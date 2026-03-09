@@ -3799,6 +3799,8 @@
         const selectedYear = yearFilterEl.value;
         const selectedMonth = monthFilterEl.value;
         const selectedDay = dayFilterEl.value;
+        const normalizedSelectedMonth = selectedMonth === "all" ? "all" : String(selectedMonth).padStart(2, "0");
+        const normalizedSelectedDay = selectedDay === "all" ? "all" : String(selectedDay).padStart(2, "0");
         const companyKeyword = normalizeCompanyName(companyFilterInputEl.value).toLowerCase();
         const today = new Date();
         const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -3809,10 +3811,9 @@
             const dateText = String(item.date || "").trim();
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
             if (dateText < todayKey) return false;
-            const itemDate = new Date(item.date);
-            const itemYear = String(itemDate.getFullYear());
-            const itemMonth = String(itemDate.getMonth() + 1);
-            const itemDay = String(itemDate.getDate());
+            const itemYear = dateText.slice(0, 4);
+            const itemMonth = dateText.slice(5, 7);
+            const itemDay = dateText.slice(8, 10);
             const itemScheduleId = String(item?.customerScheduleId || "").trim();
             const itemFallbackKey = [
               String(item?.date || "").trim(),
@@ -3828,8 +3829,8 @@
             const passPhotographer =
               currentPhotographerFilter === "all" || item.name === currentPhotographerFilter;
             const passYear = itemYear === selectedYear;
-            const passMonth = selectedMonth === "all" || itemMonth === selectedMonth;
-            const passDay = selectedDay === "all" || itemDay === selectedDay;
+            const passMonth = normalizedSelectedMonth === "all" || itemMonth === normalizedSelectedMonth;
+            const passDay = normalizedSelectedDay === "all" || itemDay === normalizedSelectedDay;
             const passCompany = !companyKeyword || normalizeCompanyName(item.company).toLowerCase().includes(companyKeyword);
 
             return passPhotographer && passYear && passMonth && passDay && passCompany;
