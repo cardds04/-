@@ -845,7 +845,8 @@
             </div>
             <div class="input-row">
               <span>🏢</span>
-              <input id="company" type="text" placeholder="업체명" required />
+              <input id="company" type="text" placeholder="업체명" list="companyAutocompleteList" required />
+              <datalist id="companyAutocompleteList"></datalist>
             </div>
             <div class="input-row">
               <span>📍</span>
@@ -1269,6 +1270,7 @@
       const companyFormEl = document.getElementById("companyForm");
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
+      const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
       const companyListEl = document.getElementById("companyList");
       let currentPhotographerFilter = "all";
@@ -2541,7 +2543,19 @@
       }
 
       function renderCompanies() {
+        if (companyAutocompleteListEl) {
+          const uniqueCompanyNames = [...new Set(companies.map((company) => normalizeCompanyName(company?.name)).filter(Boolean))];
+          companyAutocompleteListEl.innerHTML = uniqueCompanyNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join("");
+        }
+
         const keyword = companySearchInputEl.value.trim().toLowerCase();
+        const customerCompanyNameSet = new Set(
+          readStorageArray(STORAGE_CUSTOMER_COMPANIES)
+            .map((item) => normalizeCompanyName(item?.name).toLowerCase())
+            .filter(Boolean)
+        );
         const filtered = companies
           .map((company, index) => ({ company, index }))
           .filter(({ company }) => {
@@ -2552,6 +2566,7 @@
         companyListEl.innerHTML = filtered
           .map(({ company, index }) => {
             const isEditing = editingCompanyIndex === index;
+            const canDelete = !customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
             if (isEditing) {
               const customerId = getCustomerIdByCompanyName(company.name);
               return `
@@ -2562,6 +2577,7 @@
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
+                      ${canDelete ? `<button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}">삭제</button>` : ""}
                       <button class="btn-sm" type="button" data-action="cancelCompanyPhone" data-company-index="${index}">취소</button>
                     </div>
                   </div>
@@ -3830,6 +3846,27 @@
           renderCustomerStatsDashboard();
           renderCustomerUpdateNotices();
           renderCustomerAlertHistory();
+        }
+
+        if (action === "deleteCompanyInfo") {
+          const targetName = normalizeCompanyName(companies[index]?.name);
+          if (!targetName) return;
+          const isCustomerRegisteredCompany = readStorageArray(STORAGE_CUSTOMER_COMPANIES).some(
+            (item) => normalizeCompanyName(item?.name).toLowerCase() === targetName.toLowerCase()
+          );
+          if (isCustomerRegisteredCompany) {
+            alert("고객이 가입한 업체는 여기서 삭제할 수 없습니다.");
+            return;
+          }
+          const confirmed = confirm(`${targetName} 업체를 목록에서 삭제할까요?`);
+          if (!confirmed) return;
+          companies.splice(index, 1);
+          delete couponPasses[targetName];
+          editingCompanyIndex = null;
+          renderCompanies();
+          renderCouponPassList();
+          renderList();
+          return;
         }
       });
 
