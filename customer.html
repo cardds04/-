@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>고객 스케줄 등록</title>
+    <style>
+      :root {
+        --line: #d7ddec;
+        --text: #1f2940;
+        --muted: #5f6c88;
+        --blue: #466ba9;
+        --bg: #f4f7fd;
+        --red: #d74444;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap { width: min(860px, 94vw); margin: 28px auto 36px; }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+      h1 { margin: 0 0 8px; font-size: 1.8rem; }
+      .sub { margin: 0 0 16px; color: var(--muted); }
+      .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+      .tabs button { border: 1px solid var(--line); background: #f7f9ff; border-radius: 8px; padding: 7px 12px; font-weight: 700; cursor: pointer; }
+      .tabs button.active { border-color: var(--blue); background: var(--blue); color: #fff; }
+      .hidden { display: none !important; }
+      .form { display: grid; gap: 8px; }
+      .row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fcfdff; padding: 9px 10px; }
+      .row input, .row select { width: 100%; border: 0; outline: none; background: transparent; font-size: 0.95rem; }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+      .btn { border: 0; background: var(--blue); color: #fff; border-radius: 10px; padding: 10px 12px; font-weight: 700; cursor: pointer; }
+      .outline { border: 1px solid var(--line); background: #fff; color: var(--text); }
+      .top-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+      .hint { margin: -2px 0 4px; font-size: 0.84rem; color: var(--muted); }
+      .danger { color: var(--red); }
+      .compose-wrap { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fcfdff; }
+      .compose-label { font-weight: 700; margin-bottom: 8px; display: block; }
+      .compose-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+      .compose-btn { border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 999px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+      .compose-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+      .status-list { display: grid; gap: 8px; margin-top: 8px; }
+      .status-card { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; }
+      .payment-summary-box { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; margin-top: 8px; }
+      .payment-summary-title { font-weight: 700; margin-bottom: 6px; }
+      .payment-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; }
+      .status-meta { font-size: 0.9rem; line-height: 1.5; color: #2f3c58; }
+      .status-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+      .small { font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; }
+      .divider { margin: 10px 0 6px; border-top: 1px dashed var(--line); }
+      .weekday-weekend { color: var(--red); font-weight: 700; }
+      .status-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .history-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 26, 44, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        z-index: 999;
+      }
+      .history-modal.hidden { display: none; }
+      .history-panel {
+        width: min(760px, 96vw);
+        max-height: 86vh;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .history-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .history-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .history-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px;
+        background: #fbfcff;
+        font-size: 0.88rem;
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="card">
+        <h1>고객용 스케줄 등록</h1>
+        <p class="sub">회원가입 후 로그인하면 업체 스케줄을 직접 등록할 수 있습니다.</p>
+
+        <div id="authBlock">
+          <div class="tabs">
+            <button id="loginTabBtn" class="active" type="button">로그인</button>
+          </div>
+          <form id="loginForm" class="form">
+            <div class="row"><span>🆔</span><input id="loginId" type="text" placeholder="아이디" required /></div>
+            <div class="row"><span>🔑</span><input id="loginPassword" type="password" placeholder="비밀번호" required /></div>
+            <button id="saveLoginToggleBtn" class="btn outline small" type="button">아이디와 비번 저장하기: OFF</button>
+            <button class="btn" type="submit">로그인</button>
+            <button id="openSignupBtn" class="btn outline" type="button">회원가입</button>
+          </form>
+          <form id="signupForm" class="form hidden">
+            <div class="row"><span>🆔</span><input id="signupId" type="text" placeholder="아이디" required /></div>
+            <div class="row"><span>🔑</span><input id="signupPassword" type="password" placeholder="비밀번호" required /></div>
+            <div class="row"><span>🏢</span><input id="signupCompany" type="text" placeholder="업체명" required /></div>
+            <div class="row"><span>📞</span><input id="signupPhone" type="text" placeholder="연락처" required /></div>
+            <button class="btn" type="submit">회원가입</button>
+            <button id="backToLoginBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
+          </form>
+        </div>
+
+        <div id="scheduleBlock" class="hidden">
+          <div class="top-line">
+            <strong id="welcomeText"></strong>
+            <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
+          </div>
+
+          <div class="tabs" style="margin-top: 4px;">
+            <button id="registerTabBtn" class="active" type="button">스케줄등록</button>
+            <button id="statusTabBtn" type="button">내등록현황</button>
+          </div>
+
+          <section id="registerSection">
+            <form id="customerScheduleForm" class="form">
+              <div class="triple">
+                <div class="row"><span>📅</span><select id="scheduleYear" required></select></div>
+                <div class="row"><span>📆</span><select id="scheduleMonth" required></select></div>
+                <div class="row"><span>🗓️</span><select id="scheduleDay" required></select></div>
+              </div>
+              <div class="pair">
+                <div class="row"><span>⏰</span><select id="scheduleHour" required></select></div>
+                <div class="row"><span>⏱️</span><select id="scheduleMinute" required></select></div>
+              </div>
+              <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 10시~17시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
+              <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
+              <div class="triple">
+                <div class="row">
+                  <span>📐</span>
+                  <select id="schedulePyeong">
+                    <option value="">평수 선택</option>
+                    <option value="45평이하">45평이하</option>
+                    <option value="45평이상">45평이상</option>
+                    <option value="95평이상">95평이상</option>
+                    <option value="145평이상">145평이상</option>
+                  </select>
+                </div>
+                <div class="row"><span>🔒</span><input id="scheduleJointCode" type="text" placeholder="공동현관 비번" /></div>
+                <div class="row"><span>🗝️</span><input id="scheduleDoorCode" type="text" placeholder="세대 비번" /></div>
+              </div>
+              <div class="row"><span>📝</span><input id="scheduleMemo" type="text" placeholder="메모사항" /></div>
+              <div class="compose-wrap">
+                <span class="compose-label">촬영구성</span>
+                <div class="compose-buttons" id="composeButtons">
+                  <button class="compose-btn active" type="button" data-compose="미선택">미선택</button>
+                  <button class="compose-btn" type="button" data-compose="사진만">사진만</button>
+                  <button class="compose-btn" type="button" data-compose="사진영상 둘다">사진영상둘다</button>
+                </div>
+                <input id="scheduleComposition" type="hidden" value="미선택" />
+              </div>
+              <button class="btn" type="submit">스케줄 등록</button>
+              <p class="hint">스케줄 등록 후에는 <strong>내등록현황</strong> 탭에서 확인할 수 있습니다.</p>
+            </form>
+          </section>
+
+          <section id="statusSection" class="hidden">
+            <div id="paymentSummaryBox" class="payment-summary-box"></div>
+            <div class="status-top">
+              <p class="hint danger">등록한 스케줄은 4일 전까지 수정/삭제 가능하며, 3일 이내에는 관리자에게 요청해야 합니다.</p>
+              <button id="orderHistoryBtn" class="btn outline small" type="button">기록보기</button>
+            </div>
+            <div id="statusList" class="status-list"></div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <div id="orderHistoryModal" class="history-modal hidden">
+      <div class="history-panel">
+        <div class="history-head">
+          <strong>주문 기록</strong>
+          <button id="orderHistoryCloseBtn" class="btn outline small" type="button">닫기</button>
+        </div>
+        <div id="orderHistorySummary"></div>
+        <div id="orderHistoryDetailList" class="history-list"></div>
+      </div>
+    </div>
+
+    <script src="./sync-config.js"></script>
+    <script>
+      const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
+      const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
+      const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
+      const STORAGE_SESSION = "scheduleSiteCustomerSession";
+      const STORAGE_CUSTOMER_REMEMBERED_LOGIN = "scheduleSiteCustomerRememberedLogin";
+      const STORAGE_ALERTS = "scheduleSiteCustomerAlerts";
+      const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
+      const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
+      const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
+      const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
+      const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
+      const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
+      const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+      const REMOTE_SYNC_ENDPOINT =
+        localStorage.getItem("scheduleSiteRemoteSyncEndpoint") ||
+        syncConfig.remoteSyncEndpoint ||
+        "http://localhost:8787/api/state";
+      const SUPABASE_URL = localStorage.getItem("scheduleSiteSupabaseUrl") || syncConfig.supabaseUrl || "";
+      const SUPABASE_ANON_KEY = localStorage.getItem("scheduleSiteSupabaseAnonKey") || syncConfig.supabaseAnonKey || "";
+      const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      const SUPABASE_STATE_TABLE = "app_state";
+      const SUPABASE_STATE_ID = "global";
+      const STORAGE_SYNC_KEYS = [
+        STORAGE_CUSTOMERS,
+        STORAGE_COMPANIES,
+        STORAGE_SCHEDULES,
+        STORAGE_ALERTS,
+        STORAGE_LOGIN_LOGS,
+        "scheduleSiteWriters",
+        STORAGE_ADMIN_WRITER_SCHEDULES,
+        STORAGE_ADMIN_SCHEDULES,
+        STORAGE_DAILY_LIMITS,
+        STORAGE_DAYOFF_DEDUCTIONS,
+        STORAGE_DAYOFF_REQUESTS,
+        STORAGE_LIMIT_CONFIG,
+        "scheduleSiteExcludedPhotographers",
+        "scheduleSitePhotographerProfiles"
+      ];
+
+      function buildCurrentStateSnapshot() {
+        const state = {};
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          const value = localStorage.getItem(key);
+          if (value !== null) state[key] = value;
+        });
+        return state;
+      }
+
+      function applyRemoteState(state) {
+        if (!state || typeof state !== "object") return;
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(state, key)) {
+            const value = state[key];
+            if (value === null || value === undefined) {
+              localStorage.removeItem(key);
+            } else {
+              localStorage.setItem(key, String(value));
+            }
+          }
+        });
+      }
+
+      function pullRemoteStateSync() {
+        try {
+          if (USE_SUPABASE_SYNC) {
+            const xhr = new XMLHttpRequest();
+            xhr.open(
+              "GET",
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+              false
+            );
+            xhr.setRequestHeader("apikey", SUPABASE_ANON_KEY);
+            xhr.setRequestHeader("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
+            xhr.send();
+            if (xhr.status < 200 || xhr.status >= 300) return;
+            const rows = JSON.parse(xhr.responseText || "[]");
+            if (!Array.isArray(rows) || !rows.length) return;
+            const row = rows[0];
+            const state = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+            applyRemoteState(state);
+            return;
+          }
+
+          if (!REMOTE_SYNC_ENDPOINT) return;
+          const xhr = new XMLHttpRequest();
+          xhr.open("GET", REMOTE_SYNC_ENDPOINT, false);
+          xhr.send();
+          if (xhr.status < 200 || xhr.status >= 300) return;
+          const payload = JSON.parse(xhr.responseText || "{}");
+          const state = payload && typeof payload === "object" ? payload.state || {} : {};
+          applyRemoteState(state);
+        } catch (error) {
+          // 서버 미접속 상태에서는 로컬 모드로 계속 동작
+        }
+      }
+
+      let remoteSyncTimer = null;
+      function pushRemoteState() {
+        const state = buildCurrentStateSnapshot();
+        if (USE_SUPABASE_SYNC) {
+          fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              Prefer: "resolution=merge-duplicates,return=minimal"
+            },
+            body: JSON.stringify([{ id: SUPABASE_STATE_ID, payload: state }])
+          }).catch(() => {});
+          return;
+        }
+        if (!REMOTE_SYNC_ENDPOINT) return;
+        fetch(REMOTE_SYNC_ENDPOINT, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state })
+        }).catch(() => {});
+      }
+
+      function scheduleRemotePush() {
+        if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
+        remoteSyncTimer = setTimeout(pushRemoteState, 250);
+      }
+
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+      localStorage.setItem = (key, value) => {
+        originalSetItem(key, value);
+        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+      };
+      localStorage.removeItem = (key) => {
+        originalRemoveItem(key);
+        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+      };
+      pullRemoteStateSync();
+
+      const loginTabBtnEl = document.getElementById("loginTabBtn");
+      const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
+      const openSignupBtnEl = document.getElementById("openSignupBtn");
+      const backToLoginBtnEl = document.getElementById("backToLoginBtn");
+      const signupFormEl = document.getElementById("signupForm");
+      const loginFormEl = document.getElementById("loginForm");
+      const authBlockEl = document.getElementById("authBlock");
+      const scheduleBlockEl = document.getElementById("scheduleBlock");
+      const welcomeTextEl = document.getElementById("welcomeText");
+      const logoutBtnEl = document.getElementById("logoutBtn");
+
+      const registerTabBtnEl = document.getElementById("registerTabBtn");
+      const statusTabBtnEl = document.getElementById("statusTabBtn");
+      const registerSectionEl = document.getElementById("registerSection");
+      const statusSectionEl = document.getElementById("statusSection");
+      const statusListEl = document.getElementById("statusList");
+      const orderHistoryBtnEl = document.getElementById("orderHistoryBtn");
+      const orderHistoryModalEl = document.getElementById("orderHistoryModal");
+      const orderHistoryCloseBtnEl = document.getElementById("orderHistoryCloseBtn");
+      const orderHistorySummaryEl = document.getElementById("orderHistorySummary");
+      const orderHistoryDetailListEl = document.getElementById("orderHistoryDetailList");
+
+      const customerScheduleFormEl = document.getElementById("customerScheduleForm");
+      const scheduleYearEl = document.getElementById("scheduleYear");
+      const scheduleMonthEl = document.getElementById("scheduleMonth");
+      const scheduleDayEl = document.getElementById("scheduleDay");
+      const scheduleHourEl = document.getElementById("scheduleHour");
+      const scheduleMinuteEl = document.getElementById("scheduleMinute");
+      const scheduleCompositionEl = document.getElementById("scheduleComposition");
+      const composeButtonsEl = document.getElementById("composeButtons");
+      const paymentSummaryBoxEl = document.getElementById("paymentSummaryBox");
+
+      const currentYear = new Date().getFullYear();
+      const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      let editingScheduleId = null;
+      let currentCustomerTab = "register";
+      let rememberLoginEnabled = false;
+      let skipAutoLoginOnce = false;
+
+      function readStorageArray(key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function writeStorageArray(key, items) {
+        localStorage.setItem(key, JSON.stringify(items));
+      }
+
+      function readStorageObject(key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function normalize(text) {
+        return String(text || "").trim();
+      }
+
+      function updateRememberLoginButtonText() {
+        saveLoginToggleBtnEl.textContent = `아이디와 비번 저장하기: ${rememberLoginEnabled ? "ON" : "OFF"}`;
+      }
+
+      function loadRememberedLogin() {
+        try {
+          const raw = localStorage.getItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") return null;
+          const id = normalize(parsed.id);
+          const password = normalize(parsed.password);
+          if (!id || !password) return null;
+          return { id, password };
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function tryAutoLoginFromRemembered() {
+        if (skipAutoLoginOnce) return false;
+        const remembered = loadRememberedLogin();
+        if (!remembered) return false;
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const matched = users.find((user) => user.id === remembered.id && user.password === remembered.password);
+        if (!matched) return false;
+        localStorage.setItem(STORAGE_SESSION, matched.id);
+        rememberLoginEnabled = true;
+        updateRememberLoginButtonText();
+        return true;
+      }
+
+      function getCompanyKey(text) {
+        return normalize(text)
+          .replace(/\([^)]*\)/g, "")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+      }
+
+      function buildStableAdminScheduleId(row, companyKeyOverride = "") {
+        const date = normalize(row?.date) || "nodate";
+        const time = normalize(row?.time) || "notime";
+        const companyKey = companyKeyOverride || getCompanyKey(row?.company) || "nocompany";
+        const placeKey = normalize(row?.place)
+          .replace(/\s+/g, "")
+          .toLowerCase() || "noplace";
+        return `admin-${companyKey}-${date}-${time}-${placeKey}`;
+      }
+
+      function pad2(value) {
+        return String(value).padStart(2, "0");
+      }
+
+      function isWeekend(year, month, day) {
+        const weekday = new Date(year, month - 1, day).getDay();
+        return weekday === 0 || weekday === 6;
+      }
+
+      function isHolidayDate(dateKey) {
+        const holidayDateSet = new Set([
+          "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30",
+          "2025-03-01", "2025-03-03",
+          "2025-05-05", "2025-05-06",
+          "2025-06-06", "2025-08-15",
+          "2025-10-03", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09",
+          "2025-12-25",
+          "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18",
+          "2026-03-01", "2026-03-02",
+          "2026-05-05", "2026-05-24", "2026-05-25",
+          "2026-06-06",
+          "2026-08-15", "2026-08-17",
+          "2026-09-24", "2026-09-25", "2026-09-26",
+          "2026-10-03", "2026-10-05", "2026-10-09",
+          "2026-12-25",
+          "2027-01-01", "2027-02-06", "2027-02-08", "2027-02-09",
+          "2027-03-01",
+          "2027-05-05", "2027-05-13",
+          "2027-06-06", "2027-06-07",
+          "2027-08-15", "2027-08-16",
+          "2027-09-14", "2027-09-15", "2027-09-16",
+          "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11",
+          "2027-12-25", "2027-12-27"
+        ]);
+        return holidayDateSet.has(String(dateKey || "").slice(0, 10));
+      }
+
+      function getDefaultDailyLimit(dateKey) {
+        const config = readStorageObject(STORAGE_LIMIT_CONFIG);
+        const weekdayLimit = Math.max(0, Number(config.weekdayLimit) || 8);
+        const holidayLimit = Math.max(0, Number(config.holidayLimit) || 4);
+        const weekday = new Date(`${dateKey}T00:00:00`).getDay();
+        const weekend = weekday === 0 || weekday === 6;
+        return weekend || isHolidayDate(dateKey) ? holidayLimit : weekdayLimit;
+      }
+
+      function getEffectiveDailyLimit(dateKey) {
+        const deductions = readStorageObject(STORAGE_DAYOFF_DEDUCTIONS);
+        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
+        const base = getDefaultDailyLimit(dateKey);
+        const legacyRaw = Number(deductions[dateKey]);
+        const legacyDeduction = Number.isNaN(legacyRaw) || legacyRaw < 0 ? 0 : Math.floor(legacyRaw);
+        const requestedDeduction = requests
+          .filter((item) => String(item?.date || "") === String(dateKey || ""))
+          .reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0);
+        return Math.max(0, base - legacyDeduction - requestedDeduction);
+      }
+
+      function getBookedCountForDate(dateKey) {
+        const targetDate = String(dateKey || "").trim();
+        const adminSourceRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        const customerRows = readStorageArray(STORAGE_SCHEDULES);
+        if (adminSourceRows.length > 0) {
+          return adminSourceRows.filter((row) => String(row?.date || "").trim() === targetDate).length;
+        }
+        const adminRows = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
+        const customerIds = new Set(
+          customerRows
+            .map((row) => String(row?.customerScheduleId || "").trim())
+            .filter(Boolean)
+        );
+
+        const customerCount = customerRows.filter((row) => String(row?.date || "").trim() === targetDate).length;
+        const adminOnlyCount = adminRows.filter((row) => {
+          if (String(row?.date || "").trim() !== targetDate) return false;
+          const mirrorId = String(row?.writerMirrorId || "").trim();
+          if (!mirrorId) return true;
+          return !customerIds.has(mirrorId);
+        }).length;
+        return customerCount + adminOnlyCount;
+      }
+
+      function setSelectedComposition(value, rootEl = composeButtonsEl, hiddenInputEl = scheduleCompositionEl) {
+        hiddenInputEl.value = value;
+        rootEl.querySelectorAll("button[data-compose]").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.compose === value);
+        });
+      }
+
+      function switchAuthTab(mode) {
+        const signupActive = mode === "signup";
+        loginTabBtnEl.classList.add("active");
+        signupFormEl.classList.toggle("hidden", !signupActive);
+        loginFormEl.classList.toggle("hidden", signupActive);
+      }
+
+      function switchCustomerTab(tab) {
+        const isRegister = tab === "register";
+        currentCustomerTab = isRegister ? "register" : "status";
+        registerTabBtnEl.classList.toggle("active", isRegister);
+        statusTabBtnEl.classList.toggle("active", !isRegister);
+        registerSectionEl.classList.toggle("hidden", !isRegister);
+        statusSectionEl.classList.toggle("hidden", isRegister);
+        if (!isRegister) renderStatusList();
+      }
+
+      function getCurrentSessionUser() {
+        const userId = localStorage.getItem(STORAGE_SESSION);
+        if (!userId) return null;
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        return users.find((user) => user.id === userId) || null;
+      }
+
+      function syncAdminSchedulesToCustomerUser(user) {
+        if (!user) return;
+        const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        const targetCompanyKey = getCompanyKey(user.company);
+        const schedules = readStorageArray(STORAGE_SCHEDULES);
+        const adminCompanyRows = adminRows.filter((row) => getCompanyKey(row?.company) === targetCompanyKey);
+        const buildRowKey = (row) =>
+          [
+            normalize(row?.date),
+            normalize(row?.time),
+            targetCompanyKey,
+            normalize(row?.place)
+          ].join("|");
+        const adminIdSet = new Set(
+          adminCompanyRows
+            .map((row) => normalize(row?.customerScheduleId))
+            .filter(Boolean)
+        );
+        const adminFallbackKeySet = new Set(adminCompanyRows.map((row) => buildRowKey(row)));
+        let changed = false;
+
+        // 관리자 원본 기준으로 해당 업체의 잔존(고아) 스케줄 정리
+        for (let i = schedules.length - 1; i >= 0; i -= 1) {
+          const row = schedules[i];
+          if (getCompanyKey(row?.company) !== targetCompanyKey) continue;
+          const scheduleId = normalize(row?.customerScheduleId);
+          const fallbackKey = buildRowKey(row);
+          const existsInAdmin =
+            (scheduleId && adminIdSet.has(scheduleId)) || adminFallbackKeySet.has(fallbackKey);
+          if (!existsInAdmin) {
+            schedules.splice(i, 1);
+            changed = true;
+          }
+        }
+
+        adminCompanyRows.forEach((row) => {
+          const scheduleId = normalize(row?.customerScheduleId) || buildStableAdminScheduleId(row, targetCompanyKey);
+          const fallbackMatch = (item) =>
+            String(item?.date || "").trim() === String(row?.date || "").trim() &&
+            String(item?.time || "").trim() === String(row?.time || "").trim() &&
+            getCompanyKey(item?.company) === targetCompanyKey &&
+            normalize(item?.place) === normalize(row?.place);
+          const index = scheduleId
+            ? schedules.findIndex((item) => String(item?.customerScheduleId || "").trim() === scheduleId)
+            : schedules.findIndex(fallbackMatch);
+
+          const nextRow = {
+            customerScheduleId: scheduleId,
+            customerId: String(user.id || "").trim(),
+            customerPhone: String(user.phone || "").trim(),
+            date: String(row?.date || "").trim(),
+            time: String(row?.time || "09:00").trim() || "09:00",
+            name: String(row?.name || "작가미정").trim() || "작가미정",
+            company: normalize(user.company),
+            place: normalize(row?.place),
+            pyeong: normalize(row?.pyeong),
+            jointCode: normalize(row?.jointCode),
+            doorCode: normalize(row?.doorCode),
+            memo: normalize(row?.memo),
+            composition: normalize(row?.composition) || "사진만",
+            paymentStatus: normalize(row?.paymentStatus) || "미입금",
+            paymentPayer: normalize(row?.paymentPayer),
+            paymentAmount: normalize(row?.paymentAmount),
+            paymentDate: normalize(row?.paymentDate),
+            couponUsed: Boolean(row?.couponUsed),
+            adminTimeUpdated: Boolean(row?.adminTimeUpdated),
+            writerPhone: normalize(row?.writerPhone),
+            writerCarNumber: normalize(row?.writerCarNumber)
+          };
+
+          if (index >= 0) {
+            schedules[index] = { ...schedules[index], ...nextRow };
+            changed = true;
+            return;
+          }
+          schedules.unshift(nextRow);
+          changed = true;
+        });
+
+        if (changed) {
+          writeStorageArray(STORAGE_SCHEDULES, schedules);
+        }
+      }
+
+      function renderAuthState() {
+        let user = getCurrentSessionUser();
+        if (!user) {
+          const autoLoggedIn = tryAutoLoginFromRemembered();
+          if (autoLoggedIn) {
+            user = getCurrentSessionUser();
+          }
+        }
+        const isLoggedIn = Boolean(user);
+        authBlockEl.classList.toggle("hidden", isLoggedIn);
+        scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
+        if (!isLoggedIn) {
+          switchAuthTab("login");
+          const remembered = loadRememberedLogin();
+          if (remembered) {
+            document.getElementById("loginId").value = remembered.id;
+            document.getElementById("loginPassword").value = remembered.password;
+            rememberLoginEnabled = true;
+          } else {
+            rememberLoginEnabled = false;
+          }
+          updateRememberLoginButtonText();
+        }
+        if (isLoggedIn) {
+          syncAdminSchedulesToCustomerUser(user);
+          welcomeTextEl.textContent = `${user.company} (${user.id})님`;
+          renderPaymentSummary();
+          switchCustomerTab(currentCustomerTab);
+        }
+      }
+
+      function ensureCompanyStored(companyName, phone) {
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const company = normalize(companyName);
+        const exists = companies.some((item) => normalize(item.name).toLowerCase() === company.toLowerCase());
+        if (!exists) {
+          companies.unshift({ name: company, phone: normalize(phone) });
+          writeStorageArray(STORAGE_COMPANIES, companies);
+          return true;
+        }
+        return false;
+      }
+
+      function recordCustomerLogin(user) {
+        if (!user) return;
+        const logs = readStorageArray(STORAGE_LOGIN_LOGS);
+        logs.unshift({
+          id: `login-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customerId: user.id,
+          company: user.company,
+          at: new Date().toISOString()
+        });
+        writeStorageArray(STORAGE_LOGIN_LOGS, logs);
+
+        const alerts = readStorageArray(STORAGE_ALERTS);
+        alerts.unshift({
+          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "customer_login",
+          company: user.company,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+        writeStorageArray(STORAGE_ALERTS, alerts);
+      }
+
+      function setupDateTimeSelectors() {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentDay = now.getDate();
+        const currentYearValue = now.getFullYear();
+
+        scheduleYearEl.innerHTML = Array.from({ length: 5 }, (_, idx) => currentYearValue + idx)
+          .map((year) => `<option value="${year}">${year}년</option>`)
+          .join("");
+        scheduleYearEl.value = String(currentYearValue);
+        renderRegisterMonthOptions(currentYearValue, currentMonth);
+        scheduleMonthEl.value = String(currentMonth);
+
+        scheduleHourEl.innerHTML = Array.from({ length: 8 }, (_, idx) => idx + 10)
+          .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시</option>`)
+          .join("");
+        scheduleMinuteEl.innerHTML = '<option value="00">00분</option><option value="30">30분</option>';
+
+        renderDayOptions(currentYearValue, currentMonth, currentDay);
+      }
+
+      function renderRegisterMonthOptions(selectedYear, preferredMonth) {
+        const now = new Date();
+        const currentYearValue = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const year = Number(selectedYear);
+        const startMonth = year === currentYearValue ? currentMonth : 1;
+        scheduleMonthEl.innerHTML = Array.from({ length: 12 - startMonth + 1 }, (_, idx) => startMonth + idx)
+          .map((month) => `<option value="${month}">${month}월</option>`)
+          .join("");
+        const safePreferred = Number(preferredMonth);
+        const nextMonth = Number.isNaN(safePreferred) ? startMonth : Math.max(safePreferred, startMonth);
+        scheduleMonthEl.value = String(nextMonth);
+      }
+
+      function renderDayOptions(year, month, preferredDay) {
+        const selectedYear = Number(year);
+        const selectedMonth = Number(month);
+        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+        scheduleDayEl.innerHTML = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+          .map((day) => {
+            const weekday = weekdayNames[new Date(selectedYear, selectedMonth - 1, day).getDay()];
+            const weekend = isWeekend(selectedYear, selectedMonth, day);
+            return `<option value="${day}" style="${weekend ? "color:#d74444;" : ""}">${day}일 (${weekday})</option>`;
+          })
+          .join("");
+        scheduleDayEl.value = String(Math.min(Math.max(Number(preferredDay) || 1, 1), daysInMonth));
+        updateSelectedDayColor();
+      }
+
+      function buildDayOptionsHtml(year, month, preferredDay) {
+        const selectedYear = Number(year);
+        const selectedMonth = Number(month);
+        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+        const selectedDay = Math.min(Math.max(Number(preferredDay) || 1, 1), daysInMonth);
+        const html = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+          .map((day) => {
+            const weekday = weekdayNames[new Date(selectedYear, selectedMonth - 1, day).getDay()];
+            const weekend = isWeekend(selectedYear, selectedMonth, day);
+            return `<option value="${day}" ${day === selectedDay ? "selected" : ""} style="${weekend ? "color:#d74444;" : ""}">${day}일 (${weekday})</option>`;
+          })
+          .join("");
+        return { html, selectedDay };
+      }
+
+      function refreshEditDayOptions(cardEl, preferredDay) {
+        if (!cardEl) return;
+        const year = Number(cardEl.querySelector(".edit-year")?.value);
+        const month = Number(cardEl.querySelector(".edit-month")?.value);
+        const daySelectEl = cardEl.querySelector(".edit-day");
+        if (!year || !month || !daySelectEl) return;
+        const { html, selectedDay } = buildDayOptionsHtml(year, month, preferredDay);
+        daySelectEl.innerHTML = html;
+        daySelectEl.value = String(selectedDay);
+        daySelectEl.classList.toggle("weekday-weekend", isWeekend(year, month, selectedDay));
+      }
+
+      function updateSelectedDayColor() {
+        const year = Number(scheduleYearEl.value);
+        const month = Number(scheduleMonthEl.value);
+        const day = Number(scheduleDayEl.value);
+        scheduleDayEl.classList.toggle("weekday-weekend", isWeekend(year, month, day));
+      }
+
+      function getUserSchedules() {
+        const user = getCurrentSessionUser();
+        if (!user) return [];
+        syncAdminSchedulesToCustomerUser(user);
+        const userId = String(user.id || "").trim();
+        const userCompanyKey = getCompanyKey(user.company);
+        return readStorageArray(STORAGE_SCHEDULES).filter((row) => {
+          const rowCustomerId = String(row?.customerId || "").trim();
+          const rowCompanyKey = getCompanyKey(row?.company);
+          if (rowCustomerId && rowCustomerId === userId) return true;
+          return userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey;
+        });
+      }
+
+      function isPastSchedule(dateText) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(`${dateText}T00:00:00`);
+        return target.getTime() < today.getTime();
+      }
+
+      function canEditOrDelete(dateText) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(`${dateText}T00:00:00`);
+        const diffDays = Math.floor((target.getTime() - today.getTime()) / 86400000);
+        return diffDays >= 4;
+      }
+
+      function renderStatusList() {
+        const schedules = getUserSchedules()
+          .filter((item) => !isPastSchedule(item.date))
+          .sort((a, b) => {
+          const at = new Date(`${a.date}T${a.time || "00:00"}:00`).getTime();
+          const bt = new Date(`${b.date}T${b.time || "00:00"}:00`).getTime();
+          return at - bt;
+        });
+
+        if (schedules.length === 0) {
+          statusListEl.innerHTML = '<div class="status-card">지난 일정을 제외하면 표시할 일정이 없습니다.</div>';
+          return;
+        }
+
+        statusListEl.innerHTML = schedules
+          .map((item) => {
+            const editable = canEditOrDelete(item.date);
+            const isEditing = editingScheduleId === item.customerScheduleId;
+            if (isEditing) {
+              const [rawYear = `${currentYear}`, rawMonth = "01", rawDay = "01"] = String(item.date || `${currentYear}-01-01`).split("-");
+              const editYear = Number(rawYear) || currentYear;
+              const editMonth = Number(rawMonth) || 1;
+              const editDay = Number(rawDay) || 1;
+              const yearOptions = Array.from({ length: 7 }, (_, idx) => currentYear - 2 + idx)
+                .map((year) => `<option value="${year}" ${year === editYear ? "selected" : ""}>${year}년</option>`)
+                .join("");
+              const monthOptions = Array.from({ length: 12 }, (_, idx) => idx + 1)
+                .map((month) => `<option value="${month}" ${month === editMonth ? "selected" : ""}>${month}월</option>`)
+                .join("");
+              const dayOptions = buildDayOptionsHtml(editYear, editMonth, editDay).html;
+              return `
+                <article class="status-card" data-id="${item.customerScheduleId}">
+                  <div class="status-head">수정 중</div>
+                  <div class="form">
+                    <div class="triple">
+                      <div class="row"><span>📅</span><select class="edit-year">${yearOptions}</select></div>
+                      <div class="row"><span>📆</span><select class="edit-month">${monthOptions}</select></div>
+                      <div class="row"><span>🗓️</span><select class="edit-day">${dayOptions}</select></div>
+                    </div>
+                    <div class="pair">
+                      <div class="row"><span>⏰</span>
+                        <select class="edit-hour">
+                          ${Array.from({ length: 8 }, (_, idx) => idx + 10)
+                            .map((hour) => {
+                              const value = pad2(hour);
+                              const [currentHour = "09"] = String(item.time || "09:00").split(":");
+                              return `<option value="${value}" ${value === currentHour ? "selected" : ""}>${value}시</option>`;
+                            })
+                            .join("")}
+                        </select>
+                      </div>
+                      <div class="row"><span>⏱️</span>
+                        <select class="edit-minute">
+                          ${(() => {
+                            const [, currentMinute = "00"] = String(item.time || "09:00").split(":");
+                            return `
+                              <option value="00" ${currentMinute === "00" ? "selected" : ""}>00분</option>
+                              <option value="30" ${currentMinute === "30" ? "selected" : ""}>30분</option>
+                            `;
+                          })()}
+                        </select>
+                      </div>
+                    </div>
+                    <div class="row"><span>📍</span><input class="edit-place" type="text" value="${item.place || ""}" /></div>
+                    <div class="row"><span>📐</span>
+                      <select class="edit-pyeong">
+                        <option value="" ${!item.pyeong ? "selected" : ""}>평수 선택</option>
+                        <option value="45평이하" ${item.pyeong === "45평이하" ? "selected" : ""}>45평이하</option>
+                        <option value="45평이상" ${item.pyeong === "45평이상" ? "selected" : ""}>45평이상</option>
+                        <option value="95평이상" ${item.pyeong === "95평이상" ? "selected" : ""}>95평이상</option>
+                        <option value="145평이상" ${item.pyeong === "145평이상" ? "selected" : ""}>145평이상</option>
+                      </select>
+                    </div>
+                    <div class="row"><span>📝</span><input class="edit-memo" type="text" value="${item.memo || ""}" /></div>
+                    <div class="compose-buttons">
+                      <button class="compose-btn ${item.composition === "사진만" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진만">사진만</button>
+                      <button class="compose-btn ${item.composition === "사진영상 둘다" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진영상 둘다">사진영상둘다</button>
+                    </div>
+                    <input class="edit-composition" type="hidden" value="${item.composition || "사진만"}" />
+                    <div class="status-actions">
+                      <button class="btn small" type="button" data-action="saveEdit" data-id="${item.customerScheduleId}">저장</button>
+                      <button class="btn outline small" type="button" data-action="cancelEdit">취소</button>
+                    </div>
+                  </div>
+                </article>
+              `;
+            }
+            return `
+              <article class="status-card" data-id="${item.customerScheduleId}">
+                <div class="status-head">
+                  <span>${item.date} | ${item.time || "09:00"}</span>
+                  <span>${editable ? "수정가능" : "수정제한"}</span>
+                </div>
+                <div class="status-meta">
+                  장소: ${item.place || "-"}<br />
+                  평수: ${item.pyeong || "-"}<br />
+                  배정작가: ${item.name || "작가미정"}<br />
+                  작가연락처: ${item.writerPhone || "-"}<br />
+                  작가차량번호: ${item.writerCarNumber || "-"}<br />
+                  촬영구성: ${item.composition || "-"}<br />
+                  메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}
+                </div>
+                <div class="status-actions">
+                  <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>
+                  <button class="btn outline small" type="button" data-action="deleteRow" data-id="${item.customerScheduleId}">일정취소</button>
+                </div>
+                <div class="divider"></div>
+                <div class="hint ${editable ? "" : "danger"}">
+                  ${editable ? "4일 전까지 수정/삭제 가능합니다." : "3일 이내 일정입니다. 관리자에게 요청해주세요."}
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderPaymentSummary() {
+        const schedules = getUserSchedules();
+        const paidCount = schedules.filter((item) => normalize(item?.paymentStatus) === "입금완료").length;
+        const pendingCount = schedules.filter((item) => normalize(item?.paymentStatus) !== "입금완료").length;
+        paymentSummaryBoxEl.innerHTML = `
+          <div class="payment-summary-title">입금내역</div>
+          <div class="payment-summary-grid">
+            <div class="status-card">입금완료: <strong>${paidCount}건</strong></div>
+            <div class="status-card">입금확인중: <strong>${pendingCount}건</strong></div>
+          </div>
+        `;
+      }
+
+      function renderOrderHistorySummary() {
+        const schedules = getUserSchedules();
+        const grouped = new Map();
+        schedules.forEach((item) => {
+          const monthKey = String(item.date || "").slice(0, 7);
+          if (!/^\d{4}-\d{2}$/.test(monthKey)) return;
+          grouped.set(monthKey, (grouped.get(monthKey) || 0) + 1);
+        });
+        const monthlyRows = [...grouped.entries()]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([month, count]) => `<tr><td>${month}</td><td>${count}건</td></tr>`)
+          .join("");
+        const detailRows = schedules
+          .sort((a, b) => {
+            const at = new Date(`${a.date}T${a.time || "00:00"}:00`).getTime();
+            const bt = new Date(`${b.date}T${b.time || "00:00"}:00`).getTime();
+            return bt - at;
+          })
+          .map(
+            (item) => `
+              <div class="history-item">
+                ${item.date || "-"} ${item.time || "-"}<br />
+                장소: ${item.place || "-"} | 평수: ${item.pyeong || "-"} | 구성: ${item.composition || "-"}
+              </div>
+            `
+          )
+          .join("");
+
+        orderHistorySummaryEl.innerHTML = `
+          <div style="margin-bottom:8px;">전체 주문건수: <strong>${schedules.length}건</strong></div>
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; border-bottom:1px solid #d7ddec; padding:6px 0;">월</th>
+                <th style="text-align:left; border-bottom:1px solid #d7ddec; padding:6px 0;">주문건수</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${monthlyRows || '<tr><td colspan="2" style="padding:8px 0;">기록이 없습니다.</td></tr>'}
+            </tbody>
+          </table>
+        `;
+        orderHistoryDetailListEl.innerHTML = detailRows || '<div class="history-item">상세 내역이 없습니다.</div>';
+      }
+
+      signupFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const id = normalize(document.getElementById("signupId").value);
+        const password = normalize(document.getElementById("signupPassword").value);
+        const company = normalize(document.getElementById("signupCompany").value);
+        const phone = normalize(document.getElementById("signupPhone").value);
+        if (!id || !password || !company || !phone) return;
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const exists = users.some((user) => user.id.toLowerCase() === id.toLowerCase());
+        if (exists) {
+          alert("이미 사용 중인 아이디입니다.");
+          return;
+        }
+        users.unshift({ id, password, company, phone, createdAt: new Date().toISOString() });
+        writeStorageArray(STORAGE_CUSTOMERS, users);
+        ensureCompanyStored(company, phone);
+        const signupAlerts = readStorageArray(STORAGE_ALERTS);
+        signupAlerts.unshift({
+          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "customer_signup",
+          company,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+        writeStorageArray(STORAGE_ALERTS, signupAlerts);
+        localStorage.setItem(STORAGE_SESSION, id);
+        recordCustomerLogin({ id, company });
+        signupFormEl.reset();
+        renderAuthState();
+        alert("회원가입 완료! 바로 스케줄 등록이 가능합니다.");
+      });
+
+      loginFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const id = normalize(document.getElementById("loginId").value);
+        const password = normalize(document.getElementById("loginPassword").value);
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const matched = users.find((user) => user.id === id && user.password === password);
+        if (!matched) {
+          alert("아이디 또는 비밀번호가 올바르지 않습니다.");
+          return;
+        }
+        localStorage.setItem(STORAGE_SESSION, matched.id);
+        if (rememberLoginEnabled) {
+          localStorage.setItem(
+            STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+            JSON.stringify({ id: matched.id, password: matched.password })
+          );
+        } else {
+          localStorage.removeItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN);
+        }
+        recordCustomerLogin(matched);
+        loginFormEl.reset();
+        currentCustomerTab = "register";
+        renderAuthState();
+      });
+
+      logoutBtnEl.addEventListener("click", () => {
+        skipAutoLoginOnce = true;
+        localStorage.removeItem(STORAGE_SESSION);
+        editingScheduleId = null;
+        currentCustomerTab = "register";
+        renderAuthState();
+      });
+      saveLoginToggleBtnEl.addEventListener("click", () => {
+        rememberLoginEnabled = !rememberLoginEnabled;
+        updateRememberLoginButtonText();
+      });
+
+      customerScheduleFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const user = getCurrentSessionUser();
+        if (!user) {
+          alert("로그인이 필요합니다.");
+          renderAuthState();
+          return;
+        }
+
+        const year = Number(scheduleYearEl.value);
+        const month = Number(scheduleMonthEl.value);
+        const day = Number(scheduleDayEl.value);
+        const date = `${year}-${pad2(month)}-${pad2(day)}`;
+        const time = `${scheduleHourEl.value}:${scheduleMinuteEl.value}`;
+        const place = normalize(document.getElementById("schedulePlace").value);
+        if (!place) return;
+        if (scheduleCompositionEl.value === "미선택") {
+          alert("촬영구성을 선택해주세요.");
+          return;
+        }
+        const dailyLimit = getEffectiveDailyLimit(date);
+        const bookedCount = getBookedCountForDate(date);
+        if (bookedCount >= dailyLimit) {
+          alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
+          return;
+        }
+
+        const isNewCompany = ensureCompanyStored(user.company, user.phone);
+        const schedules = readStorageArray(STORAGE_SCHEDULES);
+        schedules.unshift({
+          customerScheduleId: `cus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          date,
+          time,
+          name: "작가미정",
+          company: user.company,
+          place,
+          pyeong: normalize(document.getElementById("schedulePyeong").value),
+          jointCode: normalize(document.getElementById("scheduleJointCode").value),
+          doorCode: normalize(document.getElementById("scheduleDoorCode").value),
+          memo: normalize(document.getElementById("scheduleMemo").value),
+          composition: scheduleCompositionEl.value || "사진만",
+          paymentStatus: "미입금",
+          paymentPayer: "",
+          paymentAmount: "",
+          paymentDate: "",
+          couponUsed: false,
+          adminTimeUpdated: false,
+          writerPhone: "",
+          writerCarNumber: "",
+          customerId: user.id,
+          customerPhone: user.phone
+        });
+        writeStorageArray(STORAGE_SCHEDULES, schedules);
+        const createAlerts = readStorageArray(STORAGE_ALERTS);
+        createAlerts.unshift({
+          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "schedule_create",
+          company: user.company,
+          date,
+          time,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+        writeStorageArray(STORAGE_ALERTS, createAlerts);
+        if (isNewCompany) {
+          const alerts = readStorageArray(STORAGE_ALERTS);
+          alerts.unshift({
+            id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: "new_company_schedule",
+            company: user.company,
+            date,
+            time,
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+          writeStorageArray(STORAGE_ALERTS, alerts);
+        }
+        customerScheduleFormEl.reset();
+        setupDateTimeSelectors();
+        setSelectedComposition("미선택");
+        renderPaymentSummary();
+        alert("스케줄 등록 완료! 관리자 페이지에서 바로 확인할 수 있습니다.");
+      });
+
+      statusListEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        const scheduleId = button.dataset.id;
+        const schedules = readStorageArray(STORAGE_SCHEDULES);
+        const index = schedules.findIndex((item) => item.customerScheduleId === scheduleId);
+        const item = schedules[index];
+
+        if (action === "startEdit") {
+          if (!item || !canEditOrDelete(item.date)) {
+            alert("3일 이내 일정은 관리자에게 요청해주세요.");
+            return;
+          }
+          editingScheduleId = scheduleId;
+          renderStatusList();
+          return;
+        }
+
+        if (action === "cancelEdit") {
+          editingScheduleId = null;
+          renderStatusList();
+          return;
+        }
+
+        if (action === "pickEditCompose") {
+          const cardEl = button.closest(".status-card");
+          const hiddenEl = cardEl?.querySelector(".edit-composition");
+          if (!cardEl || !hiddenEl) return;
+          hiddenEl.value = button.dataset.value || "사진만";
+          cardEl.querySelectorAll("button[data-action='pickEditCompose']").forEach((btn) => {
+            btn.classList.toggle("active", btn === button);
+          });
+          return;
+        }
+
+        if (action === "saveEdit") {
+          if (!item || !canEditOrDelete(item.date)) {
+            alert("3일 이내 일정은 관리자에게 요청해주세요.");
+            return;
+          }
+          const cardEl = button.closest(".status-card");
+          if (!cardEl) return;
+          const editYear = Number(cardEl.querySelector(".edit-year")?.value);
+          const editMonth = Number(cardEl.querySelector(".edit-month")?.value);
+          const editDay = Number(cardEl.querySelector(".edit-day")?.value);
+          const editDate = `${editYear}-${pad2(editMonth)}-${pad2(editDay)}`;
+          if (!canEditOrDelete(editDate)) {
+            alert("수정 후 일정이 3일 이내가 되면 저장할 수 없습니다. 관리자에게 요청해주세요.");
+            return;
+          }
+          item.date = editDate;
+          item.time = `${cardEl.querySelector(".edit-hour")?.value || "10"}:${cardEl.querySelector(".edit-minute")?.value || "00"}`;
+          item.place = normalize(cardEl.querySelector(".edit-place")?.value);
+          item.pyeong = normalize(cardEl.querySelector(".edit-pyeong")?.value);
+          item.memo = normalize(cardEl.querySelector(".edit-memo")?.value);
+          item.composition = normalize(cardEl.querySelector(".edit-composition")?.value) || "사진만";
+          item.adminTimeUpdated = false;
+          schedules[index] = item;
+          writeStorageArray(STORAGE_SCHEDULES, schedules);
+
+          const user = getCurrentSessionUser();
+          if (user) {
+            const alerts = readStorageArray(STORAGE_ALERTS);
+            alerts.unshift({
+              id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              type: "schedule_edit",
+              scheduleId: item.customerScheduleId,
+              company: user.company,
+              date: item.date,
+              time: item.time,
+              createdAt: new Date().toISOString(),
+              read: false
+            });
+            writeStorageArray(STORAGE_ALERTS, alerts);
+          }
+
+          editingScheduleId = null;
+          renderStatusList();
+          return;
+        }
+
+        if (action === "deleteRow") {
+          if (!item || !canEditOrDelete(item.date)) {
+            alert("3일 이내 일정은 관리자에게 요청해주세요.");
+            return;
+          }
+          const confirmed = confirm("등록한 스케줄을 삭제할까요?");
+          if (!confirmed) return;
+          const deletedDate = item.date;
+          const deletedTime = item.time;
+          const deletedCompany = item.company;
+          schedules.splice(index, 1);
+          writeStorageArray(STORAGE_SCHEDULES, schedules);
+          const cancelAlerts = readStorageArray(STORAGE_ALERTS);
+          cancelAlerts.unshift({
+            id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: "schedule_cancel",
+            company: deletedCompany,
+            date: deletedDate,
+            time: deletedTime,
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+          writeStorageArray(STORAGE_ALERTS, cancelAlerts);
+          renderPaymentSummary();
+          renderStatusList();
+        }
+      });
+
+      statusListEl.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) return;
+        if (!target.classList.contains("edit-year") && !target.classList.contains("edit-month") && !target.classList.contains("edit-day")) return;
+        const cardEl = target.closest(".status-card");
+        if (!cardEl) return;
+        refreshEditDayOptions(cardEl, cardEl.querySelector(".edit-day")?.value);
+      });
+
+      loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
+      openSignupBtnEl.addEventListener("click", () => switchAuthTab("signup"));
+      backToLoginBtnEl.addEventListener("click", () => switchAuthTab("login"));
+      registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
+      statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
+      orderHistoryBtnEl.addEventListener("click", () => {
+        renderOrderHistorySummary();
+        orderHistoryModalEl.classList.remove("hidden");
+      });
+      orderHistoryCloseBtnEl.addEventListener("click", () => {
+        orderHistoryModalEl.classList.add("hidden");
+      });
+      orderHistoryModalEl.addEventListener("click", (event) => {
+        if (event.target === orderHistoryModalEl) {
+          orderHistoryModalEl.classList.add("hidden");
+        }
+      });
+      composeButtonsEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-compose]");
+        if (!button) return;
+        setSelectedComposition(button.dataset.compose || "미선택");
+      });
+      scheduleYearEl.addEventListener("change", () => {
+        renderRegisterMonthOptions(scheduleYearEl.value, scheduleMonthEl.value);
+        renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
+      });
+      scheduleMonthEl.addEventListener("change", () => {
+        renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
+      });
+      scheduleDayEl.addEventListener("change", updateSelectedDayColor);
+
+      setupDateTimeSelectors();
+      switchAuthTab("login");
+      renderAuthState();
+      window.addEventListener("storage", (event) => {
+        if (event.key === STORAGE_ADMIN_SCHEDULES || event.key === STORAGE_SCHEDULES) {
+          renderAuthState();
+        }
+      });
+    </script>
+  </body>
+</html>

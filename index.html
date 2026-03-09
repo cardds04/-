@@ -1,0 +1,4394 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>촬영 스케줄 관리</title>
+    <style>
+      :root {
+        --bg: #f4f6fb;
+        --card: #ffffff;
+        --line: #d9deea;
+        --text: #1f2940;
+        --muted: #6b758f;
+        --blue: #456aa7;
+        --blue-dark: #34568f;
+        --badge: #f1f4fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: linear-gradient(#fafbff, #eef2fb);
+        color: var(--text);
+      }
+
+      .wrap {
+        width: min(1180px, 95vw);
+        margin: 38px auto 48px;
+      }
+
+      h1 {
+        margin: 0;
+        text-align: center;
+        font-size: clamp(28px, 3vw, 44px);
+        font-weight: 800;
+      }
+
+      .subtitle {
+        margin-top: 10px;
+        text-align: center;
+        color: #2c3242;
+        font-size: clamp(14px, 1.3vw, 21px);
+      }
+
+      .top-tabs {
+        margin: 26px 6px 12px;
+        display: flex;
+        gap: 18px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .top-tabs button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        padding: 4px 0;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+      }
+
+      .top-tabs button.active {
+        color: var(--text);
+        border-color: var(--blue);
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: 1.05fr 3fr;
+        gap: 16px;
+      }
+
+      .my-schedule-card {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 6px 20px rgba(42, 56, 90, 0.05);
+        padding: 16px;
+      }
+
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 1.65rem;
+      }
+
+      .btn-main {
+        width: 100%;
+        border: 0;
+        background: var(--blue);
+        color: #fff;
+        font-weight: 700;
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+
+      .btn-main:hover {
+        background: var(--blue-dark);
+      }
+
+      .helper {
+        color: var(--muted);
+        margin-top: 14px;
+      }
+
+      .member-names {
+        margin-top: 8px;
+        color: #314160;
+        font-size: 0.92rem;
+        line-height: 1.6;
+      }
+
+      .photographer-buttons {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .photographer-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #f7f9fd;
+        padding: 3px 8px;
+      }
+
+      .photographer-chip-btn {
+        border: 0;
+        background: transparent;
+        color: #2a3550;
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .chip-delete-btn {
+        border: 0;
+        background: transparent;
+        color: #d94848;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .sub-title {
+        margin: 16px 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .company-list {
+        margin-top: 8px;
+        display: grid;
+        gap: 6px;
+        max-height: 140px;
+        overflow: auto;
+      }
+
+      .company-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 9px;
+        font-size: 0.9rem;
+        background: #fbfcff;
+      }
+
+      .company-item.company-clickable {
+        cursor: pointer;
+      }
+
+      .company-item.company-clickable:hover {
+        border-color: #b8c7e7;
+        background: #f5f8ff;
+      }
+
+      .company-item-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .company-edit-row {
+        display: grid;
+        gap: 6px;
+      }
+
+      .register-panel {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8faff;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .form {
+        display: grid;
+        gap: 10px;
+      }
+
+      .schedule-register-card .form {
+        gap: 7px;
+      }
+
+      .schedule-register-card .filter-row {
+        gap: 6px;
+      }
+
+      .schedule-register-card .input-row {
+        padding: 7px 9px;
+      }
+
+      .input-row {
+        display: flex;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fcfdff;
+        padding: 9px 10px;
+        gap: 8px;
+      }
+
+      .input-row input,
+      .input-row select {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        outline: none;
+        font-size: 0.97rem;
+        color: var(--text);
+      }
+
+      .radio-line {
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .radio-line label {
+        color: #2e3549;
+        font-size: 0.95rem;
+      }
+
+      .new-note {
+        text-align: center;
+        color: var(--muted);
+        margin-top: 10px;
+        font-size: 0.9rem;
+      }
+
+      .schedule-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .schedule-head h2 {
+        margin: 0;
+      }
+
+      .head-right {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .count {
+        font-weight: 700;
+      }
+
+      .small-select {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 6px 9px;
+      }
+
+      .view-tabs {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0 6px;
+      }
+
+      #dateFilterRow {
+        margin-top: 6px;
+        margin-bottom: 10px;
+      }
+
+      .view-tabs button {
+        border: 1px solid var(--line);
+        background: #f7f9fd;
+        color: #526079;
+        border-radius: 8px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .view-tabs .active {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+
+      .view-tabs .tab-divider {
+        width: 1px;
+        align-self: stretch;
+        background: #d4dbea;
+        margin: 0 2px;
+      }
+
+      .view-tabs button.date-preset-tab {
+        background: #fff7cc;
+        border-color: #efd97a;
+        color: #6d5b00;
+      }
+
+      .view-tabs button.date-preset-tab.active {
+        background: #ffe58a;
+        border-color: #e2c95b;
+        color: #5e4f00;
+      }
+
+      .filter-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .filter-row select {
+        min-width: 130px;
+        flex: 1;
+      }
+
+      .filter-row button {
+        white-space: nowrap;
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+        max-height: 590px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .writer-group-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .writer-row {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #f7f9fd;
+        padding: 10px;
+      }
+
+      .writer-name {
+        font-weight: 800;
+        color: #1f2940;
+        white-space: nowrap;
+      }
+
+      .writer-places {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .writer-place {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 0.88rem;
+        color: #2b3751;
+        min-width: 220px;
+        line-height: 1.45;
+      }
+
+      .item {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .item-time {
+        background: #edf2f9;
+        padding: 8px 12px;
+        font-weight: 700;
+        display: grid;
+        gap: 8px;
+      }
+
+      .item-time-top,
+      .item-time-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .item-body {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 10px 12px;
+      }
+
+      .meta {
+        font-size: 0.95rem;
+        color: #25314b;
+        line-height: 1.6;
+      }
+
+      .info-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .info-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        background: var(--badge);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 0.9rem;
+      }
+
+      .actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 4px;
+      }
+
+      .quick-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 6px;
+      }
+
+      .quick-pill {
+        border: 1px solid #9ca8bf;
+        background: #fff;
+        color: #2b3751;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.82rem;
+        cursor: pointer;
+      }
+
+      .time-edit-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .inline-input,
+      .inline-select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        padding: 5px 7px;
+        font-size: 0.88rem;
+      }
+
+      .btn-sm {
+        border: 1px solid #9ca8bf;
+        background: #fff;
+        color: #2b3751;
+        border-radius: 999px;
+        padding: 4px 9px;
+        font-size: 0.82rem;
+      }
+
+      .btn-sm[disabled] {
+        opacity: 1;
+        cursor: default;
+      }
+
+      .btn-sm.primary {
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .btn-sm.danger {
+        border-color: #d94848;
+        background: #e65555;
+        color: #fff;
+      }
+
+      .btn-sm.neon {
+        border-color: #d8e700;
+        background: #eefe58;
+        color: #263000;
+        font-weight: 700;
+      }
+
+      #applyPreviousHistoryDateFilterBtn:hover,
+      #clearPreviousHistoryDateFilterBtn:hover,
+      #todayPreviousHistoryDateFilterBtn:hover {
+        border-color: #8ea4cf;
+        background: #eef3ff;
+      }
+
+      #applyPreviousHistoryDateFilterBtn.primary:hover {
+        border-color: #2f4e87;
+        background: #34568f;
+        color: #fff;
+      }
+
+      .inline-pair {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .payment-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      .payment-table th,
+      .payment-table td {
+        border: 1px solid var(--line);
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 0.9rem;
+      }
+
+      .payment-table th {
+        background: #eef3fb;
+      }
+
+      .coupon-register-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: nowrap;
+        margin-bottom: 12px;
+      }
+
+      .coupon-register-row .inline-input {
+        flex: 1;
+      }
+
+      .customer-alert-box {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8faff;
+        padding: 10px;
+        margin-bottom: 10px;
+        font-size: 0.88rem;
+        max-height: 230px;
+        overflow-y: auto;
+      }
+
+      .customer-alert-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px dashed #d8dfef;
+      }
+
+      .customer-alert-row:last-child {
+        border-bottom: 0;
+      }
+
+      .customer-alert-history {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        margin-bottom: 10px;
+        font-size: 0.86rem;
+        max-height: 260px;
+        overflow-y: auto;
+      }
+
+      .customer-stats-box {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+      }
+
+      .customer-stats-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+      }
+
+      .calendar-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(14, 20, 34, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        z-index: 999;
+      }
+
+      .calendar-modal.hidden {
+        display: none;
+      }
+
+      .calendar-panel {
+        width: min(980px, 96vw);
+        max-height: 90vh;
+        overflow: auto;
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        box-shadow: 0 10px 32px rgba(20, 30, 52, 0.2);
+        padding: 14px;
+      }
+
+      .calendar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .calendar-title {
+        font-weight: 800;
+        font-size: 1.05rem;
+      }
+
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .calendar-weekday {
+        text-align: center;
+        font-weight: 700;
+        color: #54607c;
+        font-size: 0.86rem;
+        padding: 4px 0;
+      }
+
+      .calendar-weekday.weekend {
+        color: #d74444;
+      }
+
+      .calendar-day {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fbfcff;
+        min-height: 120px;
+        padding: 8px;
+        font-size: 0.82rem;
+      }
+
+      .calendar-day.empty {
+        background: #f6f8fc;
+      }
+
+      .calendar-day-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .calendar-day-count {
+        color: #2f4f85;
+      }
+
+      .calendar-day-number.weekend {
+        color: #d74444;
+      }
+
+      .calendar-company {
+        color: #314160;
+        line-height: 1.4;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .calendar-limit-row {
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .calendar-bulk-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 0 0 10px;
+      }
+
+      .calendar-limit-input {
+        width: 64px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 5px;
+        font-size: 0.8rem;
+        background: #fff;
+      }
+
+      .weekday-label {
+        font-weight: 700;
+      }
+
+      .weekday-label.weekend {
+        color: #d74444;
+      }
+
+      @media (max-width: 1100px) {
+        .board {
+          grid-template-columns: 1fr;
+        }
+
+        .item-body {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>촬영스케줄 관리자페이지</h1>
+      <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
+
+      <div class="top-tabs">
+        <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
+        <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
+        <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
+      </div>
+
+      <section id="scheduleSection" class="board">
+        <article class="card">
+          <h2>작가 관리</h2>
+          <div id="registerPanel" class="register-panel hidden">
+            <div class="input-row">
+              <span>👤</span>
+              <input id="newPhotographerName" type="text" placeholder="작가 이름 입력" />
+            </div>
+            <div class="input-row">
+              <span>📞</span>
+              <input id="newPhotographerPhone" type="text" placeholder="작가번호(연락처) 입력" />
+            </div>
+            <div class="input-row">
+              <span>🚗</span>
+              <input id="newPhotographerCar" type="text" placeholder="작가 차량번호 입력" />
+            </div>
+            <div class="actions" style="margin-top: 8px;">
+              <button id="registerPhotographerBtn" class="btn-sm primary" type="button">등록</button>
+              <button id="closePhotographerPanelBtn" class="btn-sm" type="button">완료</button>
+            </div>
+            <div id="panelPhotographerList" class="member-names"></div>
+          </div>
+          <p class="helper">등록 인원: <strong id="memberCount">2명</strong></p>
+          <div id="memberNames" class="company-list"></div>
+
+          <h3 class="sub-title">업체 등록</h3>
+          <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
+          <div id="companyRegisterPanel" class="register-panel hidden">
+            <form id="companyForm" class="form">
+              <div class="input-row">
+                <span>🏢</span>
+                <input id="companyNameInput" type="text" placeholder="업체 이름" required />
+              </div>
+              <div class="input-row">
+                <span>📞</span>
+                <input id="companyPhoneInput" type="text" placeholder="연락처" required />
+              </div>
+              <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+                <button class="btn-sm primary" type="submit">등록</button>
+                <button id="closeCompanyPanelBtn" class="btn-sm" type="button">완료</button>
+              </div>
+            </form>
+          </div>
+          <div class="input-row" style="margin-top: 8px;">
+            <span>🔎</span>
+            <input id="companySearchInput" type="text" placeholder="업체명 또는 연락처 검색" />
+          </div>
+          <div id="companyList" class="company-list"></div>
+        </article>
+
+        <article class="card schedule-register-card">
+          <h2>스케줄 등록</h2>
+          <form id="scheduleForm" class="form">
+            <div class="filter-row">
+              <div class="input-row">
+                <span>📅</span>
+                <select id="year" required></select>
+              </div>
+              <div class="input-row">
+                <select id="month" required></select>
+              </div>
+              <div class="input-row">
+                <select id="day" required></select>
+              </div>
+            </div>
+            <div class="input-row">
+              <span>🏢</span>
+              <input id="company" type="text" placeholder="업체명" required />
+            </div>
+            <div class="input-row">
+              <span>📍</span>
+              <input id="place" type="text" placeholder="촬영장소" required />
+            </div>
+            <div class="filter-row">
+              <div class="input-row">
+                <span>📐</span>
+                <select id="pyeong">
+                  <option value="">평수 선택</option>
+                  <option value="45평이하">45평이하</option>
+                  <option value="45평이상">45평이상</option>
+                  <option value="95평이상">95평이상</option>
+                  <option value="145평이상">145평이상</option>
+                </select>
+              </div>
+              <div class="input-row">
+                <span>🔒</span>
+                <input id="jointCode" type="text" placeholder="공동현관 비번" />
+              </div>
+              <div class="input-row">
+                <span>🗝️</span>
+                <input id="doorCode" type="text" placeholder="세대 비번" />
+              </div>
+            </div>
+            <div class="input-row">
+              <span>📝</span>
+              <input id="memo" type="text" placeholder="메모사항" />
+            </div>
+            <div>
+              <strong>촬영 구성</strong>
+              <div class="radio-line">
+                <label><input type="radio" name="composition" value="사진만" checked /> 사진만</label>
+                <label><input type="radio" name="composition" value="사진영상 둘다" /> 사진영상 둘다</label>
+              </div>
+            </div>
+            <button class="btn-main" type="submit">+ 새 스케줄 추가</button>
+            <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
+              <input id="adminOverridePassword" class="inline-input" type="password" placeholder="관리자 비밀번호" style="width: 180px;" />
+              <button id="adminOverrideSubmitBtn" class="btn-sm" type="button">관리자권한등록</button>
+            </div>
+          </form>
+          <p class="new-note">새로고침하면 데이터가 초기화됩니다.</p>
+        </article>
+
+        <article class="card my-schedule-card">
+          <div class="schedule-head">
+            <h2>전체스케줄</h2>
+            <div class="head-right">
+              <span class="count">총 <span id="totalCount">0</span>건</span>
+              <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
+              <button id="previousScheduleHistoryBtn" class="btn-sm" type="button">이전기록</button>
+              <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
+              <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
+              <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
+            </div>
+          </div>
+
+          <div id="viewTabs" class="view-tabs"></div>
+
+          <div id="dateFilterRow" class="filter-row">
+            <select id="yearFilter" class="small-select"></select>
+            <select id="monthFilter" class="small-select"></select>
+            <select id="dayFilter" class="small-select"></select>
+            <input id="companyFilterInput" class="small-select" type="text" placeholder="업체명 검색" />
+            <button id="checkDateCountBtn" class="btn-sm" type="button">월별스케줄요약</button>
+            <button id="copyScheduleBtn" class="btn-sm" type="button">내용복사</button>
+          </div>
+
+          <div id="customerAlertBox" class="customer-alert-box"></div>
+          <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
+          <div id="list" class="list"></div>
+          <div id="customerStatsBox" class="customer-stats-box"></div>
+          <div id="openDayoffSummaryBox" class="customer-alert-history" style="margin-top: 10px;"></div>
+        </article>
+      </section>
+
+      <section id="paymentSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>입금 관리</h2>
+          </div>
+          <div id="paymentFilterTabs" class="view-tabs">
+            <button class="active" data-payment-filter="unpaid" type="button">미입금 업체</button>
+            <button data-payment-filter="paid" type="button">입금 업체</button>
+            <button data-payment-filter="hold" type="button">보류업체</button>
+            <button data-payment-filter="refund" type="button">환불업체</button>
+          </div>
+          <table class="payment-table">
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>업체명</th>
+                <th>입금자명</th>
+                <th>입금날짜</th>
+                <th>입금금액</th>
+                <th>입금유무</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="paymentListBody"></tbody>
+          </table>
+        </article>
+      </section>
+
+      <section id="couponSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>회차권 등록</h2>
+          </div>
+          <form id="couponForm" class="coupon-register-row">
+            <input id="couponCompanyInput" class="inline-input" type="text" placeholder="등록된 업체명 입력" required style="min-width: 220px;" />
+            <select id="couponCountSelect" class="inline-select" required style="width: 120px;"></select>
+            <button class="btn-sm primary" type="submit">회차권 등록</button>
+          </form>
+          <table class="payment-table">
+            <thead>
+              <tr>
+                <th>업체명</th>
+                <th>현재 남은 회차</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="couponListBody"></tbody>
+          </table>
+        </article>
+      </section>
+    </main>
+
+    <input id="excelUploadInput" type="file" accept=".csv" class="hidden" />
+
+    <div id="calendarModal" class="calendar-modal hidden">
+      <div class="calendar-panel">
+        <div class="calendar-head">
+          <div class="actions" style="margin-top: 0;">
+            <button id="calendarPrevBtn" class="btn-sm" type="button">이전달</button>
+            <button id="calendarNextBtn" class="btn-sm" type="button">다음달</button>
+          </div>
+          <div id="calendarTitle" class="calendar-title"></div>
+          <button id="calendarCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="calendarMonthTotal" class="helper" style="margin: 0 0 10px;"></div>
+        <div class="calendar-bulk-row">
+          <span>평일일괄적용</span>
+          <input id="bulkWeekdayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="평일 제한갯수" style="width: 120px;" />
+          <span>주말일괄적용</span>
+          <input id="bulkHolidayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="주말/공휴일 제한갯수" style="width: 160px;" />
+          <button id="applyMonthLimitBtn" class="btn-sm" type="button">전체 기본적용</button>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+        <div id="dayoffRequestHistory" class="customer-alert-history" style="margin-top: 10px; max-height: 180px;"></div>
+      </div>
+    </div>
+
+    <div id="companyOrderHistoryModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(900px, 96vw);">
+        <div class="calendar-head">
+          <div id="companyOrderHistoryTitle" class="calendar-title">업체 주문 기록</div>
+          <button id="companyOrderHistoryCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="companyOrderHistorySummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="companyOrderHistoryDetail" class="customer-alert-history" style="max-height: 52vh;"></div>
+      </div>
+    </div>
+
+    <div id="writerHistoryModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(860px, 96vw);">
+        <div class="calendar-head">
+          <div id="writerHistoryTitle" class="calendar-title">작가 정보</div>
+          <button id="writerHistoryCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="writerHistorySummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="writerHistoryDetail" class="customer-alert-history" style="max-height: 48vh;"></div>
+      </div>
+    </div>
+
+    <div id="previousScheduleHistoryModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(980px, 96vw);">
+        <div class="calendar-head">
+          <div id="previousScheduleHistoryTitle" class="calendar-title">이전기록</div>
+          <button id="previousScheduleHistoryCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="previousScheduleHistorySummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="previousScheduleHistoryDetail" class="customer-alert-history" style="max-height: 58vh;"></div>
+      </div>
+    </div>
+
+    <script src="./sync-config.js"></script>
+    <script>
+      const currentYear = new Date().getFullYear();
+      const photographers = [];
+      const photographerPhones = {};
+      const photographerCarNumbers = {};
+      const companies = [];
+      const data = [];
+      const STORAGE_CUSTOMER_COMPANIES = "scheduleSiteCustomerCompanies";
+      const STORAGE_CUSTOMER_SCHEDULES = "scheduleSiteCustomerSchedules";
+      const STORAGE_CUSTOMER_ALERTS = "scheduleSiteCustomerAlerts";
+      const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
+      const STORAGE_CUSTOMER_LOGINS = "scheduleSiteCustomerLogins";
+      const STORAGE_CUSTOMER_SESSION = "scheduleSiteCustomerSession";
+      const STORAGE_WRITERS = "scheduleSiteWriters";
+      const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
+      const STORAGE_EXCLUDED_PHOTOGRAPHERS = "scheduleSiteExcludedPhotographers";
+      const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
+      const STORAGE_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
+      const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
+      const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
+      const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
+      const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
+      const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
+      const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
+      const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
+      const STORAGE_FULL_RESET_DONE_V2 = "scheduleSiteFullResetDoneV2";
+      const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+      const REMOTE_SYNC_ENDPOINT =
+        localStorage.getItem("scheduleSiteRemoteSyncEndpoint") ||
+        syncConfig.remoteSyncEndpoint ||
+        "http://localhost:8787/api/state";
+      const SUPABASE_URL = localStorage.getItem("scheduleSiteSupabaseUrl") || syncConfig.supabaseUrl || "";
+      const SUPABASE_ANON_KEY = localStorage.getItem("scheduleSiteSupabaseAnonKey") || syncConfig.supabaseAnonKey || "";
+      const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      const SUPABASE_STATE_TABLE = "app_state";
+      const SUPABASE_STATE_ID = "global";
+      const STORAGE_SYNC_KEYS = [
+        STORAGE_CUSTOMER_COMPANIES,
+        STORAGE_CUSTOMER_SCHEDULES,
+        STORAGE_CUSTOMER_ALERTS,
+        STORAGE_CUSTOMERS,
+        STORAGE_CUSTOMER_LOGINS,
+        STORAGE_WRITERS,
+        STORAGE_WRITER_SCHEDULES,
+        STORAGE_ADMIN_SCHEDULES,
+        STORAGE_DAILY_LIMITS,
+        STORAGE_DAYOFF_DEDUCTIONS,
+        STORAGE_DAYOFF_REQUESTS,
+        STORAGE_DAYOFF_ALERT_READ_IDS,
+        STORAGE_LIMIT_CONFIG,
+        STORAGE_EXCLUDED_PHOTOGRAPHERS,
+        STORAGE_PHOTOGRAPHER_PROFILES
+      ];
+      const onHoldPayments = [];
+      const refundPayments = [];
+      const couponPasses = {};
+
+      function buildCurrentStateSnapshot() {
+        const state = {};
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          const value = localStorage.getItem(key);
+          if (value !== null) state[key] = value;
+        });
+        return state;
+      }
+
+      function applyRemoteState(state) {
+        if (!state || typeof state !== "object") return;
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(state, key)) {
+            const value = state[key];
+            if (value === null || value === undefined) {
+              localStorage.removeItem(key);
+            } else {
+              localStorage.setItem(key, String(value));
+            }
+          }
+        });
+      }
+
+      function pullRemoteStateSync() {
+        try {
+          if (USE_SUPABASE_SYNC) {
+            const xhr = new XMLHttpRequest();
+            xhr.open(
+              "GET",
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+              false
+            );
+            xhr.setRequestHeader("apikey", SUPABASE_ANON_KEY);
+            xhr.setRequestHeader("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
+            xhr.send();
+            if (xhr.status < 200 || xhr.status >= 300) return;
+            const rows = JSON.parse(xhr.responseText || "[]");
+            if (!Array.isArray(rows) || !rows.length) return;
+            const row = rows[0];
+            const state = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+            applyRemoteState(state);
+            return;
+          }
+
+          if (!REMOTE_SYNC_ENDPOINT) return;
+          const xhr = new XMLHttpRequest();
+          xhr.open("GET", REMOTE_SYNC_ENDPOINT, false);
+          xhr.send();
+          if (xhr.status < 200 || xhr.status >= 300) return;
+          const payload = JSON.parse(xhr.responseText || "{}");
+          const state = payload && typeof payload === "object" ? payload.state || {} : {};
+          applyRemoteState(state);
+        } catch (error) {
+          // 서버 미접속 상태에서는 로컬 모드로 계속 동작
+        }
+      }
+
+      let remoteSyncTimer = null;
+      function pushRemoteState() {
+        const state = buildCurrentStateSnapshot();
+        if (USE_SUPABASE_SYNC) {
+          fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              Prefer: "resolution=merge-duplicates,return=minimal"
+            },
+            body: JSON.stringify([{ id: SUPABASE_STATE_ID, payload: state }])
+          }).catch(() => {});
+          return;
+        }
+        if (!REMOTE_SYNC_ENDPOINT) return;
+        fetch(REMOTE_SYNC_ENDPOINT, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state })
+        }).catch(() => {});
+      }
+
+      function scheduleRemotePush() {
+        if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
+        remoteSyncTimer = setTimeout(pushRemoteState, 250);
+      }
+
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+      localStorage.setItem = (key, value) => {
+        originalSetItem(key, value);
+        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+      };
+      localStorage.removeItem = (key) => {
+        originalRemoveItem(key);
+        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+      };
+      pullRemoteStateSync();
+
+      const tabScheduleEl = document.getElementById("tabSchedule");
+      const tabPaymentEl = document.getElementById("tabPayment");
+      const tabCouponEl = document.getElementById("tabCoupon");
+      const scheduleSectionEl = document.getElementById("scheduleSection");
+      const paymentSectionEl = document.getElementById("paymentSection");
+      const couponSectionEl = document.getElementById("couponSection");
+      const paymentFilterTabsEl = document.getElementById("paymentFilterTabs");
+      const paymentListBodyEl = document.getElementById("paymentListBody");
+      const couponFormEl = document.getElementById("couponForm");
+      const couponCompanyInputEl = document.getElementById("couponCompanyInput");
+      const couponCountSelectEl = document.getElementById("couponCountSelect");
+      const couponListBodyEl = document.getElementById("couponListBody");
+      const calendarModalEl = document.getElementById("calendarModal");
+      const calendarTitleEl = document.getElementById("calendarTitle");
+      const calendarMonthTotalEl = document.getElementById("calendarMonthTotal");
+      const bulkWeekdayLimitInputEl = document.getElementById("bulkWeekdayLimitInput");
+      const bulkHolidayLimitInputEl = document.getElementById("bulkHolidayLimitInput");
+      const applyMonthLimitBtnEl = document.getElementById("applyMonthLimitBtn");
+      const calendarGridEl = document.getElementById("calendarGrid");
+      const dayoffRequestHistoryEl = document.getElementById("dayoffRequestHistory");
+      const calendarPrevBtnEl = document.getElementById("calendarPrevBtn");
+      const calendarNextBtnEl = document.getElementById("calendarNextBtn");
+      const calendarCloseBtnEl = document.getElementById("calendarCloseBtn");
+      const companyOrderHistoryModalEl = document.getElementById("companyOrderHistoryModal");
+      const companyOrderHistoryTitleEl = document.getElementById("companyOrderHistoryTitle");
+      const companyOrderHistorySummaryEl = document.getElementById("companyOrderHistorySummary");
+      const companyOrderHistoryDetailEl = document.getElementById("companyOrderHistoryDetail");
+      const companyOrderHistoryCloseBtnEl = document.getElementById("companyOrderHistoryCloseBtn");
+      const writerHistoryModalEl = document.getElementById("writerHistoryModal");
+      const writerHistoryTitleEl = document.getElementById("writerHistoryTitle");
+      const writerHistorySummaryEl = document.getElementById("writerHistorySummary");
+      const writerHistoryDetailEl = document.getElementById("writerHistoryDetail");
+      const writerHistoryCloseBtnEl = document.getElementById("writerHistoryCloseBtn");
+      const previousScheduleHistoryBtnEl = document.getElementById("previousScheduleHistoryBtn");
+      const previousScheduleHistoryModalEl = document.getElementById("previousScheduleHistoryModal");
+      const previousScheduleHistoryTitleEl = document.getElementById("previousScheduleHistoryTitle");
+      const previousScheduleHistorySummaryEl = document.getElementById("previousScheduleHistorySummary");
+      const previousScheduleHistoryDetailEl = document.getElementById("previousScheduleHistoryDetail");
+      const previousScheduleHistoryCloseBtnEl = document.getElementById("previousScheduleHistoryCloseBtn");
+      const listEl = document.getElementById("list");
+      const totalCountEl = document.getElementById("totalCount");
+      const customerAlertCountEl = document.getElementById("customerAlertCount");
+      const customerAlertHistoryBtnEl = document.getElementById("customerAlertHistoryBtn");
+      const customerStatsBoxEl = document.getElementById("customerStatsBox");
+      const customerAlertBoxEl = document.getElementById("customerAlertBox");
+      const customerAlertHistoryBoxEl = document.getElementById("customerAlertHistoryBox");
+      const openDayoffSummaryBoxEl = document.getElementById("openDayoffSummaryBox");
+      const viewTabsEl = document.getElementById("viewTabs");
+      const yearFilterEl = document.getElementById("yearFilter");
+      const monthFilterEl = document.getElementById("monthFilter");
+      const dayFilterEl = document.getElementById("dayFilter");
+      const companyFilterInputEl = document.getElementById("companyFilterInput");
+      const checkDateCountBtnEl = document.getElementById("checkDateCountBtn");
+      const copyScheduleBtnEl = document.getElementById("copyScheduleBtn");
+      const downloadExcelBtnEl = document.getElementById("downloadExcelBtn");
+      const uploadExcelBtnEl = document.getElementById("uploadExcelBtn");
+      const excelUploadInputEl = document.getElementById("excelUploadInput");
+      const formEl = document.getElementById("scheduleForm");
+      const adminOverridePasswordEl = document.getElementById("adminOverridePassword");
+      const adminOverrideSubmitBtnEl = document.getElementById("adminOverrideSubmitBtn");
+      const addPhotographerBtn = document.getElementById("addPhotographerBtn");
+      const registerPanelEl = document.getElementById("registerPanel");
+      const newPhotographerNameEl = document.getElementById("newPhotographerName");
+      const newPhotographerPhoneEl = document.getElementById("newPhotographerPhone");
+      const newPhotographerCarEl = document.getElementById("newPhotographerCar");
+      const registerPhotographerBtnEl = document.getElementById("registerPhotographerBtn");
+      const closePhotographerPanelBtnEl = document.getElementById("closePhotographerPanelBtn");
+      const memberCountEl = document.getElementById("memberCount");
+      const memberNamesEl = document.getElementById("memberNames");
+      const panelPhotographerListEl = document.getElementById("panelPhotographerList");
+      const addCompanyBtnEl = document.getElementById("addCompanyBtn");
+      const companyRegisterPanelEl = document.getElementById("companyRegisterPanel");
+      const closeCompanyPanelBtnEl = document.getElementById("closeCompanyPanelBtn");
+      const yearEl = document.getElementById("year");
+      const monthEl = document.getElementById("month");
+      const dayEl = document.getElementById("day");
+      const companyFormEl = document.getElementById("companyForm");
+      const companyNameInputEl = document.getElementById("companyNameInput");
+      const companyPhoneInputEl = document.getElementById("companyPhoneInput");
+      const companySearchInputEl = document.getElementById("companySearchInput");
+      const companyListEl = document.getElementById("companyList");
+      let currentPhotographerFilter = "all";
+      let editingPhotographerName = null;
+      let editingIndex = null;
+      let editingDateIndex = null;
+      let quickPhotographerPickerIndex = null;
+      let currentPaymentFilter = "unpaid";
+      let editingPaymentIndex = null;
+      let couponApplyIndex = null;
+      let editingCompanyIndex = null;
+      let calendarViewYear = currentYear;
+      let calendarViewMonth = new Date().getMonth() + 1;
+      let isAlertHistoryVisible = false;
+      let currentScheduleDatePreset = "";
+      let latestScheduleCopyRows = [];
+      let latestScheduleCopyLabel = "전체스케줄";
+      const ADMIN_OVERRIDE_PASSWORD = "6315";
+      let previousHistoryFilterYear = String(new Date().getFullYear());
+      let previousHistoryFilterMonth = String(new Date().getMonth() + 1).padStart(2, "0");
+      let previousHistoryFilterDay = String(new Date().getDate()).padStart(2, "0");
+      let previousHistoryWriterFilter = "all";
+      let previousHistoryCompanyFilter = "";
+
+      function escapeHtml(text) {
+        return text
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function normalizeCompanyName(name) {
+        return String(name || "").trim();
+      }
+
+      function getExcludedPhotographerNames() {
+        return readStorageArray(STORAGE_EXCLUDED_PHOTOGRAPHERS)
+          .map((name) => String(name || "").trim())
+          .filter(Boolean);
+      }
+
+      function setExcludedPhotographerNames(names) {
+        const uniqueNames = [...new Set(names.map((name) => String(name || "").trim()).filter(Boolean))];
+        localStorage.setItem(STORAGE_EXCLUDED_PHOTOGRAPHERS, JSON.stringify(uniqueNames));
+      }
+
+      function savePhotographerProfilesToStorage() {
+        const profiles = photographers.map((name) => ({
+          name: String(name || "").trim(),
+          phone: String(photographerPhones[name] || "").trim(),
+          carNumber: String(photographerCarNumbers[name] || "").trim()
+        }));
+        localStorage.setItem(STORAGE_PHOTOGRAPHER_PROFILES, JSON.stringify(profiles));
+      }
+
+      function loadPhotographerProfilesFromStorage() {
+        const raw = localStorage.getItem(STORAGE_PHOTOGRAPHER_PROFILES);
+        if (raw === null) return;
+        let parsed = [];
+        try {
+          const value = JSON.parse(raw);
+          parsed = Array.isArray(value) ? value : [];
+        } catch (error) {
+          parsed = [];
+        }
+        const profiles = parsed
+          .map((item) => ({
+            name: String(item?.name || "").trim(),
+            phone: String(item?.phone || "").trim(),
+            carNumber: String(item?.carNumber || "").trim()
+          }))
+          .filter((item) => item.name);
+
+        // 저장된 값이 빈 배열이어도 그대로 반영해야 기본값 부활을 막을 수 있음.
+        photographers.splice(0, photographers.length, ...profiles.map((item) => item.name));
+        Object.keys(photographerPhones).forEach((key) => delete photographerPhones[key]);
+        Object.keys(photographerCarNumbers).forEach((key) => delete photographerCarNumbers[key]);
+        profiles.forEach((item) => {
+          photographerPhones[item.name] = item.phone;
+          photographerCarNumbers[item.name] = item.carNumber;
+        });
+      }
+
+      function readStorageArray(key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function readStorageObject(key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function resetAllSchedulesOnce() {
+        if (localStorage.getItem(STORAGE_SCHEDULE_RESET_DONE) === "done") return;
+        [
+          STORAGE_CUSTOMER_SCHEDULES,
+          STORAGE_WRITER_SCHEDULES,
+          STORAGE_ADMIN_SCHEDULES,
+          STORAGE_DAYOFF_DEDUCTIONS,
+          STORAGE_DAYOFF_REQUESTS
+        ].forEach((key) => localStorage.removeItem(key));
+        localStorage.setItem(STORAGE_SCHEDULE_RESET_DONE, "done");
+      }
+
+      function resetAllDataOnceV2() {
+        if (localStorage.getItem(STORAGE_FULL_RESET_DONE_V2) === "done") return;
+        [
+          STORAGE_CUSTOMER_COMPANIES,
+          STORAGE_CUSTOMER_SCHEDULES,
+          STORAGE_CUSTOMER_ALERTS,
+          STORAGE_CUSTOMERS,
+          STORAGE_CUSTOMER_LOGINS,
+          STORAGE_CUSTOMER_SESSION,
+          STORAGE_WRITERS,
+          STORAGE_WRITER_SESSION,
+          STORAGE_WRITER_SCHEDULES,
+          STORAGE_ADMIN_SCHEDULES,
+          STORAGE_DAILY_LIMITS,
+          STORAGE_DAYOFF_DEDUCTIONS,
+          STORAGE_DAYOFF_REQUESTS,
+          STORAGE_DAYOFF_ALERT_READ_IDS,
+          STORAGE_LIMIT_CONFIG,
+          STORAGE_EXCLUDED_PHOTOGRAPHERS,
+          STORAGE_PHOTOGRAPHER_PROFILES,
+          STORAGE_TEST_SEED_Q1_2026_DONE,
+          STORAGE_SCHEDULE_RESET_DONE
+        ].forEach((key) => localStorage.removeItem(key));
+        localStorage.setItem(STORAGE_FULL_RESET_DONE_V2, "done");
+      }
+
+      function isHolidayDate(dateKey) {
+        const holidayDateSet = new Set([
+          // 2025 (web 확인: 공휴일 + 대체공휴일)
+          "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30",
+          "2025-03-01", "2025-03-03",
+          "2025-05-05", "2025-05-06",
+          "2025-06-06", "2025-08-15",
+          "2025-10-03", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09",
+          "2025-12-25",
+          // 2026
+          "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18",
+          "2026-03-01", "2026-03-02",
+          "2026-05-05", "2026-05-24", "2026-05-25",
+          "2026-06-06",
+          "2026-08-15", "2026-08-17",
+          "2026-09-24", "2026-09-25", "2026-09-26",
+          "2026-10-03", "2026-10-05", "2026-10-09",
+          "2026-12-25",
+          // 2027
+          "2027-01-01", "2027-02-06", "2027-02-08", "2027-02-09",
+          "2027-03-01",
+          "2027-05-05", "2027-05-13",
+          "2027-06-06", "2027-06-07",
+          "2027-08-15", "2027-08-16",
+          "2027-09-14", "2027-09-15", "2027-09-16",
+          "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11",
+          "2027-12-25", "2027-12-27"
+        ]);
+        return holidayDateSet.has(String(dateKey || "").slice(0, 10));
+      }
+
+      function getDefaultDailyLimit(dateKey) {
+        const config = readStorageObject(STORAGE_LIMIT_CONFIG);
+        const weekdayLimit = Math.max(0, Number(config.weekdayLimit) || 8);
+        const holidayLimit = Math.max(0, Number(config.holidayLimit) || 4);
+        const weekday = new Date(`${dateKey}T00:00:00`).getDay();
+        const isWeekend = weekday === 0 || weekday === 6;
+        return isWeekend || isHolidayDate(dateKey) ? holidayLimit : weekdayLimit;
+      }
+
+      function getDailyLimitBase(dateKey) {
+        return getDefaultDailyLimit(dateKey);
+      }
+
+      function getDayoffDeduction(dateKey) {
+        const deductions = readStorageObject(STORAGE_DAYOFF_DEDUCTIONS);
+        const legacyRaw = Number(deductions[dateKey]);
+        const legacyDeduction = Number.isNaN(legacyRaw) || legacyRaw < 0 ? 0 : Math.floor(legacyRaw);
+        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
+        const requestedDeduction = requests
+          .filter((item) => String(item?.date || "") === String(dateKey || ""))
+          .reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0);
+        return legacyDeduction + requestedDeduction;
+      }
+
+      function getMonthDayoffRequests(year, month) {
+        const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+        return readStorageArray(STORAGE_DAYOFF_REQUESTS)
+          .filter((item) => String(item?.date || "").startsWith(monthKey))
+          .sort((a, b) => new Date(b.requestedAt || 0).getTime() - new Date(a.requestedAt || 0).getTime());
+      }
+
+      function renderOpenDayoffSummary() {
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS)
+          .filter((item) => {
+            const date = String(item?.date || "").trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+            return date.slice(0, 7) >= currentMonthKey;
+          })
+          .sort((a, b) => {
+            const dateDiff = String(a?.date || "").localeCompare(String(b?.date || ""));
+            if (dateDiff !== 0) return dateDiff;
+            return new Date(b?.requestedAt || 0).getTime() - new Date(a?.requestedAt || 0).getTime();
+          });
+
+        if (requests.length === 0) {
+          openDayoffSummaryBoxEl.innerHTML = "<div>이번달 이후 휴무요청 내역이 없습니다.</div>";
+          return;
+        }
+
+        const byMonth = requests.reduce((acc, item) => {
+          const monthKey = String(item?.date || "").slice(0, 7);
+          if (!acc[monthKey]) acc[monthKey] = [];
+          acc[monthKey].push(item);
+          return acc;
+        }, {});
+
+        const monthRows = Object.keys(byMonth)
+          .sort((a, b) => a.localeCompare(b))
+          .map((monthKey) => {
+            const monthItems = byMonth[monthKey];
+            const byWriter = monthItems.reduce((acc, item) => {
+              const writerName = String(item?.writerName || "작가미상").trim() || "작가미상";
+              if (!acc[writerName]) acc[writerName] = [];
+              acc[writerName].push(item);
+              return acc;
+            }, {});
+
+            const writerRows = Object.keys(byWriter)
+              .sort((a, b) => a.localeCompare(b, "ko"))
+              .map((writerName) => {
+                const dateList = byWriter[writerName]
+                  .map((item) => escapeHtml(String(item?.date || "-")))
+                  .sort((a, b) => a.localeCompare(b))
+                  .join(", ");
+                return `
+                  <div class="customer-alert-row" style="align-items: flex-start;">
+                    <span><strong>${escapeHtml(writerName)}</strong>: ${dateList || "-"}</span>
+                  </div>
+                `;
+              })
+              .join("");
+
+            const [yearText, monthText] = monthKey.split("-");
+            return `
+              <div style="margin-top: 8px;">
+                <div style="font-weight: 700; margin-bottom: 4px;">${escapeHtml(yearText)}년 ${Number(monthText)}월</div>
+                ${writerRows}
+              </div>
+            `;
+          })
+          .join("");
+
+        openDayoffSummaryBoxEl.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 6px;">휴무요청작가리스트</div>
+          ${monthRows}
+        `;
+      }
+
+      function getEffectiveDailyLimit(dateKey) {
+        return Math.max(0, getDailyLimitBase(dateKey) - getDayoffDeduction(dateKey));
+      }
+
+      function getActiveScheduleCountByDate(dateKey, excludeIndex = -1) {
+        return data.reduce((count, item, index) => {
+          if (excludeIndex >= 0 && index === excludeIndex) return count;
+          return item.date === dateKey ? count + 1 : count;
+        }, 0);
+      }
+
+      function hydrateFromCustomerPageStorage() {
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        customerCompanies.forEach((company) => {
+          const name = normalizeCompanyName(company?.name);
+          if (!name) return;
+          const phone = String(company?.phone || "").trim();
+          const exists = companies.some((item) => normalizeCompanyName(item.name).toLowerCase() === name.toLowerCase());
+          if (!exists) {
+            companies.unshift({ name, phone: phone || "-" });
+          }
+        });
+
+        const existingScheduleIds = new Set(data.map((item) => String(item.customerScheduleId || "")).filter(Boolean));
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        customerSchedules.forEach((row) => {
+          const scheduleId = String(row?.customerScheduleId || "");
+          const date = String(row?.date || "").trim();
+          const company = normalizeCompanyName(row?.company);
+          const place = String(row?.place || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !company || !place) return;
+          if (scheduleId && existingScheduleIds.has(scheduleId)) return;
+
+          const fallbackIndex = data.findIndex(
+            (item) =>
+              String(item?.date || "").trim() === date &&
+              String(item?.time || "").trim() === String(row?.time || "").trim() &&
+              normalizeCompanyName(item?.company) === company &&
+              String(item?.place || "").trim() === place
+          );
+          if (fallbackIndex >= 0) {
+            const target = data[fallbackIndex];
+            if (scheduleId && !target.customerScheduleId) {
+              target.customerScheduleId = scheduleId;
+              existingScheduleIds.add(scheduleId);
+            }
+            target.customerId = String(row?.customerId || target.customerId || "").trim();
+            target.customerPhone = String(row?.customerPhone || target.customerPhone || "").trim();
+            target.name = String(row?.name || target.name || "작가미정").trim() || "작가미정";
+            target.writerPhone = String(row?.writerPhone || target.writerPhone || "").trim();
+            target.writerCarNumber = String(row?.writerCarNumber || target.writerCarNumber || "").trim();
+            target.paymentStatus = String(row?.paymentStatus || target.paymentStatus || "미입금").trim() || "미입금";
+            return;
+          }
+          data.unshift({
+            customerScheduleId: scheduleId || `legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            customerId: String(row?.customerId || "").trim(),
+            customerPhone: String(row?.customerPhone || "").trim(),
+            date,
+            time: String(row?.time || "09:00").trim() || "09:00",
+            name: String(row?.name || "작가미정").trim() || "작가미정",
+            company,
+            place,
+            pyeong: String(row?.pyeong || "").trim(),
+            jointCode: String(row?.jointCode || "").trim(),
+            doorCode: String(row?.doorCode || "").trim(),
+            memo: String(row?.memo || "").trim(),
+            composition: String(row?.composition || "사진만").trim() || "사진만",
+            writerPhone: String(row?.writerPhone || "").trim(),
+            writerCarNumber: String(row?.writerCarNumber || "").trim(),
+            paymentStatus: String(row?.paymentStatus || "미입금").trim() || "미입금",
+            paymentPayer: String(row?.paymentPayer || "").trim(),
+            paymentAmount: String(row?.paymentAmount || "").trim(),
+            paymentDate: String(row?.paymentDate || "").trim(),
+            couponUsed: Boolean(row?.couponUsed),
+            adminTimeUpdated: Boolean(row?.adminTimeUpdated)
+          });
+          if (scheduleId) existingScheduleIds.add(scheduleId);
+        });
+      }
+
+      function hydrateFromWriterPageStorage() {
+        const excludedNames = new Set(getExcludedPhotographerNames());
+        for (let i = photographers.length - 1; i >= 0; i -= 1) {
+          if (excludedNames.has(photographers[i])) {
+            photographers.splice(i, 1);
+          }
+        }
+        const writerUsers = readStorageArray(STORAGE_WRITERS);
+        writerUsers.forEach((user) => {
+          const writerName = String(user?.name || "").trim();
+          if (!writerName) return;
+          if (!excludedNames.has(writerName) && !photographers.includes(writerName)) {
+            photographers.push(writerName);
+          }
+          const phone = String(user?.phone || "").trim();
+          const carNumber = String(user?.carNumber || "").trim();
+          if (phone && !photographerPhones[writerName]) {
+            photographerPhones[writerName] = phone;
+          }
+          if (carNumber && !photographerCarNumbers[writerName]) {
+            photographerCarNumbers[writerName] = carNumber;
+          }
+        });
+        savePhotographerProfilesToStorage();
+      }
+
+      function syncWriterSchedulesStorage() {
+        const rows = data.map((item, index) => ({
+          writerMirrorId: String(item.customerScheduleId || `admin-${index}`),
+          date: String(item.date || "").trim(),
+          time: String(item.time || "").trim(),
+          name: String(item.name || "").trim(),
+          company: String(item.company || "").trim(),
+          place: String(item.place || "").trim(),
+          pyeong: String(item.pyeong || "").trim(),
+          memo: String(item.memo || "").trim(),
+          composition: String(item.composition || "").trim(),
+          writerPhone: String(item.writerPhone || "").trim(),
+          writerCarNumber: String(item.writerCarNumber || "").trim()
+        }));
+        localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(rows));
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+      }
+
+      function seedRandomSchedulesForTesting() {
+        if (localStorage.getItem(STORAGE_TEST_SEED_Q1_2026_DONE) === "done") return;
+        const companyPool = companies.length > 0 ? companies.map((item) => normalizeCompanyName(item.name)).filter(Boolean) : ["인로크2", "인로크3"];
+        const writerPool = photographers.length > 0 ? [...photographers, "작가미정"] : ["작가미정"];
+        const placePool = ["강남구", "강동구", "광진구", "송파구", "마포구", "성동구", "서초구", "동대문구"];
+        const pyeongPool = ["45평이하", "45평이상", "95평이상", "145평이상", ""];
+        const compositionPool = ["사진만", "사진영상 둘다"];
+        const paymentPool = ["미입금", "미입금", "미입금", "입금완료"];
+        const startAt = new Date("2026-02-01T00:00:00").getTime();
+        const endAt = new Date("2026-04-30T00:00:00").getTime();
+        const dayRange = Math.floor((endAt - startAt) / 86400000) + 1;
+
+        for (let i = 0; i < 50; i += 1) {
+          const dayOffset = Math.floor(Math.random() * dayRange);
+          const targetDate = new Date(startAt + dayOffset * 86400000);
+          const date = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+          const hour = String(10 + Math.floor(Math.random() * 8)).padStart(2, "0");
+          const minute = Math.random() < 0.5 ? "00" : "30";
+          const company = companyPool[Math.floor(Math.random() * companyPool.length)] || "인로크3";
+          const writer = writerPool[Math.floor(Math.random() * writerPool.length)] || "작가미정";
+          const paymentStatus = paymentPool[Math.floor(Math.random() * paymentPool.length)] || "미입금";
+          const paymentDone = paymentStatus === "입금완료";
+          const writerPhone = writer === "작가미정" ? "" : photographerPhones[writer] || "";
+          const writerCarNumber = writer === "작가미정" ? "" : photographerCarNumbers[writer] || "";
+          data.unshift({
+            customerScheduleId: `seed-q1-2026-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+            date,
+            time: `${hour}:${minute}`,
+            name: writer,
+            writerPhone,
+            writerCarNumber,
+            company,
+            place: placePool[Math.floor(Math.random() * placePool.length)],
+            pyeong: pyeongPool[Math.floor(Math.random() * pyeongPool.length)],
+            jointCode: "",
+            doorCode: "",
+            memo: "",
+            composition: compositionPool[Math.floor(Math.random() * compositionPool.length)],
+            paymentStatus,
+            paymentPayer: paymentDone ? "테스트입금자" : "",
+            paymentAmount: paymentDone ? "200000" : "",
+            paymentDate: paymentDone ? `${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}` : "",
+            couponUsed: false
+          });
+        }
+        localStorage.setItem(STORAGE_TEST_SEED_Q1_2026_DONE, "done");
+      }
+
+      function getReadDayoffAlertIds() {
+        return new Set(
+          readStorageArray(STORAGE_DAYOFF_ALERT_READ_IDS)
+            .map((value) => String(value || "").trim())
+            .filter(Boolean)
+        );
+      }
+
+      function getMergedAdminAlerts() {
+        const customerAlerts = readStorageArray(STORAGE_CUSTOMER_ALERTS).map((item) => ({
+          ...item,
+          source: "customer"
+        }));
+        const readDayoffIds = getReadDayoffAlertIds();
+        const dayoffAlerts = readStorageArray(STORAGE_DAYOFF_REQUESTS).map((item) => {
+          const dayoffId = String(item?.id || "").trim();
+          return {
+            id: `dayoff-${dayoffId}`,
+            source: "dayoff",
+            dayoffRequestId: dayoffId,
+            type: "dayoff_request",
+            writerName: String(item?.writerName || "").trim(),
+            writerId: String(item?.writerId || "").trim(),
+            date: String(item?.date || "").trim(),
+            amount: Math.max(0, Number(item?.amount) || 0),
+            read: dayoffId ? readDayoffIds.has(dayoffId) : false,
+            createdAt: item?.requestedAt || ""
+          };
+        });
+        return [...customerAlerts, ...dayoffAlerts].sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+      }
+
+      function renderCustomerUpdateNotices() {
+        const alerts = getMergedAdminAlerts();
+        const unreadCount = alerts.filter((item) => !item.read).length;
+        customerAlertCountEl.textContent = `미확인 알림 총 ${unreadCount}개`;
+        const visibleAlerts = alerts.filter((item) => !item.read);
+
+        if (visibleAlerts.length === 0) {
+          customerAlertBoxEl.innerHTML = '<div>알림이 없습니다.</div>';
+          return;
+        }
+
+        customerAlertBoxEl.innerHTML = visibleAlerts
+          .map((item) => {
+            const message = buildCustomerAlertMessage(item);
+            return `
+              <div class="customer-alert-row">
+                <span>${escapeHtml(message)}</span>
+                <button class="btn-sm" type="button" data-action="markCustomerAlertRead" data-alert-id="${escapeHtml(item.id || "")}" data-alert-source="${escapeHtml(item.source || "customer")}">확인</button>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderCustomerAlertHistory() {
+        const alerts = getMergedAdminAlerts();
+
+        if (alerts.length === 0) {
+          customerAlertHistoryBoxEl.innerHTML = "<div>이전 알림 기록이 없습니다.</div>";
+          return;
+        }
+
+        customerAlertHistoryBoxEl.innerHTML = alerts
+          .map((item) => {
+            const message = buildCustomerAlertMessage(item);
+            return `
+              <div class="customer-alert-row">
+                <span>${escapeHtml(message)}</span>
+                <span>${item.read ? "확인됨" : "미확인"}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function buildCustomerAlertMessage(item) {
+        const dateText = item.date || "-";
+        const timeText = item.time || "-";
+        const companyText = item.company || "업체미상";
+        if (item.type === "admin_time_update") {
+          return `${companyText} 업체 스케줄 시간을 ${dateText} ${timeText}(으)로 수정했습니다.`;
+        }
+        if (item.type === "new_company_schedule") {
+          return `신규업체 ${companyText} 스케줄이 등록되었습니다. (${dateText} ${timeText})`;
+        }
+        if (item.type === "schedule_create") {
+          return `${companyText} 업체가 새 스케줄을 등록했습니다. (${dateText} ${timeText})`;
+        }
+        if (item.type === "schedule_cancel") {
+          return `${companyText} 업체가 스케줄을 취소했습니다. (${dateText} ${timeText})`;
+        }
+        if (item.type === "customer_signup") {
+          return `${companyText} 업체가 고객 페이지에 회원가입했습니다.`;
+        }
+        if (item.type === "customer_login") {
+          return `${companyText} 업체가 고객 페이지에 로그인했습니다.`;
+        }
+        if (item.type === "dayoff_request") {
+          const writerName = item.writerName || "작가미상";
+          const writerId = item.writerId || "-";
+          const amount = Math.max(0, Number(item.amount) || 0);
+          return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, 차감 ${amount})`;
+        }
+        return `${companyText} 업체가 ${dateText} ${timeText} 스케줄을 수정했습니다.`;
+      }
+
+      function renderCustomerStatsDashboard() {
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+        const totalCompanies = new Set(companies.map((item) => normalizeCompanyName(item.name).toLowerCase()).filter(Boolean)).size;
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const todaySignupCount = customers.filter((item) => String(item.createdAt || "").slice(0, 10) === todayKey).length;
+        const todayVisitors = new Set(
+          loginLogs
+            .filter((item) => String(item.at || "").slice(0, 10) === todayKey)
+            .map((item) => String(item.customerId || item.company || "").trim())
+            .filter(Boolean)
+        ).size;
+
+        const dailyMap = new Map();
+        customers.forEach((item) => {
+          const dateKey = String(item.createdAt || "").slice(0, 10);
+          if (!dateKey) return;
+          if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { signup: 0, login: 0 });
+          dailyMap.get(dateKey).signup += 1;
+        });
+        loginLogs.forEach((item) => {
+          const dateKey = String(item.at || "").slice(0, 10);
+          if (!dateKey) return;
+          if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { signup: 0, login: 0 });
+          dailyMap.get(dateKey).login += 1;
+        });
+
+        const rows = [...dailyMap.entries()]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(
+            ([dateKey, stat]) => `
+              <tr>
+                <td>${escapeHtml(dateKey)}</td>
+                <td>${stat.signup}명</td>
+                <td>${stat.login}건</td>
+              </tr>
+            `
+          )
+          .join("");
+
+        customerStatsBoxEl.innerHTML = `
+          <div class="customer-stats-head">
+            <strong>고객 현황</strong>
+            <span>총업체수: ${totalCompanies}개</span>
+            <span>신규회원수(오늘): ${todaySignupCount}명</span>
+            <span>오늘 방문회원수: ${todayVisitors}명</span>
+          </div>
+          <table class="payment-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>일자</th>
+                <th>신규회원</th>
+                <th>로그인</th>
+              </tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="3">기록이 없습니다.</td></tr>'}</tbody>
+          </table>
+        `;
+      }
+
+      function syncCustomerScheduleFromAdminEdit(item, previousTime) {
+        if (!item?.customerScheduleId) return;
+        const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        const target = schedules.find((row) => row.customerScheduleId === item.customerScheduleId);
+        if (!target) return;
+        target.name = item.name || "작가미정";
+        target.writerPhone = item.writerPhone || photographerPhones[item.name] || "";
+        target.writerCarNumber = item.writerCarNumber || photographerCarNumbers[item.name] || "";
+        const isTimeChanged = Boolean(item.time) && item.time !== previousTime;
+
+        if (isTimeChanged) {
+          target.time = item.time;
+          target.adminTimeUpdated = true;
+          target.adminTimeUpdatedAt = new Date().toISOString();
+        }
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(schedules));
+
+        if (isTimeChanged) {
+          const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+          alerts.unshift({
+            id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: "admin_time_update",
+            scheduleId: item.customerScheduleId,
+            company: item.company || "",
+            date: item.date || "",
+            time: item.time || "",
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+          localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+          renderCustomerUpdateNotices();
+        }
+      }
+
+      function syncAdminSchedulesToCustomerStorage() {
+        const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+        const companyToUserMap = new Map(
+          customerUsers
+            .filter((user) => normalizeCompanyName(user?.company))
+            .map((user) => [normalizeCompanyName(user.company).toLowerCase(), user])
+        );
+        const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        let changed = false;
+
+        data.forEach((item) => {
+          const companyKey = normalizeCompanyName(item?.company).toLowerCase();
+          if (!companyKey) return;
+          const matchedUser = companyToUserMap.get(companyKey);
+          if (!matchedUser) return;
+
+          if (!item.customerScheduleId) {
+            item.customerScheduleId = `admin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            changed = true;
+          }
+          item.customerId = String(matchedUser.id || "").trim();
+          item.customerPhone = String(matchedUser.phone || "").trim();
+
+          const scheduleId = String(item.customerScheduleId || "").trim();
+          if (!scheduleId) return;
+
+          const target = schedules.find((row) => String(row?.customerScheduleId || "").trim() === scheduleId);
+          if (target) {
+            target.date = item.date || target.date || "";
+            target.time = item.time || target.time || "09:00";
+            target.name = item.name || "작가미정";
+            target.company = item.company || target.company || "";
+            target.place = item.place || target.place || "";
+            target.pyeong = item.pyeong || "";
+            target.jointCode = item.jointCode || "";
+            target.doorCode = item.doorCode || "";
+            target.memo = item.memo || "";
+            target.composition = item.composition || "사진만";
+            target.paymentStatus = item.paymentStatus || "미입금";
+            target.paymentPayer = item.paymentPayer || "";
+            target.paymentAmount = item.paymentAmount || "";
+            target.paymentDate = item.paymentDate || "";
+            target.couponUsed = Boolean(item.couponUsed);
+            target.writerPhone = item.writerPhone || photographerPhones[item.name] || "";
+            target.writerCarNumber = item.writerCarNumber || photographerCarNumbers[item.name] || "";
+            target.customerId = item.customerId;
+            target.customerPhone = item.customerPhone;
+            changed = true;
+            return;
+          }
+
+          schedules.unshift({
+            customerScheduleId: scheduleId,
+            customerId: item.customerId,
+            customerPhone: item.customerPhone,
+            date: item.date || "",
+            time: item.time || "09:00",
+            name: item.name || "작가미정",
+            company: item.company || "",
+            place: item.place || "",
+            pyeong: item.pyeong || "",
+            jointCode: item.jointCode || "",
+            doorCode: item.doorCode || "",
+            memo: item.memo || "",
+            composition: item.composition || "사진만",
+            paymentStatus: item.paymentStatus || "미입금",
+            paymentPayer: item.paymentPayer || "",
+            paymentAmount: item.paymentAmount || "",
+            paymentDate: item.paymentDate || "",
+            couponUsed: Boolean(item.couponUsed),
+            adminTimeUpdated: false,
+            writerPhone: item.writerPhone || photographerPhones[item.name] || "",
+            writerCarNumber: item.writerCarNumber || photographerCarNumbers[item.name] || ""
+          });
+          changed = true;
+        });
+
+        if (changed) {
+          localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(schedules));
+        }
+      }
+
+      function getWeekdayKo(dateText) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return "-";
+        const names = ["일", "월", "화", "수", "목", "금", "토"];
+        const parsed = new Date(`${dateText}T00:00:00`);
+        if (Number.isNaN(parsed.getTime())) return "-";
+        return names[parsed.getDay()];
+      }
+
+      function isWeekendDate(dateText) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return false;
+        const parsed = new Date(`${dateText}T00:00:00`);
+        if (Number.isNaN(parsed.getTime())) return false;
+        const weekday = parsed.getDay();
+        return weekday === 0 || weekday === 6;
+      }
+
+      function summarizeMemo(text) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return "-";
+        if (normalized.length <= 10) return normalized;
+        return `${normalized.slice(0, 10)}...`;
+      }
+
+      function formatPlaceForDisplay(text) {
+        const normalized = String(text || "-");
+        const chunks = [];
+        for (let idx = 0; idx < normalized.length; idx += 12) {
+          chunks.push(normalized.slice(idx, idx + 12));
+        }
+        return chunks.map((chunk) => escapeHtml(chunk)).join("<br />");
+      }
+
+      function escapeCsvField(value) {
+        const text = String(value ?? "");
+        if (text.includes('"') || text.includes(",") || text.includes("\n")) {
+          return `"${text.replaceAll('"', '""')}"`;
+        }
+        return text;
+      }
+
+      function parseCsvLine(line) {
+        const values = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+            }
+            continue;
+          }
+          if (char === "," && !inQuotes) {
+            values.push(current);
+            current = "";
+            continue;
+          }
+          current += char;
+        }
+        values.push(current);
+        return values;
+      }
+
+      function exportSchedulesToCsv() {
+        const headers = [
+          "date",
+          "time",
+          "name",
+          "company",
+          "place",
+          "pyeong",
+          "jointCode",
+          "doorCode",
+          "memo",
+          "composition",
+          "paymentStatus",
+          "paymentPayer",
+          "paymentAmount",
+          "paymentDate",
+          "couponUsed"
+        ];
+        const lines = [
+          headers.join(","),
+          ...data.map((item) =>
+            headers
+              .map((key) => escapeCsvField(item[key] ?? ""))
+              .join(",")
+          )
+        ];
+        const bom = "\uFEFF";
+        const blob = new Blob([bom + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const now = new Date();
+        const fileDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+        link.href = url;
+        link.download = `schedule_export_${fileDate}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      function importSchedulesFromCsvText(csvText) {
+        const lines = String(csvText || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .split("\n")
+          .filter((line) => line.trim() !== "");
+        if (lines.length < 2) {
+          alert("업로드할 데이터가 없습니다.");
+          return;
+        }
+        const header = parseCsvLine(lines[0]).map((col) => col.trim());
+        const headerMap = new Map(header.map((name, idx) => [name, idx]));
+        const required = ["date", "company", "place", "composition"];
+        const missing = required.filter((key) => !headerMap.has(key));
+        if (missing.length > 0) {
+          alert(`CSV 형식이 맞지 않습니다. 누락 컬럼: ${missing.join(", ")}`);
+          return;
+        }
+
+        let imported = 0;
+        let skipped = 0;
+        const nextItems = [];
+
+        for (let i = 1; i < lines.length; i += 1) {
+          const row = parseCsvLine(lines[i]);
+          const get = (key) => row[headerMap.get(key)] ?? "";
+          const date = String(get("date")).trim();
+          const company = normalizeCompanyName(get("company"));
+          const composition = String(get("composition")).trim() || "사진만";
+          const place = String(get("place")).trim();
+
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !company || !place || !isRegisteredCompanyName(company)) {
+            skipped += 1;
+            continue;
+          }
+          const currentCount = getActiveScheduleCountByDate(date);
+          const pendingCount = nextItems.filter((item) => item.date === date).length;
+          const dailyLimit = getEffectiveDailyLimit(date);
+          if (currentCount + pendingCount >= dailyLimit) {
+            skipped += 1;
+            continue;
+          }
+
+          nextItems.push({
+            date,
+            time: String(get("time")).trim() || "09:00",
+            name: String(get("name")).trim() || "작가미정",
+            company,
+            place,
+            pyeong: String(get("pyeong")).trim() || "",
+            jointCode: String(get("jointCode")).trim() || "",
+            doorCode: String(get("doorCode")).trim() || "",
+            memo: String(get("memo")).trim() || "",
+            composition,
+            paymentStatus: String(get("paymentStatus")).trim() || "미입금",
+            paymentPayer: String(get("paymentPayer")).trim() || "",
+            paymentAmount: String(get("paymentAmount")).trim() || "",
+            paymentDate: String(get("paymentDate")).trim() || "",
+            couponUsed: String(get("couponUsed")).trim().toLowerCase() === "true"
+          });
+          imported += 1;
+        }
+
+        if (nextItems.length > 0) {
+          data.unshift(...nextItems);
+          renderList();
+        }
+        alert(`업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
+      }
+
+      function isRegisteredCompanyName(name) {
+        const normalized = normalizeCompanyName(name).toLowerCase();
+        if (!normalized) return false;
+        return companies.some((company) => normalizeCompanyName(company.name).toLowerCase() === normalized);
+      }
+
+      function getCompanyPhoneForDisplay(companyName, item) {
+        const normalized = normalizeCompanyName(companyName).toLowerCase();
+        const matched = companies.find((company) => normalizeCompanyName(company.name).toLowerCase() === normalized);
+        if (matched?.phone) return matched.phone;
+        if (item?.customerPhone) return item.customerPhone;
+        return "-";
+      }
+
+      function getCustomerIdByCompanyName(companyName) {
+        const normalized = normalizeCompanyName(companyName).toLowerCase();
+        if (!normalized) return "";
+        const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+        const matched = customerUsers.find((user) => normalizeCompanyName(user.company).toLowerCase() === normalized);
+        return matched?.id || "";
+      }
+
+      function getCouponRemaining(companyName) {
+        const normalized = normalizeCompanyName(companyName);
+        if (!normalized) return 0;
+        return couponPasses[normalized] || 0;
+      }
+
+      function setCouponRemaining(companyName, remaining) {
+        const normalized = normalizeCompanyName(companyName);
+        if (!normalized) return;
+        couponPasses[normalized] = Math.max(0, Number(remaining) || 0);
+      }
+
+      function renderCouponPassList() {
+        const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        couponListBodyEl.innerHTML = entries
+          .map(
+            ([companyName, remaining]) => `
+              <tr>
+                <td>${escapeHtml(companyName)}</td>
+                <td>${Number(remaining)}회</td>
+                <td>
+                  <button class="btn-sm" type="button" data-action="cancelCouponPass" data-company-name="${escapeHtml(companyName)}">취소</button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
+
+        if (entries.length === 0) {
+          couponListBodyEl.innerHTML = `
+            <tr>
+              <td colspan="3">등록된 회차권이 없습니다.</td>
+            </tr>
+          `;
+        }
+      }
+
+      function setupCouponInputs() {
+        couponCountSelectEl.innerHTML = Array.from({ length: 20 }, (_, idx) => idx + 1)
+          .map((count) => `<option value="${count}">${count}회</option>`)
+          .join("");
+        couponCountSelectEl.value = "1";
+      }
+
+      function renderScheduleCalendar() {
+        const firstDay = new Date(calendarViewYear, calendarViewMonth - 1, 1).getDay();
+        const daysInMonth = new Date(calendarViewYear, calendarViewMonth, 0).getDate();
+        const monthSchedules = data.filter((item) => {
+          const date = new Date(item.date);
+          return date.getFullYear() === calendarViewYear && date.getMonth() + 1 === calendarViewMonth;
+        });
+        calendarTitleEl.textContent = `${calendarViewYear}년 ${calendarViewMonth}월`;
+        calendarMonthTotalEl.textContent = `이번 달 총 예약 ${monthSchedules.length}건`;
+        const config = readStorageObject(STORAGE_LIMIT_CONFIG);
+        bulkWeekdayLimitInputEl.value = String(Math.max(0, Number(config.weekdayLimit) || 8));
+        bulkHolidayLimitInputEl.value = String(Math.max(0, Number(config.holidayLimit) || 4));
+
+        const weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+          .map((day, idx) => `<div class="calendar-weekday ${idx === 0 || idx === 6 ? "weekend" : ""}">${day}</div>`)
+          .join("");
+
+        const cells = [];
+        const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+        for (let i = 0; i < totalCells; i += 1) {
+          const day = i - firstDay + 1;
+          if (day < 1 || day > daysInMonth) {
+            cells.push('<div class="calendar-day empty"></div>');
+            continue;
+          }
+          const dateKey = `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const daySchedules = data
+            .filter((item) => item.date === dateKey)
+            .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+          const dailyLimit = getEffectiveDailyLimit(dateKey);
+          const baseLimit = getDailyLimitBase(dateKey);
+          const deduction = getDayoffDeduction(dateKey);
+          const companies = daySchedules
+            .map(
+              (item) => {
+                const area = extractAreaLabel(item.place);
+                return `<div class="calendar-company">${escapeHtml(area || "-")} ${escapeHtml(item.time || "-")}</div>`;
+              }
+            )
+            .join("");
+          const weekdayIndex = new Date(`${dateKey}T00:00:00`).getDay();
+          const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
+          const isHoliday = isHolidayDate(dateKey);
+          const isRedDate = isWeekend || isHoliday;
+          cells.push(`
+            <div class="calendar-day">
+              <div class="calendar-day-head">
+                <span class="calendar-day-number ${isRedDate ? "weekend" : ""}">${day}일</span>
+                <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건</span>
+              </div>
+              ${companies || '<div class="calendar-company">예약 없음</div>'}
+            </div>
+          `);
+        }
+
+        calendarGridEl.innerHTML = `${weekdays}${cells.join("")}`;
+        renderDayoffRequestHistory();
+      }
+
+      function renderDayoffRequestHistory() {
+        const requests = getMonthDayoffRequests(calendarViewYear, calendarViewMonth);
+        if (requests.length === 0) {
+          dayoffRequestHistoryEl.innerHTML = `<div>${calendarViewYear}년 ${calendarViewMonth}월 휴무요청 내역이 없습니다.</div>`;
+          return;
+        }
+        const groupedByWriter = requests.reduce((acc, item) => {
+          const writerName = String(item?.writerName || "작가미상").trim() || "작가미상";
+          const writerId = String(item?.writerId || "-").trim() || "-";
+          const key = `${writerName}||${writerId}`;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(item);
+          return acc;
+        }, {});
+
+        const writerRows = Object.entries(groupedByWriter)
+          .sort((a, b) => a[0].localeCompare(b[0], "ko"))
+          .map(([key, writerItems]) => {
+            const [rawWriterName, rawWriterId] = key.split("||");
+            const writerName = escapeHtml(rawWriterName);
+            const writerId = escapeHtml(rawWriterId);
+            const dateList = writerItems
+              .map((item) => {
+                const date = escapeHtml(String(item?.date || "-"));
+                const requestedAt = escapeHtml(String(item?.requestedAt || "").slice(0, 16).replace("T", " "));
+                return `${date}${requestedAt ? ` (${requestedAt})` : ""}`;
+              })
+              .join(", ");
+            return `
+              <div class="customer-alert-row" style="align-items: flex-start;">
+                <span><strong>${writerName}</strong> (${writerId}) : ${dateList || "-"}</span>
+              </div>
+            `;
+          })
+          .join("");
+
+        dayoffRequestHistoryEl.innerHTML = `
+          <div style="margin-bottom: 6px; font-weight: 700;">${calendarViewYear}년 ${calendarViewMonth}월 휴무요청 작가 리스트</div>
+          ${writerRows}
+        `;
+      }
+
+      function applyGlobalLimitConfig() {
+        const weekdayLimit = Number(bulkWeekdayLimitInputEl.value);
+        const holidayLimit = Number(bulkHolidayLimitInputEl.value);
+        if (Number.isNaN(weekdayLimit) || weekdayLimit < 0 || Number.isNaN(holidayLimit) || holidayLimit < 0) {
+          alert("평일/주말및공휴일 제한갯수를 0 이상 숫자로 입력해주세요.");
+          return;
+        }
+        localStorage.setItem(
+          STORAGE_LIMIT_CONFIG,
+          JSON.stringify({ weekdayLimit: Math.floor(weekdayLimit), holidayLimit: Math.floor(holidayLimit) })
+        );
+        // 날짜별 개별 제한값은 사용하지 않으므로 초기화
+        localStorage.setItem(STORAGE_DAILY_LIMITS, JSON.stringify({}));
+        renderScheduleCalendar();
+        alert("제한 기본값이 전체 일정에 적용되었습니다.");
+      }
+
+      function openScheduleCalendarFromFilters() {
+        calendarViewYear = Number(yearFilterEl.value) || currentYear;
+        calendarViewMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
+        renderScheduleCalendar();
+        calendarModalEl.classList.remove("hidden");
+      }
+
+      function extractAreaLabel(placeText) {
+        const place = String(placeText || "").trim();
+        if (!place) return "";
+        const firstToken = place.split(/\s+/)[0] || "";
+        return firstToken.slice(0, 3);
+      }
+
+      function renderPhotographers() {
+        memberCountEl.textContent = `${photographers.length}명`;
+        const safeNames = photographers.map((name) => escapeHtml(name));
+        const excludedNames = getExcludedPhotographerNames();
+        const signupWriterNameSet = new Set(
+          readStorageArray(STORAGE_WRITERS)
+            .map((writer) => String(writer?.name || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        const activeRowsHtml = photographers
+          .map((name) => {
+                const safeName = escapeHtml(name);
+                const phone = escapeHtml(photographerPhones[name] || "-");
+                const carNumber = escapeHtml(photographerCarNumbers[name] || "-");
+                const isEditing = editingPhotographerName === name;
+                const canDelete = !signupWriterNameSet.has(String(name || "").trim().toLowerCase());
+                if (isEditing) {
+                  return `
+                    <div class="company-item" data-photographer-name="${safeName}">
+                      <div class="company-edit-row" style="margin-top: 0;">
+                        <input class="inline-input edit-photographer-name" type="text" value="${safeName}" placeholder="작가명" style="width: 100%; min-width: 200px;" />
+                        <input class="inline-input edit-photographer-phone" type="text" value="${escapeHtml(photographerPhones[name] || "")}" placeholder="연락처" style="width: 100%; min-width: 200px;" />
+                        <input class="inline-input edit-photographer-car" type="text" value="${escapeHtml(photographerCarNumbers[name] || "")}" placeholder="차량번호" style="width: 100%; min-width: 200px;" />
+                        <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+                          <button class="btn-sm primary" type="button" data-action="savePhotographerInfo" data-name="${safeName}">저장</button>
+                          <button class="btn-sm" type="button" data-action="cancelPhotographerEdit">취소</button>
+                          <button class="btn-sm" type="button" data-action="excludePhotographer" data-name="${safeName}">제외</button>
+                          ${canDelete ? `<button class="btn-sm" type="button" data-action="deletePhotographer" data-name="${safeName}">삭제</button>` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }
+                return `
+                  <div class="company-item company-clickable" data-writer-name="${safeName}">
+                    <div>작가: ${safeName}</div>
+                    <div>연락처: ${phone}</div>
+                    <div class="company-item-row" style="margin-top: 6px;">
+                      <span>차량번호: ${carNumber}</span>
+                      <button class="btn-sm" type="button" data-action="startPhotographerEdit" data-name="${safeName}" title="작가 수정">수정</button>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("");
+        const excludedRowsHtml = excludedNames.length > 0
+          ? `
+            <div class="company-item" style="border-style: dashed;">
+              <div><strong>제외작가 (기록조회용)</strong></div>
+              <div style="margin-top: 4px;">
+                ${excludedNames
+                  .map(
+                    (name) => `
+                      <div class="company-item company-clickable" data-writer-name="${escapeHtml(name)}" data-excluded-photographer="true" style="margin-top: 6px;">
+                        <div>작가: ${escapeHtml(name)} (제외)</div>
+                        <div>연락처: ${escapeHtml(photographerPhones[name] || "-")}</div>
+                        <div>차량번호: ${escapeHtml(photographerCarNumbers[name] || "-")}</div>
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `
+          : "";
+        memberNamesEl.innerHTML = activeRowsHtml || excludedRowsHtml
+          ? `${activeRowsHtml}${excludedRowsHtml}`
+          : '<div class="company-item">등록된 작가가 없습니다.</div>';
+        panelPhotographerListEl.innerHTML = safeNames.length > 0
+          ? `현재 작가: ${photographers
+              .map((name) => {
+                const phone = photographerPhones[name] ? `연락처:${escapeHtml(photographerPhones[name])}` : "";
+                const carNumber = photographerCarNumbers[name] ? `차량:${escapeHtml(photographerCarNumbers[name])}` : "";
+                const extra = [phone, carNumber].filter(Boolean).join(" / ");
+                return `${escapeHtml(name)}${extra ? `(${extra})` : ""}`;
+              })
+              .join(", ")}`
+          : "현재 작가가 없습니다.";
+        renderPhotographerTabs();
+      }
+
+      function renderPhotographerTabs() {
+        const namesInData = [...new Set(data.map((item) => item.name).filter(Boolean))];
+        const orderedNames = [...photographers, ...namesInData.filter((name) => !photographers.includes(name))];
+        const allTabs = ["all", ...orderedNames];
+
+        if (currentPhotographerFilter !== "all" && !orderedNames.includes(currentPhotographerFilter)) {
+          currentPhotographerFilter = "all";
+        }
+
+        const writerTabsHtml = allTabs
+          .map((tabValue) => {
+            const label = tabValue === "all" ? "작가전체" : escapeHtml(tabValue);
+            const activeClass = currentPhotographerFilter === tabValue ? "active" : "";
+            return `<button class="${activeClass}" data-view="${escapeHtml(tabValue)}" type="button">${label}</button>`;
+          })
+          .join("");
+        const allDateActiveClass = currentScheduleDatePreset === "all" ? "active" : "";
+        const todayActiveClass = currentScheduleDatePreset === "today" ? "active" : "";
+        const tomorrowActiveClass = currentScheduleDatePreset === "tomorrow" ? "active" : "";
+        viewTabsEl.innerHTML = `${writerTabsHtml}
+          <span class="tab-divider" aria-hidden="true"></span>
+          <button class="date-preset-tab ${allDateActiveClass}" data-date-preset="all" type="button">날짜전체</button>
+          <button class="date-preset-tab ${todayActiveClass}" data-date-preset="today" type="button">오늘</button>
+          <button class="date-preset-tab ${tomorrowActiveClass}" data-date-preset="tomorrow" type="button">내일</button>
+        `;
+      }
+
+      function applyScheduleDatePreset(presetType) {
+        if (presetType === "all") {
+          monthFilterEl.value = "all";
+          dayFilterEl.value = "all";
+          currentScheduleDatePreset = "all";
+          return;
+        }
+        const offsetDays = presetType === "tomorrow" ? 1 : 0;
+        const target = new Date();
+        target.setHours(0, 0, 0, 0);
+        target.setDate(target.getDate() + offsetDays);
+        yearFilterEl.value = String(target.getFullYear());
+        monthFilterEl.value = String(target.getMonth() + 1);
+        dayFilterEl.value = String(target.getDate());
+        currentScheduleDatePreset = presetType;
+      }
+
+      async function copyCurrentScheduleList() {
+        if (latestScheduleCopyRows.length === 0) {
+          alert("복사할 스케줄이 없습니다.");
+          return;
+        }
+
+        const lines = [
+          `[${latestScheduleCopyLabel}]`,
+          `총 ${latestScheduleCopyRows.length}건`,
+          ...latestScheduleCopyRows.map((item, idx) => {
+            const companyPhone = getCompanyPhoneForDisplay(item.company, item);
+            return `${idx + 1}. ${item.date || "-"} ${item.time || "-"} | 작가: ${item.name || "-"} | 업체: ${item.company || "-"} | 업체연락처: ${companyPhone || "-"} | 장소: ${item.place || "-"} | 평수: ${item.pyeong || "-"} | 촬영구성: ${item.composition || "-"} | 메모: ${item.memo || "-"}`;
+          })
+        ];
+        const text = lines.join("\n");
+
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          alert("스케줄 내용이 복사되었습니다.");
+        } catch (error) {
+          alert("복사에 실패했습니다. 다시 시도해주세요.");
+        }
+      }
+
+      function renderCompanies() {
+        const keyword = companySearchInputEl.value.trim().toLowerCase();
+        const filtered = companies
+          .map((company, index) => ({ company, index }))
+          .filter(({ company }) => {
+            if (!keyword) return true;
+            return company.name.toLowerCase().includes(keyword) || company.phone.toLowerCase().includes(keyword);
+          });
+
+        companyListEl.innerHTML = filtered
+          .map(({ company, index }) => {
+            const isEditing = editingCompanyIndex === index;
+            if (isEditing) {
+              const customerId = getCustomerIdByCompanyName(company.name);
+              return `
+                <div class="company-item" data-company-index="${index}">
+                  <div>업체: ${escapeHtml(company.name)}${customerId ? ` (아이디: ${escapeHtml(customerId)})` : ""}</div>
+                  <div class="company-edit-row" style="margin-top: 6px;">
+                    <input class="inline-input edit-company-name" type="text" value="${escapeHtml(company.name || "")}" style="width: 100%; min-width: 260px;" />
+                    <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
+                    <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+                      <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
+                      <button class="btn-sm" type="button" data-action="cancelCompanyPhone" data-company-index="${index}">취소</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            const customerId = getCustomerIdByCompanyName(company.name);
+            return `
+              <div class="company-item company-clickable" data-company-index="${index}">
+                <div>업체: ${escapeHtml(company.name)}${customerId ? ` (아이디: ${escapeHtml(customerId)})` : ""}</div>
+                <div class="company-item-row" style="margin-top: 6px;">
+                  <span>연락처: ${escapeHtml(company.phone)}</span>
+                  <button class="btn-sm" type="button" data-action="startCompanyPhoneEdit" data-company-index="${index}">수정</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+
+        if (filtered.length === 0) {
+          companyListEl.innerHTML = '<div class="company-item">검색 결과가 없습니다.</div>';
+        }
+      }
+
+      function renderCompanyOrderHistory(companyName) {
+        hydrateFromCustomerPageStorage();
+        const normalized = normalizeCompanyName(companyName).toLowerCase();
+        const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+        const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+        const matchedUser = customerUsers.find((user) => normalizeCompanyName(user.company).toLowerCase() === normalized) || null;
+        const accountId = String(matchedUser?.id || "").trim();
+        const accountPassword = String(matchedUser?.password || "").trim();
+        const accountLogs = matchedUser
+          ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
+          : [];
+        const accountTodayLoginCount = accountLogs.filter(
+          (item) => String(item.at || "").slice(0, 10) === new Date().toISOString().slice(0, 10)
+        ).length;
+        const accountLastLogin = accountLogs.length
+          ? accountLogs
+              .slice()
+              .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime())[0]?.at || ""
+          : "";
+        const customerScheduleRows = readStorageArray(STORAGE_CUSTOMER_SCHEDULES).map((row) => ({
+          customerScheduleId: String(row?.customerScheduleId || "").trim(),
+          date: String(row?.date || "").trim(),
+          time: String(row?.time || "").trim(),
+          company: normalizeCompanyName(row?.company),
+          place: String(row?.place || "").trim(),
+          pyeong: String(row?.pyeong || "").trim(),
+          composition: String(row?.composition || "").trim(),
+          paymentStatus: String(row?.paymentStatus || "미입금").trim() || "미입금",
+          memo: String(row?.memo || "").trim(),
+          sourceLabel: "진행중"
+        }));
+        const mergedActiveMap = new Map();
+        [...data.map((item) => ({ ...item, sourceLabel: "진행중" })), ...customerScheduleRows].forEach((item) => {
+          const idKey = String(item?.customerScheduleId || "").trim();
+          const fallbackKey = [
+            String(item?.date || "").trim(),
+            String(item?.time || "").trim(),
+            normalizeCompanyName(item?.company),
+            String(item?.place || "").trim()
+          ].join("|");
+          const key = idKey || fallbackKey;
+          if (!key) return;
+          mergedActiveMap.set(key, item);
+        });
+        const rows = [
+          ...[...mergedActiveMap.values()],
+          ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
+          ...refundPayments.map((item) => ({ ...item, sourceLabel: "환불" }))
+        ]
+          .filter((item) => normalizeCompanyName(item.company).toLowerCase() === normalized)
+          .sort((a, b) => {
+            const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
+            const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();
+            return at - bt;
+          });
+
+        const paidCount = rows.filter((item) => item.paymentStatus === "입금완료").length;
+        const unpaidCount = rows.length - paidCount;
+        const monthlyCounts = new Map();
+        rows.forEach((item) => {
+          const monthKey = String(item.date || "").slice(0, 7);
+          if (!/^\d{4}-\d{2}$/.test(monthKey)) return;
+          monthlyCounts.set(monthKey, (monthlyCounts.get(monthKey) || 0) + 1);
+        });
+        const monthlyRows = [...monthlyCounts.entries()]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .slice(0, 6)
+          .map(([month, count]) => `<tr><td>${escapeHtml(month)}</td><td>${count}건</td></tr>`)
+          .join("");
+
+        companyOrderHistoryTitleEl.textContent = `${companyName} 주문 기록`;
+        companyOrderHistorySummaryEl.innerHTML = `
+          <div class="customer-stats-head">
+            <span>총 주문: ${rows.length}건</span>
+            <span>입금완료: ${paidCount}건</span>
+            <span>미입금/기타: ${unpaidCount}건</span>
+          </div>
+          <div class="company-edit-row" style="margin: 8px 0 10px;">
+            <div><strong>업체 계정 관리</strong></div>
+            <input class="inline-input company-account-id" type="text" placeholder="아이디" value="${escapeHtml(accountId)}" />
+            <input class="inline-input company-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(accountPassword)}" />
+            <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+              <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}">계정저장</button>
+            </div>
+            <div style="font-size: 0.86rem; color: #5f6c88;">
+              로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
+            </div>
+          </div>
+          <table class="payment-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>주문건수</th>
+              </tr>
+            </thead>
+            <tbody>${monthlyRows || '<tr><td colspan="2">기록이 없습니다.</td></tr>'}</tbody>
+          </table>
+        `;
+
+        companyOrderHistoryDetailEl.innerHTML = rows.length
+          ? rows
+              .map(
+                (item) => `
+                  <div class="customer-alert-row" style="align-items: flex-start;">
+                    <div>
+                      <strong>${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}</strong><br />
+                      장소: ${formatPlaceForDisplay(item.place)}<br />
+                      평수/구성: ${escapeHtml(item.pyeong || "-")} / ${escapeHtml(item.composition || "-")}<br />
+                      결제상태: ${escapeHtml(item.paymentStatus || "-")} | 구분: ${escapeHtml(item.sourceLabel)}
+                    </div>
+                  </div>
+                `
+              )
+              .join("")
+          : '<div class="company-item">해당 업체의 주문 기록이 없습니다.</div>';
+      }
+
+      function renderWriterHistory(writerName) {
+        const targetName = String(writerName || "").trim();
+        const normalizedWriter = targetName.toLowerCase();
+        const writers = readStorageArray(STORAGE_WRITERS);
+        const writerUser = writers.find((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter) || null;
+        const excludedNameSet = new Set(getExcludedPhotographerNames().map((name) => String(name || "").trim().toLowerCase()));
+        const isExcludedWriter = excludedNameSet.has(normalizedWriter);
+        const writerId = String(writerUser?.id || "").trim();
+        const writerPassword = String(writerUser?.password || "").trim();
+
+        const rows = [...data, ...onHoldPayments, ...refundPayments]
+          .filter((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter)
+          .sort((a, b) => {
+            const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
+            const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();
+            return bt - at;
+          });
+
+        const monthlyCounts = new Map();
+        rows.forEach((item) => {
+          const monthKey = String(item.date || "").slice(0, 7);
+          if (!/^\d{4}-\d{2}$/.test(monthKey)) return;
+          monthlyCounts.set(monthKey, (monthlyCounts.get(monthKey) || 0) + 1);
+        });
+        const monthlyRows = [...monthlyCounts.entries()]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([month, count]) => `<tr><td>${escapeHtml(month)}</td><td>${count}회</td></tr>`)
+          .join("");
+
+        writerHistoryTitleEl.textContent = `${targetName} 작가 정보`;
+        writerHistorySummaryEl.innerHTML = `
+          <div class="customer-stats-head">
+            <span>총 촬영 배정: ${rows.length}건</span>
+          </div>
+          ${
+            isExcludedWriter
+              ? `<div class="actions" style="margin: 8px 0 10px; justify-content: flex-start;">
+                   <button class="btn-sm primary" type="button" data-action="restoreExcludedWriter" data-writer-name="${escapeHtml(targetName)}">복귀</button>
+                 </div>`
+              : ""
+          }
+          <div class="company-edit-row" style="margin: 8px 0 10px;">
+            <div><strong>작가 계정 관리</strong></div>
+            <input class="inline-input writer-account-id" type="text" placeholder="아이디" value="${escapeHtml(writerId)}" />
+            <input class="inline-input writer-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(writerPassword)}" />
+            <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+              <button class="btn-sm primary" type="button" data-action="saveWriterAccount" data-writer-name="${escapeHtml(targetName)}">계정저장</button>
+            </div>
+          </div>
+          <table class="payment-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>촬영횟수</th>
+              </tr>
+            </thead>
+            <tbody>${monthlyRows || '<tr><td colspan="2">기록이 없습니다.</td></tr>'}</tbody>
+          </table>
+        `;
+
+        writerHistoryDetailEl.innerHTML = rows.length
+          ? rows
+              .map(
+                (item) => `
+                  <div class="customer-alert-row" style="align-items: flex-start;">
+                    <div>
+                      <strong>${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}</strong><br />
+                      업체: ${escapeHtml(item.company || "-")}<br />
+                      장소: ${formatPlaceForDisplay(item.place)}
+                    </div>
+                  </div>
+                `
+              )
+              .join("")
+          : '<div class="company-item">해당 작가의 촬영 기록이 없습니다.</div>';
+      }
+
+      function renderPreviousScheduleHistory() {
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const rows = [
+          ...data.map((item) => ({ ...item, sourceLabel: "진행중" })),
+          ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
+          ...refundPayments.map((item) => ({ ...item, sourceLabel: "환불" }))
+        ]
+          .filter((item) => {
+            const dateText = String(item?.date || "").trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(dateText) && dateText < todayKey;
+          })
+          .sort((a, b) => {
+            const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
+            const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();
+            return bt - at;
+          });
+        const writerNamesInRows = [...new Set(rows.map((item) => String(item?.name || "").trim()).filter(Boolean))];
+        const writerButtonNames = [...photographers, ...writerNamesInRows.filter((name) => !photographers.includes(name))];
+        if (previousHistoryWriterFilter !== "all" && !writerButtonNames.includes(previousHistoryWriterFilter)) {
+          previousHistoryWriterFilter = "all";
+        }
+        const hasFilter =
+          previousHistoryFilterYear !== "all" ||
+          previousHistoryFilterMonth !== "all" ||
+          previousHistoryFilterDay !== "all" ||
+          previousHistoryCompanyFilter !== "";
+        const filteredRows = rows.filter((item) => {
+          const dateText = String(item?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
+          const year = dateText.slice(0, 4);
+          const month = dateText.slice(5, 7);
+          const day = dateText.slice(8, 10);
+          const passYear = previousHistoryFilterYear === "all" || year === previousHistoryFilterYear;
+          const passMonth = previousHistoryFilterMonth === "all" || month === previousHistoryFilterMonth;
+          const passDay = previousHistoryFilterDay === "all" || day === previousHistoryFilterDay;
+          const passWriter = previousHistoryWriterFilter === "all" || String(item?.name || "").trim() === previousHistoryWriterFilter;
+          const companyKeyword = normalizeCompanyName(previousHistoryCompanyFilter).toLowerCase();
+          const companyName = normalizeCompanyName(item?.company).toLowerCase();
+          const passCompany = !companyKeyword || companyName.includes(companyKeyword);
+          return passYear && passMonth && passDay && passWriter && passCompany;
+        });
+        const yearOptions = [
+          ...new Set([
+            String(new Date().getFullYear()),
+            ...rows.map((item) => String(item?.date || "").slice(0, 4)).filter((value) => /^\d{4}$/.test(value))
+          ])
+        ]
+          .sort((a, b) => b.localeCompare(a))
+          .map(
+            (year) => `<option value="${year}" ${previousHistoryFilterYear === year ? "selected" : ""}>${year}년</option>`
+          )
+          .join("");
+        const monthOptions = Array.from({ length: 12 }, (_, idx) => String(idx + 1).padStart(2, "0"))
+          .map(
+            (month) =>
+              `<option value="${month}" ${previousHistoryFilterMonth === month ? "selected" : ""}>${Number(month)}월</option>`
+          )
+          .join("");
+        const dayOptions = Array.from({ length: 31 }, (_, idx) => String(idx + 1).padStart(2, "0"))
+          .map(
+            (day) =>
+              `<option value="${day}" ${previousHistoryFilterDay === day ? "selected" : ""}>${Number(day)}일</option>`
+          )
+          .join("");
+
+        previousScheduleHistoryTitleEl.textContent = "이전기록";
+        previousScheduleHistorySummaryEl.innerHTML = `
+          <div class="view-tabs" style="margin: 0 0 8px;">
+            <button class="${previousHistoryWriterFilter === "all" ? "active" : ""}" data-history-writer="all" type="button">작가전체</button>
+            ${writerButtonNames
+              .map(
+                (name) =>
+                  `<button class="${previousHistoryWriterFilter === name ? "active" : ""}" data-history-writer="${escapeHtml(
+                    name
+                  )}" type="button">${escapeHtml(name)}</button>`
+              )
+              .join("")}
+          </div>
+          <div class="customer-stats-head">
+            <span>오늘 이전 총 기록: ${rows.length}건</span>
+            <span>조회 결과: ${filteredRows.length}건</span>
+            <select id="previousHistoryYearSelect" class="small-select" style="width: 120px;">
+              <option value="all" ${previousHistoryFilterYear === "all" ? "selected" : ""}>전체 년</option>
+              ${yearOptions}
+            </select>
+            <select id="previousHistoryMonthSelect" class="small-select" style="width: 120px;">
+              <option value="all" ${previousHistoryFilterMonth === "all" ? "selected" : ""}>전체 월</option>
+              ${monthOptions}
+            </select>
+            <select id="previousHistoryDaySelect" class="small-select" style="width: 120px;">
+              <option value="all" ${previousHistoryFilterDay === "all" ? "selected" : ""}>전체 일</option>
+              ${dayOptions}
+            </select>
+            <input id="previousHistoryCompanyInput" class="inline-input" type="text" value="${escapeHtml(previousHistoryCompanyFilter)}" placeholder="업체명 검색" style="width: 170px;" />
+            <button id="applyPreviousHistoryDateFilterBtn" class="btn-sm ${hasFilter ? "primary" : ""}" type="button">조회</button>
+            <button id="clearPreviousHistoryDateFilterBtn" class="btn-sm" type="button">전체</button>
+          </div>
+        `;
+        const yearSelectEl = previousScheduleHistorySummaryEl.querySelector("#previousHistoryYearSelect");
+        const monthSelectEl = previousScheduleHistorySummaryEl.querySelector("#previousHistoryMonthSelect");
+        const daySelectEl = previousScheduleHistorySummaryEl.querySelector("#previousHistoryDaySelect");
+        const companyInputEl = previousScheduleHistorySummaryEl.querySelector("#previousHistoryCompanyInput");
+        const applyBtnEl = previousScheduleHistorySummaryEl.querySelector("#applyPreviousHistoryDateFilterBtn");
+        const clearBtnEl = previousScheduleHistorySummaryEl.querySelector("#clearPreviousHistoryDateFilterBtn");
+        previousScheduleHistorySummaryEl.querySelectorAll("button[data-history-writer]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            previousHistoryWriterFilter = String(btn.dataset.historyWriter || "all").trim() || "all";
+            renderPreviousScheduleHistory();
+          });
+        });
+        applyBtnEl?.addEventListener("click", () => {
+          const nextYear = String(yearSelectEl?.value || "all").trim() || "all";
+          const nextMonth = String(monthSelectEl?.value || "all").trim() || "all";
+          const nextDay = String(daySelectEl?.value || "all").trim() || "all";
+          const nextCompanyKeyword = String(companyInputEl?.value || "").trim();
+          const canSearchByCompanyOnly =
+            nextCompanyKeyword !== "" && nextYear === "all" && nextMonth === "all" && nextDay === "all";
+          const isYearMonthSelected = nextYear !== "all" && nextMonth !== "all";
+          if (!canSearchByCompanyOnly && !isYearMonthSelected) {
+            alert("조회가 불가합니다. 년도와 월을 선택해주세요.");
+            return;
+          }
+          previousHistoryFilterYear = nextYear;
+          previousHistoryFilterMonth = nextMonth;
+          previousHistoryFilterDay = nextDay;
+          previousHistoryCompanyFilter = nextCompanyKeyword;
+          renderPreviousScheduleHistory();
+        });
+        clearBtnEl?.addEventListener("click", () => {
+          if (yearSelectEl) yearSelectEl.value = "all";
+          if (monthSelectEl) monthSelectEl.value = "all";
+          if (daySelectEl) daySelectEl.value = "all";
+        });
+
+        if (filteredRows.length === 0) {
+          previousScheduleHistoryDetailEl.innerHTML = '<div class="company-item">조건에 맞는 이전 기록이 없습니다.</div>';
+          return;
+        }
+
+        const grouped = new Map();
+        filteredRows.forEach((item) => {
+          const writer = item.name || "작가미정";
+          if (!grouped.has(writer)) grouped.set(writer, []);
+          grouped.get(writer).push(item);
+        });
+        const writerRows = [...grouped.entries()].sort((a, b) => {
+          const aIdx = photographers.indexOf(a[0]);
+          const bIdx = photographers.indexOf(b[0]);
+          const aScore = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx;
+          const bScore = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx;
+          return aScore - bScore || a[0].localeCompare(b[0], "ko");
+        });
+
+        previousScheduleHistoryDetailEl.innerHTML = `
+          <div class="writer-group-list">
+            ${writerRows
+              .map(
+                ([writer, schedules]) => `
+                  <article class="writer-row">
+                    <div class="writer-name">${escapeHtml(writer)}작가</div>
+                    <div class="writer-places">
+                      ${schedules
+                        .map((item) => {
+                          const statusBadgeClass = item.paymentStatus === "입금완료" ? "neon" : "danger";
+                          const statusBadgeText = item.paymentStatus === "입금완료" ? "입금확인" : "미결";
+                          return `
+                            <span class="writer-place">
+                              ${escapeHtml(item.date || "-")} (<span class="weekday-label ${isWeekendDate(item.date) ? "weekend" : ""}">${escapeHtml(getWeekdayKo(item.date))}</span>) | ${escapeHtml(item.time || "-")}
+                              <button class="btn-sm ${statusBadgeClass}" type="button" disabled style="margin-left: 6px;">${statusBadgeText}</button><br />
+                              업체: ${escapeHtml(item.company || "-")} (${escapeHtml(getCompanyPhoneForDisplay(item.company, item) || "-")})<br />
+                              장소: ${formatPlaceForDisplay(item.place)}<br />
+                              평수: ${escapeHtml(item.pyeong || "-")}<br />
+                              비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
+                              메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                              구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
+                              쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                              구분: ${escapeHtml(item.sourceLabel || "진행중")}
+                            </span>
+                          `;
+                        })
+                        .join("")}
+                    </div>
+                  </article>
+                `
+              )
+              .join("")}
+          </div>
+        `;
+      }
+
+      function renderPaymentList() {
+        const filtered =
+          currentPaymentFilter === "hold"
+            ? onHoldPayments.map((item, index) => ({ item, index, source: "hold" }))
+            : currentPaymentFilter === "refund"
+            ? refundPayments.map((item, index) => ({ item, index, source: "refund" }))
+            : data
+                .map((item, index) => ({ item, index, source: "active" }))
+                .filter(({ item }) => {
+                  if (currentPaymentFilter === "unpaid") return item.paymentStatus !== "입금완료";
+                  return item.paymentStatus === "입금완료";
+                });
+
+        paymentListBodyEl.innerHTML = filtered
+          .sort((a, b) => {
+            const aDate = new Date(`${a.item.date}T${a.item.time || "00:00"}:00`).getTime();
+            const bDate = new Date(`${b.item.date}T${b.item.time || "00:00"}:00`).getTime();
+            return aDate - bDate;
+          })
+          .map(({ item, index, source }) => {
+            const isEditing = source === "active" && editingPaymentIndex === index;
+            const fallbackDate = item.date || `${currentYear}-01-01`;
+            const sourceDate = item.paymentDate || fallbackDate;
+            let selectedMonth = "01";
+            let selectedDay = "01";
+            if (/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)) {
+              selectedMonth = sourceDate.slice(5, 7);
+              selectedDay = sourceDate.slice(8, 10);
+            } else if (/^\d{2}-\d{2}$/.test(sourceDate)) {
+              selectedMonth = sourceDate.slice(0, 2);
+              selectedDay = sourceDate.slice(3, 5);
+            }
+            const monthOptions = Array.from({ length: 12 }, (_, idx) => String(idx + 1).padStart(2, "0"))
+              .map(
+                (month) =>
+                  `<option value="${month}" ${month === selectedMonth ? "selected" : ""}>${Number(month)}월</option>`
+              )
+              .join("");
+            const dayOptions = Array.from({ length: 31 }, (_, idx) => String(idx + 1).padStart(2, "0"))
+              .map(
+                (day) =>
+                  `<option value="${day}" ${day === selectedDay ? "selected" : ""}>${Number(day)}일</option>`
+              )
+              .join("");
+            return `
+            <tr>
+              <td>${item.paymentDate || item.date}</td>
+              <td>${escapeHtml(item.company || "-")}</td>
+              <td>${
+                isEditing
+                  ? `<input class="inline-input pay-payer" type="text" value="${escapeHtml(item.paymentPayer || "")}" />`
+                  : `${escapeHtml(item.paymentPayer || "-")}`
+              }</td>
+              <td>${
+                isEditing
+                  ? `<span class="time-edit-row">
+                       <select class="inline-select pay-month" style="width: 92px;">${monthOptions}</select>
+                       <select class="inline-select pay-day" style="width: 92px;">${dayOptions}</select>
+                     </span>`
+                  : `${escapeHtml(item.paymentDate || "-")}`
+              }</td>
+              <td>${
+                isEditing
+                  ? `<input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" />`
+                  : `${escapeHtml(item.paymentAmount || "-")}`
+              }</td>
+              <td>${
+                isEditing
+                  ? `<span>금액 저장 시 자동 입금</span>`
+                  : `${
+                      source === "hold"
+                        ? "보류"
+                        : source === "refund"
+                        ? item.refundChecked
+                          ? "환불완료"
+                          : "미환불"
+                        : item.paymentStatus === "입금완료"
+                        ? "입금"
+                        : "미입금"
+                    }`
+              }</td>
+              <td>
+                ${
+                  source === "hold"
+                    ? `<button class="btn-sm" type="button" data-action="cancelHoldSchedule" data-index="${index}">스케줄취소</button>`
+                    : source === "refund"
+                    ? `<button class="btn-sm ${item.refundChecked ? "" : "primary"}" type="button" data-action="toggleRefundStatus" data-index="${index}">${
+                        item.refundChecked ? "환불체크해제" : "환불체크"
+                      }</button>`
+                    : isEditing
+                    ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">저장</button>
+                       <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
+                    : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}">입금내역수정</button>
+                       ${
+                         item.paymentStatus === "입금완료"
+                           ? ""
+                           : couponApplyIndex === index
+                           ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
+                              <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>`
+                           : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>`
+                       }`
+                }
+              </td>
+            </tr>
+          `;
+          })
+          .join("");
+
+        if (filtered.length === 0) {
+          paymentListBodyEl.innerHTML = `
+            <tr>
+              <td colspan="7">표시할 내역이 없습니다.</td>
+            </tr>
+          `;
+        }
+      }
+
+      function editPaymentFromTable(index) {
+        editingPaymentIndex = index;
+        couponApplyIndex = null;
+        renderPaymentList();
+      }
+
+      function savePaymentFromTable(index, rowEl) {
+        const item = data[index];
+        if (!item || !rowEl) return;
+
+        const payer = rowEl.querySelector(".pay-payer")?.value?.trim() || "";
+        const paymentMonth = rowEl.querySelector(".pay-month")?.value || "01";
+        const paymentDay = rowEl.querySelector(".pay-day")?.value || "01";
+        const paymentDate = `${paymentMonth}-${paymentDay}`;
+        const amount = rowEl.querySelector(".pay-amount")?.value?.trim() || "";
+
+        item.paymentPayer = payer;
+        item.paymentDate = paymentDate;
+        item.paymentAmount = amount;
+        item.paymentStatus = amount ? "입금완료" : "미입금";
+        if (amount && amount !== "쿠폰사용") {
+          item.couponUsed = false;
+        }
+        editingPaymentIndex = null;
+        renderList();
+      }
+
+      function applyCouponToPayment(index) {
+        const item = data[index];
+        if (!item) return;
+        if (item.paymentStatus === "입금완료") {
+          alert("이미 입금 처리된 스케줄입니다.");
+          return;
+        }
+        const remaining = getCouponRemaining(item.company);
+        if (remaining < 1) {
+          alert("남은 회차권이 없습니다. 회차권 등록에서 먼저 등록해주세요.");
+          return;
+        }
+
+        setCouponRemaining(item.company, remaining - 1);
+        item.paymentStatus = "입금완료";
+        item.paymentAmount = item.paymentAmount || "쿠폰사용";
+        item.paymentPayer = item.paymentPayer || "쿠폰";
+        if (!item.paymentDate) {
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, "0");
+          const day = String(now.getDate()).padStart(2, "0");
+          item.paymentDate = `${month}-${day}`;
+        }
+        item.couponUsed = true;
+        couponApplyIndex = null;
+        editingPaymentIndex = null;
+        renderList();
+        renderCouponPassList();
+      }
+
+      function cancelHoldSchedule(index) {
+        const holdItem = onHoldPayments[index];
+        if (!holdItem) return;
+
+        // 쿠폰으로 결제한 건은 1회 복구 후 보류 목록에서 제거
+        if (holdItem.couponUsed) {
+          const remaining = getCouponRemaining(holdItem.company);
+          setCouponRemaining(holdItem.company, remaining + 1);
+          onHoldPayments.splice(index, 1);
+          renderPaymentList();
+          renderCouponPassList();
+          return;
+        }
+
+        // 현금 입금 건은 환불 업체 목록으로 이동 후 환불 체크 관리
+        if (holdItem.paymentStatus === "입금완료") {
+          refundPayments.unshift({ ...holdItem, refundChecked: false });
+        }
+        onHoldPayments.splice(index, 1);
+        renderPaymentList();
+      }
+
+      function toggleRefundStatus(index) {
+        const item = refundPayments[index];
+        if (!item) return;
+        item.refundChecked = !item.refundChecked;
+        renderPaymentList();
+      }
+
+      function setupDateInputs() {
+        const now = new Date();
+        const thisYear = now.getFullYear();
+        yearEl.innerHTML = Array.from({ length: 11 }, (_, idx) => thisYear - 5 + idx)
+          .map((year) => `<option value="${year}">${year}년</option>`)
+          .join("");
+        monthEl.innerHTML = Array.from({ length: 12 }, (_, idx) => idx + 1)
+          .map((month) => `<option value="${month}">${month}월</option>`)
+          .join("");
+        yearEl.value = String(thisYear);
+        monthEl.value = String(now.getMonth() + 1);
+        renderScheduleDayOptionsWithWeekday(String(now.getDate()));
+      }
+
+      function renderScheduleDayOptionsWithWeekday(preferredDay) {
+        const selectedYear = Number(yearEl.value);
+        const selectedMonth = Number(monthEl.value);
+        const safeYear = Number.isNaN(selectedYear) ? currentYear : selectedYear;
+        const safeMonth = Number.isNaN(selectedMonth) ? 1 : selectedMonth;
+        const daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+        const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+
+        dayEl.innerHTML = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+          .map((day) => {
+            const weekday = weekdayNames[new Date(safeYear, safeMonth - 1, day).getDay()];
+            return `<option value="${day}">${day}일 (${weekday})</option>`;
+          })
+          .join("");
+
+        const wantedDay = Number(preferredDay);
+        const normalizedDay = Number.isNaN(wantedDay) ? 1 : Math.min(Math.max(wantedDay, 1), daysInMonth);
+        dayEl.value = String(normalizedDay);
+      }
+
+      function setupScheduleFilters() {
+        yearFilterEl.innerHTML = Array.from({ length: 11 }, (_, idx) => currentYear - 5 + idx)
+          .map((year) => `<option value="${year}">${year}년</option>`)
+          .join("");
+        monthFilterEl.innerHTML =
+          '<option value="all">전체 월</option>' +
+          Array.from({ length: 12 }, (_, idx) => idx + 1)
+            .map((month) => `<option value="${month}">${month}월</option>`)
+            .join("");
+
+        dayFilterEl.innerHTML =
+          '<option value="all">전체 일</option>' +
+          Array.from({ length: 31 }, (_, idx) => idx + 1)
+            .map((day) => `<option value="${day}">${day}일</option>`)
+            .join("");
+
+        yearFilterEl.value = String(currentYear);
+        monthFilterEl.value = "all";
+        dayFilterEl.value = "all";
+      }
+
+      function renderList() {
+        syncAdminSchedulesToCustomerStorage();
+        syncWriterSchedulesStorage();
+        renderOpenDayoffSummary();
+        const selectedYear = yearFilterEl.value;
+        const selectedMonth = monthFilterEl.value;
+        const selectedDay = dayFilterEl.value;
+        const companyKeyword = normalizeCompanyName(companyFilterInputEl.value).toLowerCase();
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+        const filtered = data
+          .map((item, index) => ({ item, index }))
+          .filter(({ item }) => {
+            const dateText = String(item.date || "").trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
+            if (dateText < todayKey) return false;
+            const itemDate = new Date(item.date);
+            const itemYear = String(itemDate.getFullYear());
+            const itemMonth = String(itemDate.getMonth() + 1);
+            const itemDay = String(itemDate.getDate());
+
+            const passPhotographer =
+              currentPhotographerFilter === "all" || item.name === currentPhotographerFilter;
+            const passYear = itemYear === selectedYear;
+            const passMonth = selectedMonth === "all" || itemMonth === selectedMonth;
+            const passDay = selectedDay === "all" || itemDay === selectedDay;
+            const passCompany = !companyKeyword || normalizeCompanyName(item.company).toLowerCase().includes(companyKeyword);
+
+            return passPhotographer && passYear && passMonth && passDay && passCompany;
+          })
+          .sort((a, b) => {
+            const aDateTime = new Date(`${a.item.date}T${a.item.time || "00:00"}:00`).getTime();
+            const bDateTime = new Date(`${b.item.date}T${b.item.time || "00:00"}:00`).getTime();
+            return aDateTime - bDateTime;
+          });
+
+        const monthLabel = selectedMonth === "all" ? "전체월" : `${selectedMonth}월`;
+        const dayLabel = selectedDay === "all" ? "전체일" : `${selectedDay}일`;
+        const writerLabel = currentPhotographerFilter === "all" ? "전체작가" : `${currentPhotographerFilter}작가`;
+        latestScheduleCopyRows = filtered.map(({ item }) => item);
+        latestScheduleCopyLabel = `${selectedYear}년 ${monthLabel} ${dayLabel} / ${writerLabel}`;
+
+        totalCountEl.textContent = String(filtered.length);
+        const grouped = new Map();
+        filtered.forEach(({ item, index }) => {
+          const writer = item.name || "작가미정";
+          if (!grouped.has(writer)) grouped.set(writer, []);
+          grouped.get(writer).push({ item, index });
+        });
+
+        const writerRows = [...grouped.entries()].sort((a, b) => {
+          const aIdx = photographers.indexOf(a[0]);
+          const bIdx = photographers.indexOf(b[0]);
+          const aScore = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx;
+          const bScore = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx;
+          return aScore - bScore || a[0].localeCompare(b[0], "ko");
+        });
+
+        listEl.innerHTML = `
+          <div class="writer-group-list">
+            ${writerRows
+              .map(
+                ([writer, schedules]) => `
+                  <article class="writer-row">
+                    <div class="writer-name">${escapeHtml(writer)}작가</div>
+                    <div class="writer-places">
+                      ${schedules
+                        .map(({ item, index }) => {
+                          const isEditing = editingIndex === index;
+                          const [rawHour = "09", rawMinute = "00"] = (item.time || "09:00").split(":");
+                          const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"))
+                            .map((hour) => `<option value="${hour}" ${hour === rawHour ? "selected" : ""}>${hour}시</option>`)
+                            .join("");
+                          const minuteOptions = ["00", "30"]
+                            .map((minute) => `<option value="${minute}" ${minute === rawMinute ? "selected" : ""}>${minute}분</option>`)
+                            .join("");
+                          const compositionOptions = ["사진만", "사진영상 둘다"]
+                            .map((value) => `<option value="${value}" ${item.composition === value ? "selected" : ""}>${value}</option>`)
+                            .join("");
+                          const pyeongOptions = ["45평이하", "45평이상", "95평이상", "145평이상"]
+                            .map((value) => `<option value="${value}" ${item.pyeong === value ? "selected" : ""}>${value}</option>`)
+                            .join("");
+                          const photographerOptions = ["작가미정", ...photographers]
+                            .map((name) => `<option value="${escapeHtml(name)}" ${item.name === name ? "selected" : ""}>${escapeHtml(name)}</option>`)
+                            .join("");
+
+                          return `
+                            <span class="writer-place" data-schedule-card="true" data-index="${index}">
+                              ${
+                                isEditing
+                                  ? `<div class="inline-pair" style="margin-bottom: 6px;">
+                                       <input class="inline-input edit-date-only" type="date" value="${item.date}" style="width: 150px;" />
+                                       <select class="inline-select edit-hour" style="width: 90px;">${hourOptions}</select>
+                                       <select class="inline-select edit-minute" style="width: 90px;">${minuteOptions}</select>
+                                     </div>
+                                     <div style="margin-bottom: 4px;">업체: <input class="inline-input edit-company" type="text" value="${escapeHtml(item.company || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">장소: <input class="inline-input edit-place" type="text" value="${escapeHtml(item.place || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
+                                     <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">세대비번: <input class="inline-input edit-doorCode" type="text" value="${escapeHtml(item.doorCode || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">메모: <input class="inline-input edit-memo" type="text" value="${escapeHtml(item.memo || "")}" /></div>
+                                     <div class="inline-pair" style="margin-bottom: 6px;">
+                                       <select class="inline-select edit-composition" style="width: 130px;">${compositionOptions}</select>
+                                       <select class="inline-select edit-name" style="width: 130px;">${photographerOptions}</select>
+                                     </div>
+                                     <div class="actions" style="justify-content: flex-start; margin-top: 0;">
+                                       <button class="btn-sm primary" type="button" data-action="saveEdit" data-index="${index}">저장</button>
+                                       <button class="btn-sm" type="button" data-action="cancelEdit" data-index="${index}">취소</button>
+                                     </div>`
+                                 : `${escapeHtml(item.date || "-")} (<span class="weekday-label ${isWeekendDate(item.date) ? "weekend" : ""}">${escapeHtml(getWeekdayKo(item.date))}</span>) | ${escapeHtml(item.time || "-")}
+                                     <button class="btn-sm ${item.paymentStatus === "입금완료" ? "neon" : "danger"}" type="button" disabled style="margin-left: 6px;">${item.paymentStatus === "입금완료" ? "입금확인" : "미결"}</button><br />
+                                     업체: ${escapeHtml(item.company || "-")} (${escapeHtml(getCompanyPhoneForDisplay(item.company, item))})<br />
+                                     장소: ${formatPlaceForDisplay(item.place)}<br />
+                                     평수: ${escapeHtml(item.pyeong || "-")}<br />
+                                     비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
+                                     메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                                     구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
+                                     쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                                     <span class="actions" style="justify-content: flex-start; margin-top: 6px;">
+                                       <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
+                                       <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}">삭제</button>
+                                       <button class="btn-sm" type="button" data-action="showMemo" data-index="${index}">메모</button>
+                                     </span>`
+                              }
+                            </span>
+                          `;
+                        })
+                        .join("")}
+                    </div>
+                  </article>
+                `
+              )
+              .join("")}
+          </div>
+        `;
+
+        renderPaymentList();
+      }
+
+      viewTabsEl.addEventListener("click", (event) => {
+        const datePresetButton = event.target.closest("button[data-date-preset]");
+        if (datePresetButton) {
+          applyScheduleDatePreset(datePresetButton.dataset.datePreset || "today");
+          renderPhotographerTabs();
+          renderList();
+          return;
+        }
+        const writerButton = event.target.closest("button[data-view]");
+        if (!writerButton) return;
+        currentPhotographerFilter = writerButton.dataset.view || "all";
+        renderPhotographerTabs();
+        renderList();
+      });
+
+      function switchMainTab(tab) {
+        const isSchedule = tab === "schedule";
+        const isPayment = tab === "payment";
+        const isCoupon = tab === "coupon";
+        tabScheduleEl.classList.toggle("active", isSchedule);
+        tabPaymentEl.classList.toggle("active", isPayment);
+        tabCouponEl.classList.toggle("active", isCoupon);
+        scheduleSectionEl.classList.toggle("hidden", !isSchedule);
+        paymentSectionEl.classList.toggle("hidden", !isPayment);
+        couponSectionEl.classList.toggle("hidden", !isCoupon);
+        if (isPayment) renderPaymentList();
+        if (isCoupon) renderCouponPassList();
+      }
+
+      tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
+      tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
+      tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
+
+      paymentFilterTabsEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-payment-filter]");
+        if (!button) return;
+        currentPaymentFilter = button.dataset.paymentFilter || "unpaid";
+        editingPaymentIndex = null;
+        couponApplyIndex = null;
+        [...paymentFilterTabsEl.querySelectorAll("button")].forEach((btn) => {
+          btn.classList.toggle("active", btn === button);
+        });
+        renderPaymentList();
+      });
+
+      paymentListBodyEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        const index = Number(button.dataset.index);
+        if (Number.isNaN(index)) return;
+        const rowEl = button.closest("tr");
+
+        if (action === "editPaymentRow") {
+          editPaymentFromTable(index);
+          return;
+        }
+        if (action === "cancelPaymentRow") {
+          editingPaymentIndex = null;
+          renderPaymentList();
+          return;
+        }
+        if (action === "savePaymentRow") {
+          savePaymentFromTable(index, rowEl);
+          return;
+        }
+        if (action === "startCouponApply") {
+          couponApplyIndex = index;
+          editingPaymentIndex = null;
+          renderPaymentList();
+          return;
+        }
+        if (action === "cancelCouponApply") {
+          couponApplyIndex = null;
+          renderPaymentList();
+          return;
+        }
+        if (action === "applyCouponOnce") {
+          applyCouponToPayment(index);
+          return;
+        }
+        if (action === "cancelHoldSchedule") {
+          cancelHoldSchedule(index);
+          return;
+        }
+        if (action === "toggleRefundStatus") {
+          toggleRefundStatus(index);
+        }
+      });
+
+      customerAlertBoxEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='markCustomerAlertRead'][data-alert-id]");
+        if (!button) return;
+        const alertId = button.dataset.alertId;
+        const source = button.dataset.alertSource || "customer";
+        if (source === "dayoff") {
+          const requestId = String(alertId || "").replace(/^dayoff-/, "");
+          if (!requestId) return;
+          const readIds = new Set(
+            readStorageArray(STORAGE_DAYOFF_ALERT_READ_IDS)
+              .map((value) => String(value || "").trim())
+              .filter(Boolean)
+          );
+          readIds.add(requestId);
+          localStorage.setItem(STORAGE_DAYOFF_ALERT_READ_IDS, JSON.stringify([...readIds]));
+        } else {
+          const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+          const target = alerts.find((item) => item.id === alertId);
+          if (!target) return;
+          target.read = true;
+          localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+        }
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+      });
+
+      customerAlertHistoryBtnEl.addEventListener("click", () => {
+        isAlertHistoryVisible = !isAlertHistoryVisible;
+        customerAlertHistoryBoxEl.classList.toggle("hidden", !isAlertHistoryVisible);
+        customerAlertHistoryBtnEl.textContent = isAlertHistoryVisible ? "기록닫기" : "기록";
+        if (isAlertHistoryVisible) {
+          renderCustomerAlertHistory();
+        }
+      });
+
+      yearFilterEl.addEventListener("change", () => {
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+      });
+      monthFilterEl.addEventListener("change", () => {
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+      });
+      dayFilterEl.addEventListener("change", () => {
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+      });
+      companyFilterInputEl.addEventListener("input", () => {
+        renderList();
+      });
+      downloadExcelBtnEl.addEventListener("click", exportSchedulesToCsv);
+      uploadExcelBtnEl.addEventListener("click", () => {
+        excelUploadInputEl.click();
+      });
+      excelUploadInputEl.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          importSchedulesFromCsvText(text);
+        } catch (error) {
+          alert("파일을 읽는 중 오류가 발생했습니다.");
+        } finally {
+          excelUploadInputEl.value = "";
+        }
+      });
+      yearEl.addEventListener("change", () => {
+        renderScheduleDayOptionsWithWeekday(dayEl.value);
+      });
+      monthEl.addEventListener("change", () => {
+        renderScheduleDayOptionsWithWeekday(dayEl.value);
+      });
+      checkDateCountBtnEl.addEventListener("click", openScheduleCalendarFromFilters);
+      copyScheduleBtnEl.addEventListener("click", copyCurrentScheduleList);
+      calendarCloseBtnEl.addEventListener("click", () => {
+        calendarModalEl.classList.add("hidden");
+      });
+      calendarPrevBtnEl.addEventListener("click", () => {
+        calendarViewMonth -= 1;
+        if (calendarViewMonth < 1) {
+          calendarViewMonth = 12;
+          calendarViewYear -= 1;
+        }
+        renderScheduleCalendar();
+      });
+      calendarNextBtnEl.addEventListener("click", () => {
+        calendarViewMonth += 1;
+        if (calendarViewMonth > 12) {
+          calendarViewMonth = 1;
+          calendarViewYear += 1;
+        }
+        renderScheduleCalendar();
+      });
+      calendarModalEl.addEventListener("click", (event) => {
+        if (event.target === calendarModalEl) {
+          calendarModalEl.classList.add("hidden");
+        }
+      });
+      applyMonthLimitBtnEl.addEventListener("click", applyGlobalLimitConfig);
+      companyOrderHistoryCloseBtnEl.addEventListener("click", () => {
+        companyOrderHistoryModalEl.classList.add("hidden");
+      });
+      companyOrderHistoryModalEl.addEventListener("click", (event) => {
+        if (event.target === companyOrderHistoryModalEl) {
+          companyOrderHistoryModalEl.classList.add("hidden");
+        }
+      });
+      writerHistoryCloseBtnEl.addEventListener("click", () => {
+        writerHistoryModalEl.classList.add("hidden");
+      });
+      writerHistoryModalEl.addEventListener("click", (event) => {
+        if (event.target === writerHistoryModalEl) {
+          writerHistoryModalEl.classList.add("hidden");
+        }
+      });
+      previousScheduleHistoryBtnEl.addEventListener("click", () => {
+        renderPreviousScheduleHistory();
+        previousScheduleHistoryModalEl.classList.remove("hidden");
+      });
+      previousScheduleHistoryCloseBtnEl.addEventListener("click", () => {
+        previousScheduleHistoryModalEl.classList.add("hidden");
+      });
+      previousScheduleHistoryModalEl.addEventListener("click", (event) => {
+        if (event.target === previousScheduleHistoryModalEl) {
+          previousScheduleHistoryModalEl.classList.add("hidden");
+        }
+      });
+      companyOrderHistorySummaryEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='saveCompanyAccount'][data-company-name]");
+        if (!button) return;
+        const companyName = normalizeCompanyName(button.dataset.companyName);
+        if (!companyName) return;
+        const idInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-id");
+        const passwordInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-password");
+        const newId = String(idInputEl?.value || "").trim();
+        const newPassword = String(passwordInputEl?.value || "").trim();
+        if (!newId || !newPassword) {
+          alert("아이디와 비밀번호를 모두 입력해주세요.");
+          return;
+        }
+
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const targetIndex = users.findIndex((user) => normalizeCompanyName(user.company).toLowerCase() === companyName.toLowerCase());
+        if (targetIndex < 0) {
+          alert("해당 업체의 고객 계정을 찾지 못했습니다.");
+          return;
+        }
+        const duplicateId = users.some((user, index) => index !== targetIndex && String(user.id || "").toLowerCase() === newId.toLowerCase());
+        if (duplicateId) {
+          alert("이미 사용 중인 아이디입니다.");
+          return;
+        }
+
+        const oldId = String(users[targetIndex].id || "").trim();
+        users[targetIndex].id = newId;
+        users[targetIndex].password = newPassword;
+        localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
+
+        if (oldId && oldId !== newId) {
+          const logs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+          logs.forEach((item) => {
+            if (String(item.customerId || "").trim() === oldId) {
+              item.customerId = newId;
+            }
+          });
+          localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(logs));
+
+          if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === oldId) {
+            localStorage.setItem(STORAGE_CUSTOMER_SESSION, newId);
+          }
+        }
+
+        renderCompanyOrderHistory(companyName);
+        renderCustomerStatsDashboard();
+        renderCompanies();
+        alert("업체 계정이 변경되었습니다.");
+      });
+      writerHistorySummaryEl.addEventListener("click", (event) => {
+        const restoreButton = event.target.closest("button[data-action='restoreExcludedWriter'][data-writer-name]");
+        if (restoreButton) {
+          const writerName = String(restoreButton.dataset.writerName || "").trim();
+          if (!writerName) return;
+          restoreExcludedPhotographerByName(writerName);
+          renderWriterHistory(writerName);
+          alert("작가가 복귀되었습니다.");
+          return;
+        }
+        const button = event.target.closest("button[data-action='saveWriterAccount'][data-writer-name]");
+        if (!button) return;
+        const writerName = String(button.dataset.writerName || "").trim();
+        if (!writerName) return;
+        const idInputEl = writerHistorySummaryEl.querySelector(".writer-account-id");
+        const passwordInputEl = writerHistorySummaryEl.querySelector(".writer-account-password");
+        const newId = String(idInputEl?.value || "").trim();
+        const newPassword = String(passwordInputEl?.value || "").trim();
+        if (!newId || !newPassword) {
+          alert("아이디와 비밀번호를 모두 입력해주세요.");
+          return;
+        }
+
+        const writers = readStorageArray(STORAGE_WRITERS);
+        const targetIndex = writers.findIndex((item) => String(item?.name || "").trim().toLowerCase() === writerName.toLowerCase());
+        if (targetIndex < 0) {
+          alert("해당 작가 계정을 찾지 못했습니다.");
+          return;
+        }
+        const duplicateId = writers.some((item, index) => index !== targetIndex && String(item?.id || "").toLowerCase() === newId.toLowerCase());
+        if (duplicateId) {
+          alert("이미 사용 중인 아이디입니다.");
+          return;
+        }
+
+        const oldId = String(writers[targetIndex].id || "").trim();
+        writers[targetIndex].id = newId;
+        writers[targetIndex].password = newPassword;
+        localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        if (localStorage.getItem(STORAGE_WRITER_SESSION) === oldId) {
+          localStorage.setItem(STORAGE_WRITER_SESSION, newId);
+        }
+
+        renderWriterHistory(writerName);
+        alert("작가 계정이 변경되었습니다.");
+      });
+
+      companySearchInputEl.addEventListener("input", renderCompanies);
+
+      addCompanyBtnEl.addEventListener("click", () => {
+        companyRegisterPanelEl.classList.toggle("hidden");
+        if (!companyRegisterPanelEl.classList.contains("hidden")) {
+          companyNameInputEl.focus();
+        }
+      });
+
+      closeCompanyPanelBtnEl.addEventListener("click", () => {
+        companyFormEl.reset();
+        companyRegisterPanelEl.classList.add("hidden");
+      });
+
+      companyFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const name = companyNameInputEl.value.trim();
+        const phone = companyPhoneInputEl.value.trim();
+        if (!name || !phone) return;
+        companies.unshift({ name, phone });
+        companyFormEl.reset();
+        companyRegisterPanelEl.classList.add("hidden");
+        renderCompanies();
+      });
+
+      couponFormEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const companyName = normalizeCompanyName(couponCompanyInputEl.value);
+        const selectedCount = Number(couponCountSelectEl.value || "1");
+        if (!isRegisteredCompanyName(companyName)) {
+          alert("등록된 업체만 회차권 등록할 수 있어요.");
+          return;
+        }
+        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)));
+        couponFormEl.reset();
+        couponCountSelectEl.value = "1";
+        renderCouponPassList();
+      });
+
+      couponListBodyEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='cancelCouponPass'][data-company-name]");
+        if (!button) return;
+        const companyName = normalizeCompanyName(button.dataset.companyName);
+        if (!companyName || !couponPasses[companyName]) return;
+        const confirmed = confirm(`${companyName} 회차권 등록을 취소할까요?`);
+        if (!confirmed) return;
+        delete couponPasses[companyName];
+        renderCouponPassList();
+      });
+
+      companyListEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action][data-company-index]");
+        if (!button) return;
+        const index = Number(button.dataset.companyIndex);
+        if (Number.isNaN(index) || !companies[index]) return;
+        const action = button.dataset.action;
+
+        if (action === "startCompanyPhoneEdit") {
+          editingCompanyIndex = index;
+          renderCompanies();
+          return;
+        }
+
+        if (action === "cancelCompanyPhone") {
+          editingCompanyIndex = null;
+          renderCompanies();
+          return;
+        }
+
+        if (action === "saveCompanyInfo") {
+          const itemEl = button.closest(".company-item");
+          const nameInputEl = itemEl?.querySelector(".edit-company-name");
+          const phoneInputEl = itemEl?.querySelector(".edit-company-phone");
+          const oldName = normalizeCompanyName(companies[index].name);
+          const newName = normalizeCompanyName(nameInputEl?.value);
+          const newPhone = phoneInputEl?.value?.trim() || "";
+          if (!newName) {
+            alert("업체명을 입력해주세요.");
+            return;
+          }
+          const duplicate = companies.some((company, companyIndex) => companyIndex !== index && normalizeCompanyName(company.name).toLowerCase() === newName.toLowerCase());
+          if (duplicate) {
+            alert("이미 등록된 업체명입니다.");
+            return;
+          }
+
+          companies[index].name = newName;
+          companies[index].phone = newPhone;
+
+          if (oldName && oldName !== newName) {
+            data.forEach((item) => {
+              if (normalizeCompanyName(item.company) === oldName) {
+                item.company = newName;
+              }
+            });
+            onHoldPayments.forEach((item) => {
+              if (normalizeCompanyName(item.company) === oldName) {
+                item.company = newName;
+              }
+            });
+            refundPayments.forEach((item) => {
+              if (normalizeCompanyName(item.company) === oldName) {
+                item.company = newName;
+              }
+            });
+
+            if (couponPasses[oldName] !== undefined) {
+              couponPasses[newName] = couponPasses[oldName];
+              delete couponPasses[oldName];
+            }
+
+            const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+            customerCompanies.forEach((company) => {
+              if (normalizeCompanyName(company.name) === oldName) {
+                company.name = newName;
+                if (newPhone) company.phone = newPhone;
+              }
+            });
+            localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+
+            const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+            customerSchedules.forEach((schedule) => {
+              if (normalizeCompanyName(schedule.company) === oldName) {
+                schedule.company = newName;
+              }
+            });
+            localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+
+            const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+            customerUsers.forEach((user) => {
+              if (normalizeCompanyName(user.company) === oldName) {
+                user.company = newName;
+                if (newPhone) user.phone = newPhone;
+              }
+            });
+            localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
+          }
+
+          editingCompanyIndex = null;
+          renderCompanies();
+          renderList();
+          renderCustomerStatsDashboard();
+          renderCustomerUpdateNotices();
+          renderCustomerAlertHistory();
+        }
+      });
+
+      companyListEl.addEventListener("click", (event) => {
+        if (event.target.closest("button, input, select, textarea, label")) return;
+        const itemEl = event.target.closest(".company-item[data-company-index]");
+        if (!itemEl) return;
+        if (itemEl.querySelector(".edit-company-name")) return;
+        const index = Number(itemEl.dataset.companyIndex);
+        if (Number.isNaN(index) || !companies[index]) return;
+        renderCompanyOrderHistory(companies[index].name);
+        companyOrderHistoryModalEl.classList.remove("hidden");
+      });
+
+      if (addPhotographerBtn) {
+        addPhotographerBtn.addEventListener("click", () => {
+          registerPanelEl.classList.toggle("hidden");
+          if (!registerPanelEl.classList.contains("hidden")) {
+            newPhotographerNameEl.focus();
+          }
+        });
+      }
+
+      function addPhotographerFromInput() {
+        const trimmedName = newPhotographerNameEl.value.trim();
+        const trimmedPhone = newPhotographerPhoneEl.value.trim();
+        const trimmedCarNumber = newPhotographerCarEl.value.trim();
+        if (!trimmedName) return;
+        if (photographers.includes(trimmedName)) {
+          alert("이미 등록된 작가입니다.");
+          return;
+        }
+        photographers.push(trimmedName);
+        photographerPhones[trimmedName] = trimmedPhone;
+        photographerCarNumbers[trimmedName] = trimmedCarNumber;
+        setExcludedPhotographerNames(getExcludedPhotographerNames().filter((name) => name !== trimmedName));
+        newPhotographerNameEl.value = "";
+        newPhotographerPhoneEl.value = "";
+        newPhotographerCarEl.value = "";
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+      }
+
+      function excludePhotographerByName(name) {
+        const removeIndex = photographers.findIndex((item) => item === name);
+        if (removeIndex < 0) return;
+        photographers.splice(removeIndex, 1);
+        setExcludedPhotographerNames([...getExcludedPhotographerNames(), name]);
+
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        data.forEach((item) => {
+          const itemDate = String(item?.date || "").trim();
+          if (item.name !== name) return;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(itemDate)) return;
+          if (itemDate < todayKey) return;
+          item.name = "작가미정";
+          item.writerPhone = "";
+          item.writerCarNumber = "";
+        });
+
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+      }
+
+      function deletePhotographerByName(name) {
+        const targetName = String(name || "").trim();
+        if (!targetName) return;
+        const activeIndex = photographers.findIndex((item) => item === targetName);
+        if (activeIndex >= 0) {
+          photographers.splice(activeIndex, 1);
+        }
+        setExcludedPhotographerNames(getExcludedPhotographerNames().filter((item) => item !== targetName));
+        delete photographerPhones[targetName];
+        delete photographerCarNumbers[targetName];
+
+        data.forEach((item) => {
+          if (item.name === targetName) {
+            item.name = "작가미정";
+            item.writerPhone = "";
+            item.writerCarNumber = "";
+          }
+        });
+
+        const writers = readStorageArray(STORAGE_WRITERS).filter((writer) => String(writer?.name || "").trim() !== targetName);
+        localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+
+        if (currentPhotographerFilter === targetName) {
+          currentPhotographerFilter = "all";
+        }
+        editingPhotographerName = null;
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+      }
+
+      function restoreExcludedPhotographerByName(name) {
+        const targetName = String(name || "").trim();
+        if (!targetName) return;
+        const excludedNames = getExcludedPhotographerNames();
+        if (!excludedNames.includes(targetName)) return;
+        if (!photographers.includes(targetName)) {
+          photographers.push(targetName);
+        }
+        setExcludedPhotographerNames(excludedNames.filter((item) => item !== targetName));
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+      }
+
+      function savePhotographerInfo(oldName, itemEl) {
+        const index = photographers.findIndex((item) => item === oldName);
+        if (index < 0 || !itemEl) return;
+        const nameInputEl = itemEl.querySelector(".edit-photographer-name");
+        const phoneInputEl = itemEl.querySelector(".edit-photographer-phone");
+        const carInputEl = itemEl.querySelector(".edit-photographer-car");
+
+        const newName = String(nameInputEl?.value || "").trim();
+        const newPhone = String(phoneInputEl?.value || "").trim();
+        const newCarNumber = String(carInputEl?.value || "").trim();
+
+        if (!newName) {
+          alert("작가명을 입력해주세요.");
+          return;
+        }
+        const duplicate = photographers.some((name, rowIndex) => rowIndex !== index && name.toLowerCase() === newName.toLowerCase());
+        if (duplicate) {
+          alert("이미 등록된 작가명입니다.");
+          return;
+        }
+
+        photographers[index] = newName;
+        delete photographerPhones[oldName];
+        delete photographerCarNumbers[oldName];
+        photographerPhones[newName] = newPhone;
+        photographerCarNumbers[newName] = newCarNumber;
+        setExcludedPhotographerNames(
+          getExcludedPhotographerNames().map((name) => (name === oldName ? newName : name))
+        );
+
+        const writers = readStorageArray(STORAGE_WRITERS);
+        const writerIndex = writers.findIndex((writer) => String(writer?.name || "").trim() === oldName);
+        if (writerIndex >= 0) {
+          writers[writerIndex].name = newName;
+          if (newPhone) writers[writerIndex].phone = newPhone;
+          if (newCarNumber) writers[writerIndex].carNumber = newCarNumber;
+          localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        }
+
+        data.forEach((item) => {
+          if (item.name !== oldName) return;
+          item.name = newName;
+          item.writerPhone = newPhone;
+          item.writerCarNumber = newCarNumber;
+          syncCustomerScheduleFromAdminEdit(item, item.time || "");
+        });
+
+        if (currentPhotographerFilter === oldName) {
+          currentPhotographerFilter = newName;
+        }
+        editingPhotographerName = null;
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+      }
+
+      function saveInlineEdit(index, itemEl) {
+        const item = data[index];
+        if (!item || !itemEl) return;
+        const previousTime = item.time || "";
+
+        const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
+        const hour = itemEl.querySelector(".edit-hour")?.value;
+        const minute = itemEl.querySelector(".edit-minute")?.value;
+        const company = itemEl.querySelector(".edit-company")?.value?.trim();
+        const place = itemEl.querySelector(".edit-place")?.value?.trim();
+        const pyeong = itemEl.querySelector(".edit-pyeong")?.value?.trim();
+        const jointCode = itemEl.querySelector(".edit-jointCode")?.value?.trim();
+        const doorCode = itemEl.querySelector(".edit-doorCode")?.value?.trim();
+        const memo = itemEl.querySelector(".edit-memo")?.value?.trim();
+        const composition = itemEl.querySelector(".edit-composition")?.value;
+        const name = itemEl.querySelector(".edit-name")?.value;
+        const nextDate = date || item.date;
+        if (nextDate !== item.date) {
+          const countAtDate = getActiveScheduleCountByDate(nextDate, index);
+          const dailyLimit = getEffectiveDailyLimit(nextDate);
+          if (countAtDate >= dailyLimit) {
+            alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
+            return;
+          }
+        }
+
+        if (date) item.date = date;
+        if (hour && minute) item.time = `${hour}:${minute}`;
+        if (company) item.company = company;
+        if (place) item.place = place;
+        item.pyeong = pyeong || "";
+        item.jointCode = jointCode || "";
+        item.doorCode = doorCode || "";
+        item.memo = memo || "";
+        if (composition) item.composition = composition;
+        if (name) {
+          item.name = name;
+          item.writerPhone = photographerPhones[name] || "";
+          item.writerCarNumber = photographerCarNumbers[name] || "";
+        }
+        syncCustomerScheduleFromAdminEdit(item, previousTime);
+
+        editingIndex = null;
+        renderList();
+      }
+
+      function saveDateEdit(index, itemEl) {
+        const item = data[index];
+        if (!item || !itemEl) return;
+        const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
+        const hour = itemEl.querySelector(".edit-hour")?.value;
+        const minute = itemEl.querySelector(".edit-minute")?.value;
+        const nextDate = date || item.date;
+        if (nextDate !== item.date) {
+          const countAtDate = getActiveScheduleCountByDate(nextDate, index);
+          const dailyLimit = getEffectiveDailyLimit(nextDate);
+          if (countAtDate >= dailyLimit) {
+            alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
+            return;
+          }
+        }
+
+        if (date) item.date = date;
+        if (hour && minute) item.time = `${hour}:${minute}`;
+
+        editingDateIndex = null;
+        renderList();
+      }
+
+      function deleteSchedule(index) {
+        if (index < 0 || index >= data.length) return;
+        const confirmed = confirm("삭제하시겠습니까?");
+        if (!confirmed) return;
+        const deletedItem = data[index];
+        if (deletedItem?.paymentStatus === "입금완료") {
+          onHoldPayments.unshift({ ...deletedItem });
+        }
+        data.splice(index, 1);
+
+        // 고객 페이지에서 넘어온 일정은 고객 저장소에서도 함께 삭제해야 재등장하지 않음
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        let customerIndex = -1;
+        const deletedCustomerScheduleId = String(deletedItem?.customerScheduleId || "").trim();
+        if (deletedCustomerScheduleId) {
+          customerIndex = customerSchedules.findIndex(
+            (row) => String(row?.customerScheduleId || "").trim() === deletedCustomerScheduleId
+          );
+        }
+        if (customerIndex < 0) {
+          customerIndex = customerSchedules.findIndex(
+            (row) =>
+              String(row?.date || "").trim() === String(deletedItem?.date || "").trim() &&
+              String(row?.time || "").trim() === String(deletedItem?.time || "").trim() &&
+              normalizeCompanyName(row?.company) === normalizeCompanyName(deletedItem?.company) &&
+              String(row?.place || "").trim() === String(deletedItem?.place || "").trim()
+          );
+        }
+        if (customerIndex >= 0) {
+          customerSchedules.splice(customerIndex, 1);
+          localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+        }
+
+        editingIndex = null;
+        editingDateIndex = null;
+        renderList();
+      }
+
+      listEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        const index = Number(button.dataset.index);
+        const itemEl = button.closest("[data-schedule-card='true']") || button.closest(".item");
+        const item = data[index];
+
+        if (action === "quickComposition" && !Number.isNaN(index) && item) {
+          item.composition = item.composition === "사진영상 둘다" ? "사진만" : "사진영상 둘다";
+          renderList();
+          return;
+        }
+        if (action === "startQuickPhotographer" && !Number.isNaN(index)) {
+          quickPhotographerPickerIndex = index;
+          renderList();
+          return;
+        }
+        if (action === "cancelQuickPhotographer") {
+          quickPhotographerPickerIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "saveQuickPhotographer" && !Number.isNaN(index) && item) {
+          const selected = itemEl?.querySelector(".quick-photographer-select")?.value;
+          if (selected) {
+            item.name = selected;
+            item.writerPhone = photographerPhones[selected] || "";
+            item.writerCarNumber = photographerCarNumbers[selected] || "";
+            syncCustomerScheduleFromAdminEdit(item, item.time || "");
+          }
+          quickPhotographerPickerIndex = null;
+          renderList();
+          return;
+        }
+
+        if (action === "startDateEdit" && !Number.isNaN(index)) {
+          editingDateIndex = index;
+          editingIndex = null;
+          quickPhotographerPickerIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "cancelDateEdit") {
+          editingDateIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "saveDateEdit" && !Number.isNaN(index)) {
+          saveDateEdit(index, itemEl);
+          return;
+        }
+        if (action === "deleteSchedule" && !Number.isNaN(index)) {
+          deleteSchedule(index);
+          return;
+        }
+        if (action === "showMemo" && !Number.isNaN(index) && item) {
+          const fullMemo = String(item.memo || "").trim();
+          alert(fullMemo || "등록된 메모가 없습니다.");
+          return;
+        }
+
+        if (action === "startEdit" && !Number.isNaN(index)) {
+          editingIndex = index;
+          editingDateIndex = null;
+          quickPhotographerPickerIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "cancelEdit") {
+          editingIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "saveEdit" && !Number.isNaN(index)) {
+          saveInlineEdit(index, itemEl);
+        }
+      });
+
+      memberNamesEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        const name = button.dataset.name || "";
+
+        if (action === "startPhotographerEdit") {
+          if (!name) return;
+          editingPhotographerName = name;
+          renderPhotographers();
+          return;
+        }
+
+        if (action === "cancelPhotographerEdit") {
+          editingPhotographerName = null;
+          renderPhotographers();
+          return;
+        }
+
+        if (action === "savePhotographerInfo") {
+          const itemEl = button.closest(".company-item");
+          if (!name || !itemEl) return;
+          savePhotographerInfo(name, itemEl);
+          return;
+        }
+
+        if (action === "excludePhotographer") {
+          if (!name) return;
+          const confirmed = confirm(`${name} 작가를 제외할까요?`);
+          if (!confirmed) return;
+          excludePhotographerByName(name);
+          return;
+        }
+
+        if (action === "deletePhotographer") {
+          if (!name) return;
+          const confirmed = confirm(`${name} 작가를 삭제할까요? 배정된 스케줄은 작가미정으로 변경됩니다.`);
+          if (!confirmed) return;
+          deletePhotographerByName(name);
+        }
+      });
+      memberNamesEl.addEventListener("click", (event) => {
+        if (event.target.closest("button, input, select, textarea, label")) return;
+        const itemEl = event.target.closest(".company-item[data-writer-name]");
+        if (!itemEl) return;
+        const writerName = String(itemEl.dataset.writerName || "").trim();
+        if (!writerName) return;
+        renderWriterHistory(writerName);
+        writerHistoryModalEl.classList.remove("hidden");
+      });
+
+      registerPhotographerBtnEl.addEventListener("click", addPhotographerFromInput);
+      closePhotographerPanelBtnEl.addEventListener("click", () => {
+        newPhotographerNameEl.value = "";
+        newPhotographerPhoneEl.value = "";
+        newPhotographerCarEl.value = "";
+        registerPanelEl.classList.add("hidden");
+      });
+      newPhotographerNameEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addPhotographerFromInput();
+        }
+      });
+
+      function submitScheduleFromForm(ignoreLimit = false) {
+        const pickedDate = `${yearEl.value}-${monthEl.value.padStart(2, "0")}-${dayEl.value.padStart(2, "0")}`;
+        const pickedComposition = formEl.composition.value;
+        const companyInputValue = document.getElementById("company").value || "";
+        const normalizedCompany = normalizeCompanyName(companyInputValue);
+
+        if (!isRegisteredCompanyName(normalizedCompany)) {
+          alert("등록된 업체만 스케줄 등록할 수 있어요. 먼저 업체 등록에서 추가해주세요.");
+          return;
+        }
+        const dailyLimit = getEffectiveDailyLimit(pickedDate);
+        const countAtDate = getActiveScheduleCountByDate(pickedDate);
+        if (!ignoreLimit && countAtDate >= dailyLimit) {
+          alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
+          return false;
+        }
+
+        const item = {
+          date: pickedDate || new Date().toISOString().slice(0, 10),
+          time: "09:00",
+          name: "작가미정",
+          writerPhone: "",
+          writerCarNumber: "",
+          company: normalizedCompany,
+          place: document.getElementById("place").value || "-",
+          pyeong: document.getElementById("pyeong").value || "",
+          jointCode: document.getElementById("jointCode").value || "",
+          doorCode: document.getElementById("doorCode").value || "",
+          memo: document.getElementById("memo").value || "",
+          composition: pickedComposition,
+          paymentStatus: "미입금",
+          paymentPayer: "",
+          paymentAmount: "",
+          paymentDate: "",
+          couponUsed: false
+        };
+
+        data.unshift(item);
+        formEl.reset();
+        const now = new Date();
+        yearEl.value = String(now.getFullYear());
+        monthEl.value = String(now.getMonth() + 1);
+        dayEl.value = String(now.getDate());
+        renderList();
+        return true;
+      }
+
+      formEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitScheduleFromForm(false);
+      });
+
+      adminOverrideSubmitBtnEl.addEventListener("click", () => {
+        const password = String(adminOverridePasswordEl.value || "").trim();
+        if (password !== ADMIN_OVERRIDE_PASSWORD) {
+          alert("관리자 비밀번호가 올바르지 않습니다.");
+          return;
+        }
+        const created = submitScheduleFromForm(true);
+        if (!created) return;
+        adminOverridePasswordEl.value = "";
+      });
+
+      resetAllSchedulesOnce();
+      resetAllDataOnceV2();
+      hydrateFromCustomerPageStorage();
+      loadPhotographerProfilesFromStorage();
+      hydrateFromWriterPageStorage();
+      renderPhotographers();
+      renderCustomerStatsDashboard();
+      renderCustomerUpdateNotices();
+      renderCustomerAlertHistory();
+      renderCompanies();
+      setupDateInputs();
+      setupCouponInputs();
+      setupScheduleFilters();
+      renderList();
+      switchMainTab("schedule");
+
+      window.addEventListener("storage", (event) => {
+        if (event.key === STORAGE_CUSTOMER_SCHEDULES || event.key === STORAGE_CUSTOMER_COMPANIES) {
+          hydrateFromCustomerPageStorage();
+          renderCustomerStatsDashboard();
+          renderCompanies();
+          renderList();
+        }
+        if (
+          event.key === STORAGE_WRITERS ||
+          event.key === STORAGE_EXCLUDED_PHOTOGRAPHERS ||
+          event.key === STORAGE_PHOTOGRAPHER_PROFILES
+        ) {
+          loadPhotographerProfilesFromStorage();
+          hydrateFromWriterPageStorage();
+          renderPhotographers();
+          renderList();
+        }
+        if (event.key === STORAGE_CUSTOMER_ALERTS) {
+          renderCustomerUpdateNotices();
+          renderCustomerAlertHistory();
+        }
+        if (event.key === STORAGE_CUSTOMERS || event.key === STORAGE_CUSTOMER_LOGINS) {
+          renderCustomerStatsDashboard();
+        }
+        if (
+          event.key === STORAGE_DAILY_LIMITS ||
+          event.key === STORAGE_LIMIT_CONFIG ||
+          event.key === STORAGE_DAYOFF_DEDUCTIONS ||
+          event.key === STORAGE_DAYOFF_REQUESTS ||
+          event.key === STORAGE_DAYOFF_ALERT_READ_IDS
+        ) {
+          renderScheduleCalendar();
+          renderOpenDayoffSummary();
+          renderCustomerUpdateNotices();
+          renderCustomerAlertHistory();
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        hydrateFromCustomerPageStorage();
+        loadPhotographerProfilesFromStorage();
+        hydrateFromWriterPageStorage();
+        renderPhotographers();
+        renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        renderCompanies();
+        renderList();
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+        hydrateFromCustomerPageStorage();
+        loadPhotographerProfilesFromStorage();
+        hydrateFromWriterPageStorage();
+        renderPhotographers();
+        renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        renderOpenDayoffSummary();
+      });
+    </script>
+  </body>
+</html>

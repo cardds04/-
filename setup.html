@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>스케줄 사이트 연결 설정</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: #f6f8fb;
+        color: #1f2937;
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 40px auto;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 24px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: #4b5563;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        margin: 12px 0 6px;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      button, a.btn {
+        border: 1px solid #2563eb;
+        background: #2563eb;
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 14px;
+        text-decoration: none;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button.secondary, a.btn.secondary {
+        background: #fff;
+        color: #2563eb;
+      }
+      .status {
+        margin-top: 14px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>공용 데이터 연결 설정</h1>
+      <p>
+        Supabase 프로젝트의 URL과 anon key를 입력하고 저장하면,
+        관리자/고객/작가 페이지가 같은 데이터를 함께 사용합니다.
+      </p>
+
+      <label for="supabaseUrl">Supabase Project URL</label>
+      <input id="supabaseUrl" type="text" placeholder="https://xxxx.supabase.co" />
+
+      <label for="supabaseAnonKey">Supabase anon public key</label>
+      <input id="supabaseAnonKey" type="text" placeholder="eyJ..." />
+
+      <div class="row">
+        <button id="saveBtn" type="button">저장</button>
+        <button id="clearBtn" class="secondary" type="button">설정지우기</button>
+        <a class="btn secondary" href="index.html">관리자 페이지 이동</a>
+        <a class="btn secondary" href="customer.html">고객 페이지 이동</a>
+        <a class="btn secondary" href="photographer.html">작가 페이지 이동</a>
+      </div>
+
+      <div id="status" class="status"></div>
+    </main>
+
+    <script>
+      const urlEl = document.getElementById("supabaseUrl");
+      const keyEl = document.getElementById("supabaseAnonKey");
+      const saveBtnEl = document.getElementById("saveBtn");
+      const clearBtnEl = document.getElementById("clearBtn");
+      const statusEl = document.getElementById("status");
+
+      function refreshInputs() {
+        urlEl.value = localStorage.getItem("scheduleSiteSupabaseUrl") || "";
+        keyEl.value = localStorage.getItem("scheduleSiteSupabaseAnonKey") || "";
+      }
+
+      function setStatus(text, ok) {
+        statusEl.textContent = text;
+        statusEl.style.color = ok ? "#166534" : "#b91c1c";
+      }
+
+      saveBtnEl.addEventListener("click", () => {
+        const url = urlEl.value.trim();
+        const key = keyEl.value.trim();
+        if (!url || !key) {
+          setStatus("URL과 key를 모두 입력해주세요.", false);
+          return;
+        }
+        localStorage.setItem("scheduleSiteSupabaseUrl", url);
+        localStorage.setItem("scheduleSiteSupabaseAnonKey", key);
+        setStatus("저장 완료. 각 페이지 새로고침 후 사용하세요.", true);
+      });
+
+      clearBtnEl.addEventListener("click", () => {
+        localStorage.removeItem("scheduleSiteSupabaseUrl");
+        localStorage.removeItem("scheduleSiteSupabaseAnonKey");
+        refreshInputs();
+        setStatus("설정을 지웠습니다. 로컬 모드로 동작합니다.", true);
+      });
+
+      refreshInputs();
+      setStatus("현재 값을 확인하고 저장해주세요.", true);
+    </script>
+  </body>
+</html>
