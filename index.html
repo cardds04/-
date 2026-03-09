@@ -1051,6 +1051,7 @@
       const STORAGE_WRITERS = "scheduleSiteWriters";
       const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
       const STORAGE_EXCLUDED_PHOTOGRAPHERS = "scheduleSiteExcludedPhotographers";
+      const STORAGE_ADMIN_COMPANIES = "scheduleSiteAdminCompanies";
       const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
       const STORAGE_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
@@ -1078,6 +1079,7 @@
         STORAGE_CUSTOMER_ALERTS,
         STORAGE_CUSTOMERS,
         STORAGE_CUSTOMER_LOGINS,
+        STORAGE_ADMIN_COMPANIES,
         STORAGE_WRITERS,
         STORAGE_WRITER_SCHEDULES,
         STORAGE_ADMIN_SCHEDULES,
@@ -1378,6 +1380,38 @@
         }
       }
 
+      function loadAdminCompaniesFromStorage() {
+        const saved = readStorageArray(STORAGE_ADMIN_COMPANIES)
+          .map((item) => ({
+            name: normalizeCompanyName(item?.name),
+            phone: String(item?.phone || "").trim() || "-"
+          }))
+          .filter((item) => item.name);
+        companies.splice(0, companies.length, ...saved);
+      }
+
+      function saveAdminCompaniesToStorage() {
+        const uniqueMap = new Map();
+        companies.forEach((item) => {
+          const name = normalizeCompanyName(item?.name);
+          if (!name) return;
+          const key = name.toLowerCase();
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, {
+              name,
+              phone: String(item?.phone || "").trim() || "-"
+            });
+          }
+        });
+        const rows = [...uniqueMap.values()];
+        localStorage.setItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(rows));
+      }
+
+      function loadAdminSchedulesFromStorage() {
+        const saved = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        data.splice(0, data.length, ...saved);
+      }
+
       function resetAllSchedulesOnce() {
         if (localStorage.getItem(STORAGE_SCHEDULE_RESET_DONE) === "done") return;
         [
@@ -1399,6 +1433,7 @@
           STORAGE_CUSTOMERS,
           STORAGE_CUSTOMER_LOGINS,
           STORAGE_CUSTOMER_SESSION,
+          STORAGE_ADMIN_COMPANIES,
           STORAGE_WRITERS,
           STORAGE_WRITER_SESSION,
           STORAGE_WRITER_SCHEDULES,
@@ -3722,6 +3757,7 @@
         const phone = companyPhoneInputEl.value.trim();
         if (!name || !phone) return;
         companies.unshift({ name, phone });
+        saveAdminCompaniesToStorage();
         companyFormEl.reset();
         companyRegisterPanelEl.classList.add("hidden");
         renderCompanies();
@@ -3841,6 +3877,7 @@
           }
 
           editingCompanyIndex = null;
+          saveAdminCompaniesToStorage();
           renderCompanies();
           renderList();
           renderCustomerStatsDashboard();
@@ -3863,6 +3900,7 @@
           companies.splice(index, 1);
           delete couponPasses[targetName];
           editingCompanyIndex = null;
+          saveAdminCompaniesToStorage();
           renderCompanies();
           renderCouponPassList();
           renderList();
@@ -4351,6 +4389,8 @@
 
       resetAllSchedulesOnce();
       resetAllDataOnceV2();
+      loadAdminCompaniesFromStorage();
+      loadAdminSchedulesFromStorage();
       hydrateFromCustomerPageStorage();
       loadPhotographerProfilesFromStorage();
       hydrateFromWriterPageStorage();
@@ -4366,6 +4406,14 @@
       switchMainTab("schedule");
 
       window.addEventListener("storage", (event) => {
+        if (event.key === STORAGE_ADMIN_COMPANIES) {
+          loadAdminCompaniesFromStorage();
+          renderCompanies();
+        }
+        if (event.key === STORAGE_ADMIN_SCHEDULES) {
+          loadAdminSchedulesFromStorage();
+          renderList();
+        }
         if (event.key === STORAGE_CUSTOMER_SCHEDULES || event.key === STORAGE_CUSTOMER_COMPANIES) {
           hydrateFromCustomerPageStorage();
           renderCustomerStatsDashboard();
@@ -4404,6 +4452,8 @@
       });
 
       window.addEventListener("focus", () => {
+        loadAdminCompaniesFromStorage();
+        loadAdminSchedulesFromStorage();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
@@ -4417,6 +4467,8 @@
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
+        loadAdminCompaniesFromStorage();
+        loadAdminSchedulesFromStorage();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
