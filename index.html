@@ -2718,7 +2718,7 @@
         companyListEl.innerHTML = filtered
           .map(({ company, index }) => {
             const isEditing = editingCompanyIndex === index;
-            const canDelete = !customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
+            const isCustomerRegisteredCompany = customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
             if (isEditing) {
               const customerId = getCustomerIdByCompanyName(company.name);
               return `
@@ -2730,7 +2730,9 @@
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
                       <button class="btn-sm" type="button" data-action="mergeCompanyToCustomer" data-company-index="${index}">고객병합</button>
-                      ${canDelete ? `<button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}">삭제</button>` : ""}
+                      <button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}" data-customer-company="${
+                        isCustomerRegisteredCompany ? "true" : "false"
+                      }">삭제</button>
                       <button class="btn-sm" type="button" data-action="cancelCompanyPhone" data-company-index="${index}">취소</button>
                     </div>
                   </div>
@@ -4352,12 +4354,25 @@
             (item) => normalizeCompanyName(item?.name).toLowerCase() === targetName.toLowerCase()
           );
           if (isCustomerRegisteredCompany) {
-            alert("고객이 가입한 업체는 여기서 삭제할 수 없습니다.");
-            return;
+            const password = String(prompt("고객 등록 업체 삭제 비밀번호를 입력하세요.") || "").trim();
+            if (password !== ADMIN_OVERRIDE_PASSWORD) {
+              alert("비밀번호가 올바르지 않아 삭제할 수 없습니다.");
+              return;
+            }
           }
           const confirmed = confirm(`${targetName} 업체를 목록에서 삭제할까요?`);
           if (!confirmed) return;
-          companies.splice(index, 1);
+          for (let i = companies.length - 1; i >= 0; i -= 1) {
+            if (normalizeCompanyName(companies[i]?.name).toLowerCase() === targetName.toLowerCase()) {
+              companies.splice(i, 1);
+            }
+          }
+          if (isCustomerRegisteredCompany) {
+            const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES).filter(
+              (item) => normalizeCompanyName(item?.name).toLowerCase() !== targetName.toLowerCase()
+            );
+            localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+          }
           delete couponPasses[targetName];
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
