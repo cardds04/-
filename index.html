@@ -804,7 +804,11 @@
           <div id="memberNames" class="company-list"></div>
 
           <h3 class="sub-title">업체 등록</h3>
-          <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
+          <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+            <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
+            <button id="downloadCompanyExcelBtn" class="btn-sm" type="button">다운</button>
+            <button id="uploadCompanyExcelBtn" class="btn-sm" type="button">업로드</button>
+          </div>
           <div id="companyRegisterPanel" class="register-panel hidden">
             <form id="companyForm" class="form">
               <div class="input-row">
@@ -977,6 +981,7 @@
     </main>
 
     <input id="excelUploadInput" type="file" accept=".csv" class="hidden" />
+    <input id="companyExcelUploadInput" type="file" accept=".csv" class="hidden" />
 
     <div id="calendarModal" class="calendar-modal hidden">
       <div class="calendar-panel">
@@ -1269,6 +1274,7 @@
       const downloadExcelBtnEl = document.getElementById("downloadExcelBtn");
       const uploadExcelBtnEl = document.getElementById("uploadExcelBtn");
       const excelUploadInputEl = document.getElementById("excelUploadInput");
+      const companyExcelUploadInputEl = document.getElementById("companyExcelUploadInput");
       const formEl = document.getElementById("scheduleForm");
       const adminOverridePasswordEl = document.getElementById("adminOverridePassword");
       const adminOverrideSubmitBtnEl = document.getElementById("adminOverrideSubmitBtn");
@@ -1283,6 +1289,8 @@
       const memberNamesEl = document.getElementById("memberNames");
       const panelPhotographerListEl = document.getElementById("panelPhotographerList");
       const addCompanyBtnEl = document.getElementById("addCompanyBtn");
+      const downloadCompanyExcelBtnEl = document.getElementById("downloadCompanyExcelBtn");
+      const uploadCompanyExcelBtnEl = document.getElementById("uploadCompanyExcelBtn");
       const companyRegisterPanelEl = document.getElementById("companyRegisterPanel");
       const closeCompanyPanelBtnEl = document.getElementById("closeCompanyPanelBtn");
       const yearEl = document.getElementById("year");
@@ -1427,6 +1435,7 @@
           }
         });
         const rows = [...uniqueMap.values()];
+        companies.splice(0, companies.length, ...rows);
         localStorage.setItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(rows));
       }
 
@@ -2332,6 +2341,71 @@
           renderList();
         }
         alert(`업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
+      }
+
+      function exportCompaniesToCsv() {
+        const headers = ["name", "phone"];
+        const lines = [
+          headers.join(","),
+          ...companies.map((item) => headers.map((key) => escapeCsvField(item?.[key] ?? "")).join(","))
+        ];
+        const bom = "\uFEFF";
+        const blob = new Blob([bom + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const now = new Date();
+        const fileDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+        link.href = url;
+        link.download = `company_export_${fileDate}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      function importCompaniesFromCsvText(csvText) {
+        const lines = String(csvText || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .split("\n")
+          .filter((line) => line.trim() !== "");
+        if (lines.length < 2) {
+          alert("업로드할 업체 데이터가 없습니다.");
+          return;
+        }
+        const header = parseCsvLine(lines[0]).map((col) => col.trim().toLowerCase());
+        const headerMap = new Map(header.map((name, idx) => [name, idx]));
+        const nameKey = headerMap.has("name") ? "name" : headerMap.has("company") ? "company" : "";
+        if (!nameKey) {
+          alert("CSV 형식이 맞지 않습니다. 누락 컬럼: name(또는 company)");
+          return;
+        }
+        const phoneKey = headerMap.has("phone") ? "phone" : "";
+        const existingNameSet = new Set(companies.map((item) => normalizeCompanyName(item?.name).toLowerCase()).filter(Boolean));
+        let imported = 0;
+        let skipped = 0;
+        const addedRows = [];
+
+        for (let i = 1; i < lines.length; i += 1) {
+          const row = parseCsvLine(lines[i]);
+          const name = normalizeCompanyName(row[headerMap.get(nameKey)] ?? "");
+          const phone = phoneKey ? String(row[headerMap.get(phoneKey)] ?? "").trim() : "";
+          const key = name.toLowerCase();
+          if (!name || existingNameSet.has(key)) {
+            skipped += 1;
+            continue;
+          }
+          existingNameSet.add(key);
+          addedRows.push({ name, phone });
+          imported += 1;
+        }
+
+        if (addedRows.length > 0) {
+          companies.unshift(...addedRows);
+          saveAdminCompaniesToStorage();
+          renderCompanies();
+        }
+        alert(`업체 업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
       }
 
       function isRegisteredCompanyName(name) {
@@ -4028,6 +4102,22 @@
           excelUploadInputEl.value = "";
         }
       });
+      downloadCompanyExcelBtnEl.addEventListener("click", exportCompaniesToCsv);
+      uploadCompanyExcelBtnEl.addEventListener("click", () => {
+        companyExcelUploadInputEl.click();
+      });
+      companyExcelUploadInputEl.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          importCompaniesFromCsvText(text);
+        } catch (error) {
+          alert("업체 파일을 읽는 중 오류가 발생했습니다.");
+        } finally {
+          companyExcelUploadInputEl.value = "";
+        }
+      });
       yearEl.addEventListener("change", () => {
         renderScheduleDayOptionsWithWeekday(dayEl.value);
       });
@@ -4213,6 +4303,13 @@
         const name = companyNameInputEl.value.trim();
         const phone = companyPhoneInputEl.value.trim();
         if (!name) return;
+        const duplicated = companies.some(
+          (item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(name).toLowerCase()
+        );
+        if (duplicated) {
+          alert("이미 등록된 업체명입니다.");
+          return;
+        }
         companies.unshift({ name, phone });
         saveAdminCompaniesToStorage();
         companyFormEl.reset();
