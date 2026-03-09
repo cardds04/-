@@ -1034,6 +1034,17 @@
       </div>
     </div>
 
+    <div id="companyMergeModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(860px, 96vw);">
+        <div class="calendar-head">
+          <div id="companyMergeTitle" class="calendar-title">고객 병합 선택</div>
+          <button id="companyMergeCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="companyMergeSummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="companyMergeDetail" class="customer-alert-history" style="max-height: 52vh;"></div>
+      </div>
+    </div>
+
     <script src="./sync-config.js"></script>
     <script>
       const currentYear = new Date().getFullYear();
@@ -1052,6 +1063,7 @@
       const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
       const STORAGE_EXCLUDED_PHOTOGRAPHERS = "scheduleSiteExcludedPhotographers";
       const STORAGE_ADMIN_COMPANIES = "scheduleSiteAdminCompanies";
+      const STORAGE_CANCELED_SCHEDULES = "scheduleSiteCanceledSchedules";
       const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
       const STORAGE_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
@@ -1080,6 +1092,7 @@
         STORAGE_CUSTOMERS,
         STORAGE_CUSTOMER_LOGINS,
         STORAGE_ADMIN_COMPANIES,
+        STORAGE_CANCELED_SCHEDULES,
         STORAGE_WRITERS,
         STORAGE_WRITER_SCHEDULES,
         STORAGE_ADMIN_SCHEDULES,
@@ -1232,6 +1245,11 @@
       const previousScheduleHistorySummaryEl = document.getElementById("previousScheduleHistorySummary");
       const previousScheduleHistoryDetailEl = document.getElementById("previousScheduleHistoryDetail");
       const previousScheduleHistoryCloseBtnEl = document.getElementById("previousScheduleHistoryCloseBtn");
+      const companyMergeModalEl = document.getElementById("companyMergeModal");
+      const companyMergeTitleEl = document.getElementById("companyMergeTitle");
+      const companyMergeSummaryEl = document.getElementById("companyMergeSummary");
+      const companyMergeDetailEl = document.getElementById("companyMergeDetail");
+      const companyMergeCloseBtnEl = document.getElementById("companyMergeCloseBtn");
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
       const customerAlertCountEl = document.getElementById("customerAlertCount");
@@ -1239,6 +1257,7 @@
       const customerStatsBoxEl = document.getElementById("customerStatsBox");
       const customerAlertBoxEl = document.getElementById("customerAlertBox");
       const customerAlertHistoryBoxEl = document.getElementById("customerAlertHistoryBox");
+      const canceledScheduleBoxEl = document.getElementById("canceledScheduleBox");
       const openDayoffSummaryBoxEl = document.getElementById("openDayoffSummaryBox");
       const viewTabsEl = document.getElementById("viewTabs");
       const yearFilterEl = document.getElementById("yearFilter");
@@ -1296,6 +1315,10 @@
       let previousHistoryFilterDay = String(new Date().getDate()).padStart(2, "0");
       let previousHistoryWriterFilter = "all";
       let previousHistoryCompanyFilter = "";
+      let canceledScheduleCompanyFilter = "";
+      let mergeCompanySourceIndex = -1;
+      let mergeCompanySearchKeyword = "";
+      let mergeCompanySelectedCustomerId = "";
 
       function escapeHtml(text) {
         return text
@@ -1412,6 +1435,99 @@
         data.splice(0, data.length, ...saved);
       }
 
+      function appendCanceledScheduleRecord(item, canceledBy = "admin", reason = "삭제") {
+        if (!item) return;
+        const rows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        rows.unshift({
+          cancelId: `cancel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          canceledAt: new Date().toISOString(),
+          canceledBy: String(canceledBy || "admin"),
+          reason: String(reason || "삭제"),
+          customerScheduleId: String(item?.customerScheduleId || "").trim(),
+          date: String(item?.date || "").trim(),
+          time: String(item?.time || "").trim(),
+          name: String(item?.name || "작가미정").trim() || "작가미정",
+          company: String(item?.company || "").trim(),
+          place: String(item?.place || "").trim(),
+          pyeong: String(item?.pyeong || "").trim(),
+          composition: String(item?.composition || "").trim(),
+          memo: String(item?.memo || "").trim()
+        });
+        localStorage.setItem(STORAGE_CANCELED_SCHEDULES, JSON.stringify(rows.slice(0, 300)));
+      }
+
+      function renderCanceledSchedules() {
+        if (!canceledScheduleBoxEl) return;
+        const rows = readStorageArray(STORAGE_CANCELED_SCHEDULES)
+          .slice()
+          .sort((a, b) => new Date(b?.canceledAt || 0).getTime() - new Date(a?.canceledAt || 0).getTime());
+        const keyword = normalizeCompanyName(canceledScheduleCompanyFilter).toLowerCase();
+        const filteredRows = rows.filter((item) => {
+          if (!keyword) return true;
+          return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+        });
+        if (!rows.length) {
+          canceledScheduleBoxEl.innerHTML = `
+            <div style="font-weight: 700; margin-bottom: 6px;">취소된 일정</div>
+            <div>취소 기록이 없습니다.</div>
+          `;
+          return;
+        }
+        canceledScheduleBoxEl.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 6px;">취소된 일정 (${rows.length}건)</div>
+          <div class="customer-stats-head" style="margin-bottom: 8px;">
+            <input id="canceledCompanySearchInput" class="inline-input" type="text" placeholder="업체명 검색" value="${escapeHtml(
+              canceledScheduleCompanyFilter
+            )}" style="width: 180px;" />
+            <button id="applyCanceledCompanySearchBtn" class="btn-sm" type="button">검색</button>
+            <button id="clearCanceledCompanySearchBtn" class="btn-sm" type="button">전체</button>
+            <span>결과: ${filteredRows.length}건</span>
+          </div>
+          ${rows
+            .filter((item) => {
+              if (!keyword) return true;
+              return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+            })
+            .slice(0, 50)
+            .map((item) => {
+              const canceledAt = String(item?.canceledAt || "").replace("T", " ").slice(0, 16);
+              return `
+                <div class="customer-alert-row">
+                  <div>
+                    <strong>${escapeHtml(String(item?.date || "-"))} ${escapeHtml(String(item?.time || "-"))}</strong><br />
+                    업체: ${escapeHtml(String(item?.company || "-"))} / 작가: ${escapeHtml(String(item?.name || "작가미정"))}<br />
+                    장소: ${formatPlaceForDisplay(String(item?.place || "-"))}<br />
+                    평수/구성: ${escapeHtml(String(item?.pyeong || "-"))} / ${escapeHtml(String(item?.composition || "-"))}<br />
+                    메모: ${escapeHtml(String(item?.memo || "-"))}
+                  </div>
+                  <div style="font-size: 0.82rem; color: #6f7c99; text-align: right;">
+                    취소시각: ${escapeHtml(canceledAt || "-")}<br />
+                    구분: ${escapeHtml(String(item?.canceledBy || "-"))} / 사유: ${escapeHtml(String(item?.reason || "-"))}
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        `;
+        const searchInputEl = canceledScheduleBoxEl.querySelector("#canceledCompanySearchInput");
+        const applyBtnEl = canceledScheduleBoxEl.querySelector("#applyCanceledCompanySearchBtn");
+        const clearBtnEl = canceledScheduleBoxEl.querySelector("#clearCanceledCompanySearchBtn");
+        applyBtnEl?.addEventListener("click", () => {
+          canceledScheduleCompanyFilter = String(searchInputEl?.value || "").trim();
+          renderCanceledSchedules();
+        });
+        searchInputEl?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          canceledScheduleCompanyFilter = String(searchInputEl?.value || "").trim();
+          renderCanceledSchedules();
+        });
+        clearBtnEl?.addEventListener("click", () => {
+          canceledScheduleCompanyFilter = "";
+          renderCanceledSchedules();
+        });
+      }
+
       function resetAllSchedulesOnce() {
         if (localStorage.getItem(STORAGE_SCHEDULE_RESET_DONE) === "done") return;
         [
@@ -1434,6 +1550,7 @@
           STORAGE_CUSTOMER_LOGINS,
           STORAGE_CUSTOMER_SESSION,
           STORAGE_ADMIN_COMPANIES,
+          STORAGE_CANCELED_SCHEDULES,
           STORAGE_WRITERS,
           STORAGE_WRITER_SESSION,
           STORAGE_WRITER_SCHEDULES,
@@ -2612,6 +2729,7 @@
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
+                      <button class="btn-sm" type="button" data-action="mergeCompanyToCustomer" data-company-index="${index}">고객병합</button>
                       ${canDelete ? `<button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}">삭제</button>` : ""}
                       <button class="btn-sm" type="button" data-action="cancelCompanyPhone" data-company-index="${index}">취소</button>
                     </div>
@@ -2677,7 +2795,7 @@
             normalizeCompanyName(item?.company),
             String(item?.place || "").trim()
           ].join("|");
-          const key = idKey || fallbackKey;
+          const key = fallbackKey || idKey;
           if (!key) return;
           mergedActiveMap.set(key, item);
         });
@@ -2752,6 +2870,308 @@
               )
               .join("")
           : '<div class="company-item">해당 업체의 주문 기록이 없습니다.</div>';
+      }
+
+      function closeCompanyMergeModal() {
+        mergeCompanySourceIndex = -1;
+        mergeCompanySearchKeyword = "";
+        mergeCompanySelectedCustomerId = "";
+        companyMergeModalEl.classList.add("hidden");
+      }
+
+      function renderCompanyMergeModal() {
+        const sourceCompany = companies[mergeCompanySourceIndex];
+        if (!sourceCompany) {
+          closeCompanyMergeModal();
+          return;
+        }
+        const sourceName = normalizeCompanyName(sourceCompany.name);
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        companyMergeTitleEl.textContent = `고객 병합 선택 - ${sourceName}`;
+
+        const keyword = mergeCompanySearchKeyword.toLowerCase();
+        const filteredUsers = users.filter((user) => {
+          if (!keyword) return true;
+          const companyText = String(user?.company || "").toLowerCase();
+          const idText = String(user?.id || "").toLowerCase();
+          const phoneText = String(user?.phone || "").toLowerCase();
+          return companyText.includes(keyword) || idText.includes(keyword) || phoneText.includes(keyword);
+        });
+
+        companyMergeSummaryEl.innerHTML = `
+          <div class="customer-stats-head" style="align-items: center; gap: 8px;">
+            <span>현재 업체: <strong>${escapeHtml(sourceName)}</strong></span>
+            <input id="companyMergeSearchInput" class="inline-input" type="text" placeholder="업체명/아이디/연락처 검색" value="${escapeHtml(
+              mergeCompanySearchKeyword
+            )}" style="width: 220px;" />
+            <button id="companyMergeSearchBtn" class="btn-sm" type="button">검색</button>
+            <button id="companyMergeClearBtn" class="btn-sm" type="button">초기화</button>
+            <span>검색 결과: ${filteredUsers.length}건</span>
+          </div>
+        `;
+
+        companyMergeDetailEl.innerHTML = filteredUsers.length
+          ? filteredUsers
+              .map((user) => {
+                const userId = String(user?.id || "").trim();
+                const userCompany = String(user?.company || "").trim();
+                const userPhone = String(user?.phone || "").trim() || "-";
+                const selected = mergeCompanySelectedCustomerId === userId;
+                return `
+                  <div
+                    class="customer-alert-row"
+                    style="align-items: center; justify-content: space-between; gap: 8px; cursor: pointer;"
+                    data-action="pickMergeCustomer"
+                    data-customer-id="${escapeHtml(userId)}"
+                  >
+                    <div>
+                      <strong>${escapeHtml(userCompany || "-")}</strong><br />
+                      아이디: ${escapeHtml(userId || "-")} / 연락처: ${escapeHtml(userPhone)}
+                    </div>
+                    <button
+                      class="btn-sm ${selected ? "primary" : ""}"
+                      type="button"
+                      data-action="pickMergeCustomer"
+                      data-customer-id="${escapeHtml(userId)}"
+                    >
+                      ${selected ? "선택됨" : "선택"}
+                    </button>
+                  </div>
+                `;
+              })
+              .join("")
+          : '<div class="company-item">검색 결과가 없습니다.</div>';
+
+        const searchInputEl = companyMergeSummaryEl.querySelector("#companyMergeSearchInput");
+        const searchBtnEl = companyMergeSummaryEl.querySelector("#companyMergeSearchBtn");
+        const clearBtnEl = companyMergeSummaryEl.querySelector("#companyMergeClearBtn");
+
+        searchBtnEl?.addEventListener("click", () => {
+          mergeCompanySearchKeyword = String(searchInputEl?.value || "").trim();
+          renderCompanyMergeModal();
+        });
+        searchInputEl?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          mergeCompanySearchKeyword = String(searchInputEl?.value || "").trim();
+          renderCompanyMergeModal();
+        });
+        clearBtnEl?.addEventListener("click", () => {
+          mergeCompanySearchKeyword = "";
+          mergeCompanySelectedCustomerId = "";
+          renderCompanyMergeModal();
+        });
+
+        companyMergeDetailEl.querySelectorAll("[data-action='pickMergeCustomer'][data-customer-id]").forEach((targetEl) => {
+          targetEl.addEventListener("click", () => {
+            mergeCompanySelectedCustomerId = String(targetEl.dataset.customerId || "").trim();
+            renderCompanyMergeModal();
+          });
+        });
+
+        const existingActionRow = companyMergeSummaryEl.querySelector(".actions");
+        if (!existingActionRow) {
+          const actionRowEl = document.createElement("div");
+          actionRowEl.className = "actions";
+          actionRowEl.style.marginTop = "10px";
+          actionRowEl.style.justifyContent = "flex-start";
+          actionRowEl.innerHTML = `
+            <button id="companyMergeConfirmBtn" class="btn-sm primary" type="button" ${
+              mergeCompanySelectedCustomerId ? "" : "disabled"
+            }>선택 업체로 병합</button>
+          `;
+          companyMergeSummaryEl.appendChild(actionRowEl);
+          const confirmBtnEl = actionRowEl.querySelector("#companyMergeConfirmBtn");
+          confirmBtnEl?.addEventListener("click", () => {
+            if (!mergeCompanySelectedCustomerId) return;
+            mergeAdminCompanyToCustomerAccount(mergeCompanySourceIndex, mergeCompanySelectedCustomerId);
+          });
+        }
+      }
+
+      function openCompanyMergeModal(companyIndex) {
+        const sourceCompany = companies[companyIndex];
+        if (!sourceCompany) return;
+        mergeCompanySourceIndex = companyIndex;
+        mergeCompanySearchKeyword = "";
+        mergeCompanySelectedCustomerId = "";
+        renderCompanyMergeModal();
+        companyMergeModalEl.classList.remove("hidden");
+      }
+
+      function mergeAdminCompanyToCustomerAccount(companyIndex, selectedCustomerId = "") {
+        const sourceCompany = companies[companyIndex];
+        if (!sourceCompany) return;
+        const sourceName = normalizeCompanyName(sourceCompany.name);
+        if (!sourceName) return;
+
+        if (!selectedCustomerId) {
+          openCompanyMergeModal(companyIndex);
+          return;
+        }
+
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        if (users.length === 0) {
+          alert("등록된 고객 계정이 없어 병합할 수 없습니다.");
+          return;
+        }
+
+        const user = users.find((item) => String(item.id || "").trim().toLowerCase() === String(selectedCustomerId).toLowerCase());
+        if (!user) {
+          alert("해당 아이디를 찾지 못했습니다.");
+          return;
+        }
+
+        const targetName = normalizeCompanyName(user.company);
+        const targetPhone = String(user.phone || "").trim();
+        if (!targetName) {
+          alert("선택한 고객 계정의 업체명이 비어 있어 병합할 수 없습니다.");
+          return;
+        }
+
+        const confirmed = confirm(
+          `병합을 진행할까요?\n\n관리자 업체: ${sourceName}\n고객 계정: ${String(user.id || "").trim()} (${targetName})\n\n병합 후 업체명은 "${targetName}" 으로 통일되고, 해당 업체 스케줄은 이 고객 아이디에 연결됩니다.`
+        );
+        if (!confirmed) return;
+
+        const sourceKey = sourceName.toLowerCase();
+        const targetKey = targetName.toLowerCase();
+        const targetCustomerId = String(user.id || "").trim();
+        const targetCustomerPhone = targetPhone;
+        const shouldRelink = (name) => {
+          const key = normalizeCompanyName(name).toLowerCase();
+          return key === sourceKey || key === targetKey;
+        };
+        const getScheduleDedupeKey = (item) =>
+          [
+            normalizeCompanyName(item?.company).toLowerCase(),
+            String(item?.date || "").trim(),
+            String(item?.time || "").trim(),
+            normalizeCompanyName(item?.place).toLowerCase(),
+            String(item?.pyeong || "").trim(),
+            String(item?.composition || "").trim(),
+            String(item?.memo || "").trim()
+          ].join("|");
+        const pickBetterScheduleRow = (current, next) => {
+          if (!current) return next;
+          const currentScore =
+            (String(current?.customerScheduleId || "").trim() ? 1 : 0) +
+            (String(current?.customerId || "").trim() ? 1 : 0) +
+            (String(current?.writerPhone || "").trim() ? 1 : 0) +
+            (String(current?.writerCarNumber || "").trim() ? 1 : 0);
+          const nextScore =
+            (String(next?.customerScheduleId || "").trim() ? 1 : 0) +
+            (String(next?.customerId || "").trim() ? 1 : 0) +
+            (String(next?.writerPhone || "").trim() ? 1 : 0) +
+            (String(next?.writerCarNumber || "").trim() ? 1 : 0);
+          return nextScore > currentScore ? next : current;
+        };
+
+        companies[companyIndex].name = targetName;
+        if (targetPhone) companies[companyIndex].phone = targetPhone;
+        for (let i = companies.length - 1; i >= 0; i -= 1) {
+          if (i === companyIndex) continue;
+          if (normalizeCompanyName(companies[i]?.name).toLowerCase() === targetKey) {
+            companies.splice(i, 1);
+            if (i < companyIndex) companyIndex -= 1;
+          }
+        }
+
+        data.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          item.customerId = targetCustomerId;
+          item.customerPhone = targetCustomerPhone;
+        });
+        onHoldPayments.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        refundPayments.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+
+        if (sourceName !== targetName && couponPasses[sourceName] !== undefined) {
+          const oldValue = Number(couponPasses[sourceName] || 0);
+          const targetValue = Number(couponPasses[targetName] || 0);
+          couponPasses[targetName] = Math.max(0, oldValue) + Math.max(0, targetValue);
+          delete couponPasses[sourceName];
+        }
+
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        let hasTargetCompany = false;
+        customerCompanies.forEach((item) => {
+          if (!shouldRelink(item?.name)) return;
+          item.name = targetName;
+          if (targetPhone) item.phone = targetPhone;
+          hasTargetCompany = true;
+        });
+        if (!hasTargetCompany) {
+          customerCompanies.unshift({ name: targetName, phone: targetPhone || sourceCompany.phone || "-" });
+        }
+        const dedupedCustomerCompanies = [];
+        const seenCompanyKeys = new Set();
+        customerCompanies.forEach((item) => {
+          const key = normalizeCompanyName(item?.name).toLowerCase();
+          if (!key || seenCompanyKeys.has(key)) return;
+          seenCompanyKeys.add(key);
+          dedupedCustomerCompanies.push({
+            name: normalizeCompanyName(item?.name),
+            phone: String(item?.phone || "").trim() || "-"
+          });
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(dedupedCustomerCompanies));
+
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        customerSchedules.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          item.customerId = targetCustomerId;
+          item.customerPhone = targetCustomerPhone;
+        });
+        const dedupedCustomerSchedulesMap = new Map();
+        customerSchedules.forEach((item) => {
+          const key = getScheduleDedupeKey(item);
+          if (!key) return;
+          const current = dedupedCustomerSchedulesMap.get(key);
+          dedupedCustomerSchedulesMap.set(key, pickBetterScheduleRow(current, item));
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify([...dedupedCustomerSchedulesMap.values()]));
+
+        const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        adminSchedules.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          item.customerId = targetCustomerId;
+          item.customerPhone = targetCustomerPhone;
+        });
+        const dedupedAdminSchedulesMap = new Map();
+        adminSchedules.forEach((item) => {
+          const key = getScheduleDedupeKey(item);
+          if (!key) return;
+          const current = dedupedAdminSchedulesMap.get(key);
+          dedupedAdminSchedulesMap.set(key, pickBetterScheduleRow(current, item));
+        });
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify([...dedupedAdminSchedulesMap.values()]));
+
+        const dedupedDataMap = new Map();
+        data.forEach((item) => {
+          const key = getScheduleDedupeKey(item);
+          if (!key) return;
+          const current = dedupedDataMap.get(key);
+          dedupedDataMap.set(key, pickBetterScheduleRow(current, item));
+        });
+        data.splice(0, data.length, ...dedupedDataMap.values());
+
+        saveAdminCompaniesToStorage();
+        editingCompanyIndex = null;
+        renderCompanies();
+        renderCouponPassList();
+        renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        renderList();
+        closeCompanyMergeModal();
+        alert(`병합 완료: ${sourceName} -> ${targetName} (${targetCustomerId})`);
       }
 
       function renderWriterHistory(writerName) {
@@ -3214,6 +3634,7 @@
         if (holdItem.paymentStatus === "입금완료") {
           refundPayments.unshift({ ...holdItem, refundChecked: false });
         }
+        appendCanceledScheduleRecord(holdItem, "admin", "보류취소");
         onHoldPayments.splice(index, 1);
         renderPaymentList();
       }
@@ -3284,6 +3705,21 @@
         syncAdminSchedulesToCustomerStorage();
         syncWriterSchedulesStorage();
         renderOpenDayoffSummary();
+        renderCanceledSchedules();
+        const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        const canceledScheduleIdSet = new Set(
+          canceledRows.map((item) => String(item?.customerScheduleId || "").trim()).filter(Boolean)
+        );
+        const canceledFallbackKeySet = new Set(
+          canceledRows.map((item) =>
+            [
+              String(item?.date || "").trim(),
+              String(item?.time || "").trim(),
+              normalizeCompanyName(item?.company).toLowerCase(),
+              normalizeCompanyName(item?.place).toLowerCase()
+            ].join("|")
+          )
+        );
         const selectedYear = yearFilterEl.value;
         const selectedMonth = monthFilterEl.value;
         const selectedDay = dayFilterEl.value;
@@ -3301,6 +3737,17 @@
             const itemYear = String(itemDate.getFullYear());
             const itemMonth = String(itemDate.getMonth() + 1);
             const itemDay = String(itemDate.getDate());
+            const itemScheduleId = String(item?.customerScheduleId || "").trim();
+            const itemFallbackKey = [
+              String(item?.date || "").trim(),
+              String(item?.time || "").trim(),
+              normalizeCompanyName(item?.company).toLowerCase(),
+              normalizeCompanyName(item?.place).toLowerCase()
+            ].join("|");
+            const isCanceled =
+              (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
+              canceledFallbackKeySet.has(itemFallbackKey);
+            if (isCanceled) return false;
 
             const passPhotographer =
               currentPhotographerFilter === "all" || item.name === currentPhotographerFilter;
@@ -3640,6 +4087,14 @@
           previousScheduleHistoryModalEl.classList.add("hidden");
         }
       });
+      companyMergeCloseBtnEl.addEventListener("click", () => {
+        closeCompanyMergeModal();
+      });
+      companyMergeModalEl.addEventListener("click", (event) => {
+        if (event.target === companyMergeModalEl) {
+          closeCompanyMergeModal();
+        }
+      });
       companyOrderHistorySummaryEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action='saveCompanyAccount'][data-company-name]");
         if (!button) return;
@@ -3883,6 +4338,11 @@
           renderCustomerStatsDashboard();
           renderCustomerUpdateNotices();
           renderCustomerAlertHistory();
+        }
+
+        if (action === "mergeCompanyToCustomer") {
+          mergeAdminCompanyToCustomerAccount(index);
+          return;
         }
 
         if (action === "deleteCompanyInfo") {
@@ -4147,6 +4607,7 @@
         const confirmed = confirm("삭제하시겠습니까?");
         if (!confirmed) return;
         const deletedItem = data[index];
+        appendCanceledScheduleRecord(deletedItem, "admin", "관리자삭제");
         if (deletedItem?.paymentStatus === "입금완료") {
           onHoldPayments.unshift({ ...deletedItem });
         }
@@ -4406,6 +4867,9 @@
       switchMainTab("schedule");
 
       window.addEventListener("storage", (event) => {
+        if (event.key === STORAGE_CANCELED_SCHEDULES) {
+          renderCanceledSchedules();
+        }
         if (event.key === STORAGE_ADMIN_COMPANIES) {
           loadAdminCompaniesFromStorage();
           renderCompanies();
@@ -4477,6 +4941,7 @@
         renderCustomerUpdateNotices();
         renderCustomerAlertHistory();
         renderOpenDayoffSummary();
+        renderCanceledSchedules();
       });
     </script>
   </body>

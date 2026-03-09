@@ -210,6 +210,7 @@
       const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const STORAGE_CANCELED_SCHEDULES = "scheduleSiteCanceledSchedules";
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
@@ -231,6 +232,7 @@
         STORAGE_ALERTS,
         STORAGE_LOGIN_LOGS,
         "scheduleSiteAdminCompanies",
+        STORAGE_CANCELED_SCHEDULES,
         "scheduleSiteWriters",
         STORAGE_ADMIN_WRITER_SCHEDULES,
         STORAGE_ADMIN_SCHEDULES,
@@ -407,6 +409,27 @@
 
       function normalize(text) {
         return String(text || "").trim();
+      }
+
+      function appendCanceledScheduleRecord(item, canceledBy = "customer", reason = "고객취소") {
+        if (!item) return;
+        const rows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        rows.unshift({
+          cancelId: `cancel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          canceledAt: new Date().toISOString(),
+          canceledBy: String(canceledBy || "customer"),
+          reason: String(reason || "고객취소"),
+          customerScheduleId: normalize(item?.customerScheduleId),
+          date: normalize(item?.date),
+          time: normalize(item?.time),
+          name: normalize(item?.name) || "작가미정",
+          company: normalize(item?.company),
+          place: normalize(item?.place),
+          pyeong: normalize(item?.pyeong),
+          composition: normalize(item?.composition),
+          memo: normalize(item?.memo)
+        });
+        writeStorageArray(STORAGE_CANCELED_SCHEDULES, rows.slice(0, 300));
       }
 
       function updateRememberLoginButtonText() {
@@ -1254,8 +1277,26 @@
           const deletedDate = item.date;
           const deletedTime = item.time;
           const deletedCompany = item.company;
+          appendCanceledScheduleRecord(item, "customer", "고객취소");
           schedules.splice(index, 1);
           writeStorageArray(STORAGE_SCHEDULES, schedules);
+          const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+          const writerSchedules = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
+          const deletedScheduleId = normalize(item?.customerScheduleId);
+          const isSameSchedule = (row) => {
+            const sameById = deletedScheduleId && normalize(row?.customerScheduleId || row?.writerMirrorId) === deletedScheduleId;
+            if (sameById) return true;
+            return (
+              normalize(row?.date) === normalize(item?.date) &&
+              normalize(row?.time) === normalize(item?.time) &&
+              getCompanyKey(row?.company) === getCompanyKey(item?.company) &&
+              normalize(row?.place) === normalize(item?.place)
+            );
+          };
+          const nextAdminSchedules = adminSchedules.filter((row) => !isSameSchedule(row));
+          const nextWriterSchedules = writerSchedules.filter((row) => !isSameSchedule(row));
+          writeStorageArray(STORAGE_ADMIN_SCHEDULES, nextAdminSchedules);
+          writeStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES, nextWriterSchedules);
           const cancelAlerts = readStorageArray(STORAGE_ALERTS);
           cancelAlerts.unshift({
             id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
