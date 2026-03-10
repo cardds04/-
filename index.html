@@ -1945,43 +1945,13 @@
       }
 
       function resetAllSchedulesOnce() {
-        if (localStorage.getItem(STORAGE_SCHEDULE_RESET_DONE) === "done") return;
-        [
-          STORAGE_CUSTOMER_SCHEDULES,
-          STORAGE_WRITER_SCHEDULES,
-          STORAGE_ADMIN_SCHEDULES,
-          STORAGE_DAYOFF_DEDUCTIONS,
-          STORAGE_DAYOFF_REQUESTS
-        ].forEach((key) => localStorage.removeItem(key));
-        localStorage.setItem(STORAGE_SCHEDULE_RESET_DONE, "done");
+        // 과거 마이그레이션용 자동 초기화는 비활성화
+        return;
       }
 
       function resetAllDataOnceV2() {
-        if (localStorage.getItem(STORAGE_FULL_RESET_DONE_V2) === "done") return;
-        [
-          STORAGE_CUSTOMER_COMPANIES,
-          STORAGE_CUSTOMER_SCHEDULES,
-          STORAGE_CUSTOMER_ALERTS,
-          STORAGE_CUSTOMERS,
-          STORAGE_CUSTOMER_LOGINS,
-          STORAGE_CUSTOMER_SESSION,
-          STORAGE_ADMIN_COMPANIES,
-          STORAGE_CANCELED_SCHEDULES,
-          STORAGE_WRITERS,
-          STORAGE_WRITER_SESSION,
-          STORAGE_WRITER_SCHEDULES,
-          STORAGE_ADMIN_SCHEDULES,
-          STORAGE_DAILY_LIMITS,
-          STORAGE_DAYOFF_DEDUCTIONS,
-          STORAGE_DAYOFF_REQUESTS,
-          STORAGE_DAYOFF_ALERT_READ_IDS,
-          STORAGE_LIMIT_CONFIG,
-          STORAGE_EXCLUDED_PHOTOGRAPHERS,
-          STORAGE_PHOTOGRAPHER_PROFILES,
-          STORAGE_TEST_SEED_Q1_2026_DONE,
-          STORAGE_SCHEDULE_RESET_DONE
-        ].forEach((key) => localStorage.removeItem(key));
-        localStorage.setItem(STORAGE_FULL_RESET_DONE_V2, "done");
+        // 과거 마이그레이션용 자동 초기화는 비활성화
+        return;
       }
 
       function isHolidayDate(dateKey) {
@@ -6489,8 +6459,7 @@
         adminOverridePasswordEl.value = "";
       });
 
-      resetAllSchedulesOnce();
-      resetAllDataOnceV2();
+      // 자동 초기화 비활성화 (데이터 유실 방지)
       loadAdminCompaniesFromStorage();
       loadAdminSchedulesFromStorage();
       hydrateFromCustomerPageStorage();
