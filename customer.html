@@ -270,11 +270,12 @@
 
       function pullRemoteStateSync() {
         try {
+          const cacheBust = `_=${Date.now()}`;
           if (USE_SUPABASE_SYNC) {
             const xhr = new XMLHttpRequest();
             xhr.open(
               "GET",
-              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1&${cacheBust}`,
               false
             );
             xhr.setRequestHeader("apikey", SUPABASE_ANON_KEY);
@@ -291,7 +292,8 @@
 
           if (!REMOTE_SYNC_ENDPOINT) return;
           const xhr = new XMLHttpRequest();
-          xhr.open("GET", REMOTE_SYNC_ENDPOINT, false);
+          const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
+          xhr.open("GET", `${REMOTE_SYNC_ENDPOINT}${connector}${cacheBust}`, false);
           xhr.send();
           if (xhr.status < 200 || xhr.status >= 300) return;
           const payload = JSON.parse(xhr.responseText || "{}");
