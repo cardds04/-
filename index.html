@@ -958,6 +958,7 @@
             <div class="head-right">
               <span class="count">총 <span id="totalCount">0</span>건</span>
               <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
+              <button id="markAllCustomerAlertsReadBtn" class="btn-sm" type="button">모두확인</button>
               <button id="previousScheduleHistoryBtn" class="btn-sm" type="button">이전기록</button>
               <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
               <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
@@ -965,6 +966,9 @@
               <button id="resetAllSchedulesBtn" class="btn-sm danger" type="button">전체 스케줄초기화</button>
             </div>
           </div>
+
+          <div id="customerAlertBox" class="customer-alert-box"></div>
+          <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
 
           <div id="inlineCalendarBox" class="customer-stats-box" style="margin-bottom: 10px;">
             <div class="calendar-head">
@@ -995,9 +999,6 @@
             <input id="companyFilterInput" class="small-select" type="text" placeholder="업체명 검색" />
             <button id="copyScheduleBtn" class="btn-sm" type="button">내용복사</button>
           </div>
-
-          <div id="customerAlertBox" class="customer-alert-box"></div>
-          <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
           <div id="list" class="list hidden"></div>
           <div id="customerStatsBox" class="customer-stats-box"></div>
           <div id="openDayoffSummaryBox" class="customer-alert-history" style="margin-top: 10px;"></div>
@@ -2013,6 +2014,7 @@
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
       const customerAlertCountEl = document.getElementById("customerAlertCount");
+      const markAllCustomerAlertsReadBtnEl = document.getElementById("markAllCustomerAlertsReadBtn");
       const customerAlertHistoryBtnEl = document.getElementById("customerAlertHistoryBtn");
       const customerStatsBoxEl = document.getElementById("customerStatsBox");
       const customerAlertBoxEl = document.getElementById("customerAlertBox");
@@ -3503,6 +3505,9 @@
         const alerts = getMergedAdminAlerts();
         const unreadCount = alerts.filter((item) => !item.read).length;
         customerAlertCountEl.textContent = `미확인 알림 총 ${unreadCount}개`;
+        if (markAllCustomerAlertsReadBtnEl) {
+          markAllCustomerAlertsReadBtnEl.disabled = unreadCount === 0;
+        }
         const visibleAlerts = alerts.filter((item) => !item.read);
 
         if (visibleAlerts.length === 0) {
@@ -6474,6 +6479,39 @@
           target.read = true;
           localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
         }
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+      });
+      markAllCustomerAlertsReadBtnEl?.addEventListener("click", () => {
+        const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+        let customerChanged = false;
+        alerts.forEach((item) => {
+          if (!item || item.read) return;
+          item.read = true;
+          customerChanged = true;
+        });
+        if (customerChanged) {
+          localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+        }
+
+        const requestIds = readStorageArray(STORAGE_DAYOFF_REQUESTS)
+          .map((item) => String(item?.id || "").trim())
+          .filter(Boolean);
+        const readIds = new Set(
+          readStorageArray(STORAGE_DAYOFF_ALERT_READ_IDS)
+            .map((value) => String(value || "").trim())
+            .filter(Boolean)
+        );
+        let dayoffChanged = false;
+        requestIds.forEach((id) => {
+          if (readIds.has(id)) return;
+          readIds.add(id);
+          dayoffChanged = true;
+        });
+        if (dayoffChanged) {
+          localStorage.setItem(STORAGE_DAYOFF_ALERT_READ_IDS, JSON.stringify([...readIds]));
+        }
+
         renderCustomerUpdateNotices();
         renderCustomerAlertHistory();
       });
