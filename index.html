@@ -3496,6 +3496,19 @@
                           return `
                             <span class="writer-place">
                               ${escapeHtml(item.date || "-")} (<span class="weekday-label ${isWeekendDate(item.date) ? "weekend" : ""}">${escapeHtml(getWeekdayKo(item.date))}</span>) | ${escapeHtml(item.time || "-")}
+                              <button
+                                class="btn-sm danger"
+                                type="button"
+                                data-action="deletePreviousHistorySchedule"
+                                data-source-label="${escapeHtml(item.sourceLabel || "진행중")}"
+                                data-schedule-id="${escapeHtml(String(item.customerScheduleId || "").trim())}"
+                                data-date="${escapeHtml(String(item.date || "").trim())}"
+                                data-time="${escapeHtml(String(item.time || "").trim())}"
+                                data-company="${escapeHtml(String(item.company || "").trim())}"
+                                data-place="${escapeHtml(String(item.place || "").trim())}"
+                              >
+                                삭제
+                              </button><br />
                               <button class="btn-sm ${statusBadgeClass}" type="button" disabled style="margin-left: 6px;">${statusBadgeText}</button><br />
                               업체: ${escapeHtml(item.company || "-")} (${escapeHtml(getCompanyPhoneForDisplay(item.company, item) || "-")})<br />
                               장소: ${formatPlaceForDisplay(item.place)}<br />
@@ -4754,6 +4767,56 @@
         renderList();
       }
 
+      function deletePreviousHistoryScheduleByPayload(payload) {
+        const sourceLabel = String(payload?.sourceLabel || "진행중").trim();
+        const scheduleId = String(payload?.scheduleId || "").trim();
+        const date = String(payload?.date || "").trim();
+        const time = String(payload?.time || "").trim();
+        const company = normalizeCompanyName(payload?.company);
+        const place = String(payload?.place || "").trim();
+        const targetList =
+          sourceLabel === "보류" ? onHoldPayments : sourceLabel === "환불" ? refundPayments : data;
+        const targetIndex = targetList.findIndex((item) => {
+          const sameById = scheduleId && String(item?.customerScheduleId || "").trim() === scheduleId;
+          if (sameById) return true;
+          return (
+            String(item?.date || "").trim() === date &&
+            String(item?.time || "").trim() === time &&
+            normalizeCompanyName(item?.company) === company &&
+            String(item?.place || "").trim() === place
+          );
+        });
+        if (targetIndex < 0) {
+          alert("해당 이전기록을 찾지 못했습니다.");
+          return;
+        }
+        const targetItem = targetList[targetIndex];
+        const confirmed = confirm("이전기록 항목을 삭제할까요?");
+        if (!confirmed) return;
+        appendCanceledScheduleRecord(targetItem, "admin", "이전기록삭제");
+        targetList.splice(targetIndex, 1);
+
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        const customerIndex = customerSchedules.findIndex((row) => {
+          const sameById = scheduleId && String(row?.customerScheduleId || "").trim() === scheduleId;
+          if (sameById) return true;
+          return (
+            String(row?.date || "").trim() === date &&
+            String(row?.time || "").trim() === time &&
+            normalizeCompanyName(row?.company) === company &&
+            String(row?.place || "").trim() === place
+          );
+        });
+        if (customerIndex >= 0) {
+          customerSchedules.splice(customerIndex, 1);
+          localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+        }
+
+        renderPreviousScheduleHistory();
+        renderList();
+        renderPaymentList();
+      }
+
       listEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
@@ -4831,6 +4894,19 @@
         if (action === "saveEdit" && !Number.isNaN(index)) {
           saveInlineEdit(index, itemEl);
         }
+      });
+
+      previousScheduleHistoryDetailEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='deletePreviousHistorySchedule']");
+        if (!button) return;
+        deletePreviousHistoryScheduleByPayload({
+          sourceLabel: button.dataset.sourceLabel || "진행중",
+          scheduleId: button.dataset.scheduleId || "",
+          date: button.dataset.date || "",
+          time: button.dataset.time || "",
+          company: button.dataset.company || "",
+          place: button.dataset.place || ""
+        });
       });
 
       memberNamesEl.addEventListener("click", (event) => {
