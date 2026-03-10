@@ -133,7 +133,7 @@
             <div class="row"><span>👤</span><input id="signupName" type="text" placeholder="작가명" required /></div>
             <div class="row"><span>📞</span><input id="signupPhone" type="text" placeholder="연락처(선택)" /></div>
             <div class="row"><span>🚗</span><input id="signupCarNumber" type="text" placeholder="차량번호(선택)" /></div>
-            <button class="btn" type="submit">회원가입</button>
+            <button id="signupSubmitBtn" class="btn" type="button">회원가입</button>
             <button id="backToLoginBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
           </form>
         </div>
@@ -760,6 +760,7 @@
       const openSignupBtnEl = document.getElementById("openSignupBtn");
       const backToLoginBtnEl = document.getElementById("backToLoginBtn");
       const signupFormEl = document.getElementById("signupForm");
+      const signupSubmitBtnEl = document.getElementById("signupSubmitBtn");
       const loginFormEl = document.getElementById("loginForm");
       const authBlockEl = document.getElementById("authBlock");
       const scheduleBlockEl = document.getElementById("scheduleBlock");
@@ -1612,8 +1613,7 @@
           : '<div class="history-item">이번달 촬영 내역이 없습니다.</div>';
       }
 
-      signupFormEl.addEventListener("submit", async (event) => {
-        event.preventDefault();
+      async function handleWriterSignup() {
         const id = normalize(document.getElementById("signupId").value);
         const password = normalize(document.getElementById("signupPassword").value);
         const name = normalize(document.getElementById("signupName").value);
@@ -1698,6 +1698,13 @@
         signupFormEl.reset();
         renderAuthState();
         alert("회원가입 완료! 내 스케줄을 확인하세요.");
+      }
+      signupFormEl.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await handleWriterSignup();
+      });
+      signupSubmitBtnEl?.addEventListener("click", async () => {
+        await handleWriterSignup();
       });
 
       loginFormEl.addEventListener("submit", (event) => {
