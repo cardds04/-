@@ -1203,6 +1203,7 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const STORAGE_SYNC_KEYS = [
@@ -1303,6 +1304,7 @@
       }
 
       function pullRemoteStateSync() {
+        if (!ENABLE_APP_STATE_SYNC) return false;
         try {
           if (USE_SUPABASE_SYNC) {
             const xhr = new XMLHttpRequest();
@@ -1398,6 +1400,7 @@
         syncStatusBadgeEl.textContent = `동기화: ${text}`;
       }
       async function fetchRemoteStateSnapshot() {
+        if (!ENABLE_APP_STATE_SYNC) return {};
         if (USE_SUPABASE_SYNC) {
           const response = await fetch(
             `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
@@ -1545,6 +1548,7 @@
         return rows[0] ? rows[0][STORAGE_ADMIN_COMPANIES] ?? null : null;
       }
       async function pushRemoteState() {
+        if (!ENABLE_APP_STATE_SYNC) return;
         if (isRemotePushRunning) return;
         isRemotePushRunning = true;
         setSyncStatus("저장 중...", "warn");
@@ -1621,7 +1625,7 @@
         }
       }
       async function pushRemoteStatePatch(patchState) {
-        if (!USE_SUPABASE_SYNC) return false;
+        if (!ENABLE_APP_STATE_SYNC || !USE_SUPABASE_SYNC) return false;
         const latestRemoteState = await fetchRemoteStateSnapshot();
         const nextState = { ...(latestRemoteState || {}), ...(patchState || {}) };
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
@@ -1714,6 +1718,7 @@
         renderCanceledSchedules();
       }
       function startRealtimeSyncSubscription() {
+        if (!ENABLE_APP_STATE_SYNC) return;
         if (!USE_SUPABASE_SYNC) return;
         if (!window.supabase || typeof window.supabase.createClient !== "function") return;
         try {
@@ -1828,48 +1833,16 @@
         }
       }
 
-      setSyncStatus("초기 동기화 중...", "info");
-      const initialPullOk = pullRemoteStateSync();
-      if (!initialPullOk) {
-        setSyncStatus("동기화 재시도 중...", "warn");
-        void fetchRemoteStateSnapshot()
-          .then((state) => {
-            applyRemoteState(state || {});
-            pendingLocalSyncKeys.clear();
-            lastObservedState = buildCurrentStateSnapshot();
-            setSyncStatus(`연결됨 ${formatSyncTime()}`, "ok");
-            refreshAdminUiFromSyncedState();
-          })
-          .catch(() => {
-            setSyncStatus("초기 동기화 실패", "error");
-          });
-      } else {
-        setSyncStatus(`연결됨 ${formatSyncTime()}`, "ok");
-      }
+      setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
-      localStorage.setItem = (key, value) => {
-        originalSetItem(key, value);
-        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
-          pendingLocalSyncKeys.add(String(key));
-          void runPushNow();
-        }
-      };
-      localStorage.removeItem = (key) => {
-        originalRemoveItem(key);
-        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
-          pendingLocalSyncKeys.add(String(key));
-          void runPushNow();
-        }
-      };
-      // 자동 주기 동기화는 데이터 초기화 위험이 있어 비활성화
+      // app_state 동기화 비활성화: 테이블 동기화만 사용
       startRealtimeSyncSubscription();
       startCompaniesRealtimeSubscription();
       startWritersRealtimeSubscription();
       startPaymentsRealtimeSubscription();
       startSchedulesRealtimeSubscription();
       window.addEventListener("focus", () => {
-        void pullRemoteStateOnFocus();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullWritersFromSupabaseAndRefresh();
         void pullPaymentsFromSupabaseAndApply();
@@ -1877,7 +1850,6 @@
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-          void pullRemoteStateOnFocus();
           void pullAdminCompaniesFromSupabaseAndRefresh();
           void pullWritersFromSupabaseAndRefresh();
           void pullPaymentsFromSupabaseAndApply();
