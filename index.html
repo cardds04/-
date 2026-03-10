@@ -3268,27 +3268,23 @@
 
       function hydrateFromWriterPageStorage() {
         const excludedNames = new Set(getExcludedPhotographerNames());
-        for (let i = photographers.length - 1; i >= 0; i -= 1) {
-          if (excludedNames.has(photographers[i])) {
-            photographers.splice(i, 1);
-          }
-        }
         const writerUsers = readStorageArray(STORAGE_WRITERS);
+        const previousPhoneMap = { ...photographerPhones };
+        const previousCarMap = { ...photographerCarNumbers };
+        const nextNames = [];
+        Object.keys(photographerPhones).forEach((key) => delete photographerPhones[key]);
+        Object.keys(photographerCarNumbers).forEach((key) => delete photographerCarNumbers[key]);
         writerUsers.forEach((user) => {
           const writerName = String(user?.name || "").trim();
           if (!writerName) return;
-          if (!excludedNames.has(writerName) && !photographers.includes(writerName)) {
-            photographers.push(writerName);
-          }
+          if (excludedNames.has(writerName)) return;
+          if (!nextNames.includes(writerName)) nextNames.push(writerName);
           const phone = String(user?.phone || "").trim();
           const carNumber = String(user?.carNumber || "").trim();
-          if (phone && !photographerPhones[writerName]) {
-            photographerPhones[writerName] = phone;
-          }
-          if (carNumber && !photographerCarNumbers[writerName]) {
-            photographerCarNumbers[writerName] = carNumber;
-          }
+          photographerPhones[writerName] = phone || previousPhoneMap[writerName] || "";
+          photographerCarNumbers[writerName] = carNumber || previousCarMap[writerName] || "";
         });
+        photographers.splice(0, photographers.length, ...nextNames);
         savePhotographerProfilesToStorage();
       }
 
