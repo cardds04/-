@@ -121,20 +121,20 @@
             <button id="loginTabBtn" class="active" type="button">로그인</button>
             <button id="signupTabBtn" type="button" onclick="window.__openWriterSignup && window.__openWriterSignup()">회원가입</button>
           </div>
-          <form id="loginForm" class="form">
+          <form id="loginForm" class="form" novalidate>
             <div class="row"><span>🆔</span><input id="loginId" type="text" placeholder="아이디" required /></div>
             <div class="row"><span>🔑</span><input id="loginPassword" type="password" placeholder="비밀번호" required /></div>
             <button id="saveLoginToggleBtn" class="btn outline small" type="button">아이디와 비번 저장하기: OFF</button>
             <button class="btn" type="submit">로그인</button>
             <button id="openSignupBtn" class="btn outline" type="button" onclick="window.__openWriterSignup && window.__openWriterSignup()">회원가입</button>
           </form>
-          <form id="signupForm" class="form">
+          <form id="signupForm" class="form" novalidate>
             <div class="row"><span>🆔</span><input id="signupId" type="text" placeholder="아이디" required /></div>
             <div class="row"><span>🔑</span><input id="signupPassword" type="password" placeholder="비밀번호" required /></div>
             <div class="row"><span>👤</span><input id="signupName" type="text" placeholder="작가명" required /></div>
             <div class="row"><span>📞</span><input id="signupPhone" type="text" placeholder="연락처(선택)" /></div>
             <div class="row"><span>🚗</span><input id="signupCarNumber" type="text" placeholder="차량번호(선택)" /></div>
-            <button id="signupSubmitBtn" class="btn" type="button" onclick="window.__submitWriterSignup && window.__submitWriterSignup()">회원가입</button>
+            <button id="signupSubmitBtn" class="btn" type="submit">회원가입</button>
             <button id="backToLoginBtn" class="btn outline" type="button" onclick="window.__backToWriterLogin && window.__backToWriterLogin()">로그인으로 돌아가기</button>
           </form>
         </div>
@@ -762,7 +762,6 @@
       const openSignupBtnEl = document.getElementById("openSignupBtn");
       const backToLoginBtnEl = document.getElementById("backToLoginBtn");
       const signupFormEl = document.getElementById("signupForm");
-      const signupSubmitBtnEl = document.getElementById("signupSubmitBtn");
       const loginFormEl = document.getElementById("loginForm");
       const authBlockEl = document.getElementById("authBlock");
       const scheduleBlockEl = document.getElementById("scheduleBlock");
@@ -1712,14 +1711,8 @@
         renderAuthState();
         alert("회원가입 완료! 내 스케줄을 확인하세요.");
       }
-      window.__submitWriterSignup = () => {
-        void handleWriterSignup();
-      };
       signupFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
-        await handleWriterSignup();
-      });
-      signupSubmitBtnEl?.addEventListener("click", async () => {
         await handleWriterSignup();
       });
 
