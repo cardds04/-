@@ -856,6 +856,7 @@
             paymentAmount: String(row?.payment_amount || "").trim(),
             paymentDate: String(row?.payment_date || "").trim(),
             couponUsed: Boolean(row?.coupon_used),
+            source: String(row?.source || "active").trim() || "active",
             adminTimeUpdated: false
           }))
           .filter((row) => row.company && row.date);
@@ -966,7 +967,11 @@
         if (!USE_SUPABASE_SYNC || !user) return;
         const companyName = normalize(user.company);
         const allRows = readStorageArray(STORAGE_SCHEDULES);
-        const userRows = allRows.filter((row) => normalize(row?.company).toLowerCase() === companyName.toLowerCase());
+        const userRows = allRows.filter((row) => {
+          const sameCompany = normalize(row?.company).toLowerCase() === companyName.toLowerCase();
+          const rowSource = normalize(row?.source).toLowerCase();
+          return sameCompany && rowSource === "customer";
+        });
         const deleteResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/schedules?source=eq.customer&company_name=eq.${encodeURIComponent(companyName)}`,
           {
@@ -983,7 +988,7 @@
         }
         if (!userRows.length) return;
         const insertRows = userRows.map((row) => {
-          const payload = {
+          return {
             company_name: normalize(row?.company),
             writer_name: normalize(row?.name) || "작가미정",
             date_key: normalize(row?.date),
@@ -1002,9 +1007,6 @@
             status: normalize(row?.paymentStatus) === "입금완료" ? "paid" : "unpaid",
             source: "customer"
           };
-          const rowId = String(row?.customerScheduleId || "").trim();
-          if (isUuidLike(rowId)) payload.id = rowId;
-          return payload;
         });
         const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules`, {
           method: "POST",
@@ -1791,6 +1793,7 @@
           paymentAmount: "",
           paymentDate: "",
           couponUsed: false,
+          source: "customer",
           adminTimeUpdated: false,
           writerPhone: "",
           writerCarNumber: "",
