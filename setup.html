@@ -72,8 +72,8 @@
     <main class="wrap">
       <h1>공용 데이터 연결 설정</h1>
       <p>
-        Supabase 프로젝트의 URL과 anon key를 입력하고 저장하면,
-        관리자/고객/작가 페이지가 같은 데이터를 함께 사용합니다.
+        이 페이지는 현재 `sync-config.js` 값을 읽기 전용으로 보여줍니다.
+        관리자/고객/작가 페이지는 브라우저 저장소를 무시하고, 해당 파일의 값만 사용합니다.
       </p>
 
       <label for="supabaseUrl">Supabase Project URL</label>
@@ -83,8 +83,8 @@
       <input id="supabaseAnonKey" type="text" placeholder="eyJ..." />
 
       <div class="row">
-        <button id="saveBtn" type="button">저장</button>
-        <button id="clearBtn" class="secondary" type="button">설정지우기</button>
+        <button id="saveBtn" type="button" disabled>저장 비활성화</button>
+        <button id="clearBtn" class="secondary" type="button" disabled>설정지우기 비활성화</button>
         <a class="btn secondary" href="index.html">관리자 페이지 이동</a>
         <a class="btn secondary" href="customer.html">고객 페이지 이동</a>
         <a class="btn secondary" href="photographer.html">작가 페이지 이동</a>
@@ -93,6 +93,7 @@
       <div id="status" class="status"></div>
     </main>
 
+    <script src="./sync-config.js"></script>
     <script>
       const urlEl = document.getElementById("supabaseUrl");
       const keyEl = document.getElementById("supabaseAnonKey");
@@ -101,8 +102,11 @@
       const statusEl = document.getElementById("status");
 
       function refreshInputs() {
-        urlEl.value = localStorage.getItem("scheduleSiteSupabaseUrl") || "";
-        keyEl.value = localStorage.getItem("scheduleSiteSupabaseAnonKey") || "";
+        const config = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+        urlEl.value = config.supabaseUrl || "";
+        keyEl.value = config.supabaseAnonKey || "";
+        urlEl.readOnly = true;
+        keyEl.readOnly = true;
       }
 
       function setStatus(text, ok) {
@@ -111,26 +115,15 @@
       }
 
       saveBtnEl.addEventListener("click", () => {
-        const url = urlEl.value.trim();
-        const key = keyEl.value.trim();
-        if (!url || !key) {
-          setStatus("URL과 key를 모두 입력해주세요.", false);
-          return;
-        }
-        localStorage.setItem("scheduleSiteSupabaseUrl", url);
-        localStorage.setItem("scheduleSiteSupabaseAnonKey", key);
-        setStatus("저장 완료. 각 페이지 새로고침 후 사용하세요.", true);
+        setStatus("저장은 비활성화되어 있습니다. sync-config.js를 수정해주세요.", false);
       });
 
       clearBtnEl.addEventListener("click", () => {
-        localStorage.removeItem("scheduleSiteSupabaseUrl");
-        localStorage.removeItem("scheduleSiteSupabaseAnonKey");
-        refreshInputs();
-        setStatus("설정을 지웠습니다. 로컬 모드로 동작합니다.", true);
+        setStatus("초기화는 비활성화되어 있습니다. sync-config.js를 수정해주세요.", false);
       });
 
       refreshInputs();
-      setStatus("현재 값을 확인하고 저장해주세요.", true);
+      setStatus("sync-config.js 값을 사용 중입니다. 브라우저 저장소는 사용하지 않습니다.", true);
     </script>
   </body>
 </html>

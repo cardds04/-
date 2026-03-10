@@ -1364,13 +1364,73 @@
           originalSetItem(key, String(value));
         });
       }
+      function tryParseJsonValue(value) {
+        if (typeof value !== "string") return null;
+        try {
+          return JSON.parse(value);
+        } catch (error) {
+          return null;
+        }
+      }
+      function guessMergeKey(row, index) {
+        if (!row || typeof row !== "object") return `idx:${index}`;
+        const preferredKeys = ["id", "scheduleId", "customerId", "cancelId", "code", "name", "createdAt"];
+        for (const key of preferredKeys) {
+          if (Object.prototype.hasOwnProperty.call(row, key) && row[key] !== null && row[key] !== undefined && row[key] !== "") {
+            return `${key}:${String(row[key])}`;
+          }
+        }
+        return `json:${JSON.stringify(row)}`;
+      }
+      function mergeStorageValue(remoteValue, localValue) {
+        if (localValue === null || localValue === undefined) return null;
+        if (remoteValue === null || remoteValue === undefined) return localValue;
+        const remoteJson = tryParseJsonValue(remoteValue);
+        const localJson = tryParseJsonValue(localValue);
+        if (Array.isArray(remoteJson) && Array.isArray(localJson)) {
+          const mergedMap = new Map();
+          remoteJson.forEach((row, index) => {
+            mergedMap.set(guessMergeKey(row, index), row);
+          });
+          localJson.forEach((row, index) => {
+            mergedMap.set(guessMergeKey(row, index), row);
+          });
+          return JSON.stringify(Array.from(mergedMap.values()));
+        }
+        if (
+          remoteJson &&
+          localJson &&
+          typeof remoteJson === "object" &&
+          typeof localJson === "object" &&
+          !Array.isArray(remoteJson) &&
+          !Array.isArray(localJson)
+        ) {
+          return JSON.stringify({ ...remoteJson, ...localJson });
+        }
+        return localValue;
+      }
+      function buildMergedStateForPush(remoteState, localState) {
+        const mergedState = {};
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          const hasRemote = remoteState && Object.prototype.hasOwnProperty.call(remoteState, key);
+          const remoteValue = hasRemote ? remoteState[key] : null;
+          const localValue = Object.prototype.hasOwnProperty.call(localState, key) ? localState[key] : null;
+          if (!pendingLocalSyncKeys.has(key)) {
+            mergedState[key] = remoteValue === undefined ? null : remoteValue;
+            return;
+          }
+          mergedState[key] = mergeStorageValue(remoteValue, localValue);
+        });
+        return mergedState;
+      }
       async function pushRemoteState() {
         if (isRemotePushRunning) return;
         isRemotePushRunning = true;
         try {
           const latestRemoteState = await fetchRemoteStateSnapshot();
           applyRemoteStateSnapshotWithPending(latestRemoteState);
-          const state = buildCurrentStateSnapshot();
+          const localState = buildCurrentStateSnapshot();
+          const state = buildMergedStateForPush(latestRemoteState, localState);
           if (USE_SUPABASE_SYNC) {
             await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
               method: "POST",
