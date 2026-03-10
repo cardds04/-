@@ -1619,7 +1619,10 @@
         const name = normalize(document.getElementById("signupName").value);
         const phone = normalize(document.getElementById("signupPhone").value);
         const carNumber = normalize(document.getElementById("signupCarNumber").value);
-        if (!id || !password || !name || !phone || !carNumber) return;
+        if (!id || !password || !name) {
+          alert("아이디, 비밀번호, 작가명을 입력해주세요.");
+          return;
+        }
 
         const users = readStorageArray(STORAGE_WRITERS);
         const idExists = users.some((user) => normalize(user.id).toLowerCase() === id.toLowerCase());
@@ -1633,21 +1636,64 @@
           return;
         }
 
-        users.unshift({
-          id,
-          password,
-          name,
-          phone,
-          carNumber,
-          createdAt: new Date().toISOString()
-        });
-        writeStorageArray(STORAGE_WRITERS, users);
-        try {
-          await syncWritersTableFromStorage();
-          queueWriterTablePull();
-        } catch (error) {
-          console.error("[TABLE][photographer] signup sync 실패", error);
+        if (USE_SUPABASE_SYNC) {
+          try {
+            const remoteWriters = await fetchWriterJsonRows("writers?select=login_id,name");
+            const remoteIdExists = (Array.isArray(remoteWriters) ? remoteWriters : []).some(
+              (row) => normalize(row?.login_id).toLowerCase() === id.toLowerCase()
+            );
+            if (remoteIdExists) {
+              alert("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
+              return;
+            }
+            const remoteNameExists = (Array.isArray(remoteWriters) ? remoteWriters : []).some(
+              (row) => normalize(row?.name).toLowerCase() === name.toLowerCase()
+            );
+            if (remoteNameExists) {
+              alert("이미 등록된 작가명입니다. 다른 작가명을 입력해주세요.");
+              return;
+            }
+
+            const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/writers`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify([
+                {
+                  name,
+                  login_id: id,
+                  password,
+                  phone,
+                  car_number: carNumber,
+                  is_active: true
+                }
+              ])
+            });
+            if (!insertResponse.ok) {
+              const errorText = await insertResponse.text();
+              throw new Error(`writers insert 실패: ${errorText}`);
+            }
+            queueWriterTablePull();
+          } catch (error) {
+            console.error("[TABLE][photographer] signup direct insert 실패", error);
+            alert(`작가 등록 실패: ${error && error.message ? error.message : "서버 저장 오류"}`);
+            return;
+          }
+        } else {
+          users.unshift({
+            id,
+            password,
+            name,
+            phone,
+            carNumber,
+            createdAt: new Date().toISOString()
+          });
+          writeStorageArray(STORAGE_WRITERS, users);
         }
+
         localStorage.setItem(STORAGE_WRITER_SESSION, id);
         signupFormEl.reset();
         renderAuthState();
