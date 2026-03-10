@@ -1664,14 +1664,12 @@
         if (pendingLocalSyncKeys.size > 0) void runPushNow();
       }
       function startLocalChangeWatcher() {
-        if (localChangePollTimer) clearInterval(localChangePollTimer);
-        localChangePollTimer = setInterval(captureLocalChangesForSync, 300);
+        // 자동 폴링 동기화 비활성화
+        return;
       }
       function startServerPullWatcher() {
-        if (serverPullTimer) clearInterval(serverPullTimer);
-        serverPullTimer = setInterval(() => {
-          void pullRemoteStateOnFocus();
-        }, 2000);
+        // 자동 주기 pull 동기화 비활성화
+        return;
       }
       function refreshAdminUiFromSyncedState() {
         loadAdminCompaniesFromStorage();
