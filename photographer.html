@@ -272,16 +272,16 @@
 
       function pullRemoteStateSync() {
         try {
-          const cacheBust = `_=${Date.now()}`;
           if (USE_SUPABASE_SYNC) {
             const xhr = new XMLHttpRequest();
             xhr.open(
               "GET",
-              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1&${cacheBust}`,
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
               false
             );
             xhr.setRequestHeader("apikey", SUPABASE_ANON_KEY);
             xhr.setRequestHeader("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
+            xhr.setRequestHeader("Cache-Control", "no-cache");
             xhr.send();
             if (xhr.status < 200 || xhr.status >= 300) return false;
             const rows = JSON.parse(xhr.responseText || "[]");
@@ -295,7 +295,8 @@
           if (!REMOTE_SYNC_ENDPOINT) return false;
           const xhr = new XMLHttpRequest();
           const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
-          xhr.open("GET", `${REMOTE_SYNC_ENDPOINT}${connector}${cacheBust}`, false);
+          xhr.open("GET", `${REMOTE_SYNC_ENDPOINT}${connector}t=${Date.now()}`, false);
+          xhr.setRequestHeader("Cache-Control", "no-cache");
           xhr.send();
           if (xhr.status < 200 || xhr.status >= 300) return false;
           const payload = JSON.parse(xhr.responseText || "{}");
@@ -351,9 +352,8 @@
       }
       async function fetchRemoteStateSnapshot() {
         if (USE_SUPABASE_SYNC) {
-          const cacheBust = `_=${Date.now()}`;
           const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1&${cacheBust}`,
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
             {
               method: "GET",
               headers: {
@@ -370,9 +370,8 @@
           return row && row.payload && typeof row.payload === "object" ? row.payload : {};
         }
         if (!REMOTE_SYNC_ENDPOINT) return {};
-        const cacheBust = `_=${Date.now()}`;
         const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
-        const response = await fetch(`${REMOTE_SYNC_ENDPOINT}${connector}${cacheBust}`, { cache: "no-store" });
+        const response = await fetch(`${REMOTE_SYNC_ENDPOINT}${connector}t=${Date.now()}`, { cache: "no-store" });
         if (!response.ok) return {};
         const payload = await response.json();
         return payload && typeof payload === "object" ? payload.state || {} : {};
