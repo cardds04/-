@@ -254,6 +254,8 @@
             } else {
               localStorage.setItem(key, String(value));
             }
+          } else {
+            localStorage.removeItem(key);
           }
         });
       }
@@ -331,7 +333,10 @@
         if (!remoteState || typeof remoteState !== "object") return;
         STORAGE_SYNC_KEYS.forEach((key) => {
           if (pendingLocalSyncKeys.has(key)) return;
-          if (!Object.prototype.hasOwnProperty.call(remoteState, key)) return;
+          if (!Object.prototype.hasOwnProperty.call(remoteState, key)) {
+            originalRemoveItem(key);
+            return;
+          }
           const value = remoteState[key];
           if (value === null || value === undefined) {
             originalRemoveItem(key);
