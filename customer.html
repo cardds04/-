@@ -556,6 +556,11 @@
           const remoteHasData = hasMeaningfulState(latestRemoteState);
           const nextHasData = hasMeaningfulState(state);
           const localHasData = hasMeaningfulState(localState);
+          const allCriticalEmpty = CRITICAL_SYNC_KEYS.every((key) => isStorageValueEmpty(state[key]));
+          if (allCriticalEmpty) {
+            setSyncStatus("전체 빈값 업서트 차단", "error");
+            return;
+          }
           if (!nextHasData && remoteHasData) {
             setSyncStatus("빈 데이터 쓰기 차단", "warn");
             return;
