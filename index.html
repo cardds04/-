@@ -4265,18 +4265,12 @@
         memberCountEl.textContent = `${photographers.length}명`;
         const safeNames = photographers.map((name) => escapeHtml(name));
         const excludedNames = getExcludedPhotographerNames();
-        const signupWriterNameSet = new Set(
-          readStorageArray(STORAGE_WRITERS)
-            .map((writer) => String(writer?.name || "").trim().toLowerCase())
-            .filter(Boolean)
-        );
         const activeRowsHtml = photographers
           .map((name) => {
                 const safeName = escapeHtml(name);
                 const phone = escapeHtml(photographerPhones[name] || "-");
                 const carNumber = escapeHtml(photographerCarNumbers[name] || "-");
                 const isEditing = editingPhotographerName === name;
-                const canDelete = !signupWriterNameSet.has(String(name || "").trim().toLowerCase());
                 if (isEditing) {
                   return `
                     <div class="company-item" data-photographer-name="${safeName}">
@@ -4288,7 +4282,7 @@
                           <button class="btn-sm primary" type="button" data-action="savePhotographerInfo" data-name="${safeName}">저장</button>
                           <button class="btn-sm" type="button" data-action="cancelPhotographerEdit">취소</button>
                           <button class="btn-sm" type="button" data-action="excludePhotographer" data-name="${safeName}">제외</button>
-                          ${canDelete ? `<button class="btn-sm" type="button" data-action="deletePhotographer" data-name="${safeName}">삭제</button>` : ""}
+                          <button class="btn-sm" type="button" data-action="deletePhotographer" data-name="${safeName}">삭제</button>
                         </div>
                       </div>
                     </div>
@@ -4300,7 +4294,10 @@
                     <div>연락처: ${phone}</div>
                     <div class="company-item-row" style="margin-top: 6px;">
                       <span>차량번호: ${carNumber}</span>
-                      <button class="btn-sm" type="button" data-action="startPhotographerEdit" data-name="${safeName}" title="작가 수정">수정</button>
+                      <span style="display:flex; gap:6px;">
+                        <button class="btn-sm" type="button" data-action="startPhotographerEdit" data-name="${safeName}" title="작가 수정">수정</button>
+                        <button class="btn-sm" type="button" data-action="deletePhotographer" data-name="${safeName}" title="작가 삭제">삭제</button>
+                      </span>
                     </div>
                   </div>
                 `;
