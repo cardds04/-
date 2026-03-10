@@ -408,7 +408,9 @@
         return `json:${JSON.stringify(row)}`;
       }
       function mergeStorageValue(remoteValue, localValue) {
-        if (localValue === null || localValue === undefined) return null;
+        if (localValue === null || localValue === undefined) {
+          return remoteValue === undefined ? null : remoteValue;
+        }
         if (remoteValue === null || remoteValue === undefined) return localValue;
         const remoteJson = tryParseJsonValue(remoteValue);
         const localJson = tryParseJsonValue(localValue);
