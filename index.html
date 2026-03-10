@@ -859,6 +859,7 @@
           <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
             <button id="downloadCompanyExcelBtn" class="btn-sm" type="button">다운</button>
             <button id="uploadCompanyExcelBtn" class="btn-sm" type="button">업로드</button>
+            <button id="resetAllCompaniesBtn" class="btn-sm danger" type="button">업체전체초기화</button>
           </div>
           <div id="companyRegisterPanel" class="register-panel hidden">
             <form id="companyForm" class="form">
@@ -1423,6 +1424,7 @@
       const addCompanyBtnEl = document.getElementById("addCompanyBtn");
       const downloadCompanyExcelBtnEl = document.getElementById("downloadCompanyExcelBtn");
       const uploadCompanyExcelBtnEl = document.getElementById("uploadCompanyExcelBtn");
+      const resetAllCompaniesBtnEl = document.getElementById("resetAllCompaniesBtn");
       const companyRegisterPanelEl = document.getElementById("companyRegisterPanel");
       const closeCompanyPanelBtnEl = document.getElementById("closeCompanyPanelBtn");
       const yearEl = document.getElementById("year");
@@ -2609,6 +2611,19 @@
           renderCompanies();
         }
         alert(`업체 업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
+      }
+      function resetAllCompanies() {
+        const confirmed = confirm("업체등록 데이터를 전체 초기화할까요?\n\n등록 업체 목록, 고객업체 목록, 회차권 정보가 모두 초기화됩니다.");
+        if (!confirmed) return;
+        companies.length = 0;
+        Object.keys(couponPasses).forEach((key) => delete couponPasses[key]);
+        localStorage.setItem(STORAGE_ADMIN_COMPANIES, JSON.stringify([]));
+        localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify([]));
+        editingCompanyIndex = null;
+        saveAdminCompaniesToStorage();
+        renderCompanies();
+        renderCouponPassList();
+        alert("업체등록 데이터가 전체 초기화되었습니다.");
       }
 
       function isRegisteredCompanyName(name) {
@@ -5038,6 +5053,7 @@
       uploadCompanyExcelBtnEl.addEventListener("click", () => {
         companyExcelUploadInputEl.click();
       });
+      resetAllCompaniesBtnEl?.addEventListener("click", resetAllCompanies);
       companyExcelUploadInputEl.addEventListener("change", async (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
