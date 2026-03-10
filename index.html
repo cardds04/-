@@ -6134,7 +6134,9 @@
                             .join("");
 
                           return `
-                            <span class="writer-place" data-schedule-card="true" data-index="${index}">
+                            <span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
+                              String(item.customerScheduleId || "")
+                            )}">
                               ${
                                 isEditing
                                   ? `<div class="inline-pair" style="margin-bottom: 6px;">
@@ -7361,9 +7363,15 @@
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         const action = button.dataset.action;
-        const index = Number(button.dataset.index);
         const itemEl = button.closest("[data-schedule-card='true']") || button.closest(".item");
-        const item = data[index];
+        const fallbackIndex = Number(button.dataset.index);
+        const scheduleId = String(button.dataset.scheduleId || itemEl?.dataset.scheduleId || "").trim();
+        const resolvedIndex =
+          scheduleId && data.some((row) => String(row?.customerScheduleId || "").trim() === scheduleId)
+            ? data.findIndex((row) => String(row?.customerScheduleId || "").trim() === scheduleId)
+            : fallbackIndex;
+        const index = resolvedIndex;
+        const item = Number.isNaN(index) || index < 0 ? null : data[index];
 
         if (action === "quickComposition" && !Number.isNaN(index) && item) {
           item.composition = item.composition === "사진영상 둘다" ? "사진만" : "사진영상 둘다";
