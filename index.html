@@ -1495,6 +1495,26 @@
           isRemotePushRunning = false;
         }
       }
+      async function pushRemoteStatePatch(patchState) {
+        if (!USE_SUPABASE_SYNC) return false;
+        const latestRemoteState = await fetchRemoteStateSnapshot();
+        const nextState = { ...(latestRemoteState || {}), ...(patchState || {}) };
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Prefer: "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify([{ id: SUPABASE_STATE_ID, payload: nextState }])
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Supabase patch upsert 실패 (${response.status}): ${errorText}`);
+        }
+        return true;
+      }
       function runPushNow() {
         if (!currentPushPromise) {
           currentPushPromise = pushRemoteState().finally(() => {
@@ -1889,7 +1909,8 @@
         const saved = readStorageArray(STORAGE_ADMIN_COMPANIES)
           .map((item) => ({
             name: normalizeCompanyName(item?.name),
-            phone: String(item?.phone || "").trim() || "-"
+            phone: String(item?.phone || "").trim() || "-",
+            code: normalizeCompanyCode(item?.code)
           }))
           .filter((item) => item.name);
         companies.splice(0, companies.length, ...saved);
@@ -1904,7 +1925,8 @@
           if (!uniqueMap.has(key)) {
             uniqueMap.set(key, {
               name,
-              phone: String(item?.phone || "").trim() || "-"
+              phone: String(item?.phone || "").trim() || "-",
+              code: normalizeCompanyCode(item?.code)
             });
           }
         });
@@ -5622,7 +5644,7 @@
         companyRegisterPanelEl.classList.add("hidden");
       });
 
-      companyFormEl.addEventListener("submit", (event) => {
+      companyFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const name = companyNameInputEl.value.trim();
         const phone = companyPhoneInputEl.value.trim();
@@ -5641,6 +5663,10 @@
         }
         companies.unshift({ name, phone, code });
         saveAdminCompaniesToStorage();
+        await pushRemoteStatePatch({
+          [STORAGE_ADMIN_COMPANIES]: JSON.stringify(companies)
+        });
+        await pullRemoteStateOnFocus();
         companyFormEl.reset();
         companyRegisterPanelEl.classList.add("hidden");
         renderCompanies();
