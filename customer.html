@@ -1775,7 +1775,7 @@
 
         const isNewCompany = ensureCompanyStored(user.company, user.phone, user.companyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
-        schedules.unshift({
+        const createdSchedule = {
           customerScheduleId: `cus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           date,
           time,
@@ -1799,14 +1799,22 @@
           writerCarNumber: "",
           customerId: user.id,
           customerPhone: user.phone
-        });
+        };
+        schedules.unshift(createdSchedule);
         writeStorageArray(STORAGE_SCHEDULES, schedules);
         try {
           await syncCustomerSchedulesTable(user);
           queueCustomerTablePull();
         } catch (error) {
           console.error("[TABLE][customer] schedule create sync 실패", error);
-          alert("서버 저장 중 오류가 발생했습니다. 다시 시도해주세요.");
+          const rollbackRows = readStorageArray(STORAGE_SCHEDULES).filter(
+            (row) => normalize(row?.customerScheduleId) !== normalize(createdSchedule.customerScheduleId)
+          );
+          writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
+          renderStatusList();
+          renderPaymentSummary();
+          alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
+          return;
         }
         const createAlerts = readStorageArray(STORAGE_ALERTS);
         createAlerts.unshift({
