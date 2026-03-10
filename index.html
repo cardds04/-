@@ -1416,11 +1416,12 @@
           }
           const rows = await response.json();
           if (!Array.isArray(rows) || rows.length === 0) {
-            throw new Error("Supabase payload 조회 결과가 비어있습니다.");
+            // app_state 미초기화/비어있음은 정상 빈 상태로 간주
+            return {};
           }
           const row = rows[0];
           if (!row || !row.payload || typeof row.payload !== "object") {
-            throw new Error("Supabase payload 형식이 올바르지 않습니다.");
+            return {};
           }
           return row.payload;
         }
