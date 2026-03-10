@@ -1243,16 +1243,21 @@
 
       function applyRemoteState(state) {
         if (!state || typeof state !== "object") return;
-        STORAGE_SYNC_KEYS.forEach((key) => {
-          if (Object.prototype.hasOwnProperty.call(state, key)) {
-            const value = state[key];
-            if (value === null || value === undefined) {
-              localStorage.removeItem(key);
-            } else {
-              localStorage.setItem(key, String(value));
+        isApplyingRemoteState = true;
+        try {
+          STORAGE_SYNC_KEYS.forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(state, key)) {
+              const value = state[key];
+              if (value === null || value === undefined) {
+                originalRemoveItem(key);
+              } else {
+                originalSetItem(key, String(value));
+              }
             }
-          }
-        });
+          });
+        } finally {
+          isApplyingRemoteState = false;
+        }
       }
 
       function pullRemoteStateSync() {
@@ -1293,6 +1298,7 @@
 
       let remoteSyncTimer = null;
       let isRemotePushRunning = false;
+      let isApplyingRemoteState = false;
       const pendingLocalSyncKeys = new Set();
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -1393,14 +1399,14 @@
 
       localStorage.setItem = (key, value) => {
         originalSetItem(key, value);
-        if (STORAGE_SYNC_KEYS.includes(key)) {
+        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
           scheduleRemotePush(0);
         }
       };
       localStorage.removeItem = (key) => {
         originalRemoveItem(key);
-        if (STORAGE_SYNC_KEYS.includes(key)) {
+        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
           scheduleRemotePush(0);
         }
