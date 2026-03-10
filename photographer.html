@@ -119,6 +119,7 @@
         <div id="authBlock">
           <div class="tabs">
             <button id="loginTabBtn" class="active" type="button">로그인</button>
+            <button id="signupTabBtn" type="button" onclick="window.__openWriterSignup && window.__openWriterSignup()">회원가입</button>
           </div>
           <form id="loginForm" class="form">
             <div class="row"><span>🆔</span><input id="loginId" type="text" placeholder="아이디" required /></div>
@@ -756,6 +757,7 @@
       });
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
+      const signupTabBtnEl = document.getElementById("signupTabBtn");
       const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
       const openSignupBtnEl = document.getElementById("openSignupBtn");
       const backToLoginBtnEl = document.getElementById("backToLoginBtn");
@@ -1184,7 +1186,8 @@
 
       function switchAuthTab(mode) {
         const signupActive = mode === "signup";
-        loginTabBtnEl.classList.add("active");
+        loginTabBtnEl.classList.toggle("active", !signupActive);
+        signupTabBtnEl?.classList.toggle("active", signupActive);
         signupFormEl.classList.toggle("hidden", !signupActive);
         loginFormEl.classList.toggle("hidden", signupActive);
       }
@@ -1746,6 +1749,7 @@
       });
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
+      signupTabBtnEl?.addEventListener("click", () => switchAuthTab("signup"));
       openSignupBtnEl.addEventListener("click", () => switchAuthTab("signup"));
       backToLoginBtnEl.addEventListener("click", () => switchAuthTab("login"));
       prevDayModeBtnEl.addEventListener("click", () => moveToRelativeDay(-1));
