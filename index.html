@@ -770,6 +770,11 @@
         text-overflow: ellipsis;
       }
 
+      .calendar-writer-divider {
+        border-top: 1px dashed #cfd7e8;
+        margin: 4px 0;
+      }
+
       .calendar-limit-row {
         margin-top: 6px;
         display: flex;
@@ -2349,6 +2354,12 @@
         if (!normalized) return "-";
         return normalized.length <= maxLength ? normalized : normalized.slice(0, maxLength);
       }
+      function summarizeWriterNameShort(name) {
+        const normalized = String(name || "").trim();
+        if (!normalized) return "미정";
+        if (normalized === "작가미정") return "미정";
+        return normalized.replace(/\s+/g, "");
+      }
 
       function formatPlaceForDisplay(text) {
         const normalized = String(text || "-");
@@ -2717,14 +2728,25 @@
           const dailyLimit = getEffectiveDailyLimit(dateKey);
           const baseLimit = getDailyLimitBase(dateKey);
           const deduction = getDayoffDeduction(dateKey);
-          const companies = daySchedules
-            .map(
-              (item) => {
-                const area = extractAreaLabel(item.place);
-                const companyShort = summarizeCompanyNameShort(item.company, 5);
-                return `<div class="calendar-company">${escapeHtml(area || "-")} ${escapeHtml(formatScheduleTimeSimple(item.time || "-"))} ${escapeHtml(companyShort)}</div>`;
-              }
-            )
+          const groupedByWriter = new Map();
+          daySchedules.forEach((item) => {
+            const writerKey = summarizeWriterNameShort(item.name);
+            if (!groupedByWriter.has(writerKey)) groupedByWriter.set(writerKey, []);
+            groupedByWriter.get(writerKey).push(item);
+          });
+          const companies = [...groupedByWriter.entries()]
+            .map(([_, writerItems], writerGroupIndex) => {
+              const rows = writerItems
+                .map((item) => {
+                  const areaShort = String(extractAreaLabel(item.place) || "-").slice(0, 2);
+                  const companyShort = summarizeCompanyNameShort(item.company, 2);
+                  const writerShort = summarizeWriterNameShort(item.name);
+                  return `<div class="calendar-company">${escapeHtml(areaShort)} ${escapeHtml(formatScheduleTimeSimple(item.time || "-"))} ${escapeHtml(companyShort)} ${escapeHtml(writerShort)}</div>`;
+                })
+                .join("");
+              if (writerGroupIndex === 0) return rows;
+              return `<div class="calendar-writer-divider"></div>${rows}`;
+            })
             .join("");
           const weekdayIndex = new Date(`${dateKey}T00:00:00`).getDay();
           const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
