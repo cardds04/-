@@ -305,45 +305,109 @@
       }
 
       let remoteSyncTimer = null;
-      function pushRemoteState() {
-        const state = buildCurrentStateSnapshot();
+      let isRemotePushRunning = false;
+      const pendingLocalSyncKeys = new Set();
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+      async function fetchRemoteStateSnapshot() {
         if (USE_SUPABASE_SYNC) {
-          fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-              Prefer: "resolution=merge-duplicates,return=minimal"
-            },
-            body: JSON.stringify([{ id: SUPABASE_STATE_ID, payload: state }])
-          }).catch(() => {});
-          return;
+          const cacheBust = `_=${Date.now()}`;
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1&${cacheBust}`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store"
+            }
+          );
+          if (!response.ok) return {};
+          const rows = await response.json();
+          if (!Array.isArray(rows) || rows.length === 0) return {};
+          const row = rows[0];
+          return row && row.payload && typeof row.payload === "object" ? row.payload : {};
         }
-        if (!REMOTE_SYNC_ENDPOINT) return;
-        fetch(REMOTE_SYNC_ENDPOINT, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ state })
-        }).catch(() => {});
+        if (!REMOTE_SYNC_ENDPOINT) return {};
+        const cacheBust = `_=${Date.now()}`;
+        const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
+        const response = await fetch(`${REMOTE_SYNC_ENDPOINT}${connector}${cacheBust}`, { cache: "no-store" });
+        if (!response.ok) return {};
+        const payload = await response.json();
+        return payload && typeof payload === "object" ? payload.state || {} : {};
+      }
+      function applyRemoteStateSnapshotWithPending(remoteState) {
+        if (!remoteState || typeof remoteState !== "object") return;
+        STORAGE_SYNC_KEYS.forEach((key) => {
+          if (pendingLocalSyncKeys.has(key)) return;
+          if (!Object.prototype.hasOwnProperty.call(remoteState, key)) return;
+          const value = remoteState[key];
+          if (value === null || value === undefined) {
+            originalRemoveItem(key);
+            return;
+          }
+          originalSetItem(key, String(value));
+        });
+      }
+      async function pushRemoteState() {
+        if (isRemotePushRunning) return;
+        isRemotePushRunning = true;
+        try {
+          const latestRemoteState = await fetchRemoteStateSnapshot();
+          applyRemoteStateSnapshotWithPending(latestRemoteState);
+          const state = buildCurrentStateSnapshot();
+          if (USE_SUPABASE_SYNC) {
+            await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "resolution=merge-duplicates,return=minimal"
+              },
+              body: JSON.stringify([{ id: SUPABASE_STATE_ID, payload: state }])
+            });
+            pendingLocalSyncKeys.clear();
+            return;
+          }
+          if (!REMOTE_SYNC_ENDPOINT) return;
+          await fetch(REMOTE_SYNC_ENDPOINT, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ state })
+          });
+          pendingLocalSyncKeys.clear();
+        } catch (error) {
+          // 네트워크 오류 시 다음 동기화에서 재시도
+        } finally {
+          isRemotePushRunning = false;
+        }
       }
 
       function scheduleRemotePush() {
         if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
-        remoteSyncTimer = setTimeout(pushRemoteState, 250);
+        remoteSyncTimer = setTimeout(() => {
+          void pushRemoteState();
+        }, 250);
       }
 
-      const originalSetItem = localStorage.setItem.bind(localStorage);
-      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
       localStorage.setItem = (key, value) => {
         originalSetItem(key, value);
-        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+        if (STORAGE_SYNC_KEYS.includes(key)) {
+          pendingLocalSyncKeys.add(key);
+          scheduleRemotePush();
+        }
       };
       localStorage.removeItem = (key) => {
         originalRemoveItem(key);
-        if (STORAGE_SYNC_KEYS.includes(key)) scheduleRemotePush();
+        if (STORAGE_SYNC_KEYS.includes(key)) {
+          pendingLocalSyncKeys.add(key);
+          scheduleRemotePush();
+        }
       };
       pullRemoteStateSync();
+      pendingLocalSyncKeys.clear();
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
       const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
