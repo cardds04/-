@@ -717,50 +717,16 @@
         }
       }
 
-      setSyncStatus("초기 동기화 중...", "info");
-      const initialPullOk = pullRemoteStateSync();
-      if (!initialPullOk) {
-        setSyncStatus("동기화 재시도 중...", "warn");
-        void fetchRemoteStateSnapshot()
-          .then((state) => {
-            applyRemoteState(state || {});
-            pendingLocalSyncKeys.clear();
-            lastObservedState = buildCurrentStateSnapshot();
-            setSyncStatus(`연결됨 ${formatSyncTime()}`, "ok");
-            renderAuthState();
-          })
-          .catch(() => {
-            setSyncStatus("초기 동기화 실패", "error");
-          });
-      } else {
-        setSyncStatus(`연결됨 ${formatSyncTime()}`, "ok");
-      }
+      setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
-      localStorage.setItem = (key, value) => {
-        originalSetItem(key, value);
-        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
-          pendingLocalSyncKeys.add(String(key));
-          void runPushNow();
-        }
-      };
-      localStorage.removeItem = (key) => {
-        originalRemoveItem(key);
-        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
-          pendingLocalSyncKeys.add(String(key));
-          void runPushNow();
-        }
-      };
-      // 자동 주기 동기화는 데이터 초기화 위험이 있어 비활성화
-      startRealtimeSyncSubscription();
+      // app_state 동기화 비활성화: 테이블 동기화만 사용
       startTableRealtimeSubscriptions();
       window.addEventListener("focus", () => {
-        void pullRemoteStateOnFocus();
         queueCustomerTablePull();
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-          void pullRemoteStateOnFocus();
           queueCustomerTablePull();
         }
       });
@@ -803,9 +769,9 @@
       let currentCustomerTab = "register";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
-      let tableSyncClient = null;
-      let customerTableSyncTimer = null;
-      let customerTableSyncRunning = false;
+      var tableSyncClient = null;
+      var customerTableSyncTimer = null;
+      var customerTableSyncRunning = false;
 
       function readStorageArray(key) {
         try {
