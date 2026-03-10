@@ -194,6 +194,7 @@
     </div>
 
     <script src="./sync-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       const STORAGE_WRITERS = "scheduleSiteWriters";
       const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
@@ -209,17 +210,12 @@
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
-      const REMOTE_SYNC_ENDPOINT =
-        localStorage.getItem("scheduleSiteRemoteSyncEndpoint") ||
-        syncConfig.remoteSyncEndpoint ||
-        "http://localhost:8787/api/state";
+      const REMOTE_SYNC_ENDPOINT = syncConfig.remoteSyncEndpoint || "";
       const SUPABASE_URL =
         syncConfig.supabaseUrl ||
-        localStorage.getItem("scheduleSiteSupabaseUrl") ||
         FALLBACK_SUPABASE_URL;
       const SUPABASE_ANON_KEY =
         syncConfig.supabaseAnonKey ||
-        localStorage.getItem("scheduleSiteSupabaseAnonKey") ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
       const SUPABASE_STATE_TABLE = "app_state";
@@ -243,6 +239,31 @@
         "scheduleSiteExcludedPhotographers",
         "scheduleSitePhotographerProfiles"
       ];
+      const volatileStorage = new Map();
+      function setVolatileItem(key, value) {
+        volatileStorage.set(String(key), String(value));
+      }
+      function removeVolatileItem(key) {
+        volatileStorage.delete(String(key));
+      }
+      function getVolatileItem(key) {
+        const normalizedKey = String(key);
+        return volatileStorage.has(normalizedKey) ? volatileStorage.get(normalizedKey) : null;
+      }
+      function clearVolatileItems() {
+        volatileStorage.clear();
+      }
+      function getVolatileKeyByIndex(index) {
+        const keys = Array.from(volatileStorage.keys());
+        const normalizedIndex = Number(index);
+        if (!Number.isInteger(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= keys.length) return null;
+        return keys[normalizedIndex];
+      }
+      localStorage.getItem = (key) => getVolatileItem(key);
+      localStorage.setItem = (key, value) => setVolatileItem(key, value);
+      localStorage.removeItem = (key) => removeVolatileItem(key);
+      localStorage.clear = () => clearVolatileItems();
+      localStorage.key = (index) => getVolatileKeyByIndex(index);
 
       function buildCurrentStateSnapshot() {
         const state = {};
@@ -312,8 +333,8 @@
       let isRemotePushRunning = false;
       let isApplyingRemoteState = false;
       const pendingLocalSyncKeys = new Set();
-      const originalSetItem = localStorage.setItem.bind(localStorage);
-      const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+      const originalSetItem = (key, value) => setVolatileItem(key, value);
+      const originalRemoveItem = (key) => removeVolatileItem(key);
       async function fetchRemoteStateSnapshot() {
         if (USE_SUPABASE_SYNC) {
           const cacheBust = `_=${Date.now()}`;
@@ -408,6 +429,31 @@
         pullRemoteStateSync();
         pendingLocalSyncKeys.clear();
       }
+      function startRealtimeSyncSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel(`app-state-${SUPABASE_STATE_ID}`)
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: SUPABASE_STATE_TABLE, filter: `id=eq.${SUPABASE_STATE_ID}` },
+              (payload) => {
+                const nextState = payload && payload.new && payload.new.payload && typeof payload.new.payload === "object"
+                  ? payload.new.payload
+                  : null;
+                if (!nextState) return;
+                applyRemoteState(nextState);
+                pendingLocalSyncKeys.clear();
+                renderAuthState();
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // realtime 연결 실패 시 수동 pull/push 동기화로 계속 동작
+        }
+      }
 
       localStorage.setItem = (key, value) => {
         originalSetItem(key, value);
@@ -425,6 +471,7 @@
       };
       pullRemoteStateSync();
       pendingLocalSyncKeys.clear();
+      startRealtimeSyncSubscription();
       window.addEventListener("focus", pullRemoteStateOnFocus);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) pullRemoteStateOnFocus();
