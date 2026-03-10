@@ -1272,21 +1272,21 @@
             xhr.setRequestHeader("apikey", SUPABASE_ANON_KEY);
             xhr.setRequestHeader("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
             xhr.send();
-            if (xhr.status < 200 || xhr.status >= 300) return;
+            if (xhr.status < 200 || xhr.status >= 300) return false;
             const rows = JSON.parse(xhr.responseText || "[]");
-            if (!Array.isArray(rows) || !rows.length) return;
+            if (!Array.isArray(rows) || !rows.length) return false;
             const row = rows[0];
             const state = row && row.payload && typeof row.payload === "object" ? row.payload : {};
             applyRemoteState(state);
             return true;
           }
 
-          if (!REMOTE_SYNC_ENDPOINT) return;
+          if (!REMOTE_SYNC_ENDPOINT) return false;
           const xhr = new XMLHttpRequest();
           const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
           xhr.open("GET", `${REMOTE_SYNC_ENDPOINT}${connector}${cacheBust}`, false);
           xhr.send();
-          if (xhr.status < 200 || xhr.status >= 300) return;
+          if (xhr.status < 200 || xhr.status >= 300) return false;
           const payload = JSON.parse(xhr.responseText || "{}");
           const state = payload && typeof payload === "object" ? payload.state || {} : {};
           applyRemoteState(state);
@@ -1562,7 +1562,14 @@
       STORAGE_SYNC_KEYS.forEach((key) => originalRemoveItem(key));
       const initialPullOk = pullRemoteStateSync();
       if (!initialPullOk) {
-        alert("서버 동기화에 실패했습니다. 인터넷 연결 또는 Supabase 설정을 확인해주세요.");
+        void fetchRemoteStateSnapshot()
+          .then((state) => {
+            applyRemoteState(state || {});
+            pendingLocalSyncKeys.clear();
+            lastObservedState = buildCurrentStateSnapshot();
+            refreshAdminUiFromSyncedState();
+          })
+          .catch(() => {});
       }
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
