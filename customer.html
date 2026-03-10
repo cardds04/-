@@ -217,12 +217,20 @@
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+      const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+      const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
       const REMOTE_SYNC_ENDPOINT =
         localStorage.getItem("scheduleSiteRemoteSyncEndpoint") ||
         syncConfig.remoteSyncEndpoint ||
         "http://localhost:8787/api/state";
-      const SUPABASE_URL = syncConfig.supabaseUrl || localStorage.getItem("scheduleSiteSupabaseUrl") || "";
-      const SUPABASE_ANON_KEY = syncConfig.supabaseAnonKey || localStorage.getItem("scheduleSiteSupabaseAnonKey") || "";
+      const SUPABASE_URL =
+        syncConfig.supabaseUrl ||
+        localStorage.getItem("scheduleSiteSupabaseUrl") ||
+        FALLBACK_SUPABASE_URL;
+      const SUPABASE_ANON_KEY =
+        syncConfig.supabaseAnonKey ||
+        localStorage.getItem("scheduleSiteSupabaseAnonKey") ||
+        FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
