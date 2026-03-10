@@ -239,11 +239,33 @@
         "scheduleSiteExcludedPhotographers",
         "scheduleSitePhotographerProfiles"
       ];
+      const STORAGE_SYNC_DEFAULTS = {
+        scheduleSiteCustomerCompanies: "[]",
+        scheduleSiteCustomerSchedules: "[]",
+        scheduleSiteCustomerAlerts: "[]",
+        scheduleSiteCustomers: "[]",
+        scheduleSiteCustomerLogins: "[]",
+        scheduleSiteAdminCompanies: "[]",
+        scheduleSiteCanceledSchedules: "[]",
+        scheduleSiteWriters: "[]",
+        scheduleSiteWriterSchedules: "[]",
+        scheduleSiteAdminSchedules: "[]",
+        scheduleSiteDailyLimits: "{}",
+        scheduleSiteDayoffDeductions: "{}",
+        scheduleSiteDayoffRequests: "[]",
+        scheduleSiteDayoffAlertReadIds: "[]",
+        scheduleSiteLimitConfig: "{}",
+        scheduleSiteExcludedPhotographers: "[]",
+        scheduleSitePhotographerProfiles: "[]"
+      };
+      function getSyncDefaultValue(key) {
+        return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
+      }
       function buildCurrentStateSnapshot() {
         const state = {};
         STORAGE_SYNC_KEYS.forEach((key) => {
           const value = localStorage.getItem(key);
-          state[key] = value === null ? null : value;
+          state[key] = value === null || value === undefined ? getSyncDefaultValue(key) : value;
         });
         return state;
       }
@@ -256,7 +278,7 @@
             if (!Object.prototype.hasOwnProperty.call(state, key)) return;
             const value = state[key];
             if (value === null || value === undefined) {
-              originalRemoveItem(key);
+              originalSetItem(key, getSyncDefaultValue(key));
             } else {
               originalSetItem(key, String(value));
             }
@@ -391,7 +413,7 @@
           if (!Object.prototype.hasOwnProperty.call(remoteState, key)) return;
           const value = remoteState[key];
           if (value === null || value === undefined) {
-            originalRemoveItem(key);
+            originalSetItem(key, getSyncDefaultValue(key));
             return;
           }
           originalSetItem(key, String(value));
@@ -458,9 +480,15 @@
             } else {
               mergedState[key] = remoteValue;
             }
+            if (mergedState[key] === null || mergedState[key] === undefined) {
+              mergedState[key] = getSyncDefaultValue(key);
+            }
             return;
           }
           mergedState[key] = mergeStorageValue(remoteValue, localValue);
+          if (mergedState[key] === null || mergedState[key] === undefined) {
+            mergedState[key] = getSyncDefaultValue(key);
+          }
         });
         return mergedState;
       }
