@@ -1282,6 +1282,10 @@
         const snapshot = buildCurrentStateSnapshot();
         return CRITICAL_SYNC_KEYS.some((key) => !isStorageValueEmpty(snapshot[key]));
       }
+      function hasMeaningfulState(state) {
+        if (!state || typeof state !== "object") return false;
+        return CRITICAL_SYNC_KEYS.some((key) => !isStorageValueEmpty(state[key]));
+      }
       function isSuspiciousServerState(state) {
         if (!state || typeof state !== "object") return true;
         return CRITICAL_SYNC_KEYS.every((key) => isStorageValueEmpty(state[key]));
@@ -1545,6 +1549,17 @@
           applyRemoteStateSnapshotWithPending(latestRemoteState);
           const localState = buildCurrentStateSnapshot();
           const state = buildMergedStateForPush(latestRemoteState, localState);
+          const remoteHasData = hasMeaningfulState(latestRemoteState);
+          const nextHasData = hasMeaningfulState(state);
+          const localHasData = hasMeaningfulState(localState);
+          if (!nextHasData && remoteHasData) {
+            setSyncStatus("빈 데이터 쓰기 차단", "warn");
+            return;
+          }
+          if (!nextHasData && !localHasData) {
+            setSyncStatus("빈 데이터 저장 건너뜀", "warn");
+            return;
+          }
           if (USE_SUPABASE_SYNC) {
             const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
               method: "POST",
