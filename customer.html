@@ -769,6 +769,7 @@
       let currentCustomerTab = "register";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
+      let customerScheduleSubmitting = false;
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
@@ -903,6 +904,22 @@
       function isUuidLike(value) {
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
       }
+      function buildClientUuid() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        const template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+        return template.replace(/[xy]/g, (ch) => {
+          const rand = Math.floor(Math.random() * 16);
+          const val = ch === "x" ? rand : (rand & 0x3) | 0x8;
+          return val.toString(16);
+        });
+      }
+      function ensureScheduleUuid(row) {
+        const current = normalize(row?.customerScheduleId);
+        if (isUuidLike(current)) return current;
+        return buildClientUuid();
+      }
       async function syncCustomersTableFromStorage() {
         if (!USE_SUPABASE_SYNC) return;
         const rows = readStorageArray(STORAGE_CUSTOMERS)
@@ -967,28 +984,30 @@
         if (!USE_SUPABASE_SYNC || !user) return;
         const companyName = normalize(user.company);
         const allRows = readStorageArray(STORAGE_SCHEDULES);
-        const userRows = allRows.filter((row) => {
+        let changed = false;
+        const normalizedRows = allRows.map((row) => {
+          const sameCompany = normalize(row?.company).toLowerCase() === companyName.toLowerCase();
+          const rowSource = normalize(row?.source).toLowerCase();
+          if (!(sameCompany && rowSource === "customer")) return row;
+          const ensuredId = ensureScheduleUuid(row);
+          if (normalize(row?.customerScheduleId) !== ensuredId || rowSource !== "customer") {
+            changed = true;
+            return { ...row, customerScheduleId: ensuredId, source: "customer" };
+          }
+          return row;
+        });
+        if (changed) {
+          writeStorageArray(STORAGE_SCHEDULES, normalizedRows);
+        }
+        const userRows = normalizedRows.filter((row) => {
           const sameCompany = normalize(row?.company).toLowerCase() === companyName.toLowerCase();
           const rowSource = normalize(row?.source).toLowerCase();
           return sameCompany && rowSource === "customer";
         });
-        const deleteResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?source=eq.customer&company_name=eq.${encodeURIComponent(companyName)}`,
-          {
-            method: "DELETE",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            }
-          }
-        );
-        if (!deleteResponse.ok) {
-          const errorText = await deleteResponse.text();
-          throw new Error(`customer schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
-        }
         if (!userRows.length) return;
         const insertRows = userRows.map((row) => {
           return {
+            id: ensureScheduleUuid(row),
             company_name: normalize(row?.company),
             writer_name: normalize(row?.name) || "작가미정",
             date_key: normalize(row?.date),
@@ -1008,10 +1027,11 @@
             source: "customer"
           };
         });
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal",
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
@@ -1020,6 +1040,21 @@
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`customer schedules 저장 실패 (${response.status}): ${errorText}`);
+        }
+      }
+      async function deleteCustomerScheduleFromSupabase(scheduleId) {
+        const id = normalize(scheduleId);
+        if (!USE_SUPABASE_SYNC || !isUuidLike(id)) return;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}&source=eq.customer`, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`customer schedule 삭제 실패 (${response.status}): ${errorText}`);
         }
       }
 
@@ -1748,6 +1783,7 @@
 
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (customerScheduleSubmitting) return;
         const user = getCurrentSessionUser();
         if (!user) {
           alert("로그인이 필요합니다.");
@@ -1776,7 +1812,7 @@
         const isNewCompany = ensureCompanyStored(user.company, user.phone, user.companyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
         const createdSchedule = {
-          customerScheduleId: `cus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customerScheduleId: buildClientUuid(),
           date,
           time,
           name: "작가미정",
@@ -1802,6 +1838,7 @@
         };
         schedules.unshift(createdSchedule);
         writeStorageArray(STORAGE_SCHEDULES, schedules);
+        customerScheduleSubmitting = true;
         try {
           await syncCustomerSchedulesTable(user);
           queueCustomerTablePull();
@@ -1814,8 +1851,10 @@
           renderStatusList();
           renderPaymentSummary();
           alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
+          customerScheduleSubmitting = false;
           return;
         }
+        customerScheduleSubmitting = false;
         const createAlerts = readStorageArray(STORAGE_ALERTS);
         createAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1954,7 +1993,7 @@
           const user = getCurrentSessionUser();
           if (user) {
             try {
-              await syncCustomerSchedulesTable(user);
+              await deleteCustomerScheduleFromSupabase(item.customerScheduleId);
               queueCustomerTablePull();
             } catch (error) {
               console.error("[TABLE][customer] schedule delete sync 실패", error);
