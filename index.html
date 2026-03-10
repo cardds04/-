@@ -402,6 +402,28 @@
         line-height: 1.45;
       }
 
+      .schedule-time-emphasis {
+        color: #d74444;
+        font-weight: 800;
+      }
+
+      .schedule-extra-detail {
+        margin-top: 6px;
+      }
+
+      .schedule-extra-detail summary {
+        cursor: pointer;
+        color: #456aa7;
+        font-weight: 700;
+      }
+
+      .quick-writer-row {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
       .item {
         border: 1px solid var(--line);
         border-radius: 12px;
@@ -694,6 +716,18 @@
         min-height: 120px;
         padding: 8px;
         font-size: 0.82rem;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+
+      .calendar-day:hover {
+        border-color: #8fa9da;
+        background: #f3f7ff;
+      }
+
+      .calendar-day.selected {
+        border-color: #456aa7;
+        background: #eaf1ff;
       }
 
       .calendar-day.empty {
@@ -714,6 +748,18 @@
 
       .calendar-day-number.weekend {
         color: #d74444;
+      }
+
+      .calendar-today-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #ffe066;
+        color: #6b4e00;
+        font-size: 0.72rem;
+        font-weight: 800;
+        vertical-align: middle;
       }
 
       .calendar-company {
@@ -910,6 +956,26 @@
             </div>
           </div>
 
+          <div id="inlineCalendarBox" class="customer-stats-box" style="margin-bottom: 10px;">
+            <div class="calendar-head">
+              <div class="actions" style="margin-top: 0;">
+                <button id="inlineCalendarPrevBtn" class="btn-sm" type="button">이전달</button>
+                <button id="inlineCalendarNextBtn" class="btn-sm" type="button">다음달</button>
+              </div>
+              <div id="inlineCalendarTitle" class="calendar-title"></div>
+              <span></span>
+            </div>
+            <div id="inlineCalendarMonthTotal" class="helper" style="margin: 0 0 10px;"></div>
+            <div class="calendar-bulk-row">
+              <span>평일일괄적용</span>
+              <input id="inlineBulkWeekdayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="평일 제한갯수" style="width: 120px;" />
+              <span>주말일괄적용</span>
+              <input id="inlineBulkHolidayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="주말/공휴일 제한갯수" style="width: 160px;" />
+              <button id="inlineApplyMonthLimitBtn" class="btn-sm" type="button">전체 기본적용</button>
+            </div>
+            <div id="inlineCalendarGrid" class="calendar-grid"></div>
+            <div id="inlineDayoffRequestHistory" class="customer-alert-history" style="margin-top: 10px; max-height: 180px;"></div>
+          </div>
           <div id="viewTabs" class="view-tabs"></div>
 
           <div id="dateFilterRow" class="filter-row">
@@ -917,13 +983,12 @@
             <select id="monthFilter" class="small-select"></select>
             <select id="dayFilter" class="small-select"></select>
             <input id="companyFilterInput" class="small-select" type="text" placeholder="업체명 검색" />
-            <button id="checkDateCountBtn" class="btn-sm" type="button">월별스케줄요약</button>
             <button id="copyScheduleBtn" class="btn-sm" type="button">내용복사</button>
           </div>
 
           <div id="customerAlertBox" class="customer-alert-box"></div>
           <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
-          <div id="list" class="list"></div>
+          <div id="list" class="list hidden"></div>
           <div id="customerStatsBox" class="customer-stats-box"></div>
           <div id="openDayoffSummaryBox" class="customer-alert-history" style="margin-top: 10px;"></div>
         </article>
@@ -1069,6 +1134,20 @@
         </div>
         <div id="companyTransferSummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
         <div id="companyTransferDetail" class="customer-alert-history" style="max-height: 52vh;"></div>
+      </div>
+    </div>
+
+    <div id="scheduleDetailModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(1240px, 96vw);">
+        <div class="calendar-head">
+          <div class="actions" style="margin-top: 0;">
+            <button id="scheduleDetailPrevDayBtn" class="btn-sm" type="button">전날</button>
+            <button id="scheduleDetailNextDayBtn" class="btn-sm" type="button">다음날</button>
+          </div>
+          <div id="scheduleDetailTitle" class="calendar-title">일정 상세</div>
+          <button id="scheduleDetailCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="scheduleDetailList" class="list" style="max-height: 72vh; overflow: auto;"></div>
       </div>
     </div>
 
@@ -1285,6 +1364,12 @@
       const companyTransferSummaryEl = document.getElementById("companyTransferSummary");
       const companyTransferDetailEl = document.getElementById("companyTransferDetail");
       const companyTransferCloseBtnEl = document.getElementById("companyTransferCloseBtn");
+      const scheduleDetailModalEl = document.getElementById("scheduleDetailModal");
+      const scheduleDetailPrevDayBtnEl = document.getElementById("scheduleDetailPrevDayBtn");
+      const scheduleDetailNextDayBtnEl = document.getElementById("scheduleDetailNextDayBtn");
+      const scheduleDetailTitleEl = document.getElementById("scheduleDetailTitle");
+      const scheduleDetailListEl = document.getElementById("scheduleDetailList");
+      const scheduleDetailCloseBtnEl = document.getElementById("scheduleDetailCloseBtn");
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
       const customerAlertCountEl = document.getElementById("customerAlertCount");
@@ -1294,12 +1379,20 @@
       const customerAlertHistoryBoxEl = document.getElementById("customerAlertHistoryBox");
       const canceledScheduleBoxEl = document.getElementById("canceledScheduleBox");
       const openDayoffSummaryBoxEl = document.getElementById("openDayoffSummaryBox");
+      const inlineCalendarTitleEl = document.getElementById("inlineCalendarTitle");
+      const inlineCalendarMonthTotalEl = document.getElementById("inlineCalendarMonthTotal");
+      const inlineBulkWeekdayLimitInputEl = document.getElementById("inlineBulkWeekdayLimitInput");
+      const inlineBulkHolidayLimitInputEl = document.getElementById("inlineBulkHolidayLimitInput");
+      const inlineApplyMonthLimitBtnEl = document.getElementById("inlineApplyMonthLimitBtn");
+      const inlineCalendarGridEl = document.getElementById("inlineCalendarGrid");
+      const inlineDayoffRequestHistoryEl = document.getElementById("inlineDayoffRequestHistory");
+      const inlineCalendarPrevBtnEl = document.getElementById("inlineCalendarPrevBtn");
+      const inlineCalendarNextBtnEl = document.getElementById("inlineCalendarNextBtn");
       const viewTabsEl = document.getElementById("viewTabs");
       const yearFilterEl = document.getElementById("yearFilter");
       const monthFilterEl = document.getElementById("monthFilter");
       const dayFilterEl = document.getElementById("dayFilter");
       const companyFilterInputEl = document.getElementById("companyFilterInput");
-      const checkDateCountBtnEl = document.getElementById("checkDateCountBtn");
       const copyScheduleBtnEl = document.getElementById("copyScheduleBtn");
       const downloadExcelBtnEl = document.getElementById("downloadExcelBtn");
       const uploadExcelBtnEl = document.getElementById("uploadExcelBtn");
@@ -2229,6 +2322,33 @@
         if (normalized.length <= 10) return normalized;
         return `${normalized.slice(0, 10)}...`;
       }
+      function formatScheduleDateWithoutYear(dateText) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateText || "").trim())) return "-";
+        const month = Number(String(dateText).slice(5, 7));
+        const day = Number(String(dateText).slice(8, 10));
+        return `${month}/${day}(${getWeekdayKo(dateText)})`;
+      }
+      function formatScheduleTimeSimple(timeText) {
+        const normalized = String(timeText || "").trim();
+        const matched = normalized.match(/^(\d{1,2}):(\d{2})$/);
+        if (!matched) return normalized || "-";
+        const hour = Number(matched[1]);
+        const minute = matched[2];
+        if (minute === "00") return `${hour}시`;
+        if (minute === "30") return `${hour}시반`;
+        return `${hour}시 ${Number(minute)}분`;
+      }
+      function summarizePlace(text, maxLength = 10) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return "-";
+        if (normalized.length <= maxLength) return normalized;
+        return `${normalized.slice(0, maxLength)}...`;
+      }
+      function summarizeCompanyNameShort(name, maxLength = 5) {
+        const normalized = normalizeCompanyName(name);
+        if (!normalized) return "-";
+        return normalized.length <= maxLength ? normalized : normalized.slice(0, maxLength);
+      }
 
       function formatPlaceForDisplay(text) {
         const normalized = String(text || "-");
@@ -2514,70 +2634,11 @@
         couponCountSelectEl.value = "1";
       }
 
-      function renderScheduleCalendar() {
-        const firstDay = new Date(calendarViewYear, calendarViewMonth - 1, 1).getDay();
-        const daysInMonth = new Date(calendarViewYear, calendarViewMonth, 0).getDate();
-        const monthSchedules = data.filter((item) => {
-          const date = new Date(item.date);
-          return date.getFullYear() === calendarViewYear && date.getMonth() + 1 === calendarViewMonth;
-        });
-        calendarTitleEl.textContent = `${calendarViewYear}년 ${calendarViewMonth}월`;
-        calendarMonthTotalEl.textContent = `이번 달 총 예약 ${monthSchedules.length}건`;
-        const config = readStorageObject(STORAGE_LIMIT_CONFIG);
-        bulkWeekdayLimitInputEl.value = String(Math.max(0, Number(config.weekdayLimit) || 8));
-        bulkHolidayLimitInputEl.value = String(Math.max(0, Number(config.holidayLimit) || 4));
-
-        const weekdays = ["일", "월", "화", "수", "목", "금", "토"]
-          .map((day, idx) => `<div class="calendar-weekday ${idx === 0 || idx === 6 ? "weekend" : ""}">${day}</div>`)
-          .join("");
-
-        const cells = [];
-        const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-
-        for (let i = 0; i < totalCells; i += 1) {
-          const day = i - firstDay + 1;
-          if (day < 1 || day > daysInMonth) {
-            cells.push('<div class="calendar-day empty"></div>');
-            continue;
-          }
-          const dateKey = `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const daySchedules = data
-            .filter((item) => item.date === dateKey)
-            .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-          const dailyLimit = getEffectiveDailyLimit(dateKey);
-          const baseLimit = getDailyLimitBase(dateKey);
-          const deduction = getDayoffDeduction(dateKey);
-          const companies = daySchedules
-            .map(
-              (item) => {
-                const area = extractAreaLabel(item.place);
-                return `<div class="calendar-company">${escapeHtml(area || "-")} ${escapeHtml(item.time || "-")}</div>`;
-              }
-            )
-            .join("");
-          const weekdayIndex = new Date(`${dateKey}T00:00:00`).getDay();
-          const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
-          const isHoliday = isHolidayDate(dateKey);
-          const isRedDate = isWeekend || isHoliday;
-          cells.push(`
-            <div class="calendar-day">
-              <div class="calendar-day-head">
-                <span class="calendar-day-number ${isRedDate ? "weekend" : ""}">${day}일</span>
-                <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건</span>
-              </div>
-              ${companies || '<div class="calendar-company">예약 없음</div>'}
-            </div>
-          `);
-        }
-
-        calendarGridEl.innerHTML = `${weekdays}${cells.join("")}`;
-        renderDayoffRequestHistory();
-      }
-
-      function renderDayoffRequestHistory() {
+      function renderDayoffRequestHistoryInto(targetEl) {
+        if (!targetEl) return;
         const requests = getMonthDayoffRequests(calendarViewYear, calendarViewMonth);
         if (requests.length === 0) {
-          dayoffRequestHistoryEl.innerHTML = `<div>${calendarViewYear}년 ${calendarViewMonth}월 휴무요청 내역이 없습니다.</div>`;
+          targetEl.innerHTML = `<div>${calendarViewYear}년 ${calendarViewMonth}월 휴무요청 내역이 없습니다.</div>`;
           return;
         }
         const groupedByWriter = requests.reduce((acc, item) => {
@@ -2610,15 +2671,100 @@
           })
           .join("");
 
-        dayoffRequestHistoryEl.innerHTML = `
+        targetEl.innerHTML = `
           <div style="margin-bottom: 6px; font-weight: 700;">${calendarViewYear}년 ${calendarViewMonth}월 휴무요청 작가 리스트</div>
           ${writerRows}
         `;
       }
 
-      function applyGlobalLimitConfig() {
-        const weekdayLimit = Number(bulkWeekdayLimitInputEl.value);
-        const holidayLimit = Number(bulkHolidayLimitInputEl.value);
+      function renderScheduleCalendarInto(titleEl, monthTotalEl, weekdayInputEl, holidayInputEl, gridEl, dayoffEl) {
+        if (!titleEl || !monthTotalEl || !weekdayInputEl || !holidayInputEl || !gridEl) return;
+        const now = new Date();
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const selectedDateKey =
+          monthFilterEl?.value !== "all" && dayFilterEl?.value !== "all"
+            ? `${String(yearFilterEl?.value || "")}-${String(monthFilterEl?.value || "").padStart(2, "0")}-${String(dayFilterEl?.value || "").padStart(2, "0")}`
+            : "";
+        const firstDay = new Date(calendarViewYear, calendarViewMonth - 1, 1).getDay();
+        const daysInMonth = new Date(calendarViewYear, calendarViewMonth, 0).getDate();
+        const monthSchedules = data.filter((item) => {
+          const date = new Date(item.date);
+          return date.getFullYear() === calendarViewYear && date.getMonth() + 1 === calendarViewMonth;
+        });
+        titleEl.textContent = `${calendarViewYear}년 ${calendarViewMonth}월`;
+        monthTotalEl.textContent = `이번 달 총 예약 ${monthSchedules.length}건`;
+        const config = readStorageObject(STORAGE_LIMIT_CONFIG);
+        weekdayInputEl.value = String(Math.max(0, Number(config.weekdayLimit) || 8));
+        holidayInputEl.value = String(Math.max(0, Number(config.holidayLimit) || 4));
+
+        const weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+          .map((day, idx) => `<div class="calendar-weekday ${idx === 0 || idx === 6 ? "weekend" : ""}">${day}</div>`)
+          .join("");
+
+        const cells = [];
+        const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+        for (let i = 0; i < totalCells; i += 1) {
+          const day = i - firstDay + 1;
+          if (day < 1 || day > daysInMonth) {
+            cells.push('<div class="calendar-day empty"></div>');
+            continue;
+          }
+          const dateKey = `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const daySchedules = data
+            .filter((item) => item.date === dateKey)
+            .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+          const dailyLimit = getEffectiveDailyLimit(dateKey);
+          const baseLimit = getDailyLimitBase(dateKey);
+          const deduction = getDayoffDeduction(dateKey);
+          const companies = daySchedules
+            .map(
+              (item) => {
+                const area = extractAreaLabel(item.place);
+                const companyShort = summarizeCompanyNameShort(item.company, 5);
+                return `<div class="calendar-company">${escapeHtml(area || "-")} ${escapeHtml(formatScheduleTimeSimple(item.time || "-"))} ${escapeHtml(companyShort)}</div>`;
+              }
+            )
+            .join("");
+          const weekdayIndex = new Date(`${dateKey}T00:00:00`).getDay();
+          const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
+          const isHoliday = isHolidayDate(dateKey);
+          const isRedDate = isWeekend || isHoliday;
+          const isSelected = selectedDateKey === dateKey;
+          const isToday = dateKey === todayKey;
+          cells.push(`
+            <div class="calendar-day ${isSelected ? "selected" : ""}" data-date="${dateKey}">
+              <div class="calendar-day-head">
+                <span class="calendar-day-number ${isRedDate ? "weekend" : ""}">${day}일${isToday ? '<span class="calendar-today-badge">오늘</span>' : ""}</span>
+                <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건</span>
+              </div>
+              ${companies || '<div class="calendar-company">예약 없음</div>'}
+            </div>
+          `);
+        }
+
+        gridEl.innerHTML = `${weekdays}${cells.join("")}`;
+        renderDayoffRequestHistoryInto(dayoffEl);
+      }
+
+      function renderScheduleCalendar() {
+        renderScheduleCalendarInto(
+          calendarTitleEl,
+          calendarMonthTotalEl,
+          bulkWeekdayLimitInputEl,
+          bulkHolidayLimitInputEl,
+          calendarGridEl,
+          dayoffRequestHistoryEl
+        );
+      }
+
+      function renderDayoffRequestHistory() {
+        renderDayoffRequestHistoryInto(dayoffRequestHistoryEl);
+      }
+
+      function applyGlobalLimitConfigByInputs(weekdayInputEl, holidayInputEl) {
+        const weekdayLimit = Number(weekdayInputEl?.value);
+        const holidayLimit = Number(holidayInputEl?.value);
         if (Number.isNaN(weekdayLimit) || weekdayLimit < 0 || Number.isNaN(holidayLimit) || holidayLimit < 0) {
           alert("평일/주말및공휴일 제한갯수를 0 이상 숫자로 입력해주세요.");
           return;
@@ -2630,7 +2776,11 @@
         // 날짜별 개별 제한값은 사용하지 않으므로 초기화
         localStorage.setItem(STORAGE_DAILY_LIMITS, JSON.stringify({}));
         renderScheduleCalendar();
+        renderInlineScheduleCalendarFromFilters();
         alert("제한 기본값이 전체 일정에 적용되었습니다.");
+      }
+      function applyGlobalLimitConfig() {
+        applyGlobalLimitConfigByInputs(bulkWeekdayLimitInputEl, bulkHolidayLimitInputEl);
       }
 
       function openScheduleCalendarFromFilters() {
@@ -2639,12 +2789,76 @@
         renderScheduleCalendar();
         calendarModalEl.classList.remove("hidden");
       }
+      function renderInlineScheduleCalendarFromFilters() {
+        calendarViewYear = Number(yearFilterEl.value) || currentYear;
+        calendarViewMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
+        renderScheduleCalendarInto(
+          inlineCalendarTitleEl,
+          inlineCalendarMonthTotalEl,
+          inlineBulkWeekdayLimitInputEl,
+          inlineBulkHolidayLimitInputEl,
+          inlineCalendarGridEl,
+          inlineDayoffRequestHistoryEl
+        );
+      }
+      function openScheduleDetailModal() {
+        if (!scheduleDetailModalEl || !scheduleDetailTitleEl) return;
+        const yearText = String(yearFilterEl.value || "");
+        const monthText = monthFilterEl.value === "all" ? "전체월" : `${monthFilterEl.value}월`;
+        const dayText = dayFilterEl.value === "all" ? "전체일" : `${dayFilterEl.value}일`;
+        scheduleDetailTitleEl.textContent = `일정 상세 (${yearText}년 ${monthText} ${dayText})`;
+        const hasExactDate = monthFilterEl.value !== "all" && dayFilterEl.value !== "all";
+        if (scheduleDetailPrevDayBtnEl) scheduleDetailPrevDayBtnEl.disabled = !hasExactDate;
+        if (scheduleDetailNextDayBtnEl) scheduleDetailNextDayBtnEl.disabled = !hasExactDate;
+        scheduleDetailModalEl.classList.remove("hidden");
+      }
+      function moveScheduleDetailByDay(step) {
+        const year = Number(yearFilterEl.value);
+        if (monthFilterEl.value === "all" || dayFilterEl.value === "all" || Number.isNaN(year)) {
+          return;
+        }
+        const month = Number(monthFilterEl.value);
+        const day = Number(dayFilterEl.value);
+        if (Number.isNaN(month) || Number.isNaN(day)) return;
+        const date = new Date(year, month - 1, day);
+        date.setDate(date.getDate() + step);
+        const nextYear = date.getFullYear();
+        const nextMonth = date.getMonth() + 1;
+        const nextDay = date.getDate();
+
+        if (![...yearFilterEl.options].some((option) => Number(option.value) === nextYear)) {
+          yearFilterEl.insertAdjacentHTML("beforeend", `<option value="${nextYear}">${nextYear}년</option>`);
+        }
+        yearFilterEl.value = String(nextYear);
+        monthFilterEl.value = String(nextMonth);
+        dayFilterEl.value = String(nextDay);
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+        openScheduleDetailModal();
+      }
 
       function extractAreaLabel(placeText) {
         const place = String(placeText || "").trim();
         if (!place) return "";
-        const firstToken = place.split(/\s+/)[0] || "";
-        return firstToken.slice(0, 3);
+        const excludedSiSet = new Set(["서울시", "서울특별시", "서울특벽시"]);
+        const tokens = place
+          .split(/\s+/)
+          .map((token) => token.replace(/[^\uAC00-\uD7A3]/g, ""))
+          .filter(Boolean);
+        const siToken = tokens.find((token) => /시$/.test(token));
+        const guToken = tokens.find((token) => /구$/.test(token));
+        if (siToken) {
+          if (excludedSiSet.has(siToken)) {
+            if (guToken) return guToken;
+          } else {
+            return siToken;
+          }
+        }
+        if (guToken) return guToken;
+        const fallbackToken = tokens.find((token) => !excludedSiSet.has(token)) || tokens[0] || place;
+        const firstToken = String(fallbackToken || "").trim();
+        return firstToken.slice(0, 8);
       }
 
       function renderPhotographers() {
@@ -3876,8 +4090,6 @@
       }
 
       function renderPreviousScheduleHistory() {
-        const today = new Date();
-        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
         const rows = [
           ...data.map((item) => ({ ...item, sourceLabel: "진행중" })),
           ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
@@ -4366,12 +4578,13 @@
         const today = new Date();
         const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
+        renderInlineScheduleCalendarFromFilters();
+
         const filtered = data
           .map((item, index) => ({ item, index }))
           .filter(({ item }) => {
             const dateText = String(item.date || "").trim();
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
-            if (dateText < todayKey) return false;
             const itemYear = dateText.slice(0, 4);
             const itemMonth = dateText.slice(5, 7);
             const itemDay = dateText.slice(8, 10);
@@ -4424,7 +4637,7 @@
           return aScore - bScore || a[0].localeCompare(b[0], "ko");
         });
 
-        listEl.innerHTML = `
+        const listMarkup = `
           <div class="writer-group-list">
             ${writerRows
               .map(
@@ -4475,19 +4688,50 @@
                                        <button class="btn-sm primary" type="button" data-action="saveEdit" data-index="${index}">저장</button>
                                        <button class="btn-sm" type="button" data-action="cancelEdit" data-index="${index}">취소</button>
                                      </div>`
-                                 : `${escapeHtml(item.date || "-")} (<span class="weekday-label ${isWeekendDate(item.date) ? "weekend" : ""}">${escapeHtml(getWeekdayKo(item.date))}</span>) | ${escapeHtml(item.time || "-")}
-                                     <button class="btn-sm ${item.paymentStatus === "입금완료" ? "neon" : "danger"}" type="button" disabled style="margin-left: 6px;">${item.paymentStatus === "입금완료" ? "입금확인" : "미결"}</button><br />
-                                     업체: ${escapeHtml(item.company || "-")} (${escapeHtml(getCompanyPhoneForDisplay(item.company, item))})<br />
-                                     장소: ${formatPlaceForDisplay(item.place)}<br />
-                                     평수: ${escapeHtml(item.pyeong || "-")}<br />
-                                     비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
-                                     메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                                     구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
-                                     쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                                  : editingDateIndex === index
+                                  ? `<div class="inline-pair" style="margin-bottom: 6px;">
+                                       <select class="inline-select edit-hour" style="width: 110px;">${hourOptions}</select>
+                                       <select class="inline-select edit-minute" style="width: 110px;">${minuteOptions}</select>
+                                     </div>
+                                     <div class="actions" style="justify-content: flex-start; margin-top: 0;">
+                                       <button class="btn-sm primary" type="button" data-action="saveDateEdit" data-index="${index}">시간저장</button>
+                                       <button class="btn-sm" type="button" data-action="cancelDateEdit">취소</button>
+                                     </div>`
+                                  : `${escapeHtml(formatScheduleDateWithoutYear(item.date))} | <button class="btn-sm schedule-time-emphasis" type="button" data-action="startDateEdit" data-index="${index}" style="padding: 0 6px; min-width: auto;">${escapeHtml(
+                                      formatScheduleTimeSimple(item.time)
+                                    )}</button><br />
+                                    ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
+                                    ${escapeHtml(item.company || "-")}
+                                    <details class="schedule-extra-detail">
+                                      <summary>상세보기</summary>
+                                      업체: ${escapeHtml(item.company || "-")}<br />
+                                      장소(전체): ${formatPlaceForDisplay(item.place)}<br />
+                                      연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
+                                      평수: ${escapeHtml(item.pyeong || "-")}<br />
+                                      비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
+                                      메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                                      구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
+                                      쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                                    </details>
+                                    <div class="quick-writer-row">
+                                      ${["작가미정", ...photographers]
+                                        .slice(0, 8)
+                                        .map(
+                                          (writerName) =>
+                                            `<button class="btn-sm ${item.name === writerName ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-writer-name="${escapeHtml(
+                                              writerName
+                                            )}" title="작가 바로 변경">${escapeHtml(writerName === "작가미정" ? "미정" : writerName)}</button>`
+                                        )
+                                        .join("")}
+                                    </div>
+                                    <div class="quick-writer-row" style="margin-top: 4px;">
+                                      <button class="btn-sm ${item.composition === "사진만" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-composition="사진만">사진</button>
+                                      <button class="btn-sm ${item.composition === "사진영상 둘다" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-composition="사진영상 둘다">사영</button>
+                                    </div>
                                      <span class="actions" style="justify-content: flex-start; margin-top: 6px;">
                                        <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
                                        <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}">삭제</button>
-                                       <button class="btn-sm" type="button" data-action="showMemo" data-index="${index}">메모</button>
+                                      <button class="btn-sm ${item.paymentStatus === "입금완료" ? "neon" : "danger"}" type="button" disabled>${item.paymentStatus === "입금완료" ? "입금확인" : "미결"}</button>
                                      </span>`
                               }
                             </span>
@@ -4501,6 +4745,8 @@
               .join("")}
           </div>
         `;
+        listEl.innerHTML = listMarkup;
+        if (scheduleDetailListEl) scheduleDetailListEl.innerHTML = listMarkup;
 
         renderPaymentList();
       }
@@ -4536,6 +4782,7 @@
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isTransfer) renderTransferTool();
+        if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
@@ -4649,6 +4896,9 @@
         currentScheduleDatePreset = "";
         renderPhotographerTabs();
         renderList();
+        if (dayFilterEl.value !== "all") {
+          openScheduleDetailModal();
+        }
       });
       companyFilterInputEl.addEventListener("input", () => {
         renderList();
@@ -4691,7 +4941,6 @@
       monthEl.addEventListener("change", () => {
         renderScheduleDayOptionsWithWeekday(dayEl.value);
       });
-      checkDateCountBtnEl.addEventListener("click", openScheduleCalendarFromFilters);
       copyScheduleBtnEl.addEventListener("click", copyCurrentScheduleList);
       calendarCloseBtnEl.addEventListener("click", () => {
         calendarModalEl.classList.add("hidden");
@@ -4718,6 +4967,53 @@
         }
       });
       applyMonthLimitBtnEl.addEventListener("click", applyGlobalLimitConfig);
+      inlineCalendarPrevBtnEl?.addEventListener("click", () => {
+        const selectedYear = Number(yearFilterEl.value) || currentYear;
+        const selectedMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
+        let nextYear = selectedYear;
+        let nextMonth = selectedMonth - 1;
+        if (nextMonth < 1) {
+          nextMonth = 12;
+          nextYear -= 1;
+        }
+        yearFilterEl.value = String(nextYear);
+        monthFilterEl.value = String(nextMonth);
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+      });
+      inlineCalendarNextBtnEl?.addEventListener("click", () => {
+        const selectedYear = Number(yearFilterEl.value) || currentYear;
+        const selectedMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
+        let nextYear = selectedYear;
+        let nextMonth = selectedMonth + 1;
+        if (nextMonth > 12) {
+          nextMonth = 1;
+          nextYear += 1;
+        }
+        yearFilterEl.value = String(nextYear);
+        monthFilterEl.value = String(nextMonth);
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+      });
+      inlineApplyMonthLimitBtnEl?.addEventListener("click", () => {
+        applyGlobalLimitConfigByInputs(inlineBulkWeekdayLimitInputEl, inlineBulkHolidayLimitInputEl);
+      });
+      inlineCalendarGridEl?.addEventListener("click", (event) => {
+        const cell = event.target.closest(".calendar-day[data-date]");
+        if (!cell) return;
+        const dateKey = String(cell.dataset.date || "");
+        const [yearText, monthText, dayText] = dateKey.split("-");
+        if (!yearText || !monthText || !dayText) return;
+        yearFilterEl.value = yearText;
+        monthFilterEl.value = String(Number(monthText));
+        dayFilterEl.value = String(Number(dayText));
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+        openScheduleDetailModal();
+      });
       companyOrderHistoryCloseBtnEl.addEventListener("click", () => {
         companyOrderHistoryModalEl.classList.add("hidden");
       });
@@ -4760,6 +5056,20 @@
       companyTransferModalEl.addEventListener("click", (event) => {
         if (event.target === companyTransferModalEl) {
           closeCompanyTransferModal();
+        }
+      });
+      scheduleDetailCloseBtnEl?.addEventListener("click", () => {
+        scheduleDetailModalEl?.classList.add("hidden");
+      });
+      scheduleDetailPrevDayBtnEl?.addEventListener("click", () => {
+        moveScheduleDetailByDay(-1);
+      });
+      scheduleDetailNextDayBtnEl?.addEventListener("click", () => {
+        moveScheduleDetailByDay(1);
+      });
+      scheduleDetailModalEl?.addEventListener("click", (event) => {
+        if (event.target === scheduleDetailModalEl) {
+          scheduleDetailModalEl.classList.add("hidden");
         }
       });
       companyOrderHistorySummaryEl.addEventListener("click", (event) => {
@@ -5322,21 +5632,15 @@
       function saveDateEdit(index, itemEl) {
         const item = data[index];
         if (!item || !itemEl) return;
-        const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
+        const previousTime = item.time || "";
         const hour = itemEl.querySelector(".edit-hour")?.value;
         const minute = itemEl.querySelector(".edit-minute")?.value;
-        const nextDate = date || item.date;
-        if (nextDate !== item.date) {
-          const countAtDate = getActiveScheduleCountByDate(nextDate, index);
-          const dailyLimit = getEffectiveDailyLimit(nextDate);
-          if (countAtDate >= dailyLimit) {
-            alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
-            return;
-          }
+        if (!hour || !minute) {
+          alert("시간과 분을 선택해주세요.");
+          return;
         }
-
-        if (date) item.date = date;
-        if (hour && minute) item.time = `${hour}:${minute}`;
+        item.time = `${hour}:${minute}`;
+        syncCustomerScheduleFromAdminEdit(item, previousTime);
 
         editingDateIndex = null;
         renderList();
@@ -5431,7 +5735,7 @@
         renderPaymentList();
       }
 
-      listEl.addEventListener("click", (event) => {
+      function handleScheduleListClick(event) {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         const action = button.dataset.action;
@@ -5441,6 +5745,15 @@
 
         if (action === "quickComposition" && !Number.isNaN(index) && item) {
           item.composition = item.composition === "사진영상 둘다" ? "사진만" : "사진영상 둘다";
+          syncCustomerScheduleFromAdminEdit(item, item.time || "");
+          renderList();
+          return;
+        }
+        if (action === "setQuickComposition" && !Number.isNaN(index) && item) {
+          const composition = String(button.dataset.composition || "").trim();
+          if (!composition) return;
+          item.composition = composition;
+          syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           return;
         }
@@ -5463,6 +5776,16 @@
             syncCustomerScheduleFromAdminEdit(item, item.time || "");
           }
           quickPhotographerPickerIndex = null;
+          renderList();
+          return;
+        }
+        if (action === "setQuickWriter" && !Number.isNaN(index) && item) {
+          const writerName = String(button.dataset.writerName || "").trim();
+          if (!writerName) return;
+          item.name = writerName;
+          item.writerPhone = photographerPhones[writerName] || "";
+          item.writerCarNumber = photographerCarNumbers[writerName] || "";
+          syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           return;
         }
@@ -5508,7 +5831,9 @@
         if (action === "saveEdit" && !Number.isNaN(index)) {
           saveInlineEdit(index, itemEl);
         }
-      });
+      }
+      listEl.addEventListener("click", handleScheduleListClick);
+      scheduleDetailListEl?.addEventListener("click", handleScheduleListClick);
 
       previousScheduleHistoryDetailEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action='deletePreviousHistorySchedule']");
