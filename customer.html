@@ -391,29 +391,45 @@
         }
       }
 
-      function scheduleRemotePush() {
+      function scheduleRemotePush(delayMs = 250) {
         if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
         remoteSyncTimer = setTimeout(() => {
           void pushRemoteState();
-        }, 250);
+        }, Math.max(0, Number(delayMs) || 0));
+      }
+      let lastFocusPullAt = 0;
+      function pullRemoteStateOnFocus() {
+        const now = Date.now();
+        if (now - lastFocusPullAt < 800) return;
+        lastFocusPullAt = now;
+        if (remoteSyncTimer) {
+          clearTimeout(remoteSyncTimer);
+          remoteSyncTimer = null;
+        }
+        pullRemoteStateSync();
+        pendingLocalSyncKeys.clear();
       }
 
       localStorage.setItem = (key, value) => {
         originalSetItem(key, value);
         if (STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
-          scheduleRemotePush();
+          scheduleRemotePush(0);
         }
       };
       localStorage.removeItem = (key) => {
         originalRemoveItem(key);
         if (STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
-          scheduleRemotePush();
+          scheduleRemotePush(0);
         }
       };
       pullRemoteStateSync();
       pendingLocalSyncKeys.clear();
+      window.addEventListener("focus", pullRemoteStateOnFocus);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) pullRemoteStateOnFocus();
+      });
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
       const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
