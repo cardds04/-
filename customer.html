@@ -263,10 +263,7 @@
         isApplyingRemoteState = true;
         try {
           STORAGE_SYNC_KEYS.forEach((key) => {
-            if (!Object.prototype.hasOwnProperty.call(state, key)) {
-              originalRemoveItem(key);
-              return;
-            }
+            if (!Object.prototype.hasOwnProperty.call(state, key)) return;
             const value = state[key];
             if (value === null || value === undefined) {
               originalRemoveItem(key);
@@ -373,16 +370,27 @@
               cache: "no-store"
             }
           );
-          if (!response.ok) return {};
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Supabase GET 실패 (${response.status}): ${errorText}`);
+          }
           const rows = await response.json();
-          if (!Array.isArray(rows) || rows.length === 0) return {};
+          if (!Array.isArray(rows) || rows.length === 0) {
+            throw new Error("Supabase payload 조회 결과가 비어있습니다.");
+          }
           const row = rows[0];
-          return row && row.payload && typeof row.payload === "object" ? row.payload : {};
+          if (!row || !row.payload || typeof row.payload !== "object") {
+            throw new Error("Supabase payload 형식이 올바르지 않습니다.");
+          }
+          return row.payload;
         }
-        if (!REMOTE_SYNC_ENDPOINT) return {};
+        if (!REMOTE_SYNC_ENDPOINT) throw new Error("원격 동기화 엔드포인트가 없습니다.");
         const connector = REMOTE_SYNC_ENDPOINT.includes("?") ? "&" : "?";
         const response = await fetch(`${REMOTE_SYNC_ENDPOINT}${connector}t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) return {};
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`원격 GET 실패 (${response.status}): ${errorText}`);
+        }
         const payload = await response.json();
         return payload && typeof payload === "object" ? payload.state || {} : {};
       }
@@ -453,7 +461,7 @@
           const remoteValue = hasRemote ? remoteState[key] : null;
           const localValue = Object.prototype.hasOwnProperty.call(localState, key) ? localState[key] : null;
           if (!pendingLocalSyncKeys.has(key)) {
-            mergedState[key] = remoteValue === undefined ? null : remoteValue;
+            mergedState[key] = hasRemote ? remoteValue : localValue;
             return;
           }
           mergedState[key] = mergeStorageValue(remoteValue, localValue);
@@ -604,7 +612,6 @@
         }
       }
 
-      STORAGE_SYNC_KEYS.forEach((key) => originalRemoveItem(key));
       setSyncStatus("초기 동기화 중...", "info");
       const initialPullOk = pullRemoteStateSync();
       if (!initialPullOk) {
