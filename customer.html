@@ -279,9 +279,42 @@
         });
         return state;
       }
+      const CRITICAL_SYNC_KEYS = [
+        "scheduleSiteAdminCompanies",
+        "scheduleSiteCustomerCompanies",
+        "scheduleSiteCustomerSchedules",
+        "scheduleSiteAdminSchedules",
+        "scheduleSiteWriters"
+      ];
+      function isStorageValueEmpty(value) {
+        if (value === null || value === undefined) return true;
+        const text = String(value).trim();
+        if (!text) return true;
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return parsed.length === 0;
+          if (parsed && typeof parsed === "object") return Object.keys(parsed).length === 0;
+          return false;
+        } catch (error) {
+          return false;
+        }
+      }
+      function hasMeaningfulLocalData() {
+        const snapshot = buildCurrentStateSnapshot();
+        return CRITICAL_SYNC_KEYS.some((key) => !isStorageValueEmpty(snapshot[key]));
+      }
+      function isSuspiciousServerState(state) {
+        if (!state || typeof state !== "object") return true;
+        return CRITICAL_SYNC_KEYS.every((key) => isStorageValueEmpty(state[key]));
+      }
 
       function applyRemoteState(state) {
         if (!state || typeof state !== "object") return;
+        if (isSuspiciousServerState(state) && hasMeaningfulLocalData()) {
+          setSyncStatus("서버 응답 비정상, 복구 시도 중...", "warn");
+          void runPushNow();
+          return;
+        }
         isApplyingRemoteState = true;
         try {
           STORAGE_SYNC_KEYS.forEach((key) => {
@@ -507,7 +540,10 @@
         isRemotePushRunning = true;
         setSyncStatus("저장 중...", "warn");
         try {
-          const latestRemoteState = await fetchRemoteStateSnapshot();
+          let latestRemoteState = await fetchRemoteStateSnapshot();
+          if (isSuspiciousServerState(latestRemoteState) && hasMeaningfulLocalData()) {
+            latestRemoteState = buildCurrentStateSnapshot();
+          }
           applyRemoteStateSnapshotWithPending(latestRemoteState);
           const localState = buildCurrentStateSnapshot();
           const state = buildMergedStateForPush(latestRemoteState, localState);
