@@ -562,14 +562,14 @@
         originalSetItem(key, value);
         if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
-          scheduleRemotePush(0);
+          void runPushNow();
         }
       };
       localStorage.removeItem = (key) => {
         originalRemoveItem(key);
         if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(key)) {
           pendingLocalSyncKeys.add(key);
-          scheduleRemotePush(0);
+          void runPushNow();
         }
       };
       pullRemoteStateSync();
