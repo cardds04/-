@@ -143,6 +143,7 @@
           <div class="top-line">
             <strong id="welcomeText"></strong>
             <div style="display:flex; gap:6px;">
+              <span id="monthlyShotCount" class="btn outline small" style="display:inline-flex; align-items:center;">이번달 촬영횟수 0회</span>
               <button id="historyBtn" class="btn outline small" type="button">기록보기</button>
               <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
             </div>
@@ -150,9 +151,10 @@
 
           <div class="filter-wrap">
             <div class="tabs" style="margin-bottom:8px;">
-              <button id="prevDayModeBtn" type="button">전날</button>
+              <button id="prevDayModeBtn" type="button">이전달</button>
               <button id="todayModeBtn" type="button">오늘</button>
-              <button id="nextDayModeBtn" type="button">다음날</button>
+              <button id="nextDayModeBtn" type="button">내일</button>
+              <button id="nextMonthModeBtn" type="button">다음달</button>
               <button id="dayOffRequestBtn" class="outline" type="button">휴무요청</button>
             </div>
             <div class="triple">
@@ -737,6 +739,7 @@
       const prevDayModeBtnEl = document.getElementById("prevDayModeBtn");
       const todayModeBtnEl = document.getElementById("todayModeBtn");
       const nextDayModeBtnEl = document.getElementById("nextDayModeBtn");
+      const nextMonthModeBtnEl = document.getElementById("nextMonthModeBtn");
       const copyVisibleScheduleBtnEl = document.getElementById("copyVisibleScheduleBtn");
       const filterYearEl = document.getElementById("filterYear");
       const filterMonthEl = document.getElementById("filterMonth");
@@ -749,6 +752,7 @@
       const dayOffRequestBtnEl = document.getElementById("dayOffRequestBtn");
 
       const historyBtnEl = document.getElementById("historyBtn");
+      const monthlyShotCountEl = document.getElementById("monthlyShotCount");
       const historyModalEl = document.getElementById("historyModal");
       const historyCloseBtnEl = document.getElementById("historyCloseBtn");
       const historySummaryEl = document.getElementById("historySummary");
@@ -1168,9 +1172,10 @@
       window.__backToWriterLogin = () => switchAuthTab("login");
 
       function updateFilterTabState() {
-        prevDayModeBtnEl.classList.toggle("active", quickDayPreset === "prevday");
+        prevDayModeBtnEl.classList.toggle("active", quickDayPreset === "prevmonth");
         todayModeBtnEl.classList.toggle("active", quickDayPreset === "today");
-        nextDayModeBtnEl.classList.toggle("active", quickDayPreset === "nextday");
+        nextDayModeBtnEl.classList.toggle("active", quickDayPreset === "tomorrow");
+        nextMonthModeBtnEl?.classList.toggle("active", quickDayPreset === "nextmonth");
       }
 
       function switchFilterMode(mode) {
@@ -1256,10 +1261,8 @@
         target.setDate(target.getDate() + Number(offsetDays || 0));
         if (Number(offsetDays) === 0) {
           quickDayPreset = "today";
-        } else if (Number(offsetDays) < 0) {
-          quickDayPreset = "prevday";
         } else {
-          quickDayPreset = "nextday";
+          quickDayPreset = "tomorrow";
         }
         filterMode = "day";
         updateFilterTabState();
@@ -1269,6 +1272,37 @@
         filterDayEl.closest(".row").classList.remove("hidden");
         refreshDayOptions(target.getDate());
         renderScheduleList();
+      }
+      function moveToRelativeMonth(offsetMonths) {
+        const target = new Date();
+        target.setHours(0, 0, 0, 0);
+        target.setDate(1);
+        target.setMonth(target.getMonth() + Number(offsetMonths || 0));
+        quickDayPreset = Number(offsetMonths) < 0 ? "prevmonth" : "nextmonth";
+        filterMode = "day";
+        updateFilterTabState();
+        filterYearEl.value = String(target.getFullYear());
+        filterMonthEl.value = String(target.getMonth() + 1);
+        filterMonthEl.closest(".row").classList.remove("hidden");
+        filterDayEl.closest(".row").classList.remove("hidden");
+        refreshDayOptions("all");
+        renderScheduleList();
+      }
+      function renderMonthlyShotCount() {
+        if (!monthlyShotCountEl) return;
+        const rows = getMySchedules();
+        const today = new Date();
+        const currentMonth = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}`;
+        const monthDoneRows = rows.filter((item) => {
+          if (!String(item.date || "").startsWith(currentMonth)) return false;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
+          const target = new Date(`${item.date}T00:00:00`);
+          target.setHours(0, 0, 0, 0);
+          const base = new Date();
+          base.setHours(0, 0, 0, 0);
+          return target.getTime() <= base.getTime();
+        });
+        monthlyShotCountEl.textContent = `이번달 촬영횟수 ${monthDoneRows.length}회`;
       }
 
       function renderAuthState() {
@@ -1499,6 +1533,7 @@
         latestRenderedRows = rows;
         latestModeLabel = modeLabel;
         filterCountTextEl.innerHTML = `<strong>${modeLabel} 조회결과 총 ${rows.length}건</strong>`;
+        renderMonthlyShotCount();
 
         if (rows.length === 0) {
           scheduleListEl.innerHTML = `<div class="status-card">${modeLabel} 기준 스케줄이 없습니다.</div>`;
@@ -1736,9 +1771,10 @@
       signupTabBtnEl?.addEventListener("click", () => switchAuthTab("signup"));
       openSignupBtnEl.addEventListener("click", () => switchAuthTab("signup"));
       backToLoginBtnEl.addEventListener("click", () => switchAuthTab("login"));
-      prevDayModeBtnEl.addEventListener("click", () => moveToRelativeDay(-1));
+      prevDayModeBtnEl.addEventListener("click", () => moveToRelativeMonth(-1));
       todayModeBtnEl.addEventListener("click", () => moveToRelativeDay(0));
       nextDayModeBtnEl.addEventListener("click", () => moveToRelativeDay(1));
+      nextMonthModeBtnEl?.addEventListener("click", () => moveToRelativeMonth(1));
       copyVisibleScheduleBtnEl.addEventListener("click", copyVisibleSchedules);
       dayOffRequestBtnEl.addEventListener("click", openDayOffDatePicker);
       dayOffDateEl.addEventListener("change", () => {
