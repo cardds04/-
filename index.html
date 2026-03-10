@@ -1299,11 +1299,7 @@
           STORAGE_SYNC_KEYS.forEach((key) => {
             if (!Object.prototype.hasOwnProperty.call(state, key)) return;
             const value = state[key];
-            if (value === null || value === undefined) {
-              originalSetItem(key, getSyncDefaultValue(key));
-            } else {
-              originalSetItem(key, String(value));
-            }
+            originalSetItem(key, getAppliedStorageValue(key, value));
           });
         } finally {
           isApplyingRemoteState = false;
@@ -1434,11 +1430,7 @@
           if (pendingLocalSyncKeys.has(key)) return;
           if (!Object.prototype.hasOwnProperty.call(remoteState, key)) return;
           const value = remoteState[key];
-          if (value === null || value === undefined) {
-            originalSetItem(key, getSyncDefaultValue(key));
-            return;
-          }
-          originalSetItem(key, String(value));
+          originalSetItem(key, getAppliedStorageValue(key, value));
         });
       }
       function tryParseJsonValue(value) {
@@ -1487,6 +1479,16 @@
           return JSON.stringify({ ...remoteJson, ...localJson });
         }
         return localValue;
+      }
+      function getAppliedStorageValue(key, incomingValue) {
+        if (incomingValue === null || incomingValue === undefined) {
+          return getSyncDefaultValue(key);
+        }
+        const incomingText = String(incomingValue);
+        if (!CRITICAL_SYNC_KEYS.includes(key)) return incomingText;
+        const localCurrent = localStorage.getItem(key);
+        const merged = mergeStorageValue(incomingText, localCurrent);
+        return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
       }
       function buildMergedStateForPush(remoteState, localState) {
         const mergedState = {};
