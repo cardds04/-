@@ -128,7 +128,7 @@
             <button class="btn" type="submit">로그인</button>
             <button id="openSignupBtn" class="btn outline" type="button" onclick="window.__openWriterSignup && window.__openWriterSignup()">회원가입</button>
           </form>
-          <form id="signupForm" class="form hidden">
+          <form id="signupForm" class="form">
             <div class="row"><span>🆔</span><input id="signupId" type="text" placeholder="아이디" required /></div>
             <div class="row"><span>🔑</span><input id="signupPassword" type="password" placeholder="비밀번호" required /></div>
             <div class="row"><span>👤</span><input id="signupName" type="text" placeholder="작가명" required /></div>
@@ -795,6 +795,7 @@
       let latestModeLabel = "일별";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
+      const ALWAYS_SHOW_AUTH_FORMS = true;
       let writerTableSyncClient = null;
       let writerTablePullTimer = null;
       let writerTablePullRunning = false;
@@ -1186,6 +1187,13 @@
 
       function switchAuthTab(mode) {
         const signupActive = mode === "signup";
+        if (ALWAYS_SHOW_AUTH_FORMS) {
+          loginTabBtnEl.classList.add("active");
+          signupTabBtnEl?.classList.add("active");
+          signupFormEl.classList.remove("hidden");
+          loginFormEl.classList.remove("hidden");
+          return;
+        }
         loginTabBtnEl.classList.toggle("active", !signupActive);
         signupTabBtnEl?.classList.toggle("active", signupActive);
         signupFormEl.classList.toggle("hidden", !signupActive);
