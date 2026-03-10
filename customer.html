@@ -119,6 +119,7 @@
             <div class="row"><span>🔑</span><input id="signupPassword" type="password" placeholder="비밀번호" required /></div>
             <div class="row"><span>🏢</span><input id="signupCompany" type="text" placeholder="업체명" required /></div>
             <div class="row"><span>📞</span><input id="signupPhone" type="text" placeholder="연락처" required /></div>
+            <div class="row"><span>🔢</span><input id="signupCompanyCode" type="text" placeholder="업체 고유번호(선택)" /></div>
             <button class="btn" type="submit">회원가입</button>
             <button id="backToLoginBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
           </form>
@@ -464,17 +465,19 @@
         return true;
       }
 
-      function getCompanyKey(text) {
-        return normalize(text)
+      function getCompanyKey(text, companyCode = "") {
+        const code = normalize(companyCode);
+        if (code) return `code:${code.toLowerCase()}`;
+        return `name:${normalize(text)
           .replace(/\([^)]*\)/g, "")
           .replace(/\s+/g, "")
-          .toLowerCase();
+          .toLowerCase()}`;
       }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
         const date = normalize(row?.date) || "nodate";
         const time = normalize(row?.time) || "notime";
-        const companyKey = companyKeyOverride || getCompanyKey(row?.company) || "nocompany";
+        const companyKey = companyKeyOverride || getCompanyKey(row?.company, row?.companyCode) || "nocompany";
         const placeKey = normalize(row?.place)
           .replace(/\s+/g, "")
           .toLowerCase() || "noplace";
@@ -597,9 +600,9 @@
       function syncAdminSchedulesToCustomerUser(user) {
         if (!user) return;
         const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
-        const targetCompanyKey = getCompanyKey(user.company);
+        const targetCompanyKey = getCompanyKey(user.company, user.companyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
-        const adminCompanyRows = adminRows.filter((row) => getCompanyKey(row?.company) === targetCompanyKey);
+        const adminCompanyRows = adminRows.filter((row) => getCompanyKey(row?.company, row?.companyCode) === targetCompanyKey);
         const buildRowKey = (row) =>
           [
             normalize(row?.date),
@@ -618,7 +621,7 @@
         // 관리자 원본 기준으로 해당 업체의 잔존(고아) 스케줄 정리
         for (let i = schedules.length - 1; i >= 0; i -= 1) {
           const row = schedules[i];
-          if (getCompanyKey(row?.company) !== targetCompanyKey) continue;
+          if (getCompanyKey(row?.company, row?.companyCode) !== targetCompanyKey) continue;
           const scheduleId = normalize(row?.customerScheduleId);
           const fallbackKey = buildRowKey(row);
           const existsInAdmin =
@@ -634,7 +637,7 @@
           const fallbackMatch = (item) =>
             String(item?.date || "").trim() === String(row?.date || "").trim() &&
             String(item?.time || "").trim() === String(row?.time || "").trim() &&
-            getCompanyKey(item?.company) === targetCompanyKey &&
+            getCompanyKey(item?.company, item?.companyCode) === targetCompanyKey &&
             normalize(item?.place) === normalize(row?.place);
           const index = scheduleId
             ? schedules.findIndex((item) => String(item?.customerScheduleId || "").trim() === scheduleId)
@@ -648,6 +651,7 @@
             time: String(row?.time || "09:00").trim() || "09:00",
             name: String(row?.name || "작가미정").trim() || "작가미정",
             company: normalize(user.company),
+            companyCode: normalize(user.companyCode),
             place: normalize(row?.place),
             pyeong: normalize(row?.pyeong),
             jointCode: normalize(row?.jointCode),
@@ -709,14 +713,21 @@
         }
       }
 
-      function ensureCompanyStored(companyName, phone) {
+      function ensureCompanyStored(companyName, phone, companyCode = "") {
         const companies = readStorageArray(STORAGE_COMPANIES);
         const company = normalize(companyName);
-        const exists = companies.some((item) => normalize(item.name).toLowerCase() === company.toLowerCase());
+        const normalizedCode = normalize(companyCode);
+        const targetKey = getCompanyKey(company, normalizedCode);
+        const existingIndex = companies.findIndex((item) => getCompanyKey(item?.name, item?.companyCode || item?.code) === targetKey);
+        const exists = existingIndex >= 0;
         if (!exists) {
-          companies.unshift({ name: company, phone: normalize(phone) });
+          companies.unshift({ name: company, phone: normalize(phone), companyCode: normalizedCode });
           writeStorageArray(STORAGE_COMPANIES, companies);
           return true;
+        }
+        if (normalizedCode && !normalize(companies[existingIndex]?.companyCode || companies[existingIndex]?.code)) {
+          companies[existingIndex].companyCode = normalizedCode;
+          writeStorageArray(STORAGE_COMPANIES, companies);
         }
         return false;
       }
@@ -832,10 +843,10 @@
         if (!user) return [];
         syncAdminSchedulesToCustomerUser(user);
         const userId = String(user.id || "").trim();
-        const userCompanyKey = getCompanyKey(user.company);
+        const userCompanyKey = getCompanyKey(user.company, user.companyCode);
         return readStorageArray(STORAGE_SCHEDULES).filter((row) => {
           const rowCustomerId = String(row?.customerId || "").trim();
-          const rowCompanyKey = getCompanyKey(row?.company);
+          const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
           if (rowCustomerId && rowCustomerId === userId) return true;
           return userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey;
         });
@@ -1038,6 +1049,7 @@
         const password = normalize(document.getElementById("signupPassword").value);
         const company = normalize(document.getElementById("signupCompany").value);
         const phone = normalize(document.getElementById("signupPhone").value);
+        const companyCode = normalize(document.getElementById("signupCompanyCode").value);
         if (!id || !password || !company || !phone) return;
         const users = readStorageArray(STORAGE_CUSTOMERS);
         const exists = users.some((user) => user.id.toLowerCase() === id.toLowerCase());
@@ -1045,9 +1057,9 @@
           alert("이미 사용 중인 아이디입니다.");
           return;
         }
-        users.unshift({ id, password, company, phone, createdAt: new Date().toISOString() });
+        users.unshift({ id, password, company, phone, companyCode, createdAt: new Date().toISOString() });
         writeStorageArray(STORAGE_CUSTOMERS, users);
-        ensureCompanyStored(company, phone);
+        ensureCompanyStored(company, phone, companyCode);
         const signupAlerts = readStorageArray(STORAGE_ALERTS);
         signupAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1128,7 +1140,7 @@
           return;
         }
 
-        const isNewCompany = ensureCompanyStored(user.company, user.phone);
+        const isNewCompany = ensureCompanyStored(user.company, user.phone, user.companyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
         schedules.unshift({
           customerScheduleId: `cus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1136,6 +1148,7 @@
           time,
           name: "작가미정",
           company: user.company,
+          companyCode: normalize(user.companyCode),
           place,
           pyeong: normalize(document.getElementById("schedulePyeong").value),
           jointCode: normalize(document.getElementById("scheduleJointCode").value),
@@ -1289,7 +1302,7 @@
             return (
               normalize(row?.date) === normalize(item?.date) &&
               normalize(row?.time) === normalize(item?.time) &&
-              getCompanyKey(row?.company) === getCompanyKey(item?.company) &&
+              getCompanyKey(row?.company, row?.companyCode) === getCompanyKey(item?.company, item?.companyCode) &&
               normalize(row?.place) === normalize(item?.place)
             );
           };

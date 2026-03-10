@@ -827,7 +827,6 @@
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
-        <button id="tabTransfer" data-tab="transfer" type="button">아이디이전</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -870,6 +869,10 @@
               <div class="input-row">
                 <span>📞</span>
                 <input id="companyPhoneInput" type="text" placeholder="연락처" />
+              </div>
+              <div class="input-row">
+                <span>🔢</span>
+                <input id="companyCodeInput" type="text" placeholder="업체 고유번호(직접입력)" />
               </div>
               <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                 <button class="btn-sm primary" type="submit">등록</button>
@@ -958,6 +961,7 @@
               <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
               <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
               <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
+              <button id="resetAllSchedulesBtn" class="btn-sm danger" type="button">전체 스케줄초기화</button>
             </div>
           </div>
 
@@ -1018,7 +1022,7 @@
                 <th>입금자명</th>
                 <th>입금날짜</th>
                 <th>입금금액</th>
-                <th>입금유무</th>
+                <th>입금금액</th>
                 <th>관리</th>
               </tr>
             </thead>
@@ -1320,7 +1324,6 @@
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
-      const tabTransferEl = document.getElementById("tabTransfer");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
@@ -1401,6 +1404,7 @@
       const copyScheduleBtnEl = document.getElementById("copyScheduleBtn");
       const downloadExcelBtnEl = document.getElementById("downloadExcelBtn");
       const uploadExcelBtnEl = document.getElementById("uploadExcelBtn");
+      const resetAllSchedulesBtnEl = document.getElementById("resetAllSchedulesBtn");
       const excelUploadInputEl = document.getElementById("excelUploadInput");
       const companyExcelUploadInputEl = document.getElementById("companyExcelUploadInput");
       const formEl = document.getElementById("scheduleForm");
@@ -1427,6 +1431,7 @@
       const companyFormEl = document.getElementById("companyForm");
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
+      const companyCodeInputEl = document.getElementById("companyCodeInput");
       const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
       const couponCompanyAutocompleteListEl = document.getElementById("couponCompanyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
@@ -1477,6 +1482,15 @@
       }
       function companyCompareKey(name) {
         return normalizeCompanyName(name).replace(/\s+/g, "").toLowerCase();
+      }
+      function normalizeCompanyCode(code) {
+        return String(code || "").trim();
+      }
+      function getCompanyGroupKey(name, companyCode = "") {
+        const normalizedCode = normalizeCompanyCode(companyCode);
+        if (normalizedCode) return `code:${normalizedCode.toLowerCase()}`;
+        const nameKey = companyCompareKey(name);
+        return nameKey ? `name:${nameKey}` : "";
       }
 
       function getExcludedPhotographerNames() {
@@ -2513,6 +2527,24 @@
         }
         alert(`업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
       }
+      function resetAllSchedules() {
+        const confirmed = confirm("전체 스케줄을 초기화할까요?\n\n진행중/보류/환불 스케줄이 모두 삭제됩니다.");
+        if (!confirmed) return;
+        data.length = 0;
+        onHoldPayments.length = 0;
+        refundPayments.length = 0;
+        editingIndex = null;
+        editingDateIndex = null;
+        quickPhotographerPickerIndex = null;
+        latestScheduleCopyRows = [];
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify([]));
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify([]));
+        localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify([]));
+        renderPhotographerTabs();
+        renderList();
+        renderPaymentList();
+        alert("전체 스케줄이 초기화되었습니다.");
+      }
 
       function exportCompaniesToCsv() {
         const headers = ["name", "phone"];
@@ -2594,11 +2626,16 @@
       }
 
       function getCustomerIdByCompanyName(companyName) {
-        const normalized = normalizeCompanyName(companyName).toLowerCase();
-        if (!normalized) return "";
+        const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
+        const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
+        if (!targetGroupKey) return "";
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
-        const matched = customerUsers.find((user) => normalizeCompanyName(user.company).toLowerCase() === normalized);
-        return matched?.id || "";
+        const matchedIds = customerUsers
+          .filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey)
+          .map((user) => String(user?.id || "").trim())
+          .filter(Boolean);
+        if (matchedIds.length === 0) return "";
+        return matchedIds.length === 1 ? matchedIds[0] : `${matchedIds[0]} 외 ${matchedIds.length - 1}`;
       }
 
       function getCouponRemaining(companyName) {
@@ -3082,9 +3119,9 @@
                   <div class="company-edit-row" style="margin-top: 6px;">
                     <input class="inline-input edit-company-name" type="text" value="${escapeHtml(company.name || "")}" style="width: 100%; min-width: 260px;" />
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
+                    <input class="inline-input edit-company-code" type="text" value="${escapeHtml(company.code || "")}" placeholder="업체 고유번호" style="width: 100%; min-width: 260px;" />
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
-                      <button class="btn-sm" type="button" data-action="mergeCompanyToCustomer" data-company-index="${index}" onclick="openCompanyMergeModal(${index}); return false;">병합</button>
                       <button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}" data-customer-company="${
                         isCustomerRegisteredCompany ? "true" : "false"
                       }">삭제</button>
@@ -3099,7 +3136,7 @@
               <div class="company-item company-clickable" data-company-index="${index}">
                 <div>업체: ${escapeHtml(company.name)}${customerId ? ` (아이디: ${escapeHtml(customerId)})` : ""}</div>
                 <div class="company-item-row" style="margin-top: 6px;">
-                  <span>연락처: ${escapeHtml(company.phone)}</span>
+                  <span>연락처: ${escapeHtml(company.phone)}${company.code ? ` / 고유번호: ${escapeHtml(company.code)}` : ""}</span>
                   <button class="btn-sm" type="button" data-action="startCompanyPhoneEdit" data-company-index="${index}">수정</button>
                 </div>
               </div>
@@ -3127,12 +3164,15 @@
 
       function renderCompanyOrderHistory(companyName) {
         hydrateFromCustomerPageStorage();
-        const normalized = normalizeCompanyName(companyName).toLowerCase();
+        const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
+        const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
-        const matchedUser = customerUsers.find((user) => normalizeCompanyName(user.company).toLowerCase() === normalized) || null;
+        const matchedUsers = customerUsers.filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey);
+        const matchedUser = matchedUsers[0] || null;
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
+        const accountCompanyCode = String(matchedUser?.companyCode || targetCompany?.code || "").trim();
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -3149,6 +3189,7 @@
           date: String(row?.date || "").trim(),
           time: String(row?.time || "").trim(),
           company: normalizeCompanyName(row?.company),
+          companyCode: normalizeCompanyCode(row?.companyCode),
           place: String(row?.place || "").trim(),
           pyeong: String(row?.pyeong || "").trim(),
           composition: String(row?.composition || "").trim(),
@@ -3174,7 +3215,7 @@
           ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
           ...refundPayments.map((item) => ({ ...item, sourceLabel: "환불" }))
         ]
-          .filter((item) => normalizeCompanyName(item.company).toLowerCase() === normalized)
+          .filter((item) => getCompanyGroupKey(item?.company, item?.companyCode) === targetGroupKey)
           .sort((a, b) => {
             const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
             const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();
@@ -3206,6 +3247,7 @@
             <div><strong>업체 계정 관리</strong></div>
             <input class="inline-input company-account-id" type="text" placeholder="아이디" value="${escapeHtml(accountId)}" />
             <input class="inline-input company-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(accountPassword)}" />
+            <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}">계정저장</button>
             </div>
@@ -3630,22 +3672,7 @@
           </div>
         `;
       }
-      document.addEventListener(
-        "click",
-        (event) => {
-          const mergeBtn = event.target.closest("button[data-action='mergeCompanyToCustomer'][data-company-index]");
-          if (!mergeBtn) return;
-          event.preventDefault();
-          event.stopPropagation();
-          const sourceIndex = Number(mergeBtn.dataset.companyIndex);
-          if (Number.isNaN(sourceIndex) || !companies[sourceIndex]) {
-            alert("병합 대상을 찾지 못했습니다. 다시 시도해주세요.");
-            return;
-          }
-          openCompanyMergeModal(sourceIndex);
-        },
-        true
-      );
+      
 
       function mergeAdminCompanyToCustomerAccount(companyIndex, selectedTargetCompanyKey = "") {
         const sourceCompany = companies[companyIndex];
@@ -4334,8 +4361,11 @@
           })
           .map(({ item, index, source }) => {
             const isEditing = source === "active" && editingPaymentIndex === index;
-            const fallbackDate = item.date || `${currentYear}-01-01`;
-            const sourceDate = item.paymentDate || fallbackDate;
+            const today = new Date();
+            const todayMonth = String(today.getMonth() + 1).padStart(2, "0");
+            const todayDay = String(today.getDate()).padStart(2, "0");
+            const fallbackDate = `${todayMonth}-${todayDay}`;
+            const sourceDate = isEditing ? fallbackDate : item.paymentDate || item.date || `${currentYear}-01-01`;
             let selectedMonth = "01";
             let selectedDay = "01";
             if (/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)) {
@@ -4389,8 +4419,10 @@
                         ? item.refundChecked
                           ? "환불완료"
                           : "미환불"
+                        : item.partialPaid
+                        ? `${escapeHtml(item.paymentAmount || "-")} 반만`
                         : item.paymentStatus === "입금완료"
-                        ? "입금"
+                        ? `${escapeHtml(item.paymentAmount || "-")}`
                         : "미입금"
                     }`
               }</td>
@@ -4404,15 +4436,18 @@
                       }</button>`
                     : isEditing
                     ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">저장</button>
+                       <button class="btn-sm" type="button" data-action="halfPaymentRow" data-index="${index}">반만입금</button>
                        <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
                     : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}">입금내역수정</button>
                        ${
                          item.paymentStatus === "입금완료"
-                           ? ""
+                           ? `<button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                            : couponApplyIndex === index
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
-                              <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>`
-                           : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>`
+                              <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
+                           : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                        }`
                 }
               </td>
@@ -4436,24 +4471,58 @@
         renderPaymentList();
       }
 
-      function savePaymentFromTable(index, rowEl) {
+      function savePaymentFromTable(index, rowEl, options = {}) {
         const item = data[index];
         if (!item || !rowEl) return;
+        const keepUnpaid = Boolean(options?.keepUnpaid);
+        item.paymentUndo = {
+          paymentPayer: item.paymentPayer || "",
+          paymentDate: item.paymentDate || "",
+          paymentAmount: item.paymentAmount || "",
+          paymentStatus: item.paymentStatus || "미입금",
+          couponUsed: Boolean(item.couponUsed),
+          partialPaid: Boolean(item.partialPaid)
+        };
 
         const payer = rowEl.querySelector(".pay-payer")?.value?.trim() || "";
         const paymentMonth = rowEl.querySelector(".pay-month")?.value || "01";
         const paymentDay = rowEl.querySelector(".pay-day")?.value || "01";
         const paymentDate = `${paymentMonth}-${paymentDay}`;
         const amount = rowEl.querySelector(".pay-amount")?.value?.trim() || "";
+        if (keepUnpaid && !amount) {
+          alert("반만입금은 입금금액을 먼저 입력해주세요.");
+          return;
+        }
 
         item.paymentPayer = payer;
         item.paymentDate = paymentDate;
         item.paymentAmount = amount;
-        item.paymentStatus = amount ? "입금완료" : "미입금";
+        item.paymentStatus = keepUnpaid ? "미입금" : amount ? "입금완료" : "미입금";
+        item.partialPaid = keepUnpaid;
         if (amount && amount !== "쿠폰사용") {
           item.couponUsed = false;
         }
         editingPaymentIndex = null;
+        renderList();
+      }
+
+      function undoPaymentFromTable(index) {
+        const item = data[index];
+        if (!item) return;
+        const backup = item.paymentUndo;
+        if (!backup || typeof backup !== "object") {
+          alert("되돌릴 이전 상태가 없습니다.");
+          return;
+        }
+        item.paymentPayer = String(backup.paymentPayer || "");
+        item.paymentDate = String(backup.paymentDate || "");
+        item.paymentAmount = String(backup.paymentAmount || "");
+        item.paymentStatus = String(backup.paymentStatus || "미입금");
+        item.couponUsed = Boolean(backup.couponUsed);
+        item.partialPaid = Boolean(backup.partialPaid);
+        delete item.paymentUndo;
+        editingPaymentIndex = null;
+        couponApplyIndex = null;
         renderList();
       }
 
@@ -4464,6 +4533,14 @@
           alert("이미 입금 처리된 스케줄입니다.");
           return;
         }
+        item.paymentUndo = {
+          paymentPayer: item.paymentPayer || "",
+          paymentDate: item.paymentDate || "",
+          paymentAmount: item.paymentAmount || "",
+          paymentStatus: item.paymentStatus || "미입금",
+          couponUsed: Boolean(item.couponUsed),
+          partialPaid: Boolean(item.partialPaid)
+        };
         const remaining = getCouponRemaining(item.company);
         if (remaining < 1) {
           alert("남은 회차권이 없습니다. 회차권 등록에서 먼저 등록해주세요.");
@@ -4474,6 +4551,7 @@
         item.paymentStatus = "입금완료";
         item.paymentAmount = item.paymentAmount || "쿠폰사용";
         item.paymentPayer = item.paymentPayer || "쿠폰";
+        item.partialPaid = false;
         if (!item.paymentDate) {
           const now = new Date();
           const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -4792,25 +4870,20 @@
         const isSchedule = tab === "schedule";
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
-        const isTransfer = tab === "transfer";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
-        tabTransferEl.classList.toggle("active", isTransfer);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
-        transferSectionEl.classList.toggle("hidden", !isTransfer);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
-        if (isTransfer) renderTransferTool();
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
-      tabTransferEl.addEventListener("click", () => switchMainTab("transfer"));
 
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
@@ -4843,6 +4916,14 @@
         }
         if (action === "savePaymentRow") {
           savePaymentFromTable(index, rowEl);
+          return;
+        }
+        if (action === "halfPaymentRow") {
+          savePaymentFromTable(index, rowEl, { keepUnpaid: true });
+          return;
+        }
+        if (action === "undoPaymentRow") {
+          undoPaymentFromTable(index);
           return;
         }
         if (action === "startCouponApply") {
@@ -4929,6 +5010,7 @@
       uploadExcelBtnEl.addEventListener("click", () => {
         excelUploadInputEl.click();
       });
+      resetAllSchedulesBtnEl?.addEventListener("click", resetAllSchedules);
       excelUploadInputEl.addEventListener("change", async (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -5101,8 +5183,10 @@
         if (!companyName) return;
         const idInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-id");
         const passwordInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-password");
+        const codeInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-code");
         const newId = String(idInputEl?.value || "").trim();
         const newPassword = String(passwordInputEl?.value || "").trim();
+        const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
         if (!newId || !newPassword) {
           alert("아이디와 비밀번호를 모두 입력해주세요.");
           return;
@@ -5123,6 +5207,7 @@
         const oldId = String(users[targetIndex].id || "").trim();
         users[targetIndex].id = newId;
         users[targetIndex].password = newPassword;
+        users[targetIndex].companyCode = newCompanyCode;
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
 
         if (oldId && oldId !== newId) {
@@ -5209,6 +5294,7 @@
         event.preventDefault();
         const name = companyNameInputEl.value.trim();
         const phone = companyPhoneInputEl.value.trim();
+        const code = normalizeCompanyCode(companyCodeInputEl?.value);
         if (!name) return;
         const duplicated = companies.some(
           (item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(name).toLowerCase()
@@ -5217,7 +5303,11 @@
           alert("이미 등록된 업체명입니다.");
           return;
         }
-        companies.unshift({ name, phone });
+        if (code && companies.some((item) => normalizeCompanyCode(item?.code).toLowerCase() === code.toLowerCase())) {
+          alert("이미 사용 중인 업체 고유번호입니다.");
+          return;
+        }
+        companies.unshift({ name, phone, code });
         saveAdminCompaniesToStorage();
         companyFormEl.reset();
         companyRegisterPanelEl.classList.add("hidden");
@@ -5300,16 +5390,6 @@
         const button = event.target.closest("button[data-action][data-company-index]");
         if (!button) return;
         const action = button.dataset.action;
-        if (action === "mergeCompanyToCustomer") {
-          const itemEl = button.closest(".company-item[data-company-index]");
-          const sourceIndex = Number(itemEl?.dataset.companyIndex ?? button.dataset.companyIndex);
-          if (Number.isNaN(sourceIndex) || !companies[sourceIndex]) {
-            alert("병합 대상을 찾지 못했습니다. 다시 시도해주세요.");
-            return;
-          }
-          openCompanyMergeModal(sourceIndex);
-          return;
-        }
 
         const index = Number(button.dataset.companyIndex);
         if (Number.isNaN(index) || !companies[index]) return;
@@ -5330,9 +5410,12 @@
           const itemEl = button.closest(".company-item");
           const nameInputEl = itemEl?.querySelector(".edit-company-name");
           const phoneInputEl = itemEl?.querySelector(".edit-company-phone");
+          const codeInputEl = itemEl?.querySelector(".edit-company-code");
           const oldName = normalizeCompanyName(companies[index].name);
+          const oldCode = normalizeCompanyCode(companies[index].code);
           const newName = normalizeCompanyName(nameInputEl?.value);
           const newPhone = phoneInputEl?.value?.trim() || "";
+          const newCode = normalizeCompanyCode(codeInputEl?.value);
           if (!newName) {
             alert("업체명을 입력해주세요.");
             return;
@@ -5342,9 +5425,19 @@
             alert("이미 등록된 업체명입니다.");
             return;
           }
+          const duplicateCode = newCode
+            ? companies.some((company, companyIndex) => companyIndex !== index && normalizeCompanyCode(company.code).toLowerCase() === newCode.toLowerCase())
+            : false;
+          if (duplicateCode) {
+            alert("이미 사용 중인 업체 고유번호입니다.");
+            return;
+          }
 
           companies[index].name = newName;
           companies[index].phone = newPhone;
+          companies[index].code = newCode;
+          const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
+          const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
           if (oldName && oldName !== newName) {
             data.forEach((item) => {
@@ -5370,8 +5463,10 @@
 
             const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
             customerCompanies.forEach((company) => {
-              if (normalizeCompanyName(company.name) === oldName) {
+              const companyGroupKey = getCompanyGroupKey(company?.name, company?.companyCode || company?.code);
+              if (companyGroupKey === oldGroupKey || normalizeCompanyName(company.name) === oldName) {
                 company.name = newName;
+                if (newCode) company.companyCode = newCode;
                 if (newPhone) company.phone = newPhone;
               }
             });
@@ -5387,10 +5482,32 @@
 
             const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
             customerUsers.forEach((user) => {
-              if (normalizeCompanyName(user.company) === oldName) {
+              const userGroupKey = getCompanyGroupKey(user?.company, user?.companyCode);
+              if (userGroupKey === oldGroupKey || normalizeCompanyName(user.company) === oldName) {
                 user.company = newName;
+                if (newCode) user.companyCode = newCode;
                 if (newPhone) user.phone = newPhone;
               }
+            });
+            localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
+          }
+          if (oldGroupKey !== nextGroupKey && nextGroupKey) {
+            const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+            customerCompanies.forEach((company) => {
+              const companyGroupKey = getCompanyGroupKey(company?.name, company?.companyCode || company?.code);
+              if (companyGroupKey === oldGroupKey) company.companyCode = newCode;
+            });
+            localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+            const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+            customerSchedules.forEach((schedule) => {
+              const scheduleGroupKey = getCompanyGroupKey(schedule?.company, schedule?.companyCode);
+              if (scheduleGroupKey === oldGroupKey) schedule.companyCode = newCode;
+            });
+            localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+            const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+            customerUsers.forEach((user) => {
+              const userGroupKey = getCompanyGroupKey(user?.company, user?.companyCode);
+              if (userGroupKey === oldGroupKey) user.companyCode = newCode;
             });
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
           }
