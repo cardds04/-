@@ -55,6 +55,7 @@
       .status-label-today { color: var(--red); }
       .status-label-tomorrow { color: #1c9b4a; }
       .status-meta { font-size: 0.9rem; line-height: 1.5; color: #2f3c58; }
+      .inline-copy-btn { margin-left: 6px; }
       .upcoming-wrap { margin-top: 12px; }
       .upcoming-title { font-weight: 700; margin-bottom: 8px; }
       .upcoming-list { display: grid; gap: 6px; }
@@ -151,8 +152,9 @@
               <button id="allModeBtn" type="button">전체</button>
               <button id="monthModeBtn" type="button">월별</button>
               <button id="dayModeBtn" class="active" type="button">일별</button>
+              <button id="prevDayModeBtn" type="button">전날</button>
               <button id="todayModeBtn" type="button">오늘</button>
-              <button id="tomorrowModeBtn" type="button">내일</button>
+              <button id="nextDayModeBtn" type="button">다음날</button>
               <button id="dayOffRequestBtn" class="outline" type="button">휴무요청</button>
             </div>
             <div class="triple">
@@ -165,7 +167,7 @@
             <input id="dayOffDate" type="date" class="hidden" />
           </div>
           <div id="scheduleCopyBar" class="copy-bar">
-            <button id="copyVisibleScheduleBtn" class="btn outline small" type="button">내용복사</button>
+            <button id="copyVisibleScheduleBtn" class="btn outline small" type="button">내용전체복사</button>
           </div>
 
           <div id="scheduleList" class="status-list"></div>
@@ -348,8 +350,9 @@
       const monthModeBtnEl = document.getElementById("monthModeBtn");
       const dayModeBtnEl = document.getElementById("dayModeBtn");
       const allModeBtnEl = document.getElementById("allModeBtn");
+      const prevDayModeBtnEl = document.getElementById("prevDayModeBtn");
       const todayModeBtnEl = document.getElementById("todayModeBtn");
-      const tomorrowModeBtnEl = document.getElementById("tomorrowModeBtn");
+      const nextDayModeBtnEl = document.getElementById("nextDayModeBtn");
       const copyVisibleScheduleBtnEl = document.getElementById("copyVisibleScheduleBtn");
       const filterYearEl = document.getElementById("filterYear");
       const filterMonthEl = document.getElementById("filterMonth");
@@ -406,6 +409,21 @@
 
       function pad2(value) {
         return String(value).padStart(2, "0");
+      }
+      function formatCopyDayLabel(dateText) {
+        const normalized = normalize(dateText);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized || "-";
+        return `${Number(normalized.slice(8, 10))}일`;
+      }
+      function formatCopyTimeLabel(timeText) {
+        const normalized = normalize(timeText);
+        const matched = normalized.match(/^(\d{1,2}):(\d{2})$/);
+        if (!matched) return normalized || "-";
+        const hour = Number(matched[1]);
+        const minute = matched[2];
+        if (minute === "00") return `${hour}시`;
+        if (minute === "30") return `${hour}시반`;
+        return `${hour}시 ${Number(minute)}분`;
       }
 
       function updateRememberLoginButtonText() {
@@ -534,14 +552,17 @@
           alert("복사할 일정이 없습니다.");
           return;
         }
-        const lines = [
-          `[${latestModeLabel} 일정]`,
-          `총 ${rows.length}건`,
-          ...rows.map(
-            (item, idx) =>
-              `${idx + 1}. ${item.date || "-"} ${item.time || "-"} | 업체: ${item.company || "-"} | 업체연락처: ${getCompanyPhoneForItem(item)} | 장소: ${item.place || "-"} | 평수: ${item.pyeong || "-"} | 촬영구성: ${item.composition || "-"} | 메모: ${item.memo || "-"}`
-          )
-        ];
+        const lines = [`[${latestModeLabel} 일정]`, `총 ${rows.length}건`];
+        rows.forEach((item, idx) => {
+          lines.push(`${idx + 1}. ${formatCopyDayLabel(item.date)} ${formatCopyTimeLabel(item.time)}`);
+          lines.push(`업체: ${item.company || "-"}`);
+          lines.push(`업체연락처: ${getCompanyPhoneForItem(item)}`);
+          lines.push(`장소: ${item.place || "-"}`);
+          lines.push(`평수: ${item.pyeong || "-"}`);
+          lines.push(`촬영구성: ${item.composition || "-"}`);
+          lines.push(`메모: ${item.memo || "-"}`);
+          if (idx < rows.length - 1) lines.push("");
+        });
         const text = lines.join("\n");
 
         try {
@@ -563,6 +584,45 @@
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
+      async function copyTextSmart(text) {
+        const normalized = normalize(text);
+        if (!normalized) {
+          alert("복사할 내용이 없습니다.");
+          return false;
+        }
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(normalized);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = normalized;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+      function normalizeNavigationAddress(placeText) {
+        const raw = normalize(placeText).replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+        if (!raw) return "-";
+        const stopRegex =
+          /(아파트|오피스텔|빌라|맨션|타운하우스|휴먼시아|래미안|푸르지오|자이|힐스테이트|아이파크|더샵|건영)/;
+        const unitRegex = /^(\d+동|\d+호|\d{1,4}-\d{1,4})$/;
+        const tokens = raw.split(" ").map((token) => token.trim()).filter(Boolean);
+        const kept = [];
+        for (const token of tokens) {
+          if (stopRegex.test(token) || unitRegex.test(token)) break;
+          kept.push(token);
+        }
+        return normalize(kept.join(" ")) || raw;
+      }
 
       function sameDate(a, b) {
         return `${a.getFullYear()}-${pad2(a.getMonth() + 1)}-${pad2(a.getDate())}` === `${b.getFullYear()}-${pad2(b.getMonth() + 1)}-${pad2(b.getDate())}`;
@@ -579,8 +639,9 @@
         allModeBtnEl.classList.toggle("active", filterMode === "all");
         monthModeBtnEl.classList.toggle("active", filterMode === "month");
         dayModeBtnEl.classList.toggle("active", filterMode === "day" && quickDayPreset === "");
+        prevDayModeBtnEl.classList.toggle("active", quickDayPreset === "prevday");
         todayModeBtnEl.classList.toggle("active", quickDayPreset === "today");
-        tomorrowModeBtnEl.classList.toggle("active", quickDayPreset === "tomorrow");
+        nextDayModeBtnEl.classList.toggle("active", quickDayPreset === "nextday");
       }
 
       function switchFilterMode(mode) {
@@ -658,7 +719,13 @@
         const target = new Date();
         target.setHours(0, 0, 0, 0);
         target.setDate(target.getDate() + Number(offsetDays || 0));
-        quickDayPreset = Number(offsetDays) === 0 ? "today" : "tomorrow";
+        if (Number(offsetDays) === 0) {
+          quickDayPreset = "today";
+        } else if (Number(offsetDays) < 0) {
+          quickDayPreset = "prevday";
+        } else {
+          quickDayPreset = "nextday";
+        }
         filterMode = "day";
         updateFilterTabState();
         filterYearEl.value = String(target.getFullYear());
@@ -862,7 +929,7 @@
         }
 
         scheduleListEl.innerHTML = rows
-          .map((item) => {
+          .map((item, rowIndex) => {
             const now = new Date();
             now.setHours(0, 0, 0, 0);
             const target = new Date(`${item.date || "2099-12-31"}T00:00:00`);
@@ -872,6 +939,7 @@
             const isTomorrow = sameDate(tomorrow, target);
             const statusLabel = target.getTime() < now.getTime() ? "촬영완료" : isToday ? "오늘촬영" : isTomorrow ? "내일촬영" : "촬영예정";
             const statusClass = isToday ? "status-label-today" : isTomorrow ? "status-label-tomorrow" : "";
+            const navAddress = normalizeNavigationAddress(item.place || "-");
             return `
               <article class="status-card">
                 <div class="status-head">
@@ -880,7 +948,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  장소: ${item.place || "-"}<br />
+                  장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(navAddress)}">주소복사</button><br />
                   평수: ${item.pyeong || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
                   메모: ${item.memo || "-"}
@@ -890,6 +958,16 @@
           })
           .join("");
       }
+      scheduleListEl.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action='copyNavAddress'][data-nav-address]");
+        if (!button) return;
+        const copied = await copyTextSmart(decodeURIComponent(String(button.dataset.navAddress || "")));
+        if (copied) {
+          alert("주소가 복사되었습니다.");
+        } else {
+          alert("주소 복사에 실패했습니다. 다시 시도해주세요.");
+        }
+      });
 
       function renderUpcomingList() {
         const today = new Date();
@@ -1028,8 +1106,9 @@
       allModeBtnEl.addEventListener("click", () => switchFilterMode("all"));
       monthModeBtnEl.addEventListener("click", () => switchFilterMode("month"));
       dayModeBtnEl.addEventListener("click", () => switchFilterMode("day"));
+      prevDayModeBtnEl.addEventListener("click", () => moveToRelativeDay(-1));
       todayModeBtnEl.addEventListener("click", () => moveToRelativeDay(0));
-      tomorrowModeBtnEl.addEventListener("click", () => moveToRelativeDay(1));
+      nextDayModeBtnEl.addEventListener("click", () => moveToRelativeDay(1));
       copyVisibleScheduleBtnEl.addEventListener("click", copyVisibleSchedules);
       dayOffRequestBtnEl.addEventListener("click", openDayOffDatePicker);
       dayOffDateEl.addEventListener("change", () => {
