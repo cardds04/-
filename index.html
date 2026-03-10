@@ -776,6 +776,7 @@
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
+        <button id="tabTransfer" data-tab="transfer" type="button">아이디이전</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -804,8 +805,8 @@
           <div id="memberNames" class="company-list"></div>
 
           <h3 class="sub-title">업체 등록</h3>
-          <div class="actions" style="margin-top: 0; justify-content: flex-start;">
-            <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
+          <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
+          <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
             <button id="downloadCompanyExcelBtn" class="btn-sm" type="button">다운</button>
             <button id="uploadCompanyExcelBtn" class="btn-sm" type="button">업로드</button>
           </div>
@@ -962,7 +963,8 @@
             <h2>회차권 등록</h2>
           </div>
           <form id="couponForm" class="coupon-register-row">
-            <input id="couponCompanyInput" class="inline-input" type="text" placeholder="등록된 업체명 입력" required style="min-width: 220px;" />
+            <input id="couponCompanyInput" class="inline-input" type="text" placeholder="등록된 업체명 입력" list="couponCompanyAutocompleteList" required style="min-width: 220px;" />
+            <datalist id="couponCompanyAutocompleteList"></datalist>
             <select id="couponCountSelect" class="inline-select" required style="width: 120px;"></select>
             <button class="btn-sm primary" type="submit">회차권 등록</button>
           </form>
@@ -976,6 +978,15 @@
             </thead>
             <tbody id="couponListBody"></tbody>
           </table>
+        </article>
+      </section>
+
+      <section id="transferSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>아이디이전</h2>
+          </div>
+          <div id="transferTool" class="customer-stats-box"></div>
         </article>
       </section>
     </main>
@@ -1042,11 +1053,22 @@
     <div id="companyMergeModal" class="calendar-modal hidden">
       <div class="calendar-panel" style="width: min(860px, 96vw);">
         <div class="calendar-head">
-          <div id="companyMergeTitle" class="calendar-title">고객 병합 선택</div>
+          <div id="companyMergeTitle" class="calendar-title">병합 대상 선택</div>
           <button id="companyMergeCloseBtn" class="btn-sm" type="button">닫기</button>
         </div>
         <div id="companyMergeSummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
         <div id="companyMergeDetail" class="customer-alert-history" style="max-height: 52vh;"></div>
+      </div>
+    </div>
+
+    <div id="companyTransferModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(860px, 96vw);">
+        <div class="calendar-head">
+          <div id="companyTransferTitle" class="calendar-title">업체 이전 대상 선택</div>
+          <button id="companyTransferCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="companyTransferSummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="companyTransferDetail" class="customer-alert-history" style="max-height: 52vh;"></div>
       </div>
     </div>
 
@@ -1214,9 +1236,12 @@
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
+      const tabTransferEl = document.getElementById("tabTransfer");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
+      const transferSectionEl = document.getElementById("transferSection");
+      const transferToolEl = document.getElementById("transferTool");
       const paymentFilterTabsEl = document.getElementById("paymentFilterTabs");
       const paymentListBodyEl = document.getElementById("paymentListBody");
       const couponFormEl = document.getElementById("couponForm");
@@ -1255,6 +1280,11 @@
       const companyMergeSummaryEl = document.getElementById("companyMergeSummary");
       const companyMergeDetailEl = document.getElementById("companyMergeDetail");
       const companyMergeCloseBtnEl = document.getElementById("companyMergeCloseBtn");
+      const companyTransferModalEl = document.getElementById("companyTransferModal");
+      const companyTransferTitleEl = document.getElementById("companyTransferTitle");
+      const companyTransferSummaryEl = document.getElementById("companyTransferSummary");
+      const companyTransferDetailEl = document.getElementById("companyTransferDetail");
+      const companyTransferCloseBtnEl = document.getElementById("companyTransferCloseBtn");
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
       const customerAlertCountEl = document.getElementById("customerAlertCount");
@@ -1300,6 +1330,7 @@
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
       const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
+      const couponCompanyAutocompleteListEl = document.getElementById("couponCompanyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
       const companyListEl = document.getElementById("companyList");
       let currentPhotographerFilter = "all";
@@ -1326,10 +1357,16 @@
       let canceledScheduleCompanyFilter = "";
       let mergeCompanySourceIndex = -1;
       let mergeCompanySearchKeyword = "";
-      let mergeCompanySelectedCustomerId = "";
+      let mergeCompanySelectedCompanyKey = "";
+      let transferSourceKeyword = "";
+      let transferTargetKeyword = "";
+      let transferSourceCompanyKey = "";
+      let transferTargetCompanyKey = "";
+      let transferCompanySourceIndex = -1;
+      let transferCompanySearchKeyword = "";
 
       function escapeHtml(text) {
-        return text
+        return String(text ?? "")
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
@@ -1339,6 +1376,9 @@
 
       function normalizeCompanyName(name) {
         return String(name || "").trim();
+      }
+      function companyCompareKey(name) {
+        return normalizeCompanyName(name).replace(/\s+/g, "").toLowerCase();
       }
 
       function getExcludedPhotographerNames() {
@@ -2769,9 +2809,14 @@
       }
 
       function renderCompanies() {
+        const uniqueCompanyNames = [...new Set(companies.map((company) => normalizeCompanyName(company?.name)).filter(Boolean))];
         if (companyAutocompleteListEl) {
-          const uniqueCompanyNames = [...new Set(companies.map((company) => normalizeCompanyName(company?.name)).filter(Boolean))];
           companyAutocompleteListEl.innerHTML = uniqueCompanyNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join("");
+        }
+        if (couponCompanyAutocompleteListEl) {
+          couponCompanyAutocompleteListEl.innerHTML = uniqueCompanyNames
             .map((name) => `<option value="${escapeHtml(name)}"></option>`)
             .join("");
         }
@@ -2803,7 +2848,7 @@
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
-                      <button class="btn-sm" type="button" data-action="mergeCompanyToCustomer" data-company-index="${index}">고객병합</button>
+                      <button class="btn-sm" type="button" data-action="mergeCompanyToCustomer" data-company-index="${index}" onclick="openCompanyMergeModal(${index}); return false;">병합</button>
                       <button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}" data-customer-company="${
                         isCustomerRegisteredCompany ? "true" : "false"
                       }">삭제</button>
@@ -2829,6 +2874,19 @@
         if (filtered.length === 0) {
           companyListEl.innerHTML = '<div class="company-item">검색 결과가 없습니다.</div>';
         }
+
+        companyListEl.querySelectorAll("button[data-action='absorbCompanyInfo'][data-company-index]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const sourceIndex = Number(btn.dataset.companyIndex);
+            if (Number.isNaN(sourceIndex) || !companies[sourceIndex]) {
+              alert("이전 대상을 찾지 못했습니다. 다시 시도해주세요.");
+              return;
+            }
+            openCompanyTransferModal(sourceIndex);
+          });
+        });
       }
 
       function renderCompanyOrderHistory(companyName) {
@@ -2951,7 +3009,7 @@
       function closeCompanyMergeModal() {
         mergeCompanySourceIndex = -1;
         mergeCompanySearchKeyword = "";
-        mergeCompanySelectedCustomerId = "";
+        mergeCompanySelectedCompanyKey = "";
         companyMergeModalEl.classList.add("hidden");
       }
 
@@ -2962,53 +3020,58 @@
           return;
         }
         const sourceName = normalizeCompanyName(sourceCompany.name);
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        companyMergeTitleEl.textContent = `고객 병합 선택 - ${sourceName}`;
+        const companiesForMerge = getMergeCompanyCandidates();
+        companyMergeTitleEl.textContent = `병합 대상 선택 - ${sourceName}`;
 
         const keyword = mergeCompanySearchKeyword.toLowerCase();
-        const filteredUsers = users.filter((user) => {
+        const filteredUsers = companiesForMerge.filter((item) => {
           if (!keyword) return true;
-          const companyText = String(user?.company || "").toLowerCase();
-          const idText = String(user?.id || "").toLowerCase();
-          const phoneText = String(user?.phone || "").toLowerCase();
-          return companyText.includes(keyword) || idText.includes(keyword) || phoneText.includes(keyword);
+          const companyText = String(item?.companyName || "").toLowerCase();
+          const phoneText = String(item?.phone || "").toLowerCase();
+          const sourceText = String(item?.sourceType || "").toLowerCase();
+          return companyText.includes(keyword) || phoneText.includes(keyword) || sourceText.includes(keyword);
         });
 
         companyMergeSummaryEl.innerHTML = `
           <div class="customer-stats-head" style="align-items: center; gap: 8px;">
             <span>현재 업체: <strong>${escapeHtml(sourceName)}</strong></span>
-            <input id="companyMergeSearchInput" class="inline-input" type="text" placeholder="업체명/아이디/연락처 검색" value="${escapeHtml(
+            <input id="companyMergeSearchInput" class="inline-input" type="text" placeholder="업체명/연락처/구분 검색" value="${escapeHtml(
               mergeCompanySearchKeyword
             )}" style="width: 220px;" />
             <button id="companyMergeSearchBtn" class="btn-sm" type="button">검색</button>
             <button id="companyMergeClearBtn" class="btn-sm" type="button">초기화</button>
             <span>검색 결과: ${filteredUsers.length}건</span>
           </div>
+          <div class="actions" style="margin-top: 10px; justify-content: flex-start;">
+            <button id="companyMergeConfirmBtn" class="btn-sm primary" type="button" ${
+              mergeCompanySelectedCompanyKey ? "" : "disabled"
+            }>선택 업체로 병합</button>
+          </div>
         `;
 
         companyMergeDetailEl.innerHTML = filteredUsers.length
           ? filteredUsers
-              .map((user) => {
-                const userId = String(user?.id || "").trim();
-                const userCompany = String(user?.company || "").trim();
-                const userPhone = String(user?.phone || "").trim() || "-";
-                const selected = mergeCompanySelectedCustomerId === userId;
+              .map((item) => {
+                const companyKey = String(item?.companyKey || "").trim();
+                const userCompany = String(item?.companyName || "").trim();
+                const userPhone = String(item?.phone || "").trim() || "-";
+                const selected = mergeCompanySelectedCompanyKey === companyKey;
                 return `
                   <div
                     class="customer-alert-row"
                     style="align-items: center; justify-content: space-between; gap: 8px; cursor: pointer;"
-                    data-action="pickMergeCustomer"
-                    data-customer-id="${escapeHtml(userId)}"
+                    data-action="pickMergeCompany"
+                    data-company-key="${escapeHtml(companyKey)}"
                   >
                     <div>
                       <strong>${escapeHtml(userCompany || "-")}</strong><br />
-                      아이디: ${escapeHtml(userId || "-")} / 연락처: ${escapeHtml(userPhone)}
+                      연락처: ${escapeHtml(userPhone)} / 구분: ${escapeHtml(String(item?.sourceType || "미분류"))}
                     </div>
                     <button
                       class="btn-sm ${selected ? "primary" : ""}"
                       type="button"
-                      data-action="pickMergeCustomer"
-                      data-customer-id="${escapeHtml(userId)}"
+                      data-action="pickMergeCompany"
+                      data-company-key="${escapeHtml(companyKey)}"
                     >
                       ${selected ? "선택됨" : "선택"}
                     </button>
@@ -3021,6 +3084,7 @@
         const searchInputEl = companyMergeSummaryEl.querySelector("#companyMergeSearchInput");
         const searchBtnEl = companyMergeSummaryEl.querySelector("#companyMergeSearchBtn");
         const clearBtnEl = companyMergeSummaryEl.querySelector("#companyMergeClearBtn");
+        const confirmBtnEl = companyMergeSummaryEl.querySelector("#companyMergeConfirmBtn");
 
         searchBtnEl?.addEventListener("click", () => {
           mergeCompanySearchKeyword = String(searchInputEl?.value || "").trim();
@@ -3034,35 +3098,13 @@
         });
         clearBtnEl?.addEventListener("click", () => {
           mergeCompanySearchKeyword = "";
-          mergeCompanySelectedCustomerId = "";
+          mergeCompanySelectedCompanyKey = "";
           renderCompanyMergeModal();
         });
-
-        companyMergeDetailEl.querySelectorAll("[data-action='pickMergeCustomer'][data-customer-id]").forEach((targetEl) => {
-          targetEl.addEventListener("click", () => {
-            mergeCompanySelectedCustomerId = String(targetEl.dataset.customerId || "").trim();
-            renderCompanyMergeModal();
-          });
+        confirmBtnEl?.addEventListener("click", () => {
+          if (!mergeCompanySelectedCompanyKey) return;
+          mergeAdminCompanyToCustomerAccount(mergeCompanySourceIndex, mergeCompanySelectedCompanyKey);
         });
-
-        const existingActionRow = companyMergeSummaryEl.querySelector(".actions");
-        if (!existingActionRow) {
-          const actionRowEl = document.createElement("div");
-          actionRowEl.className = "actions";
-          actionRowEl.style.marginTop = "10px";
-          actionRowEl.style.justifyContent = "flex-start";
-          actionRowEl.innerHTML = `
-            <button id="companyMergeConfirmBtn" class="btn-sm primary" type="button" ${
-              mergeCompanySelectedCustomerId ? "" : "disabled"
-            }>선택 업체로 병합</button>
-          `;
-          companyMergeSummaryEl.appendChild(actionRowEl);
-          const confirmBtnEl = actionRowEl.querySelector("#companyMergeConfirmBtn");
-          confirmBtnEl?.addEventListener("click", () => {
-            if (!mergeCompanySelectedCustomerId) return;
-            mergeAdminCompanyToCustomerAccount(mergeCompanySourceIndex, mergeCompanySelectedCustomerId);
-          });
-        }
       }
 
       function openCompanyMergeModal(companyIndex) {
@@ -3070,50 +3112,348 @@
         if (!sourceCompany) return;
         mergeCompanySourceIndex = companyIndex;
         mergeCompanySearchKeyword = "";
-        mergeCompanySelectedCustomerId = "";
+        mergeCompanySelectedCompanyKey = "";
         renderCompanyMergeModal();
         companyMergeModalEl.classList.remove("hidden");
       }
+      window.openCompanyMergeModal = openCompanyMergeModal;
 
-      function mergeAdminCompanyToCustomerAccount(companyIndex, selectedCustomerId = "") {
+      function getMergeCompanyCandidates() {
+        const adminCompaniesFromUi = companies.map((item) => ({
+          companyName: normalizeCompanyName(item?.name),
+          phone: String(item?.phone || "").trim(),
+          sourceType: "관리자"
+        }));
+        const adminCompaniesFromStorage = readStorageArray(STORAGE_ADMIN_COMPANIES).map((item) => ({
+          companyName: normalizeCompanyName(item?.name),
+          phone: String(item?.phone || "").trim(),
+          sourceType: "관리자"
+        }));
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES).map((item) => ({
+          companyName: normalizeCompanyName(item?.name),
+          phone: String(item?.phone || "").trim(),
+          sourceType: "고객"
+        }));
+        const merged = [...adminCompaniesFromUi, ...adminCompaniesFromStorage, ...customerCompanies];
+        const dedupedMap = new Map();
+        merged.forEach((item) => {
+          const companyName = normalizeCompanyName(item?.companyName);
+          const companyKey = companyCompareKey(companyName);
+          if (!companyName || !companyKey) return;
+          const existing = dedupedMap.get(companyKey);
+          if (!existing) {
+            dedupedMap.set(companyKey, {
+              companyKey,
+              companyName,
+              phone: String(item?.phone || "").trim() || "-",
+              sourceType: item?.sourceType || "미분류"
+            });
+            return;
+          }
+          if (!existing.phone || existing.phone === "-") {
+            existing.phone = String(item?.phone || "").trim() || existing.phone;
+          }
+          if (existing.sourceType !== item.sourceType) {
+            existing.sourceType = "관리자+고객";
+          }
+        });
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        return [...dedupedMap.values()].map((item) => {
+          const matched = customers.find((customer) => companyCompareKey(customer?.company) === item.companyKey);
+          return {
+            ...item,
+            customerId: String(matched?.id || "").trim()
+          };
+        });
+      }
+      function executeCompanyTransferByKeys(sourceCompanyKey, targetCompanyKey) {
+        const sourceKey = String(sourceCompanyKey || "").trim();
+        const targetKey = String(targetCompanyKey || "").trim();
+        if (!sourceKey || !targetKey) {
+          alert("원본 업체와 대상 업체를 모두 선택해주세요.");
+          return;
+        }
+        if (sourceKey === targetKey) {
+          alert("같은 업체끼리는 이전할 수 없습니다.");
+          return;
+        }
+        const candidates = getMergeCompanyCandidates();
+        const sourceCompany = candidates.find((item) => String(item.companyKey || "") === sourceKey);
+        const targetCompany = candidates.find((item) => String(item.companyKey || "") === targetKey);
+        if (!sourceCompany || !targetCompany) {
+          alert("선택한 업체를 찾지 못했습니다.");
+          return;
+        }
+
+        const sourceName = normalizeCompanyName(sourceCompany.companyName);
+        const targetName = normalizeCompanyName(targetCompany.companyName);
+        const targetPhone = String(targetCompany.phone || "").trim();
+        if (!sourceName || !targetName) {
+          alert("업체명이 비어 있어 이전할 수 없습니다.");
+          return;
+        }
+        const confirmed = confirm(
+          `이전을 진행할까요?\n\n원본 업체: ${sourceName}\n대상 업체: ${targetName}\n\n과거/미래 포함 모든 "${sourceName}" 표기가 "${targetName}"으로 변경됩니다.`
+        );
+        if (!confirmed) return;
+
+        const shouldRelink = (name) => {
+          const key = companyCompareKey(name);
+          return key === sourceKey || key === targetKey;
+        };
+        const matchedCustomer = readStorageArray(STORAGE_CUSTOMERS).find(
+          (item) => companyCompareKey(item?.company) === targetKey
+        );
+        const targetCustomerId = String(matchedCustomer?.id || "").trim();
+        const targetCustomerPhone = String(matchedCustomer?.phone || targetPhone).trim();
+
+        data.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
+        });
+        onHoldPayments.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        refundPayments.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        customerSchedules.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+
+        const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        adminSchedules.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
+        });
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(adminSchedules));
+
+        const writerSchedules = readStorageArray(STORAGE_WRITER_SCHEDULES);
+        writerSchedules.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerSchedules));
+
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        customerCompanies.forEach((item) => {
+          if (!shouldRelink(item?.name)) return;
+          item.name = targetName;
+          if (targetPhone) item.phone = targetPhone;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        customers.forEach((item) => {
+          if (shouldRelink(item?.company)) {
+            item.company = targetName;
+            if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
+          }
+        });
+        localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customers));
+
+        const customerAlerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+        customerAlerts.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(customerAlerts));
+
+        const customerLogins = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+        customerLogins.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(customerLogins));
+
+        const canceledSchedules = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        canceledSchedules.forEach((item) => {
+          if (shouldRelink(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CANCELED_SCHEDULES, JSON.stringify(canceledSchedules));
+
+        let sourceCouponTotal = 0;
+        Object.keys(couponPasses).forEach((companyName) => {
+          if (!shouldRelink(companyName)) return;
+          if (companyCompareKey(companyName) === sourceKey) {
+            sourceCouponTotal += Number(couponPasses[companyName] || 0);
+          }
+          delete couponPasses[companyName];
+        });
+        const targetCouponBase = Number(couponPasses[targetName] || 0);
+        couponPasses[targetName] = targetCouponBase + Math.max(0, sourceCouponTotal);
+
+        for (let i = companies.length - 1; i >= 0; i -= 1) {
+          const key = companyCompareKey(companies[i]?.name);
+          if (key === sourceKey || key === targetKey) {
+            companies.splice(i, 1);
+          }
+        }
+        companies.unshift({ name: targetName, phone: targetPhone || "-" });
+        saveAdminCompaniesToStorage();
+        transferSourceCompanyKey = "";
+        transferTargetCompanyKey = "";
+        transferSourceKeyword = "";
+        transferTargetKeyword = "";
+        renderCompanies();
+        renderCouponPassList();
+        renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        renderList();
+        renderTransferTool();
+        closeCompanyMergeModal();
+        alert(`이전 완료: ${sourceName} -> ${targetName}`);
+      }
+      function renderTransferTool() {
+        const candidates = getMergeCompanyCandidates();
+        const sourceRows = candidates.filter((item) => {
+          if (!transferSourceKeyword) return true;
+          const keyword = transferSourceKeyword.toLowerCase();
+          return (
+            String(item.companyName || "").toLowerCase().includes(keyword) ||
+            String(item.phone || "").toLowerCase().includes(keyword) ||
+            String(item.sourceType || "").toLowerCase().includes(keyword) ||
+            String(item.customerId || "").toLowerCase().includes(keyword)
+          );
+        });
+        const targetRows = candidates.filter((item) => {
+          if (!transferTargetKeyword) return true;
+          const keyword = transferTargetKeyword.toLowerCase();
+          return (
+            String(item.companyName || "").toLowerCase().includes(keyword) ||
+            String(item.phone || "").toLowerCase().includes(keyword) ||
+            String(item.sourceType || "").toLowerCase().includes(keyword) ||
+            String(item.customerId || "").toLowerCase().includes(keyword)
+          );
+        });
+        transferToolEl.innerHTML = `
+          <div class="customer-stats-head" style="margin-bottom: 8px;">
+            <strong>원본 업체 선택</strong>
+            <input id="transferSourceSearchInput" class="inline-input" type="text" placeholder="원본 업체명/아이디 검색" value="${escapeHtml(
+              transferSourceKeyword
+            )}" style="width: 180px;" />
+            <button id="transferSourceSearchBtn" class="btn-sm" type="button">검색</button>
+            <span>결과: ${sourceRows.length}건</span>
+          </div>
+          <div class="customer-alert-history" style="max-height: 360px; margin-bottom: 12px;">
+            ${
+              sourceRows.length
+                ? sourceRows
+                    .map(
+                      (item) => `
+                        <div class="customer-alert-row" style="align-items: center; justify-content: space-between; gap: 8px;">
+                          <div><strong>${escapeHtml(item.companyName)}</strong><br />아이디: ${escapeHtml(item.customerId || "-")} / 연락처: ${escapeHtml(item.phone || "-")} / 구분: ${escapeHtml(item.sourceType || "-")}</div>
+                          <button class="btn-sm ${transferSourceCompanyKey === item.companyKey ? "primary" : ""}" type="button" data-action="pickTransferSource" data-company-key="${escapeHtml(
+                            item.companyKey
+                          )}">${transferSourceCompanyKey === item.companyKey ? "선택됨" : "선택"}</button>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : '<div class="company-item">검색 결과가 없습니다.</div>'
+            }
+          </div>
+          <div class="customer-stats-head" style="margin-bottom: 8px;">
+            <strong>대상 업체 선택</strong>
+            <input id="transferTargetSearchInput" class="inline-input" type="text" placeholder="대상 업체명/아이디 검색" value="${escapeHtml(
+              transferTargetKeyword
+            )}" style="width: 180px;" />
+            <button id="transferTargetSearchBtn" class="btn-sm" type="button">검색</button>
+            <span>결과: ${targetRows.length}건</span>
+          </div>
+          <div class="customer-alert-history" style="max-height: 360px; margin-bottom: 12px;">
+            ${
+              targetRows.length
+                ? targetRows
+                    .map(
+                      (item) => `
+                        <div class="customer-alert-row" style="align-items: center; justify-content: space-between; gap: 8px;">
+                          <div><strong>${escapeHtml(item.companyName)}</strong><br />아이디: ${escapeHtml(item.customerId || "-")} / 연락처: ${escapeHtml(item.phone || "-")} / 구분: ${escapeHtml(item.sourceType || "-")}</div>
+                          <button class="btn-sm ${transferTargetCompanyKey === item.companyKey ? "primary" : ""}" type="button" data-action="pickTransferTarget" data-company-key="${escapeHtml(
+                            item.companyKey
+                          )}">${transferTargetCompanyKey === item.companyKey ? "선택됨" : "선택"}</button>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : '<div class="company-item">검색 결과가 없습니다.</div>'
+            }
+          </div>
+          <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+            <button id="runTransferBtn" class="btn-sm primary" type="button" ${
+              transferSourceCompanyKey && transferTargetCompanyKey && transferSourceCompanyKey !== transferTargetCompanyKey ? "" : "disabled"
+            }>이전 실행</button>
+          </div>
+        `;
+      }
+      document.addEventListener(
+        "click",
+        (event) => {
+          const mergeBtn = event.target.closest("button[data-action='mergeCompanyToCustomer'][data-company-index]");
+          if (!mergeBtn) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceIndex = Number(mergeBtn.dataset.companyIndex);
+          if (Number.isNaN(sourceIndex) || !companies[sourceIndex]) {
+            alert("병합 대상을 찾지 못했습니다. 다시 시도해주세요.");
+            return;
+          }
+          openCompanyMergeModal(sourceIndex);
+        },
+        true
+      );
+
+      function mergeAdminCompanyToCustomerAccount(companyIndex, selectedTargetCompanyKey = "") {
         const sourceCompany = companies[companyIndex];
         if (!sourceCompany) return;
         const sourceName = normalizeCompanyName(sourceCompany.name);
         if (!sourceName) return;
 
-        if (!selectedCustomerId) {
+        if (!selectedTargetCompanyKey) {
           openCompanyMergeModal(companyIndex);
           return;
         }
 
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        if (users.length === 0) {
-          alert("등록된 고객 계정이 없어 병합할 수 없습니다.");
+        const companyCandidates = getMergeCompanyCandidates();
+        if (companyCandidates.length === 0) {
+          alert("병합 가능한 업체가 없습니다.");
           return;
         }
 
-        const user = users.find((item) => String(item.id || "").trim().toLowerCase() === String(selectedCustomerId).toLowerCase());
-        if (!user) {
-          alert("해당 아이디를 찾지 못했습니다.");
+        const selectedCompany = companyCandidates.find((item) => String(item.companyKey || "").trim() === String(selectedTargetCompanyKey).trim());
+        if (!selectedCompany) {
+          alert("선택한 업체를 찾지 못했습니다.");
           return;
         }
 
-        const targetName = normalizeCompanyName(user.company);
-        const targetPhone = String(user.phone || "").trim();
+        const targetName = normalizeCompanyName(selectedCompany.companyName) || sourceName;
+        const targetPhone = String(selectedCompany.phone || "").trim();
         if (!targetName) {
-          alert("선택한 고객 계정의 업체명이 비어 있어 병합할 수 없습니다.");
+          alert("선택한 업체명이 비어 있어 병합할 수 없습니다.");
           return;
         }
+
+        const matchedCustomer = readStorageArray(STORAGE_CUSTOMERS).find(
+          (item) => companyCompareKey(item?.company) === companyCompareKey(targetName)
+        );
+        const targetCustomerId = String(matchedCustomer?.id || "").trim();
+        const targetCustomerPhone = String(matchedCustomer?.phone || targetPhone).trim();
 
         const confirmed = confirm(
-          `병합을 진행할까요?\n\n관리자 업체: ${sourceName}\n고객 계정: ${String(user.id || "").trim()} (${targetName})\n\n병합 후 업체명은 "${targetName}" 으로 통일되고, 해당 업체 스케줄은 이 고객 아이디에 연결됩니다.`
+          `병합을 진행할까요?\n\n원본 업체: ${sourceName}\n대상 업체: ${targetName} (${String(selectedCompany.sourceType || "미분류")})\n\n병합 후 과거/미래 포함 모든 "${sourceName}" 표기가 "${targetName}"으로 통일됩니다.`
         );
         if (!confirmed) return;
 
         const sourceKey = sourceName.toLowerCase();
         const targetKey = targetName.toLowerCase();
-        const targetCustomerId = String(user.id || "").trim();
-        const targetCustomerPhone = targetPhone;
         const shouldRelink = (name) => {
           const key = normalizeCompanyName(name).toLowerCase();
           return key === sourceKey || key === targetKey;
@@ -3156,8 +3496,8 @@
         data.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
-          item.customerId = targetCustomerId;
-          item.customerPhone = targetCustomerPhone;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
         onHoldPayments.forEach((item) => {
           if (shouldRelink(item?.company)) item.company = targetName;
@@ -3201,8 +3541,8 @@
         customerSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
-          item.customerId = targetCustomerId;
-          item.customerPhone = targetCustomerPhone;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
         const dedupedCustomerSchedulesMap = new Map();
         customerSchedules.forEach((item) => {
@@ -3217,8 +3557,8 @@
         adminSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
-          item.customerId = targetCustomerId;
-          item.customerPhone = targetCustomerPhone;
+          if (targetCustomerId) item.customerId = targetCustomerId;
+          if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
         const dedupedAdminSchedulesMap = new Map();
         adminSchedules.forEach((item) => {
@@ -3247,7 +3587,215 @@
         renderCustomerAlertHistory();
         renderList();
         closeCompanyMergeModal();
-        alert(`병합 완료: ${sourceName} -> ${targetName} (${targetCustomerId})`);
+        alert(`병합 완료: ${sourceName} -> ${targetName}`);
+      }
+
+      function closeCompanyTransferModal() {
+        transferCompanySourceIndex = -1;
+        transferCompanySearchKeyword = "";
+        companyTransferModalEl.classList.add("hidden");
+      }
+
+      function renderCompanyTransferModal() {
+        const sourceCompany = companies[transferCompanySourceIndex];
+        if (!sourceCompany) {
+          closeCompanyTransferModal();
+          return;
+        }
+        const sourceName = normalizeCompanyName(sourceCompany.name);
+        const sourceKey = companyCompareKey(sourceName);
+        const keyword = transferCompanySearchKeyword.toLowerCase();
+        const candidates = companies
+          .map((item) => ({
+            name: normalizeCompanyName(item?.name),
+            phone: String(item?.phone || "").trim() || "-",
+            key: companyCompareKey(item?.name)
+          }))
+          .filter((item) => item.name && item.key !== sourceKey)
+          .filter((item) => {
+            if (!keyword) return true;
+            return item.name.toLowerCase().includes(keyword) || item.phone.toLowerCase().includes(keyword);
+          });
+
+        companyTransferTitleEl.textContent = `업체 이전 대상 선택 - ${sourceName}`;
+        companyTransferSummaryEl.innerHTML = `
+          <div class="customer-stats-head" style="align-items: center; gap: 8px;">
+            <span>원본 업체: <strong>${escapeHtml(sourceName)}</strong></span>
+            <input id="companyTransferSearchInput" class="inline-input" type="text" placeholder="업체명/연락처 검색" value="${escapeHtml(
+              transferCompanySearchKeyword
+            )}" style="width: 220px;" />
+            <button id="companyTransferSearchBtn" class="btn-sm" type="button">검색</button>
+            <button id="companyTransferClearBtn" class="btn-sm" type="button">초기화</button>
+            <span>결과: ${candidates.length}건</span>
+          </div>
+        `;
+        companyTransferDetailEl.innerHTML = candidates.length
+          ? candidates
+              .map((item) => {
+                return `
+                  <div class="customer-alert-row" style="align-items: center; justify-content: space-between; gap: 8px;">
+                    <div>
+                      <strong>${escapeHtml(item.name)}</strong><br />
+                      연락처: ${escapeHtml(item.phone)}
+                    </div>
+                    <button class="btn-sm primary" type="button" data-action="transferToTarget" data-target-key="${escapeHtml(item.key)}">
+                      이전
+                    </button>
+                  </div>
+                `;
+              })
+              .join("")
+          : '<div class="company-item">검색 결과가 없습니다.</div>';
+
+        const searchInputEl = companyTransferSummaryEl.querySelector("#companyTransferSearchInput");
+        const searchBtnEl = companyTransferSummaryEl.querySelector("#companyTransferSearchBtn");
+        const clearBtnEl = companyTransferSummaryEl.querySelector("#companyTransferClearBtn");
+        searchBtnEl?.addEventListener("click", () => {
+          transferCompanySearchKeyword = String(searchInputEl?.value || "").trim();
+          renderCompanyTransferModal();
+        });
+        searchInputEl?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          transferCompanySearchKeyword = String(searchInputEl?.value || "").trim();
+          renderCompanyTransferModal();
+        });
+        clearBtnEl?.addEventListener("click", () => {
+          transferCompanySearchKeyword = "";
+          renderCompanyTransferModal();
+        });
+      }
+
+      function openCompanyTransferModal(sourceIndex) {
+        if (!companyTransferModalEl || !companyTransferSummaryEl || !companyTransferDetailEl) {
+          alert("이전 팝업을 열 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요.");
+          return;
+        }
+        const sourceCompany = companies[sourceIndex];
+        if (!sourceCompany) return;
+        transferCompanySourceIndex = sourceIndex;
+        transferCompanySearchKeyword = "";
+        renderCompanyTransferModal();
+        companyTransferModalEl.classList.remove("hidden");
+      }
+      window.openCompanyTransferModal = openCompanyTransferModal;
+
+      function absorbCompanyIntoTarget(sourceIndex, targetNameInput = "") {
+        const sourceCompany = companies[sourceIndex];
+        if (!sourceCompany) return;
+        const sourceName = normalizeCompanyName(sourceCompany.name);
+        const sourceKey = companyCompareKey(sourceName);
+        if (!sourceKey) return;
+
+        const targetInput = normalizeCompanyName(targetNameInput);
+        if (!targetInput) return;
+        const targetKey = companyCompareKey(targetInput);
+        const targetCompany = companies.find((item) => companyCompareKey(item?.name) === targetKey);
+        if (targetKey === sourceKey) {
+          alert("업체명이 동일합니다. 수정칸에 변경할 업체명을 입력한 뒤 이전 버튼을 눌러주세요.");
+          return;
+        }
+
+        const targetName = targetCompany ? normalizeCompanyName(targetCompany.name) : targetInput;
+        const targetPhone = targetCompany ? String(targetCompany.phone || "").trim() : String(sourceCompany.phone || "").trim();
+        const confirmed = confirm(
+          `이전을 진행할까요?\n\n원본: ${sourceName}\n대상: ${targetName}\n\n진행하면 과거/미래 스케줄 포함 모든 "${sourceName}" 표기가 "${targetName}"로 변경됩니다.`
+        );
+        if (!confirmed) return;
+
+        const isSource = (name) => companyCompareKey(name) === sourceKey;
+
+        data.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        onHoldPayments.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        refundPayments.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        customerSchedules.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+
+        const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        adminSchedules.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(adminSchedules));
+
+        const writerSchedules = readStorageArray(STORAGE_WRITER_SCHEDULES);
+        writerSchedules.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerSchedules));
+
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        customerCompanies.forEach((item) => {
+          if (isSource(item?.name)) {
+            item.name = targetName;
+            if (targetPhone) item.phone = targetPhone;
+          }
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        customers.forEach((item) => {
+          if (isSource(item?.company)) {
+            item.company = targetName;
+            if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
+          }
+        });
+        localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customers));
+
+        const customerAlerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+        customerAlerts.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(customerAlerts));
+
+        const customerLogins = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+        customerLogins.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(customerLogins));
+
+        const canceledSchedules = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        canceledSchedules.forEach((item) => {
+          if (isSource(item?.company)) item.company = targetName;
+        });
+        localStorage.setItem(STORAGE_CANCELED_SCHEDULES, JSON.stringify(canceledSchedules));
+
+        let sourceCouponTotal = 0;
+        Object.keys(couponPasses).forEach((companyName) => {
+          if (!isSource(companyName)) return;
+          sourceCouponTotal += Number(couponPasses[companyName] || 0);
+          delete couponPasses[companyName];
+        });
+        if (sourceCouponTotal > 0) {
+          couponPasses[targetName] = Number(couponPasses[targetName] || 0) + sourceCouponTotal;
+        }
+
+        for (let i = companies.length - 1; i >= 0; i -= 1) {
+          const itemKey = companyCompareKey(companies[i]?.name);
+          if (itemKey === sourceKey || itemKey === targetKey) {
+            companies.splice(i, 1);
+          }
+        }
+        companies.unshift({ name: targetName, phone: targetPhone || "-" });
+        saveAdminCompaniesToStorage();
+        editingCompanyIndex = null;
+        renderCompanies();
+        renderCouponPassList();
+        renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        renderList();
+        closeCompanyTransferModal();
+        alert(`이전 완료: ${sourceName} -> ${targetName}`);
       }
 
       function renderWriterHistory(writerName) {
@@ -3976,19 +4524,24 @@
         const isSchedule = tab === "schedule";
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
+        const isTransfer = tab === "transfer";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
+        tabTransferEl.classList.toggle("active", isTransfer);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
+        transferSectionEl.classList.toggle("hidden", !isTransfer);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
+        if (isTransfer) renderTransferTool();
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
+      tabTransferEl.addEventListener("click", () => switchMainTab("transfer"));
 
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
@@ -4201,6 +4754,14 @@
           closeCompanyMergeModal();
         }
       });
+      companyTransferCloseBtnEl.addEventListener("click", () => {
+        closeCompanyTransferModal();
+      });
+      companyTransferModalEl.addEventListener("click", (event) => {
+        if (event.target === companyTransferModalEl) {
+          closeCompanyTransferModal();
+        }
+      });
       companyOrderHistorySummaryEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action='saveCompanyAccount'][data-company-name]");
         if (!button) return;
@@ -4356,12 +4917,70 @@
         renderCouponPassList();
       });
 
+      transferToolEl?.addEventListener("click", (event) => {
+        const sourceSearchBtn = event.target.closest("#transferSourceSearchBtn");
+        if (sourceSearchBtn) {
+          transferSourceKeyword = String(transferToolEl.querySelector("#transferSourceSearchInput")?.value || "").trim();
+          renderTransferTool();
+          return;
+        }
+        const targetSearchBtn = event.target.closest("#transferTargetSearchBtn");
+        if (targetSearchBtn) {
+          transferTargetKeyword = String(transferToolEl.querySelector("#transferTargetSearchInput")?.value || "").trim();
+          renderTransferTool();
+          return;
+        }
+        const sourcePickBtn = event.target.closest("button[data-action='pickTransferSource'][data-company-key]");
+        if (sourcePickBtn) {
+          transferSourceCompanyKey = String(sourcePickBtn.dataset.companyKey || "");
+          renderTransferTool();
+          return;
+        }
+        const targetPickBtn = event.target.closest("button[data-action='pickTransferTarget'][data-company-key]");
+        if (targetPickBtn) {
+          transferTargetCompanyKey = String(targetPickBtn.dataset.companyKey || "");
+          renderTransferTool();
+          return;
+        }
+        const runTransferBtn = event.target.closest("#runTransferBtn");
+        if (runTransferBtn) {
+          executeCompanyTransferByKeys(transferSourceCompanyKey, transferTargetCompanyKey);
+        }
+      });
+      transferToolEl?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (target.id === "transferSourceSearchInput") {
+          event.preventDefault();
+          transferSourceKeyword = String(target.value || "").trim();
+          renderTransferTool();
+          return;
+        }
+        if (target.id === "transferTargetSearchInput") {
+          event.preventDefault();
+          transferTargetKeyword = String(target.value || "").trim();
+          renderTransferTool();
+        }
+      });
+
       companyListEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action][data-company-index]");
         if (!button) return;
+        const action = button.dataset.action;
+        if (action === "mergeCompanyToCustomer") {
+          const itemEl = button.closest(".company-item[data-company-index]");
+          const sourceIndex = Number(itemEl?.dataset.companyIndex ?? button.dataset.companyIndex);
+          if (Number.isNaN(sourceIndex) || !companies[sourceIndex]) {
+            alert("병합 대상을 찾지 못했습니다. 다시 시도해주세요.");
+            return;
+          }
+          openCompanyMergeModal(sourceIndex);
+          return;
+        }
+
         const index = Number(button.dataset.companyIndex);
         if (Number.isNaN(index) || !companies[index]) return;
-        const action = button.dataset.action;
 
         if (action === "startCompanyPhoneEdit") {
           editingCompanyIndex = index;
@@ -4451,11 +5070,6 @@
           renderCustomerStatsDashboard();
           renderCustomerUpdateNotices();
           renderCustomerAlertHistory();
-        }
-
-        if (action === "mergeCompanyToCustomer") {
-          mergeAdminCompanyToCustomerAccount(index);
-          return;
         }
 
         if (action === "deleteCompanyInfo") {
@@ -4907,6 +5521,25 @@
           company: button.dataset.company || "",
           place: button.dataset.place || ""
         });
+      });
+
+      companyMergeDetailEl.addEventListener("click", (event) => {
+        const targetEl = event.target.closest("[data-action='pickMergeCompany'][data-company-key]");
+        if (!targetEl) return;
+        mergeCompanySelectedCompanyKey = String(targetEl.dataset.companyKey || "").trim();
+        renderCompanyMergeModal();
+      });
+
+      companyTransferDetailEl.addEventListener("click", (event) => {
+        const targetEl = event.target.closest("button[data-action='transferToTarget'][data-target-key]");
+        if (!targetEl) return;
+        const targetKey = String(targetEl.dataset.targetKey || "").trim();
+        const targetCompany = companies.find((item) => companyCompareKey(item?.name) === targetKey);
+        if (!targetCompany) {
+          alert("대상 업체를 찾지 못했습니다.");
+          return;
+        }
+        absorbCompanyIntoTarget(transferCompanySourceIndex, targetCompany.name);
       });
 
       memberNamesEl.addEventListener("click", (event) => {
