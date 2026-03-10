@@ -320,6 +320,7 @@
       let currentPushPromise = null;
       const pendingLocalSyncKeys = new Set();
       let localChangePollTimer = null;
+      let serverPullTimer = null;
       let lastObservedState = {};
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -511,6 +512,7 @@
         pullRemoteStateSync();
         pendingLocalSyncKeys.clear();
         lastObservedState = buildCurrentStateSnapshot();
+        renderAuthState();
       }
       function captureLocalChangesForSync() {
         if (isApplyingRemoteState) return;
@@ -526,6 +528,12 @@
       function startLocalChangeWatcher() {
         if (localChangePollTimer) clearInterval(localChangePollTimer);
         localChangePollTimer = setInterval(captureLocalChangesForSync, 300);
+      }
+      function startServerPullWatcher() {
+        if (serverPullTimer) clearInterval(serverPullTimer);
+        serverPullTimer = setInterval(() => {
+          void pullRemoteStateOnFocus();
+        }, 2000);
       }
       function startRealtimeSyncSubscription() {
         if (!USE_SUPABASE_SYNC) return;
@@ -557,6 +565,7 @@
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
       startLocalChangeWatcher();
+      startServerPullWatcher();
       startRealtimeSyncSubscription();
       window.addEventListener("focus", () => {
         void pullRemoteStateOnFocus();

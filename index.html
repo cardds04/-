@@ -1299,6 +1299,7 @@
       let currentPushPromise = null;
       const pendingLocalSyncKeys = new Set();
       let localChangePollTimer = null;
+      let serverPullTimer = null;
       let lastObservedState = {};
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -1490,6 +1491,7 @@
         pullRemoteStateSync();
         pendingLocalSyncKeys.clear();
         lastObservedState = buildCurrentStateSnapshot();
+        refreshAdminUiFromSyncedState();
       }
       function captureLocalChangesForSync() {
         if (isApplyingRemoteState) return;
@@ -1505,6 +1507,12 @@
       function startLocalChangeWatcher() {
         if (localChangePollTimer) clearInterval(localChangePollTimer);
         localChangePollTimer = setInterval(captureLocalChangesForSync, 300);
+      }
+      function startServerPullWatcher() {
+        if (serverPullTimer) clearInterval(serverPullTimer);
+        serverPullTimer = setInterval(() => {
+          void pullRemoteStateOnFocus();
+        }, 2000);
       }
       function refreshAdminUiFromSyncedState() {
         loadAdminCompaniesFromStorage();
@@ -1551,6 +1559,7 @@
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
       startLocalChangeWatcher();
+      startServerPullWatcher();
       startRealtimeSyncSubscription();
       window.addEventListener("focus", () => {
         void pullRemoteStateOnFocus();
