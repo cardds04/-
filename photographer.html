@@ -1237,9 +1237,15 @@
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
         const daysInMonth = new Date(year, month, 0).getDate();
-        filterDayEl.innerHTML = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+        const dayOptions = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
           .map((day) => `<option value="${day}">${day}일</option>`)
           .join("");
+        filterDayEl.innerHTML = `<option value="all">전체</option>${dayOptions}`;
+        const preferredText = String(preferredDay || "").trim().toLowerCase();
+        if (preferredText === "all") {
+          filterDayEl.value = "all";
+          return;
+        }
         const day = Math.min(Math.max(Number(preferredDay) || 1, 1), daysInMonth);
         filterDayEl.value = String(day);
       }
@@ -1469,16 +1475,27 @@
       function renderScheduleList() {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
-        const day = Number(filterDayEl.value);
+        const dayValue = String(filterDayEl.value || "").trim().toLowerCase();
+        const day = Number(dayValue);
         const targetDate = `${year}-${pad2(month)}-${pad2(day)}`;
         const targetMonth = `${year}-${pad2(month)}`;
 
         const rows = getMySchedules().filter((item) => {
           if (filterMode === "all") return true;
-          if (filterMode === "day") return item.date === targetDate;
+          if (filterMode === "day") {
+            if (dayValue === "all") return String(item.date || "").slice(0, 7) === targetMonth;
+            return item.date === targetDate;
+          }
           return String(item.date || "").slice(0, 7) === targetMonth;
         });
-        const modeLabel = filterMode === "all" ? "전체" : filterMode === "day" ? `${targetDate}` : `${targetMonth}`;
+        const modeLabel =
+          filterMode === "all"
+            ? "전체"
+            : filterMode === "day"
+            ? dayValue === "all"
+              ? `${targetMonth} 전체`
+              : `${targetDate}`
+            : `${targetMonth}`;
         latestRenderedRows = rows;
         latestModeLabel = modeLabel;
         filterCountTextEl.innerHTML = `<strong>${modeLabel} 조회결과 총 ${rows.length}건</strong>`;
