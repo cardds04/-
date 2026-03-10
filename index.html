@@ -3817,6 +3817,15 @@
         let imported = 0;
         let skipped = 0;
         const nextItems = [];
+        const makeScheduleDuplicateKey = (item) =>
+          [
+            String(item?.date || "").trim(),
+            String(item?.time || "09:00").trim() || "09:00",
+            normalizeCompanyName(item?.company).toLowerCase(),
+            String(item?.place || "").trim().toLowerCase()
+          ].join("|");
+        const existingKeySet = new Set(data.map((item) => makeScheduleDuplicateKey(item)));
+        const pendingKeySet = new Set();
 
         for (let i = 1; i < lines.length; i += 1) {
           const row = parseCsvLine(lines[i]);
@@ -3838,7 +3847,7 @@
             continue;
           }
 
-          nextItems.push({
+          const nextItem = {
             date,
             time: String(get("time")).trim() || "09:00",
             name: String(get("name")).trim() || "작가미정",
@@ -3854,7 +3863,14 @@
             paymentAmount: String(get("paymentAmount")).trim() || "",
             paymentDate: String(get("paymentDate")).trim() || "",
             couponUsed: String(get("couponUsed")).trim().toLowerCase() === "true"
-          });
+          };
+          const duplicateKey = makeScheduleDuplicateKey(nextItem);
+          if (existingKeySet.has(duplicateKey) || pendingKeySet.has(duplicateKey)) {
+            skipped += 1;
+            continue;
+          }
+          pendingKeySet.add(duplicateKey);
+          nextItems.push(nextItem);
           imported += 1;
         }
 
@@ -6188,15 +6204,21 @@
                                         .slice(0, 8)
                                         .map(
                                           (writerName) =>
-                                            `<button class="btn-sm ${item.name === writerName ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-writer-name="${escapeHtml(
+                                            `<button class="btn-sm ${item.name === writerName ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(
+                                              String(item.customerScheduleId || "")
+                                            )}" data-writer-name="${escapeHtml(
                                               writerName
                                             )}" title="작가 바로 변경">${escapeHtml(writerName === "작가미정" ? "미정" : writerName)}</button>`
                                         )
                                         .join("")}
                                     </div>
                                     <div class="quick-writer-row" style="margin-top: 4px;">
-                                      <button class="btn-sm ${item.composition === "사진만" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-composition="사진만">사진</button>
-                                      <button class="btn-sm ${item.composition === "사진영상 둘다" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-composition="사진영상 둘다">사영</button>
+                                      <button class="btn-sm ${item.composition === "사진만" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-schedule-id="${escapeHtml(
+                                        String(item.customerScheduleId || "")
+                                      )}" data-composition="사진만">사진</button>
+                                      <button class="btn-sm ${item.composition === "사진영상 둘다" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-schedule-id="${escapeHtml(
+                                        String(item.customerScheduleId || "")
+                                      )}" data-composition="사진영상 둘다">사영</button>
                                     </div>
                                      <span class="actions" style="justify-content: flex-start; margin-top: 6px;">
                                        <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
@@ -7364,12 +7386,20 @@
         if (!button) return;
         const action = button.dataset.action;
         const itemEl = button.closest("[data-schedule-card='true']") || button.closest(".item");
-        const fallbackIndex = Number(button.dataset.index);
+        const fallbackIndex = Number(itemEl?.dataset.index ?? button.dataset.index);
         const scheduleId = String(button.dataset.scheduleId || itemEl?.dataset.scheduleId || "").trim();
-        const resolvedIndex =
-          scheduleId && data.some((row) => String(row?.customerScheduleId || "").trim() === scheduleId)
-            ? data.findIndex((row) => String(row?.customerScheduleId || "").trim() === scheduleId)
-            : fallbackIndex;
+        const fallbackItem =
+          !Number.isNaN(fallbackIndex) && fallbackIndex >= 0 && fallbackIndex < data.length ? data[fallbackIndex] : null;
+        const fallbackMatchesScheduleId =
+          Boolean(scheduleId) && fallbackItem && String(fallbackItem?.customerScheduleId || "").trim() === scheduleId;
+        const scheduleIndex = scheduleId
+          ? data.findIndex((row) => String(row?.customerScheduleId || "").trim() === scheduleId)
+          : -1;
+        const resolvedIndex = fallbackMatchesScheduleId
+          ? fallbackIndex
+          : scheduleIndex >= 0
+          ? scheduleIndex
+          : fallbackIndex;
         const index = resolvedIndex;
         const item = Number.isNaN(index) || index < 0 ? null : data[index];
 
