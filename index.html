@@ -1366,6 +1366,7 @@
       let scheduleSyncQueued = false;
       let isApplyingRemoteSchedules = false;
       let lastScheduleSyncSignature = "";
+      let hasLoadedSchedulesFromServer = false;
       let syncStatusBadgeEl = null;
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -2506,10 +2507,31 @@
       function isUuidLike(value) {
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
       }
+      function buildClientUuid() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        const template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+        return template.replace(/[xy]/g, (ch) => {
+          const rand = Math.floor(Math.random() * 16);
+          const val = ch === "x" ? rand : (rand & 0x3) | 0x8;
+          return val.toString(16);
+        });
+      }
+      function ensureScheduleUuid(item) {
+        const current = String(item?.customerScheduleId || "").trim();
+        if (isUuidLike(current)) return current;
+        const nextId = buildClientUuid();
+        if (item && typeof item === "object") {
+          item.customerScheduleId = nextId;
+        }
+        return nextId;
+      }
       function buildSchedulesSnapshotRows() {
         const rows = [];
         const pushRow = (item, source = "active") => {
           if (!item) return;
+          const scheduleId = ensureScheduleUuid(item);
           const paymentStatus = String(item?.paymentStatus || "미입금").trim() || "미입금";
           const status =
             source === "hold"
@@ -2524,6 +2546,7 @@
               ? "paid"
               : "unpaid";
           const row = {
+            id: scheduleId,
             company_id: null,
             company_name: String(item?.company || "").trim(),
             writer_name: String(item?.name || "작가미정").trim() || "작가미정",
@@ -2590,7 +2613,42 @@
       async function syncSchedulesToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemoteSchedules) return;
         const nextRows = buildSchedulesSnapshotRows();
-        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=not.is.null`, {
+        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id`, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          cache: "no-store"
+        });
+        if (!remoteIdResponse.ok) {
+          const errorText = await remoteIdResponse.text();
+          throw new Error(`schedules id 조회 실패 (${remoteIdResponse.status}): ${errorText}`);
+        }
+        const remoteRows = await remoteIdResponse.json();
+        const remoteIds = (Array.isArray(remoteRows) ? remoteRows : [])
+          .map((row) => String(row?.id || "").trim())
+          .filter((id) => isUuidLike(id));
+        if (nextRows.length) {
+          const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "resolution=merge-duplicates,return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(nextRows)
+          });
+          if (!upsertResponse.ok) {
+            const errorText = await upsertResponse.text();
+            throw new Error(`schedules 업서트 실패 (${upsertResponse.status}): ${errorText}`);
+          }
+        }
+        const localIdSet = new Set(nextRows.map((row) => String(row?.id || "").trim()).filter((id) => isUuidLike(id)));
+        const deleteIds = remoteIds.filter((id) => !localIdSet.has(id));
+        if (!deleteIds.length) return;
+        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=in.(${deleteIds.join(",")})`, {
           method: "DELETE",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -2600,20 +2658,6 @@
         if (!deleteResponse.ok) {
           const errorText = await deleteResponse.text();
           throw new Error(`schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
-        }
-        if (!nextRows.length) return;
-        const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify(nextRows)
-        });
-        if (!insertResponse.ok) {
-          const errorText = await insertResponse.text();
-          throw new Error(`schedules 등록 실패 (${insertResponse.status}): ${errorText}`);
         }
       }
       function queueSchedulesSync(force = false) {
@@ -2703,6 +2747,7 @@
           }));
           originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerRows));
           lastScheduleSyncSignature = getSchedulesSnapshotSignature();
+          hasLoadedSchedulesFromServer = true;
         } finally {
           isApplyingRemoteSchedules = false;
         }
@@ -5973,7 +6018,9 @@
 
       function renderList() {
         syncAdminSchedulesToCustomerStorage();
-        syncWriterSchedulesStorage();
+        if (!USE_SUPABASE_SYNC || hasLoadedSchedulesFromServer) {
+          syncWriterSchedulesStorage();
+        }
         renderOpenDayoffSummary();
         renderCanceledSchedules();
         const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
