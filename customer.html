@@ -263,13 +263,15 @@
         isApplyingRemoteState = true;
         try {
           STORAGE_SYNC_KEYS.forEach((key) => {
-            if (Object.prototype.hasOwnProperty.call(state, key)) {
-              const value = state[key];
-              if (value === null || value === undefined) {
-                originalRemoveItem(key);
-              } else {
-                originalSetItem(key, String(value));
-              }
+            if (!Object.prototype.hasOwnProperty.call(state, key)) {
+              originalRemoveItem(key);
+              return;
+            }
+            const value = state[key];
+            if (value === null || value === undefined) {
+              originalRemoveItem(key);
+            } else {
+              originalSetItem(key, String(value));
             }
           });
         } finally {
@@ -297,7 +299,7 @@
             const row = rows[0];
             const state = row && row.payload && typeof row.payload === "object" ? row.payload : {};
             applyRemoteState(state);
-            return;
+            return true;
           }
 
           if (!REMOTE_SYNC_ENDPOINT) return;
@@ -309,9 +311,11 @@
           const payload = JSON.parse(xhr.responseText || "{}");
           const state = payload && typeof payload === "object" ? payload.state || {} : {};
           applyRemoteState(state);
+          return true;
         } catch (error) {
           // 서버 미접속 상태에서는 로컬 모드로 계속 동작
         }
+        return false;
       }
 
       let remoteSyncTimer = null;
@@ -561,7 +565,11 @@
         }
       }
 
-      pullRemoteStateSync();
+      STORAGE_SYNC_KEYS.forEach((key) => originalRemoveItem(key));
+      const initialPullOk = pullRemoteStateSync();
+      if (!initialPullOk) {
+        alert("서버 동기화에 실패했습니다. 인터넷 연결 또는 Supabase 설정을 확인해주세요.");
+      }
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
       startLocalChangeWatcher();
