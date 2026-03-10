@@ -85,3 +85,9 @@ before insert or update
 on public.app_state
 for each row
 execute function public.guard_app_state_payload();
+
+-- ------------------------------------------------------------
+-- companies.code는 빈값 허용 (구버전 클라이언트 null 전송 대비)
+-- ------------------------------------------------------------
+alter table if exists public.companies
+  alter column code drop not null;
