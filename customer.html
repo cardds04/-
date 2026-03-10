@@ -461,7 +461,13 @@
           const remoteValue = hasRemote ? remoteState[key] : null;
           const localValue = Object.prototype.hasOwnProperty.call(localState, key) ? localState[key] : null;
           if (!pendingLocalSyncKeys.has(key)) {
-            mergedState[key] = hasRemote ? remoteValue : localValue;
+            if (!hasRemote) {
+              mergedState[key] = localValue;
+            } else if ((remoteValue === null || remoteValue === undefined) && localValue !== null && localValue !== undefined) {
+              mergedState[key] = localValue;
+            } else {
+              mergedState[key] = remoteValue;
+            }
             return;
           }
           mergedState[key] = mergeStorageValue(remoteValue, localValue);

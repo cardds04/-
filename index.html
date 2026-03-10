@@ -1440,12 +1440,35 @@
           const remoteValue = hasRemote ? remoteState[key] : null;
           const localValue = Object.prototype.hasOwnProperty.call(localState, key) ? localState[key] : null;
           if (!pendingLocalSyncKeys.has(key)) {
-            mergedState[key] = hasRemote ? remoteValue : localValue;
+            if (!hasRemote) {
+              mergedState[key] = localValue;
+            } else if ((remoteValue === null || remoteValue === undefined) && localValue !== null && localValue !== undefined) {
+              mergedState[key] = localValue;
+            } else {
+              mergedState[key] = remoteValue;
+            }
             return;
           }
           mergedState[key] = mergeStorageValue(remoteValue, localValue);
         });
         return mergedState;
+      }
+      async function fetchServerAdminCompaniesValue() {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload->${STORAGE_ADMIN_COMPANIES}&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) return null;
+        const rows = await response.json();
+        if (!Array.isArray(rows) || !rows.length) return null;
+        return rows[0] ? rows[0][STORAGE_ADMIN_COMPANIES] ?? null : null;
       }
       async function pushRemoteState() {
         if (isRemotePushRunning) return;
@@ -5674,6 +5697,10 @@
         await pushRemoteStatePatch({
           [STORAGE_ADMIN_COMPANIES]: JSON.stringify(companies)
         });
+        const serverCompanyValue = await fetchServerAdminCompaniesValue();
+        if (!serverCompanyValue) {
+          throw new Error("서버 업체 저장 검증 실패");
+        }
         await pullRemoteStateOnFocus();
         companyFormEl.reset();
         companyRegisterPanelEl.classList.add("hidden");
