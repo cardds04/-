@@ -4070,6 +4070,8 @@
         const isExcludedWriter = excludedNameSet.has(normalizedWriter);
         const writerId = String(writerUser?.id || "").trim();
         const writerPassword = String(writerUser?.password || "").trim();
+        const writerPhone = String(writerUser?.phone || photographerPhones[targetName] || "").trim();
+        const writerCarNumber = String(writerUser?.carNumber || photographerCarNumbers[targetName] || "").trim();
 
         const rows = [...data, ...onHoldPayments, ...refundPayments]
           .filter((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter)
@@ -4102,6 +4104,15 @@
                  </div>`
               : ""
           }
+          <div class="company-edit-row" style="margin: 8px 0 10px;">
+            <div><strong>작가 정보 수정</strong></div>
+            <input class="inline-input writer-profile-name" type="text" placeholder="작가명" value="${escapeHtml(targetName)}" />
+            <input class="inline-input writer-profile-phone" type="text" placeholder="전화번호" value="${escapeHtml(writerPhone)}" />
+            <input class="inline-input writer-profile-car" type="text" placeholder="차량번호" value="${escapeHtml(writerCarNumber)}" />
+            <div class="actions" style="margin-top: 0; justify-content: flex-start;">
+              <button class="btn-sm primary" type="button" data-action="saveWriterProfile" data-writer-name="${escapeHtml(targetName)}">정보저장</button>
+            </div>
+          </div>
           <div class="company-edit-row" style="margin: 8px 0 10px;">
             <div><strong>작가 계정 관리</strong></div>
             <input class="inline-input writer-account-id" type="text" placeholder="아이디" value="${escapeHtml(writerId)}" />
@@ -5239,6 +5250,21 @@
           alert("작가가 복귀되었습니다.");
           return;
         }
+        const profileButton = event.target.closest("button[data-action='saveWriterProfile'][data-writer-name]");
+        if (profileButton) {
+          const writerName = String(profileButton.dataset.writerName || "").trim();
+          if (!writerName) return;
+          const nameInputEl = writerHistorySummaryEl.querySelector(".writer-profile-name");
+          const phoneInputEl = writerHistorySummaryEl.querySelector(".writer-profile-phone");
+          const carInputEl = writerHistorySummaryEl.querySelector(".writer-profile-car");
+          saveWriterProfileFromHistory(
+            writerName,
+            String(nameInputEl?.value || "").trim(),
+            String(phoneInputEl?.value || "").trim(),
+            String(carInputEl?.value || "").trim()
+          );
+          return;
+        }
         const button = event.target.closest("button[data-action='saveWriterAccount'][data-writer-name]");
         if (!button) return;
         const writerName = String(button.dataset.writerName || "").trim();
@@ -5720,6 +5746,66 @@
         savePhotographerProfilesToStorage();
         renderPhotographers();
         renderList();
+      }
+      function saveWriterProfileFromHistory(oldName, newName, newPhone, newCarNumber) {
+        const normalizedOld = String(oldName || "").trim();
+        const normalizedNew = String(newName || "").trim();
+        const nextPhone = String(newPhone || "").trim();
+        const nextCarNumber = String(newCarNumber || "").trim();
+        if (!normalizedOld || !normalizedNew) {
+          alert("작가명을 입력해주세요.");
+          return;
+        }
+        const oldLower = normalizedOld.toLowerCase();
+        const newLower = normalizedNew.toLowerCase();
+        const activeDuplicate = photographers.some((name) => String(name || "").trim().toLowerCase() === newLower && String(name || "").trim().toLowerCase() !== oldLower);
+        const excludedNames = getExcludedPhotographerNames();
+        const excludedDuplicate = excludedNames.some((name) => String(name || "").trim().toLowerCase() === newLower && String(name || "").trim().toLowerCase() !== oldLower);
+        if (activeDuplicate || excludedDuplicate) {
+          alert("이미 등록된 작가명입니다.");
+          return;
+        }
+
+        const activeIndex = photographers.findIndex((name) => String(name || "").trim().toLowerCase() === oldLower);
+        if (activeIndex >= 0) {
+          photographers[activeIndex] = normalizedNew;
+        }
+        delete photographerPhones[normalizedOld];
+        delete photographerCarNumbers[normalizedOld];
+        photographerPhones[normalizedNew] = nextPhone;
+        photographerCarNumbers[normalizedNew] = nextCarNumber;
+        setExcludedPhotographerNames(excludedNames.map((name) => (String(name || "").trim().toLowerCase() === oldLower ? normalizedNew : name)));
+
+        const writers = readStorageArray(STORAGE_WRITERS);
+        const writerIndex = writers.findIndex((writer) => String(writer?.name || "").trim().toLowerCase() === oldLower);
+        if (writerIndex >= 0) {
+          writers[writerIndex].name = normalizedNew;
+          writers[writerIndex].phone = nextPhone;
+          writers[writerIndex].carNumber = nextCarNumber;
+          localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        }
+
+        const updateRow = (row) => {
+          if (String(row?.name || "").trim().toLowerCase() !== oldLower) return;
+          row.name = normalizedNew;
+          row.writerPhone = nextPhone;
+          row.writerCarNumber = nextCarNumber;
+        };
+        data.forEach((item) => {
+          updateRow(item);
+          syncCustomerScheduleFromAdminEdit(item, item.time || "");
+        });
+        onHoldPayments.forEach(updateRow);
+        refundPayments.forEach(updateRow);
+
+        if (currentPhotographerFilter.toLowerCase() === oldLower) {
+          currentPhotographerFilter = normalizedNew;
+        }
+        savePhotographerProfilesToStorage();
+        renderPhotographers();
+        renderList();
+        renderWriterHistory(normalizedNew);
+        alert("작가 정보가 변경되었습니다.");
       }
 
       function saveInlineEdit(index, itemEl) {
