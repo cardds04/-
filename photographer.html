@@ -614,6 +614,20 @@
       }
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
+      localStorage.setItem = (key, value) => {
+        originalSetItem(key, value);
+        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
+          pendingLocalSyncKeys.add(String(key));
+          void runPushNow();
+        }
+      };
+      localStorage.removeItem = (key) => {
+        originalRemoveItem(key);
+        if (!isApplyingRemoteState && STORAGE_SYNC_KEYS.includes(String(key))) {
+          pendingLocalSyncKeys.add(String(key));
+          void runPushNow();
+        }
+      };
       startLocalChangeWatcher();
       startServerPullWatcher();
       startRealtimeSyncSubscription();
