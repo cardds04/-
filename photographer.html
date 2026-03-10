@@ -217,20 +217,21 @@
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const STORAGE_SYNC_KEYS = [
-        STORAGE_WRITERS,
-        STORAGE_COMPANIES,
-        STORAGE_SCHEDULES,
+        "scheduleSiteCustomerCompanies",
+        "scheduleSiteCustomerSchedules",
+        "scheduleSiteCustomerAlerts",
+        "scheduleSiteCustomers",
+        "scheduleSiteCustomerLogins",
         "scheduleSiteAdminCompanies",
         "scheduleSiteCanceledSchedules",
-        STORAGE_ADMIN_WRITER_SCHEDULES,
-        STORAGE_ADMIN_SCHEDULES,
-        STORAGE_DAILY_LIMITS,
-        STORAGE_DAYOFF_DEDUCTIONS,
-        STORAGE_DAYOFF_REQUESTS,
-        STORAGE_LIMIT_CONFIG,
-        "scheduleSiteCustomers",
-        "scheduleSiteCustomerAlerts",
-        "scheduleSiteCustomerLogins",
+        "scheduleSiteWriters",
+        "scheduleSiteWriterSchedules",
+        "scheduleSiteAdminSchedules",
+        "scheduleSiteDailyLimits",
+        "scheduleSiteDayoffDeductions",
+        "scheduleSiteDayoffRequests",
+        "scheduleSiteDayoffAlertReadIds",
+        "scheduleSiteLimitConfig",
         "scheduleSiteExcludedPhotographers",
         "scheduleSitePhotographerProfiles"
       ];
@@ -239,7 +240,7 @@
         const state = {};
         STORAGE_SYNC_KEYS.forEach((key) => {
           const value = localStorage.getItem(key);
-          if (value !== null) state[key] = value;
+          state[key] = value === null ? null : value;
         });
         return state;
       }
