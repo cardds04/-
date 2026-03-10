@@ -2055,6 +2055,15 @@
           }))
           .filter((item) => item.name);
       }
+      function buildAutoCompanyCode(name) {
+        const text = normalizeCompanyName(name);
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+          hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+        }
+        const digest = (hash || Date.now()).toString(36).toUpperCase();
+        return `AUTO-${digest}`;
+      }
 
       async function fetchCompaniesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
@@ -2100,22 +2109,23 @@
           if (!key) return;
           localNameSet.add(key);
           const remote = remoteByName.get(key);
+          const resolvedCode = normalizeCompanyCode(row?.code) || normalizeCompanyCode(remote?.code) || buildAutoCompanyCode(row?.name);
           if (!remote) {
             insertRows.push({
               name: row.name,
               phone: row.phone === "-" ? "" : row.phone,
-              code: row.code || null
+              code: resolvedCode
             });
             return;
           }
           const samePhone = String(remote.phone || "").trim() === String(row.phone === "-" ? "" : row.phone).trim();
-          const sameCode = String(remote.code || "").trim() === String(row.code || "").trim();
+          const sameCode = String(remote.code || "").trim() === String(resolvedCode || "").trim();
           if (!samePhone || !sameCode || String(remote.name || "").trim() !== row.name) {
             updateRows.push({
               id: remote.id,
               name: row.name,
               phone: row.phone === "-" ? "" : row.phone,
-              code: row.code || null
+              code: resolvedCode
             });
           }
         });
