@@ -691,6 +691,21 @@
           // realtime 연결 실패 시 수동 pull/push 동기화로 계속 동작
         }
       }
+      function startWriterTableRealtimeSubscriptions() {
+        const client = getWriterTableSyncClient();
+        if (!client) return;
+        try {
+          client
+            .channel("photographer-table-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "writers" }, queueWriterTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, queueWriterTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, queueWriterTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "dayoff_requests" }, queueWriterTablePull)
+            .subscribe();
+        } catch (error) {
+          // realtime 실패 시 focus pull
+        }
+      }
 
       setSyncStatus("초기 동기화 중...", "info");
       const initialPullOk = pullRemoteStateSync();
@@ -728,11 +743,16 @@
       };
       // 자동 주기 동기화는 데이터 초기화 위험이 있어 비활성화
       startRealtimeSyncSubscription();
+      startWriterTableRealtimeSubscriptions();
       window.addEventListener("focus", () => {
         void pullRemoteStateOnFocus();
+        queueWriterTablePull();
       });
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) void pullRemoteStateOnFocus();
+        if (!document.hidden) {
+          void pullRemoteStateOnFocus();
+          queueWriterTablePull();
+        }
       });
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
@@ -772,6 +792,9 @@
       let latestModeLabel = "일별";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
+      let writerTableSyncClient = null;
+      let writerTablePullTimer = null;
+      let writerTablePullRunning = false;
 
       function readStorageArray(key) {
         try {
@@ -786,6 +809,140 @@
 
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
+      }
+      function writeStorageArraySilently(key, items) {
+        originalSetItem(key, JSON.stringify(items));
+      }
+      function getWriterTableSyncClient() {
+        if (!USE_SUPABASE_SYNC) return null;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+        if (writerTableSyncClient) return writerTableSyncClient;
+        writerTableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return writerTableSyncClient;
+      }
+      async function fetchWriterJsonRows(path) {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function pullTablesToWriterStorage() {
+        if (!USE_SUPABASE_SYNC) return;
+        const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
+          fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
+          fetchWriterJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchWriterJsonRows("companies?select=name,phone&order=updated_at.desc"),
+          fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
+        ]);
+        const writers = (Array.isArray(writersRows) ? writersRows : [])
+          .map((row) => ({
+            id: normalize(row?.login_id),
+            password: normalize(row?.password),
+            name: normalize(row?.name),
+            phone: normalize(row?.phone),
+            carNumber: normalize(row?.car_number),
+            createdAt: normalize(row?.created_at)
+          }))
+          .filter((row) => row.id && row.name);
+        const schedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
+          .filter((row) => normalize(row?.source) !== "hold" && normalize(row?.source) !== "refund")
+          .map((row) => ({
+            customerScheduleId: normalize(row?.id),
+            writerMirrorId: normalize(row?.id),
+            date: normalize(row?.date_key),
+            time: normalize(row?.time_key) || "09:00",
+            name: normalize(row?.writer_name) || "작가미정",
+            company: normalize(row?.company_name),
+            place: normalize(row?.place),
+            pyeong: normalize(row?.pyeong),
+            composition: normalize(row?.composition) || "사진만",
+            memo: normalize(row?.memo),
+            paymentStatus: normalize(row?.payment_status) || "미입금",
+            paymentPayer: normalize(row?.payment_payer),
+            paymentAmount: normalize(row?.payment_amount),
+            paymentDate: normalize(row?.payment_date),
+            couponUsed: Boolean(row?.coupon_used),
+            partialPaid: normalize(row?.status) === "partial"
+          }))
+          .filter((row) => row.date && row.company);
+        const companies = (Array.isArray(companiesRows) ? companiesRows : [])
+          .map((row) => ({ name: normalize(row?.name), phone: normalize(row?.phone) }))
+          .filter((row) => row.name);
+        const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
+          id: normalize(row?.id),
+          writerId: normalize(row?.writer_id),
+          writerName: normalize(row?.writer_name),
+          date: normalize(row?.dayoff_date),
+          amount: 4,
+          requestedAt: normalize(row?.created_at)
+        }));
+        writeStorageArraySilently(STORAGE_WRITERS, writers);
+        writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, schedules.map((row) => ({
+          writerMirrorId: row.writerMirrorId,
+          date: row.date,
+          time: row.time,
+          name: row.name,
+          company: row.company,
+          place: row.place,
+          pyeong: row.pyeong,
+          memo: row.memo,
+          composition: row.composition
+        })));
+        writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
+        writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
+        writeStorageArraySilently(STORAGE_COMPANIES, companies);
+        writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
+      }
+      function queueWriterTablePull() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (writerTablePullTimer) clearTimeout(writerTablePullTimer);
+        writerTablePullTimer = setTimeout(async () => {
+          if (writerTablePullRunning) return;
+          writerTablePullRunning = true;
+          try {
+            await pullTablesToWriterStorage();
+            renderAuthState();
+          } catch (error) {
+            console.error("[TABLE][photographer] pull 실패", error);
+          } finally {
+            writerTablePullRunning = false;
+          }
+        }, 120);
+      }
+      async function syncWritersTableFromStorage() {
+        if (!USE_SUPABASE_SYNC) return;
+        const rows = readStorageArray(STORAGE_WRITERS)
+          .map((item) => ({
+            name: normalize(item?.name),
+            login_id: normalize(item?.id),
+            password: normalize(item?.password),
+            phone: normalize(item?.phone),
+            car_number: normalize(item?.carNumber)
+          }))
+          .filter((row) => row.name && row.login_id);
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/writers?on_conflict=login_id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Prefer: "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify(rows)
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`writers 저장 실패 (${response.status}): ${errorText}`);
+        }
       }
 
       function readStorageObject(key) {
@@ -1163,7 +1320,7 @@
         renderMyDayoffRequests();
       }
 
-      function requestDayOffReduction(selectedDate) {
+      async function requestDayOffReduction(selectedDate) {
         const writer = getCurrentWriter();
         if (!writer) {
           alert("로그인이 필요합니다.");
@@ -1182,33 +1339,56 @@
           return;
         }
         const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
-        const writerId = normalize(writer.id);
         const writerName = normalize(writer.name).toLowerCase();
         const duplicated = requests.some((item) => {
           if (String(item?.date || "") !== dateKey) return false;
-          const itemWriterId = normalize(item?.writerId);
-          const itemWriterName = normalize(item?.writerName).toLowerCase();
-          if (itemWriterId) return itemWriterId === writerId;
-          return itemWriterName && itemWriterName === writerName;
+          return normalize(item?.writerName).toLowerCase() === writerName;
         });
         if (duplicated) {
           alert("해당 날짜는 이미 휴무요청했습니다.");
           return;
         }
-        requests.unshift({
-          id: `dayoff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          date: dateKey,
-          amount: 4,
-          writerId: String(writer.id || "").trim(),
-          writerName: String(writer.name || "").trim(),
-          requestedAt: new Date().toISOString()
+        if (!USE_SUPABASE_SYNC) {
+          requests.unshift({
+            id: `dayoff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            date: dateKey,
+            amount: 4,
+            writerId: "",
+            writerName: String(writer.name || "").trim(),
+            requestedAt: new Date().toISOString()
+          });
+          localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
+          renderMyDayoffRequests();
+          alert("휴무요청이 반영되었습니다");
+          return;
+        }
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify([
+            {
+              writer_id: null,
+              writer_name: String(writer.name || "").trim(),
+              dayoff_date: dateKey,
+              reason: "",
+              status: "pending"
+            }
+          ])
         });
-        localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
-        renderMyDayoffRequests();
+        if (!response.ok) {
+          const errorText = await response.text();
+          alert(`휴무요청 저장 실패: ${errorText}`);
+          return;
+        }
+        queueWriterTablePull();
         alert("휴무요청이 반영되었습니다");
       }
 
-      function cancelMyDayoffRequest(requestId) {
+      async function cancelMyDayoffRequest(requestId) {
         const writer = getCurrentWriter();
         if (!writer) {
           alert("로그인이 필요합니다.");
@@ -1218,28 +1398,36 @@
         const targetId = normalize(requestId);
         if (!targetId) return;
 
-        const writerId = normalize(writer.id);
-        const writerName = normalize(writer.name).toLowerCase();
-        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
-        const removeIndex = requests.findIndex((item) => {
-          if (normalize(item?.id) !== targetId) return false;
-          const itemWriterId = normalize(item?.writerId);
-          const itemWriterName = normalize(item?.writerName).toLowerCase();
-          if (itemWriterId) return itemWriterId === writerId;
-          return itemWriterName && itemWriterName === writerName;
-        });
-        if (removeIndex < 0) {
-          alert("취소할 휴무요청을 찾지 못했습니다.");
-          renderMyDayoffRequests();
-          return;
-        }
-
         const confirmed = confirm("휴무요청을 취소하시겠습니까?");
         if (!confirmed) return;
-
-        requests.splice(removeIndex, 1);
-        localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
-        renderMyDayoffRequests();
+        if (!USE_SUPABASE_SYNC) {
+          const writerName = normalize(writer.name).toLowerCase();
+          const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
+          const removeIndex = requests.findIndex((item) => normalize(item?.id) === targetId && normalize(item?.writerName).toLowerCase() === writerName);
+          if (removeIndex < 0) {
+            alert("취소할 휴무요청을 찾지 못했습니다.");
+            renderMyDayoffRequests();
+            return;
+          }
+          requests.splice(removeIndex, 1);
+          localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
+          renderMyDayoffRequests();
+          alert("휴무요청이 취소되었습니다.");
+          return;
+        }
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests?id=eq.${encodeURIComponent(targetId)}`, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          alert(`휴무요청 취소 실패: ${errorText}`);
+          return;
+        }
+        queueWriterTablePull();
         alert("휴무요청이 취소되었습니다.");
       }
 
@@ -1424,7 +1612,7 @@
           : '<div class="history-item">이번달 촬영 내역이 없습니다.</div>';
       }
 
-      signupFormEl.addEventListener("submit", (event) => {
+      signupFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const id = normalize(document.getElementById("signupId").value);
         const password = normalize(document.getElementById("signupPassword").value);
@@ -1454,6 +1642,12 @@
           createdAt: new Date().toISOString()
         });
         writeStorageArray(STORAGE_WRITERS, users);
+        try {
+          await syncWritersTableFromStorage();
+          queueWriterTablePull();
+        } catch (error) {
+          console.error("[TABLE][photographer] signup sync 실패", error);
+        }
         localStorage.setItem(STORAGE_WRITER_SESSION, id);
         signupFormEl.reset();
         renderAuthState();
@@ -1556,6 +1750,7 @@
 
       switchAuthTab("login");
       renderAuthState();
+      queueWriterTablePull();
     </script>
   </body>
 </html>

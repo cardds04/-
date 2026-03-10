@@ -701,6 +701,21 @@
           // realtime 연결 실패 시 수동 pull/push 동기화로 계속 동작
         }
       }
+      function startTableRealtimeSubscriptions() {
+        const client = getTableSyncClient();
+        if (!client) return;
+        try {
+          client
+            .channel("customer-table-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, queueCustomerTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, queueCustomerTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, queueCustomerTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "dayoff_requests" }, queueCustomerTablePull)
+            .subscribe();
+        } catch (error) {
+          // table realtime 실패 시 focus pull 사용
+        }
+      }
 
       setSyncStatus("초기 동기화 중...", "info");
       const initialPullOk = pullRemoteStateSync();
@@ -738,11 +753,16 @@
       };
       // 자동 주기 동기화는 데이터 초기화 위험이 있어 비활성화
       startRealtimeSyncSubscription();
+      startTableRealtimeSubscriptions();
       window.addEventListener("focus", () => {
         void pullRemoteStateOnFocus();
+        queueCustomerTablePull();
       });
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) void pullRemoteStateOnFocus();
+        if (!document.hidden) {
+          void pullRemoteStateOnFocus();
+          queueCustomerTablePull();
+        }
       });
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
@@ -783,6 +803,9 @@
       let currentCustomerTab = "register";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
+      let tableSyncClient = null;
+      let customerTableSyncTimer = null;
+      let customerTableSyncRunning = false;
 
       function readStorageArray(key) {
         try {
@@ -797,6 +820,239 @@
 
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
+      }
+      function writeStorageArraySilently(key, items) {
+        originalSetItem(key, JSON.stringify(items));
+      }
+      function getTableSyncClient() {
+        if (!USE_SUPABASE_SYNC) return null;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+        if (tableSyncClient) return tableSyncClient;
+        tableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return tableSyncClient;
+      }
+      async function fetchJsonRows(path) {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function pullTablesToCustomerStorage() {
+        if (!USE_SUPABASE_SYNC) return;
+        const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
+          fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
+          fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc"),
+          fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
+        ]);
+        const companies = (Array.isArray(companiesRows) ? companiesRows : [])
+          .map((row) => ({
+            name: String(row?.name || "").trim(),
+            phone: String(row?.phone || "").trim(),
+            companyCode: String(row?.code || "").trim()
+          }))
+          .filter((row) => row.name);
+        const customers = (Array.isArray(customersRows) ? customersRows : [])
+          .map((row) => ({
+            id: String(row?.login_id || "").trim(),
+            password: String(row?.password || "").trim(),
+            company: String(row?.company_name || "").trim(),
+            companyCode: String(row?.company_code || "").trim(),
+            phone: String(row?.phone || "").trim(),
+            createdAt: String(row?.created_at || "").trim()
+          }))
+          .filter((row) => row.id);
+        const mappedSchedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
+          .filter((row) => String(row?.source || "").trim() !== "hold" && String(row?.source || "").trim() !== "refund")
+          .map((row) => ({
+            customerScheduleId: String(row?.id || "").trim(),
+            date: String(row?.date_key || "").trim(),
+            time: String(row?.time_key || "09:00").trim() || "09:00",
+            name: String(row?.writer_name || "작가미정").trim() || "작가미정",
+            company: String(row?.company_name || "").trim(),
+            place: String(row?.place || "").trim(),
+            pyeong: String(row?.pyeong || "").trim(),
+            jointCode: String(row?.joint_code || "").trim(),
+            doorCode: String(row?.door_code || "").trim(),
+            memo: String(row?.memo || "").trim(),
+            composition: String(row?.composition || "사진만").trim() || "사진만",
+            paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
+            paymentPayer: String(row?.payment_payer || "").trim(),
+            paymentAmount: String(row?.payment_amount || "").trim(),
+            paymentDate: String(row?.payment_date || "").trim(),
+            couponUsed: Boolean(row?.coupon_used),
+            adminTimeUpdated: false
+          }))
+          .filter((row) => row.company && row.date);
+        const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
+          id: String(row?.id || "").trim(),
+          writerId: String(row?.writer_id || "").trim(),
+          writerName: String(row?.writer_name || "").trim(),
+          date: String(row?.dayoff_date || "").trim(),
+          amount: 4,
+          requestedAt: String(row?.created_at || "").trim()
+        }));
+        writeStorageArraySilently(STORAGE_COMPANIES, companies);
+        writeStorageArraySilently(STORAGE_CUSTOMERS, customers);
+        writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, mappedSchedules);
+        writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, mappedSchedules.map((row) => ({
+          writerMirrorId: row.customerScheduleId,
+          date: row.date,
+          time: row.time,
+          name: row.name,
+          company: row.company,
+          place: row.place,
+          pyeong: row.pyeong,
+          memo: row.memo,
+          composition: row.composition
+        })));
+        writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
+      }
+      function queueCustomerTablePull() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (customerTableSyncTimer) clearTimeout(customerTableSyncTimer);
+        customerTableSyncTimer = setTimeout(async () => {
+          if (customerTableSyncRunning) return;
+          customerTableSyncRunning = true;
+          try {
+            await pullTablesToCustomerStorage();
+            renderAuthState();
+          } catch (error) {
+            console.error("[TABLE][customer] pull 실패", error);
+          } finally {
+            customerTableSyncRunning = false;
+          }
+        }, 120);
+      }
+      function isUuidLike(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+      }
+      async function syncCustomersTableFromStorage() {
+        if (!USE_SUPABASE_SYNC) return;
+        const rows = readStorageArray(STORAGE_CUSTOMERS)
+          .map((item) => ({
+            login_id: String(item?.id || "").trim(),
+            password: String(item?.password || "").trim(),
+            company_name: String(item?.company || "").trim(),
+            company_code: String(item?.companyCode || "").trim(),
+            phone: String(item?.phone || "").trim()
+          }))
+          .filter((item) => item.login_id);
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Prefer: "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify(rows)
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`customers 저장 실패 (${response.status}): ${errorText}`);
+        }
+      }
+      async function syncCompaniesTableFromStorage() {
+        if (!USE_SUPABASE_SYNC) return;
+        const rows = readStorageArray(STORAGE_COMPANIES)
+          .map((item) => ({
+            name: String(item?.name || "").trim(),
+            phone: String(item?.phone || "").trim(),
+            code: String(item?.companyCode || item?.code || "").trim()
+          }))
+          .filter((item) => item.name);
+        if (!rows.length) return;
+        const existing = await fetchJsonRows("companies?select=name");
+        const existingSet = new Set((Array.isArray(existing) ? existing : []).map((row) => String(row?.name || "").trim().toLowerCase()).filter(Boolean));
+        const insertRows = rows
+          .filter((row) => !existingSet.has(row.name.toLowerCase()))
+          .map((row) => ({
+            name: row.name,
+            phone: row.phone,
+            code: row.code || `AUTO-${Date.now().toString(36).toUpperCase()}`
+          }));
+        if (!insertRows.length) return;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(insertRows)
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`companies 저장 실패 (${response.status}): ${errorText}`);
+        }
+      }
+      async function syncCustomerSchedulesTable(user) {
+        if (!USE_SUPABASE_SYNC || !user) return;
+        const companyName = normalize(user.company);
+        const allRows = readStorageArray(STORAGE_SCHEDULES);
+        const userRows = allRows.filter((row) => normalize(row?.company).toLowerCase() === companyName.toLowerCase());
+        const deleteResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/schedules?source=eq.customer&company_name=eq.${encodeURIComponent(companyName)}`,
+          {
+            method: "DELETE",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          }
+        );
+        if (!deleteResponse.ok) {
+          const errorText = await deleteResponse.text();
+          throw new Error(`customer schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+        }
+        if (!userRows.length) return;
+        const insertRows = userRows.map((row) => {
+          const payload = {
+            company_name: normalize(row?.company),
+            writer_name: normalize(row?.name) || "작가미정",
+            date_key: normalize(row?.date),
+            time_key: normalize(row?.time) || "09:00",
+            place: normalize(row?.place),
+            pyeong: normalize(row?.pyeong),
+            composition: normalize(row?.composition) || "사진만",
+            memo: normalize(row?.memo),
+            joint_code: normalize(row?.jointCode),
+            door_code: normalize(row?.doorCode),
+            payment_status: normalize(row?.paymentStatus) || "미입금",
+            payment_payer: normalize(row?.paymentPayer),
+            payment_amount: normalize(row?.paymentAmount),
+            payment_date: normalize(row?.paymentDate),
+            coupon_used: Boolean(row?.couponUsed),
+            status: normalize(row?.paymentStatus) === "입금완료" ? "paid" : "unpaid",
+            source: "customer"
+          };
+          const rowId = String(row?.customerScheduleId || "").trim();
+          if (isUuidLike(rowId)) payload.id = rowId;
+          return payload;
+        });
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(insertRows)
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`customer schedules 저장 실패 (${response.status}): ${errorText}`);
+        }
       }
 
       function readStorageObject(key) {
@@ -1445,7 +1701,7 @@
         orderHistoryDetailListEl.innerHTML = detailRows || '<div class="history-item">상세 내역이 없습니다.</div>';
       }
 
-      signupFormEl.addEventListener("submit", (event) => {
+      signupFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const id = normalize(document.getElementById("signupId").value);
         const password = normalize(document.getElementById("signupPassword").value);
@@ -1462,6 +1718,13 @@
         users.unshift({ id, password, company, phone, companyCode, createdAt: new Date().toISOString() });
         writeStorageArray(STORAGE_CUSTOMERS, users);
         ensureCompanyStored(company, phone, companyCode);
+        try {
+          await syncCustomersTableFromStorage();
+          await syncCompaniesTableFromStorage();
+          queueCustomerTablePull();
+        } catch (error) {
+          console.error("[TABLE][customer] signup sync 실패", error);
+        }
         const signupAlerts = readStorageArray(STORAGE_ALERTS);
         signupAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1515,7 +1778,7 @@
         updateRememberLoginButtonText();
       });
 
-      customerScheduleFormEl.addEventListener("submit", (event) => {
+      customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const user = getCurrentSessionUser();
         if (!user) {
@@ -1569,6 +1832,13 @@
           customerPhone: user.phone
         });
         writeStorageArray(STORAGE_SCHEDULES, schedules);
+        try {
+          await syncCustomerSchedulesTable(user);
+          queueCustomerTablePull();
+        } catch (error) {
+          console.error("[TABLE][customer] schedule create sync 실패", error);
+          alert("서버 저장 중 오류가 발생했습니다. 다시 시도해주세요.");
+        }
         const createAlerts = readStorageArray(STORAGE_ALERTS);
         createAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1600,7 +1870,7 @@
         alert("스케줄 등록 완료! 관리자 페이지에서 바로 확인할 수 있습니다.");
       });
 
-      statusListEl.addEventListener("click", (event) => {
+      statusListEl.addEventListener("click", async (event) => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         const action = button.dataset.action;
@@ -1660,15 +1930,24 @@
           item.adminTimeUpdated = false;
           schedules[index] = item;
           writeStorageArray(STORAGE_SCHEDULES, schedules);
-
           const user = getCurrentSessionUser();
           if (user) {
+            try {
+              await syncCustomerSchedulesTable(user);
+              queueCustomerTablePull();
+            } catch (error) {
+              console.error("[TABLE][customer] schedule edit sync 실패", error);
+            }
+          }
+
+          const userAlert = getCurrentSessionUser();
+          if (userAlert) {
             const alerts = readStorageArray(STORAGE_ALERTS);
             alerts.unshift({
               id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type: "schedule_edit",
               scheduleId: item.customerScheduleId,
-              company: user.company,
+              company: userAlert.company,
               date: item.date,
               time: item.time,
               createdAt: new Date().toISOString(),
@@ -1695,6 +1974,15 @@
           appendCanceledScheduleRecord(item, "customer", "고객취소");
           schedules.splice(index, 1);
           writeStorageArray(STORAGE_SCHEDULES, schedules);
+          const user = getCurrentSessionUser();
+          if (user) {
+            try {
+              await syncCustomerSchedulesTable(user);
+              queueCustomerTablePull();
+            } catch (error) {
+              console.error("[TABLE][customer] schedule delete sync 실패", error);
+            }
+          }
           const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
           const writerSchedules = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
           const deletedScheduleId = normalize(item?.customerScheduleId);
@@ -1771,6 +2059,7 @@
       setupDateTimeSelectors();
       switchAuthTab("login");
       renderAuthState();
+      queueCustomerTablePull();
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_ADMIN_SCHEDULES || event.key === STORAGE_SCHEDULES) {
           renderAuthState();

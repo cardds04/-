@@ -1212,9 +1212,7 @@
         STORAGE_CUSTOMERS,
         STORAGE_CUSTOMER_LOGINS,
         STORAGE_CANCELED_SCHEDULES,
-        STORAGE_WRITERS,
         STORAGE_WRITER_SCHEDULES,
-        STORAGE_ADMIN_SCHEDULES,
         STORAGE_DAILY_LIMITS,
         STORAGE_DAYOFF_DEDUCTIONS,
         STORAGE_DAYOFF_REQUESTS,
@@ -1230,9 +1228,7 @@
         [STORAGE_CUSTOMERS]: "[]",
         [STORAGE_CUSTOMER_LOGINS]: "[]",
         [STORAGE_CANCELED_SCHEDULES]: "[]",
-        [STORAGE_WRITERS]: "[]",
         [STORAGE_WRITER_SCHEDULES]: "[]",
-        [STORAGE_ADMIN_SCHEDULES]: "[]",
         [STORAGE_DAILY_LIMITS]: "{}",
         [STORAGE_DAYOFF_DEDUCTIONS]: "{}",
         [STORAGE_DAYOFF_REQUESTS]: "[]",
@@ -1258,9 +1254,7 @@
       }
       const CRITICAL_SYNC_KEYS = [
         STORAGE_CUSTOMER_COMPANIES,
-        STORAGE_CUSTOMER_SCHEDULES,
-        STORAGE_ADMIN_SCHEDULES,
-        STORAGE_WRITERS
+        STORAGE_CUSTOMER_SCHEDULES
       ];
       function isStorageValueEmpty(value) {
         if (value === null || value === undefined) return true;
@@ -1358,6 +1352,18 @@
       let companyRealtimeTimer = null;
       let companySyncPromise = null;
       let companySyncQueued = false;
+      let writerRealtimeTimer = null;
+      let writerSyncPromise = null;
+      let writerSyncQueued = false;
+      let paymentRealtimeTimer = null;
+      let paymentSyncPromise = null;
+      let paymentSyncQueued = false;
+      let isApplyingRemotePayments = false;
+      let scheduleRealtimeTimer = null;
+      let scheduleSyncPromise = null;
+      let scheduleSyncQueued = false;
+      let isApplyingRemoteSchedules = false;
+      let lastScheduleSyncSignature = "";
       let syncStatusBadgeEl = null;
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -1754,6 +1760,72 @@
           // companies realtime 실패 시 focus pull로 동작
         }
       }
+      function startWritersRealtimeSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel("writers-live-index")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "writers" },
+              () => {
+                if (writerRealtimeTimer) clearTimeout(writerRealtimeTimer);
+                writerRealtimeTimer = setTimeout(() => {
+                  void pullWritersFromSupabaseAndRefresh();
+                }, 180);
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // writers realtime 실패 시 focus pull로 동작
+        }
+      }
+      function startPaymentsRealtimeSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel("payments-live-index")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "payments" },
+              () => {
+                if (paymentRealtimeTimer) clearTimeout(paymentRealtimeTimer);
+                paymentRealtimeTimer = setTimeout(() => {
+                  void pullPaymentsFromSupabaseAndApply();
+                }, 220);
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // payments realtime 실패 시 focus pull로 동작
+        }
+      }
+      function startSchedulesRealtimeSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel("schedules-live-index")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "schedules" },
+              () => {
+                if (scheduleRealtimeTimer) clearTimeout(scheduleRealtimeTimer);
+                scheduleRealtimeTimer = setTimeout(() => {
+                  void pullSchedulesFromSupabaseAndApply();
+                }, 220);
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // schedules realtime 실패 시 focus pull로 동작
+        }
+      }
 
       setSyncStatus("초기 동기화 중...", "info");
       const initialPullOk = pullRemoteStateSync();
@@ -1792,14 +1864,23 @@
       // 자동 주기 동기화는 데이터 초기화 위험이 있어 비활성화
       startRealtimeSyncSubscription();
       startCompaniesRealtimeSubscription();
+      startWritersRealtimeSubscription();
+      startPaymentsRealtimeSubscription();
+      startSchedulesRealtimeSubscription();
       window.addEventListener("focus", () => {
         void pullRemoteStateOnFocus();
         void pullAdminCompaniesFromSupabaseAndRefresh();
+        void pullWritersFromSupabaseAndRefresh();
+        void pullPaymentsFromSupabaseAndApply();
+        void pullSchedulesFromSupabaseAndApply();
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
           void pullRemoteStateOnFocus();
           void pullAdminCompaniesFromSupabaseAndRefresh();
+          void pullWritersFromSupabaseAndRefresh();
+          void pullPaymentsFromSupabaseAndApply();
+          void pullSchedulesFromSupabaseAndApply();
         }
       });
 
@@ -2044,6 +2125,619 @@
         } catch (error) {
           return {};
         }
+      }
+      function normalizeWriterRows(rows) {
+        return (Array.isArray(rows) ? rows : [])
+          .map((item) => ({
+            name: String(item?.name || "").trim(),
+            id: String(item?.id || item?.login_id || "").trim(),
+            password: String(item?.password || "").trim(),
+            phone: String(item?.phone || "").trim(),
+            carNumber: String(item?.carNumber || item?.car_number || "").trim(),
+            isActive: item?.isActive === false || item?.is_active === false ? false : true
+          }))
+          .filter((item) => item.name);
+      }
+      function setWritersStorage(rows, options = {}) {
+        const normalized = normalizeWriterRows(rows);
+        originalSetItem(STORAGE_WRITERS, JSON.stringify(normalized));
+        if (options.sync === false) return;
+        queueWritersSync();
+      }
+      async function fetchWritersFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/writers?select=id,name,login_id,password,phone,car_number,is_active,updated_at&order=updated_at.desc`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`writers 조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function syncWritersToSupabase(snapshotRows) {
+        if (!USE_SUPABASE_SYNC) return;
+        const nextRows = normalizeWriterRows(snapshotRows);
+        const remoteRows = await fetchWritersFromSupabase();
+        const remoteByName = new Map();
+        const duplicateRemoteIds = [];
+        (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
+          const key = String(row?.name || "").trim().toLowerCase();
+          if (!key) return;
+          if (remoteByName.has(key)) {
+            duplicateRemoteIds.push(row.id);
+            return;
+          }
+          remoteByName.set(key, row);
+        });
+        const localNameSet = new Set();
+        const insertRows = [];
+        const updateRows = [];
+        nextRows.forEach((row) => {
+          const key = String(row?.name || "").trim().toLowerCase();
+          if (!key) return;
+          localNameSet.add(key);
+          const remote = remoteByName.get(key);
+          if (!remote) {
+            insertRows.push({
+              name: row.name,
+              login_id: row.id || null,
+              password: row.password || "",
+              phone: row.phone || "",
+              car_number: row.carNumber || "",
+              is_active: row.isActive !== false
+            });
+            return;
+          }
+          const changed =
+            String(remote.name || "").trim() !== row.name ||
+            String(remote.login_id || "").trim() !== String(row.id || "").trim() ||
+            String(remote.password || "").trim() !== String(row.password || "").trim() ||
+            String(remote.phone || "").trim() !== String(row.phone || "").trim() ||
+            String(remote.car_number || "").trim() !== String(row.carNumber || "").trim() ||
+            Boolean(remote.is_active) !== Boolean(row.isActive !== false);
+          if (changed) {
+            updateRows.push({
+              id: remote.id,
+              name: row.name,
+              login_id: row.id || null,
+              password: row.password || "",
+              phone: row.phone || "",
+              car_number: row.carNumber || "",
+              is_active: row.isActive !== false
+            });
+          }
+        });
+        const deleteIds = [];
+        (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
+          const key = String(row?.name || "").trim().toLowerCase();
+          if (!key || !localNameSet.has(key)) {
+            deleteIds.push(row.id);
+          }
+        });
+        duplicateRemoteIds.forEach((id) => {
+          if (!deleteIds.includes(id)) deleteIds.push(id);
+        });
+        if (deleteIds.length > 0) {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/writers?id=in.(${deleteIds.join(",")})`, {
+            method: "DELETE",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`writers 삭제 실패 (${response.status}): ${errorText}`);
+          }
+        }
+        for (const row of updateRows) {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/writers?id=eq.${encodeURIComponent(row.id)}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+              name: row.name,
+              login_id: row.login_id,
+              password: row.password,
+              phone: row.phone,
+              car_number: row.car_number,
+              is_active: row.is_active
+            })
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`writers 수정 실패 (${response.status}): ${errorText}`);
+          }
+        }
+        if (insertRows.length > 0) {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/writers`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(insertRows)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`writers 등록 실패 (${response.status}): ${errorText}`);
+          }
+        }
+      }
+      function queueWritersSync() {
+        if (!USE_SUPABASE_SYNC) return;
+        writerSyncQueued = true;
+        if (writerSyncPromise) return;
+        writerSyncPromise = (async () => {
+          while (writerSyncQueued) {
+            writerSyncQueued = false;
+            setSyncStatus("작가 서버 저장 중...", "warn");
+            await syncWritersToSupabase(readStorageArray(STORAGE_WRITERS));
+          }
+          setSyncStatus(`작가 서버 반영 ${formatSyncTime()}`, "ok");
+        })()
+          .catch((error) => {
+            console.error("[WRITERS][index] 저장 실패", error);
+            setSyncStatus("작가 저장 실패", "error");
+            alert(`작가 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+          })
+          .finally(() => {
+            writerSyncPromise = null;
+          });
+      }
+      async function pullWritersFromSupabaseAndRefresh() {
+        if (!USE_SUPABASE_SYNC) return false;
+        const remoteRows = await fetchWritersFromSupabase();
+        const nextRows = normalizeWriterRows(remoteRows);
+        setWritersStorage(nextRows, { sync: false });
+        hydrateFromWriterPageStorage();
+        renderPhotographers();
+        renderList();
+        return true;
+      }
+      function getPaymentIdentity(item) {
+        const scheduleId = String(item?.customerScheduleId || "").trim();
+        if (scheduleId) return `sid:${scheduleId}`;
+        const date = String(item?.date || "").trim();
+        const time = String(item?.time || "").trim();
+        const company = normalizeCompanyName(item?.company).toLowerCase();
+        const place = String(item?.place || "").trim().toLowerCase();
+        return `row:${date}|${time}|${company}|${place}`;
+      }
+      function normalizePaymentDateForDb(paymentDate, fallbackDate) {
+        const raw = String(paymentDate || "").trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+        if (/^\d{2}-\d{2}$/.test(raw)) {
+          const year = /^\d{4}-\d{2}-\d{2}$/.test(String(fallbackDate || "").trim())
+            ? String(fallbackDate).slice(0, 4)
+            : String(new Date().getFullYear());
+          return `${year}-${raw}`;
+        }
+        if (/^\d{1,2}-\d{1,2}$/.test(raw)) {
+          const [m, d] = raw.split("-");
+          const mm = String(Number(m) || 1).padStart(2, "0");
+          const dd = String(Number(d) || 1).padStart(2, "0");
+          const year = /^\d{4}-\d{2}-\d{2}$/.test(String(fallbackDate || "").trim())
+            ? String(fallbackDate).slice(0, 4)
+            : String(new Date().getFullYear());
+          return `${year}-${mm}-${dd}`;
+        }
+        return null;
+      }
+      function normalizePaymentDateForUi(value) {
+        const raw = String(value || "").trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.slice(5);
+        if (/^\d{2}-\d{2}$/.test(raw)) return raw;
+        return "";
+      }
+      function buildPaymentRowsSnapshot() {
+        const rows = [];
+        data.forEach((item) => rows.push({ source: "active", item }));
+        onHoldPayments.forEach((item) => rows.push({ source: "hold", item }));
+        refundPayments.forEach((item) => rows.push({ source: "refund", item }));
+        return rows;
+      }
+      async function fetchPaymentsFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/payments?select=id,company_name,payer_name,amount,paid_at,status,is_half_paid,memo,created_at&order=created_at.desc`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`payments 조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function syncPaymentsToSupabase() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
+        const paymentRows = buildPaymentRowsSnapshot();
+        const insertRows = paymentRows.map(({ source, item }) => {
+          const amountRaw = String(item?.paymentAmount || "").trim();
+          const parsedAmount = Number(String(amountRaw).replace(/[^\d.-]/g, ""));
+          const paymentDateDb = normalizePaymentDateForDb(item?.paymentDate, item?.date);
+          return {
+            schedule_id: null,
+            company_id: null,
+            company_name: String(item?.company || "").trim(),
+            payer_name: String(item?.paymentPayer || "").trim(),
+            amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
+            paid_at: paymentDateDb,
+            status:
+              source === "hold"
+                ? "보류"
+                : source === "refund"
+                ? item?.refundChecked
+                  ? "환불완료"
+                  : "미환불"
+                : String(item?.paymentStatus || "미입금").trim() || "미입금",
+            is_half_paid: Boolean(item?.partialPaid),
+            memo: JSON.stringify({
+              identity: getPaymentIdentity(item),
+              source,
+              amountRaw,
+              snapshot: {
+                customerScheduleId: String(item?.customerScheduleId || "").trim(),
+                date: String(item?.date || "").trim(),
+                time: String(item?.time || "").trim(),
+                name: String(item?.name || "").trim(),
+                company: String(item?.company || "").trim(),
+                place: String(item?.place || "").trim(),
+                pyeong: String(item?.pyeong || "").trim(),
+                composition: String(item?.composition || "").trim(),
+                memo: String(item?.memo || "").trim(),
+                paymentPayer: String(item?.paymentPayer || "").trim(),
+                paymentAmount: amountRaw,
+                paymentDate: String(item?.paymentDate || "").trim(),
+                paymentStatus: String(item?.paymentStatus || "미입금").trim() || "미입금",
+                couponUsed: Boolean(item?.couponUsed),
+                partialPaid: Boolean(item?.partialPaid),
+                refundChecked: Boolean(item?.refundChecked)
+              }
+            })
+          };
+        });
+        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=not.is.null`, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!deleteResponse.ok) {
+          const errorText = await deleteResponse.text();
+          throw new Error(`payments 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+        }
+        if (!insertRows.length) return;
+        const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(insertRows)
+        });
+        if (!insertResponse.ok) {
+          const errorText = await insertResponse.text();
+          throw new Error(`payments 등록 실패 (${insertResponse.status}): ${errorText}`);
+        }
+      }
+      function queuePaymentsSync() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
+        paymentSyncQueued = true;
+        if (paymentSyncPromise) return;
+        paymentSyncPromise = (async () => {
+          while (paymentSyncQueued) {
+            paymentSyncQueued = false;
+            setSyncStatus("입금 서버 저장 중...", "warn");
+            await syncPaymentsToSupabase();
+          }
+          setSyncStatus(`입금 서버 반영 ${formatSyncTime()}`, "ok");
+        })()
+          .catch((error) => {
+            console.error("[PAYMENTS][index] 저장 실패", error);
+            setSyncStatus("입금 저장 실패", "error");
+            alert(`입금 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+          })
+          .finally(() => {
+            paymentSyncPromise = null;
+          });
+      }
+      async function pullPaymentsFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        const rows = await fetchPaymentsFromSupabase();
+        const identityMap = new Map();
+        const holdRows = [];
+        const refundRows = [];
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          let payload = {};
+          try {
+            payload = row?.memo ? JSON.parse(row.memo) : {};
+          } catch (error) {
+            payload = {};
+          }
+          const source = String(payload?.source || "active").trim();
+          const snapshot = payload?.snapshot && typeof payload.snapshot === "object" ? payload.snapshot : {};
+          const identity = String(payload?.identity || "").trim();
+          const merged = {
+            ...snapshot,
+            company: String(row?.company_name || snapshot?.company || "").trim(),
+            paymentPayer: String(row?.payer_name || snapshot?.paymentPayer || "").trim(),
+            paymentAmount: String(payload?.amountRaw || snapshot?.paymentAmount || ""),
+            paymentDate: normalizePaymentDateForUi(row?.paid_at || snapshot?.paymentDate || ""),
+            paymentStatus:
+              source === "hold"
+                ? "미입금"
+                : source === "refund"
+                ? "입금완료"
+                : String(row?.status || snapshot?.paymentStatus || "미입금"),
+            partialPaid: Boolean(row?.is_half_paid || snapshot?.partialPaid),
+            couponUsed: Boolean(snapshot?.couponUsed),
+            refundChecked: source === "refund" ? String(row?.status || "") === "환불완료" : Boolean(snapshot?.refundChecked)
+          };
+          if (source === "hold") {
+            holdRows.push(merged);
+            return;
+          }
+          if (source === "refund") {
+            refundRows.push(merged);
+            return;
+          }
+          if (identity) {
+            identityMap.set(identity, merged);
+          }
+        });
+        isApplyingRemotePayments = true;
+        try {
+          data.forEach((item) => {
+            const identity = getPaymentIdentity(item);
+            const remote = identityMap.get(identity);
+            if (!remote) return;
+            item.paymentPayer = String(remote.paymentPayer || "").trim();
+            item.paymentAmount = String(remote.paymentAmount || "").trim();
+            item.paymentDate = String(remote.paymentDate || "").trim();
+            item.paymentStatus = String(remote.paymentStatus || "미입금").trim() || "미입금";
+            item.partialPaid = Boolean(remote.partialPaid);
+            item.couponUsed = Boolean(remote.couponUsed);
+          });
+          onHoldPayments.splice(0, onHoldPayments.length, ...holdRows);
+          refundPayments.splice(0, refundPayments.length, ...refundRows);
+        } finally {
+          isApplyingRemotePayments = false;
+        }
+        renderPaymentList();
+        renderList();
+        return true;
+      }
+      function isUuidLike(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+      }
+      function buildSchedulesSnapshotRows() {
+        const rows = [];
+        const pushRow = (item, source = "active") => {
+          if (!item) return;
+          const paymentStatus = String(item?.paymentStatus || "미입금").trim() || "미입금";
+          const status =
+            source === "hold"
+              ? "hold"
+              : source === "refund"
+              ? item?.refundChecked
+                ? "refund_done"
+                : "refund_pending"
+              : item?.partialPaid
+              ? "partial"
+              : paymentStatus === "입금완료"
+              ? "paid"
+              : "unpaid";
+          const row = {
+            company_id: null,
+            company_name: String(item?.company || "").trim(),
+            writer_name: String(item?.name || "작가미정").trim() || "작가미정",
+            date_key: String(item?.date || "").trim(),
+            time_key: String(item?.time || "09:00").trim() || "09:00",
+            place: String(item?.place || "").trim(),
+            pyeong: String(item?.pyeong || "").trim(),
+            composition: String(item?.composition || "사진만").trim() || "사진만",
+            memo: String(item?.memo || "").trim(),
+            joint_code: String(item?.jointCode || "").trim(),
+            door_code: String(item?.doorCode || "").trim(),
+            payment_status,
+            payment_payer: String(item?.paymentPayer || "").trim(),
+            payment_amount: String(item?.paymentAmount || "").trim(),
+            payment_date: String(item?.paymentDate || "").trim(),
+            coupon_used: Boolean(item?.couponUsed),
+            status,
+            source
+          };
+          const existingId = String(item?.customerScheduleId || "").trim();
+          if (isUuidLike(existingId)) row.id = existingId;
+          rows.push(row);
+        };
+        data.forEach((item) => pushRow(item, "active"));
+        onHoldPayments.forEach((item) => pushRow(item, "hold"));
+        refundPayments.forEach((item) => pushRow(item, "refund"));
+        return rows.filter((row) => row.date_key && row.company_name && row.place);
+      }
+      function getSchedulesSnapshotSignature() {
+        const rows = buildSchedulesSnapshotRows().map((row) => ({
+          id: row.id || "",
+          source: row.source,
+          status: row.status,
+          date_key: row.date_key,
+          time_key: row.time_key,
+          company_name: row.company_name,
+          place: row.place,
+          writer_name: row.writer_name,
+          payment_status: row.payment_status,
+          payment_payer: row.payment_payer,
+          payment_amount: row.payment_amount,
+          payment_date: row.payment_date,
+          coupon_used: row.coupon_used
+        }));
+        return JSON.stringify(rows);
+      }
+      async function fetchSchedulesFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,updated_at&order=updated_at.desc`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`schedules 조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function syncSchedulesToSupabase() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemoteSchedules) return;
+        const nextRows = buildSchedulesSnapshotRows();
+        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=not.is.null`, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!deleteResponse.ok) {
+          const errorText = await deleteResponse.text();
+          throw new Error(`schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+        }
+        if (!nextRows.length) return;
+        const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(nextRows)
+        });
+        if (!insertResponse.ok) {
+          const errorText = await insertResponse.text();
+          throw new Error(`schedules 등록 실패 (${insertResponse.status}): ${errorText}`);
+        }
+      }
+      function queueSchedulesSync(force = false) {
+        if (!USE_SUPABASE_SYNC || isApplyingRemoteSchedules) return;
+        const signature = getSchedulesSnapshotSignature();
+        if (!force && signature === lastScheduleSyncSignature) return;
+        lastScheduleSyncSignature = signature;
+        scheduleSyncQueued = true;
+        if (scheduleSyncPromise) return;
+        scheduleSyncPromise = (async () => {
+          while (scheduleSyncQueued) {
+            scheduleSyncQueued = false;
+            setSyncStatus("스케줄 서버 저장 중...", "warn");
+            await syncSchedulesToSupabase();
+          }
+          setSyncStatus(`스케줄 서버 반영 ${formatSyncTime()}`, "ok");
+        })()
+          .catch((error) => {
+            console.error("[SCHEDULES][index] 저장 실패", error);
+            setSyncStatus("스케줄 저장 실패", "error");
+            alert(`스케줄 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+          })
+          .finally(() => {
+            scheduleSyncPromise = null;
+          });
+      }
+      async function pullSchedulesFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        const rows = await fetchSchedulesFromSupabase();
+        const nextActive = [];
+        const nextHold = [];
+        const nextRefund = [];
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const source = String(row?.source || "active").trim() || "active";
+          const status = String(row?.status || "").trim();
+          const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
+          const nextItem = {
+            customerScheduleId: String(row?.id || "").trim(),
+            date: String(row?.date_key || "").trim(),
+            time: String(row?.time_key || "09:00").trim() || "09:00",
+            name: writerName,
+            writerPhone: String(photographerPhones[writerName] || "").trim(),
+            writerCarNumber: String(photographerCarNumbers[writerName] || "").trim(),
+            company: String(row?.company_name || "").trim(),
+            place: String(row?.place || "").trim(),
+            pyeong: String(row?.pyeong || "").trim(),
+            jointCode: String(row?.joint_code || "").trim(),
+            doorCode: String(row?.door_code || "").trim(),
+            memo: String(row?.memo || "").trim(),
+            composition: String(row?.composition || "사진만").trim() || "사진만",
+            paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
+            paymentPayer: String(row?.payment_payer || "").trim(),
+            paymentAmount: String(row?.payment_amount || "").trim(),
+            paymentDate: String(row?.payment_date || "").trim(),
+            couponUsed: Boolean(row?.coupon_used),
+            partialPaid: status === "partial",
+            refundChecked: status === "refund_done"
+          };
+          if (source === "hold") {
+            nextHold.push(nextItem);
+            return;
+          }
+          if (source === "refund") {
+            nextRefund.push(nextItem);
+            return;
+          }
+          nextActive.push(nextItem);
+        });
+        isApplyingRemoteSchedules = true;
+        try {
+          data.splice(0, data.length, ...nextActive);
+          onHoldPayments.splice(0, onHoldPayments.length, ...nextHold);
+          refundPayments.splice(0, refundPayments.length, ...nextRefund);
+          originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(nextActive));
+          const writerRows = nextActive.map((item, index) => ({
+            writerMirrorId: String(item.customerScheduleId || `admin-${index}`),
+            date: String(item.date || "").trim(),
+            time: String(item.time || "").trim(),
+            name: String(item.name || "").trim(),
+            company: String(item.company || "").trim(),
+            place: String(item.place || "").trim(),
+            pyeong: String(item.pyeong || "").trim(),
+            memo: String(item.memo || "").trim(),
+            composition: String(item.composition || "").trim(),
+            writerPhone: String(item.writerPhone || "").trim(),
+            writerCarNumber: String(item.writerCarNumber || "").trim()
+          }));
+          originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerRows));
+          lastScheduleSyncSignature = getSchedulesSnapshotSignature();
+        } finally {
+          isApplyingRemoteSchedules = false;
+        }
+        renderList();
+        renderPaymentList();
+        return true;
       }
 
       function normalizeCompanyRows(rows) {
@@ -2611,8 +3305,9 @@
           writerPhone: String(item.writerPhone || "").trim(),
           writerCarNumber: String(item.writerCarNumber || "").trim()
         }));
-        localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(rows));
-        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+        originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(rows));
+        originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+        queueSchedulesSync();
       }
 
       function seedRandomSchedulesForTesting() {
@@ -3154,6 +3849,7 @@
         if (nextItems.length > 0) {
           data.unshift(...nextItems);
           renderList();
+          queuePaymentsSync();
         }
         alert(`업로드 완료: ${imported}건 등록, ${skipped}건 건너뜀`);
       }
@@ -3173,6 +3869,7 @@
         renderPhotographerTabs();
         renderList();
         renderPaymentList();
+        queuePaymentsSync();
         alert("전체 스케줄이 초기화되었습니다.");
       }
 
@@ -5158,6 +5855,7 @@
         }
         editingPaymentIndex = null;
         renderList();
+        queuePaymentsSync();
       }
 
       function undoPaymentFromTable(index) {
@@ -5178,6 +5876,7 @@
         editingPaymentIndex = null;
         couponApplyIndex = null;
         renderList();
+        queuePaymentsSync();
       }
 
       function applyCouponToPayment(index) {
@@ -5217,6 +5916,7 @@
         editingPaymentIndex = null;
         renderList();
         renderCouponPassList();
+        queuePaymentsSync();
       }
 
       function cancelHoldSchedule(index) {
@@ -5230,6 +5930,7 @@
           onHoldPayments.splice(index, 1);
           renderPaymentList();
           renderCouponPassList();
+          queuePaymentsSync();
           return;
         }
 
@@ -5240,6 +5941,7 @@
         appendCanceledScheduleRecord(holdItem, "admin", "보류취소");
         onHoldPayments.splice(index, 1);
         renderPaymentList();
+        queuePaymentsSync();
       }
 
       function toggleRefundStatus(index) {
@@ -5247,6 +5949,7 @@
         if (!item) return;
         item.refundChecked = !item.refundChecked;
         renderPaymentList();
+        queuePaymentsSync();
       }
 
       function setupDateInputs() {
@@ -5937,7 +6640,7 @@
         const oldId = String(writers[targetIndex].id || "").trim();
         writers[targetIndex].id = newId;
         writers[targetIndex].password = newPassword;
-        localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        setWritersStorage(writers);
         if (localStorage.getItem(STORAGE_WRITER_SESSION) === oldId) {
           localStorage.setItem(STORAGE_WRITER_SESSION, newId);
         }
@@ -6260,6 +6963,25 @@
         photographerPhones[trimmedName] = trimmedPhone;
         photographerCarNumbers[trimmedName] = trimmedCarNumber;
         setExcludedPhotographerNames(getExcludedPhotographerNames().filter((name) => name !== trimmedName));
+        const writerRows = readStorageArray(STORAGE_WRITERS);
+        const existingWriterIndex = writerRows.findIndex(
+          (writer) => String(writer?.name || "").trim().toLowerCase() === trimmedName.toLowerCase()
+        );
+        if (existingWriterIndex >= 0) {
+          writerRows[existingWriterIndex].name = trimmedName;
+          writerRows[existingWriterIndex].phone = trimmedPhone;
+          writerRows[existingWriterIndex].carNumber = trimmedCarNumber;
+        } else {
+          writerRows.push({
+            name: trimmedName,
+            id: "",
+            password: "",
+            phone: trimmedPhone,
+            carNumber: trimmedCarNumber,
+            isActive: true
+          });
+        }
+        setWritersStorage(writerRows);
         newPhotographerNameEl.value = "";
         newPhotographerPhoneEl.value = "";
         newPhotographerCarEl.value = "";
@@ -6311,7 +7033,7 @@
         });
 
         const writers = readStorageArray(STORAGE_WRITERS).filter((writer) => String(writer?.name || "").trim() !== targetName);
-        localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        setWritersStorage(writers);
 
         if (currentPhotographerFilter === targetName) {
           currentPhotographerFilter = "all";
@@ -6372,8 +7094,17 @@
           writers[writerIndex].name = newName;
           if (newPhone) writers[writerIndex].phone = newPhone;
           if (newCarNumber) writers[writerIndex].carNumber = newCarNumber;
-          localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        } else {
+          writers.push({
+            name: newName,
+            id: "",
+            password: "",
+            phone: newPhone,
+            carNumber: newCarNumber,
+            isActive: true
+          });
         }
+        setWritersStorage(writers);
 
         data.forEach((item) => {
           if (item.name !== oldName) return;
@@ -6426,8 +7157,17 @@
           writers[writerIndex].name = normalizedNew;
           writers[writerIndex].phone = nextPhone;
           writers[writerIndex].carNumber = nextCarNumber;
-          localStorage.setItem(STORAGE_WRITERS, JSON.stringify(writers));
+        } else {
+          writers.push({
+            name: normalizedNew,
+            id: "",
+            password: "",
+            phone: nextPhone,
+            carNumber: nextCarNumber,
+            isActive: true
+          });
         }
+        setWritersStorage(writers);
 
         const updateRow = (row) => {
           if (String(row?.name || "").trim().toLowerCase() !== oldLower) return;
@@ -6552,6 +7292,7 @@
         editingIndex = null;
         editingDateIndex = null;
         renderList();
+        queuePaymentsSync();
       }
 
       function deletePreviousHistoryScheduleByPayload(payload) {
@@ -6602,6 +7343,7 @@
         renderPreviousScheduleHistory();
         renderList();
         renderPaymentList();
+        queuePaymentsSync();
       }
 
       function handleScheduleListClick(event) {
@@ -6845,6 +7587,7 @@
         monthEl.value = String(now.getMonth() + 1);
         dayEl.value = String(now.getDate());
         renderList();
+        queuePaymentsSync();
         return true;
       }
 
@@ -6868,8 +7611,11 @@
       loadAdminCompaniesFromStorage();
       void pullAdminCompaniesFromSupabaseAndRefresh();
       loadAdminSchedulesFromStorage();
+      void pullSchedulesFromSupabaseAndApply();
       hydrateFromCustomerPageStorage();
       loadPhotographerProfilesFromStorage();
+      void pullWritersFromSupabaseAndRefresh();
+      void pullPaymentsFromSupabaseAndApply();
       hydrateFromWriterPageStorage();
       renderPhotographers();
       renderCustomerStatsDashboard();
