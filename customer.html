@@ -1244,6 +1244,15 @@
           .replace(/\s+/g, "")
           .toLowerCase()}`;
       }
+      function getEffectiveUserCompanyCode(user) {
+        const directCode = normalize(user?.companyCode);
+        if (directCode) return directCode;
+        const userCompanyName = normalize(user?.company).toLowerCase();
+        if (!userCompanyName) return "";
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const matched = companies.find((item) => normalize(item?.name).toLowerCase() === userCompanyName);
+        return normalize(matched?.companyCode || matched?.code);
+      }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
         const date = normalize(row?.date) || "nodate";
@@ -1421,7 +1430,8 @@
       function syncAdminSchedulesToCustomerUser(user) {
         if (!user) return;
         const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
-        const targetCompanyKey = getCompanyKey(user.company, user.companyCode);
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const targetCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
         const adminCompanyRows = adminRows.filter((row) => getCompanyKey(row?.company, row?.companyCode) === targetCompanyKey);
         const buildRowKey = (row) =>
@@ -1474,7 +1484,7 @@
             timePreference: normalizeTimePreference(row?.timePreference || parsedMemo.timePreference),
             name: String(row?.name || "작가미정").trim() || "작가미정",
             company: normalize(user.company),
-            companyCode: normalize(user.companyCode),
+            companyCode: effectiveCompanyCode,
             place: normalize(row?.place),
             pyeong: normalize(row?.pyeong),
             jointCode: normalize(row?.jointCode),
@@ -1529,6 +1539,16 @@
           updateRememberLoginButtonText();
         }
         if (isLoggedIn) {
+          const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+          if (effectiveCompanyCode && !normalize(user?.companyCode)) {
+            const users = readStorageArray(STORAGE_CUSTOMERS);
+            const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
+            if (userIndex >= 0) {
+              users[userIndex].companyCode = effectiveCompanyCode;
+              writeStorageArray(STORAGE_CUSTOMERS, users);
+              user.companyCode = effectiveCompanyCode;
+            }
+          }
           syncAdminSchedulesToCustomerUser(user);
           welcomeTextEl.textContent = `${user.company} (${user.id})님`;
           renderClosedDatesNotice();
@@ -1668,7 +1688,7 @@
         if (!user) return [];
         syncAdminSchedulesToCustomerUser(user);
         const userId = String(user.id || "").trim();
-        const userCompanyKey = getCompanyKey(user.company, user.companyCode);
+        const userCompanyKey = getCompanyKey(user.company, getEffectiveUserCompanyCode(user));
         return readStorageArray(STORAGE_SCHEDULES).filter((row) => {
           const rowCustomerId = String(row?.customerId || "").trim();
           const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
