@@ -1047,6 +1047,7 @@
             />
             <select id="paymentCouponCountSelect" class="inline-select" required style="width: 120px;"></select>
             <button class="btn-sm primary" type="submit">회차권 등록</button>
+            <button id="paymentCouponEditBtn" class="btn-sm" type="button">쿠폰수정</button>
           </form>
           <div class="filter-row" style="margin-bottom: 10px;">
             <input id="paymentCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
@@ -2003,6 +2004,7 @@
       const paymentCouponFormEl = document.getElementById("paymentCouponForm");
       const paymentCouponCompanyInputEl = document.getElementById("paymentCouponCompanyInput");
       const paymentCouponCountSelectEl = document.getElementById("paymentCouponCountSelect");
+      const paymentCouponEditBtnEl = document.getElementById("paymentCouponEditBtn");
       const paymentCompanySearchInputEl = document.getElementById("paymentCompanySearchInput");
       const clearPaymentCompanySearchBtnEl = document.getElementById("clearPaymentCompanySearchBtn");
       const paymentUnpaidCompanyCountTextEl = document.getElementById("paymentUnpaidCompanyCountText");
@@ -4289,6 +4291,23 @@
         }
         setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)));
         renderCouponPassList();
+        renderPaymentList();
+        return true;
+      }
+      function updateCouponPass(companyNameRaw, remainingCountRaw) {
+        const companyName = normalizeCompanyName(companyNameRaw);
+        const remainingCount = Number(remainingCountRaw);
+        if (!isRegisteredCompanyName(companyName)) {
+          alert("등록된 업체만 쿠폰 수정할 수 있어요.");
+          return false;
+        }
+        if (!Number.isFinite(remainingCount) || remainingCount < 0) {
+          alert("남은 회차는 0 이상의 숫자로 입력해주세요.");
+          return false;
+        }
+        setCouponRemaining(companyName, Math.floor(remainingCount));
+        renderCouponPassList();
+        renderPaymentList();
         return true;
       }
 
@@ -7215,6 +7234,19 @@
         if (!success) return;
         paymentCouponFormEl.reset();
         if (paymentCouponCountSelectEl) paymentCouponCountSelectEl.value = "1";
+      });
+      paymentCouponEditBtnEl?.addEventListener("click", () => {
+        const companyName = normalizeCompanyName(paymentCouponCompanyInputEl?.value || "");
+        if (!companyName) {
+          alert("업체명을 먼저 입력해주세요.");
+          return;
+        }
+        const currentRemaining = getCouponRemaining(companyName);
+        const nextRaw = prompt("변경할 남은 쿠폰 횟수를 입력해주세요.", String(currentRemaining));
+        if (nextRaw === null) return;
+        const success = updateCouponPass(companyName, nextRaw);
+        if (!success) return;
+        alert(`${companyName} 업체 쿠폰이 ${Math.floor(Number(nextRaw) || 0)}회로 수정되었습니다.`);
       });
 
       couponListBodyEl.addEventListener("click", (event) => {
