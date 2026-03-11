@@ -147,6 +147,7 @@
                 <div class="row"><span>⏰</span><select id="scheduleHour" required></select></div>
                 <div class="row"><span>⏱️</span><select id="scheduleMinute" required></select></div>
               </div>
+              <div class="row"><span>🕒</span><select id="scheduleTimePreference"><option value="exact">정시</option><option value="before">이전</option><option value="after">이후</option><option value="other">그외시간</option></select></div>
               <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 10시~17시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
               <div class="triple">
@@ -759,6 +760,7 @@
       const scheduleDayEl = document.getElementById("scheduleDay");
       const scheduleHourEl = document.getElementById("scheduleHour");
       const scheduleMinuteEl = document.getElementById("scheduleMinute");
+      const scheduleTimePreferenceEl = document.getElementById("scheduleTimePreference");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
       const composeButtonsEl = document.getElementById("composeButtons");
       const paymentSummaryBoxEl = document.getElementById("paymentSummaryBox");
@@ -840,26 +842,30 @@
           .filter((row) => row.id);
         const mappedSchedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
           .filter((row) => String(row?.source || "").trim() !== "hold" && String(row?.source || "").trim() !== "refund")
-          .map((row) => ({
-            customerScheduleId: String(row?.id || "").trim(),
-            date: String(row?.date_key || "").trim(),
-            time: String(row?.time_key || "09:00").trim() || "09:00",
-            name: String(row?.writer_name || "작가미정").trim() || "작가미정",
-            company: String(row?.company_name || "").trim(),
-            place: String(row?.place || "").trim(),
-            pyeong: String(row?.pyeong || "").trim(),
-            jointCode: String(row?.joint_code || "").trim(),
-            doorCode: String(row?.door_code || "").trim(),
-            memo: String(row?.memo || "").trim(),
-            composition: String(row?.composition || "사진만").trim() || "사진만",
-            paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
-            paymentPayer: String(row?.payment_payer || "").trim(),
-            paymentAmount: String(row?.payment_amount || "").trim(),
-            paymentDate: String(row?.payment_date || "").trim(),
-            couponUsed: Boolean(row?.coupon_used),
-            source: String(row?.source || "active").trim() || "active",
-            adminTimeUpdated: false
-          }))
+          .map((row) => {
+            const parsedMemo = splitMemoAndTimePreference(row?.memo);
+            return {
+              customerScheduleId: String(row?.id || "").trim(),
+              date: String(row?.date_key || "").trim(),
+              time: String(row?.time_key || "09:00").trim() || "09:00",
+              timePreference: parsedMemo.timePreference,
+              name: String(row?.writer_name || "작가미정").trim() || "작가미정",
+              company: String(row?.company_name || "").trim(),
+              place: String(row?.place || "").trim(),
+              pyeong: String(row?.pyeong || "").trim(),
+              jointCode: String(row?.joint_code || "").trim(),
+              doorCode: String(row?.door_code || "").trim(),
+              memo: parsedMemo.memo,
+              composition: String(row?.composition || "사진만").trim() || "사진만",
+              paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
+              paymentPayer: String(row?.payment_payer || "").trim(),
+              paymentAmount: String(row?.payment_amount || "").trim(),
+              paymentDate: String(row?.payment_date || "").trim(),
+              couponUsed: Boolean(row?.coupon_used),
+              source: String(row?.source || "active").trim() || "active",
+              adminTimeUpdated: false
+            };
+          })
           .filter((row) => row.company && row.date);
         const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
           id: String(row?.id || "").trim(),
@@ -1006,6 +1012,7 @@
         });
         if (!userRows.length) return;
         const insertRows = userRows.map((row) => {
+          const memoForDb = mergeMemoAndTimePreference(row?.memo, row?.timePreference);
           return {
             id: ensureScheduleUuid(row),
             company_name: normalize(row?.company),
@@ -1015,7 +1022,7 @@
             place: normalize(row?.place),
             pyeong: normalize(row?.pyeong),
             composition: normalize(row?.composition) || "사진만",
-            memo: normalize(row?.memo),
+            memo: normalize(memoForDb),
             joint_code: normalize(row?.jointCode),
             door_code: normalize(row?.doorCode),
             payment_status: normalize(row?.paymentStatus) || "미입금",
@@ -1071,6 +1078,40 @@
 
       function normalize(text) {
         return String(text || "").trim();
+      }
+      function normalizeTimePreference(value) {
+        const normalized = String(value || "").trim().toLowerCase();
+        if (normalized === "before" || normalized === "after" || normalized === "other") return normalized;
+        return "exact";
+      }
+      function splitMemoAndTimePreference(rawMemo) {
+        const source = String(rawMemo || "");
+        const matched = source.match(/\s*\[time_pref:(before|after|other)\]\s*$/i);
+        if (!matched) return { memo: source.trim(), timePreference: "exact" };
+        const cleanMemo = source.slice(0, matched.index).trim();
+        return { memo: cleanMemo, timePreference: normalizeTimePreference(matched[1]) };
+      }
+      function mergeMemoAndTimePreference(rawMemo, timePreference) {
+        const { memo } = splitMemoAndTimePreference(rawMemo);
+        const pref = normalizeTimePreference(timePreference);
+        if (pref === "exact") return memo;
+        return `${memo ? `${memo} ` : ""}[time_pref:${pref}]`;
+      }
+      function formatScheduleTimeWithPreference(timeText, timePreference) {
+        const normalized = String(timeText || "").trim();
+        const matched = normalized.match(/^(\d{1,2}):(\d{2})$/);
+        const pref = normalizeTimePreference(timePreference);
+        const base = matched
+          ? matched[2] === "00"
+            ? `${Number(matched[1])}시`
+            : matched[2] === "30"
+            ? `${Number(matched[1])}시반`
+            : `${Number(matched[1])}시 ${Number(matched[2])}분`
+          : normalized || "-";
+        if (pref === "before") return `${base}이전`;
+        if (pref === "after") return `${base}이후`;
+        if (pref === "other") return `${base} 그외시간`;
+        return base;
       }
 
       function appendCanceledScheduleRecord(item, canceledBy = "customer", reason = "고객취소") {
@@ -1432,6 +1473,7 @@
           .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시</option>`)
           .join("");
         scheduleMinuteEl.innerHTML = '<option value="00">00분</option><option value="30">30분</option>';
+        if (scheduleTimePreferenceEl) scheduleTimePreferenceEl.value = "exact";
 
         renderDayOptions(currentYearValue, currentMonth, currentDay);
       }
@@ -1620,7 +1662,7 @@
             return `
               <article class="status-card" data-id="${item.customerScheduleId}">
                 <div class="status-head">
-                  <span>${item.date} | ${item.time || "09:00"}</span>
+                  <span>${item.date} | ${formatScheduleTimeWithPreference(item.time || "09:00", item.timePreference)}</span>
                   <span>${editable ? "수정가능" : "수정제한"}</span>
                 </div>
                 <div class="status-meta">
@@ -1680,7 +1722,7 @@
           .map(
             (item) => `
               <div class="history-item">
-                ${item.date || "-"} ${item.time || "-"}<br />
+                ${item.date || "-"} ${formatScheduleTimeWithPreference(item.time || "-", item.timePreference)}<br />
                 장소: ${item.place || "-"} | 평수: ${item.pyeong || "-"} | 구성: ${item.composition || "-"}
               </div>
             `
@@ -1796,6 +1838,7 @@
         const day = Number(scheduleDayEl.value);
         const date = `${year}-${pad2(month)}-${pad2(day)}`;
         const time = `${scheduleHourEl.value}:${scheduleMinuteEl.value}`;
+        const timePreference = normalizeTimePreference(scheduleTimePreferenceEl?.value);
         const place = normalize(document.getElementById("schedulePlace").value);
         if (!place) return;
         if (scheduleCompositionEl.value === "미선택") {
@@ -1815,6 +1858,7 @@
           customerScheduleId: buildClientUuid(),
           date,
           time,
+          timePreference,
           name: "작가미정",
           company: user.company,
           companyCode: normalize(user.companyCode),
@@ -1881,6 +1925,7 @@
         }
         customerScheduleFormEl.reset();
         setupDateTimeSelectors();
+        if (scheduleTimePreferenceEl) scheduleTimePreferenceEl.value = "exact";
         setSelectedComposition("미선택");
         renderPaymentSummary();
         alert("스케줄 등록 완료! 관리자 페이지에서 바로 확인할 수 있습니다.");
