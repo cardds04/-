@@ -769,6 +769,24 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .calendar-dayoff-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .calendar-dayoff-badge {
+        display: inline-flex;
+        align-items: center;
+        font-size: 10px;
+        line-height: 1;
+        color: #7a1d1d;
+        background: #ffe7e7;
+        border: 1px solid #f0bcbc;
+        border-radius: 999px;
+        padding: 3px 7px;
+        white-space: nowrap;
+      }
 
       .calendar-writer-divider {
         border-top: 1px dashed #cfd7e8;
@@ -3116,6 +3134,11 @@
           date_key: row.date_key,
           time_key: row.time_key,
           company_name: row.company_name,
+          pyeong: row.pyeong,
+          composition: row.composition,
+          memo: row.memo,
+          joint_code: row.joint_code,
+          door_code: row.door_code,
           place: row.place,
           writer_name: row.writer_name,
           payment_status: row.payment_status,
@@ -3667,6 +3690,15 @@
           .filter((item) => String(item?.date || "").startsWith(monthKey))
           .sort((a, b) => new Date(b.requestedAt || 0).getTime() - new Date(a.requestedAt || 0).getTime());
       }
+      function getDayoffWriterNamesByDate(dateKey) {
+        const normalizedDate = String(dateKey || "").trim();
+        if (!normalizedDate) return [];
+        const names = readStorageArray(STORAGE_DAYOFF_REQUESTS)
+          .filter((item) => String(item?.date || "").trim() === normalizedDate)
+          .map((item) => String(item?.writerName || "").trim())
+          .filter(Boolean);
+        return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
+      }
 
       function renderOpenDayoffSummary() {
         const now = new Date();
@@ -3996,6 +4028,12 @@
         if (item.type === "admin_time_update") {
           return `${companyText} 업체 스케줄 시간을 ${dateText} ${timeText}(으)로 수정했습니다.`;
         }
+        if (item.type === "admin_date_update") {
+          const beforeDateText = String(item.previousDate || "").trim();
+          return beforeDateText
+            ? `${companyText} 업체 스케줄 날짜를 ${beforeDateText}에서 ${dateText}(으)로 수정했습니다.`
+            : `${companyText} 업체 스케줄 날짜를 ${dateText}(으)로 수정했습니다.`;
+        }
         if (item.type === "new_company_schedule") {
           return `신규업체 ${companyText} 스케줄이 등록되었습니다. (${dateText} ${timeText})`;
         }
@@ -4080,7 +4118,7 @@
         `;
       }
 
-      function syncCustomerScheduleFromAdminEdit(item, previousTime) {
+      function syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate = "") {
         if (!item?.customerScheduleId) return;
         const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         const target = schedules.find((row) => row.customerScheduleId === item.customerScheduleId);
@@ -4089,12 +4127,18 @@
         target.writerPhone = item.writerPhone || photographerPhones[item.name] || "";
         target.writerCarNumber = item.writerCarNumber || photographerCarNumbers[item.name] || "";
         const isTimeChanged = Boolean(item.time) && item.time !== previousTime;
+        const previousDateText = String(previousDate || "").trim();
+        const currentDateText = String(item.date || "").trim();
+        const isDateChanged = Boolean(previousDateText) && Boolean(currentDateText) && previousDateText !== currentDateText;
 
         if (isTimeChanged) {
           target.time = item.time;
           target.timePreference = "exact";
           target.adminTimeUpdated = true;
           target.adminTimeUpdatedAt = new Date().toISOString();
+        }
+        if (isDateChanged) {
+          target.date = currentDateText;
         }
         localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(schedules));
 
@@ -4106,6 +4150,22 @@
             scheduleId: item.customerScheduleId,
             company: item.company || "",
             date: item.date || "",
+            time: item.time || "",
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+          localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+          renderCustomerUpdateNotices();
+        }
+        if (isDateChanged) {
+          const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+          alerts.unshift({
+            id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: "admin_date_update",
+            scheduleId: item.customerScheduleId,
+            company: item.company || "",
+            previousDate: previousDateText,
+            date: currentDateText,
             time: item.time || "",
             createdAt: new Date().toISOString(),
             read: false
@@ -4934,6 +4994,9 @@
               return `<div class="calendar-writer-divider"></div>${rows}`;
             })
             .join("");
+          const dayoffWriterBadges = getDayoffWriterNamesByDate(dateKey)
+            .map((writerName) => `<span class="calendar-dayoff-badge">${escapeHtml(writerName)}작가휴무</span>`)
+            .join("");
           const weekdayIndex = new Date(`${dateKey}T00:00:00`).getDay();
           const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
           const isHoliday = isHolidayDate(dateKey);
@@ -4947,6 +5010,7 @@
                 <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건</span>
               </div>
               ${companies || '<div class="calendar-company">예약 없음</div>'}
+              ${dayoffWriterBadges ? `<div class="calendar-dayoff-row">${dayoffWriterBadges}</div>` : ""}
             </div>
           `);
         }
@@ -7063,6 +7127,12 @@
           monthNewCountEl.textContent = `이번달 접수 ${monthNewCount}건`;
         }
         if (todayNewSummaryBoxEl) {
+          const dateUpdatedScheduleIdSet = new Set(
+            readStorageArray(STORAGE_CUSTOMER_ALERTS)
+              .filter((alert) => String(alert?.type || "").trim() === "admin_date_update")
+              .map((alert) => String(alert?.scheduleId || "").trim())
+              .filter(Boolean)
+          );
           const todayRows = activeRows
             .filter((item) => String(item?.date || "").trim() === todayKey)
             .sort((a, b) => compareScheduleDateTime(a, b));
@@ -7071,7 +7141,11 @@
           } else {
             const preview = todayRows
               .slice(0, 5)
-              .map((item) => `${String(item?.date || "-")} ${normalizeCompanyName(item?.company) || "-"}`)
+              .map((item) => {
+                const rowScheduleId = String(item?.customerScheduleId || "").trim();
+                const dateChangedSuffix = rowScheduleId && dateUpdatedScheduleIdSet.has(rowScheduleId) ? "(날짜변경)" : "";
+                return `${String(item?.date || "-")} ${normalizeCompanyName(item?.company) || "-"}${dateChangedSuffix}`;
+              })
               .join(", ");
             const remainCount = todayRows.length - 5;
             todayNewSummaryBoxEl.textContent =
@@ -8417,6 +8491,7 @@
         const item = data[index];
         if (!item || !itemEl) return;
         const previousTime = item.time || "";
+        const previousDate = item.date || "";
 
         const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
         const hour = itemEl.querySelector(".edit-hour")?.value;
@@ -8456,7 +8531,7 @@
           item.writerPhone = photographerPhones[name] || "";
           item.writerCarNumber = photographerCarNumbers[name] || "";
         }
-        syncCustomerScheduleFromAdminEdit(item, previousTime);
+        syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate);
 
         editingIndex = null;
         renderList();
@@ -8466,6 +8541,7 @@
         const item = data[index];
         if (!item || !itemEl) return;
         const previousTime = item.time || "";
+        const previousDate = item.date || "";
         const hour = itemEl.querySelector(".edit-hour")?.value;
         const minute = itemEl.querySelector(".edit-minute")?.value;
         if (!hour || !minute) {
@@ -8474,7 +8550,7 @@
         }
         item.time = `${hour}:${minute}`;
         item.timePreference = "exact";
-        syncCustomerScheduleFromAdminEdit(item, previousTime);
+        syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate);
 
         editingDateIndex = null;
         renderList();
