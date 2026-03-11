@@ -91,3 +91,75 @@ execute function public.guard_app_state_payload();
 -- ------------------------------------------------------------
 alter table if exists public.companies
   alter column code drop not null;
+
+-- ------------------------------------------------------------
+-- 쿠폰 잔여 횟수 / 사용 이력 저장 테이블
+-- ------------------------------------------------------------
+create table if not exists public.coupon_passes (
+  company_name text primary key,
+  remaining_count integer not null default 0 check (remaining_count >= 0),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.coupon_usage_history (
+  id bigserial primary key,
+  company_name text not null,
+  schedule_id text,
+  action text not null,
+  delta integer not null default 0,
+  before_count integer,
+  after_count integer,
+  memo text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_coupon_usage_history_company_name_created_at
+  on public.coupon_usage_history (company_name, created_at desc);
+
+create or replace function public.touch_coupon_passes_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_touch_coupon_passes_updated_at on public.coupon_passes;
+create trigger trg_touch_coupon_passes_updated_at
+before update on public.coupon_passes
+for each row
+execute function public.touch_coupon_passes_updated_at();
+
+alter table public.coupon_passes enable row level security;
+alter table public.coupon_usage_history enable row level security;
+
+drop policy if exists "public_read_coupon_passes" on public.coupon_passes;
+create policy "public_read_coupon_passes"
+on public.coupon_passes
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "public_write_coupon_passes" on public.coupon_passes;
+create policy "public_write_coupon_passes"
+on public.coupon_passes
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "public_read_coupon_usage_history" on public.coupon_usage_history;
+create policy "public_read_coupon_usage_history"
+on public.coupon_usage_history
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "public_write_coupon_usage_history" on public.coupon_usage_history;
+create policy "public_write_coupon_usage_history"
+on public.coupon_usage_history
+for insert
+to anon, authenticated
+with check (true);

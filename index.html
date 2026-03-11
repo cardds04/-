@@ -1229,7 +1229,6 @@
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
-      const STORAGE_COUPON_PASSES = "scheduleSiteCouponPasses";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
       const STORAGE_FULL_RESET_DONE_V2 = "scheduleSiteFullResetDoneV2";
@@ -1248,7 +1247,6 @@
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
-      const SHARED_COUPON_PASSES_FIELD = "shared_coupon_passes_v1";
       const STORAGE_SYNC_KEYS = [
         STORAGE_CUSTOMER_COMPANIES,
         STORAGE_CUSTOMER_SCHEDULES,
@@ -1262,7 +1260,6 @@
         STORAGE_DAYOFF_REQUESTS,
         STORAGE_DAYOFF_ALERT_READ_IDS,
         STORAGE_LIMIT_CONFIG,
-        STORAGE_COUPON_PASSES,
         STORAGE_EXCLUDED_PHOTOGRAPHERS,
         STORAGE_PHOTOGRAPHER_PROFILES
       ];
@@ -1279,7 +1276,6 @@
         [STORAGE_DAYOFF_REQUESTS]: "[]",
         [STORAGE_DAYOFF_ALERT_READ_IDS]: "[]",
         [STORAGE_LIMIT_CONFIG]: "{}",
-        [STORAGE_COUPON_PASSES]: "{}",
         [STORAGE_EXCLUDED_PHOTOGRAPHERS]: "[]",
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
@@ -1556,14 +1552,13 @@
         Object.assign(couponPasses, normalizeCouponPassesMap(nextMap));
       }
       function loadCouponPassesFromStorage() {
-        const fromStorage = normalizeCouponPassesMap(readStorageObject(STORAGE_COUPON_PASSES));
-        applyCouponPassesMap(fromStorage);
+        applyCouponPassesMap({});
         lastCouponPassesSignature = getCouponPassesSignature();
       }
-      async function fetchSharedCouponPassesFromSupabase() {
-        if (!USE_SUPABASE_SYNC) return null;
+      async function fetchCouponPassRowsFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return [];
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_name,remaining_count&order=company_name.asc`,
           {
             method: "GET",
             headers: {
@@ -1575,52 +1570,69 @@
         );
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`coupon pass 조회 실패 (${response.status}): ${errorText}`);
+          throw new Error(`coupon_passes 조회 실패 (${response.status}): ${errorText}`);
         }
         const rows = await response.json();
-        const payload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : null;
-        if (!payload || typeof payload !== "object") return null;
-        const remoteMap = payload[SHARED_COUPON_PASSES_FIELD];
-        if (!remoteMap || typeof remoteMap !== "object") return null;
-        return normalizeCouponPassesMap(remoteMap);
+        return Array.isArray(rows) ? rows : [];
+      }
+      async function fetchSharedCouponPassesFromSupabase() {
+        const rows = await fetchCouponPassRowsFromSupabase();
+        const mapped = {};
+        rows.forEach((row) => {
+          const companyName = normalizeCompanyName(row?.company_name);
+          if (!companyName) return;
+          mapped[companyName] = Math.max(0, Math.floor(Number(row?.remaining_count) || 0));
+        });
+        return normalizeCouponPassesMap(mapped);
       }
       async function saveCouponPassesToSupabase(nextMapInput) {
         if (!USE_SUPABASE_SYNC) return;
         const nextMap = normalizeCouponPassesMap(nextMapInput);
-        const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
-          {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store"
-          }
+        const remoteRows = await fetchCouponPassRowsFromSupabase();
+        const remoteCompanySet = new Set(
+          remoteRows
+            .map((row) => normalizeCompanyName(row?.company_name))
+            .filter(Boolean)
         );
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`coupon pass 상태 조회 실패 (${response.status}): ${errorText}`);
-        }
-        const rows = await response.json();
-        const currentPayload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : {};
-        const nextPayload = { ...currentPayload, [SHARED_COUPON_PASSES_FIELD]: nextMap };
-        const updateResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}`,
-          {
-            method: "PATCH",
+        const nextEntries = Object.entries(nextMap);
+        if (nextEntries.length > 0) {
+          const upsertRows = nextEntries.map(([companyName, remaining]) => ({
+            company_name: companyName,
+            remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
+          }));
+          const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=company_name`, {
+            method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Prefer: "return=minimal",
+              Prefer: "resolution=merge-duplicates,return=minimal",
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
-            body: JSON.stringify({ payload: nextPayload })
+            body: JSON.stringify(upsertRows)
+          });
+          if (!upsertResponse.ok) {
+            const errorText = await upsertResponse.text();
+            throw new Error(`coupon_passes upsert 실패 (${upsertResponse.status}): ${errorText}`);
           }
-        );
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text();
-          throw new Error(`coupon pass 저장 실패 (${updateResponse.status}): ${errorText}`);
+        }
+        const nextCompanySet = new Set(nextEntries.map(([companyName]) => companyName));
+        const deleteTargets = [...remoteCompanySet].filter((companyName) => !nextCompanySet.has(companyName));
+        for (const companyName of deleteTargets) {
+          const deleteResponse = await fetch(
+            `${SUPABASE_URL}/rest/v1/coupon_passes?company_name=eq.${encodeURIComponent(companyName)}`,
+            {
+              method: "DELETE",
+              headers: {
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              }
+            }
+          );
+          if (!deleteResponse.ok) {
+            const errorText = await deleteResponse.text();
+            throw new Error(`coupon_passes 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+          }
         }
       }
       function queueCouponPassesSync() {
@@ -1640,7 +1652,6 @@
         const signature = getCouponPassesSignature();
         if (signature === lastCouponPassesSignature) return;
         lastCouponPassesSignature = signature;
-        originalSetItem(STORAGE_COUPON_PASSES, JSON.stringify(normalizeCouponPassesMap(couponPasses)));
         queueCouponPassesSync();
       }
       async function pullCouponPassesFromSupabaseAndApply() {
@@ -1653,7 +1664,6 @@
           if (localSignature === remoteSignature) return false;
           isApplyingRemoteCouponPasses = true;
           applyCouponPassesMap(remoteMap);
-          originalSetItem(STORAGE_COUPON_PASSES, JSON.stringify(remoteMap));
           lastCouponPassesSignature = remoteSignature;
           return true;
         } catch (error) {
@@ -1661,6 +1671,46 @@
           return false;
         } finally {
           isApplyingRemoteCouponPasses = false;
+        }
+      }
+      async function appendCouponUsageHistoryLog({
+        companyName = "",
+        scheduleId = "",
+        action = "",
+        delta = 0,
+        beforeCount = null,
+        afterCount = null,
+        memo = ""
+      } = {}) {
+        if (!USE_SUPABASE_SYNC) return;
+        const normalizedCompany = normalizeCompanyName(companyName);
+        if (!normalizedCompany || !action) return;
+        const payload = {
+          company_name: normalizedCompany,
+          schedule_id: String(scheduleId || "").trim() || null,
+          action: String(action || "").trim(),
+          delta: Number(delta) || 0,
+          before_count: Number.isFinite(Number(beforeCount)) ? Number(beforeCount) : null,
+          after_count: Number.isFinite(Number(afterCount)) ? Number(afterCount) : null,
+          memo: String(memo || "").trim() || null
+        };
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/coupon_usage_history`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify([payload])
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`coupon_usage_history 기록 실패 (${response.status}): ${errorText}`);
+          }
+        } catch (error) {
+          console.error("[COUPON][index] 사용 이력 저장 실패", error);
         }
       }
       async function fetchRemoteStateSnapshot() {
@@ -2096,6 +2146,29 @@
           // schedules realtime 실패 시 focus pull로 동작
         }
       }
+      function startCouponPassesRealtimeSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel("coupon-passes-live-index")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "coupon_passes" },
+              () => {
+                void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+                  if (!changed) return;
+                  renderCouponPassList();
+                  renderPaymentList();
+                });
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // coupon_passes realtime 실패 시 focus pull로 동작
+        }
+      }
 
       setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
@@ -2106,11 +2179,13 @@
       startWritersRealtimeSubscription();
       startPaymentsRealtimeSubscription();
       startSchedulesRealtimeSubscription();
+      startCouponPassesRealtimeSubscription();
       window.addEventListener("focus", () => {
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullWritersFromSupabaseAndRefresh();
         void pullPaymentsFromSupabaseAndApply();
         void pullSchedulesFromSupabaseAndApply();
+        void pullCouponPassesFromSupabaseAndApply();
         void pullSharedLimitConfigAndApply();
       });
       document.addEventListener("visibilitychange", () => {
@@ -2119,6 +2194,7 @@
           void pullWritersFromSupabaseAndRefresh();
           void pullPaymentsFromSupabaseAndApply();
           void pullSchedulesFromSupabaseAndApply();
+          void pullCouponPassesFromSupabaseAndApply();
           void pullSharedLimitConfigAndApply();
         }
       });
@@ -2625,11 +2701,13 @@
       async function syncPaymentsToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
         const paymentRows = buildPaymentRowsSnapshot();
-        const insertRows = paymentRows.map(({ source, item }) => {
+        const localRows = paymentRows.map(({ source, item }) => {
           const amountRaw = String(item?.paymentAmount || "").trim();
           const parsedAmount = Number(String(amountRaw).replace(/[^\d.-]/g, ""));
           const paymentDateDb = normalizePaymentDateForDb(item?.paymentDate, item?.date);
-          return {
+          const identity = getPaymentIdentity(item);
+          const syncKey = `${source}::${identity}`;
+          const row = {
             schedule_id: null,
             company_id: null,
             company_name: String(item?.company || "").trim(),
@@ -2646,7 +2724,8 @@
                 : String(item?.paymentStatus || "미입금").trim() || "미입금",
             is_half_paid: Boolean(item?.partialPaid),
             memo: JSON.stringify({
-              identity: getPaymentIdentity(item),
+              syncKey,
+              identity,
               source,
               amountRaw,
               snapshot: {
@@ -2669,31 +2748,97 @@
               }
             })
           };
+          return { syncKey, row };
         });
-        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=not.is.null`, {
-          method: "DELETE",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        const remoteRows = await fetchPaymentsFromSupabase();
+        const remoteBySyncKey = new Map();
+        (Array.isArray(remoteRows) ? remoteRows : []).forEach((remote) => {
+          let payload = {};
+          try {
+            payload = remote?.memo ? JSON.parse(remote.memo) : {};
+          } catch (error) {
+            payload = {};
+          }
+          const source = String(payload?.source || "active").trim();
+          const identity = String(payload?.identity || "").trim();
+          const syncKey = String(payload?.syncKey || (identity ? `${source}::${identity}` : "")).trim();
+          if (!syncKey) return;
+          if (!remoteBySyncKey.has(syncKey)) {
+            remoteBySyncKey.set(syncKey, remote);
           }
         });
-        if (!deleteResponse.ok) {
-          const errorText = await deleteResponse.text();
-          throw new Error(`payments 삭제 실패 (${deleteResponse.status}): ${errorText}`);
-        }
-        if (!insertRows.length) return;
-        const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify(insertRows)
+        const localSyncKeySet = new Set(localRows.map((entry) => entry.syncKey));
+        const insertRows = [];
+        const patchTasks = [];
+        localRows.forEach(({ syncKey, row }) => {
+          const remote = remoteBySyncKey.get(syncKey);
+          if (!remote) {
+            insertRows.push(row);
+            return;
+          }
+          const same =
+            String(remote.company_name || "") === String(row.company_name || "") &&
+            String(remote.payer_name || "") === String(row.payer_name || "") &&
+            Number(remote.amount || 0) === Number(row.amount || 0) &&
+            String(remote.paid_at || "") === String(row.paid_at || "") &&
+            String(remote.status || "") === String(row.status || "") &&
+            Boolean(remote.is_half_paid) === Boolean(row.is_half_paid) &&
+            String(remote.memo || "") === String(row.memo || "");
+          if (!same) {
+            patchTasks.push({ id: remote.id, row });
+          }
         });
-        if (!insertResponse.ok) {
-          const errorText = await insertResponse.text();
-          throw new Error(`payments 등록 실패 (${insertResponse.status}): ${errorText}`);
+        for (const task of patchTasks) {
+          const patchResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${encodeURIComponent(task.id)}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(task.row)
+          });
+          if (!patchResponse.ok) {
+            const errorText = await patchResponse.text();
+            throw new Error(`payments 수정 실패 (${patchResponse.status}): ${errorText}`);
+          }
+        }
+        if (insertRows.length) {
+          const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(insertRows)
+          });
+          if (!insertResponse.ok) {
+            const errorText = await insertResponse.text();
+            throw new Error(`payments 등록 실패 (${insertResponse.status}): ${errorText}`);
+          }
+        }
+        const deleteIds = [];
+        remoteBySyncKey.forEach((remote, syncKey) => {
+          if (!localSyncKeySet.has(syncKey)) {
+            deleteIds.push(remote.id);
+          }
+        });
+        if (deleteIds.length) {
+          const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=in.(${deleteIds.join(",")})`, {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (!deleteResponse.ok) {
+            const errorText = await deleteResponse.text();
+            throw new Error(`payments 정리 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+          }
         }
       }
       function queuePaymentsSync() {
@@ -6488,6 +6633,15 @@
         }
 
         setCouponRemaining(item.company, remaining - 1);
+        void appendCouponUsageHistoryLog({
+          companyName: item.company,
+          scheduleId: item.customerScheduleId,
+          action: "use",
+          delta: -1,
+          beforeCount: remaining,
+          afterCount: remaining - 1,
+          memo: "입금관리 1회적용"
+        });
         item.paymentStatus = "입금완료";
         item.paymentAmount = item.paymentAmount || "쿠폰사용";
         item.paymentPayer = item.paymentPayer || "쿠폰";
@@ -6514,6 +6668,15 @@
         if (holdItem.couponUsed) {
           const remaining = getCouponRemaining(holdItem.company);
           setCouponRemaining(holdItem.company, remaining + 1);
+          void appendCouponUsageHistoryLog({
+            companyName: holdItem.company,
+            scheduleId: holdItem.customerScheduleId,
+            action: "restore",
+            delta: 1,
+            beforeCount: remaining,
+            afterCount: remaining + 1,
+            memo: "보류취소로 쿠폰복구"
+          });
           onHoldPayments.splice(index, 1);
           renderPaymentList();
           renderCouponPassList();
@@ -8427,11 +8590,6 @@
         if (event.key === STORAGE_ADMIN_COMPANIES) {
           loadAdminCompaniesFromStorage();
           renderCompanies();
-        }
-        if (event.key === STORAGE_COUPON_PASSES) {
-          loadCouponPassesFromStorage();
-          renderCouponPassList();
-          renderPaymentList();
         }
         if (event.key === STORAGE_ADMIN_SCHEDULES) {
           loadAdminSchedulesFromStorage();
