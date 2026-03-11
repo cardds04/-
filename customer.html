@@ -1843,9 +1843,27 @@
               </article>
             `;
           };
+        const parseTimeToMinutes = (timeText) => {
+          const text = String(timeText || "").trim();
+          if (!text) return 0;
+          const hhmm = text.match(/^(\d{1,2}):(\d{2})$/);
+          if (hhmm) {
+            const hour = Math.max(0, Math.min(23, Number(hhmm[1]) || 0));
+            const minute = Math.max(0, Math.min(59, Number(hhmm[2]) || 0));
+            return hour * 60 + minute;
+          }
+          const koreanHour = text.match(/^(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?$/);
+          if (koreanHour) {
+            const hour = Math.max(0, Math.min(23, Number(koreanHour[1]) || 0));
+            const minute = Math.max(0, Math.min(59, Number(koreanHour[2]) || 0));
+            return hour * 60 + minute;
+          }
+          return 0;
+        };
         const toDateTimeValue = (item) => {
-          const at = new Date(`${item?.date || "1900-01-01"}T${item?.time || "00:00"}:00`).getTime();
-          return Number.isNaN(at) ? 0 : at;
+          const dateText = String(item?.date || "").trim();
+          const dateMs = /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? new Date(`${dateText}T00:00:00`).getTime() : 0;
+          return (Number.isNaN(dateMs) ? 0 : dateMs) + parseTimeToMinutes(item?.time) * 60000;
         };
         const upcomingSchedules = schedules
           .filter((item) => !isPastSchedule(item.date))
