@@ -1060,7 +1060,7 @@
                 <th>입금자명</th>
                 <th>입금날짜</th>
                 <th>입금금액</th>
-                <th>입금금액</th>
+                <th>입금상태</th>
                 <th>관리</th>
               </tr>
             </thead>
@@ -5981,6 +5981,19 @@
           return "9999-12-31";
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
+        const getCouponProgressText = (companyName) => {
+          const normalizedCompany = normalizeCompanyName(companyName || "");
+          if (!normalizedCompany) return "";
+          const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany)) || 0);
+          const used = [...data, ...onHoldPayments, ...refundPayments].filter(
+            (row) =>
+              normalizeCompanyName(row?.company || "") === normalizedCompany &&
+              Boolean(row?.couponUsed)
+          ).length;
+          const total = remaining + used;
+          if (total <= 0) return "";
+          return `남은쿠폰 ${remaining}/${total}`;
+        };
         const filtered =
           currentPaymentFilter === "hold"
             ? onHoldPayments.map((item, index) => ({ item, index, source: "hold" }))
@@ -6085,7 +6098,9 @@
                 isEditing
                   ? `<span>완료/반만입금 버튼으로 처리</span>`
                   : `${
-                      source === "hold"
+                      source === "active" && getCouponProgressText(item.company)
+                        ? getCouponProgressText(item.company)
+                        : source === "hold"
                         ? "보류"
                         : source === "refund"
                         ? item.refundChecked
