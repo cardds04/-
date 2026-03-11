@@ -6087,6 +6087,18 @@
                   `<button class="btn-sm" type="button" data-action="choosePayerHistory" data-index="${index}" data-payer-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`
               )
               .join("");
+            const amountHistoryButtons = [...new Set(
+              data
+                .filter((row) => normalizeCompanyName(row?.company) === companyName)
+                .map((row) => String(row?.paymentAmount || "").trim())
+                .filter((amount) => amount && !["150000", "250000", "쿠폰사용"].includes(amount))
+            )]
+              .slice(0, 5)
+              .map(
+                (amount) =>
+                  `<button class="btn-sm" type="button" data-action="chooseAmountHistory" data-index="${index}" data-amount-value="${escapeHtml(amount)}">${escapeHtml(amount)}</button>`
+              )
+              .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
             return `
             <tr>
@@ -6120,6 +6132,7 @@
                        <button class="btn-sm ${amountMode === "custom" ? "primary" : ""}" type="button" data-action="setAmountPresetCustom" data-index="${index}">임의금액</button>
                        <button class="btn-sm" type="button" data-action="setAmountAddVat" data-index="${index}">부가세</button>
                      </div>
+                     ${amountHistoryButtons ? `<div class="quick-writer-row" style="margin-bottom: 4px;">${amountHistoryButtons}</div>` : ""}
                      <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" ${
                        amountMode === "custom" ? "" : "readonly"
                      } placeholder="입금금액 입력" />`
@@ -6762,6 +6775,13 @@
           if (!amountInput) return;
           amountInput.removeAttribute("readonly");
           amountInput.focus();
+          return;
+        }
+        if (action === "chooseAmountHistory") {
+          const amountInput = rowEl?.querySelector(".pay-amount");
+          if (!amountInput) return;
+          amountInput.value = String(button.dataset.amountValue || "").trim();
+          amountInput.removeAttribute("readonly");
           return;
         }
         if (action === "setAmountAddVat") {
