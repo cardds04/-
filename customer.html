@@ -777,7 +777,6 @@
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
-      let paymentDetailOpen = false;
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
@@ -1751,6 +1750,10 @@
                   <span>${editable ? "수정가능" : "수정제한"}</span>
                 </div>
                 <div class="status-meta">
+                  ${(() => {
+                    const amountValue = parsePaymentAmountValue(item?.paymentAmount);
+                    return `금액: ${amountValue > 0 ? formatWonText(amountValue) : "-"}`;
+                  })()}<br />
                   장소: ${item.place || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   배정작가: ${item.name || "작가미정"}<br />
@@ -1781,19 +1784,6 @@
         const unpaidTotalAmount = unpaidRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
         const vatAmount = Math.round(unpaidTotalAmount * 0.1);
         const totalWithVat = unpaidTotalAmount + vatAmount;
-        const unpaidDetailRowsHtml = unpaidRows.length
-          ? unpaidRows
-            .map((item) => {
-              const amount = parsePaymentAmountValue(item?.paymentAmount);
-              return `
-                <div style="display:flex; justify-content:space-between; gap:8px; border-top:1px dashed #d7ddec; padding:6px 0;">
-                  <span>${item.date || "-"} | ${item.place || "-"} | ${item.composition || "-"}</span>
-                  <strong>${formatWonText(amount)}</strong>
-                </div>
-              `;
-            })
-            .join("")
-          : '<div class="hint" style="padding-top:6px;">미입금 내역이 없습니다.</div>';
         paymentSummaryBoxEl.innerHTML = `
           <div class="payment-summary-title">입금내역</div>
           <div class="payment-summary-grid">
@@ -1801,17 +1791,7 @@
             <div class="status-card">입금확인중: <strong>${pendingCount}건</strong></div>
           </div>
           <div class="status-card" style="margin-top:8px; line-height:1.65;">
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <strong>내가 입금해야 할 금액: ${formatWonText(unpaidTotalAmount)}</strong>
-              <button class="btn outline small" type="button" data-action="togglePaymentDetail">${paymentDetailOpen ? "상세내역 닫기" : "상세내역"}</button>
-            </div>
-            <div class="${paymentDetailOpen ? "" : "hidden"}" style="margin-top:8px; font-size:0.9rem;">
-              <div class="hint">미입금 일정별 금액 합계로 산정됩니다.</div>
-              ${unpaidDetailRowsHtml}
-              <div style="border-top:1px solid #d7ddec; margin-top:6px; padding-top:6px;">
-                합계: <strong>${formatWonText(unpaidTotalAmount)}</strong>
-              </div>
-            </div>
+            <div><strong>내가 입금해야 할 금액: ${formatWonText(unpaidTotalAmount)}</strong></div>
             <div class="hint"><strong>계좌번호:</strong> 농협 3021511169151 김진영</div>
             <div style="font-size:0.9rem; margin-top:2px;">세금계산서 발행시: ${formatWonText(totalWithVat)} (10% 추가)</div>
             <div class="hint" style="margin-top:6px;">세금계산서발행은 10%추가됩니다.</div>
@@ -2206,12 +2186,6 @@
         const cardEl = target.closest(".status-card");
         if (!cardEl) return;
         refreshEditDayOptions(cardEl, cardEl.querySelector(".edit-day")?.value);
-      });
-      paymentSummaryBoxEl.addEventListener("click", (event) => {
-        const button = event.target.closest('button[data-action="togglePaymentDetail"]');
-        if (!button) return;
-        paymentDetailOpen = !paymentDetailOpen;
-        renderPaymentSummary();
       });
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
