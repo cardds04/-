@@ -1305,7 +1305,7 @@
         }).length;
         return customerCount + adminOnlyCount;
       }
-      function collectClosedDatesByMonth(year, month) {
+      function collectClosedDatesByMonth(year, month, minDateKey = "") {
         const y = Number(year);
         const m = Number(month);
         if (Number.isNaN(y) || Number.isNaN(m) || m < 1 || m > 12) return [];
@@ -1313,9 +1313,10 @@
         const result = [];
         for (let day = 1; day <= daysInMonth; day += 1) {
           const dateKey = `${y}-${pad2(m)}-${pad2(day)}`;
+          if (minDateKey && dateKey < minDateKey) continue;
           const limit = getEffectiveDailyLimit(dateKey);
           const booked = getBookedCountForDate(dateKey);
-          if (booked >= limit) result.push(day);
+          if (booked >= limit) result.push({ day, weekday: weekdayNames[new Date(y, m - 1, day).getDay()] });
         }
         return result;
       }
@@ -1324,13 +1325,18 @@
         const now = new Date();
         const thisYear = now.getFullYear();
         const thisMonth = now.getMonth() + 1;
+        const todayKey = `${thisYear}-${pad2(thisMonth)}-${pad2(now.getDate())}`;
         const nextDate = new Date(thisYear, thisMonth - 1, 1);
         nextDate.setMonth(nextDate.getMonth() + 1);
         const nextYear = nextDate.getFullYear();
         const nextMonth = nextDate.getMonth() + 1;
-        const thisMonthClosed = collectClosedDatesByMonth(thisYear, thisMonth);
+        const thisMonthClosed = collectClosedDatesByMonth(thisYear, thisMonth, todayKey);
         const nextMonthClosed = collectClosedDatesByMonth(nextYear, nextMonth);
-        const formatDays = (days) => (days.length ? days.map((day) => `${day}일`).join(", ") : "마감일 없음");
+        const formatDays = (days) => (days.length
+          ? days
+            .map((item) => `<span style="color:#d74444; font-weight:700;">${item.day}일(${item.weekday})</span>`)
+            .join(", ")
+          : "마감일 없음");
         closedDatesNoticeBoxEl.innerHTML = `
           <div style="font-weight: 700; margin-bottom: 4px;">촬영예약 마감일</div>
           <div style="font-size: 0.9rem; line-height: 1.5;">
