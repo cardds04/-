@@ -2693,22 +2693,27 @@
             });
             return;
           }
+          const nextLoginId = String(row.id || "").trim() || String(remote.login_id || "").trim() || null;
+          const nextPassword = String(row.password || "").trim() || String(remote.password || "").trim();
+          const nextPhone = String(row.phone || "").trim() || String(remote.phone || "").trim();
+          const nextCarNumber = String(row.carNumber || "").trim() || String(remote.car_number || "").trim();
+          const nextIsActive = row.isActive !== false;
           const changed =
             String(remote.name || "").trim() !== row.name ||
-            String(remote.login_id || "").trim() !== String(row.id || "").trim() ||
-            String(remote.password || "").trim() !== String(row.password || "").trim() ||
-            String(remote.phone || "").trim() !== String(row.phone || "").trim() ||
-            String(remote.car_number || "").trim() !== String(row.carNumber || "").trim() ||
-            Boolean(remote.is_active) !== Boolean(row.isActive !== false);
+            String(remote.login_id || "").trim() !== String(nextLoginId || "").trim() ||
+            String(remote.password || "").trim() !== String(nextPassword || "").trim() ||
+            String(remote.phone || "").trim() !== String(nextPhone || "").trim() ||
+            String(remote.car_number || "").trim() !== String(nextCarNumber || "").trim() ||
+            Boolean(remote.is_active) !== Boolean(nextIsActive);
           if (changed) {
             updateRows.push({
               id: remote.id,
               name: row.name,
-              login_id: row.id || null,
-              password: row.password || "",
-              phone: row.phone || "",
-              car_number: row.carNumber || "",
-              is_active: row.isActive !== false
+              login_id: nextLoginId,
+              password: nextPassword,
+              phone: nextPhone,
+              car_number: nextCarNumber,
+              is_active: nextIsActive
             });
           }
         });

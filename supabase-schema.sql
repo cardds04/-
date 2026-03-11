@@ -163,3 +163,49 @@ on public.coupon_usage_history
 for insert
 to anon, authenticated
 with check (true);
+
+-- ------------------------------------------------------------
+-- writers.login_id 보호: NOT NULL + UNIQUE 강제
+-- ------------------------------------------------------------
+do $$
+declare
+  blank_count integer := 0;
+  dup_count integer := 0;
+begin
+  if to_regclass('public.writers') is null then
+    return;
+  end if;
+
+  select count(*)
+    into blank_count
+  from public.writers
+  where login_id is null or btrim(login_id) = '';
+
+  if blank_count > 0 then
+    raise exception 'writers.login_id 가 비어있는 데이터 %건이 있어 NOT NULL 적용이 중단되었습니다. 먼저 정리해주세요.', blank_count;
+  end if;
+
+  select count(*)
+    into dup_count
+  from (
+    select login_id
+    from public.writers
+    group by login_id
+    having count(*) > 1
+  ) d;
+
+  if dup_count > 0 then
+    raise exception 'writers.login_id 중복 데이터 그룹 %개가 있어 UNIQUE 적용이 중단되었습니다. 먼저 정리해주세요.', dup_count;
+  end if;
+
+  update public.writers
+  set login_id = btrim(login_id)
+  where login_id <> btrim(login_id);
+
+  alter table public.writers
+    alter column login_id set not null;
+end;
+$$;
+
+create unique index if not exists writers_login_id_unique
+  on public.writers (login_id);
