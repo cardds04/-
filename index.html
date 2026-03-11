@@ -8076,7 +8076,7 @@
           scheduleDetailModalEl.classList.add("hidden");
         }
       });
-      companyOrderHistorySummaryEl.addEventListener("click", (event) => {
+      companyOrderHistorySummaryEl.addEventListener("click", async (event) => {
         const button = event.target.closest("button[data-action='saveCompanyAccount'][data-company-name]");
         if (!button) return;
         const companyName = normalizeCompanyName(button.dataset.companyName);
@@ -8122,6 +8122,10 @@
           company.code = newCompanyCode;
           adminCompanyChanged = true;
         });
+        if (!adminCompanyChanged) {
+          companies.unshift({ name: companyName, phone: String(users[targetIndex]?.phone || "").trim() || "-", code: newCompanyCode });
+          adminCompanyChanged = true;
+        }
         if (adminCompanyChanged) {
           saveAdminCompaniesToStorage();
         }
@@ -8158,6 +8162,35 @@
 
           if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === oldId) {
             localStorage.setItem(STORAGE_CUSTOMER_SESSION, newId);
+          }
+        }
+        if (USE_SUPABASE_SYNC) {
+          try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "resolution=merge-duplicates,return=minimal"
+              },
+              body: JSON.stringify([
+                {
+                  login_id: newId,
+                  password: newPassword,
+                  company_name: companyName,
+                  company_code: newCompanyCode,
+                  phone: String(users[targetIndex]?.phone || "").trim()
+                }
+              ])
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(errorText || "customers upsert failed");
+            }
+          } catch (error) {
+            console.error("[CUSTOMERS][index] 업체 계정 저장 동기화 실패", error);
+            alert("업체 계정 저장은 되었지만 서버 동기화에 실패했습니다. 잠시 후 다시 시도해주세요.");
           }
         }
 
