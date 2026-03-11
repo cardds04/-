@@ -1305,6 +1305,13 @@
         }).length;
         return customerCount + adminOnlyCount;
       }
+      function buildScheduleIdentityKey(row) {
+        const date = normalize(row?.date);
+        const time = normalize(row?.time);
+        const companyKey = getCompanyKey(row?.company, row?.companyCode) || "nocompany";
+        const placeKey = normalize(row?.place).replace(/\s+/g, "").toLowerCase() || "noplace";
+        return `${date}|${time}|${companyKey}|${placeKey}`;
+      }
       function collectClosedDatesByMonth(year, month, minDateKey = "") {
         const y = Number(year);
         const m = Number(month);
@@ -1674,6 +1681,7 @@
           .map((item) => {
             const editable = canEditOrDelete(item.date);
             const isEditing = editingScheduleId === item.customerScheduleId;
+            const rowIdentityKey = buildScheduleIdentityKey(item);
             if (isEditing) {
               const [rawYear = `${currentYear}`, rawMonth = "01", rawDay = "01"] = String(item.date || `${currentYear}-01-01`).split("-");
               const editYear = Number(rawYear) || currentYear;
@@ -1687,7 +1695,7 @@
                 .join("");
               const dayOptions = buildDayOptionsHtml(editYear, editMonth, editDay).html;
               return `
-                <article class="status-card" data-id="${item.customerScheduleId}">
+                <article class="status-card" data-id="${item.customerScheduleId}" data-row-key="${rowIdentityKey}">
                   <div class="status-head">수정 중</div>
                   <div class="form">
                     <div class="triple">
@@ -1744,7 +1752,7 @@
               `;
             }
             return `
-              <article class="status-card" data-id="${item.customerScheduleId}">
+              <article class="status-card" data-id="${item.customerScheduleId}" data-row-key="${rowIdentityKey}">
                 <div class="status-head">
                   <span>${item.date} | ${formatScheduleTimeWithPreference(item.time || "09:00", item.timePreference)}</span>
                   <span>${editable ? "수정가능" : "수정제한"}</span>
@@ -2050,7 +2058,12 @@
         const action = button.dataset.action;
         const scheduleId = button.dataset.id;
         const schedules = readStorageArray(STORAGE_SCHEDULES);
-        const index = schedules.findIndex((item) => item.customerScheduleId === scheduleId);
+        const cardElForLookup = button.closest(".status-card");
+        const rowKey = cardElForLookup?.dataset.rowKey || "";
+        let index = schedules.findIndex((item) => item.customerScheduleId === scheduleId);
+        if (index < 0 && rowKey) {
+          index = schedules.findIndex((row) => buildScheduleIdentityKey(row) === rowKey);
+        }
         const item = schedules[index];
 
         if (action === "startEdit") {
@@ -2189,7 +2202,10 @@
           renderStatusList();
         }
         if (action === "markPaymentPending") {
-          if (!item) return;
+          if (!item) {
+            alert("대상 일정을 찾지 못했습니다. 새로고침 후 다시 시도해주세요.");
+            return;
+          }
           const currentStatus = normalize(item?.paymentStatus) || "미입금";
           if (currentStatus === "입금완료") {
             alert("이미 입금완료 처리된 일정입니다.");
