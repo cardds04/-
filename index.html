@@ -1409,6 +1409,7 @@
       let couponPassesSyncPromise = null;
       let isApplyingRemoteCouponPasses = false;
       let lastCouponPassesSignature = "";
+      let couponPassesSchemaMode = "";
       let lastScheduleSyncSignature = "";
       let hasLoadedSchedulesFromServer = false;
       let limitConfigSyncPromise = null;
@@ -1555,10 +1556,62 @@
         applyCouponPassesMap({});
         lastCouponPassesSignature = getCouponPassesSignature();
       }
+      async function detectCouponPassesSchemaMode() {
+        if (couponPassesSchemaMode) return couponPassesSchemaMode;
+        if (!USE_SUPABASE_SYNC) return "";
+        const companyIdResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_id&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (companyIdResponse.ok) {
+          couponPassesSchemaMode = "company_id";
+          return couponPassesSchemaMode;
+        }
+        const companyNameResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_name&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (companyNameResponse.ok) {
+          couponPassesSchemaMode = "company_name";
+          return couponPassesSchemaMode;
+        }
+        const idErrorText = await companyIdResponse.text();
+        const nameErrorText = await companyNameResponse.text();
+        throw new Error(`coupon_passes 스키마 확인 실패: company_id(${idErrorText}) / company_name(${nameErrorText})`);
+      }
+      async function fetchCompanyIdNameMapFromSupabase() {
+        const rows = await fetchCompaniesFromSupabase();
+        const idToName = new Map();
+        const nameToId = new Map();
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const id = String(row?.id || "").trim();
+          const name = normalizeCompanyName(row?.name);
+          if (!id || !name) return;
+          idToName.set(id, name);
+          nameToId.set(name.toLowerCase(), id);
+        });
+        return { idToName, nameToId };
+      }
       async function fetchCouponPassRowsFromSupabase() {
         if (!USE_SUPABASE_SYNC) return [];
+        const schemaMode = await detectCouponPassesSchemaMode();
+        const selectFields = schemaMode === "company_id" ? "id,company_id,remaining_count" : "id,company_name,remaining_count";
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_name,remaining_count&order=company_name.asc`,
+          `${SUPABASE_URL}/rest/v1/coupon_passes?select=${selectFields}&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -1573,62 +1626,103 @@
           throw new Error(`coupon_passes 조회 실패 (${response.status}): ${errorText}`);
         }
         const rows = await response.json();
-        return Array.isArray(rows) ? rows : [];
+        if (!Array.isArray(rows)) return [];
+        if (schemaMode === "company_id") {
+          const { idToName } = await fetchCompanyIdNameMapFromSupabase();
+          return rows
+            .map((row) => {
+              const companyId = String(row?.company_id || "").trim();
+              const companyName = idToName.get(companyId) || companyId;
+              return {
+                id: String(row?.id || "").trim(),
+                companyId,
+                companyName: normalizeCompanyName(companyName),
+                remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0))
+              };
+            })
+            .filter((row) => row.companyId && row.companyName);
+        }
+        return rows
+          .map((row) => ({
+            id: String(row?.id || "").trim(),
+            companyName: normalizeCompanyName(row?.company_name),
+            remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0))
+          }))
+          .filter((row) => row.companyName);
       }
       async function fetchSharedCouponPassesFromSupabase() {
         const rows = await fetchCouponPassRowsFromSupabase();
         const mapped = {};
         rows.forEach((row) => {
-          const companyName = normalizeCompanyName(row?.company_name);
+          const companyName = normalizeCompanyName(row?.companyName);
           if (!companyName) return;
-          mapped[companyName] = Math.max(0, Math.floor(Number(row?.remaining_count) || 0));
+          mapped[companyName] = Math.max(0, Math.floor(Number(row?.remainingCount) || 0));
         });
         return normalizeCouponPassesMap(mapped);
       }
       async function saveCouponPassesToSupabase(nextMapInput) {
         if (!USE_SUPABASE_SYNC) return;
         const nextMap = normalizeCouponPassesMap(nextMapInput);
+        const schemaMode = await detectCouponPassesSchemaMode();
         const remoteRows = await fetchCouponPassRowsFromSupabase();
-        const remoteCompanySet = new Set(
-          remoteRows
-            .map((row) => normalizeCompanyName(row?.company_name))
-            .filter(Boolean)
-        );
+        const remoteCompanySet = new Set(remoteRows.map((row) => normalizeCompanyName(row?.companyName)).filter(Boolean));
         const nextEntries = Object.entries(nextMap);
         if (nextEntries.length > 0) {
-          const upsertRows = nextEntries.map(([companyName, remaining]) => ({
-            company_name: companyName,
-            remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
-          }));
-          const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=company_name`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Prefer: "resolution=merge-duplicates,return=minimal",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify(upsertRows)
-          });
-          if (!upsertResponse.ok) {
-            const errorText = await upsertResponse.text();
-            throw new Error(`coupon_passes upsert 실패 (${upsertResponse.status}): ${errorText}`);
+          let upsertRows = [];
+          let onConflictKey = "company_name";
+          if (schemaMode === "company_id") {
+            const { nameToId } = await fetchCompanyIdNameMapFromSupabase();
+            upsertRows = nextEntries
+              .map(([companyName, remaining]) => {
+                const companyId = nameToId.get(String(companyName || "").toLowerCase());
+                if (!companyId) return null;
+                return {
+                  company_id: companyId,
+                  remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
+                };
+              })
+              .filter(Boolean);
+            onConflictKey = "company_id";
+          } else {
+            upsertRows = nextEntries.map(([companyName, remaining]) => ({
+              company_name: companyName,
+              remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
+            }));
+          }
+          if (upsertRows.length > 0) {
+            const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=${onConflictKey}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "resolution=merge-duplicates,return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify(upsertRows)
+            });
+            if (!upsertResponse.ok) {
+              const errorText = await upsertResponse.text();
+              throw new Error(`coupon_passes upsert 실패 (${upsertResponse.status}): ${errorText}`);
+            }
           }
         }
         const nextCompanySet = new Set(nextEntries.map(([companyName]) => companyName));
         const deleteTargets = [...remoteCompanySet].filter((companyName) => !nextCompanySet.has(companyName));
         for (const companyName of deleteTargets) {
-          const deleteResponse = await fetch(
-            `${SUPABASE_URL}/rest/v1/coupon_passes?company_name=eq.${encodeURIComponent(companyName)}`,
-            {
-              method: "DELETE",
-              headers: {
-                Prefer: "return=minimal",
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              }
+          const remote = remoteRows.find((row) => normalizeCompanyName(row?.companyName) === companyName);
+          if (!remote) continue;
+          const query =
+            schemaMode === "company_id"
+              ? `company_id=eq.${encodeURIComponent(String(remote.companyId || ""))}`
+              : `company_name=eq.${encodeURIComponent(companyName)}`;
+          const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?${query}`, {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             }
-          );
+          });
           if (!deleteResponse.ok) {
             const errorText = await deleteResponse.text();
             throw new Error(`coupon_passes 삭제 실패 (${deleteResponse.status}): ${errorText}`);
