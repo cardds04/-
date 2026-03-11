@@ -92,6 +92,24 @@ execute function public.guard_app_state_payload();
 alter table if exists public.companies
   alter column code drop not null;
 
+-- 업체 고유번호(code)는 중복 허용
+do $$
+begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conname = 'companies_code_unique_idx'
+      and conrelid = 'public.companies'::regclass
+  ) then
+    alter table public.companies drop constraint companies_code_unique_idx;
+  end if;
+exception when undefined_table then
+  null;
+end;
+$$;
+
+drop index if exists public.companies_code_unique_idx;
+
 -- ------------------------------------------------------------
 -- 쿠폰 잔여 횟수 / 사용 이력 저장 테이블
 -- ------------------------------------------------------------

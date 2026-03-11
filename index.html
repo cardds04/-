@@ -3564,6 +3564,9 @@
           });
           if (!response.ok) {
             const errorText = await response.text();
+            if (response.status === 409 && /companies_code_unique_idx/i.test(errorText)) {
+              throw new Error(`업체 고유번호가 이미 사용 중입니다: ${row.code}`);
+            }
             throw new Error(`companies 수정 실패 (${response.status}): ${errorText}`);
           }
         }
@@ -3580,6 +3583,9 @@
           });
           if (!response.ok) {
             const errorText = await response.text();
+            if (response.status === 409 && /companies_code_unique_idx/i.test(errorText)) {
+              throw new Error("업체 고유번호가 이미 사용 중인 값이 있어 저장에 실패했습니다.");
+            }
             throw new Error(`companies 등록 실패 (${response.status}): ${errorText}`);
           }
         }
@@ -8109,7 +8115,6 @@
           alert("이미 사용 중인 아이디입니다.");
           return;
         }
-
         const oldId = String(users[targetIndex].id || "").trim();
         users[targetIndex].id = newId;
         users[targetIndex].password = newPassword;
@@ -8471,14 +8476,6 @@
             alert("이미 등록된 업체명입니다.");
             return;
           }
-          const duplicateCode = newCode
-            ? companies.some((company, companyIndex) => companyIndex !== index && normalizeCompanyCode(company.code).toLowerCase() === newCode.toLowerCase())
-            : false;
-          if (duplicateCode) {
-            alert("이미 사용 중인 업체 고유번호입니다.");
-            return;
-          }
-
           companies[index].name = newName;
           companies[index].phone = newPhone;
           companies[index].code = newCode;
