@@ -3699,6 +3699,7 @@
 
         if (isTimeChanged) {
           target.time = item.time;
+          target.timePreference = "exact";
           target.adminTimeUpdated = true;
           target.adminTimeUpdatedAt = new Date().toISOString();
         }
@@ -7708,7 +7709,10 @@
         }
 
         if (date) item.date = date;
-        if (hour && minute) item.time = `${hour}:${minute}`;
+        if (hour && minute) {
+          item.time = `${hour}:${minute}`;
+          item.timePreference = "exact";
+        }
         if (company) item.company = company;
         if (place) item.place = place;
         item.pyeong = pyeong || "";
@@ -7738,6 +7742,7 @@
           return;
         }
         item.time = `${hour}:${minute}`;
+        item.timePreference = "exact";
         syncCustomerScheduleFromAdminEdit(item, previousTime);
 
         editingDateIndex = null;
