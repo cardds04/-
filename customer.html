@@ -1118,6 +1118,14 @@
         if (pref === "other") return `${base} 그외시간`;
         return base;
       }
+      function getCustomerPaymentStatusLabel(rawStatus) {
+        const status = normalize(rawStatus);
+        if (!status) return "미입금";
+        if (status.includes("환불")) return "환불완료";
+        if (status === "입금완료" || status === "입금") return "입금";
+        if (status === "보류" || status === "입금확인중" || status === "부분입금") return "보류";
+        return "미입금";
+      }
       function formatWonText(amount) {
         const value = Math.max(0, Number(amount) || 0);
         return `${value.toLocaleString("ko-KR")}원`;
@@ -1762,7 +1770,7 @@
                     const amountValue = parsePaymentAmountValue(item?.paymentAmount);
                     return `금액: ${amountValue > 0 ? formatWonText(amountValue) : "-"}`;
                   })()}<br />
-                  입금상태: ${item.paymentStatus || "미입금"}${item.paymentPayer ? ` (${item.paymentPayer})` : ""}<br />
+                  입금상태: ${getCustomerPaymentStatusLabel(item.paymentStatus)}<br />
                   장소: ${item.place || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   배정작가: ${item.name || "작가미정"}<br />
@@ -1774,16 +1782,6 @@
                 <div class="status-actions">
                   <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>
                   <button class="btn outline small" type="button" data-action="deleteRow" data-id="${item.customerScheduleId}">일정취소</button>
-                  ${(() => {
-                    const status = normalize(item?.paymentStatus) || "미입금";
-                    if (status === "입금완료") {
-                      return '<button class="btn small" type="button" disabled>입금완료</button>';
-                    }
-                    if (status === "입금확인중") {
-                      return '<button class="btn small" type="button" disabled>입금확인중</button>';
-                    }
-                    return `<button class="btn small" type="button" data-action="markPaymentPending" data-id="${item.customerScheduleId}">입금완료 알리기</button>`;
-                  })()}
                 </div>
                 <div class="divider"></div>
                 <div class="hint ${editable ? "" : "danger"}">
@@ -2199,40 +2197,6 @@
           writeStorageArray(STORAGE_ALERTS, cancelAlerts);
           renderPaymentSummary();
           renderStatusList();
-        }
-        if (action === "markPaymentPending") {
-          if (!item) {
-            alert("대상 일정을 찾지 못했습니다. 새로고침 후 다시 시도해주세요.");
-            return;
-          }
-          const currentStatus = normalize(item?.paymentStatus) || "미입금";
-          if (currentStatus === "입금완료") {
-            alert("이미 입금완료 처리된 일정입니다.");
-            return;
-          }
-          const defaultPayer = normalize(item?.paymentPayer) || normalize(item?.company) || "";
-          const payer = normalize(prompt("입금자명을 입력해주세요.", defaultPayer));
-          if (!payer) {
-            alert("입금자명을 입력해야 합니다.");
-            return;
-          }
-          item.paymentPayer = payer;
-          item.paymentStatus = "입금확인중";
-          schedules[index] = item;
-          writeStorageArray(STORAGE_SCHEDULES, schedules);
-          const user = getCurrentSessionUser();
-          if (user) {
-            try {
-              await syncCustomerSchedulesTable(user);
-              queueCustomerTablePull();
-            } catch (error) {
-              console.error("[TABLE][customer] payment pending sync 실패", error);
-            }
-          }
-          renderPaymentSummary();
-          renderStatusList();
-          alert("입금확인중으로 등록되었습니다. 관리자가 확인 후 입금완료 처리합니다.");
-          return;
         }
       });
 
