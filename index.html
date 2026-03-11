@@ -6118,6 +6118,7 @@
                        <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}">사진</button>
                        <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}">사진영상</button>
                        <button class="btn-sm ${amountMode === "custom" ? "primary" : ""}" type="button" data-action="setAmountPresetCustom" data-index="${index}">임의금액</button>
+                       <button class="btn-sm" type="button" data-action="setAmountAddVat" data-index="${index}">부가세</button>
                      </div>
                      <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" ${
                        amountMode === "custom" ? "" : "readonly"
@@ -6761,6 +6762,17 @@
           if (!amountInput) return;
           amountInput.removeAttribute("readonly");
           amountInput.focus();
+          return;
+        }
+        if (action === "setAmountAddVat") {
+          const amountInput = rowEl?.querySelector(".pay-amount");
+          if (!amountInput) return;
+          const baseAmount = parseAmountToNumber(amountInput.value);
+          if (baseAmount === null || baseAmount <= 0) {
+            alert("먼저 입금금액을 입력하거나 사진/사진영상을 선택해주세요.");
+            return;
+          }
+          amountInput.value = String(Math.round(baseAmount * 1.1));
           return;
         }
         if (action === "cancelPaymentRow") {
