@@ -1016,6 +1016,10 @@
             <button data-payment-filter="hold" type="button">보류업체</button>
             <button data-payment-filter="refund" type="button">환불업체</button>
           </div>
+          <div class="filter-row" style="margin-bottom: 10px;">
+            <input id="paymentCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
+            <button id="clearPaymentCompanySearchBtn" class="btn-sm" type="button">전체</button>
+          </div>
           <table class="payment-table">
             <thead>
               <tr>
@@ -1963,6 +1967,8 @@
       const transferSectionEl = document.getElementById("transferSection");
       const transferToolEl = document.getElementById("transferTool");
       const paymentFilterTabsEl = document.getElementById("paymentFilterTabs");
+      const paymentCompanySearchInputEl = document.getElementById("paymentCompanySearchInput");
+      const clearPaymentCompanySearchBtnEl = document.getElementById("clearPaymentCompanySearchBtn");
       const paymentListBodyEl = document.getElementById("paymentListBody");
       const couponFormEl = document.getElementById("couponForm");
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
@@ -2077,6 +2083,7 @@
       let editingDateIndex = null;
       let quickPhotographerPickerIndex = null;
       let currentPaymentFilter = "unpaid";
+      let paymentCompanyKeyword = "";
       let editingPaymentIndex = null;
       let couponApplyIndex = null;
       let editingCompanyIndex = null;
@@ -5877,6 +5884,18 @@
       }
 
       function renderPaymentList() {
+        const parsePaymentDateSortValue = (item) => {
+          const raw = String(item?.paymentDate || item?.date || "").trim();
+          const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
+          if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+            return normalized;
+          }
+          if (/^\d{2}-\d{2}$/.test(normalized)) {
+            return `${currentYear}-${normalized}`;
+          }
+          return "9999-12-31";
+        };
+        const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         const filtered =
           currentPaymentFilter === "hold"
             ? onHoldPayments.map((item, index) => ({ item, index, source: "hold" }))
@@ -5890,10 +5909,18 @@
                 });
 
         paymentListBodyEl.innerHTML = filtered
+          .filter(({ item }) => {
+            if (!keyword) return true;
+            return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+          })
           .sort((a, b) => {
-            const aDate = new Date(`${a.item.date}T${a.item.time || "00:00"}:00`).getTime();
-            const bDate = new Date(`${b.item.date}T${b.item.time || "00:00"}:00`).getTime();
-            return aDate - bDate;
+            const aDate = parsePaymentDateSortValue(a.item);
+            const bDate = parsePaymentDateSortValue(b.item);
+            const dateCompare = aDate.localeCompare(bDate);
+            if (dateCompare !== 0) return dateCompare;
+            const aTime = parseScheduleTimeToMinutes(a.item?.time);
+            const bTime = parseScheduleTimeToMinutes(b.item?.time);
+            return aTime - bTime;
           })
           .map(({ item, index, source }) => {
             const isEditing = source === "active" && editingPaymentIndex === index;
@@ -5992,7 +6019,11 @@
           })
           .join("");
 
-        if (filtered.length === 0) {
+        const visibleRows = filtered.filter(({ item }) => {
+          if (!keyword) return true;
+          return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+        });
+        if (visibleRows.length === 0) {
           paymentListBodyEl.innerHTML = `
             <tr>
               <td colspan="7">표시할 내역이 없습니다.</td>
@@ -6447,6 +6478,15 @@
         [...paymentFilterTabsEl.querySelectorAll("button")].forEach((btn) => {
           btn.classList.toggle("active", btn === button);
         });
+        renderPaymentList();
+      });
+      paymentCompanySearchInputEl?.addEventListener("input", () => {
+        paymentCompanyKeyword = String(paymentCompanySearchInputEl.value || "").trim();
+        renderPaymentList();
+      });
+      clearPaymentCompanySearchBtnEl?.addEventListener("click", () => {
+        paymentCompanyKeyword = "";
+        if (paymentCompanySearchInputEl) paymentCompanySearchInputEl.value = "";
         renderPaymentList();
       });
 
