@@ -52,6 +52,23 @@
       .status-meta { font-size: 0.9rem; line-height: 1.5; color: #2f3c58; }
       .status-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
       .small { font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; }
+      .payment-state-badge {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .payment-state-badge::before { content: "●"; font-size: 0.62rem; }
+      .payment-state-unpaid { background: #fff5f5; color: #cf2e2e; border-color: #ffd4d4; }
+      .payment-state-paid { background: #eefbf2; color: #177a44; border-color: #c7edd6; }
+      .payment-state-hold { background: #fff8eb; color: #9a6500; border-color: #ffe3b3; }
+      .payment-state-refund { background: #eef4ff; color: #365ea8; border-color: #d5e2ff; }
       .divider { margin: 10px 0 6px; border-top: 1px dashed var(--line); }
       .weekday-weekend { color: var(--red); font-weight: 700; }
       .status-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1126,6 +1143,13 @@
         if (status === "보류" || status === "입금확인중" || status === "부분입금") return "보류";
         return "미입금";
       }
+      function getCustomerPaymentStatusClass(rawStatus) {
+        const label = getCustomerPaymentStatusLabel(rawStatus);
+        if (label === "입금") return "payment-state-paid";
+        if (label === "보류") return "payment-state-hold";
+        if (label === "환불완료") return "payment-state-refund";
+        return "payment-state-unpaid";
+      }
       function formatWonText(amount) {
         const value = Math.max(0, Number(amount) || 0);
         return `${value.toLocaleString("ko-KR")}원`;
@@ -1770,7 +1794,6 @@
                     const amountValue = parsePaymentAmountValue(item?.paymentAmount);
                     return `금액: ${amountValue > 0 ? formatWonText(amountValue) : "-"}`;
                   })()}<br />
-                  입금상태: ${getCustomerPaymentStatusLabel(item.paymentStatus)}<br />
                   장소: ${item.place || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   배정작가: ${item.name || "작가미정"}<br />
@@ -1782,6 +1805,7 @@
                 <div class="status-actions">
                   <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>
                   <button class="btn outline small" type="button" data-action="deleteRow" data-id="${item.customerScheduleId}">일정취소</button>
+                  <span class="payment-state-badge ${getCustomerPaymentStatusClass(item.paymentStatus)}">${getCustomerPaymentStatusLabel(item.paymentStatus)}</span>
                 </div>
                 <div class="divider"></div>
                 <div class="hint ${editable ? "" : "danger"}">
