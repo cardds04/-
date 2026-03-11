@@ -1734,15 +1734,14 @@
 
       function renderStatusList() {
         const schedules = getUserSchedules()
-          .filter((item) => !isPastSchedule(item.date))
           .sort((a, b) => {
           const at = new Date(`${a.date}T${a.time || "00:00"}:00`).getTime();
           const bt = new Date(`${b.date}T${b.time || "00:00"}:00`).getTime();
-          return at - bt;
+          return bt - at;
         });
 
         if (schedules.length === 0) {
-          statusListEl.innerHTML = '<div class="status-card">지난 일정을 제외하면 표시할 일정이 없습니다.</div>';
+          statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
           return;
         }
 
