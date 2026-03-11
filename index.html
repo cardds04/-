@@ -1229,6 +1229,7 @@
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
+      const STORAGE_COUPON_PASSES = "scheduleSiteCouponPasses";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
       const STORAGE_FULL_RESET_DONE_V2 = "scheduleSiteFullResetDoneV2";
@@ -1247,6 +1248,7 @@
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
+      const SHARED_COUPON_PASSES_FIELD = "shared_coupon_passes_v1";
       const STORAGE_SYNC_KEYS = [
         STORAGE_CUSTOMER_COMPANIES,
         STORAGE_CUSTOMER_SCHEDULES,
@@ -1260,6 +1262,7 @@
         STORAGE_DAYOFF_REQUESTS,
         STORAGE_DAYOFF_ALERT_READ_IDS,
         STORAGE_LIMIT_CONFIG,
+        STORAGE_COUPON_PASSES,
         STORAGE_EXCLUDED_PHOTOGRAPHERS,
         STORAGE_PHOTOGRAPHER_PROFILES
       ];
@@ -1276,6 +1279,7 @@
         [STORAGE_DAYOFF_REQUESTS]: "[]",
         [STORAGE_DAYOFF_ALERT_READ_IDS]: "[]",
         [STORAGE_LIMIT_CONFIG]: "{}",
+        [STORAGE_COUPON_PASSES]: "{}",
         [STORAGE_EXCLUDED_PHOTOGRAPHERS]: "[]",
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
@@ -1406,6 +1410,9 @@
       let scheduleSyncPromise = null;
       let scheduleSyncQueued = false;
       let isApplyingRemoteSchedules = false;
+      let couponPassesSyncPromise = null;
+      let isApplyingRemoteCouponPasses = false;
+      let lastCouponPassesSignature = "";
       let lastScheduleSyncSignature = "";
       let hasLoadedSchedulesFromServer = false;
       let limitConfigSyncPromise = null;
@@ -1531,6 +1538,129 @@
         } catch (error) {
           console.error("[LIMIT][index] 원격 적용 실패", error);
           return false;
+        }
+      }
+      function normalizeCouponPassesMap(raw) {
+        if (!raw || typeof raw !== "object") return {};
+        const entries = Object.entries(raw)
+          .map(([companyName, remaining]) => [normalizeCompanyName(companyName), Math.max(0, Math.floor(Number(remaining) || 0))])
+          .filter(([companyName]) => Boolean(companyName))
+          .sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        return Object.fromEntries(entries);
+      }
+      function getCouponPassesSignature(source = couponPasses) {
+        return JSON.stringify(normalizeCouponPassesMap(source));
+      }
+      function applyCouponPassesMap(nextMap) {
+        Object.keys(couponPasses).forEach((key) => delete couponPasses[key]);
+        Object.assign(couponPasses, normalizeCouponPassesMap(nextMap));
+      }
+      function loadCouponPassesFromStorage() {
+        const fromStorage = normalizeCouponPassesMap(readStorageObject(STORAGE_COUPON_PASSES));
+        applyCouponPassesMap(fromStorage);
+        lastCouponPassesSignature = getCouponPassesSignature();
+      }
+      async function fetchSharedCouponPassesFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`coupon pass 조회 실패 (${response.status}): ${errorText}`);
+        }
+        const rows = await response.json();
+        const payload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : null;
+        if (!payload || typeof payload !== "object") return null;
+        const remoteMap = payload[SHARED_COUPON_PASSES_FIELD];
+        if (!remoteMap || typeof remoteMap !== "object") return null;
+        return normalizeCouponPassesMap(remoteMap);
+      }
+      async function saveCouponPassesToSupabase(nextMapInput) {
+        if (!USE_SUPABASE_SYNC) return;
+        const nextMap = normalizeCouponPassesMap(nextMapInput);
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`coupon pass 상태 조회 실패 (${response.status}): ${errorText}`);
+        }
+        const rows = await response.json();
+        const currentPayload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : {};
+        const nextPayload = { ...currentPayload, [SHARED_COUPON_PASSES_FIELD]: nextMap };
+        const updateResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ payload: nextPayload })
+          }
+        );
+        if (!updateResponse.ok) {
+          const errorText = await updateResponse.text();
+          throw new Error(`coupon pass 저장 실패 (${updateResponse.status}): ${errorText}`);
+        }
+      }
+      function queueCouponPassesSync() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemoteCouponPasses) return;
+        const snapshot = normalizeCouponPassesMap(couponPasses);
+        couponPassesSyncPromise = (couponPassesSyncPromise || Promise.resolve())
+          .then(() => saveCouponPassesToSupabase(snapshot))
+          .catch((error) => {
+            console.error("[COUPON][index] 원격 저장 실패", error);
+          })
+          .finally(() => {
+            couponPassesSyncPromise = null;
+          });
+      }
+      function syncCouponPassesStorageAndRemote() {
+        if (isApplyingRemoteCouponPasses) return;
+        const signature = getCouponPassesSignature();
+        if (signature === lastCouponPassesSignature) return;
+        lastCouponPassesSignature = signature;
+        originalSetItem(STORAGE_COUPON_PASSES, JSON.stringify(normalizeCouponPassesMap(couponPasses)));
+        queueCouponPassesSync();
+      }
+      async function pullCouponPassesFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        try {
+          const remoteMap = await fetchSharedCouponPassesFromSupabase();
+          if (!remoteMap) return false;
+          const localSignature = getCouponPassesSignature();
+          const remoteSignature = JSON.stringify(remoteMap);
+          if (localSignature === remoteSignature) return false;
+          isApplyingRemoteCouponPasses = true;
+          applyCouponPassesMap(remoteMap);
+          originalSetItem(STORAGE_COUPON_PASSES, JSON.stringify(remoteMap));
+          lastCouponPassesSignature = remoteSignature;
+          return true;
+        } catch (error) {
+          console.error("[COUPON][index] 원격 적용 실패", error);
+          return false;
+        } finally {
+          isApplyingRemoteCouponPasses = false;
         }
       }
       async function fetchRemoteStateSnapshot() {
@@ -4289,6 +4419,7 @@
             </tr>
           `;
         }
+        syncCouponPassesStorageAndRemote();
       }
 
       function setupCouponInputs() {
@@ -8263,6 +8394,13 @@
       // 자동 초기화 비활성화 (데이터 유실 방지)
       loadAdminCompaniesFromStorage();
       void pullAdminCompaniesFromSupabaseAndRefresh();
+      loadCouponPassesFromStorage();
+      void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+        if (changed) {
+          renderCouponPassList();
+          renderPaymentList();
+        }
+      });
       loadAdminSchedulesFromStorage();
       void pullSchedulesFromSupabaseAndApply();
       void pullSharedLimitConfigAndApply();
@@ -8289,6 +8427,11 @@
         if (event.key === STORAGE_ADMIN_COMPANIES) {
           loadAdminCompaniesFromStorage();
           renderCompanies();
+        }
+        if (event.key === STORAGE_COUPON_PASSES) {
+          loadCouponPassesFromStorage();
+          renderCouponPassList();
+          renderPaymentList();
         }
         if (event.key === STORAGE_ADMIN_SCHEDULES) {
           loadAdminSchedulesFromStorage();
@@ -8333,6 +8476,13 @@
 
       window.addEventListener("focus", () => {
         loadAdminCompaniesFromStorage();
+        loadCouponPassesFromStorage();
+        void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          if (changed) {
+            renderCouponPassList();
+            renderPaymentList();
+          }
+        });
         loadAdminSchedulesFromStorage();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
@@ -8348,6 +8498,13 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
         loadAdminCompaniesFromStorage();
+        loadCouponPassesFromStorage();
+        void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          if (changed) {
+            renderCouponPassList();
+            renderPaymentList();
+          }
+        });
         loadAdminSchedulesFromStorage();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
