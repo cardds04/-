@@ -5956,11 +5956,7 @@
           })
           .map(({ item, index, source }) => {
             const isEditing = source === "active" && editingPaymentIndex === index;
-            const today = new Date();
-            const todayMonth = String(today.getMonth() + 1).padStart(2, "0");
-            const todayDay = String(today.getDate()).padStart(2, "0");
-            const fallbackDate = `${todayMonth}-${todayDay}`;
-            const sourceDate = isEditing ? fallbackDate : item.paymentDate || item.date || `${currentYear}-01-01`;
+            const sourceDate = item.paymentDate || item.date || `${currentYear}-01-01`;
             let selectedMonth = "01";
             let selectedDay = "01";
             if (/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)) {
@@ -6064,7 +6060,7 @@
                     : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}">입금내역수정</button>
                        ${
                          item.paymentStatus === "입금완료"
-                           ? `<button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
+                           ? `<button class="btn-sm" type="button" data-action="cancelPaidPaymentRow" data-index="${index}">입금취소</button>`
                            : couponApplyIndex === index
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
@@ -6173,6 +6169,34 @@
         item.couponUsed = Boolean(backup.couponUsed);
         item.partialPaid = Boolean(backup.partialPaid);
         delete item.paymentUndo;
+        editingPaymentIndex = null;
+        couponApplyIndex = null;
+        renderList();
+        queuePaymentsSync();
+      }
+      function cancelPaidPaymentFromTable(index) {
+        const item = data[index];
+        if (!item) return;
+        if (item.paymentStatus !== "입금완료" && !item.partialPaid) {
+          alert("입금취소할 항목이 아닙니다.");
+          return;
+        }
+        const confirmed = confirm("입금처리를 취소하고 미입금 업체로 이동할까요?");
+        if (!confirmed) return;
+        item.paymentUndo = {
+          paymentPayer: item.paymentPayer || "",
+          paymentDate: item.paymentDate || "",
+          paymentAmount: item.paymentAmount || "",
+          paymentStatus: item.paymentStatus || "미입금",
+          couponUsed: Boolean(item.couponUsed),
+          partialPaid: Boolean(item.partialPaid)
+        };
+        item.paymentStatus = "미입금";
+        item.partialPaid = false;
+        item.paymentPayer = "";
+        item.paymentDate = "";
+        item.paymentAmount = "";
+        if (item.couponUsed) item.couponUsed = false;
         editingPaymentIndex = null;
         couponApplyIndex = null;
         renderList();
@@ -6643,6 +6667,10 @@
         }
         if (action === "undoPaymentRow") {
           undoPaymentFromTable(index);
+          return;
+        }
+        if (action === "cancelPaidPaymentRow") {
+          cancelPaidPaymentFromTable(index);
           return;
         }
         if (action === "startCouponApply") {
