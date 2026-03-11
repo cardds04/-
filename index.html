@@ -1082,6 +1082,7 @@
             <select id="couponCountSelect" class="inline-select" required style="width: 120px;"></select>
             <button class="btn-sm primary" type="submit">회차권 등록</button>
           </form>
+          <div id="couponRegisteredCountText" class="hint" style="margin: 6px 0 8px;"></div>
           <table class="payment-table">
             <thead>
               <tr>
@@ -2012,6 +2013,7 @@
       const couponFormEl = document.getElementById("couponForm");
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
       const couponCountSelectEl = document.getElementById("couponCountSelect");
+      const couponRegisteredCountTextEl = document.getElementById("couponRegisteredCountText");
       const couponListBodyEl = document.getElementById("couponListBody");
       const calendarModalEl = document.getElementById("calendarModal");
       const calendarTitleEl = document.getElementById("calendarTitle");
@@ -4249,6 +4251,9 @@
 
       function renderCouponPassList() {
         const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        if (couponRegisteredCountTextEl) {
+          couponRegisteredCountTextEl.textContent = `쿠폰 등록 업체 리스트 (${entries.length}개)`;
+        }
         couponListBodyEl.innerHTML = entries
           .map(
             ([companyName, remaining]) => {
