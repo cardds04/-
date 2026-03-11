@@ -1425,6 +1425,7 @@
       let paymentSyncQueued = false;
       let isApplyingRemotePayments = false;
       let scheduleRealtimeTimer = null;
+      let dayoffRealtimeTimer = null;
       let scheduleSyncPromise = null;
       let scheduleSyncQueued = false;
       let isApplyingRemoteSchedules = false;
@@ -2284,6 +2285,28 @@
           // coupon_passes realtime 실패 시 focus pull로 동작
         }
       }
+      function startDayoffRequestsRealtimeSubscription() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        try {
+          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          client
+            .channel("dayoff-requests-live-index")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "dayoff_requests" },
+              () => {
+                if (dayoffRealtimeTimer) clearTimeout(dayoffRealtimeTimer);
+                dayoffRealtimeTimer = setTimeout(() => {
+                  void pullDayoffRequestsFromSupabaseAndApply();
+                }, 220);
+              }
+            )
+            .subscribe();
+        } catch (error) {
+          // dayoff_requests realtime 실패 시 focus pull로 동작
+        }
+      }
 
       setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
@@ -2295,12 +2318,14 @@
       startPaymentsRealtimeSubscription();
       startSchedulesRealtimeSubscription();
       startCouponPassesRealtimeSubscription();
+      startDayoffRequestsRealtimeSubscription();
       window.addEventListener("focus", () => {
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullWritersFromSupabaseAndRefresh();
         void pullPaymentsFromSupabaseAndApply();
         void pullSchedulesFromSupabaseAndApply();
         void pullCouponPassesFromSupabaseAndApply();
+        void pullDayoffRequestsFromSupabaseAndApply();
         void pullSharedLimitConfigAndApply();
       });
       document.addEventListener("visibilitychange", () => {
@@ -2310,6 +2335,7 @@
           void pullPaymentsFromSupabaseAndApply();
           void pullSchedulesFromSupabaseAndApply();
           void pullCouponPassesFromSupabaseAndApply();
+          void pullDayoffRequestsFromSupabaseAndApply();
           void pullSharedLimitConfigAndApply();
         }
       });
@@ -3319,6 +3345,72 @@
         renderPaymentList();
         return true;
       }
+      async function fetchDayoffRequestsFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`dayoff_requests 조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function pullDayoffRequestsFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        const rows = await fetchDayoffRequestsFromSupabase();
+        const nextRows = (Array.isArray(rows) ? rows : []).map((row) => ({
+          id: String(row?.id || "").trim(),
+          writerId: String(row?.writer_id || "").trim(),
+          writerName: String(row?.writer_name || "").trim(),
+          date: String(row?.dayoff_date || "").trim(),
+          amount: 4,
+          requestedAt: String(row?.created_at || "").trim()
+        }));
+        const nextSerialized = JSON.stringify(nextRows);
+        const currentSerialized = JSON.stringify(readStorageArray(STORAGE_DAYOFF_REQUESTS));
+        if (nextSerialized === currentSerialized) return false;
+        originalSetItem(STORAGE_DAYOFF_REQUESTS, nextSerialized);
+        renderScheduleCalendar();
+        renderInlineScheduleCalendarFromFilters();
+        renderOpenDayoffSummary();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        return true;
+      }
+      async function saveAdminDayoffRequestToSupabase(dateKey, writerName, writerId = "") {
+        if (!USE_SUPABASE_SYNC) return false;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify([
+            {
+              writer_id: String(writerId || "").trim() || null,
+              writer_name: String(writerName || "").trim(),
+              dayoff_date: String(dateKey || "").trim(),
+              reason: "admin_assigned",
+              status: "pending"
+            }
+          ])
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`dayoff_requests 저장 실패 (${response.status}): ${errorText}`);
+        }
+        return true;
+      }
 
       function normalizeCompanyRows(rows) {
         return (Array.isArray(rows) ? rows : [])
@@ -3724,10 +3816,14 @@
         }
         return `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-01`;
       }
-      function assignWriterDayoffByAdmin() {
+      async function assignWriterDayoffByAdmin() {
         const writerRows = getDayoffWriterSelectionRows();
         if (!writerRows.length) {
           alert("먼저 작가를 등록해주세요.");
+          return;
+        }
+        if (!USE_SUPABASE_SYNC) {
+          alert("Supabase 연결이 필요합니다. 설정을 확인해주세요.");
           return;
         }
         const defaultDate = getDefaultDayoffDateForAdmin();
@@ -3759,22 +3855,14 @@
           alert("이미 해당 날짜에 같은 작가 휴무가 등록되어 있습니다.");
           return;
         }
-        requests.unshift({
-          id: buildClientUuid(),
-          writerId,
-          writerName,
-          date: pickedDate,
-          amount: 4,
-          requestedAt: new Date().toISOString()
-        });
-        localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
-        captureLocalChangesForSync();
-        renderScheduleCalendar();
-        renderInlineScheduleCalendarFromFilters();
-        renderOpenDayoffSummary();
-        renderCustomerUpdateNotices();
-        renderCustomerAlertHistory();
-        alert(`${pickedDate} ${writerName} 작가 휴무가 등록되었습니다.`);
+        try {
+          await saveAdminDayoffRequestToSupabase(pickedDate, writerName, writerId);
+          await pullDayoffRequestsFromSupabaseAndApply();
+          alert(`${pickedDate} ${writerName} 작가 휴무가 등록되었습니다.`);
+        } catch (error) {
+          console.error("[DAYOFF][index] 저장 실패", error);
+          alert(`작가 휴무 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+        }
       }
       function getDayoffWriterNamesByDate(dateKey) {
         const normalizedDate = String(dateKey || "").trim();
@@ -9047,6 +9135,7 @@
       });
       loadAdminSchedulesFromStorage();
       void pullSchedulesFromSupabaseAndApply();
+      void pullDayoffRequestsFromSupabaseAndApply();
       void pullSharedLimitConfigAndApply();
       hydrateFromCustomerPageStorage();
       loadPhotographerProfilesFromStorage();
@@ -9123,6 +9212,7 @@
           }
         });
         loadAdminSchedulesFromStorage();
+        void pullDayoffRequestsFromSupabaseAndApply();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
@@ -9145,6 +9235,7 @@
           }
         });
         loadAdminSchedulesFromStorage();
+        void pullDayoffRequestsFromSupabaseAndApply();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
