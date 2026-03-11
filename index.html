@@ -4248,11 +4248,16 @@
       }
 
       function renderCouponPassList() {
-        const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
-        couponListBodyEl.innerHTML = entries
-          .map(
-            ([companyName, remaining]) => {
+        const companyNames = [...new Set(
+          companies
+            .map((item) => normalizeCompanyName(item?.name))
+            .filter(Boolean)
+        )].sort((a, b) => a.localeCompare(b, "ko"));
+        couponListBodyEl.innerHTML = companyNames
+          .map((companyName) => {
+              const remaining = getCouponRemaining(companyName);
               const isEditing = editingCouponCompany === companyName;
+              const hasCouponKey = Object.prototype.hasOwnProperty.call(couponPasses, companyName);
               return `
                 <tr>
                   <td>${escapeHtml(companyName)}</td>
@@ -4266,20 +4271,20 @@
                       isEditing
                         ? `<button class="btn-sm primary" type="button" data-action="saveCouponPass" data-company-name="${escapeHtml(companyName)}">저장</button>
                            <button class="btn-sm" type="button" data-action="cancelCouponEdit">취소</button>
-                           <button class="btn-sm danger" type="button" data-action="cancelCouponPass" data-company-name="${escapeHtml(companyName)}">등록취소</button>`
+                           ${hasCouponKey ? `<button class="btn-sm danger" type="button" data-action="cancelCouponPass" data-company-name="${escapeHtml(companyName)}">등록취소</button>` : ""}`
                         : `<button class="btn-sm" type="button" data-action="startCouponEdit" data-company-name="${escapeHtml(companyName)}">관리모드</button>`
                     }
                   </td>
                 </tr>
               `;
-            }
+            })
           )
           .join("");
 
-        if (entries.length === 0) {
+        if (companyNames.length === 0) {
           couponListBodyEl.innerHTML = `
             <tr>
-              <td colspan="3">등록된 회차권이 없습니다.</td>
+              <td colspan="3">등록된 업체가 없습니다.</td>
             </tr>
           `;
         }
@@ -7324,7 +7329,7 @@
         const button = event.target.closest("button[data-action='cancelCouponPass'][data-company-name]");
         if (!button) return;
         const companyName = normalizeCompanyName(button.dataset.companyName);
-        if (!companyName || !couponPasses[companyName]) return;
+        if (!companyName || !Object.prototype.hasOwnProperty.call(couponPasses, companyName)) return;
         const confirmed = confirm(`${companyName} 회차권 등록을 취소할까요?`);
         if (!confirmed) return;
         delete couponPasses[companyName];
