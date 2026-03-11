@@ -2128,6 +2128,7 @@
       let paymentCompanyKeyword = "";
       let editingPaymentIndex = null;
       let couponApplyIndex = null;
+      let editingCouponCompany = "";
       let editingCompanyIndex = null;
       let calendarViewYear = currentYear;
       let calendarViewMonth = new Date().getMonth() + 1;
@@ -4250,15 +4251,28 @@
         const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
         couponListBodyEl.innerHTML = entries
           .map(
-            ([companyName, remaining]) => `
-              <tr>
-                <td>${escapeHtml(companyName)}</td>
-                <td>${Number(remaining)}회</td>
-                <td>
-                  <button class="btn-sm" type="button" data-action="cancelCouponPass" data-company-name="${escapeHtml(companyName)}">취소</button>
-                </td>
-              </tr>
-            `
+            ([companyName, remaining]) => {
+              const isEditing = editingCouponCompany === companyName;
+              return `
+                <tr>
+                  <td>${escapeHtml(companyName)}</td>
+                  <td>${
+                    isEditing
+                      ? `<input class="inline-input coupon-remaining-input" type="number" min="0" step="1" value="${Math.max(0, Number(remaining) || 0)}" style="width: 110px;" />`
+                      : `${Number(remaining)}회`
+                  }</td>
+                  <td>
+                    ${
+                      isEditing
+                        ? `<button class="btn-sm primary" type="button" data-action="saveCouponPass" data-company-name="${escapeHtml(companyName)}">저장</button>
+                           <button class="btn-sm" type="button" data-action="cancelCouponEdit">취소</button>
+                           <button class="btn-sm danger" type="button" data-action="cancelCouponPass" data-company-name="${escapeHtml(companyName)}">등록취소</button>`
+                        : `<button class="btn-sm" type="button" data-action="startCouponEdit" data-company-name="${escapeHtml(companyName)}">관리모드</button>`
+                    }
+                  </td>
+                </tr>
+              `;
+            }
           )
           .join("");
 
@@ -7282,6 +7296,31 @@
       });
 
       couponListBodyEl.addEventListener("click", (event) => {
+        const actionButton = event.target.closest("button[data-action]");
+        if (!actionButton) return;
+        const action = String(actionButton.dataset.action || "");
+        if (action === "startCouponEdit") {
+          editingCouponCompany = normalizeCompanyName(actionButton.dataset.companyName);
+          renderCouponPassList();
+          return;
+        }
+        if (action === "cancelCouponEdit") {
+          editingCouponCompany = "";
+          renderCouponPassList();
+          return;
+        }
+        if (action === "saveCouponPass") {
+          const companyName = normalizeCompanyName(actionButton.dataset.companyName);
+          if (!companyName) return;
+          const rowEl = actionButton.closest("tr");
+          const inputEl = rowEl?.querySelector(".coupon-remaining-input");
+          const nextValue = inputEl?.value;
+          const success = updateCouponPass(companyName, nextValue);
+          if (!success) return;
+          editingCouponCompany = "";
+          renderCouponPassList();
+          return;
+        }
         const button = event.target.closest("button[data-action='cancelCouponPass'][data-company-name]");
         if (!button) return;
         const companyName = normalizeCompanyName(button.dataset.companyName);
@@ -7289,7 +7328,9 @@
         const confirmed = confirm(`${companyName} 회차권 등록을 취소할까요?`);
         if (!confirmed) return;
         delete couponPasses[companyName];
+        editingCouponCompany = "";
         renderCouponPassList();
+        renderPaymentList();
       });
 
       transferToolEl?.addEventListener("click", (event) => {
