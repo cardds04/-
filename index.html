@@ -1114,6 +1114,10 @@
             <select id="couponCountSelect" class="inline-select" required style="width: 120px;"></select>
             <button class="btn-sm primary" type="submit">회차권 등록</button>
           </form>
+          <div class="filter-row" style="margin-bottom: 8px;">
+            <input id="couponCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
+            <button id="clearCouponCompanySearchBtn" class="btn-sm" type="button">전체</button>
+          </div>
           <div id="couponRegisteredCountText" class="hint" style="margin: 6px 0 8px;"></div>
           <table class="payment-table">
             <thead>
@@ -2370,6 +2374,8 @@
       const paymentListBodyEl = document.getElementById("paymentListBody");
       const couponFormEl = document.getElementById("couponForm");
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
+      const couponCompanySearchInputEl = document.getElementById("couponCompanySearchInput");
+      const clearCouponCompanySearchBtnEl = document.getElementById("clearCouponCompanySearchBtn");
       const couponCountSelectEl = document.getElementById("couponCountSelect");
       const couponRegisteredCountTextEl = document.getElementById("couponRegisteredCountText");
       const couponListBodyEl = document.getElementById("couponListBody");
@@ -2492,6 +2498,7 @@
       let paymentCompanyKeyword = "";
       let editingPaymentIndex = null;
       let couponApplyIndex = null;
+      let couponCompanyKeyword = "";
       let editingCouponCompany = "";
       let editingCompanyIndex = null;
       let calendarViewYear = currentYear;
@@ -5006,11 +5013,16 @@
       }
 
       function renderCouponPassList() {
+        const keyword = normalizeCompanyName(couponCompanyKeyword).toLowerCase();
         const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        const filteredEntries = entries.filter(([companyName]) => {
+          if (!keyword) return true;
+          return normalizeCompanyName(companyName).toLowerCase().includes(keyword);
+        });
         if (couponRegisteredCountTextEl) {
-          couponRegisteredCountTextEl.textContent = `쿠폰 등록 업체 리스트 (${entries.length}개)`;
+          couponRegisteredCountTextEl.textContent = `쿠폰 등록 업체 리스트 (${filteredEntries.length}/${entries.length}개)`;
         }
-        couponListBodyEl.innerHTML = entries
+        couponListBodyEl.innerHTML = filteredEntries
           .map(
             ([companyName, remaining]) => {
               const isEditing = editingCouponCompany === companyName;
@@ -5042,6 +5054,12 @@
           couponListBodyEl.innerHTML = `
             <tr>
               <td colspan="3">등록된 회차권이 없습니다.</td>
+            </tr>
+          `;
+        } else if (filteredEntries.length === 0) {
+          couponListBodyEl.innerHTML = `
+            <tr>
+              <td colspan="3">검색 결과가 없습니다.</td>
             </tr>
           `;
         }
@@ -8149,6 +8167,15 @@
         if (!success) return;
         couponFormEl.reset();
         couponCountSelectEl.value = "1";
+      });
+      couponCompanySearchInputEl?.addEventListener("input", () => {
+        couponCompanyKeyword = String(couponCompanySearchInputEl.value || "").trim();
+        renderCouponPassList();
+      });
+      clearCouponCompanySearchBtnEl?.addEventListener("click", () => {
+        couponCompanyKeyword = "";
+        if (couponCompanySearchInputEl) couponCompanySearchInputEl.value = "";
+        renderCouponPassList();
       });
       paymentCouponFormEl?.addEventListener("submit", (event) => {
         event.preventDefault();
