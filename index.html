@@ -5660,10 +5660,19 @@
         hydrateFromCustomerPageStorage();
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
         const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
+        const targetNameKey = companyCompareKey(companyName);
+        const isSameTargetCompany = (name, code = "") => {
+          const byGroup = getCompanyGroupKey(name, code);
+          if (targetGroupKey && byGroup && byGroup === targetGroupKey) return true;
+          return companyCompareKey(name) === targetNameKey;
+        };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
-        const matchedUsers = customerUsers.filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey);
-        const matchedUser = matchedUsers[0] || null;
+        const matchedUsers = customerUsers.filter((user) => isSameTargetCompany(user?.company, user?.companyCode));
+        const matchedUser =
+          matchedUsers.find((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey) ||
+          matchedUsers[0] ||
+          null;
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(matchedUser?.companyCode || targetCompany?.code || "").trim();
@@ -5709,7 +5718,7 @@
           ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
           ...refundPayments.map((item) => ({ ...item, sourceLabel: "환불" }))
         ]
-          .filter((item) => getCompanyGroupKey(item?.company, item?.companyCode) === targetGroupKey)
+          .filter((item) => isSameTargetCompany(item?.company, item?.companyCode))
           .sort((a, b) => {
             const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
             const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();
