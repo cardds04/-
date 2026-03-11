@@ -1266,6 +1266,7 @@
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
+      const STORAGE_COUPON_LOWLIST_EXCLUDED = "scheduleSiteCouponLowlistExcluded";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
@@ -5013,12 +5014,27 @@
         if (!normalized) return;
         couponPasses[normalized] = Math.max(0, Number(remaining) || 0);
       }
+      function getCouponLowlistExcludedSet() {
+        return new Set(
+          readStorageArray(STORAGE_COUPON_LOWLIST_EXCLUDED)
+            .map((name) => normalizeCompanyName(name))
+            .filter(Boolean)
+        );
+      }
+      function saveCouponLowlistExcludedSet(excludedSet) {
+        const rows = [...excludedSet]
+          .map((name) => normalizeCompanyName(name))
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b, "ko"));
+        localStorage.setItem(STORAGE_COUPON_LOWLIST_EXCLUDED, JSON.stringify(rows));
+      }
 
       function renderCouponPassList() {
         const keyword = normalizeCompanyName(couponCompanyKeyword).toLowerCase();
         const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        const lowlistExcludedSet = getCouponLowlistExcludedSet();
         const lowEntries = entries
-          .filter(([, remaining]) => Number(remaining) <= 3)
+          .filter(([companyName, remaining]) => Number(remaining) <= 3 && !lowlistExcludedSet.has(normalizeCompanyName(companyName)))
           .sort((a, b) => Number(a[1]) - Number(b[1]) || a[0].localeCompare(b[0], "ko"));
         if (couponLowCountBoxEl) {
           if (!lowEntries.length) {
@@ -5039,7 +5055,10 @@
                     return `
                     <div class="customer-alert-row" style="padding: 4px 0;">
                       <span>${escapeHtml(companyName)}</span>
-                      <strong style="${countStyle}">${remainCount}회</strong>
+                      <span style="display:flex; align-items:center; gap:6px;">
+                        <strong style="${countStyle}">${remainCount}회</strong>
+                        <button class="btn-sm" type="button" data-action="excludeLowCouponCompany" data-company-name="${escapeHtml(companyName)}">제외</button>
+                      </span>
                     </div>
                   `;
                   }
@@ -8267,6 +8286,16 @@
         editingCouponCompany = "";
         renderCouponPassList();
         renderPaymentList();
+      });
+      couponLowCountBoxEl?.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='excludeLowCouponCompany'][data-company-name]");
+        if (!button) return;
+        const companyName = normalizeCompanyName(button.dataset.companyName);
+        if (!companyName) return;
+        const excludedSet = getCouponLowlistExcludedSet();
+        excludedSet.add(companyName);
+        saveCouponLowlistExcludedSet(excludedSet);
+        renderCouponPassList();
       });
 
       transferToolEl?.addEventListener("click", (event) => {
