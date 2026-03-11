@@ -1744,9 +1744,7 @@
           statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
           return;
         }
-
-        statusListEl.innerHTML = schedules
-          .map((item) => {
+        const renderScheduleCard = (item) => {
             const editable = canEditOrDelete(item.date);
             const isEditing = editingScheduleId === item.customerScheduleId;
             const rowIdentityKey = buildScheduleIdentityKey(item);
@@ -1849,8 +1847,21 @@
                 </div>
               </article>
             `;
-          })
-          .join("");
+          };
+        const upcomingSchedules = schedules.filter((item) => !isPastSchedule(item.date));
+        const pastSchedules = schedules.filter((item) => isPastSchedule(item.date));
+        const upcomingMarkup = upcomingSchedules.length
+          ? upcomingSchedules.map((item) => renderScheduleCard(item)).join("")
+          : '<div class="status-card">촬영예정/오늘촬영 일정이 없습니다.</div>';
+        const pastMarkup = pastSchedules.length
+          ? pastSchedules.map((item) => renderScheduleCard(item)).join("")
+          : '<div class="status-card">과거기록이 없습니다.</div>';
+        statusListEl.innerHTML = `
+          <div class="status-card" style="font-weight:700;">촬영예정 / 오늘촬영</div>
+          ${upcomingMarkup}
+          <div class="status-card" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
+          ${pastMarkup}
+        `;
       }
 
       function renderPaymentSummary() {
