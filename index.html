@@ -5982,13 +5982,34 @@
                   `<option value="${day}" ${day === selectedDay ? "selected" : ""}>${Number(day)}일</option>`
               )
               .join("");
+            const companyName = normalizeCompanyName(item.company || "");
+            const payerHistoryButtons = [...new Set(
+              data
+                .filter((row) => normalizeCompanyName(row?.company) === companyName)
+                .map((row) => String(row?.paymentPayer || "").trim())
+                .filter((name) => name && name !== companyName)
+            )]
+              .slice(0, 5)
+              .map(
+                (name) =>
+                  `<button class="btn-sm" type="button" data-action="choosePayerHistory" data-index="${index}" data-payer-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+              )
+              .join("");
+            const amountMode = resolvePresetAmountMode(item.paymentAmount);
             return `
             <tr>
               <td>${item.paymentDate || item.date}</td>
               <td>${escapeHtml(item.company || "-")}</td>
               <td>${
                 isEditing
-                  ? `<input class="inline-input pay-payer" type="text" value="${escapeHtml(item.paymentPayer || "")}" />`
+                  ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
+                       <button class="btn-sm ${item.paymentPayer === item.company ? "primary" : ""}" type="button" data-action="setPayerBusinessName" data-index="${index}">사업자명</button>
+                       <button class="btn-sm ${item.paymentPayer !== item.company ? "primary" : ""}" type="button" data-action="setPayerCustomName" data-index="${index}">이름</button>
+                     </div>
+                     ${payerHistoryButtons ? `<div class="quick-writer-row" style="margin-bottom: 4px;">${payerHistoryButtons}</div>` : ""}
+                     <input class="inline-input pay-payer" type="text" value="${escapeHtml(item.paymentPayer || "")}" ${
+                       item.paymentPayer === item.company ? "readonly" : ""
+                     } placeholder="입금자명 입력" />`
                   : `${escapeHtml(item.paymentPayer || "-")}`
               }</td>
               <td>${
@@ -6001,12 +6022,19 @@
               }</td>
               <td>${
                 isEditing
-                  ? `<input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" />`
+                  ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
+                       <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}">사진</button>
+                       <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}">사진영상</button>
+                       <button class="btn-sm ${amountMode === "custom" ? "primary" : ""}" type="button" data-action="setAmountPresetCustom" data-index="${index}">임의금액</button>
+                     </div>
+                     <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" ${
+                       amountMode === "custom" ? "" : "readonly"
+                     } placeholder="입금금액 입력" />`
                   : `${escapeHtml(item.paymentAmount || "-")}`
               }</td>
               <td>${
                 isEditing
-                  ? `<span>금액 저장 시 자동 입금</span>`
+                  ? `<span>완료/반만입금 버튼으로 처리</span>`
                   : `${
                       source === "hold"
                         ? "보류"
@@ -6030,7 +6058,7 @@
                         item.refundChecked ? "환불체크해제" : "환불체크"
                       }</button>`
                     : isEditing
-                    ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">저장</button>
+                    ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">완료</button>
                        <button class="btn-sm" type="button" data-action="halfPaymentRow" data-index="${index}">반만입금</button>
                        <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
                     : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}">입금내역수정</button>
@@ -6069,6 +6097,29 @@
         couponApplyIndex = null;
         renderPaymentList();
       }
+      function parseAmountToNumber(amountText) {
+        const raw = String(amountText || "").trim();
+        if (!raw) return null;
+        const compact = raw.replace(/,/g, "").replace(/\s+/g, "");
+        const manMatch = compact.match(/^(\d+(?:\.\d+)?)만(?:원)?$/);
+        if (manMatch) {
+          return Math.floor((Number(manMatch[1]) || 0) * 10000);
+        }
+        const numeric = compact.replace(/원/g, "");
+        if (!/^\d+(?:\.\d+)?$/.test(numeric)) return null;
+        return Math.floor(Number(numeric) || 0);
+      }
+      function resolvePresetAmountMode(amountText) {
+        const amountNumber = parseAmountToNumber(amountText);
+        if (amountNumber === 150000) return "photo";
+        if (amountNumber === 250000) return "video";
+        return "custom";
+      }
+      function applyHalfAmountText(amountText) {
+        const amountNumber = parseAmountToNumber(amountText);
+        if (amountNumber === null) return String(amountText || "").trim();
+        return String(Math.max(0, Math.floor(amountNumber / 2)));
+      }
 
       function savePaymentFromTable(index, rowEl, options = {}) {
         const item = data[index];
@@ -6087,7 +6138,8 @@
         const paymentMonth = rowEl.querySelector(".pay-month")?.value || "01";
         const paymentDay = rowEl.querySelector(".pay-day")?.value || "01";
         const paymentDate = `${paymentMonth}-${paymentDay}`;
-        const amount = rowEl.querySelector(".pay-amount")?.value?.trim() || "";
+        const rawAmount = rowEl.querySelector(".pay-amount")?.value?.trim() || "";
+        const amount = keepUnpaid ? applyHalfAmountText(rawAmount) : rawAmount;
         if (keepUnpaid && !amount) {
           alert("반만입금은 입금금액을 먼저 입력해주세요.");
           return;
@@ -6532,6 +6584,48 @@
 
         if (action === "editPaymentRow") {
           editPaymentFromTable(index);
+          return;
+        }
+        if (action === "setPayerBusinessName") {
+          const payerInput = rowEl?.querySelector(".pay-payer");
+          if (!payerInput) return;
+          payerInput.value = String(data[index]?.company || "").trim();
+          payerInput.setAttribute("readonly", "readonly");
+          return;
+        }
+        if (action === "setPayerCustomName") {
+          const payerInput = rowEl?.querySelector(".pay-payer");
+          if (!payerInput) return;
+          payerInput.removeAttribute("readonly");
+          payerInput.focus();
+          return;
+        }
+        if (action === "choosePayerHistory") {
+          const payerInput = rowEl?.querySelector(".pay-payer");
+          if (!payerInput) return;
+          payerInput.value = String(button.dataset.payerName || "").trim();
+          payerInput.removeAttribute("readonly");
+          return;
+        }
+        if (action === "setAmountPresetPhoto") {
+          const amountInput = rowEl?.querySelector(".pay-amount");
+          if (!amountInput) return;
+          amountInput.value = "150000";
+          amountInput.setAttribute("readonly", "readonly");
+          return;
+        }
+        if (action === "setAmountPresetVideo") {
+          const amountInput = rowEl?.querySelector(".pay-amount");
+          if (!amountInput) return;
+          amountInput.value = "250000";
+          amountInput.setAttribute("readonly", "readonly");
+          return;
+        }
+        if (action === "setAmountPresetCustom") {
+          const amountInput = rowEl?.querySelector(".pay-amount");
+          if (!amountInput) return;
+          amountInput.removeAttribute("readonly");
+          amountInput.focus();
           return;
         }
         if (action === "cancelPaymentRow") {
