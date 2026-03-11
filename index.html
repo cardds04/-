@@ -859,7 +859,6 @@
           <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
             <button id="downloadCompanyExcelBtn" class="btn-sm" type="button">다운</button>
             <button id="uploadCompanyExcelBtn" class="btn-sm" type="button">업로드</button>
-            <button id="resetAllCompaniesBtn" class="btn-sm danger" type="button">업체전체초기화</button>
           </div>
           <div id="companyRegisterPanel" class="register-panel hidden">
             <form id="companyForm" class="form">
@@ -977,13 +976,14 @@
             <h2>전체스케줄</h2>
             <div class="head-right">
               <span class="count">총 <span id="totalCount">0</span>건</span>
+              <span id="todayNewCount" class="count">오늘 신규접수 0건</span>
+              <span id="monthNewCount" class="count">이번달 접수 0건</span>
               <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
               <button id="markAllCustomerAlertsReadBtn" class="btn-sm" type="button">모두확인</button>
               <button id="previousScheduleHistoryBtn" class="btn-sm" type="button">이전기록</button>
               <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
               <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
               <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
-              <button id="resetAllSchedulesBtn" class="btn-sm danger" type="button">전체 스케줄초기화</button>
             </div>
           </div>
 
@@ -2360,6 +2360,8 @@
       const scheduleDetailCloseBtnEl = document.getElementById("scheduleDetailCloseBtn");
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
+      const todayNewCountEl = document.getElementById("todayNewCount");
+      const monthNewCountEl = document.getElementById("monthNewCount");
       const customerAlertCountEl = document.getElementById("customerAlertCount");
       const markAllCustomerAlertsReadBtnEl = document.getElementById("markAllCustomerAlertsReadBtn");
       const customerAlertHistoryBtnEl = document.getElementById("customerAlertHistoryBtn");
@@ -2385,7 +2387,6 @@
       const copyScheduleBtnEl = document.getElementById("copyScheduleBtn");
       const downloadExcelBtnEl = document.getElementById("downloadExcelBtn");
       const uploadExcelBtnEl = document.getElementById("uploadExcelBtn");
-      const resetAllSchedulesBtnEl = document.getElementById("resetAllSchedulesBtn");
       const excelUploadInputEl = document.getElementById("excelUploadInput");
       const companyExcelUploadInputEl = document.getElementById("companyExcelUploadInput");
       const formEl = document.getElementById("scheduleForm");
@@ -2404,7 +2405,6 @@
       const addCompanyBtnEl = document.getElementById("addCompanyBtn");
       const downloadCompanyExcelBtnEl = document.getElementById("downloadCompanyExcelBtn");
       const uploadCompanyExcelBtnEl = document.getElementById("uploadCompanyExcelBtn");
-      const resetAllCompaniesBtnEl = document.getElementById("resetAllCompaniesBtn");
       const companyRegisterPanelEl = document.getElementById("companyRegisterPanel");
       const closeCompanyPanelBtnEl = document.getElementById("closeCompanyPanelBtn");
       const yearEl = document.getElementById("year");
@@ -7034,8 +7034,32 @@
         const companyKeyword = normalizeCompanyName(companyFilterInputEl.value).toLowerCase();
         const today = new Date();
         const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const monthKeyPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
         renderInlineScheduleCalendarFromFilters();
+        const activeRows = data.filter((item) => {
+          const itemScheduleId = String(item?.customerScheduleId || "").trim();
+          const itemFallbackKey = [
+            String(item?.date || "").trim(),
+            String(item?.time || "").trim(),
+            normalizeCompanyName(item?.company).toLowerCase(),
+            normalizeCompanyName(item?.place).toLowerCase()
+          ].join("|");
+          return !(
+            (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
+            canceledFallbackKeySet.has(itemFallbackKey)
+          );
+        });
+        if (todayNewCountEl) {
+          const todayNewCount = activeRows.filter((item) => String(item?.date || "").trim() === todayKey).length;
+          todayNewCountEl.textContent = `오늘 신규접수 ${todayNewCount}건`;
+        }
+        if (monthNewCountEl) {
+          const monthNewCount = activeRows.filter((item) =>
+            String(item?.date || "").trim().startsWith(monthKeyPrefix)
+          ).length;
+          monthNewCountEl.textContent = `이번달 접수 ${monthNewCount}건`;
+        }
 
         const filtered = data
           .map((item, index) => ({ item, index }))
@@ -7505,7 +7529,6 @@
       uploadExcelBtnEl.addEventListener("click", () => {
         excelUploadInputEl.click();
       });
-      resetAllSchedulesBtnEl?.addEventListener("click", resetAllSchedules);
       excelUploadInputEl.addEventListener("change", async (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -7522,7 +7545,6 @@
       uploadCompanyExcelBtnEl.addEventListener("click", () => {
         companyExcelUploadInputEl.click();
       });
-      resetAllCompaniesBtnEl?.addEventListener("click", resetAllCompanies);
       companyExcelUploadInputEl.addEventListener("change", async (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
