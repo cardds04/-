@@ -6393,13 +6393,8 @@
 
       function renderPaymentList() {
         if (paymentUnpaidCompanyCountTextEl) {
-          const unpaidCompanySet = new Set(
-            data
-              .filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료")
-              .map((item) => normalizeCompanyName(item?.company || ""))
-              .filter(Boolean)
-          );
-          paymentUnpaidCompanyCountTextEl.textContent = `미입금업체 총 ${unpaidCompanySet.size}개`;
+          const unpaidScheduleCount = data.filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료").length;
+          paymentUnpaidCompanyCountTextEl.textContent = `미입금총 스케줄수 ${unpaidScheduleCount}건`;
         }
         const parsePaymentDateSortValue = (item) => {
           const raw = String(item?.date || item?.paymentDate || "").trim();
