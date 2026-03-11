@@ -777,6 +777,7 @@
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
+      let paymentDetailOpen = false;
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
@@ -1802,16 +1803,14 @@
           <div class="status-card" style="margin-top:8px; line-height:1.65;">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <strong>내가 입금해야 할 금액: ${formatWonText(unpaidTotalAmount)}</strong>
-              <details>
-                <summary class="btn outline small" style="display:inline-block; cursor:pointer;">상세내역</summary>
-                <div style="margin-top:8px; font-size:0.9rem;">
-                  <div class="hint">미입금 일정별 금액 합계로 산정됩니다.</div>
-                  ${unpaidDetailRowsHtml}
-                  <div style="border-top:1px solid #d7ddec; margin-top:6px; padding-top:6px;">
-                    합계: <strong>${formatWonText(unpaidTotalAmount)}</strong>
-                  </div>
-                </div>
-              </details>
+              <button class="btn outline small" type="button" data-action="togglePaymentDetail">${paymentDetailOpen ? "상세내역 닫기" : "상세내역"}</button>
+            </div>
+            <div class="${paymentDetailOpen ? "" : "hidden"}" style="margin-top:8px; font-size:0.9rem;">
+              <div class="hint">미입금 일정별 금액 합계로 산정됩니다.</div>
+              ${unpaidDetailRowsHtml}
+              <div style="border-top:1px solid #d7ddec; margin-top:6px; padding-top:6px;">
+                합계: <strong>${formatWonText(unpaidTotalAmount)}</strong>
+              </div>
             </div>
             <div class="hint"><strong>계좌번호:</strong> 농협 3021511169151 김진영</div>
             <div style="font-size:0.9rem; margin-top:2px;">세금계산서 발행시: ${formatWonText(totalWithVat)} (10% 추가)</div>
@@ -2207,6 +2206,12 @@
         const cardEl = target.closest(".status-card");
         if (!cardEl) return;
         refreshEditDayOptions(cardEl, cardEl.querySelector(".edit-day")?.value);
+      });
+      paymentSummaryBoxEl.addEventListener("click", (event) => {
+        const button = event.target.closest('button[data-action="togglePaymentDetail"]');
+        if (!button) return;
+        paymentDetailOpen = !paymentDetailOpen;
+        renderPaymentSummary();
       });
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
