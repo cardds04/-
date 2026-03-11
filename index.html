@@ -2936,9 +2936,19 @@
         }
       }
       function queuePaymentsSync() {
-        if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
+        if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) {
+          if (!isApplyingRemoteSchedules) {
+            queueSchedulesSync(true);
+          }
+          return;
+        }
         paymentSyncQueued = true;
-        if (paymentSyncPromise) return;
+        if (paymentSyncPromise) {
+          if (!isApplyingRemoteSchedules) {
+            queueSchedulesSync(true);
+          }
+          return;
+        }
         paymentSyncPromise = (async () => {
           while (paymentSyncQueued) {
             paymentSyncQueued = false;
@@ -2955,6 +2965,9 @@
           .finally(() => {
             paymentSyncPromise = null;
           });
+        if (!isApplyingRemoteSchedules) {
+          queueSchedulesSync(true);
+        }
       }
       async function pullPaymentsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
