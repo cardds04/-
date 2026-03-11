@@ -137,6 +137,7 @@
           </div>
 
           <section id="registerSection">
+            <div id="closedDatesNoticeBox" class="status-card" style="margin-bottom: 8px;"></div>
             <form id="customerScheduleForm" class="form">
               <div class="triple">
                 <div class="row"><span>📅</span><select id="scheduleYear" required></select></div>
@@ -765,6 +766,7 @@
       const schedulePyeongEl = document.getElementById("schedulePyeong");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
+      const closedDatesNoticeBoxEl = document.getElementById("closedDatesNoticeBox");
       const composeButtonsEl = document.getElementById("composeButtons");
       const paymentSummaryBoxEl = document.getElementById("paymentSummaryBox");
 
@@ -1293,6 +1295,41 @@
         }).length;
         return customerCount + adminOnlyCount;
       }
+      function collectClosedDatesByMonth(year, month) {
+        const y = Number(year);
+        const m = Number(month);
+        if (Number.isNaN(y) || Number.isNaN(m) || m < 1 || m > 12) return [];
+        const daysInMonth = new Date(y, m, 0).getDate();
+        const result = [];
+        for (let day = 1; day <= daysInMonth; day += 1) {
+          const dateKey = `${y}-${pad2(m)}-${pad2(day)}`;
+          const limit = getEffectiveDailyLimit(dateKey);
+          const booked = getBookedCountForDate(dateKey);
+          if (booked >= limit) result.push(day);
+        }
+        return result;
+      }
+      function renderClosedDatesNotice() {
+        if (!closedDatesNoticeBoxEl) return;
+        const now = new Date();
+        const thisYear = now.getFullYear();
+        const thisMonth = now.getMonth() + 1;
+        const nextDate = new Date(thisYear, thisMonth - 1, 1);
+        nextDate.setMonth(nextDate.getMonth() + 1);
+        const nextYear = nextDate.getFullYear();
+        const nextMonth = nextDate.getMonth() + 1;
+        const thisMonthClosed = collectClosedDatesByMonth(thisYear, thisMonth);
+        const nextMonthClosed = collectClosedDatesByMonth(nextYear, nextMonth);
+        const formatDays = (days) => (days.length ? days.map((day) => `${day}일`).join(", ") : "마감일 없음");
+        closedDatesNoticeBoxEl.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 4px;">촬영예약 마감일</div>
+          <div style="font-size: 0.9rem; line-height: 1.5;">
+            이번달(${thisYear}년 ${thisMonth}월): ${formatDays(thisMonthClosed)}<br />
+            다음달(${nextYear}년 ${nextMonth}월): ${formatDays(nextMonthClosed)}<br />
+            <span class="danger">스케줄이 꽉차서 이날짜에는 예약이 어렵습니다. 이날짜에 반드시 촬영해야하는경우 관리자에게 문의하세요.</span>
+          </div>
+        `;
+      }
 
       function setSelectedComposition(value, rootEl = composeButtonsEl, hiddenInputEl = scheduleCompositionEl) {
         hiddenInputEl.value = value;
@@ -1316,6 +1353,7 @@
         statusTabBtnEl.classList.toggle("active", !isRegister);
         registerSectionEl.classList.toggle("hidden", !isRegister);
         statusSectionEl.classList.toggle("hidden", isRegister);
+        if (isRegister) renderClosedDatesNotice();
         if (!isRegister) renderStatusList();
       }
 
@@ -1439,6 +1477,7 @@
         if (isLoggedIn) {
           syncAdminSchedulesToCustomerUser(user);
           welcomeTextEl.textContent = `${user.company} (${user.id})님`;
+          renderClosedDatesNotice();
           renderPaymentSummary();
           switchCustomerTab(currentCustomerTab);
         }
