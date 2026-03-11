@@ -1016,6 +1016,19 @@
             <button data-payment-filter="hold" type="button">보류업체</button>
             <button data-payment-filter="refund" type="button">환불업체</button>
           </div>
+          <form id="paymentCouponForm" class="coupon-register-row" style="margin-bottom: 10px;">
+            <input
+              id="paymentCouponCompanyInput"
+              class="inline-input"
+              type="text"
+              placeholder="회차권 등록 업체명 입력"
+              list="couponCompanyAutocompleteList"
+              required
+              style="min-width: 220px;"
+            />
+            <select id="paymentCouponCountSelect" class="inline-select" required style="width: 120px;"></select>
+            <button class="btn-sm primary" type="submit">회차권 등록</button>
+          </form>
           <div class="filter-row" style="margin-bottom: 10px;">
             <input id="paymentCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
             <button id="clearPaymentCompanySearchBtn" class="btn-sm" type="button">전체</button>
@@ -1967,6 +1980,9 @@
       const transferSectionEl = document.getElementById("transferSection");
       const transferToolEl = document.getElementById("transferTool");
       const paymentFilterTabsEl = document.getElementById("paymentFilterTabs");
+      const paymentCouponFormEl = document.getElementById("paymentCouponForm");
+      const paymentCouponCompanyInputEl = document.getElementById("paymentCouponCompanyInput");
+      const paymentCouponCountSelectEl = document.getElementById("paymentCouponCountSelect");
       const paymentCompanySearchInputEl = document.getElementById("paymentCompanySearchInput");
       const clearPaymentCompanySearchBtnEl = document.getElementById("clearPaymentCompanySearchBtn");
       const paymentListBodyEl = document.getElementById("paymentListBody");
@@ -4199,10 +4215,26 @@
       }
 
       function setupCouponInputs() {
-        couponCountSelectEl.innerHTML = Array.from({ length: 20 }, (_, idx) => idx + 1)
+        const optionsHtml = Array.from({ length: 20 }, (_, idx) => idx + 1)
           .map((count) => `<option value="${count}">${count}회</option>`)
           .join("");
+        couponCountSelectEl.innerHTML = optionsHtml;
+        if (paymentCouponCountSelectEl) {
+          paymentCouponCountSelectEl.innerHTML = optionsHtml;
+        }
         couponCountSelectEl.value = "1";
+        if (paymentCouponCountSelectEl) paymentCouponCountSelectEl.value = "1";
+      }
+      function registerCouponPass(companyNameRaw, selectedCountRaw) {
+        const companyName = normalizeCompanyName(companyNameRaw);
+        const selectedCount = Number(selectedCountRaw || "1");
+        if (!isRegisteredCompanyName(companyName)) {
+          alert("등록된 업체만 회차권 등록할 수 있어요.");
+          return false;
+        }
+        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)));
+        renderCouponPassList();
+        return true;
       }
 
       function renderDayoffRequestHistoryInto(targetEl) {
@@ -6958,16 +6990,17 @@
 
       couponFormEl.addEventListener("submit", (event) => {
         event.preventDefault();
-        const companyName = normalizeCompanyName(couponCompanyInputEl.value);
-        const selectedCount = Number(couponCountSelectEl.value || "1");
-        if (!isRegisteredCompanyName(companyName)) {
-          alert("등록된 업체만 회차권 등록할 수 있어요.");
-          return;
-        }
-        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)));
+        const success = registerCouponPass(couponCompanyInputEl.value, couponCountSelectEl.value);
+        if (!success) return;
         couponFormEl.reset();
         couponCountSelectEl.value = "1";
-        renderCouponPassList();
+      });
+      paymentCouponFormEl?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const success = registerCouponPass(paymentCouponCompanyInputEl?.value || "", paymentCouponCountSelectEl?.value || "1");
+        if (!success) return;
+        paymentCouponFormEl.reset();
+        if (paymentCouponCountSelectEl) paymentCouponCountSelectEl.value = "1";
       });
 
       couponListBodyEl.addEventListener("click", (event) => {
