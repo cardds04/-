@@ -1733,12 +1733,7 @@
       }
 
       function renderStatusList() {
-        const schedules = getUserSchedules()
-          .sort((a, b) => {
-          const at = new Date(`${a.date}T${a.time || "00:00"}:00`).getTime();
-          const bt = new Date(`${b.date}T${b.time || "00:00"}:00`).getTime();
-          return bt - at;
-        });
+        const schedules = getUserSchedules();
 
         if (schedules.length === 0) {
           statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
@@ -1848,8 +1843,16 @@
               </article>
             `;
           };
-        const upcomingSchedules = schedules.filter((item) => !isPastSchedule(item.date));
-        const pastSchedules = schedules.filter((item) => isPastSchedule(item.date));
+        const toDateTimeValue = (item) => {
+          const at = new Date(`${item?.date || "1900-01-01"}T${item?.time || "00:00"}:00`).getTime();
+          return Number.isNaN(at) ? 0 : at;
+        };
+        const upcomingSchedules = schedules
+          .filter((item) => !isPastSchedule(item.date))
+          .sort((a, b) => toDateTimeValue(a) - toDateTimeValue(b));
+        const pastSchedules = schedules
+          .filter((item) => isPastSchedule(item.date))
+          .sort((a, b) => toDateTimeValue(b) - toDateTimeValue(a));
         const upcomingMarkup = upcomingSchedules.length
           ? upcomingSchedules.map((item) => renderScheduleCard(item)).join("")
           : '<div class="status-card">촬영예정/오늘촬영 일정이 없습니다.</div>';
