@@ -851,6 +851,11 @@
             companyCode: String(row?.code || "").trim()
           }))
           .filter((row) => row.name);
+        const companyCodeByName = new Map(
+          companies
+            .map((item) => [normalize(item?.name).toLowerCase(), normalize(item?.companyCode)])
+            .filter(([name]) => Boolean(name))
+        );
         const customers = (Array.isArray(customersRows) ? customersRows : [])
           .map((row) => ({
             id: String(row?.login_id || "").trim(),
@@ -872,6 +877,7 @@
               timePreference: parsedMemo.timePreference,
               name: String(row?.writer_name || "작가미정").trim() || "작가미정",
               company: String(row?.company_name || "").trim(),
+              companyCode: companyCodeByName.get(String(row?.company_name || "").trim().toLowerCase()) || "",
               place: String(row?.place || "").trim(),
               pyeong: String(row?.pyeong || "").trim(),
               jointCode: String(row?.joint_code || "").trim(),
@@ -1432,8 +1438,15 @@
         const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const targetCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
+        const targetCompanyNameKey = getCompanyKey(user.company, "");
         const schedules = readStorageArray(STORAGE_SCHEDULES);
-        const adminCompanyRows = adminRows.filter((row) => getCompanyKey(row?.company, row?.companyCode) === targetCompanyKey);
+        const adminCompanyRows = adminRows.filter((row) => {
+          const rowCode = normalize(row?.companyCode);
+          if (effectiveCompanyCode && rowCode) {
+            return rowCode.toLowerCase() === effectiveCompanyCode.toLowerCase();
+          }
+          return getCompanyKey(row?.company, row?.companyCode) === targetCompanyKey || getCompanyKey(row?.company, "") === targetCompanyNameKey;
+        });
         const buildRowKey = (row) =>
           [
             normalize(row?.date),
@@ -1688,11 +1701,16 @@
         if (!user) return [];
         syncAdminSchedulesToCustomerUser(user);
         const userId = String(user.id || "").trim();
-        const userCompanyKey = getCompanyKey(user.company, getEffectiveUserCompanyCode(user));
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const userCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
+        const userCompanyNameKey = getCompanyKey(user.company, "");
         return readStorageArray(STORAGE_SCHEDULES).filter((row) => {
           const rowCustomerId = String(row?.customerId || "").trim();
           const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
+          const rowCompanyCode = normalize(row?.companyCode);
           if (rowCustomerId && rowCustomerId === userId) return true;
+          if (effectiveCompanyCode && rowCompanyCode && rowCompanyCode.toLowerCase() === effectiveCompanyCode.toLowerCase()) return true;
+          if (!effectiveCompanyCode && getCompanyKey(row?.company, "") === userCompanyNameKey) return true;
           return userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey;
         });
       }
