@@ -1057,8 +1057,44 @@
         return customerCount + adminOnlyCount;
       }
 
+      function parseScheduleTimeToMinutes(timeText) {
+        const raw = String(timeText || "").trim();
+        if (!raw) return 0;
+        const normalized = raw.replace(/\s+/g, "");
+        const meridiem = normalized.match(/^(오전|오후)(\d{1,2})(?::(\d{1,2}))?$/);
+        if (meridiem) {
+          let hour = Number(meridiem[2]) || 0;
+          const minute = Math.min(59, Number(meridiem[3] || "0") || 0);
+          if (meridiem[1] === "오후" && hour < 12) hour += 12;
+          if (meridiem[1] === "오전" && hour === 12) hour = 0;
+          return hour * 60 + minute;
+        }
+        const hm = normalized.match(/^(\d{1,2})(?::(\d{1,2}))$/);
+        if (hm) {
+          const hour = Math.min(23, Number(hm[1]) || 0);
+          const minute = Math.min(59, Number(hm[2]) || 0);
+          return hour * 60 + minute;
+        }
+        const h = normalized.match(/^(\d{1,2})시(?:반|(\d{1,2})분)?$/);
+        if (h) {
+          const hour = Math.min(23, Number(h[1]) || 0);
+          const minute = normalized.includes("반") ? 30 : Math.min(59, Number(h[2] || "0") || 0);
+          return hour * 60 + minute;
+        }
+        const onlyHour = normalized.match(/^(\d{1,2})$/);
+        if (onlyHour) {
+          return Math.min(23, Number(onlyHour[1]) || 0) * 60;
+        }
+        return 0;
+      }
       function toTimeValue(item) {
-        return new Date(`${item.date || "2099-12-31"}T${item.time || "00:00"}:00`).getTime();
+        const dateText = String(item?.date || "").trim();
+        let baseDate = new Date("2099-12-31T00:00:00").getTime();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+          const [year, month, day] = dateText.split("-").map((v) => Number(v) || 0);
+          baseDate = new Date(year, Math.max(0, month - 1), Math.max(1, day), 0, 0, 0, 0).getTime();
+        }
+        return baseDate + parseScheduleTimeToMinutes(item?.time) * 60000;
       }
 
       function getCompanyPhoneForItem(item) {
