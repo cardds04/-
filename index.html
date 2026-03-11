@@ -1052,6 +1052,7 @@
             <input id="paymentCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
             <button id="clearPaymentCompanySearchBtn" class="btn-sm" type="button">전체</button>
           </div>
+          <div id="paymentUnpaidCompanyCountText" class="hint" style="margin: -4px 0 8px;"></div>
           <table class="payment-table">
             <thead>
               <tr>
@@ -2004,6 +2005,7 @@
       const paymentCouponCountSelectEl = document.getElementById("paymentCouponCountSelect");
       const paymentCompanySearchInputEl = document.getElementById("paymentCompanySearchInput");
       const clearPaymentCompanySearchBtnEl = document.getElementById("clearPaymentCompanySearchBtn");
+      const paymentUnpaidCompanyCountTextEl = document.getElementById("paymentUnpaidCompanyCountText");
       const paymentListBodyEl = document.getElementById("paymentListBody");
       const couponFormEl = document.getElementById("couponForm");
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
@@ -5969,6 +5971,15 @@
       }
 
       function renderPaymentList() {
+        if (paymentUnpaidCompanyCountTextEl) {
+          const unpaidCompanySet = new Set(
+            data
+              .filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료")
+              .map((item) => normalizeCompanyName(item?.company || ""))
+              .filter(Boolean)
+          );
+          paymentUnpaidCompanyCountTextEl.textContent = `미입금업체 총 ${unpaidCompanySet.size}개`;
+        }
         const parsePaymentDateSortValue = (item) => {
           const raw = String(item?.paymentDate || item?.date || "").trim();
           const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
