@@ -921,6 +921,7 @@
                   <option value="other">그외시간</option>
                 </select>
               </div>
+              <button id="scheduleTimeUndecidedBtn" class="btn-sm" type="button">시간미정</button>
             </div>
             <div class="input-row">
               <span>🏢</span>
@@ -2412,6 +2413,7 @@
       const scheduleHourRegisterEl = document.getElementById("scheduleHour");
       const scheduleMinuteRegisterEl = document.getElementById("scheduleMinute");
       const scheduleTimePreferenceRegisterEl = document.getElementById("scheduleTimePreference");
+      const scheduleTimeUndecidedBtnEl = document.getElementById("scheduleTimeUndecidedBtn");
       const companyFormEl = document.getElementById("companyForm");
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
@@ -2444,6 +2446,7 @@
       let previousHistoryWriterFilter = "all";
       let previousHistoryCompanyFilter = "";
       let canceledScheduleCompanyFilter = "";
+      let scheduleTimeUndecided = false;
       let mergeCompanySourceIndex = -1;
       let mergeCompanySearchKeyword = "";
       let mergeCompanySelectedCompanyKey = "";
@@ -6942,6 +6945,20 @@
         if (scheduleTimePreferenceRegisterEl) {
           scheduleTimePreferenceRegisterEl.value = "exact";
         }
+        setScheduleTimeUndecided(false);
+      }
+      function setScheduleTimeUndecided(enabled) {
+        scheduleTimeUndecided = Boolean(enabled);
+        if (scheduleHourRegisterEl) scheduleHourRegisterEl.disabled = scheduleTimeUndecided;
+        if (scheduleMinuteRegisterEl) scheduleMinuteRegisterEl.disabled = scheduleTimeUndecided;
+        if (scheduleTimePreferenceRegisterEl) {
+          scheduleTimePreferenceRegisterEl.disabled = scheduleTimeUndecided;
+          if (scheduleTimeUndecided) scheduleTimePreferenceRegisterEl.value = "exact";
+        }
+        if (scheduleTimeUndecidedBtnEl) {
+          scheduleTimeUndecidedBtnEl.classList.toggle("primary", scheduleTimeUndecided);
+          scheduleTimeUndecidedBtnEl.textContent = scheduleTimeUndecided ? "시간미정(적용중)" : "시간미정";
+        }
       }
 
       function renderScheduleDayOptionsWithWeekday(preferredDay) {
@@ -8725,10 +8742,14 @@
 
       function submitScheduleFromForm(ignoreLimit = false) {
         const pickedDate = `${yearEl.value}-${monthEl.value.padStart(2, "0")}-${dayEl.value.padStart(2, "0")}`;
-        const pickedTime = `${String(scheduleHourRegisterEl?.value || "10").padStart(2, "0")}:${String(
-          scheduleMinuteRegisterEl?.value || "00"
-        ).padStart(2, "0")}`;
-        const pickedTimePreference = normalizeTimePreference(scheduleTimePreferenceRegisterEl?.value);
+        const pickedTime = scheduleTimeUndecided
+          ? "시간미정"
+          : `${String(scheduleHourRegisterEl?.value || "10").padStart(2, "0")}:${String(
+              scheduleMinuteRegisterEl?.value || "00"
+            ).padStart(2, "0")}`;
+        const pickedTimePreference = scheduleTimeUndecided
+          ? "exact"
+          : normalizeTimePreference(scheduleTimePreferenceRegisterEl?.value);
         const pickedComposition = formEl.composition.value;
         const companyInputValue = document.getElementById("company").value || "";
         const normalizedCompany = normalizeCompanyName(companyInputValue);
@@ -8774,6 +8795,7 @@
         if (scheduleHourRegisterEl) scheduleHourRegisterEl.value = "10";
         if (scheduleMinuteRegisterEl) scheduleMinuteRegisterEl.value = "00";
         if (scheduleTimePreferenceRegisterEl) scheduleTimePreferenceRegisterEl.value = "exact";
+        setScheduleTimeUndecided(false);
         renderList();
         queuePaymentsSync();
         return true;
@@ -8782,6 +8804,18 @@
       formEl.addEventListener("submit", (event) => {
         event.preventDefault();
         submitScheduleFromForm(false);
+      });
+      scheduleTimeUndecidedBtnEl?.addEventListener("click", () => {
+        setScheduleTimeUndecided(!scheduleTimeUndecided);
+      });
+      scheduleHourRegisterEl?.addEventListener("change", () => {
+        if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
+      });
+      scheduleMinuteRegisterEl?.addEventListener("change", () => {
+        if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
+      });
+      scheduleTimePreferenceRegisterEl?.addEventListener("change", () => {
+        if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
       });
 
       adminOverrideSubmitBtnEl.addEventListener("click", () => {
