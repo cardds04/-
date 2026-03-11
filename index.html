@@ -5669,13 +5669,15 @@
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
         const matchedUsers = customerUsers.filter((user) => isSameTargetCompany(user?.company, user?.companyCode));
+        const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
         const matchedUser =
+          matchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
           matchedUsers.find((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey) ||
           matchedUsers[0] ||
           null;
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
-        const accountCompanyCode = String(matchedUser?.companyCode || targetCompany?.code || "").trim();
+        const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -5752,7 +5754,7 @@
             <input class="inline-input company-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(accountPassword)}" />
             <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
-              <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}">계정저장</button>
+              <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
             </div>
             <div style="font-size: 0.86rem; color: #5f6c88;">
               로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
@@ -8085,13 +8087,19 @@
         const newId = String(idInputEl?.value || "").trim();
         const newPassword = String(passwordInputEl?.value || "").trim();
         const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
+        const currentAccountId = String(button.dataset.accountId || "").trim();
         if (!newId || !newPassword) {
           alert("아이디와 비밀번호를 모두 입력해주세요.");
           return;
         }
 
         const users = readStorageArray(STORAGE_CUSTOMERS);
-        const targetIndex = users.findIndex((user) => normalizeCompanyName(user.company).toLowerCase() === companyName.toLowerCase());
+        const targetIndex = users.findIndex((user) => {
+          const sameCompany = normalizeCompanyName(user.company).toLowerCase() === companyName.toLowerCase();
+          if (!sameCompany) return false;
+          if (currentAccountId) return String(user?.id || "").trim() === currentAccountId;
+          return true;
+        });
         if (targetIndex < 0) {
           alert("해당 업체의 고객 계정을 찾지 못했습니다.");
           return;
@@ -8107,6 +8115,37 @@
         users[targetIndex].password = newPassword;
         users[targetIndex].companyCode = newCompanyCode;
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
+        const companyNameLower = companyName.toLowerCase();
+        let adminCompanyChanged = false;
+        companies.forEach((company) => {
+          if (normalizeCompanyName(company?.name).toLowerCase() !== companyNameLower) return;
+          company.code = newCompanyCode;
+          adminCompanyChanged = true;
+        });
+        if (adminCompanyChanged) {
+          saveAdminCompaniesToStorage();
+        }
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        let customerCompaniesChanged = false;
+        customerCompanies.forEach((company) => {
+          if (normalizeCompanyName(company?.name).toLowerCase() !== companyNameLower) return;
+          company.companyCode = newCompanyCode;
+          company.code = newCompanyCode;
+          customerCompaniesChanged = true;
+        });
+        if (customerCompaniesChanged) {
+          localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
+        }
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        let customerSchedulesChanged = false;
+        customerSchedules.forEach((schedule) => {
+          if (normalizeCompanyName(schedule?.company).toLowerCase() !== companyNameLower) return;
+          schedule.companyCode = newCompanyCode;
+          customerSchedulesChanged = true;
+        });
+        if (customerSchedulesChanged) {
+          localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+        }
 
         if (oldId && oldId !== newId) {
           const logs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
@@ -8125,6 +8164,7 @@
         renderCompanyOrderHistory(companyName);
         renderCustomerStatsDashboard();
         renderCompanies();
+        renderList();
         alert("업체 계정이 변경되었습니다.");
       });
       writerHistorySummaryEl.addEventListener("click", (event) => {
