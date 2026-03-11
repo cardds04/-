@@ -406,6 +406,17 @@
         color: #d74444;
         font-weight: 800;
       }
+      .schedule-time-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .request-time-label {
+        color: #5a6a87;
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
 
       .schedule-extra-detail {
         margin-top: 6px;
@@ -3182,7 +3193,7 @@
       async function fetchSchedulesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -3297,6 +3308,7 @@
             jointCode: String(row?.joint_code || "").trim(),
             doorCode: String(row?.door_code || "").trim(),
             memo: parsedMemo.memo,
+            requestedAt: String(row?.created_at || "").trim(),
             composition: String(row?.composition || "사진만").trim() || "사진만",
             paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
             paymentPayer: String(row?.payment_payer || "").trim(),
@@ -4496,6 +4508,17 @@
         if (pref === "after") return `${base}이후`;
         if (pref === "other") return `${base} 그외시간`;
         return base;
+      }
+      function formatRequestedAtLabel(requestedAt) {
+        const text = String(requestedAt || "").trim();
+        if (!text) return "접수 -";
+        const date = new Date(text);
+        if (Number.isNaN(date.getTime())) return "접수 -";
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `접수 ${month}/${day} ${hour}:${minute}`;
       }
       function parseScheduleTimeToMinutes(timeText) {
         const normalized = String(timeText || "").trim();
@@ -7446,9 +7469,12 @@
                                        <button class="btn-sm primary" type="button" data-action="saveDateEdit" data-index="${index}">시간저장</button>
                                        <button class="btn-sm" type="button" data-action="cancelDateEdit">취소</button>
                                      </div>`
-                                  : `${escapeHtml(formatScheduleDateWithoutYear(item.date))} | <button class="btn-sm schedule-time-emphasis" type="button" data-action="startDateEdit" data-index="${index}" style="padding: 0 6px; min-width: auto;">${escapeHtml(
-                                      formatScheduleTimeWithPreference(item.time, item.timePreference)
-                                    )}</button><br />
+                                 : `<div class="schedule-time-line">
+                                      <span>${escapeHtml(formatScheduleDateWithoutYear(item.date))} | <button class="btn-sm schedule-time-emphasis" type="button" data-action="startDateEdit" data-index="${index}" style="padding: 0 6px; min-width: auto;">${escapeHtml(
+                                        formatScheduleTimeWithPreference(item.time, item.timePreference)
+                                      )}</button></span>
+                                      <span class="request-time-label">${escapeHtml(formatRequestedAtLabel(item.requestedAt))}</span>
+                                    </div>
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}
                                     <details class="schedule-extra-detail">
@@ -9063,6 +9089,7 @@
           date: pickedDate || new Date().toISOString().slice(0, 10),
           time: pickedTime,
           timePreference: pickedTimePreference,
+          requestedAt: new Date().toISOString(),
           name: "작가미정",
           writerPhone: "",
           writerCarNumber: "",
