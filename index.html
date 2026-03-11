@@ -1118,6 +1118,7 @@
             <input id="couponCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
             <button id="clearCouponCompanySearchBtn" class="btn-sm" type="button">전체</button>
           </div>
+          <div id="couponLowCountBox" class="customer-alert-history" style="margin: 4px 0 8px; max-height: 180px; overflow: auto;"></div>
           <div id="couponRegisteredCountText" class="hint" style="margin: 6px 0 8px;"></div>
           <table class="payment-table">
             <thead>
@@ -2376,6 +2377,7 @@
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
       const couponCompanySearchInputEl = document.getElementById("couponCompanySearchInput");
       const clearCouponCompanySearchBtnEl = document.getElementById("clearCouponCompanySearchBtn");
+      const couponLowCountBoxEl = document.getElementById("couponLowCountBox");
       const couponCountSelectEl = document.getElementById("couponCountSelect");
       const couponRegisteredCountTextEl = document.getElementById("couponRegisteredCountText");
       const couponListBodyEl = document.getElementById("couponListBody");
@@ -5015,6 +5017,37 @@
       function renderCouponPassList() {
         const keyword = normalizeCompanyName(couponCompanyKeyword).toLowerCase();
         const entries = Object.entries(couponPasses).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+        const lowEntries = entries
+          .filter(([, remaining]) => Number(remaining) <= 3)
+          .sort((a, b) => Number(a[1]) - Number(b[1]) || a[0].localeCompare(b[0], "ko"));
+        if (couponLowCountBoxEl) {
+          if (!lowEntries.length) {
+            couponLowCountBoxEl.innerHTML = '<div>3회 이하 남은 업체들: 없음</div>';
+          } else {
+            couponLowCountBoxEl.innerHTML = `
+              <div style="font-weight: 700; margin-bottom: 6px;">3회 이하 남은 업체들 (${lowEntries.length}개)</div>
+              ${lowEntries
+                .map(
+                  ([companyName, remaining]) => {
+                    const remainCount = Math.max(0, Number(remaining) || 0);
+                    const countStyle =
+                      remainCount === 0
+                        ? "color:#d74444;"
+                        : remainCount === 1
+                        ? "color:#d08400;"
+                        : "";
+                    return `
+                    <div class="customer-alert-row" style="padding: 4px 0;">
+                      <span>${escapeHtml(companyName)}</span>
+                      <strong style="${countStyle}">${remainCount}회</strong>
+                    </div>
+                  `;
+                  }
+                )
+                .join("")}
+            `;
+          }
+        }
         const filteredEntries = entries.filter(([companyName]) => {
           if (!keyword) return true;
           return normalizeCompanyName(companyName).toLowerCase().includes(keyword);
