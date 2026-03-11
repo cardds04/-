@@ -988,6 +988,7 @@
           </div>
 
           <div id="customerAlertBox" class="customer-alert-box"></div>
+          <div id="todayNewSummaryBox" class="helper" style="margin: 6px 2px 10px;"></div>
           <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
 
           <div id="inlineCalendarBox" class="customer-stats-box" style="margin-bottom: 10px;">
@@ -2367,6 +2368,7 @@
       const customerAlertHistoryBtnEl = document.getElementById("customerAlertHistoryBtn");
       const customerStatsBoxEl = document.getElementById("customerStatsBox");
       const customerAlertBoxEl = document.getElementById("customerAlertBox");
+      const todayNewSummaryBoxEl = document.getElementById("todayNewSummaryBox");
       const customerAlertHistoryBoxEl = document.getElementById("customerAlertHistoryBox");
       const canceledScheduleBoxEl = document.getElementById("canceledScheduleBox");
       const openDayoffSummaryBoxEl = document.getElementById("openDayoffSummaryBox");
@@ -7059,6 +7061,24 @@
             String(item?.date || "").trim().startsWith(monthKeyPrefix)
           ).length;
           monthNewCountEl.textContent = `이번달 접수 ${monthNewCount}건`;
+        }
+        if (todayNewSummaryBoxEl) {
+          const todayRows = activeRows
+            .filter((item) => String(item?.date || "").trim() === todayKey)
+            .sort((a, b) => compareScheduleDateTime(a, b));
+          if (todayRows.length === 0) {
+            todayNewSummaryBoxEl.textContent = "오늘의 신규접수: 없음";
+          } else {
+            const preview = todayRows
+              .slice(0, 5)
+              .map((item) => `${formatScheduleTimeWithPreference(item?.time, item?.timePreference)} ${normalizeCompanyName(item?.company) || "-"}`)
+              .join(", ");
+            const remainCount = todayRows.length - 5;
+            todayNewSummaryBoxEl.textContent =
+              remainCount > 0
+                ? `오늘의 신규접수 ${todayRows.length}건: ${preview} 외 ${remainCount}건`
+                : `오늘의 신규접수 ${todayRows.length}건: ${preview}`;
+          }
         }
 
         const filtered = data
