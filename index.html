@@ -9256,32 +9256,45 @@
         const confirmed = confirm("삭제하시겠습니까?");
         if (!confirmed) return;
         const deletedItem = data[index];
+        const deletedScheduleId = String(deletedItem?.customerScheduleId || "").trim();
+        const deletedDate = String(deletedItem?.date || "").trim();
+        const deletedTime = String(deletedItem?.time || "").trim();
+        const deletedCompany = normalizeCompanyName(deletedItem?.company);
+        const deletedPlace = String(deletedItem?.place || "").trim();
+        const isSameDeletedSchedule = (row) => {
+          const rowScheduleId = String(row?.customerScheduleId || "").trim();
+          if (deletedScheduleId && rowScheduleId === deletedScheduleId) return true;
+          const sameDate = String(row?.date || "").trim() === deletedDate;
+          const sameTime = String(row?.time || "").trim() === deletedTime;
+          const samePlace = String(row?.place || "").trim() === deletedPlace;
+          const sameCompany = normalizeCompanyName(row?.company) === deletedCompany;
+          // 회사명이 매핑 변경되는 경우가 있어 장소+일시 기준도 함께 허용
+          return (sameDate && sameTime && samePlace && sameCompany) || (sameDate && sameTime && samePlace);
+        };
         appendCanceledScheduleRecord(deletedItem, "admin", "관리자삭제");
-        if (deletedItem?.paymentStatus === "입금완료") {
-          onHoldPayments.unshift({ ...deletedItem });
-        }
         data.splice(index, 1);
+        for (let i = onHoldPayments.length - 1; i >= 0; i -= 1) {
+          if (isSameDeletedSchedule(onHoldPayments[i])) {
+            onHoldPayments.splice(i, 1);
+          }
+        }
+        for (let i = refundPayments.length - 1; i >= 0; i -= 1) {
+          if (isSameDeletedSchedule(refundPayments[i])) {
+            refundPayments.splice(i, 1);
+          }
+        }
 
         // 고객 페이지에서 넘어온 일정은 고객 저장소에서도 함께 삭제해야 재등장하지 않음
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
-        let customerIndex = -1;
-        const deletedCustomerScheduleId = String(deletedItem?.customerScheduleId || "").trim();
-        if (deletedCustomerScheduleId) {
-          customerIndex = customerSchedules.findIndex(
-            (row) => String(row?.customerScheduleId || "").trim() === deletedCustomerScheduleId
-          );
-        }
-        if (customerIndex < 0) {
-          customerIndex = customerSchedules.findIndex(
-            (row) =>
-              String(row?.date || "").trim() === String(deletedItem?.date || "").trim() &&
-              String(row?.time || "").trim() === String(deletedItem?.time || "").trim() &&
-              normalizeCompanyName(row?.company) === normalizeCompanyName(deletedItem?.company) &&
-              String(row?.place || "").trim() === String(deletedItem?.place || "").trim()
-          );
-        }
-        if (customerIndex >= 0) {
-          customerSchedules.splice(customerIndex, 1);
+        const nextCustomerSchedules = customerSchedules.filter((row) => !isSameDeletedSchedule(row));
+        if (nextCustomerSchedules.length !== customerSchedules.length) {
+          localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(nextCustomerSchedules));
+        } else {
+          // 마지막 보정: 아이디 기준만 별도로 한 번 더 확인
+          const customerIndex = deletedScheduleId
+            ? customerSchedules.findIndex((row) => String(row?.customerScheduleId || "").trim() === deletedScheduleId)
+            : -1;
+          if (customerIndex >= 0) customerSchedules.splice(customerIndex, 1);
           localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
         }
 

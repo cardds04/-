@@ -1606,13 +1606,21 @@
         }
         if (isLoggedIn) {
           const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
-          if (effectiveCompanyCode && !normalize(user?.companyCode)) {
+          const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
+          if (effectiveCompanyCode && (!normalize(user?.companyCode) || normalize(user?.company) !== normalize(resolvedCompanyName))) {
             const users = readStorageArray(STORAGE_CUSTOMERS);
             const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
             if (userIndex >= 0) {
+              users[userIndex].company = resolvedCompanyName || users[userIndex].company;
               users[userIndex].companyCode = effectiveCompanyCode;
               writeStorageArray(STORAGE_CUSTOMERS, users);
+              user.company = resolvedCompanyName || user.company;
               user.companyCode = effectiveCompanyCode;
+              if (USE_SUPABASE_SYNC) {
+                void syncCustomersTableFromStorage().catch((error) => {
+                  console.error("[TABLE][customer] 회사명/코드 동기화 실패", error);
+                });
+              }
             }
           }
           syncAdminSchedulesToCustomerUser(user);
@@ -2114,6 +2122,17 @@
         }
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const scheduleCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
+        if (normalize(scheduleCompanyName) !== normalize(user.company)) {
+          const users = readStorageArray(STORAGE_CUSTOMERS);
+          const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
+          if (userIndex >= 0) {
+            users[userIndex].company = scheduleCompanyName;
+            users[userIndex].companyCode = effectiveCompanyCode;
+            writeStorageArray(STORAGE_CUSTOMERS, users);
+            user.company = scheduleCompanyName;
+            user.companyCode = effectiveCompanyCode;
+          }
+        }
 
         const year = Number(scheduleYearEl.value);
         const month = Number(scheduleMonthEl.value);
@@ -2175,6 +2194,7 @@
         writeStorageArray(STORAGE_SCHEDULES, schedules);
         customerScheduleSubmitting = true;
         try {
+          await syncCustomersTableFromStorage();
           await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
           queueCustomerTablePull();
         } catch (error) {
