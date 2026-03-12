@@ -964,6 +964,7 @@
                 </select>
               </div>
               <button id="scheduleTimeUndecidedBtn" class="btn-sm" type="button">시간미정</button>
+              <button id="scheduleTimeFlexibleBtn" class="btn-sm" type="button">상관없음</button>
             </div>
             <div class="input-row">
               <span>🏢</span>
@@ -2751,6 +2752,7 @@
       const scheduleMinuteRegisterEl = document.getElementById("scheduleMinute");
       const scheduleTimePreferenceRegisterEl = document.getElementById("scheduleTimePreference");
       const scheduleTimeUndecidedBtnEl = document.getElementById("scheduleTimeUndecidedBtn");
+      const scheduleTimeFlexibleBtnEl = document.getElementById("scheduleTimeFlexibleBtn");
       const companyFormEl = document.getElementById("companyForm");
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
@@ -8202,6 +8204,11 @@
           scheduleTimeUndecidedBtnEl.classList.toggle("primary", scheduleTimeUndecided);
           scheduleTimeUndecidedBtnEl.textContent = scheduleTimeUndecided ? "시간미정(적용중)" : "시간미정";
         }
+        if (scheduleTimeFlexibleBtnEl) {
+          const isFlexible = !scheduleTimeUndecided && normalizeTimePreference(scheduleTimePreferenceRegisterEl?.value) === "other";
+          scheduleTimeFlexibleBtnEl.classList.toggle("primary", isFlexible);
+          scheduleTimeFlexibleBtnEl.textContent = isFlexible ? "상관없음(적용중)" : "상관없음";
+        }
       }
 
       function renderScheduleDayOptionsWithWeekday(preferredDay) {
@@ -10576,6 +10583,13 @@
       scheduleTimeUndecidedBtnEl?.addEventListener("click", () => {
         setScheduleTimeUndecided(!scheduleTimeUndecided);
       });
+      scheduleTimeFlexibleBtnEl?.addEventListener("click", () => {
+        if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
+        if (scheduleTimePreferenceRegisterEl) {
+          scheduleTimePreferenceRegisterEl.value = "other";
+        }
+        setScheduleTimeUndecided(false);
+      });
       scheduleHourRegisterEl?.addEventListener("change", () => {
         if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
       });
@@ -10583,7 +10597,7 @@
         if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
       });
       scheduleTimePreferenceRegisterEl?.addEventListener("change", () => {
-        if (scheduleTimeUndecided) setScheduleTimeUndecided(false);
+        setScheduleTimeUndecided(false);
       });
 
       adminOverrideSubmitBtnEl.addEventListener("click", () => {
