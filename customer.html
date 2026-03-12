@@ -1338,9 +1338,9 @@
             normalize(item?.name)
         );
         if (!matchedRows.length) return fallbackName;
-        const preferred =
-          matchedRows.find((item) => normalize(item?.name).toLowerCase() !== fallbackName.toLowerCase()) || matchedRows[0];
-        return normalize(preferred?.name) || fallbackName;
+        // 동일 고유번호가 여러 업체명에 연결돼 있어도 항상 같은 이름을 선택해야
+        // 화면 표기가 번갈아 바뀌지 않습니다.
+        return normalize(matchedRows[0]?.name) || fallbackName;
       }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
