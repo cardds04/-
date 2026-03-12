@@ -7946,6 +7946,10 @@
           alert("반만입금은 입금금액을 먼저 입력해주세요.");
           return;
         }
+        if (!keepUnpaid && amount && !payer) {
+          alert("입금자명을 입력해야 입금완료 처리할 수 있습니다.");
+          return;
+        }
 
         item.paymentPayer = payer;
         item.paymentDate = paymentDate;
@@ -9072,6 +9076,7 @@
         }
 
         const users = readStorageArray(STORAGE_CUSTOMERS);
+        const existingIdIndex = users.findIndex((user) => String(user?.id || "").trim().toLowerCase() === newId.toLowerCase());
         let targetIndex = users.findIndex((user) => {
           const sameCompany = normalizeCompanyName(user.company).toLowerCase() === companyName.toLowerCase();
           if (!sameCompany) return false;
@@ -9090,10 +9095,9 @@
           alert("해당 업체의 고객 계정을 찾지 못했습니다.");
           return;
         }
-        const duplicateId = users.some((user, index) => index !== targetIndex && String(user.id || "").toLowerCase() === newId.toLowerCase());
-        if (duplicateId) {
-          alert("이미 사용 중인 아이디입니다.");
-          return;
+        // 입력한 아이디가 이미 존재하면 계정명 변경이 아니라 "해당 계정을 업체에 연결"로 처리합니다.
+        if (existingIdIndex >= 0) {
+          targetIndex = existingIdIndex;
         }
         const oldId = String(users[targetIndex].id || "").trim();
         const masterCompanyName = normalizeCompanyName(resolveMasterCompanyNameByCompanyCode(newCompanyCode) || companyName);
@@ -9184,7 +9188,7 @@
                 {
                   login_id: newId,
                   password: newPassword,
-                  company_name: companyName,
+                  company_name: masterCompanyName,
                   company_code: newCompanyCode,
                   phone: String(users[targetIndex]?.phone || "").trim()
                 }
