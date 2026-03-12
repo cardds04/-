@@ -1862,8 +1862,13 @@
         };
         const toDateTimeValue = (item) => {
           const dateText = String(item?.date || "").trim();
-          const dateMs = /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? new Date(`${dateText}T00:00:00`).getTime() : 0;
-          return (Number.isNaN(dateMs) ? 0 : dateMs) + parseTimeToMinutes(item?.time) * 60000;
+          const matched = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (!matched) return 0;
+          const year = Number(matched[1]) || 0;
+          const month = Number(matched[2]) || 0;
+          const day = Number(matched[3]) || 0;
+          const dateKeyValue = year * 10000 + month * 100 + day;
+          return dateKeyValue * 1440 + parseTimeToMinutes(item?.time);
         };
         const upcomingSchedules = schedules
           .filter((item) => !isPastSchedule(item.date))
