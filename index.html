@@ -5470,6 +5470,20 @@
         if (!titleEl || !monthTotalEl || !weekdayInputEl || !holidayInputEl || !gridEl) return;
         const now = new Date();
         const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        const canceledScheduleIdSet = new Set(
+          canceledRows.map((item) => String(item?.customerScheduleId || "").trim()).filter(Boolean)
+        );
+        const canceledFallbackKeySet = new Set(
+          canceledRows.map((item) =>
+            [
+              String(item?.date || "").trim(),
+              String(item?.time || "").trim(),
+              normalizeCompanyName(item?.company).toLowerCase(),
+              normalizeCompanyName(item?.place).toLowerCase()
+            ].join("|")
+          )
+        );
         const selectedDateKey =
           monthFilterEl?.value !== "all" && dayFilterEl?.value !== "all"
             ? `${String(yearFilterEl?.value || "")}-${String(monthFilterEl?.value || "").padStart(2, "0")}-${String(dayFilterEl?.value || "").padStart(2, "0")}`
@@ -5478,7 +5492,18 @@
         const daysInMonth = new Date(calendarViewYear, calendarViewMonth, 0).getDate();
         const monthSchedules = data.filter((item) => {
           const date = new Date(item.date);
-          return date.getFullYear() === calendarViewYear && date.getMonth() + 1 === calendarViewMonth;
+          if (!(date.getFullYear() === calendarViewYear && date.getMonth() + 1 === calendarViewMonth)) return false;
+          const itemScheduleId = String(item?.customerScheduleId || "").trim();
+          const itemFallbackKey = [
+            String(item?.date || "").trim(),
+            String(item?.time || "").trim(),
+            normalizeCompanyName(item?.company).toLowerCase(),
+            normalizeCompanyName(item?.place).toLowerCase()
+          ].join("|");
+          return !(
+            (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
+            canceledFallbackKeySet.has(itemFallbackKey)
+          );
         });
         titleEl.textContent = `${calendarViewYear}년 ${calendarViewMonth}월`;
         monthTotalEl.textContent = `이번 달 총 예약 ${monthSchedules.length}건`;
@@ -5501,7 +5526,20 @@
           }
           const dateKey = `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const daySchedules = data
-            .filter((item) => item.date === dateKey)
+            .filter((item) => {
+              if (item.date !== dateKey) return false;
+              const itemScheduleId = String(item?.customerScheduleId || "").trim();
+              const itemFallbackKey = [
+                String(item?.date || "").trim(),
+                String(item?.time || "").trim(),
+                normalizeCompanyName(item?.company).toLowerCase(),
+                normalizeCompanyName(item?.place).toLowerCase()
+              ].join("|");
+              return !(
+                (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
+                canceledFallbackKeySet.has(itemFallbackKey)
+              );
+            })
             .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
           const dailyLimit = getEffectiveDailyLimit(dateKey);
           const emergencyAddition = getEmergencyLimitAddition(dateKey);
