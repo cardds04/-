@@ -905,8 +905,8 @@
       function normalizeMasterAccountMap(raw) {
         if (!raw || typeof raw !== "object") return {};
         const rows = Object.entries(raw)
-          .map(([companyCode, customerId]) => [normalize(companyCode), String(customerId || "").trim()])
-          .filter(([companyCode, customerId]) => Boolean(companyCode) && Boolean(customerId))
+          .map(([companyCode, companyName]) => [normalize(companyCode), normalize(companyName)])
+          .filter(([companyCode, companyName]) => Boolean(companyCode) && Boolean(companyName))
           .sort((a, b) => a[0].localeCompare(b[0]));
         return Object.fromEntries(rows);
       }
@@ -1385,28 +1385,19 @@
         const matched = companies.find((item) => normalize(item?.name).toLowerCase() === userCompanyName);
         return normalize(matched?.companyCode || matched?.code);
       }
-      function resolveMasterCustomerByCompanyCode(companyCode = "") {
+      function resolveMasterCompanyNameByCompanyCode(companyCode = "") {
         const normalizedCode = normalize(companyCode);
-        if (!normalizedCode) return null;
+        if (!normalizedCode) return "";
         const masterMap = getLocalMasterAccountMap();
-        const masterId = String(masterMap[normalizedCode] || "").trim();
-        if (!masterId) return null;
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        return (
-          users.find(
-            (row) =>
-              String(row?.id || "").trim() === masterId &&
-              normalize(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase()
-          ) || null
-        );
+        return normalize(masterMap[normalizedCode]);
       }
       function resolveRegisteredCompanyNameForUser(user, companyCode = "") {
         const fallbackName = normalize(user?.company);
         const normalizedCode = normalize(companyCode);
         if (!normalizedCode) return fallbackName;
-        const masterCustomer = resolveMasterCustomerByCompanyCode(normalizedCode);
-        if (masterCustomer?.company) {
-          return normalize(masterCustomer.company);
+        const masterCompanyName = resolveMasterCompanyNameByCompanyCode(normalizedCode);
+        if (masterCompanyName) {
+          return masterCompanyName;
         }
         const companies = readStorageArray(STORAGE_COMPANIES);
         const matchedRows = companies.filter(
