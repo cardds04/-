@@ -204,6 +204,7 @@
       const STORAGE_WRITER_REMEMBERED_LOGIN = "scheduleSiteWriterRememberedLogin";
       const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
+      const STORAGE_CUSTOMER_ALERTS = "scheduleSiteCustomerAlerts";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
@@ -847,6 +848,21 @@
 
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
+      }
+      function appendWriterLoginAlert(writer) {
+        const writerName = normalize(writer?.name);
+        const writerId = normalize(writer?.id);
+        if (!writerName && !writerId) return;
+        const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+        alerts.unshift({
+          id: `alert-writer-login-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "writer_login",
+          writerName: writerName || "작가미상",
+          writerId: writerId || "-",
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+        writeStorageArray(STORAGE_CUSTOMER_ALERTS, alerts.slice(0, 500));
       }
       function writeStorageArraySilently(key, items) {
         originalSetItem(key, JSON.stringify(items));
@@ -1854,6 +1870,7 @@
         } else {
           localStorage.removeItem(STORAGE_WRITER_REMEMBERED_LOGIN);
         }
+        appendWriterLoginAlert(matched);
         loginFormEl.reset();
         renderAuthState();
       });

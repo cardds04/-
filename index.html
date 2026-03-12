@@ -4823,6 +4823,11 @@
         if (item.type === "customer_login") {
           return `${companyText} 업체가 고객 페이지에 로그인했습니다.`;
         }
+        if (item.type === "writer_login") {
+          const writerName = item.writerName || "작가미상";
+          const writerId = item.writerId || "-";
+          return `${writerName} (${writerId}) 작가가 작가 페이지에 접속했습니다.`;
+        }
         if (item.type === "dayoff_request") {
           const writerName = item.writerName || "작가미상";
           const writerId = item.writerId || "-";
@@ -4835,7 +4840,7 @@
       function isTodayNewOrChangedAlert(item) {
         if (!item || item.read) return false;
         const type = String(item.type || "").trim();
-        if (!["schedule_create", "new_company_schedule", "admin_time_update", "admin_date_update"].includes(type)) return false;
+        if (!["schedule_create", "new_company_schedule", "admin_time_update", "admin_date_update", "writer_login"].includes(type)) return false;
         const createdDate = String(item.createdAt || "").slice(0, 10);
         const todayKey = new Date().toISOString().slice(0, 10);
         return createdDate === todayKey;
@@ -4878,6 +4883,15 @@
             `아이디: ${item.writerId || "-"}`,
             `휴무일: ${item.date || "-"}`,
             `차감회차: ${Math.max(0, Number(item.amount) || 0)}`
+          ].join("\n");
+        }
+        if (item.type === "writer_login") {
+          return [
+            title,
+            "",
+            `작가명: ${item.writerName || "-"}`,
+            `아이디: ${item.writerId || "-"}`,
+            `접속시각: ${formatHistoryTimelineAt(item.createdAt)}`
           ].join("\n");
         }
         const scheduleItem = findAlertScheduleItem(item);
