@@ -1294,12 +1294,15 @@
         const normalizedCode = normalize(companyCode);
         if (!normalizedCode) return fallbackName;
         const companies = readStorageArray(STORAGE_COMPANIES);
-        const matched = companies.find(
+        const matchedRows = companies.filter(
           (item) =>
             normalize(item?.companyCode || item?.code).toLowerCase() === normalizedCode.toLowerCase() &&
             normalize(item?.name)
         );
-        return normalize(matched?.name) || fallbackName;
+        if (!matchedRows.length) return fallbackName;
+        const preferred =
+          matchedRows.find((item) => normalize(item?.name).toLowerCase() !== fallbackName.toLowerCase()) || matchedRows[0];
+        return normalize(preferred?.name) || fallbackName;
       }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
@@ -1486,6 +1489,7 @@
         if (!user) return;
         const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
         const targetCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
         const targetCompanyNameKey = getCompanyKey(user.company, "");
         const schedules = readStorageArray(STORAGE_SCHEDULES);
@@ -1545,7 +1549,7 @@
             time: String(row?.time || "09:00").trim() || "09:00",
             timePreference: normalizeTimePreference(row?.timePreference || parsedMemo.timePreference),
             name: String(row?.name || "작가미정").trim() || "작가미정",
-            company: normalize(user.company),
+            company: normalize(resolvedCompanyName || user.company),
             companyCode: effectiveCompanyCode,
             place: normalize(row?.place),
             pyeong: normalize(row?.pyeong),
@@ -2095,6 +2099,13 @@
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (customerScheduleSubmitting) return;
+        if (USE_SUPABASE_SYNC) {
+          try {
+            await pullTablesToCustomerStorage();
+          } catch (error) {
+            console.error("[TABLE][customer] submit 직전 pull 실패", error);
+          }
+        }
         const user = getCurrentSessionUser();
         if (!user) {
           alert("로그인이 필요합니다.");
