@@ -7740,10 +7740,10 @@
         const isPaidTab = currentPaymentFilter === "paid";
         const isUnpaidTab = currentPaymentFilter === "unpaid";
         const isPaidAllView = isPaidTab && paymentShowAllMonthsForPaid;
-        const isMonthTab = isPaidTab || isUnpaidTab;
+        const isMonthTab = isPaidTab;
         const shouldFilterByMonth = isMonthTab && !isPaidAllView;
         if (paymentMonthNavigatorEl) {
-          paymentMonthNavigatorEl.classList.toggle("hidden", !isMonthTab);
+          paymentMonthNavigatorEl.classList.toggle("hidden", !isPaidTab);
         }
         if (paymentMonthAllToggleBtnEl) {
           paymentMonthAllToggleBtnEl.classList.toggle("hidden", !isPaidTab);
@@ -7752,7 +7752,7 @@
         paymentMonthPrevBtnEl?.classList.toggle("hidden", isPaidAllView);
         paymentMonthNextBtnEl?.classList.toggle("hidden", isPaidAllView);
         if (paymentMonthMemoBoxEl) {
-          paymentMonthMemoBoxEl.classList.toggle("hidden", !isUnpaidTab);
+          paymentMonthMemoBoxEl.classList.add("hidden");
         }
         const monthKeys = isMonthTab
           ? [...new Set(filtered.map(({ item }) => getPaymentRowMonthKey(item)).filter(Boolean))].sort((a, b) => b.localeCompare(a))
@@ -7796,12 +7796,11 @@
             : 0;
           const totalLabel = isPaidAllView ? "전체 총금액" : "월별 총금액";
           paymentMonthTotalTextEl.textContent = isUnpaidTab
-            ? `월별 총금액: ${monthTotalAmount.toLocaleString("ko-KR")}원 / 미수금: ${unpaidTotalAmount.toLocaleString("ko-KR")}원`
+            ? `전체 미수금: ${unpaidTotalAmount.toLocaleString("ko-KR")}원`
             : `${totalLabel}: ${monthTotalAmount.toLocaleString("ko-KR")}원`;
         }
         if (paymentMonthMemoInputEl) {
-          const memoMap = getPaymentMonthMemoMap();
-          paymentMonthMemoInputEl.value = isUnpaidTab ? String(memoMap[paymentViewYearMonth] || "") : "";
+          paymentMonthMemoInputEl.value = "";
         }
         paymentListBodyEl.innerHTML = visibleRows
           .map(({ item, index, source }) => {
