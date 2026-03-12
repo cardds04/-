@@ -3211,6 +3211,57 @@
         }
         return await response.json();
       }
+      async function deleteRelatedPaymentsFromSupabaseBySchedule(item) {
+        if (!USE_SUPABASE_SYNC || !item) return false;
+        const targetIdentity = getPaymentIdentity(item);
+        const targetScheduleId = String(item?.customerScheduleId || "").trim();
+        const targetDate = String(item?.date || "").trim();
+        const targetTime = String(item?.time || "").trim();
+        const targetPlace = String(item?.place || "").trim().toLowerCase();
+        const targetCompany = normalizeCompanyName(item?.company).toLowerCase();
+        const rows = await fetchPaymentsFromSupabase();
+        const deleteIds = [];
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          let payload = {};
+          try {
+            payload = row?.memo ? JSON.parse(row.memo) : {};
+          } catch (error) {
+            payload = {};
+          }
+          const identity = String(payload?.identity || "").trim();
+          const snapshot = payload?.snapshot && typeof payload.snapshot === "object" ? payload.snapshot : {};
+          const snapshotScheduleId = String(snapshot?.customerScheduleId || "").trim();
+          const snapshotDate = String(snapshot?.date || "").trim();
+          const snapshotTime = String(snapshot?.time || "").trim();
+          const snapshotPlace = String(snapshot?.place || "").trim().toLowerCase();
+          const snapshotCompany = normalizeCompanyName(snapshot?.company || row?.company_name).toLowerCase();
+          const sameByIdentity = Boolean(targetIdentity) && identity === targetIdentity;
+          const sameByScheduleId = Boolean(targetScheduleId) && snapshotScheduleId === targetScheduleId;
+          const sameByFallback =
+            snapshotDate === targetDate &&
+            snapshotTime === targetTime &&
+            snapshotPlace === targetPlace &&
+            (snapshotCompany === targetCompany || !targetCompany || !snapshotCompany);
+          const sameByLooseFallback = snapshotDate === targetDate && snapshotTime === targetTime && snapshotPlace === targetPlace;
+          if (sameByIdentity || sameByScheduleId || sameByFallback || sameByLooseFallback) {
+            if (row?.id) deleteIds.push(row.id);
+          }
+        });
+        if (!deleteIds.length) return false;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=in.(${deleteIds.join(",")})`, {
+          method: "DELETE",
+          headers: {
+            Prefer: "return=minimal",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`payments 연관 삭제 실패 (${response.status}): ${errorText}`);
+        }
+        return true;
+      }
       async function syncPaymentsToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
         const paymentRows = buildPaymentRowsSnapshot();
@@ -9842,6 +9893,14 @@
         editingDateIndex = null;
         renderList();
         queuePaymentsSync();
+        void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
+          .then((deleted) => {
+            if (!deleted) return;
+            return pullPaymentsFromSupabaseAndApply();
+          })
+          .catch((error) => {
+            console.error("[PAYMENTS][index] 연관 입금 삭제 실패", error);
+          });
       }
 
       function buildScheduleFallbackKey(row) {
