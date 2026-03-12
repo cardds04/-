@@ -235,6 +235,8 @@
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
+      const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
+      const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
@@ -900,9 +902,37 @@
         }
         return await response.json();
       }
+      function normalizeMasterAccountMap(raw) {
+        if (!raw || typeof raw !== "object") return {};
+        const rows = Object.entries(raw)
+          .map(([companyCode, customerId]) => [normalize(companyCode), String(customerId || "").trim()])
+          .filter(([companyCode, customerId]) => Boolean(companyCode) && Boolean(customerId))
+          .sort((a, b) => a[0].localeCompare(b[0]));
+        return Object.fromEntries(rows);
+      }
+      function getLocalMasterAccountMap() {
+        return normalizeMasterAccountMap(readStorageObject(STORAGE_MASTER_ACCOUNT_MAP));
+      }
+      async function pullSharedMasterAccountMapAndApply() {
+        if (!USE_SUPABASE_SYNC) return {};
+        try {
+          const rows = await fetchJsonRows(`app_state?id=eq.global&select=payload&limit=1`);
+          const payload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : null;
+          const remoteMap = normalizeMasterAccountMap(payload?.[SHARED_MASTER_ACCOUNT_MAP_FIELD]);
+          const localMap = getLocalMasterAccountMap();
+          if (JSON.stringify(remoteMap) !== JSON.stringify(localMap)) {
+            originalSetItem(STORAGE_MASTER_ACCOUNT_MAP, JSON.stringify(remoteMap));
+          }
+          return remoteMap;
+        } catch (error) {
+          console.error("[MASTER][customer] 원격 매핑 조회 실패", error);
+          return getLocalMasterAccountMap();
+        }
+      }
       async function pullTablesToCustomerStorage() {
         if (!USE_SUPABASE_SYNC) return;
         if (customerScheduleSubmitting) return;
+        await pullSharedMasterAccountMapAndApply();
         const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
           fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc"),
@@ -1358,18 +1388,17 @@
       function resolveMasterCustomerByCompanyCode(companyCode = "") {
         const normalizedCode = normalize(companyCode);
         if (!normalizedCode) return null;
-        const users = readStorageArray(STORAGE_CUSTOMERS)
-          .filter((row) => normalize(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase())
-          .map((row) => ({
-            ...row,
-            __createdAt: new Date(String(row?.createdAt || "9999-12-31T23:59:59")).getTime()
-          }))
-          .sort((a, b) => {
-            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
-            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
-            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
-          });
-        return users[0] || null;
+        const masterMap = getLocalMasterAccountMap();
+        const masterId = String(masterMap[normalizedCode] || "").trim();
+        if (!masterId) return null;
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        return (
+          users.find(
+            (row) =>
+              String(row?.id || "").trim() === masterId &&
+              normalize(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase()
+          ) || null
+        );
       }
       function resolveRegisteredCompanyNameForUser(user, companyCode = "") {
         const fallbackName = normalize(user?.company);
@@ -2545,9 +2574,15 @@
       setupDateTimeSelectors();
       switchAuthTab("login");
       renderAuthState();
+      void pullSharedMasterAccountMapAndApply().then(() => {
+        renderAuthState();
+      });
       queueCustomerTablePull();
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_ADMIN_SCHEDULES || event.key === STORAGE_SCHEDULES) {
+          renderAuthState();
+        }
+        if (event.key === STORAGE_MASTER_ACCOUNT_MAP) {
           renderAuthState();
         }
       });

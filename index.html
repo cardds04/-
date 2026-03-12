@@ -1299,6 +1299,8 @@
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
       const STORAGE_COUPON_LOWLIST_EXCLUDED = "scheduleSiteCouponLowlistExcluded";
+      const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
+      const STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED = "scheduleSiteMasterAccountBootstrapV1";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
@@ -1318,6 +1320,7 @@
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
+      const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const STORAGE_SYNC_KEYS = [
         STORAGE_CUSTOMER_COMPANIES,
         STORAGE_CUSTOMER_SCHEDULES,
@@ -1606,6 +1609,105 @@
       }
       function getLocalEmergencyLimitAdditions() {
         return normalizeEmergencyLimitAdditions(readStorageObject(STORAGE_EMERGENCY_LIMIT_ADDITIONS));
+      }
+      function normalizeMasterAccountMap(raw) {
+        if (!raw || typeof raw !== "object") return {};
+        const rows = Object.entries(raw)
+          .map(([companyCode, customerId]) => [normalizeCompanyCode(companyCode), String(customerId || "").trim()])
+          .filter(([companyCode, customerId]) => Boolean(companyCode) && Boolean(customerId))
+          .sort((a, b) => a[0].localeCompare(b[0]));
+        return Object.fromEntries(rows);
+      }
+      function getLocalMasterAccountMap() {
+        return normalizeMasterAccountMap(readStorageObject(STORAGE_MASTER_ACCOUNT_MAP));
+      }
+      function saveLocalMasterAccountMap(nextMap) {
+        originalSetItem(STORAGE_MASTER_ACCOUNT_MAP, JSON.stringify(normalizeMasterAccountMap(nextMap)));
+      }
+      async function fetchSharedMasterAccountMapFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return null;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`master account map 조회 실패 (${response.status}): ${errorText}`);
+        }
+        const rows = await response.json();
+        const payload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : null;
+        if (!payload || typeof payload !== "object") return null;
+        return normalizeMasterAccountMap(payload[SHARED_MASTER_ACCOUNT_MAP_FIELD]);
+      }
+      async function saveSharedMasterAccountMapToSupabase(nextMap) {
+        if (!USE_SUPABASE_SYNC) return;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`master account map 상태 조회 실패 (${response.status}): ${errorText}`);
+        }
+        const rows = await response.json();
+        const currentPayload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : {};
+        const nextPayload = { ...currentPayload, [SHARED_MASTER_ACCOUNT_MAP_FIELD]: normalizeMasterAccountMap(nextMap) };
+        const updateResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ payload: nextPayload })
+          }
+        );
+        if (!updateResponse.ok) {
+          const errorText = await updateResponse.text();
+          throw new Error(`master account map 저장 실패 (${updateResponse.status}): ${errorText}`);
+        }
+      }
+      async function pullSharedMasterAccountMapAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        try {
+          const remoteMap = await fetchSharedMasterAccountMapFromSupabase();
+          if (!remoteMap) return false;
+          const localMap = getLocalMasterAccountMap();
+          if (JSON.stringify(localMap) === JSON.stringify(remoteMap)) return false;
+          saveLocalMasterAccountMap(remoteMap);
+          return true;
+        } catch (error) {
+          console.error("[MASTER][index] 원격 적용 실패", error);
+          return false;
+        }
+      }
+      async function persistMasterAccountMap(nextMap, syncRemote = true) {
+        const normalized = normalizeMasterAccountMap(nextMap);
+        saveLocalMasterAccountMap(normalized);
+        if (syncRemote) {
+          try {
+            await saveSharedMasterAccountMapToSupabase(normalized);
+          } catch (error) {
+            console.error("[MASTER][index] 원격 저장 실패", error);
+          }
+        }
       }
       function buildSharedLimitConfigPayload(config) {
         const { weekdayLimit, holidayLimit } = sanitizeLimitConfig(config);
@@ -2695,18 +2797,16 @@
       function resolveMasterCustomerByCompanyCode(companyCode = "") {
         const normalizedCode = normalizeCompanyCode(companyCode);
         if (!normalizedCode) return null;
-        const customers = readStorageArray(STORAGE_CUSTOMERS)
-          .filter((row) => normalizeCompanyCode(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase())
-          .map((row) => ({
-            ...row,
-            __createdAt: new Date(String(row?.createdAt || "9999-12-31T23:59:59")).getTime()
-          }))
-          .sort((a, b) => {
-            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
-            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
-            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
-          });
-        return customers[0] || null;
+        const masterMap = getLocalMasterAccountMap();
+        const masterId = String(masterMap[normalizedCode] || "").trim();
+        if (!masterId) return null;
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        const matched = customers.find(
+          (row) =>
+            String(row?.id || "").trim() === masterId &&
+            normalizeCompanyCode(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase()
+        );
+        return matched || null;
       }
       function resolveCanonicalCompanyIdentity(name, companyCode = "") {
         const normalizedName = normalizeCompanyName(name);
@@ -2749,6 +2849,35 @@
         ].sort((a, b) => a.localeCompare(b, "ko"));
         const canonicalName = candidates[0] || normalizedName;
         return { company: canonicalName, companyCode: effectiveCode };
+      }
+      function bootstrapMasterAccountsForExistingCompanies() {
+        if (localStorage.getItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED) === "1") return false;
+        const adminCompanies = normalizeCompanyRows(readStorageArray(STORAGE_ADMIN_COMPANIES));
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        if (!adminCompanies.length || !customers.length) return false;
+        const masterMap = getLocalMasterAccountMap();
+        let changed = false;
+        adminCompanies.forEach((company) => {
+          const code = normalizeCompanyCode(company?.code || company?.companyCode);
+          const companyName = normalizeCompanyName(company?.name);
+          if (!code || !companyName) return;
+          if (masterMap[code]) return;
+          const byName = customers.filter((user) => normalizeCompanyName(user?.company).toLowerCase() === companyName.toLowerCase());
+          const byCode = customers.filter((user) => normalizeCompanyCode(user?.companyCode).toLowerCase() === code.toLowerCase());
+          const candidate =
+            byName.find((user) => normalizeCompanyCode(user?.companyCode).toLowerCase() === code.toLowerCase()) ||
+            byName[0] ||
+            byCode[0] ||
+            null;
+          const candidateId = String(candidate?.id || "").trim();
+          if (!candidateId) return;
+          masterMap[code] = candidateId;
+          changed = true;
+        });
+        localStorage.setItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED, "1");
+        if (!changed) return false;
+        void persistMasterAccountMap(masterMap, true);
+        return true;
       }
 
       function getExcludedPhotographerNames() {
@@ -5429,25 +5558,26 @@
 
       function getCustomerIdByCompanyName(companyName) {
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
-        const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
+        const targetCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
+        const targetGroupKey = getCompanyGroupKey(companyName, targetCode);
         if (!targetGroupKey) return { text: "", masterId: "", total: 0 };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
-        const matchedUsers = customerUsers
-          .filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey)
-          .map((user) => ({
-            ...user,
-            __createdAt: new Date(String(user?.createdAt || "9999-12-31T23:59:59")).getTime()
-          }))
-          .sort((a, b) => {
-            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
-            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
-            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
-          });
+        const matchedUsers = customerUsers.filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey);
         if (matchedUsers.length === 0) return { text: "", masterId: "", total: 0 };
-        const masterId = String(matchedUsers[0]?.id || "").trim();
+        const masterByCode = resolveMasterCustomerByCompanyCode(targetCode);
+        const masterId = String(masterByCode?.id || "").trim();
+        const orderedIds = [
+          ...(masterId ? [masterId] : []),
+          ...matchedUsers
+            .map((user) => String(user?.id || "").trim())
+            .filter((id) => id && id !== masterId)
+            .sort((a, b) => a.localeCompare(b, "ko"))
+        ];
+        const displayMasterId = masterId || orderedIds[0] || "";
+        if (!displayMasterId) return { text: "", masterId: "", total: 0 };
         const total = matchedUsers.length;
-        const text = total === 1 ? masterId : `${masterId} 외 ${total - 1}`;
-        return { text, masterId, total };
+        const text = total === 1 ? displayMasterId : `${displayMasterId} 외 ${Math.max(0, total - 1)}`;
+        return { text, masterId: masterId || "", total };
       }
 
       function getCouponRemaining(companyName) {
@@ -6168,19 +6298,27 @@
           });
         const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
         const masterByCode = resolveMasterCustomerByCompanyCode(companyDefaultCode);
+        const masterIdByCode = String(masterByCode?.id || "").trim();
+        const orderedMatchedUsers = [
+          ...matchedUsers
+            .filter((user) => String(user?.id || "").trim() === masterIdByCode),
+          ...matchedUsers
+            .filter((user) => String(user?.id || "").trim() !== masterIdByCode)
+            .sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || ""), "ko"))
+        ];
         const matchedUser =
-          matchedUsers.find((user) => String(user?.id || "").trim() === String(masterByCode?.id || "").trim()) ||
-          matchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
-          matchedUsers[0] ||
+          orderedMatchedUsers.find((user) => String(user?.id || "").trim() === masterIdByCode) ||
+          orderedMatchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
+          orderedMatchedUsers[0] ||
           null;
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
-        const linkedAccountText = matchedUsers
-          .map((item, index) => {
+        const linkedAccountText = orderedMatchedUsers
+          .map((item) => {
             const id = String(item?.id || "").trim();
             if (!id) return "";
-            return index === 0 ? `<span class="master-account-badge">본</span>${escapeHtml(id)}` : escapeHtml(id);
+            return id === masterIdByCode ? `<span class="master-account-badge">본</span>${escapeHtml(id)}` : escapeHtml(id);
           })
           .filter(Boolean)
           .join(", ");
@@ -6261,6 +6399,7 @@
             <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
+              <button class="btn-sm" type="button" data-action="setMasterCompanyAccount" data-company-name="${escapeHtml(companyName)}">본계정지정</button>
             </div>
             <div style="font-size: 0.86rem; color: #5f6c88;">
               로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
@@ -8646,16 +8785,95 @@
         }
       });
       companyOrderHistorySummaryEl.addEventListener("click", async (event) => {
-        const button = event.target.closest("button[data-action='saveCompanyAccount'][data-company-name]");
+        const button = event.target.closest("button[data-action][data-company-name]");
         if (!button) return;
+        const action = String(button.dataset.action || "").trim();
         const companyName = normalizeCompanyName(button.dataset.companyName);
         if (!companyName) return;
         const idInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-id");
         const passwordInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-password");
         const codeInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-code");
         const newId = String(idInputEl?.value || "").trim();
-        const newPassword = String(passwordInputEl?.value || "").trim();
         const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
+        if (action === "setMasterCompanyAccount") {
+          if (!newId || !newCompanyCode) {
+            alert("본계정으로 지정할 아이디와 업체 고유번호를 모두 입력해주세요.");
+            return;
+          }
+          const users = readStorageArray(STORAGE_CUSTOMERS);
+          const targetIndex = users.findIndex((user) => String(user?.id || "").trim().toLowerCase() === newId.toLowerCase());
+          if (targetIndex < 0) {
+            alert("해당 아이디를 찾지 못했습니다.");
+            return;
+          }
+          const masterCompanyName = normalizeCompanyName(users[targetIndex]?.company || companyName);
+          users[targetIndex].companyCode = newCompanyCode;
+          users[targetIndex].company = masterCompanyName;
+          users.forEach((user, index) => {
+            if (index === targetIndex) return;
+            if (normalizeCompanyCode(user?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
+            user.company = masterCompanyName;
+          });
+          localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
+          const masterMap = getLocalMasterAccountMap();
+          masterMap[newCompanyCode] = newId;
+          await persistMasterAccountMap(masterMap, true);
+          const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+          let customerSchedulesChanged = false;
+          customerSchedules.forEach((schedule) => {
+            if (normalizeCompanyCode(schedule?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
+            schedule.company = masterCompanyName;
+            customerSchedulesChanged = true;
+          });
+          if (customerSchedulesChanged) {
+            localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+          }
+          [data, onHoldPayments, refundPayments].forEach((rows) => {
+            rows.forEach((schedule) => {
+              if (normalizeCompanyCode(schedule?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
+              schedule.company = masterCompanyName;
+            });
+          });
+          try {
+            if (USE_SUPABASE_SYNC) {
+              const saveRows = users
+                .filter((user) => normalizeCompanyCode(user?.companyCode).toLowerCase() === newCompanyCode.toLowerCase())
+                .map((user) => ({
+                  login_id: String(user?.id || "").trim(),
+                  password: String(user?.password || "").trim(),
+                  company_name: String(user?.company || "").trim(),
+                  company_code: String(user?.companyCode || "").trim(),
+                  phone: String(user?.phone || "").trim()
+                }))
+                .filter((row) => row.login_id);
+              if (saveRows.length) {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                    Prefer: "resolution=merge-duplicates,return=minimal"
+                  },
+                  body: JSON.stringify(saveRows)
+                });
+                if (!response.ok) {
+                  const errorText = await response.text();
+                  throw new Error(errorText || "customers upsert failed");
+                }
+              }
+            }
+          } catch (error) {
+            console.error("[MASTER][index] 본계정 지정 동기화 실패", error);
+          }
+          renderCompanyOrderHistory(companyName);
+          renderCustomerStatsDashboard();
+          renderCompanies();
+          renderList();
+          alert("본계정이 지정되었습니다. 같은 고유번호 계정은 본계정을 따릅니다.");
+          return;
+        }
+        const newPassword = String(passwordInputEl?.value || "").trim();
         const currentAccountId = String(button.dataset.accountId || "").trim();
         if (!newId || !newPassword) {
           alert("아이디와 비밀번호를 모두 입력해주세요.");
@@ -10132,7 +10350,9 @@
       void pullSchedulesFromSupabaseAndApply();
       void pullDayoffRequestsFromSupabaseAndApply();
       void pullSharedLimitConfigAndApply();
+      void pullSharedMasterAccountMapAndApply();
       hydrateFromCustomerPageStorage();
+      bootstrapMasterAccountsForExistingCompanies();
       loadPhotographerProfilesFromStorage();
       void pullWritersFromSupabaseAndRefresh();
       void pullPaymentsFromSupabaseAndApply();
@@ -10182,6 +10402,14 @@
         }
         if (event.key === STORAGE_CUSTOMERS || event.key === STORAGE_CUSTOMER_LOGINS) {
           renderCustomerStatsDashboard();
+          renderCompanies();
+        }
+        if (event.key === STORAGE_MASTER_ACCOUNT_MAP) {
+          renderCompanies();
+          if (!companyOrderHistoryModalEl.classList.contains("hidden")) {
+            const modalTitle = String(companyOrderHistoryTitleEl.textContent || "").replace(/\s*주문 기록$/, "");
+            if (modalTitle) renderCompanyOrderHistory(modalTitle);
+          }
         }
         if (
           event.key === STORAGE_DAILY_LIMITS ||
@@ -10209,7 +10437,9 @@
         });
         loadAdminSchedulesFromStorage();
         void pullDayoffRequestsFromSupabaseAndApply();
+        void pullSharedMasterAccountMapAndApply();
         hydrateFromCustomerPageStorage();
+        bootstrapMasterAccountsForExistingCompanies();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
         renderPhotographers();
@@ -10232,7 +10462,9 @@
         });
         loadAdminSchedulesFromStorage();
         void pullDayoffRequestsFromSupabaseAndApply();
+        void pullSharedMasterAccountMapAndApply();
         hydrateFromCustomerPageStorage();
+        bootstrapMasterAccountsForExistingCompanies();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
         renderPhotographers();

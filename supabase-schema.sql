@@ -47,7 +47,8 @@ declare
     'scheduleSiteCustomerSchedules',
     'scheduleSiteWriters',
     'scheduleSiteWriterSchedules',
-    'scheduleSitePhotographerProfiles'
+    'scheduleSitePhotographerProfiles',
+    'shared_master_account_map_v1'
   ];
   key_name text;
   old_text text;
