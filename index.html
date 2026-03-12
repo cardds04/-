@@ -5574,20 +5574,22 @@
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
         const targetCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
         const targetGroupKey = getCompanyGroupKey(companyName, targetCode);
-        if (!targetGroupKey) return { text: "", isMasterCompany: false, total: 0 };
+        const masterCompanyName = resolveMasterCompanyNameByCompanyCode(targetCode);
+        const isMasterCompany =
+          Boolean(masterCompanyName) &&
+          normalizeCompanyName(masterCompanyName).toLowerCase() === normalizeCompanyName(targetCompany?.name || companyName).toLowerCase();
+        if (!targetGroupKey) return { text: "", isMasterCompany, total: 0 };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const matchedUsers = customerUsers.filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey);
-        if (matchedUsers.length === 0) return { text: "", isMasterCompany: false, total: 0 };
+        if (matchedUsers.length === 0) return { text: "", isMasterCompany, total: 0 };
         const orderedIds = matchedUsers
           .map((user) => String(user?.id || "").trim())
           .filter(Boolean)
           .sort((a, b) => a.localeCompare(b, "ko"));
         const firstId = orderedIds[0] || "";
-        if (!firstId) return { text: "", isMasterCompany: false, total: 0 };
+        if (!firstId) return { text: "", isMasterCompany, total: 0 };
         const total = matchedUsers.length;
         const text = total === 1 ? firstId : `${firstId} 외 ${Math.max(0, total - 1)}`;
-        const masterCompanyName = resolveMasterCompanyNameByCompanyCode(targetCode);
-        const isMasterCompany = Boolean(masterCompanyName) && normalizeCompanyName(masterCompanyName) === normalizeCompanyName(targetCompany?.name || companyName);
         return { text, isMasterCompany, total };
       }
 
