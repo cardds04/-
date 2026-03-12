@@ -881,6 +881,7 @@
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
       let myInfoOpen = false;
+      let myInfoEditMode = false;
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
@@ -1404,6 +1405,24 @@
         }
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const companyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode) || normalize(user?.company) || "-";
+        if (myInfoEditMode) {
+          myInfoBoxEl.innerHTML = `
+            <div style="font-weight:700; margin-bottom:6px;">내 정보 수정</div>
+            <div class="form">
+              <div class="row"><span>🆔</span><input type="text" value="${escapeHtml(user?.id || "-")}" readonly /></div>
+              <div class="row"><span>🔑</span><input class="myinfo-password-input" type="password" placeholder="새 비밀번호" value="${escapeHtml(user?.password || "")}" /></div>
+              <div class="row"><span>🏢</span><input class="myinfo-company-input" type="text" value="${escapeHtml(companyName)}" /></div>
+              <div class="row"><span>📞</span><input class="myinfo-phone-input" type="text" value="${escapeHtml(user?.phone || "")}" /></div>
+              <div class="row"><span>🔐</span><input type="text" value="${escapeHtml(effectiveCompanyCode || "-")}" readonly /></div>
+              <div class="actions" style="justify-content:flex-start;">
+                <button class="btn small" type="button" data-action="saveMyInfo">저장</button>
+                <button class="btn outline small" type="button" data-action="cancelMyInfoEdit">취소</button>
+              </div>
+            </div>
+          `;
+          myInfoBoxEl.classList.remove("hidden");
+          return;
+        }
         myInfoBoxEl.innerHTML = `
           <div style="font-weight:700; margin-bottom:6px;">내 정보</div>
           <div style="line-height:1.6;">
@@ -1412,6 +1431,9 @@
             연락처: ${escapeHtml(user?.phone || "-")}<br />
             고유번호: ${escapeHtml(effectiveCompanyCode || "-")}<br />
             가입일: ${escapeHtml(formatDateTimeText(user?.createdAt))}
+          </div>
+          <div class="actions" style="justify-content:flex-start; margin-top:8px;">
+            <button class="btn outline small" type="button" data-action="startMyInfoEdit">내정보수정</button>
           </div>
         `;
         myInfoBoxEl.classList.remove("hidden");
@@ -1784,6 +1806,7 @@
         myInfoBtnEl?.classList.toggle("hidden", !isLoggedIn);
         if (!isLoggedIn) {
           myInfoOpen = false;
+          myInfoEditMode = false;
           renderMyInfo(null);
           switchAuthTab("login");
           const remembered = loadRememberedLogin();
@@ -2291,6 +2314,7 @@
         editingScheduleId = null;
         currentCustomerTab = "register";
         myInfoOpen = false;
+        myInfoEditMode = false;
         renderAuthState();
       });
       saveLoginToggleBtnEl.addEventListener("click", () => {
@@ -2329,8 +2353,81 @@
       myInfoBtnEl?.addEventListener("click", () => {
         const user = getCurrentSessionUser();
         if (!user) return;
+        if (myInfoOpen) myInfoEditMode = false;
         myInfoOpen = !myInfoOpen;
         renderMyInfo(user);
+      });
+      myInfoBoxEl?.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = String(button.dataset.action || "").trim();
+        const user = getCurrentSessionUser();
+        if (!user) {
+          renderAuthState();
+          return;
+        }
+        if (action === "startMyInfoEdit") {
+          myInfoEditMode = true;
+          renderMyInfo(user);
+          return;
+        }
+        if (action === "cancelMyInfoEdit") {
+          myInfoEditMode = false;
+          renderMyInfo(user);
+          return;
+        }
+        if (action !== "saveMyInfo") return;
+        const passwordInputEl = myInfoBoxEl.querySelector(".myinfo-password-input");
+        const companyInputEl = myInfoBoxEl.querySelector(".myinfo-company-input");
+        const phoneInputEl = myInfoBoxEl.querySelector(".myinfo-phone-input");
+        const nextPassword = normalize(passwordInputEl?.value);
+        const nextCompany = normalize(companyInputEl?.value);
+        const nextPhone = normalize(phoneInputEl?.value);
+        if (!nextPassword) {
+          alert("비밀번호를 입력해주세요.");
+          return;
+        }
+        if (!nextCompany) {
+          alert("업체명을 입력해주세요.");
+          return;
+        }
+        if (!nextPhone) {
+          alert("연락처를 입력해주세요.");
+          return;
+        }
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
+        if (userIndex < 0) {
+          alert("내 계정을 찾지 못했습니다. 다시 로그인해주세요.");
+          return;
+        }
+        const effectiveCode = getEffectiveUserCompanyCode(users[userIndex]);
+        users[userIndex].password = nextPassword;
+        users[userIndex].company = nextCompany;
+        users[userIndex].phone = nextPhone;
+        if (effectiveCode && !normalize(users[userIndex].companyCode)) {
+          users[userIndex].companyCode = effectiveCode;
+        }
+        writeStorageArray(STORAGE_CUSTOMERS, users);
+        ensureCompanyStored(nextCompany, nextPhone, effectiveCode);
+        if (rememberLoginEnabled) {
+          const remembered = loadRememberedLogin();
+          if (remembered && remembered.id === String(user?.id || "")) {
+            localStorage.setItem(
+              STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+              JSON.stringify({ id: remembered.id, password: nextPassword })
+            );
+          }
+        }
+        try {
+          await syncCustomersTableFromStorage();
+          await syncCompaniesTableFromStorage();
+        } catch (error) {
+          console.error("[TABLE][customer] 내정보 저장 sync 실패", error);
+        }
+        myInfoEditMode = false;
+        renderAuthState();
+        alert("내 정보가 저장되었습니다.");
       });
 
       customerScheduleFormEl.addEventListener("submit", async (event) => {
