@@ -1108,7 +1108,7 @@
             <span id="paymentMonthTotalText" class="hint" style="margin-left: 8px;">월별 총금액: 0원</span>
           </div>
           <div id="paymentMonthMemoBox" class="hidden" style="margin: 0 0 10px;">
-            <textarea id="paymentMonthMemoInput" class="inline-input" placeholder="이 달 입금 메모를 입력하세요." style="width:100%; min-height: 78px; resize: vertical;"></textarea>
+            <textarea id="paymentMonthMemoInput" class="inline-input" placeholder="이 달 미입금 메모를 입력하세요." style="width:100%; min-height: 78px; resize: vertical;"></textarea>
             <div class="actions" style="justify-content:flex-start; margin-top: 6px;">
               <button id="savePaymentMonthMemoBtn" class="btn-sm primary" type="button">월메모저장</button>
               <button id="clearPaymentMonthMemoBtn" class="btn-sm" type="button">월메모삭제</button>
@@ -7741,7 +7741,7 @@
           paymentMonthNavigatorEl.classList.toggle("hidden", !isMonthTab);
         }
         if (paymentMonthMemoBoxEl) {
-          paymentMonthMemoBoxEl.classList.toggle("hidden", !isPaidTab);
+          paymentMonthMemoBoxEl.classList.toggle("hidden", !isUnpaidTab);
         }
         const monthKeys = isMonthTab
           ? [...new Set(filtered.map(({ item }) => getPaymentRowMonthKey(item)).filter(Boolean))].sort((a, b) => b.localeCompare(a))
@@ -7785,7 +7785,7 @@
         }
         if (paymentMonthMemoInputEl) {
           const memoMap = getPaymentMonthMemoMap();
-          paymentMonthMemoInputEl.value = isPaidTab ? String(memoMap[paymentViewYearMonth] || "") : "";
+          paymentMonthMemoInputEl.value = isUnpaidTab ? String(memoMap[paymentViewYearMonth] || "") : "";
         }
         paymentListBodyEl.innerHTML = visibleRows
           .map(({ item, index, source }) => {
