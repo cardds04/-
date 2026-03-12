@@ -4333,6 +4333,100 @@
         ].join("\n");
       }
 
+      function formatHistoryTimelineAt(value) {
+        const text = String(value || "").trim();
+        if (!text) return "-";
+        const date = new Date(text);
+        if (Number.isNaN(date.getTime())) return "-";
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      }
+
+      function getScheduleHistoryTimelineText(scheduleItem) {
+        if (!scheduleItem) return "주문 정보를 찾지 못했습니다.";
+        const scheduleId = String(scheduleItem?.customerScheduleId || "").trim();
+        const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS)
+          .filter((alert) => {
+            const type = String(alert?.type || "").trim();
+            if (!["admin_time_update", "admin_date_update", "schedule_create", "new_company_schedule"].includes(type)) {
+              return false;
+            }
+            const alertScheduleId = String(alert?.scheduleId || alert?.customerScheduleId || "").trim();
+            return Boolean(scheduleId) && alertScheduleId === scheduleId;
+          })
+          .sort((a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime());
+
+        const currentDate = String(scheduleItem?.date || "").trim();
+        const currentTime = String(scheduleItem?.time || "").trim();
+        let initialDate = currentDate;
+        let initialTime = currentTime;
+        alerts
+          .slice()
+          .reverse()
+          .forEach((alert) => {
+            const type = String(alert?.type || "").trim();
+            if (type === "admin_date_update") {
+              const previousDate = String(alert?.previousDate || "").trim();
+              if (previousDate) initialDate = previousDate;
+              const previousTime = String(alert?.previousTime || "").trim();
+              if (previousTime) initialTime = previousTime;
+            }
+            if (type === "admin_time_update") {
+              const previousTime = String(alert?.previousTime || "").trim();
+              if (previousTime) initialTime = previousTime;
+            }
+          });
+
+        const lines = [];
+        lines.push(`[주문번호] ${scheduleId || "-"}`);
+        lines.push(`[업체] ${scheduleItem?.company || "-"}`);
+        lines.push("");
+        lines.push(
+          `[접수] ${formatHistoryTimelineAt(scheduleItem?.requestedAt)} | ${initialDate || "-"} ${formatScheduleTimeWithPreference(
+            initialTime || "-",
+            "exact"
+          )} | ${extractAreaLabel(scheduleItem?.place) || scheduleItem?.place || "-"}`
+        );
+
+        const changeAlerts = alerts.filter((alert) => ["admin_time_update", "admin_date_update"].includes(String(alert?.type || "").trim()));
+        if (changeAlerts.length === 0) {
+          lines.push("[변경] 변경 이력 없음");
+        } else {
+          changeAlerts.forEach((alert) => {
+            const changedAt = formatHistoryTimelineAt(alert?.createdAt);
+            const type = String(alert?.type || "").trim();
+            const changedDate = String(alert?.date || "").trim() || "-";
+            const changedTime = String(alert?.time || "").trim() || "-";
+            if (type === "admin_date_update") {
+              const previousDate = String(alert?.previousDate || "").trim() || "?";
+              lines.push(
+                `[변경] ${changedAt} | 날짜 ${previousDate} -> ${changedDate}, 시간 ${formatScheduleTimeWithPreference(changedTime, "exact")}`
+              );
+              return;
+            }
+            const previousTime = String(alert?.previousTime || "").trim() || "?";
+            lines.push(
+              `[변경] ${changedAt} | 시간 ${formatScheduleTimeWithPreference(previousTime, "exact")} -> ${formatScheduleTimeWithPreference(
+                changedTime,
+                "exact"
+              )} (${changedDate})`
+            );
+          });
+        }
+
+        lines.push("");
+        lines.push(
+          `[현재] ${currentDate || "-"} ${formatScheduleTimeWithPreference(currentTime || "-", scheduleItem?.timePreference)} | ${
+            extractAreaLabel(scheduleItem?.place) || scheduleItem?.place || "-"
+          } | 구성 ${scheduleItem?.composition || "-"} | 작가 ${scheduleItem?.name || "-"}`
+        );
+        return lines.join("\n");
+      }
+
       function renderCustomerStatsDashboard() {
         const customers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
@@ -4425,6 +4519,7 @@
             scheduleId: item.customerScheduleId,
             company: item.company || "",
             date: item.date || "",
+            previousTime: previousTime || "",
             time: item.time || "",
             createdAt: new Date().toISOString(),
             read: false
@@ -4441,6 +4536,7 @@
             company: item.company || "",
             previousDate: previousDateText,
             date: currentDateText,
+            previousTime: previousTime || "",
             time: item.time || "",
             createdAt: new Date().toISOString(),
             read: false
@@ -7672,6 +7768,9 @@
                                      <span class="actions" style="justify-content: flex-start; margin-top: 6px;">
                                        <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
                                        <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}">삭제</button>
+                                      <button class="btn-sm" type="button" data-action="showScheduleHistory" data-schedule-id="${escapeHtml(
+                                        String(item.customerScheduleId || "")
+                                      )}">기록</button>
                                       <button class="btn-sm ${item.paymentStatus === "입금완료" ? "neon" : "danger"}" type="button" disabled>${item.paymentStatus === "입금완료" ? "입금확인" : "미결"}</button>
                                      </span>`
                               }
@@ -9197,6 +9296,10 @@
         if (action === "showMemo" && !Number.isNaN(index) && item) {
           const fullMemo = String(item.memo || "").trim();
           alert(fullMemo || "등록된 메모가 없습니다.");
+          return;
+        }
+        if (action === "showScheduleHistory" && !Number.isNaN(index) && item) {
+          alert(getScheduleHistoryTimelineText(item));
           return;
         }
 
