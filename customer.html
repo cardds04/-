@@ -166,17 +166,17 @@
               </div>
               <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 9시~18시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
-              <div class="triple">
-                <div class="row">
-                  <span>📐</span>
-                  <select id="schedulePyeong">
-                    <option value="">평수 선택</option>
-                    <option value="45평이하">45평이하</option>
-                    <option value="45평이상">45평이상</option>
-                    <option value="95평이상">95평이상</option>
-                    <option value="145평이상">145평이상</option>
-                  </select>
+              <div class="compose-wrap">
+                <span class="compose-label">평수선택</span>
+                <div class="compose-buttons" id="pyeongButtons">
+                  <button class="compose-btn active" type="button" data-pyeong="미선택">미선택</button>
+                  <button class="compose-btn" type="button" data-pyeong="45평이하">45평이하</button>
+                  <button class="compose-btn" type="button" data-pyeong="46평이상">46평이상</button>
+                  <button class="compose-btn" type="button" data-pyeong="100평이상">100평이상</button>
                 </div>
+                <input id="schedulePyeong" type="hidden" value="미선택" />
+              </div>
+              <div class="pair">
                 <div class="row"><span>🔒</span><input id="scheduleJointCode" type="text" placeholder="공동현관 비번" /></div>
                 <div class="row"><span>🗝️</span><input id="scheduleDoorCode" type="text" placeholder="세대 비번" /></div>
               </div>
@@ -778,6 +778,7 @@
       const scheduleHourEl = document.getElementById("scheduleHour");
       const scheduleMinuteEl = document.getElementById("scheduleMinute");
       const schedulePyeongEl = document.getElementById("schedulePyeong");
+      const pyeongButtonsEl = document.getElementById("pyeongButtons");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
       const closedDatesNoticeBoxEl = document.getElementById("closedDatesNoticeBox");
@@ -1169,14 +1170,19 @@
         return hasManWon ? Math.round(numeric * 10000) : Math.round(numeric);
       }
       function calculateExpectedPaymentAmount(pyeong, composition) {
-        const area = normalize(pyeong);
+        const areaRaw = normalize(pyeong);
+        const area =
+          areaRaw === "45평이상" || areaRaw === "95평이상" || areaRaw === "145평이상"
+            ? areaRaw === "45평이상"
+              ? "46평이상"
+              : "100평이상"
+            : areaRaw;
         const compose = normalize(composition);
-        if (!area || compose === "미선택" || !compose) return null;
+        if (!area || area === "미선택" || compose === "미선택" || !compose) return null;
         const priceTable = {
           "45평이하": { "사진만": 150000, "사진영상 둘다": 250000 },
-          "45평이상": { "사진만": 200000, "사진영상 둘다": 280000 },
-          "95평이상": { "사진만": 250000, "사진영상 둘다": 410000 },
-          "145평이상": { "사진만": 300000, "사진영상 둘다": 490000 }
+          "46평이상": { "사진만": 200000, "사진영상 둘다": 280000 },
+          "100평이상": { "사진만": 250000, "사진영상 둘다": 410000 }
         };
         const row = priceTable[area];
         if (!row) return null;
@@ -1403,6 +1409,13 @@
         hiddenInputEl.value = value;
         rootEl.querySelectorAll("button[data-compose]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.compose === value);
+        });
+        updateExpectedPaymentText();
+      }
+      function setSelectedPyeong(value, rootEl = pyeongButtonsEl, hiddenInputEl = schedulePyeongEl) {
+        hiddenInputEl.value = value;
+        rootEl?.querySelectorAll("button[data-pyeong]").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.pyeong === value);
         });
         updateExpectedPaymentText();
       }
@@ -1635,6 +1648,7 @@
         `;
         scheduleHourEl.value = "09";
         scheduleMinuteEl.value = "exact";
+        setSelectedPyeong("미선택");
 
         renderDayOptions(currentYearValue, currentMonth, currentDay);
       }
@@ -1797,11 +1811,10 @@
                     <div class="row"><span>📍</span><input class="edit-place" type="text" value="${item.place || ""}" /></div>
                     <div class="row"><span>📐</span>
                       <select class="edit-pyeong">
-                        <option value="" ${!item.pyeong ? "selected" : ""}>평수 선택</option>
+                        <option value="미선택" ${!item.pyeong || item.pyeong === "미선택" ? "selected" : ""}>미선택</option>
                         <option value="45평이하" ${item.pyeong === "45평이하" ? "selected" : ""}>45평이하</option>
-                        <option value="45평이상" ${item.pyeong === "45평이상" ? "selected" : ""}>45평이상</option>
-                        <option value="95평이상" ${item.pyeong === "95평이상" ? "selected" : ""}>95평이상</option>
-                        <option value="145평이상" ${item.pyeong === "145평이상" ? "selected" : ""}>145평이상</option>
+                        <option value="46평이상" ${item.pyeong === "46평이상" || item.pyeong === "45평이상" ? "selected" : ""}>46평이상</option>
+                        <option value="100평이상" ${item.pyeong === "100평이상" || item.pyeong === "95평이상" || item.pyeong === "145평이상" ? "selected" : ""}>100평이상</option>
                       </select>
                     </div>
                     <div class="row"><span>📝</span><input class="edit-memo" type="text" value="${item.memo || ""}" /></div>
@@ -2065,6 +2078,10 @@
         const expectedAmount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
         const place = normalize(document.getElementById("schedulePlace").value);
         if (!place) return;
+        if (schedulePyeongEl.value === "미선택") {
+          alert("평수를 선택해주세요.");
+          return;
+        }
         if (scheduleCompositionEl.value === "미선택") {
           alert("촬영구성을 선택해주세요.");
           return;
@@ -2149,6 +2166,7 @@
         }
         customerScheduleFormEl.reset();
         setupDateTimeSelectors();
+        setSelectedPyeong("미선택");
         setSelectedComposition("미선택");
         updateExpectedPaymentText();
         renderPaymentSummary();
@@ -2337,6 +2355,11 @@
         if (!button) return;
         setSelectedComposition(button.dataset.compose || "미선택");
       });
+      pyeongButtonsEl?.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-pyeong]");
+        if (!button) return;
+        setSelectedPyeong(button.dataset.pyeong || "미선택");
+      });
       scheduleMinuteEl?.addEventListener("change", () => {
         const mode = normalizeTimePreference(scheduleMinuteEl.value);
         if (mode === "any" || mode === "other") {
@@ -2360,7 +2383,6 @@
         renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
       });
       scheduleDayEl.addEventListener("change", updateSelectedDayColor);
-      schedulePyeongEl?.addEventListener("change", updateExpectedPaymentText);
       updateExpectedPaymentText();
 
       setupDateTimeSelectors();
