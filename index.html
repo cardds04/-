@@ -417,6 +417,20 @@
         font-size: 0.75rem;
         white-space: nowrap;
       }
+      .master-account-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: #fff;
+        background: #2563eb;
+        margin-right: 4px;
+      }
 
       .schedule-extra-detail {
         margin-top: 6px;
@@ -2678,6 +2692,22 @@
         const nameKey = companyCompareKey(name);
         return nameKey ? `name:${nameKey}` : "";
       }
+      function resolveMasterCustomerByCompanyCode(companyCode = "") {
+        const normalizedCode = normalizeCompanyCode(companyCode);
+        if (!normalizedCode) return null;
+        const customers = readStorageArray(STORAGE_CUSTOMERS)
+          .filter((row) => normalizeCompanyCode(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase())
+          .map((row) => ({
+            ...row,
+            __createdAt: new Date(String(row?.createdAt || "9999-12-31T23:59:59")).getTime()
+          }))
+          .sort((a, b) => {
+            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+          });
+        return customers[0] || null;
+      }
       function resolveCanonicalCompanyIdentity(name, companyCode = "") {
         const normalizedName = normalizeCompanyName(name);
         const normalizedCode = normalizeCompanyCode(companyCode);
@@ -2705,6 +2735,10 @@
         }
         if (!effectiveCode) {
           return { company: normalizedName, companyCode: "" };
+        }
+        const masterCustomer = resolveMasterCustomerByCompanyCode(effectiveCode);
+        if (masterCustomer?.company) {
+          return { company: normalizeCompanyName(masterCustomer.company), companyCode: effectiveCode };
         }
         const candidates = [
           ...new Set(
@@ -5396,14 +5430,24 @@
       function getCustomerIdByCompanyName(companyName) {
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
         const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
-        if (!targetGroupKey) return "";
+        if (!targetGroupKey) return { text: "", masterId: "", total: 0 };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
-        const matchedIds = customerUsers
+        const matchedUsers = customerUsers
           .filter((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey)
-          .map((user) => String(user?.id || "").trim())
-          .filter(Boolean);
-        if (matchedIds.length === 0) return "";
-        return matchedIds.length === 1 ? matchedIds[0] : `${matchedIds[0]} 외 ${matchedIds.length - 1}`;
+          .map((user) => ({
+            ...user,
+            __createdAt: new Date(String(user?.createdAt || "9999-12-31T23:59:59")).getTime()
+          }))
+          .sort((a, b) => {
+            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+          });
+        if (matchedUsers.length === 0) return { text: "", masterId: "", total: 0 };
+        const masterId = String(matchedUsers[0]?.id || "").trim();
+        const total = matchedUsers.length;
+        const text = total === 1 ? masterId : `${masterId} 외 ${total - 1}`;
+        return { text, masterId, total };
       }
 
       function getCouponRemaining(companyName) {
@@ -6043,10 +6087,13 @@
             const isEditing = editingCompanyIndex === index;
             const isCustomerRegisteredCompany = customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
             if (isEditing) {
-              const customerId = getCustomerIdByCompanyName(company.name);
+              const customerMeta = getCustomerIdByCompanyName(company.name);
+              const customerIdHtml = customerMeta.masterId
+                ? ` (아이디: <span class="master-account-badge">본</span>${escapeHtml(customerMeta.text)})`
+                : "";
               return `
                 <div class="company-item" data-company-index="${index}">
-                  <div>업체: ${escapeHtml(company.name)}${customerId ? ` (아이디: ${escapeHtml(customerId)})` : ""}</div>
+                  <div>업체: ${escapeHtml(company.name)}${customerIdHtml}</div>
                   <div class="company-edit-row" style="margin-top: 6px;">
                     <input class="inline-input edit-company-name" type="text" value="${escapeHtml(company.name || "")}" style="width: 100%; min-width: 260px;" />
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
@@ -6062,10 +6109,13 @@
                 </div>
               `;
             }
-            const customerId = getCustomerIdByCompanyName(company.name);
+            const customerMeta = getCustomerIdByCompanyName(company.name);
+            const customerIdHtml = customerMeta.masterId
+              ? ` (아이디: <span class="master-account-badge">본</span>${escapeHtml(customerMeta.text)})`
+              : "";
             return `
               <div class="company-item company-clickable" data-company-index="${index}">
-                <div>업체: ${escapeHtml(company.name)}${customerId ? ` (아이디: ${escapeHtml(customerId)})` : ""}</div>
+                <div>업체: ${escapeHtml(company.name)}${customerIdHtml}</div>
                 <div class="company-item-row" style="margin-top: 6px;">
                   <span>연락처: ${escapeHtml(company.phone)}${company.code ? ` / 고유번호: ${escapeHtml(company.code)}` : ""}</span>
                   <button class="btn-sm" type="button" data-action="startCompanyPhoneEdit" data-company-index="${index}">수정</button>
@@ -6105,16 +6155,35 @@
         };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
-        const matchedUsers = customerUsers.filter((user) => isSameTargetCompany(user?.company, user?.companyCode));
+        const matchedUsers = customerUsers
+          .filter((user) => isSameTargetCompany(user?.company, user?.companyCode))
+          .map((user) => ({
+            ...user,
+            __createdAt: new Date(String(user?.createdAt || "9999-12-31T23:59:59")).getTime()
+          }))
+          .sort((a, b) => {
+            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+          });
         const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
+        const masterByCode = resolveMasterCustomerByCompanyCode(companyDefaultCode);
         const matchedUser =
+          matchedUsers.find((user) => String(user?.id || "").trim() === String(masterByCode?.id || "").trim()) ||
           matchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
-          matchedUsers.find((user) => getCompanyGroupKey(user?.company, user?.companyCode) === targetGroupKey) ||
           matchedUsers[0] ||
           null;
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
+        const linkedAccountText = matchedUsers
+          .map((item, index) => {
+            const id = String(item?.id || "").trim();
+            if (!id) return "";
+            return index === 0 ? `<span class="master-account-badge">본</span>${escapeHtml(id)}` : escapeHtml(id);
+          })
+          .filter(Boolean)
+          .join(", ");
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -6195,6 +6264,9 @@
             </div>
             <div style="font-size: 0.86rem; color: #5f6c88;">
               로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
+            </div>
+            <div style="font-size: 0.86rem; color: #5f6c88; margin-top: 4px;">
+              연결아이디: ${linkedAccountText || "-"}
             </div>
           </div>
           <table class="payment-table" style="margin-top: 0;">
@@ -8591,12 +8663,20 @@
         }
 
         const users = readStorageArray(STORAGE_CUSTOMERS);
-        const targetIndex = users.findIndex((user) => {
+        let targetIndex = users.findIndex((user) => {
           const sameCompany = normalizeCompanyName(user.company).toLowerCase() === companyName.toLowerCase();
           if (!sameCompany) return false;
           if (currentAccountId) return String(user?.id || "").trim() === currentAccountId;
           return true;
         });
+        if (targetIndex < 0 && newCompanyCode) {
+          targetIndex = users.findIndex((user) => {
+            const sameCode = normalizeCompanyCode(user?.companyCode).toLowerCase() === newCompanyCode.toLowerCase();
+            if (!sameCode) return false;
+            if (currentAccountId) return String(user?.id || "").trim() === currentAccountId;
+            return true;
+          });
+        }
         if (targetIndex < 0) {
           alert("해당 업체의 고객 계정을 찾지 못했습니다.");
           return;
@@ -8607,9 +8687,19 @@
           return;
         }
         const oldId = String(users[targetIndex].id || "").trim();
+        const masterUser = resolveMasterCustomerByCompanyCode(newCompanyCode);
+        const masterCompanyName = normalizeCompanyName(masterUser?.company || companyName);
         users[targetIndex].id = newId;
         users[targetIndex].password = newPassword;
+        users[targetIndex].company = masterCompanyName;
         users[targetIndex].companyCode = newCompanyCode;
+        if (newCompanyCode) {
+          users.forEach((user, index) => {
+            if (index === targetIndex) return;
+            if (normalizeCompanyCode(user?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
+            user.company = masterCompanyName;
+          });
+        }
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
         const companyNameLower = companyName.toLowerCase();
         let adminCompanyChanged = false;
@@ -8639,13 +8729,25 @@
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         let customerSchedulesChanged = false;
         customerSchedules.forEach((schedule) => {
-          if (normalizeCompanyName(schedule?.company).toLowerCase() !== companyNameLower) return;
+          const sameName = normalizeCompanyName(schedule?.company).toLowerCase() === companyNameLower;
+          const sameCode = newCompanyCode && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === newCompanyCode.toLowerCase();
+          if (!sameName && !sameCode) return;
+          schedule.company = masterCompanyName;
           schedule.companyCode = newCompanyCode;
           customerSchedulesChanged = true;
         });
         if (customerSchedulesChanged) {
           localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
         }
+        [data, onHoldPayments, refundPayments].forEach((rows) => {
+          rows.forEach((schedule) => {
+            const sameName = normalizeCompanyName(schedule?.company).toLowerCase() === companyNameLower;
+            const sameCode = newCompanyCode && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === newCompanyCode.toLowerCase();
+            if (!sameName && !sameCode) return;
+            schedule.company = masterCompanyName;
+            schedule.companyCode = newCompanyCode;
+          });
+        });
 
         if (oldId && oldId !== newId) {
           const logs = readStorageArray(STORAGE_CUSTOMER_LOGINS);

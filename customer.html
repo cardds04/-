@@ -1355,10 +1355,30 @@
         const matched = companies.find((item) => normalize(item?.name).toLowerCase() === userCompanyName);
         return normalize(matched?.companyCode || matched?.code);
       }
+      function resolveMasterCustomerByCompanyCode(companyCode = "") {
+        const normalizedCode = normalize(companyCode);
+        if (!normalizedCode) return null;
+        const users = readStorageArray(STORAGE_CUSTOMERS)
+          .filter((row) => normalize(row?.companyCode).toLowerCase() === normalizedCode.toLowerCase())
+          .map((row) => ({
+            ...row,
+            __createdAt: new Date(String(row?.createdAt || "9999-12-31T23:59:59")).getTime()
+          }))
+          .sort((a, b) => {
+            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+          });
+        return users[0] || null;
+      }
       function resolveRegisteredCompanyNameForUser(user, companyCode = "") {
         const fallbackName = normalize(user?.company);
         const normalizedCode = normalize(companyCode);
         if (!normalizedCode) return fallbackName;
+        const masterCustomer = resolveMasterCustomerByCompanyCode(normalizedCode);
+        if (masterCustomer?.company) {
+          return normalize(masterCustomer.company);
+        }
         const companies = readStorageArray(STORAGE_COMPANIES);
         const matchedRows = companies.filter(
           (item) =>
