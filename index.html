@@ -2678,6 +2678,44 @@
         const nameKey = companyCompareKey(name);
         return nameKey ? `name:${nameKey}` : "";
       }
+      function resolveCanonicalCompanyIdentity(name, companyCode = "") {
+        const normalizedName = normalizeCompanyName(name);
+        const normalizedCode = normalizeCompanyCode(companyCode);
+        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        const companySources = [
+          ...companies.map((row) => ({
+            name: normalizeCompanyName(row?.name),
+            code: normalizeCompanyCode(row?.code || row?.companyCode)
+          })),
+          ...customerCompanies.map((row) => ({
+            name: normalizeCompanyName(row?.name),
+            code: normalizeCompanyCode(row?.companyCode || row?.code)
+          })),
+          ...customers.map((row) => ({
+            name: normalizeCompanyName(row?.company),
+            code: normalizeCompanyCode(row?.companyCode)
+          }))
+        ].filter((row) => row.name);
+
+        let effectiveCode = normalizedCode;
+        if (!effectiveCode && normalizedName) {
+          const matched = companySources.find((row) => row.name.toLowerCase() === normalizedName.toLowerCase() && row.code);
+          effectiveCode = normalizeCompanyCode(matched?.code);
+        }
+        if (!effectiveCode) {
+          return { company: normalizedName, companyCode: "" };
+        }
+        const candidates = [
+          ...new Set(
+            companySources
+              .filter((row) => row.code.toLowerCase() === effectiveCode.toLowerCase())
+              .map((row) => row.name)
+          )
+        ].sort((a, b) => a.localeCompare(b, "ko"));
+        const canonicalName = candidates[0] || normalizedName;
+        return { company: canonicalName, companyCode: effectiveCode };
+      }
 
       function getExcludedPhotographerNames() {
         return readStorageArray(STORAGE_EXCLUDED_PHOTOGRAPHERS)
@@ -3008,7 +3046,7 @@
           const row = {
             schedule_id: null,
             company_id: null,
-            company_name: String(item?.company || "").trim(),
+            company_name: resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company,
             payer_name: String(item?.paymentPayer || "").trim(),
             amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
             paid_at: paymentDateDb,
@@ -3284,7 +3322,7 @@
           const row = {
             id: scheduleId,
             company_id: null,
-            company_name: String(item?.company || "").trim(),
+            company_name: resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company,
             writer_name: String(item?.name || "작가미정").trim() || "작가미정",
             date_key: String(item?.date || "").trim(),
             time_key: String(item?.time || "09:00").trim() || "09:00",
@@ -3439,6 +3477,7 @@
           const status = String(row?.status || "").trim();
           const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
+          const canonicalIdentity = resolveCanonicalCompanyIdentity(String(row?.company_name || "").trim(), String(row?.company_code || "").trim());
           const nextItem = {
             customerScheduleId: String(row?.id || "").trim(),
             date: String(row?.date_key || "").trim(),
@@ -3447,7 +3486,8 @@
             name: writerName,
             writerPhone: String(photographerPhones[writerName] || "").trim(),
             writerCarNumber: String(photographerCarNumbers[writerName] || "").trim(),
-            company: String(row?.company_name || "").trim(),
+            company: canonicalIdentity.company,
+            companyCode: canonicalIdentity.companyCode,
             place: String(row?.place || "").trim(),
             pyeong: String(row?.pyeong || "").trim(),
             jointCode: String(row?.joint_code || "").trim(),
@@ -7751,6 +7791,9 @@
       function renderList() {
         data.forEach((item) => {
           ensureScheduleUuid(item);
+          const canonicalIdentity = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode);
+          item.company = canonicalIdentity.company || item.company || "";
+          item.companyCode = canonicalIdentity.companyCode || item.companyCode || "";
         });
         syncAdminSchedulesToCustomerStorage();
         if (!USE_SUPABASE_SYNC || hasLoadedSchedulesFromServer) {
@@ -9342,7 +9385,11 @@
           item.time = `${hour}:${minute}`;
           item.timePreference = "exact";
         }
-        if (company) item.company = company;
+        if (company) {
+          const canonicalIdentity = resolveCanonicalCompanyIdentity(company, item?.companyCode);
+          item.company = canonicalIdentity.company || company;
+          item.companyCode = canonicalIdentity.companyCode || item.companyCode || "";
+        }
         if (place) item.place = place;
         item.pyeong = pyeong || "";
         item.jointCode = jointCode || "";
@@ -9887,6 +9934,7 @@
           return false;
         }
 
+        const canonicalIdentity = resolveCanonicalCompanyIdentity(normalizedCompany, "");
         const item = {
           customerScheduleId: buildClientUuid(),
           date: pickedDate || new Date().toISOString().slice(0, 10),
@@ -9896,7 +9944,8 @@
           name: "작가미정",
           writerPhone: "",
           writerCarNumber: "",
-          company: normalizedCompany,
+          company: canonicalIdentity.company || normalizedCompany,
+          companyCode: canonicalIdentity.companyCode || "",
           place: document.getElementById("place").value || "-",
           pyeong: document.getElementById("pyeong").value || "",
           jointCode: document.getElementById("jointCode").value || "",

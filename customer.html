@@ -1366,9 +1366,10 @@
             normalize(item?.name)
         );
         if (!matchedRows.length) return fallbackName;
-        // 동일 고유번호가 여러 업체명에 연결돼 있어도 항상 같은 이름을 선택해야
-        // 화면 표기가 번갈아 바뀌지 않습니다.
-        return normalize(matchedRows[0]?.name) || fallbackName;
+        const uniqueNames = [...new Set(matchedRows.map((item) => normalize(item?.name)).filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b, "ko")
+        );
+        return uniqueNames[0] || fallbackName;
       }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
