@@ -164,17 +164,6 @@
                 <div class="row"><span>⏰</span><select id="scheduleHour" required></select></div>
                 <div class="row"><span>⏱️</span><select id="scheduleMinute" required></select></div>
               </div>
-              <div class="compose-wrap">
-                <span class="compose-label">희망시간 선택</span>
-                <div class="compose-buttons" id="timePreferenceButtons">
-                  <button class="compose-btn active" type="button" data-time-pref="unselected">미선택</button>
-                  <button class="compose-btn" type="button" data-time-pref="exact">정시</button>
-                  <button class="compose-btn" type="button" data-time-pref="before">이전</button>
-                  <button class="compose-btn" type="button" data-time-pref="after">이후</button>
-                  <button class="compose-btn" type="button" data-time-pref="other">그외시간</button>
-                </div>
-                <input id="scheduleTimePreference" type="hidden" value="unselected" />
-              </div>
               <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 10시~17시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
               <div class="triple">
@@ -788,8 +777,6 @@
       const scheduleDayEl = document.getElementById("scheduleDay");
       const scheduleHourEl = document.getElementById("scheduleHour");
       const scheduleMinuteEl = document.getElementById("scheduleMinute");
-      const scheduleTimePreferenceEl = document.getElementById("scheduleTimePreference");
-      const timePreferenceButtonsEl = document.getElementById("timePreferenceButtons");
       const schedulePyeongEl = document.getElementById("schedulePyeong");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
@@ -1119,12 +1106,12 @@
       }
       function normalizeTimePreference(value) {
         const normalized = String(value || "").trim().toLowerCase();
-        if (normalized === "before" || normalized === "after" || normalized === "other") return normalized;
+        if (normalized === "before" || normalized === "after" || normalized === "other" || normalized === "any") return normalized;
         return "exact";
       }
       function splitMemoAndTimePreference(rawMemo) {
         const source = String(rawMemo || "");
-        const matched = source.match(/\s*\[time_pref:(before|after|other)\]\s*$/i);
+        const matched = source.match(/\s*\[time_pref:(before|after|other|any)\]\s*$/i);
         if (!matched) return { memo: source.trim(), timePreference: "exact" };
         const cleanMemo = source.slice(0, matched.index).trim();
         return { memo: cleanMemo, timePreference: normalizeTimePreference(matched[1]) };
@@ -1139,6 +1126,7 @@
         const normalized = String(timeText || "").trim();
         const matched = normalized.match(/^(\d{1,2}):(\d{2})$/);
         const pref = normalizeTimePreference(timePreference);
+        if (pref === "any" || normalized === "시간상관없음") return "시간상관없음";
         const base = matched
           ? matched[2] === "00"
             ? `${Number(matched[1])}시`
@@ -1418,13 +1406,6 @@
         });
         updateExpectedPaymentText();
       }
-      function setSelectedTimePreference(value, rootEl = timePreferenceButtonsEl, hiddenInputEl = scheduleTimePreferenceEl) {
-        const targetValue = String(value || "").trim() || "unselected";
-        hiddenInputEl.value = targetValue;
-        rootEl?.querySelectorAll("button[data-time-pref]").forEach((btn) => {
-          btn.classList.toggle("active", btn.dataset.timePref === targetValue);
-        });
-      }
 
       function switchAuthTab(mode) {
         const signupActive = mode === "signup";
@@ -1644,9 +1625,16 @@
 
         scheduleHourEl.innerHTML = Array.from({ length: 8 }, (_, idx) => idx + 10)
           .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시</option>`)
-          .join("");
-        scheduleMinuteEl.innerHTML = '<option value="00">00분</option><option value="30">30분</option>';
-        setSelectedTimePreference("unselected");
+          .join("") + '<option value="any-time">시간상관없음</option>';
+        scheduleMinuteEl.innerHTML = `
+          <option value="exact">정시</option>
+          <option value="before">이전</option>
+          <option value="after">이후</option>
+          <option value="any">시간상관없음</option>
+          <option value="other">그외시간</option>
+        `;
+        scheduleHourEl.value = "10";
+        scheduleMinuteEl.value = "exact";
 
         renderDayOptions(currentYearValue, currentMonth, currentDay);
       }
@@ -2068,8 +2056,12 @@
         const month = Number(scheduleMonthEl.value);
         const day = Number(scheduleDayEl.value);
         const date = `${year}-${pad2(month)}-${pad2(day)}`;
-        const time = `${scheduleHourEl.value}:${scheduleMinuteEl.value}`;
-        const timePreference = normalizeTimePreference(scheduleTimePreferenceEl?.value);
+        const timePreference = normalizeTimePreference(scheduleMinuteEl?.value);
+        const selectedHour = String(scheduleHourEl.value || "10");
+        const time =
+          timePreference === "any" || timePreference === "other"
+            ? "시간상관없음"
+            : `${selectedHour === "any-time" ? "10" : selectedHour}:00`;
         const expectedAmount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
         const place = normalize(document.getElementById("schedulePlace").value);
         if (!place) return;
@@ -2157,7 +2149,6 @@
         }
         customerScheduleFormEl.reset();
         setupDateTimeSelectors();
-        setSelectedTimePreference("unselected");
         setSelectedComposition("미선택");
         updateExpectedPaymentText();
         renderPaymentSummary();
@@ -2346,10 +2337,20 @@
         if (!button) return;
         setSelectedComposition(button.dataset.compose || "미선택");
       });
-      timePreferenceButtonsEl?.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-time-pref]");
-        if (!button) return;
-        setSelectedTimePreference(button.dataset.timePref || "unselected");
+      scheduleMinuteEl?.addEventListener("change", () => {
+        const mode = normalizeTimePreference(scheduleMinuteEl.value);
+        if (mode === "any" || mode === "other") {
+          scheduleHourEl.value = "any-time";
+          return;
+        }
+        if (scheduleHourEl.value === "any-time") {
+          scheduleHourEl.value = "10";
+        }
+      });
+      scheduleHourEl?.addEventListener("change", () => {
+        if (scheduleHourEl.value === "any-time") {
+          scheduleMinuteEl.value = "any";
+        }
       });
       scheduleYearEl.addEventListener("change", () => {
         renderRegisterMonthOptions(scheduleYearEl.value, scheduleMonthEl.value);
