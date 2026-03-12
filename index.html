@@ -1497,6 +1497,28 @@
         const holidayLimit = Number.isNaN(holidayRaw) ? 4 : Math.max(0, Math.floor(holidayRaw));
         return { weekdayLimit, holidayLimit };
       }
+      function normalizeEmergencyLimitAdditions(raw) {
+        if (!raw || typeof raw !== "object") return {};
+        const entries = Object.entries(raw)
+          .map(([dateKey, value]) => {
+            const normalizedDate = String(dateKey || "").trim();
+            const amount = Math.max(0, Math.floor(Number(value) || 0));
+            return [normalizedDate, amount];
+          })
+          .filter(([dateKey, amount]) => /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && amount > 0)
+          .sort((a, b) => a[0].localeCompare(b[0]));
+        return Object.fromEntries(entries);
+      }
+      function getLocalEmergencyLimitAdditions() {
+        return normalizeEmergencyLimitAdditions(readStorageObject(STORAGE_EMERGENCY_LIMIT_ADDITIONS));
+      }
+      function buildSharedLimitConfigPayload(config) {
+        const { weekdayLimit, holidayLimit } = sanitizeLimitConfig(config);
+        const emergencyLimitAdditions = normalizeEmergencyLimitAdditions(
+          config?.emergencyLimitAdditions ?? getLocalEmergencyLimitAdditions()
+        );
+        return { weekdayLimit, holidayLimit, emergencyLimitAdditions };
+      }
       function getLocalLimitConfig() {
         return sanitizeLimitConfig(readStorageObject(STORAGE_LIMIT_CONFIG));
       }
@@ -1522,7 +1544,7 @@
         if (!payload || typeof payload !== "object") return null;
         const remoteConfig = payload[SHARED_LIMIT_CONFIG_FIELD];
         if (!remoteConfig || typeof remoteConfig !== "object") return null;
-        return sanitizeLimitConfig(remoteConfig);
+        return buildSharedLimitConfigPayload(remoteConfig);
       }
       async function saveSharedLimitConfigToSupabase(config) {
         if (!USE_SUPABASE_SYNC) return;
@@ -1543,7 +1565,7 @@
         }
         const rows = await response.json();
         const currentPayload = Array.isArray(rows) && rows[0] && typeof rows[0].payload === "object" ? rows[0].payload : {};
-        const nextPayload = { ...currentPayload, [SHARED_LIMIT_CONFIG_FIELD]: sanitizeLimitConfig(config) };
+        const nextPayload = { ...currentPayload, [SHARED_LIMIT_CONFIG_FIELD]: buildSharedLimitConfigPayload(config) };
         const updateResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}`,
           {
@@ -1568,11 +1590,19 @@
           const remoteConfig = await fetchSharedLimitConfigFromSupabase();
           if (!remoteConfig) return false;
           const localConfig = getLocalLimitConfig();
-          if (localConfig.weekdayLimit === remoteConfig.weekdayLimit && localConfig.holidayLimit === remoteConfig.holidayLimit) {
+          const localEmergencyMap = getLocalEmergencyLimitAdditions();
+          const remoteEmergencyMap = normalizeEmergencyLimitAdditions(remoteConfig.emergencyLimitAdditions);
+          const sameEmergencyMap = JSON.stringify(localEmergencyMap) === JSON.stringify(remoteEmergencyMap);
+          if (
+            localConfig.weekdayLimit === remoteConfig.weekdayLimit &&
+            localConfig.holidayLimit === remoteConfig.holidayLimit &&
+            sameEmergencyMap
+          ) {
             return false;
           }
-          originalSetItem(STORAGE_LIMIT_CONFIG, JSON.stringify(remoteConfig));
+          originalSetItem(STORAGE_LIMIT_CONFIG, JSON.stringify(sanitizeLimitConfig(remoteConfig)));
           originalSetItem(STORAGE_DAILY_LIMITS, JSON.stringify({}));
+          originalSetItem(STORAGE_EMERGENCY_LIMIT_ADDITIONS, JSON.stringify(remoteEmergencyMap));
           renderScheduleCalendar();
           renderInlineScheduleCalendarFromFilters();
           return true;
@@ -4014,6 +4044,22 @@
         const previous = Math.max(0, Math.floor(Number(additions[pickedDate]) || 0));
         additions[pickedDate] = previous + addCount;
         localStorage.setItem(STORAGE_EMERGENCY_LIMIT_ADDITIONS, JSON.stringify(additions));
+        if (USE_SUPABASE_SYNC) {
+          limitConfigSyncPromise = (limitConfigSyncPromise || Promise.resolve())
+            .then(() =>
+              saveSharedLimitConfigToSupabase({
+                ...getLocalLimitConfig(),
+                emergencyLimitAdditions: additions
+              })
+            )
+            .catch((error) => {
+              console.error("[LIMIT][index] 긴급추가 원격 저장 실패", error);
+              alert("긴급추가 서버 저장에 실패했습니다.");
+            })
+            .finally(() => {
+              limitConfigSyncPromise = null;
+            });
+        }
 
         renderScheduleCalendar();
         renderInlineScheduleCalendarFromFilters();
