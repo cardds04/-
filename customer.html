@@ -290,12 +290,36 @@
       function installSupabaseOnlyStorageProxy() {
         if (!SUPABASE_ONLY_MODE) return;
         const scopePrefix = "scheduleSite";
+        const snapshotStorageKey = "__scheduleSiteSnapshotV1";
         const nativeGetItem = localStorage.getItem.bind(localStorage);
         const nativeSetItem = localStorage.setItem.bind(localStorage);
         const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
         const nativeClear = localStorage.clear.bind(localStorage);
         const memoryStore = new Map();
         const isScopedKey = (key) => String(key || "").startsWith(scopePrefix);
+        let snapshotSaveTimer = null;
+        const saveSnapshot = () => {
+          if (snapshotSaveTimer) clearTimeout(snapshotSaveTimer);
+          snapshotSaveTimer = setTimeout(() => {
+            try {
+              nativeSetItem(snapshotStorageKey, JSON.stringify(Object.fromEntries(memoryStore.entries())));
+            } catch (error) {
+              // 스냅샷 저장 실패는 무시
+            }
+          }, 10);
+        };
+        try {
+          const rawSnapshot = nativeGetItem(snapshotStorageKey);
+          const parsedSnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
+          if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
+            Object.entries(parsedSnapshot).forEach(([key, value]) => {
+              if (!isScopedKey(key)) return;
+              memoryStore.set(String(key), String(value ?? ""));
+            });
+          }
+        } catch (error) {
+          // 파싱 실패 시 빈 메모리로 시작
+        }
         localStorage.getItem = (key) => {
           const normalizedKey = String(key || "");
           if (!isScopedKey(normalizedKey)) return nativeGetItem(normalizedKey);
@@ -309,6 +333,7 @@
             return;
           }
           memoryStore.set(normalizedKey, normalizedValue);
+          saveSnapshot();
         };
         localStorage.removeItem = (key) => {
           const normalizedKey = String(key || "");
@@ -317,9 +342,11 @@
             return;
           }
           memoryStore.delete(normalizedKey);
+          saveSnapshot();
         };
         localStorage.clear = () => {
           memoryStore.clear();
+          nativeRemoveItem(snapshotStorageKey);
           nativeClear();
         };
       }
@@ -875,6 +902,7 @@
       }
       async function pullTablesToCustomerStorage() {
         if (!USE_SUPABASE_SYNC) return;
+        if (customerScheduleSubmitting) return;
         const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
           fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc"),
