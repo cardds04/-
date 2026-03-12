@@ -987,7 +987,8 @@
             <div>
               <strong>촬영 구성</strong>
               <div class="radio-line">
-                <label><input type="radio" name="composition" value="사진만" checked /> 사진만</label>
+                <label><input type="radio" name="composition" value="" checked /> 미선택</label>
+                <label><input type="radio" name="composition" value="사진만" /> 사진만</label>
                 <label><input type="radio" name="composition" value="사진영상 둘다" /> 사진영상 둘다</label>
               </div>
             </div>
@@ -3278,7 +3279,7 @@
         const remoteRows = await remoteIdResponse.json();
         const remoteIds = (Array.isArray(remoteRows) ? remoteRows : [])
           .map((row) => String(row?.id || "").trim())
-          .filter((id) => isUuidLike(id));
+          .filter(Boolean);
         if (nextRows.length) {
           const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
             method: "POST",
@@ -3295,19 +3296,21 @@
             throw new Error(`schedules 업서트 실패 (${upsertResponse.status}): ${errorText}`);
           }
         }
-        const localIdSet = new Set(nextRows.map((row) => String(row?.id || "").trim()).filter((id) => isUuidLike(id)));
+        const localIdSet = new Set(nextRows.map((row) => String(row?.id || "").trim()).filter(Boolean));
         const deleteIds = remoteIds.filter((id) => !localIdSet.has(id));
         if (!deleteIds.length) return;
-        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=in.(${deleteIds.join(",")})`, {
-          method: "DELETE",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        for (const deleteId of deleteIds) {
+          const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(deleteId)}`, {
+            method: "DELETE",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (!deleteResponse.ok) {
+            const errorText = await deleteResponse.text();
+            throw new Error(`schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
           }
-        });
-        if (!deleteResponse.ok) {
-          const errorText = await deleteResponse.text();
-          throw new Error(`schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
         }
       }
       function queueSchedulesSync(force = false) {
@@ -9560,13 +9563,17 @@
         const pickedTimePreference = scheduleTimeUndecided
           ? "exact"
           : normalizeTimePreference(scheduleTimePreferenceRegisterEl?.value);
-        const pickedComposition = formEl.composition.value;
+        const pickedComposition = String(formEl.composition?.value || "").trim();
         const companyInputValue = document.getElementById("company").value || "";
         const normalizedCompany = normalizeCompanyName(companyInputValue);
 
         if (!isRegisteredCompanyName(normalizedCompany)) {
           alert("등록된 업체만 스케줄 등록할 수 있어요. 먼저 업체 등록에서 추가해주세요.");
           return;
+        }
+        if (!["사진만", "사진영상 둘다"].includes(pickedComposition)) {
+          alert("촬영 구성에서 '사진만' 또는 '사진영상 둘다'를 선택해주세요.");
+          return false;
         }
         const dailyLimit = getEffectiveDailyLimit(pickedDate);
         const countAtDate = getActiveScheduleCountByDate(pickedDate);
