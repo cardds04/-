@@ -3705,6 +3705,28 @@
             scheduleSyncPromise = null;
           });
       }
+      function queueSchedulesSyncWithRetry(force = false, retryCount = 0) {
+        if (!USE_SUPABASE_SYNC) return;
+        if (isApplyingRemoteSchedules) {
+          if (retryCount >= 20) return;
+          setTimeout(() => {
+            queueSchedulesSyncWithRetry(force, retryCount + 1);
+          }, 120);
+          return;
+        }
+        queueSchedulesSync(force);
+      }
+      function queuePaymentsSyncWithRetry(retryCount = 0) {
+        if (!USE_SUPABASE_SYNC) return;
+        if (isApplyingRemotePayments) {
+          if (retryCount >= 20) return;
+          setTimeout(() => {
+            queuePaymentsSyncWithRetry(retryCount + 1);
+          }, 120);
+          return;
+        }
+        queuePaymentsSync();
+      }
       async function pullSchedulesFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         if (scheduleSyncPromise || scheduleSyncQueued) return false;
@@ -6404,6 +6426,15 @@
         };
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+        const latestLoginAtById = new Map();
+        loginLogs.forEach((log) => {
+          const customerId = String(log?.customerId || "").trim();
+          if (!customerId) return;
+          const atTs = new Date(String(log?.at || "")).getTime();
+          if (!Number.isFinite(atTs)) return;
+          const prev = latestLoginAtById.get(customerId) || 0;
+          if (atTs > prev) latestLoginAtById.set(customerId, atTs);
+        });
         const matchedUsers = customerUsers
           .filter((user) => isSameTargetCompany(user?.company, user?.companyCode))
           .map((user) => ({
@@ -6419,7 +6450,14 @@
         const masterCompanyNameByCode = resolveMasterCompanyNameByCompanyCode(companyDefaultCode);
         const orderedMatchedUsers = [
           ...matchedUsers
-            .sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || ""), "ko"))
+            .sort((a, b) => {
+              const aId = String(a?.id || "").trim();
+              const bId = String(b?.id || "").trim();
+              const aLogin = latestLoginAtById.get(aId) || 0;
+              const bLogin = latestLoginAtById.get(bId) || 0;
+              if (aLogin !== bLogin) return bLogin - aLogin;
+              return aId.localeCompare(bId, "ko");
+            })
         ];
         const matchedUser =
           orderedMatchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
@@ -9948,7 +9986,8 @@
         editingIndex = null;
         editingDateIndex = null;
         renderList();
-        queuePaymentsSync();
+        queueSchedulesSyncWithRetry(true);
+        queuePaymentsSyncWithRetry();
         void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
           .then((deleted) => {
             if (!deleted) return;
@@ -10115,7 +10154,8 @@
         staleCleanupModalEl?.classList.add("hidden");
         renderList();
         renderPaymentList();
-        queuePaymentsSync();
+        queueSchedulesSyncWithRetry(true);
+        queuePaymentsSyncWithRetry();
         alert(`선택한 잔여건 ${selected.length}건을 정리했습니다.`);
       }
 
@@ -10167,7 +10207,8 @@
         renderPreviousScheduleHistory();
         renderList();
         renderPaymentList();
-        queuePaymentsSync();
+        queueSchedulesSyncWithRetry(true);
+        queuePaymentsSyncWithRetry();
       }
 
       function handleScheduleListClick(event) {

@@ -130,6 +130,7 @@
             <button id="saveLoginToggleBtn" class="btn outline small" type="button">아이디와 비번 저장하기: OFF</button>
             <button class="btn" type="submit">로그인</button>
             <button id="openSignupBtn" class="btn outline" type="button">회원가입</button>
+            <button id="openFindIdBtn" class="btn outline" type="button">아이디 찾기</button>
           </form>
           <form id="signupForm" class="form hidden">
             <div class="row"><span>🆔</span><input id="signupId" type="text" placeholder="아이디" required /></div>
@@ -139,13 +140,23 @@
             <button class="btn" type="submit">회원가입</button>
             <button id="backToLoginBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
           </form>
+          <form id="findIdForm" class="form hidden">
+            <div class="row"><span>📞</span><input id="findIdPhone" type="text" placeholder="회원가입시 입력한 연락처" required /></div>
+            <button class="btn" type="submit">아이디 찾기</button>
+            <button id="backToLoginFromFindIdBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
+            <p id="findIdResultText" class="hint"></p>
+          </form>
         </div>
 
         <div id="scheduleBlock" class="hidden">
           <div class="top-line">
             <strong id="welcomeText"></strong>
-            <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
+            <div style="display:flex; gap:6px;">
+              <button id="myInfoBtn" class="btn outline" type="button">내 정보</button>
+              <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
+            </div>
           </div>
+          <div id="myInfoBox" class="status-card hidden" style="margin-bottom:8px;"></div>
 
           <div class="tabs" style="margin-top: 4px;">
             <button id="registerTabBtn" class="active" type="button">스케줄등록</button>
@@ -821,12 +832,18 @@
       const loginTabBtnEl = document.getElementById("loginTabBtn");
       const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
       const openSignupBtnEl = document.getElementById("openSignupBtn");
+      const openFindIdBtnEl = document.getElementById("openFindIdBtn");
       const backToLoginBtnEl = document.getElementById("backToLoginBtn");
+      const backToLoginFromFindIdBtnEl = document.getElementById("backToLoginFromFindIdBtn");
       const signupFormEl = document.getElementById("signupForm");
+      const findIdFormEl = document.getElementById("findIdForm");
+      const findIdResultTextEl = document.getElementById("findIdResultText");
       const loginFormEl = document.getElementById("loginForm");
       const authBlockEl = document.getElementById("authBlock");
       const scheduleBlockEl = document.getElementById("scheduleBlock");
       const welcomeTextEl = document.getElementById("welcomeText");
+      const myInfoBtnEl = document.getElementById("myInfoBtn");
+      const myInfoBoxEl = document.getElementById("myInfoBox");
       const logoutBtnEl = document.getElementById("logoutBtn");
 
       const registerTabBtnEl = document.getElementById("registerTabBtn");
@@ -863,6 +880,7 @@
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
+      let myInfoOpen = false;
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
@@ -1356,6 +1374,39 @@
       function updateRememberLoginButtonText() {
         saveLoginToggleBtnEl.textContent = `아이디와 비번 저장하기: ${rememberLoginEnabled ? "ON" : "OFF"}`;
       }
+      function normalizePhoneDigits(value) {
+        return String(value || "").replace(/[^\d]/g, "");
+      }
+      function formatDateTimeText(value) {
+        const parsed = new Date(String(value || ""));
+        if (!Number.isFinite(parsed.getTime())) return "-";
+        const yyyy = parsed.getFullYear();
+        const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+        const dd = String(parsed.getDate()).padStart(2, "0");
+        const hh = String(parsed.getHours()).padStart(2, "0");
+        const mi = String(parsed.getMinutes()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+      }
+      function renderMyInfo(user) {
+        if (!myInfoBoxEl) return;
+        if (!user || !myInfoOpen) {
+          myInfoBoxEl.classList.add("hidden");
+          return;
+        }
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const companyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode) || normalize(user?.company) || "-";
+        myInfoBoxEl.innerHTML = `
+          <div style="font-weight:700; margin-bottom:6px;">내 정보</div>
+          <div style="line-height:1.6;">
+            아이디: <strong>${escapeHtml(user?.id || "-")}</strong><br />
+            업체명: ${escapeHtml(companyName)}<br />
+            연락처: ${escapeHtml(user?.phone || "-")}<br />
+            고유번호: ${escapeHtml(effectiveCompanyCode || "-")}<br />
+            가입일: ${escapeHtml(formatDateTimeText(user?.createdAt))}
+          </div>
+        `;
+        myInfoBoxEl.classList.remove("hidden");
+      }
 
       function loadRememberedLogin() {
         try {
@@ -1586,9 +1637,14 @@
 
       function switchAuthTab(mode) {
         const signupActive = mode === "signup";
+        const findIdActive = mode === "findId";
         loginTabBtnEl.classList.add("active");
         signupFormEl.classList.toggle("hidden", !signupActive);
-        loginFormEl.classList.toggle("hidden", signupActive);
+        findIdFormEl.classList.toggle("hidden", !findIdActive);
+        loginFormEl.classList.toggle("hidden", signupActive || findIdActive);
+        if (findIdResultTextEl && !findIdActive) {
+          findIdResultTextEl.textContent = "";
+        }
       }
 
       function switchCustomerTab(tab) {
@@ -1716,7 +1772,10 @@
         const isLoggedIn = Boolean(user);
         authBlockEl.classList.toggle("hidden", isLoggedIn);
         scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
+        myInfoBtnEl?.classList.toggle("hidden", !isLoggedIn);
         if (!isLoggedIn) {
+          myInfoOpen = false;
+          renderMyInfo(null);
           switchAuthTab("login");
           const remembered = loadRememberedLogin();
           if (remembered) {
@@ -1749,6 +1808,7 @@
           }
           syncAdminSchedulesToCustomerUser(user);
           welcomeTextEl.textContent = `${user.company} (${user.id})님`;
+          renderMyInfo(user);
           renderClosedDatesNotice();
           renderPaymentSummary();
           switchCustomerTab(currentCustomerTab);
@@ -2221,11 +2281,47 @@
         localStorage.removeItem(STORAGE_SESSION);
         editingScheduleId = null;
         currentCustomerTab = "register";
+        myInfoOpen = false;
         renderAuthState();
       });
       saveLoginToggleBtnEl.addEventListener("click", () => {
         rememberLoginEnabled = !rememberLoginEnabled;
         updateRememberLoginButtonText();
+      });
+      findIdFormEl?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const phoneInputEl = document.getElementById("findIdPhone");
+        const targetPhone = normalizePhoneDigits(phoneInputEl?.value);
+        if (!targetPhone) {
+          if (findIdResultTextEl) findIdResultTextEl.textContent = "전화번호를 입력해주세요.";
+          return;
+        }
+        if (USE_SUPABASE_SYNC) {
+          try {
+            await pullTablesToCustomerStorage();
+          } catch (error) {
+            console.error("[TABLE][customer] 아이디찾기 pull 실패", error);
+          }
+        }
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const matchedIds = [...new Set(
+          users
+            .filter((user) => normalizePhoneDigits(user?.phone) === targetPhone)
+            .map((user) => normalize(user?.id))
+            .filter(Boolean)
+        )];
+        if (!findIdResultTextEl) return;
+        if (!matchedIds.length) {
+          findIdResultTextEl.textContent = "일치하는 아이디를 찾지 못했습니다.";
+          return;
+        }
+        findIdResultTextEl.innerHTML = `찾은 아이디: <strong>${escapeHtml(matchedIds.join(", "))}</strong>`;
+      });
+      myInfoBtnEl?.addEventListener("click", () => {
+        const user = getCurrentSessionUser();
+        if (!user) return;
+        myInfoOpen = !myInfoOpen;
+        renderMyInfo(user);
       });
 
       customerScheduleFormEl.addEventListener("submit", async (event) => {
@@ -2532,7 +2628,9 @@
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
       openSignupBtnEl.addEventListener("click", () => switchAuthTab("signup"));
+      openFindIdBtnEl.addEventListener("click", () => switchAuthTab("findId"));
       backToLoginBtnEl.addEventListener("click", () => switchAuthTab("login"));
+      backToLoginFromFindIdBtnEl?.addEventListener("click", () => switchAuthTab("login"));
       registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
       statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
       orderHistoryBtnEl.addEventListener("click", () => {
