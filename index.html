@@ -3971,6 +3971,51 @@
         renderCustomerStatsDashboard();
         return true;
       }
+      function normalizeCustomerRows(rows) {
+        const list = Array.isArray(rows) ? rows : [];
+        const mapped = list
+          .map((row) => ({
+            id: String(row?.login_id || row?.id || "").trim(),
+            password: String(row?.password || "").trim(),
+            company: normalizeCompanyName(row?.company_name || row?.company),
+            companyCode: normalizeCompanyCode(row?.company_code || row?.companyCode),
+            phone: String(row?.phone || "").trim(),
+            createdAt: String(row?.created_at || row?.createdAt || "").trim()
+          }))
+          .filter((row) => row.id);
+        const dedupedMap = new Map();
+        mapped.forEach((row) => {
+          const key = row.id.toLowerCase();
+          if (!dedupedMap.has(key)) dedupedMap.set(key, row);
+        });
+        return [...dedupedMap.values()];
+      }
+      async function fetchCustomersFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return [];
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/customers?select=login_id,password,company_name,company_code,phone,created_at&order=created_at.desc`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`customers 조회 실패 (${response.status}): ${errorText}`);
+        }
+        return await response.json();
+      }
+      async function pullCustomersFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC) return false;
+        const remoteRows = await fetchCustomersFromSupabase();
+        const normalized = normalizeCustomerRows(remoteRows);
+        originalSetItem(STORAGE_CUSTOMERS, JSON.stringify(normalized));
+        return true;
+      }
 
       function loadAdminCompaniesFromStorage() {
         const saved = normalizeCompanyRows(readStorageArray(STORAGE_ADMIN_COMPANIES));
@@ -10339,6 +10384,10 @@
       // 자동 초기화 비활성화 (데이터 유실 방지)
       loadAdminCompaniesFromStorage();
       void pullAdminCompaniesFromSupabaseAndRefresh();
+      void pullCustomersFromSupabaseAndApply().then(() => {
+        renderCustomerStatsDashboard();
+        renderCompanies();
+      });
       loadCouponPassesFromStorage();
       void pullCouponPassesFromSupabaseAndApply().then((changed) => {
         if (changed) {
@@ -10430,6 +10479,10 @@
 
       window.addEventListener("focus", () => {
         loadAdminCompaniesFromStorage();
+        void pullCustomersFromSupabaseAndApply().then(() => {
+          renderCustomerStatsDashboard();
+          renderCompanies();
+        });
         loadCouponPassesFromStorage();
         void pullCouponPassesFromSupabaseAndApply().then((changed) => {
           if (changed) {
@@ -10457,6 +10510,10 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
         loadAdminCompaniesFromStorage();
+        void pullCustomersFromSupabaseAndApply().then(() => {
+          renderCustomerStatsDashboard();
+          renderCompanies();
+        });
         loadCouponPassesFromStorage();
         void pullCouponPassesFromSupabaseAndApply().then((changed) => {
           if (changed) {
