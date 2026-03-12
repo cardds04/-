@@ -7735,21 +7735,23 @@
                   return item.paymentStatus === "입금완료";
                 });
         const isPaidTab = currentPaymentFilter === "paid";
+        const isUnpaidTab = currentPaymentFilter === "unpaid";
+        const isMonthTab = isPaidTab || isUnpaidTab;
         if (paymentMonthNavigatorEl) {
-          paymentMonthNavigatorEl.classList.toggle("hidden", !isPaidTab);
+          paymentMonthNavigatorEl.classList.toggle("hidden", !isMonthTab);
         }
         if (paymentMonthMemoBoxEl) {
           paymentMonthMemoBoxEl.classList.toggle("hidden", !isPaidTab);
         }
-        const paidMonthKeys = isPaidTab
+        const monthKeys = isMonthTab
           ? [...new Set(filtered.map(({ item }) => getPaymentRowMonthKey(item)).filter(Boolean))].sort((a, b) => b.localeCompare(a))
           : [];
-        if (isPaidTab && paidMonthKeys.length && !paidMonthKeys.includes(paymentViewYearMonth)) {
-          paymentViewYearMonth = paidMonthKeys[0];
+        if (isMonthTab && monthKeys.length && !monthKeys.includes(paymentViewYearMonth)) {
+          paymentViewYearMonth = monthKeys[0];
         }
         if (paymentMonthLabelEl) {
           const [viewYear = "-", viewMonth = "-"] = String(paymentViewYearMonth || "").split("-");
-          paymentMonthLabelEl.textContent = isPaidTab ? `${viewYear}년 ${Number(viewMonth || 1)}월` : "-";
+          paymentMonthLabelEl.textContent = isMonthTab ? `${viewYear}년 ${Number(viewMonth || 1)}월` : "-";
         }
 
         const visibleRows = filtered
@@ -7758,7 +7760,7 @@
             return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
           })
           .filter(({ item }) => {
-            if (!isPaidTab) return true;
+            if (!isMonthTab) return true;
             return getPaymentRowMonthKey(item) === paymentViewYearMonth;
           })
           .sort((a, b) => {
@@ -7774,7 +7776,12 @@
           const monthTotalAmount = isPaidTab
             ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(item?.paymentAmount) || 0)), 0)
             : 0;
-          paymentMonthTotalTextEl.textContent = `월별 총금액: ${monthTotalAmount.toLocaleString("ko-KR")}원`;
+          const unpaidTotalAmount = isUnpaidTab
+            ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(item?.paymentAmount) || 0)), 0)
+            : 0;
+          paymentMonthTotalTextEl.textContent = isUnpaidTab
+            ? `월별 총금액: ${monthTotalAmount.toLocaleString("ko-KR")}원 / 미수금: ${unpaidTotalAmount.toLocaleString("ko-KR")}원`
+            : `월별 총금액: ${monthTotalAmount.toLocaleString("ko-KR")}원`;
         }
         if (paymentMonthMemoInputEl) {
           const memoMap = getPaymentMonthMemoMap();
