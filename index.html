@@ -1116,6 +1116,7 @@
                 <th>입금자명</th>
                 <th>입금날짜</th>
                 <th>입금금액</th>
+                <th>추가수금/메모</th>
                 <th>입금상태</th>
                 <th>관리</th>
               </tr>
@@ -3316,6 +3317,8 @@
                 memo: String(item?.memo || "").trim(),
                 paymentPayer: String(item?.paymentPayer || "").trim(),
                 paymentAmount: amountRaw,
+                paymentExtraAmount: String(item?.paymentExtraAmount || "").trim(),
+                paymentExtraMemo: String(item?.paymentExtraMemo || "").trim(),
                 paymentDate: String(item?.paymentDate || "").trim(),
                 paymentStatus: String(item?.paymentStatus || "미입금").trim() || "미입금",
                 couponUsed: Boolean(item?.couponUsed),
@@ -7797,6 +7800,8 @@
               )
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
+            const extraAmount = String(item?.paymentExtraAmount || "").trim();
+            const extraMemo = String(item?.paymentExtraMemo || "").trim();
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}</td>
@@ -7834,6 +7839,15 @@
                        amountMode === "custom" ? "" : "readonly"
                      } placeholder="입금금액 입력" />`
                   : `${escapeHtml(item.paymentAmount || "-")}`
+              }</td>
+              <td>${
+                isEditing
+                  ? `<input class="inline-input pay-extra-amount" type="text" value="${escapeHtml(extraAmount)}" placeholder="추가수금금액" style="margin-bottom:4px;" />
+                     <input class="inline-input pay-extra-memo" type="text" value="${escapeHtml(extraMemo)}" placeholder="추가메모" />
+                     <div class="quick-writer-row" style="margin-top:4px;">
+                       <button class="btn-sm" type="button" data-action="clearExtraDue" data-index="${index}">추가수금초기화</button>
+                     </div>`
+                  : `${extraAmount ? `추가: ${escapeHtml(extraAmount)}` : "-"}${extraMemo ? `<br />메모: ${escapeHtml(extraMemo)}` : ""}`
               }</td>
               <td>${
                 isEditing
@@ -7875,7 +7889,6 @@
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
                               <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                            : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
-                              <button class="btn-sm" type="button" data-action="manualProcessPaymentRow" data-index="${index}">입금처리</button>
                               <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                        }`
                 }
@@ -7888,7 +7901,7 @@
         if (visibleRows.length === 0) {
           paymentListBodyEl.innerHTML = `
             <tr>
-              <td colspan="7">표시할 내역이 없습니다.</td>
+              <td colspan="8">표시할 내역이 없습니다.</td>
             </tr>
           `;
         }
@@ -7931,6 +7944,8 @@
           paymentPayer: item.paymentPayer || "",
           paymentDate: item.paymentDate || "",
           paymentAmount: item.paymentAmount || "",
+          paymentExtraAmount: item.paymentExtraAmount || "",
+          paymentExtraMemo: item.paymentExtraMemo || "",
           paymentStatus: item.paymentStatus || "미입금",
           couponUsed: Boolean(item.couponUsed),
           partialPaid: Boolean(item.partialPaid)
@@ -7941,20 +7956,20 @@
         const paymentDay = rowEl.querySelector(".pay-day")?.value || "01";
         const paymentDate = `${paymentMonth}-${paymentDay}`;
         const rawAmount = rowEl.querySelector(".pay-amount")?.value?.trim() || "";
+        const rawExtraAmount = rowEl.querySelector(".pay-extra-amount")?.value?.trim() || "";
+        const rawExtraMemo = rowEl.querySelector(".pay-extra-memo")?.value?.trim() || "";
         const amount = keepUnpaid ? applyHalfAmountText(rawAmount) : rawAmount;
         if (keepUnpaid && !amount) {
           alert("반만입금은 입금금액을 먼저 입력해주세요.");
-          return;
-        }
-        if (!keepUnpaid && amount && !payer) {
-          alert("입금자명을 입력해야 입금완료 처리할 수 있습니다.");
           return;
         }
 
         item.paymentPayer = payer;
         item.paymentDate = paymentDate;
         item.paymentAmount = amount;
-        item.paymentStatus = keepUnpaid ? "미입금" : amount ? "입금완료" : "미입금";
+        item.paymentExtraAmount = rawExtraAmount;
+        item.paymentExtraMemo = rawExtraMemo;
+        item.paymentStatus = keepUnpaid ? "미입금" : amount && payer ? "입금완료" : "미입금";
         item.partialPaid = keepUnpaid;
         if (amount && amount !== "쿠폰사용") {
           item.couponUsed = false;
@@ -7975,6 +7990,8 @@
         item.paymentPayer = String(backup.paymentPayer || "");
         item.paymentDate = String(backup.paymentDate || "");
         item.paymentAmount = String(backup.paymentAmount || "");
+        item.paymentExtraAmount = String(backup.paymentExtraAmount || "");
+        item.paymentExtraMemo = String(backup.paymentExtraMemo || "");
         item.paymentStatus = String(backup.paymentStatus || "미입금");
         item.couponUsed = Boolean(backup.couponUsed);
         item.partialPaid = Boolean(backup.partialPaid);
@@ -7997,6 +8014,8 @@
           paymentPayer: item.paymentPayer || "",
           paymentDate: item.paymentDate || "",
           paymentAmount: item.paymentAmount || "",
+          paymentExtraAmount: item.paymentExtraAmount || "",
+          paymentExtraMemo: item.paymentExtraMemo || "",
           paymentStatus: item.paymentStatus || "미입금",
           couponUsed: Boolean(item.couponUsed),
           partialPaid: Boolean(item.partialPaid)
@@ -8024,6 +8043,8 @@
           paymentPayer: item.paymentPayer || "",
           paymentDate: item.paymentDate || "",
           paymentAmount: item.paymentAmount || "",
+          paymentExtraAmount: item.paymentExtraAmount || "",
+          paymentExtraMemo: item.paymentExtraMemo || "",
           paymentStatus: item.paymentStatus || "미입금",
           couponUsed: Boolean(item.couponUsed),
           partialPaid: Boolean(item.partialPaid)
@@ -8602,6 +8623,13 @@
           amountInput.value = String(Math.round(baseAmount * 1.1));
           return;
         }
+        if (action === "clearExtraDue") {
+          const extraAmountInput = rowEl?.querySelector(".pay-extra-amount");
+          const extraMemoInput = rowEl?.querySelector(".pay-extra-memo");
+          if (extraAmountInput) extraAmountInput.value = "";
+          if (extraMemoInput) extraMemoInput.value = "";
+          return;
+        }
         if (action === "cancelPaymentRow") {
           editingPaymentIndex = null;
           renderPaymentList();
@@ -8613,32 +8641,6 @@
         }
         if (action === "halfPaymentRow") {
           savePaymentFromTable(index, rowEl, { keepUnpaid: true });
-          return;
-        }
-        if (action === "manualProcessPaymentRow") {
-          const item = data[index];
-          if (!item) return;
-          item.paymentUndo = {
-            paymentPayer: item.paymentPayer || "",
-            paymentDate: item.paymentDate || "",
-            paymentAmount: item.paymentAmount || "",
-            paymentStatus: item.paymentStatus || "미입금",
-            couponUsed: Boolean(item.couponUsed),
-            partialPaid: Boolean(item.partialPaid)
-          };
-          item.paymentPayer = "수동처리";
-          item.paymentAmount = "수동처리";
-          item.paymentStatus = "입금완료";
-          item.partialPaid = false;
-          item.couponUsed = false;
-          if (!item.paymentDate) {
-            const now = new Date();
-            item.paymentDate = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-          }
-          editingPaymentIndex = null;
-          couponApplyIndex = null;
-          renderList();
-          queuePaymentsSync();
           return;
         }
         if (action === "undoPaymentRow") {
