@@ -286,6 +286,44 @@
         scheduleSiteExcludedPhotographers: "[]",
         scheduleSitePhotographerProfiles: "[]"
       };
+      const SUPABASE_ONLY_MODE = true;
+      function installSupabaseOnlyStorageProxy() {
+        if (!SUPABASE_ONLY_MODE) return;
+        const scopePrefix = "scheduleSite";
+        const nativeGetItem = localStorage.getItem.bind(localStorage);
+        const nativeSetItem = localStorage.setItem.bind(localStorage);
+        const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+        const nativeClear = localStorage.clear.bind(localStorage);
+        const memoryStore = new Map();
+        const isScopedKey = (key) => String(key || "").startsWith(scopePrefix);
+        localStorage.getItem = (key) => {
+          const normalizedKey = String(key || "");
+          if (!isScopedKey(normalizedKey)) return nativeGetItem(normalizedKey);
+          return memoryStore.has(normalizedKey) ? memoryStore.get(normalizedKey) : null;
+        };
+        localStorage.setItem = (key, value) => {
+          const normalizedKey = String(key || "");
+          const normalizedValue = String(value ?? "");
+          if (!isScopedKey(normalizedKey)) {
+            nativeSetItem(normalizedKey, normalizedValue);
+            return;
+          }
+          memoryStore.set(normalizedKey, normalizedValue);
+        };
+        localStorage.removeItem = (key) => {
+          const normalizedKey = String(key || "");
+          if (!isScopedKey(normalizedKey)) {
+            nativeRemoveItem(normalizedKey);
+            return;
+          }
+          memoryStore.delete(normalizedKey);
+        };
+        localStorage.clear = () => {
+          memoryStore.clear();
+          nativeClear();
+        };
+      }
+      installSupabaseOnlyStorageProxy();
       function getSyncDefaultValue(key) {
         return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
       }

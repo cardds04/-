@@ -1011,6 +1011,7 @@
               <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
               <button id="markAllCustomerAlertsReadBtn" class="btn-sm" type="button">모두확인</button>
               <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
+              <button id="openStaleCleanupModalBtn" class="btn-sm" type="button">기존잔여정리</button>
               <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
               <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
             </div>
@@ -1241,6 +1242,20 @@
       </div>
     </div>
 
+    <div id="staleCleanupModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(980px, 96vw);">
+        <div class="calendar-head">
+          <div id="staleCleanupTitle" class="calendar-title">기존 잔여건 정리</div>
+          <button id="staleCleanupCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div id="staleCleanupSummary" class="customer-stats-box" style="margin-bottom: 10px;"></div>
+        <div id="staleCleanupList" class="customer-alert-history" style="max-height: 56vh;"></div>
+        <div class="actions" style="justify-content: flex-end; margin-top: 10px;">
+          <button id="staleCleanupApplyBtn" class="btn-sm primary" type="button">선택항목삭제</button>
+        </div>
+      </div>
+    </div>
+
     <script src="./sync-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
@@ -1323,6 +1338,44 @@
         [STORAGE_EXCLUDED_PHOTOGRAPHERS]: "[]",
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
+      const SUPABASE_ONLY_MODE = true;
+      function installSupabaseOnlyStorageProxy() {
+        if (!SUPABASE_ONLY_MODE) return;
+        const scopePrefix = "scheduleSite";
+        const nativeGetItem = localStorage.getItem.bind(localStorage);
+        const nativeSetItem = localStorage.setItem.bind(localStorage);
+        const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+        const nativeClear = localStorage.clear.bind(localStorage);
+        const memoryStore = new Map();
+        const isScopedKey = (key) => String(key || "").startsWith(scopePrefix);
+        localStorage.getItem = (key) => {
+          const normalizedKey = String(key || "");
+          if (!isScopedKey(normalizedKey)) return nativeGetItem(normalizedKey);
+          return memoryStore.has(normalizedKey) ? memoryStore.get(normalizedKey) : null;
+        };
+        localStorage.setItem = (key, value) => {
+          const normalizedKey = String(key || "");
+          const normalizedValue = String(value ?? "");
+          if (!isScopedKey(normalizedKey)) {
+            nativeSetItem(normalizedKey, normalizedValue);
+            return;
+          }
+          memoryStore.set(normalizedKey, normalizedValue);
+        };
+        localStorage.removeItem = (key) => {
+          const normalizedKey = String(key || "");
+          if (!isScopedKey(normalizedKey)) {
+            nativeRemoveItem(normalizedKey);
+            return;
+          }
+          memoryStore.delete(normalizedKey);
+        };
+        localStorage.clear = () => {
+          memoryStore.clear();
+          nativeClear();
+        };
+      }
+      installSupabaseOnlyStorageProxy();
       function getSyncDefaultValue(key) {
         return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
       }
@@ -2462,6 +2515,12 @@
       const scheduleDetailTitleEl = document.getElementById("scheduleDetailTitle");
       const scheduleDetailListEl = document.getElementById("scheduleDetailList");
       const scheduleDetailCloseBtnEl = document.getElementById("scheduleDetailCloseBtn");
+      const staleCleanupModalEl = document.getElementById("staleCleanupModal");
+      const staleCleanupTitleEl = document.getElementById("staleCleanupTitle");
+      const staleCleanupSummaryEl = document.getElementById("staleCleanupSummary");
+      const staleCleanupListEl = document.getElementById("staleCleanupList");
+      const staleCleanupCloseBtnEl = document.getElementById("staleCleanupCloseBtn");
+      const staleCleanupApplyBtnEl = document.getElementById("staleCleanupApplyBtn");
       const listEl = document.getElementById("list");
       const totalCountEl = document.getElementById("totalCount");
       const todayNewCountEl = document.getElementById("todayNewCount");
@@ -2469,6 +2528,7 @@
       const customerAlertCountEl = document.getElementById("customerAlertCount");
       const markAllCustomerAlertsReadBtnEl = document.getElementById("markAllCustomerAlertsReadBtn");
       const customerAlertHistoryBtnEl = document.getElementById("customerAlertHistoryBtn");
+      const openStaleCleanupModalBtnEl = document.getElementById("openStaleCleanupModalBtn");
       const customerStatsBoxEl = document.getElementById("customerStatsBox");
       const customerAlertBoxEl = document.getElementById("customerAlertBox");
       const todayNewSummaryBoxEl = document.getElementById("todayNewSummaryBox");
@@ -2564,6 +2624,8 @@
       let transferTargetCompanyKey = "";
       let transferCompanySourceIndex = -1;
       let transferCompanySearchKeyword = "";
+      let staleCleanupCandidates = [];
+      let staleCleanupSelectedIds = new Set();
 
       function escapeHtml(text) {
         return String(text ?? "")
@@ -8207,6 +8269,43 @@
           renderCustomerAlertHistory();
         }
       });
+      openStaleCleanupModalBtnEl?.addEventListener("click", () => {
+        renderStaleCleanupModal(true);
+        staleCleanupModalEl?.classList.remove("hidden");
+      });
+      staleCleanupCloseBtnEl?.addEventListener("click", () => {
+        staleCleanupModalEl?.classList.add("hidden");
+      });
+      staleCleanupModalEl?.addEventListener("click", (event) => {
+        if (event.target === staleCleanupModalEl) {
+          staleCleanupModalEl.classList.add("hidden");
+        }
+      });
+      staleCleanupSummaryEl?.addEventListener("click", (event) => {
+        const target = event.target.closest("button[id]");
+        if (!target) return;
+        if (target.id === "staleCleanupSelectAllBtn") {
+          staleCleanupSelectedIds = new Set(staleCleanupCandidates.map((item) => item.candidateId));
+          renderStaleCleanupModal(false);
+          return;
+        }
+        if (target.id === "staleCleanupSelectNoneBtn") {
+          staleCleanupSelectedIds = new Set();
+          renderStaleCleanupModal(false);
+        }
+      });
+      staleCleanupListEl?.addEventListener("change", (event) => {
+        const checkbox = event.target.closest("input[type='checkbox'][data-candidate-id]");
+        if (!checkbox) return;
+        const candidateId = String(checkbox.dataset.candidateId || "").trim();
+        if (!candidateId) return;
+        if (checkbox.checked) {
+          staleCleanupSelectedIds.add(candidateId);
+        } else {
+          staleCleanupSelectedIds.delete(candidateId);
+        }
+      });
+      staleCleanupApplyBtnEl?.addEventListener("click", applySelectedStaleCleanup);
 
       yearFilterEl.addEventListener("change", () => {
         currentScheduleDatePreset = "";
@@ -9302,6 +9401,166 @@
         editingDateIndex = null;
         renderList();
         queuePaymentsSync();
+      }
+
+      function buildScheduleFallbackKey(row) {
+        return [
+          String(row?.date || "").trim(),
+          String(row?.time || "").trim(),
+          normalizeCompanyName(row?.company).toLowerCase(),
+          normalizeCompanyName(row?.place).toLowerCase()
+        ].join("|");
+      }
+
+      function buildScheduleFallbackLooseKey(row) {
+        return [
+          String(row?.date || "").trim(),
+          String(row?.time || "").trim(),
+          normalizeCompanyName(row?.place).toLowerCase()
+        ].join("|");
+      }
+
+      function collectStaleCleanupCandidates() {
+        const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        const canceledIdSet = new Set(
+          canceledRows.map((row) => String(row?.customerScheduleId || "").trim()).filter(Boolean)
+        );
+        const canceledFallbackKeySet = new Set(canceledRows.map((row) => buildScheduleFallbackKey(row)));
+        const canceledFallbackLooseKeySet = new Set(canceledRows.map((row) => buildScheduleFallbackLooseKey(row)));
+        const candidates = [];
+        const pushCandidate = (source, sourceLabel, row, index) => {
+          const scheduleId = String(row?.customerScheduleId || "").trim();
+          const strictKey = buildScheduleFallbackKey(row);
+          const looseKey = buildScheduleFallbackLooseKey(row);
+          const matched =
+            (scheduleId && canceledIdSet.has(scheduleId)) ||
+            canceledFallbackKeySet.has(strictKey) ||
+            canceledFallbackLooseKeySet.has(looseKey);
+          if (!matched) return;
+          const candidateId = `${source}:${index}:${scheduleId || strictKey}`;
+          candidates.push({
+            candidateId,
+            source,
+            index,
+            sourceLabel,
+            scheduleId,
+            date: String(row?.date || "").trim(),
+            time: String(row?.time || "").trim(),
+            company: normalizeCompanyName(row?.company),
+            place: String(row?.place || "").trim()
+          });
+        };
+        data.forEach((row, index) => pushCandidate("active", "진행중", row, index));
+        onHoldPayments.forEach((row, index) => pushCandidate("hold", "보류", row, index));
+        refundPayments.forEach((row, index) => pushCandidate("refund", "환불", row, index));
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        customerSchedules.forEach((row, index) => pushCandidate("customer", "고객스케줄", row, index));
+        return candidates;
+      }
+
+      function renderStaleCleanupModal(resetSelection = false) {
+        staleCleanupCandidates = collectStaleCleanupCandidates();
+        if (resetSelection) {
+          staleCleanupSelectedIds = new Set(staleCleanupCandidates.map((item) => item.candidateId));
+        } else {
+          const validIdSet = new Set(staleCleanupCandidates.map((item) => item.candidateId));
+          staleCleanupSelectedIds = new Set(
+            [...staleCleanupSelectedIds].filter((candidateId) => validIdSet.has(candidateId))
+          );
+        }
+        const counts = staleCleanupCandidates.reduce((acc, item) => {
+          acc[item.source] = (acc[item.source] || 0) + 1;
+          return acc;
+        }, {});
+        if (staleCleanupTitleEl) staleCleanupTitleEl.textContent = "기존 잔여건 정리";
+        if (staleCleanupSummaryEl) {
+          staleCleanupSummaryEl.innerHTML = `
+            <div class="customer-stats-head">
+              <span>삭제 후보 총 ${staleCleanupCandidates.length}건</span>
+              <span>진행중 ${counts.active || 0}건</span>
+              <span>보류 ${counts.hold || 0}건</span>
+              <span>환불 ${counts.refund || 0}건</span>
+              <span>고객스케줄 ${counts.customer || 0}건</span>
+              <button id="staleCleanupSelectAllBtn" class="btn-sm" type="button">전체선택</button>
+              <button id="staleCleanupSelectNoneBtn" class="btn-sm" type="button">전체해제</button>
+            </div>
+          `;
+        }
+        if (!staleCleanupListEl) return;
+        if (!staleCleanupCandidates.length) {
+          staleCleanupListEl.innerHTML = '<div class="company-item">현재 정리할 기존 잔여건이 없습니다.</div>';
+          if (staleCleanupApplyBtnEl) staleCleanupApplyBtnEl.disabled = true;
+          return;
+        }
+        if (staleCleanupApplyBtnEl) staleCleanupApplyBtnEl.disabled = false;
+        staleCleanupListEl.innerHTML = staleCleanupCandidates
+          .map((item) => {
+            const checked = staleCleanupSelectedIds.has(item.candidateId) ? "checked" : "";
+            const dateText = escapeHtml(item.date || "-");
+            const timeText = escapeHtml(item.time || "-");
+            const companyText = escapeHtml(item.company || "-");
+            const placeText = escapeHtml(extractAreaLabel(item.place) || item.place || "-");
+            return `
+              <label class="customer-alert-row" style="align-items: flex-start; gap: 8px;">
+                <input type="checkbox" data-candidate-id="${escapeHtml(item.candidateId)}" ${checked} />
+                <span>[${escapeHtml(item.sourceLabel)}] ${dateText} ${timeText} / ${companyText} / ${placeText}</span>
+              </label>
+            `;
+          })
+          .join("");
+      }
+
+      function applySelectedStaleCleanup() {
+        const selected = staleCleanupCandidates.filter((item) => staleCleanupSelectedIds.has(item.candidateId));
+        if (!selected.length) {
+          alert("삭제할 항목을 선택해주세요.");
+          return;
+        }
+        const makeMatcher = (source) => {
+          const rows = selected.filter((item) => item.source === source);
+          if (!rows.length) return () => false;
+          const idSet = new Set(rows.map((item) => String(item.scheduleId || "").trim()).filter(Boolean));
+          const strictSet = new Set(
+            rows.map((item) =>
+              [String(item.date || "").trim(), String(item.time || "").trim(), normalizeCompanyName(item.company).toLowerCase(), normalizeCompanyName(item.place).toLowerCase()].join("|")
+            )
+          );
+          const looseSet = new Set(
+            rows.map((item) => [String(item.date || "").trim(), String(item.time || "").trim(), normalizeCompanyName(item.place).toLowerCase()].join("|"))
+          );
+          return (row) => {
+            const scheduleId = String(row?.customerScheduleId || "").trim();
+            if (scheduleId && idSet.has(scheduleId)) return true;
+            const strictKey = buildScheduleFallbackKey(row);
+            if (strictSet.has(strictKey)) return true;
+            const looseKey = buildScheduleFallbackLooseKey(row);
+            return looseSet.has(looseKey);
+          };
+        };
+
+        const activeMatcher = makeMatcher("active");
+        const holdMatcher = makeMatcher("hold");
+        const refundMatcher = makeMatcher("refund");
+        const customerMatcher = makeMatcher("customer");
+
+        for (let i = data.length - 1; i >= 0; i -= 1) {
+          if (activeMatcher(data[i])) data.splice(i, 1);
+        }
+        for (let i = onHoldPayments.length - 1; i >= 0; i -= 1) {
+          if (holdMatcher(onHoldPayments[i])) onHoldPayments.splice(i, 1);
+        }
+        for (let i = refundPayments.length - 1; i >= 0; i -= 1) {
+          if (refundMatcher(refundPayments[i])) refundPayments.splice(i, 1);
+        }
+        const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        const nextCustomerSchedules = customerSchedules.filter((row) => !customerMatcher(row));
+        localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(nextCustomerSchedules));
+
+        staleCleanupModalEl?.classList.add("hidden");
+        renderList();
+        renderPaymentList();
+        queuePaymentsSync();
+        alert(`선택한 잔여건 ${selected.length}건을 정리했습니다.`);
       }
 
       function deletePreviousHistoryScheduleByPayload(payload) {
