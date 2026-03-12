@@ -164,7 +164,17 @@
                 <div class="row"><span>⏰</span><select id="scheduleHour" required></select></div>
                 <div class="row"><span>⏱️</span><select id="scheduleMinute" required></select></div>
               </div>
-              <div class="row"><span>🕒</span><select id="scheduleTimePreference"><option value="exact">정시</option><option value="before">이전</option><option value="after">이후</option><option value="other">그외시간</option></select></div>
+              <div class="compose-wrap">
+                <span class="compose-label">희망시간 선택</span>
+                <div class="compose-buttons" id="timePreferenceButtons">
+                  <button class="compose-btn active" type="button" data-time-pref="unselected">미선택</button>
+                  <button class="compose-btn" type="button" data-time-pref="exact">정시</button>
+                  <button class="compose-btn" type="button" data-time-pref="before">이전</button>
+                  <button class="compose-btn" type="button" data-time-pref="after">이후</button>
+                  <button class="compose-btn" type="button" data-time-pref="other">그외시간</button>
+                </div>
+                <input id="scheduleTimePreference" type="hidden" value="unselected" />
+              </div>
               <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 10시~17시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
               <div class="triple">
@@ -779,6 +789,7 @@
       const scheduleHourEl = document.getElementById("scheduleHour");
       const scheduleMinuteEl = document.getElementById("scheduleMinute");
       const scheduleTimePreferenceEl = document.getElementById("scheduleTimePreference");
+      const timePreferenceButtonsEl = document.getElementById("timePreferenceButtons");
       const schedulePyeongEl = document.getElementById("schedulePyeong");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
@@ -1407,6 +1418,13 @@
         });
         updateExpectedPaymentText();
       }
+      function setSelectedTimePreference(value, rootEl = timePreferenceButtonsEl, hiddenInputEl = scheduleTimePreferenceEl) {
+        const targetValue = String(value || "").trim() || "unselected";
+        hiddenInputEl.value = targetValue;
+        rootEl?.querySelectorAll("button[data-time-pref]").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.timePref === targetValue);
+        });
+      }
 
       function switchAuthTab(mode) {
         const signupActive = mode === "signup";
@@ -1628,7 +1646,7 @@
           .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시</option>`)
           .join("");
         scheduleMinuteEl.innerHTML = '<option value="00">00분</option><option value="30">30분</option>';
-        if (scheduleTimePreferenceEl) scheduleTimePreferenceEl.value = "exact";
+        setSelectedTimePreference("unselected");
 
         renderDayOptions(currentYearValue, currentMonth, currentDay);
       }
@@ -2139,7 +2157,7 @@
         }
         customerScheduleFormEl.reset();
         setupDateTimeSelectors();
-        if (scheduleTimePreferenceEl) scheduleTimePreferenceEl.value = "exact";
+        setSelectedTimePreference("unselected");
         setSelectedComposition("미선택");
         updateExpectedPaymentText();
         renderPaymentSummary();
@@ -2327,6 +2345,11 @@
         const button = event.target.closest("button[data-compose]");
         if (!button) return;
         setSelectedComposition(button.dataset.compose || "미선택");
+      });
+      timePreferenceButtonsEl?.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-time-pref]");
+        if (!button) return;
+        setSelectedTimePreference(button.dataset.timePref || "unselected");
       });
       scheduleYearEl.addEventListener("change", () => {
         renderRegisterMonthOptions(scheduleYearEl.value, scheduleMonthEl.value);
