@@ -1036,6 +1036,7 @@
               <input id="inlineBulkHolidayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="주말/공휴일 제한갯수" style="width: 160px;" />
               <button id="inlineApplyMonthLimitBtn" class="btn-sm" type="button">전체 기본적용</button>
               <button id="inlineAssignDayoffBtn" class="btn-sm" type="button">작가휴무지정</button>
+              <button id="inlineEmergencyAddLimitBtn" class="btn-sm" type="button">긴급추가</button>
             </div>
             <div id="inlineCalendarGrid" class="calendar-grid"></div>
             <div id="inlineDayoffRequestHistory" class="customer-alert-history" style="margin-top: 10px; max-height: 180px;"></div>
@@ -1163,6 +1164,7 @@
           <input id="bulkHolidayLimitInput" class="calendar-limit-input" type="number" min="0" step="1" placeholder="주말/공휴일 제한갯수" style="width: 160px;" />
           <button id="applyMonthLimitBtn" class="btn-sm" type="button">전체 기본적용</button>
           <button id="assignDayoffBtn" class="btn-sm" type="button">작가휴무지정</button>
+          <button id="emergencyAddLimitBtn" class="btn-sm" type="button">긴급추가</button>
         </div>
         <div id="calendarGrid" class="calendar-grid"></div>
         <div id="dayoffRequestHistory" class="customer-alert-history" style="margin-top: 10px; max-height: 180px;"></div>
@@ -1262,6 +1264,7 @@
       const STORAGE_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
+      const STORAGE_EMERGENCY_LIMIT_ADDITIONS = "scheduleSiteEmergencyLimitAdditions";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
@@ -1294,6 +1297,7 @@
         STORAGE_CANCELED_SCHEDULES,
         STORAGE_WRITER_SCHEDULES,
         STORAGE_DAILY_LIMITS,
+        STORAGE_EMERGENCY_LIMIT_ADDITIONS,
         STORAGE_DAYOFF_DEDUCTIONS,
         STORAGE_DAYOFF_REQUESTS,
         STORAGE_DAYOFF_ALERT_READ_IDS,
@@ -1310,6 +1314,7 @@
         [STORAGE_CANCELED_SCHEDULES]: "[]",
         [STORAGE_WRITER_SCHEDULES]: "[]",
         [STORAGE_DAILY_LIMITS]: "{}",
+        [STORAGE_EMERGENCY_LIMIT_ADDITIONS]: "{}",
         [STORAGE_DAYOFF_DEDUCTIONS]: "{}",
         [STORAGE_DAYOFF_REQUESTS]: "[]",
         [STORAGE_DAYOFF_ALERT_READ_IDS]: "[]",
@@ -2388,6 +2393,7 @@
       const bulkHolidayLimitInputEl = document.getElementById("bulkHolidayLimitInput");
       const applyMonthLimitBtnEl = document.getElementById("applyMonthLimitBtn");
       const assignDayoffBtnEl = document.getElementById("assignDayoffBtn");
+      const emergencyAddLimitBtnEl = document.getElementById("emergencyAddLimitBtn");
       const calendarGridEl = document.getElementById("calendarGrid");
       const dayoffRequestHistoryEl = document.getElementById("dayoffRequestHistory");
       const calendarPrevBtnEl = document.getElementById("calendarPrevBtn");
@@ -2444,6 +2450,7 @@
       const inlineBulkHolidayLimitInputEl = document.getElementById("inlineBulkHolidayLimitInput");
       const inlineApplyMonthLimitBtnEl = document.getElementById("inlineApplyMonthLimitBtn");
       const inlineAssignDayoffBtnEl = document.getElementById("inlineAssignDayoffBtn");
+      const inlineEmergencyAddLimitBtnEl = document.getElementById("inlineEmergencyAddLimitBtn");
       const inlineCalendarGridEl = document.getElementById("inlineCalendarGrid");
       const inlineDayoffRequestHistoryEl = document.getElementById("inlineDayoffRequestHistory");
       const inlineCalendarPrevBtnEl = document.getElementById("inlineCalendarPrevBtn");
@@ -3801,6 +3808,13 @@
         return getDefaultDailyLimit(dateKey);
       }
 
+      function getEmergencyLimitAddition(dateKey) {
+        const additions = readStorageObject(STORAGE_EMERGENCY_LIMIT_ADDITIONS);
+        const raw = Number(additions[String(dateKey || "").trim()]);
+        if (Number.isNaN(raw) || raw < 0) return 0;
+        return Math.floor(raw);
+      }
+
       function getDayoffDeduction(dateKey) {
         const deductions = readStorageObject(STORAGE_DAYOFF_DEDUCTIONS);
         const legacyRaw = Number(deductions[dateKey]);
@@ -3976,7 +3990,37 @@
       }
 
       function getEffectiveDailyLimit(dateKey) {
-        return Math.max(0, getDailyLimitBase(dateKey) - getDayoffDeduction(dateKey));
+        return Math.max(0, getDailyLimitBase(dateKey) + getEmergencyLimitAddition(dateKey) - getDayoffDeduction(dateKey));
+      }
+
+      function addEmergencyLimitByAdmin() {
+        const defaultDate = getDefaultDayoffDateForAdmin();
+        const pickedDateInput = prompt("긴급추가 날짜를 입력하세요. (YYYY-MM-DD)", defaultDate);
+        if (!pickedDateInput) return;
+        const pickedDate = String(pickedDateInput || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) {
+          alert("날짜 형식은 YYYY-MM-DD 로 입력해주세요.");
+          return;
+        }
+        const countInput = prompt("해당 날짜에 추가할 촬영 건수를 입력하세요. (1 이상 정수)", "1");
+        if (countInput === null) return;
+        const addCount = Math.floor(Number(String(countInput || "").trim()));
+        if (!Number.isFinite(addCount) || addCount <= 0) {
+          alert("추가 건수는 1 이상의 정수만 가능합니다.");
+          return;
+        }
+
+        const additions = readStorageObject(STORAGE_EMERGENCY_LIMIT_ADDITIONS);
+        const previous = Math.max(0, Math.floor(Number(additions[pickedDate]) || 0));
+        additions[pickedDate] = previous + addCount;
+        localStorage.setItem(STORAGE_EMERGENCY_LIMIT_ADDITIONS, JSON.stringify(additions));
+
+        renderScheduleCalendar();
+        renderInlineScheduleCalendarFromFilters();
+        renderList();
+
+        const finalLimit = getEffectiveDailyLimit(pickedDate);
+        alert(`${pickedDate} 긴급추가 ${addCount}건이 적용되었습니다. (누적 +${additions[pickedDate]}건 / 최종 제한 ${finalLimit}건)`);
       }
 
       function getActiveScheduleCountByDate(dateKey, excludeIndex = -1) {
@@ -5414,6 +5458,7 @@
             .filter((item) => item.date === dateKey)
             .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
           const dailyLimit = getEffectiveDailyLimit(dateKey);
+          const emergencyAddition = getEmergencyLimitAddition(dateKey);
           const baseLimit = getDailyLimitBase(dateKey);
           const deduction = getDayoffDeduction(dateKey);
           const groupedByWriter = new Map();
@@ -5449,7 +5494,7 @@
             <div class="calendar-day ${isSelected ? "selected" : ""}" data-date="${dateKey}">
               <div class="calendar-day-head">
                 <span class="calendar-day-number ${isRedDate ? "weekend" : ""}">${day}일${isToday ? '<span class="calendar-today-badge">오늘</span>' : ""}</span>
-                <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건</span>
+                <span class="calendar-day-count">${daySchedules.length}/${dailyLimit}건${emergencyAddition > 0 ? `(+${emergencyAddition})` : ""}</span>
               </div>
               ${companies || '<div class="calendar-company">예약 없음</div>'}
               ${dayoffWriterBadges ? `<div class="calendar-dayoff-row">${dayoffWriterBadges}</div>` : ""}
@@ -8158,6 +8203,7 @@
       });
       applyMonthLimitBtnEl.addEventListener("click", applyGlobalLimitConfig);
       assignDayoffBtnEl?.addEventListener("click", assignWriterDayoffByAdmin);
+      emergencyAddLimitBtnEl?.addEventListener("click", addEmergencyLimitByAdmin);
       inlineCalendarPrevBtnEl?.addEventListener("click", () => {
         const selectedYear = Number(yearFilterEl.value) || currentYear;
         const selectedMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
@@ -8192,6 +8238,7 @@
         applyGlobalLimitConfigByInputs(inlineBulkWeekdayLimitInputEl, inlineBulkHolidayLimitInputEl);
       });
       inlineAssignDayoffBtnEl?.addEventListener("click", assignWriterDayoffByAdmin);
+      inlineEmergencyAddLimitBtnEl?.addEventListener("click", addEmergencyLimitByAdmin);
       inlineCalendarGridEl?.addEventListener("click", (event) => {
         const cell = event.target.closest(".calendar-day[data-date]");
         if (!cell) return;
@@ -9576,6 +9623,7 @@
         }
         if (
           event.key === STORAGE_DAILY_LIMITS ||
+          event.key === STORAGE_EMERGENCY_LIMIT_ADDITIONS ||
           event.key === STORAGE_LIMIT_CONFIG ||
           event.key === STORAGE_DAYOFF_DEDUCTIONS ||
           event.key === STORAGE_DAYOFF_REQUESTS ||
