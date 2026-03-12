@@ -1301,6 +1301,7 @@
       const STORAGE_COUPON_LOWLIST_EXCLUDED = "scheduleSiteCouponLowlistExcluded";
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
       const STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED = "scheduleSiteMasterAccountBootstrapV1";
+      const STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED_V2 = "scheduleSiteMasterAccountBootstrapV2";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
@@ -2877,6 +2878,31 @@
         localStorage.setItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED, "1");
         if (!changed) return false;
         void persistMasterAccountMap(masterMap, true);
+        return true;
+      }
+      function bootstrapMasterAccountsFromCurrentCustomersV2() {
+        if (localStorage.getItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED_V2) === "1") return false;
+        const customers = readStorageArray(STORAGE_CUSTOMERS)
+          .map((user) => ({
+            ...user,
+            __createdAt: new Date(String(user?.createdAt || "9999-12-31T23:59:59")).getTime()
+          }))
+          .sort((a, b) => {
+            const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+            const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+            return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+          });
+        const nextMap = {};
+        customers.forEach((user) => {
+          const companyCode = normalizeCompanyCode(user?.companyCode);
+          const userId = String(user?.id || "").trim();
+          if (!companyCode || !userId) return;
+          // 코드별 본계정은 1개만 가능하므로 현재 등록계정 기준 첫 계정을 본으로 고정.
+          if (!nextMap[companyCode]) nextMap[companyCode] = userId;
+        });
+        localStorage.setItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED_V2, "1");
+        if (!Object.keys(nextMap).length) return false;
+        void persistMasterAccountMap(nextMap, true);
         return true;
       }
 
@@ -10353,6 +10379,7 @@
       void pullSharedMasterAccountMapAndApply();
       hydrateFromCustomerPageStorage();
       bootstrapMasterAccountsForExistingCompanies();
+      bootstrapMasterAccountsFromCurrentCustomersV2();
       loadPhotographerProfilesFromStorage();
       void pullWritersFromSupabaseAndRefresh();
       void pullPaymentsFromSupabaseAndApply();
@@ -10440,6 +10467,7 @@
         void pullSharedMasterAccountMapAndApply();
         hydrateFromCustomerPageStorage();
         bootstrapMasterAccountsForExistingCompanies();
+        bootstrapMasterAccountsFromCurrentCustomersV2();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
         renderPhotographers();
@@ -10465,6 +10493,7 @@
         void pullSharedMasterAccountMapAndApply();
         hydrateFromCustomerPageStorage();
         bootstrapMasterAccountsForExistingCompanies();
+        bootstrapMasterAccountsFromCurrentCustomersV2();
         loadPhotographerProfilesFromStorage();
         hydrateFromWriterPageStorage();
         renderPhotographers();
