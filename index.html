@@ -1009,7 +1009,6 @@
               <span id="monthNewCount" class="count">이번달 접수 0건</span>
               <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
               <button id="markAllCustomerAlertsReadBtn" class="btn-sm" type="button">모두확인</button>
-              <button id="previousScheduleHistoryBtn" class="btn-sm" type="button">이전기록</button>
               <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
               <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
               <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
@@ -4182,15 +4181,16 @@
 
       function renderCustomerUpdateNotices() {
         const alerts = getMergedAdminAlerts();
-        const unreadCount = alerts.filter((item) => !item.read).length;
-        customerAlertCountEl.textContent = `미확인 알림 총 ${unreadCount}개`;
+        const todayRelevantAlerts = alerts.filter((item) => isTodayNewOrChangedAlert(item));
+        const unreadCount = todayRelevantAlerts.filter((item) => !item.read).length;
+        customerAlertCountEl.textContent = `오늘 신규/변경 알림 ${unreadCount}개`;
         if (markAllCustomerAlertsReadBtnEl) {
           markAllCustomerAlertsReadBtnEl.disabled = unreadCount === 0;
         }
-        const visibleAlerts = alerts.filter((item) => !item.read);
+        const visibleAlerts = todayRelevantAlerts.filter((item) => !item.read);
 
         if (visibleAlerts.length === 0) {
-          customerAlertBoxEl.innerHTML = '<div>알림이 없습니다.</div>';
+          customerAlertBoxEl.innerHTML = '<div>오늘 신규/변경 알림이 없습니다.</div>';
           return;
         }
 
@@ -4199,7 +4199,9 @@
             const message = buildCustomerAlertMessage(item);
             return `
               <div class="customer-alert-row">
-                <span>${escapeHtml(message)}</span>
+                <button class="btn-sm" style="flex: 1; text-align: left; justify-content: flex-start;" type="button" data-action="openCustomerAlertDetail" data-alert-id="${escapeHtml(
+                  item.id || ""
+                )}" data-alert-source="${escapeHtml(item.source || "customer")}">${escapeHtml(message)}</button>
                 <button class="btn-sm" type="button" data-action="markCustomerAlertRead" data-alert-id="${escapeHtml(item.id || "")}" data-alert-source="${escapeHtml(item.source || "customer")}">확인</button>
               </div>
             `;
@@ -4263,6 +4265,72 @@
           return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, 차감 ${amount})`;
         }
         return `${companyText} 업체가 ${dateText} ${timeText} 스케줄을 수정했습니다.`;
+      }
+
+      function isTodayNewOrChangedAlert(item) {
+        if (!item || item.read) return false;
+        const type = String(item.type || "").trim();
+        if (!["schedule_create", "new_company_schedule", "admin_time_update", "admin_date_update"].includes(type)) return false;
+        const createdDate = String(item.createdAt || "").slice(0, 10);
+        const todayKey = new Date().toISOString().slice(0, 10);
+        return createdDate === todayKey;
+      }
+
+      function findAlertScheduleItem(item) {
+        const targetScheduleId = String(item?.customerScheduleId || item?.scheduleId || "").trim();
+        const pool = [
+          ...data,
+          ...onHoldPayments,
+          ...refundPayments,
+          ...readStorageArray(STORAGE_CUSTOMER_SCHEDULES),
+          ...readStorageArray(STORAGE_ADMIN_SCHEDULES)
+        ];
+        if (targetScheduleId) {
+          const byId = pool.find((row) => String(row?.customerScheduleId || row?.scheduleId || "").trim() === targetScheduleId);
+          if (byId) return byId;
+        }
+        const companyText = String(item?.company || "").trim();
+        const dateText = String(item?.date || "").trim();
+        const timeText = String(item?.time || "").trim();
+        return (
+          pool.find(
+            (row) =>
+              String(row?.company || "").trim() === companyText &&
+              String(row?.date || "").trim() === dateText &&
+              String(row?.time || "").trim() === timeText
+          ) || null
+        );
+      }
+
+      function buildCustomerAlertDetailMessage(item) {
+        if (!item) return "알림 정보를 찾지 못했습니다.";
+        const title = buildCustomerAlertMessage(item);
+        if (item.type === "dayoff_request") {
+          return [
+            title,
+            "",
+            `작가명: ${item.writerName || "-"}`,
+            `아이디: ${item.writerId || "-"}`,
+            `휴무일: ${item.date || "-"}`,
+            `차감회차: ${Math.max(0, Number(item.amount) || 0)}`
+          ].join("\n");
+        }
+        const scheduleItem = findAlertScheduleItem(item);
+        if (!scheduleItem) {
+          return [title, "", "상세 스케줄을 찾지 못했습니다."].join("\n");
+        }
+        return [
+          title,
+          "",
+          `업체명: ${scheduleItem.company || "-"}`,
+          `날짜: ${scheduleItem.date || "-"}`,
+          `시간: ${scheduleItem.time || "-"}`,
+          `장소: ${scheduleItem.address || "-"}`,
+          `평수: ${scheduleItem.pyeong || "-"}`,
+          `구성: ${scheduleItem.composition || "-"}`,
+          `작가: ${scheduleItem.name || "-"}`,
+          `메모: ${scheduleItem.memo || "-"}`
+        ].join("\n");
       }
 
       function renderCustomerStatsDashboard() {
@@ -7823,6 +7891,21 @@
       });
 
       customerAlertBoxEl.addEventListener("click", (event) => {
+        const detailButton = event.target.closest("button[data-action='openCustomerAlertDetail'][data-alert-id]");
+        if (detailButton) {
+          const alertId = detailButton.dataset.alertId;
+          const source = detailButton.dataset.alertSource || "customer";
+          const alerts = getMergedAdminAlerts();
+          const targetAlert = alerts.find(
+            (item) => String(item?.id || "").trim() === String(alertId || "").trim() && String(item?.source || "customer") === source
+          );
+          if (!targetAlert) {
+            alert("알림 상세정보를 찾지 못했습니다.");
+            return;
+          }
+          alert(buildCustomerAlertDetailMessage(targetAlert));
+          return;
+        }
         const button = event.target.closest("button[data-action='markCustomerAlertRead'][data-alert-id]");
         if (!button) return;
         const alertId = button.dataset.alertId;
@@ -8040,7 +8123,7 @@
           writerHistoryModalEl.classList.add("hidden");
         }
       });
-      previousScheduleHistoryBtnEl.addEventListener("click", () => {
+      previousScheduleHistoryBtnEl?.addEventListener("click", () => {
         renderPreviousScheduleHistory();
         previousScheduleHistoryModalEl.classList.remove("hidden");
       });
