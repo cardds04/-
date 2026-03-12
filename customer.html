@@ -1014,17 +1014,37 @@
       }
       async function syncCustomerSchedulesTable(user) {
         if (!USE_SUPABASE_SYNC || !user) return;
-        const companyName = normalize(user.company);
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
+        const companyName = normalize(resolvedCompanyName || user.company);
+        const legacyCompanyName = normalize(user.company);
         const allRows = readStorageArray(STORAGE_SCHEDULES);
         let changed = false;
         const normalizedRows = allRows.map((row) => {
-          const sameCompany = normalize(row?.company).toLowerCase() === companyName.toLowerCase();
+          const rowCompanyName = normalize(row?.company).toLowerCase();
+          const rowCompanyCode = normalize(row?.companyCode).toLowerCase();
+          const sameByCode = Boolean(effectiveCompanyCode) && Boolean(rowCompanyCode) && rowCompanyCode === effectiveCompanyCode.toLowerCase();
+          const sameByName =
+            rowCompanyName === companyName.toLowerCase() || rowCompanyName === legacyCompanyName.toLowerCase();
+          const sameCompany = sameByCode || sameByName;
           const rowSource = normalize(row?.source).toLowerCase();
           if (!(sameCompany && rowSource === "customer")) return row;
           const ensuredId = ensureScheduleUuid(row);
-          if (normalize(row?.customerScheduleId) !== ensuredId || rowSource !== "customer") {
+          const nextRow = {
+            ...row,
+            customerScheduleId: ensuredId,
+            source: "customer",
+            company: companyName,
+            companyCode: effectiveCompanyCode || normalize(row?.companyCode)
+          };
+          if (
+            normalize(row?.customerScheduleId) !== ensuredId ||
+            normalize(row?.company) !== companyName ||
+            normalize(row?.companyCode) !== normalize(nextRow.companyCode) ||
+            rowSource !== "customer"
+          ) {
             changed = true;
-            return { ...row, customerScheduleId: ensuredId, source: "customer" };
+            return nextRow;
           }
           return row;
         });
@@ -1032,7 +1052,12 @@
           writeStorageArray(STORAGE_SCHEDULES, normalizedRows);
         }
         const userRows = normalizedRows.filter((row) => {
-          const sameCompany = normalize(row?.company).toLowerCase() === companyName.toLowerCase();
+          const rowCompanyName = normalize(row?.company).toLowerCase();
+          const rowCompanyCode = normalize(row?.companyCode).toLowerCase();
+          const sameByCode = Boolean(effectiveCompanyCode) && Boolean(rowCompanyCode) && rowCompanyCode === effectiveCompanyCode.toLowerCase();
+          const sameByName =
+            rowCompanyName === companyName.toLowerCase() || rowCompanyName === legacyCompanyName.toLowerCase();
+          const sameCompany = sameByCode || sameByName;
           const rowSource = normalize(row?.source).toLowerCase();
           return sameCompany && rowSource === "customer";
         });
@@ -1263,6 +1288,18 @@
         const companies = readStorageArray(STORAGE_COMPANIES);
         const matched = companies.find((item) => normalize(item?.name).toLowerCase() === userCompanyName);
         return normalize(matched?.companyCode || matched?.code);
+      }
+      function resolveRegisteredCompanyNameForUser(user, companyCode = "") {
+        const fallbackName = normalize(user?.company);
+        const normalizedCode = normalize(companyCode);
+        if (!normalizedCode) return fallbackName;
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const matched = companies.find(
+          (item) =>
+            normalize(item?.companyCode || item?.code).toLowerCase() === normalizedCode.toLowerCase() &&
+            normalize(item?.name)
+        );
+        return normalize(matched?.name) || fallbackName;
       }
 
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
@@ -2064,6 +2101,8 @@
           renderAuthState();
           return;
         }
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const scheduleCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
 
         const year = Number(scheduleYearEl.value);
         const month = Number(scheduleMonthEl.value);
@@ -2093,7 +2132,7 @@
           return;
         }
 
-        const isNewCompany = ensureCompanyStored(user.company, user.phone, user.companyCode);
+        const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
         const schedules = readStorageArray(STORAGE_SCHEDULES);
         const createdSchedule = {
           customerScheduleId: buildClientUuid(),
@@ -2101,8 +2140,8 @@
           time,
           timePreference,
           name: "작가미정",
-          company: user.company,
-          companyCode: normalize(user.companyCode),
+          company: scheduleCompanyName,
+          companyCode: normalize(effectiveCompanyCode),
           place,
           pyeong: normalize(document.getElementById("schedulePyeong").value),
           jointCode: normalize(document.getElementById("scheduleJointCode").value),
@@ -2125,7 +2164,7 @@
         writeStorageArray(STORAGE_SCHEDULES, schedules);
         customerScheduleSubmitting = true;
         try {
-          await syncCustomerSchedulesTable(user);
+          await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
           queueCustomerTablePull();
         } catch (error) {
           console.error("[TABLE][customer] schedule create sync 실패", error);
@@ -2144,7 +2183,7 @@
         createAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           type: "schedule_create",
-          company: user.company,
+          company: scheduleCompanyName,
           date,
           time,
           createdAt: new Date().toISOString(),
@@ -2156,7 +2195,7 @@
           alerts.unshift({
             id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             type: "new_company_schedule",
-            company: user.company,
+            company: scheduleCompanyName,
             date,
             time,
             createdAt: new Date().toISOString(),
