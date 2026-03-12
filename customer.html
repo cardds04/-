@@ -187,8 +187,10 @@
                   <button class="compose-btn active" type="button" data-compose="미선택">미선택</button>
                   <button class="compose-btn" type="button" data-compose="사진만">사진만</button>
                   <button class="compose-btn" type="button" data-compose="사진영상 둘다">사진영상둘다</button>
+                  <button class="compose-btn" id="taxInvoiceRequestBtn" type="button">세금계산서신청(+10%)</button>
                 </div>
                 <input id="scheduleComposition" type="hidden" value="미선택" />
+                <input id="scheduleTaxInvoiceRequested" type="hidden" value="off" />
               </div>
               <p id="expectedPaymentText" class="hint"><strong>결제예정금액:</strong> -</p>
               <button class="btn" type="submit">스케줄 등록</button>
@@ -847,6 +849,8 @@
       const schedulePyeongEl = document.getElementById("schedulePyeong");
       const pyeongButtonsEl = document.getElementById("pyeongButtons");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
+      const taxInvoiceRequestBtnEl = document.getElementById("taxInvoiceRequestBtn");
+      const scheduleTaxInvoiceRequestedEl = document.getElementById("scheduleTaxInvoiceRequested");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
       const closedDatesNoticeBoxEl = document.getElementById("closedDatesNoticeBox");
       const composeButtonsEl = document.getElementById("composeButtons");
@@ -1290,7 +1294,7 @@
         if (!Number.isFinite(numeric) || numeric <= 0) return 0;
         return hasManWon ? Math.round(numeric * 10000) : Math.round(numeric);
       }
-      function calculateExpectedPaymentAmount(pyeong, composition) {
+      function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false) {
         const areaRaw = normalize(pyeong);
         const area =
           areaRaw === "45평이상" || areaRaw === "95평이상" || areaRaw === "145평이상"
@@ -1307,11 +1311,24 @@
         };
         const row = priceTable[area];
         if (!row) return null;
-        return Number(row[compose] || 0) || null;
+        const baseAmount = Number(row[compose] || 0) || null;
+        if (!baseAmount) return null;
+        if (!taxInvoiceRequested) return baseAmount;
+        return Math.round(baseAmount * 1.1);
+      }
+      function isTaxInvoiceRequested() {
+        return normalize(scheduleTaxInvoiceRequestedEl?.value).toLowerCase() === "on";
+      }
+      function setTaxInvoiceRequested(requested) {
+        if (scheduleTaxInvoiceRequestedEl) {
+          scheduleTaxInvoiceRequestedEl.value = requested ? "on" : "off";
+        }
+        taxInvoiceRequestBtnEl?.classList.toggle("active", requested);
+        updateExpectedPaymentText();
       }
       function updateExpectedPaymentText() {
         if (!expectedPaymentTextEl) return;
-        const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value);
+        const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, isTaxInvoiceRequested());
         expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
       }
 
@@ -2251,7 +2268,8 @@
           timePreference === "any" || timePreference === "other"
             ? "시간상관없음"
             : `${selectedHour === "any-time" ? "09" : selectedHour}:00`;
-        const expectedAmount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
+        const taxInvoiceRequested = isTaxInvoiceRequested();
+        const expectedAmount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
         const place = normalize(document.getElementById("schedulePlace").value);
         if (!place) return;
         if (schedulePyeongEl.value === "미선택") {
@@ -2289,6 +2307,7 @@
           paymentPayer: "",
           paymentAmount: expectedAmount ? String(expectedAmount) : "",
           paymentDate: "",
+          taxInvoiceRequested,
           couponUsed: false,
           source: "customer",
           adminTimeUpdated: false,
@@ -2345,6 +2364,7 @@
         setupDateTimeSelectors();
         setSelectedPyeong("미선택");
         setSelectedComposition("미선택");
+        setTaxInvoiceRequested(false);
         updateExpectedPaymentText();
         renderPaymentSummary();
         alert("스케줄 등록 완료! 관리자 페이지에서 바로 확인할 수 있습니다.");
@@ -2532,6 +2552,9 @@
         if (!button) return;
         setSelectedComposition(button.dataset.compose || "미선택");
       });
+      taxInvoiceRequestBtnEl?.addEventListener("click", () => {
+        setTaxInvoiceRequested(!isTaxInvoiceRequested());
+      });
       pyeongButtonsEl?.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-pyeong]");
         if (!button) return;
@@ -2563,6 +2586,7 @@
       updateExpectedPaymentText();
 
       setupDateTimeSelectors();
+      setTaxInvoiceRequested(false);
       switchAuthTab("login");
       renderAuthState();
       void pullSharedMasterAccountMapAndApply().then(() => {
