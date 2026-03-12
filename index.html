@@ -9576,6 +9576,7 @@
         }
 
         const item = {
+          customerScheduleId: buildClientUuid(),
           date: pickedDate || new Date().toISOString().slice(0, 10),
           time: pickedTime,
           timePreference: pickedTimePreference,
@@ -9598,6 +9599,18 @@
         };
 
         data.unshift(item);
+        const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
+        alerts.unshift({
+          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "schedule_create",
+          scheduleId: String(item.customerScheduleId || "").trim(),
+          company: item.company || "",
+          date: item.date || "",
+          time: item.time || "",
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+        localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
         formEl.reset();
         const now = new Date();
         yearEl.value = String(now.getFullYear());
@@ -9607,6 +9620,8 @@
         if (scheduleMinuteRegisterEl) scheduleMinuteRegisterEl.value = "00";
         if (scheduleTimePreferenceRegisterEl) scheduleTimePreferenceRegisterEl.value = "exact";
         setScheduleTimeUndecided(false);
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
         renderList();
         queuePaymentsSync();
         return true;
