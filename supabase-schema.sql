@@ -228,3 +228,41 @@ $$;
 
 create unique index if not exists writers_login_id_unique
   on public.writers (login_id);
+
+-- ------------------------------------------------------------
+-- 고객 접수 이력(append-only) 보존 테이블
+-- ------------------------------------------------------------
+create table if not exists public.customer_submission_receipts (
+  receipt_id text primary key,
+  schedule_id text,
+  customer_id text,
+  company_name text,
+  schedule_date text,
+  schedule_time text,
+  place text,
+  source text not null default 'customer',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_customer_submission_receipts_created_at
+  on public.customer_submission_receipts (created_at desc);
+
+create index if not exists idx_customer_submission_receipts_schedule_id
+  on public.customer_submission_receipts (schedule_id);
+
+alter table public.customer_submission_receipts enable row level security;
+
+drop policy if exists "public_read_customer_submission_receipts" on public.customer_submission_receipts;
+create policy "public_read_customer_submission_receipts"
+on public.customer_submission_receipts
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "public_write_customer_submission_receipts" on public.customer_submission_receipts;
+create policy "public_write_customer_submission_receipts"
+on public.customer_submission_receipts
+for insert
+to anon, authenticated
+with check (true);

@@ -249,6 +249,8 @@
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
+      const STORAGE_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
+      const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
@@ -267,6 +269,7 @@
         "scheduleSiteCustomerCompanies",
         "scheduleSiteCustomerSchedules",
         "scheduleSiteCustomerAlerts",
+        "scheduleSiteCustomerSubmissionLogs",
         "scheduleSiteCustomers",
         "scheduleSiteCustomerLogins",
         "scheduleSiteAdminCompanies",
@@ -286,6 +289,7 @@
         scheduleSiteCustomerCompanies: "[]",
         scheduleSiteCustomerSchedules: "[]",
         scheduleSiteCustomerAlerts: "[]",
+        scheduleSiteCustomerSubmissionLogs: "[]",
         scheduleSiteCustomers: "[]",
         scheduleSiteCustomerLogins: "[]",
         scheduleSiteAdminCompanies: "[]",
@@ -899,6 +903,40 @@
 
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
+      }
+      function appendLocalSubmissionReceipt(receipt) {
+        const logs = readStorageArray(STORAGE_SUBMISSION_LOGS);
+        logs.unshift(receipt);
+        writeStorageArray(STORAGE_SUBMISSION_LOGS, logs.slice(0, 500));
+      }
+      async function appendSubmissionReceiptToSupabase(receipt) {
+        if (!USE_SUPABASE_SYNC || !receipt) return;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?on_conflict=receipt_id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify([
+            {
+              receipt_id: String(receipt.receiptId || "").trim(),
+              schedule_id: String(receipt.scheduleId || "").trim() || null,
+              customer_id: String(receipt.customerId || "").trim() || null,
+              company_name: String(receipt.company || "").trim() || null,
+              schedule_date: String(receipt.date || "").trim() || null,
+              schedule_time: String(receipt.time || "").trim() || null,
+              place: String(receipt.place || "").trim() || null,
+              source: "customer",
+              payload: receipt
+            }
+          ])
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn("[SUBMISSION_RECEIPT] remote insert skipped", errorText);
+        }
       }
       function writeStorageArraySilently(key, items) {
         originalSetItem(key, JSON.stringify(items));
@@ -2538,6 +2576,19 @@
           return;
         }
         customerScheduleSubmitting = false;
+        const submissionReceipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          scheduleId: String(createdSchedule.customerScheduleId || "").trim(),
+          customerId: String(user?.id || "").trim(),
+          company: scheduleCompanyName,
+          date,
+          time,
+          place,
+          createdAt: new Date().toISOString(),
+          status: "accepted"
+        };
+        appendLocalSubmissionReceipt(submissionReceipt);
+        void appendSubmissionReceiptToSupabase(submissionReceipt);
         const createAlerts = readStorageArray(STORAGE_ALERTS);
         createAlerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2569,7 +2620,7 @@
         setTaxInvoiceRequested(false);
         updateExpectedPaymentText();
         renderPaymentSummary();
-        alert("스케줄 등록 완료! 관리자 페이지에서 바로 확인할 수 있습니다.");
+        alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
       });
 
       statusListEl.addEventListener("click", async (event) => {
