@@ -251,6 +251,10 @@
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
       const STORAGE_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
+      const STORAGE_AUTO_BACKUP_ENTRIES = "scheduleSiteAutoBackupEntriesV1";
+      const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000;
+      const AUTO_BACKUP_IDLE_STOP_MS = 10 * 60 * 1000;
+      const AUTO_BACKUP_KEEP_COUNT = 20;
       const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
@@ -889,6 +893,8 @@
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
+      var activityAutoBackupTimer = null;
+      var lastDbMutationAtMs = 0;
 
       function readStorageArray(key) {
         try {
@@ -903,6 +909,33 @@
 
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
+      }
+      function saveActivityBackupSnapshot(reason = "customer_mutation") {
+        const entries = readStorageArray(STORAGE_AUTO_BACKUP_ENTRIES);
+        entries.unshift({
+          id: `auto-backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          reason: String(reason || "customer_mutation"),
+          createdAt: new Date().toISOString(),
+          payload: buildCurrentStateSnapshot()
+        });
+        writeStorageArray(STORAGE_AUTO_BACKUP_ENTRIES, entries.slice(0, AUTO_BACKUP_KEEP_COUNT));
+      }
+      function markDbMutationActivity(reason = "customer_mutation") {
+        lastDbMutationAtMs = Date.now();
+        if (activityAutoBackupTimer) return;
+        activityAutoBackupTimer = setInterval(() => {
+          const idleMs = Date.now() - lastDbMutationAtMs;
+          if (idleMs >= AUTO_BACKUP_IDLE_STOP_MS) {
+            clearInterval(activityAutoBackupTimer);
+            activityAutoBackupTimer = null;
+            return;
+          }
+          try {
+            saveActivityBackupSnapshot(reason);
+          } catch (error) {
+            console.error("[AUTO_BACKUP][customer] 저장 실패", error);
+          }
+        }, AUTO_BACKUP_INTERVAL_MS);
       }
       function appendLocalSubmissionReceipt(receipt) {
         const logs = readStorageArray(STORAGE_SUBMISSION_LOGS);
@@ -1111,6 +1144,7 @@
       }
       async function syncCustomersTableFromStorage() {
         if (!USE_SUPABASE_SYNC) return;
+        markDbMutationActivity("customer_account_mutation");
         const rows = readStorageArray(STORAGE_CUSTOMERS)
           .map((item) => ({
             login_id: String(item?.id || "").trim(),
@@ -1137,6 +1171,7 @@
       }
       async function syncCompaniesTableFromStorage() {
         if (!USE_SUPABASE_SYNC) return;
+        markDbMutationActivity("company_mutation");
         const rows = readStorageArray(STORAGE_COMPANIES)
           .map((item) => ({
             name: String(item?.name || "").trim(),
@@ -1171,6 +1206,7 @@
       }
       async function syncCustomerSchedulesTable(user) {
         if (!USE_SUPABASE_SYNC || !user) return;
+        markDbMutationActivity("customer_schedule_mutation");
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
         const companyName = normalize(resolvedCompanyName || user.company);
@@ -1260,6 +1296,7 @@
       async function deleteCustomerScheduleFromSupabase(scheduleId) {
         const id = normalize(scheduleId);
         if (!USE_SUPABASE_SYNC || !isUuidLike(id)) return;
+        markDbMutationActivity("customer_schedule_delete");
         const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}&source=eq.customer`, {
           method: "DELETE",
           headers: {
