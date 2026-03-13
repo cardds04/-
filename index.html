@@ -3292,6 +3292,11 @@
         if (/^\d{2}-\d{2}$/.test(raw)) return raw;
         return "";
       }
+      function markScheduleRowDirty(item, reason = "schedule_mutation") {
+        if (!item || typeof item !== "object") return;
+        item.localUpdatedAt = new Date().toISOString();
+        markDbMutationActivity(reason);
+      }
       function buildPaymentRowsSnapshot() {
         const rows = [];
         data.forEach((item) => rows.push({ source: "active", item }));
@@ -3366,6 +3371,29 @@
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`payments 연관 삭제 실패 (${response.status}): ${errorText}`);
+        }
+        return true;
+      }
+      async function deleteScheduleFromSupabaseById(scheduleId) {
+        if (!USE_SUPABASE_SYNC) return false;
+        const targetId = String(scheduleId || "").trim();
+        if (!targetId) return false;
+        await guardUploadWithRemoteFreshness({
+          tableName: "schedules",
+          label: "스케줄",
+          lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
+        });
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(targetId)}`, {
+          method: "DELETE",
+          headers: {
+            Prefer: "return=minimal",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`schedules 삭제 실패 (${response.status}): ${errorText}`);
         }
         return true;
       }
@@ -3691,6 +3719,19 @@
         refundPayments.forEach((item) => pushRow(item, "refund"));
         return rows.filter((row) => row.date_key && row.company_name && row.place);
       }
+      function buildLocalScheduleUpdatedAtMap() {
+        const map = new Map();
+        const push = (item) => {
+          if (!item) return;
+          const id = ensureScheduleUuid(item);
+          if (!id) return;
+          map.set(id, String(item?.localUpdatedAt || "").trim());
+        };
+        data.forEach(push);
+        onHoldPayments.forEach(push);
+        refundPayments.forEach(push);
+        return map;
+      }
       function getSchedulesSnapshotSignature() {
         const rows = buildSchedulesSnapshotRows().map((row) => ({
           id: row.id || "",
@@ -3741,7 +3782,7 @@
           lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
         });
         const nextRows = buildSchedulesSnapshotRows();
-        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id`, {
+        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,updated_at`, {
           method: "GET",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -3754,10 +3795,25 @@
           throw new Error(`schedules id 조회 실패 (${remoteIdResponse.status}): ${errorText}`);
         }
         const remoteRows = await remoteIdResponse.json();
-        const remoteIds = (Array.isArray(remoteRows) ? remoteRows : [])
-          .map((row) => String(row?.id || "").trim())
-          .filter(Boolean);
-        if (nextRows.length) {
+        const remoteUpdatedAtMap = new Map(
+          (Array.isArray(remoteRows) ? remoteRows : [])
+            .map((row) => [String(row?.id || "").trim(), String(row?.updated_at || "").trim()])
+            .filter(([id]) => Boolean(id))
+        );
+        const localUpdatedAtMap = buildLocalScheduleUpdatedAtMap();
+        const safeUpsertRows = nextRows.filter((row) => {
+          const id = String(row?.id || "").trim();
+          if (!id) return false;
+          const remoteUpdatedAt = remoteUpdatedAtMap.get(id);
+          if (!remoteUpdatedAt) return true;
+          const localUpdatedAt = String(localUpdatedAtMap.get(id) || "").trim();
+          if (!localUpdatedAt) return false;
+          const localMs = new Date(localUpdatedAt).getTime();
+          const remoteMs = new Date(remoteUpdatedAt).getTime();
+          if (Number.isNaN(localMs) || Number.isNaN(remoteMs)) return false;
+          return localMs > remoteMs;
+        });
+        if (safeUpsertRows.length) {
           const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
             method: "POST",
             headers: {
@@ -3766,27 +3822,11 @@
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
-            body: JSON.stringify(nextRows)
+            body: JSON.stringify(safeUpsertRows)
           });
           if (!upsertResponse.ok) {
             const errorText = await upsertResponse.text();
             throw new Error(`schedules 업서트 실패 (${upsertResponse.status}): ${errorText}`);
-          }
-        }
-        const localIdSet = new Set(nextRows.map((row) => String(row?.id || "").trim()).filter(Boolean));
-        const deleteIds = remoteIds.filter((id) => !localIdSet.has(id));
-        if (!deleteIds.length) return;
-        for (const deleteId of deleteIds) {
-          const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(deleteId)}`, {
-            method: "DELETE",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            }
-          });
-          if (!deleteResponse.ok) {
-            const errorText = await deleteResponse.text();
-            throw new Error(`schedules 삭제 실패 (${deleteResponse.status}): ${errorText}`);
           }
         }
       }
@@ -5221,6 +5261,7 @@
 
       function syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate = "") {
         if (!item?.customerScheduleId) return;
+        markScheduleRowDirty(item, "schedule_mutation");
         const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         const target = schedules.find((row) => row.customerScheduleId === item.customerScheduleId);
         if (!target) return;
@@ -8433,6 +8474,7 @@
         item.paymentAmount = amount;
         item.paymentStatus = keepUnpaid ? "미입금" : amount && payer ? "입금완료" : "미입금";
         item.partialPaid = keepUnpaid;
+        markScheduleRowDirty(item, "payment_mutation");
         if (amount && amount !== "쿠폰사용") {
           item.couponUsed = false;
         }
@@ -8457,6 +8499,7 @@
         item.paymentStatus = String(backup.paymentStatus || "미입금");
         item.couponUsed = Boolean(backup.couponUsed);
         item.partialPaid = Boolean(backup.partialPaid);
+        markScheduleRowDirty(item, "payment_mutation");
         delete item.paymentUndo;
         editingPaymentIndex = null;
         couponApplyIndex = null;
@@ -8487,6 +8530,7 @@
         item.paymentPayer = "";
         item.paymentDate = "";
         item.paymentAmount = "";
+        markScheduleRowDirty(item, "payment_mutation");
         if (item.couponUsed) item.couponUsed = false;
         editingPaymentIndex = null;
         couponApplyIndex = null;
@@ -8531,6 +8575,7 @@
         item.paymentAmount = item.paymentAmount || "쿠폰사용";
         item.paymentPayer = item.paymentPayer || "쿠폰";
         item.partialPaid = false;
+        markScheduleRowDirty(item, "payment_mutation");
         if (!item.paymentDate) {
           const now = new Date();
           const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -8548,6 +8593,7 @@
       function cancelHoldSchedule(index) {
         const holdItem = onHoldPayments[index];
         if (!holdItem) return;
+        markScheduleRowDirty(holdItem, "payment_mutation");
 
         // 쿠폰으로 결제한 건은 1회 복구 후 보류 목록에서 제거
         if (holdItem.couponUsed) {
@@ -8583,6 +8629,7 @@
         const item = refundPayments[index];
         if (!item) return;
         item.refundChecked = !item.refundChecked;
+        markScheduleRowDirty(item, "payment_mutation");
         renderPaymentList();
         queuePaymentsSync();
       }
@@ -10445,6 +10492,7 @@
           item.writerPhone = photographerPhones[name] || "";
           item.writerCarNumber = photographerCarNumbers[name] || "";
         }
+        markScheduleRowDirty(item, "schedule_mutation");
         syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate);
 
         editingIndex = null;
@@ -10464,6 +10512,7 @@
         }
         item.time = `${hour}:${minute}`;
         item.timePreference = "exact";
+        markScheduleRowDirty(item, "schedule_mutation");
         syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate);
 
         editingDateIndex = null;
@@ -10522,6 +10571,9 @@
         renderList();
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
+        void deleteScheduleFromSupabaseById(deletedScheduleId).catch((error) => {
+          console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
+        });
         void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
           .then((deleted) => {
             if (!deleted) return;
@@ -10769,6 +10821,7 @@
 
         if (action === "quickComposition" && !Number.isNaN(index) && item) {
           item.composition = item.composition === "사진영상 둘다" ? "사진만" : "사진영상 둘다";
+          markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           return;
@@ -10777,6 +10830,7 @@
           const composition = String(button.dataset.composition || "").trim();
           if (!composition) return;
           item.composition = composition;
+          markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           return;
@@ -10797,6 +10851,7 @@
             item.name = selected;
             item.writerPhone = photographerPhones[selected] || "";
             item.writerCarNumber = photographerCarNumbers[selected] || "";
+            markScheduleRowDirty(item, "schedule_mutation");
             syncCustomerScheduleFromAdminEdit(item, item.time || "");
           }
           quickPhotographerPickerIndex = null;
@@ -10809,6 +10864,7 @@
           item.name = writerName;
           item.writerPhone = photographerPhones[writerName] || "";
           item.writerCarNumber = photographerCarNumbers[writerName] || "";
+          markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           return;
@@ -10999,6 +11055,7 @@
           time: pickedTime,
           timePreference: pickedTimePreference,
           requestedAt: new Date().toISOString(),
+          localUpdatedAt: new Date().toISOString(),
           name: "작가미정",
           writerPhone: "",
           writerCarNumber: "",
