@@ -2417,6 +2417,10 @@
         const month = Number(scheduleMonthEl.value);
         const day = Number(scheduleDayEl.value);
         const date = `${year}-${pad2(month)}-${pad2(day)}`;
+        if (isPastSchedule(date)) {
+          alert("오늘 이전 날짜는 접수할 수 없습니다.");
+          return;
+        }
         const timePreference = normalizeTimePreference(scheduleMinuteEl?.value);
         const selectedHour = String(scheduleHourEl.value || "09");
         const time =
