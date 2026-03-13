@@ -9694,19 +9694,31 @@
             return true;
           });
         }
-        if (targetIndex < 0) {
-          alert("해당 업체의 고객 계정을 찾지 못했습니다.");
-          return;
+        // 기존 계정이 없어도 여기서 신규 계정을 직접 생성할 수 있게 허용
+        if (targetIndex < 0 && existingIdIndex >= 0) {
+          targetIndex = existingIdIndex;
         }
-        if (existingIdIndex >= 0 && existingIdIndex !== targetIndex) {
+        if (existingIdIndex >= 0 && targetIndex >= 0 && existingIdIndex !== targetIndex) {
           alert("이미 존재하는 아이디입니다. 통합이 필요하면 '아이디이전(통합)'을 사용해주세요.");
           return;
         }
-        const oldId = String(users[targetIndex].id || "").trim();
-        users[targetIndex].id = newId;
-        users[targetIndex].password = newPassword;
-        users[targetIndex].company = companyName;
-        users[targetIndex].companyCode = newCompanyCode;
+        const oldId = targetIndex >= 0 ? String(users[targetIndex]?.id || "").trim() : "";
+        if (targetIndex < 0) {
+          users.unshift({
+            id: newId,
+            password: newPassword,
+            company: companyName,
+            companyCode: newCompanyCode,
+            phone: "-",
+            createdAt: new Date().toISOString()
+          });
+          targetIndex = 0;
+        } else {
+          users[targetIndex].id = newId;
+          users[targetIndex].password = newPassword;
+          users[targetIndex].company = companyName;
+          users[targetIndex].companyCode = newCompanyCode;
+        }
         if (newCompanyCode) {
           users.forEach((user, index) => {
             if (index === targetIndex) return;
