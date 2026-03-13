@@ -917,6 +917,14 @@
                 <span>🔢</span>
                 <input id="companyCodeInput" type="text" placeholder="업체 고유번호(직접입력)" />
               </div>
+              <div class="input-row">
+                <span>🆔</span>
+                <input id="companyAccountIdInput" type="text" placeholder="아이디(업체명과 동일)" readonly />
+              </div>
+              <div class="input-row">
+                <span>🔑</span>
+                <input id="companyAccountPasswordInput" type="text" placeholder="업체 로그인 비밀번호" required />
+              </div>
               <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                 <button class="btn-sm primary" type="submit">등록</button>
                 <button id="closeCompanyPanelBtn" class="btn-sm" type="button">완료</button>
@@ -2820,6 +2828,8 @@
       const companyNameInputEl = document.getElementById("companyNameInput");
       const companyPhoneInputEl = document.getElementById("companyPhoneInput");
       const companyCodeInputEl = document.getElementById("companyCodeInput");
+      const companyAccountIdInputEl = document.getElementById("companyAccountIdInput");
+      const companyAccountPasswordInputEl = document.getElementById("companyAccountPasswordInput");
       const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
       const couponCompanyAutocompleteListEl = document.getElementById("couponCompanyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
@@ -6940,7 +6950,6 @@
             return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
           });
         const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
-        const masterCompanyNameByCode = resolveMasterCompanyNameByCompanyCode(companyDefaultCode);
         const orderedMatchedUsers = [
           ...matchedUsers
             .sort((a, b) => {
@@ -6959,14 +6968,6 @@
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
-        const linkedAccountText = orderedMatchedUsers
-          .map((item) => {
-            const id = String(item?.id || "").trim();
-            if (!id) return "";
-            return escapeHtml(id);
-          })
-          .filter(Boolean)
-          .join(", ");
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -7044,16 +7045,10 @@
             <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
-              <button class="btn-sm" type="button" data-action="setMasterCompanyAccount" data-company-name="${escapeHtml(companyName)}">본계정지정</button>
+              <button class="btn-sm" type="button" data-action="transferCompanyAccountId" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">아이디이전(통합)</button>
             </div>
             <div style="font-size: 0.86rem; color: #5f6c88;">
               로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
-            </div>
-            <div style="font-size: 0.86rem; color: #5f6c88; margin-top: 4px;">
-              본업체: ${masterCompanyNameByCode ? `<span class="master-account-badge">본</span>${escapeHtml(masterCompanyNameByCode)}` : "-"}
-            </div>
-            <div style="font-size: 0.86rem; color: #5f6c88; margin-top: 4px;">
-              연결아이디: ${linkedAccountText || "-"}
             </div>
           </div>
           <table class="payment-table" style="margin-top: 0;">
@@ -9574,78 +9569,110 @@
         const passwordInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-password");
         const codeInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-code");
         const newId = String(idInputEl?.value || "").trim();
+        const newPassword = String(passwordInputEl?.value || "").trim();
         const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
-        if (action === "setMasterCompanyAccount") {
-          if (!newCompanyCode) {
-            alert("본업체로 지정할 업체 고유번호를 입력해주세요.");
+        if (action === "transferCompanyAccountId") {
+          const fromAccountId = String(button.dataset.accountId || "").trim();
+          if (!fromAccountId) {
+            alert("이전할 기존 아이디를 찾지 못했습니다.");
+            return;
+          }
+          if (!newId) {
+            alert("새 아이디를 입력해주세요.");
+            return;
+          }
+          if (!newPassword) {
+            alert("새 비밀번호를 입력해주세요.");
+            return;
+          }
+          if (fromAccountId.toLowerCase() === newId.toLowerCase()) {
+            alert("같은 아이디로는 이전할 수 없습니다.");
             return;
           }
           const users = readStorageArray(STORAGE_CUSTOMERS);
-          const masterCompanyName = normalizeCompanyName(companyName);
-          users.forEach((user) => {
-            if (normalizeCompanyCode(user?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
-            user.company = masterCompanyName;
-          });
-          localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
-          const masterMap = getLocalMasterAccountMap();
-          masterMap[newCompanyCode] = masterCompanyName;
-          await persistMasterAccountMap(masterMap, true);
-          const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
-          let customerSchedulesChanged = false;
-          customerSchedules.forEach((schedule) => {
-            if (normalizeCompanyCode(schedule?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
-            schedule.company = masterCompanyName;
-            customerSchedulesChanged = true;
-          });
-          if (customerSchedulesChanged) {
-            localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
+          const fromIndex = users.findIndex((user) => String(user?.id || "").trim().toLowerCase() === fromAccountId.toLowerCase());
+          if (fromIndex < 0) {
+            alert("기존 계정을 찾지 못했습니다.");
+            return;
           }
-          [data, onHoldPayments, refundPayments].forEach((rows) => {
-            rows.forEach((schedule) => {
-              if (normalizeCompanyCode(schedule?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
-              schedule.company = masterCompanyName;
-            });
-          });
-          try {
-            if (USE_SUPABASE_SYNC) {
-              const saveRows = users
-                .filter((user) => normalizeCompanyCode(user?.companyCode).toLowerCase() === newCompanyCode.toLowerCase())
-                .map((user) => ({
-                  login_id: String(user?.id || "").trim(),
-                  password: String(user?.password || "").trim(),
-                  company_name: String(user?.company || "").trim(),
-                  company_code: String(user?.companyCode || "").trim(),
-                  phone: String(user?.phone || "").trim()
-                }))
-                .filter((row) => row.login_id);
-              if (saveRows.length) {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                    Prefer: "resolution=merge-duplicates,return=minimal"
-                  },
-                  body: JSON.stringify(saveRows)
-                });
-                if (!response.ok) {
-                  const errorText = await response.text();
-                  throw new Error(errorText || "customers upsert failed");
-                }
-              }
+          const toIndex = users.findIndex((user) => String(user?.id || "").trim().toLowerCase() === newId.toLowerCase());
+          const sourceUser = users[fromIndex];
+          const mergedPhone = String(sourceUser?.phone || "").trim() || "-";
+          if (toIndex >= 0 && toIndex !== fromIndex) {
+            users[toIndex].password = newPassword;
+            users[toIndex].company = companyName;
+            users[toIndex].companyCode = newCompanyCode;
+            if (!String(users[toIndex].phone || "").trim()) users[toIndex].phone = mergedPhone;
+            users.splice(fromIndex, 1);
+          } else {
+            users[fromIndex].id = newId;
+            users[fromIndex].password = newPassword;
+            users[fromIndex].company = companyName;
+            users[fromIndex].companyCode = newCompanyCode;
+            if (!String(users[fromIndex].phone || "").trim()) users[fromIndex].phone = mergedPhone;
+          }
+          localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
+          const logs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
+          logs.forEach((item) => {
+            if (String(item.customerId || "").trim().toLowerCase() === fromAccountId.toLowerCase()) {
+              item.customerId = newId;
             }
-          } catch (error) {
-            console.error("[MASTER][index] 본계정 지정 동기화 실패", error);
+          });
+          localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(logs));
+          if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === fromAccountId) {
+            localStorage.setItem(STORAGE_CUSTOMER_SESSION, newId);
+          }
+          if (USE_SUPABASE_SYNC) {
+            try {
+              const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                  Prefer: "resolution=merge-duplicates,return=minimal"
+                },
+                body: JSON.stringify([
+                  {
+                    login_id: newId,
+                    password: newPassword,
+                    company_name: companyName,
+                    company_code: newCompanyCode,
+                    phone: mergedPhone
+                  }
+                ])
+              });
+              if (!upsertResponse.ok) {
+                const errorText = await upsertResponse.text();
+                throw new Error(errorText || "customers upsert failed");
+              }
+              const deleteResponse = await fetch(
+                `${SUPABASE_URL}/rest/v1/customers?login_id=eq.${encodeURIComponent(fromAccountId)}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    Prefer: "return=minimal",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                  }
+                }
+              );
+              if (!deleteResponse.ok) {
+                const errorText = await deleteResponse.text();
+                throw new Error(errorText || "customers delete failed");
+              }
+            } catch (error) {
+              console.error("[CUSTOMERS][index] 업체 아이디 이전 동기화 실패", error);
+              alert("아이디 이전은 로컬에 적용되었지만 서버 동기화에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            }
           }
           renderCompanyOrderHistory(companyName);
           renderCustomerStatsDashboard();
           renderCompanies();
           renderList();
-          alert("본업체가 지정되었습니다. 같은 고유번호 계정은 본업체를 따릅니다.");
+          alert("아이디 이전(통합)이 완료되었습니다. 기존 아이디는 삭제되었습니다.");
           return;
         }
-        const newPassword = String(passwordInputEl?.value || "").trim();
         const currentAccountId = String(button.dataset.accountId || "").trim();
         if (!newId || !newPassword) {
           alert("아이디와 비밀번호를 모두 입력해주세요.");
@@ -9672,21 +9699,20 @@
           alert("해당 업체의 고객 계정을 찾지 못했습니다.");
           return;
         }
-        // 입력한 아이디가 이미 존재하면 계정명 변경이 아니라 "해당 계정을 업체에 연결"로 처리합니다.
-        if (existingIdIndex >= 0) {
-          targetIndex = existingIdIndex;
+        if (existingIdIndex >= 0 && existingIdIndex !== targetIndex) {
+          alert("이미 존재하는 아이디입니다. 통합이 필요하면 '아이디이전(통합)'을 사용해주세요.");
+          return;
         }
         const oldId = String(users[targetIndex].id || "").trim();
-        const masterCompanyName = normalizeCompanyName(resolveMasterCompanyNameByCompanyCode(newCompanyCode) || companyName);
         users[targetIndex].id = newId;
         users[targetIndex].password = newPassword;
-        users[targetIndex].company = masterCompanyName;
+        users[targetIndex].company = companyName;
         users[targetIndex].companyCode = newCompanyCode;
         if (newCompanyCode) {
           users.forEach((user, index) => {
             if (index === targetIndex) return;
             if (normalizeCompanyCode(user?.companyCode).toLowerCase() !== newCompanyCode.toLowerCase()) return;
-            user.company = masterCompanyName;
+            user.company = companyName;
           });
         }
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
@@ -9721,7 +9747,7 @@
           const sameName = normalizeCompanyName(schedule?.company).toLowerCase() === companyNameLower;
           const sameCode = newCompanyCode && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === newCompanyCode.toLowerCase();
           if (!sameName && !sameCode) return;
-          schedule.company = masterCompanyName;
+          schedule.company = companyName;
           schedule.companyCode = newCompanyCode;
           customerSchedulesChanged = true;
         });
@@ -9733,7 +9759,7 @@
             const sameName = normalizeCompanyName(schedule?.company).toLowerCase() === companyNameLower;
             const sameCode = newCompanyCode && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === newCompanyCode.toLowerCase();
             if (!sameName && !sameCode) return;
-            schedule.company = masterCompanyName;
+            schedule.company = companyName;
             schedule.companyCode = newCompanyCode;
           });
         });
@@ -9765,7 +9791,7 @@
                 {
                   login_id: newId,
                   password: newPassword,
-                  company_name: masterCompanyName,
+                  company_name: companyName,
                   company_code: newCompanyCode,
                   phone: String(users[targetIndex]?.phone || "").trim()
                 }
@@ -9854,21 +9880,35 @@
       addCompanyBtnEl.addEventListener("click", () => {
         companyRegisterPanelEl.classList.toggle("hidden");
         if (!companyRegisterPanelEl.classList.contains("hidden")) {
+          if (companyAccountIdInputEl) {
+            companyAccountIdInputEl.value = normalizeCompanyName(companyNameInputEl?.value || "");
+          }
           companyNameInputEl.focus();
         }
       });
 
       closeCompanyPanelBtnEl.addEventListener("click", () => {
         companyFormEl.reset();
+        if (companyAccountIdInputEl) companyAccountIdInputEl.value = "";
         companyRegisterPanelEl.classList.add("hidden");
+      });
+      companyNameInputEl?.addEventListener("input", () => {
+        if (!companyAccountIdInputEl) return;
+        companyAccountIdInputEl.value = normalizeCompanyName(companyNameInputEl?.value || "");
       });
 
       companyFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const name = companyNameInputEl.value.trim();
+        const name = normalizeCompanyName(companyNameInputEl.value);
         const phone = companyPhoneInputEl.value.trim();
         const code = normalizeCompanyCode(companyCodeInputEl?.value);
+        const accountId = normalizeCompanyName(companyAccountIdInputEl?.value || name);
+        const accountPassword = String(companyAccountPasswordInputEl?.value || "").trim();
         if (!name) return;
+        if (!accountPassword) {
+          alert("업체 계정 비밀번호를 입력해주세요.");
+          return;
+        }
         const duplicated = companies.some(
           (item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(name).toLowerCase()
         );
@@ -9880,11 +9920,56 @@
           alert("이미 사용 중인 업체 고유번호입니다.");
           return;
         }
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const duplicateAccount = users.some((user) => String(user?.id || "").trim().toLowerCase() === accountId.toLowerCase());
+        if (duplicateAccount) {
+          alert("이미 사용 중인 업체 계정 아이디입니다.");
+          return;
+        }
         companies.unshift({ name, phone, code });
         saveAdminCompaniesToStorage();
+        users.unshift({
+          id: accountId,
+          password: accountPassword,
+          company: name,
+          companyCode: code,
+          phone: phone || "-",
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
         companyFormEl.reset();
+        if (companyAccountIdInputEl) companyAccountIdInputEl.value = "";
         companyRegisterPanelEl.classList.add("hidden");
         renderCompanies();
+        if (USE_SUPABASE_SYNC) {
+          try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "resolution=merge-duplicates,return=minimal"
+              },
+              body: JSON.stringify([
+                {
+                  login_id: accountId,
+                  password: accountPassword,
+                  company_name: name,
+                  company_code: code,
+                  phone: phone || "-"
+                }
+              ])
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(errorText || "customers upsert failed");
+            }
+          } catch (error) {
+            console.error("[CUSTOMERS][index] 업체등록 계정 생성 동기화 실패", error);
+            alert("업체 등록은 완료되었지만 계정 서버 동기화에 실패했습니다. 잠시 후 업체 계정 관리에서 다시 저장해주세요.");
+          }
+        }
       });
 
       couponFormEl.addEventListener("submit", (event) => {

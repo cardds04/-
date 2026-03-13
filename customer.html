@@ -118,7 +118,7 @@
     <main class="wrap">
       <div class="card">
         <h1>고객용 스케줄 등록</h1>
-        <p class="sub">회원가입 후 로그인하면 업체 스케줄을 직접 등록할 수 있습니다.</p>
+        <p class="sub">관리자가 전달한 계정으로 로그인하면 업체 스케줄을 직접 등록할 수 있습니다.</p>
 
         <div id="authBlock">
           <div class="tabs">
@@ -127,24 +127,7 @@
           <form id="loginForm" class="form">
             <div class="row"><span>🆔</span><input id="loginId" type="text" placeholder="아이디" required /></div>
             <div class="row"><span>🔑</span><input id="loginPassword" type="password" placeholder="비밀번호" required /></div>
-            <button id="saveLoginToggleBtn" class="btn outline small" type="button">아이디와 비번 저장하기: OFF</button>
             <button class="btn" type="submit">로그인</button>
-            <button id="openSignupBtn" class="btn outline" type="button">회원가입</button>
-            <button id="openFindIdBtn" class="btn outline" type="button">아이디 찾기</button>
-          </form>
-          <form id="signupForm" class="form hidden">
-            <div class="row"><span>🆔</span><input id="signupId" type="text" placeholder="아이디" required /></div>
-            <div class="row"><span>🔑</span><input id="signupPassword" type="password" placeholder="비밀번호" required /></div>
-            <div class="row"><span>🏢</span><input id="signupCompany" type="text" placeholder="업체명" required /></div>
-            <div class="row"><span>📞</span><input id="signupPhone" type="text" placeholder="연락처" required /></div>
-            <button class="btn" type="submit">회원가입</button>
-            <button id="backToLoginBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
-          </form>
-          <form id="findIdForm" class="form hidden">
-            <div class="row"><span>📞</span><input id="findIdPhone" type="text" placeholder="회원가입시 입력한 연락처" required /></div>
-            <button class="btn" type="submit">아이디 찾기</button>
-            <button id="backToLoginFromFindIdBtn" class="btn outline" type="button">로그인으로 돌아가기</button>
-            <p id="findIdResultText" class="hint"></p>
           </form>
         </div>
 
@@ -838,14 +821,6 @@
       });
 
       const loginTabBtnEl = document.getElementById("loginTabBtn");
-      const saveLoginToggleBtnEl = document.getElementById("saveLoginToggleBtn");
-      const openSignupBtnEl = document.getElementById("openSignupBtn");
-      const openFindIdBtnEl = document.getElementById("openFindIdBtn");
-      const backToLoginBtnEl = document.getElementById("backToLoginBtn");
-      const backToLoginFromFindIdBtnEl = document.getElementById("backToLoginFromFindIdBtn");
-      const signupFormEl = document.getElementById("signupForm");
-      const findIdFormEl = document.getElementById("findIdForm");
-      const findIdResultTextEl = document.getElementById("findIdResultText");
       const loginFormEl = document.getElementById("loginForm");
       const authBlockEl = document.getElementById("authBlock");
       const scheduleBlockEl = document.getElementById("scheduleBlock");
@@ -885,7 +860,6 @@
       const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
       let editingScheduleId = null;
       let currentCustomerTab = "register";
-      let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
       let myInfoOpen = false;
@@ -1456,9 +1430,6 @@
         writeStorageArray(STORAGE_CANCELED_SCHEDULES, rows.slice(0, 300));
       }
 
-      function updateRememberLoginButtonText() {
-        saveLoginToggleBtnEl.textContent = `아이디와 비번 저장하기: ${rememberLoginEnabled ? "ON" : "OFF"}`;
-      }
       function normalizePhoneDigits(value) {
         return String(value || "").replace(/[^\d]/g, "");
       }
@@ -1537,8 +1508,6 @@
         const matched = users.find((user) => user.id === remembered.id && user.password === remembered.password);
         if (!matched) return false;
         localStorage.setItem(STORAGE_SESSION, matched.id);
-        rememberLoginEnabled = true;
-        updateRememberLoginButtonText();
         return true;
       }
 
@@ -1742,15 +1711,8 @@
       }
 
       function switchAuthTab(mode) {
-        const signupActive = mode === "signup";
-        const findIdActive = mode === "findId";
         loginTabBtnEl.classList.add("active");
-        signupFormEl.classList.toggle("hidden", !signupActive);
-        findIdFormEl.classList.toggle("hidden", !findIdActive);
-        loginFormEl.classList.toggle("hidden", signupActive || findIdActive);
-        if (findIdResultTextEl && !findIdActive) {
-          findIdResultTextEl.textContent = "";
-        }
+        loginFormEl.classList.remove("hidden");
       }
 
       function switchCustomerTab(tab) {
@@ -1888,11 +1850,7 @@
           if (remembered) {
             document.getElementById("loginId").value = remembered.id;
             document.getElementById("loginPassword").value = remembered.password;
-            rememberLoginEnabled = true;
-          } else {
-            rememberLoginEnabled = false;
           }
-          updateRememberLoginButtonText();
         }
         if (isLoggedIn) {
           const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
@@ -2318,46 +2276,6 @@
         orderHistoryDetailListEl.innerHTML = detailRows || '<div class="history-item">상세 내역이 없습니다.</div>';
       }
 
-      signupFormEl.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const id = normalize(document.getElementById("signupId").value);
-        const password = normalize(document.getElementById("signupPassword").value);
-        const company = normalize(document.getElementById("signupCompany").value);
-        const phone = normalize(document.getElementById("signupPhone").value);
-        const companyCode = "";
-        if (!id || !password || !company || !phone) return;
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        const exists = users.some((user) => user.id.toLowerCase() === id.toLowerCase());
-        if (exists) {
-          alert("이미 사용 중인 아이디입니다.");
-          return;
-        }
-        users.unshift({ id, password, company, phone, companyCode, createdAt: new Date().toISOString() });
-        writeStorageArray(STORAGE_CUSTOMERS, users);
-        ensureCompanyStored(company, phone, companyCode);
-        try {
-          await syncCustomersTableFromStorage();
-          await syncCompaniesTableFromStorage();
-          queueCustomerTablePull();
-        } catch (error) {
-          console.error("[TABLE][customer] signup sync 실패", error);
-        }
-        const signupAlerts = readStorageArray(STORAGE_ALERTS);
-        signupAlerts.unshift({
-          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type: "customer_signup",
-          company,
-          createdAt: new Date().toISOString(),
-          read: false
-        });
-        writeStorageArray(STORAGE_ALERTS, signupAlerts);
-        localStorage.setItem(STORAGE_SESSION, id);
-        recordCustomerLogin({ id, company });
-        signupFormEl.reset();
-        renderAuthState();
-        alert("회원가입 완료! 바로 스케줄 등록이 가능합니다.");
-      });
-
       loginFormEl.addEventListener("submit", (event) => {
         event.preventDefault();
         const id = normalize(document.getElementById("loginId").value);
@@ -2369,14 +2287,10 @@
           return;
         }
         localStorage.setItem(STORAGE_SESSION, matched.id);
-        if (rememberLoginEnabled) {
-          localStorage.setItem(
-            STORAGE_CUSTOMER_REMEMBERED_LOGIN,
-            JSON.stringify({ id: matched.id, password: matched.password })
-          );
-        } else {
-          localStorage.removeItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN);
-        }
+        localStorage.setItem(
+          STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+          JSON.stringify({ id: matched.id, password: matched.password })
+        );
         recordCustomerLogin(matched);
         loginFormEl.reset();
         currentCustomerTab = "register";
@@ -2391,39 +2305,6 @@
         myInfoOpen = false;
         myInfoEditMode = false;
         renderAuthState();
-      });
-      saveLoginToggleBtnEl.addEventListener("click", () => {
-        rememberLoginEnabled = !rememberLoginEnabled;
-        updateRememberLoginButtonText();
-      });
-      findIdFormEl?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const phoneInputEl = document.getElementById("findIdPhone");
-        const targetPhone = normalizePhoneDigits(phoneInputEl?.value);
-        if (!targetPhone) {
-          if (findIdResultTextEl) findIdResultTextEl.textContent = "전화번호를 입력해주세요.";
-          return;
-        }
-        if (USE_SUPABASE_SYNC) {
-          try {
-            await pullTablesToCustomerStorage();
-          } catch (error) {
-            console.error("[TABLE][customer] 아이디찾기 pull 실패", error);
-          }
-        }
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        const matchedIds = [...new Set(
-          users
-            .filter((user) => normalizePhoneDigits(user?.phone) === targetPhone)
-            .map((user) => normalize(user?.id))
-            .filter(Boolean)
-        )];
-        if (!findIdResultTextEl) return;
-        if (!matchedIds.length) {
-          findIdResultTextEl.textContent = "일치하는 아이디를 찾지 못했습니다.";
-          return;
-        }
-        findIdResultTextEl.innerHTML = `찾은 아이디: <strong>${escapeHtml(matchedIds.join(", "))}</strong>`;
       });
       myInfoBtnEl?.addEventListener("click", () => {
         const user = getCurrentSessionUser();
@@ -2485,14 +2366,12 @@
         }
         writeStorageArray(STORAGE_CUSTOMERS, users);
         ensureCompanyStored(nextCompany, nextPhone, effectiveCode);
-        if (rememberLoginEnabled) {
-          const remembered = loadRememberedLogin();
-          if (remembered && remembered.id === String(user?.id || "")) {
-            localStorage.setItem(
-              STORAGE_CUSTOMER_REMEMBERED_LOGIN,
-              JSON.stringify({ id: remembered.id, password: nextPassword })
-            );
-          }
+        const remembered = loadRememberedLogin();
+        if (remembered && remembered.id === String(user?.id || "")) {
+          localStorage.setItem(
+            STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+            JSON.stringify({ id: remembered.id, password: nextPassword })
+          );
         }
         try {
           await syncCustomersTableFromStorage();
@@ -2821,10 +2700,6 @@
       });
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
-      openSignupBtnEl.addEventListener("click", () => switchAuthTab("signup"));
-      openFindIdBtnEl.addEventListener("click", () => switchAuthTab("findId"));
-      backToLoginBtnEl.addEventListener("click", () => switchAuthTab("login"));
-      backToLoginFromFindIdBtnEl?.addEventListener("click", () => switchAuthTab("login"));
       registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
       statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
       orderHistoryBtnEl.addEventListener("click", () => {
