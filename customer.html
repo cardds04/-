@@ -1457,7 +1457,7 @@
             <div class="form">
               <div class="row"><span>아이디</span><input type="text" value="${escapeHtml(user?.id || "-")}" readonly /></div>
               <div class="row"><span>비밀번호</span><input class="myinfo-password-input" type="password" placeholder="새 비밀번호" value="${escapeHtml(user?.password || "")}" /></div>
-              <div class="row"><span>업체명</span><input class="myinfo-company-input" type="text" value="${escapeHtml(companyName)}" /></div>
+              <div class="row"><span>업체명</span><input class="myinfo-company-input" type="text" value="${escapeHtml(companyName)}" readonly /></div>
               <div class="row"><span>연락처</span><input class="myinfo-phone-input" type="text" value="${escapeHtml(user?.phone || "")}" /></div>
               <div class="actions" style="justify-content:flex-start;">
                 <button class="btn small" type="button" data-action="saveMyInfo">저장</button>
@@ -2333,17 +2333,11 @@
         }
         if (action !== "saveMyInfo") return;
         const passwordInputEl = myInfoBoxEl.querySelector(".myinfo-password-input");
-        const companyInputEl = myInfoBoxEl.querySelector(".myinfo-company-input");
         const phoneInputEl = myInfoBoxEl.querySelector(".myinfo-phone-input");
         const nextPassword = normalize(passwordInputEl?.value);
-        const nextCompany = normalize(companyInputEl?.value);
         const nextPhone = normalize(phoneInputEl?.value);
         if (!nextPassword) {
           alert("비밀번호를 입력해주세요.");
-          return;
-        }
-        if (!nextCompany) {
-          alert("업체명을 입력해주세요.");
           return;
         }
         if (!nextPhone) {
@@ -2357,14 +2351,15 @@
           return;
         }
         const effectiveCode = getEffectiveUserCompanyCode(users[userIndex]);
+        const fixedCompanyName = resolveRegisteredCompanyNameForUser(users[userIndex], effectiveCode) || normalize(users[userIndex]?.company);
         users[userIndex].password = nextPassword;
-        users[userIndex].company = nextCompany;
+        users[userIndex].company = fixedCompanyName;
         users[userIndex].phone = nextPhone;
         if (effectiveCode && !normalize(users[userIndex].companyCode)) {
           users[userIndex].companyCode = effectiveCode;
         }
         writeStorageArray(STORAGE_CUSTOMERS, users);
-        ensureCompanyStored(nextCompany, nextPhone, effectiveCode);
+        ensureCompanyStored(fixedCompanyName, nextPhone, effectiveCode);
         const remembered = loadRememberedLogin();
         if (remembered && remembered.id === String(user?.id || "")) {
           localStorage.setItem(
