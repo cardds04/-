@@ -9832,6 +9832,23 @@
               companyCode: newCompanyCode,
               phone: String(users[targetIndex]?.phone || "").trim()
             });
+            if (oldId && oldId !== newId) {
+              const deleteResponse = await fetch(
+                `${SUPABASE_URL}/rest/v1/customers?login_id=eq.${encodeURIComponent(oldId)}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    Prefer: "return=minimal",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                  }
+                }
+              );
+              if (!deleteResponse.ok) {
+                const errorText = await deleteResponse.text();
+                throw new Error(`기존 아이디 삭제 실패 (${deleteResponse.status}): ${errorText}`);
+              }
+            }
           } catch (error) {
             console.error("[CUSTOMERS][index] 업체 계정 저장 동기화 실패", error);
             alert(`업체 계정 저장은 되었지만 서버 동기화에 실패했습니다.\n${error?.message || "잠시 후 다시 시도해주세요."}`);
