@@ -8212,6 +8212,17 @@
           }
           return "9999-12-31";
         };
+        const parsePaidCompletedDateSortValue = (item) => {
+          const raw = String(item?.paymentDate || item?.date || "").trim();
+          const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
+          if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+            return normalized;
+          }
+          if (/^\d{2}-\d{2}$/.test(normalized)) {
+            return `${currentYear}-${normalized}`;
+          }
+          return "0000-00-00";
+        };
         const getPaymentRowMonthKey = (item) => {
           const raw = String(item?.date || item?.paymentDate || "").trim().replace(/\./g, "-").replace(/\//g, "-");
           if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.slice(0, 7);
@@ -8286,6 +8297,12 @@
             return getPaymentRowMonthKey(item) === paymentViewYearMonth;
           })
           .sort((a, b) => {
+            if (isPaidAllView) {
+              const aPaidDate = parsePaidCompletedDateSortValue(a.item);
+              const bPaidDate = parsePaidCompletedDateSortValue(b.item);
+              const paidDateCompare = bPaidDate.localeCompare(aPaidDate);
+              if (paidDateCompare !== 0) return paidDateCompare;
+            }
             const aDate = parsePaymentDateSortValue(a.item);
             const bDate = parsePaymentDateSortValue(b.item);
             const dateCompare = aDate.localeCompare(bDate);
