@@ -6836,30 +6836,40 @@
           alert("복사할 미입금 내역이 없습니다.");
           return;
         }
-        const duplicatedCompanyMap = new Map();
-        const detailLines = latestUnpaidSummaryRows.map((item, idx) => {
+        const companyGroups = new Map();
+        latestUnpaidSummaryRows.forEach((item) => {
           const dateLabel = formatPaymentSummaryDateLabel(item?.date || item?.paymentDate || "");
           const companyName = normalizeCompanyName(item?.company || "") || "-";
           const amountValue = parseAmountToNumber(item?.paymentAmount);
           const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
-          if (!duplicatedCompanyMap.has(companyName)) {
-            duplicatedCompanyMap.set(companyName, { count: 0, sum: 0 });
+          if (!companyGroups.has(companyName)) {
+            companyGroups.set(companyName, { rows: [], sum: 0 });
           }
-          const bucket = duplicatedCompanyMap.get(companyName);
-          bucket.count += 1;
+          const bucket = companyGroups.get(companyName);
+          bucket.rows.push(`${dateLabel} ${companyName} ${amountText}`);
           bucket.sum += Math.max(0, Number(amountValue) || 0);
-          return `${idx + 1}. ${dateLabel} | ${companyName} | ${amountText}`;
         });
-        const duplicatedCompanyLines = [...duplicatedCompanyMap.entries()]
-          .filter(([, info]) => info.count >= 2)
-          .sort((a, b) => b[1].sum - a[1].sum)
-          .map(
-            ([companyName, info], idx) =>
-              `${idx + 1}. ${companyName} - ${info.count}건 합산 ${info.sum.toLocaleString("ko-KR")}원`
+
+        const singleCompanyLines = [];
+        const duplicatedCompanyBlocks = [];
+        companyGroups.forEach((info, companyName) => {
+          if (info.rows.length <= 1) {
+            singleCompanyLines.push(info.rows[0]);
+            return;
+          }
+          duplicatedCompanyBlocks.push(
+            `[동일업체] ${companyName}`,
+            ...info.rows,
+            `합산 ${info.sum.toLocaleString("ko-KR")}원`
           );
-        const lines = ["[미입금업체 전체요약]", `총 ${latestUnpaidSummaryRows.length}건`, ...detailLines];
-        if (duplicatedCompanyLines.length) {
-          lines.push("", "[동일업체 합산]", ...duplicatedCompanyLines);
+        });
+
+        const lines = ["[미입금업체 전체요약]", `총 ${latestUnpaidSummaryRows.length}건`];
+        if (singleCompanyLines.length) {
+          lines.push("", "[한건 미입금 업체]", ...singleCompanyLines);
+        }
+        if (duplicatedCompanyBlocks.length) {
+          lines.push("", "[동일업체 미입금 업체]", ...duplicatedCompanyBlocks);
         }
         const text = lines.join("\n");
         try {
