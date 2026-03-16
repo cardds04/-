@@ -4961,11 +4961,21 @@
           .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime())
           .slice(0, 2000);
       }
+      function getLocalScheduleReceiptLedgerRows() {
+        const newRows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+        const legacyRows = readStorageArray(STORAGE_CUSTOMER_SUBMISSION_LOGS).map(normalizeScheduleReceiptLedgerEntry);
+        return mergeScheduleReceiptLedgerRows(newRows, legacyRows);
+      }
+      function initializeScheduleReceiptLedgerStorage() {
+        const mergedLocalRows = getLocalScheduleReceiptLedgerRows();
+        latestScheduleReceiptLedger = mergedLocalRows;
+        localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(mergedLocalRows));
+      }
       function appendScheduleReceiptLedgerLocal(entry) {
         if (!entry) return;
         const normalized = normalizeScheduleReceiptLedgerEntry(entry);
         if (!normalized.receiptId) return;
-        const rows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+        const rows = getLocalScheduleReceiptLedgerRows();
         rows.unshift(normalized);
         const deduped = [];
         const seen = new Set();
@@ -4985,11 +4995,11 @@
         if (!USE_SUPABASE_SYNC || !entry) return false;
         const normalized = normalizeScheduleReceiptLedgerEntry(entry);
         if (!normalized.receiptId) return false;
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?on_conflict=receipt_id`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Prefer: "resolution=merge-duplicates,return=minimal",
+            Prefer: "return=minimal",
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
@@ -5008,6 +5018,7 @@
           ])
         });
         if (!response.ok) {
+          if (response.status === 409) return true;
           const errorText = await response.text();
           throw new Error(`접수기록 저장 실패 (${response.status}): ${errorText}`);
         }
@@ -5017,7 +5028,7 @@
         if (!receiptLedgerListEl) return;
         const rows = (latestScheduleReceiptLedger.length
           ? latestScheduleReceiptLedger
-          : readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry)
+          : getLocalScheduleReceiptLedgerRows()
         )
           .filter((item) => String(item?.receiptId || "").trim())
           .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
@@ -5120,7 +5131,7 @@
           if (!response.ok) return false;
           const rows = await response.json();
           const normalizedRows = (Array.isArray(rows) ? rows : []).map(normalizeScheduleReceiptLedgerEntry);
-          const localRows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+          const localRows = getLocalScheduleReceiptLedgerRows();
           const mergedRows = mergeScheduleReceiptLedgerRows(normalizedRows, localRows);
           latestScheduleReceiptLedger = mergedRows;
           localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(mergedRows));
@@ -11545,6 +11556,7 @@
         }
       });
       loadAdminSchedulesFromStorage();
+      initializeScheduleReceiptLedgerStorage();
       void pullSchedulesFromSupabaseAndApply();
       void pullDayoffRequestsFromSupabaseAndApply();
       void pullSubmissionReceiptsFromSupabaseAndApply();

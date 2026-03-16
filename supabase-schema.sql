@@ -266,3 +266,19 @@ on public.customer_submission_receipts
 for insert
 to anon, authenticated
 with check (true);
+
+-- append-only 강제: 기존 기록 수정/삭제 금지
+drop policy if exists "public_update_customer_submission_receipts" on public.customer_submission_receipts;
+create policy "public_update_customer_submission_receipts"
+on public.customer_submission_receipts
+for update
+to anon, authenticated
+using (false)
+with check (false);
+
+drop policy if exists "public_delete_customer_submission_receipts" on public.customer_submission_receipts;
+create policy "public_delete_customer_submission_receipts"
+on public.customer_submission_receipts
+for delete
+to anon, authenticated
+using (false);
