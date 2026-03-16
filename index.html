@@ -5020,19 +5020,30 @@
           if (!byScheduleId.has(key)) byScheduleId.set(key, []);
           byScheduleId.get(key).push(item);
         });
-        const createdRows = rows.filter((item) => String(item?.source || "").endsWith("_create"));
-        receiptLedgerListEl.innerHTML = createdRows.length
-          ? createdRows
+        receiptLedgerListEl.innerHTML = rows.length
+          ? rows
               .map((item) => {
                 const key = String(item?.scheduleId || "").trim() || `${item.date}|${item.time}|${normalizeCompanyName(item.company)}|${item.place}`;
                 const group = byScheduleId.get(key) || [];
                 const hasDelete = group.some((row) => String(row?.source || "").includes("delete"));
                 const hasCancel = group.some((row) => String(row?.source || "").includes("cancel"));
                 const createdAtText = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
-                const sourceLabel = String(item?.source || "").startsWith("admin_") ? "관리자접수" : "고객접수";
+                const source = String(item?.source || "");
+                const sourceLabel =
+                  source === "admin_delete"
+                    ? "관리자삭제기록"
+                    : source === "customer_cancel"
+                    ? "고객취소기록"
+                    : source.startsWith("admin_")
+                    ? "관리자접수"
+                    : "고객접수";
                 const actionButtons = [
-                  hasDelete ? '<button class="btn-sm danger" type="button" disabled>삭제</button>' : "",
-                  hasCancel ? '<button class="btn-sm" type="button" disabled>일정취소</button>' : ""
+                  source.includes("delete") || (!source.includes("cancel") && hasDelete)
+                    ? '<button class="btn-sm danger" type="button" disabled>삭제</button>'
+                    : "",
+                  source.includes("cancel") || (!source.includes("delete") && hasCancel)
+                    ? '<button class="btn-sm" type="button" disabled>일정취소</button>'
+                    : ""
                 ]
                   .filter(Boolean)
                   .join(" ");
