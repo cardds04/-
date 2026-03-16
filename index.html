@@ -926,6 +926,13 @@
                 <span>🔑</span>
                 <input id="companyAccountPasswordInput" type="text" placeholder="업체 로그인 비밀번호" required />
               </div>
+              <div class="input-row">
+                <span>구분</span>
+                <select id="companyAccountSiteTypeSelect">
+                  <option value="inlog">인로그</option>
+                  <option value="shopick">쇼픽</option>
+                </select>
+              </div>
               <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                 <button class="btn-sm primary" type="submit">등록</button>
                 <button id="closeCompanyPanelBtn" class="btn-sm" type="button">완료</button>
@@ -2850,6 +2857,7 @@
       const companyCodeInputEl = document.getElementById("companyCodeInput");
       const companyAccountIdInputEl = document.getElementById("companyAccountIdInput");
       const companyAccountPasswordInputEl = document.getElementById("companyAccountPasswordInput");
+      const companyAccountSiteTypeSelectEl = document.getElementById("companyAccountSiteTypeSelect");
       const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
       const couponCompanyAutocompleteListEl = document.getElementById("couponCompanyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
@@ -4245,6 +4253,10 @@
         return true;
       }
       function normalizeCustomerRows(rows) {
+        const normalizeCustomerSiteType = (value) => {
+          const normalized = String(value || "").trim().toLowerCase();
+          return normalized === "shopick" ? "shopick" : "inlog";
+        };
         const list = Array.isArray(rows) ? rows : [];
         const mapped = list
           .map((row) => ({
@@ -4253,7 +4265,8 @@
             company: normalizeCompanyName(row?.company_name || row?.company),
             companyCode: normalizeCompanyCode(row?.company_code || row?.companyCode),
             phone: String(row?.phone || "").trim(),
-            createdAt: String(row?.created_at || row?.createdAt || "").trim()
+            createdAt: String(row?.created_at || row?.createdAt || "").trim(),
+            siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
           }))
           .filter((row) => row.id);
         const dedupedMap = new Map();
@@ -4265,35 +4278,51 @@
       }
       async function fetchCustomersFromSupabase() {
         if (!USE_SUPABASE_SYNC) return [];
-        const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/customers?select=login_id,password,company_name,company_code,phone,created_at&order=created_at.desc`,
-          {
+        const primaryUrl = `${SUPABASE_URL}/rest/v1/customers?select=login_id,password,company_name,company_code,phone,site_type,created_at&order=created_at.desc`;
+        const fallbackUrl = `${SUPABASE_URL}/rest/v1/customers?select=login_id,password,company_name,company_code,phone,created_at&order=created_at.desc`;
+        let response = await fetch(primaryUrl, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          const canFallback = (response.status === 400 || response.status === 404) && String(errorText).includes("site_type");
+          if (!canFallback) {
+            throw new Error(`customers 조회 실패 (${response.status}): ${errorText}`);
+          }
+          response = await fetch(fallbackUrl, {
             method: "GET",
             headers: {
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
             cache: "no-store"
-          }
-        );
+          });
+        }
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`customers 조회 실패 (${response.status}): ${errorText}`);
         }
         return await response.json();
       }
-      async function saveSingleCustomerAccountToSupabase({ loginId, password, companyName, companyCode, phone }) {
+      async function saveSingleCustomerAccountToSupabase({ loginId, password, companyName, companyCode, phone, siteType }) {
         if (!USE_SUPABASE_SYNC) return false;
         const normalizedLoginId = String(loginId || "").trim();
         if (!normalizedLoginId) {
           throw new Error("고객 계정 아이디가 비어있습니다.");
         }
+        const normalizedSiteType = String(siteType || "").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
         const payload = {
           login_id: normalizedLoginId,
           password: String(password || "").trim(),
           company_name: String(companyName || "").trim(),
           company_code: normalizeCompanyCode(companyCode),
-          phone: String(phone || "").trim()
+          phone: String(phone || "").trim(),
+          site_type: normalizedSiteType
         };
         const existsResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/customers?select=login_id&login_id=eq.${encodeURIComponent(normalizedLoginId)}&limit=1`,
@@ -4328,7 +4357,32 @@
         });
         if (!saveResponse.ok) {
           const errorText = await saveResponse.text();
-          throw new Error(`customers ${exists ? "수정" : "등록"} 실패 (${saveResponse.status}): ${errorText}`);
+          const canRetryWithoutSiteType =
+            (saveResponse.status === 400 || saveResponse.status === 404) && String(errorText).includes("site_type");
+          if (!canRetryWithoutSiteType) {
+            throw new Error(`customers ${exists ? "수정" : "등록"} 실패 (${saveResponse.status}): ${errorText}`);
+          }
+          const fallbackPayload = {
+            login_id: normalizedLoginId,
+            password: String(password || "").trim(),
+            company_name: String(companyName || "").trim(),
+            company_code: normalizeCompanyCode(companyCode),
+            phone: String(phone || "").trim()
+          };
+          const retryResponse = await fetch(saveUrl, {
+            method: saveMethod,
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(exists ? fallbackPayload : [fallbackPayload])
+          });
+          if (!retryResponse.ok) {
+            const retryText = await retryResponse.text();
+            throw new Error(`customers ${exists ? "수정" : "등록"} 실패 (${retryResponse.status}): ${retryText}`);
+          }
         }
         return true;
       }
@@ -7233,6 +7287,7 @@
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
+        const accountSiteType = String(matchedUser?.siteType || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -7308,6 +7363,10 @@
             <input class="inline-input company-account-id" type="text" placeholder="아이디" value="${escapeHtml(accountId)}" />
             <input class="inline-input company-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(accountPassword)}" />
             <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
+            <select class="inline-select company-account-site-type" style="width: 140px;">
+              <option value="inlog" ${accountSiteType === "inlog" ? "selected" : ""}>인로그</option>
+              <option value="shopick" ${accountSiteType === "shopick" ? "selected" : ""}>쇼픽</option>
+            </select>
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
               <button class="btn-sm" type="button" data-action="transferCompanyAccountId" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">아이디이전(통합)</button>
@@ -9856,9 +9915,11 @@
         const idInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-id");
         const passwordInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-password");
         const codeInputEl = companyOrderHistorySummaryEl.querySelector(".company-account-code");
+        const siteTypeSelectEl = companyOrderHistorySummaryEl.querySelector(".company-account-site-type");
         const newId = String(idInputEl?.value || "").trim();
         const newPassword = String(passwordInputEl?.value || "").trim();
         const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
+        const newSiteType = String(siteTypeSelectEl?.value || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
         if (action === "transferCompanyAccountId") {
           const fromAccountId = String(button.dataset.accountId || "").trim();
           if (!fromAccountId) {
@@ -9890,6 +9951,7 @@
             users[toIndex].password = newPassword;
             users[toIndex].company = companyName;
             users[toIndex].companyCode = newCompanyCode;
+            users[toIndex].siteType = newSiteType;
             if (!String(users[toIndex].phone || "").trim()) users[toIndex].phone = mergedPhone;
             users.splice(fromIndex, 1);
           } else {
@@ -9897,6 +9959,7 @@
             users[fromIndex].password = newPassword;
             users[fromIndex].company = companyName;
             users[fromIndex].companyCode = newCompanyCode;
+            users[fromIndex].siteType = newSiteType;
             if (!String(users[fromIndex].phone || "").trim()) users[fromIndex].phone = mergedPhone;
           }
           localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
@@ -9917,7 +9980,8 @@
                 password: newPassword,
                 companyName,
                 companyCode: newCompanyCode,
-                phone: mergedPhone
+                phone: mergedPhone,
+                siteType: newSiteType
               });
               const deleteResponse = await fetch(
                 `${SUPABASE_URL}/rest/v1/customers?login_id=eq.${encodeURIComponent(fromAccountId)}`,
@@ -9983,6 +10047,7 @@
             password: newPassword,
             company: companyName,
             companyCode: newCompanyCode,
+            siteType: newSiteType,
             phone: "-",
             createdAt: new Date().toISOString()
           });
@@ -9992,6 +10057,7 @@
           users[targetIndex].password = newPassword;
           users[targetIndex].company = companyName;
           users[targetIndex].companyCode = newCompanyCode;
+          users[targetIndex].siteType = newSiteType;
         }
         if (newCompanyCode) {
           users.forEach((user, index) => {
@@ -10069,7 +10135,8 @@
               password: newPassword,
               companyName,
               companyCode: newCompanyCode,
-              phone: String(users[targetIndex]?.phone || "").trim()
+              phone: String(users[targetIndex]?.phone || "").trim(),
+              siteType: newSiteType
             });
             if (oldId && oldId !== newId) {
               const deleteResponse = await fetch(
@@ -10170,6 +10237,7 @@
           if (companyAccountIdInputEl) {
             companyAccountIdInputEl.value = normalizeCompanyName(companyNameInputEl?.value || "");
           }
+          if (companyAccountSiteTypeSelectEl) companyAccountSiteTypeSelectEl.value = "inlog";
           companyNameInputEl.focus();
         }
       });
@@ -10177,6 +10245,7 @@
       closeCompanyPanelBtnEl.addEventListener("click", () => {
         companyFormEl.reset();
         if (companyAccountIdInputEl) companyAccountIdInputEl.value = "";
+        if (companyAccountSiteTypeSelectEl) companyAccountSiteTypeSelectEl.value = "inlog";
         companyRegisterPanelEl.classList.add("hidden");
       });
       companyNameInputEl?.addEventListener("input", () => {
@@ -10191,6 +10260,7 @@
         const code = normalizeCompanyCode(companyCodeInputEl?.value);
         const accountId = normalizeCompanyName(companyAccountIdInputEl?.value || name);
         const accountPassword = String(companyAccountPasswordInputEl?.value || "").trim();
+        const accountSiteType = String(companyAccountSiteTypeSelectEl?.value || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
         if (!name) return;
         if (!accountPassword) {
           alert("업체 계정 비밀번호를 입력해주세요.");
@@ -10220,6 +10290,7 @@
           password: accountPassword,
           company: name,
           companyCode: code,
+          siteType: accountSiteType,
           phone: phone || "-",
           createdAt: new Date().toISOString()
         });
@@ -10241,6 +10312,7 @@
         });
         companyFormEl.reset();
         if (companyAccountIdInputEl) companyAccountIdInputEl.value = "";
+        if (companyAccountSiteTypeSelectEl) companyAccountSiteTypeSelectEl.value = "inlog";
         companyRegisterPanelEl.classList.add("hidden");
         renderCompanies();
         if (USE_SUPABASE_SYNC) {
@@ -10250,7 +10322,8 @@
               password: accountPassword,
               companyName: name,
               companyCode: code,
-              phone: phone || "-"
+              phone: phone || "-",
+              siteType: accountSiteType
             });
           } catch (error) {
             console.error("[CUSTOMERS][index] 업체등록 계정 생성 동기화 실패", error);

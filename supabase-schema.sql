@@ -230,6 +230,44 @@ create unique index if not exists writers_login_id_unique
   on public.writers (login_id);
 
 -- ------------------------------------------------------------
+-- 고객 사이트 구분(inlog/shopick) 컬럼
+-- ------------------------------------------------------------
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'customers'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customers'
+      and column_name = 'site_type'
+  ) then
+    alter table public.customers add column site_type text not null default 'inlog';
+  end if;
+end
+$$;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customers'
+      and column_name = 'site_type'
+  ) then
+    update public.customers
+    set site_type = 'inlog'
+    where site_type is null or btrim(site_type) = '';
+  end if;
+end
+$$;
+
+-- ------------------------------------------------------------
 -- 고객 접수 이력(append-only) 보존 테이블
 -- ------------------------------------------------------------
 create table if not exists public.customer_submission_receipts (

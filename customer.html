@@ -412,6 +412,7 @@
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
       const customerPageMode = new URLSearchParams(window.location.search).get("mode");
       const isLiteCustomerMode = customerPageMode === "lite";
+      const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "inlog";
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const STORAGE_SYNC_KEYS = [
@@ -1033,6 +1034,10 @@
       var customerTableSyncRunning = false;
       var activityAutoBackupTimer = null;
       var lastDbMutationAtMs = 0;
+      function normalizeCustomerSiteType(value) {
+        const normalized = String(value || "").trim().toLowerCase();
+        return normalized === "shopick" ? "shopick" : "inlog";
+      }
 
       function readStorageArray(key) {
         try {
@@ -1167,9 +1172,18 @@
         if (!USE_SUPABASE_SYNC) return;
         if (customerScheduleSubmitting) return;
         await pullSharedMasterAccountMapAndApply();
+        const fetchCustomersRowsForPull = async () => {
+          try {
+            return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,site_type,created_at&order=updated_at.desc");
+          } catch (error) {
+            const fallbackNeeded = String(error?.message || "").includes("site_type");
+            if (!fallbackNeeded) throw error;
+            return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc");
+          }
+        };
         const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
-          fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc"),
+          fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1192,7 +1206,8 @@
             company: String(row?.company_name || "").trim(),
             companyCode: String(row?.company_code || "").trim(),
             phone: String(row?.phone || "").trim(),
-            createdAt: String(row?.created_at || "").trim()
+            createdAt: String(row?.created_at || "").trim(),
+            siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
           }))
           .filter((row) => row.id);
         const mappedSchedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
@@ -1291,10 +1306,11 @@
             password: String(item?.password || "").trim(),
             company_name: String(item?.company || "").trim(),
             company_code: String(item?.companyCode || "").trim(),
-            phone: String(item?.phone || "").trim()
+            phone: String(item?.phone || "").trim(),
+            site_type: normalizeCustomerSiteType(item?.siteType)
           }))
           .filter((item) => item.login_id);
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+        let response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1304,6 +1320,25 @@
           },
           body: JSON.stringify(rows)
         });
+        if (!response.ok) {
+          const errorText = await response.text();
+          const canRetryWithoutSiteType =
+            (response.status === 400 || response.status === 404) && String(errorText || "").includes("site_type");
+          if (!canRetryWithoutSiteType) {
+            throw new Error(`customers 저장 실패 (${response.status}): ${errorText}`);
+          }
+          const fallbackRows = rows.map(({ site_type, ...rest }) => rest);
+          response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              Prefer: "resolution=merge-duplicates,return=minimal"
+            },
+            body: JSON.stringify(fallbackRows)
+          });
+        }
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`customers 저장 실패 (${response.status}): ${errorText}`);
@@ -1689,7 +1724,12 @@
         const remembered = loadRememberedLogin();
         if (!remembered) return false;
         const users = readStorageArray(STORAGE_CUSTOMERS);
-        const matched = users.find((user) => user.id === remembered.id && user.password === remembered.password);
+        const matched = users.find(
+          (user) =>
+            user.id === remembered.id &&
+            user.password === remembered.password &&
+            normalizeCustomerSiteType(user?.siteType) === requiredCustomerSiteType
+        );
         if (!matched) return false;
         localStorage.setItem(STORAGE_SESSION, matched.id);
         return true;
@@ -1914,7 +1954,10 @@
         const userId = localStorage.getItem(STORAGE_SESSION);
         if (!userId) return null;
         const users = readStorageArray(STORAGE_CUSTOMERS);
-        return users.find((user) => user.id === userId) || null;
+        const matched = users.find((user) => user.id === userId) || null;
+        if (!matched) return null;
+        if (normalizeCustomerSiteType(matched?.siteType) !== requiredCustomerSiteType) return null;
+        return matched;
       }
 
       function syncAdminSchedulesToCustomerUser(user) {
@@ -2465,8 +2508,19 @@
         const id = normalize(document.getElementById("loginId").value);
         const password = normalize(document.getElementById("loginPassword").value);
         const users = readStorageArray(STORAGE_CUSTOMERS);
-        const matched = users.find((user) => user.id === id && user.password === password);
+        const matchedByCredential = users.find((user) => user.id === id && user.password === password);
+        const matched = users.find(
+          (user) =>
+            user.id === id &&
+            user.password === password &&
+            normalizeCustomerSiteType(user?.siteType) === requiredCustomerSiteType
+        );
         if (!matched) {
+          if (matchedByCredential) {
+            const siteLabel = requiredCustomerSiteType === "shopick" ? "쇼픽" : "인로그";
+            alert(`${siteLabel} 전용 접수사이트에서만 로그인할 수 있는 계정입니다.`);
+            return;
+          }
           alert("아이디 또는 비밀번호가 올바르지 않습니다.");
           return;
         }
