@@ -870,6 +870,7 @@
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
+        <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -1178,6 +1179,19 @@
         </article>
       </section>
 
+      <section id="receiptLedgerSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>접수기록 원장</h2>
+            <div class="head-right">
+              <span id="receiptLedgerCountText" class="count">총 0건</span>
+            </div>
+          </div>
+          <div class="helper" style="margin-bottom: 8px;">삭제/취소되어도 사라지지 않는 보험용 기록입니다.</div>
+          <div id="receiptLedgerList" class="customer-alert-history" style="max-height: 70vh;"></div>
+        </article>
+      </section>
+
       <section id="transferSection" class="hidden">
         <article class="card">
           <div class="schedule-head">
@@ -1341,6 +1355,7 @@
       const STORAGE_LAST_PAYMENT_PULL_AT = "scheduleSiteLastPaymentPullAt";
       const STORAGE_LAST_COMPANY_PULL_AT = "scheduleSiteLastCompanyPullAt";
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
+      const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
@@ -1599,6 +1614,7 @@
       let syncStatusBadgeEl = null;
       let autoBackupTimer = null;
       let latestSubmissionReceipts = [];
+      let latestScheduleReceiptLedger = [];
       const originalSetItem = localStorage.setItem.bind(localStorage);
       const originalRemoveItem = localStorage.removeItem.bind(localStorage);
       function formatSyncTime(date = new Date()) {
@@ -2675,9 +2691,13 @@
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
+      const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
+      const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
+      const receiptLedgerListEl = document.getElementById("receiptLedgerList");
+      const receiptLedgerCountTextEl = document.getElementById("receiptLedgerCountText");
       const transferSectionEl = document.getElementById("transferSection");
       const transferToolEl = document.getElementById("transferTool");
       const paymentFilterTabsEl = document.getElementById("paymentFilterTabs");
@@ -4912,11 +4932,129 @@
             .filter(Boolean)
         );
       }
+      function normalizeScheduleReceiptLedgerEntry(row) {
+        return {
+          receiptId: String(row?.receiptId || row?.receipt_id || "").trim(),
+          scheduleId: String(row?.scheduleId || row?.schedule_id || "").trim(),
+          customerId: String(row?.customerId || row?.customer_id || "").trim(),
+          company: String(row?.company || row?.company_name || "").trim(),
+          date: String(row?.date || row?.schedule_date || "").trim(),
+          time: String(row?.time || row?.schedule_time || "").trim(),
+          place: String(row?.place || "").trim(),
+          source: String(row?.source || "customer_create").trim() || "customer_create",
+          createdAt: String(row?.createdAt || row?.created_at || "").trim()
+        };
+      }
+      function appendScheduleReceiptLedgerLocal(entry) {
+        if (!entry) return;
+        const normalized = normalizeScheduleReceiptLedgerEntry(entry);
+        if (!normalized.receiptId) return;
+        const rows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+        rows.unshift(normalized);
+        const deduped = [];
+        const seen = new Set();
+        rows.forEach((item) => {
+          const id = String(item?.receiptId || "").trim();
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          deduped.push(item);
+        });
+        latestScheduleReceiptLedger = deduped.slice(0, 2000);
+        localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(latestScheduleReceiptLedger));
+        if (!receiptLedgerSectionEl?.classList.contains("hidden")) {
+          renderScheduleReceiptLedger();
+        }
+      }
+      async function appendScheduleReceiptLedgerToSupabase(entry) {
+        if (!USE_SUPABASE_SYNC || !entry) return false;
+        const normalized = normalizeScheduleReceiptLedgerEntry(entry);
+        if (!normalized.receiptId) return false;
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?on_conflict=receipt_id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify([
+            {
+              receipt_id: normalized.receiptId,
+              schedule_id: normalized.scheduleId || null,
+              customer_id: normalized.customerId || null,
+              company_name: normalized.company || null,
+              schedule_date: normalized.date || null,
+              schedule_time: normalized.time || null,
+              place: normalized.place || null,
+              source: normalized.source,
+              payload: normalized
+            }
+          ])
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`접수기록 저장 실패 (${response.status}): ${errorText}`);
+        }
+        return true;
+      }
+      function renderScheduleReceiptLedger() {
+        if (!receiptLedgerListEl) return;
+        const rows = (latestScheduleReceiptLedger.length
+          ? latestScheduleReceiptLedger
+          : readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry)
+        )
+          .filter((item) => String(item?.receiptId || "").trim())
+          .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+        if (receiptLedgerCountTextEl) {
+          receiptLedgerCountTextEl.textContent = `총 ${rows.length}건`;
+        }
+        if (!rows.length) {
+          receiptLedgerListEl.innerHTML = '<div class="company-item">접수기록이 없습니다.</div>';
+          return;
+        }
+        const byScheduleId = new Map();
+        rows.forEach((item) => {
+          const key = String(item?.scheduleId || "").trim() || `${item.date}|${item.time}|${normalizeCompanyName(item.company)}|${item.place}`;
+          if (!byScheduleId.has(key)) byScheduleId.set(key, []);
+          byScheduleId.get(key).push(item);
+        });
+        const createdRows = rows.filter((item) => String(item?.source || "").endsWith("_create"));
+        receiptLedgerListEl.innerHTML = createdRows.length
+          ? createdRows
+              .map((item) => {
+                const key = String(item?.scheduleId || "").trim() || `${item.date}|${item.time}|${normalizeCompanyName(item.company)}|${item.place}`;
+                const group = byScheduleId.get(key) || [];
+                const hasDelete = group.some((row) => String(row?.source || "").includes("delete"));
+                const hasCancel = group.some((row) => String(row?.source || "").includes("cancel"));
+                const createdAtText = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
+                const sourceLabel = String(item?.source || "").startsWith("admin_") ? "관리자접수" : "고객접수";
+                const actionButtons = [
+                  hasDelete ? '<button class="btn-sm danger" type="button" disabled>삭제</button>' : "",
+                  hasCancel ? '<button class="btn-sm" type="button" disabled>일정취소</button>' : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return `
+                  <div class="customer-alert-row" style="align-items: flex-start;">
+                    <div>
+                      <strong>${escapeHtml(item.company || "-")}</strong> (${escapeHtml(sourceLabel)})<br />
+                      일정: ${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}<br />
+                      장소: ${escapeHtml(item.place || "-")}<br />
+                      접수번호: ${escapeHtml(item.receiptId || "-")}<br />
+                      접수시각: ${escapeHtml(createdAtText || "-")}
+                    </div>
+                    <div class="actions" style="margin-top: 0; justify-content: flex-end;">${actionButtons}</div>
+                  </div>
+                `;
+              })
+              .join("")
+          : '<div class="company-item">접수기록이 없습니다.</div>';
+      }
       async function pullSubmissionReceiptsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         try {
           const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,created_at&order=created_at.desc&limit=500`,
+            `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,created_at&order=created_at.desc&limit=2000`,
             {
               method: "GET",
               headers: {
@@ -4928,20 +5066,17 @@
           );
           if (!response.ok) return false;
           const rows = await response.json();
-          latestSubmissionReceipts = (Array.isArray(rows) ? rows : []).map((row) => ({
-            receiptId: String(row?.receipt_id || "").trim(),
-            scheduleId: String(row?.schedule_id || "").trim(),
-            customerId: String(row?.customer_id || "").trim(),
-            company: String(row?.company_name || "").trim(),
-            date: String(row?.schedule_date || "").trim(),
-            time: String(row?.schedule_time || "").trim(),
-            place: String(row?.place || "").trim(),
-            source: String(row?.source || "customer").trim(),
-            createdAt: String(row?.created_at || "").trim()
-          }));
+          const normalizedRows = (Array.isArray(rows) ? rows : []).map(normalizeScheduleReceiptLedgerEntry);
+          latestScheduleReceiptLedger = normalizedRows;
+          localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(normalizedRows));
+          latestSubmissionReceipts = normalizedRows.filter((item) => {
+            const source = String(item?.source || "");
+            return source === "customer" || source === "admin" || source.endsWith("_create");
+          });
           localStorage.setItem(STORAGE_CUSTOMER_SUBMISSION_LOGS, JSON.stringify(latestSubmissionReceipts));
           renderCustomerUpdateNotices();
           renderCustomerAlertHistory();
+          renderScheduleReceiptLedger();
           return true;
         } catch (error) {
           return false;
@@ -4973,7 +5108,12 @@
           ? latestSubmissionReceipts
           : readStorageArray(STORAGE_CUSTOMER_SUBMISSION_LOGS);
         const readSubmissionIds = getReadSubmissionReceiptIds();
-        const submissionAlerts = (Array.isArray(submissionRows) ? submissionRows : []).map((item) => {
+        const submissionAlerts = (Array.isArray(submissionRows) ? submissionRows : [])
+          .filter((item) => {
+            const source = String(item?.source || "");
+            return source === "customer" || source === "admin" || source.endsWith("_create");
+          })
+          .map((item) => {
           const receiptId = String(item?.receiptId || item?.receipt_id || "").trim();
           return {
             id: `submission-${receiptId}`,
@@ -9084,20 +9224,25 @@
         const isSchedule = tab === "schedule";
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
+        const isReceiptLedger = tab === "receiptLedger";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
+        tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
+        receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
+        if (isReceiptLedger) renderScheduleReceiptLedger();
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
+      tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
 
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
@@ -10716,6 +10861,21 @@
         renderList();
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
+        const deleteReceipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          scheduleId: String(deletedScheduleId || "").trim(),
+          customerId: "",
+          company: String(deletedItem?.company || "").trim(),
+          date: String(deletedItem?.date || "").trim(),
+          time: String(deletedItem?.time || "").trim(),
+          place: String(deletedItem?.place || "").trim(),
+          source: "admin_delete",
+          createdAt: new Date().toISOString()
+        };
+        appendScheduleReceiptLedgerLocal(deleteReceipt);
+        void appendScheduleReceiptLedgerToSupabase(deleteReceipt).catch((error) => {
+          console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
+        });
         void deleteScheduleFromSupabaseById(deletedScheduleId).catch((error) => {
           console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
         });
@@ -11232,6 +11392,21 @@
           read: false
         });
         localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+        const submissionReceipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          scheduleId: String(item.customerScheduleId || "").trim(),
+          customerId: "",
+          company: String(item.company || "").trim(),
+          date: String(item.date || "").trim(),
+          time: String(item.time || "").trim(),
+          place: String(item.place || "").trim(),
+          source: "admin_create",
+          createdAt: new Date().toISOString()
+        };
+        appendScheduleReceiptLedgerLocal(submissionReceipt);
+        void appendScheduleReceiptLedgerToSupabase(submissionReceipt).catch((error) => {
+          console.error("[SUBMISSION_RECEIPT][index] 관리자 접수기록 저장 실패", error);
+        });
         formEl.reset();
         const now = new Date();
         yearEl.value = String(now.getFullYear());
@@ -11358,6 +11533,9 @@
         ) {
           renderCustomerUpdateNotices();
           renderCustomerAlertHistory();
+        }
+        if (event.key === STORAGE_SCHEDULE_RECEIPT_LEDGER) {
+          renderScheduleReceiptLedger();
         }
         if (event.key === STORAGE_CUSTOMERS || event.key === STORAGE_CUSTOMER_LOGINS) {
           renderCustomerStatsDashboard();

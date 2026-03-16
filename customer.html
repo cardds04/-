@@ -914,10 +914,11 @@
       function appendLocalSubmissionReceipt(receipt) {
         const logs = readStorageArray(STORAGE_SUBMISSION_LOGS);
         logs.unshift(receipt);
-        writeStorageArray(STORAGE_SUBMISSION_LOGS, logs.slice(0, 500));
+        writeStorageArray(STORAGE_SUBMISSION_LOGS, logs.slice(0, 2000));
       }
       async function appendSubmissionReceiptToSupabase(receipt) {
         if (!USE_SUPABASE_SYNC || !receipt) return;
+        const source = String(receipt?.source || "customer_create").trim() || "customer_create";
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?on_conflict=receipt_id`, {
           method: "POST",
           headers: {
@@ -935,7 +936,7 @@
               schedule_date: String(receipt.date || "").trim() || null,
               schedule_time: String(receipt.time || "").trim() || null,
               place: String(receipt.place || "").trim() || null,
-              source: "customer",
+              source,
               payload: receipt
             }
           ])
@@ -2498,6 +2499,7 @@
           date,
           time,
           place,
+          source: "customer_create",
           createdAt: new Date().toISOString(),
           status: "accepted"
         };
@@ -2644,6 +2646,19 @@
           const deletedTime = item.time;
           const deletedCompany = item.company;
           appendCanceledScheduleRecord(item, "customer", "고객취소");
+          const cancelReceipt = {
+            receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            scheduleId: String(item?.customerScheduleId || "").trim(),
+            customerId: String(item?.customerId || "").trim(),
+            company: String(item?.company || "").trim(),
+            date: String(item?.date || "").trim(),
+            time: String(item?.time || "").trim(),
+            place: String(item?.place || "").trim(),
+            source: "customer_cancel",
+            createdAt: new Date().toISOString()
+          };
+          appendLocalSubmissionReceipt(cancelReceipt);
+          void appendSubmissionReceiptToSupabase(cancelReceipt);
           schedules.splice(index, 1);
           writeStorageArray(STORAGE_SCHEDULES, schedules);
           const user = getCurrentSessionUser();
