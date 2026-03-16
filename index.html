@@ -4933,6 +4933,7 @@
         );
       }
       function normalizeScheduleReceiptLedgerEntry(row) {
+        const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
         return {
           receiptId: String(row?.receiptId || row?.receipt_id || "").trim(),
           scheduleId: String(row?.scheduleId || row?.schedule_id || "").trim(),
@@ -4940,6 +4941,7 @@
           company: String(row?.company || row?.company_name || "").trim(),
           date: String(row?.date || row?.schedule_date || "").trim(),
           time: String(row?.time || row?.schedule_time || "").trim(),
+          timePreference: normalizeTimePreference(row?.timePreference || payload?.timePreference),
           place: String(row?.place || "").trim(),
           source: String(row?.source || "customer_create").trim() || "customer_create",
           createdAt: String(row?.createdAt || row?.created_at || "").trim()
@@ -5050,11 +5052,33 @@
               .join("")
           : '<div class="company-item">접수기록이 없습니다.</div>';
       }
+      function findInitialScheduleReceiptEntry(scheduleItem) {
+        const scheduleId = String(scheduleItem?.customerScheduleId || "").trim();
+        if (!scheduleId) return null;
+        const rows = latestScheduleReceiptLedger.length
+          ? latestScheduleReceiptLedger
+          : readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+        const candidates = (Array.isArray(rows) ? rows : [])
+          .filter((row) => {
+            const rowScheduleId = String(row?.scheduleId || "").trim();
+            const source = String(row?.source || "");
+            return rowScheduleId && rowScheduleId === scheduleId && source.endsWith("_create");
+          })
+          .sort((a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime());
+        return candidates[0] || null;
+      }
+      function formatInitialRequestedDateTimeLabel(scheduleItem) {
+        const initial = findInitialScheduleReceiptEntry(scheduleItem);
+        if (!initial) return "최초 -";
+        const dateText = formatScheduleDateWithoutYear(initial?.date || "");
+        const timeText = formatScheduleTimeWithPreference(initial?.time || "-", initial?.timePreference);
+        return `최초 ${dateText} ${timeText}`;
+      }
       async function pullSubmissionReceiptsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         try {
           const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,created_at&order=created_at.desc&limit=2000`,
+            `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,payload,created_at&order=created_at.desc&limit=2000`,
             {
               method: "GET",
               headers: {
@@ -9145,6 +9169,7 @@
                                       )}</button></span>
                                       <span class="request-time-label">${escapeHtml(formatRequestedAtLabel(item.requestedAt))}</span>
                                     </div>
+                                    <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}
                                     <details class="schedule-extra-detail">
@@ -11399,6 +11424,7 @@
           company: String(item.company || "").trim(),
           date: String(item.date || "").trim(),
           time: String(item.time || "").trim(),
+          timePreference: normalizeTimePreference(item.timePreference),
           place: String(item.place || "").trim(),
           source: "admin_create",
           createdAt: new Date().toISOString()
