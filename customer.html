@@ -160,7 +160,7 @@
               </div>
               <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 9시~18시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
-              <div class="compose-wrap">
+              <div class="compose-wrap" id="pyeongSection">
                 <span class="compose-label">평수선택</span>
                 <div class="compose-buttons" id="pyeongButtons">
                   <button class="compose-btn active" type="button" data-pyeong="미선택">미선택</button>
@@ -175,7 +175,7 @@
                 <div class="row"><span>🗝️</span><input id="scheduleDoorCode" type="text" placeholder="세대 비번" /></div>
               </div>
               <div class="row"><span>📝</span><input id="scheduleMemo" type="text" placeholder="메모사항" /></div>
-              <div class="compose-wrap">
+              <div class="compose-wrap" id="compositionSection">
                 <span class="compose-label">촬영구성</span>
                 <div class="compose-buttons" id="composeButtons">
                   <button class="compose-btn active" type="button" data-compose="미선택">미선택</button>
@@ -250,6 +250,8 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      const customerPageMode = new URLSearchParams(window.location.search).get("mode");
+      const isLiteCustomerMode = customerPageMode === "lite";
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const STORAGE_SYNC_KEYS = [
@@ -848,7 +850,9 @@
       const scheduleMinuteEl = document.getElementById("scheduleMinute");
       const schedulePyeongEl = document.getElementById("schedulePyeong");
       const pyeongButtonsEl = document.getElementById("pyeongButtons");
+      const pyeongSectionEl = document.getElementById("pyeongSection");
       const scheduleCompositionEl = document.getElementById("scheduleComposition");
+      const compositionSectionEl = document.getElementById("compositionSection");
       const taxInvoiceRequestBtnEl = document.getElementById("taxInvoiceRequestBtn");
       const scheduleTaxInvoiceRequestedEl = document.getElementById("scheduleTaxInvoiceRequested");
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
@@ -1404,8 +1408,26 @@
         taxInvoiceRequestBtnEl?.classList.toggle("active", requested);
         updateExpectedPaymentText();
       }
+      function applyCustomerSiteMode() {
+        if (!isLiteCustomerMode) return;
+        document.title = "고객용 간편 스케줄 등록";
+        const subtitleEl = document.querySelector(".sub");
+        if (subtitleEl) {
+          subtitleEl.textContent = "관리자가 전달한 계정으로 간편 스케줄 접수를 등록할 수 있습니다.";
+        }
+        if (pyeongSectionEl) pyeongSectionEl.classList.add("hidden");
+        if (compositionSectionEl) compositionSectionEl.classList.add("hidden");
+        if (expectedPaymentTextEl) expectedPaymentTextEl.classList.add("hidden");
+        if (schedulePyeongEl) schedulePyeongEl.value = "";
+        if (scheduleCompositionEl) scheduleCompositionEl.value = "사진만";
+        setTaxInvoiceRequested(false);
+      }
       function updateExpectedPaymentText() {
         if (!expectedPaymentTextEl) return;
+        if (isLiteCustomerMode) {
+          expectedPaymentTextEl.textContent = "";
+          return;
+        }
         const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, isTaxInvoiceRequested());
         expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
       }
@@ -2423,15 +2445,17 @@
           timePreference === "any" || timePreference === "other"
             ? "시간상관없음"
             : `${selectedHour === "any-time" ? "09" : selectedHour}:00`;
-        const taxInvoiceRequested = isTaxInvoiceRequested();
-        const expectedAmount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
+        const taxInvoiceRequested = isLiteCustomerMode ? false : isTaxInvoiceRequested();
+        const expectedAmount = isLiteCustomerMode
+          ? null
+          : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
         const place = normalize(document.getElementById("schedulePlace").value);
         if (!place) return;
-        if (schedulePyeongEl.value === "미선택") {
+        if (!isLiteCustomerMode && schedulePyeongEl.value === "미선택") {
           alert("평수를 선택해주세요.");
           return;
         }
-        if (scheduleCompositionEl.value === "미선택") {
+        if (!isLiteCustomerMode && scheduleCompositionEl.value === "미선택") {
           alert("촬영구성을 선택해주세요.");
           return;
         }
@@ -2453,11 +2477,11 @@
           company: scheduleCompanyName,
           companyCode: normalize(effectiveCompanyCode),
           place,
-          pyeong: normalize(document.getElementById("schedulePyeong").value),
+          pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
           jointCode: normalize(document.getElementById("scheduleJointCode").value),
           doorCode: normalize(document.getElementById("scheduleDoorCode").value),
           memo: normalize(document.getElementById("scheduleMemo").value),
-          composition: scheduleCompositionEl.value || "사진만",
+          composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
           paymentStatus: "미입금",
           paymentPayer: "",
           paymentAmount: expectedAmount ? String(expectedAmount) : "",
@@ -2768,6 +2792,7 @@
 
       setupDateTimeSelectors();
       setTaxInvoiceRequested(false);
+      applyCustomerSiteMode();
       switchAuthTab("login");
       renderAuthState();
       void pullSharedMasterAccountMapAndApply().then(() => {
