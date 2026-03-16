@@ -4947,6 +4947,20 @@
           createdAt: String(row?.createdAt || row?.created_at || "").trim()
         };
       }
+      function mergeScheduleReceiptLedgerRows(remoteRows, localRows) {
+        const merged = [];
+        const seen = new Set();
+        [...(Array.isArray(remoteRows) ? remoteRows : []), ...(Array.isArray(localRows) ? localRows : [])].forEach((row) => {
+          const normalized = normalizeScheduleReceiptLedgerEntry(row);
+          const receiptId = String(normalized?.receiptId || "").trim();
+          if (!receiptId || seen.has(receiptId)) return;
+          seen.add(receiptId);
+          merged.push(normalized);
+        });
+        return merged
+          .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime())
+          .slice(0, 2000);
+      }
       function appendScheduleReceiptLedgerLocal(entry) {
         if (!entry) return;
         const normalized = normalizeScheduleReceiptLedgerEntry(entry);
@@ -5030,6 +5044,9 @@
                 const createdAtText = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
                 const source = String(item?.source || "");
                 const sourceLabel =
+                  source === "admin_company_create"
+                    ? "관리자업체등록"
+                    :
                   source === "admin_delete"
                     ? "관리자삭제기록"
                     : source === "customer_cancel"
@@ -5037,6 +5054,7 @@
                     : source.startsWith("admin_")
                     ? "관리자접수"
                     : "고객접수";
+                const scheduleText = item?.date || item?.time ? `${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}` : "업체 등록";
                 const actionButtons = [
                   source.includes("delete") || (!source.includes("cancel") && hasDelete)
                     ? '<button class="btn-sm danger" type="button" disabled>삭제</button>'
@@ -5051,7 +5069,7 @@
                   <div class="customer-alert-row" style="align-items: flex-start;">
                     <div>
                       <strong>${escapeHtml(item.company || "-")}</strong> (${escapeHtml(sourceLabel)})<br />
-                      일정: ${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}<br />
+                      일정: ${scheduleText}<br />
                       장소: ${escapeHtml(item.place || "-")}<br />
                       접수번호: ${escapeHtml(item.receiptId || "-")}<br />
                       접수시각: ${escapeHtml(createdAtText || "-")}
@@ -5102,9 +5120,11 @@
           if (!response.ok) return false;
           const rows = await response.json();
           const normalizedRows = (Array.isArray(rows) ? rows : []).map(normalizeScheduleReceiptLedgerEntry);
-          latestScheduleReceiptLedger = normalizedRows;
-          localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(normalizedRows));
-          latestSubmissionReceipts = normalizedRows.filter((item) => {
+          const localRows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
+          const mergedRows = mergeScheduleReceiptLedgerRows(normalizedRows, localRows);
+          latestScheduleReceiptLedger = mergedRows;
+          localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(mergedRows));
+          latestSubmissionReceipts = mergedRows.filter((item) => {
             const source = String(item?.source || "");
             return source === "customer" || source === "admin" || source.endsWith("_create");
           });
@@ -10193,6 +10213,21 @@
           createdAt: new Date().toISOString()
         });
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(users));
+        const companyRegisterReceipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          scheduleId: `company-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          customerId: "",
+          company: name,
+          date: "",
+          time: "",
+          place: phone ? `업체등록 / 연락처 ${phone}` : "업체등록",
+          source: "admin_company_create",
+          createdAt: new Date().toISOString()
+        };
+        appendScheduleReceiptLedgerLocal(companyRegisterReceipt);
+        void appendScheduleReceiptLedgerToSupabase(companyRegisterReceipt).catch((error) => {
+          console.error("[SUBMISSION_RECEIPT][index] 업체등록 기록 저장 실패", error);
+        });
         companyFormEl.reset();
         if (companyAccountIdInputEl) companyAccountIdInputEl.value = "";
         companyRegisterPanelEl.classList.add("hidden");
