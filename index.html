@@ -1361,6 +1361,7 @@
       const STORAGE_LAST_SCHEDULE_PULL_AT = "scheduleSiteLastSchedulePullAt";
       const STORAGE_LAST_PAYMENT_PULL_AT = "scheduleSiteLastPaymentPullAt";
       const STORAGE_LAST_COMPANY_PULL_AT = "scheduleSiteLastCompanyPullAt";
+      const STORAGE_LAST_COUPON_PULL_AT = "scheduleSiteLastCouponPullAt";
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
@@ -1985,7 +1986,7 @@
       async function fetchCouponPassRowsFromSupabase() {
         if (!USE_SUPABASE_SYNC) return [];
         const schemaMode = await detectCouponPassesSchemaMode();
-        const selectFields = schemaMode === "company_id" ? "id,company_id,remaining_count" : "id,company_name,remaining_count";
+        const selectFields = schemaMode === "company_id" ? "id,company_id,remaining_count,updated_at" : "id,company_name,remaining_count,updated_at";
         const response = await fetch(
           `${SUPABASE_URL}/rest/v1/coupon_passes?select=${selectFields}&order=updated_at.desc`,
           {
@@ -2013,7 +2014,8 @@
                 id: String(row?.id || "").trim(),
                 companyId,
                 companyName: normalizeCompanyName(companyName),
-                remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0))
+                remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0)),
+                updatedAt: String(row?.updated_at || "").trim()
               };
             })
             .filter((row) => row.companyId && row.companyName);
@@ -2022,7 +2024,8 @@
           .map((row) => ({
             id: String(row?.id || "").trim(),
             companyName: normalizeCompanyName(row?.company_name),
-            remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0))
+            remainingCount: Math.max(0, Math.floor(Number(row?.remaining_count) || 0)),
+            updatedAt: String(row?.updated_at || "").trim()
           }))
           .filter((row) => row.companyName);
       }
@@ -2034,10 +2037,15 @@
           if (!companyName) return;
           mapped[companyName] = Math.max(0, Math.floor(Number(row?.remainingCount) || 0));
         });
-        return normalizeCouponPassesMap(mapped);
+        return { map: normalizeCouponPassesMap(mapped), rows };
       }
       async function saveCouponPassesToSupabase(nextMapInput) {
         if (!USE_SUPABASE_SYNC) return;
+        await guardUploadWithRemoteFreshness({
+          tableName: "coupon_passes",
+          label: "회차권",
+          lastPullStorageKey: STORAGE_LAST_COUPON_PULL_AT
+        });
         const nextMap = normalizeCouponPassesMap(nextMapInput);
         const schemaMode = await detectCouponPassesSchemaMode();
         const remoteRows = await fetchCouponPassRowsFromSupabase();
@@ -2128,8 +2136,9 @@
       async function pullCouponPassesFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         try {
-          const remoteMap = await fetchSharedCouponPassesFromSupabase();
+          const { map: remoteMap, rows: remoteRows } = await fetchSharedCouponPassesFromSupabase();
           if (!remoteMap) return false;
+          updateLastPullTime(STORAGE_LAST_COUPON_PULL_AT, remoteRows, "updatedAt");
           const localSignature = getCouponPassesSignature();
           const remoteSignature = JSON.stringify(remoteMap);
           if (localSignature === remoteSignature) return false;
@@ -6099,6 +6108,7 @@
         localStorage.setItem(STORAGE_LAST_COMPANY_PULL_AT, nowIso);
         localStorage.setItem(STORAGE_LAST_SCHEDULE_PULL_AT, nowIso);
         localStorage.setItem(STORAGE_LAST_PAYMENT_PULL_AT, nowIso);
+        localStorage.setItem(STORAGE_LAST_COUPON_PULL_AT, nowIso);
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
         markDbMutationActivity("restore_applied");
