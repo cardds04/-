@@ -1459,15 +1459,35 @@
           return sameCompany && syncableSource;
         });
         if (!userRows.length) return;
+        const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        const adminCompanyRows = adminRows.filter((row) => {
+          const rowCompanyCode = normalize(row?.companyCode);
+          if (effectiveCompanyCode && rowCompanyCode) {
+            return rowCompanyCode.toLowerCase() === effectiveCompanyCode.toLowerCase();
+          }
+          return getCompanyKey(row?.company, row?.companyCode) === getCompanyKey(companyName, effectiveCompanyCode) ||
+            getCompanyKey(row?.company, "") === getCompanyKey(companyName, "");
+        });
+        const adminIdSet = new Set(adminCompanyRows.map((row) => normalize(row?.customerScheduleId)).filter(Boolean));
+        const adminKeySet = new Set(adminCompanyRows.map((row) => buildScheduleIdentityKey(row)));
+        const filteredUserRows = userRows.filter((row) => {
+          const rowSource = normalize(row?.source).toLowerCase();
+          const isFreshLocalCustomerRow = rowSource === "customer" && isRecentLocalScheduleEdit(row);
+          if (isFreshLocalCustomerRow) return true;
+          const rowId = normalize(row?.customerScheduleId);
+          if (rowId && adminIdSet.has(rowId)) return true;
+          return adminKeySet.has(buildScheduleIdentityKey(row));
+        });
+        if (!filteredUserRows.length) return;
         let remotePaymentStateById = new Map();
         try {
           remotePaymentStateById = await fetchRemoteSchedulePaymentStateByIds(
-            userRows.map((row) => ensureScheduleUuid(row))
+            filteredUserRows.map((row) => ensureScheduleUuid(row))
           );
         } catch (error) {
           console.warn("[TABLE][customer] 결제상태 보호 조회 실패", error);
         }
-        const insertRows = userRows.map((row) => {
+        const insertRows = filteredUserRows.map((row) => {
           const memoForDb = mergeMemoAndTimePreference(row?.memo, row?.timePreference);
           const rowId = ensureScheduleUuid(row);
           const remotePaymentState = remotePaymentStateById.get(rowId);
