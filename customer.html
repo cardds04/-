@@ -1004,6 +1004,7 @@
       const orderHistoryDetailListEl = document.getElementById("orderHistoryDetailList");
 
       const customerScheduleFormEl = document.getElementById("customerScheduleForm");
+      const customerScheduleSubmitBtnEl = customerScheduleFormEl?.querySelector('button[type="submit"]') || null;
       const scheduleYearEl = document.getElementById("scheduleYear");
       const scheduleMonthEl = document.getElementById("scheduleMonth");
       const scheduleDayEl = document.getElementById("scheduleDay");
@@ -1703,6 +1704,13 @@
         }
         const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, isTaxInvoiceRequested());
         expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
+      }
+      function setCustomerScheduleSubmittingState(isSubmitting) {
+        customerScheduleSubmitting = Boolean(isSubmitting);
+        if (customerScheduleSubmitBtnEl) {
+          customerScheduleSubmitBtnEl.disabled = customerScheduleSubmitting;
+          customerScheduleSubmitBtnEl.textContent = customerScheduleSubmitting ? "등록 중..." : "스케줄 등록";
+        }
       }
 
       function appendCanceledScheduleRecord(item, canceledBy = "customer", reason = "고객취소") {
@@ -2716,165 +2724,185 @@
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (customerScheduleSubmitting) return;
-        if (USE_SUPABASE_SYNC) {
-          try {
-            await pullTablesToCustomerStorage();
-          } catch (error) {
-            console.error("[TABLE][customer] submit 직전 pull 실패", error);
-          }
-        }
-        const user = getCurrentSessionUser();
-        if (!user) {
-          alert("로그인이 필요합니다.");
-          renderAuthState();
-          return;
-        }
-        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
-        const scheduleCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
-        if (normalize(scheduleCompanyName) !== normalize(user.company)) {
-          const users = readStorageArray(STORAGE_CUSTOMERS);
-          const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
-          if (userIndex >= 0) {
-            users[userIndex].company = scheduleCompanyName;
-            users[userIndex].companyCode = effectiveCompanyCode;
-            writeStorageArray(STORAGE_CUSTOMERS, users);
-            user.company = scheduleCompanyName;
-            user.companyCode = effectiveCompanyCode;
-          }
-        }
-
-        const year = Number(scheduleYearEl.value);
-        const month = Number(scheduleMonthEl.value);
-        const day = Number(scheduleDayEl.value);
-        const date = `${year}-${pad2(month)}-${pad2(day)}`;
-        if (isPastSchedule(date)) {
-          alert("오늘 이전 날짜는 접수할 수 없습니다.");
-          return;
-        }
-        const timePreference = normalizeTimePreference(scheduleMinuteEl?.value);
-        const selectedHour = String(scheduleHourEl.value || "09");
-        const time =
-          timePreference === "any" || timePreference === "other"
-            ? "시간상관없음"
-            : `${selectedHour === "any-time" ? "09" : selectedHour}:00`;
-        const taxInvoiceRequested = isLiteCustomerMode ? false : isTaxInvoiceRequested();
-        const expectedAmount = isLiteCustomerMode
-          ? null
-          : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
-        const place = normalize(document.getElementById("schedulePlace").value);
-        if (!place) return;
-        if (!isLiteCustomerMode && schedulePyeongEl.value === "미선택") {
-          alert("평수를 선택해주세요.");
-          return;
-        }
-        if (!isLiteCustomerMode && scheduleCompositionEl.value === "미선택") {
-          alert("촬영구성을 선택해주세요.");
-          return;
-        }
-        const dailyLimit = getEffectiveDailyLimit(date);
-        const bookedCount = getBookedCountForDate(date);
-        if (bookedCount >= dailyLimit) {
-          alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
-          return;
-        }
-
-        const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
-        const schedules = readStorageArray(STORAGE_SCHEDULES);
-        const createdSchedule = {
-          customerScheduleId: buildClientUuid(),
-          date,
-          time,
-          timePreference,
-          name: "작가미정",
-          company: scheduleCompanyName,
-          companyCode: normalize(effectiveCompanyCode),
-          place,
-          pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
-          jointCode: normalize(document.getElementById("scheduleJointCode").value),
-          doorCode: normalize(document.getElementById("scheduleDoorCode").value),
-          memo: normalize(document.getElementById("scheduleMemo").value),
-          composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
-          paymentStatus: "미입금",
-          paymentPayer: "",
-          paymentAmount: expectedAmount ? String(expectedAmount) : "",
-          paymentDate: "",
-          taxInvoiceRequested,
-          couponUsed: false,
-          source: "customer",
-          adminTimeUpdated: false,
-          localUpdatedAt: new Date().toISOString(),
-          writerPhone: "",
-          writerCarNumber: "",
-          customerId: user.id,
-          customerPhone: user.phone
-        };
-        schedules.unshift(createdSchedule);
-        writeStorageArray(STORAGE_SCHEDULES, schedules);
-        customerScheduleSubmitting = true;
+        setCustomerScheduleSubmittingState(true);
         try {
-          await syncCustomersTableFromStorage();
-          await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
-          queueCustomerTablePull();
-        } catch (error) {
-          console.error("[TABLE][customer] schedule create sync 실패", error);
-          const rollbackRows = readStorageArray(STORAGE_SCHEDULES).filter(
-            (row) => normalize(row?.customerScheduleId) !== normalize(createdSchedule.customerScheduleId)
-          );
-          writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
-          renderStatusList();
-          renderPaymentSummary();
-          alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
-          customerScheduleSubmitting = false;
-          return;
-        }
-        customerScheduleSubmitting = false;
-        const submissionReceipt = {
-          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          scheduleId: String(createdSchedule.customerScheduleId || "").trim(),
-          customerId: String(user?.id || "").trim(),
-          company: scheduleCompanyName,
-          date,
-          time,
-          timePreference,
-          place,
-          source: "customer_create",
-          createdAt: new Date().toISOString(),
-          status: "accepted"
-        };
-        appendLocalSubmissionReceipt(submissionReceipt);
-        void appendSubmissionReceiptToSupabase(submissionReceipt);
-        const createAlerts = readStorageArray(STORAGE_ALERTS);
-        createAlerts.unshift({
-          id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type: "schedule_create",
-          company: scheduleCompanyName,
-          date,
-          time,
-          createdAt: new Date().toISOString(),
-          read: false
-        });
-        writeStorageArray(STORAGE_ALERTS, createAlerts);
-        if (isNewCompany) {
-          const alerts = readStorageArray(STORAGE_ALERTS);
-          alerts.unshift({
+          if (USE_SUPABASE_SYNC) {
+            try {
+              await pullTablesToCustomerStorage();
+            } catch (error) {
+              console.error("[TABLE][customer] submit 직전 pull 실패", error);
+            }
+          }
+          const user = getCurrentSessionUser();
+          if (!user) {
+            alert("로그인이 필요합니다.");
+            renderAuthState();
+            return;
+          }
+          const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+          const scheduleCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
+          if (normalize(scheduleCompanyName) !== normalize(user.company)) {
+            const users = readStorageArray(STORAGE_CUSTOMERS);
+            const userIndex = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
+            if (userIndex >= 0) {
+              users[userIndex].company = scheduleCompanyName;
+              users[userIndex].companyCode = effectiveCompanyCode;
+              writeStorageArray(STORAGE_CUSTOMERS, users);
+              user.company = scheduleCompanyName;
+              user.companyCode = effectiveCompanyCode;
+            }
+          }
+
+          const year = Number(scheduleYearEl.value);
+          const month = Number(scheduleMonthEl.value);
+          const day = Number(scheduleDayEl.value);
+          const date = `${year}-${pad2(month)}-${pad2(day)}`;
+          if (isPastSchedule(date)) {
+            alert("오늘 이전 날짜는 접수할 수 없습니다.");
+            return;
+          }
+          const timePreference = normalizeTimePreference(scheduleMinuteEl?.value);
+          const selectedHour = String(scheduleHourEl.value || "09");
+          const time =
+            timePreference === "any" || timePreference === "other"
+              ? "시간상관없음"
+              : `${selectedHour === "any-time" ? "09" : selectedHour}:00`;
+          const taxInvoiceRequested = isLiteCustomerMode ? false : isTaxInvoiceRequested();
+          const expectedAmount = isLiteCustomerMode
+            ? null
+            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
+          const place = normalize(document.getElementById("schedulePlace").value);
+          if (!place) {
+            alert("주소를 입력해주세요.");
+            return;
+          }
+          if (!isLiteCustomerMode && schedulePyeongEl.value === "미선택") {
+            alert("평수를 선택해주세요.");
+            return;
+          }
+          if (!isLiteCustomerMode && scheduleCompositionEl.value === "미선택") {
+            alert("촬영구성을 선택해주세요.");
+            return;
+          }
+          const dailyLimit = getEffectiveDailyLimit(date);
+          const bookedCount = getBookedCountForDate(date);
+          if (bookedCount >= dailyLimit) {
+            alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
+            return;
+          }
+          const existingRows = readStorageArray(STORAGE_SCHEDULES);
+          const duplicateExists = existingRows.some((row) => {
+            const rowSource = normalize(row?.source).toLowerCase();
+            if (rowSource === "hold" || rowSource === "refund") return false;
+            return (
+              normalize(row?.date) === date &&
+              normalize(row?.time) === time &&
+              getCompanyKey(row?.company, row?.companyCode) === getCompanyKey(scheduleCompanyName, effectiveCompanyCode) &&
+              normalize(row?.place) === place
+            );
+          });
+          if (duplicateExists) {
+            alert("같은 일정이 이미 등록되어 있습니다. 내등록현황에서 확인해주세요.");
+            return;
+          }
+
+          const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
+          const schedules = existingRows;
+          const createdSchedule = {
+            customerScheduleId: buildClientUuid(),
+            date,
+            time,
+            timePreference,
+            name: "작가미정",
+            company: scheduleCompanyName,
+            companyCode: normalize(effectiveCompanyCode),
+            place,
+            pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
+            jointCode: normalize(document.getElementById("scheduleJointCode").value),
+            doorCode: normalize(document.getElementById("scheduleDoorCode").value),
+            memo: normalize(document.getElementById("scheduleMemo").value),
+            composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
+            paymentStatus: "미입금",
+            paymentPayer: "",
+            paymentAmount: expectedAmount ? String(expectedAmount) : "",
+            paymentDate: "",
+            taxInvoiceRequested,
+            couponUsed: false,
+            source: "customer",
+            adminTimeUpdated: false,
+            localUpdatedAt: new Date().toISOString(),
+            writerPhone: "",
+            writerCarNumber: "",
+            customerId: user.id,
+            customerPhone: user.phone
+          };
+          schedules.unshift(createdSchedule);
+          writeStorageArray(STORAGE_SCHEDULES, schedules);
+          try {
+            await syncCustomersTableFromStorage();
+            await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
+            queueCustomerTablePull();
+          } catch (error) {
+            console.error("[TABLE][customer] schedule create sync 실패", error);
+            const rollbackRows = readStorageArray(STORAGE_SCHEDULES).filter(
+              (row) => normalize(row?.customerScheduleId) !== normalize(createdSchedule.customerScheduleId)
+            );
+            writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
+            renderStatusList();
+            renderPaymentSummary();
+            alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
+            return;
+          }
+          const submissionReceipt = {
+            receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            scheduleId: String(createdSchedule.customerScheduleId || "").trim(),
+            customerId: String(user?.id || "").trim(),
+            company: scheduleCompanyName,
+            date,
+            time,
+            timePreference,
+            place,
+            source: "customer_create",
+            createdAt: new Date().toISOString(),
+            status: "accepted"
+          };
+          appendLocalSubmissionReceipt(submissionReceipt);
+          void appendSubmissionReceiptToSupabase(submissionReceipt);
+          const createAlerts = readStorageArray(STORAGE_ALERTS);
+          createAlerts.unshift({
             id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            type: "new_company_schedule",
+            type: "schedule_create",
             company: scheduleCompanyName,
             date,
             time,
             createdAt: new Date().toISOString(),
             read: false
           });
-          writeStorageArray(STORAGE_ALERTS, alerts);
+          writeStorageArray(STORAGE_ALERTS, createAlerts);
+          if (isNewCompany) {
+            const alerts = readStorageArray(STORAGE_ALERTS);
+            alerts.unshift({
+              id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              type: "new_company_schedule",
+              company: scheduleCompanyName,
+              date,
+              time,
+              createdAt: new Date().toISOString(),
+              read: false
+            });
+            writeStorageArray(STORAGE_ALERTS, alerts);
+          }
+          customerScheduleFormEl.reset();
+          setupDateTimeSelectors();
+          setSelectedPyeong("미선택");
+          setSelectedComposition("미선택");
+          setTaxInvoiceRequested(false);
+          updateExpectedPaymentText();
+          renderPaymentSummary();
+          alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
+        } finally {
+          setCustomerScheduleSubmittingState(false);
         }
-        customerScheduleFormEl.reset();
-        setupDateTimeSelectors();
-        setSelectedPyeong("미선택");
-        setSelectedComposition("미선택");
-        setTaxInvoiceRequested(false);
-        updateExpectedPaymentText();
-        renderPaymentSummary();
-        alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
       });
 
       statusListEl.addEventListener("click", async (event) => {
