@@ -1023,6 +1023,7 @@
 
       const currentYear = new Date().getFullYear();
       const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      const CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS = 2 * 60 * 1000;
       let editingScheduleId = null;
       let currentCustomerTab = "register";
       let skipAutoLoginOnce = false;
@@ -1636,6 +1637,15 @@
         if (!Number.isFinite(numeric) || numeric <= 0) return 0;
         return hasManWon ? Math.round(numeric * 10000) : Math.round(numeric);
       }
+      function getRowUpdatedAtMs(value) {
+        const ms = new Date(String(value || "")).getTime();
+        return Number.isFinite(ms) ? ms : NaN;
+      }
+      function isRecentLocalScheduleEdit(row) {
+        const localMs = getRowUpdatedAtMs(row?.localUpdatedAt);
+        if (Number.isNaN(localMs)) return false;
+        return Date.now() - localMs <= CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS;
+      }
       function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false) {
         const areaRaw = normalize(pyeong);
         const area =
@@ -2062,6 +2072,10 @@
           const fallbackKey = buildRowKey(row);
           const existsInAdmin =
             (scheduleId && adminIdSet.has(scheduleId)) || adminFallbackKeySet.has(fallbackKey);
+          if (!existsInAdmin && isRecentLocalScheduleEdit(row)) {
+            // 고객이 방금 수정/등록한 일정은 서버 pull 전까지 로컬 우선으로 잠시 보존
+            continue;
+          }
           if (!existsInAdmin) {
             schedules.splice(i, 1);
             changed = true;
@@ -2109,7 +2123,15 @@
           };
 
           if (index >= 0) {
-            schedules[index] = { ...schedules[index], ...nextRow };
+            const currentRow = schedules[index];
+            const localMs = getRowUpdatedAtMs(currentRow?.localUpdatedAt);
+            const remoteMs = getRowUpdatedAtMs(row?.updatedAt);
+            const shouldKeepLocal =
+              isRecentLocalScheduleEdit(currentRow) &&
+              (Number.isNaN(remoteMs) || (!Number.isNaN(localMs) && localMs > remoteMs));
+            if (!shouldKeepLocal) {
+              schedules[index] = { ...currentRow, ...nextRow };
+            }
             changed = true;
             return;
           }
@@ -2778,6 +2800,7 @@
           couponUsed: false,
           source: "customer",
           adminTimeUpdated: false,
+          localUpdatedAt: new Date().toISOString(),
           writerPhone: "",
           writerCarNumber: "",
           customerId: user.id,
@@ -2915,6 +2938,7 @@
           item.memo = normalize(cardEl.querySelector(".edit-memo")?.value);
           item.composition = normalize(cardEl.querySelector(".edit-composition")?.value) || "사진만";
           item.adminTimeUpdated = false;
+          item.localUpdatedAt = new Date().toISOString();
           schedules[index] = item;
           writeStorageArray(STORAGE_SCHEDULES, schedules);
           const user = getCurrentSessionUser();
