@@ -1422,7 +1422,8 @@
             rowCompanyName === companyName.toLowerCase() || rowCompanyName === legacyCompanyName.toLowerCase();
           const sameCompany = sameByCode || sameByName;
           const rowSource = normalize(row?.source).toLowerCase();
-          if (!(sameCompany && rowSource === "customer")) return row;
+          const syncableSource = rowSource !== "hold" && rowSource !== "refund";
+          if (!(sameCompany && syncableSource)) return row;
           const ensuredId = ensureScheduleUuid(row);
           const nextRow = {
             ...row,
@@ -1453,7 +1454,8 @@
             rowCompanyName === companyName.toLowerCase() || rowCompanyName === legacyCompanyName.toLowerCase();
           const sameCompany = sameByCode || sameByName;
           const rowSource = normalize(row?.source).toLowerCase();
-          return sameCompany && rowSource === "customer";
+          const syncableSource = rowSource !== "hold" && rowSource !== "refund";
+          return sameCompany && syncableSource;
         });
         if (!userRows.length) return;
         let remotePaymentStateById = new Map();
