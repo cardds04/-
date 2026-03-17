@@ -1935,8 +1935,21 @@
         const targetDate = String(dateKey || "").trim();
         const adminSourceRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         const customerRows = readStorageArray(STORAGE_SCHEDULES);
+        const buildCountKey = (row) => {
+          const date = normalize(row?.date);
+          const time = normalize(row?.time);
+          const companyKey = getCompanyKey(row?.company, row?.companyCode) || "nocompany";
+          const placeKey = normalize(row?.place).replace(/\s+/g, "").toLowerCase() || "noplace";
+          return `${date}|${time}|${companyKey}|${placeKey}`;
+        };
         if (adminSourceRows.length > 0) {
-          return adminSourceRows.filter((row) => String(row?.date || "").trim() === targetDate).length;
+          const keySet = new Set(
+            adminSourceRows
+              .filter((row) => String(row?.date || "").trim() === targetDate)
+              .map((row) => buildCountKey(row))
+              .filter(Boolean)
+          );
+          return keySet.size;
         }
         const adminRows = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
         const customerIds = new Set(
@@ -1944,15 +1957,21 @@
             .map((row) => String(row?.customerScheduleId || "").trim())
             .filter(Boolean)
         );
-
-        const customerCount = customerRows.filter((row) => String(row?.date || "").trim() === targetDate).length;
-        const adminOnlyCount = adminRows.filter((row) => {
+        const customerKeySet = new Set(
+          customerRows
+            .filter((row) => String(row?.date || "").trim() === targetDate)
+            .map((row) => buildCountKey(row))
+            .filter(Boolean)
+        );
+        const adminOnlyRows = adminRows.filter((row) => {
           if (String(row?.date || "").trim() !== targetDate) return false;
           const mirrorId = String(row?.writerMirrorId || "").trim();
           if (!mirrorId) return true;
           return !customerIds.has(mirrorId);
-        }).length;
-        return customerCount + adminOnlyCount;
+        });
+        const mergedKeySet = new Set(customerKeySet);
+        adminOnlyRows.forEach((row) => mergedKeySet.add(buildCountKey(row)));
+        return mergedKeySet.size;
       }
       function buildScheduleIdentityKey(row) {
         const date = normalize(row?.date);
