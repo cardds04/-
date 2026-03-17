@@ -1539,28 +1539,6 @@
         const id = normalize(scheduleId);
         if (!USE_SUPABASE_SYNC || !isUuidLike(id)) return;
         markDbMutationActivity("customer_schedule_delete");
-        const expectedCompanyNormalized = normalize(expectedCompanyName).toLowerCase();
-        const checkResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}&select=id,company_name,source&limit=1`,
-          {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store"
-          }
-        );
-        if (!checkResponse.ok) {
-          const errorText = await checkResponse.text();
-          throw new Error(`customer schedule 삭제전 조회 실패 (${checkResponse.status}): ${errorText}`);
-        }
-        const checkRows = await checkResponse.json();
-        if (!Array.isArray(checkRows) || checkRows.length === 0) return;
-        const remoteCompanyNormalized = normalize(checkRows[0]?.company_name).toLowerCase();
-        if (expectedCompanyNormalized && remoteCompanyNormalized && expectedCompanyNormalized !== remoteCompanyNormalized) {
-          throw new Error("다른 업체 일정은 삭제할 수 없습니다.");
-        }
         const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}`, {
           method: "DELETE",
           headers: {
