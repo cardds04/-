@@ -4829,6 +4829,10 @@
             companies.unshift({ name, phone: phone || "-" });
           }
         });
+        if (USE_SUPABASE_SYNC) {
+          // Supabase 사용 시 schedules 원본은 서버만 신뢰한다.
+          return;
+        }
 
         const existingScheduleIds = new Set(data.map((item) => String(item.customerScheduleId || "")).filter(Boolean));
         const shouldImportLocalCustomerSchedulesAsSource = !USE_SUPABASE_SYNC || !hasLoadedSchedulesFromServer;

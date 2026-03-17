@@ -1971,6 +1971,9 @@
           );
           return keySet.size;
         }
+        if (USE_SUPABASE_SYNC) {
+          return 0;
+        }
         const adminRows = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
         const customerIds = new Set(
           customerRows
@@ -2412,7 +2415,8 @@
           dedupedMap.set(key, choosePreferredScheduleRowForCustomerView(current, row));
         });
         const dedupedRows = Array.from(dedupedMap.values());
-        if (!USE_SUPABASE_SYNC || adminCompanyRows.length === 0) return dedupedRows;
+        if (USE_SUPABASE_SYNC && adminCompanyRows.length === 0) return [];
+        if (!USE_SUPABASE_SYNC) return dedupedRows;
         return dedupedRows.filter((row) => {
           const id = normalize(row?.customerScheduleId);
           if (id && adminIdSet.has(id)) return true;
