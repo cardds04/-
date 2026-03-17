@@ -4832,6 +4832,7 @@
 
         const existingScheduleIds = new Set(data.map((item) => String(item.customerScheduleId || "")).filter(Boolean));
         const shouldImportLocalCustomerSchedulesAsSource = !USE_SUPABASE_SYNC || !hasLoadedSchedulesFromServer;
+        const canHydratePaymentFieldsFromCustomerLocal = !USE_SUPABASE_SYNC || !hasLoadedSchedulesFromServer;
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         customerSchedules.forEach((row) => {
           const scheduleId = String(row?.customerScheduleId || "");
@@ -4859,7 +4860,13 @@
             target.name = String(row?.name || target.name || "작가미정").trim() || "작가미정";
             target.writerPhone = String(row?.writerPhone || target.writerPhone || "").trim();
             target.writerCarNumber = String(row?.writerCarNumber || target.writerCarNumber || "").trim();
-            target.paymentStatus = String(row?.paymentStatus || target.paymentStatus || "미입금").trim() || "미입금";
+            if (canHydratePaymentFieldsFromCustomerLocal) {
+              target.paymentStatus = String(row?.paymentStatus || target.paymentStatus || "미입금").trim() || "미입금";
+              target.paymentPayer = String(row?.paymentPayer || target.paymentPayer || "").trim();
+              target.paymentAmount = String(row?.paymentAmount || target.paymentAmount || "").trim();
+              target.paymentDate = String(row?.paymentDate || target.paymentDate || "").trim();
+              target.couponUsed = Boolean(row?.couponUsed ?? target.couponUsed);
+            }
             return;
           }
           if (!shouldImportLocalCustomerSchedulesAsSource) {
