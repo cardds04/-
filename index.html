@@ -4429,6 +4429,10 @@
       }
 
       function loadAdminSchedulesFromStorage() {
+        if (USE_SUPABASE_SYNC) {
+          // Supabase 동기화 모드에서는 로컬 캐시를 원본으로 사용하지 않는다.
+          return;
+        }
         const saved = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         data.splice(0, data.length, ...saved);
       }
@@ -11685,8 +11689,12 @@
           renderCompanies();
         }
         if (event.key === STORAGE_ADMIN_SCHEDULES) {
-          loadAdminSchedulesFromStorage();
-          renderList();
+          if (USE_SUPABASE_SYNC) {
+            void pullSchedulesFromSupabaseAndApply();
+          } else {
+            loadAdminSchedulesFromStorage();
+            renderList();
+          }
         }
         if (event.key === STORAGE_CUSTOMER_SCHEDULES || event.key === STORAGE_CUSTOMER_COMPANIES) {
           hydrateFromCustomerPageStorage();
@@ -11754,7 +11762,11 @@
             renderPaymentList();
           }
         });
-        loadAdminSchedulesFromStorage();
+        if (USE_SUPABASE_SYNC) {
+          void pullSchedulesFromSupabaseAndApply();
+        } else {
+          loadAdminSchedulesFromStorage();
+        }
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedMasterAccountMapAndApply();
@@ -11786,7 +11798,11 @@
             renderPaymentList();
           }
         });
-        loadAdminSchedulesFromStorage();
+        if (USE_SUPABASE_SYNC) {
+          void pullSchedulesFromSupabaseAndApply();
+        } else {
+          loadAdminSchedulesFromStorage();
+        }
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedMasterAccountMapAndApply();
