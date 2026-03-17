@@ -3061,20 +3061,27 @@
           };
           appendLocalSubmissionReceipt(cancelReceipt);
           void appendSubmissionReceiptToSupabase(cancelReceipt);
-          schedules.splice(index, 1);
-          writeStorageArray(STORAGE_SCHEDULES, schedules);
+          const deletedScheduleId = normalize(item?.customerScheduleId);
+          const deletedRowKey = buildScheduleIdentityKey(item);
+          const nextSchedules = schedules.filter((row) => {
+            const rowId = normalize(row?.customerScheduleId);
+            if (deletedScheduleId && rowId === deletedScheduleId) return false;
+            return buildScheduleIdentityKey(row) !== deletedRowKey;
+          });
+          writeStorageArray(STORAGE_SCHEDULES, nextSchedules);
           const user = getCurrentSessionUser();
           if (user) {
             try {
               await deleteCustomerScheduleFromSupabase(item.customerScheduleId);
-              queueCustomerTablePull();
             } catch (error) {
               console.error("[TABLE][customer] schedule delete sync 실패", error);
+            } finally {
+              // 서버 삭제 성공/실패와 무관하게 서버 기준으로 재동기화
+              queueCustomerTablePull();
             }
           }
           const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
           const writerSchedules = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
-          const deletedScheduleId = normalize(item?.customerScheduleId);
           const isSameSchedule = (row) => {
             const sameById = deletedScheduleId && normalize(row?.customerScheduleId || row?.writerMirrorId) === deletedScheduleId;
             if (sameById) return true;
