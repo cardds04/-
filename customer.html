@@ -1379,6 +1379,29 @@
           throw new Error(`companies 저장 실패 (${response.status}): ${errorText}`);
         }
       }
+      async function fetchRemoteSchedulePaymentStateByIds(ids) {
+        const normalizedIds = [...new Set((Array.isArray(ids) ? ids : []).map((id) => normalize(id)).filter(Boolean))];
+        if (!USE_SUPABASE_SYNC || !normalizedIds.length) return new Map();
+        const orFilter = normalizedIds.map((id) => `id.eq.${id}`).join(",");
+        if (!orFilter) return new Map();
+        const rows = await fetchJsonRows(
+          `schedules?select=id,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status&or=(${orFilter})`
+        );
+        const map = new Map();
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const id = normalize(row?.id);
+          if (!id) return;
+          map.set(id, {
+            paymentStatus: normalize(row?.payment_status),
+            paymentPayer: normalize(row?.payment_payer),
+            paymentAmount: normalize(row?.payment_amount),
+            paymentDate: normalize(row?.payment_date),
+            couponUsed: Boolean(row?.coupon_used),
+            status: normalize(row?.status)
+          });
+        });
+        return map;
+      }
       async function syncCustomerSchedulesTable(user) {
         if (!USE_SUPABASE_SYNC || !user) return;
         markDbMutationActivity("customer_schedule_mutation");
@@ -1430,10 +1453,28 @@
           return sameCompany && rowSource === "customer";
         });
         if (!userRows.length) return;
+        let remotePaymentStateById = new Map();
+        try {
+          remotePaymentStateById = await fetchRemoteSchedulePaymentStateByIds(
+            userRows.map((row) => ensureScheduleUuid(row))
+          );
+        } catch (error) {
+          console.warn("[TABLE][customer] 결제상태 보호 조회 실패", error);
+        }
         const insertRows = userRows.map((row) => {
           const memoForDb = mergeMemoAndTimePreference(row?.memo, row?.timePreference);
+          const rowId = ensureScheduleUuid(row);
+          const remotePaymentState = remotePaymentStateById.get(rowId);
+          const paymentStatus = normalize(remotePaymentState?.paymentStatus || row?.paymentStatus) || "미입금";
+          const paymentPayer = normalize(remotePaymentState?.paymentPayer || row?.paymentPayer);
+          const paymentAmount = normalize(remotePaymentState?.paymentAmount || row?.paymentAmount);
+          const paymentDate = normalize(remotePaymentState?.paymentDate || row?.paymentDate);
+          const couponUsed = remotePaymentState ? Boolean(remotePaymentState?.couponUsed) : Boolean(row?.couponUsed);
+          const scheduleStatus =
+            normalize(remotePaymentState?.status) ||
+            (paymentStatus === "입금완료" ? "paid" : "unpaid");
           return {
-            id: ensureScheduleUuid(row),
+            id: rowId,
             company_name: normalize(row?.company),
             writer_name: normalize(row?.name) || "작가미정",
             date_key: normalize(row?.date),
@@ -1444,12 +1485,12 @@
             memo: normalize(memoForDb),
             joint_code: normalize(row?.jointCode),
             door_code: normalize(row?.doorCode),
-            payment_status: normalize(row?.paymentStatus) || "미입금",
-            payment_payer: normalize(row?.paymentPayer),
-            payment_amount: normalize(row?.paymentAmount),
-            payment_date: normalize(row?.paymentDate),
-            coupon_used: Boolean(row?.couponUsed),
-            status: normalize(row?.paymentStatus) === "입금완료" ? "paid" : "unpaid",
+            payment_status: paymentStatus,
+            payment_payer: paymentPayer,
+            payment_amount: paymentAmount,
+            payment_date: paymentDate,
+            coupon_used: couponUsed,
+            status: scheduleStatus,
             source: "customer"
           };
         });
@@ -1545,11 +1586,11 @@
       }
       function getCustomerPaymentStatusLabel(rawStatus) {
         const status = normalize(rawStatus);
-        if (!status) return "미입금";
+        if (!status) return "입금확인중";
         if (status.includes("환불")) return "환불완료";
         if (status === "입금완료" || status === "입금") return "입금";
         if (status === "보류" || status === "입금확인중" || status === "부분입금") return "보류";
-        return "미입금";
+        return "입금확인중";
       }
       function getCustomerPaymentStatusClass(rawStatus) {
         const label = getCustomerPaymentStatusLabel(rawStatus);
