@@ -2082,10 +2082,6 @@
           const fallbackKey = buildRowKey(row);
           const existsInAdmin =
             (scheduleId && adminIdSet.has(scheduleId)) || adminFallbackKeySet.has(fallbackKey);
-          if (!existsInAdmin && isRecentLocalScheduleEdit(row)) {
-            // 고객이 방금 수정/등록한 일정은 서버 pull 전까지 로컬 우선으로 잠시 보존
-            continue;
-          }
           if (!existsInAdmin) {
             schedules.splice(i, 1);
             changed = true;
