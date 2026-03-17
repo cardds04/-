@@ -1184,7 +1184,7 @@
         const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
           fetchCustomersRowsForPull(),
-          fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
@@ -1234,7 +1234,9 @@
               paymentDate: String(row?.payment_date || "").trim(),
               couponUsed: Boolean(row?.coupon_used),
               source: String(row?.source || "active").trim() || "active",
-              adminTimeUpdated: false
+              adminTimeUpdated: false,
+              updatedAt: String(row?.updated_at || "").trim(),
+              createdAt: String(row?.created_at || "").trim()
             };
           })
           .filter((row) => row.company && row.date);
@@ -1598,6 +1600,27 @@
         if (label === "보류") return "payment-state-hold";
         if (label === "환불완료") return "payment-state-refund";
         return "payment-state-unpaid";
+      }
+      function getPaymentStatusPriorityForMerge(rawStatus) {
+        const status = normalize(rawStatus);
+        if (status.includes("환불")) return 4;
+        if (status === "입금완료" || status === "입금") return 3;
+        if (status === "보류" || status === "입금확인중" || status === "부분입금") return 2;
+        return 1;
+      }
+      function choosePreferredScheduleRowForCustomerView(prevRow, nextRow) {
+        if (!prevRow) return nextRow;
+        const prevPriority = getPaymentStatusPriorityForMerge(prevRow?.paymentStatus);
+        const nextPriority = getPaymentStatusPriorityForMerge(nextRow?.paymentStatus);
+        if (nextPriority > prevPriority) return nextRow;
+        if (nextPriority < prevPriority) return prevRow;
+        const prevUpdatedAt = new Date(String(prevRow?.updatedAt || prevRow?.createdAt || "")).getTime();
+        const nextUpdatedAt = new Date(String(nextRow?.updatedAt || nextRow?.createdAt || "")).getTime();
+        if (Number.isFinite(nextUpdatedAt) && Number.isFinite(prevUpdatedAt) && nextUpdatedAt > prevUpdatedAt) return nextRow;
+        const prevAmount = parsePaymentAmountValue(prevRow?.paymentAmount);
+        const nextAmount = parsePaymentAmountValue(nextRow?.paymentAmount);
+        if (nextAmount > prevAmount) return nextRow;
+        return prevRow;
       }
       function formatWonText(amount) {
         const value = Math.max(0, Number(amount) || 0);
@@ -2080,7 +2103,9 @@
             couponUsed: Boolean(row?.couponUsed),
             adminTimeUpdated: Boolean(row?.adminTimeUpdated),
             writerPhone: normalize(row?.writerPhone),
-            writerCarNumber: normalize(row?.writerCarNumber)
+            writerCarNumber: normalize(row?.writerCarNumber),
+            updatedAt: normalize(row?.updatedAt),
+            createdAt: normalize(row?.createdAt)
           };
 
           if (index >= 0) {
@@ -2290,7 +2315,7 @@
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const userCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
         const userCompanyNameKey = getCompanyKey(user.company, "");
-        return readStorageArray(STORAGE_SCHEDULES).filter((row) => {
+        const filteredRows = readStorageArray(STORAGE_SCHEDULES).filter((row) => {
           const rowCustomerId = String(row?.customerId || "").trim();
           const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
           const rowCompanyCode = normalize(row?.companyCode);
@@ -2299,6 +2324,13 @@
           if (!effectiveCompanyCode && getCompanyKey(row?.company, "") === userCompanyNameKey) return true;
           return userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey;
         });
+        const dedupedMap = new Map();
+        filteredRows.forEach((row) => {
+          const key = buildScheduleIdentityKey(row);
+          const current = dedupedMap.get(key);
+          dedupedMap.set(key, choosePreferredScheduleRowForCustomerView(current, row));
+        });
+        return Array.from(dedupedMap.values());
       }
 
       function isPastSchedule(dateText) {
