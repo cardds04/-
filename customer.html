@@ -2362,6 +2362,20 @@
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const userCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
         const userCompanyNameKey = getCompanyKey(user.company, "");
+        const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
+        const adminCompanyRows = adminRows.filter((row) => {
+          const rowCompanyCode = normalize(row?.companyCode);
+          if (effectiveCompanyCode && rowCompanyCode) {
+            return rowCompanyCode.toLowerCase() === effectiveCompanyCode.toLowerCase();
+          }
+          return getCompanyKey(row?.company, row?.companyCode) === userCompanyKey || getCompanyKey(row?.company, "") === userCompanyNameKey;
+        });
+        const adminIdSet = new Set(
+          adminCompanyRows
+            .map((row) => normalize(row?.customerScheduleId))
+            .filter(Boolean)
+        );
+        const adminKeySet = new Set(adminCompanyRows.map((row) => buildScheduleIdentityKey(row)));
         const filteredRows = readStorageArray(STORAGE_SCHEDULES).filter((row) => {
           const rowCustomerId = String(row?.customerId || "").trim();
           const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
@@ -2377,7 +2391,13 @@
           const current = dedupedMap.get(key);
           dedupedMap.set(key, choosePreferredScheduleRowForCustomerView(current, row));
         });
-        return Array.from(dedupedMap.values());
+        const dedupedRows = Array.from(dedupedMap.values());
+        if (!USE_SUPABASE_SYNC || adminCompanyRows.length === 0) return dedupedRows;
+        return dedupedRows.filter((row) => {
+          const id = normalize(row?.customerScheduleId);
+          if (id && adminIdSet.has(id)) return true;
+          return adminKeySet.has(buildScheduleIdentityKey(row));
+        });
       }
 
       function isPastSchedule(dateText) {
