@@ -1119,6 +1119,7 @@
           </form>
           <div class="filter-row" style="margin-bottom: 10px;">
             <input id="paymentCompanySearchInput" class="small-select" type="text" placeholder="업체명 검색" />
+            <input id="paymentPayerSearchInput" class="small-select" type="text" placeholder="입금자명 검색" />
             <button id="clearPaymentCompanySearchBtn" class="btn-sm" type="button">전체</button>
           </div>
           <div id="paymentMonthNavigator" class="filter-row hidden" style="margin-bottom: 8px;">
@@ -2722,6 +2723,7 @@
       const paymentCouponCountSelectEl = document.getElementById("paymentCouponCountSelect");
       const paymentCouponEditBtnEl = document.getElementById("paymentCouponEditBtn");
       const paymentCompanySearchInputEl = document.getElementById("paymentCompanySearchInput");
+      const paymentPayerSearchInputEl = document.getElementById("paymentPayerSearchInput");
       const clearPaymentCompanySearchBtnEl = document.getElementById("clearPaymentCompanySearchBtn");
       const paymentMonthNavigatorEl = document.getElementById("paymentMonthNavigator");
       const paymentMonthPrevBtnEl = document.getElementById("paymentMonthPrevBtn");
@@ -2878,6 +2880,7 @@
       let quickPhotographerPickerIndex = null;
       let currentPaymentFilter = "unpaid";
       let paymentCompanyKeyword = "";
+      let paymentPayerKeyword = "";
       let paymentViewYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
       let paymentShowAllMonthsForPaid = false;
       let editingPaymentIndex = null;
@@ -8531,6 +8534,7 @@
           return "";
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
+        const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
         const getCouponProgressText = (companyName) => {
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
@@ -8591,6 +8595,10 @@
           .filter(({ item }) => {
             if (!keyword) return true;
             return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+          })
+          .filter(({ item }) => {
+            if (!payerKeyword) return true;
+            return String(item?.paymentPayer || "").trim().toLowerCase().includes(payerKeyword);
           })
           .filter(({ item }) => {
             if (!shouldFilterByMonth) return true;
@@ -9410,9 +9418,15 @@
         paymentCompanyKeyword = String(paymentCompanySearchInputEl.value || "").trim();
         renderPaymentList();
       });
+      paymentPayerSearchInputEl?.addEventListener("input", () => {
+        paymentPayerKeyword = String(paymentPayerSearchInputEl.value || "").trim();
+        renderPaymentList();
+      });
       clearPaymentCompanySearchBtnEl?.addEventListener("click", () => {
         paymentCompanyKeyword = "";
+        paymentPayerKeyword = "";
         if (paymentCompanySearchInputEl) paymentCompanySearchInputEl.value = "";
+        if (paymentPayerSearchInputEl) paymentPayerSearchInputEl.value = "";
         renderPaymentList();
       });
       paymentMonthPrevBtnEl?.addEventListener("click", () => {
