@@ -877,7 +877,7 @@
         if (!USE_SUPABASE_SYNC) return;
         const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
           fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
-          fetchWriterJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchWriterJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows("companies?select=name,phone&order=updated_at.desc"),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -904,6 +904,8 @@
             pyeong: normalize(row?.pyeong),
             composition: normalize(row?.composition) || "사진만",
             memo: normalize(row?.memo),
+            jointCode: normalize(row?.joint_code),
+            doorCode: normalize(row?.door_code),
             paymentStatus: normalize(row?.payment_status) || "미입금",
             paymentPayer: normalize(row?.payment_payer),
             paymentAmount: normalize(row?.payment_amount),
@@ -1185,6 +1187,8 @@
           lines.push(`업체: ${item.company || "-"}`);
           lines.push(`업체연락처: ${getCompanyPhoneForItem(item)}`);
           lines.push(`장소: ${item.place || "-"}`);
+          lines.push(`공동현관 비번: ${item.jointCode || "-"}`);
+          lines.push(`세대 비번: ${item.doorCode || "-"}`);
           lines.push(`평수: ${item.pyeong || "-"}`);
           lines.push(`촬영구성: ${item.composition || "-"}`);
           lines.push(`메모: ${item.memo || "-"}`);
@@ -1662,6 +1666,8 @@
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
                   장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(navAddress)}">주소복사</button><br />
+                  공동현관 비번: ${item.jointCode || "-"}<br />
+                  세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
                   메모: ${item.memo || "-"}
