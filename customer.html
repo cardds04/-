@@ -980,7 +980,6 @@
             .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, queueCustomerTablePull)
-            .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "dayoff_requests" }, queueCustomerTablePull)
             .subscribe();
         } catch (error) {
@@ -1193,6 +1192,24 @@
         if (!USE_SUPABASE_SYNC) return;
         if (customerScheduleSubmitting) return;
         await pullSharedMasterAccountMapAndApply();
+        const fetchPaymentsRowsForPull = async () => {
+          const sessionUser = getCurrentSessionUser();
+          if (!sessionUser) return [];
+          const effectiveCompanyCode = getEffectiveUserCompanyCode(sessionUser);
+          const resolvedCompanyName = resolveRegisteredCompanyNameForUser(sessionUser, effectiveCompanyCode);
+          const companyNames = [...new Set([normalize(resolvedCompanyName), normalize(sessionUser?.company)].filter(Boolean))];
+          if (!companyNames.length) return [];
+          const rowsList = await Promise.all(
+            companyNames.map((companyName) =>
+              fetchJsonRows(
+                `payments?select=id,company_name,payer_name,amount,paid_at,status,memo,updated_at&company_name=eq.${encodeURIComponent(
+                  companyName
+                )}&order=updated_at.desc&limit=400`
+              ).catch(() => [])
+            )
+          );
+          return rowsList.flat();
+        };
         const fetchCustomersRowsForPull = async () => {
           try {
             return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,site_type,created_at&order=updated_at.desc");
@@ -1206,7 +1223,7 @@
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
           fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
-          fetchJsonRows("payments?select=id,company_name,payer_name,amount,paid_at,status,memo,updated_at&order=updated_at.desc"),
+          fetchPaymentsRowsForPull(),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
         const normalizePaymentStatusFromPaymentsTable = (rawStatus) => {

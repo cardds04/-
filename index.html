@@ -6742,10 +6742,8 @@
             normalizeCompanyName(item?.company).toLowerCase(),
             normalizeCompanyName(item?.place).toLowerCase()
           ].join("|");
-          return !(
-            (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
-            canceledFallbackKeySet.has(itemFallbackKey)
-          );
+          if (itemScheduleId) return !canceledScheduleIdSet.has(itemScheduleId);
+          return !canceledFallbackKeySet.has(itemFallbackKey);
         });
         titleEl.textContent = `${calendarViewYear}년 ${calendarViewMonth}월`;
         monthTotalEl.textContent = `이번 달 총 예약 ${monthSchedules.length}건`;
@@ -6777,10 +6775,8 @@
                 normalizeCompanyName(item?.company).toLowerCase(),
                 normalizeCompanyName(item?.place).toLowerCase()
               ].join("|");
-              return !(
-                (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
-                canceledFallbackKeySet.has(itemFallbackKey)
-              );
+              if (itemScheduleId) return !canceledScheduleIdSet.has(itemScheduleId);
+              return !canceledFallbackKeySet.has(itemFallbackKey);
             })
             .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
           const dailyLimit = getEffectiveDailyLimit(dateKey);
@@ -9136,10 +9132,8 @@
             normalizeCompanyName(item?.company).toLowerCase(),
             normalizeCompanyName(item?.place).toLowerCase()
           ].join("|");
-          return !(
-            (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
-            canceledFallbackKeySet.has(itemFallbackKey)
-          );
+          if (itemScheduleId) return !canceledScheduleIdSet.has(itemScheduleId);
+          return !canceledFallbackKeySet.has(itemFallbackKey);
         });
         if (todayNewCountEl) {
           const todayNewCount = activeRows.filter((item) => String(item?.date || "").trim() === todayKey).length;
@@ -9195,9 +9189,9 @@
               normalizeCompanyName(item?.company).toLowerCase(),
               normalizeCompanyName(item?.place).toLowerCase()
             ].join("|");
-            const isCanceled =
-              (itemScheduleId && canceledScheduleIdSet.has(itemScheduleId)) ||
-              canceledFallbackKeySet.has(itemFallbackKey);
+            const isCanceled = itemScheduleId
+              ? canceledScheduleIdSet.has(itemScheduleId)
+              : canceledFallbackKeySet.has(itemFallbackKey);
             if (isCanceled) return false;
 
             const passPhotographer =
