@@ -2619,9 +2619,14 @@
       function renderPaymentSummary() {
         const schedules = getUserSchedules();
         const paidCount = schedules.filter((item) => normalize(item?.paymentStatus) === "입금완료").length;
-        const unpaidRows = schedules.filter((item) => normalize(item?.paymentStatus) !== "입금완료");
-        const pendingCount = unpaidRows.length;
-        const unpaidTotalAmount = unpaidRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
+        const holdRows = schedules.filter((item) => normalize(item?.paymentStatus) === "보류");
+        const pendingRows = schedules.filter(
+          (item) => normalize(item?.paymentStatus) !== "입금완료" && normalize(item?.paymentStatus) !== "보류"
+        );
+        const pendingCount = pendingRows.length;
+        const holdCount = holdRows.length;
+        const unpaidTotalAmount = pendingRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
+        const holdAccruedAmount = holdRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
         const vatAmount = Math.round(unpaidTotalAmount * 0.1);
         const totalWithVat = unpaidTotalAmount + vatAmount;
         paymentSummaryBoxEl.innerHTML = `
@@ -2629,9 +2634,11 @@
           <div class="payment-summary-grid">
             <div class="status-card">입금완료: <strong>${paidCount}건</strong></div>
             <div class="status-card">입금확인중: <strong>${pendingCount}건</strong></div>
+            <div class="status-card">보류: <strong>${holdCount}건</strong></div>
           </div>
           <div class="status-card" style="margin-top:8px; line-height:1.65;">
             <div><strong>내가 입금해야 할 금액: <span style="color:#1d9f57;">${formatWonText(unpaidTotalAmount)}</span></strong></div>
+            <div><strong>적립된금액(보류): <span style="color:#365ea8;">${formatWonText(holdAccruedAmount)}</span></strong></div>
             <div class="hint"><strong>계좌번호:</strong> 농협 3021511169151 김진영</div>
             <div style="font-size:0.9rem; margin-top:2px;">세금계산서 발행시: ${formatWonText(totalWithVat)} (10% 추가)</div>
             <div class="hint">입금후 관리자에게 세금계산서를 요청해주세요.</div>
