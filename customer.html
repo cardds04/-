@@ -1200,12 +1200,61 @@
             return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc");
           }
         };
-        const [companiesRows, customersRows, schedulesRows, dayoffRows] = await Promise.all([
+        const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
           fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
           fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
+          fetchJsonRows("payments?select=id,company_name,payer_name,amount,paid_at,status,memo,updated_at&order=updated_at.desc"),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
+        const normalizePaymentStatusFromPaymentsTable = (rawStatus) => {
+          const status = normalize(rawStatus);
+          if (!status) return "미입금";
+          if (status.includes("환불")) return "환불완료";
+          if (status === "보류") return "보류";
+          if (status === "입금완료" || status === "입금") return "입금완료";
+          if (status === "부분입금") return "부분입금";
+          return "미입금";
+        };
+        const formatPaidAtToUiDate = (raw) => {
+          const value = normalize(raw);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.slice(5);
+          return value;
+        };
+        const paymentPatchByScheduleId = new Map();
+        (Array.isArray(paymentsRows) ? paymentsRows : []).forEach((row) => {
+          let memoPayload = {};
+          try {
+            memoPayload = row?.memo ? JSON.parse(row.memo) : {};
+          } catch (error) {
+            memoPayload = {};
+          }
+          const identity = normalize(memoPayload?.identity);
+          const snapshot = memoPayload?.snapshot && typeof memoPayload.snapshot === "object" ? memoPayload.snapshot : {};
+          const scheduleIdFromIdentity = identity.startsWith("sid:") ? identity.slice(4) : "";
+          const scheduleId = normalize(scheduleIdFromIdentity || snapshot?.customerScheduleId);
+          if (!scheduleId) return;
+          const amountRaw = normalize(memoPayload?.amountRaw || snapshot?.paymentAmount);
+          const amountFromNumeric =
+            Number.isFinite(Number(row?.amount)) && Number(row?.amount) > 0 ? String(Math.floor(Number(row.amount))) : "";
+          const patch = {
+            paymentStatus: normalizePaymentStatusFromPaymentsTable(row?.status || snapshot?.paymentStatus),
+            paymentPayer: normalize(row?.payer_name || snapshot?.paymentPayer),
+            paymentAmount: amountRaw || amountFromNumeric,
+            paymentDate: formatPaidAtToUiDate(row?.paid_at || snapshot?.paymentDate),
+            couponUsed: Boolean(snapshot?.couponUsed)
+          };
+          const prev = paymentPatchByScheduleId.get(scheduleId);
+          if (!prev) {
+            paymentPatchByScheduleId.set(scheduleId, patch);
+            return;
+          }
+          const prevUpdatedAtMs = new Date(normalize(prev?.updatedAt)).getTime();
+          const rowUpdatedAtMs = new Date(normalize(row?.updated_at)).getTime();
+          if (Number.isFinite(rowUpdatedAtMs) && (!Number.isFinite(prevUpdatedAtMs) || rowUpdatedAtMs >= prevUpdatedAtMs)) {
+            paymentPatchByScheduleId.set(scheduleId, { ...patch, updatedAt: normalize(row?.updated_at) });
+          }
+        });
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
           .map((row) => ({
             name: String(row?.name || "").trim(),
@@ -1233,8 +1282,10 @@
           .filter((row) => String(row?.source || "").trim() !== "hold" && String(row?.source || "").trim() !== "refund")
           .map((row) => {
             const parsedMemo = splitMemoAndTimePreference(row?.memo);
+            const scheduleId = String(row?.id || "").trim();
+            const paymentPatch = paymentPatchByScheduleId.get(scheduleId);
             return {
-              customerScheduleId: String(row?.id || "").trim(),
+              customerScheduleId: scheduleId,
               date: String(row?.date_key || "").trim(),
               time: String(row?.time_key || "09:00").trim() || "09:00",
               timePreference: parsedMemo.timePreference,
@@ -1247,11 +1298,11 @@
               doorCode: String(row?.door_code || "").trim(),
               memo: parsedMemo.memo,
               composition: String(row?.composition || "사진만").trim() || "사진만",
-              paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
-              paymentPayer: String(row?.payment_payer || "").trim(),
-              paymentAmount: String(row?.payment_amount || "").trim(),
-              paymentDate: String(row?.payment_date || "").trim(),
-              couponUsed: Boolean(row?.coupon_used),
+              paymentStatus: normalize(paymentPatch?.paymentStatus || row?.payment_status) || "미입금",
+              paymentPayer: normalize(paymentPatch?.paymentPayer || row?.payment_payer),
+              paymentAmount: normalize(paymentPatch?.paymentAmount || row?.payment_amount),
+              paymentDate: normalize(paymentPatch?.paymentDate || row?.payment_date),
+              couponUsed: paymentPatch ? Boolean(paymentPatch?.couponUsed) : Boolean(row?.coupon_used),
               source: String(row?.source || "active").trim() || "active",
               adminTimeUpdated: false,
               updatedAt: String(row?.updated_at || "").trim(),
