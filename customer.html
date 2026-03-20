@@ -2548,9 +2548,8 @@
 
       function renderStatusList() {
         const schedules = getUserSchedules();
-        const canceledSchedules = getUserCanceledSchedules();
 
-        if (schedules.length === 0 && canceledSchedules.length === 0) {
+        if (schedules.length === 0) {
           statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
           return;
         }
@@ -2696,36 +2695,11 @@
         const pastMarkup = pastSchedules.length
           ? pastSchedules.map((item) => renderScheduleCard(item)).join("")
           : '<div class="status-card">과거기록이 없습니다.</div>';
-        const canceledMarkup = canceledSchedules.length
-          ? canceledSchedules
-              .map((item) => {
-                const canceledAtText = formatDateTimeText(item?.canceledAt);
-                return `
-                  <article class="status-card" style="background:#fff7f7; border-color:#ffd9d9;">
-                    <div class="status-head">
-                      <span>${item.date || "-"} | ${formatScheduleTimeWithPreference(item.time || "09:00")}</span>
-                      <span class="danger">취소완료</span>
-                    </div>
-                    <div class="status-meta">
-                      장소: ${item.place || "-"}<br />
-                      평수: ${item.pyeong || "-"}<br />
-                      촬영구성: ${item.composition || "-"}<br />
-                      메모: ${item.memo || "-"}<br />
-                      취소사유: ${item.reason || "취소"}<br />
-                      취소일시: ${canceledAtText}
-                    </div>
-                  </article>
-                `;
-              })
-              .join("")
-          : '<div class="status-card">취소된 일정이 없습니다.</div>';
         statusListEl.innerHTML = `
           <div class="status-card" style="font-weight:700;">촬영예정 / 오늘촬영</div>
           ${upcomingMarkup}
           <div class="status-card" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
           ${pastMarkup}
-          <div class="status-card" style="font-weight:700; margin-top: 8px;">취소된일정</div>
-          ${canceledMarkup}
         `;
       }
 
