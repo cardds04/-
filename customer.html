@@ -410,6 +410,7 @@
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
       const STORAGE_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
+      const STORAGE_CUSTOMER_HOLD_PAYMENTS = "scheduleSiteCustomerHoldPayments";
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_AUTO_BACKUP_ENTRIES = "scheduleSiteAutoBackupEntriesV1";
       const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000;
@@ -979,6 +980,7 @@
             .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, queueCustomerTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "dayoff_requests" }, queueCustomerTablePull)
             .subscribe();
         } catch (error) {
@@ -1222,6 +1224,7 @@
           return value;
         };
         const paymentPatchByScheduleId = new Map();
+        const holdPaymentRows = [];
         (Array.isArray(paymentsRows) ? paymentsRows : []).forEach((row) => {
           let memoPayload = {};
           try {
@@ -1233,17 +1236,27 @@
           const snapshot = memoPayload?.snapshot && typeof memoPayload.snapshot === "object" ? memoPayload.snapshot : {};
           const scheduleIdFromIdentity = identity.startsWith("sid:") ? identity.slice(4) : "";
           const scheduleId = normalize(scheduleIdFromIdentity || snapshot?.customerScheduleId);
+          const source = normalize(memoPayload?.source);
+          const normalizedStatus = normalizePaymentStatusFromPaymentsTable(row?.status || snapshot?.paymentStatus);
           if (!scheduleId) return;
           const amountRaw = normalize(memoPayload?.amountRaw || snapshot?.paymentAmount);
           const amountFromNumeric =
             Number.isFinite(Number(row?.amount)) && Number(row?.amount) > 0 ? String(Math.floor(Number(row.amount))) : "";
           const patch = {
-            paymentStatus: normalizePaymentStatusFromPaymentsTable(row?.status || snapshot?.paymentStatus),
+            paymentStatus: normalizedStatus,
             paymentPayer: normalize(row?.payer_name || snapshot?.paymentPayer),
             paymentAmount: amountRaw || amountFromNumeric,
             paymentDate: formatPaidAtToUiDate(row?.paid_at || snapshot?.paymentDate),
             couponUsed: Boolean(snapshot?.couponUsed)
           };
+          if (normalizedStatus === "보류" || source === "hold") {
+            holdPaymentRows.push({
+              scheduleId,
+              company: normalize(row?.company_name || snapshot?.company),
+              paymentAmount: patch.paymentAmount,
+              updatedAt: normalize(row?.updated_at)
+            });
+          }
           const prev = paymentPatchByScheduleId.get(scheduleId);
           if (!prev) {
             paymentPatchByScheduleId.set(scheduleId, patch);
@@ -1321,6 +1334,7 @@
         writeStorageArraySilently(STORAGE_COMPANIES, companies);
         writeStorageArraySilently(STORAGE_CUSTOMERS, customers);
         writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, mappedSchedules);
+        writeStorageArraySilently(STORAGE_CUSTOMER_HOLD_PAYMENTS, holdPaymentRows);
         writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, mappedSchedules.map((row) => ({
           writerMirrorId: row.customerScheduleId,
           date: row.date,
@@ -2492,6 +2506,28 @@
           return adminKeySet.has(buildScheduleIdentityKey(row));
         });
       }
+      function getUserCanceledSchedules() {
+        const user = getCurrentSessionUser();
+        if (!user) return [];
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const userCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
+        const userCompanyNameKey = getCompanyKey(user.company, "");
+        return readStorageArray(STORAGE_CANCELED_SCHEDULES)
+          .filter((row) => {
+            const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
+            const rowCompanyNameKey = getCompanyKey(row?.company, "");
+            return (
+              (userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey) ||
+              (userCompanyNameKey && rowCompanyNameKey && rowCompanyNameKey === userCompanyNameKey)
+            );
+          })
+          .sort((a, b) => {
+            const aMs = new Date(String(a?.canceledAt || "")).getTime();
+            const bMs = new Date(String(b?.canceledAt || "")).getTime();
+            if (Number.isFinite(aMs) && Number.isFinite(bMs) && bMs !== aMs) return bMs - aMs;
+            return String(b?.date || "").localeCompare(String(a?.date || ""));
+          });
+      }
 
       function isPastSchedule(dateText) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return false;
@@ -2512,8 +2548,9 @@
 
       function renderStatusList() {
         const schedules = getUserSchedules();
+        const canceledSchedules = getUserCanceledSchedules();
 
-        if (schedules.length === 0) {
+        if (schedules.length === 0 && canceledSchedules.length === 0) {
           statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
           return;
         }
@@ -2659,25 +2696,63 @@
         const pastMarkup = pastSchedules.length
           ? pastSchedules.map((item) => renderScheduleCard(item)).join("")
           : '<div class="status-card">과거기록이 없습니다.</div>';
+        const canceledMarkup = canceledSchedules.length
+          ? canceledSchedules
+              .map((item) => {
+                const canceledAtText = formatDateTimeText(item?.canceledAt);
+                return `
+                  <article class="status-card" style="background:#fff7f7; border-color:#ffd9d9;">
+                    <div class="status-head">
+                      <span>${item.date || "-"} | ${formatScheduleTimeWithPreference(item.time || "09:00")}</span>
+                      <span class="danger">취소완료</span>
+                    </div>
+                    <div class="status-meta">
+                      장소: ${item.place || "-"}<br />
+                      평수: ${item.pyeong || "-"}<br />
+                      촬영구성: ${item.composition || "-"}<br />
+                      메모: ${item.memo || "-"}<br />
+                      취소사유: ${item.reason || "취소"}<br />
+                      취소일시: ${canceledAtText}
+                    </div>
+                  </article>
+                `;
+              })
+              .join("")
+          : '<div class="status-card">취소된 일정이 없습니다.</div>';
         statusListEl.innerHTML = `
           <div class="status-card" style="font-weight:700;">촬영예정 / 오늘촬영</div>
           ${upcomingMarkup}
           <div class="status-card" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
           ${pastMarkup}
+          <div class="status-card" style="font-weight:700; margin-top: 8px;">취소된일정</div>
+          ${canceledMarkup}
         `;
       }
 
       function renderPaymentSummary() {
         const schedules = getUserSchedules();
+        const user = getCurrentSessionUser();
+        const effectiveCompanyCode = user ? getEffectiveUserCompanyCode(user) : "";
+        const userCompanyKey = user ? getCompanyKey(user.company, effectiveCompanyCode) : "";
+        const userCompanyNameKey = user ? getCompanyKey(user.company, "") : "";
+        const holdPaymentRows = readStorageArray(STORAGE_CUSTOMER_HOLD_PAYMENTS).filter((row) => {
+          const companyKey = getCompanyKey(row?.company, "");
+          return companyKey && (companyKey === userCompanyKey || companyKey === userCompanyNameKey);
+        });
         const paidCount = schedules.filter((item) => normalize(item?.paymentStatus) === "입금완료").length;
         const holdRows = schedules.filter((item) => normalize(item?.paymentStatus) === "보류");
         const pendingRows = schedules.filter(
           (item) => normalize(item?.paymentStatus) !== "입금완료" && normalize(item?.paymentStatus) !== "보류"
         );
         const pendingCount = pendingRows.length;
-        const holdCount = holdRows.length;
+        const holdCount = holdPaymentRows.length || holdRows.length;
         const unpaidTotalAmount = pendingRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
-        const holdAccruedAmount = holdRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
+        const holdAccruedAmountFromPayments = holdPaymentRows.reduce(
+          (sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount),
+          0
+        );
+        const holdAccruedAmountFromSchedules = holdRows.reduce((sum, item) => sum + parsePaymentAmountValue(item?.paymentAmount), 0);
+        const holdAccruedAmount = holdAccruedAmountFromPayments || holdAccruedAmountFromSchedules;
         const vatAmount = Math.round(unpaidTotalAmount * 0.1);
         const totalWithVat = unpaidTotalAmount + vatAmount;
         paymentSummaryBoxEl.innerHTML = `
