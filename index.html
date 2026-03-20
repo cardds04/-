@@ -11023,12 +11023,16 @@
           // 회사명이 매핑 변경되는 경우가 있어 장소+일시 기준도 함께 허용
           return (sameDate && sameTime && samePlace && sameCompany) || (sameDate && sameTime && samePlace);
         };
+        const shouldMoveToHoldAfterDelete = String(deletedItem?.paymentStatus || "").trim() === "입금완료";
         appendCanceledScheduleRecord(deletedItem, "admin", "관리자삭제");
         data.splice(index, 1);
         for (let i = onHoldPayments.length - 1; i >= 0; i -= 1) {
-          if (isSameDeletedSchedule(onHoldPayments[i])) {
-            onHoldPayments.splice(i, 1);
-          }
+          if (!isSameDeletedSchedule(onHoldPayments[i])) continue;
+          onHoldPayments.splice(i, 1);
+        }
+        if (shouldMoveToHoldAfterDelete) {
+          // 입금완료 건은 스케줄이 삭제되어도 보류 업체에서 후속 처리 가능하도록 이관한다.
+          onHoldPayments.unshift({ ...deletedItem });
         }
         for (let i = refundPayments.length - 1; i >= 0; i -= 1) {
           if (isSameDeletedSchedule(refundPayments[i])) {
@@ -11073,14 +11077,16 @@
         void deleteScheduleFromSupabaseById(deletedScheduleId).catch((error) => {
           console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
         });
-        void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
-          .then((deleted) => {
-            if (!deleted) return;
-            return pullPaymentsFromSupabaseAndApply();
-          })
-          .catch((error) => {
-            console.error("[PAYMENTS][index] 연관 입금 삭제 실패", error);
-          });
+        if (!shouldMoveToHoldAfterDelete) {
+          void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
+            .then((deleted) => {
+              if (!deleted) return;
+              return pullPaymentsFromSupabaseAndApply();
+            })
+            .catch((error) => {
+              console.error("[PAYMENTS][index] 연관 입금 삭제 실패", error);
+            });
+        }
       }
 
       function buildScheduleFallbackKey(row) {
@@ -11268,10 +11274,27 @@
           return;
         }
         const targetItem = targetList[targetIndex];
+        const shouldMoveToHoldAfterDelete =
+          sourceLabel === "진행중" && String(targetItem?.paymentStatus || "").trim() === "입금완료";
         const confirmed = confirm("이전기록 항목을 삭제할까요?");
         if (!confirmed) return;
         appendCanceledScheduleRecord(targetItem, "admin", "이전기록삭제");
         targetList.splice(targetIndex, 1);
+        if (shouldMoveToHoldAfterDelete) {
+          const duplicateIndex = onHoldPayments.findIndex((row) => {
+            const sameById =
+              scheduleId && String(row?.customerScheduleId || "").trim() === String(scheduleId || "").trim();
+            if (sameById) return true;
+            return (
+              String(row?.date || "").trim() === date &&
+              String(row?.time || "").trim() === time &&
+              normalizeCompanyName(row?.company) === company &&
+              String(row?.place || "").trim() === place
+            );
+          });
+          if (duplicateIndex >= 0) onHoldPayments.splice(duplicateIndex, 1);
+          onHoldPayments.unshift({ ...targetItem });
+        }
 
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         const customerIndex = customerSchedules.findIndex((row) => {
