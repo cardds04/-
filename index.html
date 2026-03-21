@@ -10371,6 +10371,18 @@
         }
       }
 
+      /** 「확인」으로 기록보기로만 보낸 건 — 15일간 스케줄(진행)에 다시 안 나오게 */
+      function getArchivedDashboardConfirmedKeySet() {
+        const keys = new Set();
+        readDashboardCompletedHistory().forEach((e) => {
+          const sk = String(e.scheduleKey || "").trim();
+          if (sk) keys.add(sk);
+          const item = findDashboardItemForScheduleKey(sk);
+          if (item) keys.add(getDashboardScheduleKey(item));
+        });
+        return keys;
+      }
+
       function ymdFromConfirmedAtUtc(iso) {
         const s = String(iso || "").trim();
         const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -10482,6 +10494,7 @@
         pruneWriterProcessLogToCompletedScheduleKeys();
         completedEntries = readDashboardCompletedEntries();
         const completedKeys = new Set(completedEntries.map((e) => e.scheduleKey));
+        const archivedConfirmedKeys = getArchivedDashboardConfirmedKeySet();
 
         ensureDashboardProcessedDatePickers(todayKey);
 
@@ -10556,7 +10569,10 @@
                 </div>`;
         }
 
-        const pendingItems = inWindow.filter((item) => !completedKeys.has(getDashboardScheduleKey(item)));
+        const pendingItems = inWindow.filter((item) => {
+          const sk = getDashboardScheduleKey(item);
+          return !completedKeys.has(sk) && !archivedConfirmedKeys.has(sk);
+        });
         const doneItemSet = new Map();
         completedEntries.forEach((e) => {
           const item = findDashboardItemForScheduleKey(e.scheduleKey);
