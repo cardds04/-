@@ -9790,6 +9790,73 @@
         return `fb:${String(item?.date || "").trim()}|${String(item?.time || "").trim()}|${normalizeCompanyName(item?.company)}|${normalizeCompanyName(item?.place)}`;
       }
 
+      /** 완료/로그에 저장된 scheduleKey가 서버 동기화 후 id↔fb로 바뀌어도 같은 건을 찾음 */
+      function findDashboardItemForScheduleKey(scheduleKey) {
+        const sk = String(scheduleKey || "").trim();
+        if (!sk) return null;
+        const direct = data.find((it) => getDashboardScheduleKey(it) === sk);
+        if (direct) return direct;
+        if (sk.startsWith("id:")) {
+          const id = sk.slice(3).trim();
+          return data.find((it) => String(it?.customerScheduleId || "").trim() === id) || null;
+        }
+        if (sk.startsWith("fb:")) {
+          const rest = sk.slice(3);
+          const parts = rest.split("|");
+          const date = String(parts[0] || "").trim();
+          const time = String(parts[1] || "").trim();
+          const comp = String(parts[2] || "").trim();
+          const place = String(parts[3] || "").trim();
+          return (
+            data.find((it) => {
+              if (String(it?.date || "").trim() !== date) return false;
+              if (String(it?.time || "").trim() !== time) return false;
+              if (normalizeCompanyName(it?.company) !== comp) return false;
+              if (normalizeCompanyName(it?.place) !== place) return false;
+              return true;
+            }) || null
+          );
+        }
+        return null;
+      }
+
+      function migrateDashboardCompletedKeysToCanonical() {
+        const entries = readDashboardCompletedEntries();
+        let dirty = false;
+        const next = entries.map((e) => {
+          const item = findDashboardItemForScheduleKey(e.scheduleKey);
+          if (!item) return e;
+          const canon = getDashboardScheduleKey(item);
+          if (canon === e.scheduleKey) return e;
+          dirty = true;
+          return { ...e, scheduleKey: canon };
+        });
+        if (dirty) writeDashboardCompletedEntries(next);
+      }
+
+      function migrateWriterProcessLogKeysToCanonical() {
+        const rows = readWriterProcessLog();
+        let dirty = false;
+        const next = rows.map((r) => {
+          const item = findDashboardItemForScheduleKey(r.scheduleKey);
+          if (!item) return r;
+          const canon = getDashboardScheduleKey(item);
+          if (canon === r.scheduleKey) return r;
+          dirty = true;
+          return { ...r, scheduleKey: canon };
+        });
+        if (dirty) writeWriterProcessLog(next);
+      }
+
+      /** 완료 목록에 없는 처리 로그(유령 건수) 제거 — 2번·3번 칸 숫자 맞춤 */
+      function pruneWriterProcessLogToCompletedScheduleKeys() {
+        const ckeys = new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
+        if (ckeys.size === 0) return;
+        const rows = readWriterProcessLog();
+        const next = rows.filter((r) => ckeys.has(r.scheduleKey));
+        if (next.length !== rows.length) writeWriterProcessLog(next);
+      }
+
       /** 촬영일 기준 오늘까지 며칠 지났는지 (오늘=0) */
       function diffScheduleDaysPassedFromToday(scheduleYmd, todayYmd) {
         const m = String(scheduleYmd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -9986,7 +10053,11 @@
 
         dashboardDayDetailOpenKey = "";
 
-        const completedEntries = pruneDashboardCompletedEntries(activeRows);
+        migrateDashboardCompletedKeysToCanonical();
+        migrateWriterProcessLogKeysToCanonical();
+        let completedEntries = pruneDashboardCompletedEntries(activeRows);
+        pruneWriterProcessLogToCompletedScheduleKeys();
+        completedEntries = readDashboardCompletedEntries();
         const completedKeys = new Set(completedEntries.map((e) => e.scheduleKey));
 
         ensureDashboardProcessedDatePickers(todayKey);
@@ -10060,7 +10131,16 @@
         }
 
         const pendingItems = inWindow.filter((item) => !completedKeys.has(getDashboardScheduleKey(item)));
-        const doneItems = inWindow.filter((item) => completedKeys.has(getDashboardScheduleKey(item)));
+        const doneItemSet = new Map();
+        completedEntries.forEach((e) => {
+          const item = findDashboardItemForScheduleKey(e.scheduleKey);
+          if (!item) return;
+          const d = String(item?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < windowStart || d > windowEnd) return;
+          const canon = getDashboardScheduleKey(item);
+          if (!doneItemSet.has(canon)) doneItemSet.set(canon, item);
+        });
+        const doneItems = Array.from(doneItemSet.values()).sort((a, b) => compareScheduleDateTime(a, b));
 
         listRoot.innerHTML = pendingItems.length
           ? pendingItems.map((item) => renderDashboardScheduleRow(item, false)).filter(Boolean).join("")
