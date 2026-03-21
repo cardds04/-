@@ -337,6 +337,20 @@
         white-space: nowrap;
       }
 
+      .schedule-days-passed {
+        font-size: 0.68rem;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .schedule-days-passed-within {
+        color: #15803d;
+      }
+
+      .schedule-days-passed-over {
+        color: #b91c1c;
+      }
+
       .schedule-dashboard-company {
         flex: 1;
         min-width: 0;
@@ -9509,6 +9523,16 @@
         return `fb:${String(item?.date || "").trim()}|${String(item?.time || "").trim()}|${normalizeCompanyName(item?.company)}|${normalizeCompanyName(item?.place)}`;
       }
 
+      /** 촬영일 기준 오늘까지 며칠 지났는지 (오늘=0) */
+      function diffScheduleDaysPassedFromToday(scheduleYmd, todayYmd) {
+        const m = String(scheduleYmd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        const t = String(todayYmd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m || !t) return 0;
+        const dSched = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        const dToday = new Date(Number(t[1]), Number(t[2]) - 1, Number(t[3]));
+        return Math.round((dToday - dSched) / 86400000);
+      }
+
       function readDashboardCompletedEntries() {
         const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED);
         const today = new Date();
@@ -9640,6 +9664,9 @@
           if (dataIndex < 0) return "";
           const dateStr = String(item?.date || "").trim();
           const shortD = formatYmdToMdSlash(dateStr);
+          const daysPassed = Math.max(0, diffScheduleDaysPassedFromToday(dateStr, todayKey));
+          const passedLabel = daysPassed === 0 ? "오늘" : `${daysPassed}일 지남`;
+          const passedClass = daysPassed > 7 ? "schedule-days-passed schedule-days-passed-over" : "schedule-days-passed schedule-days-passed-within";
           const company = normalizeCompanyName(item?.company) || "-";
           const isShootToday = dateStr === todayKey;
           const sk = getDashboardScheduleKey(item);
@@ -9666,6 +9693,7 @@
             : "";
           return `<div class="schedule-dashboard-row-line">
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
+                  <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
                   ${nameCell}
                   ${todayBadge}
                   ${chips}
