@@ -505,12 +505,21 @@
         scopedKeyCount() {
           return this.memoryStore.size;
         },
+        normalizeKvValue(v) {
+          if (v === null || v === undefined) return "";
+          if (typeof v === "string") return v;
+          try {
+            return JSON.stringify(v);
+          } catch (error) {
+            return String(v);
+          }
+        },
         hydrateFromServerKv(kvObj) {
           if (!kvObj || typeof kvObj !== "object") return;
           this.memoryStore.clear();
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
-            this.memoryStore.set(String(k), String(v ?? ""));
+            this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
             this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
@@ -601,6 +610,8 @@
             }
           );
           if (!response.ok) {
+            const errBody = await response.text();
+            console.error("[CLIENT_KV] GET 실패", response.status, errBody);
             scheduleSiteClientKvState.initialPullDone = true;
             return;
           }
@@ -628,6 +639,9 @@
           console.warn("[CLIENT_KV] Supabase 복원 실패", error);
         } finally {
           scheduleSiteClientKvState.initialPullDone = true;
+          if (scheduleSiteClientKvState.scopedKeyCount() > 0) {
+            setTimeout(() => void pushScheduleSiteClientKvToSupabase(), 500);
+          }
         }
       }
       async function pushScheduleSiteClientKvToSupabase() {
@@ -645,12 +659,16 @@
             },
             body: JSON.stringify([{ id: SUPABASE_CLIENT_KV_ROW_ID, kv }])
           });
-          if (!response.ok) throw new Error(await response.text());
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("[CLIENT_KV] POST 실패", response.status, errorText);
+            throw new Error(errorText);
+          }
           const rows = await response.json();
           const updatedAt = rows?.[0]?.updated_at;
           if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
         } catch (error) {
-          console.warn("[CLIENT_KV] Supabase 저장 실패", error);
+          console.error("[CLIENT_KV] Supabase 저장 실패", error);
         }
       }
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
