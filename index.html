@@ -2123,13 +2123,23 @@
       /** 첫 로드·저장 실패 후 재맞춤용 — 조금 더 길게 */
       const DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS = 12000;
       const DASHBOARD_STATE_BOOTSTRAP_MAX_TRIES = 3;
+      /** Safari 등: 포커스 없이도 타 브라우저 변경 반영 (배터리·요청량 절충) */
+      const DASHBOARD_STATE_POLL_INTERVAL_MS = 6500;
       let dashboardStateSaveTimer = null;
       /** 새 저장이 시작되면 진행 중이던 POST 를 취소 — 옛 상태 전송만 서버가 처리하는 낭비·대기 방지 */
       let dashboardSaveSupersedeAbort = null;
       let dashboardStateFetchPromise = null;
-      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true). */
-      async function executeDashboardStatePull(timeoutMs) {
-        if (!USE_SUPABASE_SYNC) return false;
+      /** 마지막으로 적용·저장한 서버 스냅샷 — 폴링 시 동일하면 UI 생략 */
+      let lastDashboardRemoteContentSig = "";
+      let dashboardStatePollTimerId = null;
+      function noteDashboardRemoteContentSigFromStorage() {
+        const a = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
+        const b = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
+        lastDashboardRemoteContentSig = `${a}\n${b}`;
+      }
+      /** GET 만 수행 (적용 X). 폴링·비교용 */
+      async function fetchDashboardStatePayload(timeoutMs) {
+        if (!USE_SUPABASE_SYNC) return { ok: false };
         const ac = new AbortController();
         const tid = setTimeout(() => ac.abort(), timeoutMs);
         try {
@@ -2148,7 +2158,7 @@
           if (!res.ok) {
             const t = await res.text();
             console.warn("[DASHBOARD_STATE] GET", res.status, t);
-            return false;
+            return { ok: false };
           }
           const rows = await res.json();
           const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
@@ -2157,20 +2167,56 @@
           const completedStr =
             completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
           const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
-          isApplyingRemoteDashboardState = true;
-          try {
-            localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
-            localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
-          } finally {
-            isApplyingRemoteDashboardState = false;
-          }
-          return true;
+          return { ok: true, completedStr, logStr };
         } catch (error) {
           if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
-          return false;
+          return { ok: false };
         } finally {
           clearTimeout(tid);
         }
+      }
+      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true). */
+      async function executeDashboardStatePull(timeoutMs) {
+        if (!USE_SUPABASE_SYNC) return false;
+        const payload = await fetchDashboardStatePayload(timeoutMs);
+        if (!payload.ok) return false;
+        const { completedStr, logStr } = payload;
+        isApplyingRemoteDashboardState = true;
+        try {
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
+          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
+          lastDashboardRemoteContentSig = `${completedStr}\n${logStr}`;
+        } finally {
+          isApplyingRemoteDashboardState = false;
+        }
+        return true;
+      }
+      /** 다른 기기·브라우저에서 저장된 경우 — 새로고침 없이 반영 */
+      async function maybePollDashboardStateFromOtherDevices() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (document.visibilityState !== "visible") return;
+        if (dashboardStateSaveTimer !== null) return;
+        if (dashboardSaveSupersedeAbort !== null) return;
+        if (isApplyingRemoteDashboardState) return;
+        const payload = await fetchDashboardStatePayload(DASHBOARD_STATE_FETCH_TIMEOUT_MS);
+        if (!payload.ok) return;
+        const sig = `${payload.completedStr}\n${payload.logStr}`;
+        if (sig === lastDashboardRemoteContentSig) return;
+        isApplyingRemoteDashboardState = true;
+        try {
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, payload.completedStr);
+          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, payload.logStr);
+          lastDashboardRemoteContentSig = sig;
+        } finally {
+          isApplyingRemoteDashboardState = false;
+        }
+        if (typeof renderList === "function") renderList();
+      }
+      function startDashboardStateBackgroundSync() {
+        if (!USE_SUPABASE_SYNC || dashboardStatePollTimerId !== null) return;
+        dashboardStatePollTimerId = setInterval(() => {
+          void maybePollDashboardStateFromOtherDevices();
+        }, DASHBOARD_STATE_POLL_INTERVAL_MS);
       }
       /** 서버 연결 불가 시 기기마다 다른 로컬 캐시를 보여주지 않도록 2·3번 비움 */
       function clearDashboardStateWhenServerUnreachable(message) {
@@ -2186,6 +2232,7 @@
             "대시보드(2·3번) 서버와 맞출 수 없어 목록을 비웠습니다. 네트워크·VPN 확인 후 새로고침하세요.",
           "error"
         );
+        noteDashboardRemoteContentSigFromStorage();
       }
       async function fetchDashboardStateWithRetriesForBootstrap() {
         if (!USE_SUPABASE_SYNC) return true;
@@ -2293,7 +2340,11 @@
               r = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
             }
           }
-          if (supersede.signal.aborted || r === "ok" || r === "superseded") return;
+          if (supersede.signal.aborted || r === "superseded") return;
+          if (r === "ok") {
+            noteDashboardRemoteContentSigFromStorage();
+            return;
+          }
           setSyncStatus("대시보드 저장이 서버에 반영되지 않았습니다. 서버 데이터로 맞추는 중…", "warn");
           let pulled = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
           if (!pulled && !supersede.signal.aborted) {
@@ -13092,6 +13143,7 @@
           renderList();
           renderPaymentList();
         });
+        startDashboardStateBackgroundSync();
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
 
