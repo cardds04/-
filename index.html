@@ -10186,9 +10186,12 @@
         if (dirty) writeWriterProcessLog(next);
       }
 
-      /** 완료 목록에 없는 처리 로그(유령 건수) 제거 — 2번·3번 칸 숫자 맞춤 */
+      /** 완료 목록·기록보기(확인)에 없는 처리 로그만 제거 — 3번 오늘처리 건수는 확인 후에도 유지 */
       function pruneWriterProcessLogToCompletedScheduleKeys() {
         const ckeys = new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
+        readDashboardCompletedHistory().forEach((e) => {
+          if (e.scheduleKey) ckeys.add(e.scheduleKey);
+        });
         if (ckeys.size === 0) return;
         const rows = readWriterProcessLog();
         const next = rows.filter((r) => ckeys.has(r.scheduleKey));
@@ -10337,13 +10340,6 @@
         const w = String(writer || "").trim();
         const d = String(processedDay || "").trim();
         const rows = readWriterProcessLog().filter((r) => !(r.scheduleKey === scheduleKey && r.writer === w && r.processedDay === d));
-        writeWriterProcessLog(rows);
-      }
-
-      function removeWriterProcessLogRowsForScheduleKey(scheduleKey) {
-        const sk = String(scheduleKey || "").trim();
-        if (!sk) return;
-        const rows = readWriterProcessLog().filter((r) => r.scheduleKey !== sk);
         writeWriterProcessLog(rows);
       }
 
@@ -11023,7 +11019,6 @@
             company: normalizeCompanyName(item?.company) || "-"
           });
           writeDashboardCompletedHistory(history);
-          removeWriterProcessLogRowsForScheduleKey(sk);
           renderList();
           return;
         }
