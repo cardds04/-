@@ -407,6 +407,8 @@
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
+      const STORAGE_WRITERS = "scheduleSiteWriters";
+      const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
       const STORAGE_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
@@ -1238,6 +1240,24 @@
         }
       }
 
+      function buildWriterPhoneCarLookup() {
+        const phones = Object.create(null);
+        const cars = Object.create(null);
+        const merge = (name, phone, carNumber) => {
+          const n = String(name || "").trim();
+          if (!n || n === "작가미정") return;
+          const p = String(phone || "").trim();
+          const c = String(carNumber || "").trim();
+          if (p) phones[n] = p;
+          if (c) cars[n] = c;
+        };
+        readStorageArray(STORAGE_WRITERS).forEach((user) => merge(user?.name, user?.phone, user?.carNumber));
+        readStorageArray(STORAGE_PHOTOGRAPHER_PROFILES).forEach((item) =>
+          merge(item?.name, item?.phone, item?.carNumber)
+        );
+        return { phones, cars };
+      }
+
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
       }
@@ -1465,6 +1485,7 @@
             .map((item) => [normalize(item?.name).toLowerCase(), normalize(item?.companyCode)])
             .filter(([name]) => Boolean(name))
         );
+        const writerPhoneCar = buildWriterPhoneCarLookup();
         const customers = (Array.isArray(customersRows) ? customersRows : [])
           .map((row) => ({
             id: String(row?.login_id || "").trim(),
@@ -1482,12 +1503,15 @@
             const parsedMemo = splitMemoAndTimePreference(row?.memo);
             const scheduleId = String(row?.id || "").trim();
             const paymentPatch = paymentPatchByScheduleId.get(scheduleId);
+            const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
             return {
               customerScheduleId: scheduleId,
               date: String(row?.date_key || "").trim(),
               time: String(row?.time_key || "09:00").trim() || "09:00",
               timePreference: parsedMemo.timePreference,
-              name: String(row?.writer_name || "작가미정").trim() || "작가미정",
+              name: writerName,
+              writerPhone: normalize(writerPhoneCar.phones[writerName] || ""),
+              writerCarNumber: normalize(writerPhoneCar.cars[writerName] || ""),
               company: String(row?.company_name || "").trim(),
               companyCode: companyCodeByName.get(String(row?.company_name || "").trim().toLowerCase()) || "",
               place: String(row?.place || "").trim(),
@@ -1529,7 +1553,9 @@
           place: row.place,
           pyeong: row.pyeong,
           memo: row.memo,
-          composition: row.composition
+          composition: row.composition,
+          writerPhone: row.writerPhone,
+          writerCarNumber: row.writerCarNumber
         })));
         writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
       }
