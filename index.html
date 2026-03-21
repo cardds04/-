@@ -2200,11 +2200,13 @@
         if (!USE_SUPABASE_SYNC) return { ok: false };
         const ac = new AbortController();
         const tid = setTimeout(() => ac.abort(), timeoutMs);
+        const localHistoryFallback = () => localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
         try {
-          const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
+          const base = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
             SUPABASE_DASHBOARD_STATE_ID
-          )}&select=completed,process_log,completed_history&limit=1`;
-          const res = await fetch(url, {
+          )}&limit=1`;
+          let select = "completed,process_log,completed_history";
+          let res = await fetch(`${base}&select=${select}`, {
             method: "GET",
             headers: {
               apikey: SUPABASE_ANON_KEY,
@@ -2213,6 +2215,18 @@
             cache: "no-store",
             signal: ac.signal
           });
+          if (res.status === 400) {
+            select = "completed,process_log";
+            res = await fetch(`${base}&select=${select}`, {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store",
+              signal: ac.signal
+            });
+          }
           if (!res.ok) {
             const t = await res.text();
             console.warn("[DASHBOARD_STATE] GET", res.status, t);
@@ -2227,7 +2241,13 @@
             completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
           const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
           const historyStr =
-            histRaw == null ? "[]" : typeof histRaw === "string" ? histRaw : JSON.stringify(histRaw);
+            select === "completed,process_log"
+              ? localHistoryFallback()
+              : histRaw == null
+                ? "[]"
+                : typeof histRaw === "string"
+                  ? histRaw
+                  : JSON.stringify(histRaw);
           return { ok: true, completedStr, logStr, historyStr };
         } catch (error) {
           if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
@@ -2361,7 +2381,7 @@
           supersedeSignal.addEventListener("abort", onSupersede);
         }
         try {
-          const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
+          let response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2380,10 +2400,32 @@
             ])
           });
           if (supersedeSignal?.aborted) return "superseded";
+          if (!response.ok && response.status === 400) {
+            await response.text();
+            console.warn("[DASHBOARD_STATE] completed_history 포함 저장 실패 — 구스키마용(완료·로그만) POST 재시도");
+            response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "resolution=merge-duplicates,return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              signal: merged.signal,
+              body: JSON.stringify([
+                {
+                  id: SUPABASE_DASHBOARD_STATE_ID,
+                  completed,
+                  process_log
+                }
+              ])
+            });
+          }
+          if (supersedeSignal?.aborted) return "superseded";
           if (!response.ok) {
             const errText = await response.text();
             console.error("[DASHBOARD_STATE] 저장 실패", response.status, errText);
-            setSyncStatus(`대시보드(2·3번) 저장 실패 (${response.status}) — 테이블·RLS 확인`, "error");
+            setSyncStatus(`대시보드(2·3번) 저장 실패 (${response.status}) — 테이블·RLS·completed_history 컬럼 확인`, "error");
             return "http_fail";
           }
           setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
@@ -2427,10 +2469,10 @@
           }
           if (typeof renderList === "function") renderList();
           if (!pulled) {
-            clearDashboardStateWhenServerUnreachable(
-              "대시보드 서버와 동기화할 수 없어 2·3번을 비웠습니다. 네트워크 확인 후 새로고침하세요."
+            setSyncStatus(
+              "대시보드 서버와 맞추지 못했습니다. 스케줄 등록은 로컬에 유지됩니다. 네트워크·Supabase(completed_history 컬럼) 확인 후 새로고침하세요.",
+              "warn"
             );
-            if (typeof renderList === "function") renderList();
           } else {
             setSyncStatus(`대시보드 서버 기준으로 맞춤 ${formatSyncTime()}`, "ok");
           }
@@ -5932,7 +5974,9 @@
         }));
         originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(rows));
         originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
-        queueSchedulesSync();
+        if (!USE_SUPABASE_SYNC || hasLoadedSchedulesFromServer) {
+          queueSchedulesSync();
+        }
       }
 
       function seedRandomSchedulesForTesting() {
@@ -10586,9 +10630,7 @@
           item.companyCode = canonicalIdentity.companyCode || item.companyCode || "";
         });
         syncAdminSchedulesToCustomerStorage();
-        if (!USE_SUPABASE_SYNC || hasLoadedSchedulesFromServer) {
-          syncWriterSchedulesStorage();
-        }
+        syncWriterSchedulesStorage();
         renderOpenDayoffSummary();
         renderCanceledSchedules();
         const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
@@ -13235,6 +13277,9 @@
         setScheduleTimeUndecided(false);
         renderCustomerUpdateNotices();
         renderCustomerAlertHistory();
+        if (USE_SUPABASE_SYNC) {
+          queueSchedulesSync(true);
+        }
         renderList();
         queuePaymentsSync();
         return true;
