@@ -443,6 +443,60 @@
         color: #5a8a4a;
       }
 
+      .schedule-dashboard-completed-writer {
+        font-size: 0.68rem;
+        font-weight: 800;
+        color: var(--blue-dark);
+      }
+
+      .writer-week-stat-cell-btn {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        border: 1px solid #e8edf5;
+        background: #f7f9fd;
+        border-radius: 6px;
+        padding: 4px 2px;
+        cursor: pointer;
+        text-align: center;
+        font: inherit;
+      }
+
+      .writer-week-stat-cell-btn:hover {
+        border-color: var(--blue);
+        background: #eef3fb;
+      }
+
+      .writer-day-detail-panel {
+        margin-top: 8px;
+        padding: 8px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #e8edf5;
+        font-size: 0.74rem;
+      }
+
+      .writer-day-detail-panel.hidden {
+        display: none;
+      }
+
+      .writer-day-detail-head {
+        font-weight: 800;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .writer-day-detail-list {
+        margin: 0;
+        padding-left: 18px;
+        color: #3d4a63;
+      }
+
+      .writer-day-detail-list li {
+        margin: 3px 0;
+      }
+
       .writer-week-stats-grid {
         display: grid;
         grid-template-columns: repeat(7, minmax(36px, 1fr));
@@ -3228,6 +3282,7 @@
       const companySearchInputEl = document.getElementById("companySearchInput");
       const companyListEl = document.getElementById("companyList");
       let currentPhotographerFilter = "all";
+      let dashboardDayDetailOpenKey = "";
       let editingPhotographerName = null;
       let editingIndex = null;
       let editingDateIndex = null;
@@ -9460,10 +9515,11 @@
         const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
         return raw
           .map((v) => {
-            if (typeof v === "string") return { scheduleKey: String(v).trim(), processedAt: todayKey };
+            if (typeof v === "string") return { scheduleKey: String(v).trim(), processedAt: todayKey, writer: "" };
             const sk = String(v?.scheduleKey ?? "").trim();
             const pa = String(v?.processedAt ?? todayKey).trim();
-            return { scheduleKey: sk, processedAt: pa || todayKey };
+            const writer = String(v?.writer ?? "").trim();
+            return { scheduleKey: sk, processedAt: pa || todayKey, writer };
           })
           .filter((e) => e.scheduleKey);
       }
@@ -9475,6 +9531,34 @@
       function getProcessedAtForKey(scheduleKey) {
         const e = readDashboardCompletedEntries().find((x) => x.scheduleKey === scheduleKey);
         return e?.processedAt ?? "";
+      }
+
+      function getCompletedEntryForKey(scheduleKey) {
+        return readDashboardCompletedEntries().find((x) => x.scheduleKey === scheduleKey);
+      }
+
+      function appendWriterProcessLogForDashboard(writer, processedDay, item) {
+        const w = String(writer || "").trim();
+        if (!DASHBOARD_TARGET_WRITERS.includes(w)) return;
+        const scheduleKey = getDashboardScheduleKey(item);
+        const rows = readWriterProcessLog();
+        if (rows.some((r) => r.writer === w && r.processedDay === processedDay && r.scheduleKey === scheduleKey)) return;
+        rows.push({
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          writer: w,
+          processedDay,
+          scheduleDate: String(item?.date || "").trim(),
+          company: normalizeCompanyName(item?.company) || "-",
+          scheduleKey
+        });
+        writeWriterProcessLog(rows);
+      }
+
+      function removeWriterProcessLogForDashboardRevert(scheduleKey, writer, processedDay) {
+        const w = String(writer || "").trim();
+        const d = String(processedDay || "").trim();
+        const rows = readWriterProcessLog().filter((r) => !(r.scheduleKey === scheduleKey && r.writer === w && r.processedDay === d));
+        writeWriterProcessLog(rows);
       }
 
       function writeDashboardCompletedEntries(entries) {
@@ -9517,36 +9601,14 @@
         }
       }
 
-      function toggleWriterProcessForToday(writer, item) {
-        const w = String(writer || "").trim();
-        if (!DASHBOARD_TARGET_WRITERS.includes(w)) return;
-        const now = new Date();
-        const processedDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const scheduleKey = getDashboardScheduleKey(item);
-        const rows = readWriterProcessLog();
-        const idx = rows.findIndex((r) => r.writer === w && r.processedDay === processedDay && r.scheduleKey === scheduleKey);
-        if (idx >= 0) {
-          rows.splice(idx, 1);
-        } else {
-          rows.push({
-            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            writer: w,
-            processedDay,
-            scheduleDate: String(item?.date || "").trim(),
-            company: normalizeCompanyName(item?.company) || "-",
-            scheduleKey
-          });
-        }
-        writeWriterProcessLog(rows);
-        renderList();
-      }
-
       function renderScheduleDashboard(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
         const completedRoot = document.getElementById("scheduleDashboardCompletedList");
         const rangeHintEl = document.getElementById("scheduleDashboardRangeHint");
         const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
         if (!listRoot || !completedRoot || !todayWrap) return;
+
+        dashboardDayDetailOpenKey = "";
 
         const completedEntries = pruneDashboardCompletedEntries(activeRows);
         const completedKeys = new Set(completedEntries.map((e) => e.scheduleKey));
@@ -9581,23 +9643,24 @@
           const company = normalizeCompanyName(item?.company) || "-";
           const isShootToday = dateStr === todayKey;
           const sk = getDashboardScheduleKey(item);
-          const chips = DASHBOARD_TARGET_WRITERS.map((writer) => {
-            const active = log.some((r) => r.writer === writer && r.processedDay === todayKey && r.scheduleKey === sk);
-            const activeClass = active ? " active" : "";
-            return `<button type="button" class="dashboard-writer-chip${activeClass}" data-action="toggleWriterProcess" data-writer="${escapeHtml(
-              writer
-            )}" data-data-index="${dataIndex}">${escapeHtml(writer)}</button>`;
-          }).join("");
+          const chips = completed
+            ? ""
+            : DASHBOARD_TARGET_WRITERS.map((writerName) => {
+                return `<button type="button" class="dashboard-writer-chip dashboard-writer-pick" data-action="dashboardCompleteWithWriter" data-writer="${escapeHtml(
+                  writerName
+                )}" data-data-index="${dataIndex}" title="한 명만 선택하면 즉시 완료">${escapeHtml(writerName)}</button>`;
+              }).join("");
           const todayBadge = isShootToday ? '<span class="dashboard-today-badge">오늘</span>' : "";
-          const processedAt = completed ? getProcessedAtForKey(sk) : "";
+          const completedEntry = completed ? getCompletedEntryForKey(sk) : null;
+          const processedAt = completedEntry?.processedAt || "";
           const processedAtLabel = processedAt
             ? `<span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(processedAt))} 완료</span>`
             : "";
-          const nameCell = completed
-            ? `<span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>`
-            : `<button type="button" class="schedule-dashboard-company-btn" data-action="dashboardMarkComplete" data-data-index="${dataIndex}" title="선택한 완료일로 완료된 작업으로 이동">${escapeHtml(
-                company
-              )}</button>`;
+          const writerDoneLabel =
+            completed && completedEntry?.writer
+              ? `<span class="schedule-dashboard-completed-writer">${escapeHtml(completedEntry.writer)} 처리</span>`
+              : "";
+          const nameCell = `<span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>`;
           const revertBtn = completed
             ? `<button type="button" class="dashboard-revert-btn" data-action="dashboardUnmarkComplete" data-data-index="${dataIndex}">되돌리기</button>`
             : "";
@@ -9607,6 +9670,7 @@
                   ${todayBadge}
                   ${chips}
                   ${processedAtLabel}
+                  ${writerDoneLabel}
                   ${revertBtn}
                 </div>`;
         }
@@ -9624,34 +9688,26 @@
 
         const todayHtml = DASHBOARD_TARGET_WRITERS.map((writer) => {
           const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : "dashboardWriterBlockKjy";
-          const todayEntries = log.filter((r) => r.writer === writer && r.processedDay === todayKey);
-          const todayCnt = todayEntries.length;
-          const todayLis = todayEntries
-            .map(
-              (e) =>
-                `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
-            )
-            .join("");
+          const detailPanelId = writer === "박보윤" ? "writerDayDetailPanelPby" : "writerDayDetailPanelKjy";
           const weekGrid = `<div class="writer-week-stats-grid">${processSevenDays
             .map((dayKey) => {
               const cnt = log.filter((r) => r.writer === writer && r.processedDay === dayKey).length;
               const tag = dayKey === todayKey ? '<span class="writer-week-stat-tag">오늘</span>' : "";
-              return `<div class="writer-week-stat-cell">
+              return `<button type="button" class="writer-week-stat-cell-btn" data-action="writerDayDetailClick" data-writer="${escapeHtml(
+                writer
+              )}" data-day="${escapeHtml(dayKey)}">
                 <div class="writer-week-stat-date">${escapeHtml(formatYmdToMdSlash(dayKey))}${tag}</div>
                 <div class="writer-week-stat-count">${cnt}건</div>
-              </div>`;
+              </button>`;
             })
             .join("")}</div>`;
           return `<div id="${blockId}" class="writer-today-block" data-writer-block="${escapeHtml(writer)}">
             <h4>${escapeHtml(writer)}</h4>
-            <div class="writer-today-hero">
-              오늘 처리 <span class="writer-today-count">${todayCnt}건</span>
-            </div>
-            ${todayCnt ? `<ul class="writer-today-list">${todayLis}</ul>` : ""}
-            <div class="writer-week-summary">
-              <div class="writer-week-summary-title">최근 7일 일별 처리</div>
+            <div class="writer-week-summary" style="margin-top:0;border-top:0;padding-top:0;">
+              <div class="writer-week-summary-title">최근 7일 일별 처리 (칸 클릭 시 업체명)</div>
               ${weekGrid}
             </div>
+            <div id="${detailPanelId}" class="writer-day-detail-panel hidden"></div>
           </div>`;
         }).join("");
 
@@ -9968,9 +10024,11 @@
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
-        const markCompleteBtn = event.target.closest("button[data-action='dashboardMarkComplete']");
-        if (markCompleteBtn) {
-          const idx = Number(markCompleteBtn.dataset.dataIndex);
+        const writerCompleteBtn = event.target.closest("button[data-action='dashboardCompleteWithWriter']");
+        if (writerCompleteBtn) {
+          const writer = String(writerCompleteBtn.dataset.writer || "").trim();
+          const idx = Number(writerCompleteBtn.dataset.dataIndex);
+          if (!DASHBOARD_TARGET_WRITERS.includes(writer)) return;
           if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
           const item = data[idx];
           const sk = getDashboardScheduleKey(item);
@@ -9979,11 +10037,52 @@
           const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
           const processedAt = processedDateEl?.value?.trim() || todayKey;
           const entries = readDashboardCompletedEntries();
-          if (!entries.some((e) => e.scheduleKey === sk)) {
-            entries.push({ scheduleKey: sk, processedAt });
-            writeDashboardCompletedEntries(entries);
-          }
+          if (entries.some((e) => e.scheduleKey === sk)) return;
+          entries.push({ scheduleKey: sk, processedAt, writer });
+          writeDashboardCompletedEntries(entries);
+          appendWriterProcessLogForDashboard(writer, processedAt, item);
           renderList();
+          return;
+        }
+        const detailBtn = event.target.closest("button[data-action='writerDayDetailClick']");
+        if (detailBtn) {
+          const writer = String(detailBtn.dataset.writer || "").trim();
+          const day = String(detailBtn.dataset.day || "").trim();
+          if (!writer || !day) return;
+          const panelId = writer === "박보윤" ? "writerDayDetailPanelPby" : "writerDayDetailPanelKjy";
+          const otherId = writer === "박보윤" ? "writerDayDetailPanelKjy" : "writerDayDetailPanelPby";
+          const panel = document.getElementById(panelId);
+          const otherPanel = document.getElementById(otherId);
+          if (!panel) return;
+          const openKey = `${writer}|${day}`;
+          if (dashboardDayDetailOpenKey === openKey && !panel.classList.contains("hidden")) {
+            panel.classList.add("hidden");
+            panel.innerHTML = "";
+            dashboardDayDetailOpenKey = "";
+            return;
+          }
+          dashboardDayDetailOpenKey = openKey;
+          if (otherPanel) {
+            otherPanel.classList.add("hidden");
+            otherPanel.innerHTML = "";
+          }
+          const entries = readWriterProcessLog().filter((r) => r.writer === writer && r.processedDay === day);
+          if (entries.length === 0) {
+            panel.innerHTML = `<div class="writer-day-detail-head">${escapeHtml(
+              formatYmdToMdSlash(day)
+            )} · 처리 업체</div><div class="helper" style="margin:0;">기록이 없습니다.</div>`;
+          } else {
+            const lis = entries
+              .map(
+                (e) =>
+                  `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
+              )
+              .join("");
+            panel.innerHTML = `<div class="writer-day-detail-head">${escapeHtml(
+              formatYmdToMdSlash(day)
+            )} · 처리 업체</div><ul class="writer-day-detail-list">${lis}</ul>`;
+          }
+          panel.classList.remove("hidden");
           return;
         }
         const unmarkBtn = event.target.closest("button[data-action='dashboardUnmarkComplete']");
@@ -9992,18 +10091,15 @@
           if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
           const item = data[idx];
           const sk = getDashboardScheduleKey(item);
+          const entry = getCompletedEntryForKey(sk);
           const entries = readDashboardCompletedEntries().filter((e) => e.scheduleKey !== sk);
           writeDashboardCompletedEntries(entries);
+          if (entry?.writer && entry?.processedAt) {
+            removeWriterProcessLogForDashboardRevert(sk, entry.writer, entry.processedAt);
+          }
           renderList();
           return;
         }
-        const chip = event.target.closest("button[data-action='toggleWriterProcess']");
-        if (!chip) return;
-        const writer = chip.dataset.writer;
-        const idx = Number(chip.dataset.dataIndex);
-        if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
-        const item = data[idx];
-        toggleWriterProcessForToday(writer, item);
       });
 
       function switchMainTab(tab) {
