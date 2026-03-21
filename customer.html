@@ -540,7 +540,7 @@
           if (!this.initialPullDone) return;
           if (typeof window.__scheduleSitePushClientKv !== "function") return;
           if (this.supabasePushTimer) clearTimeout(this.supabasePushTimer);
-          this.supabasePushTimer = setTimeout(() => void window.__scheduleSitePushClientKv(), 800);
+          this.supabasePushTimer = setTimeout(() => void window.__scheduleSitePushClientKv(), 2500);
         },
         installProxy() {
           if (!SUPABASE_ONLY_MODE) return;
@@ -592,11 +592,28 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
+      const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
+      const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
+      const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;
+      let scheduleSiteClientKvPushInFlight = false;
+      function scheduleClientKvSeedPushIfNeeded() {
+        if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
+        const key = "__scheduleSiteClientKvLastSeedPush";
+        try {
+          const last = Number(scheduleSiteClientKvState.nativeGetItem(key));
+          if (Number.isFinite(last) && Date.now() - last < CLIENT_KV_SEED_PUSH_INTERVAL_MS) return;
+          scheduleSiteClientKvState.nativeSetItem(key, String(Date.now()));
+        } catch (error) {}
+        setTimeout(() => void pushScheduleSiteClientKvToSupabase(), 1000);
+      }
       async function pullScheduleSiteClientKvFromSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) {
           scheduleSiteClientKvState.initialPullDone = true;
-          return;
+          return false;
         }
+        let didHydrate = false;
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), CLIENT_KV_FETCH_TIMEOUT_MS);
         try {
           const response = await fetch(
             `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv,updated_at&limit=1`,
@@ -606,19 +623,18 @@
                 apikey: SUPABASE_ANON_KEY,
                 Authorization: `Bearer ${SUPABASE_ANON_KEY}`
               },
-              cache: "no-store"
+              cache: "no-store",
+              signal: ac.signal
             }
           );
           if (!response.ok) {
             const errBody = await response.text();
             console.error("[CLIENT_KV] GET 실패", response.status, errBody);
-            scheduleSiteClientKvState.initialPullDone = true;
-            return;
+            return false;
           }
           const rows = await response.json();
           if (!Array.isArray(rows) || rows.length === 0) {
-            scheduleSiteClientKvState.initialPullDone = true;
-            return;
+            return false;
           }
           const row = rows[0];
           const serverAt = String(row?.updated_at || "").trim();
@@ -634,20 +650,30 @@
           if (shouldApply) {
             scheduleSiteClientKvState.hydrateFromServerKv(kv);
             scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
+            didHydrate = true;
           }
+          return didHydrate;
         } catch (error) {
-          console.warn("[CLIENT_KV] Supabase 복원 실패", error);
-        } finally {
-          scheduleSiteClientKvState.initialPullDone = true;
-          if (scheduleSiteClientKvState.scopedKeyCount() > 0) {
-            setTimeout(() => void pushScheduleSiteClientKvToSupabase(), 500);
+          if (error && error.name === "AbortError") {
+            console.warn("[CLIENT_KV] 복원 요청 시간 초과 — 화면은 계속 표시됩니다.");
+          } else {
+            console.warn("[CLIENT_KV] Supabase 복원 실패", error);
           }
+          return false;
+        } finally {
+          clearTimeout(tid);
+          scheduleSiteClientKvState.initialPullDone = true;
+          scheduleClientKvSeedPushIfNeeded();
         }
       }
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
+        if (scheduleSiteClientKvPushInFlight) return;
         const kv = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
         if (!Object.keys(kv).length) return;
+        scheduleSiteClientKvPushInFlight = true;
+        const ac = new AbortController();
+        const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
         try {
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
             method: "POST",
@@ -657,6 +683,7 @@
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
+            signal: ac.signal,
             body: JSON.stringify([{ id: SUPABASE_CLIENT_KV_ROW_ID, kv }])
           });
           if (!response.ok) {
@@ -668,7 +695,14 @@
           const updatedAt = rows?.[0]?.updated_at;
           if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
         } catch (error) {
-          console.error("[CLIENT_KV] Supabase 저장 실패", error);
+          if (error && error.name === "AbortError") {
+            console.warn("[CLIENT_KV] 저장 요청 시간 초과");
+          } else {
+            console.error("[CLIENT_KV] Supabase 저장 실패", error);
+          }
+        } finally {
+          clearTimeout(pushTid);
+          scheduleSiteClientKvPushInFlight = false;
         }
       }
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
@@ -3475,8 +3509,8 @@
       scheduleDayEl.addEventListener("change", updateSelectedDayColor);
       updateExpectedPaymentText();
 
-      async function bootstrapCustomerPageData() {
-        await pullScheduleSiteClientKvFromSupabase();
+      function bootstrapCustomerPageData() {
+        const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
         setupDateTimeSelectors();
         setTaxInvoiceRequested(false);
         applyCustomerSiteMode();
@@ -3486,6 +3520,11 @@
           renderAuthState();
         });
         queueCustomerTablePull();
+        clientKvPullDone.then((didHydrate) => {
+          if (!didHydrate) return;
+          queueCustomerTablePull();
+          renderAuthState();
+        });
       }
       void bootstrapCustomerPageData();
       window.addEventListener("storage", (event) => {
