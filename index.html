@@ -4462,6 +4462,80 @@
         }
         return true;
       }
+      async function fetchScheduleIdsFromSupabaseByComposite(item) {
+        if (!USE_SUPABASE_SYNC || !item) return [];
+        const company = String(item?.company || "").trim();
+        const dateKey = String(item?.date || "").trim();
+        const timeKey = String(item?.time || "").trim();
+        const place = String(item?.place || "").trim();
+        if (!company || !dateKey || !timeKey) return [];
+        const headers = {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Accept: "application/json"
+        };
+        const base = `${SUPABASE_URL}/rest/v1/schedules?select=id,place&company_name=eq.${encodeURIComponent(
+          company
+        )}&date_key=eq.${encodeURIComponent(dateKey)}&time_key=eq.${encodeURIComponent(timeKey)}`;
+        const strictUrl = `${base}&place=eq.${encodeURIComponent(place)}`;
+        const runLookup = async (url) => {
+          const response = await fetch(url, { method: "GET", headers, cache: "no-store" });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`schedules 조회 실패 (${response.status}): ${errorText}`);
+          }
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        };
+        let rows = await runLookup(strictUrl);
+        if (!rows.length && place) {
+          const looseRows = await runLookup(base);
+          if (looseRows.length === 1) {
+            rows = looseRows;
+          }
+        }
+        return rows.map((row) => String(row?.id || "").trim()).filter((id) => isUuidLike(id));
+      }
+      /** 관리자 삭제 시 id가 비어 있거나 로컬 id가 DB와 불일치해도 서버 행을 지우기 위한 삭제 */
+      async function deleteScheduleFromSupabaseByItem(item) {
+        if (!USE_SUPABASE_SYNC || !item) return false;
+        await guardUploadWithRemoteFreshness({
+          tableName: "schedules",
+          label: "스케줄",
+          lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
+        });
+        const idSet = new Set();
+        const directId = String(item?.customerScheduleId || "").trim();
+        if (isUuidLike(directId)) idSet.add(directId);
+        let compositeIds = [];
+        try {
+          compositeIds = await fetchScheduleIdsFromSupabaseByComposite(item);
+        } catch (error) {
+          console.warn("[SCHEDULES][index] 복합키로 schedules 조회 실패 — id 삭제만 시도", error);
+        }
+        compositeIds.forEach((id) => idSet.add(id));
+        if (!idSet.size) {
+          console.warn("[SCHEDULES][index] Supabase schedules 삭제: 매칭 id 없음(회사/일시/장소 확인)", item);
+          return false;
+        }
+        let deletedAny = false;
+        for (const sid of idSet) {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`, {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`schedules 삭제 실패 (${response.status}): ${errorText}`);
+          }
+          deletedAny = true;
+        }
+        return deletedAny;
+      }
       async function syncPaymentsToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
         await guardUploadWithRemoteFreshness({
@@ -12729,7 +12803,7 @@
         void appendScheduleReceiptLedgerToSupabase(deleteReceipt).catch((error) => {
           console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
         });
-        void deleteScheduleFromSupabaseById(deletedScheduleId).catch((error) => {
+        void deleteScheduleFromSupabaseByItem(deletedItem).catch((error) => {
           console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
         });
         if (!shouldMoveToHoldAfterDelete) {
