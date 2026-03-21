@@ -378,6 +378,7 @@ create table if not exists public.schedule_dashboard_state (
   id text primary key,
   completed jsonb not null default '[]'::jsonb,
   process_log jsonb not null default '[]'::jsonb,
+  completed_history jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -424,3 +425,7 @@ for update
 to anon, authenticated
 using (true)
 with check (true);
+
+-- 확인 처리로 목록에서 제거된 완료 건 (기록보기)
+alter table public.schedule_dashboard_state
+  add column if not exists completed_history jsonb not null default '[]'::jsonb;

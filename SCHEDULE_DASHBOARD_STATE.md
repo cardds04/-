@@ -18,9 +18,12 @@
 | `id` | 고정 `global` (PK) |
 | `completed` | 2번 칸 — 완료 항목 배열 (jsonb) |
 | `process_log` | 3번 칸 — 작가 처리 로그 배열 (jsonb) |
+| `completed_history` | 「확인」으로 목록에서 뺀 완료 기록 (jsonb) |
 | `updated_at` | 자동 갱신 |
 
-로컬 키 이름(참고): `scheduleSiteAdminDashboardCompletedV1`, `scheduleSiteAdminWriterProcessLogV1`
+**이미 테이블만 만든 경우** SQL Editor에서 `alter table ... add column if not exists completed_history` 구문을 한 번 실행하세요. (`supabase-schema.sql` 하단 참고)
+
+로컬 키 이름(참고): `scheduleSiteAdminDashboardCompletedV1`, `scheduleSiteAdminWriterProcessLogV1`, `scheduleSiteAdminDashboardCompletedHistoryV1`
 
 ## 3. 동작 요약
 

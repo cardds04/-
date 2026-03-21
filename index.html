@@ -451,6 +451,27 @@
         color: var(--blue-dark);
       }
 
+      .schedule-dashboard-head-with-action {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .schedule-dashboard-head-with-action .dashboard-history-btn {
+        flex-shrink: 0;
+        font-size: 0.72rem;
+        padding: 4px 10px;
+      }
+
+      .dashboard-completed-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+
       .schedule-dashboard-processed-at {
         font-size: 0.68rem;
         font-weight: 700;
@@ -1481,7 +1502,10 @@
               <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-2">
-              <div class="schedule-dashboard-head">완료된 작업</div>
+              <div class="schedule-dashboard-head schedule-dashboard-head-with-action">
+                <span>완료된 작업</span>
+                <button id="dashboardCompletedHistoryBtn" class="btn-sm dashboard-history-btn" type="button">기록보기</button>
+              </div>
               <div id="scheduleDashboardCompletedList" class="schedule-dashboard-list schedule-dashboard-completed-list"></div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-3">
@@ -1696,6 +1720,30 @@
       </div>
     </div>
 
+    <div id="dashboardCompletedHistoryModal" class="calendar-modal hidden">
+      <div class="calendar-panel" style="width: min(720px, 96vw);">
+        <div class="calendar-head">
+          <div class="calendar-title">완료 확인 기록</div>
+          <button id="dashboardCompletedHistoryCloseBtn" class="btn-sm" type="button">닫기</button>
+        </div>
+        <div class="customer-stats-box" style="margin-bottom: 12px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 6px;">
+              <span>확인일 시작</span>
+              <input id="dashboardCompletedHistoryFrom" type="date" class="small-select" style="padding: 4px 8px;" />
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px;">
+              <span>확인일 끝</span>
+              <input id="dashboardCompletedHistoryTo" type="date" class="small-select" style="padding: 4px 8px;" />
+            </label>
+            <button id="dashboardCompletedHistorySearchBtn" class="btn-sm" type="button">검색</button>
+          </div>
+          <p class="helper" style="margin: 8px 0 0;">「확인」으로 목록에서 제거한 작업만 표시됩니다. 날짜는 확인을 누른 날(확인일) 기준입니다.</p>
+        </div>
+        <div id="dashboardCompletedHistoryList" class="customer-alert-history" style="max-height: 52vh;"></div>
+      </div>
+    </div>
+
     <div id="previousScheduleHistoryModal" class="calendar-modal hidden">
       <div class="calendar-panel" style="width: min(980px, 96vw);">
         <div class="calendar-head">
@@ -1803,6 +1851,7 @@
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
+      const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
@@ -1908,7 +1957,12 @@
           this.memoryStore.clear();
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
-            if (k === STORAGE_ADMIN_DASHBOARD_COMPLETED || k === STORAGE_ADMIN_WRITER_PROCESS_LOG) return;
+            if (
+              k === STORAGE_ADMIN_DASHBOARD_COMPLETED ||
+              k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
+              k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+            )
+              return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -2069,7 +2123,10 @@
         if (scheduleSiteClientKvPushInFlight) return;
         const kvFiltered = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
-            ([k]) => k !== STORAGE_ADMIN_DASHBOARD_COMPLETED && k !== STORAGE_ADMIN_WRITER_PROCESS_LOG
+            ([k]) =>
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
+              k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
           )
         );
         if (!Object.keys(kvFiltered).length) return;
@@ -2135,7 +2192,8 @@
       function noteDashboardRemoteContentSigFromStorage() {
         const a = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
         const b = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
-        lastDashboardRemoteContentSig = `${a}\n${b}`;
+        const c = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
+        lastDashboardRemoteContentSig = `${a}\n${b}\n${c}`;
       }
       /** GET 만 수행 (적용 X). 폴링·비교용 */
       async function fetchDashboardStatePayload(timeoutMs) {
@@ -2145,7 +2203,7 @@
         try {
           const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
             SUPABASE_DASHBOARD_STATE_ID
-          )}&select=completed,process_log&limit=1`;
+          )}&select=completed,process_log,completed_history&limit=1`;
           const res = await fetch(url, {
             method: "GET",
             headers: {
@@ -2164,10 +2222,13 @@
           const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
           const completedRaw = row?.completed;
           const logRaw = row?.process_log;
+          const histRaw = row?.completed_history;
           const completedStr =
             completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
           const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
-          return { ok: true, completedStr, logStr };
+          const historyStr =
+            histRaw == null ? "[]" : typeof histRaw === "string" ? histRaw : JSON.stringify(histRaw);
+          return { ok: true, completedStr, logStr, historyStr };
         } catch (error) {
           if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
           return { ok: false };
@@ -2180,12 +2241,13 @@
         if (!USE_SUPABASE_SYNC) return false;
         const payload = await fetchDashboardStatePayload(timeoutMs);
         if (!payload.ok) return false;
-        const { completedStr, logStr } = payload;
+        const { completedStr, logStr, historyStr } = payload;
         isApplyingRemoteDashboardState = true;
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
-          lastDashboardRemoteContentSig = `${completedStr}\n${logStr}`;
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, historyStr || "[]");
+          lastDashboardRemoteContentSig = `${completedStr}\n${logStr}\n${historyStr || "[]"}`;
         } finally {
           isApplyingRemoteDashboardState = false;
         }
@@ -2200,12 +2262,14 @@
         if (isApplyingRemoteDashboardState) return;
         const payload = await fetchDashboardStatePayload(DASHBOARD_STATE_FETCH_TIMEOUT_MS);
         if (!payload.ok) return;
-        const sig = `${payload.completedStr}\n${payload.logStr}`;
+        const h = payload.historyStr || "[]";
+        const sig = `${payload.completedStr}\n${payload.logStr}\n${h}`;
         if (sig === lastDashboardRemoteContentSig) return;
         isApplyingRemoteDashboardState = true;
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, payload.completedStr);
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, payload.logStr);
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, h);
           lastDashboardRemoteContentSig = sig;
         } finally {
           isApplyingRemoteDashboardState = false;
@@ -2224,6 +2288,7 @@
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, "[]");
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, "[]");
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, "[]");
         } finally {
           isApplyingRemoteDashboardState = false;
         }
@@ -2263,8 +2328,10 @@
         if (supersedeSignal?.aborted) return "superseded";
         const completedStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
         const logStr = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
+        const historyStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
         let completed;
         let process_log;
+        let completed_history;
         try {
           completed = JSON.parse(completedStr);
           if (!Array.isArray(completed)) completed = [];
@@ -2276,6 +2343,12 @@
           if (!Array.isArray(process_log)) process_log = [];
         } catch {
           process_log = [];
+        }
+        try {
+          completed_history = JSON.parse(historyStr);
+          if (!Array.isArray(completed_history)) completed_history = [];
+        } catch {
+          completed_history = [];
         }
         const merged = new AbortController();
         const tid = setTimeout(() => merged.abort(), DASHBOARD_STATE_SAVE_TIMEOUT_MS);
@@ -2301,7 +2374,8 @@
               {
                 id: SUPABASE_DASHBOARD_STATE_ID,
                 completed,
-                process_log
+                process_log,
+                completed_history
               }
             ])
           });
@@ -3658,6 +3732,13 @@
       const writerHistorySummaryEl = document.getElementById("writerHistorySummary");
       const writerHistoryDetailEl = document.getElementById("writerHistoryDetail");
       const writerHistoryCloseBtnEl = document.getElementById("writerHistoryCloseBtn");
+      const dashboardCompletedHistoryModalEl = document.getElementById("dashboardCompletedHistoryModal");
+      const dashboardCompletedHistoryCloseBtnEl = document.getElementById("dashboardCompletedHistoryCloseBtn");
+      const dashboardCompletedHistoryFromEl = document.getElementById("dashboardCompletedHistoryFrom");
+      const dashboardCompletedHistoryToEl = document.getElementById("dashboardCompletedHistoryTo");
+      const dashboardCompletedHistorySearchBtnEl = document.getElementById("dashboardCompletedHistorySearchBtn");
+      const dashboardCompletedHistoryListEl = document.getElementById("dashboardCompletedHistoryList");
+      const dashboardCompletedHistoryBtnEl = document.getElementById("dashboardCompletedHistoryBtn");
       const previousScheduleHistoryBtnEl = document.getElementById("previousScheduleHistoryBtn");
       const previousScheduleHistoryModalEl = document.getElementById("previousScheduleHistoryModal");
       const previousScheduleHistoryTitleEl = document.getElementById("previousScheduleHistoryTitle");
@@ -10215,6 +10296,91 @@
         writeWriterProcessLog(rows);
       }
 
+      function removeWriterProcessLogRowsForScheduleKey(scheduleKey) {
+        const sk = String(scheduleKey || "").trim();
+        if (!sk) return;
+        const rows = readWriterProcessLog().filter((r) => r.scheduleKey !== sk);
+        writeWriterProcessLog(rows);
+      }
+
+      function readDashboardCompletedHistory() {
+        const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY);
+        return raw
+          .filter((v) => v && typeof v === "object")
+          .map((v) => ({
+            scheduleKey: String(v.scheduleKey || "").trim(),
+            processedAt: String(v.processedAt || "").trim(),
+            writer: String(v.writer || "").trim(),
+            confirmedAt: String(v.confirmedAt || "").trim(),
+            scheduleDate: String(v.scheduleDate || "").trim(),
+            company: String(v.company || "").trim()
+          }))
+          .filter((e) => e.scheduleKey && e.confirmedAt);
+      }
+
+      function writeDashboardCompletedHistory(rows) {
+        try {
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, JSON.stringify(rows));
+          queueDashboardStateSaveToSupabase();
+        } catch (error) {
+          console.warn("writeDashboardCompletedHistory", error);
+        }
+      }
+
+      function ymdFromConfirmedAtUtc(iso) {
+        const s = String(iso || "").trim();
+        const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+        return m ? m[1] : "";
+      }
+
+      function openDashboardCompletedHistoryModal() {
+        const today = new Date();
+        const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        if (dashboardCompletedHistoryFromEl) dashboardCompletedHistoryFromEl.value = ymd;
+        if (dashboardCompletedHistoryToEl) dashboardCompletedHistoryToEl.value = ymd;
+        renderDashboardCompletedHistoryFiltered();
+        dashboardCompletedHistoryModalEl?.classList.remove("hidden");
+      }
+
+      function renderDashboardCompletedHistoryFiltered() {
+        if (!dashboardCompletedHistoryListEl) return;
+        const fromY = dashboardCompletedHistoryFromEl?.value?.trim() || "";
+        const toY = dashboardCompletedHistoryToEl?.value?.trim() || "";
+        let rows = readDashboardCompletedHistory();
+        rows.sort((a, b) => String(b.confirmedAt).localeCompare(String(a.confirmedAt)));
+        rows = rows.filter((e) => {
+          const cy = ymdFromConfirmedAtUtc(e.confirmedAt);
+          if (!cy) return false;
+          if (fromY && cy < fromY) return false;
+          if (toY && cy > toY) return false;
+          return true;
+        });
+        if (rows.length === 0) {
+          dashboardCompletedHistoryListEl.innerHTML =
+            '<div class="helper" style="margin:0;">해당 기간에 기록이 없습니다.</div>';
+          return;
+        }
+        dashboardCompletedHistoryListEl.innerHTML = rows
+          .map((e) => {
+            const proc =
+              e.processedAt && /^\d{4}-\d{2}-\d{2}$/.test(e.processedAt) ? formatYmdToMdSlash(e.processedAt) : "-";
+            const sdat =
+              e.scheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(e.scheduleDate) ? formatYmdToMdSlash(e.scheduleDate) : "-";
+            const confYmd = ymdFromConfirmedAtUtc(e.confirmedAt);
+            const confLabel = confYmd ? formatYmdToMdSlash(confYmd) : "-";
+            const wr = e.writer ? `${escapeHtml(e.writer)} 처리` : "";
+            const comp = escapeHtml(e.company || "-");
+            return `<div class="schedule-dashboard-row-line" style="margin-bottom:8px;padding:8px;border:1px solid #e8edf5;border-radius:8px;">
+              <div><span class="schedule-dashboard-date-co">${escapeHtml(sdat)}</span>
+              <span class="schedule-dashboard-company" style="margin-left:6px;">${comp}</span></div>
+              <div style="margin-top:4px;"><span class="schedule-dashboard-processed-at">${escapeHtml(proc)} 완료</span>
+              ${wr ? `<span class="schedule-dashboard-completed-writer" style="margin-left:8px;">${wr}</span>` : ""}</div>
+              <div class="helper" style="margin-top:4px;">확인일: ${escapeHtml(confLabel)}</div>
+            </div>`;
+          })
+          .join("");
+      }
+
       function writeDashboardCompletedEntries(entries) {
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
@@ -10329,7 +10495,7 @@
               : "";
           const nameCell = `<span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>`;
           const revertBtn = completed
-            ? `<button type="button" class="dashboard-revert-btn" data-action="dashboardUnmarkComplete" data-data-index="${dataIndex}">되돌리기</button>`
+            ? `<span class="dashboard-completed-actions"><button type="button" class="dashboard-revert-btn" data-action="dashboardUnmarkComplete" data-data-index="${dataIndex}">되돌리기</button><button type="button" class="dashboard-revert-btn" data-action="dashboardConfirmCompleted" data-data-index="${dataIndex}">확인</button></span>`
             : "";
           return `<div class="schedule-dashboard-row-line">
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
@@ -10773,6 +10939,30 @@
           if (entry?.writer && entry?.processedAt) {
             removeWriterProcessLogForDashboardRevert(sk, entry.writer, entry.processedAt);
           }
+          renderList();
+          return;
+        }
+        const confirmDoneBtn = event.target.closest("button[data-action='dashboardConfirmCompleted']");
+        if (confirmDoneBtn) {
+          const idx = Number(confirmDoneBtn.dataset.dataIndex);
+          if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+          const item = data[idx];
+          const sk = getDashboardScheduleKey(item);
+          const entry = getCompletedEntryForKey(sk);
+          if (!entry) return;
+          const entries = readDashboardCompletedEntries().filter((e) => e.scheduleKey !== sk);
+          writeDashboardCompletedEntries(entries);
+          const history = readDashboardCompletedHistory();
+          history.push({
+            scheduleKey: sk,
+            processedAt: entry.processedAt || "",
+            writer: entry.writer || "",
+            confirmedAt: new Date().toISOString(),
+            scheduleDate: String(item?.date || "").trim(),
+            company: normalizeCompanyName(item?.company) || "-"
+          });
+          writeDashboardCompletedHistory(history);
+          removeWriterProcessLogRowsForScheduleKey(sk);
           renderList();
           return;
         }
@@ -11302,6 +11492,16 @@
           writerHistoryModalEl.classList.add("hidden");
         }
       });
+      dashboardCompletedHistoryBtnEl?.addEventListener("click", () => openDashboardCompletedHistoryModal());
+      dashboardCompletedHistoryCloseBtnEl?.addEventListener("click", () => {
+        dashboardCompletedHistoryModalEl?.classList.add("hidden");
+      });
+      dashboardCompletedHistoryModalEl?.addEventListener("click", (event) => {
+        if (event.target === dashboardCompletedHistoryModalEl) {
+          dashboardCompletedHistoryModalEl.classList.add("hidden");
+        }
+      });
+      dashboardCompletedHistorySearchBtnEl?.addEventListener("click", () => renderDashboardCompletedHistoryFiltered());
       previousScheduleHistoryBtnEl?.addEventListener("click", () => {
         renderPreviousScheduleHistory();
         previousScheduleHistoryModalEl.classList.remove("hidden");
