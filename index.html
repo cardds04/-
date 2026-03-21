@@ -437,6 +437,12 @@
         color: var(--blue-dark);
       }
 
+      .schedule-dashboard-processed-at {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #5a8a4a;
+      }
+
       .writer-week-stats-grid {
         display: grid;
         grid-template-columns: repeat(7, minmax(36px, 1fr));
@@ -554,6 +560,24 @@
         color: var(--muted);
         margin: -2px 0 6px;
         line-height: 1.35;
+      }
+
+      .schedule-dashboard-processed-date-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+
+      .schedule-dashboard-processed-date-row label {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .schedule-dashboard-processed-date-row input[type="date"] {
+        min-width: 130px;
       }
 
       .schedule-dashboard-week-group {
@@ -1366,6 +1390,10 @@
             <div class="schedule-dashboard-col schedule-dashboard-col-1">
               <div class="schedule-dashboard-head">15일간 스케줄</div>
               <div id="scheduleDashboardRangeHint" class="schedule-dashboard-range-hint"></div>
+              <div class="schedule-dashboard-processed-date-row">
+                <label for="scheduleDashboardProcessedDate">완료일 (언제 처리했는지):</label>
+                <input id="scheduleDashboardProcessedDate" type="date" class="small-select" title="이 날짜로 완료 처리 (기본: 오늘)" />
+              </div>
               <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-2">
@@ -9426,28 +9454,43 @@
         return `fb:${String(item?.date || "").trim()}|${String(item?.time || "").trim()}|${normalizeCompanyName(item?.company)}|${normalizeCompanyName(item?.place)}`;
       }
 
-      function readDashboardCompletedScheduleKeys() {
-        return new Set(
-          readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED)
-            .map((v) => String(v ?? "").trim())
-            .filter(Boolean)
-        );
+      function readDashboardCompletedEntries() {
+        const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED);
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        return raw
+          .map((v) => {
+            if (typeof v === "string") return { scheduleKey: String(v).trim(), processedAt: todayKey };
+            const sk = String(v?.scheduleKey ?? "").trim();
+            const pa = String(v?.processedAt ?? todayKey).trim();
+            return { scheduleKey: sk, processedAt: pa || todayKey };
+          })
+          .filter((e) => e.scheduleKey);
       }
 
-      function writeDashboardCompletedScheduleKeys(keySet) {
+      function getCompletedKeySet() {
+        return new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
+      }
+
+      function getProcessedAtForKey(scheduleKey) {
+        const e = readDashboardCompletedEntries().find((x) => x.scheduleKey === scheduleKey);
+        return e?.processedAt ?? "";
+      }
+
+      function writeDashboardCompletedEntries(entries) {
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify([...keySet]));
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
         } catch (error) {
-          console.warn("writeDashboardCompletedScheduleKeys", error);
+          console.warn("writeDashboardCompletedEntries", error);
         }
       }
 
-      function pruneDashboardCompletedScheduleKeys(activeRows) {
+      function pruneDashboardCompletedEntries(activeRows) {
         const valid = new Set(activeRows.map((item) => getDashboardScheduleKey(item)));
-        const cur = readDashboardCompletedScheduleKeys();
-        const next = new Set([...cur].filter((k) => valid.has(k)));
-        if (next.size !== cur.size) {
-          writeDashboardCompletedScheduleKeys(next);
+        const cur = readDashboardCompletedEntries();
+        const next = cur.filter((e) => valid.has(e.scheduleKey));
+        if (next.length !== cur.length) {
+          writeDashboardCompletedEntries(next);
         }
         return next;
       }
@@ -9505,7 +9548,13 @@
         const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
         if (!listRoot || !completedRoot || !todayWrap) return;
 
-        const completedKeys = pruneDashboardCompletedScheduleKeys(activeRows);
+        const completedEntries = pruneDashboardCompletedEntries(activeRows);
+        const completedKeys = new Set(completedEntries.map((e) => e.scheduleKey));
+
+        const processedDateEl = document.getElementById("scheduleDashboardProcessedDate");
+        if (processedDateEl && !processedDateEl.value) {
+          processedDateEl.value = todayKey;
+        }
 
         const { start: windowStart, end: windowEnd } = getDashboardFifteenDayWindow(todayKey);
         if (rangeHintEl) {
@@ -9540,9 +9589,13 @@
             )}" data-data-index="${dataIndex}">${escapeHtml(writer)}</button>`;
           }).join("");
           const todayBadge = isShootToday ? '<span class="dashboard-today-badge">오늘</span>' : "";
+          const processedAt = completed ? getProcessedAtForKey(sk) : "";
+          const processedAtLabel = processedAt
+            ? `<span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(processedAt))} 완료</span>`
+            : "";
           const nameCell = completed
             ? `<span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>`
-            : `<button type="button" class="schedule-dashboard-company-btn" data-action="dashboardMarkComplete" data-data-index="${dataIndex}" title="완료된 작업으로 이동">${escapeHtml(
+            : `<button type="button" class="schedule-dashboard-company-btn" data-action="dashboardMarkComplete" data-data-index="${dataIndex}" title="선택한 완료일로 완료된 작업으로 이동">${escapeHtml(
                 company
               )}</button>`;
           const revertBtn = completed
@@ -9553,6 +9606,7 @@
                   ${nameCell}
                   ${todayBadge}
                   ${chips}
+                  ${processedAtLabel}
                   ${revertBtn}
                 </div>`;
         }
@@ -9920,9 +9974,15 @@
           if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
           const item = data[idx];
           const sk = getDashboardScheduleKey(item);
-          const next = readDashboardCompletedScheduleKeys();
-          next.add(sk);
-          writeDashboardCompletedScheduleKeys(next);
+          const processedDateEl = document.getElementById("scheduleDashboardProcessedDate");
+          const now = new Date();
+          const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          const processedAt = processedDateEl?.value?.trim() || todayKey;
+          const entries = readDashboardCompletedEntries();
+          if (!entries.some((e) => e.scheduleKey === sk)) {
+            entries.push({ scheduleKey: sk, processedAt });
+            writeDashboardCompletedEntries(entries);
+          }
           renderList();
           return;
         }
@@ -9932,9 +9992,8 @@
           if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
           const item = data[idx];
           const sk = getDashboardScheduleKey(item);
-          const next = readDashboardCompletedScheduleKeys();
-          next.delete(sk);
-          writeDashboardCompletedScheduleKeys(next);
+          const entries = readDashboardCompletedEntries().filter((e) => e.scheduleKey !== sk);
+          writeDashboardCompletedEntries(entries);
           renderList();
           return;
         }
