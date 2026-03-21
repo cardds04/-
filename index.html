@@ -449,6 +449,50 @@
         margin: 2px 0;
       }
 
+      .writer-day-subblock {
+        margin: 8px 0 0;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #f7f9fd;
+        border: 1px solid #e8edf5;
+      }
+
+      .writer-day-subblock:first-of-type {
+        margin-top: 4px;
+      }
+
+      .writer-day-subhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: #2a3550;
+      }
+
+      .writer-day-subhead .writer-day-count {
+        color: var(--blue);
+      }
+
+      .writer-today-block[data-writer-block="김진영"] .writer-day-subhead .writer-day-count {
+        color: #c77a1a;
+      }
+
+      .writer-day-sublist {
+        margin: 0;
+        padding-left: 14px;
+        font-size: 0.72rem;
+        color: #3d4a63;
+      }
+
+      .schedule-dashboard-range-hint {
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin: -2px 0 6px;
+        line-height: 1.35;
+      }
+
       .schedule-dashboard-chart-wrap {
         flex: 1;
         min-height: 160px;
@@ -1239,7 +1283,8 @@
 
           <div id="scheduleDashboard" class="schedule-dashboard" aria-label="스케줄 요약 대시보드">
             <div class="schedule-dashboard-col schedule-dashboard-col-1">
-              <div class="schedule-dashboard-head">남은 스케줄 (오늘 이후)</div>
+              <div class="schedule-dashboard-head">3주 구간 스케줄</div>
+              <div id="scheduleDashboardRangeHint" class="schedule-dashboard-range-hint"></div>
               <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
               <div class="schedule-dashboard-jump">
                 <button type="button" data-action="scrollWriterTodaySummary" data-writer="박보윤">박보윤 오늘</button>
@@ -1247,11 +1292,11 @@
               </div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-2">
-              <div class="schedule-dashboard-head">오늘 처리</div>
+              <div class="schedule-dashboard-head">최근 3일 처리</div>
               <div id="scheduleDashboardTodayWrap"></div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-3">
-              <div class="schedule-dashboard-head">처리 추이 (오늘 기준 전후 7일 구간)</div>
+              <div class="schedule-dashboard-head">처리 추이 (최근 3일)</div>
               <div id="scheduleDashboardChart" class="schedule-dashboard-chart-wrap"></div>
             </div>
           </div>
@@ -9287,6 +9332,47 @@
         return `${y}-${mo}-${d}`;
       }
 
+      function parseYmdToLocalDate(ymd) {
+        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      }
+
+      function formatLocalDateToYmd(d) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+
+      function getMondayOnOrBeforeLocalDate(d) {
+        const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const dow = x.getDay();
+        const offset = dow === 0 ? -6 : 1 - dow;
+        x.setDate(x.getDate() + offset);
+        return x;
+      }
+
+      /** 저번주 월요일 ~ 다음주 일요일 (3주, 21일) */
+      function getDashboardThreeWeekWindow(todayKey) {
+        const d = parseYmdToLocalDate(todayKey);
+        if (!d) return { start: todayKey, end: todayKey };
+        const thisMonday = getMondayOnOrBeforeLocalDate(d);
+        const start = new Date(thisMonday);
+        start.setDate(start.getDate() - 7);
+        const end = new Date(thisMonday);
+        end.setDate(end.getDate() + 13);
+        return { start: formatLocalDateToYmd(start), end: formatLocalDateToYmd(end) };
+      }
+
+      function getDashboardProcessThreeDays(todayKey) {
+        return [addDaysToYmd(todayKey, -2), addDaysToYmd(todayKey, -1), todayKey];
+      }
+
+      function formatProcessDayRelativeLabel(dayKey, todayKey) {
+        if (dayKey === todayKey) return "오늘";
+        if (dayKey === addDaysToYmd(todayKey, -1)) return "어제";
+        if (dayKey === addDaysToYmd(todayKey, -2)) return "그제";
+        return "";
+      }
+
       function getDashboardScheduleKey(item) {
         const id = String(item?.customerScheduleId || "").trim();
         if (id) return `id:${id}`;
@@ -9341,21 +9427,30 @@
 
       function renderScheduleDashboard(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
+        const rangeHintEl = document.getElementById("scheduleDashboardRangeHint");
         const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
         const chartRoot = document.getElementById("scheduleDashboardChart");
         if (!listRoot || !todayWrap || !chartRoot) return;
 
+        const { start: windowStart, end: windowEnd } = getDashboardThreeWeekWindow(todayKey);
+        if (rangeHintEl) {
+          rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
+            windowEnd
+          )} · 저번주 월요일 ~ 다음주 일요일`;
+        }
+
         const upcoming = activeRows
           .filter((item) => {
             const d = String(item?.date || "").trim();
-            return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= todayKey;
+            return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= windowStart && d <= windowEnd;
           })
           .sort((a, b) => compareScheduleDateTime(a, b));
 
         const log = readWriterProcessLog();
+        const processThreeDays = getDashboardProcessThreeDays(todayKey);
 
         const listHtml = !upcoming.length
-          ? '<div class="helper" style="margin:0;font-size:0.8rem;">오늘 이후 예정된 스케줄이 없습니다.</div>'
+          ? '<div class="helper" style="margin:0;font-size:0.8rem;">이 3주 구간에 해당하는 스케줄이 없습니다.</div>'
           : upcoming
               .map((item) => {
                 const dataIndex = data.indexOf(item);
@@ -9385,29 +9480,37 @@
 
         listRoot.innerHTML = listHtml;
 
-        const todayLogs = log.filter((r) => r.processedDay === todayKey);
         const todayHtml = DASHBOARD_TARGET_WRITERS.map((writer) => {
-          const entries = todayLogs.filter((r) => r.writer === writer);
           const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : "dashboardWriterBlockKjy";
-          const count = entries.length;
-          const lis = entries
-            .map(
-              (e) =>
-                `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
-            )
+          const dayBlocks = processThreeDays
+            .map((dayKey) => {
+              const entries = log.filter((r) => r.writer === writer && r.processedDay === dayKey);
+              const cnt = entries.length;
+              const rel = formatProcessDayRelativeLabel(dayKey, todayKey);
+              const lis = entries
+                .map(
+                  (e) =>
+                    `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
+                )
+                .join("");
+              return `<div class="writer-day-subblock">
+              <div class="writer-day-subhead">
+                <span>${escapeHtml(formatYmdToMdSlash(dayKey))}${rel ? ` (${escapeHtml(rel)})` : ""}</span>
+                <span class="writer-day-count">${cnt}건</span>
+              </div>
+              ${cnt ? `<ul class="writer-day-sublist">${lis}</ul>` : ""}
+            </div>`;
+            })
             .join("");
           return `<div id="${blockId}" class="writer-today-block" data-writer-block="${escapeHtml(writer)}">
-            <h4><span>${escapeHtml(writer)} 오늘</span> <span class="writer-today-count">${count}건</span></h4>
-            ${count ? `<ul class="writer-today-list">${lis}</ul>` : ""}
+            <h4><span>${escapeHtml(writer)}</span> <span class="writer-today-count" style="font-size:0.78rem;font-weight:700;color:var(--muted);">최근 3일</span></h4>
+            ${dayBlocks}
           </div>`;
         }).join("");
 
         todayWrap.innerHTML = todayHtml;
 
-        const chartDates = [];
-        for (let offset = -2; offset <= 5; offset += 1) {
-          chartDates.push(addDaysToYmd(todayKey, offset));
-        }
+        const chartDates = [...processThreeDays];
         const countsForWriter = (writer) =>
           chartDates.map((day) => log.filter((r) => r.writer === writer && r.processedDay === day).length);
         const seriesPby = countsForWriter("박보윤");
