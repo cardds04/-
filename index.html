@@ -9447,9 +9447,9 @@
         return `${y}-${mo}-${d}`;
       }
 
-      /** 오늘 포함 15일간 촬영일 (오늘 ~ 오늘+14) */
+      /** 오늘 포함 과거 방향 15일간 촬영일 (오늘-14 ~ 오늘) */
       function getDashboardFifteenDayWindow(todayKey) {
-        return { start: todayKey, end: addDaysToYmd(todayKey, 14) };
+        return { start: addDaysToYmd(todayKey, -14), end: todayKey };
       }
 
       /** 오늘 포함 최근 7일 (과거→오늘 순) */
@@ -9549,7 +9549,7 @@
         if (rangeHintEl) {
           rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
             windowEnd
-          )} · 오늘부터 15일간`;
+          )} · 오늘 포함 과거 15일`;
         }
 
         const inWindow = activeRows
@@ -9648,10 +9648,10 @@
         const seriesKjy = countsForWriter("김진영");
         const maxVal = Math.max(1, ...seriesPby, ...seriesKjy);
         const W = 480;
-        const H = 168;
+        const H = 188;
         const padL = 34;
         const padR = 10;
-        const padT = 12;
+        const padT = 26;
         const padB = 32;
         const plotW = W - padL - padR;
         const plotH = H - padT - padB;
@@ -9671,12 +9671,30 @@
           })
           .join("");
 
+        const svgCountLabels = chartDates
+          .map((_, i) => {
+            const x = xAt(i);
+            const vP = seriesPby[i];
+            const vK = seriesKjy[i];
+            const yP = yAt(vP);
+            const yK = yAt(vK);
+            const topY = Math.min(yP, yK);
+            const labelY = Math.max(padT + 2, topY - 10);
+            return `<text x="${x.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700">
+              <tspan fill="#456aa7">${escapeHtml(String(vP))}건</tspan>
+              <tspan fill="#94a3b8"> · </tspan>
+              <tspan fill="#c77a1a">${escapeHtml(String(vK))}건</tspan>
+            </text>`;
+          })
+          .join("");
+
         chartRoot.innerHTML = `
           <div class="schedule-dashboard-chart-legend">
             <span><i style="background:#456aa7;"></i>박보윤</span>
             <span><i style="background:#e8a54b;"></i>김진영</span>
+            <span style="margin-left:6px;color:#6b758f;font-weight:600;">날짜별: 파란숫자·주황숫자=각 건수</span>
           </div>
-          <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="max-height:200px;">
+          <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="max-height:220px;">
             <line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" stroke="#d9deea" stroke-width="1"/>
             <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#d9deea" stroke-width="1"/>
             <polyline fill="none" stroke="#456aa7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${linePoints(
@@ -9697,6 +9715,7 @@
                   `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.5" fill="#e8a54b" stroke="#fff" stroke-width="1"/>`
               )
               .join("")}
+            ${svgCountLabels}
             ${svgLabels}
           </svg>
         `;
