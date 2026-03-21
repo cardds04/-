@@ -24,3 +24,17 @@
 - 사파리에서 같은 사이트를 열었을 때 목록이 보이면 정상입니다.
 
 **주의:** anon 키로 읽기/쓰기가 가능하므로, 운영 환경에서는 RLS·정책을 프로젝트 보안 요구에 맞게 조정하세요.
+
+## 4. 전체스케줄 대시보드 2·3번 칸
+
+- **2번** 완료된 작업: `scheduleSiteAdminDashboardCompletedV1`
+- **3번** 오늘 처리(7일 그리드): `scheduleSiteAdminWriterProcessLogV1`
+
+완료 처리·되돌리기 시 위 두 값이 바뀔 때마다 **`schedule_site_client_kv`에 업서트**되도록 별도 동기화가 붙어 있습니다.  
+브라우저 개발자 도구 콘솔에 `[DASHBOARD_KV]` 로그가 나오면 저장 시도 결과를 확인할 수 있습니다.
+
+## 5. 테이블이 계속 비어 있을 때
+
+1. 콘솔에 `[DASHBOARD_KV] schedule_site_client_kv 저장 실패` 또는 `401` / `403` / `42501` 이 있는지 확인합니다.
+2. **Authentication → Policies** 에서 `schedule_site_client_kv`에 **anon**용 `SELECT` / `INSERT` / `UPDATE` 가 모두 허용되는지 확인합니다. (스키마에 넣은 `public_read_*` / `public_write_*` / `public_update_*` 정책)
+3. **Settings → API** 의 Project URL·anon key가 `sync-config.js`와 일치하는지 확인합니다.

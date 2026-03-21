@@ -2106,6 +2106,61 @@
         }
       }
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
+      /** 대시보드 2·3번 칸(완료·작가 처리 로그) — schedule_site_client_kv 에 명시적으로 반영 */
+      let dashboardPanelsKvSyncTimer = null;
+      function queueDashboardPanelsSyncToSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        if (dashboardPanelsKvSyncTimer) clearTimeout(dashboardPanelsKvSyncTimer);
+        dashboardPanelsKvSyncTimer = setTimeout(() => {
+          dashboardPanelsKvSyncTimer = null;
+          void mergeAndPushDashboardPanelsToSupabaseClientKv();
+        }, 350);
+      }
+      async function mergeAndPushDashboardPanelsToSupabaseClientKv() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), 25000);
+        try {
+          const mergedKv = { ...Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()) };
+          mergedKv[STORAGE_ADMIN_DASHBOARD_COMPLETED] =
+            localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
+          mergedKv[STORAGE_ADMIN_WRITER_PROCESS_LOG] =
+            localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
+          if (!Object.keys(mergedKv).length) return;
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "resolution=merge-duplicates,return=representation",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            signal: ac.signal,
+            body: JSON.stringify([
+              {
+                id: SUPABASE_CLIENT_KV_ROW_ID,
+                kv: mergedKv
+              }
+            ])
+          });
+          if (!response.ok) {
+            const errText = await response.text();
+            console.error("[DASHBOARD_KV] schedule_site_client_kv 저장 실패", response.status, errText);
+            return;
+          }
+          const rows = await response.json();
+          const updatedAt = rows?.[0]?.updated_at;
+          if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
+        } catch (error) {
+          if (error && error.name === "AbortError") {
+            console.warn("[DASHBOARD_KV] 저장 시간 초과");
+          } else {
+            console.error("[DASHBOARD_KV] 동기화 오류", error);
+          }
+        } finally {
+          clearTimeout(tid);
+        }
+      }
       function getSyncDefaultValue(key) {
         return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
       }
@@ -9883,6 +9938,7 @@
       function writeDashboardCompletedEntries(entries) {
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
+          queueDashboardPanelsSyncToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedEntries", error);
         }
@@ -9915,6 +9971,7 @@
       function writeWriterProcessLog(rows) {
         try {
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(rows));
+          queueDashboardPanelsSyncToSupabase();
         } catch (error) {
           console.warn("writeWriterProcessLog", error);
         }
