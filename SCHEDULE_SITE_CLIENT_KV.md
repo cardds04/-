@@ -30,15 +30,16 @@
 - **2번** 완료된 작업: `scheduleSiteAdminDashboardCompletedV1`
 - **3번** 오늘 처리(7일 그리드): `scheduleSiteAdminWriterProcessLogV1`
 
-완료 처리·되돌리기 시 위 두 값이 바뀔 때마다 **`schedule_site_client_kv`에 업서트**되도록 별도 동기화가 붙어 있습니다.  
-브라우저 개발자 도구 콘솔에 `[DASHBOARD_KV]` 로그가 나오면 저장 시도 결과를 확인할 수 있습니다.
+위 두 값은 **로컬 키 이름은 그대로** 두고, Supabase 동기화는 **`schedule_dashboard_state`** 테이블(행 `id = global`)만 사용합니다.  
+`schedule_site_client_kv` 에는 이 두 키를 **넣지 않습니다**(옛 데이터가 있어도 내려받을 때 무시).  
+설정·SQL은 **`SCHEDULE_DASHBOARD_STATE.md`** 를 보세요. 콘솔 접두사는 `[DASHBOARD_STATE]` 입니다.
 
 ## 왜 같은 Supabase인데도 기기마다 다르게 보일까?
 
 같은 **프로젝트(베이스)** 를 써도 아래면 연동이 깨질 수 있습니다.
 
-1. **테이블이 둘**  
-   일정 본문은 주로 **`schedules`** 테이블, 브라우저 캐시·대시보드 묶음은 **`schedule_site_client_kv`** 입니다. 한쪽만 쓰거나 한쪽 저장이 실패하면 화면이 엇갈립니다.
+1. **테이블이 여러 개**  
+   스케줄 본문은 **`schedules`** 등, Safari 복구용 묶음은 **`schedule_site_client_kv`**, 대시보드 2·3번은 **`schedule_dashboard_state`** 입니다. 각각 저장이 실패하면 화면이 엇갈릴 수 있습니다.
 
 2. **RLS(행 보안)**  
    `schedules` 는 되는데 `schedule_site_client_kv` 만 **403 / new row violates** 가 나면, anon 에 대한 INSERT/UPDATE 정책이 없거나 다른 것입니다.
@@ -46,8 +47,8 @@
 3. **브라우저마다 로컬이 다름**  
    크롬·사파리는 **각자 메모리·스냅샷**이 있습니다. `client_kv` 로 올리/내려받기가 실패하면 “같은 DB인데 다름”처럼 보입니다.
 
-4. **이전 버그(대시보드 저장 시 kv 덮어쓰기)**  
-   메모리에 다른 키가 비어 있을 때 대시보드만 저장하면, 서버 `kv` 안의 **다른 scheduleSite 키가 통째로 지워질 수 있었습니다.** (코드에서 서버 기준 병합으로 수정함)
+4. **대시보드는 `client_kv`가 아님**  
+   2·3번은 **`schedule_dashboard_state`** 만 봅니다. 예전처럼 `client_kv` 안의 대시보드 키에 의존하지 않습니다.
 
 5. **접속 방식**  
    `file://` 로 HTML 을 열면 브라우저가 API 를 막을 수 있습니다. **http(s) 로 서빙**하는지 확인하세요.
@@ -59,6 +60,7 @@
 
 ## 5. 테이블이 계속 비어 있을 때
 
-1. 콘솔에 `[DASHBOARD_KV] schedule_site_client_kv 저장 실패` 또는 `401` / `403` / `42501` 이 있는지 확인합니다.
-2. **Authentication → Policies** 에서 `schedule_site_client_kv`에 **anon**용 `SELECT` / `INSERT` / `UPDATE` 가 모두 허용되는지 확인합니다. (스키마에 넣은 `public_read_*` / `public_write_*` / `public_update_*` 정책)
-3. **Settings → API** 의 Project URL·anon key가 `sync-config.js`와 일치하는지 확인합니다.
+1. 대시보드 2·3번만 문제면 **`SCHEDULE_DASHBOARD_STATE.md`** 와 콘솔 `[DASHBOARD_STATE]` 로그를 확인합니다.
+2. `client_kv` 문제면 콘솔 `[CLIENT_KV]` 와 `401` / `403` / `42501` 을 확인합니다.
+3. **Authentication → Policies** 에서 해당 테이블에 **anon**용 `SELECT` / `INSERT` / `UPDATE` 가 있는지 확인합니다.
+4. **Settings → API** 의 Project URL·anon key가 `sync-config.js`와 일치하는지 확인합니다.

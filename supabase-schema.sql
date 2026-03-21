@@ -369,3 +369,58 @@ for update
 to anon, authenticated
 using (true)
 with check (true);
+
+-- ------------------------------------------------------------
+-- 관리 대시보드 2·3번 칸 전용: 완료 목록 + 작가 처리 로그 (단일 행)
+-- (1번 스케줄은 schedules 등 기존 경로 — 2·3번만 이 테이블로 동기화)
+-- ------------------------------------------------------------
+create table if not exists public.schedule_dashboard_state (
+  id text primary key,
+  completed jsonb not null default '[]'::jsonb,
+  process_log jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.schedule_dashboard_state (id)
+values ('global')
+on conflict (id) do nothing;
+
+create or replace function public.set_schedule_dashboard_state_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_schedule_dashboard_state_updated on public.schedule_dashboard_state;
+create trigger trg_schedule_dashboard_state_updated
+before insert or update on public.schedule_dashboard_state
+for each row
+execute function public.set_schedule_dashboard_state_updated_at();
+
+alter table public.schedule_dashboard_state enable row level security;
+
+drop policy if exists "public_read_schedule_dashboard_state" on public.schedule_dashboard_state;
+create policy "public_read_schedule_dashboard_state"
+on public.schedule_dashboard_state
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "public_write_schedule_dashboard_state" on public.schedule_dashboard_state;
+create policy "public_write_schedule_dashboard_state"
+on public.schedule_dashboard_state
+for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "public_update_schedule_dashboard_state" on public.schedule_dashboard_state;
+create policy "public_update_schedule_dashboard_state"
+on public.schedule_dashboard_state
+for update
+to anon, authenticated
+using (true)
+with check (true);

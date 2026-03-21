@@ -1824,6 +1824,8 @@
       const SUPABASE_STATE_ID = "global";
       const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
       const SUPABASE_CLIENT_KV_ROW_ID = "scoped_local_v1";
+      const SUPABASE_DASHBOARD_STATE_TABLE = "schedule_dashboard_state";
+      const SUPABASE_DASHBOARD_STATE_ID = "global";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
       const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const STORAGE_SYNC_KEYS = [
@@ -1906,6 +1908,7 @@
           this.memoryStore.clear();
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
+            if (k === STORAGE_ADMIN_DASHBOARD_COMPLETED || k === STORAGE_ADMIN_WRITER_PROCESS_LOG) return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -2064,8 +2067,12 @@
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
-        const kv = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
-        if (!Object.keys(kv).length) return;
+        const kvFiltered = Object.fromEntries(
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(
+            ([k]) => k !== STORAGE_ADMIN_DASHBOARD_COMPLETED && k !== STORAGE_ADMIN_WRITER_PROCESS_LOG
+          )
+        );
+        if (!Object.keys(kvFiltered).length) return;
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
         const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
@@ -2082,7 +2089,7 @@
             body: JSON.stringify([
               {
                 id: SUPABASE_CLIENT_KV_ROW_ID,
-                kv
+                kv: kvFiltered
               }
             ])
           });
@@ -2106,56 +2113,75 @@
         }
       }
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
-      /** 대시보드 2·3번 칸(완료·작가 처리 로그) — schedule_site_client_kv 에 명시적으로 반영 */
-      let dashboardPanelsKvSyncTimer = null;
-      function queueDashboardPanelsSyncToSupabase() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
-        if (dashboardPanelsKvSyncTimer) clearTimeout(dashboardPanelsKvSyncTimer);
-        dashboardPanelsKvSyncTimer = setTimeout(() => {
-          dashboardPanelsKvSyncTimer = null;
-          void mergeAndPushDashboardPanelsToSupabaseClientKv();
-        }, 350);
-      }
-      async function mergeAndPushDashboardPanelsToSupabaseClientKv() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+      /** 대시보드 2·3번 칸 — 전용 테이블 schedule_dashboard_state (client_kv 와 분리) */
+      let isApplyingRemoteDashboardState = false;
+      const DASHBOARD_STATE_SAVE_DEBOUNCE_MS = 350;
+      let dashboardStateSaveTimer = null;
+      async function fetchAndApplyDashboardStateFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return;
         const ac = new AbortController();
         const tid = setTimeout(() => ac.abort(), 25000);
         try {
-          let baseKv = {};
-          try {
-            const getResp = await fetch(
-              `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv&limit=1`,
-              {
-                method: "GET",
-                headers: {
-                  apikey: SUPABASE_ANON_KEY,
-                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                },
-                cache: "no-store",
-                signal: ac.signal
-              }
-            );
-            if (getResp.ok) {
-              const rows = await getResp.json();
-              const raw = rows?.[0]?.kv;
-              if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-                Object.entries(raw).forEach(([k, v]) => {
-                  if (!String(k).startsWith("scheduleSite")) return;
-                  baseKv[k] = typeof v === "string" ? v : JSON.stringify(v);
-                });
-              }
-            }
-          } catch (e) {
-            // 서버에 행 없음·GET 실패 시 로컬만으로 진행
+          const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
+            SUPABASE_DASHBOARD_STATE_ID
+          )}&select=completed,process_log&limit=1`;
+          const res = await fetch(url, {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store",
+            signal: ac.signal
+          });
+          if (!res.ok) {
+            const t = await res.text();
+            if (res.status !== 404) console.warn("[DASHBOARD_STATE] GET", res.status, t);
+            return;
           }
-          const fromMemory = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
-          const mergedKv = { ...baseKv, ...fromMemory };
-          mergedKv[STORAGE_ADMIN_DASHBOARD_COMPLETED] =
-            localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
-          mergedKv[STORAGE_ADMIN_WRITER_PROCESS_LOG] =
-            localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
-          if (!Object.keys(mergedKv).length) return;
-          const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
+          const rows = await res.json();
+          const row = rows?.[0];
+          if (!row) return;
+          const completedRaw = row.completed;
+          const logRaw = row.process_log;
+          const completedStr =
+            completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
+          const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
+          isApplyingRemoteDashboardState = true;
+          try {
+            localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
+            localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
+          } finally {
+            isApplyingRemoteDashboardState = false;
+          }
+        } catch (error) {
+          if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
+        } finally {
+          clearTimeout(tid);
+        }
+      }
+      async function saveDashboardPanelsStateToSupabase() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemoteDashboardState) return;
+        const completedStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
+        const logStr = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
+        let completed;
+        let process_log;
+        try {
+          completed = JSON.parse(completedStr);
+          if (!Array.isArray(completed)) completed = [];
+        } catch {
+          completed = [];
+        }
+        try {
+          process_log = JSON.parse(logStr);
+          if (!Array.isArray(process_log)) process_log = [];
+        } catch {
+          process_log = [];
+        }
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), 25000);
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2166,32 +2192,38 @@
             signal: ac.signal,
             body: JSON.stringify([
               {
-                id: SUPABASE_CLIENT_KV_ROW_ID,
-                kv: mergedKv
+                id: SUPABASE_DASHBOARD_STATE_ID,
+                completed,
+                process_log
               }
             ])
           });
           if (!response.ok) {
             const errText = await response.text();
-            console.error("[DASHBOARD_KV] schedule_site_client_kv 저장 실패", response.status, errText);
-            setSyncStatus(`대시보드 저장 실패 (${response.status}) — RLS·API키 확인`, "error");
+            console.error("[DASHBOARD_STATE] 저장 실패", response.status, errText);
+            setSyncStatus(`대시보드(2·3번) 저장 실패 (${response.status}) — 테이블·RLS 확인`, "error");
             return;
           }
-          const rows = await response.json();
-          const updatedAt = rows?.[0]?.updated_at;
-          if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
-          setSyncStatus(`대시보드·KV 서버 반영 ${formatSyncTime()}`, "ok");
+          setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
         } catch (error) {
           if (error && error.name === "AbortError") {
-            console.warn("[DASHBOARD_KV] 저장 시간 초과");
-            setSyncStatus("대시보드 KV 저장 시간 초과", "warn");
+            console.warn("[DASHBOARD_STATE] 저장 시간 초과");
+            setSyncStatus("대시보드 저장 시간 초과", "warn");
           } else {
-            console.error("[DASHBOARD_KV] 동기화 오류", error);
-            setSyncStatus("대시보드 KV 동기화 오류", "error");
+            console.error("[DASHBOARD_STATE] 저장 오류", error);
+            setSyncStatus("대시보드 저장 오류", "error");
           }
         } finally {
           clearTimeout(tid);
         }
+      }
+      function queueDashboardStateSaveToSupabase() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (dashboardStateSaveTimer) clearTimeout(dashboardStateSaveTimer);
+        dashboardStateSaveTimer = setTimeout(() => {
+          dashboardStateSaveTimer = null;
+          void saveDashboardPanelsStateToSupabase();
+        }, DASHBOARD_STATE_SAVE_DEBOUNCE_MS);
       }
       function getSyncDefaultValue(key) {
         return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
@@ -10037,7 +10069,7 @@
       function writeDashboardCompletedEntries(entries) {
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
-          queueDashboardPanelsSyncToSupabase();
+          queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedEntries", error);
         }
@@ -10070,7 +10102,7 @@
       function writeWriterProcessLog(rows) {
         try {
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(rows));
-          queueDashboardPanelsSyncToSupabase();
+          queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeWriterProcessLog", error);
         }
@@ -12895,8 +12927,15 @@
       });
 
       // 자동 초기화 비활성화 (데이터 유실 방지)
-      function bootstrapAdminPageData() {
+      async function bootstrapAdminPageData() {
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
+        if (USE_SUPABASE_SYNC) {
+          try {
+            await fetchAndApplyDashboardStateFromSupabase();
+          } catch (e) {
+            console.warn("[DASHBOARD_STATE] bootstrap", e);
+          }
+        }
         loadAdminCompaniesFromStorage();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullCustomersFromSupabaseAndApply().then(() => {
@@ -12956,7 +12995,7 @@
           renderPaymentList();
         });
       }
-      void bootstrapAdminPageData();
+      void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
 
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_CANCELED_SCHEDULES) {
@@ -13027,7 +13066,7 @@
         }
       });
 
-      window.addEventListener("focus", () => {
+      window.addEventListener("focus", async () => {
         loadAdminCompaniesFromStorage();
         void pullCustomersFromSupabaseAndApply().then(() => {
           renderCustomerStatsDashboard();
@@ -13041,6 +13080,11 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
+          try {
+            await fetchAndApplyDashboardStateFromSupabase();
+          } catch (e) {
+            /* ignore */
+          }
           void pullSchedulesFromSupabaseAndApply();
         } else {
           loadAdminSchedulesFromStorage();
@@ -13062,7 +13106,7 @@
         renderList();
       });
 
-      document.addEventListener("visibilitychange", () => {
+      document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState !== "visible") return;
         loadAdminCompaniesFromStorage();
         void pullCustomersFromSupabaseAndApply().then(() => {
@@ -13077,6 +13121,11 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
+          try {
+            await fetchAndApplyDashboardStateFromSupabase();
+          } catch (e) {
+            /* ignore */
+          }
           void pullSchedulesFromSupabaseAndApply();
         } else {
           loadAdminSchedulesFromStorage();
@@ -13096,6 +13145,7 @@
         renderCustomerAlertHistory();
         renderOpenDayoffSummary();
         renderCanceledSchedules();
+        renderList();
       });
     </script>
   </body>
