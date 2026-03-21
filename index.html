@@ -2116,64 +2116,104 @@
       /** 대시보드 2·3번 칸 — 전용 테이블 schedule_dashboard_state (client_kv 와 분리) */
       let isApplyingRemoteDashboardState = false;
       const DASHBOARD_STATE_SAVE_DEBOUNCE_MS = 350;
-      /** 읽기는 짧게 끊어 스케줄 등 다른 동기화가 대기하지 않게 함 */
-      const DASHBOARD_STATE_FETCH_TIMEOUT_MS = 5000;
+      /** 단일 요청 상한 (느린망). 빠른 연속 클릭은 이전 요청을 abort 해서 줄을 서지 않음 */
+      const DASHBOARD_STATE_SAVE_TIMEOUT_MS = 22000;
+      /** 백그라운드 새로고침(포커스 등)용 GET 타임아웃 */
+      const DASHBOARD_STATE_FETCH_TIMEOUT_MS = 8000;
+      /** 첫 로드·저장 실패 후 재맞춤용 — 조금 더 길게 */
+      const DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS = 12000;
+      const DASHBOARD_STATE_BOOTSTRAP_MAX_TRIES = 3;
       let dashboardStateSaveTimer = null;
+      /** 새 저장이 시작되면 진행 중이던 POST 를 취소 — 옛 상태 전송만 서버가 처리하는 낭비·대기 방지 */
+      let dashboardSaveSupersedeAbort = null;
       let dashboardStateFetchPromise = null;
-      async function fetchAndApplyDashboardStateFromSupabase() {
-        if (!USE_SUPABASE_SYNC) return;
-        if (dashboardStateFetchPromise) return dashboardStateFetchPromise;
-        const run = async () => {
-          const ac = new AbortController();
-          const tid = setTimeout(() => ac.abort(), DASHBOARD_STATE_FETCH_TIMEOUT_MS);
-          try {
-            const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
-              SUPABASE_DASHBOARD_STATE_ID
-            )}&select=completed,process_log&limit=1`;
-            const res = await fetch(url, {
-              method: "GET",
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              cache: "no-store",
-              signal: ac.signal
-            });
-            if (!res.ok) {
-              const t = await res.text();
-              if (res.status !== 404) console.warn("[DASHBOARD_STATE] GET", res.status, t);
-              return;
-            }
-            const rows = await res.json();
-            const row = rows?.[0];
-            if (!row) return;
-            const completedRaw = row.completed;
-            const logRaw = row.process_log;
-            const completedStr =
-              completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
-            const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
-            isApplyingRemoteDashboardState = true;
-            try {
-              localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
-              localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
-            } finally {
-              isApplyingRemoteDashboardState = false;
-            }
-          } catch (error) {
-            if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
-          } finally {
-            clearTimeout(tid);
+      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true). */
+      async function executeDashboardStatePull(timeoutMs) {
+        if (!USE_SUPABASE_SYNC) return false;
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), timeoutMs);
+        try {
+          const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
+            SUPABASE_DASHBOARD_STATE_ID
+          )}&select=completed,process_log&limit=1`;
+          const res = await fetch(url, {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store",
+            signal: ac.signal
+          });
+          if (!res.ok) {
+            const t = await res.text();
+            console.warn("[DASHBOARD_STATE] GET", res.status, t);
+            return false;
           }
-        };
-        const inflight = run();
-        dashboardStateFetchPromise = inflight;
-        inflight.finally(() => {
-          if (dashboardStateFetchPromise === inflight) dashboardStateFetchPromise = null;
-        });
-        return inflight;
+          const rows = await res.json();
+          const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+          const completedRaw = row?.completed;
+          const logRaw = row?.process_log;
+          const completedStr =
+            completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
+          const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
+          isApplyingRemoteDashboardState = true;
+          try {
+            localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
+            localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
+          } finally {
+            isApplyingRemoteDashboardState = false;
+          }
+          return true;
+        } catch (error) {
+          if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
+          return false;
+        } finally {
+          clearTimeout(tid);
+        }
       }
-      async function saveDashboardPanelsStateToSupabase() {
-        if (!USE_SUPABASE_SYNC || isApplyingRemoteDashboardState) return;
+      /** 서버 연결 불가 시 기기마다 다른 로컬 캐시를 보여주지 않도록 2·3번 비움 */
+      function clearDashboardStateWhenServerUnreachable(message) {
+        isApplyingRemoteDashboardState = true;
+        try {
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, "[]");
+          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, "[]");
+        } finally {
+          isApplyingRemoteDashboardState = false;
+        }
+        setSyncStatus(
+          message ||
+            "대시보드(2·3번) 서버와 맞출 수 없어 목록을 비웠습니다. 네트워크·VPN 확인 후 새로고침하세요.",
+          "error"
+        );
+      }
+      async function fetchDashboardStateWithRetriesForBootstrap() {
+        if (!USE_SUPABASE_SYNC) return true;
+        for (let i = 0; i < DASHBOARD_STATE_BOOTSTRAP_MAX_TRIES; i++) {
+          if (i > 0) await new Promise((r) => setTimeout(r, 500 + i * 500));
+          const ok = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
+          if (ok) return true;
+        }
+        clearDashboardStateWhenServerUnreachable();
+        return false;
+      }
+      /** 동시에 여러 번 호출되면 같은 GET 으로 합침. Promise<boolean> */
+      function fetchAndApplyDashboardStateFromSupabase() {
+        if (!USE_SUPABASE_SYNC) return Promise.resolve(false);
+        if (dashboardStateFetchPromise) return dashboardStateFetchPromise;
+        const p = executeDashboardStatePull(DASHBOARD_STATE_FETCH_TIMEOUT_MS);
+        dashboardStateFetchPromise = p;
+        p.finally(() => {
+          if (dashboardStateFetchPromise === p) dashboardStateFetchPromise = null;
+        });
+        return p;
+      }
+      /**
+       * @param {AbortSignal | null | undefined} supersedeSignal 새 저장이 오면 abort → "superseded"
+       * @returns {"ok"|"http_fail"|"timeout"|"superseded"}
+       */
+      async function saveDashboardPanelsStateToSupabaseOnce(supersedeSignal) {
+        if (supersedeSignal?.aborted) return "superseded";
         const completedStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
         const logStr = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
         let completed;
@@ -2190,18 +2230,26 @@
         } catch {
           process_log = [];
         }
-        const ac = new AbortController();
-        const tid = setTimeout(() => ac.abort(), 15000);
+        const merged = new AbortController();
+        const tid = setTimeout(() => merged.abort(), DASHBOARD_STATE_SAVE_TIMEOUT_MS);
+        const onSupersede = () => merged.abort();
+        if (supersedeSignal) {
+          if (supersedeSignal.aborted) {
+            clearTimeout(tid);
+            return "superseded";
+          }
+          supersedeSignal.addEventListener("abort", onSupersede);
+        }
         try {
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Prefer: "resolution=merge-duplicates,return=representation",
+              Prefer: "resolution=merge-duplicates,return=minimal",
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
-            signal: ac.signal,
+            signal: merged.signal,
             body: JSON.stringify([
               {
                 id: SUPABASE_DASHBOARD_STATE_ID,
@@ -2210,23 +2258,61 @@
               }
             ])
           });
+          if (supersedeSignal?.aborted) return "superseded";
           if (!response.ok) {
             const errText = await response.text();
             console.error("[DASHBOARD_STATE] 저장 실패", response.status, errText);
             setSyncStatus(`대시보드(2·3번) 저장 실패 (${response.status}) — 테이블·RLS 확인`, "error");
-            return;
+            return "http_fail";
           }
           setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
+          return "ok";
         } catch (error) {
           if (error && error.name === "AbortError") {
-            console.warn("[DASHBOARD_STATE] 저장 시간 초과");
-            setSyncStatus("대시보드 저장 시간 초과", "warn");
-          } else {
-            console.error("[DASHBOARD_STATE] 저장 오류", error);
-            setSyncStatus("대시보드 저장 오류", "error");
+            if (supersedeSignal?.aborted) return "superseded";
+            return "timeout";
           }
+          console.error("[DASHBOARD_STATE] 저장 오류", error);
+          setSyncStatus("대시보드 저장 오류", "error");
+          return "http_fail";
         } finally {
           clearTimeout(tid);
+          if (supersedeSignal) supersedeSignal.removeEventListener("abort", onSupersede);
+        }
+      }
+      async function saveDashboardPanelsStateToSupabase() {
+        if (!USE_SUPABASE_SYNC || isApplyingRemoteDashboardState) return;
+        dashboardSaveSupersedeAbort?.abort();
+        const supersede = new AbortController();
+        dashboardSaveSupersedeAbort = supersede;
+        try {
+          let r = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
+          if (r === "timeout" && !supersede.signal.aborted) {
+            await new Promise((res) => setTimeout(res, 400));
+            if (!supersede.signal.aborted) {
+              r = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
+            }
+          }
+          if (supersede.signal.aborted || r === "ok" || r === "superseded") return;
+          setSyncStatus("대시보드 저장이 서버에 반영되지 않았습니다. 서버 데이터로 맞추는 중…", "warn");
+          let pulled = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
+          if (!pulled && !supersede.signal.aborted) {
+            await new Promise((res) => setTimeout(res, 600));
+            pulled = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
+          }
+          if (typeof renderList === "function") renderList();
+          if (!pulled) {
+            clearDashboardStateWhenServerUnreachable(
+              "대시보드 서버와 동기화할 수 없어 2·3번을 비웠습니다. 네트워크 확인 후 새로고침하세요."
+            );
+            if (typeof renderList === "function") renderList();
+          } else {
+            setSyncStatus(`대시보드 서버 기준으로 맞춤 ${formatSyncTime()}`, "ok");
+          }
+        } finally {
+          if (dashboardSaveSupersedeAbort === supersede) {
+            dashboardSaveSupersedeAbort = null;
+          }
         }
       }
       function queueDashboardStateSaveToSupabase() {
@@ -12941,10 +13027,13 @@
       // 자동 초기화 비활성화 (데이터 유실 방지)
       async function bootstrapAdminPageData() {
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
-        const dashboardPull =
-          USE_SUPABASE_SYNC
-            ? fetchAndApplyDashboardStateFromSupabase().catch(() => {})
-            : Promise.resolve();
+        if (USE_SUPABASE_SYNC) {
+          try {
+            await fetchDashboardStateWithRetriesForBootstrap();
+          } catch (e) {
+            console.warn("[DASHBOARD_STATE] bootstrap", e);
+          }
+        }
         loadAdminCompaniesFromStorage();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullCustomersFromSupabaseAndApply().then(() => {
@@ -12984,7 +13073,6 @@
         setupScheduleFilters();
         renderList();
         switchMainTab("schedule");
-        void dashboardPull.then(() => renderList());
         clientKvPullDone.then((didHydrate) => {
           if (!didHydrate) return;
           loadAdminCompaniesFromStorage();
