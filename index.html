@@ -2121,7 +2121,35 @@
         const ac = new AbortController();
         const tid = setTimeout(() => ac.abort(), 25000);
         try {
-          const mergedKv = { ...Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()) };
+          let baseKv = {};
+          try {
+            const getResp = await fetch(
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv&limit=1`,
+              {
+                method: "GET",
+                headers: {
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                cache: "no-store",
+                signal: ac.signal
+              }
+            );
+            if (getResp.ok) {
+              const rows = await getResp.json();
+              const raw = rows?.[0]?.kv;
+              if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+                Object.entries(raw).forEach(([k, v]) => {
+                  if (!String(k).startsWith("scheduleSite")) return;
+                  baseKv[k] = typeof v === "string" ? v : JSON.stringify(v);
+                });
+              }
+            }
+          } catch (e) {
+            // 서버에 행 없음·GET 실패 시 로컬만으로 진행
+          }
+          const fromMemory = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
+          const mergedKv = { ...baseKv, ...fromMemory };
           mergedKv[STORAGE_ADMIN_DASHBOARD_COMPLETED] =
             localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
           mergedKv[STORAGE_ADMIN_WRITER_PROCESS_LOG] =
@@ -2146,16 +2174,20 @@
           if (!response.ok) {
             const errText = await response.text();
             console.error("[DASHBOARD_KV] schedule_site_client_kv 저장 실패", response.status, errText);
+            setSyncStatus(`대시보드 저장 실패 (${response.status}) — RLS·API키 확인`, "error");
             return;
           }
           const rows = await response.json();
           const updatedAt = rows?.[0]?.updated_at;
           if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
+          setSyncStatus(`대시보드·KV 서버 반영 ${formatSyncTime()}`, "ok");
         } catch (error) {
           if (error && error.name === "AbortError") {
             console.warn("[DASHBOARD_KV] 저장 시간 초과");
+            setSyncStatus("대시보드 KV 저장 시간 초과", "warn");
           } else {
             console.error("[DASHBOARD_KV] 동기화 오류", error);
+            setSyncStatus("대시보드 KV 동기화 오류", "error");
           }
         } finally {
           clearTimeout(tid);
