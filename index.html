@@ -277,6 +277,206 @@
         margin: 0;
       }
 
+      .schedule-dashboard {
+        display: grid;
+        grid-template-columns: 1fr 1fr 2fr;
+        gap: 10px;
+        margin: 0 0 14px;
+        align-items: stretch;
+      }
+
+      .schedule-dashboard-col {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fbfcff;
+        padding: 10px 10px 8px;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .schedule-dashboard-col-3 {
+        min-height: 220px;
+      }
+
+      @media (max-width: 900px) {
+        .schedule-dashboard {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .schedule-dashboard-head {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--muted);
+        margin-bottom: 6px;
+        letter-spacing: -0.02em;
+      }
+
+      .schedule-dashboard-list {
+        flex: 1;
+        overflow: auto;
+        max-height: 220px;
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+
+      .schedule-dashboard-row-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 4px 0;
+        border-bottom: 1px dashed #e2e8f4;
+      }
+
+      .schedule-dashboard-row-line:last-child {
+        border-bottom: 0;
+      }
+
+      .schedule-dashboard-date-co {
+        color: #2a3550;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .schedule-dashboard-company {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+      }
+
+      .dashboard-writer-chip {
+        border: 1px solid #c9d4ea;
+        background: #fff;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        cursor: pointer;
+        color: #3d4a63;
+      }
+
+      .dashboard-writer-chip:hover {
+        border-color: var(--blue);
+        color: var(--blue-dark);
+      }
+
+      .dashboard-writer-chip.active {
+        background: #e8f0ff;
+        border-color: var(--blue);
+        color: var(--blue-dark);
+      }
+
+      .dashboard-writer-chip[data-writer="김진영"].active {
+        background: #fff3e6;
+        border-color: #e8a54b;
+        color: #8a5a12;
+      }
+
+      .dashboard-today-badge {
+        font-size: 0.68rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: #ffe8e8;
+        color: #b42318;
+      }
+
+      .schedule-dashboard-jump {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px solid var(--line);
+      }
+
+      .schedule-dashboard-jump button {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        cursor: pointer;
+        color: #3d4a63;
+      }
+
+      .schedule-dashboard-jump button:hover {
+        border-color: var(--blue);
+        color: var(--blue-dark);
+      }
+
+      .writer-today-block {
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #e8edf5;
+        scroll-margin-top: 8px;
+      }
+
+      .writer-today-block h4 {
+        margin: 0 0 6px;
+        font-size: 0.88rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .writer-today-count {
+        font-weight: 800;
+        color: var(--blue);
+      }
+
+      .writer-today-block[data-writer-block="김진영"] .writer-today-count {
+        color: #c77a1a;
+      }
+
+      .writer-today-list {
+        margin: 0;
+        padding-left: 16px;
+        font-size: 0.78rem;
+        color: #3d4a63;
+      }
+
+      .writer-today-list li {
+        margin: 2px 0;
+      }
+
+      .schedule-dashboard-chart-wrap {
+        flex: 1;
+        min-height: 160px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .schedule-dashboard-chart-legend {
+        display: flex;
+        gap: 14px;
+        font-size: 0.72rem;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .schedule-dashboard-chart-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .schedule-dashboard-chart-legend i {
+        width: 18px;
+        height: 3px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+
       .head-right {
         display: flex;
         align-items: center;
@@ -1037,6 +1237,25 @@
             <h2>전체스케줄</h2>
           </div>
 
+          <div id="scheduleDashboard" class="schedule-dashboard" aria-label="스케줄 요약 대시보드">
+            <div class="schedule-dashboard-col schedule-dashboard-col-1">
+              <div class="schedule-dashboard-head">남은 스케줄 (오늘 이후)</div>
+              <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
+              <div class="schedule-dashboard-jump">
+                <button type="button" data-action="scrollWriterTodaySummary" data-writer="박보윤">박보윤 오늘</button>
+                <button type="button" data-action="scrollWriterTodaySummary" data-writer="김진영">김진영 오늘</button>
+              </div>
+            </div>
+            <div class="schedule-dashboard-col schedule-dashboard-col-2">
+              <div class="schedule-dashboard-head">오늘 처리</div>
+              <div id="scheduleDashboardTodayWrap"></div>
+            </div>
+            <div class="schedule-dashboard-col schedule-dashboard-col-3">
+              <div class="schedule-dashboard-head">처리 추이 (오늘 기준 전후 7일 구간)</div>
+              <div id="scheduleDashboardChart" class="schedule-dashboard-chart-wrap"></div>
+            </div>
+          </div>
+
           <div id="inlineCalendarBox" class="customer-stats-box" style="margin-bottom: 10px;">
             <div class="calendar-head">
               <div class="actions" style="margin-top: 0;">
@@ -1348,6 +1567,8 @@
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
+      const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
+      const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
@@ -9049,6 +9270,204 @@
         dayEl.value = String(normalizedDay);
       }
 
+      function formatYmdToMdSlash(ymd) {
+        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return "-";
+        return `${Number(m[2])}/${Number(m[3])}`;
+      }
+
+      function addDaysToYmd(ymd, deltaDays) {
+        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return ymd;
+        const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        dt.setDate(dt.getDate() + deltaDays);
+        const y = dt.getFullYear();
+        const mo = String(dt.getMonth() + 1).padStart(2, "0");
+        const d = String(dt.getDate()).padStart(2, "0");
+        return `${y}-${mo}-${d}`;
+      }
+
+      function getDashboardScheduleKey(item) {
+        const id = String(item?.customerScheduleId || "").trim();
+        if (id) return `id:${id}`;
+        return `fb:${String(item?.date || "").trim()}|${String(item?.time || "").trim()}|${normalizeCompanyName(item?.company)}|${normalizeCompanyName(item?.place)}`;
+      }
+
+      function readWriterProcessLog() {
+        return readStorageArray(STORAGE_ADMIN_WRITER_PROCESS_LOG)
+          .filter((row) => row && typeof row === "object")
+          .map((row) => ({
+            id: String(row.id || ""),
+            writer: String(row.writer || "").trim(),
+            processedDay: String(row.processedDay || "").trim(),
+            scheduleDate: String(row.scheduleDate || "").trim(),
+            company: String(row.company || "").trim(),
+            scheduleKey: String(row.scheduleKey || "").trim()
+          }))
+          .filter((row) => row.writer && row.processedDay && row.scheduleKey);
+      }
+
+      function writeWriterProcessLog(rows) {
+        try {
+          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(rows));
+        } catch (error) {
+          console.warn("writeWriterProcessLog", error);
+        }
+      }
+
+      function toggleWriterProcessForToday(writer, item) {
+        const w = String(writer || "").trim();
+        if (!DASHBOARD_TARGET_WRITERS.includes(w)) return;
+        const now = new Date();
+        const processedDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const scheduleKey = getDashboardScheduleKey(item);
+        const rows = readWriterProcessLog();
+        const idx = rows.findIndex((r) => r.writer === w && r.processedDay === processedDay && r.scheduleKey === scheduleKey);
+        if (idx >= 0) {
+          rows.splice(idx, 1);
+        } else {
+          rows.push({
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            writer: w,
+            processedDay,
+            scheduleDate: String(item?.date || "").trim(),
+            company: normalizeCompanyName(item?.company) || "-",
+            scheduleKey
+          });
+        }
+        writeWriterProcessLog(rows);
+        renderList();
+      }
+
+      function renderScheduleDashboard(activeRows, todayKey) {
+        const listRoot = document.getElementById("scheduleDashboardList");
+        const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
+        const chartRoot = document.getElementById("scheduleDashboardChart");
+        if (!listRoot || !todayWrap || !chartRoot) return;
+
+        const upcoming = activeRows
+          .filter((item) => {
+            const d = String(item?.date || "").trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= todayKey;
+          })
+          .sort((a, b) => compareScheduleDateTime(a, b));
+
+        const log = readWriterProcessLog();
+
+        const listHtml = !upcoming.length
+          ? '<div class="helper" style="margin:0;font-size:0.8rem;">오늘 이후 예정된 스케줄이 없습니다.</div>'
+          : upcoming
+              .map((item) => {
+                const dataIndex = data.indexOf(item);
+                if (dataIndex < 0) return "";
+                const dateStr = String(item?.date || "").trim();
+                const shortD = formatYmdToMdSlash(dateStr);
+                const company = normalizeCompanyName(item?.company) || "-";
+                const isShootToday = dateStr === todayKey;
+                const sk = getDashboardScheduleKey(item);
+                const chips = DASHBOARD_TARGET_WRITERS.map((writer) => {
+                  const active = log.some((r) => r.writer === writer && r.processedDay === todayKey && r.scheduleKey === sk);
+                  const activeClass = active ? " active" : "";
+                  return `<button type="button" class="dashboard-writer-chip${activeClass}" data-action="toggleWriterProcess" data-writer="${escapeHtml(
+                    writer
+                  )}" data-data-index="${dataIndex}">${escapeHtml(writer)}</button>`;
+                }).join("");
+                const todayBadge = isShootToday ? '<span class="dashboard-today-badge">오늘</span>' : "";
+                return `<div class="schedule-dashboard-row-line">
+                  <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
+                  <span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>
+                  ${todayBadge}
+                  ${chips}
+                </div>`;
+              })
+              .filter(Boolean)
+              .join("");
+
+        listRoot.innerHTML = listHtml;
+
+        const todayLogs = log.filter((r) => r.processedDay === todayKey);
+        const todayHtml = DASHBOARD_TARGET_WRITERS.map((writer) => {
+          const entries = todayLogs.filter((r) => r.writer === writer);
+          const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : "dashboardWriterBlockKjy";
+          const count = entries.length;
+          const lis = entries
+            .map(
+              (e) =>
+                `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
+            )
+            .join("");
+          return `<div id="${blockId}" class="writer-today-block" data-writer-block="${escapeHtml(writer)}">
+            <h4><span>${escapeHtml(writer)} 오늘</span> <span class="writer-today-count">${count}건</span></h4>
+            ${count ? `<ul class="writer-today-list">${lis}</ul>` : ""}
+          </div>`;
+        }).join("");
+
+        todayWrap.innerHTML = todayHtml;
+
+        const chartDates = [];
+        for (let offset = -2; offset <= 5; offset += 1) {
+          chartDates.push(addDaysToYmd(todayKey, offset));
+        }
+        const countsForWriter = (writer) =>
+          chartDates.map((day) => log.filter((r) => r.writer === writer && r.processedDay === day).length);
+        const seriesPby = countsForWriter("박보윤");
+        const seriesKjy = countsForWriter("김진영");
+        const maxVal = Math.max(1, ...seriesPby, ...seriesKjy);
+        const W = 420;
+        const H = 168;
+        const padL = 34;
+        const padR = 10;
+        const padT = 12;
+        const padB = 32;
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+        const n = chartDates.length;
+        const xAt = (i) => padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+        const yAt = (v) => padT + plotH - (v / maxVal) * plotH;
+        const linePoints = (series) =>
+          series
+            .map((v, i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`)
+            .join(" ");
+
+        const svgLabels = chartDates
+          .map((d, i) => {
+            const x = xAt(i);
+            const label = formatYmdToMdSlash(d);
+            return `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#6b758f">${escapeHtml(label)}</text>`;
+          })
+          .join("");
+
+        chartRoot.innerHTML = `
+          <div class="schedule-dashboard-chart-legend">
+            <span><i style="background:#456aa7;"></i>박보윤</span>
+            <span><i style="background:#e8a54b;"></i>김진영</span>
+          </div>
+          <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="max-height:200px;">
+            <line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" stroke="#d9deea" stroke-width="1"/>
+            <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#d9deea" stroke-width="1"/>
+            <polyline fill="none" stroke="#456aa7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${linePoints(
+              seriesPby
+            )}" />
+            <polyline fill="none" stroke="#e8a54b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${linePoints(
+              seriesKjy
+            )}" />
+            ${seriesPby
+              .map(
+                (v, i) =>
+                  `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.5" fill="#456aa7" stroke="#fff" stroke-width="1"/>`
+              )
+              .join("")}
+            ${seriesKjy
+              .map(
+                (v, i) =>
+                  `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.5" fill="#e8a54b" stroke="#fff" stroke-width="1"/>`
+              )
+              .join("")}
+            ${svgLabels}
+          </svg>
+        `;
+      }
+
       function setupScheduleFilters() {
         yearFilterEl.innerHTML = Array.from({ length: 11 }, (_, idx) => currentYear - 5 + idx)
           .map((year) => `<option value="${year}">${year}년</option>`)
@@ -9119,6 +9538,7 @@
           if (itemScheduleId) return !canceledScheduleIdSet.has(itemScheduleId);
           return !canceledFallbackKeySet.has(itemFallbackKey);
         });
+        renderScheduleDashboard(activeRows, todayKey);
         if (todayNewCountEl) {
           const todayNewCount = activeRows.filter((item) => String(item?.date || "").trim() === todayKey).length;
           todayNewCountEl.textContent = `오늘 신규접수 ${todayNewCount}건`;
@@ -9355,6 +9775,24 @@
         currentPhotographerFilter = writerButton.dataset.view || "all";
         renderPhotographerTabs();
         renderList();
+      });
+
+      scheduleSectionEl.addEventListener("click", (event) => {
+        const jumpBtn = event.target.closest("button[data-action='scrollWriterTodaySummary']");
+        if (jumpBtn) {
+          const writer = String(jumpBtn.dataset.writer || "").trim();
+          const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : writer === "김진영" ? "dashboardWriterBlockKjy" : "";
+          const targetEl = blockId ? document.getElementById(blockId) : null;
+          targetEl?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          return;
+        }
+        const chip = event.target.closest("button[data-action='toggleWriterProcess']");
+        if (!chip) return;
+        const writer = chip.dataset.writer;
+        const idx = Number(chip.dataset.dataIndex);
+        if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+        const item = data[idx];
+        toggleWriterProcessForToday(writer, item);
       });
 
       function switchMainTab(tab) {
