@@ -2116,49 +2116,61 @@
       /** 대시보드 2·3번 칸 — 전용 테이블 schedule_dashboard_state (client_kv 와 분리) */
       let isApplyingRemoteDashboardState = false;
       const DASHBOARD_STATE_SAVE_DEBOUNCE_MS = 350;
+      /** 읽기는 짧게 끊어 스케줄 등 다른 동기화가 대기하지 않게 함 */
+      const DASHBOARD_STATE_FETCH_TIMEOUT_MS = 5000;
       let dashboardStateSaveTimer = null;
+      let dashboardStateFetchPromise = null;
       async function fetchAndApplyDashboardStateFromSupabase() {
         if (!USE_SUPABASE_SYNC) return;
-        const ac = new AbortController();
-        const tid = setTimeout(() => ac.abort(), 25000);
-        try {
-          const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
-            SUPABASE_DASHBOARD_STATE_ID
-          )}&select=completed,process_log&limit=1`;
-          const res = await fetch(url, {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store",
-            signal: ac.signal
-          });
-          if (!res.ok) {
-            const t = await res.text();
-            if (res.status !== 404) console.warn("[DASHBOARD_STATE] GET", res.status, t);
-            return;
-          }
-          const rows = await res.json();
-          const row = rows?.[0];
-          if (!row) return;
-          const completedRaw = row.completed;
-          const logRaw = row.process_log;
-          const completedStr =
-            completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
-          const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
-          isApplyingRemoteDashboardState = true;
+        if (dashboardStateFetchPromise) return dashboardStateFetchPromise;
+        const run = async () => {
+          const ac = new AbortController();
+          const tid = setTimeout(() => ac.abort(), DASHBOARD_STATE_FETCH_TIMEOUT_MS);
           try {
-            localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
-            localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
+            const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
+              SUPABASE_DASHBOARD_STATE_ID
+            )}&select=completed,process_log&limit=1`;
+            const res = await fetch(url, {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store",
+              signal: ac.signal
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              if (res.status !== 404) console.warn("[DASHBOARD_STATE] GET", res.status, t);
+              return;
+            }
+            const rows = await res.json();
+            const row = rows?.[0];
+            if (!row) return;
+            const completedRaw = row.completed;
+            const logRaw = row.process_log;
+            const completedStr =
+              completedRaw == null ? "[]" : typeof completedRaw === "string" ? completedRaw : JSON.stringify(completedRaw);
+            const logStr = logRaw == null ? "[]" : typeof logRaw === "string" ? logRaw : JSON.stringify(logRaw);
+            isApplyingRemoteDashboardState = true;
+            try {
+              localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
+              localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
+            } finally {
+              isApplyingRemoteDashboardState = false;
+            }
+          } catch (error) {
+            if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
           } finally {
-            isApplyingRemoteDashboardState = false;
+            clearTimeout(tid);
           }
-        } catch (error) {
-          if (error && error.name !== "AbortError") console.warn("[DASHBOARD_STATE] fetch", error);
-        } finally {
-          clearTimeout(tid);
-        }
+        };
+        const inflight = run();
+        dashboardStateFetchPromise = inflight;
+        inflight.finally(() => {
+          if (dashboardStateFetchPromise === inflight) dashboardStateFetchPromise = null;
+        });
+        return inflight;
       }
       async function saveDashboardPanelsStateToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemoteDashboardState) return;
@@ -2179,7 +2191,7 @@
           process_log = [];
         }
         const ac = new AbortController();
-        const tid = setTimeout(() => ac.abort(), 25000);
+        const tid = setTimeout(() => ac.abort(), 15000);
         try {
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?on_conflict=id`, {
             method: "POST",
@@ -12929,13 +12941,10 @@
       // 자동 초기화 비활성화 (데이터 유실 방지)
       async function bootstrapAdminPageData() {
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
-        if (USE_SUPABASE_SYNC) {
-          try {
-            await fetchAndApplyDashboardStateFromSupabase();
-          } catch (e) {
-            console.warn("[DASHBOARD_STATE] bootstrap", e);
-          }
-        }
+        const dashboardPull =
+          USE_SUPABASE_SYNC
+            ? fetchAndApplyDashboardStateFromSupabase().catch(() => {})
+            : Promise.resolve();
         loadAdminCompaniesFromStorage();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullCustomersFromSupabaseAndApply().then(() => {
@@ -12975,6 +12984,7 @@
         setupScheduleFilters();
         renderList();
         switchMainTab("schedule");
+        void dashboardPull.then(() => renderList());
         clientKvPullDone.then((didHydrate) => {
           if (!didHydrate) return;
           loadAdminCompaniesFromStorage();
@@ -13066,7 +13076,7 @@
         }
       });
 
-      window.addEventListener("focus", async () => {
+      window.addEventListener("focus", () => {
         loadAdminCompaniesFromStorage();
         void pullCustomersFromSupabaseAndApply().then(() => {
           renderCustomerStatsDashboard();
@@ -13080,11 +13090,7 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
-          try {
-            await fetchAndApplyDashboardStateFromSupabase();
-          } catch (e) {
-            /* ignore */
-          }
+          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
           void pullSchedulesFromSupabaseAndApply();
         } else {
           loadAdminSchedulesFromStorage();
@@ -13106,7 +13112,7 @@
         renderList();
       });
 
-      document.addEventListener("visibilitychange", async () => {
+      document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
         loadAdminCompaniesFromStorage();
         void pullCustomersFromSupabaseAndApply().then(() => {
@@ -13121,11 +13127,7 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
-          try {
-            await fetchAndApplyDashboardStateFromSupabase();
-          } catch (e) {
-            /* ignore */
-          }
+          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
           void pullSchedulesFromSupabaseAndApply();
         } else {
           loadAdminSchedulesFromStorage();
