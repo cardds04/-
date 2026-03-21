@@ -9604,34 +9604,40 @@
           const unpaidScheduleCount = data.filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료").length;
           paymentUnpaidCompanyCountTextEl.textContent = `미입금총 스케줄수 ${unpaidScheduleCount}건`;
         }
+        const padPaymentDatePart = (value) => String(Math.max(0, Number(value) || 0)).padStart(2, "0");
+        /** 입금관리 표의 '날짜'열(촬영일 우선)과 동일한 기준으로 YYYY-MM-DD 정규화 — 한 자리 월/일도 허용 */
+        const normalizePaymentListYmd = (rawInput) => {
+          const raw = String(rawInput || "").trim();
+          if (!raw) return "";
+          const compact = raw.replace(/\./g, "-").replace(/\//g, "-").replace(/\s+/g, "");
+          const full = compact.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+          if (full) {
+            return `${full[1]}-${padPaymentDatePart(full[2])}-${padPaymentDatePart(full[3])}`;
+          }
+          const md = compact.match(/^(\d{1,2})-(\d{1,2})$/);
+          if (md) {
+            return `${currentYear}-${padPaymentDatePart(md[1])}-${padPaymentDatePart(md[2])}`;
+          }
+          return "";
+        };
         const parsePaymentDateSortValue = (item) => {
-          const raw = String(item?.date || item?.paymentDate || "").trim();
-          const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
-          if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-            return normalized;
-          }
-          if (/^\d{2}-\d{2}$/.test(normalized)) {
-            return `${currentYear}-${normalized}`;
-          }
+          const fromShoot = normalizePaymentListYmd(item?.date);
+          if (fromShoot) return fromShoot;
+          const fromPay = normalizePaymentListYmd(item?.paymentDate);
+          if (fromPay) return fromPay;
           return "9999-12-31";
         };
         const parsePaidCompletedDateSortValue = (item) => {
-          const raw = String(item?.paymentDate || item?.date || "").trim();
-          const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
-          if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-            return normalized;
-          }
-          if (/^\d{2}-\d{2}$/.test(normalized)) {
-            return `${currentYear}-${normalized}`;
-          }
+          const fromPay = normalizePaymentListYmd(item?.paymentDate);
+          if (fromPay) return fromPay;
+          const fromShoot = normalizePaymentListYmd(item?.date);
+          if (fromShoot) return fromShoot;
           return "0000-00-00";
         };
         const getPaymentRowMonthKey = (item) => {
-          const raw = String(item?.date || item?.paymentDate || "").trim().replace(/\./g, "-").replace(/\//g, "-");
-          if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.slice(0, 7);
-          if (/^\d{2}-\d{2}$/.test(raw)) return `${currentYear}-${raw.slice(0, 2)}`;
-          if (/^\d{1,2}-\d{1,2}$/.test(raw)) return `${currentYear}-${String(Number(raw.split("-")[0]) || 1).padStart(2, "0")}`;
-          return "";
+          const full =
+            normalizePaymentListYmd(item?.date) || normalizePaymentListYmd(item?.paymentDate);
+          return /^\d{4}-\d{2}-\d{2}$/.test(full) ? full.slice(0, 7) : "";
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
