@@ -632,20 +632,31 @@
 
       .schedule-dashboard-processed-date-row {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 6px;
         margin-bottom: 8px;
-        flex-wrap: wrap;
       }
 
-      .schedule-dashboard-processed-date-row label {
+      .schedule-dashboard-processed-date-label {
         font-size: 0.76rem;
         font-weight: 700;
         color: var(--muted);
       }
 
-      .schedule-dashboard-processed-date-row input[type="date"] {
-        min-width: 130px;
+      .schedule-dashboard-processed-date-selects {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .schedule-dashboard-processed-date-selects .small-select {
+        min-width: 0;
+        flex: 0 1 auto;
+      }
+
+      .schedule-dashboard-processed-date-selects .btn-sm {
+        flex-shrink: 0;
       }
 
       .schedule-dashboard-week-group {
@@ -1459,8 +1470,13 @@
               <div class="schedule-dashboard-head">15일간 스케줄</div>
               <div id="scheduleDashboardRangeHint" class="schedule-dashboard-range-hint"></div>
               <div class="schedule-dashboard-processed-date-row">
-                <label for="scheduleDashboardProcessedDate">완료일 (언제 처리했는지):</label>
-                <input id="scheduleDashboardProcessedDate" type="date" class="small-select" title="이 날짜로 완료 처리 (기본: 오늘)" />
+                <span class="schedule-dashboard-processed-date-label">완료일 (언제 처리했는지):</span>
+                <div class="schedule-dashboard-processed-date-selects">
+                  <select id="dashboardProcessedYear" class="small-select" aria-label="완료 연도"></select>
+                  <select id="dashboardProcessedMonth" class="small-select" aria-label="완료 월"></select>
+                  <select id="dashboardProcessedDay" class="small-select" aria-label="완료 일"></select>
+                  <button id="dashboardProcessedTodayBtn" class="btn-sm" type="button">오늘</button>
+                </div>
               </div>
               <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
             </div>
@@ -3297,6 +3313,8 @@
       const companyListEl = document.getElementById("companyList");
       let currentPhotographerFilter = "all";
       let dashboardDayDetailOpenKey = "";
+      let dashboardProcessedPickersInitialized = false;
+      let dashboardProcessedPickerListenersBound = false;
       let editingPhotographerName = null;
       let editingIndex = null;
       let editingDateIndex = null;
@@ -9533,6 +9551,89 @@
         return Math.round((dToday - dSched) / 86400000);
       }
 
+      function renderDashboardProcessedDayOptions(preferredDay) {
+        const yEl = document.getElementById("dashboardProcessedYear");
+        const mEl = document.getElementById("dashboardProcessedMonth");
+        const dEl = document.getElementById("dashboardProcessedDay");
+        if (!yEl || !mEl || !dEl) return;
+        const selectedYear = Number(yEl.value);
+        const selectedMonth = Number(mEl.value);
+        const now = new Date();
+        const safeYear = Number.isNaN(selectedYear) ? now.getFullYear() : selectedYear;
+        const safeMonth = Number.isNaN(selectedMonth) ? 1 : selectedMonth;
+        const daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+        const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+        dEl.innerHTML = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+          .map((day) => {
+            const weekday = weekdayNames[new Date(safeYear, safeMonth - 1, day).getDay()];
+            return `<option value="${day}">${day}일 (${weekday})</option>`;
+          })
+          .join("");
+        const wantedDay = Number(preferredDay);
+        const normalizedDay = Number.isNaN(wantedDay) ? 1 : Math.min(Math.max(wantedDay, 1), daysInMonth);
+        dEl.value = String(normalizedDay);
+      }
+
+      function setDashboardProcessedDatePickersFromYmd(ymd) {
+        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return;
+        const yEl = document.getElementById("dashboardProcessedYear");
+        const moEl = document.getElementById("dashboardProcessedMonth");
+        if (!yEl || !moEl) return;
+        yEl.value = m[1];
+        moEl.value = String(Number(m[2]));
+        renderDashboardProcessedDayOptions(String(Number(m[3])));
+      }
+
+      function getDashboardProcessedDateYmd() {
+        const yEl = document.getElementById("dashboardProcessedYear");
+        const mEl = document.getElementById("dashboardProcessedMonth");
+        const dEl = document.getElementById("dashboardProcessedDay");
+        if (!yEl || !mEl || !dEl) return "";
+        const y = String(yEl.value || "").trim();
+        const mo = String(mEl.value || "").trim();
+        const day = String(dEl.value || "").trim();
+        if (!y || !mo || !day) return "";
+        return `${y}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+
+      function ensureDashboardProcessedDatePickers(todayKey) {
+        const yEl = document.getElementById("dashboardProcessedYear");
+        const mEl = document.getElementById("dashboardProcessedMonth");
+        if (!yEl || !mEl) return;
+        if (!dashboardProcessedPickersInitialized) {
+          const now = new Date();
+          const thisYear = now.getFullYear();
+          yEl.innerHTML = Array.from({ length: 11 }, (_, idx) => thisYear - 5 + idx)
+            .map((year) => `<option value="${year}">${year}년</option>`)
+            .join("");
+          mEl.innerHTML = Array.from({ length: 12 }, (_, idx) => idx + 1)
+            .map((month) => `<option value="${month}">${month}월</option>`)
+            .join("");
+          dashboardProcessedPickersInitialized = true;
+          setDashboardProcessedDatePickersFromYmd(todayKey);
+        }
+        if (!dashboardProcessedPickerListenersBound) {
+          const yearSel = document.getElementById("dashboardProcessedYear");
+          const monthSel = document.getElementById("dashboardProcessedMonth");
+          const todayBtn = document.getElementById("dashboardProcessedTodayBtn");
+          yearSel?.addEventListener("change", () => {
+            const dEl = document.getElementById("dashboardProcessedDay");
+            renderDashboardProcessedDayOptions(dEl?.value || "1");
+          });
+          monthSel?.addEventListener("change", () => {
+            const dEl = document.getElementById("dashboardProcessedDay");
+            renderDashboardProcessedDayOptions(dEl?.value || "1");
+          });
+          todayBtn?.addEventListener("click", () => {
+            const n = new Date();
+            const tk = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+            setDashboardProcessedDatePickersFromYmd(tk);
+          });
+          dashboardProcessedPickerListenersBound = true;
+        }
+      }
+
       function readDashboardCompletedEntries() {
         const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED);
         const today = new Date();
@@ -9637,10 +9738,7 @@
         const completedEntries = pruneDashboardCompletedEntries(activeRows);
         const completedKeys = new Set(completedEntries.map((e) => e.scheduleKey));
 
-        const processedDateEl = document.getElementById("scheduleDashboardProcessedDate");
-        if (processedDateEl && !processedDateEl.value) {
-          processedDateEl.value = todayKey;
-        }
+        ensureDashboardProcessedDatePickers(todayKey);
 
         const { start: windowStart, end: windowEnd } = getDashboardFifteenDayWindow(todayKey);
         if (rangeHintEl) {
@@ -10060,10 +10158,9 @@
           if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
           const item = data[idx];
           const sk = getDashboardScheduleKey(item);
-          const processedDateEl = document.getElementById("scheduleDashboardProcessedDate");
           const now = new Date();
           const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-          const processedAt = processedDateEl?.value?.trim() || todayKey;
+          const processedAt = getDashboardProcessedDateYmd() || todayKey;
           const entries = readDashboardCompletedEntries();
           if (entries.some((e) => e.scheduleKey === sk)) return;
           entries.push({ scheduleKey: sk, processedAt, writer });
