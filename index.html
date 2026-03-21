@@ -387,29 +387,98 @@
         color: #b42318;
       }
 
-      .schedule-dashboard-jump {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 8px;
-        padding-top: 6px;
-        border-top: 1px solid var(--line);
+      .schedule-dashboard-company-btn {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        text-align: left;
+        font: inherit;
+        font-weight: 700;
+        color: var(--blue-dark);
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-decoration: underline;
+        text-decoration-color: transparent;
       }
 
-      .schedule-dashboard-jump button {
+      .schedule-dashboard-company-btn:hover {
+        text-decoration-color: var(--blue);
+        color: var(--blue);
+      }
+
+      .schedule-dashboard-completed-section {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 2px solid #d4dbea;
+      }
+
+      .schedule-dashboard-completed-title {
+        font-size: 0.76rem;
+        font-weight: 800;
+        color: #5a6578;
+        margin-bottom: 6px;
+      }
+
+      .schedule-dashboard-completed-list {
+        max-height: 160px;
+      }
+
+      .dashboard-revert-btn {
         border: 1px solid var(--line);
         background: #fff;
         border-radius: 8px;
-        padding: 4px 10px;
-        font-size: 0.75rem;
+        padding: 2px 8px;
+        font-size: 0.7rem;
         font-weight: 800;
         cursor: pointer;
         color: #3d4a63;
+        flex-shrink: 0;
       }
 
-      .schedule-dashboard-jump button:hover {
+      .dashboard-revert-btn:hover {
         border-color: var(--blue);
         color: var(--blue-dark);
+      }
+
+      .writer-week-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 4px 6px;
+        text-align: center;
+      }
+
+      .writer-week-stat-cell {
+        min-width: 0;
+        padding: 4px 2px;
+        border-radius: 6px;
+        background: #f7f9fd;
+        border: 1px solid #e8edf5;
+      }
+
+      .writer-week-stat-date {
+        font-size: 0.65rem;
+        font-weight: 800;
+        color: var(--muted);
+        line-height: 1.2;
+      }
+
+      .writer-week-stat-count {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #2a3550;
+        margin-top: 2px;
+      }
+
+      .writer-week-stat-tag {
+        display: block;
+        font-size: 0.58rem;
+        font-weight: 800;
+        color: #b42318;
+        margin-top: 2px;
       }
 
       .writer-today-block {
@@ -536,26 +605,6 @@
         font-weight: 800;
         color: var(--muted);
         margin-bottom: 6px;
-      }
-
-      .writer-week-day-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        font-size: 0.74rem;
-        padding: 4px 2px;
-        border-bottom: 1px dotted #e2e8f4;
-        color: #3d4a63;
-      }
-
-      .writer-week-day-row:last-child {
-        border-bottom: 0;
-      }
-
-      .writer-week-day-row .w-count {
-        font-weight: 800;
-        color: #2a3550;
       }
 
       .schedule-dashboard-chart-wrap {
@@ -1348,12 +1397,12 @@
 
           <div id="scheduleDashboard" class="schedule-dashboard" aria-label="스케줄 요약 대시보드">
             <div class="schedule-dashboard-col schedule-dashboard-col-1">
-              <div class="schedule-dashboard-head">저저번주 · 저번주 · 이번주 스케줄</div>
+              <div class="schedule-dashboard-head">15일간 스케줄</div>
               <div id="scheduleDashboardRangeHint" class="schedule-dashboard-range-hint"></div>
               <div id="scheduleDashboardList" class="schedule-dashboard-list"></div>
-              <div class="schedule-dashboard-jump">
-                <button type="button" data-action="scrollWriterTodaySummary" data-writer="박보윤">박보윤 오늘</button>
-                <button type="button" data-action="scrollWriterTodaySummary" data-writer="김진영">김진영 오늘</button>
+              <div class="schedule-dashboard-completed-section">
+                <div class="schedule-dashboard-completed-title">완료된 작업</div>
+                <div id="scheduleDashboardCompletedList" class="schedule-dashboard-list schedule-dashboard-completed-list"></div>
               </div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-2">
@@ -1678,6 +1727,7 @@
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
+      const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
@@ -9397,53 +9447,9 @@
         return `${y}-${mo}-${d}`;
       }
 
-      function parseYmdToLocalDate(ymd) {
-        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!m) return null;
-        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      }
-
-      function formatLocalDateToYmd(d) {
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      }
-
-      function getMondayOnOrBeforeLocalDate(d) {
-        const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        const dow = x.getDay();
-        const offset = dow === 0 ? -6 : 1 - dow;
-        x.setDate(x.getDate() + offset);
-        return x;
-      }
-
-      /** 저저번주 월요일 ~ 이번주 일요일 (저저번주·저번주·이번주, 21일) */
-      function getDashboardThreeRollingWeeksWindow(todayKey) {
-        const d = parseYmdToLocalDate(todayKey);
-        if (!d) return { start: todayKey, end: todayKey, thisMondayYmd: todayKey };
-        const thisMonday = getMondayOnOrBeforeLocalDate(d);
-        const thisMondayYmd = formatLocalDateToYmd(thisMonday);
-        const start = addDaysToYmd(thisMondayYmd, -14);
-        const end = addDaysToYmd(thisMondayYmd, 6);
-        return { start, end, thisMondayYmd };
-      }
-
-      function getDashboardWeekBucketKey(itemYmd, thisMondayYmd) {
-        const itemD = parseYmdToLocalDate(itemYmd);
-        if (!itemD) return null;
-        const itemMonYmd = formatLocalDateToYmd(getMondayOnOrBeforeLocalDate(itemD));
-        const w0 = thisMondayYmd;
-        const w1 = addDaysToYmd(w0, -7);
-        const w2 = addDaysToYmd(w0, -14);
-        if (itemMonYmd === w2) return "저저번주";
-        if (itemMonYmd === w1) return "저번주";
-        if (itemMonYmd === w0) return "이번주";
-        return null;
-      }
-
-      function formatDashboardWeekTitleRange(thisMondayYmd, weekLabel) {
-        const offset = weekLabel === "저저번주" ? -14 : weekLabel === "저번주" ? -7 : 0;
-        const mon = addDaysToYmd(thisMondayYmd, offset);
-        const sun = addDaysToYmd(mon, 6);
-        return `${formatYmdToMdSlash(mon)}~${formatYmdToMdSlash(sun)}`;
+      /** 오늘 포함 15일간 촬영일 (오늘 ~ 오늘+14) */
+      function getDashboardFifteenDayWindow(todayKey) {
+        return { start: todayKey, end: addDaysToYmd(todayKey, 14) };
       }
 
       /** 오늘 포함 최근 7일 (과거→오늘 순) */
@@ -9455,6 +9461,32 @@
         const id = String(item?.customerScheduleId || "").trim();
         if (id) return `id:${id}`;
         return `fb:${String(item?.date || "").trim()}|${String(item?.time || "").trim()}|${normalizeCompanyName(item?.company)}|${normalizeCompanyName(item?.place)}`;
+      }
+
+      function readDashboardCompletedScheduleKeys() {
+        return new Set(
+          readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED)
+            .map((v) => String(v ?? "").trim())
+            .filter(Boolean)
+        );
+      }
+
+      function writeDashboardCompletedScheduleKeys(keySet) {
+        try {
+          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify([...keySet]));
+        } catch (error) {
+          console.warn("writeDashboardCompletedScheduleKeys", error);
+        }
+      }
+
+      function pruneDashboardCompletedScheduleKeys(activeRows) {
+        const valid = new Set(activeRows.map((item) => getDashboardScheduleKey(item)));
+        const cur = readDashboardCompletedScheduleKeys();
+        const next = new Set([...cur].filter((k) => valid.has(k)));
+        if (next.size !== cur.size) {
+          writeDashboardCompletedScheduleKeys(next);
+        }
+        return next;
       }
 
       function readWriterProcessLog() {
@@ -9505,19 +9537,22 @@
 
       function renderScheduleDashboard(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
+        const completedRoot = document.getElementById("scheduleDashboardCompletedList");
         const rangeHintEl = document.getElementById("scheduleDashboardRangeHint");
         const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
         const chartRoot = document.getElementById("scheduleDashboardChart");
-        if (!listRoot || !todayWrap || !chartRoot) return;
+        if (!listRoot || !completedRoot || !todayWrap || !chartRoot) return;
 
-        const { start: windowStart, end: windowEnd, thisMondayYmd } = getDashboardThreeRollingWeeksWindow(todayKey);
+        const completedKeys = pruneDashboardCompletedScheduleKeys(activeRows);
+
+        const { start: windowStart, end: windowEnd } = getDashboardFifteenDayWindow(todayKey);
         if (rangeHintEl) {
           rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
             windowEnd
-          )} · 저저번주·저번주·이번주`;
+          )} · 오늘부터 15일간`;
         }
 
-        const upcoming = activeRows
+        const inWindow = activeRows
           .filter((item) => {
             const d = String(item?.date || "").trim();
             return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= windowStart && d <= windowEnd;
@@ -9527,7 +9562,7 @@
         const log = readWriterProcessLog();
         const processSevenDays = getDashboardProcessSevenDays(todayKey);
 
-        function renderDashboardScheduleRow(item) {
+        function renderDashboardScheduleRow(item, completed) {
           const dataIndex = data.indexOf(item);
           if (dataIndex < 0) return "";
           const dateStr = String(item?.date || "").trim();
@@ -9543,42 +9578,33 @@
             )}" data-data-index="${dataIndex}">${escapeHtml(writer)}</button>`;
           }).join("");
           const todayBadge = isShootToday ? '<span class="dashboard-today-badge">오늘</span>' : "";
+          const nameCell = completed
+            ? `<span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>`
+            : `<button type="button" class="schedule-dashboard-company-btn" data-action="dashboardMarkComplete" data-data-index="${dataIndex}" title="완료된 작업으로 이동">${escapeHtml(
+                company
+              )}</button>`;
+          const revertBtn = completed
+            ? `<button type="button" class="dashboard-revert-btn" data-action="dashboardUnmarkComplete" data-data-index="${dataIndex}">되돌리기</button>`
+            : "";
           return `<div class="schedule-dashboard-row-line">
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
-                  <span class="schedule-dashboard-company" title="${escapeHtml(company)}">${escapeHtml(company)}</span>
+                  ${nameCell}
                   ${todayBadge}
                   ${chips}
+                  ${revertBtn}
                 </div>`;
         }
 
-        const weekOrder = ["저저번주", "저번주", "이번주"];
-        const buckets = { 저저번주: [], 저번주: [], 이번주: [] };
-        upcoming.forEach((item) => {
-          const d = String(item?.date || "").trim();
-          const key = getDashboardWeekBucketKey(d, thisMondayYmd);
-          if (key && buckets[key]) buckets[key].push(item);
-        });
+        const pendingItems = inWindow.filter((item) => !completedKeys.has(getDashboardScheduleKey(item)));
+        const doneItems = inWindow.filter((item) => completedKeys.has(getDashboardScheduleKey(item)));
 
-        let listHtml = "";
-        if (!upcoming.length) {
-          listHtml = '<div class="helper" style="margin:0;font-size:0.8rem;">이 3주 구간에 해당하는 스케줄이 없습니다.</div>';
-        } else {
-          listHtml = weekOrder
-            .map((weekName) => {
-              const rows = buckets[weekName];
-              const rangeStr = formatDashboardWeekTitleRange(thisMondayYmd, weekName);
-              const body = rows.length
-                ? rows.map((item) => renderDashboardScheduleRow(item)).filter(Boolean).join("")
-                : '<div class="helper" style="margin:0;font-size:0.76rem;">해당 주에 스케줄 없음</div>';
-              return `<div class="schedule-dashboard-week-group">
-              <div class="schedule-dashboard-week-title">${escapeHtml(weekName)} (${escapeHtml(rangeStr)})</div>
-              ${body}
-            </div>`;
-            })
-            .join("");
-        }
+        listRoot.innerHTML = pendingItems.length
+          ? pendingItems.map((item) => renderDashboardScheduleRow(item, false)).filter(Boolean).join("")
+          : '<div class="helper" style="margin:0;font-size:0.8rem;">진행 중인 스케줄이 없습니다.</div>';
 
-        listRoot.innerHTML = listHtml;
+        completedRoot.innerHTML = doneItems.length
+          ? doneItems.map((item) => renderDashboardScheduleRow(item, true)).filter(Boolean).join("")
+          : '<div class="helper" style="margin:0;font-size:0.76rem;">완료된 작업이 없습니다.</div>';
 
         const todayHtml = DASHBOARD_TARGET_WRITERS.map((writer) => {
           const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : "dashboardWriterBlockKjy";
@@ -9590,16 +9616,16 @@
                 `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
             )
             .join("");
-          const weekRows = processSevenDays
+          const weekGrid = `<div class="writer-week-stats-grid">${processSevenDays
             .map((dayKey) => {
               const cnt = log.filter((r) => r.writer === writer && r.processedDay === dayKey).length;
-              const tag = dayKey === todayKey ? " (오늘)" : "";
-              return `<div class="writer-week-day-row">
-                <span>${escapeHtml(formatYmdToMdSlash(dayKey))}${escapeHtml(tag)}</span>
-                <span class="w-count">${cnt}건</span>
+              const tag = dayKey === todayKey ? '<span class="writer-week-stat-tag">오늘</span>' : "";
+              return `<div class="writer-week-stat-cell">
+                <div class="writer-week-stat-date">${escapeHtml(formatYmdToMdSlash(dayKey))}${tag}</div>
+                <div class="writer-week-stat-count">${cnt}건</div>
               </div>`;
             })
-            .join("");
+            .join("")}</div>`;
           return `<div id="${blockId}" class="writer-today-block" data-writer-block="${escapeHtml(writer)}">
             <h4>${escapeHtml(writer)}</h4>
             <div class="writer-today-hero">
@@ -9608,7 +9634,7 @@
             ${todayCnt ? `<ul class="writer-today-list">${todayLis}</ul>` : ""}
             <div class="writer-week-summary">
               <div class="writer-week-summary-title">최근 7일 일별 처리</div>
-              ${weekRows}
+              ${weekGrid}
             </div>
           </div>`;
         }).join("");
@@ -9986,12 +10012,28 @@
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
-        const jumpBtn = event.target.closest("button[data-action='scrollWriterTodaySummary']");
-        if (jumpBtn) {
-          const writer = String(jumpBtn.dataset.writer || "").trim();
-          const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : writer === "김진영" ? "dashboardWriterBlockKjy" : "";
-          const targetEl = blockId ? document.getElementById(blockId) : null;
-          targetEl?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const markCompleteBtn = event.target.closest("button[data-action='dashboardMarkComplete']");
+        if (markCompleteBtn) {
+          const idx = Number(markCompleteBtn.dataset.dataIndex);
+          if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+          const item = data[idx];
+          const sk = getDashboardScheduleKey(item);
+          const next = readDashboardCompletedScheduleKeys();
+          next.add(sk);
+          writeDashboardCompletedScheduleKeys(next);
+          renderList();
+          return;
+        }
+        const unmarkBtn = event.target.closest("button[data-action='dashboardUnmarkComplete']");
+        if (unmarkBtn) {
+          const idx = Number(unmarkBtn.dataset.dataIndex);
+          if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+          const item = data[idx];
+          const sk = getDashboardScheduleKey(item);
+          const next = readDashboardCompletedScheduleKeys();
+          next.delete(sk);
+          writeDashboardCompletedScheduleKeys(next);
+          renderList();
           return;
         }
         const chip = event.target.closest("button[data-action='toggleWriterProcess']");
