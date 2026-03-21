@@ -4551,10 +4551,23 @@
         }
         queuePaymentsSync();
       }
-      async function pullSchedulesFromSupabaseAndApply() {
+      async function pullSchedulesFromSupabaseAndApply(retryAttempt = 0) {
         if (!USE_SUPABASE_SYNC) return false;
-        if (scheduleSyncPromise || scheduleSyncQueued) return false;
-        const rows = await fetchSchedulesFromSupabase();
+        if (scheduleSyncPromise || scheduleSyncQueued) {
+          if (retryAttempt < 40) {
+            setTimeout(() => void pullSchedulesFromSupabaseAndApply(retryAttempt + 1), 120);
+          }
+          return false;
+        }
+        let rows;
+        try {
+          rows = await fetchSchedulesFromSupabase();
+        } catch (error) {
+          console.error("[SCHEDULES] 서버에서 스케줄을 불러오지 못했습니다.", error);
+          renderList();
+          renderPaymentList();
+          return false;
+        }
         updateLastPullTime(STORAGE_LAST_SCHEDULE_PULL_AT, rows, "updated_at");
         const nextActive = [];
         const nextHold = [];
@@ -5056,10 +5069,8 @@
       }
 
       function loadAdminSchedulesFromStorage() {
-        if (USE_SUPABASE_SYNC) {
-          // Supabase 동기화 모드에서는 로컬 캐시를 원본으로 사용하지 않는다.
-          return;
-        }
+        // Supabase 모드에서도 메모리(client_kv/스냅샷)에 있는 목록을 먼저 data에 올려야
+        // 캘린더·목록이 즉시 그려진다. 이후 pullSchedulesFromSupabaseAndApply가 서버 최신으로 덮어쓴다.
         const saved = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         data.splice(0, data.length, ...saved);
       }
