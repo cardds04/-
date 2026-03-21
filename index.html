@@ -1822,6 +1822,8 @@
       const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
+      const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
+      const SUPABASE_CLIENT_KV_ROW_ID = "scoped_local_v1";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
       const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
       const STORAGE_SYNC_KEYS = [
@@ -1859,70 +1861,200 @@
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
-      function installSupabaseOnlyStorageProxy() {
-        if (!SUPABASE_ONLY_MODE) return;
-        const scopePrefix = "scheduleSite";
-        const snapshotStorageKey = "__scheduleSiteSnapshotV1";
-        const nativeGetItem = localStorage.getItem.bind(localStorage);
-        const nativeSetItem = localStorage.setItem.bind(localStorage);
-        const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
-        const nativeClear = localStorage.clear.bind(localStorage);
-        const memoryStore = new Map();
-        const isScopedKey = (key) => String(key || "").startsWith(scopePrefix);
-        let snapshotSaveTimer = null;
-        const saveSnapshot = () => {
-          if (snapshotSaveTimer) clearTimeout(snapshotSaveTimer);
-          snapshotSaveTimer = setTimeout(() => {
+      const scheduleSiteClientKvState = {
+        memoryStore: new Map(),
+        snapshotStorageKey: "__scheduleSiteSnapshotV1",
+        scopePrefix: "scheduleSite",
+        nativeGetItem: null,
+        nativeSetItem: null,
+        nativeRemoveItem: null,
+        nativeClear: null,
+        snapshotTimer: null,
+        supabasePushTimer: null,
+        initialPullDone: false,
+        isScopedKey(key) {
+          return String(key || "").startsWith(this.scopePrefix);
+        },
+        getNativeLastScopedWriteAt() {
+          try {
+            return String(this.nativeGetItem("__scheduleSiteLastScopedWriteAt") || "").trim();
+          } catch (error) {
+            return "";
+          }
+        },
+        setNativeLastScopedWriteAt(iso) {
+          try {
+            this.nativeSetItem("__scheduleSiteLastScopedWriteAt", String(iso || ""));
+          } catch (error) {
+            // Safari private 등에서 native 저장 실패는 무시
+          }
+        },
+        scopedKeyCount() {
+          return this.memoryStore.size;
+        },
+        hydrateFromServerKv(kvObj) {
+          if (!kvObj || typeof kvObj !== "object") return;
+          this.memoryStore.clear();
+          Object.entries(kvObj).forEach(([k, v]) => {
+            if (!this.isScopedKey(k)) return;
+            this.memoryStore.set(String(k), String(v ?? ""));
+          });
+          try {
+            this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
+          } catch (error) {
+            // 무시
+          }
+        },
+        saveSnapshotDebounced() {
+          if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+          this.snapshotTimer = setTimeout(() => {
             try {
-              nativeSetItem(snapshotStorageKey, JSON.stringify(Object.fromEntries(memoryStore.entries())));
+              this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
             } catch (error) {
-              // 스냅샷 저장 실패 시 무시
+              // 무시
             }
+            this.setNativeLastScopedWriteAt(new Date().toISOString());
+            this.queueSupabaseKvPush();
           }, 10);
-        };
+        },
+        queueSupabaseKvPush() {
+          if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+          if (!this.initialPullDone) return;
+          if (typeof window.__scheduleSitePushClientKv !== "function") return;
+          if (this.supabasePushTimer) clearTimeout(this.supabasePushTimer);
+          this.supabasePushTimer = setTimeout(() => void window.__scheduleSitePushClientKv(), 800);
+        },
+        installProxy() {
+          if (!SUPABASE_ONLY_MODE) return;
+          this.nativeGetItem = localStorage.getItem.bind(localStorage);
+          this.nativeSetItem = localStorage.setItem.bind(localStorage);
+          this.nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+          this.nativeClear = localStorage.clear.bind(localStorage);
+          this.memoryStore = new Map();
+          try {
+            const rawSnapshot = this.nativeGetItem(this.snapshotStorageKey);
+            const parsedSnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
+            if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
+              Object.entries(parsedSnapshot).forEach(([key, value]) => {
+                if (!this.isScopedKey(key)) return;
+                this.memoryStore.set(String(key), String(value ?? ""));
+              });
+            }
+          } catch (error) {
+            // 파싱 실패 시 빈 메모리로 시작
+          }
+          const self = this;
+          localStorage.getItem = (key) => {
+            const normalizedKey = String(key || "");
+            if (!self.isScopedKey(normalizedKey)) return self.nativeGetItem(normalizedKey);
+            return self.memoryStore.has(normalizedKey) ? self.memoryStore.get(normalizedKey) : null;
+          };
+          localStorage.setItem = (key, value) => {
+            const normalizedKey = String(key || "");
+            const normalizedValue = String(value ?? "");
+            if (!self.isScopedKey(normalizedKey)) {
+              self.nativeSetItem(normalizedKey, normalizedValue);
+              return;
+            }
+            self.memoryStore.set(normalizedKey, normalizedValue);
+            self.saveSnapshotDebounced();
+          };
+          localStorage.removeItem = (key) => {
+            const normalizedKey = String(key || "");
+            if (!self.isScopedKey(normalizedKey)) {
+              self.nativeRemoveItem(normalizedKey);
+              return;
+            }
+            self.memoryStore.delete(normalizedKey);
+            self.saveSnapshotDebounced();
+          };
+          localStorage.clear = () => {
+            self.memoryStore.clear();
+            self.nativeRemoveItem(self.snapshotStorageKey);
+            self.nativeClear();
+          };
+        }
+      };
+      scheduleSiteClientKvState.installProxy();
+      async function pullScheduleSiteClientKvFromSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) {
+          scheduleSiteClientKvState.initialPullDone = true;
+          return;
+        }
         try {
-          const rawSnapshot = nativeGetItem(snapshotStorageKey);
-          const parsedSnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
-          if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
-            Object.entries(parsedSnapshot).forEach(([key, value]) => {
-              if (!isScopedKey(key)) return;
-              memoryStore.set(String(key), String(value ?? ""));
-            });
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv,updated_at&limit=1`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store"
+            }
+          );
+          if (!response.ok) {
+            scheduleSiteClientKvState.initialPullDone = true;
+            return;
+          }
+          const rows = await response.json();
+          if (!Array.isArray(rows) || rows.length === 0) {
+            scheduleSiteClientKvState.initialPullDone = true;
+            return;
+          }
+          const row = rows[0];
+          const serverAt = String(row?.updated_at || "").trim();
+          const kv = row?.kv;
+          const localWriteAt = scheduleSiteClientKvState.getNativeLastScopedWriteAt();
+          const memCount = scheduleSiteClientKvState.scopedKeyCount();
+          const serverMs = serverAt ? new Date(serverAt).getTime() : 0;
+          const localMs = localWriteAt ? new Date(localWriteAt).getTime() : 0;
+          const serverKeyCount = kv && typeof kv === "object" ? Object.keys(kv).length : 0;
+          const shouldApply =
+            serverKeyCount > 0 &&
+            (memCount === 0 || (Boolean(localWriteAt) && serverMs > localMs && !Number.isNaN(serverMs) && !Number.isNaN(localMs)));
+          if (shouldApply) {
+            scheduleSiteClientKvState.hydrateFromServerKv(kv);
+            scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
           }
         } catch (error) {
-          // 파싱 실패 시 빈 메모리로 시작
+          console.warn("[CLIENT_KV] Supabase 복원 실패", error);
+        } finally {
+          scheduleSiteClientKvState.initialPullDone = true;
         }
-        localStorage.getItem = (key) => {
-          const normalizedKey = String(key || "");
-          if (!isScopedKey(normalizedKey)) return nativeGetItem(normalizedKey);
-          return memoryStore.has(normalizedKey) ? memoryStore.get(normalizedKey) : null;
-        };
-        localStorage.setItem = (key, value) => {
-          const normalizedKey = String(key || "");
-          const normalizedValue = String(value ?? "");
-          if (!isScopedKey(normalizedKey)) {
-            nativeSetItem(normalizedKey, normalizedValue);
-            return;
-          }
-          memoryStore.set(normalizedKey, normalizedValue);
-          saveSnapshot();
-        };
-        localStorage.removeItem = (key) => {
-          const normalizedKey = String(key || "");
-          if (!isScopedKey(normalizedKey)) {
-            nativeRemoveItem(normalizedKey);
-            return;
-          }
-          memoryStore.delete(normalizedKey);
-          saveSnapshot();
-        };
-        localStorage.clear = () => {
-          memoryStore.clear();
-          nativeRemoveItem(snapshotStorageKey);
-          nativeClear();
-        };
       }
-      installSupabaseOnlyStorageProxy();
+      async function pushScheduleSiteClientKvToSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
+        const kv = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
+        if (!Object.keys(kv).length) return;
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "resolution=merge-duplicates,return=representation",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify([
+              {
+                id: SUPABASE_CLIENT_KV_ROW_ID,
+                kv
+              }
+            ])
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+          }
+          const rows = await response.json();
+          const updatedAt = rows?.[0]?.updated_at;
+          if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
+        } catch (error) {
+          console.warn("[CLIENT_KV] Supabase 저장 실패", error);
+        }
+      }
+      window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
       function getSyncDefaultValue(key) {
         return Object.prototype.hasOwnProperty.call(STORAGE_SYNC_DEFAULTS, key) ? STORAGE_SYNC_DEFAULTS[key] : "[]";
       }
@@ -12525,45 +12657,49 @@
       });
 
       // 자동 초기화 비활성화 (데이터 유실 방지)
-      loadAdminCompaniesFromStorage();
-      void pullAdminCompaniesFromSupabaseAndRefresh();
-      void pullCustomersFromSupabaseAndApply().then(() => {
+      async function bootstrapAdminPageData() {
+        await pullScheduleSiteClientKvFromSupabase();
+        loadAdminCompaniesFromStorage();
+        void pullAdminCompaniesFromSupabaseAndRefresh();
+        void pullCustomersFromSupabaseAndApply().then(() => {
+          renderCustomerStatsDashboard();
+          renderCompanies();
+        });
+        loadCouponPassesFromStorage();
+        void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          if (changed) {
+            renderCouponPassList();
+            renderPaymentList();
+          }
+        });
+        loadAdminSchedulesFromStorage();
+        initializeScheduleReceiptLedgerStorage();
+        void pullSchedulesFromSupabaseAndApply();
+        void pullDayoffRequestsFromSupabaseAndApply();
+        void pullSubmissionReceiptsFromSupabaseAndApply();
+        void pullSharedLimitConfigAndApply();
+        void pullSharedMasterAccountMapAndApply();
+        hydrateFromCustomerPageStorage();
+        bootstrapMasterAccountsForExistingCompanies();
+        bootstrapMasterAccountsFromCurrentCustomersV2();
+        bootstrapMasterCompaniesFromRegisteredCompaniesV3();
+        loadPhotographerProfilesFromStorage();
+        void pullWritersFromSupabaseAndRefresh();
+        void pullPaymentsFromSupabaseAndApply();
+        hydrateFromWriterPageStorage();
+        renderPhotographers();
         renderCustomerStatsDashboard();
+        renderCustomerUpdateNotices();
+        renderCustomerAlertHistory();
+        updateFullBackupInfoText();
         renderCompanies();
-      });
-      loadCouponPassesFromStorage();
-      void pullCouponPassesFromSupabaseAndApply().then((changed) => {
-        if (changed) {
-          renderCouponPassList();
-          renderPaymentList();
-        }
-      });
-      loadAdminSchedulesFromStorage();
-      initializeScheduleReceiptLedgerStorage();
-      void pullSchedulesFromSupabaseAndApply();
-      void pullDayoffRequestsFromSupabaseAndApply();
-      void pullSubmissionReceiptsFromSupabaseAndApply();
-      void pullSharedLimitConfigAndApply();
-      void pullSharedMasterAccountMapAndApply();
-      hydrateFromCustomerPageStorage();
-      bootstrapMasterAccountsForExistingCompanies();
-      bootstrapMasterAccountsFromCurrentCustomersV2();
-      bootstrapMasterCompaniesFromRegisteredCompaniesV3();
-      loadPhotographerProfilesFromStorage();
-      void pullWritersFromSupabaseAndRefresh();
-      void pullPaymentsFromSupabaseAndApply();
-      hydrateFromWriterPageStorage();
-      renderPhotographers();
-      renderCustomerStatsDashboard();
-      renderCustomerUpdateNotices();
-      renderCustomerAlertHistory();
-      updateFullBackupInfoText();
-      renderCompanies();
-      setupDateInputs();
-      setupCouponInputs();
-      setupScheduleFilters();
-      renderList();
-      switchMainTab("schedule");
+        setupDateInputs();
+        setupCouponInputs();
+        setupScheduleFilters();
+        renderList();
+        switchMainTab("schedule");
+      }
+      void bootstrapAdminPageData();
 
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_CANCELED_SCHEDULES) {

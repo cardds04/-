@@ -320,3 +320,52 @@ on public.customer_submission_receipts
 for delete
 to anon, authenticated
 using (false);
+
+-- ------------------------------------------------------------
+-- Safari 등 localStorage 스냅샷이 비어 있을 때 복구용: scheduleSite* 키 묶음
+-- ------------------------------------------------------------
+create table if not exists public.schedule_site_client_kv (
+  id text primary key,
+  kv jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.set_schedule_site_client_kv_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_schedule_site_client_kv_updated on public.schedule_site_client_kv;
+create trigger trg_schedule_site_client_kv_updated
+before insert or update on public.schedule_site_client_kv
+for each row
+execute function public.set_schedule_site_client_kv_updated_at();
+
+alter table public.schedule_site_client_kv enable row level security;
+
+drop policy if exists "public_read_schedule_site_client_kv" on public.schedule_site_client_kv;
+create policy "public_read_schedule_site_client_kv"
+on public.schedule_site_client_kv
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "public_write_schedule_site_client_kv" on public.schedule_site_client_kv;
+create policy "public_write_schedule_site_client_kv"
+on public.schedule_site_client_kv
+for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "public_update_schedule_site_client_kv" on public.schedule_site_client_kv;
+create policy "public_update_schedule_site_client_kv"
+on public.schedule_site_client_kv
+for update
+to anon, authenticated
+using (true)
+with check (true);
