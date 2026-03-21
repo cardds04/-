@@ -1035,25 +1035,7 @@
         <article class="card my-schedule-card">
           <div class="schedule-head">
             <h2>전체스케줄</h2>
-            <div class="head-right">
-              <span class="count">총 <span id="totalCount">0</span>건</span>
-              <span id="todayNewCount" class="count">오늘 신규접수 0건</span>
-              <span id="monthNewCount" class="count">이번달 접수 0건</span>
-              <span id="customerAlertCount" class="count">미확인 알림 총 0개</span>
-              <button id="markAllCustomerAlertsReadBtn" class="btn-sm" type="button">모두확인</button>
-              <button id="customerAlertHistoryBtn" class="btn-sm" type="button">기록</button>
-              <button id="openStaleCleanupModalBtn" class="btn-sm" type="button">기존잔여정리</button>
-              <button id="downloadExcelBtn" class="btn-sm" type="button">엑셀 다운로드</button>
-              <button id="uploadExcelBtn" class="btn-sm" type="button">엑셀 업로드</button>
-              <button id="downloadFullBackupBtn" class="btn-sm" type="button">전체백업</button>
-              <button id="uploadFullBackupBtn" class="btn-sm" type="button">백업복원</button>
-              <span id="fullBackupInfoText" class="count">마지막 백업 -</span>
-            </div>
           </div>
-
-          <div id="customerAlertBox" class="customer-alert-box"></div>
-          <div id="todayNewSummaryBox" class="helper" style="margin: 6px 2px 10px;"></div>
-          <div id="customerAlertHistoryBox" class="customer-alert-history hidden"></div>
 
           <div id="inlineCalendarBox" class="customer-stats-box" style="margin-bottom: 10px;">
             <div class="calendar-head">
@@ -5283,6 +5265,7 @@
       }
 
       function renderCustomerUpdateNotices() {
+        if (!customerAlertBoxEl) return;
         const alerts = getMergedAdminAlerts();
         const todayRelevantAlerts = alerts.filter((item) => isTodayNewOrChangedAlert(item));
         const unreadCount = todayRelevantAlerts.filter((item) => !item.read).length;
@@ -5313,6 +5296,7 @@
       }
 
       function renderCustomerAlertHistory() {
+        if (!customerAlertHistoryBoxEl) return;
         const alerts = getMergedAdminAlerts();
 
         if (alerts.length === 0) {
@@ -9211,7 +9195,7 @@
         latestScheduleCopyRows = filtered.map(({ item }) => item);
         latestScheduleCopyLabel = `${selectedYear}년 ${monthLabel} ${dayLabel} / ${writerLabel}`;
 
-        totalCountEl.textContent = String(filtered.length);
+        if (totalCountEl) totalCountEl.textContent = String(filtered.length);
         const grouped = new Map();
         filtered.forEach(({ item, index }) => {
           const writer = item.name || "작가미정";
@@ -9580,7 +9564,7 @@
         }
       });
 
-      customerAlertBoxEl.addEventListener("click", (event) => {
+      customerAlertBoxEl?.addEventListener("click", (event) => {
         const detailButton = event.target.closest("button[data-action='openCustomerAlertDetail'][data-alert-id]");
         if (detailButton) {
           const alertId = detailButton.dataset.alertId;
@@ -9682,7 +9666,7 @@
         renderCustomerAlertHistory();
       });
 
-      customerAlertHistoryBtnEl.addEventListener("click", () => {
+      customerAlertHistoryBtnEl?.addEventListener("click", () => {
         isAlertHistoryVisible = !isAlertHistoryVisible;
         customerAlertHistoryBoxEl.classList.toggle("hidden", !isAlertHistoryVisible);
         customerAlertHistoryBtnEl.textContent = isAlertHistoryVisible ? "기록닫기" : "기록";
@@ -9749,8 +9733,8 @@
       companyFilterInputEl.addEventListener("input", () => {
         renderList();
       });
-      downloadExcelBtnEl.addEventListener("click", exportSchedulesToCsv);
-      uploadExcelBtnEl.addEventListener("click", () => {
+      downloadExcelBtnEl?.addEventListener("click", exportSchedulesToCsv);
+      uploadExcelBtnEl?.addEventListener("click", () => {
         excelUploadInputEl.click();
       });
       downloadFullBackupBtnEl?.addEventListener("click", downloadFullBackupCsv);
