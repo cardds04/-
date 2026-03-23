@@ -19,8 +19,6 @@
         --card-green: #2fa85c;
         --card-yellow: #ffd54a;
         --card-orange: #ff6b2c;
-        --shadow: 0 12px 28px rgba(30, 40, 60, 0.12);
-        --radius: 15px;
       }
 
       * {
@@ -49,18 +47,18 @@
       .brand {
         display: flex;
         justify-content: center;
-        margin-bottom: 32px;
+        margin-bottom: 20px;
       }
 
       .brand__mark {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 160px;
-        padding: 12px 28px;
+        min-width: 140px;
+        padding: 10px 22px;
         background: var(--logo-green);
-        border-radius: 10px;
-        box-shadow: 0 8px 20px rgba(46, 204, 74, 0.35);
+        border-radius: 0;
+        box-shadow: none;
       }
 
       .brand__mark span {
@@ -70,176 +68,73 @@
         color: #fff;
       }
 
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 18px;
-        align-items: stretch;
+      .tile-strip {
+        width: 100%;
+        max-width: min(1100px, 100%);
+        margin: 0 auto 28px;
+        overflow: hidden;
+        box-shadow: 0 8px 28px rgba(30, 40, 60, 0.1);
       }
 
-      @media (max-width: 1024px) {
-        .grid {
+      .nav-tiles {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+      }
+
+      @media (max-width: 560px) {
+        .nav-tiles {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
 
-      @media (max-width: 600px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .card {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        min-height: 420px;
-        border-radius: var(--radius);
-        overflow: hidden;
-        box-shadow: var(--shadow);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-
-      .card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 18px 36px rgba(30, 40, 60, 0.16);
-      }
-
-      .card__media {
-        position: relative;
-        height: 160px;
-        flex-shrink: 0;
-        background: rgba(0, 0, 0, 0.08);
-      }
-
-      .card__media img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-      }
-
-      .card__play {
-        position: absolute;
-        inset: 0;
+      .nav-tiles__item {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35));
-      }
-
-      .card__play-circle {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-      }
-
-      .card__play-circle svg {
-        margin-left: 4px;
-      }
-
-      .card__body {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        padding: 18px 18px 20px;
-      }
-
-      .card__title {
-        margin: 0 0 8px;
-        font-size: clamp(1.05rem, 2vw, 1.25rem);
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        line-height: 1.25;
-      }
-
-      .card__sub {
-        margin: 0 0 auto;
-        font-size: 0.82rem;
-        font-weight: 500;
-        line-height: 1.45;
-        opacity: 0.95;
-      }
-
-      .card__btn-wrap {
-        margin-top: 18px;
-        display: flex;
-        justify-content: center;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 140px;
-        padding: 10px 20px;
-        border-radius: 999px;
-        background: #fff;
-        color: #111;
+        min-height: 44px;
+        padding: 10px 8px;
+        font-size: clamp(0.62rem, 2.1vw, 0.76rem);
         font-weight: 700;
-        font-size: 0.78rem;
-        letter-spacing: 0.04em;
-        border: none;
+        letter-spacing: 0.02em;
+        line-height: 1.25;
+        text-align: center;
+        border: 0;
+        border-radius: 0;
         cursor: pointer;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        transition: filter 0.15s ease, opacity 0.15s ease;
       }
 
-      .pill:hover {
-        transform: scale(1.03);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-        background: #fafafa;
+      .nav-tiles__item:hover {
+        filter: brightness(1.05);
       }
 
-      .pill:active {
-        transform: scale(0.98);
+      .nav-tiles__item:active {
+        opacity: 0.92;
       }
 
-      /* 카드별 색 */
-      .card--photos {
+      .nav-tiles__item--photos {
         background: var(--card-blue);
         color: #fff;
       }
 
-      .card--videos {
+      .nav-tiles__item--videos {
         background: var(--card-green);
         color: #fff;
       }
 
-      .card--product {
+      .nav-tiles__item--product {
         background: var(--card-yellow);
         color: #111;
       }
 
-      .card--product .card__sub {
-        color: #222;
-        opacity: 0.9;
-      }
-
-      .card--order {
-        background: linear-gradient(145deg, #ff6b2c 0%, #e84a1f 100%);
+      .nav-tiles__item--order {
+        background: var(--card-orange);
         color: #fff;
       }
 
-      .card--order .card__media {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.08);
-      }
-
-      .order-icon {
-        width: 120px;
-        height: 100px;
-      }
-
       .latest {
-        margin-top: 48px;
+        margin-top: 40px;
         text-align: center;
       }
 
@@ -260,7 +155,7 @@
         max-width: min(1100px, 100%);
         margin: 0 auto;
         overflow: hidden;
-        border-radius: 2px;
+        border-radius: 0;
         box-shadow: 0 8px 28px rgba(30, 40, 60, 0.1);
       }
 
@@ -332,91 +227,14 @@
       </header>
 
       <main>
-        <section class="grid" aria-label="주요 메뉴">
-          <article class="card card--photos">
-            <div class="card__media">
-              <img
-                src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80"
-                alt="웨딩 포트폴리오 썸네일"
-                width="800"
-                height="533"
-                loading="lazy"
-              />
-            </div>
-            <div class="card__body">
-              <h2 class="card__title">포트폴리오 사진</h2>
-              <p class="card__sub">순간을 담다 · 갤러리 보기</p>
-              <div class="card__btn-wrap">
-                <a class="pill" href="#" title="포트폴리오 사진 (준비 중)">더보기</a>
-              </div>
-            </div>
-          </article>
-
-          <article class="card card--videos">
-            <div class="card__media">
-              <img
-                src="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=800&q=80"
-                alt="영상 포트폴리오 배경"
-                width="800"
-                height="533"
-                loading="lazy"
-              />
-              <div class="card__play" aria-hidden="true">
-                <div class="card__play-circle">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M8 5v14l11-7L8 5z" fill="#222" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-            <div class="card__body">
-              <h2 class="card__title">포트폴리오 영상</h2>
-              <p class="card__sub">생생한 스토리 · 릴스 보기</p>
-              <div class="card__btn-wrap">
-                <a class="pill" href="#" title="포트폴리오 영상 (준비 중)">릴스 보기</a>
-              </div>
-            </div>
-          </article>
-
-          <article class="card card--product">
-            <div class="card__media">
-              <img
-                src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80"
-                alt="상품 안내 이미지"
-                width="800"
-                height="533"
-                loading="lazy"
-              />
-            </div>
-            <div class="card__body">
-              <h2 class="card__title">상품 안내</h2>
-              <p class="card__sub">맞춤 솔루션 · 카탈로그 둘러보기</p>
-              <div class="card__btn-wrap">
-                <a class="pill" href="#" title="상품 안내 (준비 중)">카탈로그</a>
-              </div>
-            </div>
-          </article>
-
-          <article class="card card--order">
-            <div class="card__media">
-              <svg class="order-icon" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <rect x="18" y="28" width="72" height="48" rx="6" stroke="#fff" stroke-width="3" />
-                <path d="M28 38h52M28 48h36M28 58h44" stroke="#fff" stroke-width="2.5" stroke-linecap="round" />
-                <circle cx="78" cy="44" r="10" stroke="#fff" stroke-width="2.5" />
-                <path d="M74 44l3 3 6-6" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M88 22l10 8-6 14" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M94 26l4-4 8 8-4 4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-            <div class="card__body">
-              <h2 class="card__title">주문 등록</h2>
-              <p class="card__sub">간편 신청 · 프로젝트 시작하기</p>
-              <div class="card__btn-wrap">
-                <a class="pill" href="#" title="주문 등록 (준비 중)">지금 신청</a>
-              </div>
-            </div>
-          </article>
-        </section>
+        <div class="tile-strip">
+          <nav class="nav-tiles" aria-label="주요 메뉴">
+            <a class="nav-tiles__item nav-tiles__item--photos" href="#" title="포트폴리오 사진">포트폴리오 사진</a>
+            <a class="nav-tiles__item nav-tiles__item--videos" href="#" title="포트폴리오 영상">포트폴리오 영상</a>
+            <a class="nav-tiles__item nav-tiles__item--product" href="#" title="상품 안내">상품안내</a>
+            <a class="nav-tiles__item nav-tiles__item--order" href="#" title="주문 등록">주문등록</a>
+          </nav>
+        </div>
 
         <section class="latest" aria-labelledby="latest-heading">
           <h2 id="latest-heading">Latest Creations</h2>
@@ -472,6 +290,60 @@
               <img
                 src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=900&q=80"
                 alt="최신 작품 6"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 7"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1504194104404-433918773792?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 8"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1483988352577-2f64eed4693a?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 9"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1475180238706-0630aa49665f?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 10"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 11"
+                loading="lazy"
+                width="900"
+                height="675"
+              />
+            </figure>
+            <figure class="gallery__item" role="listitem">
+              <img
+                src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80"
+                alt="최신 작품 12"
                 loading="lazy"
                 width="900"
                 height="675"
