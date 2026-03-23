@@ -1497,6 +1497,33 @@
         display: block;
         pointer-events: none;
       }
+
+      .inlog-cinema-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      @media (max-width: 640px) {
+        .inlog-cinema-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .inlog-cinema-item {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px;
+        background: var(--card);
+      }
+
+      .inlog-cinema-item .input-row {
+        margin-bottom: 0;
+      }
+
+      .inlog-cinema-item .inline-input {
+        width: 100%;
+      }
     </style>
   </head>
   <body>
@@ -1509,7 +1536,7 @@
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
-        <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 Photo</button>
+        <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 등록</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -1852,7 +1879,7 @@
       <section id="inlogPhotoSection" class="hidden">
         <article class="card">
           <div class="schedule-head">
-            <h2>인로그 Photo (현장별)</h2>
+            <h2>인로그 등록</h2>
           </div>
           <p class="helper" style="margin-bottom: 8px;">
             한 칸이 한 현장입니다. 위에서 대표 이미지를 고르고(썸네일 클릭), URL 목록은 그 아래에 둡니다. 그리드는 한 줄에 4칸입니다. 저장은
@@ -1865,8 +1892,18 @@
             <button id="inlogPhotoAddAlbumBtn" class="btn-sm primary" type="button">+ 현장 추가</button>
           </div>
           <div id="inlogPhotoAlbumsEditor"></div>
+          <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;" />
+          <h3 class="sub-title" style="margin: 0 0 8px;">시네마 링크 등록</h3>
+          <p class="helper" style="margin: 0 0 8px;">YouTube 또는 일반 URL을 추가하면 <code>inlog.html#cinema</code>에서 3열 미리보기로 표시됩니다.</p>
+          <p class="helper" style="margin: 0 0 10px;">
+            <a href="inlog.html#cinema" target="_blank" rel="noopener noreferrer">Cinema 페이지 새 탭</a>
+          </p>
+          <div class="actions" style="margin-bottom: 10px; justify-content: flex-start;">
+            <button id="inlogCinemaAddBtn" class="btn-sm primary" type="button">+ 시네마 링크 추가</button>
+          </div>
+          <div id="inlogCinemaEditor" class="inlog-cinema-grid"></div>
           <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
-            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">저장</button>
+            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
           </div>
         </article>
@@ -2066,6 +2103,7 @@
       const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
+      const STORAGE_INLOG_CINEMA_ITEMS = "scheduleSiteInlogCinemaItemsV1";
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
@@ -2333,6 +2371,80 @@
       function writeInlogPhotoAlbums(payload) {
         localStorage.setItem(STORAGE_INLOG_PHOTO_ALBUMS, JSON.stringify(payload));
       }
+      function mergeInlogCinemaItemsStored(p) {
+        if (!p || typeof p !== "object") return { v: 1, items: [] };
+        const items = Array.isArray(p.items) ? p.items : [];
+        const out = { v: 1, items: [] };
+        items.forEach((it, i) => {
+          if (!it || typeof it !== "object") return;
+          const id = String(it.id || "").trim() || `cin-${i + 1}-${Date.now()}`;
+          const url = String(it.url || it.href || "").trim();
+          const title = String(it.title || "").trim();
+          if (!url) return;
+          out.items.push({ id, url, title });
+        });
+        return out;
+      }
+      function readInlogCinemaItems() {
+        try {
+          const raw = localStorage.getItem(STORAGE_INLOG_CINEMA_ITEMS);
+          if (!raw) return { v: 1, items: [] };
+          return mergeInlogCinemaItemsStored(JSON.parse(raw));
+        } catch {
+          return { v: 1, items: [] };
+        }
+      }
+      function writeInlogCinemaItems(payload) {
+        localStorage.setItem(STORAGE_INLOG_CINEMA_ITEMS, JSON.stringify(payload));
+      }
+      function newInlogCinemaId() {
+        return `cin-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      }
+      function buildInlogCinemaEditorItem(item) {
+        const it = item || { id: newInlogCinemaId(), url: "", title: "" };
+        const wrap = document.createElement("div");
+        wrap.className = "inlog-cinema-item";
+        wrap.setAttribute("data-cinema-id", String(it.id || newInlogCinemaId()));
+        const row = document.createElement("div");
+        row.className = "input-row";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "inline-input inlog-cinema-url";
+        input.placeholder = "https://youtube.com/watch?v=... 또는 일반 링크";
+        input.value = String(it.url || "").trim();
+        const rmBtn = document.createElement("button");
+        rmBtn.type = "button";
+        rmBtn.className = "btn-sm inlog-cinema-remove";
+        rmBtn.textContent = "삭제";
+        row.appendChild(input);
+        row.appendChild(rmBtn);
+        wrap.appendChild(row);
+        return wrap;
+      }
+      function renderInlogCinemaEditor(payload) {
+        const editor = document.getElementById("inlogCinemaEditor");
+        if (!editor) return;
+        editor.innerHTML = "";
+        const items = payload && Array.isArray(payload.items) ? payload.items : [];
+        if (!items.length) {
+          editor.appendChild(buildInlogCinemaEditorItem(null));
+        } else {
+          items.forEach((it) => editor.appendChild(buildInlogCinemaEditorItem(it)));
+        }
+      }
+      function collectInlogCinemaEditorPayload() {
+        const editor = document.getElementById("inlogCinemaEditor");
+        const items = [];
+        if (!editor) return { v: 1, items: [] };
+        editor.querySelectorAll(".inlog-cinema-item").forEach((row) => {
+          const id = String(row.getAttribute("data-cinema-id") || newInlogCinemaId()).trim();
+          row.setAttribute("data-cinema-id", id);
+          const url = String(row.querySelector(".inlog-cinema-url")?.value || "").trim();
+          if (!url) return;
+          items.push({ id, url, title: "" });
+        });
+        return { v: 1, items };
+      }
       function newInlogPhotoAlbumId() {
         return `alb-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       }
@@ -2480,7 +2592,9 @@
       }
       function hydrateInlogPhotoEditorFromStorage() {
         wireInlogPhotoAlbumEditorIfNeeded();
+        wireInlogCinemaEditorIfNeeded();
         renderInlogPhotoAlbumsEditor(readInlogPhotoAlbums());
+        renderInlogCinemaEditor(readInlogCinemaItems());
       }
       function collectInlogPhotoAlbumsEditorPayload() {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
@@ -2588,6 +2702,23 @@
               btn.disabled = false;
               btn.textContent = prevLabel || "업로드";
             }
+          }
+        });
+      }
+      function wireInlogCinemaEditorIfNeeded() {
+        const sec = document.getElementById("inlogPhotoSection");
+        if (!sec || sec.getAttribute("data-inlog-cinema-wired") === "1") return;
+        sec.setAttribute("data-inlog-cinema-wired", "1");
+        const editor = document.getElementById("inlogCinemaEditor");
+        if (!editor) return;
+        editor.addEventListener("click", (e) => {
+          const rm = e.target.closest(".inlog-cinema-remove");
+          if (!rm || !editor.contains(rm)) return;
+          const row = rm.closest(".inlog-cinema-item");
+          if (!row || !editor.contains(row)) return;
+          row.remove();
+          if (!editor.querySelector(".inlog-cinema-item")) {
+            editor.appendChild(buildInlogCinemaEditorItem(null));
           }
         });
       }
@@ -4350,6 +4481,7 @@
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
+      const inlogCinemaAddBtnEl = document.getElementById("inlogCinemaAddBtn");
       const inlogPhotoSaveBtnEl = document.getElementById("inlogPhotoSaveBtn");
       const inlogPhotoSaveStatusEl = document.getElementById("inlogPhotoSaveStatus");
       const receiptLedgerListEl = document.getElementById("receiptLedgerList");
@@ -11786,6 +11918,12 @@
         editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
         renumberInlogPhotoAlbumHeadings();
       });
+      inlogCinemaAddBtnEl?.addEventListener("click", () => {
+        const editor = document.getElementById("inlogCinemaEditor");
+        if (!editor) return;
+        wireInlogCinemaEditorIfNeeded();
+        editor.appendChild(buildInlogCinemaEditorItem(null));
+      });
       inlogPhotoSaveBtnEl?.addEventListener("click", () => {
         const btn = inlogPhotoSaveBtnEl;
         if (!btn || btn.disabled) return;
@@ -11793,8 +11931,10 @@
         btn.disabled = true;
         btn.textContent = "저장 중…";
         try {
-          const payload = collectInlogPhotoAlbumsEditorPayload();
-          writeInlogPhotoAlbums(payload);
+          const photoPayload = collectInlogPhotoAlbumsEditorPayload();
+          const cinemaPayload = collectInlogCinemaEditorPayload();
+          writeInlogPhotoAlbums(photoPayload);
+          writeInlogCinemaItems(cinemaPayload);
           if (inlogPhotoSaveStatusEl) {
             inlogPhotoSaveStatusEl.textContent = USE_SUPABASE_SYNC
               ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."

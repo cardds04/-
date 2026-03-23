@@ -289,6 +289,67 @@
         display: block;
       }
 
+      .cinema-grid {
+        width: 100%;
+        max-width: min(var(--gallery-max), 100%);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      @media (max-width: 860px) {
+        .cinema-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 520px) {
+        .cinema-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .cinema-card {
+        margin: 0;
+        padding: 0;
+        border: 1px solid rgba(255, 213, 3, 0.25);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #111;
+      }
+
+      .cinema-card__media {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+      }
+
+      .cinema-card__media iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+      }
+
+      .cinema-card__link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 14px;
+        color: var(--page-bg);
+        font-size: 0.82rem;
+        text-align: center;
+        word-break: break-all;
+        line-height: 1.45;
+      }
+
+      .cinema-card__link:hover {
+        opacity: 0.85;
+      }
+
       .latest {
         margin-top: 0;
         width: 100vw;
@@ -503,7 +564,7 @@
             <a class="site-header__logo" href="inlog.html" aria-label="인로그 홈">인로그</a>
             <nav class="site-header__nav" aria-label="주요 메뉴">
               <a id="inlog-nav-photo" href="#photo" title="포트폴리오 사진">Photo</a>
-              <a href="#" title="포트폴리오 영상">Cinema</a>
+              <a id="inlog-nav-cinema" href="#cinema" title="포트폴리오 영상">Cinema</a>
               <a href="#" title="상품 안내">Product</a>
               <a
                 class="site-header__cta"
@@ -728,6 +789,17 @@
             <div id="inlogPhotoAlbumsMount"></div>
           </section>
         </div>
+
+        <div id="inlog-view-cinema" hidden>
+          <section class="latest photo-latest" aria-labelledby="cinema-cat-heading">
+            <div class="latest__intro">
+              <p class="latest__title-en" id="cinema-cat-heading">Cinema</p>
+              <p class="latest__title-ko">영상 포트폴리오</p>
+              <p class="latest__desc">등록한 링크가 3열로 미리보기 됩니다.</p>
+            </div>
+            <div id="inlogCinemaMount"></div>
+          </section>
+        </div>
       </main>
     </div>
 
@@ -785,6 +857,7 @@
         const ROW_ID = "scoped_local_v1";
         const SLOT_COUNT = 12;
         const PHOTO_STORAGE_KEY = "scheduleSiteInlogPhotoAlbumsV1";
+        const CINEMA_STORAGE_KEY = "scheduleSiteInlogCinemaItemsV1";
         function sanitizeInlogHomeHref(s) {
           const t = String(s || "").trim();
           if (!t) return "";
@@ -1164,9 +1237,114 @@
           const albums = payload && Array.isArray(payload.albums) ? payload.albums : [];
           return albums.filter((alb) => Boolean(getAlbumCoverSrc(alb))).length;
         }
+        function normalizeCinemaUrl(url) {
+          const s = String(url || "").trim();
+          if (!s) return "";
+          if (/^https?:\/\//i.test(s)) return s;
+          return `https://${s}`;
+        }
+        function getYoutubeVideoId(url) {
+          const raw = String(url || "").trim();
+          if (!raw) return "";
+          try {
+            const u = new URL(raw);
+            const host = u.hostname.toLowerCase();
+            if (host.includes("youtu.be")) return String(u.pathname || "").replace(/^\//, "").trim();
+            if (host.includes("youtube.com")) {
+              if (u.pathname.startsWith("/watch")) return String(u.searchParams.get("v") || "").trim();
+              const parts = String(u.pathname || "").split("/").filter(Boolean);
+              const idx = parts.findIndex((p) => p === "embed" || p === "shorts");
+              if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim();
+            }
+          } catch (e) {
+            return "";
+          }
+          return "";
+        }
+        function defaultCinemaPayload() {
+          return { v: 1, items: [] };
+        }
+        function mergeCinemaPayload(p) {
+          if (!p || typeof p !== "object") return defaultCinemaPayload();
+          const items = Array.isArray(p.items) ? p.items : [];
+          const out = { v: 1, items: [] };
+          items.forEach((it, i) => {
+            if (!it || typeof it !== "object") return;
+            const id = String(it.id || "").trim() || `cin-${i + 1}`;
+            const url = normalizeCinemaUrl(it.url || it.href || "");
+            if (!url) return;
+            const title = String(it.title || "").trim();
+            out.items.push({ id, url, title });
+          });
+          return out;
+        }
+        function parseCinemaFromKv(kv) {
+          const raw = kv && kv[CINEMA_STORAGE_KEY];
+          if (raw == null || raw === "") return defaultCinemaPayload();
+          try {
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return mergeCinemaPayload(parsed);
+          } catch (e) {
+            return defaultCinemaPayload();
+          }
+        }
+        function parseCinemaFromLocalStorage() {
+          try {
+            const raw = localStorage.getItem(CINEMA_STORAGE_KEY);
+            if (!raw) return defaultCinemaPayload();
+            return mergeCinemaPayload(JSON.parse(raw));
+          } catch (e) {
+            return defaultCinemaPayload();
+          }
+        }
+        function renderCinemaMount(cinemaPayload) {
+          const mount = document.getElementById("inlogCinemaMount");
+          if (!mount) return;
+          mount.innerHTML = "";
+          const items = cinemaPayload && Array.isArray(cinemaPayload.items) ? cinemaPayload.items : [];
+          if (!items.length) {
+            const p = document.createElement("p");
+            p.className = "photo-empty";
+            p.textContent = "등록된 영상 링크가 없습니다. 관리자 인로그 등록 탭에서 시네마 링크를 추가해 주세요.";
+            mount.appendChild(p);
+            return;
+          }
+          const grid = document.createElement("div");
+          grid.className = "cinema-grid";
+          items.forEach((it) => {
+            const card = document.createElement("article");
+            card.className = "cinema-card";
+            const media = document.createElement("div");
+            media.className = "cinema-card__media";
+            const ytId = getYoutubeVideoId(it.url);
+            if (ytId) {
+              const iframe = document.createElement("iframe");
+              iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(ytId)}`;
+              iframe.loading = "lazy";
+              iframe.allow =
+                "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+              iframe.referrerPolicy = "strict-origin-when-cross-origin";
+              iframe.allowFullscreen = true;
+              iframe.title = it.title || "YouTube preview";
+              media.appendChild(iframe);
+            } else {
+              const a = document.createElement("a");
+              a.className = "cinema-card__link";
+              a.href = it.url;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = it.title || it.url;
+              media.appendChild(a);
+            }
+            card.appendChild(media);
+            grid.appendChild(card);
+          });
+          mount.appendChild(grid);
+        }
         async function loadInlogHomeFromSupabase() {
           let payload = defaultInlogHomePayload();
           let photoPayload = defaultPhotoAlbumsPayload();
+          let cinemaPayload = defaultCinemaPayload();
           const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
           const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
           const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
@@ -1175,6 +1353,7 @@
           if (!url || !key) {
             applyInlogHomeGalleryFromPhotoAlbums(photoPayload, payload);
             renderPhotoAlbumsMount(photoPayload, getPhotoOpenAlbumIdFromHash());
+            renderCinemaMount(cinemaPayload);
             return;
           }
           try {
@@ -1190,6 +1369,9 @@
               const effectivePhoto = countRenderableAlbums(localPhoto) ? localPhoto : photoPayload;
               applyInlogHomeGalleryFromPhotoAlbums(effectivePhoto, payload);
               renderPhotoAlbumsMount(effectivePhoto, getPhotoOpenAlbumIdFromHash());
+              const localCinema = parseCinemaFromLocalStorage();
+              cinemaPayload = localCinema.items.length ? localCinema : cinemaPayload;
+              renderCinemaMount(cinemaPayload);
               return;
             }
             const rows = await res.json();
@@ -1206,11 +1388,16 @@
               }
             }
             photoPayload = parsePhotoAlbumsFromKv(kv);
+            cinemaPayload = parseCinemaFromKv(kv);
             if (!countRenderableAlbums(photoPayload)) {
               const localPhoto = parsePhotoAlbumsFromLocalStorage();
               if (countRenderableAlbums(localPhoto)) {
                 photoPayload = localPhoto;
               }
+            }
+            if (!cinemaPayload.items.length) {
+              const localCinema = parseCinemaFromLocalStorage();
+              if (localCinema.items.length) cinemaPayload = localCinema;
             }
           } catch (e) {
             console.warn("[INLOG_HOME] load", e);
@@ -1218,9 +1405,12 @@
             if (countRenderableAlbums(localPhoto)) {
               photoPayload = localPhoto;
             }
+            const localCinema = parseCinemaFromLocalStorage();
+            if (localCinema.items.length) cinemaPayload = localCinema;
           }
           applyInlogHomeGalleryFromPhotoAlbums(photoPayload, payload);
           renderPhotoAlbumsMount(photoPayload, getPhotoOpenAlbumIdFromHash());
+          renderCinemaMount(cinemaPayload);
         }
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadInlogHomeFromSupabase);
         else void loadInlogHomeFromSupabase();
@@ -1243,6 +1433,9 @@
           const raw = String(location.hash || "").replace(/^#/, "");
           return raw === "photo" || raw.startsWith("photo?");
         }
+        function isInlogCinemaHash() {
+          return /^#cinema$/i.test(location.hash || "");
+        }
         function tryOpenInlogPhotoAlbumFromHash() {
           const id = getInlogPhotoAlbumIdFromHash();
           if (!id) return;
@@ -1256,14 +1449,21 @@
         }
         function applyInlogRoute() {
           const isPhoto = isInlogPhotoHash();
+          const isCinema = isInlogCinemaHash();
           const home = document.getElementById("inlog-view-home");
           const photo = document.getElementById("inlog-view-photo");
+          const cinema = document.getElementById("inlog-view-cinema");
           const navPhoto = document.getElementById("inlog-nav-photo");
-          if (home) home.hidden = isPhoto;
+          const navCinema = document.getElementById("inlog-nav-cinema");
+          if (home) home.hidden = isPhoto || isCinema;
           if (photo) photo.hidden = !isPhoto;
+          if (cinema) cinema.hidden = !isCinema;
           if (navPhoto) navPhoto.classList.toggle("is-active", isPhoto);
-          if (isPhoto) {
+          if (navCinema) navCinema.classList.toggle("is-active", isCinema);
+          if (isPhoto || isCinema) {
             window.scrollTo(0, 0);
+          }
+          if (isPhoto) {
             const albumId = getInlogPhotoAlbumIdFromHash();
             requestAnimationFrame(() => {
               if (!albumId) {
