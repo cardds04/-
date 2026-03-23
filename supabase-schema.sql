@@ -431,6 +431,54 @@ alter table public.schedule_dashboard_state
   add column if not exists completed_history jsonb not null default '[]'::jsonb;
 
 -- ------------------------------------------------------------
+-- schedule_site_client_kv: 인로그 Photo·Cinema·Home 키 보호 트리거
+-- 배경 push 또는 네트워크 오류로 해당 키가 kv 에서 빠졌을 때 기존 값을 복원한다.
+-- 저장 버튼은 항상 {"v":1,"items":[...]} 형태의 유효한 값을 포함하므로 영향 없음.
+-- ------------------------------------------------------------
+create or replace function public.guard_inlog_kv_keys()
+returns trigger
+language plpgsql
+as $$
+declare
+  protected_keys text[] := array[
+    'scheduleSiteInlogPhotoAlbumsV1',
+    'scheduleSiteInlogCinemaItemsV1',
+    'scheduleSiteInlogHomeMainV1'
+  ];
+  key_name text;
+  old_val text;
+begin
+  if new.kv is null then
+    new.kv := '{}'::jsonb;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    foreach key_name in array protected_keys loop
+      old_val := old.kv ->> key_name;
+
+      -- 기존 값이 유효한데, 새 kv 에 해당 키가 아예 없으면 기존 값을 복원
+      if old_val is not null
+         and old_val <> ''
+         and old_val <> '[]'
+         and old_val <> '{}'
+         and new.kv -> key_name is null
+      then
+        new.kv := jsonb_set(new.kv, array[key_name], old.kv -> key_name, true);
+      end if;
+    end loop;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_guard_inlog_kv_keys on public.schedule_site_client_kv;
+create trigger trg_guard_inlog_kv_keys
+before insert or update on public.schedule_site_client_kv
+for each row
+execute function public.guard_inlog_kv_keys();
+
+-- ------------------------------------------------------------
 -- 인로그 메인 이미지 (관리자 업로드 → 공개 URL)
 -- Storage → 버킷을 UI로 만들어도 되고, 아래만 실행해도 됩니다.
 -- ------------------------------------------------------------
