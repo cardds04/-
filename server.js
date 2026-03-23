@@ -65,6 +65,12 @@ app.put("/api/state", async (req, res) => {
   }
 });
 
+app.get("/inlog", (req, res) => {
+  res.sendFile(path.join(__dirname, "inlog.html"));
+});
+
+app.use(express.static(__dirname));
+
 app.listen(PORT, () => {
   console.log(`Shared state server listening on http://localhost:${PORT}`);
   console.log(`State file path: ${STATE_PATH}`);
