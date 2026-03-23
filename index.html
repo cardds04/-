@@ -2762,6 +2762,58 @@
         }
         return Boolean(await pushScheduleSiteClientKvToSupabase());
       }
+      async function fetchClientKvRowFromSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return null;
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), CLIENT_KV_FETCH_TIMEOUT_MS);
+        try {
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv,updated_at&limit=1`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store",
+              signal: ac.signal
+            }
+          );
+          if (!response.ok) return null;
+          const rows = await response.json();
+          if (!Array.isArray(rows) || rows.length === 0) return null;
+          return rows[0];
+        } catch (error) {
+          return null;
+        } finally {
+          clearTimeout(tid);
+        }
+      }
+      function normalizeKvComparableValue(v) {
+        if (v === null || v === undefined) return "";
+        if (typeof v === "string") return v;
+        try {
+          return JSON.stringify(v);
+        } catch (error) {
+          return String(v);
+        }
+      }
+      async function verifyInlogConsistencyOrRevert() {
+        const row = await fetchClientKvRowFromSupabase();
+        if (!row || !row.kv || typeof row.kv !== "object") return { ok: false, reconciled: false };
+        const serverPhoto = normalizeKvComparableValue(row.kv[STORAGE_INLOG_PHOTO_ALBUMS]);
+        const serverCinema = normalizeKvComparableValue(row.kv[STORAGE_INLOG_CINEMA_ITEMS]);
+        const localPhoto = normalizeKvComparableValue(scheduleSiteClientKvState.memoryStore.get(STORAGE_INLOG_PHOTO_ALBUMS) || "");
+        const localCinema = normalizeKvComparableValue(scheduleSiteClientKvState.memoryStore.get(STORAGE_INLOG_CINEMA_ITEMS) || "");
+        const matched = serverPhoto === localPhoto && serverCinema === localCinema;
+        if (matched) return { ok: true, reconciled: false };
+        scheduleSiteClientKvState.hydrateFromServerKv(row.kv);
+        scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(row.updated_at || new Date().toISOString()));
+        if (typeof hydrateInlogPhotoEditorFromStorage === "function") {
+          hydrateInlogPhotoEditorFromStorage();
+        }
+        return { ok: true, reconciled: true };
+      }
       async function refreshInlogFromSupabase(reason = "normal") {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return false;
         const now = Date.now();
@@ -11964,17 +12016,31 @@
           writeInlogCinemaItems(cinemaPayload);
           if (USE_SUPABASE_SYNC) {
             const ok = await forceClientKvPushWhenReady();
-            if (inlogPhotoSaveStatusEl) {
-              inlogPhotoSaveStatusEl.textContent = ok
-                ? "저장됨 · Supabase 반영 완료"
-                : "저장됨 · Supabase 반영 지연(네트워크 확인)";
-            }
             if (!ok) {
+              if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 지연(네트워크 확인)";
+              }
               requestClientKvPushWhenReady();
               // 로컬만 저장된 상태가 남지 않도록 즉시 서버 상태로 되돌림
               await refreshInlogFromSupabase("force");
               if (inlogPhotoSaveStatusEl) {
                 inlogPhotoSaveStatusEl.textContent = "Supabase 저장 실패 · 서버 기준으로 화면을 되돌렸습니다.";
+              }
+            } else {
+              const verify = await verifyInlogConsistencyOrRevert();
+              if (verify.ok && !verify.reconciled) {
+                if (inlogPhotoSaveStatusEl) {
+                  inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
+                }
+                setSyncStatus("등록완료 데이터일치완료", "ok");
+                window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok"), 1000);
+              } else if (verify.reconciled) {
+                if (inlogPhotoSaveStatusEl) {
+                  inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구";
+                }
+                setSyncStatus("불일치 감지 · 서버 기준 복구", "warn");
+              } else if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "저장됨 · 검증 확인 실패(재시도 권장)";
               }
             }
           } else if (inlogPhotoSaveStatusEl) {
