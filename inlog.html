@@ -141,29 +141,54 @@
         line-height: 1.5;
       }
 
-      /* Photo 뷰: 인트로만 좌우 여백, 그리드는 뷰포트 가로 풀 */
-      .photo-latest {
-        padding-left: 0;
-        padding-right: 0;
-      }
-
+      /* Photo: 본문 폭은 적당히 제한, 대표는 가로 스크롤 */
       .photo-latest .latest__intro {
         padding-left: max(18px, env(safe-area-inset-left, 0px));
         padding-right: max(18px, env(safe-area-inset-right, 0px));
       }
 
-      /* 대표사진만 3열 (썸네일은 정사각 크롭) */
+      .photo-browser {
+        max-width: min(var(--gallery-max), min(920px, 94vw));
+        margin: 0 auto;
+        padding: 0 8px;
+      }
+
+      .photo-covers-scroller {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+        overscroll-behavior-x: contain;
+        margin: 0 -8px;
+        padding: 4px 8px 12px;
+        scrollbar-color: rgba(255, 213, 3, 0.45) transparent;
+      }
+
+      .photo-covers-scroller::-webkit-scrollbar {
+        height: 6px;
+      }
+
+      .photo-covers-scroller::-webkit-scrollbar-thumb {
+        background: rgba(255, 213, 3, 0.4);
+        border-radius: 3px;
+      }
+
       .photo-covers {
         list-style: none;
         margin: 0;
         padding: 0;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0;
-        width: 100%;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 14px;
+        width: max-content;
+        min-height: 0;
       }
 
       .photo-covers > li {
+        flex: 0 0 auto;
+        width: clamp(168px, 36vw, 260px);
+        scroll-snap-align: start;
         margin: 0;
         padding: 0;
       }
@@ -174,11 +199,22 @@
         margin: 0;
         padding: 0;
         border: none;
-        background: #000;
+        border-radius: 6px;
+        background: #141414;
         cursor: pointer;
-        aspect-ratio: 1;
+        aspect-ratio: 4 / 5;
         overflow: hidden;
         -webkit-tap-highlight-color: transparent;
+        box-sizing: border-box;
+      }
+
+      .photo-cover-cell:focus-visible {
+        outline: 2px solid var(--page-bg);
+        outline-offset: 3px;
+      }
+
+      .photo-cover-cell.is-selected {
+        box-shadow: 0 0 0 2px var(--page-bg);
       }
 
       .photo-cover-cell img {
@@ -191,63 +227,65 @@
 
       @media (hover: hover) and (pointer: fine) {
         .photo-cover-cell:hover {
-          opacity: 0.92;
+          opacity: 0.94;
         }
       }
 
-      /* 상세: 한 줄에 한 장, 원본 가로세로 비율 유지 */
-      .photo-detail {
-        width: 100%;
-        margin: 0;
-        padding: 0 0 24px;
-        background: #000;
+      /* 대표 줄 아래로 펼쳐지는 갤러리 */
+      .photo-expand {
+        margin-top: 8px;
+        padding: 20px 0 8px;
+        border-top: 1px solid rgba(255, 213, 3, 0.22);
       }
 
-      .photo-detail[hidden] {
+      .photo-expand[hidden] {
         display: none !important;
       }
 
-      .photo-detail__back {
+      .photo-expand__close {
         display: block;
         width: 100%;
-        max-width: 28rem;
-        margin: 0 auto 20px;
-        padding: 12px 18px;
-        border: 1px solid rgba(255, 213, 3, 0.45);
+        max-width: 16rem;
+        margin: 0 auto 18px;
+        padding: 10px 16px;
+        border: 1px solid rgba(255, 213, 3, 0.4);
+        border-radius: 6px;
         background: transparent;
         color: var(--page-bg);
         font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
-        font-size: 0.95rem;
+        font-size: 0.88rem;
         font-weight: 600;
         cursor: pointer;
         text-align: center;
       }
 
-      .photo-detail__back:hover {
-        opacity: 0.85;
+      .photo-expand__close:hover {
+        opacity: 0.88;
       }
 
-      .photo-detail__strip {
+      .photo-expand__strip {
         display: flex;
         flex-direction: column;
-        gap: 0;
+        gap: 14px;
         width: 100%;
-        margin: 0;
-        padding: 0;
+        max-width: 100%;
+        margin: 0 auto;
       }
 
-      .photo-detail__row {
+      .photo-expand__row {
         width: 100%;
         margin: 0;
         padding: 0;
         line-height: 0;
-        background: #000;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #0a0a0a;
       }
 
-      .photo-detail__row img {
+      .photo-expand__row img {
         width: 100%;
-        height: auto;
         max-width: 100%;
+        height: auto;
         display: block;
       }
 
@@ -685,7 +723,7 @@
             <div class="latest__intro">
               <p class="latest__title-en" id="photo-cat-heading">Photo</p>
               <p class="latest__title-ko">포트폴리오</p>
-              <p class="latest__desc">대표 사진을 누르면 해당 현장에 등록한 사진이 한 장씩 세로로 펼쳐집니다.</p>
+              <p class="latest__desc">대표 사진을 옆으로 넘겨 보시고, 누르면 아래에 그 현장 사진이 이어집니다.</p>
             </div>
             <div id="inlogPhotoAlbumsMount"></div>
           </section>
@@ -924,37 +962,60 @@
             mount.appendChild(p);
             return;
           }
+
+          const browser = document.createElement("div");
+          browser.className = "photo-browser";
+
+          const scroller = document.createElement("div");
+          scroller.className = "photo-covers-scroller";
+
           const grid = document.createElement("ul");
           grid.className = "photo-covers";
-          grid.setAttribute("aria-label", "현장 대표 사진 목록");
+          grid.setAttribute("aria-label", "현장 대표 사진 — 옆으로 스크롤");
 
-          const detail = document.createElement("div");
-          detail.className = "photo-detail";
-          detail.hidden = true;
-          detail.setAttribute("aria-hidden", "true");
+          const expand = document.createElement("div");
+          expand.className = "photo-expand";
+          expand.hidden = true;
+          expand.setAttribute("aria-hidden", "true");
 
-          const backBtn = document.createElement("button");
-          backBtn.type = "button";
-          backBtn.className = "photo-detail__back";
-          backBtn.textContent = "← 목록으로";
+          const closeBtn = document.createElement("button");
+          closeBtn.type = "button";
+          closeBtn.className = "photo-expand__close";
+          closeBtn.textContent = "접기";
 
           const strip = document.createElement("div");
-          strip.className = "photo-detail__strip";
+          strip.className = "photo-expand__strip";
 
-          detail.appendChild(backBtn);
-          detail.appendChild(strip);
+          expand.appendChild(closeBtn);
+          expand.appendChild(strip);
 
-          function showGrid() {
-            detail.hidden = true;
-            detail.setAttribute("aria-hidden", "true");
-            grid.hidden = false;
-            grid.removeAttribute("aria-hidden");
+          let selectedAlbumId = null;
+
+          function clearSelection() {
+            selectedAlbumId = null;
+            grid.querySelectorAll(".photo-cover-cell").forEach((b) => {
+              b.classList.remove("is-selected");
+              b.setAttribute("aria-expanded", "false");
+            });
           }
-          function showDetail(urls) {
+
+          function collapseExpand() {
+            expand.hidden = true;
+            expand.setAttribute("aria-hidden", "true");
+            clearSelection();
+          }
+
+          function openExpand(alb, urls, triggerBtn) {
+            const aid = String(alb.id || "");
+            if (!expand.hidden && selectedAlbumId === aid) {
+              collapseExpand();
+              return;
+            }
+            selectedAlbumId = aid;
             strip.innerHTML = "";
             urls.forEach((src) => {
               const row = document.createElement("div");
-              row.className = "photo-detail__row";
+              row.className = "photo-expand__row";
               const im = document.createElement("img");
               im.src = src;
               im.alt = "";
@@ -963,42 +1024,48 @@
               row.appendChild(im);
               strip.appendChild(row);
             });
-            grid.hidden = true;
-            grid.setAttribute("aria-hidden", "true");
-            detail.hidden = false;
-            detail.removeAttribute("aria-hidden");
-            backBtn.focus();
+            grid.querySelectorAll(".photo-cover-cell").forEach((b) => {
+              b.classList.toggle("is-selected", b === triggerBtn);
+              b.setAttribute("aria-expanded", b === triggerBtn ? "true" : "false");
+            });
+            expand.hidden = false;
+            expand.removeAttribute("aria-hidden");
+            requestAnimationFrame(() => {
+              expand.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
           }
 
-          backBtn.addEventListener("click", showGrid);
+          closeBtn.addEventListener("click", collapseExpand);
 
           withCover.forEach(({ alb, cover }) => {
             const li = document.createElement("li");
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "photo-cover-cell";
-            btn.setAttribute(
-              "aria-label",
-              String(alb.title || "현장").trim() ? `${alb.title} 사진 보기` : "현장 사진 보기"
-            );
+            btn.dataset.albumId = String(alb.id || "");
+            btn.setAttribute("aria-expanded", "false");
+            const titleStr = String(alb.title || "현장").trim();
+            btn.setAttribute("aria-label", titleStr ? `${titleStr} — 아래로 사진 펼치기` : "현장 사진 펼치기");
             const im = document.createElement("img");
             im.src = cover;
             im.alt = "";
             im.loading = "lazy";
             btn.appendChild(im);
-            btn.addEventListener("click", () => showDetail(getAlbumDetailPhotos(alb)));
+            btn.addEventListener("click", () => openExpand(alb, getAlbumDetailPhotos(alb), btn));
             li.appendChild(btn);
             grid.appendChild(li);
           });
 
-          mount.appendChild(grid);
-          mount.appendChild(detail);
+          scroller.appendChild(grid);
+          browser.appendChild(scroller);
+          browser.appendChild(expand);
+          mount.appendChild(browser);
         }
         document.addEventListener("keydown", (e) => {
           if (e.key !== "Escape") return;
-          const detail = document.querySelector("#inlogPhotoAlbumsMount .photo-detail");
-          if (!detail || detail.hidden) return;
-          detail.querySelector(".photo-detail__back")?.click();
+          const ex = document.querySelector("#inlogPhotoAlbumsMount .photo-expand");
+          if (!ex || ex.hidden) return;
+          ex.querySelector(".photo-expand__close")?.click();
         });
         function parsePhotoAlbumsFromKv(kv) {
           const rawP = kv && kv[PHOTO_STORAGE_KEY];
