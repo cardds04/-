@@ -2510,7 +2510,7 @@
         });
         return { v: 1, albums: [...byId.values()] };
       }
-      function mergeInlogCinemaPayloadByItemId(basePayload, localPayload) {
+      function mergeInlogCinemaPayloadByItemId(basePayload, localPayload, deletedIds) {
         const base = mergeInlogCinemaItemsStored(basePayload || { v: 1, items: [] });
         const local = mergeInlogCinemaItemsStored(localPayload || { v: 1, items: [] });
         const byId = new Map(base.items.map((it) => [String(it.id || "").trim(), it]));
@@ -2518,6 +2518,12 @@
           const id = String(it.id || "").trim();
           if (!id) return;
           byId.set(id, it);
+        });
+        const tombstones = deletedIds instanceof Set ? deletedIds : new Set();
+        tombstones.forEach((id) => {
+          const key = String(id || "").trim();
+          if (!key) return;
+          byId.delete(key);
         });
         return { v: 1, items: [...byId.values()] };
       }
@@ -2798,6 +2804,8 @@
           const row = rm.closest(".inlog-cinema-item");
           if (!row || !editor.contains(row)) return;
           markInlogEditorDirty();
+          const deleteId = String(row.getAttribute("data-cinema-id") || "").trim();
+          if (deleteId) inlogCinemaDeletedIds.add(deleteId);
           row.remove();
           if (!editor.querySelector(".inlog-cinema-item")) {
             editor.appendChild(buildInlogCinemaEditorItem(null));
@@ -2817,11 +2825,13 @@
       let clientKvPollTimerId = null;
       let inlogLastSupabaseRefreshAt = 0;
       let inlogEditorDirty = false;
+      const inlogCinemaDeletedIds = new Set();
       function markInlogEditorDirty() {
         inlogEditorDirty = true;
       }
       function clearInlogEditorDirty() {
         inlogEditorDirty = false;
+        inlogCinemaDeletedIds.clear();
       }
       const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
@@ -12205,7 +12215,7 @@
             const serverPhotoPayload = mergeInlogPhotoAlbumsStored(serverKv[STORAGE_INLOG_PHOTO_ALBUMS]);
             const serverCinemaPayload = mergeInlogCinemaItemsStored(serverKv[STORAGE_INLOG_CINEMA_ITEMS]);
             photoPayload = mergeInlogPhotoPayloadByAlbumId(serverPhotoPayload, localPhotoPayload);
-            cinemaPayload = mergeInlogCinemaPayloadByItemId(serverCinemaPayload, localCinemaPayload);
+            cinemaPayload = mergeInlogCinemaPayloadByItemId(serverCinemaPayload, localCinemaPayload, inlogCinemaDeletedIds);
           }
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
