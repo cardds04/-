@@ -2115,19 +2115,10 @@
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
-      const runtimeHost = String(location.hostname || "").toLowerCase();
-      const isLocalDesktopRuntime =
-        location.protocol === "file:" ||
-        runtimeHost === "localhost" ||
-        runtimeHost === "127.0.0.1" ||
-        runtimeHost === "::1" ||
-        runtimeHost.endsWith(".local");
-      /** 로컬 데스크탑 개발환경만 강제 읽기전용(dev), 배포 웹은 sync-config(appMode) 따름 */
-      const APP_MODE = isLocalDesktopRuntime
-        ? "dev"
-        : String(syncConfig.appMode || "ops")
-            .trim()
-            .toLowerCase();
+      /** 데스크탑/배포 구분 없이 sync-config.js 의 appMode 만 사용 (기본 ops = 읽기·쓰기) */
+      const APP_MODE = String(syncConfig.appMode || "ops")
+        .trim()
+        .toLowerCase();
       const REMOTE_SYNC_ENDPOINT = syncConfig.remoteSyncEndpoint || "";
       const SUPABASE_URL =
         syncConfig.supabaseUrl ||
@@ -2184,34 +2175,6 @@
       /** Storage 업로드 등 fetch 래퍼와 무관하게 브라우저 원본 fetch 보관 */
       if (typeof window.fetch === "function" && typeof window.__scheduleSiteNativeFetch !== "function") {
         window.__scheduleSiteNativeFetch = window.fetch.bind(window);
-      }
-      if (USE_SUPABASE_SYNC && APP_MODE === "dev" && typeof window.fetch === "function") {
-        const __nativeFetch = window.fetch.bind(window);
-        window.fetch = (input, init = {}) => {
-          let url = "";
-          let method = "";
-          if (typeof input === "string") {
-            url = input;
-            method = String(init?.method || "GET");
-          } else if (input && typeof input === "object") {
-            url = String(input.url || "");
-            method = String(init?.method || input.method || "GET");
-          }
-          const m = method.toUpperCase();
-          const isSupabaseReq = url.startsWith(SUPABASE_URL);
-          const isWriteMethod = m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
-          const isRestReq = isSupabaseReq && url.includes("/rest/v1/");
-          if (isRestReq && isWriteMethod) {
-            console.warn("[DEV_READONLY] Supabase write blocked:", m, url);
-            return Promise.resolve(
-              new Response(JSON.stringify({ error: "DEV_READONLY_MODE" }), {
-                status: 409,
-                headers: { "Content-Type": "application/json" }
-              })
-            );
-          }
-          return __nativeFetch(input, init);
-        };
       }
       const scheduleSiteClientKvState = {
         memoryStore: new Map(),
@@ -12228,6 +12191,13 @@
           let cinemaPayload = localCinemaPayload;
           if (USE_SUPABASE_SYNC) {
             const serverRow = await fetchClientKvRowFromSupabase();
+            if (!serverRow || !serverRow.kv || typeof serverRow.kv !== "object") {
+              if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "서버 최신 데이터 조회 실패 · 저장 중단(로컬 덮어쓰기 방지)";
+              }
+              setSyncStatus("서버 조회 실패로 저장 중단 · 네트워크 확인 후 다시 시도", "warn", { pinMs: 1200 });
+              return;
+            }
             const serverKv = serverRow && serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
             const serverPhotoPayload = mergeInlogPhotoAlbumsStored(serverKv[STORAGE_INLOG_PHOTO_ALBUMS]);
             const serverCinemaPayload = mergeInlogCinemaItemsStored(serverKv[STORAGE_INLOG_CINEMA_ITEMS]);
