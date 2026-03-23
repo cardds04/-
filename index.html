@@ -2220,7 +2220,7 @@
         },
         hydrateFromServerKv(kvObj) {
           if (!kvObj || typeof kvObj !== "object") return;
-          this.memoryStore.clear();
+          // clear() 금지: 서버 kv에 일부 키만 있거나 응답이 잘린 경우 인로그·시네마 등 나머지 키가 통째로 증발함
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
             if (
@@ -2718,6 +2718,11 @@
           const fileEl = row && row.querySelector(".inlog-photo-bulk-file");
           if (fileEl) fileEl.click();
         });
+        editor.addEventListener("focusin", (e) => {
+          const t = e.target;
+          if (!t || !t.classList) return;
+          if (t.classList.contains("inlog-photo-photos-text")) markInlogEditorDirty();
+        });
         editor.addEventListener("input", (e) => {
           const t = e.target;
           if (!t || !t.classList || !t.classList.contains("inlog-photo-photos-text")) return;
@@ -2788,6 +2793,11 @@
           if (!editor.querySelector(".inlog-cinema-item")) {
             editor.appendChild(buildInlogCinemaEditorItem(null));
           }
+        });
+        editor.addEventListener("focusin", (e) => {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("inlog-cinema-url")) return;
+          markInlogEditorDirty();
         });
         editor.addEventListener("input", (e) => {
           const t = e.target;
