@@ -1687,28 +1687,13 @@
             <h2>인로그 메인 화면</h2>
           </div>
           <p class="helper" style="margin-bottom: 6px;">
-            상단 <strong>큰 사진(히어로)</strong>과 포트폴리오 그리드 <strong>1~12번</strong>을 <strong>업로드</strong>하거나 URL로 지정합니다. 업로드는 Supabase Storage 버킷
-            <code>inlog_home</code>에 올라가며, 저장 시 <code>schedule_site_client_kv</code>에 동기화됩니다.
+            포트폴리오 그리드 <strong>1~12번</strong>만 <strong>업로드</strong>하거나 URL로 지정합니다. 업로드는 Supabase Storage 버킷 <code>inlog_home</code>에 올라가며, 저장 시
+            <code>schedule_site_client_kv</code>에 동기화됩니다.
           </p>
           <p class="helper" style="margin-bottom: 12px;">
             <a href="inlog.html" target="_blank" rel="noopener noreferrer">inlog.html 새 탭에서 미리보기</a>
           </p>
-          <h3 class="sub-title">큰 사진 (히어로)</h3>
-          <div class="input-row inlog-home-upload-row">
-            <span>업로드</span>
-            <input id="inlogHeroFile" type="file" accept="image/*" class="hidden" />
-            <button id="inlogHeroUploadBtn" class="btn-sm" type="button">사진 올리기</button>
-            <img id="inlogHeroPreview" class="inlog-home-thumb" alt="히어로 미리보기" hidden />
-          </div>
-          <div class="input-row">
-            <span>URL</span>
-            <input id="inlogHeroSrc" class="inline-input" type="url" inputmode="url" placeholder="https://..." style="flex: 1" />
-          </div>
-          <div class="input-row">
-            <span>대체텍스트</span>
-            <input id="inlogHeroAlt" class="inline-input" type="text" placeholder="스크린리더용 설명" style="flex: 1" />
-          </div>
-          <h3 class="sub-title" style="margin-top: 18px">갤러리 1~12번</h3>
+          <h3 class="sub-title">갤러리 1~12번</h3>
           <div id="inlogHomeGallerySlots"></div>
           <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
             <button id="inlogHomeSaveBtn" class="btn-sm primary" type="button">저장</button>
@@ -2110,10 +2095,6 @@
           `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
         return {
           v: 1,
-          hero: {
-            src: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=2400&q=85",
-            alt: "인로그 대표 이미지"
-          },
           gallery: [
             { src: u("photo-1515886657613-9f3515b0c78f", 900), alt: "최신 작품 1", badge: "" },
             { src: u("photo-1469334031218-e382a71b716b", 900), alt: "최신 작품 2", badge: "New Brand" },
@@ -2137,10 +2118,6 @@
           if (!raw) return merged;
           const p = JSON.parse(raw);
           if (!p || typeof p !== "object") return merged;
-          if (p.hero && typeof p.hero === "object") {
-            if (p.hero.src) merged.hero.src = String(p.hero.src).trim();
-            if (p.hero.alt != null) merged.hero.alt = String(p.hero.alt);
-          }
           const g = Array.isArray(p.gallery) ? p.gallery : [];
           for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
             const item = g[i];
@@ -2220,10 +2197,6 @@
         ensureInlogHomeGalleryEditorBuilt();
         wireInlogHomeImageUploadsIfNeeded();
         const p = readInlogHomeMain();
-        const heroSrcEl = document.getElementById("inlogHeroSrc");
-        const heroAltEl = document.getElementById("inlogHeroAlt");
-        if (heroSrcEl) heroSrcEl.value = p.hero?.src || "";
-        if (heroAltEl) heroAltEl.value = p.hero?.alt || "";
         for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
           const g = p.gallery[i] || {};
           const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
@@ -2237,10 +2210,6 @@
       }
       function collectInlogHomeEditorToPayload() {
         const base = defaultInlogHomeMainPayload();
-        const heroSrcEl = document.getElementById("inlogHeroSrc");
-        const heroAltEl = document.getElementById("inlogHeroAlt");
-        base.hero.src = String(heroSrcEl?.value || "").trim() || base.hero.src;
-        base.hero.alt = String(heroAltEl?.value || "").trim() || base.hero.alt;
         for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
           const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
           const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
@@ -2266,8 +2235,6 @@
         }
       }
       function refreshInlogHomeEditorPreviews() {
-        const heroSrc = document.getElementById("inlogHeroSrc");
-        setInlogHomeImagePreview(document.getElementById("inlogHeroPreview"), heroSrc?.value || "");
         for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
           const srcIn = document.getElementById(`inlogGallerySrc${n}`);
           setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), srcIn?.value || "");
@@ -2345,14 +2312,9 @@
             }
           });
         }
-        bindSlot("inlogHeroUploadBtn", "inlogHeroFile", "inlogHeroSrc", "inlogHeroPreview");
         for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
           bindSlot(`inlogGalleryUploadBtn${n}`, `inlogGalleryFile${n}`, `inlogGallerySrc${n}`, `inlogGalleryPreview${n}`);
         }
-        const heroUrlIn = document.getElementById("inlogHeroSrc");
-        heroUrlIn?.addEventListener("input", () =>
-          setInlogHomeImagePreview(document.getElementById("inlogHeroPreview"), heroUrlIn.value)
-        );
         for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
           const gel = document.getElementById(`inlogGallerySrc${n}`);
           if (!gel) continue;
