@@ -1320,6 +1320,7 @@
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
+        <button id="tabInlogHome" data-tab="inlogHome" type="button">인로그 메인</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -1659,6 +1660,36 @@
         </article>
       </section>
 
+      <section id="inlogHomeSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>인로그 메인 화면</h2>
+          </div>
+          <p class="helper" style="margin-bottom: 6px;">
+            상단 <strong>큰 사진(히어로)</strong>과 포트폴리오 그리드 <strong>1~12번</strong> 이미지 URL·대체텍스트·배지를 설정합니다. 저장 시 다른 관리자 PC와
+            <code>schedule_site_client_kv</code>로 동기화됩니다.
+          </p>
+          <p class="helper" style="margin-bottom: 12px;">
+            <a href="inlog.html" target="_blank" rel="noopener noreferrer">inlog.html 새 탭에서 미리보기</a>
+          </p>
+          <h3 class="sub-title">큰 사진 (히어로)</h3>
+          <div class="input-row">
+            <span>URL</span>
+            <input id="inlogHeroSrc" class="inline-input" type="url" inputmode="url" placeholder="https://..." style="flex: 1" />
+          </div>
+          <div class="input-row">
+            <span>대체텍스트</span>
+            <input id="inlogHeroAlt" class="inline-input" type="text" placeholder="스크린리더용 설명" style="flex: 1" />
+          </div>
+          <h3 class="sub-title" style="margin-top: 18px">갤러리 1~12번</h3>
+          <div id="inlogHomeGallerySlots"></div>
+          <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
+            <button id="inlogHomeSaveBtn" class="btn-sm primary" type="button">저장</button>
+            <span id="inlogHomeSaveStatus" class="hint" style="margin-left: 10px"></span>
+          </div>
+        </article>
+      </section>
+
       <section id="transferSection" class="hidden">
         <article class="card">
           <div class="schedule-head">
@@ -1852,6 +1883,9 @@
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
+      /** 인로그 홈(inlog.html) 히어로 + 갤러리 12칸 — client_kv 동기화 */
+      const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
+      const INLOG_HOME_GALLERY_COUNT = 12;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
@@ -2042,6 +2076,129 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
+      function defaultInlogHomeMainPayload() {
+        const u = (id, w) =>
+          `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+        return {
+          v: 1,
+          hero: {
+            src: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=2400&q=85",
+            alt: "인로그 대표 이미지"
+          },
+          gallery: [
+            { src: u("photo-1515886657613-9f3515b0c78f", 900), alt: "최신 작품 1", badge: "" },
+            { src: u("photo-1469334031218-e382a71b716b", 900), alt: "최신 작품 2", badge: "New Brand" },
+            { src: u("photo-1509631179647-017733169913", 900), alt: "최신 작품 3", badge: "" },
+            { src: u("photo-1521572163474-6864f9cf17ab", 900), alt: "최신 작품 4", badge: "New Brand" },
+            { src: u("photo-1496747611176-843222e1e57c", 900), alt: "최신 작품 5", badge: "" },
+            { src: u("photo-1539109136881-3be0616acf4b", 900), alt: "최신 작품 6", badge: "" },
+            { src: u("photo-1524504388940-b1c1722653e1", 900), alt: "최신 작품 7", badge: "" },
+            { src: u("photo-1504194104404-433918773792", 900), alt: "최신 작품 8", badge: "" },
+            { src: u("photo-1483988352577-2f64eed4693a", 900), alt: "최신 작품 9", badge: "" },
+            { src: u("photo-1475180238706-0630aa49665f", 900), alt: "최신 작품 10", badge: "" },
+            { src: u("photo-1552374196-c4e7ffc6e126", 900), alt: "최신 작품 11", badge: "" },
+            { src: u("photo-1506794778202-cad84cf45f1d", 900), alt: "최신 작품 12", badge: "" }
+          ]
+        };
+      }
+      function readInlogHomeMain() {
+        const merged = defaultInlogHomeMainPayload();
+        try {
+          const raw = localStorage.getItem(STORAGE_INLOG_HOME_MAIN);
+          if (!raw) return merged;
+          const p = JSON.parse(raw);
+          if (!p || typeof p !== "object") return merged;
+          if (p.hero && typeof p.hero === "object") {
+            if (p.hero.src) merged.hero.src = String(p.hero.src).trim();
+            if (p.hero.alt != null) merged.hero.alt = String(p.hero.alt);
+          }
+          const g = Array.isArray(p.gallery) ? p.gallery : [];
+          for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
+            const item = g[i];
+            if (!item || typeof item !== "object") continue;
+            if (item.src) merged.gallery[i].src = String(item.src).trim();
+            if (item.alt != null) merged.gallery[i].alt = String(item.alt);
+            merged.gallery[i].badge = item.badge != null ? String(item.badge).trim() : "";
+          }
+          return merged;
+        } catch {
+          return merged;
+        }
+      }
+      function writeInlogHomeMain(payload) {
+        localStorage.setItem(STORAGE_INLOG_HOME_MAIN, JSON.stringify(payload));
+      }
+      function ensureInlogHomeGalleryEditorBuilt() {
+        const c = document.getElementById("inlogHomeGallerySlots");
+        if (!c || c.getAttribute("data-built") === "1") return;
+        c.setAttribute("data-built", "1");
+        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
+          const wrap = document.createElement("div");
+          wrap.className = "inlog-home-slot";
+          wrap.style.marginTop = "12px";
+          wrap.style.paddingTop = "12px";
+          wrap.style.borderTop = "1px solid var(--line)";
+          const st = document.createElement("div");
+          st.className = "sub-title";
+          st.style.margin = "0 0 8px";
+          st.textContent = `갤러리 ${n}번`;
+          wrap.appendChild(st);
+          [["URL", `inlogGallerySrc${n}`, "https://..."], ["대체텍스트", `inlogGalleryAlt${n}`, ""], ["배지", `inlogGalleryBadge${n}`, "New Brand 등 (없으면 비움)"]].forEach(
+            ([label, id, ph]) => {
+              const row = document.createElement("div");
+              row.className = "input-row";
+              const span = document.createElement("span");
+              span.textContent = label;
+              const input = document.createElement("input");
+              input.id = id;
+              input.type = "text";
+              input.className = "inline-input";
+              input.style.flex = "1";
+              if (ph) input.placeholder = ph;
+              row.appendChild(span);
+              row.appendChild(input);
+              wrap.appendChild(row);
+            }
+          );
+          c.appendChild(wrap);
+        }
+      }
+      function hydrateInlogHomeEditorFromStorage() {
+        ensureInlogHomeGalleryEditorBuilt();
+        const p = readInlogHomeMain();
+        const heroSrcEl = document.getElementById("inlogHeroSrc");
+        const heroAltEl = document.getElementById("inlogHeroAlt");
+        if (heroSrcEl) heroSrcEl.value = p.hero?.src || "";
+        if (heroAltEl) heroAltEl.value = p.hero?.alt || "";
+        for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
+          const g = p.gallery[i] || {};
+          const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
+          const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
+          const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
+          if (srcEl) srcEl.value = g.src || "";
+          if (altEl) altEl.value = g.alt || "";
+          if (badgeEl) badgeEl.value = g.badge || "";
+        }
+      }
+      function collectInlogHomeEditorToPayload() {
+        const base = defaultInlogHomeMainPayload();
+        const heroSrcEl = document.getElementById("inlogHeroSrc");
+        const heroAltEl = document.getElementById("inlogHeroAlt");
+        base.hero.src = String(heroSrcEl?.value || "").trim() || base.hero.src;
+        base.hero.alt = String(heroAltEl?.value || "").trim() || base.hero.alt;
+        for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
+          const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
+          const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
+          const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
+          const src = String(srcEl?.value || "").trim();
+          const alt = String(altEl?.value || "").trim();
+          const badge = String(badgeEl?.value || "").trim();
+          if (src) base.gallery[i].src = src;
+          if (alt) base.gallery[i].alt = alt;
+          base.gallery[i].badge = badge;
+        }
+        return base;
+      }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
       const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;
@@ -3770,10 +3927,14 @@
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
+      const tabInlogHomeEl = document.getElementById("tabInlogHome");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
+      const inlogHomeSectionEl = document.getElementById("inlogHomeSection");
+      const inlogHomeSaveBtnEl = document.getElementById("inlogHomeSaveBtn");
+      const inlogHomeSaveStatusEl = document.getElementById("inlogHomeSaveStatus");
       const receiptLedgerListEl = document.getElementById("receiptLedgerList");
       const receiptLedgerCountTextEl = document.getElementById("receiptLedgerCountText");
       const transferSectionEl = document.getElementById("transferSection");
@@ -11178,17 +11339,21 @@
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
+        const isInlogHome = tab === "inlogHome";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
+        tabInlogHomeEl?.classList.toggle("active", isInlogHome);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
+        inlogHomeSectionEl?.classList.toggle("hidden", !isInlogHome);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
+        if (isInlogHome) hydrateInlogHomeEditorFromStorage();
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
@@ -11196,6 +11361,17 @@
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
+      tabInlogHomeEl?.addEventListener("click", () => switchMainTab("inlogHome"));
+      inlogHomeSaveBtnEl?.addEventListener("click", () => {
+        const payload = collectInlogHomeEditorToPayload();
+        writeInlogHomeMain(payload);
+        if (inlogHomeSaveStatusEl) {
+          inlogHomeSaveStatusEl.textContent = USE_SUPABASE_SYNC
+            ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
+            : "저장됨(로컬만)";
+        }
+        setTimeout(() => void window.__scheduleSitePushClientKv?.(), 100);
+      });
 
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
