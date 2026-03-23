@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -38,86 +38,71 @@
       .page {
         max-width: 1280px;
         margin: 0 auto;
-        padding: 28px 18px 56px;
+        padding: 20px 18px 56px;
       }
 
-      .brand {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 20px;
-      }
-
-      .brand__mark {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 140px;
-        padding: 10px 22px;
-        background: transparent;
-        border-radius: 0;
-        box-shadow: none;
-      }
-
-      .brand__mark span {
-        font-weight: 800;
-        font-size: clamp(1.35rem, 3vw, 1.75rem);
-        letter-spacing: 0.06em;
-        color: var(--ink);
-      }
-
-      .tile-strip {
+      .site-header {
         width: 100%;
         max-width: min(1100px, 100%);
-        margin: 0 auto 28px;
-        overflow: hidden;
-        border: 2px solid var(--grid-line);
-        background: var(--grid-line);
+        margin: 0 auto 0;
       }
 
-      .nav-tiles {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1px;
-        background: var(--grid-line);
-      }
-
-      @media (max-width: 560px) {
-        .nav-tiles {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      .nav-tiles__item {
+      .site-header__bar {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        justify-content: center;
-        min-height: 44px;
-        padding: 10px 8px;
-        font-size: clamp(0.62rem, 2.1vw, 0.76rem);
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        line-height: 1.25;
-        text-align: center;
-        border: 0;
-        border-radius: 0;
-        cursor: pointer;
-        transition: filter 0.15s ease, opacity 0.15s ease;
+        justify-content: space-between;
+        gap: 16px 24px;
+        padding: 6px 0 18px;
       }
 
-      .nav-tiles__item:hover {
-        filter: brightness(0.97);
-      }
-
-      .nav-tiles__item:active {
-        opacity: 0.88;
-      }
-
-      .nav-tiles__item--photos,
-      .nav-tiles__item--videos,
-      .nav-tiles__item--product,
-      .nav-tiles__item--order {
-        background: var(--page-bg);
+      .site-header__logo {
+        font-weight: 800;
+        font-size: clamp(1.65rem, 4.2vw, 2.35rem);
+        letter-spacing: -0.02em;
+        line-height: 1;
         color: var(--ink);
+        flex-shrink: 0;
+      }
+
+      .site-header__logo:hover {
+        opacity: 0.75;
+      }
+
+      .site-header__nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: clamp(14px, 3.2vw, 32px);
+        font-family: "Bebas Neue", "Montserrat", sans-serif;
+        font-size: clamp(1.35rem, 3.8vw, 1.85rem);
+        letter-spacing: 0.08em;
+        line-height: 1;
+      }
+
+      .site-header__nav a {
+        color: var(--ink);
+        text-decoration: none;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .site-header__nav a:hover {
+        opacity: 0.65;
+      }
+
+      .site-header__nav a.site-header__cta {
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-thickness: 2px;
+      }
+
+      .site-header__rule {
+        height: 10px;
+        width: 100%;
+        background: var(--ink);
+        margin-bottom: 28px;
       }
 
       .latest {
@@ -209,22 +194,20 @@
   </head>
   <body>
     <div class="page">
-      <header class="brand" role="banner">
-        <div class="brand__mark" aria-label="인로그 로고">
-          <span>인로그</span>
+      <header class="site-header" role="banner">
+        <div class="site-header__bar">
+          <a class="site-header__logo" href="inlog.html" aria-label="인로그 홈">인로그</a>
+          <nav class="site-header__nav" aria-label="주요 메뉴">
+            <a href="#" title="포트폴리오 사진">Photo</a>
+            <a href="#" title="포트폴리오 영상">Cinema</a>
+            <a href="#" title="상품 안내">Product</a>
+            <a class="site-header__cta" href="#" title="주문 등록">Order</a>
+          </nav>
         </div>
+        <div class="site-header__rule" aria-hidden="true"></div>
       </header>
 
       <main>
-        <div class="tile-strip">
-          <nav class="nav-tiles" aria-label="주요 메뉴">
-            <a class="nav-tiles__item nav-tiles__item--photos" href="#" title="포트폴리오 사진">포트폴리오 사진</a>
-            <a class="nav-tiles__item nav-tiles__item--videos" href="#" title="포트폴리오 영상">포트폴리오 영상</a>
-            <a class="nav-tiles__item nav-tiles__item--product" href="#" title="상품 안내">상품안내</a>
-            <a class="nav-tiles__item nav-tiles__item--order" href="#" title="주문 등록">주문등록</a>
-          </nav>
-        </div>
-
         <section class="latest" aria-labelledby="latest-heading">
           <h2 id="latest-heading">Latest Creations</h2>
           <div class="gallery" role="list">
