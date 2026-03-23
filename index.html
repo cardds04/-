@@ -3001,6 +3001,27 @@
           }
         }
       }
+      /** 주기 poll 없음: 창 포커스·탭 복귀·다른 탭 스냅샷 변경 시에만 서버 기준 동기화(편집 중 제외) */
+      const CLIENT_KV_SOFT_PULL_DEBOUNCE_MS = 450;
+      let clientKvSoftPullTimer = null;
+      function scheduleSoftPullClientKvFromSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        if (inlogEditorDirty) return;
+        if (clientKvSoftPullTimer) clearTimeout(clientKvSoftPullTimer);
+        clientKvSoftPullTimer = setTimeout(() => {
+          clientKvSoftPullTimer = null;
+          if (inlogEditorDirty) return;
+          if (scheduleSiteClientKvPushInFlight) return;
+          void (async () => {
+            const changed = await pullScheduleSiteClientKvFromSupabase();
+            if (!changed) return;
+            const inlogVisible = Boolean(inlogPhotoSectionEl && !inlogPhotoSectionEl.classList.contains("hidden"));
+            if (inlogVisible && typeof hydrateInlogPhotoEditorFromStorage === "function") {
+              hydrateInlogPhotoEditorFromStorage();
+            }
+          })();
+        }, CLIENT_KV_SOFT_PULL_DEBOUNCE_MS);
+      }
       async function pushScheduleSiteClientKvToSupabase() {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
@@ -14623,7 +14644,21 @@
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
 
+      window.addEventListener("focus", () => {
+        scheduleSoftPullClientKvFromSupabase();
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+        scheduleSoftPullClientKvFromSupabase();
+      });
+      window.addEventListener("online", () => {
+        scheduleSoftPullClientKvFromSupabase();
+      });
+
       window.addEventListener("storage", (event) => {
+        if (event.key === "__scheduleSiteSnapshotV1") {
+          scheduleSoftPullClientKvFromSupabase();
+        }
         if (event.key === STORAGE_CANCELED_SCHEDULES) {
           renderCanceledSchedules();
         }
