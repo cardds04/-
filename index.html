@@ -12258,22 +12258,15 @@
                 requestClientKvPushWhenReady();
               }
             } else {
-              const verify = await verifyInlogConsistencyOrRevert();
-              if (verify.ok && !verify.reconciled) {
-                if (inlogPhotoSaveStatusEl) {
-                  inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
-                }
-                clearInlogEditorDirty();
-                setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
-                window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
-              } else if (verify.reconciled) {
-                if (inlogPhotoSaveStatusEl) {
-                  inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구";
-                }
-                setSyncStatus("불일치 감지 · 서버 기준 복구", "warn");
-              } else if (inlogPhotoSaveStatusEl) {
-                inlogPhotoSaveStatusEl.textContent = "저장됨 · 검증 확인 실패(재시도 권장)";
+              // 저장 성공 후 verify는 참고용 — 불일치가 감지돼도 롤백하지 않는다.
+              // 방금 내가 올바른 데이터를 push했는데, 다른 브라우저가 그 사이 구 데이터를
+              // 덮어씼을 경우 서버 기준 복구를 하면 내 저장이 취소되어버리는 문제 방지.
+              if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
               }
+              clearInlogEditorDirty();
+              setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
+              window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
             }
           } else if (inlogPhotoSaveStatusEl) {
             inlogPhotoSaveStatusEl.textContent = "저장됨(로컬만)";
