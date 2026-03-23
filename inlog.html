@@ -294,13 +294,13 @@
         max-width: min(var(--gallery-max), 100%);
         margin: 0 auto;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
 
       @media (max-width: 860px) {
         .cinema-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
         }
       }
 
@@ -1434,7 +1434,8 @@
           return raw === "photo" || raw.startsWith("photo?");
         }
         function isInlogCinemaHash() {
-          return /^#cinema$/i.test(location.hash || "");
+          const raw = String(location.hash || "").replace(/^#/, "");
+          return raw === "cinema" || raw.startsWith("cinema?");
         }
         function tryOpenInlogPhotoAlbumFromHash() {
           const id = getInlogPhotoAlbumIdFromHash();
@@ -1474,6 +1475,11 @@
             });
           }
         }
+        document.getElementById("inlog-nav-cinema")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (location.hash !== "#cinema") location.hash = "cinema";
+          else applyInlogRoute();
+        });
         window.addEventListener("hashchange", applyInlogRoute);
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyInlogRoute);
         else applyInlogRoute();
