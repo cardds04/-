@@ -2115,6 +2115,10 @@
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+      /** dev: pull only(읽기전용), ops: pull+push(기본) */
+      const APP_MODE = String(syncConfig.appMode || "ops")
+        .trim()
+        .toLowerCase();
       const REMOTE_SYNC_ENDPOINT = syncConfig.remoteSyncEndpoint || "";
       const SUPABASE_URL =
         syncConfig.supabaseUrl ||
@@ -2123,6 +2127,7 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      const SUPABASE_PUSH_ENABLED = USE_SUPABASE_SYNC && APP_MODE !== "dev";
       const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
@@ -2167,6 +2172,33 @@
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
+      if (USE_SUPABASE_SYNC && APP_MODE === "dev" && typeof window.fetch === "function") {
+        const __nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, init = {}) => {
+          let url = "";
+          let method = "";
+          if (typeof input === "string") {
+            url = input;
+            method = String(init?.method || "GET");
+          } else if (input && typeof input === "object") {
+            url = String(input.url || "");
+            method = String(init?.method || input.method || "GET");
+          }
+          const m = method.toUpperCase();
+          const isSupabaseReq = url.startsWith(SUPABASE_URL);
+          const isWriteMethod = m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
+          if (isSupabaseReq && isWriteMethod) {
+            console.warn("[DEV_READONLY] Supabase write blocked:", m, url);
+            return Promise.resolve(
+              new Response(JSON.stringify({ error: "DEV_READONLY_MODE" }), {
+                status: 409,
+                headers: { "Content-Type": "application/json" }
+              })
+            );
+          }
+          return __nativeFetch(input, init);
+        };
+      }
       const scheduleSiteClientKvState = {
         memoryStore: new Map(),
         snapshotStorageKey: "__scheduleSiteSnapshotV1",
@@ -2241,7 +2273,7 @@
           }, 10);
         },
         queueSupabaseKvPush() {
-          if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+          if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE) return;
           if (!this.initialPullDone) {
             this.pendingKvPushAfterInitialPull = true;
             return;
@@ -2733,7 +2765,7 @@
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
       /** 저장 직후 호출: 첫 Supabase pull 이 끝날 때까지 기다렸다가 즉시 push (샘플만 보이는 현상 방지) */
       function requestClientKvPushWhenReady() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE) return;
         let n = 0;
         const tick = () => {
           n += 1;
@@ -2751,7 +2783,7 @@
         setTimeout(tick, 30);
       }
       async function forceClientKvPushWhenReady() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return false;
+        if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE) return false;
         let n = 0;
         while (!scheduleSiteClientKvState.initialPullDone && n < CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS) {
           n += 1;
@@ -2829,6 +2861,7 @@
         return ok;
       }
       function scheduleClientKvSeedPushIfNeeded() {
+        if (!SUPABASE_PUSH_ENABLED) return;
         if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
         const key = "__scheduleSiteClientKvLastSeedPush";
         try {
@@ -2898,7 +2931,7 @@
         }
       }
       async function pushScheduleSiteClientKvToSupabase() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
+        if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
         const kvFiltered = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
@@ -3145,25 +3178,13 @@
           void maybePollDashboardStateFromOtherDevices();
         }, DASHBOARD_STATE_POLL_INTERVAL_MS);
       }
-      /** 서버 연결 불가 시 기기마다 다른 로컬 캐시를 보여주지 않도록 2·3번 비움 */
+      /** 서버 연결 불가 시 완료/처리 상태를 지우지 않고 유지 */
       function clearDashboardStateWhenServerUnreachable(message) {
-        isApplyingRemoteDashboardState = true;
-        try {
-          dashboardPanelsState.completed = [];
-          dashboardPanelsState.processLog = [];
-          dashboardPanelsState.history = [];
-          persistDashboardPanelsToNativeLocalIfNoSupabase();
-        } finally {
-          isApplyingRemoteDashboardState = false;
-        }
-        dashboardStateLocalGeneration = 0;
-        dashboardStateServerAckGeneration = 0;
         setSyncStatus(
           message ||
-            "대시보드(2·3번) 서버와 맞출 수 없어 목록을 비웠습니다. 네트워크·VPN 확인 후 새로고침하세요.",
-          "error"
+            "대시보드 서버 연결이 불안정하여 기존 완료/처리 상태를 유지합니다. 네트워크 확인 후 자동 재동기화됩니다.",
+          "warn"
         );
-        noteDashboardRemoteContentSigFromMemory();
       }
       async function fetchDashboardStateWithRetriesForBootstrap() {
         if (!USE_SUPABASE_SYNC) return true;
@@ -3320,7 +3341,7 @@
         }
       }
       function queueDashboardStateSaveToSupabase() {
-        if (!USE_SUPABASE_SYNC) return;
+        if (!SUPABASE_PUSH_ENABLED) return;
         if (dashboardStateSaveTimer) clearTimeout(dashboardStateSaveTimer);
         dashboardStateSaveTimer = setTimeout(() => {
           dashboardStateSaveTimer = null;
@@ -4525,7 +4546,11 @@
         }
       }
 
-      setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
+      if (APP_MODE === "dev") {
+        setSyncStatus(`개발모드(읽기전용) · pull only ${formatSyncTime()}`, "warn", { pinMs: 2000 });
+      } else {
+        setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
+      }
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
       // app_state 동기화 비활성화: 테이블 동기화만 사용
@@ -11388,13 +11413,10 @@
       }
 
       function pruneDashboardCompletedEntries(activeRows) {
-        const valid = new Set(activeRows.map((item) => getDashboardScheduleKey(item)));
         const cur = readDashboardCompletedEntries();
-        const next = cur.filter((e) => valid.has(e.scheduleKey));
-        if (next.length !== cur.length) {
-          writeDashboardCompletedEntries(next);
-        }
-        return next;
+        // 자동 삭제 금지: 일시적인 동기화 지연/키 변화로 완료 상태가 사라지는 문제 방지
+        // 명시적 되돌리기/확인 버튼 동작에서만 삭제한다.
+        return cur;
       }
 
       function readWriterProcessLog() {
