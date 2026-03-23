@@ -2766,8 +2766,10 @@
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
+      const CLIENT_KV_POLL_INTERVAL_MS = 6500;
       const INLOG_SUPABASE_REFRESH_THROTTLE_MS = 6000;
       let scheduleSiteClientKvPushInFlight = false;
+      let clientKvPollTimerId = null;
       let inlogLastSupabaseRefreshAt = 0;
       const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
@@ -2924,6 +2926,25 @@
           }
         }
       }
+      async function maybePollClientKvFromSupabase() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        if (document.visibilityState !== "visible") return;
+        if (scheduleSiteClientKvPushInFlight) return;
+        const changed = await pullScheduleSiteClientKvFromSupabase();
+        if (!changed) return;
+        if (typeof hydrateInlogPhotoEditorFromStorage === "function") {
+          const inlogVisible = Boolean(inlogPhotoSectionEl && !inlogPhotoSectionEl.classList.contains("hidden"));
+          if (inlogVisible) {
+            hydrateInlogPhotoEditorFromStorage();
+          }
+        }
+      }
+      function startClientKvBackgroundSync() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || clientKvPollTimerId !== null) return;
+        clientKvPollTimerId = setInterval(() => {
+          void maybePollClientKvFromSupabase();
+        }, CLIENT_KV_POLL_INTERVAL_MS);
+      }
       async function pushScheduleSiteClientKvToSupabase() {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
@@ -3010,6 +3031,8 @@
       /** 로컬 2·3번 변경 세대. 서버에 성공 반영되면 serverAck 와 맞춤. 다르면 원격 pull 로 로컬 덮어쓰기 금지(유실 방지). */
       let dashboardStateLocalGeneration = 0;
       let dashboardStateServerAckGeneration = 0;
+      /** 완료 목록에서 사용자가 명시적으로 제거한 scheduleKey 추적(서버 병합 시 삭제 보존) */
+      const dashboardCompletedRemovalTombstones = new Set();
       function bumpDashboardLocalMutationGeneration() {
         dashboardStateLocalGeneration += 1;
       }
@@ -3220,9 +3243,18 @@
        */
       async function saveDashboardPanelsStateToSupabaseOnce(supersedeSignal) {
         if (supersedeSignal?.aborted) return "superseded";
-        let completed = Array.isArray(dashboardPanelsState.completed) ? dashboardPanelsState.completed : [];
+        let completed = normalizeDashboardCompletedEntries(dashboardPanelsState.completed);
         let process_log = Array.isArray(dashboardPanelsState.processLog) ? dashboardPanelsState.processLog : [];
         let completed_history = Array.isArray(dashboardPanelsState.history) ? dashboardPanelsState.history : [];
+        // 저장 직전에 최신 서버 상태를 가져와 키 단위 병합 후 전송(사용자 삭제 의도는 tombstone으로 유지)
+        const latest = await fetchDashboardStatePayload(DASHBOARD_STATE_FETCH_TIMEOUT_MS);
+        if (latest.ok) {
+          const remoteCompleted = normalizeDashboardCompletedEntries(parseDashboardPanelsJsonArray(latest.completedStr));
+          const mergedCompletedByKey = new Map(remoteCompleted.map((e) => [e.scheduleKey, e]));
+          completed.forEach((e) => mergedCompletedByKey.set(e.scheduleKey, e));
+          dashboardCompletedRemovalTombstones.forEach((scheduleKey) => mergedCompletedByKey.delete(scheduleKey));
+          completed = [...mergedCompletedByKey.values()];
+        }
         const merged = new AbortController();
         const tid = setTimeout(() => merged.abort(), DASHBOARD_STATE_SAVE_TIMEOUT_MS);
         const onSupersede = () => merged.abort();
@@ -3282,6 +3314,7 @@
             return "http_fail";
           }
           setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
+          dashboardCompletedRemovalTombstones.clear();
           markDashboardServerAckMatchesLocal();
           return "ok";
         } catch (error) {
@@ -11278,6 +11311,19 @@
           })
           .filter((e) => e.scheduleKey);
       }
+      function normalizeDashboardCompletedEntries(entries) {
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        return (Array.isArray(entries) ? entries : [])
+          .map((v) => {
+            if (typeof v === "string") return { scheduleKey: String(v).trim(), processedAt: todayKey, writer: "" };
+            const sk = String(v?.scheduleKey ?? "").trim();
+            const pa = String(v?.processedAt ?? todayKey).trim();
+            const writer = String(v?.writer ?? "").trim();
+            return { scheduleKey: sk, processedAt: pa || todayKey, writer };
+          })
+          .filter((e) => e.scheduleKey);
+      }
 
       function getCompletedKeySet() {
         return new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
@@ -11410,7 +11456,20 @@
 
       function writeDashboardCompletedEntries(entries) {
         try {
-          dashboardPanelsState.completed = Array.isArray(entries) ? entries : [];
+          const prev = readDashboardCompletedEntries();
+          const next = normalizeDashboardCompletedEntries(entries);
+          const nextKeys = new Set(next.map((e) => e.scheduleKey));
+          prev.forEach((e) => {
+            if (!nextKeys.has(e.scheduleKey)) {
+              dashboardCompletedRemovalTombstones.add(e.scheduleKey);
+            }
+          });
+          next.forEach((e) => {
+            if (dashboardCompletedRemovalTombstones.has(e.scheduleKey)) {
+              dashboardCompletedRemovalTombstones.delete(e.scheduleKey);
+            }
+          });
+          dashboardPanelsState.completed = next;
           bumpDashboardLocalMutationGeneration();
           persistDashboardPanelsToNativeLocalIfNoSupabase();
           queueDashboardStateSaveToSupabase();
@@ -14481,6 +14540,7 @@
           renderList();
           renderPaymentList();
         });
+        startClientKvBackgroundSync();
         startDashboardStateBackgroundSync();
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
