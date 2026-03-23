@@ -2366,7 +2366,9 @@
         return `${base}/storage/v1/object/public/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`;
       }
       function mergeInlogPhotoAlbumsStored(p) {
-        if (!p || typeof p !== "object") return { v: 1, albums: [] };
+        if (!p) return { v: 1, albums: [] };
+        if (typeof p === "string") { try { p = JSON.parse(p); } catch { return { v: 1, albums: [] }; } }
+        if (typeof p !== "object" || Array.isArray(p)) return { v: 1, albums: [] };
         const albums = Array.isArray(p.albums) ? p.albums : [];
         const out = { v: 1, albums: [] };
         albums.forEach((a, i) => {
@@ -2406,7 +2408,9 @@
         localStorage.setItem(STORAGE_INLOG_PHOTO_ALBUMS, JSON.stringify(payload));
       }
       function mergeInlogCinemaItemsStored(p) {
-        if (!p || typeof p !== "object") return { v: 1, items: [] };
+        if (!p) return { v: 1, items: [] };
+        if (typeof p === "string") { try { p = JSON.parse(p); } catch { return { v: 1, items: [] }; } }
+        if (typeof p !== "object" || Array.isArray(p)) return { v: 1, items: [] };
         const items = Array.isArray(p.items) ? p.items : [];
         const out = { v: 1, items: [] };
         items.forEach((it, i) => {
@@ -12229,7 +12233,28 @@
               setSyncStatus("서버 조회 실패로 저장 중단 · 네트워크 확인 후 다시 시도", "warn", { pinMs: 1200 });
               return;
             }
-            const serverKv = serverRow && serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
+            // [타임스탬프 가드] 내 마지막 pull 이후 다른 기기가 서버를 갱신했으면 저장 차단
+            // 구 로컬 데이터가 최신 서버 데이터를 덮어쓰지 못하도록 한다.
+            const lastKnownAt = scheduleSiteClientKvState.getNativeLastScopedWriteAt();
+            const serverAt = String(serverRow.updated_at || "").trim();
+            if (lastKnownAt && serverAt && serverAt > lastKnownAt) {
+              // 서버가 더 최신 → 에디터를 서버 기준으로 갱신 후 저장 차단
+              scheduleSiteClientKvState.hydrateFromServerKv(serverRow.kv);
+              scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt);
+              try {
+                scheduleSiteClientKvState.nativeSetItem(
+                  scheduleSiteClientKvState.snapshotStorageKey,
+                  JSON.stringify(Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()))
+                );
+              } catch (_) {}
+              hydrateInlogPhotoEditorFromStorage();
+              if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "⚠ 다른 기기에서 데이터 변경 감지 · 최신 데이터로 갱신됨. 내용 확인 후 다시 저장해주세요.";
+              }
+              setSyncStatus("서버 최신 데이터로 갱신됨 · 다시 저장 필요", "warn", { pinMs: 3000 });
+              return;
+            }
+            const serverKv = serverRow.kv;
             const serverPhotoPayload = mergeInlogPhotoAlbumsStored(serverKv[STORAGE_INLOG_PHOTO_ALBUMS]);
             const serverCinemaPayload = mergeInlogCinemaItemsStored(serverKv[STORAGE_INLOG_CINEMA_ITEMS]);
             photoPayload = mergeInlogPhotoPayloadByAlbumId(serverPhotoPayload, localPhotoPayload);
@@ -12258,15 +12283,16 @@
                 requestClientKvPushWhenReady();
               }
             } else {
-              // 저장 성공 후 verify는 참고용 — 불일치가 감지돼도 롤백하지 않는다.
-              // 방금 내가 올바른 데이터를 push했는데, 다른 브라우저가 그 사이 구 데이터를
-              // 덮어씼을 경우 서버 기준 복구를 하면 내 저장이 취소되어버리는 문제 방지.
+              // 저장 성공 후 Supabase에서 즉시 re-pull → 로컬을 서버 확정값으로 갱신
+              // (캐시 무효화: 저장 성공 시 로컬 구 캐시를 서버 최신값으로 강제 교체)
               if (inlogPhotoSaveStatusEl) {
                 inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
               }
               clearInlogEditorDirty();
               setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
               window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
+              // 저장 완료 후 서버 최신 상태를 로컬에 반영해 lastKnownAt를 갱신
+              void pullScheduleSiteClientKvFromSupabase();
             }
           } else if (inlogPhotoSaveStatusEl) {
             inlogPhotoSaveStatusEl.textContent = "저장됨(로컬만)";
