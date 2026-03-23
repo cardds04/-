@@ -1996,6 +1996,8 @@
         snapshotTimer: null,
         supabasePushTimer: null,
         initialPullDone: false,
+        /** pull 완료 전에 setItem 이 발생했으면 pull 직후 queueSupabaseKvPush 로 플러시 */
+        pendingKvPushAfterInitialPull: false,
         isScopedKey(key) {
           return String(key || "").startsWith(this.scopePrefix);
         },
@@ -2058,9 +2060,13 @@
         },
         queueSupabaseKvPush() {
           if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
-          if (!this.initialPullDone) return;
+          if (!this.initialPullDone) {
+            this.pendingKvPushAfterInitialPull = true;
+            return;
+          }
           if (typeof window.__scheduleSitePushClientKv !== "function") return;
           if (this.supabasePushTimer) clearTimeout(this.supabasePushTimer);
+          this.pendingKvPushAfterInitialPull = false;
           this.supabasePushTimer = setTimeout(() => void window.__scheduleSitePushClientKv(), 2500);
         },
         installProxy() {
@@ -2096,6 +2102,7 @@
               return;
             }
             self.memoryStore.set(normalizedKey, normalizedValue);
+            self.setNativeLastScopedWriteAt(new Date().toISOString());
             self.saveSnapshotDebounced();
           };
           localStorage.removeItem = (key) => {
@@ -2105,6 +2112,7 @@
               return;
             }
             self.memoryStore.delete(normalizedKey);
+            self.setNativeLastScopedWriteAt(new Date().toISOString());
             self.saveSnapshotDebounced();
           };
           localStorage.clear = () => {
@@ -2678,6 +2686,27 @@
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
       const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;
       let scheduleSiteClientKvPushInFlight = false;
+      const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
+      const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
+      /** 저장 직후 호출: 첫 Supabase pull 이 끝날 때까지 기다렸다가 즉시 push (샘플만 보이는 현상 방지) */
+      function requestClientKvPushWhenReady() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
+        let n = 0;
+        const tick = () => {
+          n += 1;
+          if (!scheduleSiteClientKvState.initialPullDone) {
+            if (n >= CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS) {
+              scheduleSiteClientKvState.pendingKvPushAfterInitialPull = true;
+              console.warn("[CLIENT_KV] 초기 동기화 대기 초과 — pull 완료 후 자동으로 서버에 반영됩니다.");
+              return;
+            }
+            setTimeout(tick, CLIENT_KV_PUSH_WHEN_READY_POLL_MS);
+            return;
+          }
+          void window.__scheduleSitePushClientKv?.();
+        };
+        setTimeout(tick, 30);
+      }
       function scheduleClientKvSeedPushIfNeeded() {
         if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
         const key = "__scheduleSiteClientKvLastSeedPush";
@@ -2748,6 +2777,9 @@
           clearTimeout(tid);
           scheduleSiteClientKvState.initialPullDone = true;
           scheduleClientKvSeedPushIfNeeded();
+          if (scheduleSiteClientKvState.pendingKvPushAfterInitialPull) {
+            scheduleSiteClientKvState.queueSupabaseKvPush();
+          }
         }
       }
       async function pushScheduleSiteClientKvToSupabase() {
@@ -11862,7 +11894,7 @@
             ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
             : "저장됨(로컬만)";
         }
-        setTimeout(() => void window.__scheduleSitePushClientKv?.(), 100);
+        requestClientKvPushWhenReady();
       });
       inlogHomeSaveBtnEl?.addEventListener("click", () => {
         const payload = collectInlogHomeEditorToPayload();
@@ -11872,7 +11904,7 @@
             ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
             : "저장됨(로컬만)";
         }
-        setTimeout(() => void window.__scheduleSitePushClientKv?.(), 100);
+        requestClientKvPushWhenReady();
       });
 
       paymentFilterTabsEl.addEventListener("click", (event) => {
