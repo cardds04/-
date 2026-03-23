@@ -9745,7 +9745,14 @@
         paymentListBodyEl.innerHTML = visibleRows
           .map(({ item, index, source }) => {
             const isEditing = source === "active" && editingPaymentIndex === index;
-            const sourceDate = item.paymentDate || item.date || `${currentYear}-01-01`;
+            const trimmedPaymentDate = String(item.paymentDate || "").trim();
+            let sourceDate;
+            if (isEditing && !trimmedPaymentDate) {
+              const now = new Date();
+              sourceDate = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            } else {
+              sourceDate = trimmedPaymentDate || item.date || `${currentYear}-01-01`;
+            }
             let selectedMonth = "01";
             let selectedDay = "01";
             if (/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)) {
