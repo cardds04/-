@@ -1329,6 +1329,82 @@
       .inlog-home-thumb[hidden] {
         display: none !important;
       }
+
+      .inlog-photo-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        align-items: start;
+      }
+
+      @media (max-width: 1000px) {
+        .inlog-photo-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .inlog-photo-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 380px) {
+        .inlog-photo-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .inlog-photo-album-edit {
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--card);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .inlog-photo-album-edit__top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        min-height: 28px;
+      }
+
+      .inlog-photo-album-edit .inlog-photo-album-heading {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .inlog-photo-album-edit .inlog-photo-photos-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .inlog-photo-album-edit .inlog-photo-photos-row .inline-input.inlog-photo-photos-text {
+        width: 100%;
+        min-height: 72px;
+        font-size: 0.78rem;
+        resize: vertical;
+      }
+
+      .inlog-photo-album-edit .inlog-photo-bulk-row {
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .inlog-photo-album-edit .inlog-photo-bulk-row .hint {
+        font-size: 0.72rem;
+        flex: 1 1 100%;
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -1341,7 +1417,6 @@
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
-        <button id="tabInlogHome" data-tab="inlogHome" type="button">인로그 메인</button>
         <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 Photo</button>
       </div>
 
@@ -1682,35 +1757,14 @@
         </article>
       </section>
 
-      <section id="inlogHomeSection" class="hidden">
-        <article class="card">
-          <div class="schedule-head">
-            <h2>인로그 메인 화면</h2>
-          </div>
-          <p class="helper" style="margin-bottom: 6px;">
-            공개 <code>inlog.html</code>에서는 인로그 Photo에 등록한 현장의 대표(커버)가 1번부터 순서대로 메인 그리드에도 표시됩니다. 남는 번호만 여기서 지정한 이미지·링크가 쓰입니다. 대표를 누르면 포토 페이지로 이동해 해당 현장이 펼쳐집니다. 업로드는 Storage
-            <code>inlog_home</code>, 저장은 <code>schedule_site_client_kv</code> 키 <code>scheduleSiteInlogHomeMainV1</code>입니다.
-          </p>
-          <p class="helper" style="margin-bottom: 12px;">
-            <a href="inlog.html" target="_blank" rel="noopener noreferrer">inlog.html 새 탭에서 미리보기</a>
-          </p>
-          <h3 class="sub-title">갤러리 1~12번</h3>
-          <div id="inlogHomeGallerySlots"></div>
-          <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
-            <button id="inlogHomeSaveBtn" class="btn-sm primary" type="button">저장</button>
-            <span id="inlogHomeSaveStatus" class="hint" style="margin-left: 10px"></span>
-          </div>
-        </article>
-      </section>
-
       <section id="inlogPhotoSection" class="hidden">
         <article class="card">
           <div class="schedule-head">
             <h2>인로그 Photo (현장별)</h2>
           </div>
           <p class="helper" style="margin-bottom: 8px;">
-            <code>inlog.html#photo</code>에는 커버(대표)를 가로로 스크롤하며 볼 수 있고, 누르면 그 아래에 등록한 사진이 세로로 한 장씩(원본 비율) 펼쳐집니다. 데이터는
-            <code>schedule_site_client_kv</code> 키 <code>scheduleSiteInlogPhotoAlbumsV1</code>에 저장됩니다.
+            한 칸이 한 현장입니다. 첫 줄 URL이 메인·포토 대표 썸네일로 쓰입니다(제목·커버 URL 없음). 그리드는 한 줄에 4칸입니다. 저장은
+            <code>schedule_site_client_kv</code> 키 <code>scheduleSiteInlogPhotoAlbumsV1</code>입니다.
           </p>
           <p class="helper" style="margin-bottom: 12px;">
             <a href="inlog.html#photo" target="_blank" rel="noopener noreferrer">Photo 페이지 새 탭</a>
@@ -1919,10 +1973,7 @@
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
-      /** 인로그 홈(inlog.html) 히어로 + 갤러리 12칸 — client_kv 동기화 */
-      const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
-      const INLOG_HOME_GALLERY_COUNT = 12;
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
@@ -2123,174 +2174,6 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
-      function sanitizeInlogHomeHref(s) {
-        const t = String(s || "").trim();
-        if (!t) return "";
-        const low = t.toLowerCase();
-        if (low.startsWith("javascript:") || low.startsWith("data:") || low.startsWith("vbscript:")) return "";
-        return t;
-      }
-      function defaultInlogHomeMainPayload() {
-        const u = (id, w) =>
-          `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
-        const gl = (id, w, alt, badge, link = "") => ({ src: u(id, w), alt, badge, link });
-        return {
-          v: 1,
-          gallery: [
-            gl("photo-1515886657613-9f3515b0c78f", 900, "최신 작품 1", ""),
-            gl("photo-1469334031218-e382a71b716b", 900, "최신 작품 2", "New Brand"),
-            gl("photo-1509631179647-017733169913", 900, "최신 작품 3", ""),
-            gl("photo-1521572163474-6864f9cf17ab", 900, "최신 작품 4", "New Brand"),
-            gl("photo-1496747611176-843222e1e57c", 900, "최신 작품 5", ""),
-            gl("photo-1539109136881-3be0616acf4b", 900, "최신 작품 6", ""),
-            gl("photo-1524504388940-b1c1722653e1", 900, "최신 작품 7", ""),
-            gl("photo-1504194104404-433918773792", 900, "최신 작품 8", ""),
-            gl("photo-1483988352577-2f64eed4693a", 900, "최신 작품 9", ""),
-            gl("photo-1475180238706-0630aa49665f", 900, "최신 작품 10", ""),
-            gl("photo-1552374196-c4e7ffc6e126", 900, "최신 작품 11", ""),
-            gl("photo-1506794778202-cad84cf45f1d", 900, "최신 작품 12", "")
-          ]
-        };
-      }
-      function readInlogHomeMain() {
-        const merged = defaultInlogHomeMainPayload();
-        try {
-          const raw = localStorage.getItem(STORAGE_INLOG_HOME_MAIN);
-          if (!raw) return merged;
-          const p = JSON.parse(raw);
-          if (!p || typeof p !== "object") return merged;
-          const g = Array.isArray(p.gallery) ? p.gallery : [];
-          for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
-            const item = g[i];
-            if (!item || typeof item !== "object") continue;
-            if (item.src) merged.gallery[i].src = String(item.src).trim();
-            if (item.alt != null) merged.gallery[i].alt = String(item.alt);
-            merged.gallery[i].badge = item.badge != null ? String(item.badge).trim() : "";
-            if (item.link != null) merged.gallery[i].link = sanitizeInlogHomeHref(String(item.link));
-          }
-          return merged;
-        } catch {
-          return merged;
-        }
-      }
-      function writeInlogHomeMain(payload) {
-        localStorage.setItem(STORAGE_INLOG_HOME_MAIN, JSON.stringify(payload));
-      }
-      function ensureInlogHomeGalleryEditorBuilt() {
-        const c = document.getElementById("inlogHomeGallerySlots");
-        if (!c || c.getAttribute("data-built") === "1") return;
-        c.setAttribute("data-built", "1");
-        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
-          const wrap = document.createElement("div");
-          wrap.className = "inlog-home-slot";
-          wrap.style.marginTop = "12px";
-          wrap.style.paddingTop = "12px";
-          wrap.style.borderTop = "1px solid var(--line)";
-          const st = document.createElement("div");
-          st.className = "sub-title";
-          st.style.margin = "0 0 8px";
-          st.textContent = `갤러리 ${n}번`;
-          wrap.appendChild(st);
-          const upRow = document.createElement("div");
-          upRow.className = "input-row inlog-home-upload-row";
-          const upLabel = document.createElement("span");
-          upLabel.textContent = "업로드";
-          const fileIn = document.createElement("input");
-          fileIn.type = "file";
-          fileIn.accept = "image/*";
-          fileIn.className = "hidden";
-          fileIn.id = `inlogGalleryFile${n}`;
-          const upBtn = document.createElement("button");
-          upBtn.type = "button";
-          upBtn.className = "btn-sm";
-          upBtn.id = `inlogGalleryUploadBtn${n}`;
-          upBtn.textContent = "사진 올리기";
-          const prevImg = document.createElement("img");
-          prevImg.className = "inlog-home-thumb";
-          prevImg.id = `inlogGalleryPreview${n}`;
-          prevImg.alt = `갤러리 ${n} 미리보기`;
-          prevImg.hidden = true;
-          upRow.appendChild(upLabel);
-          upRow.appendChild(fileIn);
-          upRow.appendChild(upBtn);
-          upRow.appendChild(prevImg);
-          wrap.appendChild(upRow);
-          [
-            ["URL", `inlogGallerySrc${n}`, "https://..."],
-            ["이동 주소", `inlogGalleryLink${n}`, "클릭 시 열 주소 (비우면 링크 없음)"],
-            ["대체텍스트", `inlogGalleryAlt${n}`, ""],
-            ["배지", `inlogGalleryBadge${n}`, "New Brand 등 (없으면 비움)"]
-          ].forEach(
-            ([label, id, ph]) => {
-              const row = document.createElement("div");
-              row.className = "input-row";
-              const span = document.createElement("span");
-              span.textContent = label;
-              const input = document.createElement("input");
-              input.id = id;
-              input.type = "text";
-              input.className = "inline-input";
-              input.style.flex = "1";
-              if (ph) input.placeholder = ph;
-              row.appendChild(span);
-              row.appendChild(input);
-              wrap.appendChild(row);
-            }
-          );
-          c.appendChild(wrap);
-        }
-      }
-      function hydrateInlogHomeEditorFromStorage() {
-        ensureInlogHomeGalleryEditorBuilt();
-        wireInlogHomeImageUploadsIfNeeded();
-        const p = readInlogHomeMain();
-        for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
-          const g = p.gallery[i] || {};
-          const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
-          const linkEl = document.getElementById(`inlogGalleryLink${i + 1}`);
-          const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
-          const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
-          if (srcEl) srcEl.value = g.src || "";
-          if (linkEl) linkEl.value = g.link || "";
-          if (altEl) altEl.value = g.alt || "";
-          if (badgeEl) badgeEl.value = g.badge || "";
-        }
-        refreshInlogHomeEditorPreviews();
-      }
-      function collectInlogHomeEditorToPayload() {
-        const base = defaultInlogHomeMainPayload();
-        for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
-          const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
-          const linkInEl = document.getElementById(`inlogGalleryLink${i + 1}`);
-          const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
-          const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
-          const src = String(srcEl?.value || "").trim();
-          const alt = String(altEl?.value || "").trim();
-          const badge = String(badgeEl?.value || "").trim();
-          if (src) base.gallery[i].src = src;
-          if (alt) base.gallery[i].alt = alt;
-          base.gallery[i].badge = badge;
-          base.gallery[i].link = sanitizeInlogHomeHref(linkInEl?.value);
-        }
-        return base;
-      }
-      function setInlogHomeImagePreview(imgEl, url) {
-        if (!imgEl) return;
-        const u = String(url || "").trim();
-        if (u) {
-          imgEl.src = u;
-          imgEl.hidden = false;
-        } else {
-          imgEl.removeAttribute("src");
-          imgEl.hidden = true;
-        }
-      }
-      function refreshInlogHomeEditorPreviews() {
-        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
-          const srcIn = document.getElementById(`inlogGallerySrc${n}`);
-          setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), srcIn?.value || "");
-        }
-      }
       async function uploadInlogHomeImageFileToSupabase(file) {
         if (!file || !file.size) throw new Error("파일을 선택해 주세요.");
         if (!USE_SUPABASE_SYNC) throw new Error("Supabase 연동이 없어 업로드할 수 없습니다.");
@@ -2323,56 +2206,6 @@
           );
         }
         return `${base}/storage/v1/object/public/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`;
-      }
-      function wireInlogHomeImageUploadsIfNeeded() {
-        const sec = document.getElementById("inlogHomeSection");
-        if (!sec || sec.getAttribute("data-inlog-uploads-wired") === "1") return;
-        sec.setAttribute("data-inlog-uploads-wired", "1");
-        function bindSlot(btnId, fileId, urlInputId, previewId) {
-          const btn = document.getElementById(btnId);
-          const fileEl = document.getElementById(fileId);
-          const urlIn = document.getElementById(urlInputId);
-          const preview = document.getElementById(previewId);
-          if (!btn || !fileEl || !urlIn || !preview) return;
-          btn.addEventListener("click", () => fileEl.click());
-          fileEl.addEventListener("change", async () => {
-            const file = fileEl.files && fileEl.files[0];
-            fileEl.value = "";
-            if (!file) return;
-            const prevLabel = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = "업로드 중…";
-            let tempUrl = "";
-            try {
-              tempUrl = URL.createObjectURL(file);
-              preview.src = tempUrl;
-              preview.hidden = false;
-              const publicUrl = await uploadInlogHomeImageFileToSupabase(file);
-              urlIn.value = publicUrl;
-              URL.revokeObjectURL(tempUrl);
-              tempUrl = "";
-              setInlogHomeImagePreview(preview, publicUrl);
-            } catch (e) {
-              console.warn("[INLOG_UPLOAD]", e);
-              if (tempUrl) URL.revokeObjectURL(tempUrl);
-              alert(String(e?.message || e));
-              setInlogHomeImagePreview(preview, urlIn.value.trim());
-            } finally {
-              btn.disabled = false;
-              btn.textContent = prevLabel;
-            }
-          });
-        }
-        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
-          bindSlot(`inlogGalleryUploadBtn${n}`, `inlogGalleryFile${n}`, `inlogGallerySrc${n}`, `inlogGalleryPreview${n}`);
-        }
-        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
-          const gel = document.getElementById(`inlogGallerySrc${n}`);
-          if (!gel) continue;
-          gel.addEventListener("input", () =>
-            setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), gel.value)
-          );
-        }
       }
       function mergeInlogPhotoAlbumsStored(p) {
         if (!p || typeof p !== "object") return { v: 1, albums: [] };
@@ -2417,76 +2250,30 @@
         const wrap = document.createElement("div");
         wrap.className = "inlog-photo-album-edit";
         wrap.setAttribute("data-album-id", id);
-        wrap.style.marginTop = "16px";
-        wrap.style.paddingTop = "16px";
-        wrap.style.borderTop = "1px solid var(--line)";
+        const top = document.createElement("div");
+        top.className = "inlog-photo-album-edit__top";
         const head = document.createElement("div");
         head.className = "sub-title inlog-photo-album-heading";
-        head.style.marginBottom = "10px";
         head.textContent = "현장";
-        const rowTitle = document.createElement("div");
-        rowTitle.className = "input-row";
-        const sp1 = document.createElement("span");
-        sp1.textContent = "제목";
-        const inTitle = document.createElement("input");
-        inTitle.type = "text";
-        inTitle.className = "inline-input inlog-photo-album-title";
-        inTitle.style.flex = "1";
-        inTitle.placeholder = "예: OO아파트 00동";
-        inTitle.value = a.title || "";
-        rowTitle.appendChild(sp1);
-        rowTitle.appendChild(inTitle);
-        const upRow = document.createElement("div");
-        upRow.className = "input-row inlog-home-upload-row";
-        const spU = document.createElement("span");
-        spU.textContent = "커버";
-        const fileIn = document.createElement("input");
-        fileIn.type = "file";
-        fileIn.accept = "image/*";
-        fileIn.className = "hidden inlog-photo-cover-file";
-        const upBtn = document.createElement("button");
-        upBtn.type = "button";
-        upBtn.className = "btn-sm inlog-photo-cover-upload";
-        upBtn.textContent = "올리기";
-        const prev = document.createElement("img");
-        prev.className = "inlog-home-thumb inlog-photo-cover-preview";
-        prev.alt = "";
-        prev.hidden = true;
-        upRow.appendChild(spU);
-        upRow.appendChild(fileIn);
-        upRow.appendChild(upBtn);
-        upRow.appendChild(prev);
-        const rowCover = document.createElement("div");
-        rowCover.className = "input-row";
-        const sp2 = document.createElement("span");
-        sp2.textContent = "커버 URL";
-        const inCover = document.createElement("input");
-        inCover.type = "text";
-        inCover.className = "inline-input inlog-photo-cover-src";
-        inCover.style.flex = "1";
-        inCover.placeholder = "https://... (비우면 첫 장 사진 사용)";
-        inCover.value = a.coverSrc || "";
-        rowCover.appendChild(sp2);
-        rowCover.appendChild(inCover);
+        const rmBtn = document.createElement("button");
+        rmBtn.type = "button";
+        rmBtn.className = "btn-sm inlog-photo-album-remove";
+        rmBtn.textContent = "삭제";
+        top.appendChild(head);
+        top.appendChild(rmBtn);
         const rowTa = document.createElement("div");
-        rowTa.className = "input-row";
-        rowTa.style.alignItems = "flex-start";
-        const sp3 = document.createElement("span");
-        sp3.textContent = "사진 URL";
-        sp3.style.paddingTop = "8px";
+        rowTa.className = "input-row inlog-photo-photos-row";
+        rowTa.style.alignItems = "stretch";
         const ta = document.createElement("textarea");
         ta.className = "inline-input inlog-photo-photos-text";
-        ta.style.flex = "1";
-        ta.style.minHeight = "100px";
-        ta.style.resize = "vertical";
-        ta.placeholder = "한 줄에 이미지 주소 하나";
+        ta.placeholder = "한 줄에 URL 하나 · 첫 줄이 대표 썸네일";
         ta.value = (a.photos || []).map((p) => p.src).join("\n");
-        rowTa.appendChild(sp3);
         rowTa.appendChild(ta);
         const bulkRow = document.createElement("div");
-        bulkRow.className = "input-row inlog-home-upload-row";
+        bulkRow.className = "input-row inlog-home-upload-row inlog-photo-bulk-row";
         const bulkLabel = document.createElement("span");
-        bulkLabel.textContent = "사진 일괄";
+        bulkLabel.textContent = "일괄";
+        bulkLabel.style.fontSize = "0.78rem";
         const bulkFile = document.createElement("input");
         bulkFile.type = "file";
         bulkFile.accept = "image/*";
@@ -2495,34 +2282,17 @@
         const bulkBtn = document.createElement("button");
         bulkBtn.type = "button";
         bulkBtn.className = "btn-sm inlog-photo-bulk-upload";
-        bulkBtn.textContent = "여러장 업로드";
+        bulkBtn.textContent = "업로드";
         const bulkHint = document.createElement("span");
         bulkHint.className = "hint inlog-photo-bulk-status";
-        bulkHint.textContent = "선택한 파일이 URL 목록에 자동 추가됩니다.";
+        bulkHint.textContent = "선택 파일 URL이 목록에 붙습니다.";
         bulkRow.appendChild(bulkLabel);
         bulkRow.appendChild(bulkFile);
         bulkRow.appendChild(bulkBtn);
         bulkRow.appendChild(bulkHint);
-        const rm = document.createElement("div");
-        rm.className = "actions";
-        rm.style.justifyContent = "flex-start";
-        rm.style.marginTop = "8px";
-        const rmBtn = document.createElement("button");
-        rmBtn.type = "button";
-        rmBtn.className = "btn-sm inlog-photo-album-remove";
-        rmBtn.textContent = "이 현장 삭제";
-        rm.appendChild(rmBtn);
-        wrap.appendChild(head);
-        wrap.appendChild(rowTitle);
-        wrap.appendChild(upRow);
-        wrap.appendChild(rowCover);
-        wrap.appendChild(bulkRow);
+        wrap.appendChild(top);
         wrap.appendChild(rowTa);
-        wrap.appendChild(rm);
-        inCover.addEventListener("input", () =>
-          setInlogHomeImagePreview(wrap.querySelector(".inlog-photo-cover-preview"), inCover.value)
-        );
-        setInlogHomeImagePreview(prev, inCover.value.trim());
+        wrap.appendChild(bulkRow);
         return wrap;
       }
       function renumberInlogPhotoAlbumHeadings() {
@@ -2536,6 +2306,7 @@
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
         if (!editor) return;
         editor.innerHTML = "";
+        editor.className = "inlog-photo-grid";
         const albums = payload && Array.isArray(payload.albums) ? payload.albums : [];
         if (!albums.length) {
           editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
@@ -2555,15 +2326,13 @@
         editor.querySelectorAll(".inlog-photo-album-edit").forEach((row) => {
           const id = row.getAttribute("data-album-id") || newInlogPhotoAlbumId();
           row.setAttribute("data-album-id", id);
-          const title = String(row.querySelector(".inlog-photo-album-title")?.value || "").trim() || "제목 없음";
-          const coverSrc = String(row.querySelector(".inlog-photo-cover-src")?.value || "").trim();
           const text = String(row.querySelector(".inlog-photo-photos-text")?.value || "");
           const photos = text
             .split("\n")
             .map((s) => s.trim())
             .filter(Boolean)
             .map((src) => ({ src, alt: "" }));
-          albums.push({ id, title, coverSrc, coverAlt: "", photos });
+          albums.push({ id, title: "", coverSrc: "", coverAlt: "", photos });
         });
         return { v: 1, albums };
       }
@@ -2586,59 +2355,11 @@
           }
         });
         editor.addEventListener("click", (e) => {
-          const btn = e.target.closest(".inlog-photo-cover-upload");
-          if (!btn || !editor.contains(btn)) return;
-          const row = btn.closest(".inlog-photo-album-edit");
-          const fileEl = row && row.querySelector(".inlog-photo-cover-file");
-          if (fileEl) fileEl.click();
-        });
-        editor.addEventListener("click", (e) => {
           const btn = e.target.closest(".inlog-photo-bulk-upload");
           if (!btn || !editor.contains(btn)) return;
           const row = btn.closest(".inlog-photo-album-edit");
           const fileEl = row && row.querySelector(".inlog-photo-bulk-file");
           if (fileEl) fileEl.click();
-        });
-        editor.addEventListener("change", async (e) => {
-          const t = e.target;
-          if (!t || !t.classList || !t.classList.contains("inlog-photo-cover-file")) return;
-          const row = t.closest(".inlog-photo-album-edit");
-          const ed = document.getElementById("inlogPhotoAlbumsEditor");
-          if (!row || !ed || !ed.contains(row)) return;
-          const file = t.files && t.files[0];
-          t.value = "";
-          if (!file) return;
-          const urlIn = row.querySelector(".inlog-photo-cover-src");
-          const preview = row.querySelector(".inlog-photo-cover-preview");
-          const btn = row.querySelector(".inlog-photo-cover-upload");
-          const prevLabel = btn ? btn.textContent : "";
-          if (btn) {
-            btn.disabled = true;
-            btn.textContent = "업로드 중…";
-          }
-          let tempUrl = "";
-          try {
-            tempUrl = URL.createObjectURL(file);
-            if (preview) {
-              preview.src = tempUrl;
-              preview.hidden = false;
-            }
-            const publicUrl = await uploadInlogHomeImageFileToSupabase(file);
-            if (urlIn) urlIn.value = publicUrl;
-            URL.revokeObjectURL(tempUrl);
-            tempUrl = "";
-            setInlogHomeImagePreview(preview, publicUrl);
-          } catch (err) {
-            console.warn("[INLOG_PHOTO_UPLOAD]", err);
-            if (tempUrl) URL.revokeObjectURL(tempUrl);
-            alert(String(err?.message || err));
-            setInlogHomeImagePreview(preview, String(urlIn?.value || "").trim());
-          } finally {
-            if (btn) {
-              btn.disabled = false;
-              btn.textContent = prevLabel || "올리기";
-            }
-          }
         });
         editor.addEventListener("change", async (e) => {
           const t = e.target;
@@ -4434,15 +4155,11 @@
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
-      const tabInlogHomeEl = document.getElementById("tabInlogHome");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
-      const inlogHomeSectionEl = document.getElementById("inlogHomeSection");
-      const inlogHomeSaveBtnEl = document.getElementById("inlogHomeSaveBtn");
-      const inlogHomeSaveStatusEl = document.getElementById("inlogHomeSaveStatus");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
       const inlogPhotoSaveBtnEl = document.getElementById("inlogPhotoSaveBtn");
@@ -11851,24 +11568,20 @@
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
-        const isInlogHome = tab === "inlogHome";
         const isInlogPhoto = tab === "inlogPhoto";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
-        tabInlogHomeEl?.classList.toggle("active", isInlogHome);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
-        inlogHomeSectionEl?.classList.toggle("hidden", !isInlogHome);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
-        if (isInlogHome) hydrateInlogHomeEditorFromStorage();
         if (isInlogPhoto) hydrateInlogPhotoEditorFromStorage();
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
@@ -11877,7 +11590,6 @@
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
-      tabInlogHomeEl?.addEventListener("click", () => switchMainTab("inlogHome"));
       tabInlogPhotoEl?.addEventListener("click", () => switchMainTab("inlogPhoto"));
       inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
@@ -11896,17 +11608,6 @@
         }
         requestClientKvPushWhenReady();
       });
-      inlogHomeSaveBtnEl?.addEventListener("click", () => {
-        const payload = collectInlogHomeEditorToPayload();
-        writeInlogHomeMain(payload);
-        if (inlogHomeSaveStatusEl) {
-          inlogHomeSaveStatusEl.textContent = USE_SUPABASE_SYNC
-            ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
-            : "저장됨(로컬만)";
-        }
-        requestClientKvPushWhenReady();
-      });
-
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
         if (!button) return;
