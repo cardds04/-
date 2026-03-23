@@ -11787,14 +11787,26 @@
         renumberInlogPhotoAlbumHeadings();
       });
       inlogPhotoSaveBtnEl?.addEventListener("click", () => {
-        const payload = collectInlogPhotoAlbumsEditorPayload();
-        writeInlogPhotoAlbums(payload);
-        if (inlogPhotoSaveStatusEl) {
-          inlogPhotoSaveStatusEl.textContent = USE_SUPABASE_SYNC
-            ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
-            : "저장됨(로컬만)";
+        const btn = inlogPhotoSaveBtnEl;
+        if (!btn || btn.disabled) return;
+        const prevLabel = btn.textContent || "저장";
+        btn.disabled = true;
+        btn.textContent = "저장 중…";
+        try {
+          const payload = collectInlogPhotoAlbumsEditorPayload();
+          writeInlogPhotoAlbums(payload);
+          if (inlogPhotoSaveStatusEl) {
+            inlogPhotoSaveStatusEl.textContent = USE_SUPABASE_SYNC
+              ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
+              : "저장됨(로컬만)";
+          }
+          requestClientKvPushWhenReady();
+        } finally {
+          window.setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = prevLabel;
+          }, 420);
         }
-        requestClientKvPushWhenReady();
       });
       paymentFilterTabsEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-payment-filter]");
