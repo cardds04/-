@@ -50,6 +50,26 @@
         padding-top: 0;
       }
 
+      .site-header-fixed {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        background: var(--page-bg);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+      }
+
+      .header-spacer {
+        height: calc(20px + 5.25rem + 60px);
+      }
+
+      @media (max-width: 560px) {
+        .header-spacer {
+          height: calc(20px + 8.5rem + 60px);
+        }
+      }
+
       .site-header {
         width: 100%;
         max-width: min(1100px, 100%);
@@ -111,11 +131,11 @@
         height: 60px;
         width: 100%;
         background: var(--ink);
-        margin: 0 0 28px;
+        margin: 0;
       }
 
       .latest {
-        margin-top: 40px;
+        margin-top: 32px;
         width: 100vw;
         max-width: 100vw;
         margin-left: calc(50% - 50vw);
@@ -125,13 +145,42 @@
         box-sizing: border-box;
       }
 
-      .latest h2 {
-        margin: 0 0 28px;
-        font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
-        font-weight: 800;
-        font-size: clamp(1.5rem, 3vw, 2rem);
+      .latest__intro {
+        max-width: 40rem;
+        margin: 0 auto 36px;
+        padding: 0 12px;
+        text-align: center;
+      }
+
+      .latest__title-en {
+        margin: 0 0 18px;
+        font-family: "Bebas Neue", "Montserrat", sans-serif;
+        font-size: clamp(2.75rem, 11vw, 5rem);
+        font-weight: 400;
+        line-height: 0.95;
+        letter-spacing: 0.06em;
         color: var(--page-bg);
-        letter-spacing: 0.04em;
+      }
+
+      .latest__title-ko {
+        margin: 0 0 16px;
+        font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
+        font-weight: 700;
+        font-size: clamp(1.05rem, 3.2vw, 1.4rem);
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+        color: var(--page-bg);
+      }
+
+      .latest__desc {
+        margin: 0;
+        font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
+        font-weight: 400;
+        font-size: clamp(0.78rem, 2.2vw, 0.95rem);
+        line-height: 1.55;
+        letter-spacing: 0.01em;
+        color: var(--page-bg);
+        opacity: 0.95;
       }
 
       .gallery {
@@ -206,29 +255,38 @@
     </style>
   </head>
   <body>
-    <div class="page page--header">
-      <header class="site-header" role="banner">
-        <div class="site-header__bar">
-          <a class="site-header__logo" href="inlog.html" aria-label="인로그 홈">인로그</a>
-          <nav class="site-header__nav" aria-label="주요 메뉴">
-            <a href="#" title="포트폴리오 사진">Photo</a>
-            <a href="#" title="포트폴리오 영상">Cinema</a>
-            <a href="#" title="상품 안내">Product</a>
-            <a
-              class="site-header__cta"
-              href="https://sc-pink.vercel.app/customer.html"
-              title="주문 등록"
-              rel="noopener noreferrer"
-              >Order</a>
-          </nav>
-        </div>
-      </header>
+    <div class="site-header-fixed">
+      <div class="page page--header">
+        <header class="site-header" role="banner">
+          <div class="site-header__bar">
+            <a class="site-header__logo" href="inlog.html" aria-label="인로그 홈">인로그</a>
+            <nav class="site-header__nav" aria-label="주요 메뉴">
+              <a href="#" title="포트폴리오 사진">Photo</a>
+              <a href="#" title="포트폴리오 영상">Cinema</a>
+              <a href="#" title="상품 안내">Product</a>
+              <a
+                class="site-header__cta"
+                href="https://sc-pink.vercel.app/customer.html"
+                title="주문 등록"
+                rel="noopener noreferrer"
+                >Order</a>
+            </nav>
+          </div>
+        </header>
+      </div>
+      <div class="site-header__rule" aria-hidden="true"></div>
     </div>
-    <div class="site-header__rule" aria-hidden="true"></div>
+    <div class="header-spacer" aria-hidden="true"></div>
     <div class="page">
       <main>
         <section class="latest" aria-labelledby="latest-heading">
-          <h2 id="latest-heading">Latest Creations</h2>
+          <div class="latest__intro">
+            <p class="latest__title-en" id="latest-heading">Inlog, Portfolio</p>
+            <p class="latest__title-ko">인로그, 최신 포트폴리오</p>
+            <p class="latest__desc">
+              Introducing the latest photography and cinema work from Inlog studio.
+            </p>
+          </div>
           <div class="gallery" role="list">
             <figure class="gallery__item" role="listitem">
               <img
