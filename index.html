@@ -2671,6 +2671,7 @@
         wireInlogCinemaEditorIfNeeded();
         renderInlogPhotoAlbumsEditor(readInlogPhotoAlbums());
         renderInlogCinemaEditor(readInlogCinemaItems());
+        clearInlogEditorDirty();
       }
       function collectInlogPhotoAlbumsEditorPayload() {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
@@ -2705,6 +2706,7 @@
           if (!rm || !editor.contains(rm)) return;
           const row = rm.closest(".inlog-photo-album-edit");
           if (!row || !editor.contains(row)) return;
+          markInlogEditorDirty();
           row.remove();
           renumberInlogPhotoAlbumHeadings();
           if (!editor.querySelector(".inlog-photo-album-edit")) {
@@ -2718,6 +2720,7 @@
             const row = thumb.closest(".inlog-photo-album-edit");
             const u = String(thumb.dataset.coverUrl || "").trim();
             if (row && u) {
+              markInlogEditorDirty();
               row.setAttribute("data-cover-src", u);
               syncInlogPhotoRowRepresentative(row);
               const picksEl = row.querySelector(".inlog-photo-rep__picks");
@@ -2735,6 +2738,7 @@
         editor.addEventListener("input", (e) => {
           const t = e.target;
           if (!t || !t.classList || !t.classList.contains("inlog-photo-photos-text")) return;
+          markInlogEditorDirty();
           const row = t.closest(".inlog-photo-album-edit");
           if (row && editor.contains(row)) syncInlogPhotoRowRepresentative(row);
         });
@@ -2768,6 +2772,7 @@
             const nextBlock = uploaded.join("\n");
             if (ta) ta.value = current ? `${current}\n${nextBlock}` : nextBlock;
             if (hint) hint.textContent = `${uploaded.length}장 업로드 완료`;
+            markInlogEditorDirty();
             syncInlogPhotoRowRepresentative(row);
           } catch (err) {
             console.warn("[INLOG_PHOTO_BULK_UPLOAD]", err);
@@ -2792,10 +2797,16 @@
           if (!rm || !editor.contains(rm)) return;
           const row = rm.closest(".inlog-cinema-item");
           if (!row || !editor.contains(row)) return;
+          markInlogEditorDirty();
           row.remove();
           if (!editor.querySelector(".inlog-cinema-item")) {
             editor.appendChild(buildInlogCinemaEditorItem(null));
           }
+        });
+        editor.addEventListener("input", (e) => {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("inlog-cinema-url")) return;
+          markInlogEditorDirty();
         });
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
@@ -2805,6 +2816,13 @@
       let scheduleSiteClientKvPushInFlight = false;
       let clientKvPollTimerId = null;
       let inlogLastSupabaseRefreshAt = 0;
+      let inlogEditorDirty = false;
+      function markInlogEditorDirty() {
+        inlogEditorDirty = true;
+      }
+      function clearInlogEditorDirty() {
+        inlogEditorDirty = false;
+      }
       const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
       /** 저장 직후 호출: 첫 Supabase pull 이 끝날 때까지 기다렸다가 즉시 push (샘플만 보이는 현상 방지) */
@@ -2964,6 +2982,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
         if (document.visibilityState !== "visible") return;
         if (scheduleSiteClientKvPushInFlight) return;
+        if (inlogEditorDirty) return;
         const changed = await pullScheduleSiteClientKvFromSupabase();
         if (!changed) return;
         if (typeof hydrateInlogPhotoEditorFromStorage === "function") {
@@ -12127,6 +12146,7 @@
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
         if (!editor) return;
         wireInlogPhotoAlbumEditorIfNeeded();
+        markInlogEditorDirty();
         editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
         renumberInlogPhotoAlbumHeadings();
       });
@@ -12134,6 +12154,7 @@
         const editor = document.getElementById("inlogCinemaEditor");
         if (!editor) return;
         wireInlogCinemaEditorIfNeeded();
+        markInlogEditorDirty();
         editor.appendChild(buildInlogCinemaEditorItem(null));
       });
       inlogPhotoVerifyBtnEl?.addEventListener("click", async () => {
@@ -12214,6 +12235,7 @@
                 if (inlogPhotoSaveStatusEl) {
                   inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
                 }
+                clearInlogEditorDirty();
                 setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
                 window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
               } else if (verify.reconciled) {
