@@ -1342,6 +1342,7 @@
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
         <button id="tabInlogHome" data-tab="inlogHome" type="button">인로그 메인</button>
+        <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 Photo</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -1702,6 +1703,29 @@
         </article>
       </section>
 
+      <section id="inlogPhotoSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>인로그 Photo (현장별)</h2>
+          </div>
+          <p class="helper" style="margin-bottom: 8px;">
+            <code>inlog.html#photo</code> 화면에 현장 단위로 묶인 갤러리가 표시됩니다. 현장을 펼치면 그 현장 사진들이 나옵니다. 데이터는 <code>schedule_site_client_kv</code> 키
+            <code>scheduleSiteInlogPhotoAlbumsV1</code>에 저장됩니다.
+          </p>
+          <p class="helper" style="margin-bottom: 12px;">
+            <a href="inlog.html#photo" target="_blank" rel="noopener noreferrer">Photo 페이지 새 탭</a>
+          </p>
+          <div class="actions" style="margin-bottom: 12px; justify-content: flex-start;">
+            <button id="inlogPhotoAddAlbumBtn" class="btn-sm primary" type="button">+ 현장 추가</button>
+          </div>
+          <div id="inlogPhotoAlbumsEditor"></div>
+          <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
+            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">저장</button>
+            <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
+          </div>
+        </article>
+      </section>
+
       <section id="transferSection" class="hidden">
         <article class="card">
           <div class="schedule-head">
@@ -1897,6 +1921,7 @@
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
       /** 인로그 홈(inlog.html) 히어로 + 갤러리 12칸 — client_kv 동기화 */
       const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
+      const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
       const INLOG_HOME_GALLERY_COUNT = 12;
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -2340,6 +2365,245 @@
             setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), gel.value)
           );
         }
+      }
+      function mergeInlogPhotoAlbumsStored(p) {
+        if (!p || typeof p !== "object") return { v: 1, albums: [] };
+        const albums = Array.isArray(p.albums) ? p.albums : [];
+        const out = { v: 1, albums: [] };
+        albums.forEach((a, i) => {
+          if (!a || typeof a !== "object") return;
+          const id = String(a.id || "").trim() || `alb-${i}-${Date.now()}`;
+          const title = String(a.title || "").trim() || `현장 ${i + 1}`;
+          const coverSrc = String(a.coverSrc || "").trim();
+          const coverAlt = String(a.coverAlt || "").trim();
+          const photos = Array.isArray(a.photos)
+            ? a.photos
+                .map((ph) => ({
+                  src: String(ph && ph.src ? ph.src : "").trim(),
+                  alt: String(ph && ph.alt != null ? ph.alt : "").trim()
+                }))
+                .filter((ph) => ph.src)
+            : [];
+          out.albums.push({ id, title, coverSrc, coverAlt, photos });
+        });
+        return out;
+      }
+      function readInlogPhotoAlbums() {
+        try {
+          const raw = localStorage.getItem(STORAGE_INLOG_PHOTO_ALBUMS);
+          if (!raw) return { v: 1, albums: [] };
+          return mergeInlogPhotoAlbumsStored(JSON.parse(raw));
+        } catch {
+          return { v: 1, albums: [] };
+        }
+      }
+      function writeInlogPhotoAlbums(payload) {
+        localStorage.setItem(STORAGE_INLOG_PHOTO_ALBUMS, JSON.stringify(payload));
+      }
+      function newInlogPhotoAlbumId() {
+        return `alb-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      }
+      function buildInlogPhotoAlbumEditorRow(album) {
+        const a = album || { id: newInlogPhotoAlbumId(), title: "", coverSrc: "", coverAlt: "", photos: [] };
+        const id = String(a.id || newInlogPhotoAlbumId());
+        const wrap = document.createElement("div");
+        wrap.className = "inlog-photo-album-edit";
+        wrap.setAttribute("data-album-id", id);
+        wrap.style.marginTop = "16px";
+        wrap.style.paddingTop = "16px";
+        wrap.style.borderTop = "1px solid var(--line)";
+        const head = document.createElement("div");
+        head.className = "sub-title inlog-photo-album-heading";
+        head.style.marginBottom = "10px";
+        head.textContent = "현장";
+        const rowTitle = document.createElement("div");
+        rowTitle.className = "input-row";
+        const sp1 = document.createElement("span");
+        sp1.textContent = "제목";
+        const inTitle = document.createElement("input");
+        inTitle.type = "text";
+        inTitle.className = "inline-input inlog-photo-album-title";
+        inTitle.style.flex = "1";
+        inTitle.placeholder = "예: OO아파트 00동";
+        inTitle.value = a.title || "";
+        rowTitle.appendChild(sp1);
+        rowTitle.appendChild(inTitle);
+        const upRow = document.createElement("div");
+        upRow.className = "input-row inlog-home-upload-row";
+        const spU = document.createElement("span");
+        spU.textContent = "커버";
+        const fileIn = document.createElement("input");
+        fileIn.type = "file";
+        fileIn.accept = "image/*";
+        fileIn.className = "hidden inlog-photo-cover-file";
+        const upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.className = "btn-sm inlog-photo-cover-upload";
+        upBtn.textContent = "올리기";
+        const prev = document.createElement("img");
+        prev.className = "inlog-home-thumb inlog-photo-cover-preview";
+        prev.alt = "";
+        prev.hidden = true;
+        upRow.appendChild(spU);
+        upRow.appendChild(fileIn);
+        upRow.appendChild(upBtn);
+        upRow.appendChild(prev);
+        const rowCover = document.createElement("div");
+        rowCover.className = "input-row";
+        const sp2 = document.createElement("span");
+        sp2.textContent = "커버 URL";
+        const inCover = document.createElement("input");
+        inCover.type = "text";
+        inCover.className = "inline-input inlog-photo-cover-src";
+        inCover.style.flex = "1";
+        inCover.placeholder = "https://... (비우면 첫 장 사진 사용)";
+        inCover.value = a.coverSrc || "";
+        rowCover.appendChild(sp2);
+        rowCover.appendChild(inCover);
+        const rowTa = document.createElement("div");
+        rowTa.className = "input-row";
+        rowTa.style.alignItems = "flex-start";
+        const sp3 = document.createElement("span");
+        sp3.textContent = "사진 URL";
+        sp3.style.paddingTop = "8px";
+        const ta = document.createElement("textarea");
+        ta.className = "inline-input inlog-photo-photos-text";
+        ta.style.flex = "1";
+        ta.style.minHeight = "100px";
+        ta.style.resize = "vertical";
+        ta.placeholder = "한 줄에 이미지 주소 하나";
+        ta.value = (a.photos || []).map((p) => p.src).join("\n");
+        rowTa.appendChild(sp3);
+        rowTa.appendChild(ta);
+        const rm = document.createElement("div");
+        rm.className = "actions";
+        rm.style.justifyContent = "flex-start";
+        rm.style.marginTop = "8px";
+        const rmBtn = document.createElement("button");
+        rmBtn.type = "button";
+        rmBtn.className = "btn-sm inlog-photo-album-remove";
+        rmBtn.textContent = "이 현장 삭제";
+        rm.appendChild(rmBtn);
+        wrap.appendChild(head);
+        wrap.appendChild(rowTitle);
+        wrap.appendChild(upRow);
+        wrap.appendChild(rowCover);
+        wrap.appendChild(rowTa);
+        wrap.appendChild(rm);
+        inCover.addEventListener("input", () =>
+          setInlogHomeImagePreview(wrap.querySelector(".inlog-photo-cover-preview"), inCover.value)
+        );
+        setInlogHomeImagePreview(prev, inCover.value.trim());
+        return wrap;
+      }
+      function renumberInlogPhotoAlbumHeadings() {
+        const editor = document.getElementById("inlogPhotoAlbumsEditor");
+        if (!editor) return;
+        [...editor.querySelectorAll(".inlog-photo-album-heading")].forEach((h, i) => {
+          h.textContent = `현장 ${i + 1}`;
+        });
+      }
+      function renderInlogPhotoAlbumsEditor(payload) {
+        const editor = document.getElementById("inlogPhotoAlbumsEditor");
+        if (!editor) return;
+        editor.innerHTML = "";
+        const albums = payload && Array.isArray(payload.albums) ? payload.albums : [];
+        if (!albums.length) {
+          editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
+        } else {
+          albums.forEach((alb) => editor.appendChild(buildInlogPhotoAlbumEditorRow(alb)));
+        }
+        renumberInlogPhotoAlbumHeadings();
+      }
+      function hydrateInlogPhotoEditorFromStorage() {
+        wireInlogPhotoAlbumEditorIfNeeded();
+        renderInlogPhotoAlbumsEditor(readInlogPhotoAlbums());
+      }
+      function collectInlogPhotoAlbumsEditorPayload() {
+        const editor = document.getElementById("inlogPhotoAlbumsEditor");
+        const albums = [];
+        if (!editor) return { v: 1, albums: [] };
+        editor.querySelectorAll(".inlog-photo-album-edit").forEach((row) => {
+          const id = row.getAttribute("data-album-id") || newInlogPhotoAlbumId();
+          row.setAttribute("data-album-id", id);
+          const title = String(row.querySelector(".inlog-photo-album-title")?.value || "").trim() || "제목 없음";
+          const coverSrc = String(row.querySelector(".inlog-photo-cover-src")?.value || "").trim();
+          const text = String(row.querySelector(".inlog-photo-photos-text")?.value || "");
+          const photos = text
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((src, j) => ({ src, alt: `${title} ${j + 1}` }));
+          albums.push({ id, title, coverSrc, coverAlt: title, photos });
+        });
+        return { v: 1, albums };
+      }
+      function wireInlogPhotoAlbumEditorIfNeeded() {
+        const sec = document.getElementById("inlogPhotoSection");
+        if (!sec || sec.getAttribute("data-inlog-photo-wired") === "1") return;
+        sec.setAttribute("data-inlog-photo-wired", "1");
+        const editor = document.getElementById("inlogPhotoAlbumsEditor");
+        if (!editor) return;
+        editor.addEventListener("click", (e) => {
+          const rm = e.target.closest(".inlog-photo-album-remove");
+          if (!rm || !editor.contains(rm)) return;
+          const row = rm.closest(".inlog-photo-album-edit");
+          if (!row || !editor.contains(row)) return;
+          row.remove();
+          renumberInlogPhotoAlbumHeadings();
+          if (!editor.querySelector(".inlog-photo-album-edit")) {
+            editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
+            renumberInlogPhotoAlbumHeadings();
+          }
+        });
+        editor.addEventListener("click", (e) => {
+          const btn = e.target.closest(".inlog-photo-cover-upload");
+          if (!btn || !editor.contains(btn)) return;
+          const row = btn.closest(".inlog-photo-album-edit");
+          const fileEl = row && row.querySelector(".inlog-photo-cover-file");
+          if (fileEl) fileEl.click();
+        });
+        editor.addEventListener("change", async (e) => {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("inlog-photo-cover-file")) return;
+          const row = t.closest(".inlog-photo-album-edit");
+          const ed = document.getElementById("inlogPhotoAlbumsEditor");
+          if (!row || !ed || !ed.contains(row)) return;
+          const file = t.files && t.files[0];
+          t.value = "";
+          if (!file) return;
+          const urlIn = row.querySelector(".inlog-photo-cover-src");
+          const preview = row.querySelector(".inlog-photo-cover-preview");
+          const btn = row.querySelector(".inlog-photo-cover-upload");
+          const prevLabel = btn ? btn.textContent : "";
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "업로드 중…";
+          }
+          let tempUrl = "";
+          try {
+            tempUrl = URL.createObjectURL(file);
+            if (preview) {
+              preview.src = tempUrl;
+              preview.hidden = false;
+            }
+            const publicUrl = await uploadInlogHomeImageFileToSupabase(file);
+            if (urlIn) urlIn.value = publicUrl;
+            URL.revokeObjectURL(tempUrl);
+            tempUrl = "";
+            setInlogHomeImagePreview(preview, publicUrl);
+          } catch (err) {
+            console.warn("[INLOG_PHOTO_UPLOAD]", err);
+            if (tempUrl) URL.revokeObjectURL(tempUrl);
+            alert(String(err?.message || err));
+            setInlogHomeImagePreview(preview, String(urlIn?.value || "").trim());
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = prevLabel || "올리기";
+            }
+          }
+        });
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
@@ -4070,6 +4334,7 @@
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabInlogHomeEl = document.getElementById("tabInlogHome");
+      const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
@@ -4077,6 +4342,10 @@
       const inlogHomeSectionEl = document.getElementById("inlogHomeSection");
       const inlogHomeSaveBtnEl = document.getElementById("inlogHomeSaveBtn");
       const inlogHomeSaveStatusEl = document.getElementById("inlogHomeSaveStatus");
+      const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
+      const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
+      const inlogPhotoSaveBtnEl = document.getElementById("inlogPhotoSaveBtn");
+      const inlogPhotoSaveStatusEl = document.getElementById("inlogPhotoSaveStatus");
       const receiptLedgerListEl = document.getElementById("receiptLedgerList");
       const receiptLedgerCountTextEl = document.getElementById("receiptLedgerCountText");
       const transferSectionEl = document.getElementById("transferSection");
@@ -11482,20 +11751,24 @@
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isInlogHome = tab === "inlogHome";
+        const isInlogPhoto = tab === "inlogPhoto";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabInlogHomeEl?.classList.toggle("active", isInlogHome);
+        tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         inlogHomeSectionEl?.classList.toggle("hidden", !isInlogHome);
+        inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isInlogHome) hydrateInlogHomeEditorFromStorage();
+        if (isInlogPhoto) hydrateInlogPhotoEditorFromStorage();
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
@@ -11504,6 +11777,24 @@
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabInlogHomeEl?.addEventListener("click", () => switchMainTab("inlogHome"));
+      tabInlogPhotoEl?.addEventListener("click", () => switchMainTab("inlogPhoto"));
+      inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
+        const editor = document.getElementById("inlogPhotoAlbumsEditor");
+        if (!editor) return;
+        wireInlogPhotoAlbumEditorIfNeeded();
+        editor.appendChild(buildInlogPhotoAlbumEditorRow(null));
+        renumberInlogPhotoAlbumHeadings();
+      });
+      inlogPhotoSaveBtnEl?.addEventListener("click", () => {
+        const payload = collectInlogPhotoAlbumsEditorPayload();
+        writeInlogPhotoAlbums(payload);
+        if (inlogPhotoSaveStatusEl) {
+          inlogPhotoSaveStatusEl.textContent = USE_SUPABASE_SYNC
+            ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
+            : "저장됨(로컬만)";
+        }
+        setTimeout(() => void window.__scheduleSitePushClientKv?.(), 100);
+      });
       inlogHomeSaveBtnEl?.addEventListener("click", () => {
         const payload = collectInlogHomeEditorToPayload();
         writeInlogHomeMain(payload);
