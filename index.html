@@ -1442,16 +1442,34 @@
 
       .inlog-photo-rep__picks {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 6px;
         align-items: center;
-        min-height: 36px;
+        min-height: 44px;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        padding: 2px 0 6px;
+        scrollbar-color: rgba(69, 106, 167, 0.45) transparent;
+      }
+
+      .inlog-photo-rep__picks::-webkit-scrollbar {
+        height: 5px;
+      }
+
+      .inlog-photo-rep__picks::-webkit-scrollbar-thumb {
+        background: rgba(69, 106, 167, 0.4);
+        border-radius: 3px;
       }
 
       .inlog-photo-rep__picks .inlog-photo-rep__empty-hint {
         font-size: 0.7rem;
         color: var(--muted);
         margin: 0;
+        flex-shrink: 0;
       }
 
       .inlog-photo-rep-thumb {
@@ -1464,6 +1482,7 @@
         height: 40px;
         flex-shrink: 0;
         background: #e8ecf4;
+        scroll-snap-align: start;
       }
 
       .inlog-photo-rep-thumb.is-selected {
@@ -2511,6 +2530,9 @@
             if (row && u) {
               row.setAttribute("data-cover-src", u);
               syncInlogPhotoRowRepresentative(row);
+              const picksEl = row.querySelector(".inlog-photo-rep__picks");
+              const selThumb = picksEl && picksEl.querySelector(".inlog-photo-rep-thumb.is-selected");
+              selThumb?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
             }
             return;
           }
