@@ -2266,12 +2266,22 @@
           this.nativeRemoveItem = localStorage.removeItem.bind(localStorage);
           this.nativeClear = localStorage.clear.bind(localStorage);
           this.memoryStore = new Map();
+          // 인로그(사진·시네마) 키는 스냅샷에서 미리 로드하지 않는다.
+          // 이 키들만 Supabase pull 완료 후 memoryStore에 채워지도록 해서,
+          // 구 스냅샷 값이 저장 버튼 클릭 시 서버를 덮어쓰는 것을 방지한다.
+          // 나머지 스케줄·회사 등의 키는 UX를 위해 스냅샷에서 미리 로드한다.
+          const INLOG_ONLY_KEYS_NO_PRELOAD = new Set([
+            "scheduleSiteInlogPhotoAlbumsV1",
+            "scheduleSiteInlogCinemaItemsV1",
+            "scheduleSiteInlogHomeMainV1"
+          ]);
           try {
             const rawSnapshot = this.nativeGetItem(this.snapshotStorageKey);
             const parsedSnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
             if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
               Object.entries(parsedSnapshot).forEach(([key, value]) => {
                 if (!this.isScopedKey(key)) return;
+                if (INLOG_ONLY_KEYS_NO_PRELOAD.has(key)) return;
                 this.memoryStore.set(String(key), String(value ?? ""));
               });
             }
@@ -12175,15 +12185,17 @@
             if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "Supabase 연동이 꺼져 있어 검증할 수 없습니다.";
             return;
           }
-          await forceClientKvPushWhenReady();
+          // 검증 버튼은 push 없이 서버에서 최신 데이터를 pull해 비교·복구만 한다
+          // (push 먼저 하면 현재 브라우저의 오래된 로컬 데이터가 서버를 덮어쓸 수 있음)
           const verify = await verifyInlogConsistencyOrRevert();
           if (verify.ok && !verify.reconciled) {
             if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "등록완료 데이터일치완료";
             setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
             window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
           } else if (verify.reconciled) {
-            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구";
+            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구됨";
             setSyncStatus("불일치 감지 · 서버 기준 복구", "warn", { pinMs: 1000 });
+            window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1200);
           } else {
             if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "검증 실패 · 네트워크 상태 확인";
             setSyncStatus("검증 실패 · 네트워크 확인", "error", { pinMs: 1000 });
@@ -12201,6 +12213,8 @@
         const prevLabel = btn.textContent || "저장";
         btn.disabled = true;
         btn.textContent = "저장 중…";
+        // 저장 진행 중 소프트 pull이 memoryStore를 덮어쓰지 않도록 dirty 상태 유지
+        markInlogEditorDirty();
         try {
           const localPhotoPayload = collectInlogPhotoAlbumsEditorPayload();
           const localCinemaPayload = collectInlogCinemaEditorPayload();
