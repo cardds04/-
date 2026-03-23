@@ -12189,16 +12189,24 @@
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
           if (USE_SUPABASE_SYNC) {
-            const ok = await forceClientKvPushWhenReady();
+            let ok = await forceClientKvPushWhenReady();
+            if (!ok && SUPABASE_PUSH_ENABLED) {
+              // 네트워크 지연/초기 pull 경합 시 1회 추가 재시도
+              await new Promise((r) => setTimeout(r, 350));
+              ok = await forceClientKvPushWhenReady();
+            }
             if (!ok) {
-              if (inlogPhotoSaveStatusEl) {
-                inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 지연(네트워크 확인)";
-              }
-              requestClientKvPushWhenReady();
-              // 로컬만 저장된 상태가 남지 않도록 즉시 서버 상태로 되돌림
-              await refreshInlogFromSupabase("force");
-              if (inlogPhotoSaveStatusEl) {
-                inlogPhotoSaveStatusEl.textContent = "Supabase 저장 실패 · 서버 기준으로 화면을 되돌렸습니다.";
+              if (!SUPABASE_PUSH_ENABLED) {
+                if (inlogPhotoSaveStatusEl) {
+                  inlogPhotoSaveStatusEl.textContent = "읽기전용 모드 · 이 환경에서는 Supabase 저장이 비활성화되어 있습니다.";
+                }
+                await refreshInlogFromSupabase("force");
+              } else {
+                if (inlogPhotoSaveStatusEl) {
+                  inlogPhotoSaveStatusEl.textContent = "저장 유지 · Supabase 반영 재시도 중(네트워크 확인)";
+                }
+                // 실패해도 즉시 되돌리지 않고 현재 행위를 유지한 채 재시도 큐에 위임
+                requestClientKvPushWhenReady();
               }
             } else {
               const verify = await verifyInlogConsistencyOrRevert();
