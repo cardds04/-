@@ -1308,6 +1308,27 @@
           grid-template-columns: 1fr;
         }
       }
+
+      .inlog-home-upload-row {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .inlog-home-thumb {
+        max-height: 96px;
+        max-width: 160px;
+        width: auto;
+        height: auto;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        vertical-align: middle;
+      }
+
+      .inlog-home-thumb[hidden] {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
@@ -1666,13 +1687,19 @@
             <h2>인로그 메인 화면</h2>
           </div>
           <p class="helper" style="margin-bottom: 6px;">
-            상단 <strong>큰 사진(히어로)</strong>과 포트폴리오 그리드 <strong>1~12번</strong> 이미지 URL·대체텍스트·배지를 설정합니다. 저장 시 다른 관리자 PC와
-            <code>schedule_site_client_kv</code>로 동기화됩니다.
+            상단 <strong>큰 사진(히어로)</strong>과 포트폴리오 그리드 <strong>1~12번</strong>을 <strong>업로드</strong>하거나 URL로 지정합니다. 업로드는 Supabase Storage 버킷
+            <code>inlog_home</code>에 올라가며, 저장 시 <code>schedule_site_client_kv</code>에 동기화됩니다.
           </p>
           <p class="helper" style="margin-bottom: 12px;">
             <a href="inlog.html" target="_blank" rel="noopener noreferrer">inlog.html 새 탭에서 미리보기</a>
           </p>
           <h3 class="sub-title">큰 사진 (히어로)</h3>
+          <div class="input-row inlog-home-upload-row">
+            <span>업로드</span>
+            <input id="inlogHeroFile" type="file" accept="image/*" class="hidden" />
+            <button id="inlogHeroUploadBtn" class="btn-sm" type="button">사진 올리기</button>
+            <img id="inlogHeroPreview" class="inlog-home-thumb" alt="히어로 미리보기" hidden />
+          </div>
           <div class="input-row">
             <span>URL</span>
             <input id="inlogHeroSrc" class="inline-input" type="url" inputmode="url" placeholder="https://..." style="flex: 1" />
@@ -1886,6 +1913,8 @@
       /** 인로그 홈(inlog.html) 히어로 + 갤러리 12칸 — client_kv 동기화 */
       const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
       const INLOG_HOME_GALLERY_COUNT = 12;
+      const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
+      const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
@@ -2143,6 +2172,30 @@
           st.style.margin = "0 0 8px";
           st.textContent = `갤러리 ${n}번`;
           wrap.appendChild(st);
+          const upRow = document.createElement("div");
+          upRow.className = "input-row inlog-home-upload-row";
+          const upLabel = document.createElement("span");
+          upLabel.textContent = "업로드";
+          const fileIn = document.createElement("input");
+          fileIn.type = "file";
+          fileIn.accept = "image/*";
+          fileIn.className = "hidden";
+          fileIn.id = `inlogGalleryFile${n}`;
+          const upBtn = document.createElement("button");
+          upBtn.type = "button";
+          upBtn.className = "btn-sm";
+          upBtn.id = `inlogGalleryUploadBtn${n}`;
+          upBtn.textContent = "사진 올리기";
+          const prevImg = document.createElement("img");
+          prevImg.className = "inlog-home-thumb";
+          prevImg.id = `inlogGalleryPreview${n}`;
+          prevImg.alt = `갤러리 ${n} 미리보기`;
+          prevImg.hidden = true;
+          upRow.appendChild(upLabel);
+          upRow.appendChild(fileIn);
+          upRow.appendChild(upBtn);
+          upRow.appendChild(prevImg);
+          wrap.appendChild(upRow);
           [["URL", `inlogGallerySrc${n}`, "https://..."], ["대체텍스트", `inlogGalleryAlt${n}`, ""], ["배지", `inlogGalleryBadge${n}`, "New Brand 등 (없으면 비움)"]].forEach(
             ([label, id, ph]) => {
               const row = document.createElement("div");
@@ -2165,6 +2218,7 @@
       }
       function hydrateInlogHomeEditorFromStorage() {
         ensureInlogHomeGalleryEditorBuilt();
+        wireInlogHomeImageUploadsIfNeeded();
         const p = readInlogHomeMain();
         const heroSrcEl = document.getElementById("inlogHeroSrc");
         const heroAltEl = document.getElementById("inlogHeroAlt");
@@ -2179,6 +2233,7 @@
           if (altEl) altEl.value = g.alt || "";
           if (badgeEl) badgeEl.value = g.badge || "";
         }
+        refreshInlogHomeEditorPreviews();
       }
       function collectInlogHomeEditorToPayload() {
         const base = defaultInlogHomeMainPayload();
@@ -2198,6 +2253,113 @@
           base.gallery[i].badge = badge;
         }
         return base;
+      }
+      function setInlogHomeImagePreview(imgEl, url) {
+        if (!imgEl) return;
+        const u = String(url || "").trim();
+        if (u) {
+          imgEl.src = u;
+          imgEl.hidden = false;
+        } else {
+          imgEl.removeAttribute("src");
+          imgEl.hidden = true;
+        }
+      }
+      function refreshInlogHomeEditorPreviews() {
+        const heroSrc = document.getElementById("inlogHeroSrc");
+        setInlogHomeImagePreview(document.getElementById("inlogHeroPreview"), heroSrc?.value || "");
+        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
+          const srcIn = document.getElementById(`inlogGallerySrc${n}`);
+          setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), srcIn?.value || "");
+        }
+      }
+      async function uploadInlogHomeImageFileToSupabase(file) {
+        if (!file || !file.size) throw new Error("파일을 선택해 주세요.");
+        if (!USE_SUPABASE_SYNC) throw new Error("Supabase 연동이 없어 업로드할 수 없습니다.");
+        if (file.size > INLOG_HOME_STORAGE_MAX_BYTES) throw new Error("파일이 너무 큽니다. (최대 8MB)");
+        if (!String(file.type || "").startsWith("image/")) throw new Error("이미지 파일만 올릴 수 있습니다.");
+        const orig = String((file.name || "image").split(/[/\\]/).pop() || "image");
+        const extPart = orig.includes(".") ? orig.split(".").pop() : "";
+        const ext = String(extPart || "jpg")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `main/${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+        const pathForUrl = path
+          .split("/")
+          .map((seg) => encodeURIComponent(seg))
+          .join("/");
+        const base = String(SUPABASE_URL || "").replace(/\/$/, "");
+        const res = await fetch(`${base}/storage/v1/object/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": file.type || "application/octet-stream"
+          },
+          body: file
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(
+            errText || `업로드 실패 (${res.status}). Supabase SQL로 버킷 inlog_home·Storage 정책을 적용했는지 확인하세요.`
+          );
+        }
+        return `${base}/storage/v1/object/public/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`;
+      }
+      function wireInlogHomeImageUploadsIfNeeded() {
+        const sec = document.getElementById("inlogHomeSection");
+        if (!sec || sec.getAttribute("data-inlog-uploads-wired") === "1") return;
+        sec.setAttribute("data-inlog-uploads-wired", "1");
+        function bindSlot(btnId, fileId, urlInputId, previewId) {
+          const btn = document.getElementById(btnId);
+          const fileEl = document.getElementById(fileId);
+          const urlIn = document.getElementById(urlInputId);
+          const preview = document.getElementById(previewId);
+          if (!btn || !fileEl || !urlIn || !preview) return;
+          btn.addEventListener("click", () => fileEl.click());
+          fileEl.addEventListener("change", async () => {
+            const file = fileEl.files && fileEl.files[0];
+            fileEl.value = "";
+            if (!file) return;
+            const prevLabel = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "업로드 중…";
+            let tempUrl = "";
+            try {
+              tempUrl = URL.createObjectURL(file);
+              preview.src = tempUrl;
+              preview.hidden = false;
+              const publicUrl = await uploadInlogHomeImageFileToSupabase(file);
+              urlIn.value = publicUrl;
+              URL.revokeObjectURL(tempUrl);
+              tempUrl = "";
+              setInlogHomeImagePreview(preview, publicUrl);
+            } catch (e) {
+              console.warn("[INLOG_UPLOAD]", e);
+              if (tempUrl) URL.revokeObjectURL(tempUrl);
+              alert(String(e?.message || e));
+              setInlogHomeImagePreview(preview, urlIn.value.trim());
+            } finally {
+              btn.disabled = false;
+              btn.textContent = prevLabel;
+            }
+          });
+        }
+        bindSlot("inlogHeroUploadBtn", "inlogHeroFile", "inlogHeroSrc", "inlogHeroPreview");
+        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
+          bindSlot(`inlogGalleryUploadBtn${n}`, `inlogGalleryFile${n}`, `inlogGallerySrc${n}`, `inlogGalleryPreview${n}`);
+        }
+        const heroUrlIn = document.getElementById("inlogHeroSrc");
+        heroUrlIn?.addEventListener("input", () =>
+          setInlogHomeImagePreview(document.getElementById("inlogHeroPreview"), heroUrlIn.value)
+        );
+        for (let n = 1; n <= INLOG_HOME_GALLERY_COUNT; n++) {
+          const gel = document.getElementById(`inlogGallerySrc${n}`);
+          if (!gel) continue;
+          gel.addEventListener("input", () =>
+            setInlogHomeImagePreview(document.getElementById(`inlogGalleryPreview${n}`), gel.value)
+          );
+        }
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;

@@ -429,3 +429,24 @@ with check (true);
 -- 확인 처리로 목록에서 제거된 완료 건 (기록보기)
 alter table public.schedule_dashboard_state
   add column if not exists completed_history jsonb not null default '[]'::jsonb;
+
+-- ------------------------------------------------------------
+-- 인로그 메인 이미지 (관리자 업로드 → 공개 URL)
+-- Storage → 버킷을 UI로 만들어도 되고, 아래만 실행해도 됩니다.
+-- ------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('inlog_home', 'inlog_home', true, 8388608)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "inlog_home_objects_select" on storage.objects;
+create policy "inlog_home_objects_select"
+on storage.objects for select
+using (bucket_id = 'inlog_home');
+
+drop policy if exists "inlog_home_objects_insert" on storage.objects;
+create policy "inlog_home_objects_insert"
+on storage.objects for insert
+to anon, authenticated
+with check (bucket_id = 'inlog_home');
