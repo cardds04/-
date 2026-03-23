@@ -1405,6 +1405,79 @@
         flex: 1 1 100%;
         margin: 0;
       }
+
+      .inlog-photo-rep {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+
+      .inlog-photo-rep__label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .inlog-photo-rep__preview-wrap {
+        width: 100%;
+        aspect-ratio: 1;
+        max-height: 132px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: #eef1f8;
+      }
+
+      .inlog-photo-rep__preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .inlog-photo-rep__preview[hidden] {
+        display: none !important;
+      }
+
+      .inlog-photo-rep__picks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        min-height: 36px;
+      }
+
+      .inlog-photo-rep__picks .inlog-photo-rep__empty-hint {
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .inlog-photo-rep-thumb {
+        padding: 0;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        overflow: hidden;
+        cursor: pointer;
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+        background: #e8ecf4;
+      }
+
+      .inlog-photo-rep-thumb.is-selected {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 1px var(--blue);
+      }
+
+      .inlog-photo-rep-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -1763,7 +1836,7 @@
             <h2>인로그 Photo (현장별)</h2>
           </div>
           <p class="helper" style="margin-bottom: 8px;">
-            한 칸이 한 현장입니다. 첫 줄 URL이 메인·포토 대표 썸네일로 쓰입니다(제목·커버 URL 없음). 그리드는 한 줄에 4칸입니다. 저장은
+            한 칸이 한 현장입니다. 위에서 대표 이미지를 고르고(썸네일 클릭), URL 목록은 그 아래에 둡니다. 그리드는 한 줄에 4칸입니다. 저장은
             <code>schedule_site_client_kv</code> 키 <code>scheduleSiteInlogPhotoAlbumsV1</code>입니다.
           </p>
           <p class="helper" style="margin-bottom: 12px;">
@@ -2244,12 +2317,81 @@
       function newInlogPhotoAlbumId() {
         return `alb-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       }
+      function parseInlogPhotoUrlsFromTextarea(ta) {
+        if (!ta) return [];
+        return String(ta.value || "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      function syncInlogPhotoRowRepresentative(row) {
+        if (!row || !row.classList.contains("inlog-photo-album-edit")) return;
+        const ta = row.querySelector(".inlog-photo-photos-text");
+        const picks = row.querySelector(".inlog-photo-rep__picks");
+        const prevImg = row.querySelector(".inlog-photo-rep__preview");
+        if (!ta || !picks || !prevImg) return;
+        const urls = parseInlogPhotoUrlsFromTextarea(ta);
+        if (!urls.length) {
+          row.removeAttribute("data-cover-src");
+          prevImg.removeAttribute("src");
+          prevImg.hidden = true;
+          picks.innerHTML = "";
+          const hint = document.createElement("p");
+          hint.className = "inlog-photo-rep__empty-hint";
+          hint.textContent = "URL을 넣으면 대표 미리보기·선택이 됩니다.";
+          picks.appendChild(hint);
+          return;
+        }
+        let selected = String(row.getAttribute("data-cover-src") || "").trim();
+        if (!selected || !urls.includes(selected)) {
+          selected = urls[0];
+          row.setAttribute("data-cover-src", selected);
+        }
+        prevImg.src = selected;
+        prevImg.hidden = false;
+        prevImg.alt = "대표 이미지";
+        picks.innerHTML = "";
+        urls.forEach((u) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "inlog-photo-rep-thumb" + (u === selected ? " is-selected" : "");
+          b.dataset.coverUrl = u;
+          b.title = "대표로 선택";
+          const im = document.createElement("img");
+          im.src = u;
+          im.alt = "";
+          im.loading = "lazy";
+          b.appendChild(im);
+          picks.appendChild(b);
+        });
+      }
       function buildInlogPhotoAlbumEditorRow(album) {
         const a = album || { id: newInlogPhotoAlbumId(), title: "", coverSrc: "", coverAlt: "", photos: [] };
         const id = String(a.id || newInlogPhotoAlbumId());
         const wrap = document.createElement("div");
         wrap.className = "inlog-photo-album-edit";
         wrap.setAttribute("data-album-id", id);
+        const urlsFromPhotos = (a.photos || []).map((p) => String(p && p.src ? p.src : "").trim()).filter(Boolean);
+        const savedCover = String(a.coverSrc || "").trim();
+        if (savedCover && urlsFromPhotos.includes(savedCover)) wrap.setAttribute("data-cover-src", savedCover);
+        else if (urlsFromPhotos.length) wrap.setAttribute("data-cover-src", urlsFromPhotos[0]);
+        const rep = document.createElement("div");
+        rep.className = "inlog-photo-rep";
+        const repLab = document.createElement("div");
+        repLab.className = "inlog-photo-rep__label";
+        repLab.textContent = "대표 이미지";
+        const prevWrap = document.createElement("div");
+        prevWrap.className = "inlog-photo-rep__preview-wrap";
+        const prevImg = document.createElement("img");
+        prevImg.className = "inlog-photo-rep__preview";
+        prevImg.alt = "";
+        prevImg.hidden = true;
+        prevWrap.appendChild(prevImg);
+        const picks = document.createElement("div");
+        picks.className = "inlog-photo-rep__picks";
+        rep.appendChild(repLab);
+        rep.appendChild(prevWrap);
+        rep.appendChild(picks);
         const top = document.createElement("div");
         top.className = "inlog-photo-album-edit__top";
         const head = document.createElement("div");
@@ -2266,8 +2408,8 @@
         rowTa.style.alignItems = "stretch";
         const ta = document.createElement("textarea");
         ta.className = "inline-input inlog-photo-photos-text";
-        ta.placeholder = "한 줄에 URL 하나 · 첫 줄이 대표 썸네일";
-        ta.value = (a.photos || []).map((p) => p.src).join("\n");
+        ta.placeholder = "한 줄에 이미지 URL 하나";
+        ta.value = urlsFromPhotos.join("\n");
         rowTa.appendChild(ta);
         const bulkRow = document.createElement("div");
         bulkRow.className = "input-row inlog-home-upload-row inlog-photo-bulk-row";
@@ -2290,9 +2432,11 @@
         bulkRow.appendChild(bulkFile);
         bulkRow.appendChild(bulkBtn);
         bulkRow.appendChild(bulkHint);
+        wrap.appendChild(rep);
         wrap.appendChild(top);
         wrap.appendChild(rowTa);
         wrap.appendChild(bulkRow);
+        syncInlogPhotoRowRepresentative(wrap);
         return wrap;
       }
       function renumberInlogPhotoAlbumHeadings() {
@@ -2332,7 +2476,12 @@
             .map((s) => s.trim())
             .filter(Boolean)
             .map((src) => ({ src, alt: "" }));
-          albums.push({ id, title: "", coverSrc: "", coverAlt: "", photos });
+          let coverSrc = String(row.getAttribute("data-cover-src") || "").trim();
+          if (coverSrc && !photos.some((p) => p.src === coverSrc)) {
+            coverSrc = photos[0] ? photos[0].src : "";
+          }
+          if (!coverSrc && photos.length) coverSrc = photos[0].src;
+          albums.push({ id, title: "", coverSrc, coverAlt: "", photos });
         });
         return { v: 1, albums };
       }
@@ -2355,11 +2504,27 @@
           }
         });
         editor.addEventListener("click", (e) => {
+          const thumb = e.target.closest(".inlog-photo-rep-thumb");
+          if (thumb && editor.contains(thumb)) {
+            const row = thumb.closest(".inlog-photo-album-edit");
+            const u = String(thumb.dataset.coverUrl || "").trim();
+            if (row && u) {
+              row.setAttribute("data-cover-src", u);
+              syncInlogPhotoRowRepresentative(row);
+            }
+            return;
+          }
           const btn = e.target.closest(".inlog-photo-bulk-upload");
           if (!btn || !editor.contains(btn)) return;
           const row = btn.closest(".inlog-photo-album-edit");
           const fileEl = row && row.querySelector(".inlog-photo-bulk-file");
           if (fileEl) fileEl.click();
+        });
+        editor.addEventListener("input", (e) => {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("inlog-photo-photos-text")) return;
+          const row = t.closest(".inlog-photo-album-edit");
+          if (row && editor.contains(row)) syncInlogPhotoRowRepresentative(row);
         });
         editor.addEventListener("change", async (e) => {
           const t = e.target;
@@ -2391,6 +2556,7 @@
             const nextBlock = uploaded.join("\n");
             if (ta) ta.value = current ? `${current}\n${nextBlock}` : nextBlock;
             if (hint) hint.textContent = `${uploaded.length}장 업로드 완료`;
+            syncInlogPhotoRowRepresentative(row);
           } catch (err) {
             console.warn("[INLOG_PHOTO_BULK_UPLOAD]", err);
             alert(String(err?.message || err));
@@ -2398,7 +2564,7 @@
           } finally {
             if (btn) {
               btn.disabled = false;
-              btn.textContent = prevLabel || "여러장 업로드";
+              btn.textContent = prevLabel || "업로드";
             }
           }
         });
