@@ -2181,6 +2181,10 @@
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
+      /** Storage 업로드 등 fetch 래퍼와 무관하게 브라우저 원본 fetch 보관 */
+      if (typeof window.fetch === "function" && typeof window.__scheduleSiteNativeFetch !== "function") {
+        window.__scheduleSiteNativeFetch = window.fetch.bind(window);
+      }
       if (USE_SUPABASE_SYNC && APP_MODE === "dev" && typeof window.fetch === "function") {
         const __nativeFetch = window.fetch.bind(window);
         window.fetch = (input, init = {}) => {
@@ -2351,7 +2355,15 @@
         if (!file || !file.size) throw new Error("파일을 선택해 주세요.");
         if (!USE_SUPABASE_SYNC) throw new Error("Supabase 연동이 없어 업로드할 수 없습니다.");
         if (file.size > INLOG_HOME_STORAGE_MAX_BYTES) throw new Error("파일이 너무 큽니다. (최대 8MB)");
-        if (!String(file.type || "").startsWith("image/")) throw new Error("이미지 파일만 올릴 수 있습니다.");
+        const mime = String(file.type || "").toLowerCase();
+        const baseName = String((file.name || "image").split(/[/\\]/).pop() || "").toLowerCase();
+        const extLooksImage = /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/.test(baseName);
+        if (mime && !mime.startsWith("image/") && !extLooksImage) {
+          throw new Error("이미지 파일만 올릴 수 있습니다.");
+        }
+        if (!mime && !extLooksImage) {
+          throw new Error("이미지 파일만 올릴 수 있습니다. (파일 형식을 확인해 주세요)");
+        }
         const orig = String((file.name || "image").split(/[/\\]/).pop() || "image");
         const extPart = orig.includes(".") ? orig.split(".").pop() : "";
         const ext = String(extPart || "jpg")
@@ -2363,7 +2375,8 @@
           .map((seg) => encodeURIComponent(seg))
           .join("/");
         const base = String(SUPABASE_URL || "").replace(/\/$/, "");
-        const res = await fetch(`${base}/storage/v1/object/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`, {
+        const doFetch = typeof window.__scheduleSiteNativeFetch === "function" ? window.__scheduleSiteNativeFetch : fetch;
+        const res = await doFetch(`${base}/storage/v1/object/${INLOG_HOME_STORAGE_BUCKET}/${pathForUrl}`, {
           method: "POST",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -2759,7 +2772,6 @@
           t.value = "";
           if (!files.length) return;
           markInlogEditorDirty();
-          inlogPhotoBulkUploadInFlight = true;
           const ta = row.querySelector(".inlog-photo-photos-text");
           const btn = row.querySelector(".inlog-photo-bulk-upload");
           const hint = row.querySelector(".inlog-photo-bulk-status");
@@ -2788,7 +2800,6 @@
             alert(String(err?.message || err));
             if (hint) hint.textContent = uploaded.length ? `${uploaded.length}장 업로드 완료 (중단됨)` : "업로드 실패";
           } finally {
-            inlogPhotoBulkUploadInFlight = false;
             if (btn) {
               btn.disabled = false;
               btn.textContent = prevLabel || "업로드";
@@ -2823,13 +2834,10 @@
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
-      const CLIENT_KV_POLL_INTERVAL_MS = 6500;
       const INLOG_SUPABASE_REFRESH_THROTTLE_MS = 6000;
       let scheduleSiteClientKvPushInFlight = false;
-      let clientKvPollTimerId = null;
       let inlogLastSupabaseRefreshAt = 0;
       let inlogEditorDirty = false;
-      let inlogPhotoBulkUploadInFlight = false;
       const inlogCinemaDeletedIds = new Set();
       function markInlogEditorDirty() {
         inlogEditorDirty = true;
@@ -2992,27 +3000,6 @@
             scheduleSiteClientKvState.queueSupabaseKvPush();
           }
         }
-      }
-      async function maybePollClientKvFromSupabase() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return;
-        if (document.visibilityState !== "visible") return;
-        if (scheduleSiteClientKvPushInFlight) return;
-        if (inlogPhotoBulkUploadInFlight) return;
-        if (inlogEditorDirty) return;
-        const changed = await pullScheduleSiteClientKvFromSupabase();
-        if (!changed) return;
-        if (typeof hydrateInlogPhotoEditorFromStorage === "function") {
-          const inlogVisible = Boolean(inlogPhotoSectionEl && !inlogPhotoSectionEl.classList.contains("hidden"));
-          if (inlogVisible) {
-            hydrateInlogPhotoEditorFromStorage();
-          }
-        }
-      }
-      function startClientKvBackgroundSync() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || clientKvPollTimerId !== null) return;
-        clientKvPollTimerId = setInterval(() => {
-          void maybePollClientKvFromSupabase();
-        }, CLIENT_KV_POLL_INTERVAL_MS);
       }
       async function pushScheduleSiteClientKvToSupabase() {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
@@ -12148,7 +12135,10 @@
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isInlogPhoto) {
-          void refreshInlogFromSupabase("force");
+          // 편집 중에는 서버 pull로 DOM을 덮어쓰지 않음 · Supabase 반영은 저장/일치 확인/탭 재진입(저장 완료 후)에만
+          if (!inlogEditorDirty) {
+            void refreshInlogFromSupabase("force");
+          }
         }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
@@ -14629,17 +14619,9 @@
           renderList();
           renderPaymentList();
         });
-        startClientKvBackgroundSync();
         startDashboardStateBackgroundSync();
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
-      window.addEventListener("online", () => {
-        void pullScheduleSiteClientKvFromSupabase();
-      });
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState !== "visible") return;
-        void pullScheduleSiteClientKvFromSupabase();
-      });
 
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_CANCELED_SCHEDULES) {
