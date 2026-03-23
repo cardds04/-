@@ -2475,6 +2475,26 @@
         ta.value = (a.photos || []).map((p) => p.src).join("\n");
         rowTa.appendChild(sp3);
         rowTa.appendChild(ta);
+        const bulkRow = document.createElement("div");
+        bulkRow.className = "input-row inlog-home-upload-row";
+        const bulkLabel = document.createElement("span");
+        bulkLabel.textContent = "사진 일괄";
+        const bulkFile = document.createElement("input");
+        bulkFile.type = "file";
+        bulkFile.accept = "image/*";
+        bulkFile.multiple = true;
+        bulkFile.className = "hidden inlog-photo-bulk-file";
+        const bulkBtn = document.createElement("button");
+        bulkBtn.type = "button";
+        bulkBtn.className = "btn-sm inlog-photo-bulk-upload";
+        bulkBtn.textContent = "여러장 업로드";
+        const bulkHint = document.createElement("span");
+        bulkHint.className = "hint inlog-photo-bulk-status";
+        bulkHint.textContent = "선택한 파일이 URL 목록에 자동 추가됩니다.";
+        bulkRow.appendChild(bulkLabel);
+        bulkRow.appendChild(bulkFile);
+        bulkRow.appendChild(bulkBtn);
+        bulkRow.appendChild(bulkHint);
         const rm = document.createElement("div");
         rm.className = "actions";
         rm.style.justifyContent = "flex-start";
@@ -2488,6 +2508,7 @@
         wrap.appendChild(rowTitle);
         wrap.appendChild(upRow);
         wrap.appendChild(rowCover);
+        wrap.appendChild(bulkRow);
         wrap.appendChild(rowTa);
         wrap.appendChild(rm);
         inCover.addEventListener("input", () =>
@@ -2563,6 +2584,13 @@
           const fileEl = row && row.querySelector(".inlog-photo-cover-file");
           if (fileEl) fileEl.click();
         });
+        editor.addEventListener("click", (e) => {
+          const btn = e.target.closest(".inlog-photo-bulk-upload");
+          if (!btn || !editor.contains(btn)) return;
+          const row = btn.closest(".inlog-photo-album-edit");
+          const fileEl = row && row.querySelector(".inlog-photo-bulk-file");
+          if (fileEl) fileEl.click();
+        });
         editor.addEventListener("change", async (e) => {
           const t = e.target;
           if (!t || !t.classList || !t.classList.contains("inlog-photo-cover-file")) return;
@@ -2601,6 +2629,47 @@
             if (btn) {
               btn.disabled = false;
               btn.textContent = prevLabel || "올리기";
+            }
+          }
+        });
+        editor.addEventListener("change", async (e) => {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("inlog-photo-bulk-file")) return;
+          const row = t.closest(".inlog-photo-album-edit");
+          const ed = document.getElementById("inlogPhotoAlbumsEditor");
+          if (!row || !ed || !ed.contains(row)) return;
+          const files = [...(t.files || [])];
+          t.value = "";
+          if (!files.length) return;
+          const ta = row.querySelector(".inlog-photo-photos-text");
+          const btn = row.querySelector(".inlog-photo-bulk-upload");
+          const hint = row.querySelector(".inlog-photo-bulk-status");
+          const prevLabel = btn ? btn.textContent : "";
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "업로드 중…";
+          }
+          if (hint) hint.textContent = `0/${files.length} 업로드 중`;
+          const uploaded = [];
+          try {
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const publicUrl = await uploadInlogHomeImageFileToSupabase(file);
+              uploaded.push(publicUrl);
+              if (hint) hint.textContent = `${i + 1}/${files.length} 업로드 중`;
+            }
+            const current = String(ta?.value || "").trim();
+            const nextBlock = uploaded.join("\n");
+            if (ta) ta.value = current ? `${current}\n${nextBlock}` : nextBlock;
+            if (hint) hint.textContent = `${uploaded.length}장 업로드 완료`;
+          } catch (err) {
+            console.warn("[INLOG_PHOTO_BULK_UPLOAD]", err);
+            alert(String(err?.message || err));
+            if (hint) hint.textContent = uploaded.length ? `${uploaded.length}장 업로드 완료 (중단됨)` : "업로드 실패";
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = prevLabel || "여러장 업로드";
             }
           }
         });
