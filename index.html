@@ -2403,7 +2403,13 @@
       }
       function readInlogPhotoAlbums() {
         try {
-          const raw = localStorage.getItem(STORAGE_INLOG_PHOTO_ALBUMS);
+          const memRaw =
+            scheduleSiteClientKvState &&
+            scheduleSiteClientKvState.memoryStore &&
+            typeof scheduleSiteClientKvState.memoryStore.get === "function"
+              ? scheduleSiteClientKvState.memoryStore.get(STORAGE_INLOG_PHOTO_ALBUMS)
+              : "";
+          const raw = String(memRaw || localStorage.getItem(STORAGE_INLOG_PHOTO_ALBUMS) || "").trim();
           if (!raw) return { v: 1, albums: [] };
           return mergeInlogPhotoAlbumsStored(JSON.parse(raw));
         } catch {
@@ -2429,7 +2435,13 @@
       }
       function readInlogCinemaItems() {
         try {
-          const raw = localStorage.getItem(STORAGE_INLOG_CINEMA_ITEMS);
+          const memRaw =
+            scheduleSiteClientKvState &&
+            scheduleSiteClientKvState.memoryStore &&
+            typeof scheduleSiteClientKvState.memoryStore.get === "function"
+              ? scheduleSiteClientKvState.memoryStore.get(STORAGE_INLOG_CINEMA_ITEMS)
+              : "";
+          const raw = String(memRaw || localStorage.getItem(STORAGE_INLOG_CINEMA_ITEMS) || "").trim();
           if (!raw) return { v: 1, items: [] };
           return mergeInlogCinemaItemsStored(JSON.parse(raw));
         } catch {
@@ -2486,6 +2498,28 @@
           items.push({ id, url, title: "" });
         });
         return { v: 1, items };
+      }
+      function mergeInlogPhotoPayloadByAlbumId(basePayload, localPayload) {
+        const base = mergeInlogPhotoAlbumsStored(basePayload || { v: 1, albums: [] });
+        const local = mergeInlogPhotoAlbumsStored(localPayload || { v: 1, albums: [] });
+        const byId = new Map(base.albums.map((a) => [String(a.id || "").trim(), a]));
+        local.albums.forEach((a) => {
+          const id = String(a.id || "").trim();
+          if (!id) return;
+          byId.set(id, a);
+        });
+        return { v: 1, albums: [...byId.values()] };
+      }
+      function mergeInlogCinemaPayloadByItemId(basePayload, localPayload) {
+        const base = mergeInlogCinemaItemsStored(basePayload || { v: 1, items: [] });
+        const local = mergeInlogCinemaItemsStored(localPayload || { v: 1, items: [] });
+        const byId = new Map(base.items.map((it) => [String(it.id || "").trim(), it]));
+        local.items.forEach((it) => {
+          const id = String(it.id || "").trim();
+          if (!id) return;
+          byId.set(id, it);
+        });
+        return { v: 1, items: [...byId.values()] };
       }
       function newInlogPhotoAlbumId() {
         return `alb-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -12079,8 +12113,7 @@
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isInlogPhoto) {
-          hydrateInlogPhotoEditorFromStorage();
-          void refreshInlogFromSupabase();
+          void refreshInlogFromSupabase("force");
         }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
@@ -12141,8 +12174,18 @@
         btn.disabled = true;
         btn.textContent = "저장 중…";
         try {
-          const photoPayload = collectInlogPhotoAlbumsEditorPayload();
-          const cinemaPayload = collectInlogCinemaEditorPayload();
+          const localPhotoPayload = collectInlogPhotoAlbumsEditorPayload();
+          const localCinemaPayload = collectInlogCinemaEditorPayload();
+          let photoPayload = localPhotoPayload;
+          let cinemaPayload = localCinemaPayload;
+          if (USE_SUPABASE_SYNC) {
+            const serverRow = await fetchClientKvRowFromSupabase();
+            const serverKv = serverRow && serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
+            const serverPhotoPayload = mergeInlogPhotoAlbumsStored(serverKv[STORAGE_INLOG_PHOTO_ALBUMS]);
+            const serverCinemaPayload = mergeInlogCinemaItemsStored(serverKv[STORAGE_INLOG_CINEMA_ITEMS]);
+            photoPayload = mergeInlogPhotoPayloadByAlbumId(serverPhotoPayload, localPhotoPayload);
+            cinemaPayload = mergeInlogCinemaPayloadByItemId(serverCinemaPayload, localCinemaPayload);
+          }
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
           if (USE_SUPABASE_SYNC) {
