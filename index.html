@@ -2408,7 +2408,8 @@
         }
       }
       function writeInlogPhotoAlbums(payload) {
-        localStorage.setItem(STORAGE_INLOG_PHOTO_ALBUMS, JSON.stringify(payload));
+        const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
+        localStorage.setItem(STORAGE_INLOG_PHOTO_ALBUMS, JSON.stringify(stamped));
       }
       function mergeInlogCinemaItemsStored(p) {
         if (!p) return { v: 1, items: [] };
@@ -2442,7 +2443,8 @@
         }
       }
       function writeInlogCinemaItems(payload) {
-        localStorage.setItem(STORAGE_INLOG_CINEMA_ITEMS, JSON.stringify(payload));
+        const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
+        localStorage.setItem(STORAGE_INLOG_CINEMA_ITEMS, JSON.stringify(stamped));
       }
       function newInlogCinemaId() {
         return `cin-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;

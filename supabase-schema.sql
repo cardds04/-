@@ -431,40 +431,52 @@ alter table public.schedule_dashboard_state
   add column if not exists completed_history jsonb not null default '[]'::jsonb;
 
 -- ------------------------------------------------------------
--- schedule_site_client_kv: 인로그 Photo·Cinema·Home 키 보호 트리거
--- 배경 push 또는 네트워크 오류로 해당 키가 kv 에서 빠졌을 때 기존 값을 복원한다.
--- 저장 버튼은 항상 {"v":1,"items":[...]} 형태의 유효한 값을 포함하므로 영향 없음.
+-- schedule_site_client_kv: 인로그 Photo·Cinema 키 savedAt 기반 보호 트리거
+--
+-- 저장 버튼은 payload 안에 savedAt(ISO 타임스탬프)를 함께 기록한다.
+-- UPDATE 시 새 payload의 savedAt이 현재 저장된 savedAt보다 오래됐거나
+-- 없으면 덮어쓰기를 차단해 오래된 데이터로의 역행을 DB 레벨에서 막는다.
+-- 키 자체가 새 kv에 없는 경우도 기존 값 보존.
 -- ------------------------------------------------------------
 create or replace function public.guard_inlog_kv_keys()
 returns trigger
 language plpgsql
 as $$
 declare
-  protected_keys text[] := array[
+  inlog_keys   text[] := array[
     'scheduleSiteInlogPhotoAlbumsV1',
-    'scheduleSiteInlogCinemaItemsV1',
-    'scheduleSiteInlogHomeMainV1'
+    'scheduleSiteInlogCinemaItemsV1'
   ];
-  key_name text;
-  old_val text;
+  key_name     text;
+  old_saved_at text;
+  new_saved_at text;
 begin
   if new.kv is null then
     new.kv := '{}'::jsonb;
   end if;
 
   if tg_op = 'UPDATE' then
-    foreach key_name in array protected_keys loop
-      old_val := old.kv ->> key_name;
+    foreach key_name in array inlog_keys loop
 
-      -- 기존 값이 유효한데, 새 kv 에 해당 키가 아예 없으면 기존 값을 복원
-      if old_val is not null
-         and old_val <> ''
-         and old_val <> '[]'
-         and old_val <> '{}'
-         and new.kv -> key_name is null
+      -- 키 자체가 새 kv에 없으면 기존 값 복원
+      if (old.kv -> key_name) is not null
+         and (new.kv -> key_name) is null
+      then
+        new.kv := jsonb_set(new.kv, array[key_name], old.kv -> key_name, true);
+        continue;
+      end if;
+
+      -- savedAt 비교: 새 데이터가 더 오래됐거나 타임스탬프가 없으면 기존 값 복원
+      old_saved_at := old.kv -> key_name ->> 'savedAt';
+      new_saved_at := new.kv -> key_name ->> 'savedAt';
+
+      if old_saved_at is not null
+         and old_saved_at <> ''
+         and (new_saved_at is null or new_saved_at = '' or new_saved_at < old_saved_at)
       then
         new.kv := jsonb_set(new.kv, array[key_name], old.kv -> key_name, true);
       end if;
+
     end loop;
   end if;
 
