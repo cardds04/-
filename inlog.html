@@ -372,25 +372,24 @@
       }
 
       .home-cinema__rail {
-        display: flex;
-        flex-wrap: nowrap;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scroll-snap-type: x proximity;
         padding: 2px 0 8px;
       }
 
+      @media (max-width: 760px) {
+        .home-cinema__rail {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .home-cinema__item {
-        flex: 0 0 auto;
-        width: clamp(240px, 48vw, 360px);
         aspect-ratio: 16 / 9;
         border: 1px solid rgba(255, 213, 3, 0.28);
         border-radius: 10px;
         overflow: hidden;
         background: #111;
-        scroll-snap-align: start;
       }
 
       .home-cinema__item iframe {
@@ -669,6 +668,13 @@
               Introducing the latest photography and cinema work from Inlog studio.
             </p>
           </div>
+          <section class="home-cinema" aria-labelledby="home-cinema-title">
+            <div class="home-cinema__head">
+              <h2 id="home-cinema-title" class="home-cinema__title">LATEST CINEMA</h2>
+              <a class="home-cinema__more" href="#cinema">전체보기 →</a>
+            </div>
+            <div id="inlogHomeCinemaMount"></div>
+          </section>
           <div class="gallery" id="inlogGalleryRoot" role="list">
             <figure class="gallery__item" role="listitem">
               <a class="inlog-gallery-link inlog-gallery-link--inactive" data-inlog-index="0" href="#">
@@ -839,13 +845,6 @@
               <span class="gallery__badge inlog-gallery-badge" data-inlog-index="11" hidden></span>
             </figure>
           </div>
-          <section class="home-cinema" aria-labelledby="home-cinema-title">
-            <div class="home-cinema__head">
-              <h2 id="home-cinema-title" class="home-cinema__title">LATEST CINEMA</h2>
-              <a class="home-cinema__more" href="#cinema">전체보기 →</a>
-            </div>
-            <div id="inlogHomeCinemaMount"></div>
-          </section>
         </section>
         </div>
 
