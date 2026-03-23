@@ -2196,7 +2196,8 @@
           const m = method.toUpperCase();
           const isSupabaseReq = url.startsWith(SUPABASE_URL);
           const isWriteMethod = m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
-          if (isSupabaseReq && isWriteMethod) {
+          const isRestReq = isSupabaseReq && url.includes("/rest/v1/");
+          if (isRestReq && isWriteMethod) {
             console.warn("[DEV_READONLY] Supabase write blocked:", m, url);
             return Promise.resolve(
               new Response(JSON.stringify({ error: "DEV_READONLY_MODE" }), {
