@@ -134,112 +134,48 @@
       .photo-empty {
         margin: 24px auto;
         max-width: 28rem;
+        padding: 0 18px;
         font-size: 0.95rem;
         color: var(--page-bg);
         opacity: 0.85;
         line-height: 1.5;
       }
 
-      .photo-album-list {
+      /* Photo 뷰: 인트로만 좌우 여백, 그리드는 뷰포트 가로 풀 */
+      .photo-latest {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .photo-latest .latest__intro {
+        padding-left: max(18px, env(safe-area-inset-left, 0px));
+        padding-right: max(18px, env(safe-area-inset-right, 0px));
+      }
+
+      .photo-wall {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0;
         width: 100%;
-        max-width: min(var(--gallery-max), 100%);
-        margin: 0 auto;
-        text-align: left;
+        margin: 0;
+        padding: 0;
       }
 
-      .photo-album {
-        margin: 0 0 12px;
-        border: 1px solid var(--page-bg);
-        background: #0d0d0d;
-      }
-
-      .photo-album__summary {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 14px 16px;
-        cursor: pointer;
-        list-style: none;
-        font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
-      }
-
-      .photo-album__summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .photo-album__cover {
-        width: 68px;
-        min-width: 68px;
-        aspect-ratio: 5 / 6;
-        object-fit: cover;
-        border: 1px solid var(--page-bg);
-        background: #222;
-      }
-
-      .photo-album__title {
-        flex: 1;
-        font-weight: 800;
-        font-size: clamp(0.95rem, 2.8vw, 1.08rem);
-        letter-spacing: -0.02em;
-        color: var(--page-bg);
-        text-align: left;
-      }
-
-      .photo-album__chev {
-        flex-shrink: 0;
-        font-size: 0.72rem;
-        color: var(--page-bg);
-        transition: transform 0.25s ease;
-      }
-
-      .photo-album[open] .photo-album__chev {
-        transform: rotate(-180deg);
-      }
-
-      .photo-album__panel {
-        padding: 0 10px 14px;
-        border-top: 1px solid rgba(255, 213, 3, 0.25);
+      .photo-wall__cell {
+        margin: 0;
+        padding: 0;
+        aspect-ratio: 1;
+        overflow: hidden;
         background: #000;
       }
 
-      .photo-album__grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        padding-top: 12px;
-      }
-
-      @media (max-width: 720px) {
-        .photo-album__grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 400px) {
-        .photo-album__grid {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .photo-album__cell {
-        margin: 0;
-        aspect-ratio: 5 / 6;
-        overflow: hidden;
-        background: #111;
-      }
-
-      .photo-album__cell img {
+      .photo-wall__cell img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
-        transition: transform 0.35s ease;
-      }
-
-      @media (hover: hover) and (pointer: fine) {
-        .photo-album__cell:hover img {
-          transform: scale(1.05);
-        }
+        border: none;
+        outline: none;
       }
 
       .latest {
@@ -675,10 +611,10 @@
           <section class="latest photo-latest" aria-labelledby="photo-cat-heading">
             <div class="latest__intro">
               <p class="latest__title-en" id="photo-cat-heading">Photo</p>
-              <p class="latest__title-ko">현장별 포트폴리오</p>
-              <p class="latest__desc">대표사진(커버)을 누르면 해당 현장 사진들이 펼쳐집니다.</p>
+              <p class="latest__title-ko">포트폴리오</p>
+              <p class="latest__desc">등록된 사진이 가로 세 칸으로 이어집니다.</p>
             </div>
-            <div id="inlogPhotoAlbumsMount" class="photo-album-list"></div>
+            <div id="inlogPhotoAlbumsMount" role="list"></div>
           </section>
         </div>
       </main>
@@ -886,69 +822,49 @@
           });
           return out;
         }
+        function flattenPhotoAlbumsToSrcList(albums) {
+          const out = [];
+          (albums || []).forEach((alb) => {
+            const photos = alb.photos || [];
+            if (photos.length) {
+              photos.forEach((ph) => {
+                const src = String(ph && ph.src ? ph.src : "").trim();
+                if (src) out.push(src);
+              });
+            } else {
+              const c = String(alb.coverSrc || "").trim();
+              if (c) out.push(c);
+            }
+          });
+          return out;
+        }
         function renderPhotoAlbumsMount(photoPayload) {
           const mount = document.getElementById("inlogPhotoAlbumsMount");
           if (!mount) return;
           mount.innerHTML = "";
+          mount.removeAttribute("class");
+          mount.removeAttribute("role");
           const albums = photoPayload && Array.isArray(photoPayload.albums) ? photoPayload.albums : [];
-          if (!albums.length) {
+          const urls = flattenPhotoAlbumsToSrcList(albums);
+          if (!urls.length) {
             const p = document.createElement("p");
             p.className = "photo-empty";
-            p.textContent = "등록된 현장이 없습니다. 관리자 페이지에서 인로그 Photo 탭에 현장을 추가해 주세요.";
+            p.textContent = "등록된 사진이 없습니다. 관리자 페이지 인로그 Photo 탭에서 URL을 추가해 주세요.";
             mount.appendChild(p);
             return;
           }
-          albums.forEach((alb, idx) => {
-            const photos = alb.photos || [];
-            const coverFallback = photos[0] && photos[0].src ? photos[0].src : "";
-            const coverSrc = String(alb.coverSrc || "").trim() || coverFallback;
-            const det = document.createElement("details");
-            det.className = "photo-album";
-            const sum = document.createElement("summary");
-            sum.className = "photo-album__summary";
-            if (coverSrc) {
-              const cov = document.createElement("img");
-              cov.className = "photo-album__cover";
-              cov.src = coverSrc;
-              cov.alt = String(alb.coverAlt || alb.title || "").trim() || "";
-              cov.loading = "lazy";
-              sum.appendChild(cov);
-            }
-            const tit = document.createElement("span");
-            tit.className = "photo-album__title";
-            tit.textContent = alb.title || "현장 " + (idx + 1);
-            const chev = document.createElement("span");
-            chev.className = "photo-album__chev";
-            chev.setAttribute("aria-hidden", "true");
-            chev.textContent = "▼";
-            sum.appendChild(tit);
-            sum.appendChild(chev);
-            const panel = document.createElement("div");
-            panel.className = "photo-album__panel";
-            const grid = document.createElement("div");
-            grid.className = "photo-album__grid";
-            if (!photos.length) {
-              const empty = document.createElement("p");
-              empty.className = "photo-empty";
-              empty.style.margin = "12px 0";
-              empty.textContent = "이 현장에 등록된 사진이 없습니다.";
-              panel.appendChild(empty);
-            } else {
-              photos.forEach((ph) => {
-                const fig = document.createElement("figure");
-                fig.className = "photo-album__cell";
-                const im = document.createElement("img");
-                im.src = ph.src;
-                im.alt = ph.alt || "";
-                im.loading = "lazy";
-                fig.appendChild(im);
-                grid.appendChild(fig);
-              });
-              panel.appendChild(grid);
-            }
-            det.appendChild(sum);
-            det.appendChild(panel);
-            mount.appendChild(det);
+          mount.className = "photo-wall";
+          mount.setAttribute("role", "list");
+          urls.forEach((src) => {
+            const cell = document.createElement("div");
+            cell.className = "photo-wall__cell";
+            cell.setAttribute("role", "listitem");
+            const im = document.createElement("img");
+            im.src = src;
+            im.alt = "";
+            im.loading = "lazy";
+            cell.appendChild(im);
+            mount.appendChild(cell);
           });
         }
         function parsePhotoAlbumsFromKv(kv) {
