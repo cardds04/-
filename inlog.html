@@ -291,14 +291,14 @@
 
       .cinema-grid {
         width: 100%;
-        max-width: min(var(--gallery-max), 100%);
+        max-width: min(1500px, 98vw);
         margin: 0 auto;
         display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
       }
 
-      @media (max-width: 520px) {
+      @media (max-width: 860px) {
         .cinema-grid {
           grid-template-columns: 1fr;
         }
@@ -315,7 +315,7 @@
 
       .cinema-card__media {
         width: 100%;
-        aspect-ratio: 16 / 9;
+        aspect-ratio: 16 / 8.6;
         background: #000;
       }
 
@@ -1347,6 +1347,16 @@
             }
             const rows = await res.json();
             const kv = rows && rows[0] && rows[0].kv;
+            try {
+              if (kv && typeof kv === "object") {
+                const p = kv[PHOTO_STORAGE_KEY];
+                const c = kv[CINEMA_STORAGE_KEY];
+                if (p != null) localStorage.setItem(PHOTO_STORAGE_KEY, typeof p === "string" ? p : JSON.stringify(p));
+                if (c != null) localStorage.setItem(CINEMA_STORAGE_KEY, typeof c === "string" ? c : JSON.stringify(c));
+              }
+            } catch (e) {
+              // Safari private 등 localStorage 불가 환경은 무시
+            }
             const raw = kv && kv[STORAGE_KEY];
             if (raw) {
               try {
