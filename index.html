@@ -2186,6 +2186,18 @@
       /** 새 저장이 시작되면 진행 중이던 POST 를 취소 — 옛 상태 전송만 서버가 처리하는 낭비·대기 방지 */
       let dashboardSaveSupersedeAbort = null;
       let dashboardStateFetchPromise = null;
+      /** 로컬 2·3번 변경 세대. 서버에 성공 반영되면 serverAck 와 맞춤. 다르면 원격 pull 로 로컬 덮어쓰기 금지(유실 방지). */
+      let dashboardStateLocalGeneration = 0;
+      let dashboardStateServerAckGeneration = 0;
+      function bumpDashboardLocalMutationGeneration() {
+        dashboardStateLocalGeneration += 1;
+      }
+      function markDashboardServerAckMatchesLocal() {
+        dashboardStateServerAckGeneration = dashboardStateLocalGeneration;
+      }
+      function isDashboardStatePendingServerSync() {
+        return dashboardStateLocalGeneration !== dashboardStateServerAckGeneration;
+      }
       /** 마지막으로 적용·저장한 서버 스냅샷 — 폴링 시 동일하면 UI 생략 */
       let lastDashboardRemoteContentSig = "";
       let dashboardStatePollTimerId = null;
@@ -2256,9 +2268,13 @@
           clearTimeout(tid);
         }
       }
-      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true). */
-      async function executeDashboardStatePull(timeoutMs) {
+      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true).
+       * @param {{ force?: boolean }} [opts] force=true 이면 미동기화 로컬이 있어도 덮어씀(최초 부트스트랩만). */
+      async function executeDashboardStatePull(timeoutMs, opts) {
         if (!USE_SUPABASE_SYNC) return false;
+        if (!opts?.force && isDashboardStatePendingServerSync()) {
+          return false;
+        }
         const payload = await fetchDashboardStatePayload(timeoutMs);
         if (!payload.ok) return false;
         const { completedStr, logStr, historyStr } = payload;
@@ -2271,12 +2287,14 @@
         } finally {
           isApplyingRemoteDashboardState = false;
         }
+        markDashboardServerAckMatchesLocal();
         return true;
       }
       /** 다른 기기·브라우저에서 저장된 경우 — 새로고침 없이 반영 */
       async function maybePollDashboardStateFromOtherDevices() {
         if (!USE_SUPABASE_SYNC) return;
         if (document.visibilityState !== "visible") return;
+        if (isDashboardStatePendingServerSync()) return;
         if (dashboardStateSaveTimer !== null) return;
         if (dashboardSaveSupersedeAbort !== null) return;
         if (isApplyingRemoteDashboardState) return;
@@ -2294,6 +2312,7 @@
         } finally {
           isApplyingRemoteDashboardState = false;
         }
+        markDashboardServerAckMatchesLocal();
         if (typeof renderList === "function") renderList();
       }
       function startDashboardStateBackgroundSync() {
@@ -2312,6 +2331,8 @@
         } finally {
           isApplyingRemoteDashboardState = false;
         }
+        dashboardStateLocalGeneration = 0;
+        dashboardStateServerAckGeneration = 0;
         setSyncStatus(
           message ||
             "대시보드(2·3번) 서버와 맞출 수 없어 목록을 비웠습니다. 네트워크·VPN 확인 후 새로고침하세요.",
@@ -2323,7 +2344,7 @@
         if (!USE_SUPABASE_SYNC) return true;
         for (let i = 0; i < DASHBOARD_STATE_BOOTSTRAP_MAX_TRIES; i++) {
           if (i > 0) await new Promise((r) => setTimeout(r, 500 + i * 500));
-          const ok = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
+          const ok = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS, { force: true });
           if (ok) return true;
         }
         clearDashboardStateWhenServerUnreachable();
@@ -2333,7 +2354,7 @@
       function fetchAndApplyDashboardStateFromSupabase() {
         if (!USE_SUPABASE_SYNC) return Promise.resolve(false);
         if (dashboardStateFetchPromise) return dashboardStateFetchPromise;
-        const p = executeDashboardStatePull(DASHBOARD_STATE_FETCH_TIMEOUT_MS);
+        const p = executeDashboardStatePull(DASHBOARD_STATE_FETCH_TIMEOUT_MS, { force: false });
         dashboardStateFetchPromise = p;
         p.finally(() => {
           if (dashboardStateFetchPromise === p) dashboardStateFetchPromise = null;
@@ -2429,6 +2450,7 @@
             return "http_fail";
           }
           setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
+          markDashboardServerAckMatchesLocal();
           return "ok";
         } catch (error) {
           if (error && error.name === "AbortError") {
@@ -2461,20 +2483,31 @@
             noteDashboardRemoteContentSigFromStorage();
             return;
           }
-          setSyncStatus("대시보드 저장이 서버에 반영되지 않았습니다. 서버 데이터로 맞추는 중…", "warn");
-          let pulled = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
-          if (!pulled && !supersede.signal.aborted) {
-            await new Promise((res) => setTimeout(res, 600));
-            pulled = await executeDashboardStatePull(DASHBOARD_STATE_BOOTSTRAP_FETCH_TIMEOUT_MS);
+          setSyncStatus(
+            "대시보드(완료·오늘처리) 저장이 서버에 반영되지 않았습니다. 화면의 완료 상태는 이 브라우저에 유지됩니다. 잠시 후 자동 재시도하거나 네트워크를 확인하세요.",
+            "warn"
+          );
+          if (!supersede.signal.aborted) {
+            await new Promise((res) => setTimeout(res, 500));
+            if (!supersede.signal.aborted) {
+              const r2 = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
+              if (r2 === "ok") {
+                noteDashboardRemoteContentSigFromStorage();
+                setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
+                return;
+              }
+            }
           }
-          if (typeof renderList === "function") renderList();
-          if (!pulled) {
-            setSyncStatus(
-              "대시보드 서버와 맞추지 못했습니다. 스케줄 등록은 로컬에 유지됩니다. 네트워크·Supabase(completed_history 컬럼) 확인 후 새로고침하세요.",
-              "warn"
-            );
-          } else {
-            setSyncStatus(`대시보드 서버 기준으로 맞춤 ${formatSyncTime()}`, "ok");
+          if (!supersede.signal.aborted) {
+            await new Promise((res) => setTimeout(res, 1200));
+            if (!supersede.signal.aborted) {
+              const r3 = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
+              if (r3 === "ok") {
+                noteDashboardRemoteContentSigFromStorage();
+                setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
+                return;
+              }
+            }
           }
         } finally {
           if (dashboardSaveSupersedeAbort === supersede) {
@@ -10448,6 +10481,7 @@
       function writeDashboardCompletedHistory(rows) {
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, JSON.stringify(rows));
+          bumpDashboardLocalMutationGeneration();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedHistory", error);
@@ -10523,6 +10557,7 @@
       function writeDashboardCompletedEntries(entries) {
         try {
           localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
+          bumpDashboardLocalMutationGeneration();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedEntries", error);
@@ -10556,6 +10591,7 @@
       function writeWriterProcessLog(rows) {
         try {
           localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(rows));
+          bumpDashboardLocalMutationGeneration();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeWriterProcessLog", error);
@@ -13599,6 +13635,15 @@
       });
 
       document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden" && USE_SUPABASE_SYNC) {
+          if (dashboardStateSaveTimer !== null) {
+            clearTimeout(dashboardStateSaveTimer);
+            dashboardStateSaveTimer = null;
+          }
+          if (isDashboardStatePendingServerSync() && !isApplyingRemoteDashboardState) {
+            void saveDashboardPanelsStateToSupabase();
+          }
+        }
         if (document.visibilityState !== "visible") return;
         loadAdminCompaniesFromStorage();
         void pullCustomersFromSupabaseAndApply().then(() => {
