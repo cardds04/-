@@ -2238,6 +2238,7 @@
           }
         },
         saveSnapshotDebounced() {
+          // 로컬 스냅샷 저장만 — 자동 push 제거(로컬 변경이 Supabase를 덮어쓰지 않도록)
           if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
           this.snapshotTimer = setTimeout(() => {
             try {
@@ -2245,8 +2246,6 @@
             } catch (error) {
               // 무시
             }
-            this.setNativeLastScopedWriteAt(new Date().toISOString());
-            this.queueSupabaseKvPush();
           }, 10);
         },
         queueSupabaseKvPush() {
@@ -2954,8 +2953,16 @@
           const serverKeyCount = kv && typeof kv === "object" ? Object.keys(kv).length : 0;
           const shouldApply = serverKeyCount > 0;
           if (shouldApply) {
+            // 서버값으로 memoryStore 업데이트
             scheduleSiteClientKvState.hydrateFromServerKv(kv);
             scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
+            // 로컬 스냅샷을 서버값으로 즉시 덮어씀 — 구 스냅샷이 push 경로로 서버를 덮지 못하게
+            try {
+              scheduleSiteClientKvState.nativeSetItem(
+                scheduleSiteClientKvState.snapshotStorageKey,
+                JSON.stringify(Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()))
+              );
+            } catch (_) {}
             didHydrate = true;
           }
           return didHydrate;
