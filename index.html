@@ -2201,18 +2201,66 @@
       /** 마지막으로 적용·저장한 서버 스냅샷 — 폴링 시 동일하면 UI 생략 */
       let lastDashboardRemoteContentSig = "";
       let dashboardStatePollTimerId = null;
-      function noteDashboardRemoteContentSigFromStorage() {
-        const a = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
-        const b = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
-        const c = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
+      /** 완료·오늘처리·기록보기 — Supabase ↔ 이 메모리만 동기화. localStorage/proxy에 덮어쓰지 않음. */
+      const dashboardPanelsState = {
+        completed: [],
+        processLog: [],
+        history: []
+      };
+      function parseDashboardPanelsJsonArray(input) {
+        if (Array.isArray(input)) return input;
+        const str = typeof input === "string" ? input : JSON.stringify(input ?? []);
+        try {
+          const p = JSON.parse(str || "[]");
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      }
+      function applyDashboardPanelsFromServerStrings(completedStr, logStr, historyStr) {
+        dashboardPanelsState.completed = parseDashboardPanelsJsonArray(completedStr);
+        dashboardPanelsState.processLog = parseDashboardPanelsJsonArray(logStr);
+        dashboardPanelsState.history = parseDashboardPanelsJsonArray(historyStr || "[]");
+      }
+      function noteDashboardRemoteContentSigFromMemory() {
+        const a = JSON.stringify(dashboardPanelsState.completed);
+        const b = JSON.stringify(dashboardPanelsState.processLog);
+        const c = JSON.stringify(dashboardPanelsState.history);
         lastDashboardRemoteContentSig = `${a}\n${b}\n${c}`;
+      }
+      /** Supabase 미사용 시에만 예전처럼 네이티브 localStorage에 보관(동기화 대상 아님). */
+      function persistDashboardPanelsToNativeLocalIfNoSupabase() {
+        if (USE_SUPABASE_SYNC) return;
+        try {
+          const ns = scheduleSiteClientKvState?.nativeSetItem;
+          if (typeof ns !== "function") return;
+          ns(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(dashboardPanelsState.completed));
+          ns(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(dashboardPanelsState.processLog));
+          ns(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, JSON.stringify(dashboardPanelsState.history));
+        } catch (error) {
+          console.warn("[DASHBOARD_STATE] native persist", error);
+        }
+      }
+      function loadDashboardPanelsFromNativeLocalStorageIfNoSupabase() {
+        if (USE_SUPABASE_SYNC) return;
+        try {
+          const ng = scheduleSiteClientKvState?.nativeGetItem;
+          if (typeof ng !== "function") return;
+          dashboardPanelsState.completed = parseDashboardPanelsJsonArray(ng(STORAGE_ADMIN_DASHBOARD_COMPLETED));
+          dashboardPanelsState.processLog = parseDashboardPanelsJsonArray(ng(STORAGE_ADMIN_WRITER_PROCESS_LOG));
+          dashboardPanelsState.history = parseDashboardPanelsJsonArray(ng(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY));
+          noteDashboardRemoteContentSigFromMemory();
+          markDashboardServerAckMatchesLocal();
+        } catch (error) {
+          console.warn("[DASHBOARD_STATE] native load", error);
+        }
       }
       /** GET 만 수행 (적용 X). 폴링·비교용 */
       async function fetchDashboardStatePayload(timeoutMs) {
         if (!USE_SUPABASE_SYNC) return { ok: false };
         const ac = new AbortController();
         const tid = setTimeout(() => ac.abort(), timeoutMs);
-        const localHistoryFallback = () => localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
+        const localHistoryFallback = () => "[]";
         try {
           const base = `${SUPABASE_URL}/rest/v1/${SUPABASE_DASHBOARD_STATE_TABLE}?id=eq.${encodeURIComponent(
             SUPABASE_DASHBOARD_STATE_ID
@@ -2268,8 +2316,7 @@
           clearTimeout(tid);
         }
       }
-      /** 서버 한 번 조회 후 로컬 2·3번 키에 반영. 성공 시 true (빈 행이어도 true).
-       * @param {{ force?: boolean }} [opts] force=true 이면 미동기화 로컬이 있어도 덮어씀(최초 부트스트랩만). */
+      /** 서버 한 번 조회 후 메모리(대시보드 전용)에만 반영. localStorage 는 건드리지 않음. */
       async function executeDashboardStatePull(timeoutMs, opts) {
         if (!USE_SUPABASE_SYNC) return false;
         if (!opts?.force && isDashboardStatePendingServerSync()) {
@@ -2280,10 +2327,8 @@
         const { completedStr, logStr, historyStr } = payload;
         isApplyingRemoteDashboardState = true;
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, completedStr);
-          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, logStr);
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, historyStr || "[]");
-          lastDashboardRemoteContentSig = `${completedStr}\n${logStr}\n${historyStr || "[]"}`;
+          applyDashboardPanelsFromServerStrings(completedStr, logStr, historyStr || "[]");
+          noteDashboardRemoteContentSigFromMemory();
         } finally {
           isApplyingRemoteDashboardState = false;
         }
@@ -2305,10 +2350,8 @@
         if (sig === lastDashboardRemoteContentSig) return;
         isApplyingRemoteDashboardState = true;
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, payload.completedStr);
-          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, payload.logStr);
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, h);
-          lastDashboardRemoteContentSig = sig;
+          applyDashboardPanelsFromServerStrings(payload.completedStr, payload.logStr, h);
+          noteDashboardRemoteContentSigFromMemory();
         } finally {
           isApplyingRemoteDashboardState = false;
         }
@@ -2325,9 +2368,10 @@
       function clearDashboardStateWhenServerUnreachable(message) {
         isApplyingRemoteDashboardState = true;
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, "[]");
-          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, "[]");
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, "[]");
+          dashboardPanelsState.completed = [];
+          dashboardPanelsState.processLog = [];
+          dashboardPanelsState.history = [];
+          persistDashboardPanelsToNativeLocalIfNoSupabase();
         } finally {
           isApplyingRemoteDashboardState = false;
         }
@@ -2338,7 +2382,7 @@
             "대시보드(2·3번) 서버와 맞출 수 없어 목록을 비웠습니다. 네트워크·VPN 확인 후 새로고침하세요.",
           "error"
         );
-        noteDashboardRemoteContentSigFromStorage();
+        noteDashboardRemoteContentSigFromMemory();
       }
       async function fetchDashboardStateWithRetriesForBootstrap() {
         if (!USE_SUPABASE_SYNC) return true;
@@ -2367,30 +2411,9 @@
        */
       async function saveDashboardPanelsStateToSupabaseOnce(supersedeSignal) {
         if (supersedeSignal?.aborted) return "superseded";
-        const completedStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED) || "[]";
-        const logStr = localStorage.getItem(STORAGE_ADMIN_WRITER_PROCESS_LOG) || "[]";
-        const historyStr = localStorage.getItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY) || "[]";
-        let completed;
-        let process_log;
-        let completed_history;
-        try {
-          completed = JSON.parse(completedStr);
-          if (!Array.isArray(completed)) completed = [];
-        } catch {
-          completed = [];
-        }
-        try {
-          process_log = JSON.parse(logStr);
-          if (!Array.isArray(process_log)) process_log = [];
-        } catch {
-          process_log = [];
-        }
-        try {
-          completed_history = JSON.parse(historyStr);
-          if (!Array.isArray(completed_history)) completed_history = [];
-        } catch {
-          completed_history = [];
-        }
+        let completed = Array.isArray(dashboardPanelsState.completed) ? dashboardPanelsState.completed : [];
+        let process_log = Array.isArray(dashboardPanelsState.processLog) ? dashboardPanelsState.processLog : [];
+        let completed_history = Array.isArray(dashboardPanelsState.history) ? dashboardPanelsState.history : [];
         const merged = new AbortController();
         const tid = setTimeout(() => merged.abort(), DASHBOARD_STATE_SAVE_TIMEOUT_MS);
         const onSupersede = () => merged.abort();
@@ -2480,7 +2503,7 @@
           }
           if (supersede.signal.aborted || r === "superseded") return;
           if (r === "ok") {
-            noteDashboardRemoteContentSigFromStorage();
+            noteDashboardRemoteContentSigFromMemory();
             return;
           }
           setSyncStatus(
@@ -2492,7 +2515,7 @@
             if (!supersede.signal.aborted) {
               const r2 = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
               if (r2 === "ok") {
-                noteDashboardRemoteContentSigFromStorage();
+                noteDashboardRemoteContentSigFromMemory();
                 setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
                 return;
               }
@@ -2503,7 +2526,7 @@
             if (!supersede.signal.aborted) {
               const r3 = await saveDashboardPanelsStateToSupabaseOnce(supersede.signal);
               if (r3 === "ok") {
-                noteDashboardRemoteContentSigFromStorage();
+                noteDashboardRemoteContentSigFromMemory();
                 setSyncStatus(`대시보드 동기화 ${formatSyncTime()}`, "ok");
                 return;
               }
@@ -10412,7 +10435,7 @@
       }
 
       function readDashboardCompletedEntries() {
-        const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED);
+        const raw = dashboardPanelsState.completed;
         const today = new Date();
         const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
         return raw
@@ -10464,7 +10487,7 @@
       }
 
       function readDashboardCompletedHistory() {
-        const raw = readStorageArray(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY);
+        const raw = dashboardPanelsState.history;
         return raw
           .filter((v) => v && typeof v === "object")
           .map((v) => ({
@@ -10480,8 +10503,9 @@
 
       function writeDashboardCompletedHistory(rows) {
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY, JSON.stringify(rows));
+          dashboardPanelsState.history = Array.isArray(rows) ? rows : [];
           bumpDashboardLocalMutationGeneration();
+          persistDashboardPanelsToNativeLocalIfNoSupabase();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedHistory", error);
@@ -10556,8 +10580,9 @@
 
       function writeDashboardCompletedEntries(entries) {
         try {
-          localStorage.setItem(STORAGE_ADMIN_DASHBOARD_COMPLETED, JSON.stringify(entries));
+          dashboardPanelsState.completed = Array.isArray(entries) ? entries : [];
           bumpDashboardLocalMutationGeneration();
+          persistDashboardPanelsToNativeLocalIfNoSupabase();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeDashboardCompletedEntries", error);
@@ -10575,7 +10600,7 @@
       }
 
       function readWriterProcessLog() {
-        return readStorageArray(STORAGE_ADMIN_WRITER_PROCESS_LOG)
+        return dashboardPanelsState.processLog
           .filter((row) => row && typeof row === "object")
           .map((row) => ({
             id: String(row.id || ""),
@@ -10590,8 +10615,9 @@
 
       function writeWriterProcessLog(rows) {
         try {
-          localStorage.setItem(STORAGE_ADMIN_WRITER_PROCESS_LOG, JSON.stringify(rows));
+          dashboardPanelsState.processLog = Array.isArray(rows) ? rows : [];
           bumpDashboardLocalMutationGeneration();
+          persistDashboardPanelsToNativeLocalIfNoSupabase();
           queueDashboardStateSaveToSupabase();
         } catch (error) {
           console.warn("writeWriterProcessLog", error);
@@ -13466,6 +13492,8 @@
           } catch (e) {
             console.warn("[DASHBOARD_STATE] bootstrap", e);
           }
+        } else {
+          loadDashboardPanelsFromNativeLocalStorageIfNoSupabase();
         }
         loadAdminCompaniesFromStorage();
         void pullAdminCompaniesFromSupabaseAndRefresh();
