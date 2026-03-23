@@ -2766,7 +2766,6 @@
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
-      const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;
       const INLOG_SUPABASE_REFRESH_THROTTLE_MS = 6000;
       let scheduleSiteClientKvPushInFlight = false;
       let inlogLastSupabaseRefreshAt = 0;
@@ -2869,19 +2868,6 @@
         }
         return ok;
       }
-      function scheduleClientKvSeedPushIfNeeded() {
-        if (!SUPABASE_PUSH_ENABLED) return;
-        if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
-        const key = "__scheduleSiteClientKvLastSeedPush";
-        try {
-          const last = Number(scheduleSiteClientKvState.nativeGetItem(key));
-          if (Number.isFinite(last) && Date.now() - last < CLIENT_KV_SEED_PUSH_INTERVAL_MS) return;
-          scheduleSiteClientKvState.nativeSetItem(key, String(Date.now()));
-        } catch (error) {
-          // 무시
-        }
-        setTimeout(() => void pushScheduleSiteClientKvToSupabase(), 1000);
-      }
       async function pullScheduleSiteClientKvFromSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) {
           scheduleSiteClientKvState.initialPullDone = true;
@@ -2933,7 +2919,6 @@
         } finally {
           clearTimeout(tid);
           scheduleSiteClientKvState.initialPullDone = true;
-          scheduleClientKvSeedPushIfNeeded();
           if (scheduleSiteClientKvState.pendingKvPushAfterInitialPull) {
             scheduleSiteClientKvState.queueSupabaseKvPush();
           }
@@ -2942,7 +2927,7 @@
       async function pushScheduleSiteClientKvToSupabase() {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
-        const kvFiltered = Object.fromEntries(
+        const kvFilteredLocal = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
             ([k]) =>
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
@@ -2950,6 +2935,19 @@
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
           )
         );
+        // 행위(로컬 변경) 전에 서버가 먼저 갱신됐을 수 있으므로 push 직전 최신 서버 상태를 pull해 병합
+        const serverRow = await fetchClientKvRowFromSupabase();
+        const serverKvRaw = serverRow && serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
+        const serverKvFiltered = Object.fromEntries(
+          Object.entries(serverKvRaw).filter(
+            ([k]) =>
+              String(k || "").startsWith("scheduleSite") &&
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
+              k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+          )
+        );
+        const kvFiltered = { ...serverKvFiltered, ...kvFilteredLocal };
         if (!Object.keys(kvFiltered).length) return false;
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
