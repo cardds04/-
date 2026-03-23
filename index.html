@@ -3462,6 +3462,7 @@
       let hasLoadedSchedulesFromServer = false;
       let limitConfigSyncPromise = null;
       let syncStatusBadgeEl = null;
+      let syncStatusPinnedUntilMs = 0;
       let autoBackupTimer = null;
       let latestSubmissionReceipts = [];
       let latestScheduleReceiptLedger = [];
@@ -3473,7 +3474,11 @@
         const s = String(date.getSeconds()).padStart(2, "0");
         return `${h}:${m}:${s}`;
       }
-      function setSyncStatus(text, tone = "info") {
+      function setSyncStatus(text, tone = "info", options = {}) {
+        const now = Date.now();
+        const force = Boolean(options && options.force);
+        const pinMs = Number(options && options.pinMs) || 0;
+        if (!force && now < syncStatusPinnedUntilMs) return;
         if (!syncStatusBadgeEl) {
           syncStatusBadgeEl = document.createElement("div");
           syncStatusBadgeEl.style.position = "fixed";
@@ -3496,6 +3501,11 @@
         };
         syncStatusBadgeEl.style.background = toneMap[tone] || toneMap.info;
         syncStatusBadgeEl.textContent = `동기화: ${text}`;
+        if (pinMs > 0) {
+          syncStatusPinnedUntilMs = Date.now() + pinMs;
+        } else if (Date.now() >= syncStatusPinnedUntilMs) {
+          syncStatusPinnedUntilMs = 0;
+        }
       }
       function updateLastPullTime(storageKey, rows, updatedAtField = "updated_at") {
         const latest = (Array.isArray(rows) ? rows : [])
@@ -12032,8 +12042,8 @@
                 if (inlogPhotoSaveStatusEl) {
                   inlogPhotoSaveStatusEl.textContent = "저장됨 · Supabase 반영 완료";
                 }
-                setSyncStatus("등록완료 데이터일치완료", "ok");
-                window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok"), 1000);
+                setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
+                window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
               } else if (verify.reconciled) {
                 if (inlogPhotoSaveStatusEl) {
                   inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구";
