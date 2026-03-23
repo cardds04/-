@@ -2105,6 +2105,13 @@
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
       const STORAGE_INLOG_CINEMA_ITEMS = "scheduleSiteInlogCinemaItemsV1";
+      const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
+      // 인로그 전용 키 집합: 스냅샷 preload 제외 + 배경 push 제외에 공통 사용
+      const INLOG_DATA_KEYS = new Set([
+        STORAGE_INLOG_PHOTO_ALBUMS,
+        STORAGE_INLOG_CINEMA_ITEMS,
+        STORAGE_INLOG_HOME_MAIN
+      ]);
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
@@ -2270,11 +2277,7 @@
           // 이 키들만 Supabase pull 완료 후 memoryStore에 채워지도록 해서,
           // 구 스냅샷 값이 저장 버튼 클릭 시 서버를 덮어쓰는 것을 방지한다.
           // 나머지 스케줄·회사 등의 키는 UX를 위해 스냅샷에서 미리 로드한다.
-          const INLOG_ONLY_KEYS_NO_PRELOAD = new Set([
-            "scheduleSiteInlogPhotoAlbumsV1",
-            "scheduleSiteInlogCinemaItemsV1",
-            "scheduleSiteInlogHomeMainV1"
-          ]);
+          const INLOG_ONLY_KEYS_NO_PRELOAD = INLOG_DATA_KEYS;
           try {
             const rawSnapshot = this.nativeGetItem(this.snapshotStorageKey);
             const parsedSnapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null;
@@ -2835,7 +2838,7 @@
       const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
       /** 저장 직후 호출: 첫 Supabase pull 이 끝날 때까지 기다렸다가 즉시 push (샘플만 보이는 현상 방지) */
-      function requestClientKvPushWhenReady() {
+      function requestClientKvPushWhenReady(includeInlogData = false) {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE) return;
         let n = 0;
         const tick = () => {
@@ -2849,11 +2852,11 @@
             setTimeout(tick, CLIENT_KV_PUSH_WHEN_READY_POLL_MS);
             return;
           }
-          void window.__scheduleSitePushClientKv?.();
+          void pushScheduleSiteClientKvToSupabase(includeInlogData);
         };
         setTimeout(tick, 30);
       }
-      async function forceClientKvPushWhenReady() {
+      async function forceClientKvPushWhenReady(includeInlogData = false) {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE) return false;
         let n = 0;
         while (!scheduleSiteClientKvState.initialPullDone && n < CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS) {
@@ -2864,7 +2867,7 @@
           scheduleSiteClientKvState.pendingKvPushAfterInitialPull = true;
           return false;
         }
-        return Boolean(await pushScheduleSiteClientKvToSupabase());
+        return Boolean(await pushScheduleSiteClientKvToSupabase(includeInlogData));
       }
       async function fetchClientKvRowFromSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return null;
@@ -3016,16 +3019,25 @@
           })();
         }, CLIENT_KV_SOFT_PULL_DEBOUNCE_MS);
       }
-      async function pushScheduleSiteClientKvToSupabase() {
+      // includeInlogData=false(기본): 인로그 photo/cinema/home 키를 로컬 memoryStore에서 제외해
+      // 배경 push가 저장 버튼 이외 경로로 서버의 인로그 데이터를 덮어쓰지 않도록 한다.
+      // includeInlogData=true: 저장 버튼에서만 사용 — 인로그 키 포함 전체 push.
+      async function pushScheduleSiteClientKvToSupabase(includeInlogData = false) {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
+        const EXCLUDED_KEYS = new Set([
+          STORAGE_ADMIN_DASHBOARD_COMPLETED,
+          STORAGE_ADMIN_WRITER_PROCESS_LOG,
+          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+        ]);
         const kvFilteredLocal = Object.fromEntries(
-          [...scheduleSiteClientKvState.memoryStore.entries()].filter(
-            ([k]) =>
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
-              k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
-          )
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
+            if (EXCLUDED_KEYS.has(k)) return false;
+            // 저장 버튼(includeInlogData=true)이 아닌 경우 인로그 키는 로컬에서 제외 →
+            // 서버 최신 인로그 데이터가 항상 보존된다.
+            if (!includeInlogData && INLOG_DATA_KEYS.has(k)) return false;
+            return true;
+          })
         );
         // 행위(로컬 변경) 전에 서버가 먼저 갱신됐을 수 있으므로 push 직전 최신 서버 상태를 pull해 병합
         const serverRow = await fetchClientKvRowFromSupabase();
@@ -3039,6 +3051,8 @@
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
           )
         );
+        // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
+        // 서버의 인로그 데이터가 그대로 유지된다.
         const kvFiltered = { ...serverKvFiltered, ...kvFilteredLocal };
         if (!Object.keys(kvFiltered).length) return false;
         scheduleSiteClientKvPushInFlight = true;
@@ -12263,11 +12277,12 @@
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
           if (USE_SUPABASE_SYNC) {
-            let ok = await forceClientKvPushWhenReady();
+            // includeInlogData=true: 저장 버튼만 인로그 키 포함 push
+            let ok = await forceClientKvPushWhenReady(true);
             if (!ok && SUPABASE_PUSH_ENABLED) {
               // 네트워크 지연/초기 pull 경합 시 1회 추가 재시도
               await new Promise((r) => setTimeout(r, 350));
-              ok = await forceClientKvPushWhenReady();
+              ok = await forceClientKvPushWhenReady(true);
             }
             if (!ok) {
               if (!SUPABASE_PUSH_ENABLED) {
@@ -12280,7 +12295,7 @@
                   inlogPhotoSaveStatusEl.textContent = "저장 유지 · Supabase 반영 재시도 중(네트워크 확인)";
                 }
                 // 실패해도 즉시 되돌리지 않고 현재 행위를 유지한 채 재시도 큐에 위임
-                requestClientKvPushWhenReady();
+                requestClientKvPushWhenReady(true);
               }
             } else {
               // 저장 성공 후 Supabase에서 즉시 re-pull → 로컬을 서버 확정값으로 갱신
