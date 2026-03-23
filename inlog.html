@@ -861,6 +861,8 @@
             const item = payload.gallery[i];
             if (!item) continue;
             const img = document.querySelector('.inlog-gallery-img[data-inlog-index="' + i + '"]');
+            const figure = img && img.closest(".gallery__item");
+            if (figure) figure.hidden = false;
             if (img && item.src) {
               img.src = item.src;
               img.alt = item.alt || img.alt || "";
@@ -877,6 +879,72 @@
               }
             }
             applyInlogGalleryLink(i, item);
+          }
+        }
+        /** 포토 탭에 등록한 현장 대표사진 → 메인 갤러리. 나머지 칸은 인로그 홈 설정 폴백 */
+        function applyInlogHomeGalleryFromPhotoAlbums(photoPayload, homeFallbackPayload) {
+          if (!countRenderableAlbums(photoPayload)) {
+            applyInlogHomePayload(homeFallbackPayload);
+            return;
+          }
+          const albums = photoPayload && Array.isArray(photoPayload.albums) ? photoPayload.albums : [];
+          const withCover = albums.filter((alb) => Boolean(getAlbumCoverSrc(alb)));
+          for (let i = 0; i < SLOT_COUNT; i++) {
+            const img = document.querySelector('.inlog-gallery-img[data-inlog-index="' + i + '"]');
+            const linkEl = document.querySelector('.inlog-gallery-link[data-inlog-index="' + i + '"]');
+            const badge = document.querySelector('.inlog-gallery-badge[data-inlog-index="' + i + '"]');
+            const figure = img && img.closest(".gallery__item");
+            if (i < withCover.length) {
+              const alb = withCover[i];
+              const cover = getAlbumCoverSrc(alb);
+              const titleStr = String(alb.title || "").trim();
+              if (figure) figure.hidden = false;
+              if (img) {
+                img.src = cover;
+                img.alt = titleStr || "포트폴리오";
+              }
+              if (badge) {
+                badge.textContent = "";
+                badge.hidden = true;
+              }
+              if (linkEl) {
+                const aid = String(alb.id || "").trim();
+                linkEl.href = aid ? "#photo?album=" + encodeURIComponent(aid) : "#photo";
+                linkEl.classList.remove("inlog-gallery-link--inactive");
+                linkEl.removeAttribute("target");
+                linkEl.removeAttribute("rel");
+                linkEl.setAttribute(
+                  "aria-label",
+                  (titleStr || "포토") + " — 포토 페이지에서 보기"
+                );
+              }
+            } else {
+              const item = homeFallbackPayload.gallery[i];
+              const hasSrc = item && String(item.src || "").trim();
+              if (figure) figure.hidden = !hasSrc;
+              if (hasSrc && img) {
+                img.src = item.src;
+                img.alt = item.alt || "";
+              }
+              if (badge) {
+                const t = hasSrc ? String(item.badge || "").trim() : "";
+                if (t) {
+                  badge.textContent = t;
+                  badge.hidden = false;
+                } else {
+                  badge.textContent = "";
+                  badge.hidden = true;
+                }
+              }
+              if (hasSrc) applyInlogGalleryLink(i, item);
+              else if (linkEl) {
+                linkEl.href = "#";
+                linkEl.classList.add("inlog-gallery-link--inactive");
+                linkEl.removeAttribute("target");
+                linkEl.removeAttribute("rel");
+                linkEl.removeAttribute("aria-label");
+              }
+            }
           }
         }
         function defaultPhotoAlbumsPayload() {
@@ -922,7 +990,19 @@
           if (list.length) return list;
           return cover ? [cover] : [];
         }
-        function renderPhotoAlbumsMount(photoPayload) {
+        function getPhotoOpenAlbumIdFromHash() {
+          const raw = String(location.hash || "").replace(/^#/, "");
+          if (raw !== "photo" && !raw.startsWith("photo?")) return "";
+          const q = raw.indexOf("?");
+          if (q < 0) return "";
+          try {
+            const params = new URLSearchParams(raw.slice(q + 1));
+            return String(params.get("album") || "").trim();
+          } catch (e) {
+            return "";
+          }
+        }
+        function renderPhotoAlbumsMount(photoPayload, openAlbumId) {
           const mount = document.getElementById("inlogPhotoAlbumsMount");
           if (!mount) return;
           mount.innerHTML = "";
@@ -1034,6 +1114,20 @@
           browser.appendChild(scroller);
           browser.appendChild(expand);
           mount.appendChild(browser);
+          const wantOpen = String(openAlbumId || "").trim() || getPhotoOpenAlbumIdFromHash();
+          if (wantOpen) {
+            const match = withCover.find((x) => String(x.alb.id || "") === wantOpen);
+            if (match) {
+              const btns = grid.querySelectorAll(".photo-cover-cell");
+              for (let bi = 0; bi < btns.length; bi++) {
+                const b = btns[bi];
+                if (b.dataset.albumId === wantOpen) {
+                  openExpand(match.alb, getAlbumDetailPhotos(match.alb), b);
+                  break;
+                }
+              }
+            }
+          }
         }
         document.addEventListener("keydown", (e) => {
           if (e.key !== "Escape") return;
@@ -1079,8 +1173,8 @@
           const url = syncConfig.supabaseUrl || FALLBACK_SUPABASE_URL;
           const key = syncConfig.supabaseAnonKey || FALLBACK_SUPABASE_ANON_KEY;
           if (!url || !key) {
-            applyInlogHomePayload(payload);
-            renderPhotoAlbumsMount(photoPayload);
+            applyInlogHomeGalleryFromPhotoAlbums(photoPayload, payload);
+            renderPhotoAlbumsMount(photoPayload, getPhotoOpenAlbumIdFromHash());
             return;
           }
           try {
@@ -1092,9 +1186,10 @@
               }
             );
             if (!res.ok) {
-              applyInlogHomePayload(payload);
               const localPhoto = parsePhotoAlbumsFromLocalStorage();
-              renderPhotoAlbumsMount(countRenderableAlbums(localPhoto) ? localPhoto : photoPayload);
+              const effectivePhoto = countRenderableAlbums(localPhoto) ? localPhoto : photoPayload;
+              applyInlogHomeGalleryFromPhotoAlbums(effectivePhoto, payload);
+              renderPhotoAlbumsMount(effectivePhoto, getPhotoOpenAlbumIdFromHash());
               return;
             }
             const rows = await res.json();
@@ -1124,8 +1219,8 @@
               photoPayload = localPhoto;
             }
           }
-          applyInlogHomePayload(payload);
-          renderPhotoAlbumsMount(photoPayload);
+          applyInlogHomeGalleryFromPhotoAlbums(photoPayload, payload);
+          renderPhotoAlbumsMount(photoPayload, getPhotoOpenAlbumIdFromHash());
         }
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadInlogHomeFromSupabase);
         else void loadInlogHomeFromSupabase();
@@ -1133,15 +1228,51 @@
     </script>
     <script>
       (function () {
+        function getInlogPhotoAlbumIdFromHash() {
+          const raw = String(location.hash || "").replace(/^#/, "");
+          if (raw !== "photo" && !raw.startsWith("photo?")) return "";
+          const q = raw.indexOf("?");
+          if (q < 0) return "";
+          try {
+            return String(new URLSearchParams(raw.slice(q + 1)).get("album") || "").trim();
+          } catch (e) {
+            return "";
+          }
+        }
+        function isInlogPhotoHash() {
+          const raw = String(location.hash || "").replace(/^#/, "");
+          return raw === "photo" || raw.startsWith("photo?");
+        }
+        function tryOpenInlogPhotoAlbumFromHash() {
+          const id = getInlogPhotoAlbumIdFromHash();
+          if (!id) return;
+          const btns = document.querySelectorAll("#inlogPhotoAlbumsMount button.photo-cover-cell");
+          for (let i = 0; i < btns.length; i++) {
+            if (btns[i].dataset.albumId === id) {
+              btns[i].click();
+              break;
+            }
+          }
+        }
         function applyInlogRoute() {
-          const isPhoto = /^#photo$/i.test(location.hash || "");
+          const isPhoto = isInlogPhotoHash();
           const home = document.getElementById("inlog-view-home");
           const photo = document.getElementById("inlog-view-photo");
           const navPhoto = document.getElementById("inlog-nav-photo");
           if (home) home.hidden = isPhoto;
           if (photo) photo.hidden = !isPhoto;
           if (navPhoto) navPhoto.classList.toggle("is-active", isPhoto);
-          if (isPhoto) window.scrollTo(0, 0);
+          if (isPhoto) {
+            window.scrollTo(0, 0);
+            const albumId = getInlogPhotoAlbumIdFromHash();
+            requestAnimationFrame(() => {
+              if (!albumId) {
+                document.querySelector("#inlogPhotoAlbumsMount .photo-expand__close")?.click();
+              } else {
+                tryOpenInlogPhotoAlbumFromHash();
+              }
+            });
+          }
         }
         window.addEventListener("hashchange", applyInlogRoute);
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyInlogRoute);
