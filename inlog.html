@@ -1056,6 +1056,20 @@
           }
           return defaultPhotoAlbumsPayload();
         }
+        function parsePhotoAlbumsFromLocalStorage() {
+          try {
+            const raw = localStorage.getItem(PHOTO_STORAGE_KEY);
+            if (!raw) return defaultPhotoAlbumsPayload();
+            const parsed = JSON.parse(raw);
+            return mergePhotoAlbumsPayload(parsed);
+          } catch (e) {
+            return defaultPhotoAlbumsPayload();
+          }
+        }
+        function countRenderableAlbums(payload) {
+          const albums = payload && Array.isArray(payload.albums) ? payload.albums : [];
+          return albums.filter((alb) => Boolean(getAlbumCoverSrc(alb))).length;
+        }
         async function loadInlogHomeFromSupabase() {
           let payload = defaultInlogHomePayload();
           let photoPayload = defaultPhotoAlbumsPayload();
@@ -1079,7 +1093,8 @@
             );
             if (!res.ok) {
               applyInlogHomePayload(payload);
-              renderPhotoAlbumsMount(photoPayload);
+              const localPhoto = parsePhotoAlbumsFromLocalStorage();
+              renderPhotoAlbumsMount(countRenderableAlbums(localPhoto) ? localPhoto : photoPayload);
               return;
             }
             const rows = await res.json();
@@ -1096,8 +1111,18 @@
               }
             }
             photoPayload = parsePhotoAlbumsFromKv(kv);
+            if (!countRenderableAlbums(photoPayload)) {
+              const localPhoto = parsePhotoAlbumsFromLocalStorage();
+              if (countRenderableAlbums(localPhoto)) {
+                photoPayload = localPhoto;
+              }
+            }
           } catch (e) {
             console.warn("[INLOG_HOME] load", e);
+            const localPhoto = parsePhotoAlbumsFromLocalStorage();
+            if (countRenderableAlbums(localPhoto)) {
+              photoPayload = localPhoto;
+            }
           }
           applyInlogHomePayload(payload);
           renderPhotoAlbumsMount(photoPayload);
