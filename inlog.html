@@ -17,13 +17,8 @@
         --ink: #000000;
         --grid-line: #000000;
         --gallery-max: 1100px;
-        --header-stack-h: calc(20px + 5.25rem);
-      }
-
-      @media (max-width: 560px) {
-        :root {
-          --header-stack-h: calc(20px + 8.5rem);
-        }
+        /* 실제 높이는 헤더 바로 아래 스크립트가 .site-header-fixed offsetHeight 로 덮어씀 */
+        --header-stack-h: 88px;
       }
 
       * {
@@ -337,6 +332,24 @@
         </header>
       </div>
     </div>
+    <script>
+      (function () {
+        function syncInlogHeaderStack() {
+          var el = document.querySelector(".site-header-fixed");
+          if (!el) return;
+          document.documentElement.style.setProperty("--header-stack-h", el.offsetHeight + "px");
+        }
+        syncInlogHeaderStack();
+        window.addEventListener("resize", syncInlogHeaderStack);
+        var el = document.querySelector(".site-header-fixed");
+        if (el && typeof ResizeObserver !== "undefined") {
+          new ResizeObserver(syncInlogHeaderStack).observe(el);
+        }
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(syncInlogHeaderStack).catch(function () {});
+        }
+      })();
+    </script>
     <div class="page">
       <main>
         <section class="latest" aria-labelledby="latest-heading">
