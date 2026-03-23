@@ -1687,8 +1687,8 @@
             <h2>인로그 메인 화면</h2>
           </div>
           <p class="helper" style="margin-bottom: 6px;">
-            포트폴리오 그리드 <strong>1~12번</strong>만 <strong>업로드</strong>하거나 URL로 지정합니다. 업로드는 Supabase Storage 버킷 <code>inlog_home</code>에 올라가며, 저장 시
-            <code>schedule_site_client_kv</code>에 동기화됩니다.
+            포트폴리오 그리드 <strong>1~12번</strong>을 <strong>업로드</strong>하거나 이미지 URL로 지정합니다. <strong>이동 주소</strong>를 넣으면 홈페이지에서 해당 사진을 눌렀을 때 그 주소로 이동합니다(비우면 클릭 없음). 업로드는 Supabase Storage
+            <code>inlog_home</code>, 저장은 <code>schedule_site_client_kv</code>에 동기화됩니다.
           </p>
           <p class="helper" style="margin-bottom: 12px;">
             <a href="inlog.html" target="_blank" rel="noopener noreferrer">inlog.html 새 탭에서 미리보기</a>
@@ -2090,24 +2090,32 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
+      function sanitizeInlogHomeHref(s) {
+        const t = String(s || "").trim();
+        if (!t) return "";
+        const low = t.toLowerCase();
+        if (low.startsWith("javascript:") || low.startsWith("data:") || low.startsWith("vbscript:")) return "";
+        return t;
+      }
       function defaultInlogHomeMainPayload() {
         const u = (id, w) =>
           `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+        const gl = (id, w, alt, badge, link = "") => ({ src: u(id, w), alt, badge, link });
         return {
           v: 1,
           gallery: [
-            { src: u("photo-1515886657613-9f3515b0c78f", 900), alt: "최신 작품 1", badge: "" },
-            { src: u("photo-1469334031218-e382a71b716b", 900), alt: "최신 작품 2", badge: "New Brand" },
-            { src: u("photo-1509631179647-017733169913", 900), alt: "최신 작품 3", badge: "" },
-            { src: u("photo-1521572163474-6864f9cf17ab", 900), alt: "최신 작품 4", badge: "New Brand" },
-            { src: u("photo-1496747611176-843222e1e57c", 900), alt: "최신 작품 5", badge: "" },
-            { src: u("photo-1539109136881-3be0616acf4b", 900), alt: "최신 작품 6", badge: "" },
-            { src: u("photo-1524504388940-b1c1722653e1", 900), alt: "최신 작품 7", badge: "" },
-            { src: u("photo-1504194104404-433918773792", 900), alt: "최신 작품 8", badge: "" },
-            { src: u("photo-1483988352577-2f64eed4693a", 900), alt: "최신 작품 9", badge: "" },
-            { src: u("photo-1475180238706-0630aa49665f", 900), alt: "최신 작품 10", badge: "" },
-            { src: u("photo-1552374196-c4e7ffc6e126", 900), alt: "최신 작품 11", badge: "" },
-            { src: u("photo-1506794778202-cad84cf45f1d", 900), alt: "최신 작품 12", badge: "" }
+            gl("photo-1515886657613-9f3515b0c78f", 900, "최신 작품 1", ""),
+            gl("photo-1469334031218-e382a71b716b", 900, "최신 작품 2", "New Brand"),
+            gl("photo-1509631179647-017733169913", 900, "최신 작품 3", ""),
+            gl("photo-1521572163474-6864f9cf17ab", 900, "최신 작품 4", "New Brand"),
+            gl("photo-1496747611176-843222e1e57c", 900, "최신 작품 5", ""),
+            gl("photo-1539109136881-3be0616acf4b", 900, "최신 작품 6", ""),
+            gl("photo-1524504388940-b1c1722653e1", 900, "최신 작품 7", ""),
+            gl("photo-1504194104404-433918773792", 900, "최신 작품 8", ""),
+            gl("photo-1483988352577-2f64eed4693a", 900, "최신 작품 9", ""),
+            gl("photo-1475180238706-0630aa49665f", 900, "최신 작품 10", ""),
+            gl("photo-1552374196-c4e7ffc6e126", 900, "최신 작품 11", ""),
+            gl("photo-1506794778202-cad84cf45f1d", 900, "최신 작품 12", "")
           ]
         };
       }
@@ -2125,6 +2133,7 @@
             if (item.src) merged.gallery[i].src = String(item.src).trim();
             if (item.alt != null) merged.gallery[i].alt = String(item.alt);
             merged.gallery[i].badge = item.badge != null ? String(item.badge).trim() : "";
+            if (item.link != null) merged.gallery[i].link = sanitizeInlogHomeHref(String(item.link));
           }
           return merged;
         } catch {
@@ -2173,7 +2182,12 @@
           upRow.appendChild(upBtn);
           upRow.appendChild(prevImg);
           wrap.appendChild(upRow);
-          [["URL", `inlogGallerySrc${n}`, "https://..."], ["대체텍스트", `inlogGalleryAlt${n}`, ""], ["배지", `inlogGalleryBadge${n}`, "New Brand 등 (없으면 비움)"]].forEach(
+          [
+            ["URL", `inlogGallerySrc${n}`, "https://..."],
+            ["이동 주소", `inlogGalleryLink${n}`, "클릭 시 열 주소 (비우면 링크 없음)"],
+            ["대체텍스트", `inlogGalleryAlt${n}`, ""],
+            ["배지", `inlogGalleryBadge${n}`, "New Brand 등 (없으면 비움)"]
+          ].forEach(
             ([label, id, ph]) => {
               const row = document.createElement("div");
               row.className = "input-row";
@@ -2200,9 +2214,11 @@
         for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
           const g = p.gallery[i] || {};
           const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
+          const linkEl = document.getElementById(`inlogGalleryLink${i + 1}`);
           const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
           const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
           if (srcEl) srcEl.value = g.src || "";
+          if (linkEl) linkEl.value = g.link || "";
           if (altEl) altEl.value = g.alt || "";
           if (badgeEl) badgeEl.value = g.badge || "";
         }
@@ -2212,6 +2228,7 @@
         const base = defaultInlogHomeMainPayload();
         for (let i = 0; i < INLOG_HOME_GALLERY_COUNT; i++) {
           const srcEl = document.getElementById(`inlogGallerySrc${i + 1}`);
+          const linkInEl = document.getElementById(`inlogGalleryLink${i + 1}`);
           const altEl = document.getElementById(`inlogGalleryAlt${i + 1}`);
           const badgeEl = document.getElementById(`inlogGalleryBadge${i + 1}`);
           const src = String(srcEl?.value || "").trim();
@@ -2220,6 +2237,7 @@
           if (src) base.gallery[i].src = src;
           if (alt) base.gallery[i].alt = alt;
           base.gallery[i].badge = badge;
+          base.gallery[i].link = sanitizeInlogHomeHref(linkInEl?.value);
         }
         return base;
       }
