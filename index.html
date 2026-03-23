@@ -2115,10 +2115,19 @@
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
-      /** dev: pull only(읽기전용), ops: pull+push(기본) */
-      const APP_MODE = String(syncConfig.appMode || "ops")
-        .trim()
-        .toLowerCase();
+      const runtimeHost = String(location.hostname || "").toLowerCase();
+      const isLocalDesktopRuntime =
+        location.protocol === "file:" ||
+        runtimeHost === "localhost" ||
+        runtimeHost === "127.0.0.1" ||
+        runtimeHost === "::1" ||
+        runtimeHost.endsWith(".local");
+      /** 로컬 데스크탑 개발환경만 강제 읽기전용(dev), 배포 웹은 sync-config(appMode) 따름 */
+      const APP_MODE = isLocalDesktopRuntime
+        ? "dev"
+        : String(syncConfig.appMode || "ops")
+            .trim()
+            .toLowerCase();
       const REMOTE_SYNC_ENDPOINT = syncConfig.remoteSyncEndpoint || "";
       const SUPABASE_URL =
         syncConfig.supabaseUrl ||
