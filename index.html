@@ -1903,6 +1903,7 @@
           </div>
           <div id="inlogCinemaEditor" class="inlog-cinema-grid"></div>
           <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
+            <button id="inlogPhotoVerifyBtn" class="btn-sm" type="button">데이터 일치 확인</button>
             <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
           </div>
@@ -4568,6 +4569,7 @@
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
       const inlogCinemaAddBtnEl = document.getElementById("inlogCinemaAddBtn");
+      const inlogPhotoVerifyBtnEl = document.getElementById("inlogPhotoVerifyBtn");
       const inlogPhotoSaveBtnEl = document.getElementById("inlogPhotoSaveBtn");
       const inlogPhotoSaveStatusEl = document.getElementById("inlogPhotoSaveStatus");
       const receiptLedgerListEl = document.getElementById("receiptLedgerList");
@@ -12012,6 +12014,37 @@
         if (!editor) return;
         wireInlogCinemaEditorIfNeeded();
         editor.appendChild(buildInlogCinemaEditorItem(null));
+      });
+      inlogPhotoVerifyBtnEl?.addEventListener("click", async () => {
+        const btn = inlogPhotoVerifyBtnEl;
+        if (!btn || btn.disabled) return;
+        const prevLabel = btn.textContent || "데이터 일치 확인";
+        btn.disabled = true;
+        btn.textContent = "확인 중…";
+        try {
+          if (!USE_SUPABASE_SYNC) {
+            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "Supabase 연동이 꺼져 있어 검증할 수 없습니다.";
+            return;
+          }
+          await forceClientKvPushWhenReady();
+          const verify = await verifyInlogConsistencyOrRevert();
+          if (verify.ok && !verify.reconciled) {
+            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "등록완료 데이터일치완료";
+            setSyncStatus("등록완료 데이터일치완료", "ok", { pinMs: 1000 });
+            window.setTimeout(() => setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok", { force: true }), 1000);
+          } else if (verify.reconciled) {
+            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "불일치 감지 · Supabase 기준으로 자동 복구";
+            setSyncStatus("불일치 감지 · 서버 기준 복구", "warn", { pinMs: 1000 });
+          } else {
+            if (inlogPhotoSaveStatusEl) inlogPhotoSaveStatusEl.textContent = "검증 실패 · 네트워크 상태 확인";
+            setSyncStatus("검증 실패 · 네트워크 확인", "error", { pinMs: 1000 });
+          }
+        } finally {
+          window.setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = prevLabel;
+          }, 320);
+        }
       });
       inlogPhotoSaveBtnEl?.addEventListener("click", async () => {
         const btn = inlogPhotoSaveBtnEl;
