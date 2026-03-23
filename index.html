@@ -2747,6 +2747,19 @@
         };
         setTimeout(tick, 30);
       }
+      async function forceClientKvPushWhenReady() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return false;
+        let n = 0;
+        while (!scheduleSiteClientKvState.initialPullDone && n < CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS) {
+          n += 1;
+          await new Promise((r) => setTimeout(r, CLIENT_KV_PUSH_WHEN_READY_POLL_MS));
+        }
+        if (!scheduleSiteClientKvState.initialPullDone) {
+          scheduleSiteClientKvState.pendingKvPushAfterInitialPull = true;
+          return false;
+        }
+        return Boolean(await pushScheduleSiteClientKvToSupabase());
+      }
       function scheduleClientKvSeedPushIfNeeded() {
         if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
         const key = "__scheduleSiteClientKvLastSeedPush";
@@ -2792,14 +2805,8 @@
           const row = rows[0];
           const serverAt = String(row?.updated_at || "").trim();
           const kv = row?.kv;
-          const localWriteAt = scheduleSiteClientKvState.getNativeLastScopedWriteAt();
-          const memCount = scheduleSiteClientKvState.scopedKeyCount();
-          const serverMs = serverAt ? new Date(serverAt).getTime() : 0;
-          const localMs = localWriteAt ? new Date(localWriteAt).getTime() : 0;
           const serverKeyCount = kv && typeof kv === "object" ? Object.keys(kv).length : 0;
-          const shouldApply =
-            serverKeyCount > 0 &&
-            (memCount === 0 || (Boolean(localWriteAt) && serverMs > localMs && !Number.isNaN(serverMs) && !Number.isNaN(localMs)));
+          const shouldApply = serverKeyCount > 0;
           if (shouldApply) {
             scheduleSiteClientKvState.hydrateFromServerKv(kv);
             scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
@@ -2823,8 +2830,8 @@
         }
       }
       async function pushScheduleSiteClientKvToSupabase() {
-        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
-        if (scheduleSiteClientKvPushInFlight) return;
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
+        if (scheduleSiteClientKvPushInFlight) return false;
         const kvFiltered = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
             ([k]) =>
@@ -2833,7 +2840,7 @@
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
           )
         );
-        if (!Object.keys(kvFiltered).length) return;
+        if (!Object.keys(kvFiltered).length) return false;
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
         const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
@@ -2862,12 +2869,14 @@
           const rows = await response.json();
           const updatedAt = rows?.[0]?.updated_at;
           if (updatedAt) scheduleSiteClientKvState.setNativeLastScopedWriteAt(String(updatedAt));
+          return true;
         } catch (error) {
           if (error && error.name === "AbortError") {
             console.warn("[CLIENT_KV] 저장 요청 시간 초과");
           } else {
             console.error("[CLIENT_KV] Supabase 저장 실패", error);
           }
+          return false;
         } finally {
           clearTimeout(pushTid);
           scheduleSiteClientKvPushInFlight = false;
@@ -2876,7 +2885,7 @@
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
       /** 대시보드 2·3번 칸 — 전용 테이블 schedule_dashboard_state (client_kv 와 분리) */
       let isApplyingRemoteDashboardState = false;
-      const DASHBOARD_STATE_SAVE_DEBOUNCE_MS = 350;
+      const DASHBOARD_STATE_SAVE_DEBOUNCE_MS = 80;
       /** 단일 요청 상한 (느린망). 빠른 연속 클릭은 이전 요청을 abort 해서 줄을 서지 않음 */
       const DASHBOARD_STATE_SAVE_TIMEOUT_MS = 22000;
       /** 백그라운드 새로고침(포커스 등)용 GET 타임아웃 */
@@ -11924,7 +11933,7 @@
         wireInlogCinemaEditorIfNeeded();
         editor.appendChild(buildInlogCinemaEditorItem(null));
       });
-      inlogPhotoSaveBtnEl?.addEventListener("click", () => {
+      inlogPhotoSaveBtnEl?.addEventListener("click", async () => {
         const btn = inlogPhotoSaveBtnEl;
         if (!btn || btn.disabled) return;
         const prevLabel = btn.textContent || "저장";
@@ -11935,12 +11944,17 @@
           const cinemaPayload = collectInlogCinemaEditorPayload();
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
-          if (inlogPhotoSaveStatusEl) {
-            inlogPhotoSaveStatusEl.textContent = USE_SUPABASE_SYNC
-              ? "저장됨 · 서버 반영까지 잠시 걸릴 수 있습니다."
-              : "저장됨(로컬만)";
+          if (USE_SUPABASE_SYNC) {
+            const ok = await forceClientKvPushWhenReady();
+            if (inlogPhotoSaveStatusEl) {
+              inlogPhotoSaveStatusEl.textContent = ok
+                ? "저장됨 · Supabase 반영 완료"
+                : "저장됨 · Supabase 반영 지연(네트워크 확인)";
+            }
+            if (!ok) requestClientKvPushWhenReady();
+          } else if (inlogPhotoSaveStatusEl) {
+            inlogPhotoSaveStatusEl.textContent = "저장됨(로컬만)";
           }
-          requestClientKvPushWhenReady();
         } finally {
           window.setTimeout(() => {
             btn.disabled = false;
