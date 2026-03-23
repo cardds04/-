@@ -372,24 +372,35 @@
       }
 
       .home-cinema__rail {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
+        flex-wrap: nowrap;
         gap: 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+        overscroll-behavior-x: contain;
         padding: 2px 0 8px;
       }
 
-      @media (max-width: 760px) {
-        .home-cinema__rail {
-          grid-template-columns: 1fr;
-        }
+      .home-cinema__rail::-webkit-scrollbar {
+        height: 6px;
+      }
+
+      .home-cinema__rail::-webkit-scrollbar-thumb {
+        background: rgba(255, 213, 3, 0.38);
+        border-radius: 3px;
       }
 
       .home-cinema__item {
+        flex: 0 0 auto;
+        width: clamp(260px, 52vw, 420px);
         aspect-ratio: 16 / 9;
         border: 1px solid rgba(255, 213, 3, 0.28);
         border-radius: 10px;
         overflow: hidden;
         background: #111;
+        scroll-snap-align: start;
       }
 
       .home-cinema__item iframe {

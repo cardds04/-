@@ -14455,6 +14455,13 @@
         startDashboardStateBackgroundSync();
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
+      window.addEventListener("online", () => {
+        void pullScheduleSiteClientKvFromSupabase();
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+        void pullScheduleSiteClientKvFromSupabase();
+      });
 
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_CANCELED_SCHEDULES) {
