@@ -2725,7 +2725,9 @@
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
       const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;
+      const INLOG_SUPABASE_REFRESH_THROTTLE_MS = 6000;
       let scheduleSiteClientKvPushInFlight = false;
+      let inlogLastSupabaseRefreshAt = 0;
       const CLIENT_KV_PUSH_WHEN_READY_POLL_MS = 120;
       const CLIENT_KV_PUSH_WHEN_READY_MAX_POLLS = 80;
       /** 저장 직후 호출: 첫 Supabase pull 이 끝날 때까지 기다렸다가 즉시 push (샘플만 보이는 현상 방지) */
@@ -2759,6 +2761,19 @@
           return false;
         }
         return Boolean(await pushScheduleSiteClientKvToSupabase());
+      }
+      async function refreshInlogFromSupabase(reason = "normal") {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) return false;
+        const now = Date.now();
+        if (reason !== "force" && now - inlogLastSupabaseRefreshAt < INLOG_SUPABASE_REFRESH_THROTTLE_MS) {
+          return false;
+        }
+        const ok = await pullScheduleSiteClientKvFromSupabase();
+        inlogLastSupabaseRefreshAt = Date.now();
+        if (typeof hydrateInlogPhotoEditorFromStorage === "function") {
+          hydrateInlogPhotoEditorFromStorage();
+        }
+        return ok;
       }
       function scheduleClientKvSeedPushIfNeeded() {
         if (scheduleSiteClientKvState.scopedKeyCount() === 0) return;
@@ -11911,7 +11926,10 @@
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
-        if (isInlogPhoto) hydrateInlogPhotoEditorFromStorage();
+        if (isInlogPhoto) {
+          hydrateInlogPhotoEditorFromStorage();
+          void refreshInlogFromSupabase();
+        }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
 
@@ -11951,7 +11969,14 @@
                 ? "저장됨 · Supabase 반영 완료"
                 : "저장됨 · Supabase 반영 지연(네트워크 확인)";
             }
-            if (!ok) requestClientKvPushWhenReady();
+            if (!ok) {
+              requestClientKvPushWhenReady();
+              // 로컬만 저장된 상태가 남지 않도록 즉시 서버 상태로 되돌림
+              await refreshInlogFromSupabase("force");
+              if (inlogPhotoSaveStatusEl) {
+                inlogPhotoSaveStatusEl.textContent = "Supabase 저장 실패 · 서버 기준으로 화면을 되돌렸습니다.";
+              }
+            }
           } else if (inlogPhotoSaveStatusEl) {
             inlogPhotoSaveStatusEl.textContent = "저장됨(로컬만)";
           }
