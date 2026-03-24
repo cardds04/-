@@ -611,17 +611,9 @@
         transition: opacity 0.25s ease;
         white-space: nowrap;
       }
-      /* 링크가 활성일 때 호버 시 더보기 표시 (데스크탑) */
-      @media (hover: hover) and (pointer: fine) {
-        .gallery__item:not([hidden]):hover .inlog-gallery-link:not(.inlog-gallery-link--inactive) ~ .gallery__more {
-          opacity: 1;
-        }
-      }
-      /* 터치 기기에선 항상 표시 */
-      @media (hover: none) {
-        .gallery__item:not([hidden]) .inlog-gallery-link:not(.inlog-gallery-link--inactive) ~ .gallery__more {
-          opacity: 1;
-        }
+      /* 활성 링크가 있는 갤러리 아이템에서 항상 표시 */
+      .gallery__item:not([hidden]) .inlog-gallery-link:not(.inlog-gallery-link--inactive) ~ .gallery__more {
+        opacity: 1;
       }
 
       /* 맨위로 버튼 */
@@ -631,25 +623,42 @@
         right: 20px;
         z-index: 999;
         display: none;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: 44px;
-        height: 44px;
+        gap: 2px;
+        width: 52px;
+        height: 52px;
         border-radius: 50%;
         background: #ffd503;
         color: #111;
         border: none;
         cursor: pointer;
-        font-size: 1.1rem;
-        font-weight: 700;
         box-shadow: 0 3px 14px rgba(0,0,0,0.35);
         transition: opacity 0.2s, transform 0.2s;
+        padding: 0;
       }
       #scroll-to-top.is-visible {
         display: flex;
       }
       #scroll-to-top:hover {
         transform: translateY(-3px);
+      }
+      #scroll-to-top .stt-tri {
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-bottom: 10px solid #111;
+        display: block;
+      }
+      #scroll-to-top .stt-label {
+        font-size: 0.48rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        color: #111;
+        font-family: "Montserrat", sans-serif;
       }
 
       .gallery__badge {
@@ -1673,7 +1682,10 @@
     </script>
 
     <!-- 맨위로 버튼 -->
-    <button id="scroll-to-top" aria-label="맨 위로 이동" title="맨 위로">↑</button>
+    <button id="scroll-to-top" aria-label="맨 위로 이동" title="맨 위로">
+      <span class="stt-tri"></span>
+      <span class="stt-label">맨위로</span>
+    </button>
     <script>
       (function () {
         const btn = document.getElementById("scroll-to-top");
