@@ -148,7 +148,7 @@
       }
 
       .photo-browser {
-        max-width: min(var(--gallery-max), min(920px, 94vw));
+        max-width: 100%;
         margin: 0 auto;
         padding: 0 8px;
       }
@@ -187,7 +187,7 @@
 
       .photo-covers > li {
         flex: 0 0 auto;
-        width: clamp(168px, 36vw, 260px);
+        width: clamp(220px, 44vw, 360px);
         scroll-snap-align: start;
         margin: 0;
         padding: 0;
@@ -1560,10 +1560,14 @@
           if (isPhoto) {
             const albumId = getInlogPhotoAlbumIdFromHash();
             requestAnimationFrame(() => {
-              if (!albumId) {
-                document.querySelector("#inlogPhotoAlbumsMount .photo-expand__close")?.click();
-              } else {
+              if (albumId) {
                 tryOpenInlogPhotoAlbumFromHash();
+              } else {
+                const expand = document.querySelector("#inlogPhotoAlbumsMount .photo-expand");
+                if (expand && expand.hidden) {
+                  const firstBtn = document.querySelector("#inlogPhotoAlbumsMount button.photo-cover-cell");
+                  firstBtn?.click();
+                }
               }
             });
           }
