@@ -3893,6 +3893,7 @@
       let scheduleSyncQueued = false;
       let isApplyingRemoteSchedules = false;
       let scheduleSyncCooldownUntil = 0; // push 직후 pull 차단 쿨다운
+      const schedulePendingDeletionIds = new Set(); // 서버 DELETE 진행 중인 스케줄 ID 집합
       let couponPassesSyncPromise = null;
       let isApplyingRemoteCouponPasses = false;
       let lastCouponPassesSignature = "";
@@ -6427,7 +6428,11 @@
         const nextActive = [];
         const nextHold = [];
         const nextRefund = [];
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
+        (Array.isArray(rows) ? rows : []).filter((row) => {
+          // 삭제 진행 중(pendingDeletion) 항목은 서버에 아직 존재해도 pull 결과에서 제외
+          const rid = String(row?.id || "").trim();
+          return !rid || !schedulePendingDeletionIds.has(rid);
+        }).forEach((row) => {
           const source = String(row?.source || "active").trim() || "active";
           const status = String(row?.status || "").trim();
           const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
@@ -14499,9 +14504,19 @@
         void appendScheduleReceiptLedgerToSupabase(deleteReceipt).catch((error) => {
           console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
         });
-        void deleteScheduleFromSupabaseByItem(deletedItem).catch((error) => {
-          console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
-        });
+        // 삭제 진행 중 표시 → pull이 이 ID를 서버에서 가져와도 무시함
+        if (deletedScheduleId) schedulePendingDeletionIds.add(deletedScheduleId);
+        void deleteScheduleFromSupabaseByItem(deletedItem)
+          .then(() => {
+            // 삭제 완료 후 800ms 추가 쿨다운으로 리얼타임 pull 안정화
+            scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
+          })
+          .catch((error) => {
+            console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
+          })
+          .finally(() => {
+            if (deletedScheduleId) schedulePendingDeletionIds.delete(deletedScheduleId);
+          });
         if (!shouldMoveToHoldAfterDelete) {
           void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
             .then((deleted) => {
