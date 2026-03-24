@@ -3048,11 +3048,33 @@
             try {
               const url = await uploadInlogHomeImageFileToSupabase(file);
               URL.revokeObjectURL(localUrl);
-              setProductImage(url);
-              if (statusEl) { statusEl.textContent = "✓ 업로드 완료"; statusEl.style.color = "green"; }
-              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; statusEl.style.color = ""; } }, 3000);
+              setProductImage(url); // imgUrlEl.value = url, previewEl.src = url, markInlogEditorDirty()
+
+              // 업로드 완료 즉시 localStorage/memoryStore에 저장 →
+              // 이후 pull/hydrate가 발생해도 새 URL이 보존됨
+              const currentPayload = collectInlogProductEditorPayload();
+              writeInlogProduct(currentPayload);
+
+              if (statusEl) { statusEl.textContent = "✓ 업로드 완료 · 저장 중…"; statusEl.style.color = "green"; }
+
+              // 자동으로 Supabase에도 push (저장 버튼 없이도 반영)
+              try {
+                const ok = await forceClientKvPushWhenReady(true);
+                if (ok) {
+                  if (statusEl) { statusEl.textContent = "✓ 등록 완료"; statusEl.style.color = "green"; }
+                  clearInlogEditorDirty();
+                } else {
+                  if (statusEl) { statusEl.textContent = "✓ 로컬 저장됨 · 저장 버튼으로 서버 반영 가능"; statusEl.style.color = "#b8860b"; }
+                }
+              } catch (_) {
+                if (statusEl) { statusEl.textContent = "✓ 로컬 저장됨 · 저장 버튼으로 서버 반영 가능"; statusEl.style.color = "#b8860b"; }
+              }
+              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; statusEl.style.color = ""; } }, 4000);
             } catch (e) {
               URL.revokeObjectURL(localUrl);
+              // 업로드 실패 시 미리보기 초기화
+              if (previewEl) previewEl.src = "";
+              if (previewWrap) previewWrap.style.display = "none";
               const msg = String(e.message || e);
               console.error("[Product upload]", msg);
               if (statusEl) { statusEl.textContent = `✗ ${msg}`; statusEl.style.color = "red"; }
@@ -3071,7 +3093,17 @@
           });
         }
 
-        if (textEl) textEl.addEventListener("input", () => markInlogEditorDirty());
+        if (textEl) {
+          let productTextSaveTimer = null;
+          textEl.addEventListener("input", () => {
+            markInlogEditorDirty();
+            // 텍스트 입력 후 1.5초 뒤 자동 로컬 저장 (미리보기 보존)
+            if (productTextSaveTimer) clearTimeout(productTextSaveTimer);
+            productTextSaveTimer = setTimeout(() => {
+              writeInlogProduct(collectInlogProductEditorPayload());
+            }, 1500);
+          });
+        }
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
