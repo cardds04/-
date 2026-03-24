@@ -6414,6 +6414,10 @@
         const serverIds = new Set(
           (Array.isArray(rows) ? rows : []).map((r) => String(r?.id || "").trim()).filter(Boolean)
         );
+        // pull 완료 시 서버에 아예 없는 pendingDeletion ID는 자동 정리 (DELETE 성공 확인)
+        schedulePendingDeletionIds.forEach((pid) => {
+          if (!serverIds.has(pid)) removePendingDeleteId(pid);
+        });
         const localActiveNotOnServer = data.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
           return id && !serverIds.has(id);
@@ -14547,9 +14551,10 @@
           console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
         });
         void deleteScheduleFromSupabaseByItem(deletedItem)
-          .then(() => {
-            // 실제 DELETE 완료 → pendingDeletion 해제, 짧은 쿨다운으로 전환
-            if (deletedScheduleId) removePendingDeleteId(deletedScheduleId);
+          .then((deleted) => {
+            // 실제 DELETE 성공(true 반환)했을 때만 pendingDeletion 해제
+            // false 반환(매칭 id 없음)이면 localStorage 보호를 유지
+            if (deletedScheduleId && deleted === true) removePendingDeleteId(deletedScheduleId);
             scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
           })
           .catch((error) => {
