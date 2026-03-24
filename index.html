@@ -14604,8 +14604,13 @@
             scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
           })
           .catch((error) => {
-            console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
+            console.error("[SCHEDULES][index] 스케줄 서버 삭제 실패", error);
             // 삭제 실패해도 pendingDeletion은 localStorage에 유지(계속 pull에서 차단)
+            // 사용자에게 권한 오류 안내
+            const errMsg = String(error?.message || "");
+            if (errMsg.includes("42501") || errMsg.includes("403") || errMsg.includes("permission")) {
+              alert("⚠️ 서버 삭제 권한 오류\n\nSupabase 대시보드 → Table Editor → schedules 테이블 → RLS 정책에서\nDELETE 정책을 추가해야 합니다.\n\n프로젝트 폴더의 SCHEDULES_TABLE_POLICIES.sql 파일을\nSupabase SQL Editor에서 실행해 주세요.");
+            }
           });
         if (!shouldMoveToHoldAfterDelete) {
           void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
