@@ -6257,7 +6257,7 @@
       async function fetchSchedulesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&source=neq.deleted&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -6419,6 +6419,13 @@
         );
         // pull 시점의 pendingDeletion 스냅샷 — 아래 localNotOnServer 필터에 사용
         const pendingDeletionSnapshot = new Set(schedulePendingDeletionIds);
+        if (pendingDeletionSnapshot.size > 0) {
+          console.log(`[PULL] pendingDeletion IDs: [${Array.from(pendingDeletionSnapshot).join(", ")}]`);
+          pendingDeletionSnapshot.forEach((pid) => {
+            if (serverIds.has(pid)) console.log(`[PULL] ⚠ pendingId ${pid} 가 서버에 아직 남아있음 → 필터 적용`);
+            else console.log(`[PULL] ✓ pendingId ${pid} 가 서버에서 삭제됨`);
+          });
+        }
         const localActiveNotOnServer = data.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
           // 삭제 대기 중인 항목은 서버에 없어도 복원하지 않음
@@ -14596,21 +14603,24 @@
         void appendScheduleReceiptLedgerToSupabase(deleteReceipt).catch((error) => {
           console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
         });
+        console.log(`[DELETE] 삭제 시도 — id="${deletedScheduleId}", company="${deletedItem?.company}", date="${deletedItem?.date}", time="${deletedItem?.time}"`);
         void deleteScheduleFromSupabaseByItem(deletedItem)
           .then((deleted) => {
-            // 실제 DELETE 성공(true 반환)했을 때만 pendingDeletion 해제
-            // false 반환(매칭 id 없음)이면 localStorage 보호를 유지
-            if (deletedScheduleId && deleted === true) removePendingDeleteId(deletedScheduleId);
+            console.log(`[DELETE] 서버 삭제 결과: deleted=${deleted}, id="${deletedScheduleId}"`);
+            if (deleted === true) {
+              setSyncStatus("서버 삭제 완료 ✓", "ok", { pinMs: 3000 });
+              if (deletedScheduleId) removePendingDeleteId(deletedScheduleId);
+            } else {
+              // id로 못 찾은 경우 — pendingId 유지
+              console.warn(`[DELETE] 서버에서 id 매칭 없음 — pendingId 유지 (id="${deletedScheduleId}")`);
+            }
             scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
           })
           .catch((error) => {
-            console.error("[SCHEDULES][index] 스케줄 서버 삭제 실패", error);
-            // 삭제 실패해도 pendingDeletion은 localStorage에 유지(계속 pull에서 차단)
-            // 사용자에게 권한 오류 안내
             const errMsg = String(error?.message || "");
-            if (errMsg.includes("42501") || errMsg.includes("403") || errMsg.includes("permission")) {
-              alert("⚠️ 서버 삭제 권한 오류\n\nSupabase 대시보드 → Table Editor → schedules 테이블 → RLS 정책에서\nDELETE 정책을 추가해야 합니다.\n\n프로젝트 폴더의 SCHEDULES_TABLE_POLICIES.sql 파일을\nSupabase SQL Editor에서 실행해 주세요.");
-            }
+            console.error(`[DELETE] 서버 삭제 실패: ${errMsg}`);
+            setSyncStatus(`서버 삭제 실패: ${errMsg.slice(0, 60)}`, "error", { pinMs: 6000 });
+            alert(`⚠️ 스케줄 서버 삭제 실패\n\n오류: ${errMsg}\n\nSupabase SQL Editor에서 SCHEDULES_TABLE_POLICIES.sql 을 실행했는지 확인하세요.`);
           });
         if (!shouldMoveToHoldAfterDelete) {
           void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
