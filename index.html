@@ -11640,7 +11640,13 @@
                 );
                 if (vRes.ok) {
                   const vRows = await vRes.json();
-                  const actualSource = String(vRows?.[0]?.source || "").trim();
+                  // row 자체가 없으면 이미 DELETE된 것 → PATCH 불필요, 성공 처리
+                  if (!Array.isArray(vRows) || vRows.length === 0) {
+                    console.log(`[SCHEDULES] PATCH 불필요: row 이미 삭제됨 (id=${scheduleId})`);
+                    if (newSource === "deleted") removePendingDeleteId(scheduleId);
+                    return;
+                  }
+                  const actualSource = String(vRows[0]?.source || "").trim();
                   if (actualSource !== newSource) {
                     console.warn(`[SCHEDULES] PATCH 검증 실패: 서버 source="${actualSource}" (기대="${newSource}") — 재시도 (시도 ${attempt + 1})`);
                     await new Promise((r) => setTimeout(r, delay));
