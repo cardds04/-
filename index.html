@@ -6416,25 +6416,27 @@
         const serverIds = new Set(
           (Array.isArray(rows) ? rows : []).map((r) => String(r?.id || "").trim()).filter(Boolean)
         );
-        // pull 완료 시 서버에 아예 없는 pendingDeletion ID는 자동 정리 (DELETE 성공 확인)
-        schedulePendingDeletionIds.forEach((pid) => {
-          if (!serverIds.has(pid)) removePendingDeleteId(pid);
-        });
+        // pull 시점의 pendingDeletion 스냅샷 — 아래 localNotOnServer 필터에 사용
+        const pendingDeletionSnapshot = new Set(schedulePendingDeletionIds);
         const localActiveNotOnServer = data.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
           // 삭제 대기 중인 항목은 서버에 없어도 복원하지 않음
-          if (id && schedulePendingDeletionIds.has(id)) return false;
+          if (id && pendingDeletionSnapshot.has(id)) return false;
           return id && !serverIds.has(id);
         });
         const localHoldNotOnServer = onHoldPayments.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
-          if (id && schedulePendingDeletionIds.has(id)) return false;
+          if (id && pendingDeletionSnapshot.has(id)) return false;
           return id && !serverIds.has(id);
         });
         const localRefundNotOnServer = refundPayments.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
-          if (id && schedulePendingDeletionIds.has(id)) return false;
+          if (id && pendingDeletionSnapshot.has(id)) return false;
           return id && !serverIds.has(id);
+        });
+        // 서버에 완전히 없는 pendingDeletion ID는 localNotOnServer 계산 후 정리
+        pendingDeletionSnapshot.forEach((pid) => {
+          if (!serverIds.has(pid)) removePendingDeleteId(pid);
         });
         const nextActive = [];
         const nextHold = [];
