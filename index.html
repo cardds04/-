@@ -6603,6 +6603,13 @@
           while (companySyncQueued) {
             companySyncQueued = false;
             setSyncStatus("업체 서버 저장 중...", "warn");
+            // freshness guard 오류 방지: 동기화 전 최신 pull 타임스탬프 갱신
+            try {
+              const freshRows = await fetchCompaniesFromSupabase();
+              if (Array.isArray(freshRows)) {
+                updateLastPullTime(STORAGE_LAST_COMPANY_PULL_AT, freshRows, "updated_at");
+              }
+            } catch (_) {}
             await syncAdminCompaniesToSupabase(companies);
           }
           setSyncStatus(`업체 서버 반영 ${formatSyncTime()}`, "ok");
