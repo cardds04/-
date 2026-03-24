@@ -4794,6 +4794,7 @@
       }
       function refreshAdminUiFromSyncedState() {
         loadAdminCompaniesFromStorage();
+        restorePendingDeleteIdsFromStorage(); // 삭제 대기 항목 필터링을 위해 먼저 복원
         loadAdminSchedulesFromStorage();
         hydrateFromCustomerPageStorage();
         loadPhotographerProfilesFromStorage();
@@ -6960,7 +6961,12 @@
         // Supabase 모드에서도 메모리(client_kv/스냅샷)에 있는 목록을 먼저 data에 올려야
         // 캘린더·목록이 즉시 그려진다. 이후 pullSchedulesFromSupabaseAndApply가 서버 최신으로 덮어쓴다.
         const saved = readStorageArray(STORAGE_ADMIN_SCHEDULES);
-        data.splice(0, data.length, ...saved);
+        // 삭제 대기 중인 항목은 스냅샷에 남아있어도 제거 — 새로고침 시 재등장 방지
+        const filtered = saved.filter((item) => {
+          const id = String(item?.customerScheduleId || "").trim();
+          return !id || !schedulePendingDeletionIds.has(id);
+        });
+        data.splice(0, data.length, ...filtered);
       }
 
       function appendCanceledScheduleRecord(item, canceledBy = "admin", reason = "삭제") {
@@ -15195,9 +15201,9 @@
             renderPaymentList();
           }
         });
+        restorePendingDeleteIdsFromStorage(); // loadAdminSchedulesFromStorage 전에 복원해야 필터링 적용됨
         loadAdminSchedulesFromStorage();
         initializeScheduleReceiptLedgerStorage();
-        restorePendingDeleteIdsFromStorage(); // 페이지 재로드 후에도 삭제 대기 ID 유지
         void pullSchedulesFromSupabaseAndApply();
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
