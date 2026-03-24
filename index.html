@@ -6011,6 +6011,7 @@
         if (!USE_SUPABASE_SYNC) return false;
         if (paymentSyncPromise || paymentSyncQueued) return false;
         // pull 전에 서버에 아직 반영 안 된 로컬 보류/환불 항목을 기억해 복귀 조작이 사라지지 않도록 보호
+        // serverHoldIds/serverRefundIds 에는 UUID와 identity 키 둘 다 저장해 중복 방지
         const serverHoldIds = new Set();
         const serverRefundIds = new Set();
         const rows = await fetchPaymentsFromSupabase();
@@ -6046,12 +6047,15 @@
           };
           if (source === "hold") {
             holdRows.push(merged);
-            serverHoldIds.add(String(merged.customerScheduleId || identity || "").trim());
+            // UUID와 identity 키 둘 다 등록해야 OR 비교 오류로 중복이 생기지 않음
+            if (merged.customerScheduleId) serverHoldIds.add(String(merged.customerScheduleId).trim());
+            if (identity) serverHoldIds.add(String(identity).trim());
             return;
           }
           if (source === "refund") {
             refundRows.push(merged);
-            serverRefundIds.add(String(merged.customerScheduleId || identity || "").trim());
+            if (merged.customerScheduleId) serverRefundIds.add(String(merged.customerScheduleId).trim());
+            if (identity) serverRefundIds.add(String(identity).trim());
             return;
           }
           if (identity) {
@@ -6059,15 +6063,18 @@
           }
         });
         // 서버에 아직 없는 로컬 보류/환불 항목 보존 (동기화 실패 후 pull이 덮어쓰는 것 방지)
+        // UUID / identity 키 중 하나라도 서버에 있으면 이미 서버에 반영된 것으로 간주 → 중복 방지
         const localHoldNotOnServer = onHoldPayments.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
           const key = String(getPaymentIdentity(item) || "").trim();
-          return (id && !serverHoldIds.has(id)) || (key && !serverHoldIds.has(key));
+          const onServer = (id && serverHoldIds.has(id)) || (key && serverHoldIds.has(key));
+          return !onServer;
         });
         const localRefundNotOnServer = refundPayments.filter((item) => {
           const id = String(item?.customerScheduleId || "").trim();
           const key = String(getPaymentIdentity(item) || "").trim();
-          return (id && !serverRefundIds.has(id)) || (key && !serverRefundIds.has(key));
+          const onServer = (id && serverRefundIds.has(id)) || (key && serverRefundIds.has(key));
+          return !onServer;
         });
         if (localHoldNotOnServer.length || localRefundNotOnServer.length) {
           holdRows.push(...localHoldNotOnServer);
