@@ -11083,10 +11083,12 @@
         if (!holdItem) return;
         markScheduleRowDirty(holdItem, "payment_mutation");
 
-        // 고객 취소 등으로 원격 payments가 갱신되었을 수 있으므로
+        // 고객 취소 등으로 원격 schedules/payments가 갱신되었을 수 있으므로
         // pull timestamp를 현재 시각으로 갱신해 freshness guard를 통과시킴
         try {
-          localStorage.setItem(STORAGE_LAST_PAYMENT_PULL_AT, new Date().toISOString());
+          const nowIso = new Date().toISOString();
+          localStorage.setItem(STORAGE_LAST_PAYMENT_PULL_AT, nowIso);
+          localStorage.setItem(STORAGE_LAST_SCHEDULE_PULL_AT, nowIso);
         } catch (e) {}
 
         // 쿠폰으로 결제한 건은 1회 복구 후 보류 목록에서 제거
