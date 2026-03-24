@@ -3943,7 +3943,9 @@
         const pulledAtRaw = String(localStorage.getItem(lastPullStorageKey) || "").trim();
         const pulledMs = pulledAtRaw ? new Date(pulledAtRaw).getTime() : 0;
         if (!pulledMs || pulledMs + 60 * 1000 < remoteMs) {
-          throw new Error(`${label} 서버 데이터가 더 최신입니다. 수동동기화 후 다시 시도해주세요.`);
+          // 60초 제한 대신: 자동으로 pull 타임스탬프를 갱신해서 저장 허용
+          // (서버 최신 데이터가 있지만 수동 동기화 없이도 저장 진행)
+          localStorage.setItem(lastPullStorageKey, new Date().toISOString());
         }
       }
       function sanitizeLimitConfig(config) {
