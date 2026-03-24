@@ -3509,8 +3509,10 @@
             localStorage.setItem(STORAGE_SESSION, userObj.id);
             localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: userObj.id, password: userObj.password }));
             recordCustomerLogin(userObj);
-            // 관리자 페이지에서 업체 검색 가능하도록 customers 테이블에도 동기화
+            // 관리자 페이지 업체 검색에 뜨도록 companies + customers 테이블 동기화
+            ensureCompanyStored(userObj.company, userObj.phone);
             void syncCustomersTableFromStorage().catch(() => {});
+            void syncCompaniesTableFromStorage().catch(() => {});
             loginFormEl.reset();
             currentCustomerTab = "register";
             renderAuthState();
@@ -3565,8 +3567,10 @@
           localStorage.setItem(STORAGE_SESSION, userObj.id);
           localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: userObj.id, password: userObj.password }));
           recordCustomerLogin(userObj);
-          // 관리자 페이지에서 업체 검색 가능하도록 customers 테이블에도 동기화
+          // 관리자 페이지 업체 검색에 뜨도록 companies + customers 테이블 동기화
+          ensureCompanyStored(userObj.company, userObj.phone);
           void syncCustomersTableFromStorage().catch(() => {});
+          void syncCompaniesTableFromStorage().catch(() => {});
           signupFormEl.reset();
           currentCustomerTab = "register";
           renderAuthState();
