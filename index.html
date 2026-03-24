@@ -6010,6 +6010,9 @@
       async function pullPaymentsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         if (paymentSyncPromise || paymentSyncQueued) return false;
+        // pull 전에 서버에 아직 반영 안 된 로컬 보류/환불 항목을 기억해 복귀 조작이 사라지지 않도록 보호
+        const serverHoldIds = new Set();
+        const serverRefundIds = new Set();
         const rows = await fetchPaymentsFromSupabase();
         updateLastPullTime(STORAGE_LAST_PAYMENT_PULL_AT, rows, "updated_at");
         const identityMap = new Map();
@@ -6043,16 +6046,34 @@
           };
           if (source === "hold") {
             holdRows.push(merged);
+            serverHoldIds.add(String(merged.customerScheduleId || identity || "").trim());
             return;
           }
           if (source === "refund") {
             refundRows.push(merged);
+            serverRefundIds.add(String(merged.customerScheduleId || identity || "").trim());
             return;
           }
           if (identity) {
             identityMap.set(identity, merged);
           }
         });
+        // 서버에 아직 없는 로컬 보류/환불 항목 보존 (동기화 실패 후 pull이 덮어쓰는 것 방지)
+        const localHoldNotOnServer = onHoldPayments.filter((item) => {
+          const id = String(item?.customerScheduleId || "").trim();
+          const key = String(getPaymentIdentity(item) || "").trim();
+          return (id && !serverHoldIds.has(id)) || (key && !serverHoldIds.has(key));
+        });
+        const localRefundNotOnServer = refundPayments.filter((item) => {
+          const id = String(item?.customerScheduleId || "").trim();
+          const key = String(getPaymentIdentity(item) || "").trim();
+          return (id && !serverRefundIds.has(id)) || (key && !serverRefundIds.has(key));
+        });
+        if (localHoldNotOnServer.length || localRefundNotOnServer.length) {
+          holdRows.push(...localHoldNotOnServer);
+          refundRows.push(...localRefundNotOnServer);
+          setTimeout(() => queuePaymentsSyncWithRetry(), 500);
+        }
         isApplyingRemotePayments = true;
         try {
           data.forEach((item) => {
@@ -11195,7 +11216,8 @@
               <td>
                 ${
                   source === "hold"
-                    ? `<button class="btn-sm" type="button" data-action="cancelHoldSchedule" data-index="${index}">스케줄취소</button>`
+                    ? `<button class="btn-sm" type="button" data-action="cancelHoldSchedule" data-index="${index}">스케줄취소</button>
+                       <button class="btn-sm primary" type="button" data-action="revertHoldToActive" data-index="${index}">되돌리기</button>`
                     : source === "refund"
                     ? `<button class="btn-sm ${item.refundChecked ? "" : "primary"}" type="button" data-action="toggleRefundStatus" data-index="${index}">${
                         item.refundChecked ? "환불체크해제" : "환불체크"
@@ -11448,6 +11470,41 @@
         onHoldPayments.splice(index, 1);
         renderPaymentList();
         queuePaymentsSync();
+      }
+
+      function revertHoldToActive(index) {
+        const holdItem = onHoldPayments[index];
+        if (!holdItem) return;
+
+        if (!confirm(`"${holdItem.company || holdItem.name}" 항목을 입금업체로 되돌리시겠습니까?`)) return;
+
+        // freshness guard 우회 — 조작 직전 pull 타임스탬프 갱신
+        try {
+          const nowIso = new Date().toISOString();
+          localStorage.setItem(STORAGE_LAST_PAYMENT_PULL_AT, nowIso);
+          localStorage.setItem(STORAGE_LAST_SCHEDULE_PULL_AT, nowIso);
+        } catch (_) {}
+
+        // 보류 → 입금업체(active)로 복귀: paymentStatus 를 "입금완료" 로 유지
+        const restoredItem = {
+          ...holdItem,
+          paymentStatus: holdItem.paymentStatus || "입금완료",
+          localUpdatedAt: new Date().toISOString()
+        };
+
+        // active 목록 맨 앞에 추가, 보류 목록에서 제거
+        data.unshift(restoredItem);
+        onHoldPayments.splice(index, 1);
+
+        markScheduleRowDirty(restoredItem, "payment_mutation");
+
+        saveAdminSchedulesToStorage();
+        renderList();
+        renderPaymentList();
+
+        // 결제·스케줄 모두 즉시 서버 동기화 (재시도 로직 포함)
+        queuePaymentsSync();
+        queueSchedulesSyncWithRetry(true);
       }
 
       function toggleRefundStatus(index) {
@@ -12848,6 +12905,10 @@
         }
         if (action === "cancelHoldSchedule") {
           cancelHoldSchedule(index);
+          return;
+        }
+        if (action === "revertHoldToActive") {
+          revertHoldToActive(index);
           return;
         }
         if (action === "toggleRefundStatus") {
