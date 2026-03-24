@@ -2172,6 +2172,7 @@
       const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
       const STORAGE_INLOG_PRODUCT = "scheduleSiteInlogProductV1";
       const STORAGE_INLOG_LOGO = "scheduleSiteInlogLogoV1";
+      const STORAGE_PENDING_DELETE_SCHEDULE_IDS = "scheduleSitePendingDeleteScheduleIds";
       // 인로그 전용 키 집합: 스냅샷 preload 제외 + 배경 push 제외에 공통 사용
       const INLOG_DATA_KEYS = new Set([
         STORAGE_INLOG_PHOTO_ALBUMS,
@@ -11488,29 +11489,62 @@
         queuePaymentsSync();
       }
 
+      /** localStorage에 저장된 삭제 대기 ID 목록을 메모리 Set에 복원 */
+      function restorePendingDeleteIdsFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS);
+          if (!raw) return;
+          const ids = JSON.parse(raw);
+          if (Array.isArray(ids)) ids.forEach((id) => { if (id) schedulePendingDeletionIds.add(String(id)); });
+        } catch (_) {}
+      }
+      /** 삭제 대기 ID를 메모리 + localStorage 양쪽에 추가 */
+      function addPendingDeleteId(scheduleId) {
+        if (!scheduleId) return;
+        schedulePendingDeletionIds.add(scheduleId);
+        try {
+          const ids = Array.from(schedulePendingDeletionIds);
+          localStorage.setItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS, JSON.stringify(ids));
+        } catch (_) {}
+      }
+      /** 삭제 완료된 ID를 메모리 + localStorage 양쪽에서 제거 */
+      function removePendingDeleteId(scheduleId) {
+        if (!scheduleId) return;
+        schedulePendingDeletionIds.delete(scheduleId);
+        try {
+          const ids = Array.from(schedulePendingDeletionIds);
+          localStorage.setItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS, JSON.stringify(ids));
+        } catch (_) {}
+      }
+
       /**
-       * 서버 schedules 테이블의 source 컬럼을 즉시 PATCH.
+       * 서버 schedules 테이블의 source 컬럼을 즉시 PATCH (최대 3회 재시도).
        * syncSchedulesToSupabase의 localMs>remoteMs 필터를 우회해
        * pull이 이전 상태로 복구하는 것을 방지.
        */
       async function directPatchScheduleSource(scheduleId, newSource) {
         if (!USE_SUPABASE_SYNC || !scheduleId) return;
-        try {
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(scheduleId)}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Prefer: "return=minimal",
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              body: JSON.stringify({ source: newSource })
-            }
-          );
-        } catch (e) {
-          console.warn("[SCHEDULES] directPatchScheduleSource 실패, 큐 동기화로 재시도", e);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await fetch(
+              `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(scheduleId)}`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({ source: newSource })
+              }
+            );
+            if (res.ok) return; // 성공
+            console.warn(`[SCHEDULES] directPatchScheduleSource HTTP ${res.status} (시도 ${attempt + 1}/3)`);
+          } catch (e) {
+            console.warn(`[SCHEDULES] directPatchScheduleSource 네트워크 오류 (시도 ${attempt + 1}/3)`, e);
+          }
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
         }
       }
 
@@ -14491,7 +14525,7 @@
         editingDateIndex = null;
         // 삭제 즉시 pull 차단 쿨다운 8초 — 서버 DELETE 완료 전 pull로 복구 방지
         scheduleSyncCooldownUntil = Date.now() + 8000;
-        if (deletedScheduleId) schedulePendingDeletionIds.add(deletedScheduleId);
+        if (deletedScheduleId) addPendingDeleteId(deletedScheduleId);
         renderList();
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
@@ -14515,12 +14549,12 @@
         void deleteScheduleFromSupabaseByItem(deletedItem)
           .then(() => {
             // 실제 DELETE 완료 → pendingDeletion 해제, 짧은 쿨다운으로 전환
-            if (deletedScheduleId) schedulePendingDeletionIds.delete(deletedScheduleId);
+            if (deletedScheduleId) removePendingDeleteId(deletedScheduleId);
             scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
           })
           .catch((error) => {
             console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
-            // 삭제 실패해도 pendingDeletion은 유지(계속 pull에서 차단)
+            // 삭제 실패해도 pendingDeletion은 localStorage에 유지(계속 pull에서 차단)
           });
         if (!shouldMoveToHoldAfterDelete) {
           void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
@@ -15151,6 +15185,7 @@
         });
         loadAdminSchedulesFromStorage();
         initializeScheduleReceiptLedgerStorage();
+        restorePendingDeleteIdsFromStorage(); // 페이지 재로드 후에도 삭제 대기 ID 유지
         void pullSchedulesFromSupabaseAndApply();
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
@@ -15295,6 +15330,7 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
+          restorePendingDeleteIdsFromStorage();
           void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
           void pullSchedulesFromSupabaseAndApply();
         } else {
@@ -15341,6 +15377,7 @@
           }
         });
         if (USE_SUPABASE_SYNC) {
+          restorePendingDeleteIdsFromStorage();
           void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
           void pullSchedulesFromSupabaseAndApply();
         } else {
