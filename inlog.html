@@ -640,7 +640,7 @@
             <nav class="site-header__nav" aria-label="주요 메뉴">
               <a id="inlog-nav-photo" href="#photo" title="포트폴리오 사진">Photo</a>
               <a id="inlog-nav-cinema" href="#cinema" title="포트폴리오 영상">Cinema</a>
-              <a href="#" title="상품 안내">Product</a>
+              <a id="inlog-nav-product" href="#product" title="상품 안내">Product</a>
               <a
                 class="site-header__cta"
                 href="https://sc-pink.vercel.app/customer.html"
@@ -882,6 +882,24 @@
             <div id="inlogCinemaMount"></div>
           </section>
         </div>
+
+        <div id="inlog-view-product" hidden>
+          <section class="latest photo-latest" aria-labelledby="product-heading">
+            <div class="latest__intro">
+              <p class="latest__title-en" id="product-heading">Product</p>
+              <p class="latest__title-ko">상품 안내</p>
+            </div>
+            <div id="inlogProductMount" style="max-width:860px; margin:0 auto; padding:0 16px 60px;">
+              <div id="inlogProductImageWrap" style="width:100%; margin-bottom:28px; border-radius:12px; overflow:hidden; display:none;">
+                <img id="inlogProductImage" src="" alt="product"
+                  style="width:100%; display:block; object-fit:cover; max-height:520px;" />
+              </div>
+              <div id="inlogProductTextWrap"
+                style="font-size:15px; line-height:1.8; color:var(--text,#222); white-space:pre-wrap; word-break:break-word;">
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
 
@@ -940,6 +958,7 @@
         const SLOT_COUNT = 12;
         const PHOTO_STORAGE_KEY = "scheduleSiteInlogPhotoAlbumsV1";
         const CINEMA_STORAGE_KEY = "scheduleSiteInlogCinemaItemsV1";
+        const PRODUCT_STORAGE_KEY = "scheduleSiteInlogProductV1";
         function sanitizeInlogHomeHref(s) {
           const t = String(s || "").trim();
           if (!t) return "";
@@ -1480,8 +1499,10 @@
               if (kv && typeof kv === "object") {
                 const p = kv[PHOTO_STORAGE_KEY];
                 const c = kv[CINEMA_STORAGE_KEY];
+                const pr = kv[PRODUCT_STORAGE_KEY];
                 if (p != null) localStorage.setItem(PHOTO_STORAGE_KEY, typeof p === "string" ? p : JSON.stringify(p));
                 if (c != null) localStorage.setItem(CINEMA_STORAGE_KEY, typeof c === "string" ? c : JSON.stringify(c));
+                if (pr != null) localStorage.setItem(PRODUCT_STORAGE_KEY, typeof pr === "string" ? pr : JSON.stringify(pr));
               }
             } catch (e) {
               // Safari private 등 localStorage 불가 환경은 무시
@@ -1506,6 +1527,36 @@
           renderPhotoAlbumsMount(photoPayload, getPhotoOpenAlbumIdFromHash());
           renderCinemaMount(cinemaPayload);
           renderHomeCinemaMount(cinemaPayload);
+          renderProductMount();
+        }
+
+        function parseProductFromStorage() {
+          try {
+            const raw = localStorage.getItem(PRODUCT_STORAGE_KEY);
+            if (!raw) return { imageUrl: "", text: "" };
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return { imageUrl: String(parsed.imageUrl || ""), text: String(parsed.text || "") };
+          } catch (e) {
+            return { imageUrl: "", text: "" };
+          }
+        }
+
+        function renderProductMount() {
+          const data = parseProductFromStorage();
+          const imgWrap = document.getElementById("inlogProductImageWrap");
+          const imgEl = document.getElementById("inlogProductImage");
+          const textWrap = document.getElementById("inlogProductTextWrap");
+          if (imgWrap && imgEl) {
+            if (data.imageUrl) {
+              imgEl.src = data.imageUrl;
+              imgWrap.style.display = "block";
+            } else {
+              imgWrap.style.display = "none";
+            }
+          }
+          if (textWrap) {
+            textWrap.textContent = data.text || "";
+          }
         }
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadInlogHomeFromSupabase);
         else void loadInlogHomeFromSupabase();
@@ -1532,6 +1583,10 @@
           const raw = String(location.hash || "").replace(/^#/, "");
           return raw === "cinema" || raw.startsWith("cinema?");
         }
+        function isInlogProductHash() {
+          const raw = String(location.hash || "").replace(/^#/, "");
+          return raw === "product" || raw.startsWith("product?");
+        }
         function tryOpenInlogPhotoAlbumFromHash() {
           const id = getInlogPhotoAlbumIdFromHash();
           if (!id) return;
@@ -1546,17 +1601,22 @@
         function applyInlogRoute() {
           const isPhoto = isInlogPhotoHash();
           const isCinema = isInlogCinemaHash();
+          const isProduct = isInlogProductHash();
           const home = document.getElementById("inlog-view-home");
           const photo = document.getElementById("inlog-view-photo");
           const cinema = document.getElementById("inlog-view-cinema");
+          const product = document.getElementById("inlog-view-product");
           const navPhoto = document.getElementById("inlog-nav-photo");
           const navCinema = document.getElementById("inlog-nav-cinema");
-          if (home) home.hidden = isPhoto || isCinema;
+          const navProduct = document.getElementById("inlog-nav-product");
+          if (home) home.hidden = isPhoto || isCinema || isProduct;
           if (photo) photo.hidden = !isPhoto;
           if (cinema) cinema.hidden = !isCinema;
+          if (product) product.hidden = !isProduct;
           if (navPhoto) navPhoto.classList.toggle("is-active", isPhoto);
           if (navCinema) navCinema.classList.toggle("is-active", isCinema);
-          if (isPhoto || isCinema) {
+          if (navProduct) navProduct.classList.toggle("is-active", isProduct);
+          if (isPhoto || isCinema || isProduct) {
             window.scrollTo(0, 0);
           }
           if (isPhoto) {
@@ -1577,6 +1637,11 @@
         document.getElementById("inlog-nav-cinema")?.addEventListener("click", (e) => {
           e.preventDefault();
           if (location.hash !== "#cinema") location.hash = "cinema";
+          else applyInlogRoute();
+        });
+        document.getElementById("inlog-nav-product")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (location.hash !== "#product") location.hash = "product";
           else applyInlogRoute();
         });
         window.addEventListener("hashchange", applyInlogRoute);

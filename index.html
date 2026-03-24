@@ -1902,9 +1902,33 @@
             <button id="inlogCinemaAddBtn" class="btn-sm primary" type="button">+ 시네마 링크 추가</button>
           </div>
           <div id="inlogCinemaEditor" class="inlog-cinema-grid"></div>
+          <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;" />
+          <h3 class="sub-title" style="margin: 0 0 8px;">Product 등록</h3>
+          <p class="helper" style="margin: 0 0 10px;">
+            <code>inlog.html#product</code> 페이지에 표시할 대표 이미지와 텍스트를 입력하세요.
+            &nbsp;<a href="inlog.html#product" target="_blank" rel="noopener noreferrer">Product 페이지 새 탭</a>
+          </p>
+          <div style="margin-bottom: 10px;">
+            <label class="hint" style="display:block; margin-bottom:4px;">대표 이미지 URL</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input id="inlogProductImageUrl" type="text" class="inline-input"
+                style="flex:1; min-width:200px;"
+                placeholder="https://... 이미지 주소" />
+              <button id="inlogProductImagePreviewBtn" class="btn-sm" type="button">미리보기</button>
+            </div>
+            <img id="inlogProductImagePreview" src="" alt="product preview"
+              style="margin-top:8px; max-width:100%; max-height:260px; border-radius:6px; object-fit:cover; display:block;"
+              hidden />
+          </div>
+          <div style="margin-bottom: 10px;">
+            <label class="hint" style="display:block; margin-bottom:4px;">텍스트 내용</label>
+            <textarea id="inlogProductText" class="inline-input"
+              style="width:100%; min-height:120px; resize:vertical; font-size:14px;"
+              placeholder="Product 페이지에 표시할 설명 텍스트를 입력하세요."></textarea>
+          </div>
           <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
             <button id="inlogPhotoVerifyBtn" class="btn-sm" type="button">데이터 일치 확인</button>
-            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마 저장</button>
+            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마/Product 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
           </div>
         </article>
@@ -2106,11 +2130,13 @@
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
       const STORAGE_INLOG_CINEMA_ITEMS = "scheduleSiteInlogCinemaItemsV1";
       const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
+      const STORAGE_INLOG_PRODUCT = "scheduleSiteInlogProductV1";
       // 인로그 전용 키 집합: 스냅샷 preload 제외 + 배경 push 제외에 공통 사용
       const INLOG_DATA_KEYS = new Set([
         STORAGE_INLOG_PHOTO_ALBUMS,
         STORAGE_INLOG_CINEMA_ITEMS,
-        STORAGE_INLOG_HOME_MAIN
+        STORAGE_INLOG_HOME_MAIN,
+        STORAGE_INLOG_PRODUCT
       ]);
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -2446,6 +2472,37 @@
         const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
         localStorage.setItem(STORAGE_INLOG_CINEMA_ITEMS, JSON.stringify(stamped));
       }
+      function readInlogProduct() {
+        try {
+          const raw = localStorage.getItem(STORAGE_INLOG_PRODUCT);
+          if (!raw) return { v: 1, imageUrl: "", text: "" };
+          const parsed = JSON.parse(raw);
+          return { v: 1, imageUrl: String(parsed.imageUrl || ""), text: String(parsed.text || "") };
+        } catch (e) {
+          return { v: 1, imageUrl: "", text: "" };
+        }
+      }
+      function writeInlogProduct(payload) {
+        const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
+        localStorage.setItem(STORAGE_INLOG_PRODUCT, JSON.stringify(stamped));
+      }
+      function collectInlogProductEditorPayload() {
+        const imageUrl = String(document.getElementById("inlogProductImageUrl")?.value || "").trim();
+        const text = String(document.getElementById("inlogProductText")?.value || "").trim();
+        return { v: 1, imageUrl, text };
+      }
+      function hydrateInlogProductEditor() {
+        const data = readInlogProduct();
+        const imgEl = document.getElementById("inlogProductImageUrl");
+        const textEl = document.getElementById("inlogProductText");
+        const previewEl = document.getElementById("inlogProductImagePreview");
+        if (imgEl) imgEl.value = data.imageUrl || "";
+        if (textEl) textEl.value = data.text || "";
+        if (previewEl) {
+          previewEl.src = data.imageUrl || "";
+          previewEl.hidden = !data.imageUrl;
+        }
+      }
       function newInlogCinemaId() {
         return `cin-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       }
@@ -2670,8 +2727,10 @@
       function hydrateInlogPhotoEditorFromStorage() {
         wireInlogPhotoAlbumEditorIfNeeded();
         wireInlogCinemaEditorIfNeeded();
+        wireInlogProductEditorIfNeeded();
         renderInlogPhotoAlbumsEditor(readInlogPhotoAlbums());
         renderInlogCinemaEditor(readInlogCinemaItems());
+        hydrateInlogProductEditor();
         clearInlogEditorDirty();
       }
       function collectInlogPhotoAlbumsEditorPayload() {
@@ -2822,6 +2881,24 @@
           if (!t || !t.classList || !t.classList.contains("inlog-cinema-url")) return;
           markInlogEditorDirty();
         });
+      }
+      function wireInlogProductEditorIfNeeded() {
+        const sec = document.getElementById("inlogPhotoSection");
+        if (!sec || sec.getAttribute("data-inlog-product-wired") === "1") return;
+        sec.setAttribute("data-inlog-product-wired", "1");
+        const imgUrlEl = document.getElementById("inlogProductImageUrl");
+        const previewEl = document.getElementById("inlogProductImagePreview");
+        const previewBtn = document.getElementById("inlogProductImagePreviewBtn");
+        const textEl = document.getElementById("inlogProductText");
+        if (previewBtn && imgUrlEl && previewEl) {
+          previewBtn.addEventListener("click", () => {
+            const url = imgUrlEl.value.trim();
+            previewEl.src = url;
+            previewEl.hidden = !url;
+          });
+        }
+        if (imgUrlEl) imgUrlEl.addEventListener("input", () => markInlogEditorDirty());
+        if (textEl) textEl.addEventListener("input", () => markInlogEditorDirty());
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
@@ -12253,8 +12330,10 @@
         try {
           const localPhotoPayload = collectInlogPhotoAlbumsEditorPayload();
           const localCinemaPayload = collectInlogCinemaEditorPayload();
+          const localProductPayload = collectInlogProductEditorPayload();
           let photoPayload = localPhotoPayload;
           let cinemaPayload = localCinemaPayload;
+          let productPayload = localProductPayload;
           if (USE_SUPABASE_SYNC) {
             const serverRow = await fetchClientKvRowFromSupabase();
             if (!serverRow || !serverRow.kv || typeof serverRow.kv !== "object") {
@@ -12293,6 +12372,7 @@
           }
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
+          writeInlogProduct(productPayload);
           if (USE_SUPABASE_SYNC) {
             // includeInlogData=true: 저장 버튼만 인로그 키 포함 push
             let ok = await forceClientKvPushWhenReady(true);
