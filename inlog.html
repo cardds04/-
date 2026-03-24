@@ -1161,7 +1161,7 @@
           mount.innerHTML = "";
           mount.removeAttribute("class");
           const albums = photoPayload && Array.isArray(photoPayload.albums) ? photoPayload.albums : [];
-          const withCover = albums.map((alb, i) => ({ alb, cover: getAlbumCoverSrc(alb), i })).filter((x) => x.cover);
+          const withCover = [...albums].reverse().map((alb, i) => ({ alb, cover: getAlbumCoverSrc(alb), i })).filter((x) => x.cover);
           if (!withCover.length) {
             const p = document.createElement("p");
             p.className = "photo-empty";
@@ -1268,18 +1268,22 @@
           browser.appendChild(expand);
           mount.appendChild(browser);
           const wantOpen = String(openAlbumId || "").trim() || getPhotoOpenAlbumIdFromHash();
-          const firstToOpen = wantOpen || (withCover.length ? String(withCover[0].alb.id || "") : "");
-          if (firstToOpen) {
-            const match = withCover.find((x) => String(x.alb.id || "") === firstToOpen);
+          if (wantOpen) {
+            const match = withCover.find((x) => String(x.alb.id || "") === wantOpen);
             if (match) {
               const btns = grid.querySelectorAll(".photo-cover-cell");
               for (let bi = 0; bi < btns.length; bi++) {
                 const b = btns[bi];
-                if (b.dataset.albumId === firstToOpen) {
+                if (b.dataset.albumId === wantOpen) {
                   openExpand(match.alb, getAlbumDetailPhotos(match.alb), b);
                   break;
                 }
               }
+            }
+          } else if (withCover.length) {
+            const firstBtn = grid.querySelector(".photo-cover-cell");
+            if (firstBtn) {
+              openExpand(withCover[0].alb, getAlbumDetailPhotos(withCover[0].alb), firstBtn);
             }
           }
         }
@@ -1373,7 +1377,7 @@
           }
           const grid = document.createElement("div");
           grid.className = "cinema-grid";
-          items.forEach((it) => {
+          [...items].reverse().forEach((it) => {
             const card = document.createElement("article");
             card.className = "cinema-card";
             const media = document.createElement("div");
