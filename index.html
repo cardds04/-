@@ -5802,69 +5802,82 @@
       /** 관리자 삭제 시 id가 비어 있거나 로컬 id가 DB와 불일치해도 서버 행을 지우기 위한 삭제 */
       async function deleteScheduleFromSupabaseByItem(item) {
         if (!USE_SUPABASE_SYNC || !item) return false;
-        // guardUploadWithRemoteFreshness 제거 — freshness guard가 DELETE를 막는 경우 방지
 
-        // 1차: directId (customerScheduleId) 로 직접 삭제 후 실제 삭제 여부 검증
-        const directId = String(item?.customerScheduleId || "").trim();
-        if (isUuidLike(directId)) {
-          console.log(`[DELETE] 직접 id로 서버 삭제 시도: ${directId}`);
-          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(directId)}`, {
-            method: "DELETE",
-            headers: {
-              Prefer: "return=minimal",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        // ── 소프트 삭제 헬퍼: PATCH source="deleted" 후 SELECT로 검증 ──
+        async function softDeleteById(sid) {
+          console.log(`[DELETE] 소프트삭제(PATCH source=deleted) 시도: ${sid}`);
+          const patchRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify({ source: "deleted" })
             }
-          });
-          console.log(`[DELETE] 서버 응답 status: ${res.status}`);
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`schedules 삭제 실패 (${res.status}): ${errorText}`);
+          );
+          if (!patchRes.ok) {
+            const errText = await patchRes.text();
+            console.warn(`[DELETE] PATCH 실패 (${patchRes.status}): ${errText}`);
+            return false;
           }
-          // 204여도 실제 삭제됐는지 SELECT로 검증 (RLS가 조용히 막으면 204지만 row가 남음)
-          const verifyRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(directId)}&select=id,source`,
+          // 검증: source가 실제로 "deleted"로 바뀌었는지 확인
+          const verRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}&select=id,source`,
             { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
           );
-          if (verifyRes.ok) {
-            const remaining = await verifyRes.json();
-            if (Array.isArray(remaining) && remaining.length > 0) {
-              const src = String(remaining[0]?.source || "").trim();
-              console.warn(`[DELETE] row가 아직 남아있음 (source="${src}") — PATCH로 대체 마킹`);
-              // PATCH로 source="deleted" 마킹 — pull 필터에서 영구 제외
-              const patchRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(directId)}`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Prefer: "return=minimal",
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                  },
-                  body: JSON.stringify({ source: "deleted" })
-                }
-              );
-              // PATCH 결과도 검증
-              const verifyPatch = await fetch(
-                `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(directId)}&select=id,source`,
-                { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
-              );
-              if (verifyPatch.ok) {
-                const patchedRows = await verifyPatch.json();
-                const patchedSrc = String(patchedRows?.[0]?.source || "").trim();
-                console.log(`[DELETE] PATCH 검증 결과: source="${patchedSrc}"`);
-                if (patchedSrc === "deleted") return true; // PATCH 성공
-              }
-              console.error(`[DELETE] DELETE도 PATCH도 실패 — Supabase RLS 정책 확인 필요`);
-              return false;
+          if (verRes.ok) {
+            const rows = await verRes.json();
+            if (!Array.isArray(rows) || rows.length === 0) {
+              // 이미 없는 행 → 성공으로 간주
+              console.log(`[DELETE] 소프트삭제 검증: row 없음(이미 삭제됨) ✓`);
+              return true;
             }
+            const src = String(rows[0]?.source || "").trim();
+            if (src === "deleted") {
+              console.log(`[DELETE] 소프트삭제 검증: source="deleted" 확인 ✓`);
+              return true;
+            }
+            console.warn(`[DELETE] 소프트삭제 검증 실패: source="${src}" (RLS 차단 가능성)`);
+            return false;
           }
-          console.log(`[DELETE] 서버에서 row 삭제 확인됨 ✓`);
-          return true;
+          return false;
         }
 
-        // 2차: directId 없을 때 복합키로 id 조회 후 삭제
+        // ── 하드 삭제 헬퍼 (소프트 삭제 후에도 row가 남을 경우 추가 시도) ──
+        async function hardDeleteById(sid) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`, {
+            method: "DELETE",
+            headers: { Prefer: "return=minimal", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+          });
+          console.log(`[DELETE] 하드삭제 status: ${res.status} (id=${sid})`);
+          return res.ok;
+        }
+
+        // 1차: directId (customerScheduleId) 로 처리
+        const directId = String(item?.customerScheduleId || "").trim();
+        if (isUuidLike(directId)) {
+          // ★ 소프트 삭제 우선 — source="deleted" 마킹이 남아있어야 고객 페이지가 재삽입을 차단함
+          const softOk = await softDeleteById(directId);
+          if (softOk) {
+            // 소프트 삭제 성공 후 하드 삭제도 시도 (테이블 정리용, 실패해도 무관)
+            hardDeleteById(directId).catch(() => {});
+            return true;
+          }
+          // 소프트 삭제 실패 시 하드 삭제 시도
+          console.warn(`[DELETE] 소프트삭제 실패 → 하드삭제 시도`);
+          const hardOk = await hardDeleteById(directId);
+          if (!hardOk) {
+            console.error(`[DELETE] 소프트/하드 삭제 모두 실패 — Supabase RLS 정책 확인 필요 (id=${directId})`);
+            alert("스케줄 삭제 권한이 없습니다.\nSupabase 대시보드에서 schedules 테이블의 RLS DELETE/UPDATE 정책을 확인해주세요.");
+          }
+          return hardOk;
+        }
+
+        // 2차: directId 없을 때 복합키로 id 조회 후 처리
         console.warn(`[DELETE] customerScheduleId 없음 — 복합키 조회 시도`, item);
         let compositeIds = [];
         try {
@@ -5876,22 +5889,17 @@
           console.warn("[DELETE] 서버에서 매칭 row 없음 — 삭제 불가", item);
           return false;
         }
+        let allOk = true;
         for (const sid of compositeIds) {
-          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`, {
-            method: "DELETE",
-            headers: {
-              Prefer: "return=minimal",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            }
-          });
-          console.log(`[DELETE] 복합키 삭제 status: ${res.status} (id=${sid})`);
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`schedules 삭제 실패 (${res.status}): ${errorText}`);
+          const softOk = await softDeleteById(sid);
+          if (softOk) {
+            hardDeleteById(sid).catch(() => {});
+          } else {
+            const hardOk = await hardDeleteById(sid);
+            if (!hardOk) allOk = false;
           }
         }
-        return true;
+        return allOk;
       }
       async function syncPaymentsToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
