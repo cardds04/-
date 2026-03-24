@@ -5802,28 +5802,13 @@
       /** 관리자 삭제 시 id가 비어 있거나 로컬 id가 DB와 불일치해도 서버 행을 지우기 위한 삭제 */
       async function deleteScheduleFromSupabaseByItem(item) {
         if (!USE_SUPABASE_SYNC || !item) return false;
-        await guardUploadWithRemoteFreshness({
-          tableName: "schedules",
-          label: "스케줄",
-          lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
-        });
-        const idSet = new Set();
+        // guardUploadWithRemoteFreshness 제거 — freshness guard가 DELETE를 막는 경우 방지
+
+        // 1차: directId (customerScheduleId) 로 직접 삭제
         const directId = String(item?.customerScheduleId || "").trim();
-        if (isUuidLike(directId)) idSet.add(directId);
-        let compositeIds = [];
-        try {
-          compositeIds = await fetchScheduleIdsFromSupabaseByComposite(item);
-        } catch (error) {
-          console.warn("[SCHEDULES][index] 복합키로 schedules 조회 실패 — id 삭제만 시도", error);
-        }
-        compositeIds.forEach((id) => idSet.add(id));
-        if (!idSet.size) {
-          console.warn("[SCHEDULES][index] Supabase schedules 삭제: 매칭 id 없음(회사/일시/장소 확인)", item);
-          return false;
-        }
-        let deletedAny = false;
-        for (const sid of idSet) {
-          const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`, {
+        if (isUuidLike(directId)) {
+          console.log(`[DELETE] 직접 id로 서버 삭제 시도: ${directId}`);
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(directId)}`, {
             method: "DELETE",
             headers: {
               Prefer: "return=minimal",
@@ -5831,13 +5816,42 @@
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             }
           });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`schedules 삭제 실패 (${response.status}): ${errorText}`);
+          console.log(`[DELETE] 서버 응답 status: ${res.status}`);
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`schedules 삭제 실패 (${res.status}): ${errorText}`);
           }
-          deletedAny = true;
+          return true; // HTTP 2xx = 성공 (0건 삭제도 포함)
         }
-        return deletedAny;
+
+        // 2차: directId 없을 때 복합키로 id 조회 후 삭제
+        console.warn(`[DELETE] customerScheduleId 없음 — 복합키 조회 시도`, item);
+        let compositeIds = [];
+        try {
+          compositeIds = await fetchScheduleIdsFromSupabaseByComposite(item);
+        } catch (error) {
+          console.warn("[DELETE] 복합키 조회 실패", error);
+        }
+        if (!compositeIds.length) {
+          console.warn("[DELETE] 서버에서 매칭 row 없음 — 삭제 불가", item);
+          return false;
+        }
+        for (const sid of compositeIds) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(sid)}`, {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          console.log(`[DELETE] 복합키 삭제 status: ${res.status} (id=${sid})`);
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`schedules 삭제 실패 (${res.status}): ${errorText}`);
+          }
+        }
+        return true;
       }
       async function syncPaymentsToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemotePayments) return;
