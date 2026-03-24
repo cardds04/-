@@ -5603,6 +5603,7 @@
         });
         const remoteRows = await fetchPaymentsFromSupabase();
         const remoteBySyncKey = new Map();
+        const duplicateRemoteIds = [];
         (Array.isArray(remoteRows) ? remoteRows : []).forEach((remote) => {
           let payload = {};
           try {
@@ -5613,9 +5614,15 @@
           const source = String(payload?.source || "active").trim();
           const identity = String(payload?.identity || "").trim();
           const syncKey = String(payload?.syncKey || (identity ? `${source}::${identity}` : "")).trim();
-          if (!syncKey) return;
+          if (!syncKey) {
+            duplicateRemoteIds.push(remote.id);
+            return;
+          }
           if (!remoteBySyncKey.has(syncKey)) {
             remoteBySyncKey.set(syncKey, remote);
+          } else {
+            // 동일 syncKey의 중복 레코드는 삭제 대상으로 수집
+            duplicateRemoteIds.push(remote.id);
           }
         });
         const localSyncKeySet = new Set(localRows.map((entry) => entry.syncKey));
@@ -5671,7 +5678,7 @@
             throw new Error(`payments 등록 실패 (${insertResponse.status}): ${errorText}`);
           }
         }
-        const deleteIds = [];
+        const deleteIds = [...duplicateRemoteIds];
         remoteBySyncKey.forEach((remote, syncKey) => {
           if (!localSyncKeySet.has(syncKey)) {
             deleteIds.push(remote.id);
