@@ -1929,9 +1929,46 @@
               style="width:100%; min-height:120px; resize:vertical; font-size:14px;"
               placeholder="Product 페이지에 표시할 설명 텍스트를 입력하세요."></textarea>
           </div>
+          <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;" />
+          <h3 class="sub-title" style="margin: 0 0 8px;">로고 이미지 등록</h3>
+          <p class="helper" style="margin: 0 0 12px;">
+            헤더(상단)와 푸터(하단)에 표시할 로고 이미지를 각각 업로드하세요.<br>
+            이미지가 없으면 기존 텍스트/기본 로고가 표시됩니다.
+          </p>
+
+          <div style="margin-bottom: 14px;">
+            <label class="hint" style="display:block; margin-bottom:4px; font-weight:600;">헤더 로고 (상단 좌측)</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button id="inlogLogoHeaderUploadBtn" class="btn-sm primary" type="button">📷 이미지 업로드</button>
+              <span id="inlogLogoHeaderStatus" class="hint" style="font-size:13px;"></span>
+            </div>
+            <input id="inlogLogoHeaderFileInput" type="file" accept="image/*" style="display:none;" />
+            <input id="inlogLogoHeaderUrl" type="hidden" value="" />
+            <div id="inlogLogoHeaderPreviewWrap" style="margin-top:8px; display:none;">
+              <img id="inlogLogoHeaderPreview" src="" alt="헤더 로고 미리보기"
+                style="max-width:220px; max-height:80px; border-radius:6px; object-fit:contain; display:block; background:#f0f0f0; padding:6px;" />
+              <button id="inlogLogoHeaderRemoveBtn" class="btn-sm" type="button" style="margin-top:4px;">이미지 제거</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 14px;">
+            <label class="hint" style="display:block; margin-bottom:4px; font-weight:600;">푸터 로고 (하단 중앙)</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button id="inlogLogoFooterUploadBtn" class="btn-sm primary" type="button">📷 이미지 업로드</button>
+              <span id="inlogLogoFooterStatus" class="hint" style="font-size:13px;"></span>
+            </div>
+            <input id="inlogLogoFooterFileInput" type="file" accept="image/*" style="display:none;" />
+            <input id="inlogLogoFooterUrl" type="hidden" value="" />
+            <div id="inlogLogoFooterPreviewWrap" style="margin-top:8px; display:none;">
+              <img id="inlogLogoFooterPreview" src="" alt="푸터 로고 미리보기"
+                style="max-width:160px; max-height:120px; border-radius:6px; object-fit:contain; display:block; background:#f0f0f0; padding:6px;" />
+              <button id="inlogLogoFooterRemoveBtn" class="btn-sm" type="button" style="margin-top:4px;">이미지 제거</button>
+            </div>
+          </div>
+
           <div class="actions" style="margin-top: 16px; justify-content: flex-start;">
             <button id="inlogPhotoVerifyBtn" class="btn-sm" type="button">데이터 일치 확인</button>
-            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마/Product 저장</button>
+            <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마/로고 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
           </div>
         </article>
@@ -2134,12 +2171,14 @@
       const STORAGE_INLOG_CINEMA_ITEMS = "scheduleSiteInlogCinemaItemsV1";
       const STORAGE_INLOG_HOME_MAIN = "scheduleSiteInlogHomeMainV1";
       const STORAGE_INLOG_PRODUCT = "scheduleSiteInlogProductV1";
+      const STORAGE_INLOG_LOGO = "scheduleSiteInlogLogoV1";
       // 인로그 전용 키 집합: 스냅샷 preload 제외 + 배경 push 제외에 공통 사용
       const INLOG_DATA_KEYS = new Set([
         STORAGE_INLOG_PHOTO_ALBUMS,
         STORAGE_INLOG_CINEMA_ITEMS,
         STORAGE_INLOG_HOME_MAIN,
-        STORAGE_INLOG_PRODUCT
+        STORAGE_INLOG_PRODUCT,
+        STORAGE_INLOG_LOGO
       ]);
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -2475,6 +2514,94 @@
         const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
         localStorage.setItem(STORAGE_INLOG_CINEMA_ITEMS, JSON.stringify(stamped));
       }
+      function readInlogLogo() {
+        try {
+          const raw = localStorage.getItem(STORAGE_INLOG_LOGO);
+          if (!raw) return { v: 1, headerUrl: "", footerUrl: "" };
+          const parsed = JSON.parse(raw);
+          return { v: 1, headerUrl: String(parsed.headerUrl || ""), footerUrl: String(parsed.footerUrl || "") };
+        } catch (e) {
+          return { v: 1, headerUrl: "", footerUrl: "" };
+        }
+      }
+      function writeInlogLogo(payload) {
+        const stamped = Object.assign({}, payload, { savedAt: new Date().toISOString() });
+        localStorage.setItem(STORAGE_INLOG_LOGO, JSON.stringify(stamped));
+      }
+      function collectInlogLogoEditorPayload() {
+        const headerUrl = String(document.getElementById("inlogLogoHeaderUrl")?.value || "").trim();
+        const footerUrl = String(document.getElementById("inlogLogoFooterUrl")?.value || "").trim();
+        return { v: 1, headerUrl, footerUrl };
+      }
+      function hydrateInlogLogoEditor() {
+        const data = readInlogLogo();
+        const headerUrlEl = document.getElementById("inlogLogoHeaderUrl");
+        const footerUrlEl = document.getElementById("inlogLogoFooterUrl");
+        const headerPreviewWrap = document.getElementById("inlogLogoHeaderPreviewWrap");
+        const headerPreviewEl = document.getElementById("inlogLogoHeaderPreview");
+        const footerPreviewWrap = document.getElementById("inlogLogoFooterPreviewWrap");
+        const footerPreviewEl = document.getElementById("inlogLogoFooterPreview");
+        if (headerUrlEl) headerUrlEl.value = data.headerUrl || "";
+        if (footerUrlEl) footerUrlEl.value = data.footerUrl || "";
+        if (headerPreviewEl) headerPreviewEl.src = data.headerUrl || "";
+        if (headerPreviewWrap) headerPreviewWrap.style.display = data.headerUrl ? "block" : "none";
+        if (footerPreviewEl) footerPreviewEl.src = data.footerUrl || "";
+        if (footerPreviewWrap) footerPreviewWrap.style.display = data.footerUrl ? "block" : "none";
+      }
+      let _inlogLogoEditorWired = false;
+      function wireInlogLogoEditorIfNeeded() {
+        if (_inlogLogoEditorWired) return;
+        _inlogLogoEditorWired = true;
+        function wireLogoUpload(btnId, fileId, urlId, previewWraId, previewId, statusId) {
+          const btn = document.getElementById(btnId);
+          const file = document.getElementById(fileId);
+          const urlEl = document.getElementById(urlId);
+          const previewWrap = document.getElementById(previewWraId);
+          const previewEl = document.getElementById(previewId);
+          const statusEl = document.getElementById(statusId);
+          const removeId = btnId.replace("UploadBtn", "RemoveBtn");
+          const removeBtn = document.getElementById(removeId);
+          if (!btn || !file) return;
+          btn.addEventListener("click", () => file.click());
+          file.addEventListener("change", async () => {
+            const f = file.files && file.files[0];
+            if (!f) return;
+            const localUrl = URL.createObjectURL(f);
+            if (previewEl) previewEl.src = localUrl;
+            if (previewWrap) previewWrap.style.display = "block";
+            if (statusEl) { statusEl.textContent = "업로드 중…"; statusEl.style.color = ""; }
+            btn.disabled = true;
+            try {
+              const url = await uploadInlogHomeImageFileToSupabase(f);
+              URL.revokeObjectURL(localUrl);
+              if (urlEl) urlEl.value = url;
+              if (previewEl) previewEl.src = url;
+              if (statusEl) { statusEl.textContent = "✓ 업로드 완료"; statusEl.style.color = "green"; }
+              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; } }, 3000);
+              markInlogEditorDirty();
+            } catch (e) {
+              URL.revokeObjectURL(localUrl);
+              if (statusEl) { statusEl.textContent = "✗ " + String(e.message || e); statusEl.style.color = "red"; }
+              alert("이미지 업로드 실패:\n" + String(e.message || e));
+            } finally {
+              btn.disabled = false;
+              file.value = "";
+            }
+          });
+          if (removeBtn) {
+            removeBtn.addEventListener("click", () => {
+              if (urlEl) urlEl.value = "";
+              if (previewEl) previewEl.src = "";
+              if (previewWrap) previewWrap.style.display = "none";
+              markInlogEditorDirty();
+            });
+          }
+        }
+        wireLogoUpload("inlogLogoHeaderUploadBtn", "inlogLogoHeaderFileInput", "inlogLogoHeaderUrl",
+          "inlogLogoHeaderPreviewWrap", "inlogLogoHeaderPreview", "inlogLogoHeaderStatus");
+        wireLogoUpload("inlogLogoFooterUploadBtn", "inlogLogoFooterFileInput", "inlogLogoFooterUrl",
+          "inlogLogoFooterPreviewWrap", "inlogLogoFooterPreview", "inlogLogoFooterStatus");
+      }
       function readInlogProduct() {
         try {
           const raw = localStorage.getItem(STORAGE_INLOG_PRODUCT);
@@ -2730,9 +2857,11 @@
         wireInlogPhotoAlbumEditorIfNeeded();
         wireInlogCinemaEditorIfNeeded();
         wireInlogProductEditorIfNeeded();
+        wireInlogLogoEditorIfNeeded();
         renderInlogPhotoAlbumsEditor(readInlogPhotoAlbums());
         renderInlogCinemaEditor(readInlogCinemaItems());
         hydrateInlogProductEditor();
+        hydrateInlogLogoEditor();
         clearInlogEditorDirty();
       }
       function collectInlogPhotoAlbumsEditorPayload() {
@@ -12316,8 +12445,8 @@
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabInlogPhotoEl?.addEventListener("click", () => {
         switchMainTab("inlogPhoto");
-        // 탭 클릭 시 product 에디터 wiring 보장
         wireInlogProductEditorIfNeeded();
+        wireInlogLogoEditorIfNeeded();
       });
       inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
@@ -12379,12 +12508,15 @@
           const localPhotoPayload = collectInlogPhotoAlbumsEditorPayload();
           const localCinemaPayload = collectInlogCinemaEditorPayload();
           const localProductPayload = collectInlogProductEditorPayload();
+          const localLogoPayload = collectInlogLogoEditorPayload();
           // 서버 페치 전에 먼저 로컬 저장: freshness guard가 발동해 early return 되더라도
-          // product 데이터가 memoryStore에 남아 있어 에디터가 클리어되지 않는다.
+          // 데이터가 memoryStore에 남아 있어 에디터가 클리어되지 않는다.
           writeInlogProduct(localProductPayload);
+          writeInlogLogo(localLogoPayload);
           let photoPayload = localPhotoPayload;
           let cinemaPayload = localCinemaPayload;
           let productPayload = localProductPayload;
+          let logoPayload = localLogoPayload;
           if (USE_SUPABASE_SYNC) {
             const serverRow = await fetchClientKvRowFromSupabase();
             if (!serverRow || !serverRow.kv || typeof serverRow.kv !== "object") {
@@ -12424,6 +12556,7 @@
           writeInlogPhotoAlbums(photoPayload);
           writeInlogCinemaItems(cinemaPayload);
           writeInlogProduct(productPayload);
+          writeInlogLogo(logoPayload);
           if (USE_SUPABASE_SYNC) {
             // includeInlogData=true: 저장 버튼만 인로그 키 포함 push
             let ok = await forceClientKvPushWhenReady(true);

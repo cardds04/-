@@ -999,6 +999,7 @@
         const PHOTO_STORAGE_KEY = "scheduleSiteInlogPhotoAlbumsV1";
         const CINEMA_STORAGE_KEY = "scheduleSiteInlogCinemaItemsV1";
         const PRODUCT_STORAGE_KEY = "scheduleSiteInlogProductV1";
+        const LOGO_STORAGE_KEY = "scheduleSiteInlogLogoV1";
         function sanitizeInlogHomeHref(s) {
           const t = String(s || "").trim();
           if (!t) return "";
@@ -1534,6 +1535,8 @@
                 if (p != null) localStorage.setItem(PHOTO_STORAGE_KEY, typeof p === "string" ? p : JSON.stringify(p));
                 if (c != null) localStorage.setItem(CINEMA_STORAGE_KEY, typeof c === "string" ? c : JSON.stringify(c));
                 if (pr != null) localStorage.setItem(PRODUCT_STORAGE_KEY, typeof pr === "string" ? pr : JSON.stringify(pr));
+                const lg = kv[LOGO_STORAGE_KEY];
+                if (lg != null) localStorage.setItem(LOGO_STORAGE_KEY, typeof lg === "string" ? lg : JSON.stringify(lg));
               }
             } catch (e) {
               // Safari private 등 localStorage 불가 환경은 무시
@@ -1559,6 +1562,7 @@
           renderCinemaMount(cinemaPayload);
           renderHomeCinemaMount(cinemaPayload);
           renderProductMount();
+          renderLogoMount();
         }
 
         function parseProductFromStorage() {
@@ -1584,6 +1588,50 @@
           }
           if (textWrap) {
             textWrap.textContent = data.text || "";
+          }
+        }
+        function parseLogoFromStorage() {
+          try {
+            const raw = localStorage.getItem(LOGO_STORAGE_KEY);
+            if (!raw) return { headerUrl: "", footerUrl: "" };
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return {
+              headerUrl: String(parsed.headerUrl || "").trim(),
+              footerUrl: String(parsed.footerUrl || "").trim()
+            };
+          } catch (e) {
+            return { headerUrl: "", footerUrl: "" };
+          }
+        }
+        function renderLogoMount() {
+          const logo = parseLogoFromStorage();
+          // 헤더 로고
+          const headerLogoEl = document.querySelector(".site-header__logo");
+          if (headerLogoEl) {
+            if (logo.headerUrl) {
+              headerLogoEl.innerHTML = "";
+              const img = document.createElement("img");
+              img.src = logo.headerUrl;
+              img.alt = "인로그 로고";
+              img.style.cssText = "height:clamp(28px,5vw,44px); width:auto; display:block; object-fit:contain;";
+              headerLogoEl.appendChild(img);
+            } else {
+              if (!headerLogoEl.querySelector("img")) {
+                headerLogoEl.textContent = "인로그";
+              }
+            }
+          }
+          // 푸터 로고
+          const footerBrandEl = document.querySelector(".site-footer__brand");
+          if (footerBrandEl) {
+            if (logo.footerUrl) {
+              footerBrandEl.innerHTML = "";
+              const img = document.createElement("img");
+              img.src = logo.footerUrl;
+              img.alt = "인로그 로고";
+              img.style.cssText = "width:min(132px,36vw); height:auto; display:block; margin:0 auto; object-fit:contain;";
+              footerBrandEl.appendChild(img);
+            }
           }
         }
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadInlogHomeFromSupabase);
