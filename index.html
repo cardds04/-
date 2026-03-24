@@ -6429,9 +6429,12 @@
         const nextHold = [];
         const nextRefund = [];
         (Array.isArray(rows) ? rows : []).filter((row) => {
-          // 삭제 진행 중(pendingDeletion) 항목은 서버에 아직 존재해도 pull 결과에서 제외
+          // source="deleted" 행 또는 pendingDeletion ID 행은 pull에서 항상 제외
           const rid = String(row?.id || "").trim();
-          return !rid || !schedulePendingDeletionIds.has(rid);
+          const src = String(row?.source || "").trim();
+          if (src === "deleted") return false;
+          if (rid && schedulePendingDeletionIds.has(rid)) return false;
+          return true;
         }).forEach((row) => {
           const source = String(row?.source || "active").trim() || "active";
           const status = String(row?.status || "").trim();
@@ -14486,9 +14489,14 @@
 
         editingIndex = null;
         editingDateIndex = null;
+        // 삭제 즉시 pull 차단 쿨다운 8초 — 서버 DELETE 완료 전 pull로 복구 방지
+        scheduleSyncCooldownUntil = Date.now() + 8000;
+        if (deletedScheduleId) schedulePendingDeletionIds.add(deletedScheduleId);
         renderList();
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
+        // 서버 row의 source를 즉시 "deleted"로 PATCH → pull 시 필터로 완전 차단
+        if (deletedScheduleId) void directPatchScheduleSource(deletedScheduleId, "deleted");
         const deleteReceipt = {
           receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           scheduleId: String(deletedScheduleId || "").trim(),
@@ -14504,18 +14512,15 @@
         void appendScheduleReceiptLedgerToSupabase(deleteReceipt).catch((error) => {
           console.error("[SUBMISSION_RECEIPT][index] 관리자 삭제기록 저장 실패", error);
         });
-        // 삭제 진행 중 표시 → pull이 이 ID를 서버에서 가져와도 무시함
-        if (deletedScheduleId) schedulePendingDeletionIds.add(deletedScheduleId);
         void deleteScheduleFromSupabaseByItem(deletedItem)
           .then(() => {
-            // 삭제 완료 후 800ms 추가 쿨다운으로 리얼타임 pull 안정화
+            // 실제 DELETE 완료 → pendingDeletion 해제, 짧은 쿨다운으로 전환
+            if (deletedScheduleId) schedulePendingDeletionIds.delete(deletedScheduleId);
             scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 800);
           })
           .catch((error) => {
             console.error("[SCHEDULES][index] 스케줄 삭제 동기화 실패", error);
-          })
-          .finally(() => {
-            if (deletedScheduleId) schedulePendingDeletionIds.delete(deletedScheduleId);
+            // 삭제 실패해도 pendingDeletion은 유지(계속 pull에서 차단)
           });
         if (!shouldMoveToHoldAfterDelete) {
           void deleteRelatedPaymentsFromSupabaseBySchedule(deletedItem)
