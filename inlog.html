@@ -1041,7 +1041,7 @@
             return;
           }
           const albums = photoPayload && Array.isArray(photoPayload.albums) ? photoPayload.albums : [];
-          const withCover = albums.filter((alb) => Boolean(getAlbumCoverSrc(alb)));
+          const withCover = [...albums].reverse().filter((alb) => Boolean(getAlbumCoverSrc(alb)));
           for (let i = 0; i < SLOT_COUNT; i++) {
             const img = document.querySelector('.inlog-gallery-img[data-inlog-index="' + i + '"]');
             const linkEl = document.querySelector('.inlog-gallery-link[data-inlog-index="' + i + '"]');
@@ -1268,13 +1268,14 @@
           browser.appendChild(expand);
           mount.appendChild(browser);
           const wantOpen = String(openAlbumId || "").trim() || getPhotoOpenAlbumIdFromHash();
-          if (wantOpen) {
-            const match = withCover.find((x) => String(x.alb.id || "") === wantOpen);
+          const firstToOpen = wantOpen || (withCover.length ? String(withCover[0].alb.id || "") : "");
+          if (firstToOpen) {
+            const match = withCover.find((x) => String(x.alb.id || "") === firstToOpen);
             if (match) {
               const btns = grid.querySelectorAll(".photo-cover-cell");
               for (let bi = 0; bi < btns.length; bi++) {
                 const b = btns[bi];
-                if (b.dataset.albumId === wantOpen) {
+                if (b.dataset.albumId === firstToOpen) {
                   openExpand(match.alb, getAlbumDetailPhotos(match.alb), b);
                   break;
                 }
