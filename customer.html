@@ -1825,7 +1825,7 @@
         } catch (error) {
           console.warn("[TABLE][customer] 결제상태 보호 조회 실패", error);
         }
-        const insertRows = filteredUserRows.map((row) => {
+        let insertRows = filteredUserRows.map((row) => {
           const memoForDb = mergeMemoAndTimePreference(row?.memo, row?.timePreference);
           const rowId = ensureScheduleUuid(row);
           const remotePaymentState = remotePaymentStateById.get(rowId);
@@ -1858,6 +1858,40 @@
             source: "customer"
           };
         });
+        // 관리자가 삭제한 스케줄(source="deleted")은 고객 페이지가 덮어쓰지 않도록 필터
+        try {
+          const checkIds = insertRows.map((r) => String(r.id || "")).filter(Boolean);
+          if (checkIds.length > 0) {
+            const checkRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/schedules?id=in.(${checkIds.map(encodeURIComponent).join(",")})&select=id,source`,
+              { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+            );
+            if (checkRes.ok) {
+              const remoteCheck = await checkRes.json();
+              const adminDeletedIds = new Set(
+                (Array.isArray(remoteCheck) ? remoteCheck : [])
+                  .filter((r) => String(r?.source || "").trim() === "deleted")
+                  .map((r) => String(r?.id || "").trim())
+                  .filter(Boolean)
+              );
+              if (adminDeletedIds.size > 0) {
+                // 관리자가 삭제한 스케줄은 로컬 스토리지에서도 제거
+                const currentSchedules = readStorageArray(STORAGE_SCHEDULES);
+                const cleaned = currentSchedules.filter(
+                  (row) => !adminDeletedIds.has(normalize(ensureScheduleUuid(row)))
+                );
+                if (cleaned.length !== currentSchedules.length) {
+                  writeStorageArray(STORAGE_SCHEDULES, cleaned);
+                }
+                // UPSERT 대상에서도 제외
+                insertRows = insertRows.filter((r) => !adminDeletedIds.has(String(r.id || "")));
+              }
+            }
+          }
+        } catch (_) {
+          // 삭제 체크 실패 시 기존 insertRows 그대로 진행
+        }
+        if (!insertRows.length) return;
         const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
           method: "POST",
           headers: {

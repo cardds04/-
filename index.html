@@ -11632,8 +11632,24 @@
               }
             );
             if (res.ok) {
-              console.log(`[SCHEDULES] PATCH source=${newSource} 성공 (시도 ${attempt + 1}, id=${scheduleId})`);
-              // PATCH 성공 → pull에서 source="deleted"로 영구 필터링됨 → pendingId 해제
+              // Prefer:return=minimal은 0건 업데이트도 204 반환 → SELECT로 실제 반영 여부 검증
+              try {
+                const vRes = await fetch(
+                  `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(scheduleId)}&select=id,source`,
+                  { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+                );
+                if (vRes.ok) {
+                  const vRows = await vRes.json();
+                  const actualSource = String(vRows?.[0]?.source || "").trim();
+                  if (actualSource !== newSource) {
+                    console.warn(`[SCHEDULES] PATCH 검증 실패: 서버 source="${actualSource}" (기대="${newSource}") — 재시도 (시도 ${attempt + 1})`);
+                    await new Promise((r) => setTimeout(r, delay));
+                    delay = Math.min(delay * 2, 30000);
+                    continue;
+                  }
+                }
+              } catch (_) { /* 검증 실패 시 성공으로 간주 */ }
+              console.log(`[SCHEDULES] PATCH source=${newSource} 검증 완료 (시도 ${attempt + 1}, id=${scheduleId})`);
               if (newSource === "deleted") removePendingDeleteId(scheduleId);
               return;
             }
