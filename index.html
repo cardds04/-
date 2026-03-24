@@ -2303,7 +2303,8 @@
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED ||
               k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY ||
-              k === STORAGE_ADMIN_SCHEDULES // schedules 테이블로 관리 — 서버 KV 복원 금지
+              k === STORAGE_ADMIN_SCHEDULES || // schedules 테이블로 관리 — 서버 KV 복원 금지
+              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
             )
               return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
@@ -11507,31 +11508,42 @@
       }
 
       /** localStorage에 저장된 삭제 대기 ID 목록을 메모리 Set에 복원 */
+      // 삭제 대기 IDs는 프록시(memoryStore/스냅샷/KV)를 완전히 우회해 네이티브 localStorage에만 저장한다.
+      // hydrateFromServerKv가 실행될 때 서버 KV(구버전)가 memoryStore를 덮어쓰면 IDs가 사라져
+      // 삭제한 스케줄이 새로고침 후 재등장하는 버그의 원인이었다.
+      const _nativePendingStore = {
+        get() {
+          try {
+            const fn = scheduleSiteClientKvState?.nativeGetItem;
+            return fn ? fn(STORAGE_PENDING_DELETE_SCHEDULE_IDS) : null;
+          } catch (_) { return null; }
+        },
+        set(ids) {
+          try {
+            const fn = scheduleSiteClientKvState?.nativeSetItem;
+            if (fn) fn(STORAGE_PENDING_DELETE_SCHEDULE_IDS, JSON.stringify(ids));
+          } catch (_) {}
+        }
+      };
       function restorePendingDeleteIdsFromStorage() {
         try {
-          const raw = localStorage.getItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS);
+          const raw = _nativePendingStore.get();
           if (!raw) return;
           const ids = JSON.parse(raw);
           if (Array.isArray(ids)) ids.forEach((id) => { if (id) schedulePendingDeletionIds.add(String(id)); });
         } catch (_) {}
       }
-      /** 삭제 대기 ID를 메모리 + localStorage 양쪽에 추가 */
+      /** 삭제 대기 ID를 메모리 + 네이티브 localStorage 양쪽에 추가 */
       function addPendingDeleteId(scheduleId) {
         if (!scheduleId) return;
         schedulePendingDeletionIds.add(scheduleId);
-        try {
-          const ids = Array.from(schedulePendingDeletionIds);
-          localStorage.setItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS, JSON.stringify(ids));
-        } catch (_) {}
+        _nativePendingStore.set(Array.from(schedulePendingDeletionIds));
       }
-      /** 삭제 완료된 ID를 메모리 + localStorage 양쪽에서 제거 */
+      /** 삭제 완료된 ID를 메모리 + 네이티브 localStorage 양쪽에서 제거 */
       function removePendingDeleteId(scheduleId) {
         if (!scheduleId) return;
         schedulePendingDeletionIds.delete(scheduleId);
-        try {
-          const ids = Array.from(schedulePendingDeletionIds);
-          localStorage.setItem(STORAGE_PENDING_DELETE_SCHEDULE_IDS, JSON.stringify(ids));
-        } catch (_) {}
+        _nativePendingStore.set(Array.from(schedulePendingDeletionIds));
       }
 
       /**
