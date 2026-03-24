@@ -1846,6 +1846,53 @@
         }
       }
 
+      // 고객 취소 시 입금완료 결제 레코드를 Supabase payments 테이블에서 "보류"로 이관
+      async function movePaymentToHoldInSupabase(item) {
+        const scheduleId = normalize(item?.customerScheduleId);
+        if (!USE_SUPABASE_SYNC || !isUuidLike(scheduleId)) return;
+        const paymentStatus = normalize(item?.paymentStatus) || "미입금";
+        if (paymentStatus !== "입금완료") return;
+        try {
+          const searchRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/payments?memo=ilike.*${encodeURIComponent(scheduleId)}*&select=id,memo,status`,
+            {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store"
+            }
+          );
+          if (!searchRes.ok) return;
+          const rows = await searchRes.json();
+          if (!Array.isArray(rows) || !rows.length) return;
+          for (const row of rows) {
+            let memoObj = {};
+            try { memoObj = row.memo ? JSON.parse(row.memo) : {}; } catch (e) {}
+            const currentSource = String(memoObj.source || "active").trim();
+            if (currentSource === "hold" || currentSource === "refund") continue;
+            const identity = String(memoObj.identity || "").trim() || `sid:${scheduleId}`;
+            const newMemo = JSON.stringify({
+              ...memoObj,
+              source: "hold",
+              syncKey: `hold::${identity}`
+            });
+            await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${encodeURIComponent(row.id)}`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify({ status: "보류", memo: newMemo })
+            });
+          }
+        } catch (e) {
+          console.warn("[PAYMENT][customer] 취소 후 보류 이관 실패", e);
+        }
+      }
+
       function readStorageObject(key) {
         try {
           const raw = localStorage.getItem(key);
@@ -3408,6 +3455,7 @@
           const deletedTime = item.time;
           const deletedCompany = item.company;
           appendCanceledScheduleRecord(item, "customer", "고객취소");
+          void movePaymentToHoldInSupabase(item);
           const cancelReceipt = {
             receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             scheduleId: String(item?.customerScheduleId || "").trim(),
