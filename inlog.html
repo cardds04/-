@@ -154,17 +154,30 @@
         padding: 0;
       }
 
+      .photo-covers-wrap {
+        width: 100vw;
+        max-width: 100vw;
+        margin: 0 0 0 calc(50% - 50vw);
+        background: #222;
+        box-sizing: border-box;
+        padding: 28px 24px 36px;
+      }
+      .photo-covers-head {
+        font-family: "Bebas Neue", "Montserrat", sans-serif;
+        font-size: clamp(1.2rem, 3vw, 1.6rem);
+        font-weight: 400;
+        letter-spacing: 0.12em;
+        color: #ffd503;
+        margin: 0 0 16px 0;
+      }
       .photo-covers-scroller {
         overflow-x: auto;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
         scroll-snap-type: x proximity;
         overscroll-behavior-x: contain;
-        margin: 0 0 0 calc(50% - 50vw);
-        width: 100vw;
-        padding: 36px 24px 36px;
-        background: #222;
-        box-sizing: border-box;
+        margin: 0;
+        padding: 4px 0 12px;
         scrollbar-color: rgba(255, 213, 3, 0.45) transparent;
       }
 
@@ -1219,6 +1232,13 @@
           const browser = document.createElement("div");
           browser.className = "photo-browser";
 
+          const coversWrap = document.createElement("div");
+          coversWrap.className = "photo-covers-wrap";
+
+          const coversHead = document.createElement("p");
+          coversHead.className = "photo-covers-head";
+          coversHead.textContent = "대표사진들";
+
           const scroller = document.createElement("div");
           scroller.className = "photo-covers-scroller";
 
@@ -1310,7 +1330,9 @@
           });
 
           scroller.appendChild(grid);
-          browser.appendChild(scroller);
+          coversWrap.appendChild(coversHead);
+          coversWrap.appendChild(scroller);
+          browser.appendChild(coversWrap);
           browser.appendChild(expand);
           mount.appendChild(browser);
           const wantOpen = String(openAlbumId || "").trim() || getPhotoOpenAlbumIdFromHash();
