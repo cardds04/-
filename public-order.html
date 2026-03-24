@@ -1831,8 +1831,27 @@
             siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
           }))
           .filter((row) => row.id);
+        // source="deleted" 항목은 관리자가 소프트 삭제한 것 → 로컬에서도 제거
+        const deletedServerIds = new Set(
+          (Array.isArray(schedulesRows) ? schedulesRows : [])
+            .filter((row) => String(row?.source || "").trim() === "deleted")
+            .map((row) => String(row?.id || "").trim())
+            .filter(Boolean)
+        );
+        if (deletedServerIds.size > 0) {
+          const currentLocalSchedules = readStorageArray(STORAGE_SCHEDULES);
+          const afterRemove = currentLocalSchedules.filter(
+            (row) => !deletedServerIds.has(normalize(row?.customerScheduleId))
+          );
+          if (afterRemove.length !== currentLocalSchedules.length) {
+            writeStorageArray(STORAGE_SCHEDULES, afterRemove);
+          }
+        }
         const mappedSchedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
-          .filter((row) => String(row?.source || "").trim() !== "hold" && String(row?.source || "").trim() !== "refund")
+          .filter((row) => {
+            const src = String(row?.source || "").trim();
+            return src !== "hold" && src !== "refund" && src !== "deleted";
+          })
           .map((row) => {
             const parsedMemo = splitMemoAndTimePreference(row?.memo);
             const scheduleId = String(row?.id || "").trim();
