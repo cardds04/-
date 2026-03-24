@@ -1909,16 +1909,19 @@
             &nbsp;<a href="inlog.html#product" target="_blank" rel="noopener noreferrer">Product 페이지 새 탭</a>
           </p>
           <div style="margin-bottom: 10px;">
-            <label class="hint" style="display:block; margin-bottom:4px;">대표 이미지 URL</label>
+            <label class="hint" style="display:block; margin-bottom:4px;">대표 이미지</label>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <input id="inlogProductImageUrl" type="text" class="inline-input"
-                style="flex:1; min-width:200px;"
-                placeholder="https://... 이미지 주소" />
-              <button id="inlogProductImagePreviewBtn" class="btn-sm" type="button">미리보기</button>
+              <button id="inlogProductUploadBtn" class="btn-sm primary" type="button">📷 이미지 업로드</button>
+              <span id="inlogProductUploadStatus" class="hint" style="font-size:13px;"></span>
             </div>
-            <img id="inlogProductImagePreview" src="" alt="product preview"
-              style="margin-top:8px; max-width:100%; max-height:260px; border-radius:6px; object-fit:cover; display:block;"
-              hidden />
+            <input id="inlogProductFileInput" type="file" accept="image/*" style="display:none;" />
+            <input id="inlogProductImageUrl" type="hidden" value="" />
+            <div id="inlogProductImagePreviewWrap" style="margin-top:10px; display:none;">
+              <img id="inlogProductImagePreview" src="" alt="product preview"
+                style="max-width:100%; max-height:280px; border-radius:8px; object-fit:cover; display:block;" />
+              <button id="inlogProductImageRemoveBtn" class="btn-sm" type="button"
+                style="margin-top:6px;">이미지 제거</button>
+            </div>
           </div>
           <div style="margin-bottom: 10px;">
             <label class="hint" style="display:block; margin-bottom:4px;">텍스트 내용</label>
@@ -2493,15 +2496,14 @@
       }
       function hydrateInlogProductEditor() {
         const data = readInlogProduct();
-        const imgEl = document.getElementById("inlogProductImageUrl");
+        const imgUrlEl = document.getElementById("inlogProductImageUrl");
         const textEl = document.getElementById("inlogProductText");
+        const previewWrap = document.getElementById("inlogProductImagePreviewWrap");
         const previewEl = document.getElementById("inlogProductImagePreview");
-        if (imgEl) imgEl.value = data.imageUrl || "";
+        if (imgUrlEl) imgUrlEl.value = data.imageUrl || "";
         if (textEl) textEl.value = data.text || "";
-        if (previewEl) {
-          previewEl.src = data.imageUrl || "";
-          previewEl.hidden = !data.imageUrl;
-        }
+        if (previewEl) previewEl.src = data.imageUrl || "";
+        if (previewWrap) previewWrap.style.display = data.imageUrl ? "block" : "none";
       }
       function newInlogCinemaId() {
         return `cin-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -2886,18 +2888,51 @@
         const sec = document.getElementById("inlogPhotoSection");
         if (!sec || sec.getAttribute("data-inlog-product-wired") === "1") return;
         sec.setAttribute("data-inlog-product-wired", "1");
+
+        const uploadBtn = document.getElementById("inlogProductUploadBtn");
+        const fileInput = document.getElementById("inlogProductFileInput");
         const imgUrlEl = document.getElementById("inlogProductImageUrl");
+        const previewWrap = document.getElementById("inlogProductImagePreviewWrap");
         const previewEl = document.getElementById("inlogProductImagePreview");
-        const previewBtn = document.getElementById("inlogProductImagePreviewBtn");
+        const removeBtn = document.getElementById("inlogProductImageRemoveBtn");
+        const statusEl = document.getElementById("inlogProductUploadStatus");
         const textEl = document.getElementById("inlogProductText");
-        if (previewBtn && imgUrlEl && previewEl) {
-          previewBtn.addEventListener("click", () => {
-            const url = imgUrlEl.value.trim();
-            previewEl.src = url;
-            previewEl.hidden = !url;
+
+        function setProductImage(url) {
+          if (imgUrlEl) imgUrlEl.value = url || "";
+          if (previewEl) previewEl.src = url || "";
+          if (previewWrap) previewWrap.style.display = url ? "block" : "none";
+          markInlogEditorDirty();
+        }
+
+        if (uploadBtn && fileInput) {
+          uploadBtn.addEventListener("click", () => fileInput.click());
+          fileInput.addEventListener("change", async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            fileInput.value = "";
+            uploadBtn.disabled = true;
+            if (statusEl) statusEl.textContent = "업로드 중…";
+            try {
+              const url = await uploadInlogHomeImageFileToSupabase(file);
+              setProductImage(url);
+              if (statusEl) statusEl.textContent = "업로드 완료";
+              setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2500);
+            } catch (e) {
+              if (statusEl) statusEl.textContent = `업로드 실패: ${e.message || e}`;
+            } finally {
+              uploadBtn.disabled = false;
+            }
           });
         }
-        if (imgUrlEl) imgUrlEl.addEventListener("input", () => markInlogEditorDirty());
+
+        if (removeBtn) {
+          removeBtn.addEventListener("click", () => {
+            setProductImage("");
+            if (statusEl) statusEl.textContent = "";
+          });
+        }
+
         if (textEl) textEl.addEventListener("input", () => markInlogEditorDirty());
       }
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
