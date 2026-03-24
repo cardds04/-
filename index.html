@@ -2910,18 +2910,27 @@
           fileInput.addEventListener("change", async () => {
             const file = fileInput.files && fileInput.files[0];
             if (!file) return;
-            fileInput.value = "";
+            // 로컬 미리보기 즉시 표시
+            const localUrl = URL.createObjectURL(file);
+            if (previewEl) previewEl.src = localUrl;
+            if (previewWrap) previewWrap.style.display = "block";
+            if (statusEl) { statusEl.textContent = "업로드 중…"; statusEl.style.color = ""; }
             uploadBtn.disabled = true;
-            if (statusEl) statusEl.textContent = "업로드 중…";
             try {
               const url = await uploadInlogHomeImageFileToSupabase(file);
+              URL.revokeObjectURL(localUrl);
               setProductImage(url);
-              if (statusEl) statusEl.textContent = "업로드 완료";
-              setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2500);
+              if (statusEl) { statusEl.textContent = "✓ 업로드 완료"; statusEl.style.color = "green"; }
+              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; statusEl.style.color = ""; } }, 3000);
             } catch (e) {
-              if (statusEl) statusEl.textContent = `업로드 실패: ${e.message || e}`;
+              URL.revokeObjectURL(localUrl);
+              const msg = String(e.message || e);
+              console.error("[Product upload]", msg);
+              if (statusEl) { statusEl.textContent = `✗ ${msg}`; statusEl.style.color = "red"; }
+              alert(`이미지 업로드 실패:\n${msg}`);
             } finally {
               uploadBtn.disabled = false;
+              fileInput.value = "";
             }
           });
         }
@@ -12305,7 +12314,11 @@
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
-      tabInlogPhotoEl?.addEventListener("click", () => switchMainTab("inlogPhoto"));
+      tabInlogPhotoEl?.addEventListener("click", () => {
+        switchMainTab("inlogPhoto");
+        // 탭 클릭 시 product 에디터 wiring 보장
+        wireInlogProductEditorIfNeeded();
+      });
       inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
         if (!editor) return;
