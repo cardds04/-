@@ -1572,18 +1572,15 @@
           }
         }
 
+        const PRODUCT_SAMPLE_IMAGE = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=80";
         function renderProductMount() {
           const data = parseProductFromStorage();
           const imgWrap = document.getElementById("inlogProductImageWrap");
           const imgEl = document.getElementById("inlogProductImage");
           const textWrap = document.getElementById("inlogProductTextWrap");
           if (imgWrap && imgEl) {
-            if (data.imageUrl) {
-              imgEl.src = data.imageUrl;
-              imgWrap.style.display = "block";
-            } else {
-              imgWrap.style.display = "none";
-            }
+            imgEl.src = data.imageUrl || PRODUCT_SAMPLE_IMAGE;
+            imgWrap.style.display = "block";
           }
           if (textWrap) {
             textWrap.textContent = data.text || "";
