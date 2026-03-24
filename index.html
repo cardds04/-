@@ -12379,6 +12379,9 @@
           const localPhotoPayload = collectInlogPhotoAlbumsEditorPayload();
           const localCinemaPayload = collectInlogCinemaEditorPayload();
           const localProductPayload = collectInlogProductEditorPayload();
+          // 서버 페치 전에 먼저 로컬 저장: freshness guard가 발동해 early return 되더라도
+          // product 데이터가 memoryStore에 남아 있어 에디터가 클리어되지 않는다.
+          writeInlogProduct(localProductPayload);
           let photoPayload = localPhotoPayload;
           let cinemaPayload = localCinemaPayload;
           let productPayload = localProductPayload;
