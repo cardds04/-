@@ -6499,7 +6499,7 @@
           data.splice(0, data.length, ...nextActive);
           onHoldPayments.splice(0, onHoldPayments.length, ...nextHold);
           refundPayments.splice(0, refundPayments.length, ...nextRefund);
-          originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(nextActive));
+          localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(nextActive));
           const writerRows = nextActive.map((item, index) => ({
             writerMirrorId: String(item.customerScheduleId || `admin-${index}`),
             date: String(item.date || "").trim(),
@@ -7470,7 +7470,7 @@
           writerCarNumber: String(item.writerCarNumber || "").trim()
         }));
         originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(rows));
-        originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
         if (!USE_SUPABASE_SYNC || hasLoadedSchedulesFromServer) {
           queueSchedulesSync();
         }
@@ -14532,8 +14532,8 @@
 
         editingIndex = null;
         editingDateIndex = null;
-        // STORAGE_ADMIN_SCHEDULES 즉시 갱신 — 새로고침 시 localActiveNotOnServer로 복원되지 않도록
-        try { originalSetItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+        // STORAGE_ADMIN_SCHEDULES 즉시 갱신 — 새로고침 시 스냅샷/memoryStore에도 반영
+        try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
         // 삭제 즉시 pull 차단 쿨다운 8초 — 서버 DELETE 완료 전 pull로 복구 방지
         scheduleSyncCooldownUntil = Date.now() + 8000;
         if (deletedScheduleId) addPendingDeleteId(deletedScheduleId);
