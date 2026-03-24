@@ -683,10 +683,26 @@
           scheduleClientKvSeedPushIfNeeded();
         }
       }
+      // 고객 페이지가 KV에 쓰면 안 되는 관리자 전용 키 목록
+      // 이 키들은 관리자 페이지에서만 변경해야 하며, 고객 seed push가 덮어쓰면
+      // 관리자가 바꾼 값이 rollback 되는 버그가 발생한다.
+      const ADMIN_ONLY_KV_KEYS = new Set([
+        STORAGE_LIMIT_CONFIG,
+        "scheduleSiteInlogPhotoAlbumsV1",
+        "scheduleSiteInlogCinemaItemsV1",
+        "scheduleSiteInlogHomeMainV1",
+        "scheduleSiteInlogProductV1",
+        "scheduleSiteInlogLogoV1",
+        "scheduleSiteDailyLimits",
+        "scheduleSiteEmergencyLimitAdditionsV1"
+      ]);
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
-        const kv = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
+        // 관리자 전용 키를 제외하고 push — 고객 push가 관리자 설정을 덮어쓰는 것을 방지
+        const kv = Object.fromEntries(
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => !ADMIN_ONLY_KV_KEYS.has(k))
+        );
         if (!Object.keys(kv).length) return;
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
