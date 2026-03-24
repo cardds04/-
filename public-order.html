@@ -780,67 +780,72 @@
       };
       scheduleSiteClientKvState.installProxy();
 
-      // ── 세션/로그인 키를 서버 KV pull에서 보호 ──────────────────────────
-      // 서버 KV 동기화 시 scheduleSiteCustomerSession / scheduleSiteCustomerRememberedLogin 이
-      // 초기화되면 로그인이 풀리는 문제 방지 → 이 두 키는 서버 pull로 절대 덮어쓰지 않음.
-      (function patchHydrateToProtectSession() {
-        const _original = scheduleSiteClientKvState.hydrateFromServerKv.bind(scheduleSiteClientKvState);
-        const SESSION_GUARD_KEYS = [
-          "scheduleSiteCustomerSession",
-          "scheduleSiteCustomerRememberedLogin"
-        ];
+      // ══════════════════════════════════════════════════════════════════════
+      // 공개 가입 세션 영속성 보장
+      // ─────────────────────────────────────────────────────────────────────
+      // KV 프록시는 "scheduleSite*" 키를 메모리 스토어에 저장하고, 서버 KV pull 시
+      // 전체 메모리 스토어를 서버 값으로 교체한다 (hydrateFromServerKv).
+      // 서버 KV(관리자 페이지 기준)에는 고객 세션·유저 데이터가 없으므로
+      // pull 이후 세션이 지워지고 로그아웃된다.
+      //
+      // 해결: 공개 가입 세션 데이터는 KV 프록시 밖의 네이티브 localStorage 키에
+      //       별도 저장하고, hydrateFromServerKv 후에 자동으로 복원한다.
+      // ══════════════════════════════════════════════════════════════════════
+      const PUB_SESSION_KEY    = "__pubOrdSess";       // native only (not "scheduleSite*")
+      const PUB_USER_KEY       = "__pubOrdUser";       // native only
+      const PUB_REMEMBERED_KEY = "__pubOrdRemembered"; // native only
+
+      function savePubSessionNative(userId, userObj) {
+        try {
+          scheduleSiteClientKvState.nativeSetItem(PUB_SESSION_KEY, String(userId || ""));
+          scheduleSiteClientKvState.nativeSetItem(PUB_USER_KEY, JSON.stringify(userObj));
+          scheduleSiteClientKvState.nativeSetItem(PUB_REMEMBERED_KEY, JSON.stringify({ id: userObj.id, password: userObj.password }));
+        } catch (_) {}
+      }
+      function clearPubSessionNative() {
+        try {
+          scheduleSiteClientKvState.nativeSetItem(PUB_SESSION_KEY, "");
+          scheduleSiteClientKvState.nativeSetItem(PUB_USER_KEY, "");
+          scheduleSiteClientKvState.nativeSetItem(PUB_REMEMBERED_KEY, "");
+        } catch (_) {}
+      }
+      function restorePubSessionToMemory() {
+        try {
+          const userId = scheduleSiteClientKvState.nativeGetItem(PUB_SESSION_KEY);
+          if (!userId || !String(userId).trim()) return false;
+          const userJson = scheduleSiteClientKvState.nativeGetItem(PUB_USER_KEY);
+          if (!userJson) return false;
+          const userObj = JSON.parse(userJson);
+          if (!userObj || !userObj.id) return false;
+          // STORAGE_CUSTOMERS 에 유저 복원
+          const existing = scheduleSiteClientKvState.memoryStore.get("scheduleSiteCustomers") || "[]";
+          let users = [];
+          try { users = JSON.parse(existing); } catch (_) { users = []; }
+          if (!Array.isArray(users)) users = [];
+          const idx = users.findIndex((u) => String(u.id || "") === String(userObj.id || ""));
+          if (idx >= 0) users[idx] = { ...users[idx], ...userObj };
+          else users.push(userObj);
+          scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomers", JSON.stringify(users));
+          // STORAGE_SESSION 복원
+          scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomerSession", String(userId));
+          // STORAGE_CUSTOMER_REMEMBERED_LOGIN 복원
+          const remJson = scheduleSiteClientKvState.nativeGetItem(PUB_REMEMBERED_KEY);
+          if (remJson) scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomerRememberedLogin", remJson);
+          return true;
+        } catch (_) { return false; }
+      }
+
+      // hydrateFromServerKv 패치: 서버 pull 후 공개 세션 자동 복원
+      (function patchHydrate() {
+        const _orig = scheduleSiteClientKvState.hydrateFromServerKv.bind(scheduleSiteClientKvState);
         scheduleSiteClientKvState.hydrateFromServerKv = function(kvObj) {
-          // hydrate 전 세션 키 값 저장
-          const saved = {};
-          SESSION_GUARD_KEYS.forEach((k) => {
-            const v = this.memoryStore.get(k);
-            if (v !== undefined && v !== null && String(v).trim() !== "") saved[k] = v;
-          });
-          // 기존 hydrate 실행 (메모리 스토어 전체 교체)
-          _original(kvObj);
-          // 세션 키 복원 — 서버에서 값이 없거나 비어있는 경우에도 덮어쓰지 않음
-          SESSION_GUARD_KEYS.forEach((k) => {
-            if (saved[k] !== undefined) this.memoryStore.set(k, saved[k]);
-          });
+          _orig(kvObj);
+          restorePubSessionToMemory();
         };
       })();
 
-      // ── 세션을 native localStorage에도 병행 저장 ─────────────────────────
-      // KV 프록시가 세션 키를 메모리에만 두는 경우에 대비, 네이티브에도 미러링.
-      const _origLsSetItem = scheduleSiteClientKvState.nativeSetItem;
-      const SESSION_MIRROR_KEYS = new Set([
-        "scheduleSiteCustomerSession",
-        "scheduleSiteCustomerRememberedLogin"
-      ]);
-      scheduleSiteClientKvState.nativeSetItem = function(key, value) {
-        _origLsSetItem.call(this, key, value);
-      };
-      // localStorage.setItem 프록시 후처리 — 세션 키는 native에도 저장
-      const __origProxySetItem = localStorage.setItem.bind(localStorage);
-      localStorage.setItem = (function(origProxy) {
-        return function(key, value) {
-          origProxy(key, value);
-          if (SESSION_MIRROR_KEYS.has(String(key))) {
-            scheduleSiteClientKvState.nativeSetItem(String(key), String(value ?? ""));
-          }
-        };
-      })(localStorage.setItem);
-      // localStorage.getItem 후처리 — 세션 키가 메모리에 없으면 native에서 복구
-      const __origProxyGetItem = localStorage.getItem.bind(localStorage);
-      localStorage.getItem = (function(origProxy) {
-        return function(key) {
-          const result = origProxy(key);
-          if (SESSION_MIRROR_KEYS.has(String(key)) && (result === null || result === undefined || String(result).trim() === "")) {
-            const native = scheduleSiteClientKvState.nativeGetItem(String(key));
-            if (native !== null && native !== undefined && String(native).trim() !== "") {
-              // 네이티브에 값이 있으면 메모리 스토어 복구 후 반환
-              scheduleSiteClientKvState.memoryStore.set(String(key), String(native));
-              return native;
-            }
-          }
-          return result;
-        };
-      })(localStorage.getItem);
+      // 페이지 로드 즉시 복원 시도 (서버 pull 전에도 화면 깜빡임 방지)
+      restorePubSessionToMemory();
 
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
@@ -3571,6 +3576,7 @@
             storePublicUserLocally(userObj);
             localStorage.setItem(STORAGE_SESSION, userObj.id);
             localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: userObj.id, password: userObj.password }));
+            savePubSessionNative(userObj.id, userObj); // native 영속 저장
             recordCustomerLogin(userObj);
             // 관리자 페이지 업체 검색에 뜨도록 companies + customers 테이블 동기화
             ensureCompanyStored(userObj.company, userObj.phone);
@@ -3629,6 +3635,7 @@
           storePublicUserLocally(userObj);
           localStorage.setItem(STORAGE_SESSION, userObj.id);
           localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: userObj.id, password: userObj.password }));
+          savePubSessionNative(userObj.id, userObj); // native 영속 저장
           recordCustomerLogin(userObj);
           // 관리자 페이지 업체 검색에 뜨도록 companies + customers 테이블 동기화
           ensureCompanyStored(userObj.company, userObj.phone);
@@ -3653,6 +3660,7 @@
       logoutBtnEl.addEventListener("click", () => {
         skipAutoLoginOnce = true;
         localStorage.removeItem(STORAGE_SESSION);
+        clearPubSessionNative(); // native 세션도 삭제
         editingScheduleId = null;
         currentCustomerTab = "register";
         myInfoOpen = false;
@@ -4176,9 +4184,12 @@
         // KV pull 완료 후 날짜 선택기와 마감일 안내를 새 건수 기준으로 다시 그린다
         clientKvPullDone.then((didHydrate) => {
           refreshDaySelectorsAndNotice();
-          if (!didHydrate) return;
-          queueCustomerTablePull();
-          renderAuthState();
+          // KV pull 완료 후 공개 세션 복원 재시도 (hydrate가 세션을 지웠을 수 있음)
+          const restored = restorePubSessionToMemory();
+          if (restored || didHydrate) {
+            queueCustomerTablePull();
+            renderAuthState();
+          }
         });
       }
       void bootstrapCustomerPageData();
