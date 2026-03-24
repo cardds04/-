@@ -1858,22 +1858,42 @@
             source: "customer"
           };
         });
-        // 관리자가 삭제한 스케줄(source="deleted")은 고객 페이지가 덮어쓰지 않도록 필터
+        // 서버 우선 보호: source="deleted" 또는 서버가 더 최근에 수정한 row는 고객이 덮어쓰지 않음
         try {
           const checkIds = insertRows.map((r) => String(r.id || "")).filter(Boolean);
           if (checkIds.length > 0) {
             const checkRes = await fetch(
-              `${SUPABASE_URL}/rest/v1/schedules?id=in.(${checkIds.map(encodeURIComponent).join(",")})&select=id,source`,
+              `${SUPABASE_URL}/rest/v1/schedules?id=in.(${checkIds.map(encodeURIComponent).join(",")})&select=id,source,updated_at`,
               { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
             );
             if (checkRes.ok) {
               const remoteCheck = await checkRes.json();
-              const adminDeletedIds = new Set(
-                (Array.isArray(remoteCheck) ? remoteCheck : [])
-                  .filter((r) => String(r?.source || "").trim() === "deleted")
-                  .map((r) => String(r?.id || "").trim())
-                  .filter(Boolean)
-              );
+              // 로컬 localUpdatedAt 맵 (rowId → ms)
+              const localUpdatedAtMap = new Map();
+              filteredUserRows.forEach((row) => {
+                const id = normalize(ensureScheduleUuid(row));
+                if (!id) return;
+                const ms = new Date(String(row?.localUpdatedAt || "")).getTime();
+                if (!Number.isNaN(ms)) localUpdatedAtMap.set(id, ms);
+              });
+              const adminDeletedIds = new Set();
+              const serverNewerIds = new Set();
+              (Array.isArray(remoteCheck) ? remoteCheck : []).forEach((r) => {
+                const id = String(r?.id || "").trim();
+                if (!id) return;
+                const src = String(r?.source || "").trim();
+                if (src === "deleted") {
+                  adminDeletedIds.add(id);
+                  return;
+                }
+                // 서버 updated_at vs 로컬 localUpdatedAt 비교
+                const remoteMs = new Date(String(r?.updated_at || "")).getTime();
+                const localMs = localUpdatedAtMap.get(id) ?? NaN;
+                if (!Number.isNaN(remoteMs) && !Number.isNaN(localMs) && remoteMs > localMs) {
+                  // 서버가 더 최신 → 고객 UPSERT 차단
+                  serverNewerIds.add(id);
+                }
+              });
               if (adminDeletedIds.size > 0) {
                 // 관리자가 삭제한 스케줄은 로컬 스토리지에서도 제거
                 const currentSchedules = readStorageArray(STORAGE_SCHEDULES);
@@ -1883,13 +1903,15 @@
                 if (cleaned.length !== currentSchedules.length) {
                   writeStorageArray(STORAGE_SCHEDULES, cleaned);
                 }
-                // UPSERT 대상에서도 제외
-                insertRows = insertRows.filter((r) => !adminDeletedIds.has(String(r.id || "")));
+              }
+              const blockIds = new Set([...adminDeletedIds, ...serverNewerIds]);
+              if (blockIds.size > 0) {
+                insertRows = insertRows.filter((r) => !blockIds.has(String(r.id || "")));
               }
             }
           }
         } catch (_) {
-          // 삭제 체크 실패 시 기존 insertRows 그대로 진행
+          // 체크 실패 시 기존 insertRows 그대로 진행
         }
         if (!insertRows.length) return;
         const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
