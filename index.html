@@ -2302,7 +2302,8 @@
             if (
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED ||
               k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
-              k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+              k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY ||
+              k === STORAGE_ADMIN_SCHEDULES // schedules 테이블로 관리 — 서버 KV 복원 금지
             )
               return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
@@ -15224,7 +15225,9 @@
         clientKvPullDone.then((didHydrate) => {
           if (!didHydrate) return;
           loadAdminCompaniesFromStorage();
-          loadAdminSchedulesFromStorage();
+          // USE_SUPABASE_SYNC 모드에서는 schedules 테이블 pull이 data를 덮어쓰므로
+          // 서버 KV에 남아있는 구버전 scheduleSiteAdminSchedules로 data를 덮어쓰지 않도록 skip
+          if (!USE_SUPABASE_SYNC) loadAdminSchedulesFromStorage();
           loadCouponPassesFromStorage();
           hydrateFromCustomerPageStorage();
           hydrateFromWriterPageStorage();
