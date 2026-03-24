@@ -380,6 +380,45 @@
         </div>
       </div>
     </main>
+    <!-- 예약 확인 모달 -->
+    <div id="scheduleConfirmModal" style="
+      position:fixed; inset:0; background:rgba(17,26,44,0.78);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:1000;">
+      <div style="
+        width:min(480px,96vw); background:#fff; border:1px solid #d7ddec;
+        border-radius:14px; padding:20px; max-height:90vh; overflow-y:auto;
+        box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+        <div style="font-weight:800; font-size:1.1rem; color:#1f2940; margin-bottom:14px;">
+          📋 예약 확인
+        </div>
+        <div style="background:#f0f5ff; border-radius:8px; padding:12px 14px; font-size:0.85rem; line-height:1.8; color:#2f3c58; margin-bottom:14px; border-left:3px solid #466ba9;">
+          본 예약은 <strong>접수 상태</strong>이며, 촬영 스케줄은 관리자와의 시간 조율 후 최종 확정됩니다.<br/>
+          스케줄은 <strong>입금 순으로 확정</strong>되니 유의해 주세요.<br/>
+          예약 진행을 원하시면 아래 확인 버튼을 눌러주세요.
+        </div>
+        <div id="scheduleConfirmSummary" style="
+          background:#f8faff; border:1px solid #d7ddec; border-radius:8px;
+          padding:12px 14px; font-size:0.86rem; line-height:1.9; color:#1f2940;
+          margin-bottom:18px;">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="scheduleConfirmCancelBtn" type="button" style="
+            flex:1; padding:10px; border:1px solid #d7ddec; background:#fff;
+            color:#5f6c88; border-radius:8px; font-weight:700; cursor:pointer;
+            font-family:inherit; font-size:0.92rem;">
+            취소
+          </button>
+          <button id="scheduleConfirmOkBtn" type="button" style="
+            flex:2; padding:10px; border:none; background:#466ba9;
+            color:#fff; border-radius:8px; font-weight:800; cursor:pointer;
+            font-family:inherit; font-size:0.92rem;">
+            확인 — 예약 접수
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="orderHistoryModal" class="history-modal hidden">
       <div class="history-panel">
         <div class="history-head">
@@ -3299,6 +3338,39 @@
         alert("내 정보가 저장되었습니다.");
       });
 
+      // ── 예약 확인 모달 ────────────────────────────────────────────────
+      const scheduleConfirmModalEl = document.getElementById("scheduleConfirmModal");
+      const scheduleConfirmSummaryEl = document.getElementById("scheduleConfirmSummary");
+      const scheduleConfirmOkBtnEl = document.getElementById("scheduleConfirmOkBtn");
+      const scheduleConfirmCancelBtnEl = document.getElementById("scheduleConfirmCancelBtn");
+      let _pendingScheduleSubmit = null;
+
+      function showScheduleConfirmModal(summaryHtml, onConfirm) {
+        scheduleConfirmSummaryEl.innerHTML = summaryHtml;
+        scheduleConfirmModalEl.style.display = "flex";
+        _pendingScheduleSubmit = onConfirm;
+      }
+      function hideScheduleConfirmModal() {
+        scheduleConfirmModalEl.style.display = "none";
+        _pendingScheduleSubmit = null;
+      }
+      scheduleConfirmOkBtnEl?.addEventListener("click", async () => {
+        if (typeof _pendingScheduleSubmit === "function") {
+          hideScheduleConfirmModal();
+          await _pendingScheduleSubmit();
+        }
+      });
+      scheduleConfirmCancelBtnEl?.addEventListener("click", () => {
+        hideScheduleConfirmModal();
+        setCustomerScheduleSubmittingState(false);
+      });
+      scheduleConfirmModalEl?.addEventListener("click", (e) => {
+        if (e.target === scheduleConfirmModalEl) {
+          hideScheduleConfirmModal();
+          setCustomerScheduleSubmittingState(false);
+        }
+      });
+
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (customerScheduleSubmitting) return;
@@ -3388,6 +3460,42 @@
             return;
           }
 
+          // ── 예약 확인 모달 표시 ──────────────────────────────────────────
+          {
+            const _wdNames = ["일","월","화","수","목","금","토"];
+            const _dateObj = new Date(`${date}T00:00:00`);
+            const _dayName = _wdNames[_dateObj.getDay()];
+            const _timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
+            const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
+            const _composition = isLiteCustomerMode ? "사진만" : (scheduleCompositionEl.value || "미선택");
+            const _memo = normalize(document.getElementById("scheduleMemo").value);
+            const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, isTaxInvoiceRequested());
+            const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
+            const _rows = [
+              ["업체", scheduleCompanyName],
+              ["날짜", `${date} (${_dayName})`],
+              ["시간", _timeLabel],
+              ["장소", place],
+              _pyeong ? ["평수", _pyeong] : null,
+              ["촬영구성", _composition],
+              _amountText ? ["결제예정금액", _amountText] : null,
+              _memo ? ["메모", _memo] : null,
+            ].filter(Boolean);
+            const _summaryHtml = _rows.map(([lbl, val]) =>
+              `<div style="display:flex;gap:8px;">
+                <span style="min-width:82px;color:#5f6c88;flex-shrink:0;">${lbl}</span>
+                <span style="color:#1f2940;font-weight:700;">${val}</span>
+              </div>`
+            ).join("");
+            setCustomerScheduleSubmittingState(false);
+            showScheduleConfirmModal(_summaryHtml, async () => {
+              setCustomerScheduleSubmittingState(true);
+              await doRegisterSchedule();
+            });
+            return;
+          }
+
+          async function doRegisterSchedule() {
           const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
           const schedules = existingRows;
           const createdSchedule = {
@@ -3482,6 +3590,7 @@
           updateExpectedPaymentText();
           renderPaymentSummary();
           alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
+          } // end doRegisterSchedule
         } finally {
           setCustomerScheduleSubmittingState(false);
         }
