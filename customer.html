@@ -2673,14 +2673,14 @@
         const selectedYear = Number(year);
         const selectedMonth = Number(month);
         const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+        const todayKey = getTodayDateKey();
         const tomorrowKey = getTomorrowDateKey();
-        const blockTomorrow = isTomorrowBlockedByTime();
         scheduleDayEl.innerHTML = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
           .map((day) => {
             const weekday = weekdayNames[new Date(selectedYear, selectedMonth - 1, day).getDay()];
             const weekend = isWeekend(selectedYear, selectedMonth, day);
             const dateKey = `${selectedYear}-${pad2(selectedMonth)}-${pad2(day)}`;
-            const isBlocked = blockTomorrow && dateKey === tomorrowKey;
+            const isBlocked = dateKey === todayKey || dateKey === tomorrowKey;
             const label = isBlocked
               ? `${day}일 (${weekday}) — 마감`
               : `${day}일 (${weekday})`;
@@ -2697,14 +2697,14 @@
         const selectedMonth = Number(month);
         const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
         const selectedDay = Math.min(Math.max(Number(preferredDay) || 1, 1), daysInMonth);
+        const todayKey = getTodayDateKey();
         const tomorrowKey = getTomorrowDateKey();
-        const blockTomorrow = isTomorrowBlockedByTime();
         const html = Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
           .map((day) => {
             const weekday = weekdayNames[new Date(selectedYear, selectedMonth - 1, day).getDay()];
             const weekend = isWeekend(selectedYear, selectedMonth, day);
             const dateKey = `${selectedYear}-${pad2(selectedMonth)}-${pad2(day)}`;
-            const isBlocked = blockTomorrow && dateKey === tomorrowKey;
+            const isBlocked = dateKey === todayKey || dateKey === tomorrowKey;
             const label = isBlocked
               ? `${day}일 (${weekday}) — 마감`
               : `${day}일 (${weekday})`;
@@ -2811,6 +2811,11 @@
         return target.getTime() < today.getTime();
       }
 
+      function getTodayDateKey() {
+        const d = new Date();
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      }
+
       function getTomorrowDateKey() {
         const d = new Date();
         d.setDate(d.getDate() + 1);
@@ -2818,7 +2823,7 @@
       }
 
       function isTomorrowBlockedByTime() {
-        return new Date().getHours() >= 15;
+        return true;
       }
 
       function canEditOrDelete(dateText) {
@@ -3229,8 +3234,8 @@
             alert("오늘 이전 날짜는 접수할 수 없습니다.");
             return;
           }
-          if (isTomorrowBlockedByTime() && date === getTomorrowDateKey()) {
-            alert("오후 3시 이후에는 다음날 예약 접수가 마감됩니다.\n예약을 원하시면 관리자에게 문의해주세요.");
+          if (date === getTodayDateKey() || date === getTomorrowDateKey()) {
+            alert("오늘과 내일 날짜는 예약 접수가 마감됩니다.\n예약을 원하시면 관리자에게 문의해주세요.");
             return;
           }
           const timePreference = normalizeTimePreference(scheduleMinuteEl?.value);
