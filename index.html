@@ -11078,25 +11078,44 @@
         queuePaymentsSync();
       }
 
-      function cancelHoldSchedule(index) {
+      async function cancelHoldSchedule(index) {
         const holdItem = onHoldPayments[index];
         if (!holdItem) return;
-        markScheduleRowDirty(holdItem, "payment_mutation");
+
+        // 고객 취소 등으로 원격 payments가 갱신된 경우 guard 통과를 위해 먼저 pull
+        try {
+          await pullPaymentsFromSupabaseAndApply();
+        } catch (e) {
+          console.warn("[HOLD_CANCEL] pre-pull 실패, 계속 진행", e);
+        }
+
+        // pull 후 배열이 갱신될 수 있으므로 동일 항목을 다시 찾음
+        const scheduleId = String(holdItem.customerScheduleId || "").trim();
+        const fallbackKey = [holdItem.date, holdItem.time, holdItem.place, holdItem.company].join("|");
+        let targetIndex = onHoldPayments.findIndex((item) => {
+          if (scheduleId && String(item.customerScheduleId || "").trim() === scheduleId) return true;
+          return [item.date, item.time, item.place, item.company].join("|") === fallbackKey;
+        });
+        if (targetIndex < 0) targetIndex = index;
+        const target = onHoldPayments[targetIndex];
+        if (!target) return;
+
+        markScheduleRowDirty(target, "payment_mutation");
 
         // 쿠폰으로 결제한 건은 1회 복구 후 보류 목록에서 제거
-        if (holdItem.couponUsed) {
-          const remaining = getCouponRemaining(holdItem.company);
-          setCouponRemaining(holdItem.company, remaining + 1);
+        if (target.couponUsed) {
+          const remaining = getCouponRemaining(target.company);
+          setCouponRemaining(target.company, remaining + 1);
           void appendCouponUsageHistoryLog({
-            companyName: holdItem.company,
-            scheduleId: holdItem.customerScheduleId,
+            companyName: target.company,
+            scheduleId: target.customerScheduleId,
             action: "restore",
             delta: 1,
             beforeCount: remaining,
             afterCount: remaining + 1,
             memo: "보류취소로 쿠폰복구"
           });
-          onHoldPayments.splice(index, 1);
+          onHoldPayments.splice(targetIndex, 1);
           renderPaymentList();
           renderCouponPassList();
           queuePaymentsSync();
@@ -11104,11 +11123,11 @@
         }
 
         // 현금 입금 건은 환불 업체 목록으로 이동 후 환불 체크 관리
-        if (holdItem.paymentStatus === "입금완료") {
-          refundPayments.unshift({ ...holdItem, refundChecked: false });
+        if (target.paymentStatus === "입금완료") {
+          refundPayments.unshift({ ...target, refundChecked: false });
         }
-        appendCanceledScheduleRecord(holdItem, "admin", "보류취소");
-        onHoldPayments.splice(index, 1);
+        appendCanceledScheduleRecord(target, "admin", "보류취소");
+        onHoldPayments.splice(targetIndex, 1);
         renderPaymentList();
         queuePaymentsSync();
       }
