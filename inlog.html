@@ -1102,42 +1102,36 @@
             return;
           }
           const albums = photoPayload && Array.isArray(photoPayload.albums) ? photoPayload.albums : [];
-          // 모든 앨범의 사진을 최신순으로 모아서 갤러리 슬롯에 채움 (앨범당 커버 1장이 아닌 전체 사진 사용)
-          const allSlots = [];
-          [...albums].reverse().forEach(function(alb) {
-            const aid = String(alb.id || "").trim();
-            const titleStr = String(alb.title || "").trim();
-            const href = aid ? "#photo?album=" + encodeURIComponent(aid) : "#photo";
-            const detailPhotos = getAlbumDetailPhotos(alb);
-            detailPhotos.forEach(function(src) {
-              allSlots.push({ src: src, alt: titleStr || "포트폴리오", albumId: aid, href: href, title: titleStr });
-            });
-          });
+          // 앨범당 대표커버 1장씩, 최신 등록순(역순)으로 갤러리 슬롯에 표시
+          const withCover = [...albums].reverse().filter((alb) => Boolean(getAlbumCoverSrc(alb)));
           for (let i = 0; i < SLOT_COUNT; i++) {
             const img = document.querySelector('.inlog-gallery-img[data-inlog-index="' + i + '"]');
             const linkEl = document.querySelector('.inlog-gallery-link[data-inlog-index="' + i + '"]');
             const badge = document.querySelector('.inlog-gallery-badge[data-inlog-index="' + i + '"]');
             const figure = img && img.closest(".gallery__item");
-            if (i < allSlots.length) {
-              const slot = allSlots[i];
+            if (i < withCover.length) {
+              const alb = withCover[i];
+              const cover = getAlbumCoverSrc(alb);
+              const titleStr = String(alb.title || "").trim();
               if (figure) figure.hidden = false;
               if (img) {
-                img.src = slot.src;
-                img.alt = slot.alt;
+                img.src = cover;
+                img.alt = titleStr || "포트폴리오";
               }
               if (badge) {
                 badge.textContent = "";
                 badge.hidden = true;
               }
               if (linkEl) {
-                linkEl.href = slot.href;
+                const aid = String(alb.id || "").trim();
+                linkEl.href = aid ? "#photo?album=" + encodeURIComponent(aid) : "#photo";
                 linkEl.classList.remove("inlog-gallery-link--inactive");
                 linkEl.removeAttribute("target");
                 linkEl.removeAttribute("rel");
-                linkEl.setAttribute("aria-label", (slot.title || "포토") + " — 포토 페이지에서 보기");
+                linkEl.setAttribute("aria-label", (titleStr || "포토") + " — 포토 페이지에서 보기");
               }
             } else {
-              // 앨범 사진으로 채운 후 남은 슬롯은 숨김 (샘플 대신)
+              // 앨범 커버로 채운 후 남은 슬롯은 샘플 대신 숨김
               if (figure) figure.hidden = true;
               if (linkEl) {
                 linkEl.href = "#";
