@@ -649,6 +649,21 @@
           const shouldApply =
             serverKeyCount > 0 &&
             (memCount === 0 || (Boolean(localWriteAt) && serverMs > localMs && !Number.isNaN(serverMs) && !Number.isNaN(localMs)));
+          // shouldApply 여부와 무관하게, 건수 설정(limitConfig)이 서버에 있으면 항상 적용
+          // (관리자가 건수를 바꾼 경우 고객 페이지가 즉시 반영하기 위함)
+          if (!shouldApply && kv && typeof kv[STORAGE_LIMIT_CONFIG] !== "undefined") {
+            const serverLimitRaw = scheduleSiteClientKvState.normalizeKvValue(kv[STORAGE_LIMIT_CONFIG]);
+            const localLimitRaw = scheduleSiteClientKvState.memoryStore.get(STORAGE_LIMIT_CONFIG) || "";
+            if (serverLimitRaw !== localLimitRaw) {
+              scheduleSiteClientKvState.memoryStore.set(STORAGE_LIMIT_CONFIG, serverLimitRaw);
+              try {
+                const snap = scheduleSiteClientKvState.nativeGetItem(scheduleSiteClientKvState.snapshotStorageKey);
+                const snapObj = snap ? JSON.parse(snap) : {};
+                snapObj[STORAGE_LIMIT_CONFIG] = serverLimitRaw;
+                scheduleSiteClientKvState.nativeSetItem(scheduleSiteClientKvState.snapshotStorageKey, JSON.stringify(snapObj));
+              } catch (_) {}
+            }
+          }
           if (shouldApply) {
             scheduleSiteClientKvState.hydrateFromServerKv(kv);
             scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
@@ -1162,12 +1177,24 @@
       lastObservedState = buildCurrentStateSnapshot();
       // app_state 동기화 비활성화: 테이블 동기화만 사용
       startTableRealtimeSubscriptions();
+      let lastKvFocusPullAt = 0;
+      function queueKvPullOnFocus() {
+        const now = Date.now();
+        // 30초 이내 재풀 방지
+        if (now - lastKvFocusPullAt < 30000) return;
+        lastKvFocusPullAt = now;
+        void pullScheduleSiteClientKvFromSupabase().then(() => {
+          if (typeof refreshDaySelectorsAndNotice === "function") refreshDaySelectorsAndNotice();
+        });
+      }
       window.addEventListener("focus", () => {
         queueCustomerTablePull();
+        queueKvPullOnFocus();
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
           queueCustomerTablePull();
+          queueKvPullOnFocus();
         }
       });
 
@@ -1568,6 +1595,8 @@
           try {
             await pullTablesToCustomerStorage();
             renderAuthState();
+            // 스케줄 건수 변경이 반영되도록 날짜 선택기와 마감일 안내를 다시 그린다
+            if (typeof refreshDaySelectorsAndNotice === "function") refreshDaySelectorsAndNotice();
           } catch (error) {
             console.error("[TABLE][customer] pull 실패", error);
           } finally {
@@ -3622,6 +3651,12 @@
       scheduleDayEl.addEventListener("change", updateSelectedDayColor);
       updateExpectedPaymentText();
 
+      function refreshDaySelectorsAndNotice() {
+        if (scheduleYearEl && scheduleMonthEl && scheduleDayEl) {
+          renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
+        }
+        renderClosedDatesNotice();
+      }
       function bootstrapCustomerPageData() {
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
         setupDateTimeSelectors();
@@ -3633,7 +3668,9 @@
           renderAuthState();
         });
         queueCustomerTablePull();
+        // KV pull 완료 후 날짜 선택기와 마감일 안내를 새 건수 기준으로 다시 그린다
         clientKvPullDone.then((didHydrate) => {
+          refreshDaySelectorsAndNotice();
           if (!didHydrate) return;
           queueCustomerTablePull();
           renderAuthState();
