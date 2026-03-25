@@ -1441,6 +1441,9 @@
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
+      // 고객이 방금 취소한 스케줄 ID 집합 — pull 후 syncAdminSchedulesToCustomerUser가
+      // Supabase 응답이 아직 반영되기 전에 취소 일정을 다시 복원하는 race condition 방지
+      const pendingCustomerCancelIds = new Set();
       var activityAutoBackupTimer = null;
       var lastDbMutationAtMs = 0;
       function normalizeCustomerSiteType(value) {
@@ -1805,6 +1808,18 @@
           customerTableSyncRunning = true;
           try {
             await pullTablesToCustomerStorage();
+            // pull 완료 후 STORAGE_ADMIN_SCHEDULES에 없는 ID는 pendingCancelIds에서 제거
+            // → 더 이상 취소 차단이 필요 없음을 확인
+            if (pendingCustomerCancelIds.size > 0) {
+              const adminIds = new Set(
+                readStorageArray(STORAGE_ADMIN_SCHEDULES)
+                  .map((r) => normalize(r?.customerScheduleId))
+                  .filter(Boolean)
+              );
+              pendingCustomerCancelIds.forEach((id) => {
+                if (!adminIds.has(id)) pendingCustomerCancelIds.delete(id);
+              });
+            }
             renderAuthState();
             // 스케줄 건수 변경이 반영되도록 날짜 선택기와 마감일 안내를 다시 그린다
             if (typeof refreshDaySelectorsAndNotice === "function") refreshDaySelectorsAndNotice();
@@ -2770,6 +2785,8 @@
         adminCompanyRows.forEach((row) => {
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
           const scheduleId = normalize(row?.customerScheduleId) || buildStableAdminScheduleId(row, targetCompanyKey);
+          // 방금 취소한 일정은 pull 응답이 구버전이더라도 다시 추가하지 않음
+          if (scheduleId && pendingCustomerCancelIds.has(scheduleId)) return;
           const fallbackMatch = (item) =>
             String(item?.date || "").trim() === String(row?.date || "").trim() &&
             String(item?.time || "").trim() === String(row?.time || "").trim() &&
@@ -3076,6 +3093,8 @@
         if (!USE_SUPABASE_SYNC) return dedupedRows;
         return dedupedRows.filter((row) => {
           const id = normalize(row?.customerScheduleId);
+          // 방금 취소한 일정은 Supabase 반영 전에도 UI에 나타나지 않도록 차단
+          if (id && pendingCustomerCancelIds.has(id)) return false;
           if (id && adminIdSet.has(id)) return true;
           return adminKeySet.has(buildScheduleIdentityKey(row));
         });
@@ -3865,6 +3884,12 @@
           void appendSubmissionReceiptToSupabase(cancelReceipt);
           const deletedScheduleId = normalize(item?.customerScheduleId);
           const deletedRowKey = buildScheduleIdentityKey(item);
+          // 방금 취소한 ID를 기억해 Supabase pull 후 재복원 race condition 방지
+          if (deletedScheduleId) {
+            pendingCustomerCancelIds.add(deletedScheduleId);
+            // 15초 후 자동 제거 (Supabase 반영이 완료됐을 시점)
+            setTimeout(() => pendingCustomerCancelIds.delete(deletedScheduleId), 15000);
+          }
           const nextSchedules = schedules.filter((row) => {
             const rowId = normalize(row?.customerScheduleId);
             if (deletedScheduleId && rowId === deletedScheduleId) return false;
