@@ -359,9 +359,9 @@
         <div class="site-header__bar">
           <a class="site-header__logo" id="siteHeaderLogo" href="inlog.html" aria-label="인로그 홈">INLOG</a>
           <nav class="site-header__nav" aria-label="주요 메뉴">
-            <a href="inlog.html">Home</a>
+            <a href="inlog.html#photo">Photo</a>
             <a href="inlog.html#cinema">Cinema</a>
-            <a href="inlog.html#photo">Gallery</a>
+            <a href="inlog.html#product">Product</a>
             <a href="customer.html" class="is-active">Order</a>
           </nav>
         </div>
@@ -378,13 +378,9 @@
         syncHeaderStack();
         window.addEventListener("resize", syncHeaderStack);
       })();
-      // 관리자가 등록한 로고 이미지 적용
+      // 관리자가 등록한 로고 이미지 적용 (localStorage → Supabase KV 순서로 시도)
       (function () {
-        try {
-          var raw = localStorage.getItem("scheduleSiteInlogLogoV1");
-          if (!raw) return;
-          var logo = JSON.parse(raw);
-          var url = logo && logo.headerUrl ? logo.headerUrl : "";
+        function applyLogoUrl(url) {
           if (!url) return;
           var el = document.getElementById("siteHeaderLogo");
           if (!el) return;
@@ -392,7 +388,36 @@
           var img = document.createElement("img");
           img.src = url;
           img.alt = "인로그 로고";
+          img.style.cssText = "height:clamp(44px,7vw,72px);width:auto;display:block;object-fit:contain;";
           el.appendChild(img);
+        }
+        // 1) localStorage에서 즉시 시도
+        try {
+          var raw = localStorage.getItem("scheduleSiteInlogLogoV1");
+          if (raw) {
+            var logo = JSON.parse(raw);
+            applyLogoUrl(logo && logo.headerUrl ? logo.headerUrl : "");
+          }
+        } catch (_) {}
+        // 2) Supabase KV에서 최신 로고 fetch (localStorage에 없을 때 대비)
+        try {
+          var cfg = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+          var sbUrl = cfg.supabaseUrl || "https://pidfkrxsgffoqstogmli.supabase.co";
+          var sbKey = cfg.supabaseAnonKey || "";
+          if (sbUrl && sbKey) {
+            fetch(sbUrl + "/rest/v1/schedule_site_client_kv?id=eq.global&select=kv&limit=1", {
+              headers: { apikey: sbKey, Authorization: "Bearer " + sbKey },
+              cache: "no-store"
+            }).then(function(res) { return res.ok ? res.json() : []; })
+              .then(function(rows) {
+                if (!Array.isArray(rows) || !rows[0] || !rows[0].kv) return;
+                var kv = rows[0].kv;
+                var logoRaw = kv["scheduleSiteInlogLogoV1"];
+                if (!logoRaw) return;
+                var parsed = typeof logoRaw === "string" ? JSON.parse(logoRaw) : logoRaw;
+                applyLogoUrl(parsed && parsed.headerUrl ? parsed.headerUrl : "");
+              }).catch(function(){});
+          }
         } catch (_) {}
       })();
     </script>
