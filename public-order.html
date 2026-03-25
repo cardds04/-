@@ -2199,17 +2199,34 @@
         const id = normalize(scheduleId);
         if (!USE_SUPABASE_SYNC || !isUuidLike(id)) return;
         markDbMutationActivity("customer_schedule_delete");
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}`, {
-          method: "DELETE",
+        // 소프트 삭제: source="deleted" 로 PATCH — RLS가 DELETE를 막아도 UPDATE는 허용되므로 안전
+        const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}`, {
+          method: "PATCH",
           headers: {
+            "Content-Type": "application/json",
             Prefer: "return=minimal",
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          }
+          },
+          body: JSON.stringify({ source: "deleted" })
         });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`customer schedule 삭제 실패 (${response.status}): ${errorText}`);
+        if (!patchRes.ok) {
+          const errorText = await patchRes.text();
+          throw new Error(`customer schedule 소프트삭제 실패 (${patchRes.status}): ${errorText}`);
+        }
+        // 검증: source가 실제로 "deleted"로 바뀌었는지 확인
+        const verRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(id)}&select=id,source`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+        );
+        if (verRes.ok) {
+          const rows = await verRes.json();
+          if (Array.isArray(rows) && rows.length > 0) {
+            const src = String(rows[0]?.source || "").trim();
+            if (src !== "deleted") {
+              throw new Error(`source 변경 미반영 (현재: "${src}") — Supabase RLS UPDATE 정책 확인 필요`);
+            }
+          }
         }
       }
 
