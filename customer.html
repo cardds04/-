@@ -3362,33 +3362,28 @@
       const scheduleConfirmSummaryEl = document.getElementById("scheduleConfirmSummary");
       const scheduleConfirmOkBtnEl = document.getElementById("scheduleConfirmOkBtn");
       const scheduleConfirmCancelBtnEl = document.getElementById("scheduleConfirmCancelBtn");
-      let _pendingScheduleSubmit = null;
 
-      function showScheduleConfirmModal(summaryHtml, onConfirm) {
-        scheduleConfirmSummaryEl.innerHTML = summaryHtml;
-        scheduleConfirmModalEl.style.display = "flex";
-        _pendingScheduleSubmit = onConfirm;
+      function waitForScheduleConfirm(summaryHtml) {
+        return new Promise((resolve) => {
+          scheduleConfirmSummaryEl.innerHTML = summaryHtml;
+          scheduleConfirmModalEl.style.display = "flex";
+
+          function onOk() { cleanup(); resolve(true); }
+          function onCancel() { cleanup(); resolve(false); }
+          function onBackdrop(e) { if (e.target === scheduleConfirmModalEl) { cleanup(); resolve(false); } }
+
+          function cleanup() {
+            scheduleConfirmModalEl.style.display = "none";
+            scheduleConfirmOkBtnEl.removeEventListener("click", onOk);
+            scheduleConfirmCancelBtnEl.removeEventListener("click", onCancel);
+            scheduleConfirmModalEl.removeEventListener("click", onBackdrop);
+          }
+
+          scheduleConfirmOkBtnEl.addEventListener("click", onOk);
+          scheduleConfirmCancelBtnEl.addEventListener("click", onCancel);
+          scheduleConfirmModalEl.addEventListener("click", onBackdrop);
+        });
       }
-      function hideScheduleConfirmModal() {
-        scheduleConfirmModalEl.style.display = "none";
-        _pendingScheduleSubmit = null;
-      }
-      scheduleConfirmOkBtnEl?.addEventListener("click", async () => {
-        if (typeof _pendingScheduleSubmit === "function") {
-          hideScheduleConfirmModal();
-          await _pendingScheduleSubmit();
-        }
-      });
-      scheduleConfirmCancelBtnEl?.addEventListener("click", () => {
-        hideScheduleConfirmModal();
-        setCustomerScheduleSubmittingState(false);
-      });
-      scheduleConfirmModalEl?.addEventListener("click", (e) => {
-        if (e.target === scheduleConfirmModalEl) {
-          hideScheduleConfirmModal();
-          setCustomerScheduleSubmittingState(false);
-        }
-      });
 
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -3479,42 +3474,37 @@
             return;
           }
 
-          // ── 예약 확인 모달 표시 ──────────────────────────────────────────
-          {
-            const _wdNames = ["일","월","화","수","목","금","토"];
-            const _dateObj = new Date(`${date}T00:00:00`);
-            const _dayName = _wdNames[_dateObj.getDay()];
-            const _timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
-            const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-            const _composition = isLiteCustomerMode ? "사진만" : (scheduleCompositionEl.value || "미선택");
-            const _memo = normalize(document.getElementById("scheduleMemo").value);
-            const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, isTaxInvoiceRequested());
-            const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
-            const _rows = [
-              ["업체", scheduleCompanyName],
-              ["날짜", `${date} (${_dayName})`],
-              ["시간", _timeLabel],
-              ["장소", place],
-              _pyeong ? ["평수", _pyeong] : null,
-              ["촬영구성", _composition],
-              _amountText ? ["결제예정금액", _amountText] : null,
-              _memo ? ["메모", _memo] : null,
-            ].filter(Boolean);
-            const _summaryHtml = _rows.map(([lbl, val]) =>
-              `<div style="display:flex;gap:8px;">
-                <span style="min-width:82px;color:#5f6c88;flex-shrink:0;">${lbl}</span>
-                <span style="color:#1f2940;font-weight:700;">${val}</span>
-              </div>`
-            ).join("");
-            setCustomerScheduleSubmittingState(false);
-            showScheduleConfirmModal(_summaryHtml, async () => {
-              setCustomerScheduleSubmittingState(true);
-              await doRegisterSchedule();
-            });
-            return;
-          }
+          // ── 예약 확인 모달 표시 및 대기 ────────────────────────────────
+          const _wdNames = ["일","월","화","수","목","금","토"];
+          const _dateObj = new Date(`${date}T00:00:00`);
+          const _dayName = _wdNames[_dateObj.getDay()];
+          const _timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
+          const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
+          const _composition = isLiteCustomerMode ? "사진만" : (scheduleCompositionEl.value || "미선택");
+          const _memo = normalize(document.getElementById("scheduleMemo").value);
+          const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, isTaxInvoiceRequested());
+          const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
+          const _rows = [
+            ["업체", scheduleCompanyName],
+            ["날짜", `${date} (${_dayName})`],
+            ["시간", _timeLabel],
+            ["장소", place],
+            _pyeong ? ["평수", _pyeong] : null,
+            ["촬영구성", _composition],
+            _amountText ? ["결제예정금액", _amountText] : null,
+            _memo ? ["메모", _memo] : null,
+          ].filter(Boolean);
+          const _summaryHtml = _rows.map(([lbl, val]) =>
+            `<div style="display:flex;gap:8px;">
+              <span style="min-width:82px;color:#5f6c88;flex-shrink:0;">${lbl}</span>
+              <span style="color:#1f2940;font-weight:700;">${val}</span>
+            </div>`
+          ).join("");
 
-          async function doRegisterSchedule() {
+          const confirmed = await waitForScheduleConfirm(_summaryHtml);
+          if (!confirmed) return;
+
+          // ── 실제 등록 처리 ──────────────────────────────────────────────
           const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
           const schedules = existingRows;
           const createdSchedule = {
@@ -3526,10 +3516,10 @@
             company: scheduleCompanyName,
             companyCode: normalize(effectiveCompanyCode),
             place,
-            pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
+            pyeong: _pyeong,
             jointCode: normalize(document.getElementById("scheduleJointCode").value),
             doorCode: normalize(document.getElementById("scheduleDoorCode").value),
-            memo: normalize(document.getElementById("scheduleMemo").value),
+            memo: _memo,
             composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
             paymentStatus: "미입금",
             paymentPayer: "",
@@ -3609,7 +3599,6 @@
           updateExpectedPaymentText();
           renderPaymentSummary();
           alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
-          } // end doRegisterSchedule
         } finally {
           setCustomerScheduleSubmittingState(false);
         }
