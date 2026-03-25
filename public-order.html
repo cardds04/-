@@ -18,8 +18,7 @@
         --text: #f0f0f0;
         --muted: #888;
         --red: #ff5c5c;
-        --header-h: 72px;
-      }
+        }
       * { box-sizing: border-box; }
       html { background: var(--bg); }
       body {
@@ -28,50 +27,8 @@
         background: var(--bg);
         color: var(--text);
         -webkit-font-smoothing: antialiased;
-        padding-top: var(--header-h);
       }
       a { color: inherit; text-decoration: none; }
-
-      /* ── 고정 헤더 ── */
-      .site-header-fixed {
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        z-index: 200;
-        background: var(--gold);
-        box-shadow: 0 3px 16px rgba(0,0,0,0.45);
-        height: var(--header-h);
-        display: flex;
-        align-items: center;
-      }
-      .site-header-inner {
-        width: 100%;
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 0 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-      }
-      .site-logo {
-        font-family: "Bebas Neue", "Montserrat", sans-serif;
-        font-size: clamp(2.4rem, 6.5vw, 3.4rem);
-        letter-spacing: 0.06em;
-        color: #000;
-        line-height: 1;
-        text-decoration: none;
-      }
-      .site-logo img { height: clamp(44px, 7vw, 72px); width: auto; object-fit: contain; display: block; }
-      .site-nav {
-        display: flex;
-        align-items: center;
-        gap: clamp(12px, 3vw, 28px);
-        font-family: "Bebas Neue", "Montserrat", sans-serif;
-        font-size: clamp(1.1rem, 2.8vw, 1.5rem);
-        letter-spacing: 0.08em;
-        color: #000;
-      }
-      .site-nav a:hover { opacity: 0.6; }
 
       /* ── 레이아웃 ── */
       .wrap { width: min(860px, 94vw); margin: 32px auto 48px; }
@@ -429,24 +386,10 @@
       @media (max-width: 600px) {
         .pair, .triple { grid-template-columns: 1fr; }
         .top-line { flex-direction: column; align-items: flex-start; }
-        .site-nav { gap: 10px; font-size: 1rem; }
       }
     </style>
   </head>
   <body>
-    <!-- 고정 헤더 -->
-    <header class="site-header-fixed">
-      <div class="site-header-inner">
-        <a href="/inlog.html" class="site-logo" id="publicHeaderLogo">INLOG</a>
-        <nav class="site-nav">
-          <a href="/inlog.html#photo">PHOTO</a>
-          <a href="/inlog.html#cinema">CINEMA</a>
-          <a href="/inlog.html#product">PRODUCT</a>
-          <a href="/public-order.html" style="color:#000;font-weight:900;text-decoration:underline;text-underline-offset:4px;">ORDER</a>
-        </nav>
-      </div>
-    </header>
-
     <main class="wrap">
       <h1 class="page-title">ORDER</h1>
       <p class="page-sub">회원가입 후 촬영 스케줄을 직접 등록하세요.</p>
@@ -4311,39 +4254,6 @@
         });
       }
       void bootstrapCustomerPageData();
-      // 헤더 로고 이미지 동기화 (localStorage → Supabase KV 순서로 시도)
-      (function applyPublicHeaderLogo() {
-        function applyLogoUrl(url) {
-          if (!url) return;
-          const el = document.getElementById("publicHeaderLogo");
-          if (!el) return;
-          el.innerHTML = `<img src="${url}" alt="INLOG" style="height:clamp(44px,7vw,72px);width:auto;display:block;object-fit:contain;" />`;
-        }
-        // 1) localStorage 즉시 적용
-        try {
-          const raw = localStorage.getItem("scheduleSiteInlogLogoV1");
-          if (raw) {
-            const logo = JSON.parse(raw);
-            applyLogoUrl(logo?.headerUrl || logo?.url || "");
-          }
-        } catch (_) {}
-        // 2) Supabase KV에서 최신 로고 fetch
-        try {
-          if (USE_SUPABASE_SYNC && SUPABASE_URL && SUPABASE_ANON_KEY) {
-            fetch(`${SUPABASE_URL}/rest/v1/schedule_site_client_kv?id=eq.global&select=kv&limit=1`, {
-              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-              cache: "no-store"
-            }).then(r => r.ok ? r.json() : [])
-              .then(rows => {
-                if (!Array.isArray(rows) || !rows[0]?.kv) return;
-                const logoRaw = rows[0].kv["scheduleSiteInlogLogoV1"];
-                if (!logoRaw) return;
-                const parsed = typeof logoRaw === "string" ? JSON.parse(logoRaw) : logoRaw;
-                applyLogoUrl(parsed?.headerUrl || "");
-              }).catch(() => {});
-          }
-        } catch (_) {}
-      })();
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_ADMIN_SCHEDULES || event.key === STORAGE_SCHEDULES) {
           renderAuthState();
