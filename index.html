@@ -943,6 +943,42 @@
         margin-right: 4px;
       }
 
+      .site-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 6px;
+        font-size: 0.72rem;
+        font-weight: 900;
+        color: #fff;
+        margin-right: 5px;
+        flex-shrink: 0;
+      }
+      .site-badge.inlog  { background: #16a34a; }
+      .site-badge.shopick { background: #dc2626; }
+
+      .today-new-companies {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin-bottom: 10px;
+        font-size: 0.82rem;
+      }
+      .today-new-companies .today-new-title {
+        font-weight: 800;
+        color: #15803d;
+        margin-bottom: 4px;
+        font-size: 0.85rem;
+      }
+      .today-new-companies .today-new-item {
+        color: #166534;
+        line-height: 1.7;
+      }
+
       .schedule-extra-detail {
         margin-top: 6px;
       }
@@ -1635,6 +1671,7 @@
 
         <article class="card fill-card">
           <h2>업체 등록</h2>
+          <div id="todayNewCompaniesBox"></div>
           <button id="addCompanyBtn" class="btn-main" type="button">+ 업체 등록</button>
           <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
             <button id="downloadCompanyExcelBtn" class="btn-sm" type="button">다운</button>
@@ -9887,6 +9924,40 @@
             .map((item) => normalizeCompanyName(item?.name).toLowerCase())
             .filter(Boolean)
         );
+
+        // 사이트 타입 조회 헬퍼
+        const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
+        function getCompanySiteType(companyName, companyCode) {
+          const groupKey = getCompanyGroupKey(companyName, companyCode);
+          const matched = customerUsers.filter((u) => getCompanyGroupKey(u?.company, u?.companyCode) === groupKey);
+          if (!matched.length) return null;
+          const st = String(matched[0]?.siteType || "inlog").trim().toLowerCase();
+          return st === "shopick" ? "shopick" : "inlog";
+        }
+        function siteBadgeHtml(siteType) {
+          if (!siteType) return "";
+          return siteType === "shopick"
+            ? `<span class="site-badge shopick">쇼</span>`
+            : `<span class="site-badge inlog">인</span>`;
+        }
+
+        // 오늘의 신규업체 (오늘 가입한 고객 계정 기준)
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayNewCustomers = customerUsers.filter((u) => String(u?.createdAt || "").slice(0, 10) === todayStr);
+        const todayNewNames = [...new Set(todayNewCustomers.map((u) => String(u?.company || "").trim()).filter(Boolean))];
+        const todayBox = document.getElementById("todayNewCompaniesBox");
+        if (todayBox) {
+          if (todayNewNames.length > 0) {
+            todayBox.innerHTML = `
+              <div class="today-new-companies">
+                <div class="today-new-title">🆕 오늘 신규 업체 ${todayNewNames.length}개</div>
+                ${todayNewNames.map((n) => `<div class="today-new-item">· ${escapeHtml(n)}</div>`).join("")}
+              </div>`;
+          } else {
+            todayBox.innerHTML = "";
+          }
+        }
+
         const filtered = companies
           .map((company, index) => ({ company, index }))
           .filter(({ company }) => {
@@ -9898,13 +9969,14 @@
           .map(({ company, index }) => {
             const isEditing = editingCompanyIndex === index;
             const isCustomerRegisteredCompany = customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
+            const siteType = getCompanySiteType(company.name, company.code);
+            const badge = siteBadgeHtml(siteType);
+            const customerMeta = getCustomerIdByCompanyName(company.name);
+            const customerIdHtml = customerMeta.text ? ` (아이디: ${escapeHtml(customerMeta.text)})` : "";
             if (isEditing) {
-              const customerMeta = getCustomerIdByCompanyName(company.name);
-              const masterBadge = customerMeta.isMasterCompany ? `<span class="master-account-badge">본</span>` : "";
-              const customerIdHtml = customerMeta.text ? ` (아이디: ${escapeHtml(customerMeta.text)})` : "";
               return `
                 <div class="company-item" data-company-index="${index}">
-                  <div>업체: ${masterBadge}${escapeHtml(company.name)}${customerIdHtml}</div>
+                  <div style="display:flex;align-items:center;">${badge}${escapeHtml(company.name)}${customerIdHtml}</div>
                   <div class="company-edit-row" style="margin-top: 6px;">
                     <input class="inline-input edit-company-name" type="text" value="${escapeHtml(company.name || "")}" style="width: 100%; min-width: 260px;" />
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
@@ -9920,14 +9992,11 @@
                 </div>
               `;
             }
-            const customerMeta = getCustomerIdByCompanyName(company.name);
-            const masterBadge = customerMeta.isMasterCompany ? `<span class="master-account-badge">본</span>` : "";
-            const customerIdHtml = customerMeta.text ? ` (아이디: ${escapeHtml(customerMeta.text)})` : "";
             return `
               <div class="company-item company-clickable" data-company-index="${index}">
-                <div>업체: ${masterBadge}${escapeHtml(company.name)}${customerIdHtml}</div>
-                <div class="company-item-row" style="margin-top: 6px;">
-                  <span>연락처: ${escapeHtml(company.phone)}${company.code ? ` / 고유번호: ${escapeHtml(company.code)}` : ""}</span>
+                <div style="display:flex;align-items:center;">${badge}${escapeHtml(company.name)}${customerIdHtml}</div>
+                <div class="company-item-row" style="margin-top: 4px;">
+                  <span style="color:#6b7a99;font-size:0.85rem;">연락처: ${escapeHtml(company.phone || "-")}</span>
                 </div>
               </div>
             `;
