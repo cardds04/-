@@ -3921,137 +3921,143 @@
           }
 
           // ── 예약 확인 모달 표시 ──────────────────────────────────────────
-          {
-            const weekdayNames = ["일","월","화","수","목","금","토"];
-            const dateObj = new Date(`${date}T00:00:00`);
-            const dayName = weekdayNames[dateObj.getDay()];
-            const timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
-            const pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-            const composition = isLiteCustomerMode ? "사진만" : (scheduleCompositionEl.value || "미선택");
-            const memo = normalize(document.getElementById("scheduleMemo").value);
-            const amountText = expectedAmount ? `${Number(expectedAmount).toLocaleString()}원` : "-";
-            const summaryRows = [
-              ["업체", scheduleCompanyName],
-              ["날짜", `${date} (${dayName})`],
-              ["시간", timeLabel],
-              ["장소", place],
-              pyeong ? ["평수", pyeong] : null,
-              ["촬영구성", composition],
-              amountText !== "-" ? ["결제예정금액", amountText] : null,
-              memo ? ["메모", memo] : null,
-            ].filter(Boolean);
-            const summaryHtml = summaryRows.map(([label, val]) =>
-              `<div style="display:flex; gap:6px;">
-                <span style="min-width:80px; color:#888; flex-shrink:0;">${label}</span>
-                <span style="color:#f0f0f0; font-weight:600;">${val}</span>
-              </div>`
-            ).join("");
+          const weekdayNames = ["일","월","화","수","목","금","토"];
+          const dateObj = new Date(`${date}T00:00:00`);
+          const dayName = weekdayNames[dateObj.getDay()];
+          const timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
+          const pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
+          const composition = isLiteCustomerMode ? "사진만" : (scheduleCompositionEl.value || "미선택");
+          const memo = normalize(document.getElementById("scheduleMemo").value);
+          const amountText = expectedAmount ? `${Number(expectedAmount).toLocaleString()}원` : "-";
+          const summaryRows = [
+            ["업체", scheduleCompanyName],
+            ["날짜", `${date} (${dayName})`],
+            ["시간", timeLabel],
+            ["장소", place],
+            pyeong ? ["평수", pyeong] : null,
+            ["촬영구성", composition],
+            amountText !== "-" ? ["결제예정금액", amountText] : null,
+            memo ? ["메모", memo] : null,
+          ].filter(Boolean);
+          const summaryHtml = summaryRows.map(([label, val]) =>
+            `<div style="display:flex; gap:6px;">
+              <span style="min-width:80px; color:#888; flex-shrink:0;">${label}</span>
+              <span style="color:#f0f0f0; font-weight:600;">${val}</span>
+            </div>`
+          ).join("");
 
-            // 모달 표시 후 확인 버튼에서 등록 로직 실행
-            setCustomerScheduleSubmittingState(false); // 버튼 잠금 해제 (모달 대기 중)
-            showScheduleConfirmModal(summaryHtml, async () => {
-              setCustomerScheduleSubmittingState(true);
-              await doRegisterSchedule();
-            });
-            return; // 모달 확인 전까지 중단
-          }
-
-          async function doRegisterSchedule() { // 실제 등록 로직 (모달 확인 후 실행)
-          const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
-          const schedules = existingRows;
-          const createdSchedule = {
-            customerScheduleId: buildClientUuid(),
-            date,
-            time,
-            timePreference,
-            name: "작가미정",
-            company: scheduleCompanyName,
-            companyCode: normalize(effectiveCompanyCode),
-            place,
-            pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
-            jointCode: normalize(document.getElementById("scheduleJointCode").value),
-            doorCode: normalize(document.getElementById("scheduleDoorCode").value),
-            memo: normalize(document.getElementById("scheduleMemo").value),
-            composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
-            paymentStatus: "미입금",
-            paymentPayer: "",
-            paymentAmount: expectedAmount ? String(expectedAmount) : "",
-            paymentDate: "",
-            taxInvoiceRequested,
-            couponUsed: false,
-            source: "customer",
-            adminTimeUpdated: false,
-            localUpdatedAt: new Date().toISOString(),
-            writerPhone: "",
-            writerCarNumber: "",
-            customerId: user.id,
-            customerPhone: user.phone
-          };
-          schedules.unshift(createdSchedule);
-          writeStorageArray(STORAGE_SCHEDULES, schedules);
-          try {
-            await syncCustomersTableFromStorage();
-            await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
-            queueCustomerTablePull();
-          } catch (error) {
-            console.error("[TABLE][customer] schedule create sync 실패", error);
-            const rollbackRows = readStorageArray(STORAGE_SCHEDULES).filter(
-              (row) => normalize(row?.customerScheduleId) !== normalize(createdSchedule.customerScheduleId)
-            );
-            writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
-            renderStatusList();
-            renderPaymentSummary();
-            alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
-            return;
-          }
-          const submissionReceipt = {
-            receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            scheduleId: String(createdSchedule.customerScheduleId || "").trim(),
-            customerId: String(user?.id || "").trim(),
-            company: scheduleCompanyName,
-            date,
-            time,
-            timePreference,
-            place,
-            source: "customer_create",
-            createdAt: new Date().toISOString(),
-            status: "accepted"
-          };
-          appendLocalSubmissionReceipt(submissionReceipt);
-          void appendSubmissionReceiptToSupabase(submissionReceipt);
-          const createAlerts = readStorageArray(STORAGE_ALERTS);
-          createAlerts.unshift({
-            id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            type: "schedule_create",
-            company: scheduleCompanyName,
-            date,
-            time,
-            createdAt: new Date().toISOString(),
-            read: false
-          });
-          writeStorageArray(STORAGE_ALERTS, createAlerts);
-          if (isNewCompany) {
-            const alerts = readStorageArray(STORAGE_ALERTS);
-            alerts.unshift({
+          // 모달 확인 후 실행할 실제 등록 로직 (const로 명확히 정의)
+          const doRegisterSchedule = async () => {
+            const isNewCompany = ensureCompanyStored(scheduleCompanyName, user.phone, effectiveCompanyCode);
+            const schedules = existingRows;
+            const createdSchedule = {
+              customerScheduleId: buildClientUuid(),
+              date,
+              time,
+              timePreference,
+              name: "작가미정",
+              company: scheduleCompanyName,
+              companyCode: normalize(effectiveCompanyCode),
+              place,
+              pyeong: isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value),
+              jointCode: normalize(document.getElementById("scheduleJointCode").value),
+              doorCode: normalize(document.getElementById("scheduleDoorCode").value),
+              memo: normalize(document.getElementById("scheduleMemo").value),
+              composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
+              paymentStatus: "미입금",
+              paymentPayer: "",
+              paymentAmount: expectedAmount ? String(expectedAmount) : "",
+              paymentDate: "",
+              taxInvoiceRequested,
+              couponUsed: false,
+              source: "customer",
+              adminTimeUpdated: false,
+              localUpdatedAt: new Date().toISOString(),
+              writerPhone: "",
+              writerCarNumber: "",
+              customerId: user.id,
+              customerPhone: user.phone
+            };
+            schedules.unshift(createdSchedule);
+            writeStorageArray(STORAGE_SCHEDULES, schedules);
+            try {
+              await syncCustomersTableFromStorage();
+              await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
+              queueCustomerTablePull();
+            } catch (error) {
+              console.error("[TABLE][customer] schedule create sync 실패", error);
+              const rollbackRows = readStorageArray(STORAGE_SCHEDULES).filter(
+                (row) => normalize(row?.customerScheduleId) !== normalize(createdSchedule.customerScheduleId)
+              );
+              writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
+              renderStatusList();
+              renderPaymentSummary();
+              alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
+              return;
+            }
+            const submissionReceipt = {
+              receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              scheduleId: String(createdSchedule.customerScheduleId || "").trim(),
+              customerId: String(user?.id || "").trim(),
+              company: scheduleCompanyName,
+              date,
+              time,
+              timePreference,
+              place,
+              source: "customer_create",
+              createdAt: new Date().toISOString(),
+              status: "accepted"
+            };
+            appendLocalSubmissionReceipt(submissionReceipt);
+            void appendSubmissionReceiptToSupabase(submissionReceipt);
+            const createAlerts = readStorageArray(STORAGE_ALERTS);
+            createAlerts.unshift({
               id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              type: "new_company_schedule",
+              type: "schedule_create",
               company: scheduleCompanyName,
               date,
               time,
               createdAt: new Date().toISOString(),
               read: false
             });
-            writeStorageArray(STORAGE_ALERTS, alerts);
-          }
-          customerScheduleFormEl.reset();
-          setupDateTimeSelectors();
-          setSelectedPyeong("미선택");
-          setSelectedComposition("미선택");
-          setTaxInvoiceRequested(false);
-          updateExpectedPaymentText();
-          renderPaymentSummary();
-          alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
-          } // end doRegisterSchedule
+            writeStorageArray(STORAGE_ALERTS, createAlerts);
+            if (isNewCompany) {
+              const alerts = readStorageArray(STORAGE_ALERTS);
+              alerts.unshift({
+                id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                type: "new_company_schedule",
+                company: scheduleCompanyName,
+                date,
+                time,
+                createdAt: new Date().toISOString(),
+                read: false
+              });
+              writeStorageArray(STORAGE_ALERTS, alerts);
+            }
+            customerScheduleFormEl.reset();
+            setupDateTimeSelectors();
+            setSelectedPyeong("미선택");
+            setSelectedComposition("미선택");
+            setTaxInvoiceRequested(false);
+            updateExpectedPaymentText();
+            renderPaymentSummary();
+            alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
+          };
+
+          // 모달 표시 후 확인 버튼에서 등록 로직 실행
+          setCustomerScheduleSubmittingState(false); // 버튼 잠금 해제 (모달 대기 중)
+          showScheduleConfirmModal(summaryHtml, async () => {
+            setCustomerScheduleSubmittingState(true);
+            try {
+              await doRegisterSchedule();
+            } catch (err) {
+              console.error("[doRegisterSchedule] 예기치 못한 오류", err);
+              alert("예약 등록 중 오류가 발생했습니다. 다시 시도해주세요.");
+            } finally {
+              setCustomerScheduleSubmittingState(false);
+            }
+          });
+          return; // 모달 확인 전까지 중단
         } finally {
           setCustomerScheduleSubmittingState(false);
         }
