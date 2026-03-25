@@ -514,10 +514,10 @@
       <div style="
         width:min(480px,96vw); background:#1a1a1a; border:1px solid #ffd503;
         border-radius:16px; padding:24px; max-height:90vh; overflow-y:auto;">
-        <div style="font-family:'Bebas Neue','Montserrat',sans-serif; font-size:1.4rem; letter-spacing:0.08em; color:#ffd503; margin-bottom:16px;">
+        <div id="scheduleConfirmTitle" style="font-family:'Bebas Neue','Montserrat',sans-serif; font-size:1.4rem; letter-spacing:0.08em; color:#ffd503; margin-bottom:16px;">
           예약 확인
         </div>
-        <div style="background:#111; border-radius:10px; padding:14px; font-size:0.88rem; line-height:1.8; color:#ccc; margin-bottom:16px; border-left:3px solid #ffd503;">
+        <div id="scheduleConfirmDesc" style="background:#111; border-radius:10px; padding:14px; font-size:0.88rem; line-height:1.8; color:#ccc; margin-bottom:16px; border-left:3px solid #ffd503;">
           본 예약은 <strong style="color:#ffd503;">접수 상태</strong>이며, 촬영 스케줄은 관리자와의 시간 조율 후 최종 확정됩니다.<br/>
           스케줄은 <strong style="color:#ffd503;">입금 순으로 확정</strong>되니 유의해 주세요.<br/>
           예약 진행을 원하시면 아래 확인 버튼을 눌러주세요.
@@ -1499,6 +1499,8 @@
       var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
+      // 고객이 방금 취소한 스케줄 ID 집합 — pull 후 재복원 race condition 방지
+      const pendingCustomerCancelIds = new Set();
       var activityAutoBackupTimer = null;
       var lastDbMutationAtMs = 0;
       function normalizeCustomerSiteType(value) {
@@ -1863,6 +1865,17 @@
           customerTableSyncRunning = true;
           try {
             await pullTablesToCustomerStorage();
+            // pull 완료 후 STORAGE_ADMIN_SCHEDULES에 없는 ID는 pendingCancelIds에서 제거
+            if (pendingCustomerCancelIds.size > 0) {
+              const adminIds = new Set(
+                readStorageArray(STORAGE_ADMIN_SCHEDULES)
+                  .map((r) => normalize(r?.customerScheduleId))
+                  .filter(Boolean)
+              );
+              pendingCustomerCancelIds.forEach((id) => {
+                if (!adminIds.has(id)) pendingCustomerCancelIds.delete(id);
+              });
+            }
             renderAuthState();
             // 스케줄 건수 변경이 반영되도록 날짜 선택기와 마감일 안내를 다시 그린다
             if (typeof refreshDaySelectorsAndNotice === "function") refreshDaySelectorsAndNotice();
@@ -2947,6 +2960,8 @@
         adminCompanyRows.forEach((row) => {
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
           const scheduleId = normalize(row?.customerScheduleId) || buildStableAdminScheduleId(row, targetCompanyKey);
+          // 방금 취소한 일정은 pull 응답이 구버전이더라도 다시 추가하지 않음
+          if (scheduleId && pendingCustomerCancelIds.has(scheduleId)) return;
           const fallbackMatch = (item) =>
             String(item?.date || "").trim() === String(row?.date || "").trim() &&
             String(item?.time || "").trim() === String(row?.time || "").trim() &&
@@ -3253,6 +3268,8 @@
         if (!USE_SUPABASE_SYNC) return dedupedRows;
         return dedupedRows.filter((row) => {
           const id = normalize(row?.customerScheduleId);
+          // 방금 취소한 일정은 Supabase 반영 전에도 UI에 나타나지 않도록 차단
+          if (id && pendingCustomerCancelIds.has(id)) return false;
           if (id && adminIdSet.has(id)) return true;
           return adminKeySet.has(buildScheduleIdentityKey(row));
         });
@@ -3745,11 +3762,31 @@
       const scheduleConfirmSummaryEl = document.getElementById("scheduleConfirmSummary");
       const scheduleConfirmOkBtnEl = document.getElementById("scheduleConfirmOkBtn");
       const scheduleConfirmCancelBtnEl = document.getElementById("scheduleConfirmCancelBtn");
+      const scheduleConfirmTitleEl = document.getElementById("scheduleConfirmTitle");
+      const scheduleConfirmDescEl = document.getElementById("scheduleConfirmDesc");
+
+      const MODAL_DEFAULTS = {
+        title: "예약 확인",
+        desc: `본 예약은 <strong style="color:#ffd503;">접수 상태</strong>이며, 촬영 스케줄은 관리자와의 시간 조율 후 최종 확정됩니다.<br/>스케줄은 <strong style="color:#ffd503;">입금 순으로 확정</strong>되니 유의해 주세요.<br/>예약 진행을 원하시면 아래 확인 버튼을 눌러주세요.`,
+        okLabel: "확인 — 예약 접수",
+        okColor: "#ffd503"
+      };
 
       // 모달을 보여주고 사용자가 확인/취소를 누를 때까지 Promise로 대기
       // true → 확인, false → 취소/닫기
-      function waitForScheduleConfirm(summaryHtml) {
+      function waitForScheduleConfirm(summaryHtml, opts = {}) {
         return new Promise((resolve) => {
+          const { title, desc, okLabel, okColor } = { ...MODAL_DEFAULTS, ...opts };
+          if (scheduleConfirmTitleEl) scheduleConfirmTitleEl.textContent = title;
+          if (scheduleConfirmDescEl) {
+            scheduleConfirmDescEl.innerHTML = desc || "";
+            scheduleConfirmDescEl.style.display = desc ? "" : "none";
+          }
+          if (scheduleConfirmOkBtnEl) {
+            scheduleConfirmOkBtnEl.textContent = okLabel;
+            scheduleConfirmOkBtnEl.style.background = okColor || "#ffd503";
+            scheduleConfirmOkBtnEl.style.color = okColor === "#ffd503" ? "#000" : "#fff";
+          }
           scheduleConfirmSummaryEl.innerHTML = summaryHtml;
           scheduleConfirmModalEl.style.display = "flex";
 
@@ -4091,7 +4128,11 @@
             alert("3일 이내 일정은 관리자에게 요청해주세요.");
             return;
           }
-          const confirmed = confirm("등록한 스케줄을 삭제할까요?");
+          const confirmed = await waitForScheduleConfirm(
+            `<div style="display:flex;gap:8px;"><span style="min-width:60px;color:#aaa;">날짜</span><span style="font-weight:700;">${item.date} ${item.time}</span></div>` +
+            `<div style="display:flex;gap:8px;"><span style="min-width:60px;color:#aaa;">장소</span><span style="font-weight:700;">${item.place || "-"}</span></div>`,
+            { title: "일정 취소", desc: false, okLabel: "일정 취소", okColor: "#c0392b" }
+          );
           if (!confirmed) return;
           const deletedDate = item.date;
           const deletedTime = item.time;
@@ -4113,6 +4154,11 @@
           void appendSubmissionReceiptToSupabase(cancelReceipt);
           const deletedScheduleId = normalize(item?.customerScheduleId);
           const deletedRowKey = buildScheduleIdentityKey(item);
+          // 방금 취소한 ID를 기억해 Supabase pull 후 재복원 race condition 방지
+          if (deletedScheduleId) {
+            pendingCustomerCancelIds.add(deletedScheduleId);
+            setTimeout(() => pendingCustomerCancelIds.delete(deletedScheduleId), 15000);
+          }
           const nextSchedules = schedules.filter((row) => {
             const rowId = normalize(row?.customerScheduleId);
             if (deletedScheduleId && rowId === deletedScheduleId) return false;
