@@ -3814,9 +3814,10 @@
         _pendingScheduleSubmit = null;
       }
       scheduleConfirmOkBtnEl?.addEventListener("click", async () => {
-        if (typeof _pendingScheduleSubmit === "function") {
+        const pending = _pendingScheduleSubmit; // hideScheduleConfirmModal이 null로 초기화하기 전에 저장
+        if (typeof pending === "function") {
           hideScheduleConfirmModal();
-          await _pendingScheduleSubmit();
+          await pending();
         }
       });
       scheduleConfirmCancelBtnEl?.addEventListener("click", () => {

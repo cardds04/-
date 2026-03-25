@@ -2569,6 +2569,9 @@
           file.addEventListener("change", async () => {
             const f = file.files && file.files[0];
             if (!f) return;
+            // 파일 선택 즉시 dirty 마킹 — 포커스 복귀 시 soft pull이 구버전 데이터로
+            // 에디터를 덮어쓰는 것을 차단
+            markInlogEditorDirty();
             const localUrl = URL.createObjectURL(f);
             if (previewEl) previewEl.src = localUrl;
             if (previewWrap) previewWrap.style.display = "block";
@@ -3042,6 +3045,9 @@
           fileInput.addEventListener("change", async () => {
             const file = fileInput.files && fileInput.files[0];
             if (!file) return;
+            // 파일 선택 즉시 dirty 마킹 — 파일창이 닫히면서 포커스 복귀 시
+            // 발생하는 soft pull이 구버전 데이터로 에디터를 덮어쓰는 것을 차단
+            markInlogEditorDirty();
             // 로컬 미리보기 즉시 표시
             const localUrl = URL.createObjectURL(file);
             if (previewEl) previewEl.src = localUrl;
@@ -3299,6 +3305,9 @@
           void (async () => {
             const changed = await pullScheduleSiteClientKvFromSupabase();
             if (!changed) return;
+            // pull 완료 후 dirty 재확인 — pull이 진행되는 동안 업로드가 시작됐을 경우
+            // 구버전 서버 데이터로 에디터를 덮어쓰지 않도록 차단
+            if (inlogEditorDirty) return;
             const inlogVisible = Boolean(inlogPhotoSectionEl && !inlogPhotoSectionEl.classList.contains("hidden"));
             if (inlogVisible && typeof hydrateInlogPhotoEditorFromStorage === "function") {
               hydrateInlogPhotoEditorFromStorage();
