@@ -2582,9 +2582,21 @@
               URL.revokeObjectURL(localUrl);
               if (urlEl) urlEl.value = url;
               if (previewEl) previewEl.src = url;
-              if (statusEl) { statusEl.textContent = "✓ 업로드 완료"; statusEl.style.color = "green"; }
-              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; } }, 3000);
+              if (statusEl) { statusEl.textContent = "✓ 업로드 완료 · 저장 중…"; statusEl.style.color = "green"; }
               markInlogEditorDirty();
+              // 업로드 완료 즉시 memoryStore에 저장 → pull/hydrate 발생 시 새 URL 보존
+              writeInlogLogo(collectInlogLogoEditorPayload());
+              // 자동으로 Supabase에도 push (저장 버튼 없이도 반영)
+              try {
+                const ok = await forceClientKvPushWhenReady(true);
+                if (ok) {
+                  if (statusEl) { statusEl.textContent = "✓ 등록 완료"; statusEl.style.color = "green"; }
+                  clearInlogEditorDirty();
+                } else {
+                  if (statusEl) { statusEl.textContent = "✓ 업로드 완료 (저장 버튼으로 최종 저장)"; statusEl.style.color = "green"; }
+                }
+              } catch (_) {}
+              setTimeout(() => { if (statusEl) { statusEl.textContent = ""; } }, 3000);
             } catch (e) {
               URL.revokeObjectURL(localUrl);
               if (statusEl) { statusEl.textContent = "✗ " + String(e.message || e); statusEl.style.color = "red"; }
@@ -3106,10 +3118,15 @@
           let productTextSaveTimer = null;
           textEl.addEventListener("input", () => {
             markInlogEditorDirty();
-            // 텍스트 입력 후 1.5초 뒤 자동 로컬 저장 (미리보기 보존)
+            // 텍스트 입력 후 1.5초 뒤 자동 로컬 저장 + Supabase push
             if (productTextSaveTimer) clearTimeout(productTextSaveTimer);
-            productTextSaveTimer = setTimeout(() => {
-              writeInlogProduct(collectInlogProductEditorPayload());
+            productTextSaveTimer = setTimeout(async () => {
+              const currentPayload = collectInlogProductEditorPayload();
+              writeInlogProduct(currentPayload);
+              try {
+                const ok = await forceClientKvPushWhenReady(true);
+                if (ok) clearInlogEditorDirty();
+              } catch (_) {}
             }, 1500);
           });
         }
