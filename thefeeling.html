@@ -56,6 +56,44 @@
     }
     .btn-add-space:hover { background: var(--blue-dark); }
 
+    /* ── Space Nav Bar ── */
+    .space-nav {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      position: sticky;
+      top: 57px;
+      z-index: 99;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .space-nav::-webkit-scrollbar { display: none; }
+    .space-nav-inner {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 20px;
+      min-width: max-content;
+    }
+    .space-nav-btn {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+      border-radius: 20px;
+      padding: 5px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .space-nav-btn:hover,
+    .space-nav-btn.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+
     /* ── Main ── */
     .main-content {
       padding: 28px;
@@ -361,6 +399,10 @@
     <button class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
   </header>
 
+  <nav class="space-nav" id="spaceNav" style="display:none;">
+    <div class="space-nav-inner" id="spaceNavInner"></div>
+  </nav>
+
   <main class="main-content" id="mainContent"></main>
 
   <!-- Copy toast -->
@@ -446,6 +488,29 @@
     }
 
     // ─── Render ────────────────────────────────────────────────────────────────
+    function renderSpaceNav() {
+      const nav = document.getElementById("spaceNav");
+      const inner = document.getElementById("spaceNavInner");
+      if (!state.spaces.length) { nav.style.display = "none"; return; }
+      nav.style.display = "";
+      inner.innerHTML = state.spaces.map(space =>
+        `<button class="space-nav-btn" data-nav-space="${esc(space.id)}">${esc(space.name || "공간")}</button>`
+      ).join("");
+      inner.querySelectorAll("[data-nav-space]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const section = document.querySelector(`[data-space-id="${btn.dataset.navSpace}"]`);
+          if (!section) return;
+          const navH = (document.getElementById("spaceNav")?.offsetHeight || 0)
+                     + (document.querySelector(".page-header")?.offsetHeight || 0);
+          const top = section.getBoundingClientRect().top + window.scrollY - navH - 12;
+          window.scrollTo({ top, behavior: "smooth" });
+          inner.querySelectorAll(".space-nav-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+      });
+      setupScrollSpy();
+    }
+
     function render() {
       const main = document.getElementById("mainContent");
       if (!state.spaces.length) {
@@ -454,9 +519,11 @@
             <p>아직 등록된 공간이 없습니다.<br>공간을 추가하고 제품 사진을 업로드해보세요.</p>
             <button onclick="openSpacePrompt()">＋ 공간 추가</button>
           </div>`;
+        renderSpaceNav();
         return;
       }
       main.innerHTML = state.spaces.map(renderSpace).join("");
+      renderSpaceNav();
       bindAllEvents();
     }
 
@@ -529,10 +596,16 @@
     function bindAllEvents() {
       // Rename space
       document.querySelectorAll("[data-rename]").forEach(inp => {
+        inp.addEventListener("input", () => {
+          const sp = state.spaces.find(s => s.id === inp.dataset.rename);
+          if (sp) { sp.name = inp.value.trim() || "공간"; }
+          const navBtn = document.querySelector(`[data-nav-space="${inp.dataset.rename}"]`);
+          if (navBtn) navBtn.textContent = inp.value.trim() || "공간";
+        });
         inp.addEventListener("change", () => {
           const sp = state.spaces.find(s => s.id === inp.dataset.rename);
           if (sp) { sp.name = inp.value.trim() || "공간"; saveState(); }
-          render();
+          renderSpaceNav();
         });
       });
 
@@ -676,6 +749,28 @@
       if (e.key === "Enter")  confirmAddSpace();
       if (e.key === "Escape") closeSpacePrompt();
     });
+
+    // ─── Scroll spy ───────────────────────────────────────────────────────────
+    let scrollSpyObserver = null;
+    function setupScrollSpy() {
+      if (scrollSpyObserver) scrollSpyObserver.disconnect();
+      const sections = document.querySelectorAll("[data-space-id]");
+      if (!sections.length) return;
+      const navH = (document.getElementById("spaceNav")?.offsetHeight || 0)
+                 + (document.querySelector(".page-header")?.offsetHeight || 0);
+      scrollSpyObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.spaceId;
+          document.querySelectorAll(".space-nav-btn").forEach(b => {
+            b.classList.toggle("active", b.dataset.navSpace === id);
+          });
+          const activeBtn = document.querySelector(`.space-nav-btn[data-nav-space="${id}"]`);
+          if (activeBtn) activeBtn.scrollIntoView({ inline: "nearest", block: "nearest" });
+        });
+      }, { rootMargin: `-${navH + 10}px 0px -60% 0px`, threshold: 0 });
+      sections.forEach(s => scrollSpyObserver.observe(s));
+    }
 
     // ─── Init ─────────────────────────────────────────────────────────────────
     render();
