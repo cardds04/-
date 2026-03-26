@@ -218,6 +218,7 @@
     .copy-flash {
       position: absolute;
       inset: 0;
+      z-index: 8;
       background: rgba(37,99,235,0.82);
       color: #fff;
       display: flex;
@@ -231,10 +232,43 @@
       border-radius: 0;
     }
     .photo-thumb-wrap.flashing .copy-flash { opacity: 1; }
+    /* 사진 위 제목 (복사 없음, 편집만) */
+    .photo-title-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 5;
+      padding: 8px 8px 16px;
+      background: linear-gradient(to bottom, rgba(15,23,42,0.78) 0%, rgba(15,23,42,0.35) 55%, transparent 100%);
+      pointer-events: auto;
+    }
+    .photo-title-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.95);
+      padding: 5px 9px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+    }
+    .photo-title-input::placeholder {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .photo-title-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(37,99,235,0.25);
+    }
     /* Uploading overlay */
     .uploading-badge {
       position: absolute;
       inset: 0;
+      z-index: 7;
       background: rgba(255,255,255,0.7);
       display: flex;
       align-items: center;
@@ -616,6 +650,11 @@
           if (!s.brands) s.brands = [];
           // 구버전 brands(문자열 배열) → 객체 배열로 마이그레이션
           s.brands = s.brands.map(b => typeof b === "string" ? { name: b, url: "" } : b);
+          (s.spaces || []).forEach((sp) => {
+            (sp.photos || []).forEach((p) => {
+              if (p.photoTitle == null) p.photoTitle = "";
+            });
+          });
           return s;
         }
       } catch {}
@@ -839,6 +878,7 @@
       const isEditing = editingKey === key;
       const name     = photo.productName || "";
       const isEmpty  = !name;
+      const title    = photo.photoTitle != null ? String(photo.photoTitle) : "";
       const uploadOverlay = photo.uploading
         ? `<div class="uploading-badge">업로드 중…</div>` : "";
 
@@ -866,6 +906,12 @@
       return `
         <div class="photo-card">
           <div class="photo-thumb-wrap" data-copy-photo="${photo.id}" data-copy-space="${spaceId}">
+            <div class="photo-title-overlay">
+              <input type="text" class="photo-title-input" maxlength="80"
+                placeholder="사진 위 제목"
+                value="${esc(title)}"
+                data-photo-title="${photo.id}" data-photo-title-space="${spaceId}" />
+            </div>
             <img src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
             <div class="copy-flash">📋 복사!</div>
             ${uploadOverlay}
@@ -922,9 +968,36 @@
         });
       });
 
+      // 사진 위 제목 편집 (클릭 시 제품명 복사 방지)
+      let titleSaveTimer = null;
+      document.querySelectorAll("[data-photo-title]").forEach(inp => {
+        inp.addEventListener("click", e => e.stopPropagation());
+        inp.addEventListener("mousedown", e => e.stopPropagation());
+        inp.addEventListener("input", () => {
+          const spaceId = inp.dataset.photoTitleSpace;
+          const photoId = inp.dataset.photoTitle;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          photo.photoTitle = inp.value;
+          clearTimeout(titleSaveTimer);
+          titleSaveTimer = setTimeout(() => saveState(), 400);
+        });
+        inp.addEventListener("change", () => {
+          const spaceId = inp.dataset.photoTitleSpace;
+          const photoId = inp.dataset.photoTitle;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          photo.photoTitle = inp.value.trim();
+          saveState();
+        });
+      });
+
       // Click photo → copy product name
       document.querySelectorAll("[data-copy-photo]").forEach(wrap => {
-        wrap.addEventListener("click", async () => {
+        wrap.addEventListener("click", async (e) => {
+          if (e.target.closest(".photo-title-input")) return;
           const spaceId = wrap.dataset.copySpace;
           const photoId = wrap.dataset.copyPhoto;
           const space   = state.spaces.find(s => s.id === spaceId);
@@ -1018,7 +1091,7 @@
             const space = state.spaces.find(s => s.id === spaceId);
             if (!space) continue;
             const localUrl = URL.createObjectURL(file);
-            const photo = { id: uid(), url: localUrl, productName: "", uploading: true };
+            const photo = { id: uid(), url: localUrl, productName: "", photoTitle: "", uploading: true };
             space.photos.push(photo);
             saveState(); render();
 
