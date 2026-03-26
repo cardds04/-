@@ -565,6 +565,12 @@
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_SESSION = "scheduleSiteCustomerSession";
       const STORAGE_CUSTOMER_REMEMBERED_LOGIN = "scheduleSiteCustomerRememberedLogin";
+      const PRIVATE_LOCAL_KEYS = new Set([
+        STORAGE_SESSION,
+        STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+        "scheduleSiteWriterSession",
+        "scheduleSiteWriterRememberedLogin"
+      ]);
       const STORAGE_ALERTS = "scheduleSiteCustomerAlerts";
       const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
@@ -687,6 +693,7 @@
           this.memoryStore.clear();
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
+            if (PRIVATE_LOCAL_KEYS.has(String(k))) return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -723,6 +730,7 @@
             if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
               Object.entries(parsedSnapshot).forEach(([key, value]) => {
                 if (!this.isScopedKey(key)) return;
+                if (PRIVATE_LOCAL_KEYS.has(String(key))) return;
                 this.memoryStore.set(String(key), String(value ?? ""));
               });
             }
@@ -731,7 +739,7 @@
           localStorage.getItem = (key) => {
             const normalizedKey = String(key || "");
             // 세션/인증 키는 항상 native localStorage에서 직접 읽음 (공유 금지)
-            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) return self.nativeGetItem(normalizedKey);
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) return self.nativeGetItem(normalizedKey);
             if (!self.isScopedKey(normalizedKey)) return self.nativeGetItem(normalizedKey);
             return self.memoryStore.has(normalizedKey) ? self.memoryStore.get(normalizedKey) : null;
           };
@@ -739,7 +747,7 @@
             const normalizedKey = String(key || "");
             const normalizedValue = String(value ?? "");
             // 세션/인증 키는 항상 native localStorage에만 저장 (Supabase 동기화 금지)
-            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
               self.nativeSetItem(normalizedKey, normalizedValue);
               return;
             }
@@ -753,7 +761,7 @@
           localStorage.removeItem = (key) => {
             const normalizedKey = String(key || "");
             // 세션/인증 키는 항상 native localStorage에서 직접 삭제
-            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
               self.nativeRemoveItem(normalizedKey);
               return;
             }
@@ -943,11 +951,6 @@
         "scheduleSiteInlogLogoV1",
         "scheduleSiteDailyLimits",
         "scheduleSiteEmergencyLimitAdditionsV1"
-      ]);
-      // 세션/인증 키는 절대 Supabase에 올라가거나 다른 브라우저에서 적용되면 안 됨
-      const PRIVATE_LOCAL_KEYS = new Set([
-        STORAGE_SESSION,
-        STORAGE_CUSTOMER_REMEMBERED_LOGIN
       ]);
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;

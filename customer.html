@@ -441,6 +441,13 @@
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_SESSION = "scheduleSiteCustomerSession";
       const STORAGE_CUSTOMER_REMEMBERED_LOGIN = "scheduleSiteCustomerRememberedLogin";
+      // 고객·작가 로그인 세션은 Supabase KV에 절대 올리지 않음 (타인 계정 전파 방지)
+      const PRIVATE_LOCAL_KEYS = new Set([
+        STORAGE_SESSION,
+        STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+        "scheduleSiteWriterSession",
+        "scheduleSiteWriterRememberedLogin"
+      ]);
       const STORAGE_ALERTS = "scheduleSiteCustomerAlerts";
       const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
@@ -601,6 +608,7 @@
             if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
               Object.entries(parsedSnapshot).forEach(([key, value]) => {
                 if (!this.isScopedKey(key)) return;
+                if (PRIVATE_LOCAL_KEYS.has(String(key))) return;
                 this.memoryStore.set(String(key), String(value ?? ""));
               });
             }
@@ -751,12 +759,6 @@
         "scheduleSiteInlogLogoV1",
         "scheduleSiteDailyLimits",
         "scheduleSiteEmergencyLimitAdditionsV1"
-      ]);
-      // 세션/인증 키는 절대 Supabase에 올라가거나 다른 브라우저에서 적용되면 안 됨
-      // 이 키들이 공유되면 A 업체가 로그인한 상태가 B 업체 브라우저에 전파되는 심각한 보안 문제 발생
-      const PRIVATE_LOCAL_KEYS = new Set([
-        STORAGE_SESSION,
-        STORAGE_CUSTOMER_REMEMBERED_LOGIN
       ]);
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;

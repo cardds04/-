@@ -264,6 +264,13 @@
         scheduleSitePhotographerProfiles: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
+      // 작가·고객 로그인 세션은 Supabase KV에 절대 올리지 않음 (타 계정 전파 방지)
+      const PRIVATE_LOCAL_KEYS = new Set([
+        STORAGE_WRITER_SESSION,
+        STORAGE_WRITER_REMEMBERED_LOGIN,
+        "scheduleSiteCustomerSession",
+        "scheduleSiteCustomerRememberedLogin"
+      ]);
       const scheduleSiteClientKvState = {
         memoryStore: new Map(),
         snapshotStorageKey: "__scheduleSiteSnapshotV1",
@@ -307,6 +314,7 @@
           this.memoryStore.clear();
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
+            if (PRIVATE_LOCAL_KEYS.has(String(k))) return;
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -343,6 +351,7 @@
             if (parsedSnapshot && typeof parsedSnapshot === "object" && !Array.isArray(parsedSnapshot)) {
               Object.entries(parsedSnapshot).forEach(([key, value]) => {
                 if (!this.isScopedKey(key)) return;
+                if (PRIVATE_LOCAL_KEYS.has(String(key))) return;
                 this.memoryStore.set(String(key), String(value ?? ""));
               });
             }
@@ -350,12 +359,17 @@
           const self = this;
           localStorage.getItem = (key) => {
             const normalizedKey = String(key || "");
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) return self.nativeGetItem(normalizedKey);
             if (!self.isScopedKey(normalizedKey)) return self.nativeGetItem(normalizedKey);
             return self.memoryStore.has(normalizedKey) ? self.memoryStore.get(normalizedKey) : null;
           };
           localStorage.setItem = (key, value) => {
             const normalizedKey = String(key || "");
             const normalizedValue = String(value ?? "");
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+              self.nativeSetItem(normalizedKey, normalizedValue);
+              return;
+            }
             if (!self.isScopedKey(normalizedKey)) {
               self.nativeSetItem(normalizedKey, normalizedValue);
               return;
@@ -365,6 +379,10 @@
           };
           localStorage.removeItem = (key) => {
             const normalizedKey = String(key || "");
+            if (PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+              self.nativeRemoveItem(normalizedKey);
+              return;
+            }
             if (!self.isScopedKey(normalizedKey)) {
               self.nativeRemoveItem(normalizedKey);
               return;
@@ -457,7 +475,9 @@
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
-        const kv = Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries());
+        const kv = Object.fromEntries(
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => !PRIVATE_LOCAL_KEYS.has(k))
+        );
         if (!Object.keys(kv).length) return;
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
