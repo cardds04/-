@@ -477,6 +477,24 @@
       }
     }
 
+    async function copyImageFromUrl(url) {
+      // 이미지를 Canvas에 그려 PNG blob으로 변환 후 클립보드에 복사
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url + (url.includes("?") ? "&" : "?") + "_cb=" + Date.now();
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d").drawImage(img, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("blob 변환 실패");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    }
+
     // ─── Escape ────────────────────────────────────────────────────────────────
     function esc(s) {
       return String(s || "")
@@ -561,6 +579,7 @@
           <div class="product-name-text ${isEmpty ? "empty" : ""}">${esc(isEmpty ? "제품명 없음" : name)}</div>
           <div class="card-actions">
             <button class="btn-card" data-edit="${photo.id}" data-edit-space="${spaceId}">수정</button>
+            <button class="btn-card" data-copy-img="${photo.id}" data-copy-img-space="${spaceId}">이미지 복사</button>
             <button class="btn-card danger" data-del-photo="${photo.id}" data-del-space="${spaceId}">삭제</button>
           </div>
         </div>`;
@@ -632,6 +651,30 @@
           wrap.classList.add("flashing");
           setTimeout(() => wrap.classList.remove("flashing"), 600);
           showToast(`📋 "${name}" 복사 완료!`);
+        });
+      });
+
+      // Click "이미지 복사" → copy actual image to clipboard
+      document.querySelectorAll("[data-copy-img]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.copyImgSpace;
+          const photoId = btn.dataset.copyImg;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo?.url) { showToast("⚠️ 이미지를 찾을 수 없습니다"); return; }
+          try {
+            btn.textContent = "복사 중…";
+            btn.disabled = true;
+            await copyImageFromUrl(photo.url);
+            showToast("🖼️ 이미지 복사 완료!");
+          } catch (err) {
+            console.warn("이미지 복사 실패:", err);
+            showToast("⚠️ 이미지 복사 실패 (Chrome/Edge에서만 지원)");
+          } finally {
+            btn.textContent = "이미지 복사";
+            btn.disabled = false;
+          }
         });
       });
 
