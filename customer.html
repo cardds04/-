@@ -2934,6 +2934,15 @@
         scheduleDayEl.classList.toggle("weekday-weekend", isWeekend(year, month, day));
       }
 
+      function getAdminCompanyDefaultMemo(companyName) {
+        try {
+          const adminCompanies = JSON.parse(localStorage.getItem("scheduleSiteAdminCompanies") || "[]");
+          const normalized = normalize(companyName).toLowerCase();
+          const matched = adminCompanies.find((c) => normalize(c?.name).toLowerCase() === normalized);
+          return matched?.defaultMemo || "";
+        } catch { return ""; }
+      }
+
       function getUserSchedules() {
         const user = getCurrentSessionUser();
         if (!user) return [];
@@ -3133,7 +3142,7 @@
                   작가연락처: ${item.writerPhone || "-"}<br />
                   작가차량번호: ${item.writerCarNumber || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
-                  메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}
+                  메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
                 </div>
                 <div class="status-actions">
                   <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>

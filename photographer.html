@@ -1164,6 +1164,15 @@
         }
       }
 
+      function getAdminCompanyDefaultMemo(companyName) {
+        try {
+          const adminCompanies = JSON.parse(localStorage.getItem("scheduleSiteAdminCompanies") || "[]");
+          const normalized = normalize(companyName).toLowerCase();
+          const matched = adminCompanies.find((c) => normalize(c?.name).toLowerCase() === normalized);
+          return matched?.defaultMemo || "";
+        } catch { return ""; }
+      }
+
       function normalize(text) {
         return String(text || "").trim();
       }
@@ -1360,6 +1369,8 @@
           lines.push(`평수: ${item.pyeong || "-"}`);
           lines.push(`촬영구성: ${item.composition || "-"}`);
           lines.push(`메모: ${item.memo || "-"}`);
+          const defaultMemo = getAdminCompanyDefaultMemo(item.company);
+          if (defaultMemo) lines.push(`기본요청사항: ${defaultMemo}`);
           if (idx < rows.length - 1) lines.push("");
         });
         const text = lines.join("\n");
@@ -1838,7 +1849,7 @@
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
-                  메모: ${item.memo || "-"}
+                  메모: ${item.memo || "-"}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
                 </div>
               </article>
             `;
