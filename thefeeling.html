@@ -282,12 +282,16 @@
       width: 100%;
       border: 1.5px solid var(--blue);
       border-radius: 8px;
-      padding: 6px 9px;
+      padding: 8px 10px;
       font-size: 0.85rem;
       color: var(--text);
       outline: none;
       font-family: inherit;
       background: #fff;
+      resize: none;
+      line-height: 1.5;
+      min-height: 5.5em;
+      box-sizing: border-box;
     }
     .btn-card.primary {
       background: var(--blue);
@@ -589,9 +593,9 @@
 
       const editBody = `
         <div class="card-edit">
-          <input class="product-name-input" type="text"
-            value="${esc(name)}" placeholder="제품명 입력"
-            data-edit-input="${photo.id}" data-edit-input-space="${spaceId}" />
+          <textarea class="product-name-input" rows="4"
+            placeholder="제품명 입력"
+            data-edit-input="${photo.id}" data-edit-input-space="${spaceId}">${esc(name)}</textarea>
           <div class="card-actions">
             <button class="btn-card primary" data-save="${photo.id}" data-save-space="${spaceId}">저장</button>
             <button class="btn-card" data-cancel-edit="${photo.id}">취소</button>
@@ -704,10 +708,10 @@
         btn.addEventListener("click", () => saveProductName(btn.dataset.saveSpace, btn.dataset.save));
       });
 
-      // Enter key in input → save
+      // Ctrl+Enter → save, Escape → cancel
       document.querySelectorAll("[data-edit-input]").forEach(inp => {
         inp.addEventListener("keydown", e => {
-          if (e.key === "Enter")  saveProductName(inp.dataset.editInputSpace, inp.dataset.editInput);
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveProductName(inp.dataset.editInputSpace, inp.dataset.editInput);
           if (e.key === "Escape") { editingKey = null; render(); }
         });
       });
