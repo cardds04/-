@@ -4033,6 +4033,8 @@
       let serverPullTimer = null;
       let lastObservedState = {};
       let companyRealtimeTimer = null;
+      // 세션 내 오늘 신규업체 최대값 유지 (pull 순서 차이로 인한 깜빡임 방지)
+      let sessionTodayNewNamesMax = [];
       let companySyncPromise = null;
       let companySyncQueued = false;
       let writerRealtimeTimer = null;
@@ -10040,7 +10042,12 @@
         // 오늘의 신규업체 (오늘 가입한 고객 계정 기준)
         const todayStr = new Date().toISOString().slice(0, 10);
         const todayNewCustomers = customerUsers.filter((u) => String(u?.createdAt || "").slice(0, 10) === todayStr);
-        const todayNewNames = [...new Set(todayNewCustomers.map((u) => String(u?.company || "").trim()).filter(Boolean))];
+        const todayNewNamesFresh = [...new Set(todayNewCustomers.map((u) => String(u?.company || "").trim()).filter(Boolean))];
+        // 세션 내 최대값 유지: Supabase pull 순서 차이로 인한 일시적 감소(깜빡임) 방지
+        if (todayNewNamesFresh.length >= sessionTodayNewNamesMax.length) {
+          sessionTodayNewNamesMax = todayNewNamesFresh;
+        }
+        const todayNewNames = sessionTodayNewNamesMax;
         const todayBox = document.getElementById("todayNewCompaniesBox");
         if (todayBox) {
           if (todayNewNames.length > 0) {
