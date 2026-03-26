@@ -4354,7 +4354,9 @@
           ) {
             return false;
           }
-          originalSetItem(STORAGE_LIMIT_CONFIG, JSON.stringify(sanitizeLimitConfig(remoteConfig)));
+          // emergencyLimitAdditions를 STORAGE_LIMIT_CONFIG에 함께 포함하여 고객 페이지에서도 읽을 수 있게 함
+          const sanitized = sanitizeLimitConfig(remoteConfig);
+          originalSetItem(STORAGE_LIMIT_CONFIG, JSON.stringify({ ...sanitized, emergencyLimitAdditions: remoteEmergencyMap }));
           originalSetItem(STORAGE_DAILY_LIMITS, JSON.stringify({}));
           originalSetItem(STORAGE_EMERGENCY_LIMIT_ADDITIONS, JSON.stringify(remoteEmergencyMap));
           renderScheduleCalendar();
@@ -7603,14 +7605,13 @@
         const previous = Math.max(0, Math.floor(Number(additions[pickedDate]) || 0));
         additions[pickedDate] = previous + addCount;
         localStorage.setItem(STORAGE_EMERGENCY_LIMIT_ADDITIONS, JSON.stringify(additions));
+        // 고객 페이지가 STORAGE_LIMIT_CONFIG를 통해 긴급추가를 인식할 수 있도록 함께 저장
+        const baseConfig = getLocalLimitConfig();
+        const mergedConfig = { ...baseConfig, emergencyLimitAdditions: additions };
+        localStorage.setItem(STORAGE_LIMIT_CONFIG, JSON.stringify(mergedConfig));
         if (USE_SUPABASE_SYNC) {
           limitConfigSyncPromise = (limitConfigSyncPromise || Promise.resolve())
-            .then(() =>
-              saveSharedLimitConfigToSupabase({
-                ...getLocalLimitConfig(),
-                emergencyLimitAdditions: additions
-              })
-            )
+            .then(() => saveSharedLimitConfigToSupabase(mergedConfig))
             .catch((error) => {
               console.error("[LIMIT][index] 긴급추가 원격 저장 실패", error);
               alert("긴급추가 서버 저장에 실패했습니다.");
@@ -7618,6 +7619,8 @@
             .finally(() => {
               limitConfigSyncPromise = null;
             });
+          // 고객 페이지가 읽는 KV에도 반영
+          requestClientKvPushWhenReady();
         }
 
         renderScheduleCalendar();
@@ -9669,15 +9672,17 @@
           return;
         }
         const nextConfig = sanitizeLimitConfig({ weekdayLimit, holidayLimit });
+        // 기존 긴급추가 보존하여 고객 페이지에서도 읽을 수 있게 함
+        const existingEmergency = getLocalEmergencyLimitAdditions();
         localStorage.setItem(
           STORAGE_LIMIT_CONFIG,
-          JSON.stringify(nextConfig)
+          JSON.stringify({ ...nextConfig, emergencyLimitAdditions: existingEmergency })
         );
         // 날짜별 개별 제한값은 사용하지 않으므로 초기화
         localStorage.setItem(STORAGE_DAILY_LIMITS, JSON.stringify({}));
         if (USE_SUPABASE_SYNC) {
           limitConfigSyncPromise = (limitConfigSyncPromise || Promise.resolve())
-            .then(() => saveSharedLimitConfigToSupabase(nextConfig))
+            .then(() => saveSharedLimitConfigToSupabase({ ...nextConfig, emergencyLimitAdditions: existingEmergency }))
             .catch((error) => {
               console.error("[LIMIT][index] 원격 저장 실패", error);
               alert("평일/주말 제한 기본값 서버 저장에 실패했습니다.");

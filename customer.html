@@ -2483,7 +2483,11 @@
         const requestedDeduction = requests
           .filter((item) => String(item?.date || "") === String(dateKey || ""))
           .reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0);
-        return Math.max(0, base - legacyDeduction - requestedDeduction);
+        // 긴급추가 반영: STORAGE_LIMIT_CONFIG 안의 emergencyLimitAdditions 또는 별도 키에서 읽기
+        const limitConfig = readStorageObject(STORAGE_LIMIT_CONFIG);
+        const emergencyAdditions = limitConfig?.emergencyLimitAdditions || {};
+        const emergencyAdd = Math.max(0, Math.floor(Number(emergencyAdditions[dateKey]) || 0));
+        return Math.max(0, base + emergencyAdd - legacyDeduction - requestedDeduction);
       }
 
       function getBookedCountForDate(dateKey) {
