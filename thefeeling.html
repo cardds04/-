@@ -42,8 +42,31 @@
       font-weight: 900;
       letter-spacing: -0.03em;
     }
-    .btn-add-space {
+    .page-header-actions {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .btn-backup {
+      background: #334155;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 10px;
+      padding: 9px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-backup:hover {
+      background: #475569;
+      color: #fff;
+    }
+    .btn-add-space {
       background: var(--blue);
       color: #fff;
       border: none;
@@ -617,7 +640,10 @@
 
   <header class="page-header">
     <h1>더필링</h1>
-    <button class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
+    <div class="page-header-actions">
+      <button type="button" class="btn-backup" id="backupBtn" title="저장된 공간·사진·브랜드 데이터를 PC에 JSON 파일로 저장">💾 백업</button>
+      <button type="button" class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
+    </div>
   </header>
 
   <nav class="space-nav" id="spaceNav" style="display:none;">
@@ -681,6 +707,39 @@
       return { spaces: [], brands: [] };
     }
     function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+    /** PC(데스크톱)에 JSON 파일로 백업 — 브라우저 저장 대화상자에서 바탕화면 등 원하는 위치 선택 가능 */
+    function downloadTheFeelingBackup() {
+      try {
+        saveState();
+        const raw = localStorage.getItem(STORE_KEY);
+        let data;
+        try {
+          data = raw ? JSON.parse(raw) : { spaces: [], brands: [] };
+        } catch {
+          data = { spaces: [], brands: [] };
+        }
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          version: 1,
+          storeKey: STORE_KEY,
+          data
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.download = `thefeeling-backup-${stamp}.json`;
+        a.href = URL.createObjectURL(blob);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        showToast("💾 백업 파일을 저장했습니다. (다운로드 또는 저장 위치를 확인하세요)");
+      } catch (e) {
+        console.error("[TheFeeling] backup", e);
+        alert("백업 저장에 실패했습니다.");
+      }
+    }
 
     let state = loadState();
     // track which photo is in edit mode: "spaceId__photoId"
@@ -1197,6 +1256,7 @@
     }
 
     document.getElementById("addSpaceBtn").addEventListener("click", openSpacePrompt);
+    document.getElementById("backupBtn").addEventListener("click", downloadTheFeelingBackup);
     document.getElementById("btnConfirmSpace").addEventListener("click", confirmAddSpace);
     document.getElementById("btnCancelSpace").addEventListener("click", closeSpacePrompt);
     document.getElementById("spacePrompt").addEventListener("click", e => {
