@@ -569,6 +569,26 @@
     .btn-order:hover:not(:disabled) { background: #dbeafe; color: var(--blue); border-color: #bfdbfe; }
     .btn-order:disabled { opacity: 0.3; cursor: default; }
 
+    /* 사진 카드 행 (순서 ▲▼) */
+    .photo-card-row {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .photo-card-row .photo-card {
+      flex: 1;
+      min-width: 0;
+    }
+    .photo-order-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+      justify-content: center;
+      padding: 4px 0;
+    }
+
     /* Copy toast */
     .copy-toast {
       position: fixed;
@@ -844,7 +864,7 @@
     function renderSpace(space) {
       const idx = state.spaces.findIndex(s => s.id === space.id);
       const total = state.spaces.length;
-      const photos = space.photos.map(p => renderCard(space.id, p)).join("");
+      const photos = space.photos.map((p, i) => renderCard(space.id, p, i)).join("");
       return `
         <section class="category-section" data-space-id="${space.id}">
           <div class="category-header">
@@ -873,12 +893,14 @@
         </section>`;
     }
 
-    function renderCard(spaceId, photo) {
+    function renderCard(spaceId, photo, photoIdx) {
       const key      = `${spaceId}__${photo.id}`;
       const isEditing = editingKey === key;
       const name     = photo.productName || "";
       const isEmpty  = !name;
       const title    = photo.photoTitle != null ? String(photo.photoTitle) : "";
+      const space    = state.spaces.find(s => s.id === spaceId);
+      const pCount   = space?.photos?.length ?? 0;
       const uploadOverlay = photo.uploading
         ? `<div class="uploading-badge">업로드 중…</div>` : "";
 
@@ -904,20 +926,28 @@
         </div>`;
 
       return `
-        <div class="photo-card">
-          <div class="photo-thumb-wrap" data-copy-photo="${photo.id}" data-copy-space="${spaceId}">
-            <div class="photo-title-overlay">
-              <input type="text" class="photo-title-input" maxlength="80"
-                placeholder="사진 위 제목"
-                value="${esc(title)}"
-                data-photo-title="${photo.id}" data-photo-title-space="${spaceId}" />
-            </div>
-            <img src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
-            <div class="copy-flash">📋 복사!</div>
-            ${uploadOverlay}
+        <div class="photo-card-row">
+          <div class="photo-order-btns">
+            <button type="button" class="btn-order" data-photo-move-up="${photo.id}" data-photo-move-up-space="${spaceId}"
+              title="앞으로" ${photoIdx === 0 ? "disabled" : ""}>▲</button>
+            <button type="button" class="btn-order" data-photo-move-down="${photo.id}" data-photo-move-down-space="${spaceId}"
+              title="뒤로" ${photoIdx >= pCount - 1 ? "disabled" : ""}>▼</button>
           </div>
-          <div class="card-body">
-            ${isEditing ? editBody : viewBody}
+          <div class="photo-card">
+            <div class="photo-thumb-wrap" data-copy-photo="${photo.id}" data-copy-space="${spaceId}">
+              <div class="photo-title-overlay">
+                <input type="text" class="photo-title-input" maxlength="80"
+                  placeholder="사진 위 제목"
+                  value="${esc(title)}"
+                  data-photo-title="${photo.id}" data-photo-title-space="${spaceId}" />
+              </div>
+              <img src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
+              <div class="copy-flash">📋 복사!</div>
+              ${uploadOverlay}
+            </div>
+            <div class="card-body">
+              ${isEditing ? editBody : viewBody}
+            </div>
           </div>
         </div>`;
     }
@@ -938,6 +968,34 @@
           const idx = state.spaces.findIndex(s => s.id === btn.dataset.moveDown);
           if (idx < 0 || idx >= state.spaces.length - 1) return;
           [state.spaces[idx], state.spaces[idx + 1]] = [state.spaces[idx + 1], state.spaces[idx]];
+          saveState(); render();
+        });
+      });
+
+      // 사진 순서 (같은 공간 안에서)
+      document.querySelectorAll("[data-photo-move-up]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.photoMoveUpSpace;
+          const photoId = btn.dataset.photoMoveUp;
+          const sp = state.spaces.find(s => s.id === spaceId);
+          if (!sp || !sp.photos) return;
+          const i = sp.photos.findIndex(p => p.id === photoId);
+          if (i <= 0) return;
+          [sp.photos[i - 1], sp.photos[i]] = [sp.photos[i], sp.photos[i - 1]];
+          saveState(); render();
+        });
+      });
+      document.querySelectorAll("[data-photo-move-down]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.photoMoveDownSpace;
+          const photoId = btn.dataset.photoMoveDown;
+          const sp = state.spaces.find(s => s.id === spaceId);
+          if (!sp || !sp.photos) return;
+          const i = sp.photos.findIndex(p => p.id === photoId);
+          if (i < 0 || i >= sp.photos.length - 1) return;
+          [sp.photos[i], sp.photos[i + 1]] = [sp.photos[i + 1], sp.photos[i]];
           saveState(); render();
         });
       });
