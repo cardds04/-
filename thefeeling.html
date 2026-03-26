@@ -538,7 +538,9 @@
 
       // Delete space
       document.querySelectorAll("[data-del-space]").forEach(btn => {
-        btn.addEventListener("click", () => {
+        if (btn.hasAttribute("data-del-photo")) return;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           if (!confirm("이 공간을 삭제할까요?")) return;
           state.spaces = state.spaces.filter(s => s.id !== btn.dataset.delSpace);
           saveState(); editingKey = null; render();
@@ -596,7 +598,8 @@
 
       // Delete photo
       document.querySelectorAll("[data-del-photo]").forEach(btn => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           if (!confirm("이 사진을 삭제할까요?")) return;
           const space = state.spaces.find(s => s.id === btn.dataset.delSpace);
           if (space) space.photos = space.photos.filter(p => p.id !== btn.dataset.delPhoto);
