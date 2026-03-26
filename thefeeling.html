@@ -372,6 +372,79 @@
     }
     .btn-prompt-cancel:hover { background: #e2e8f0; }
 
+    /* ── AI 브랜드 섹션 ── */
+    .brand-section {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      padding: 20px 24px 22px;
+      margin: 20px 24px 0;
+    }
+    .brand-section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .brand-section-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .btn-add-brand {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      margin-left: auto;
+      transition: background 0.15s;
+    }
+    .btn-add-brand:hover { background: var(--blue-dark); }
+    .brand-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      min-height: 36px;
+    }
+    .brand-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #eff6ff;
+      border: 1.5px solid #bfdbfe;
+      border-radius: 999px;
+      padding: 6px 14px 6px 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--blue-dark);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .brand-chip:hover { background: #dbeafe; border-color: var(--blue); }
+    .brand-chip-icon { font-size: 1rem; }
+    .brand-chip-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #93c5fd;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 0 0 2px;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .brand-chip-del:hover { color: var(--red); }
+    .brand-empty-hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
     /* Copy toast */
     .copy-toast {
       position: fixed;
@@ -407,6 +480,15 @@
     <div class="space-nav-inner" id="spaceNavInner"></div>
   </nav>
 
+  <!-- AI 브랜드 섹션 (고정) -->
+  <section class="brand-section" id="brandSection">
+    <div class="brand-section-header">
+      <span class="brand-section-title">🤖 AI용 브랜드</span>
+      <button class="btn-add-brand" id="addBrandBtn">＋ 브랜드명 추가</button>
+    </div>
+    <div class="brand-chips" id="brandChips"></div>
+  </section>
+
   <main class="main-content" id="mainContent"></main>
 
   <!-- Copy toast -->
@@ -437,8 +519,8 @@
     const STORE_KEY = "thefeelingData_v2";
 
     function loadState() {
-      try { const r = localStorage.getItem(STORE_KEY); if (r) return JSON.parse(r); } catch {}
-      return { spaces: [] };
+      try { const r = localStorage.getItem(STORE_KEY); if (r) { const s = JSON.parse(r); if (!s.brands) s.brands = []; return s; } } catch {}
+      return { spaces: [], brands: [] };
     }
     function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 
@@ -509,6 +591,44 @@
         .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     }
 
+    // ─── Brand Section ─────────────────────────────────────────────────────────
+    function renderBrands() {
+      const container = document.getElementById("brandChips");
+      if (!container) return;
+      if (!state.brands.length) {
+        container.innerHTML = `<span class="brand-empty-hint">브랜드명을 추가하면 아이콘으로 표시됩니다.</span>`;
+        return;
+      }
+      container.innerHTML = state.brands.map((b, i) => `
+        <div class="brand-chip" data-brand-idx="${i}">
+          <span class="brand-chip-icon">🏷️</span>
+          <span class="brand-chip-name">${esc(b)}</span>
+          <button class="brand-chip-del" data-del-brand="${i}" title="삭제">✕</button>
+        </div>`).join("");
+
+      container.querySelectorAll("[data-brand-idx]").forEach(chip => {
+        chip.addEventListener("click", async (e) => {
+          if (e.target.closest("[data-del-brand]")) return;
+          const idx = Number(chip.dataset.brandIdx);
+          const name = state.brands[idx];
+          if (!name) return;
+          await copyText(name);
+          showToast(`📋 "${name}" 복사 완료!`);
+        });
+      });
+
+      container.querySelectorAll("[data-del-brand]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const idx = Number(btn.dataset.delBrand);
+          if (!confirm(`"${state.brands[idx]}" 브랜드를 삭제할까요?`)) return;
+          state.brands.splice(idx, 1);
+          saveState();
+          renderBrands();
+        });
+      });
+    }
+
     // ─── Render ────────────────────────────────────────────────────────────────
     function renderSpaceNav() {
       const nav = document.getElementById("spaceNav");
@@ -534,6 +654,7 @@
     }
 
     function render() {
+      renderBrands();
       const main = document.getElementById("mainContent");
       if (!state.spaces.length) {
         main.innerHTML = `
@@ -818,6 +939,17 @@
       }, { rootMargin: `-${navH + 10}px 0px -60% 0px`, threshold: 0 });
       sections.forEach(s => scrollSpyObserver.observe(s));
     }
+
+    // ─── Brand Add ────────────────────────────────────────────────────────────
+    document.getElementById("addBrandBtn").addEventListener("click", () => {
+      const input = prompt("브랜드명을 입력하세요.", "");
+      if (input === null) return;
+      const name = String(input).trim();
+      if (!name) return;
+      state.brands.push(name);
+      saveState();
+      renderBrands();
+    });
 
     // ─── Init ─────────────────────────────────────────────────────────────────
     render();
