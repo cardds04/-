@@ -213,6 +213,25 @@
         gap: 6px;
       }
 
+      .default-memo-box {
+        background: #f0f4ff;
+        border: 1px solid #c3cfee;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-top: 4px;
+        font-size: 0.82rem;
+        color: #3a4a6b;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      .default-memo-label {
+        font-size: 0.75rem;
+        color: #6b7a99;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
       .register-panel {
         margin-top: 10px;
         padding: 10px;
@@ -9214,6 +9233,12 @@
         return "-";
       }
 
+      function getCompanyDefaultMemo(companyName) {
+        const normalized = normalizeCompanyName(companyName).toLowerCase();
+        const matched = companies.find((company) => normalizeCompanyName(company.name).toLowerCase() === normalized);
+        return matched?.defaultMemo || "";
+      }
+
       function getCustomerIdByCompanyName(companyName) {
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
         const targetCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
@@ -9981,6 +10006,8 @@
                     <input class="inline-input edit-company-name" type="text" value="${escapeHtml(company.name || "")}" style="width: 100%; min-width: 260px;" />
                     <input class="inline-input edit-company-phone" type="text" value="${escapeHtml(company.phone || "")}" style="width: 100%; min-width: 260px;" />
                     <input class="inline-input edit-company-code" type="text" value="${escapeHtml(company.code || "")}" placeholder="업체 고유번호" style="width: 100%; min-width: 260px;" />
+                    <div style="font-size:0.8rem;color:#6b7a99;font-weight:600;margin-top:4px;">기본요청사항</div>
+                    <textarea class="inline-input edit-company-default-memo" rows="3" placeholder="스케줄 메모에 자동 삽입될 기본요청사항을 입력하세요" style="width:100%;min-width:260px;resize:vertical;font-size:0.85rem;">${escapeHtml(company.defaultMemo || "")}</textarea>
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
                       <button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}" data-customer-company="${
@@ -9992,12 +10019,16 @@
                 </div>
               `;
             }
+            const defaultMemoHtml = company.defaultMemo
+              ? `<div class="default-memo-label">기본요청사항</div><div class="default-memo-box">${escapeHtml(company.defaultMemo)}</div>`
+              : "";
             return `
               <div class="company-item company-clickable" data-company-index="${index}">
                 <div style="display:flex;align-items:center;">${badge}${escapeHtml(company.name)}${customerIdHtml}</div>
                 <div class="company-item-row" style="margin-top: 4px;">
                   <span style="color:#6b7a99;font-size:0.85rem;">연락처: ${escapeHtml(company.phone || "-")}</span>
                 </div>
+                ${defaultMemoHtml}
               </div>
             `;
           })
@@ -11240,6 +11271,7 @@
                               평수: ${escapeHtml(item.pyeong || "-")}<br />
                               비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                               메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                              ${(() => { const dm = getCompanyDefaultMemo(item.company); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                               구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                               쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                               구분: ${escapeHtml(item.sourceLabel || "진행중")}
@@ -12742,6 +12774,13 @@
                           const photographerOptions = ["작가미정", ...photographers]
                             .map((name) => `<option value="${escapeHtml(name)}" ${item.name === name ? "selected" : ""}>${escapeHtml(name)}</option>`)
                             .join("");
+                          const companyDefaultMemo = getCompanyDefaultMemo(item.company);
+                          const memoWithDefault = (() => {
+                            const base = item.memo || "";
+                            if (!companyDefaultMemo) return base;
+                            if (base.includes(companyDefaultMemo)) return base;
+                            return base ? `${base}\n${companyDefaultMemo}` : companyDefaultMemo;
+                          })();
 
                           return `
                             <span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
@@ -12759,7 +12798,7 @@
                                      <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
                                      <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
                                      <div style="margin-bottom: 4px;">세대비번: <input class="inline-input edit-doorCode" type="text" value="${escapeHtml(item.doorCode || "")}" /></div>
-                                     <div style="margin-bottom: 4px;">메모: <input class="inline-input edit-memo" type="text" value="${escapeHtml(item.memo || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">메모: <input class="inline-input edit-memo" type="text" value="${escapeHtml(memoWithDefault)}" /></div>
                                      <div class="inline-pair" style="margin-bottom: 6px;">
                                        <select class="inline-select edit-composition" style="width: 130px;">${compositionOptions}</select>
                                        <select class="inline-select edit-name" style="width: 130px;">${photographerOptions}</select>
@@ -12794,6 +12833,7 @@
                                       평수: ${escapeHtml(item.pyeong || "-")}<br />
                                       비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                                       메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                                      ${(() => { const dm = getCompanyDefaultMemo(item.company); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                                       구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                       쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                                     </details>
@@ -14288,11 +14328,13 @@
           const nameInputEl = itemEl?.querySelector(".edit-company-name");
           const phoneInputEl = itemEl?.querySelector(".edit-company-phone");
           const codeInputEl = itemEl?.querySelector(".edit-company-code");
+          const defaultMemoInputEl = itemEl?.querySelector(".edit-company-default-memo");
           const oldName = normalizeCompanyName(companies[index].name);
           const oldCode = normalizeCompanyCode(companies[index].code);
           const newName = normalizeCompanyName(nameInputEl?.value);
           const newPhone = phoneInputEl?.value?.trim() || "";
           const newCode = normalizeCompanyCode(codeInputEl?.value);
+          const newDefaultMemo = defaultMemoInputEl?.value?.trim() || "";
           if (!newName) {
             alert("업체명을 입력해주세요.");
             return;
@@ -14305,6 +14347,7 @@
           companies[index].name = newName;
           companies[index].phone = newPhone;
           companies[index].code = newCode;
+          companies[index].defaultMemo = newDefaultMemo;
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
