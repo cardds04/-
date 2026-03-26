@@ -13831,6 +13831,28 @@
           const defaultMemoEl = companyOrderHistorySummaryEl.querySelector(".company-default-memo");
           const newDefaultMemo = String(defaultMemoEl?.value || "").trim();
           setCompanyDefaultMemoByName(companyName, newDefaultMemo);
+
+          // 해당 업체의 모든 기존 스케줄 메모에 기본요청사항 삽입
+          if (newDefaultMemo) {
+            const companyNameLower = normalizeCompanyName(companyName).toLowerCase();
+            let updatedCount = 0;
+            const allScheduleLists = [data, onHoldPayments, refundPayments];
+            allScheduleLists.forEach((list) => {
+              list.forEach((item) => {
+                if (normalizeCompanyName(item?.company).toLowerCase() !== companyNameLower) return;
+                const currentMemo = String(item.memo || "").trim();
+                if (currentMemo.includes(newDefaultMemo)) return;
+                item.memo = currentMemo ? `${currentMemo}\n${newDefaultMemo}` : newDefaultMemo;
+                markScheduleRowDirty(item, "schedule_mutation");
+                updatedCount++;
+              });
+            });
+            if (updatedCount > 0) {
+              try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+              queueSchedulesSyncWithRetry(true);
+            }
+          }
+
           renderCompanyOrderHistory(companyName);
           renderList();
           alert("기본요청사항이 저장되었습니다.");
