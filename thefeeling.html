@@ -12,7 +12,7 @@
       --blue: #2563eb;
       --blue-dark: #1d4ed8;
       --text: #1e293b;
-      --muted: #64748b;
+      --muted: #94a3b8;
       --green: #16a34a;
       --red: #dc2626;
     }
@@ -34,22 +34,16 @@
       gap: 16px;
       position: sticky;
       top: 0;
-      z-index: 200;
+      z-index: 100;
       box-shadow: 0 2px 12px rgba(0,0,0,0.25);
     }
     .page-header h1 {
       font-size: 1.45rem;
       font-weight: 900;
       letter-spacing: -0.03em;
-      color: #f8fafc;
-    }
-    .page-header .header-right {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
     }
     .btn-add-space {
+      margin-left: auto;
       background: var(--blue);
       color: #fff;
       border: none;
@@ -58,9 +52,6 @@
       font-size: 0.9rem;
       font-weight: 700;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
       transition: background 0.15s;
     }
     .btn-add-space:hover { background: var(--blue-dark); }
@@ -71,22 +62,16 @@
       max-width: 1700px;
       margin: 0 auto;
     }
-
     .empty-state {
       text-align: center;
       color: var(--muted);
       padding: 80px 0;
     }
-    .empty-state p { font-size: 1rem; margin-bottom: 20px; line-height: 1.8; }
+    .empty-state p { font-size: 1rem; margin-bottom: 20px; line-height: 1.9; }
     .empty-state button {
-      background: var(--blue);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      padding: 13px 30px;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 12px; padding: 13px 30px; font-size: 1rem;
+      font-weight: 700; cursor: pointer; font-family: inherit;
     }
 
     /* ── Category Section ── */
@@ -94,7 +79,7 @@
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 18px;
-      padding: 22px 22px 24px;
+      padding: 22px 22px 26px;
       margin-bottom: 28px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.04);
     }
@@ -102,12 +87,9 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
       padding-bottom: 14px;
       border-bottom: 1px solid var(--line);
-    }
-    .category-icon {
-      font-size: 1.2rem;
     }
     .category-name-input {
       font-size: 1.15rem;
@@ -121,10 +103,9 @@
       padding: 2px 0;
       border-bottom: 2px solid transparent;
       transition: border-color 0.15s;
+      font-family: inherit;
     }
-    .category-name-input:focus {
-      border-bottom-color: var(--blue);
-    }
+    .category-name-input:focus { border-bottom-color: var(--blue); }
     .category-photo-count {
       font-size: 0.82rem;
       color: var(--muted);
@@ -141,6 +122,7 @@
       cursor: pointer;
       transition: background 0.15s;
       white-space: nowrap;
+      font-family: inherit;
     }
     .btn-delete-category:hover { background: #fef2f2; }
 
@@ -148,75 +130,138 @@
     .photo-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
+      gap: 14px;
     }
     @media (max-width: 1400px) { .photo-grid { grid-template-columns: repeat(4, 1fr); } }
-    @media (max-width: 1000px) { .photo-grid { grid-template-columns: repeat(3, 1fr); } }
-    @media (max-width: 680px)  { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 1050px) { .photo-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 700px)  { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
 
     /* ── Photo Card ── */
     .photo-card {
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 14px;
       overflow: hidden;
       background: #f8faff;
-      cursor: pointer;
-      transition: box-shadow 0.15s, transform 0.1s;
-      position: relative;
-    }
-    .photo-card:hover {
-      box-shadow: 0 6px 18px rgba(37,99,235,0.13);
-      transform: translateY(-2px);
-    }
-    .photo-card .uploading-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(255,255,255,0.75);
       display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
-      color: var(--blue);
-      font-weight: 700;
+      flex-direction: column;
     }
-    .photo-thumb {
+
+    /* Photo thumb area — click to copy */
+    .photo-thumb-wrap {
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .photo-thumb-wrap img {
       width: 100%;
       aspect-ratio: 4/3;
       object-fit: cover;
       display: block;
+      transition: opacity 0.15s;
     }
-    .photo-meta {
-      padding: 8px 10px 10px;
+    .photo-thumb-wrap:hover img { opacity: 0.88; }
+    /* Copy feedback overlay */
+    .copy-flash {
+      position: absolute;
+      inset: 0;
+      background: rgba(37,99,235,0.82);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 800;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s;
+      border-radius: 0;
     }
-    .product-name-label {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-bottom: 2px;
+    .photo-thumb-wrap.flashing .copy-flash { opacity: 1; }
+    /* Uploading overlay */
+    .uploading-badge {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      color: var(--blue);
+      font-weight: 700;
     }
-    .product-name-display {
-      font-size: 0.88rem;
+
+    /* Card body */
+    .card-body {
+      padding: 10px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex: 1;
+    }
+
+    /* View mode */
+    .product-name-text {
+      font-size: 0.86rem;
       font-weight: 700;
       color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.4;
+      word-break: break-all;
+      min-height: 1.2em;
     }
-    .product-name-display.empty {
-      color: #cbd5e1;
+    .product-name-text.empty {
+      color: var(--muted);
       font-weight: 400;
       font-style: italic;
     }
-    .copy-hint {
-      font-size: 0.72rem;
-      color: var(--blue);
-      margin-top: 3px;
-      opacity: 0.7;
+    .card-actions {
+      display: flex;
+      gap: 5px;
     }
+    .btn-card {
+      flex: 1;
+      padding: 5px 0;
+      border-radius: 7px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: #f1f5f9;
+      color: var(--text);
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .btn-card:hover { background: #e2e8f0; }
+    .btn-card.danger {
+      border-color: #fca5a5;
+      color: var(--red);
+      background: transparent;
+    }
+    .btn-card.danger:hover { background: #fef2f2; }
 
-    /* ── Upload Slot ── */
+    /* Edit mode */
+    .product-name-input {
+      width: 100%;
+      border: 1.5px solid var(--blue);
+      border-radius: 8px;
+      padding: 6px 9px;
+      font-size: 0.85rem;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+      background: #fff;
+    }
+    .btn-card.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .btn-card.primary:hover { background: var(--blue-dark); }
+
+    /* Upload slot */
     .upload-slot {
       border: 2px dashed #cbd5e1;
-      border-radius: 12px;
+      border-radius: 14px;
       aspect-ratio: 4/3;
       display: flex;
       flex-direction: column;
@@ -236,127 +281,12 @@
     }
     .upload-slot-icon { font-size: 2rem; }
 
-    /* ── Modal ── */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.82);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .modal-box {
-      background: #fff;
-      border-radius: 20px;
-      overflow: hidden;
-      width: min(580px, 96vw);
-      max-height: 92vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-    }
-    .modal-img-wrap {
-      background: #0f172a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      max-height: 55vh;
-      overflow: hidden;
-    }
-    .modal-img {
-      width: 100%;
-      max-height: 55vh;
-      object-fit: contain;
-      display: block;
-    }
-    .modal-body {
-      padding: 20px 22px 22px;
-      overflow-y: auto;
-    }
-    .modal-space-label {
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .modal-product-name {
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: var(--text);
-      word-break: break-all;
-      margin-bottom: 16px;
-      min-height: 1.6rem;
-    }
-    .modal-product-name.empty { color: #cbd5e1; font-weight: 400; font-style: italic; }
-    .modal-product-edit-input {
-      width: 100%;
-      border: 1.5px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 1rem;
-      color: var(--text);
-      margin-bottom: 12px;
-      outline: none;
-      font-family: inherit;
-      transition: border-color 0.15s;
-    }
-    .modal-product-edit-input:focus { border-color: var(--blue); }
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .btn-copy-product {
-      flex: 2;
-      min-width: 120px;
-      background: var(--blue);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 11px;
-      font-size: 0.92rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background 0.15s;
-      font-family: inherit;
-    }
-    .btn-copy-product:hover { background: var(--blue-dark); }
-    .btn-copy-product.copied { background: var(--green); }
-    .btn-modal-secondary {
-      flex: 1;
-      background: #f1f5f9;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 11px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      color: var(--text);
-      font-family: inherit;
-      white-space: nowrap;
-    }
-    .btn-modal-secondary:hover { background: #e2e8f0; }
-    .btn-modal-danger {
-      background: transparent;
-      border: 1px solid #fca5a5;
-      color: var(--red);
-      border-radius: 10px;
-      padding: 11px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-    .btn-modal-danger:hover { background: #fef2f2; }
-
-    /* ── Space name prompt modal ── */
+    /* Space name prompt */
     .prompt-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.55);
-      z-index: 2000;
+      z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -369,11 +299,8 @@
       width: min(400px, 96vw);
       box-shadow: 0 12px 40px rgba(0,0,0,0.2);
     }
-    .prompt-box h3 {
-      font-size: 1.05rem;
-      font-weight: 800;
-      margin-bottom: 14px;
-    }
+    .prompt-box h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
+    .prompt-hint { font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; }
     .prompt-input {
       width: 100%;
       border: 1.5px solid var(--line);
@@ -388,53 +315,56 @@
     }
     .prompt-input:focus { border-color: var(--blue); }
     .prompt-actions { display: flex; gap: 8px; }
-    .prompt-hint {
-      font-size: 0.82rem;
-      color: var(--muted);
-      margin-bottom: 12px;
+    .btn-prompt-ok {
+      flex: 2;
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 10px; padding: 11px; font-size: 0.9rem;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .btn-prompt-ok:hover { background: var(--blue-dark); }
+    .btn-prompt-cancel {
+      flex: 1;
+      background: #f1f5f9; border: 1px solid var(--line);
+      border-radius: 10px; padding: 11px; font-size: 0.85rem;
+      font-weight: 600; cursor: pointer; font-family: inherit; color: var(--text);
+    }
+    .btn-prompt-cancel:hover { background: #e2e8f0; }
+
+    /* Copy toast */
+    .copy-toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
   <header class="page-header">
     <h1>더필링</h1>
-    <div class="header-right">
-      <button class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
-    </div>
+    <button class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
   </header>
 
-  <!-- Main content -->
   <main class="main-content" id="mainContent"></main>
 
-  <!-- Photo modal -->
-  <div class="modal-overlay" id="photoModal" style="display:none;">
-    <div class="modal-box">
-      <div class="modal-img-wrap">
-        <img class="modal-img" id="modalImg" src="" alt="" />
-      </div>
-      <div class="modal-body">
-        <div id="modalViewMode">
-          <div class="modal-space-label" id="modalSpaceLabel"></div>
-          <div class="modal-product-name" id="modalProductName"></div>
-          <div class="modal-actions">
-            <button class="btn-copy-product" id="btnCopyProduct">📋 제품명 복사</button>
-            <button class="btn-modal-secondary" id="btnEditProduct">✏️ 수정</button>
-            <button class="btn-modal-danger" id="btnDeletePhoto">삭제</button>
-            <button class="btn-modal-secondary" id="btnCloseModal">닫기</button>
-          </div>
-        </div>
-        <div id="modalEditMode" style="display:none;">
-          <input class="modal-product-edit-input" id="modalProductInput" type="text" placeholder="제품명을 입력하세요" />
-          <div class="modal-actions">
-            <button class="btn-copy-product" id="btnSaveProduct">저장</button>
-            <button class="btn-modal-secondary" id="btnCancelEdit">취소</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Copy toast -->
+  <div class="copy-toast" id="copyToast">📋 복사 완료!</div>
 
   <!-- Space name prompt -->
   <div class="prompt-overlay" id="spacePrompt" style="display:none;">
@@ -443,8 +373,8 @@
       <p class="prompt-hint">예: 거실, 주방, 침실, 욕실, 드레스룸 …</p>
       <input class="prompt-input" id="spaceNameInput" type="text" placeholder="공간 이름 입력" maxlength="30" />
       <div class="prompt-actions">
-        <button class="btn-copy-product" id="btnConfirmSpace" style="flex:2;">추가</button>
-        <button class="btn-modal-secondary" id="btnCancelSpace" style="flex:1;">취소</button>
+        <button class="btn-prompt-ok" id="btnConfirmSpace">추가</button>
+        <button class="btn-prompt-cancel" id="btnCancelSpace">취소</button>
       </div>
     </div>
   </div>
@@ -452,27 +382,23 @@
   <script src="sync-config.js"></script>
   <script>
     // ─── Supabase ──────────────────────────────────────────────────────────────
-    const _cfg = window.SCHEDULE_SITE_SYNC_CONFIG || {};
-    const SUPA_URL = _cfg.supabaseUrl || "";
+    const _cfg  = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+    const SUPA_URL = _cfg.supabaseUrl  || "";
     const SUPA_KEY = _cfg.supabaseAnonKey || "";
     const BUCKET   = "inlog_home";
 
-    // ─── Storage ───────────────────────────────────────────────────────────────
+    // ─── State ─────────────────────────────────────────────────────────────────
     const STORE_KEY = "thefeelingData_v2";
 
     function loadState() {
-      try {
-        const raw = localStorage.getItem(STORE_KEY);
-        if (raw) return JSON.parse(raw);
-      } catch (e) {}
+      try { const r = localStorage.getItem(STORE_KEY); if (r) return JSON.parse(r); } catch {}
       return { spaces: [] };
     }
-
-    function saveState() {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    }
+    function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 
     let state = loadState();
+    // track which photo is in edit mode: "spaceId__photoId"
+    let editingKey = null;
 
     function uid() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -480,29 +406,43 @@
 
     // ─── Upload ────────────────────────────────────────────────────────────────
     async function uploadPhoto(file) {
-      const ext  = file.name.split(".").pop() || "jpg";
+      const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
       const path = `thefeeling/${Date.now()}_${uid()}.${ext}`;
       const res  = await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${path}`, {
         method: "POST",
-        headers: {
-          apikey: SUPA_KEY,
-          Authorization: `Bearer ${SUPA_KEY}`,
-          "Content-Type": file.type,
-          "x-upsert": "true"
-        },
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
+                   "Content-Type": file.type, "x-upsert": "true" },
         body: file
       });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       return `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
     }
 
+    // ─── Copy toast ────────────────────────────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg = "📋 복사 완료!") {
+      const el = document.getElementById("copyToast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+    }
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); }
+      catch {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+    }
+
     // ─── Escape ────────────────────────────────────────────────────────────────
     function esc(s) {
       return String(s || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     }
 
     // ─── Render ────────────────────────────────────────────────────────────────
@@ -521,77 +461,153 @@
     }
 
     function renderSpace(space) {
-      const count = space.photos.length;
-      const photos = space.photos.map(p => renderPhotoCard(space.id, p)).join("");
+      const photos = space.photos.map(p => renderCard(space.id, p)).join("");
       return `
         <section class="category-section" data-space-id="${space.id}">
           <div class="category-header">
-            <span class="category-icon">🏠</span>
+            <span>🏠</span>
             <input class="category-name-input" type="text"
               value="${esc(space.name)}" placeholder="공간 이름"
-              data-rename-space="${space.id}" />
-            <span class="category-photo-count">사진 ${count}장</span>
-            <button class="btn-delete-category" data-delete-space="${space.id}">공간 삭제</button>
+              data-rename="${space.id}" />
+            <span class="category-photo-count">사진 ${space.photos.length}장</span>
+            <button class="btn-delete-category" data-del-space="${space.id}">공간 삭제</button>
           </div>
           <div class="photo-grid">
             ${photos}
-            <label class="upload-slot" title="사진 업로드">
+            <label class="upload-slot" title="사진 추가">
               <span class="upload-slot-icon">📷</span>
               <span>사진 추가</span>
               <input type="file" accept="image/*" multiple style="display:none;"
-                data-upload-space="${space.id}" />
+                data-upload="${space.id}" />
             </label>
           </div>
         </section>`;
     }
 
-    function renderPhotoCard(spaceId, photo) {
-      const name    = photo.productName || "";
-      const isEmpty = !name;
-      const overlay = photo.uploading
-        ? `<div class="uploading-overlay">업로드 중…</div>` : "";
+    function renderCard(spaceId, photo) {
+      const key      = `${spaceId}__${photo.id}`;
+      const isEditing = editingKey === key;
+      const name     = photo.productName || "";
+      const isEmpty  = !name;
+      const uploadOverlay = photo.uploading
+        ? `<div class="uploading-badge">업로드 중…</div>` : "";
+
+      const viewBody = `
+        <div class="card-view">
+          <div class="product-name-text ${isEmpty ? "empty" : ""}">${esc(isEmpty ? "제품명 없음" : name)}</div>
+          <div class="card-actions">
+            <button class="btn-card" data-edit="${photo.id}" data-edit-space="${spaceId}">수정</button>
+            <button class="btn-card danger" data-del-photo="${photo.id}" data-del-space="${spaceId}">삭제</button>
+          </div>
+        </div>`;
+
+      const editBody = `
+        <div class="card-edit">
+          <input class="product-name-input" type="text"
+            value="${esc(name)}" placeholder="제품명 입력"
+            data-edit-input="${photo.id}" data-edit-input-space="${spaceId}" />
+          <div class="card-actions">
+            <button class="btn-card primary" data-save="${photo.id}" data-save-space="${spaceId}">저장</button>
+            <button class="btn-card" data-cancel-edit="${photo.id}">취소</button>
+          </div>
+        </div>`;
+
       return `
-        <div class="photo-card" data-open-photo="${photo.id}" data-open-space="${spaceId}">
-          <img class="photo-thumb" src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
-          ${overlay}
-          <div class="photo-meta">
-            <div class="product-name-label">제품명</div>
-            <div class="product-name-display ${isEmpty ? "empty" : ""}">${esc(isEmpty ? "제품명 없음" : name)}</div>
-            ${!isEmpty ? `<div class="copy-hint">클릭 → 복사</div>` : ""}
+        <div class="photo-card">
+          <div class="photo-thumb-wrap" data-copy-photo="${photo.id}" data-copy-space="${spaceId}">
+            <img src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
+            <div class="copy-flash">📋 복사!</div>
+            ${uploadOverlay}
+          </div>
+          <div class="card-body">
+            ${isEditing ? editBody : viewBody}
           </div>
         </div>`;
     }
 
     // ─── Events ────────────────────────────────────────────────────────────────
     function bindAllEvents() {
-      // Space rename
-      document.querySelectorAll("[data-rename-space]").forEach(input => {
-        input.addEventListener("change", () => {
-          const sp = state.spaces.find(s => s.id === input.dataset.renameSpace);
-          if (sp) { sp.name = input.value.trim() || "공간"; saveState(); }
+      // Rename space
+      document.querySelectorAll("[data-rename]").forEach(inp => {
+        inp.addEventListener("change", () => {
+          const sp = state.spaces.find(s => s.id === inp.dataset.rename);
+          if (sp) { sp.name = inp.value.trim() || "공간"; saveState(); }
+          render();
         });
       });
 
-      // Space delete
-      document.querySelectorAll("[data-delete-space]").forEach(btn => {
+      // Delete space
+      document.querySelectorAll("[data-del-space]").forEach(btn => {
         btn.addEventListener("click", () => {
-          if (!confirm("이 공간과 모든 사진을 삭제할까요?")) return;
-          state.spaces = state.spaces.filter(s => s.id !== btn.dataset.deleteSpace);
-          saveState(); render();
+          if (!confirm("이 공간을 삭제할까요?")) return;
+          state.spaces = state.spaces.filter(s => s.id !== btn.dataset.delSpace);
+          saveState(); editingKey = null; render();
         });
       });
 
-      // Open photo modal
-      document.querySelectorAll("[data-open-photo]").forEach(card => {
-        card.addEventListener("click", () => {
-          openPhotoModal(card.dataset.openSpace, card.dataset.openPhoto);
+      // Click photo → copy product name
+      document.querySelectorAll("[data-copy-photo]").forEach(wrap => {
+        wrap.addEventListener("click", async () => {
+          const spaceId = wrap.dataset.copySpace;
+          const photoId = wrap.dataset.copyPhoto;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          const name = photo.productName || "";
+          if (!name) { showToast("⚠️ 제품명이 없습니다"); return; }
+          await copyText(name);
+          // Flash effect
+          wrap.classList.add("flashing");
+          setTimeout(() => wrap.classList.remove("flashing"), 600);
+          showToast(`📋 "${name}" 복사 완료!`);
+        });
+      });
+
+      // Enter edit mode
+      document.querySelectorAll("[data-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          editingKey = `${btn.dataset.editSpace}__${btn.dataset.edit}`;
+          render();
+          // Focus the input after render
+          setTimeout(() => {
+            const inp = document.querySelector(`[data-edit-input="${btn.dataset.edit}"]`);
+            inp?.focus();
+          }, 30);
+        });
+      });
+
+      // Cancel edit
+      document.querySelectorAll("[data-cancel-edit]").forEach(btn => {
+        btn.addEventListener("click", () => { editingKey = null; render(); });
+      });
+
+      // Save product name
+      document.querySelectorAll("[data-save]").forEach(btn => {
+        btn.addEventListener("click", () => saveProductName(btn.dataset.saveSpace, btn.dataset.save));
+      });
+
+      // Enter key in input → save
+      document.querySelectorAll("[data-edit-input]").forEach(inp => {
+        inp.addEventListener("keydown", e => {
+          if (e.key === "Enter")  saveProductName(inp.dataset.editInputSpace, inp.dataset.editInput);
+          if (e.key === "Escape") { editingKey = null; render(); }
+        });
+      });
+
+      // Delete photo
+      document.querySelectorAll("[data-del-photo]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (!confirm("이 사진을 삭제할까요?")) return;
+          const space = state.spaces.find(s => s.id === btn.dataset.delSpace);
+          if (space) space.photos = space.photos.filter(p => p.id !== btn.dataset.delPhoto);
+          saveState(); editingKey = null; render();
         });
       });
 
       // File upload
-      document.querySelectorAll("[data-upload-space]").forEach(fileInput => {
+      document.querySelectorAll("[data-upload]").forEach(fileInput => {
         fileInput.addEventListener("change", async () => {
-          const spaceId = fileInput.dataset.uploadSpace;
+          const spaceId = fileInput.dataset.upload;
           const files   = Array.from(fileInput.files);
           if (!files.length) return;
           fileInput.value = "";
@@ -599,14 +615,11 @@
           for (const file of files) {
             const space = state.spaces.find(s => s.id === spaceId);
             if (!space) continue;
-
-            // Immediate local preview
             const localUrl = URL.createObjectURL(file);
             const photo = { id: uid(), url: localUrl, productName: "", uploading: true };
             space.photos.push(photo);
             saveState(); render();
 
-            // Upload in background
             (async () => {
               try {
                 const remoteUrl = await uploadPhoto(file);
@@ -627,108 +640,22 @@
       });
     }
 
-    // ─── Photo Modal ───────────────────────────────────────────────────────────
-    let _modal = { spaceId: null, photoId: null };
-
-    function openPhotoModal(spaceId, photoId) {
+    function saveProductName(spaceId, photoId) {
       const space = state.spaces.find(s => s.id === spaceId);
       const photo = space?.photos.find(p => p.id === photoId);
       if (!photo) return;
-      _modal = { spaceId, photoId };
-
-      document.getElementById("modalImg").src              = photo.url;
-      document.getElementById("modalSpaceLabel").textContent = `📍 ${space.name}`;
-      const nameEl = document.getElementById("modalProductName");
-      nameEl.textContent = photo.productName || "(제품명 없음)";
-      nameEl.className   = "modal-product-name" + (photo.productName ? "" : " empty");
-      document.getElementById("modalProductInput").value   = photo.productName || "";
-
-      showViewMode();
-      document.getElementById("photoModal").style.display = "flex";
+      const inp = document.querySelector(`[data-edit-input="${photoId}"]`);
+      if (inp) photo.productName = inp.value.trim();
+      saveState(); editingKey = null; render();
     }
 
-    function showViewMode() {
-      document.getElementById("modalViewMode").style.display = "";
-      document.getElementById("modalEditMode").style.display = "none";
-      const btn = document.getElementById("btnCopyProduct");
-      btn.textContent = "📋 제품명 복사";
-      btn.classList.remove("copied");
-    }
-
-    function showEditMode() {
-      document.getElementById("modalViewMode").style.display = "none";
-      document.getElementById("modalEditMode").style.display = "";
-      document.getElementById("modalProductInput").focus();
-    }
-
-    function closePhotoModal() {
-      document.getElementById("photoModal").style.display = "none";
-      document.getElementById("modalImg").src = "";
-      _modal = { spaceId: null, photoId: null };
-    }
-
-    document.getElementById("photoModal").addEventListener("click", e => {
-      if (e.target === document.getElementById("photoModal")) closePhotoModal();
-    });
-    document.getElementById("btnCloseModal").addEventListener("click", closePhotoModal);
-    document.getElementById("btnEditProduct").addEventListener("click", showEditMode);
-    document.getElementById("btnCancelEdit").addEventListener("click", showViewMode);
-
-    document.getElementById("btnCopyProduct").addEventListener("click", async () => {
-      const nameEl = document.getElementById("modalProductName");
-      const text   = nameEl.textContent;
-      if (!text || text === "(제품명 없음)") return;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const ta = document.createElement("textarea");
-        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-        document.body.appendChild(ta); ta.select(); document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      const btn = document.getElementById("btnCopyProduct");
-      btn.textContent = "✅ 복사 완료!";
-      btn.classList.add("copied");
-      setTimeout(() => { btn.textContent = "📋 제품명 복사"; btn.classList.remove("copied"); }, 2000);
-    });
-
-    document.getElementById("btnSaveProduct").addEventListener("click", () => {
-      const { spaceId, photoId } = _modal;
-      const space = state.spaces.find(s => s.id === spaceId);
-      const photo = space?.photos.find(p => p.id === photoId);
-      if (!photo) return;
-      photo.productName = document.getElementById("modalProductInput").value.trim();
-      saveState(); render();
-      const nameEl = document.getElementById("modalProductName");
-      nameEl.textContent = photo.productName || "(제품명 없음)";
-      nameEl.className   = "modal-product-name" + (photo.productName ? "" : " empty");
-      showViewMode();
-    });
-
-    document.getElementById("modalProductInput").addEventListener("keydown", e => {
-      if (e.key === "Enter")  document.getElementById("btnSaveProduct").click();
-      if (e.key === "Escape") showViewMode();
-    });
-
-    document.getElementById("btnDeletePhoto").addEventListener("click", () => {
-      if (!confirm("이 사진을 삭제할까요?")) return;
-      const { spaceId, photoId } = _modal;
-      const space = state.spaces.find(s => s.id === spaceId);
-      if (space) space.photos = space.photos.filter(p => p.id !== photoId);
-      saveState(); render(); closePhotoModal();
-    });
-
-    // ─── Space Add Prompt ─────────────────────────────────────────────────────
+    // ─── Space prompt ──────────────────────────────────────────────────────────
     function openSpacePrompt() {
       document.getElementById("spaceNameInput").value = "";
       document.getElementById("spacePrompt").style.display = "flex";
       setTimeout(() => document.getElementById("spaceNameInput").focus(), 50);
     }
-
-    function closeSpacePrompt() {
-      document.getElementById("spacePrompt").style.display = "none";
-    }
-
+    function closeSpacePrompt() { document.getElementById("spacePrompt").style.display = "none"; }
     function confirmAddSpace() {
       const name = document.getElementById("spaceNameInput").value.trim();
       if (!name) { document.getElementById("spaceNameInput").focus(); return; }
