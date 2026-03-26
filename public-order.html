@@ -730,12 +730,19 @@
           const self = this;
           localStorage.getItem = (key) => {
             const normalizedKey = String(key || "");
+            // 세션/인증 키는 항상 native localStorage에서 직접 읽음 (공유 금지)
+            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) return self.nativeGetItem(normalizedKey);
             if (!self.isScopedKey(normalizedKey)) return self.nativeGetItem(normalizedKey);
             return self.memoryStore.has(normalizedKey) ? self.memoryStore.get(normalizedKey) : null;
           };
           localStorage.setItem = (key, value) => {
             const normalizedKey = String(key || "");
             const normalizedValue = String(value ?? "");
+            // 세션/인증 키는 항상 native localStorage에만 저장 (Supabase 동기화 금지)
+            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+              self.nativeSetItem(normalizedKey, normalizedValue);
+              return;
+            }
             if (!self.isScopedKey(normalizedKey)) {
               self.nativeSetItem(normalizedKey, normalizedValue);
               return;
@@ -745,6 +752,11 @@
           };
           localStorage.removeItem = (key) => {
             const normalizedKey = String(key || "");
+            // 세션/인증 키는 항상 native localStorage에서 직접 삭제
+            if (PRIVATE_LOCAL_KEYS && PRIVATE_LOCAL_KEYS.has(normalizedKey)) {
+              self.nativeRemoveItem(normalizedKey);
+              return;
+            }
             if (!self.isScopedKey(normalizedKey)) {
               self.nativeRemoveItem(normalizedKey);
               return;
@@ -807,20 +819,22 @@
           if (idx >= 0) users[idx] = { ...users[idx], ...userObj };
           else users.push(userObj);
           scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomers", JSON.stringify(users));
-          // STORAGE_SESSION 복원
-          scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomerSession", String(userId));
-          // STORAGE_CUSTOMER_REMEMBERED_LOGIN 복원
+          // STORAGE_SESSION 복원 — native localStorage에만 저장 (memoryStore/Supabase 동기화 금지)
+          scheduleSiteClientKvState.nativeSetItem("scheduleSiteCustomerSession", String(userId));
+          // STORAGE_CUSTOMER_REMEMBERED_LOGIN 복원 — native localStorage에만 저장
           const remJson = scheduleSiteClientKvState.nativeGetItem(PUB_REMEMBERED_KEY);
-          if (remJson) scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomerRememberedLogin", remJson);
+          if (remJson) scheduleSiteClientKvState.nativeSetItem("scheduleSiteCustomerRememberedLogin", remJson);
           return true;
         } catch (_) { return false; }
       }
 
-      // hydrateFromServerKv 패치: 서버 pull 후 공개 세션 자동 복원
+      // hydrateFromServerKv 패치: 서버 pull 후 세션 키 제거 + 공개 세션 복원
       (function patchHydrate() {
         const _orig = scheduleSiteClientKvState.hydrateFromServerKv.bind(scheduleSiteClientKvState);
         scheduleSiteClientKvState.hydrateFromServerKv = function(kvObj) {
           _orig(kvObj);
+          // 서버에서 받아온 다른 유저의 세션 키를 즉시 제거 (보안)
+          PRIVATE_LOCAL_KEYS.forEach(k => scheduleSiteClientKvState.memoryStore.delete(k));
           restorePubSessionToMemory();
         };
       })();
@@ -930,12 +944,17 @@
         "scheduleSiteDailyLimits",
         "scheduleSiteEmergencyLimitAdditionsV1"
       ]);
+      // 세션/인증 키는 절대 Supabase에 올라가거나 다른 브라우저에서 적용되면 안 됨
+      const PRIVATE_LOCAL_KEYS = new Set([
+        STORAGE_SESSION,
+        STORAGE_CUSTOMER_REMEMBERED_LOGIN
+      ]);
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
-        // 관리자 전용 키를 제외하고 push — 고객 push가 관리자 설정을 덮어쓰는 것을 방지
+        // 관리자 전용 키 및 세션/인증 키를 제외하고 push
         const kv = Object.fromEntries(
-          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => !ADMIN_ONLY_KV_KEYS.has(k))
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => !ADMIN_ONLY_KV_KEYS.has(k) && !PRIVATE_LOCAL_KEYS.has(k))
         );
         if (!Object.keys(kv).length) return;
         scheduleSiteClientKvPushInFlight = true;
