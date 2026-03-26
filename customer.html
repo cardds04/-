@@ -2936,10 +2936,9 @@
 
       function getAdminCompanyDefaultMemo(companyName) {
         try {
-          const adminCompanies = JSON.parse(localStorage.getItem("scheduleSiteAdminCompanies") || "[]");
-          const normalized = normalize(companyName).toLowerCase();
-          const matched = adminCompanies.find((c) => normalize(c?.name).toLowerCase() === normalized);
-          return matched?.defaultMemo || "";
+          const map = JSON.parse(localStorage.getItem("scheduleSiteCompanyDefaultMemos") || "{}");
+          const key = normalize(companyName).toLowerCase();
+          return String(map[key] || "");
         } catch { return ""; }
       }
 

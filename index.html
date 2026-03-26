@@ -2265,6 +2265,7 @@
       const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
       const STORAGE_EXCLUDED_PHOTOGRAPHERS = "scheduleSiteExcludedPhotographers";
       const STORAGE_ADMIN_COMPANIES = "scheduleSiteAdminCompanies";
+      const STORAGE_COMPANY_DEFAULT_MEMOS = "scheduleSiteCompanyDefaultMemos";
       const STORAGE_CANCELED_SCHEDULES = "scheduleSiteCanceledSchedules";
       const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
       const STORAGE_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
@@ -5421,6 +5422,31 @@
       function normalizeCompanyName(name) {
         return String(name || "").trim();
       }
+
+      function loadCompanyDefaultMemos() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_COMPANY_DEFAULT_MEMOS) || "{}"); } catch { return {}; }
+      }
+      function saveCompanyDefaultMemos(memoMap) {
+        localStorage.setItem(STORAGE_COMPANY_DEFAULT_MEMOS, JSON.stringify(memoMap));
+      }
+      function getCompanyDefaultMemoByName(companyName) {
+        const key = normalizeCompanyName(companyName).toLowerCase();
+        if (!key) return "";
+        const map = loadCompanyDefaultMemos();
+        return String(map[key] || "");
+      }
+      function setCompanyDefaultMemoByName(companyName, memo) {
+        const key = normalizeCompanyName(companyName).toLowerCase();
+        if (!key) return;
+        const map = loadCompanyDefaultMemos();
+        if (memo) {
+          map[key] = String(memo).trim();
+        } else {
+          delete map[key];
+        }
+        saveCompanyDefaultMemos(map);
+      }
+
       function companyCompareKey(name) {
         return normalizeCompanyName(name).replace(/\s+/g, "").toLowerCase();
       }
@@ -9276,9 +9302,7 @@
       }
 
       function getCompanyDefaultMemo(companyName) {
-        const normalized = normalizeCompanyName(companyName).toLowerCase();
-        const matched = companies.find((company) => normalizeCompanyName(company.name).toLowerCase() === normalized);
-        return matched?.defaultMemo || "";
+        return getCompanyDefaultMemoByName(companyName);
       }
 
       function getCustomerIdByCompanyName(companyName) {
@@ -10061,9 +10085,10 @@
                 </div>
               `;
             }
-            const defaultMemoHtml = company.defaultMemo
-              ? `<div class="default-memo-label">기본요청사항</div><div class="default-memo-box">${escapeHtml(company.defaultMemo)}</div>`
-              : "";
+            const defaultMemoHtml = (() => {
+              const dm = getCompanyDefaultMemoByName(company.name);
+              return dm ? `<div class="default-memo-label">기본요청사항</div><div class="default-memo-box">${escapeHtml(dm)}</div>` : "";
+            })();
             return `
               <div class="company-item company-clickable" data-company-index="${index}">
                 <div style="display:flex;align-items:center;">${badge}${escapeHtml(company.name)}${customerIdHtml}</div>
@@ -10209,7 +10234,7 @@
           .map(([month, count]) => `<tr><td>${escapeHtml(month)}</td><td>${count}건</td></tr>`)
           .join("");
 
-        const currentDefaultMemo = targetCompany?.defaultMemo || "";
+        const currentDefaultMemo = getCompanyDefaultMemoByName(companyName);
         companyOrderHistoryTitleEl.textContent = `${companyName} 주문 기록`;
         companyOrderHistorySummaryEl.innerHTML = `
           <div class="customer-stats-head">
@@ -13805,18 +13830,8 @@
         if (action === "saveCompanyDefaultMemo") {
           const defaultMemoEl = companyOrderHistorySummaryEl.querySelector(".company-default-memo");
           const newDefaultMemo = String(defaultMemoEl?.value || "").trim();
-          const companyNameLower = companyName.toLowerCase();
-          let found = false;
-          companies.forEach((company) => {
-            if (normalizeCompanyName(company?.name).toLowerCase() !== companyNameLower) return;
-            company.defaultMemo = newDefaultMemo;
-            found = true;
-          });
-          if (!found) {
-            companies.unshift({ name: companyName, phone: "-", code: "", defaultMemo: newDefaultMemo });
-          }
-          saveAdminCompaniesToStorage();
-          renderCompanies();
+          setCompanyDefaultMemoByName(companyName, newDefaultMemo);
+          renderCompanyOrderHistory(companyName);
           renderList();
           alert("기본요청사항이 저장되었습니다.");
           return;
