@@ -4742,7 +4742,31 @@
           return getSyncDefaultValue(key);
         }
         const incomingText = String(incomingValue);
-        if (!CRITICAL_SYNC_KEYS.includes(key)) return incomingText;
+        if (!CRITICAL_SYNC_KEYS.includes(key)) {
+          // admin companies는 defaultMemo를 로컬에서 보존
+          if (key === STORAGE_ADMIN_COMPANIES) {
+            try {
+              const incoming = JSON.parse(incomingText);
+              const local = JSON.parse(localStorage.getItem(key) || "[]");
+              if (Array.isArray(incoming) && Array.isArray(local)) {
+                const localMemoMap = new Map();
+                local.forEach((c) => {
+                  if (c?.defaultMemo) {
+                    localMemoMap.set(normalizeCompanyName(c.name).toLowerCase(), String(c.defaultMemo));
+                  }
+                });
+                incoming.forEach((c) => {
+                  const k = normalizeCompanyName(c?.name).toLowerCase();
+                  if (!c.defaultMemo && localMemoMap.has(k)) {
+                    c.defaultMemo = localMemoMap.get(k);
+                  }
+                });
+                return JSON.stringify(incoming);
+              }
+            } catch (_) {}
+          }
+          return incomingText;
+        }
         const localCurrent = localStorage.getItem(key);
         const merged = mergeStorageValue(incomingText, localCurrent);
         return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
@@ -7183,6 +7207,8 @@
         const rows = [...uniqueMap.values()];
         companies.splice(0, companies.length, ...rows);
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(rows));
+        // defaultMemo 등 로컬 변경이 원격 상태에 의해 덮어쓰이지 않도록 pending 표시
+        if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         queueAdminCompaniesSync();
       }
 
