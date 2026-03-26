@@ -463,6 +463,32 @@
       font-size: 0.82rem;
     }
 
+    /* ── 공간 순서 이동 버튼 ── */
+    .space-order-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .btn-order {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      width: 26px;
+      height: 22px;
+      font-size: 0.65rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      transition: background 0.12s, color 0.12s;
+      padding: 0;
+      line-height: 1;
+    }
+    .btn-order:hover:not(:disabled) { background: #dbeafe; color: var(--blue); border-color: #bfdbfe; }
+    .btn-order:disabled { opacity: 0.3; cursor: default; }
+
     /* Copy toast */
     .copy-toast {
       position: fixed;
@@ -731,10 +757,16 @@
     }
 
     function renderSpace(space) {
+      const idx = state.spaces.findIndex(s => s.id === space.id);
+      const total = state.spaces.length;
       const photos = space.photos.map(p => renderCard(space.id, p)).join("");
       return `
         <section class="category-section" data-space-id="${space.id}">
           <div class="category-header">
+            <div class="space-order-btns">
+              <button class="btn-order" data-move-up="${space.id}" title="위로" ${idx === 0 ? "disabled" : ""}>▲</button>
+              <button class="btn-order" data-move-down="${space.id}" title="아래로" ${idx === total - 1 ? "disabled" : ""}>▼</button>
+            </div>
             <span>🏠</span>
             <input class="category-name-input" type="text"
               value="${esc(space.name)}" placeholder="공간 이름"
@@ -798,6 +830,24 @@
 
     // ─── Events ────────────────────────────────────────────────────────────────
     function bindAllEvents() {
+      // Move space up/down
+      document.querySelectorAll("[data-move-up]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = state.spaces.findIndex(s => s.id === btn.dataset.moveUp);
+          if (idx <= 0) return;
+          [state.spaces[idx - 1], state.spaces[idx]] = [state.spaces[idx], state.spaces[idx - 1]];
+          saveState(); render();
+        });
+      });
+      document.querySelectorAll("[data-move-down]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = state.spaces.findIndex(s => s.id === btn.dataset.moveDown);
+          if (idx < 0 || idx >= state.spaces.length - 1) return;
+          [state.spaces[idx], state.spaces[idx + 1]] = [state.spaces[idx + 1], state.spaces[idx]];
+          saveState(); render();
+        });
+      });
+
       // Rename space
       document.querySelectorAll("[data-rename]").forEach(inp => {
         inp.addEventListener("input", () => {
