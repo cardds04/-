@@ -6809,7 +6809,8 @@
           .map((item) => ({
             name: normalizeCompanyName(item?.name),
             phone: String(item?.phone || "").trim() || "-",
-            code: normalizeCompanyCode(item?.code)
+            code: normalizeCompanyCode(item?.code),
+            defaultMemo: String(item?.defaultMemo || "").trim()
           }))
           .filter((item) => item.name);
       }
@@ -6996,6 +6997,20 @@
         const remoteRows = await fetchCompaniesFromSupabase();
         updateLastPullTime(STORAGE_LAST_COMPANY_PULL_AT, remoteRows, "updated_at");
         const normalized = normalizeCompanyRows(remoteRows);
+        // Supabase companies 테이블에는 defaultMemo 컬럼이 없으므로
+        // 로컬에 저장된 defaultMemo를 병합하여 유실 방지
+        const localCompanies = readStorageArray(STORAGE_ADMIN_COMPANIES);
+        const localMemoMap = new Map();
+        localCompanies.forEach((c) => {
+          const key = normalizeCompanyName(c?.name).toLowerCase();
+          if (key && c?.defaultMemo) localMemoMap.set(key, String(c.defaultMemo));
+        });
+        normalized.forEach((c) => {
+          const key = normalizeCompanyName(c.name).toLowerCase();
+          if (!c.defaultMemo && localMemoMap.has(key)) {
+            c.defaultMemo = localMemoMap.get(key);
+          }
+        });
         companies.splice(0, companies.length, ...normalized);
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(normalized));
         renderCompanies();
@@ -7160,7 +7175,8 @@
             uniqueMap.set(key, {
               name,
               phone: String(item?.phone || "").trim() || "-",
-              code: normalizeCompanyCode(item?.code)
+              code: normalizeCompanyCode(item?.code),
+              defaultMemo: String(item?.defaultMemo || "").trim()
             });
           }
         });
