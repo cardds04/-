@@ -428,6 +428,24 @@
     }
     .brand-chip:hover { background: #dbeafe; border-color: var(--blue); }
     .brand-chip-icon { font-size: 1rem; }
+    .brand-chip.no-url {
+      background: #f8faff;
+      border-color: #cbd5e1;
+      color: #64748b;
+    }
+    .brand-chip.no-url:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .brand-chip-edit {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #93c5fd;
+      font-size: 0.85rem;
+      line-height: 1;
+      padding: 0 0 0 2px;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .brand-chip-edit:hover { color: var(--blue); }
     .brand-chip-del {
       background: none;
       border: none;
@@ -519,7 +537,16 @@
     const STORE_KEY = "thefeelingData_v2";
 
     function loadState() {
-      try { const r = localStorage.getItem(STORE_KEY); if (r) { const s = JSON.parse(r); if (!s.brands) s.brands = []; return s; } } catch {}
+      try {
+        const r = localStorage.getItem(STORE_KEY);
+        if (r) {
+          const s = JSON.parse(r);
+          if (!s.brands) s.brands = [];
+          // 구버전 brands(문자열 배열) → 객체 배열로 마이그레이션
+          s.brands = s.brands.map(b => typeof b === "string" ? { name: b, url: "" } : b);
+          return s;
+        }
+      } catch {}
       return { spaces: [], brands: [] };
     }
     function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -599,34 +626,67 @@
         container.innerHTML = `<span class="brand-empty-hint">브랜드명을 추가하면 아이콘으로 표시됩니다.</span>`;
         return;
       }
-      container.innerHTML = state.brands.map((b, i) => `
-        <div class="brand-chip" data-brand-idx="${i}">
-          <span class="brand-chip-icon">🏷️</span>
-          <span class="brand-chip-name">${esc(b)}</span>
-          <button class="brand-chip-del" data-del-brand="${i}" title="삭제">✕</button>
-        </div>`).join("");
+      container.innerHTML = state.brands.map((b, i) => {
+        const hasUrl = Boolean(b.url);
+        return `
+          <div class="brand-chip ${hasUrl ? "has-url" : "no-url"}" data-brand-idx="${i}" title="${hasUrl ? b.url : "URL 미설정 — 편집으로 URL 추가"}">
+            <span class="brand-chip-icon">${hasUrl ? "🔗" : "🏷️"}</span>
+            <span class="brand-chip-name">${esc(b.name)}</span>
+            <button class="brand-chip-edit" data-edit-brand="${i}" title="URL 편집">✏️</button>
+            <button class="brand-chip-del" data-del-brand="${i}" title="삭제">✕</button>
+          </div>`;
+      }).join("");
 
+      // 칩 클릭 → URL 있으면 이동, 없으면 URL 입력 유도
       container.querySelectorAll("[data-brand-idx]").forEach(chip => {
-        chip.addEventListener("click", async (e) => {
-          if (e.target.closest("[data-del-brand]")) return;
+        chip.addEventListener("click", (e) => {
+          if (e.target.closest("[data-del-brand]") || e.target.closest("[data-edit-brand]")) return;
           const idx = Number(chip.dataset.brandIdx);
-          const name = state.brands[idx];
-          if (!name) return;
-          await copyText(name);
-          showToast(`📋 "${name}" 복사 완료!`);
+          const brand = state.brands[idx];
+          if (!brand) return;
+          if (brand.url) {
+            window.open(brand.url, "_blank", "noopener,noreferrer");
+          } else {
+            promptBrandUrl(idx);
+          }
         });
       });
 
+      // 편집 버튼 → 이름/URL 수정
+      container.querySelectorAll("[data-edit-brand]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          promptBrandUrl(Number(btn.dataset.editBrand));
+        });
+      });
+
+      // 삭제 버튼
       container.querySelectorAll("[data-del-brand]").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const idx = Number(btn.dataset.delBrand);
-          if (!confirm(`"${state.brands[idx]}" 브랜드를 삭제할까요?`)) return;
+          if (!confirm(`"${state.brands[idx].name}" 브랜드를 삭제할까요?`)) return;
           state.brands.splice(idx, 1);
           saveState();
           renderBrands();
         });
       });
+    }
+
+    function promptBrandUrl(idx) {
+      const brand = state.brands[idx];
+      if (!brand) return;
+      const newName = prompt("브랜드명", brand.name);
+      if (newName === null) return;
+      const trimName = newName.trim();
+      if (!trimName) return;
+      const newUrl = prompt("이동할 URL (예: https://www.bang-olufsen.com)", brand.url || "");
+      if (newUrl === null) return;
+      let trimUrl = newUrl.trim();
+      if (trimUrl && !/^https?:\/\//i.test(trimUrl)) trimUrl = "https://" + trimUrl;
+      state.brands[idx] = { name: trimName, url: trimUrl };
+      saveState();
+      renderBrands();
     }
 
     // ─── Render ────────────────────────────────────────────────────────────────
@@ -946,7 +1006,11 @@
       if (input === null) return;
       const name = String(input).trim();
       if (!name) return;
-      state.brands.push(name);
+      const urlInput = prompt("이동할 URL을 입력하세요. (없으면 빈칸 그대로 확인)", "");
+      if (urlInput === null) return;
+      let url = String(urlInput).trim();
+      if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+      state.brands.push({ name, url });
       saveState();
       renderBrands();
     });
