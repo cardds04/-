@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>블로그 글쓰기 도우미 (네이버 붙여넣기용)</title>
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="블로그도우미" />
+    <link rel="manifest" href="/blog-app.webmanifest" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+      crossorigin
+    />
+    <title>블로그 글쓰기 도우미</title>
     <style>
       :root {
         --bg: #f0f2f8;
@@ -25,59 +34,89 @@
         line-height: 1.55;
       }
       .wrap {
-        max-width: 920px;
+        max-width: 640px;
         margin: 0 auto;
-        padding: 24px 18px 56px;
+        padding: 20px 16px 48px;
       }
       h1 {
-        font-size: 1.45rem;
+        font-size: 1.35rem;
         font-weight: 800;
-        margin: 0 0 8px;
+        margin: 0 0 6px;
       }
       .lead {
         color: var(--muted);
-        font-size: 0.92rem;
-        margin: 0 0 22px;
+        font-size: 0.88rem;
+        margin: 0 0 20px;
       }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 14px;
-        padding: 18px 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 4px 18px rgba(20, 30, 60, 0.06);
+        padding: 16px 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 16px rgba(20, 30, 60, 0.05);
       }
       .card h2 {
-        font-size: 1.05rem;
-        margin: 0 0 14px;
+        font-size: 1rem;
+        margin: 0 0 12px;
         font-weight: 800;
       }
       label {
         display: block;
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         font-weight: 700;
         color: var(--muted);
-        margin-bottom: 6px;
+        margin-bottom: 5px;
       }
       input[type="text"],
+      input[type="password"],
       textarea {
         width: 100%;
         padding: 10px 12px;
         border: 1px solid var(--line);
         border-radius: 10px;
         font: inherit;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
       }
       textarea {
-        min-height: 120px;
+        min-height: 280px;
         resize: vertical;
+      }
+      .final-draft {
+        min-height: 280px;
+        max-height: 520px;
+        overflow-y: auto;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: #111;
+      }
+      .final-draft:empty::before {
+        content: "「글 자동 생성」을 누르면 여기에 표시됩니다.";
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .final-draft strong {
+        font-weight: 800;
+      }
+      .final-draft table.draft-space-divider {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+      }
+      .final-draft table.draft-space-divider td {
+        font-size: 1px;
+        line-height: 1px;
+        padding: 0;
+        border-top: 1px solid #e6e8ec;
       }
       .row2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        gap: 10px;
       }
-      @media (max-width: 640px) {
+      @media (max-width: 560px) {
         .row2 {
           grid-template-columns: 1fr;
         }
@@ -86,8 +125,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        padding: 10px 16px;
+        padding: 11px 18px;
         border: 0;
         border-radius: 10px;
         font: inherit;
@@ -106,63 +144,98 @@
       .btn.secondary:hover {
         background: #dde2ee;
       }
+      .btn:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
       .btn-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 8px;
+        gap: 8px;
+        margin-top: 10px;
       }
       .hint {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: var(--muted);
         margin-top: 8px;
       }
-      .space-row {
-        display: grid;
-        grid-template-columns: 140px 1fr auto;
-        gap: 10px;
-        align-items: end;
+      .bulk-drop-zone {
+        border: 2px dashed var(--line);
+        border-radius: 12px;
+        padding: 28px 16px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 600;
         margin-bottom: 10px;
+        background: #fafbff;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
       }
-      @media (max-width: 640px) {
-        .space-row {
-          grid-template-columns: 1fr;
-        }
+      .bulk-drop-zone.drag {
+        border-color: var(--accent);
+        background: #eef4ff;
+        color: var(--text);
       }
-      .space-row select {
-        padding: 10px;
+      .bulk-list {
+        list-style: none;
+        margin: 0 0 8px;
+        padding: 0;
+        border: 1px solid var(--line);
         border-radius: 10px;
-        border: 1px solid var(--line);
-        font: inherit;
+        max-height: 200px;
+        overflow-y: auto;
       }
-      .space-row input[type="file"] {
-        font-size: 0.8rem;
+      .bulk-item {
+        display: grid;
+        grid-template-columns: 32px 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--line);
+        font-size: 0.82rem;
+        background: #fff;
       }
-      .space-row button {
-        padding: 8px 12px;
-        border-radius: 8px;
+      .bulk-item:last-child {
+        border-bottom: 0;
+      }
+      .bulk-item .tag {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #fff;
+        background: var(--muted);
+        border-radius: 6px;
+        padding: 3px 5px;
+        text-align: center;
+      }
+      .bulk-item .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .bulk-item .btns {
+        display: flex;
+        gap: 3px;
+        flex-shrink: 0;
+      }
+      .bulk-item .btns button {
+        padding: 3px 7px;
+        font-size: 0.72rem;
         border: 1px solid var(--line);
+        border-radius: 5px;
         background: #fff;
         cursor: pointer;
-        font-size: 0.85rem;
-      }
-      #mainPreview {
-        max-width: 100%;
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        margin-top: 12px;
-        display: block;
       }
       .toast {
         position: fixed;
-        bottom: 22px;
+        bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
         background: #1e293b;
         color: #fff;
-        padding: 12px 20px;
-        border-radius: 12px;
-        font-size: 0.9rem;
+        padding: 11px 18px;
+        border-radius: 10px;
+        font-size: 0.88rem;
         font-weight: 600;
         opacity: 0;
         pointer-events: none;
@@ -172,105 +245,281 @@
       .toast.show {
         opacity: 1;
       }
-      ol.steps {
-        margin: 0;
-        padding-left: 1.2rem;
-        font-size: 0.88rem;
-        color: var(--muted);
+      code {
+        font-size: 0.82em;
+        background: #e8ecf4;
+        padding: 2px 5px;
+        border-radius: 5px;
       }
-      ol.steps li {
-        margin-bottom: 6px;
+      .main-photo-wrap {
+        margin-top: 12px;
+      }
+      .main-photo-preview-img {
+        display: block;
+        width: 100%;
+        max-width: 420px;
+        aspect-ratio: 1;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        object-fit: contain;
+        background: #1a1a1a;
       }
     </style>
   </head>
   <body>
     <div class="wrap">
       <h1>블로그 글쓰기 도우미</h1>
-      <p class="lead">
-        사진·단지·위치·키워드를 넣으면 <strong>메인 커버 이미지(동네·단지명 합성)</strong>와
-        <strong>챗GPT·제미나이용 프롬프트</strong>를 만들고, AI가 쓴 글을
-        <strong>한 번에 복사</strong>해 네이버 블로그에 붙여넣을 수 있게 정리합니다. (자동 게시·로그인 자동화는 하지 않습니다.)
-      </p>
+      <p class="lead">로컬에서 <code>npm start</code> 후 이 페이지를 열고, 사진만 넣고 생성하면 됩니다.</p>
 
       <div class="card">
         <h2>1. 기본 정보</h2>
-        <label for="keywords">핵심 키워드 (쉼표로 구분)</label>
-        <input type="text" id="keywords" placeholder="예: 신축, 전세, 채광, 주차" />
-
-        <div class="row2">
-          <div>
-            <label for="aptName">아파트 이름</label>
-            <input type="text" id="aptName" placeholder="예: ○○자이" />
-          </div>
-          <div>
-            <label for="neighborhood">위치 (메인 사진 왼쪽 하단 1줄)</label>
-            <input type="text" id="neighborhood" placeholder="예: 송파구 가락동" />
-          </div>
-        </div>
+        <label for="neighborhood">동네 · 주소 (먼저 입력)</label>
+        <input type="text" id="neighborhood" placeholder="예: 송파구 가락동 / 고양시 화정동" autocomplete="address-line2" />
+        <p class="hint" id="areaPreview" style="margin-top: -4px; margin-bottom: 10px"></p>
+        <label for="aptName">아파트 이름</label>
+        <input type="text" id="aptName" placeholder="예: 별빛마을아파트" autocomplete="off" />
       </div>
 
       <div class="card">
-        <h2>2. 사진</h2>
-        <p class="hint" style="margin-top: 0">
-          <strong>첫 번째 줄의 사진</strong>이 메인 커버로 쓰입니다. 공간을 고른 뒤 파일 선택 시 <strong>Ctrl(⌘)로 여러 장</strong>을 한 번에 고를 수 있습니다. 행 옆 「삭제」로 줄을 없앨 수 있습니다.
+        <h2>2. 메인 사진 (1:1)</h2>
+        <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
+          글 본문용 순번 사진과 <strong>별도</strong>입니다. 가운데 기준으로 정사각형 자른 뒤, 왼쪽 아래에 INTERIOR / DESIGN / 구분선 / 동네 / 아파트명을 얹습니다. 문구는 위
+          <strong>동네·주소</strong>·<strong>아파트 이름</strong>을 씁니다.
         </p>
-        <label for="mainPhoto">메인 사진 (대표 커버)</label>
-        <input type="file" id="mainPhoto" accept="image/*" />
-
-        <div id="extraSpaces"></div>
-        <button type="button" class="btn secondary" id="addSpaceRow" style="margin-top: 8px">＋ 공간 사진 추가</button>
-      </div>
-
-      <div class="card">
-        <h2>3. 메인 사진 미리보기 · 다운로드</h2>
-        <p class="hint">왼쪽 하단에 위치(위) + 아파트명(아래)을 올립니다. 네이버 에디터에 이 이미지를 먼저 넣은 뒤 글을 이어 쓰면 됩니다.</p>
-        <div class="btn-row">
-          <button type="button" class="btn" id="btnRenderMain">미리보기 갱신</button>
-          <button type="button" class="btn secondary" id="btnDownloadMain">메인 이미지 PNG 저장</button>
+        <input type="file" id="mainPhotoInput" accept="image/*" style="display: none" />
+        <div id="mainPhotoDropZone" class="bulk-drop-zone" tabindex="0" role="button" style="padding: 20px 16px">
+          메인 사진 한 장 넣기<br />
+          <span style="font-size: 0.8rem; font-weight: 500">넣으면 바로 아래에 미리보기</span>
         </div>
-        <canvas id="mainCanvas" style="display: none"></canvas>
-        <img id="mainPreview" alt="메인 미리보기" />
-      </div>
-
-      <div class="card">
-        <h2>4. AI(챗GPT·제미나이)용 프롬프트</h2>
-        <ol class="steps">
-          <li>위에서 고른 <strong>모든 사진</strong>을 채팅에 첨부합니다. (순서: 메인 → 각 공간 행 위에서 아래, 한 행에 여러 장이면 선택한 파일 순서)</li>
-          <li>「프롬프트 복사」 후 채팅에 붙여넣고 전송합니다.</li>
-          <li>나온 전체 답변을 5번 칸에 붙여넣습니다.</li>
-        </ol>
-        <div class="btn-row">
-          <button type="button" class="btn" id="btnCopyPrompt">프롬프트 복사</button>
+        <div id="mainPhotoPreviewWrap" class="main-photo-wrap" hidden>
+          <img id="mainPhotoPreviewImg" class="main-photo-preview-img" alt="메인 사진 미리보기" />
+          <div class="btn-row">
+            <button type="button" class="btn secondary" id="btnMainPhotoDownload">PNG 저장</button>
+            <button type="button" class="btn secondary" id="btnMainPhotoClear">메인 사진 지우기</button>
+          </div>
         </div>
-        <textarea id="promptPreview" readonly style="min-height: 220px; margin-top: 12px; font-size: 0.82rem"></textarea>
       </div>
 
       <div class="card">
-        <h2>5. 최종 글 (AI 답변 붙여넣기 → 전체 복사)</h2>
-        <label for="finalDraft">챗GPT·제미나이가 쓴 글 전체</label>
-        <textarea id="finalDraft" placeholder="AI 응답을 그대로 붙여넣으세요."></textarea>
+        <h2>3. 사진 (글 생성용 순서)</h2>
+        <input type="file" id="bulkPhotoInput" accept="image/*" multiple style="display: none" />
+        <div id="bulkDropZone" class="bulk-drop-zone" tabindex="0" role="button">
+          사진을 여기로 끌어놓기<br />
+          <span style="font-size: 0.8rem; font-weight: 500">또는 클릭해서 고르기</span>
+        </div>
+        <ul id="bulkList" class="bulk-list" aria-label="사진 순서"></ul>
+        <button type="button" class="btn secondary" id="btnClearBulk" style="padding: 6px 12px; font-size: 0.82rem">
+          목록 비우기
+        </button>
+      </div>
+
+      <div class="card">
+        <h2>4. Gemini로 생성</h2>
+        <div id="apiBaseWrap">
+          <label for="apiBase">서버 주소 (<code>file://</code>로 열 때만)</label>
+          <input type="text" id="apiBase" placeholder="http://localhost:8787" autocomplete="off" />
+        </div>
+        <label for="aiApiKey">Gemini API 키 (선택)</label>
+        <input type="password" id="aiApiKey" autocomplete="off" placeholder="비워두면 서버에 GEMINI_API_KEY가 있을 때만 동작" />
+        <p class="hint" style="margin-top: -4px">
+          인터넷에 올린 서버에는 <code>GEMINI_API_KEY</code> 환경변수를 넣고, 여기는 비워 두는 방식을 권장합니다. 로컬만 쓰면 키를 입력하거나 브라우저에 저장해 두세요.
+        </p>
+        <button type="button" class="btn" id="btnAutoGenerate">글 자동 생성</button>
+        <p class="hint" id="autoGenStatus" style="min-height: 1.3em; color: var(--text)"></p>
+        <label style="margin-top: 14px">최종 글 (미리보기)</label>
+        <div id="finalDraft" class="final-draft" role="region" aria-live="polite"></div>
         <div class="btn-row">
-          <button type="button" class="btn" id="btnCopyFinal">전체 복사 (텍스트)</button>
-          <button type="button" class="btn secondary" id="btnCopyFinalHtml">HTML로 복사 (에디터에 따라 다를 수 있음)</button>
+          <button type="button" class="btn secondary" id="btnCopyDraft">글복사</button>
         </div>
         <p class="hint">
-          네이버 스마트에디터는 HTML 붙여넣기가 제한될 수 있습니다. 그럴 때는 「전체 복사」로 메모장에 넣은 뒤 단락만 에디터에 옮기거나, Word에 붙였다가 다시 복사하는 방식이 안전합니다.
+          본문 12pt·공간 소제목 14pt. 공간 앞 구분은 네이버 에디터가 `<hr>`를 없애는 경우가 있어 `<br/>`+테이블·선 `<p>` 조합으로 넣었습니다. 붙여넣기 후에도 간격·선이 안 보이면 브라우저에서 「일반 텍스트만 붙여넣기」로 시도해 보세요.
         </p>
       </div>
     </div>
     <div class="toast" id="toast" role="status"></div>
 
     <script>
-      const SPACE_OPTIONS = ["거실", "주방", "현관", "방", "욕실", "발코니", "기타"];
+      const GEMINI_MODEL = "gemini-3-flash-preview";
 
-      const mainPhoto = document.getElementById("mainPhoto");
-      const extraSpaces = document.getElementById("extraSpaces");
-      const addSpaceRow = document.getElementById("addSpaceRow");
-      const mainCanvas = document.getElementById("mainCanvas");
-      const mainPreview = document.getElementById("mainPreview");
-      const promptPreview = document.getElementById("promptPreview");
+      const bulkListEl = document.getElementById("bulkList");
+      const bulkDropZone = document.getElementById("bulkDropZone");
+      const bulkPhotoInput = document.getElementById("bulkPhotoInput");
       const finalDraft = document.getElementById("finalDraft");
       const toast = document.getElementById("toast");
+      /** @type {File[]} */
+      let bulkFileList = [];
+      /** @type {string} Gemini 원문(마크다운 ** 유지) */
+      let lastDraftRaw = "";
+
+      (function initGeminiKeyField() {
+        const el = document.getElementById("aiApiKey");
+        try {
+          const saved = localStorage.getItem("blog_gemini_api_key");
+          if (saved) el.value = saved;
+        } catch {
+          /* ignore */
+        }
+        el.addEventListener("change", () => {
+          try {
+            const v = el.value.trim();
+            if (v) localStorage.setItem("blog_gemini_api_key", v);
+            else localStorage.removeItem("blog_gemini_api_key");
+          } catch {
+            /* ignore */
+          }
+        });
+      })();
+
+      /** 동네 문자열 → 제목용 [○○인테리어]의 ○○ (예: 송파구→송파, 고양시→고양) */
+      function areaInteriorePrefix(raw) {
+        const s = String(raw || "").trim();
+        if (!s) return "";
+        const gu = s.match(/([\uAC00-\uD7A3]{2,10})구(?=\s|$)/);
+        if (gu) return gu[1];
+        const si = s.match(/([\uAC00-\uD7A3]{2,10})시(?=\s|$)/);
+        if (si) return si[1];
+        const gun = s.match(/([\uAC00-\uD7A3]{2,10})군(?=\s|$)/);
+        if (gun) return gun[1];
+        const first = s.split(/\s+/)[0];
+        return first.replace(/(특별시|광역시|특별자치시|시|군|구)$/, "") || first;
+      }
+
+      function refreshAreaPreview() {
+        const el = document.getElementById("areaPreview");
+        const n = document.getElementById("neighborhood").value.trim();
+        const p = areaInteriorePrefix(n);
+        el.textContent = p
+          ? `첫 줄 제목 태그: [${p}인테리어] 로 자동 적용됩니다.`
+          : "동네를 입력하면 [○○인테리어]가 자동으로 정해집니다.";
+      }
+
+      let mainPhotoFile = null;
+      let mainPhotoDataUrl = "";
+
+      function tryRefreshMainPhotoPreview() {
+        if (mainPhotoFile) void buildMainPhotoPreview(mainPhotoFile);
+      }
+
+      function fitFontSize(ctx, text, fontFamily, weight, maxW, basePx, minPx) {
+        let s = basePx;
+        while (s >= minPx) {
+          ctx.font = `${weight} ${s}px ${fontFamily}`;
+          if (ctx.measureText(text).width <= maxW) return s;
+          s -= 2;
+        }
+        return minPx;
+      }
+
+      async function buildMainPhotoPreview(file) {
+        const wrap = document.getElementById("mainPhotoPreviewWrap");
+        const imgEl = document.getElementById("mainPhotoPreviewImg");
+        const mimeRaw = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
+        if (/heic|heif/i.test(mimeRaw) || /\.hei[cf]$/i.test(file.name)) {
+          throw new Error("HEIC는 JPG 등으로 변환해 주세요.");
+        }
+        const bmp = await createImageBitmap(file);
+        try {
+          const OUT = 1080;
+          const pret = '"Pretendard",sans-serif';
+          await document.fonts.ready;
+          await Promise.all([
+            document.fonts.load(`700 ${Math.round(OUT * 0.04)}px Pretendard`),
+            document.fonts.load(`400 ${Math.round(OUT * 0.04)}px Pretendard`)
+          ]).catch(() => {});
+
+          const canvas = document.createElement("canvas");
+          canvas.width = OUT;
+          canvas.height = OUT;
+          const ctx = canvas.getContext("2d");
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          const iw = bmp.width;
+          const ih = bmp.height;
+          const side = Math.min(iw, ih);
+          const sx = (iw - side) / 2;
+          const sy = (ih - side) / 2;
+          ctx.drawImage(bmp, sx, sy, side, side, 0, 0, OUT, OUT);
+
+          const padL = Math.round(OUT * 0.048);
+          const padB = Math.round(OUT * 0.056);
+          const shiftUp = Math.round(OUT * 0.052);
+          const maxTextW = OUT - padL * 2;
+          const district = document.getElementById("neighborhood").value.trim() || "동네 · 주소";
+          const apt = document.getElementById("aptName").value.trim() || "아파트명";
+
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          ctx.fillStyle = "#ffffff";
+
+          let y = OUT - padB - shiftUp;
+          const gapSmall = Math.round(OUT * 0.01);
+          const gapBlock = Math.round(OUT * 0.022);
+
+          const fAptBase = Math.round(OUT * 0.059);
+          const fApt = fitFontSize(ctx, apt, pret, 700, maxTextW, fAptBase, Math.round(OUT * 0.037));
+          ctx.font = `700 ${fApt}px ${pret}`;
+          ctx.fillText(apt, padL, y);
+          y -= fApt + gapSmall;
+
+          const fDistBase = Math.round(OUT * 0.055);
+          const fDist = fitFontSize(ctx, district, pret, 400, maxTextW, fDistBase, Math.round(OUT * 0.035));
+          ctx.font = `400 ${fDist}px ${pret}`;
+          ctx.fillText(district, padL, y);
+          y -= fDist + gapBlock;
+
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = Math.max(1.2, OUT / 720);
+          const lineRight = OUT - padL;
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(lineRight, y);
+          ctx.stroke();
+
+          y -= gapBlock;
+
+          const fDesign = Math.round(OUT * 0.024);
+          ctx.font = `400 ${fDesign}px ${pret}`;
+          try {
+            ctx.letterSpacing = "0.05em";
+          } catch {
+            /* ignore */
+          }
+          ctx.fillText("DESIGN", padL, y);
+          try {
+            ctx.letterSpacing = "0";
+          } catch {
+            /* ignore */
+          }
+          y -= fDesign + Math.round(OUT * 0.002);
+
+          const fInt = Math.round(OUT * 0.036);
+          ctx.font = `700 ${fInt}px ${pret}`;
+          try {
+            ctx.letterSpacing = "0.04em";
+          } catch {
+            /* ignore */
+          }
+          ctx.fillText("INTERIOR", padL, y);
+          try {
+            ctx.letterSpacing = "0";
+          } catch {
+            /* ignore */
+          }
+
+          mainPhotoDataUrl = canvas.toDataURL("image/png");
+          imgEl.src = mainPhotoDataUrl;
+          wrap.hidden = false;
+        } finally {
+          bmp.close();
+        }
+      }
+
+      document.getElementById("neighborhood").addEventListener("input", () => {
+        refreshAreaPreview();
+        tryRefreshMainPhotoPreview();
+      });
+      document.getElementById("aptName").addEventListener("input", tryRefreshMainPhotoPreview);
+      refreshAreaPreview();
 
       function showToast(msg) {
         toast.textContent = msg;
@@ -279,125 +528,444 @@
         showToast._t = setTimeout(() => toast.classList.remove("show"), 2200);
       }
 
-      function addExtraRow() {
-        const row = document.createElement("div");
-        row.className = "space-row";
-        const sel = document.createElement("select");
-        SPACE_OPTIONS.forEach((s) => {
-          const o = document.createElement("option");
-          o.value = s;
-          o.textContent = s;
-          sel.appendChild(o);
-        });
-        const fileWrap = document.createElement("div");
-        fileWrap.style.minWidth = "0";
-        const file = document.createElement("input");
-        file.type = "file";
-        file.accept = "image/*";
-        file.multiple = true;
-        const fileHint = document.createElement("div");
-        fileHint.className = "hint";
-        fileHint.style.marginTop = "4px";
-        fileHint.style.marginBottom = "0";
-        fileHint.textContent = "여러 장: 선택 창에서 Ctrl·⌘로 추가 선택";
-        const syncCount = () => {
-          const n = file.files?.length || 0;
-          fileHint.textContent =
-            n === 0
-              ? "여러 장: 선택 창에서 Ctrl·⌘로 추가 선택"
-              : `${n}장 선택됨 (첨부 순서 = 이 순서)`;
-        };
-        file.addEventListener("change", () => {
-          syncCount();
-          updatePromptPreview();
-        });
-        fileWrap.appendChild(file);
-        fileWrap.appendChild(fileHint);
-        const rm = document.createElement("button");
-        rm.type = "button";
-        rm.textContent = "삭제";
-        rm.addEventListener("click", () => row.remove());
-        row.appendChild(sel);
-        row.appendChild(fileWrap);
-        row.appendChild(rm);
-        extraSpaces.appendChild(row);
-      }
-
-      addSpaceRow.addEventListener("click", () => addExtraRow());
-      for (let i = 0; i < 4; i++) addExtraRow();
-
-      function getExtraList() {
-        const rows = [...extraSpaces.querySelectorAll(".space-row")];
-        const out = [];
-        for (const row of rows) {
-          const label = row.querySelector("select")?.value || "기타";
-          const files = row.querySelector('input[type="file"]')?.files;
-          if (!files?.length) continue;
-          const total = files.length;
-          for (let i = 0; i < total; i++) {
-            out.push({ label, name: files[i].name, idx: i + 1, total });
-          }
+      function getApiBase() {
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          return `${window.location.protocol}//${window.location.host}`.replace(/\/$/, "");
         }
-        return out;
+        const raw = (document.getElementById("apiBase").value || "").trim();
+        return (raw || "http://localhost:8787").replace(/\/$/, "");
       }
+
+      (function initApiBase() {
+        const wrap = document.getElementById("apiBaseWrap");
+        const baseInput = document.getElementById("apiBase");
+        if (window.location.protocol === "file:") {
+          wrap.style.display = "block";
+          baseInput.value = sessionStorage.getItem("blog_api_base") || "http://localhost:8787";
+          baseInput.addEventListener("change", () => sessionStorage.setItem("blog_api_base", baseInput.value.trim()));
+        } else {
+          wrap.style.display = "none";
+        }
+      })();
+
+      function renderBulkList() {
+        bulkListEl.innerHTML = "";
+        if (!bulkFileList.length) {
+          const li = document.createElement("li");
+          li.className = "bulk-item";
+          li.style.gridTemplateColumns = "1fr";
+          li.style.color = "var(--muted)";
+          li.style.fontSize = "0.8rem";
+          li.textContent = "사진을 추가하세요.";
+          bulkListEl.appendChild(li);
+          return;
+        }
+        bulkFileList.forEach((file, i) => {
+          const li = document.createElement("li");
+          li.className = "bulk-item";
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = String(i + 1);
+          const name = document.createElement("span");
+          name.className = "name";
+          name.title = file.name;
+          name.textContent = file.name;
+          const btns = document.createElement("span");
+          btns.className = "btns";
+          const up = document.createElement("button");
+          up.type = "button";
+          up.textContent = "↑";
+          up.disabled = i === 0;
+          up.addEventListener("click", () => {
+            if (i <= 0) return;
+            [bulkFileList[i - 1], bulkFileList[i]] = [bulkFileList[i], bulkFileList[i - 1]];
+            renderBulkList();
+          });
+          const down = document.createElement("button");
+          down.type = "button";
+          down.textContent = "↓";
+          down.disabled = i >= bulkFileList.length - 1;
+          down.addEventListener("click", () => {
+            if (i >= bulkFileList.length - 1) return;
+            [bulkFileList[i], bulkFileList[i + 1]] = [bulkFileList[i + 1], bulkFileList[i]];
+            renderBulkList();
+          });
+          const rm = document.createElement("button");
+          rm.type = "button";
+          rm.textContent = "×";
+          rm.addEventListener("click", () => {
+            bulkFileList.splice(i, 1);
+            renderBulkList();
+          });
+          btns.append(up, down, rm);
+          li.append(tag, name, btns);
+          bulkListEl.appendChild(li);
+        });
+      }
+
+      function addFilesToBulk(fileArr) {
+        const arr = Array.from(fileArr || []).filter((f) => {
+          if (!f || !f.name) return false;
+          if (f.type && f.type.startsWith("image/")) return true;
+          return /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name);
+        });
+        if (!arr.length) return;
+        bulkFileList.push(...arr);
+        renderBulkList();
+      }
+
+      bulkDropZone.addEventListener("click", () => bulkPhotoInput.click());
+      bulkDropZone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          bulkPhotoInput.click();
+        }
+      });
+      bulkPhotoInput.addEventListener("change", (e) => {
+        addFilesToBulk(e.target.files);
+        e.target.value = "";
+      });
+      document.getElementById("btnClearBulk").addEventListener("click", () => {
+        bulkFileList = [];
+        renderBulkList();
+      });
+      ["dragenter", "dragover"].forEach((ev) => {
+        bulkDropZone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          bulkDropZone.classList.add("drag");
+        });
+      });
+      ["dragleave", "drop"].forEach((ev) => {
+        bulkDropZone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          bulkDropZone.classList.remove("drag");
+        });
+      });
+      bulkDropZone.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer?.files;
+        if (dt?.length) addFilesToBulk(dt);
+      });
+      renderBulkList();
+
+      const mainPhotoInput = document.getElementById("mainPhotoInput");
+      const mainPhotoDropZone = document.getElementById("mainPhotoDropZone");
+      const mainPhotoPreviewWrap = document.getElementById("mainPhotoPreviewWrap");
+      const mainPhotoPreviewImg = document.getElementById("mainPhotoPreviewImg");
+
+      function setMainPhotoFromFile(file) {
+        if (!file || !file.type?.startsWith("image/")) {
+          showToast("이미지 파일만 넣어 주세요.");
+          return;
+        }
+        mainPhotoFile = file;
+        void buildMainPhotoPreview(file).catch((err) => {
+          console.error(err);
+          mainPhotoFile = null;
+          mainPhotoDataUrl = "";
+          mainPhotoPreviewWrap.hidden = true;
+          showToast(err?.message || String(err));
+        });
+      }
+
+      mainPhotoDropZone.addEventListener("click", () => mainPhotoInput.click());
+      mainPhotoDropZone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          mainPhotoInput.click();
+        }
+      });
+      mainPhotoInput.addEventListener("change", (e) => {
+        const f = e.target.files?.[0];
+        e.target.value = "";
+        if (f) setMainPhotoFromFile(f);
+      });
+      ["dragenter", "dragover"].forEach((ev) => {
+        mainPhotoDropZone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          mainPhotoDropZone.classList.add("drag");
+        });
+      });
+      ["dragleave", "drop"].forEach((ev) => {
+        mainPhotoDropZone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          mainPhotoDropZone.classList.remove("drag");
+        });
+      });
+      mainPhotoDropZone.addEventListener("drop", (e) => {
+        const f = e.dataTransfer?.files?.[0];
+        if (f) setMainPhotoFromFile(f);
+      });
+
+      document.getElementById("btnMainPhotoDownload").addEventListener("click", () => {
+        if (!mainPhotoDataUrl) {
+          showToast("먼저 메인 사진을 넣어 주세요.");
+          return;
+        }
+        const a = document.createElement("a");
+        a.href = mainPhotoDataUrl;
+        a.download = "blog-main-thumbnail.png";
+        a.click();
+        showToast("PNG 저장");
+      });
+
+      document.getElementById("btnMainPhotoClear").addEventListener("click", () => {
+        mainPhotoFile = null;
+        mainPhotoDataUrl = "";
+        mainPhotoPreviewImg.removeAttribute("src");
+        mainPhotoPreviewWrap.hidden = true;
+        showToast("메인 사진을 지웠습니다.");
+      });
 
       function buildPrompt() {
-        const keywords = document.getElementById("keywords").value.trim();
         const apt = document.getElementById("aptName").value.trim();
         const neighborhood = document.getElementById("neighborhood").value.trim();
-        const main = mainPhoto.files?.[0];
-        const extras = getExtraList();
-
-        let orderLines = "1) 메인(대표) 사진 — 커버·첫 이미지용\n";
-        extras.forEach((e, i) => {
-          const part = e.total > 1 ? `${e.label} ${e.idx}/${e.total}번째` : `${e.label}`;
-          orderLines += `${i + 2}) ${part} — 파일명: ${e.name}\n`;
+        const areaTag = areaInteriorePrefix(neighborhood) || "지역";
+        let orderLines = "";
+        bulkFileList.forEach((file, i) => {
+          orderLines += `${i + 1}) 파일명: ${file.name}\n`;
         });
-
-        return `당신은 네이버 부동산·인테리어 블로그 전문 작가입니다. 아래 정보와 첨부 이미지 순서를 반드시 지켜 글을 작성하세요.
+        return `당신은 네이버 부동산·인테리어 블로그 전문 작가입니다. 첨부 이미지 순서는 아래와 같고, 사진을 보고 어떤 공간인지 판별해 각 구역 설명에 반영하세요.
 
 [필수 정보]
-- 핵심 키워드: ${keywords || "(미입력)"}
+- 위치(동네·주소): ${neighborhood || "(미입력)"}
 - 아파트명: ${apt || "(미입력)"}
-- 위치(동네): ${neighborhood || "(미입력)"}
+- 제목 첫 대괄호 태그(반드시 이 형태): [${areaTag}인테리어]
+  ※ 위치 문자열 규칙: "○○구 …"이면 ○○만 사용(예: 송파구 가락동 → 송파). "○○시 …"이면 ○○만 사용(예: 고양시 화정동 → 고양).
 
-[첨부 이미지 순서 — 이 순서대로 글에 배치]
+[첨부 이미지 순서]
 ${orderLines}
-※ 메인 사진은 사용자가 별도로 "동네 한 줄 + 아파트명 한 줄"을 왼쪽 하단에 합성한 커버로 쓸 예정이므로, 본문에서는 메인 이미지에 대한 시각적 설명을 자연스럽게 넣되 중복 서술은 줄이세요.
 
-[글 구조]
-1. 인트로: 키워드·단지명·입지가 자연스럽게 드러나도록 3~6문단 분량으로 작성.
-2. 공간별 본문: 거실, 주방, 현관, 방, 욕실 등 실제 첨부된 공간마다 섹션을 나누고, 각 섹션은 반드시 공백 제외 기준 500자 이상으로 상세히 작성. 각 섹션 제목은 "## 거실" 형식의 마크다운 헤딩으로 시작.
-3. 각 공간 섹션에서 첨부 순서대로 "[이미지: 거실]" 한 줄씩 표시. 같은 공간 사진이 여러 장이면 같은 공간명으로 줄을 여러 개 두고, 위 첨부 순서와 1:1로 대응시킬 것.
-4. 마지막에 추천 해시태그를 정확히 30개 작성. 각 태그는 #으로 시작하고, 한 줄에 공백으로 구분하거나 줄바꿈으로 나열.
+[출력 형식 — 아래 순서·줄바꿈을 정확히 지킬 것. 마크다운 # 제목 금지.]
 
-[톤]
-- 과장 광고체는 피하고, 현장감 있게 차분하게.
-- 키워드는 자연스럽게 몇 차례 녹일 것 (키워드 나열 금지).
+1) 첫 줄: 제목 한 줄만.
+   반드시 이 패턴: [${areaTag}인테리어] + 사용자 위치 문장을 자연스럽게 이어 "에 위치한" + 아파트명 + "인테리어 현장"
+   예시(참고): [송파인테리어]송파구 가락동에 위치한 ○○아파트인테리어 현장 / [고양인테리어]고양시 화정동에 위치한 ○○아파트인테리어 현장
+   실제 출력 시 ○○는 아래 아파트명과 위치 정보를 정확히 반영할 것.
 
-[출력]
-- 다른 안내문 없이 블로그 본문만 출력.`;
+2) 빈 줄 하나
+
+3) 인트로: 단지명·입지(위 동네·주소)·아파트 특징이 드러나는 설명. 3~6문단 분량 안팎. 중요한 말은 **굵게**.
+   ※ 인트로의 문단 나눔(빈 줄)은 반드시 아래 [문단·줄 나누기] 규칙을 따를 것.
+
+4) 공간 블록 — 아래 순서만, 고정: 거실 → 주방 → 현관 → 욕실 → 안방 (다섯 곳 모두 작성).
+   ※ 긴 구분선(하이픈·━·─ 등 한 줄로 이어진 장식 줄)은 절대 넣지 말 것. 공간 사이에는 빈 줄만 사용.
+   ※ 인트로 마지막 문단과 첫 공간(거실) 소제목 사이, 그리고 공간 블록과 공간 블록 사이에는 빈 줄을 두 번 연속 넣을 것(문단 사이 한 줄보다 넓게 구분).
+
+   각 공간 블록마다 동일 패턴:
+   - 첫 줄 한 줄만: 공간명 한 단어(거실·주방·현관·욕실·안방) + 반드시 한 칸 띄운 뒤 ASCII 큰따옴표 " 로 시작해 소제목을 닫는 " 로 끝낼 것. (12~28자 안팎, 이미지에서 읽히는 분위기·채광·자재·포인트 등)
+     예: 거실 "우드 톤과 북향 채광이 살아 있는 가족 공간"
+     예: 주방 "화이트 상판과 수납 동선을 살린 ㄷ자 구조"
+     ※ 공간명과 소제목 사이에 대시(—)·긴 하이픈·세로줄 등 장식용 선을 넣지 말 것. 따옴표만 사용.
+     ※ 공간명·소제목 문구 전체를 **로 감싸지 말 것. 소제목 안에서 정말 강조할 단어만 **마크다운 굵게**로 짧게 감쌀 것.
+   - 빈 줄 하나
+   - 본문 (공백 제외 500자 이상). 사진 내용 반영. 핵심 단어·수치·자재명 등 중요한 부분은 **마크다운 굵게**로 적절히 강조.
+   ※ 본문의 문단 나눔(빈 줄)은 아래 [문단·줄 나누기] 규칙을 따를 것.
+   - "[이미지: 거실]" 같은 플레이스홀더는 출력하지 말 것. (사진은 작성자가 에디터에서 직접 넣음)
+   - 다음 공간 소제목 직전: 빈 줄 두 번 연속 (구분선 없음)
+
+5) 마지막 줄들: 해시태그 정확히 30개. 각각 #으로 시작.
+   - 반드시 아파트명 "${apt || "단지명"}" 과 동네·주소 "${neighborhood || "위치"}" 를 중심으로 조합할 것 (단지+동네, 단지+구/시, 지역+인테리어, 동 이름+아파트 등).
+   - 위 아파트·주소와 무관한 일반·낚시성 태그는 넣지 말 것. 30개 모두 현장과 직접 연관되게.
+
+[굵은 글씨]
+- 인트로·각 공간 본문: 단지명, 입지, 평수, 자재, 시공 포인트 등 중요한 표현만 **마크다운 굵게**로 짧게 감싸기. 문단 전체를 통째로 굵게 하지 말 것.
+- 공간 소제목 따옴표 안: 필요한 핵심 단어만 **감싸기**. 따옴표 안 문장 전체를 한 덩어리로 굵게 하지 말 것.
+- 맨 첫 줄 전체 제목([${areaTag}인테리어]…), 해시태그 줄에는 ** 사용 금지.
+
+[문단·줄 나누기 — 인트로·각 공간 본문만. 제목 첫 줄·공간 소제목 줄·해시태그 블록은 제외]
+문장은 마침표·물음표·느낌표·말줄임표(. ? ! … 및 。 ？ ！) 등으로 끝난 뒤를 기준으로 한다.
+- 그 시점까지 **같은 문단**에 이어 쓴 글의 **글자 수(띄어쓰기 포함)** 가 **150자를 넘었다면** → 그 문장 직후 **빈 줄 하나**를 넣고, 다음 문장부터 **새 문단**으로 시작한다.
+- **150자 이하**(150자까지 포함)이면 → 줄을 바꾸지 말고 **공백 한 칸**만 두고 같은 문단에서 다음 문장을 이어 쓴다.
+※ **마크다운 **굵게** 표기는 글자 수에 포함해 센다. 한 문장만으로 150자를 넘기면 그 문장 다음에 빈 줄을 넣어도 된다.
+
+[톤] 과장 광고체 금지, 차분하게.
+
+[출력] 설명 문 없이 위 형식의 본문만 출력.`;
       }
 
-      function updatePromptPreview() {
-        promptPreview.value = buildPrompt();
-      }
-
-      ["keywords", "aptName", "neighborhood"].forEach((id) => {
-        document.getElementById(id).addEventListener("input", updatePromptPreview);
-      });
-      mainPhoto.addEventListener("change", updatePromptPreview);
-      extraSpaces.addEventListener("change", updatePromptPreview);
-
-      document.getElementById("btnCopyPrompt").addEventListener("click", async () => {
-        updatePromptPreview();
+      async function fileToImagePart(file, maxSide = 2048) {
+        const mimeRaw = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
+        if (/heic|heif/i.test(mimeRaw) || /\.hei[cf]$/i.test(file.name)) {
+          throw new Error("HEIC는 JPG 등으로 변환해 주세요.");
+        }
+        const bmp = await createImageBitmap(file);
         try {
-          await navigator.clipboard.writeText(promptPreview.value);
-          showToast("프롬프트를 복사했습니다.");
-        } catch {
-          showToast("복사 실패 — 텍스트를 직접 선택해 복사하세요.");
+          let w = bmp.width;
+          let h = bmp.height;
+          if (w > maxSide || h > maxSide) {
+            const s = Math.min(maxSide / w, maxSide / h);
+            w = Math.round(w * s);
+            h = Math.round(h * s);
+          }
+          const c = document.createElement("canvas");
+          c.width = w;
+          c.height = h;
+          c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+          const outMime = mimeRaw === "image/png" ? "image/png" : "image/jpeg";
+          const blob = await new Promise((res) =>
+            c.toBlob(res, outMime, outMime === "image/jpeg" ? 0.88 : undefined)
+          );
+          if (!blob) throw new Error("이미지 인코딩 실패");
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+          }
+          return { mimeType: outMime, base64: btoa(binary), sizeBytes: blob.size };
+        } finally {
+          bmp.close();
+        }
+      }
+
+      function formatDataSize(bytes) {
+        const n = Number(bytes);
+        if (!Number.isFinite(n) || n < 0) return "0B";
+        if (n < 1024) return `${Math.round(n)}B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+        return `${(n / (1024 * 1024)).toFixed(2)}MB`;
+      }
+
+      document.getElementById("btnAutoGenerate").addEventListener("click", async () => {
+        const btn = document.getElementById("btnAutoGenerate");
+        const status = document.getElementById("autoGenStatus");
+        if (!bulkFileList.length) {
+          showToast("사진을 1장 이상 넣어 주세요.");
+          return;
+        }
+        const apiKey = document.getElementById("aiApiKey").value.trim();
+        const prompt = buildPrompt();
+        btn.disabled = true;
+        lastDraftRaw = "";
+        finalDraft.innerHTML = "";
+        status.textContent = "처리 중…";
+        try {
+          const parts = [];
+          let totalImageBytes = 0;
+          for (let i = 0; i < bulkFileList.length; i++) {
+            status.textContent = `이미지 ${i + 1}/${bulkFileList.length} 준비…`;
+            const p = await fileToImagePart(bulkFileList[i]);
+            totalImageBytes += p.sizeBytes || 0;
+            parts.push(p);
+          }
+          const images = parts.map(({ mimeType, base64 }) => ({ mimeType, base64 }));
+          const approxBase64Bytes = Math.round((totalImageBytes * 4) / 3);
+          status.textContent = `Gemini로 전송 중… (이미지 ${images.length}장 · 처리 후 합계 약 ${formatDataSize(totalImageBytes)}, Base64 포함 시 약 ${formatDataSize(approxBase64Bytes)})`;
+          const res = await fetch(`${getApiBase()}/api/blog-generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider: "gemini",
+              geminiModel: GEMINI_MODEL,
+              apiKey,
+              prompt,
+              images
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || res.statusText || "요청 실패");
+          if (!data.text) throw new Error("응답에 본문이 없습니다.");
+          lastDraftRaw = reflowDraftBySentenceLength(data.text.trim(), 150);
+          finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
+          status.textContent = `생성 완료 · Gemini 전송 이미지 ${images.length}장, 처리 후 합계 약 ${formatDataSize(totalImageBytes)} (Base64 포함 약 ${formatDataSize(approxBase64Bytes)})`;
+          showToast("생성 완료");
+        } catch (e) {
+          console.error(e);
+          status.textContent = "";
+          const msg = e?.message || String(e);
+          showToast(msg);
+          alert(msg);
+        } finally {
+          btn.disabled = false;
         }
       });
+
+      const ROOM_NAMES_ARR = ["거실", "주방", "현관", "욕실", "안방"];
+      const ROOM_SUBTITLE_BLOCK_RE = new RegExp(
+        `^(?:\\*\\*)?(?:${ROOM_NAMES_ARR.join("|")})(?:\\*\\*)?\\s*(?:["\u201c]|[—–\\-|｜])`,
+        "m"
+      );
+
+      function isHashtagOnlyBlock(block) {
+        const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
+        return lines.length > 0 && lines.every((l) => l.startsWith("#"));
+      }
+
+      function shouldReflowDraftBlock(block, index) {
+        const t = block.trim();
+        if (index === 0 && /^\[[^\]\n]+인테리어\]/.test(t)) return false;
+        if (ROOM_SUBTITLE_BLOCK_RE.test(t)) return false;
+        if (isHashtagOnlyBlock(block)) return false;
+        return true;
+      }
+
+      /** **…** 안의 마침표는 문장 경계로 쓰지 않음 */
+      function splitIntoSentencesForReflow(str) {
+        const sentences = [];
+        let buf = "";
+        let i = 0;
+        let bold = false;
+        const n = str.length;
+        while (i < n) {
+          if (str[i] === "*" && i + 1 < n && str[i + 1] === "*") {
+            buf += "**";
+            bold = !bold;
+            i += 2;
+            continue;
+          }
+          if (!bold && /[.!?。！？…]/.test(str[i])) {
+            if (str[i] === "." && /\d/.test(str[i - 1] || "") && /\d/.test(str[i + 1] || "")) {
+              buf += str[i];
+              i++;
+              continue;
+            }
+            buf += str[i];
+            i++;
+            while (i < n && str[i] !== "\n" && /\s/.test(str[i])) {
+              buf += str[i];
+              i++;
+            }
+            const trimmed = buf.trim();
+            if (trimmed) sentences.push(trimmed);
+            buf = "";
+            continue;
+          }
+          buf += str[i];
+          i++;
+        }
+        const tail = buf.trim();
+        if (tail) sentences.push(tail);
+        return sentences;
+      }
+
+      function reflowBlockToParagraphs(block, maxLen) {
+        const oneLine = block.replace(/\s*\n\s*/g, " ").trim();
+        if (!oneLine) return block;
+        const sentences = splitIntoSentencesForReflow(oneLine);
+        if (sentences.length === 0) return block;
+        const paras = [];
+        let cur = [];
+        for (const s of sentences) {
+          cur.push(s);
+          const text = cur.join(" ");
+          if (text.length > maxLen) {
+            paras.push(text);
+            cur = [];
+          }
+        }
+        if (cur.length) paras.push(cur.join(" "));
+        return paras.join("\n\n");
+      }
+
+      /** 인트로·공간 본문: 문장 끝 기준 누적 150자 초과 시에만 문단 구분 */
+      function reflowDraftBySentenceLength(raw, maxLen) {
+        const blocks = raw.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+        const out = blocks.map((block, index) =>
+          shouldReflowDraftBlock(block, index) ? reflowBlockToParagraphs(block, maxLen) : block
+        );
+        return out.join("\n\n");
+      }
 
       function escapeHtml(s) {
         return s
@@ -407,40 +975,139 @@ ${orderLines}
           .replace(/"/g, "&quot;");
       }
 
-      function plainToHtml(text) {
-        const paras = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
-        return paras.map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`).join("\n");
+      /** **굵게** → <strong>, 나머지 이스케이프 후 줄바꿈은 <br> */
+      function markdownBoldToHtmlFragment(s) {
+        const parts = String(s).split(/\*\*/);
+        let out = "";
+        for (let i = 0; i < parts.length; i++) {
+          const chunk = escapeHtml(parts[i]);
+          if (i % 2 === 1) {
+            if (chunk) out += `<strong>${chunk}</strong>`;
+          } else {
+            out += chunk.replace(/\n/g, "<br/>");
+          }
+        }
+        return out;
       }
 
-      document.getElementById("btnCopyFinal").addEventListener("click", async () => {
-        const t = finalDraft.value.trim();
-        if (!t) {
-          showToast("붙여넣을 내용이 없습니다.");
-          return;
-        }
-        try {
-          await navigator.clipboard.writeText(t);
-          showToast("전체 텍스트를 복사했습니다.");
-        } catch {
-          showToast("복사 실패");
-        }
-      });
+      /** 빈 줄로 문단 나눔 → <p>…</p> (스타일은 buildFinalDraftDisplayHtml에서 지정) */
+      function draftMarkdownToBlocksHtml(text) {
+        if (!text || !String(text).trim()) return "";
+        return String(text)
+          .split(/\n\n+/)
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .map((block) => `<p>${markdownBoldToHtmlFragment(block)}</p>`)
+          .join("");
+      }
 
-      document.getElementById("btnCopyFinalHtml").addEventListener("click", async () => {
-        const t = finalDraft.value.trim();
-        if (!t) {
-          showToast("붙여넣을 내용이 없습니다.");
+      const ROOM_NAMES = new Set(ROOM_NAMES_ARR);
+      const ROOM_QUOTE_LINE = new RegExp(
+        `^\\s*(?:${ROOM_NAMES_ARR.join("|")})\\s*["\u201c]`
+      );
+      const AFTER_ROOM_STRONG = /^\s*(?:["\u201c]|[—–\-|｜])/;
+
+      function applyRoomSubtitleClass(container) {
+        container.querySelectorAll("p").forEach((p) => {
+          const strong = p.querySelector(":scope > strong:first-child");
+          if (strong && ROOM_NAMES.has(strong.textContent.trim())) {
+            const next = strong.nextSibling;
+            if (next && next.nodeType === Node.TEXT_NODE && AFTER_ROOM_STRONG.test(next.textContent)) {
+              p.classList.add("draft-room-line");
+              return;
+            }
+          }
+          const first = p.firstChild;
+          if (first && first.nodeType === Node.TEXT_NODE && ROOM_QUOTE_LINE.test(first.textContent)) {
+            p.classList.add("draft-room-line");
+          }
+        });
+      }
+
+      /** 문단 트리(공간 소제목 판별) — HTML·plain 간격 계산 공통 */
+      function draftParagraphNodes(raw) {
+        const inner = draftMarkdownToBlocksHtml(raw);
+        const wrap = document.createElement("div");
+        wrap.innerHTML = inner;
+        applyRoomSubtitleClass(wrap);
+        return [...wrap.querySelectorAll("p")];
+      }
+
+      /**
+       * 미리보기·HTML 복사: 본문 12pt, 소제목 줄 14pt(줄 전체 굵게 아님 — <strong>만 굵게).
+       * 네이버 등 에디터는 `<hr>`을 자주 제거함 → 위아래 `<br/>` 다수 + `table td`의 `border-top`으로 한 줄 구분(인라인 스타일 유지).
+       */
+      function buildSpaceDividerHtml() {
+        const line = "#e6e8ec";
+        const tableLine =
+          '<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" class="draft-space-divider" style="border-collapse:collapse;width:100%;margin:0"><tbody><tr><td style="font-size:2px;line-height:2px;padding:8px 0 7px;border-top:1px solid ' +
+          line +
+          '">&nbsp;</td></tr></tbody></table>';
+        return "<br/><br/>" + tableLine + "<br/><br/>";
+      }
+
+      function buildFinalDraftDisplayHtml(raw) {
+        const lh = 1.65;
+        const bodyPt = 12;
+        const roomPt = 14;
+        const styleBody = `margin:0;line-height:${lh};font-size:${bodyPt}pt;font-weight:400;color:#111;`;
+        const styleRoom = `margin:0;line-height:1.4;font-size:${roomPt}pt;font-weight:400;color:#0f172a;`;
+        const ps = draftParagraphNodes(raw);
+        const parts = [];
+        for (let i = 0; i < ps.length; i++) {
+          const p = ps[i];
+          const isRoom = p.classList.contains("draft-room-line");
+          const innerHtml = p.innerHTML;
+          const style = isRoom ? styleRoom : styleBody;
+          if (isRoom && i > 0) {
+            parts.push(buildSpaceDividerHtml());
+          }
+          parts.push(`<p style="${style}">${innerHtml}</p>`);
+          if (i >= ps.length - 1) continue;
+          const nextRoom = ps[i + 1].classList.contains("draft-room-line");
+          if (isRoom && !nextRoom) {
+            parts.push("<br/>");
+          } else if (!isRoom && !nextRoom) {
+            parts.push("<br/>");
+          }
+        }
+        return parts.join("");
+      }
+
+      /** plain 복사: 문단 사이 빈 줄, 공간 소제목 앞에는 구분선 한 줄(에디터가 HTML 무시할 때 대비) */
+      function buildPlainForClipboard(raw) {
+        const ps = draftParagraphNodes(raw);
+        const plainHr =
+          "────────────────────────────────────────";
+        let out = "";
+        for (let i = 0; i < ps.length; i++) {
+          const t = ps[i].textContent.replace(/\s+/g, " ").trim();
+          if (i > 0) {
+            const isRoom = ps[i].classList.contains("draft-room-line");
+            out += isRoom ? `\n\n${plainHr}\n\n` : "\n\n";
+          }
+          out += t;
+        }
+        return out;
+      }
+
+      document.getElementById("btnCopyDraft").addEventListener("click", async () => {
+        if (!lastDraftRaw.trim()) {
+          showToast("복사할 내용이 없습니다.");
           return;
         }
-        const html = plainToHtml(t);
+        const inner = buildFinalDraftDisplayHtml(lastDraftRaw);
+        const innerWrap = `<div style="font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#111">${inner}</div>`;
+        const html = `<!--StartFragment-->${innerWrap}<!--EndFragment-->`;
+        const plain = buildPlainForClipboard(lastDraftRaw);
         try {
           await navigator.clipboard.write([
             new ClipboardItem({
               "text/html": new Blob([html], { type: "text/html" }),
-              "text/plain": new Blob([t], { type: "text/plain" })
+              "text/plain": new Blob([plain], { type: "text/plain" })
             })
           ]);
-          showToast("HTML 형식으로 복사했습니다.");
+          showToast("글복사 완료");
         } catch {
           try {
             await navigator.clipboard.writeText(html);
@@ -450,99 +1117,6 @@ ${orderLines}
           }
         }
       });
-
-      function loadImage(file) {
-        return new Promise((resolve, reject) => {
-          const url = URL.createObjectURL(file);
-          const img = new Image();
-          img.onload = () => {
-            URL.revokeObjectURL(url);
-            resolve(img);
-          };
-          img.onerror = reject;
-          img.src = url;
-        });
-      }
-
-      async function renderMainCover() {
-        const file = mainPhoto.files?.[0];
-        const neighborhood = document.getElementById("neighborhood").value.trim() || "위치 입력";
-        const apt = document.getElementById("aptName").value.trim() || "아파트명 입력";
-
-        if (!file) {
-          showToast("메인 사진을 선택하세요.");
-          mainPreview.removeAttribute("src");
-          return;
-        }
-
-        const img = await loadImage(file);
-        const maxW = 1200;
-        const scale = Math.min(1, maxW / img.width);
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        mainCanvas.width = w;
-        mainCanvas.height = h;
-        const ctx = mainCanvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, w, h);
-
-        const pad = Math.max(14, Math.round(w * 0.022));
-        const line1 = neighborhood;
-        const line2 = apt;
-        ctx.font = `700 ${Math.round(18 * (w / 500))}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-        const m1 = ctx.measureText(line1);
-        ctx.font = `800 ${Math.round(22 * (w / 500))}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-        const m2 = ctx.measureText(line2);
-        const boxW = Math.ceil(Math.max(m1.width, m2.width) + pad * 2);
-        const lineH1 = Math.round(22 * (w / 500));
-        const lineH2 = Math.round(26 * (w / 500));
-        const boxH = pad + lineH1 + 6 + lineH2 + pad;
-
-        const bx = pad;
-        const by = h - boxH - pad;
-
-        ctx.save();
-        ctx.fillStyle = "rgba(0,0,0,0.55)";
-        ctx.beginPath();
-        ctx.roundRect(bx, by, boxW, boxH, 10);
-        ctx.fill();
-        ctx.restore();
-
-        ctx.fillStyle = "#fff";
-        ctx.textBaseline = "top";
-        ctx.font = `700 ${Math.round(18 * (w / 500))}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-        ctx.fillText(line1, bx + pad, by + pad);
-        ctx.font = `800 ${Math.round(22 * (w / 500))}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-        ctx.fillText(line2, bx + pad, by + pad + lineH1 + 6);
-
-        mainPreview.src = mainCanvas.toDataURL("image/png");
-        showToast("미리보기를 갱신했습니다.");
-      }
-
-      document.getElementById("btnRenderMain").addEventListener("click", () => void renderMainCover());
-      document.getElementById("btnDownloadMain").addEventListener("click", async () => {
-        await renderMainCover();
-        const file = mainPhoto.files?.[0];
-        if (!file || !mainPreview.src) return;
-        const a = document.createElement("a");
-        a.href = mainPreview.src;
-        a.download = `blog-main-${(document.getElementById("aptName").value || "cover").replace(/\s+/g, "_")}.png`;
-        a.click();
-      });
-
-      if (!CanvasRenderingContext2D.prototype.roundRect) {
-        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-          const rr = Math.min(r, w / 2, h / 2);
-          this.beginPath();
-          this.moveTo(x + rr, y);
-          this.arcTo(x + w, y, x + w, y + h, rr);
-          this.arcTo(x + w, y + h, x, y + h, rr);
-          this.arcTo(x, y + h, x, y, rr);
-          this.arcTo(x, y, x + w, y, rr);
-          this.closePath();
-        };
-      }
-
-      updatePromptPreview();
     </script>
   </body>
 </html>
