@@ -269,7 +269,10 @@
   <body>
     <div class="wrap">
       <h1>블로그 글쓰기 도우미</h1>
-      <p class="lead">로컬에서 <code>npm start</code> 후 이 페이지를 열고, 사진만 넣고 생성하면 됩니다.</p>
+      <p class="lead">
+        <strong>웹(Vercel 등)</strong>에 올린 경우 이 주소만 열면 되고, 프로젝트 환경변수 <code>GEMINI_API_KEY</code>만 넣으면 됩니다. 로컬은
+        <code>npm start</code> 후 같은 화면입니다.
+      </p>
 
       <div class="card">
         <h2>1. 기본 정보</h2>
@@ -323,6 +326,9 @@
         <input type="password" id="aiApiKey" autocomplete="off" placeholder="비워두면 서버에 GEMINI_API_KEY가 있을 때만 동작" />
         <p class="hint" style="margin-top: -4px">
           인터넷에 올린 서버에는 <code>GEMINI_API_KEY</code> 환경변수를 넣고, 여기는 비워 두는 방식을 권장합니다. 로컬만 쓰면 키를 입력하거나 브라우저에 저장해 두세요.
+        </p>
+        <p class="hint" style="margin-top: -2px">
+          <strong>Vercel</strong> 무료 플랜은 한 번에 보내는 데이터가 약 <strong>4.5MB</strong>를 넘기면 실패합니다. 장수가 많으면 자동으로 해상도·품질을 낮춥니다. 그래도 안 되면 사진을 10장 전후로 줄여 보세요.
         </p>
         <button type="button" class="btn" id="btnAutoGenerate">글 자동 생성</button>
         <p class="hint" id="autoGenStatus" style="min-height: 1.3em; color: var(--text)"></p>
@@ -783,7 +789,22 @@ ${orderLines}
 [출력] 설명 문 없이 위 형식의 본문만 출력.`;
       }
 
-      async function fileToImagePart(file, maxSide = 2048) {
+      /** Vercel 등 서버리스는 요청 본문 약 4.5MB 제한 → 장수 많을수록 해상도·품질 낮춤 */
+      function pickBulkImageMaxSide(fileCount) {
+        if (fileCount <= 6) return 2048;
+        if (fileCount <= 9) return 1536;
+        if (fileCount <= 12) return 1280;
+        return 1024;
+      }
+
+      function pickBulkJpegQuality(fileCount) {
+        if (fileCount <= 6) return 0.88;
+        if (fileCount <= 9) return 0.85;
+        if (fileCount <= 12) return 0.82;
+        return 0.78;
+      }
+
+      async function fileToImagePart(file, maxSide = 2048, jpegQuality = 0.88) {
         const mimeRaw = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
         if (/heic|heif/i.test(mimeRaw) || /\.hei[cf]$/i.test(file.name)) {
           throw new Error("HEIC는 JPG 등으로 변환해 주세요.");
@@ -802,9 +823,8 @@ ${orderLines}
           c.height = h;
           c.getContext("2d").drawImage(bmp, 0, 0, w, h);
           const outMime = mimeRaw === "image/png" ? "image/png" : "image/jpeg";
-          const blob = await new Promise((res) =>
-            c.toBlob(res, outMime, outMime === "image/jpeg" ? 0.88 : undefined)
-          );
+          const q = outMime === "image/jpeg" ? jpegQuality : undefined;
+          const blob = await new Promise((res) => c.toBlob(res, outMime, q));
           if (!blob) throw new Error("이미지 인코딩 실패");
           const buf = await blob.arrayBuffer();
           const bytes = new Uint8Array(buf);
@@ -841,30 +861,52 @@ ${orderLines}
         finalDraft.innerHTML = "";
         status.textContent = "처리 중…";
         try {
+          const nFiles = bulkFileList.length;
+          const bulkMaxSide = pickBulkImageMaxSide(nFiles);
+          const bulkJpegQ = pickBulkJpegQuality(nFiles);
           const parts = [];
           let totalImageBytes = 0;
           for (let i = 0; i < bulkFileList.length; i++) {
             status.textContent = `이미지 ${i + 1}/${bulkFileList.length} 준비…`;
-            const p = await fileToImagePart(bulkFileList[i]);
+            const p = await fileToImagePart(bulkFileList[i], bulkMaxSide, bulkJpegQ);
             totalImageBytes += p.sizeBytes || 0;
             parts.push(p);
           }
           const images = parts.map(({ mimeType, base64 }) => ({ mimeType, base64 }));
           const approxBase64Bytes = Math.round((totalImageBytes * 4) / 3);
-          status.textContent = `Gemini로 전송 중… (이미지 ${images.length}장 · 처리 후 합계 약 ${formatDataSize(totalImageBytes)}, Base64 포함 시 약 ${formatDataSize(approxBase64Bytes)})`;
+          const payloadJson = JSON.stringify({
+            provider: "gemini",
+            geminiModel: GEMINI_MODEL,
+            apiKey,
+            prompt,
+            images
+          });
+          const payloadBytes = new TextEncoder().encode(payloadJson).length;
+          status.textContent = `Gemini로 전송 중… (${images.length}장 · 최장변${bulkMaxSide}px · 실제 요청 약 ${formatDataSize(payloadBytes)})`;
           const res = await fetch(`${getApiBase()}/api/blog-generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              provider: "gemini",
-              geminiModel: GEMINI_MODEL,
-              apiKey,
-              prompt,
-              images
-            })
+            body: payloadJson
           });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.message || res.statusText || "요청 실패");
+          const rawText = await res.text();
+          let data = {};
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = { message: rawText ? rawText.slice(0, 280) : "(본문 없음)" };
+          }
+          if (!res.ok) {
+            let detail = data.message || res.statusText || `HTTP ${res.status}`;
+            if (res.status === 413 || /entity too large|payload too large/i.test(String(detail))) {
+              detail +=
+                " — Vercel 등은 요청 크기가 약 4.5MB로 제한됩니다. 사진을 줄이거나(10장 이하 권장) 다시 시도해 주세요.";
+            }
+            if (res.status === 404) {
+              detail +=
+                " — /api/blog-generate 가 없습니다. 최신 코드 배포 후 api/blog-generate.js 와 vercel.json 이 포함됐는지 확인하세요.";
+            }
+            throw new Error(detail);
+          }
           if (!data.text) throw new Error("응답에 본문이 없습니다.");
           lastDraftRaw = reflowDraftBySentenceLength(data.text.trim(), 150);
           finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
