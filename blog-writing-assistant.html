@@ -143,23 +143,6 @@
         opacity: 0.65;
         cursor: not-allowed;
       }
-      .api-key-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-        margin-top: 6px;
-      }
-      .api-key-row input {
-        flex: 1 1 200px;
-        min-width: 0;
-      }
-      .api-key-row .btn {
-        flex: 0 0 auto;
-        padding: 8px 12px;
-        font-size: 0.8rem;
-        font-weight: 600;
-      }
       .btn-row {
         display: flex;
         flex-wrap: wrap;
@@ -339,23 +322,7 @@
           <input type="text" id="apiBase" placeholder="http://localhost:8787" autocomplete="off" />
         </div>
         <label for="aiApiKey">Gemini API 키 (선택)</label>
-        <div class="api-key-row">
-          <input
-            type="password"
-            id="aiApiKey"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="새 키만 입력 (저장 후 이 칸은 비워집니다)"
-          />
-          <button type="button" class="btn secondary" id="btnClearGeminiKey">저장된 키 지우기</button>
-        </div>
-        <p class="hint" id="geminiKeySavedHint" style="margin-top: 6px; display: none"></p>
-        <p class="hint" style="margin-top: -4px">
-          키는 이 PC 브라우저 <code>localStorage</code>에만 저장되며, 저장된 값은 입력칸에 다시 넣지 않아 화면·길이로도 드러나지 않습니다. 바꿀 때만 붙여 넣은 뒤 칸 밖을 클릭하면 저장되고 칸이 비워집니다. 인터넷 서버에는 <code>GEMINI_API_KEY</code> 환경변수 사용을 권장합니다.
-        </p>
-        <p class="hint" style="margin-top: -2px">
-          <strong>Vercel</strong> 무료 플랜은 한 번에 보내는 데이터가 약 <strong>4.5MB</strong>를 넘기면 실패합니다. 장수가 많으면 자동으로 해상도·품질을 낮춥니다. 그래도 안 되면 사진을 10장 전후로 줄여 보세요.
-        </p>
+        <input type="password" id="aiApiKey" autocomplete="off" placeholder="비워두면 서버에 GEMINI_API_KEY가 있을 때만 동작" />
         <button type="button" class="btn" id="btnAutoGenerate">글 자동 생성</button>
         <p class="hint" id="autoGenStatus" style="min-height: 1.3em; color: var(--text)"></p>
         <label style="margin-top: 14px">최종 글 (미리보기)</label>
@@ -383,71 +350,23 @@
       /** @type {string} Gemini 원문(마크다운 ** 유지) */
       let lastDraftRaw = "";
 
-      const GEMINI_KEY_STORAGE = "blog_gemini_api_key";
-
-      function getResolvedGeminiApiKey() {
-        const el = document.getElementById("aiApiKey");
-        const typed = (el && el.value.trim()) || "";
-        if (typed) return typed;
-        try {
-          return localStorage.getItem(GEMINI_KEY_STORAGE) || "";
-        } catch {
-          return "";
-        }
-      }
-
-      function refreshGeminiKeySavedHint() {
-        const hint = document.getElementById("geminiKeySavedHint");
-        if (!hint) return;
-        let has = false;
-        try {
-          has = !!(localStorage.getItem(GEMINI_KEY_STORAGE) || "").trim();
-        } catch {
-          has = false;
-        }
-        if (has) {
-          hint.style.display = "block";
-          hint.textContent =
-            "이 브라우저에 키가 저장되어 있어 요청 시 자동으로 사용합니다. 바꿀 때만 위 칸에 새 키를 입력한 뒤 칸 밖을 클릭하세요.";
-        } else {
-          hint.style.display = "none";
-          hint.textContent = "";
-        }
-      }
-
-      /** 입력칸에만 있을 때 localStorage로 옮기고 칸을 비움. @returns 저장 여부 */
-      function persistGeminiKeyFromInput(opts) {
-        const silent = opts && opts.silent;
-        const el = document.getElementById("aiApiKey");
-        const v = el.value.trim();
-        if (!v) return false;
-        try {
-          localStorage.setItem(GEMINI_KEY_STORAGE, v);
-          el.value = "";
-          if (!silent) showToast("API 키를 저장했습니다. (화면에는 표시하지 않습니다)");
-        } catch {
-          return false;
-        }
-        refreshGeminiKeySavedHint();
-        return true;
-      }
-
       (function initGeminiKeyField() {
         const el = document.getElementById("aiApiKey");
+        try {
+          const saved = localStorage.getItem("blog_gemini_api_key");
+          if (saved) el.value = saved;
+        } catch {
+          /* ignore */
+        }
         el.addEventListener("change", () => {
-          persistGeminiKeyFromInput({ silent: false });
-        });
-        document.getElementById("btnClearGeminiKey").addEventListener("click", () => {
           try {
-            localStorage.removeItem(GEMINI_KEY_STORAGE);
+            const v = el.value.trim();
+            if (v) localStorage.setItem("blog_gemini_api_key", v);
+            else localStorage.removeItem("blog_gemini_api_key");
           } catch {
             /* ignore */
           }
-          el.value = "";
-          refreshGeminiKeySavedHint();
-          showToast("저장된 API 키를 지웠습니다.");
         });
-        refreshGeminiKeySavedHint();
       })();
 
       /** 동네 문자열 → 제목용 [○○인테리어]의 ○○ (예: 송파구→송파, 고양시→고양) */
@@ -928,8 +847,7 @@ ${orderLines}
           showToast("사진을 1장 이상 넣어 주세요.");
           return;
         }
-        persistGeminiKeyFromInput({ silent: true });
-        const apiKey = getResolvedGeminiApiKey();
+        const apiKey = document.getElementById("aiApiKey").value.trim();
         const prompt = buildPrompt();
         btn.disabled = true;
         lastDraftRaw = "";
