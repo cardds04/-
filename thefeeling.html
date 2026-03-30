@@ -232,6 +232,12 @@
       grid-template-columns: repeat(5, 1fr);
       gap: 14px;
       align-items: stretch;
+      border-radius: 14px;
+      transition: box-shadow 0.15s, background 0.15s;
+    }
+    .photo-grid.photo-grid--drop {
+      box-shadow: inset 0 0 0 2px var(--blue);
+      background: rgba(37, 99, 235, 0.06);
     }
     @media (max-width: 1400px) { .photo-grid { grid-template-columns: repeat(4, 1fr); } }
     @media (max-width: 1050px) { .photo-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -1069,6 +1075,16 @@
       return state.spaces[0]?.id || null;
     }
 
+    function hasFileDragPayload(dt) {
+      if (!dt || !dt.types) return false;
+      const types = Array.from(dt.types);
+      return types.includes("Files") || types.some((t) => t.startsWith("image/"));
+    }
+
+    function clearPhotoGridDropHighlight() {
+      document.querySelectorAll(".photo-grid--drop").forEach((g) => g.classList.remove("photo-grid--drop"));
+    }
+
     // ─── Copy toast ────────────────────────────────────────────────────────────
     let toastTimer = null;
     function showToast(msg = "📋 복사 완료!") {
@@ -1244,9 +1260,9 @@
             <span class="category-photo-count">사진 ${space.photos.length}장</span>
             <button class="btn-delete-category" data-del-space="${space.id}">공간 삭제</button>
           </div>
-          <div class="photo-grid">
+          <div class="photo-grid" data-photo-drop="${space.id}">
             ${photos}
-            <label class="upload-slot" title="사진 추가 · 캡처 후 Ctrl+V(⌘+V)로 붙여넣기">
+            <label class="upload-slot" title="사진 추가 · 파일 드래그·놓기 · 캡처 후 Ctrl+V(⌘+V)">
               <span class="upload-slot-inner">
                 <span class="upload-slot-icon">📷</span>
                 <span>사진 추가</span>
@@ -1604,6 +1620,63 @@
       },
       true
     );
+
+    window.addEventListener("dragend", clearPhotoGridDropHighlight);
+
+    (function initPhotoGridDropDelegate() {
+      document.addEventListener(
+        "dragenter",
+        (e) => {
+          const grid = e.target.closest?.("[data-photo-drop]");
+          if (!grid || !hasFileDragPayload(e.dataTransfer)) return;
+          e.preventDefault();
+          clearPhotoGridDropHighlight();
+          grid.classList.add("photo-grid--drop");
+        },
+        true
+      );
+      document.addEventListener(
+        "dragover",
+        (e) => {
+          const grid = e.target.closest?.("[data-photo-drop]");
+          if (!grid || !hasFileDragPayload(e.dataTransfer)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        },
+        true
+      );
+      document.addEventListener(
+        "dragleave",
+        (e) => {
+          const grid = e.target.closest?.("[data-photo-drop]");
+          if (!grid || !hasFileDragPayload(e.dataTransfer)) return;
+          const rel = e.relatedTarget;
+          if (!rel || !grid.contains(rel)) grid.classList.remove("photo-grid--drop");
+        },
+        true
+      );
+      document.addEventListener(
+        "drop",
+        (e) => {
+          const grid = e.target.closest?.("[data-photo-drop]");
+          if (!grid || !hasFileDragPayload(e.dataTransfer)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          grid.classList.remove("photo-grid--drop");
+          const spaceId = grid.dataset.photoDrop;
+          if (!spaceId) return;
+          const files = Array.from(e.dataTransfer.files || []);
+          const imageCount = files.filter((f) => !f.type || f.type.startsWith("image/")).length;
+          if (!imageCount) {
+            showToast("⚠️ 이미지 파일만 넣을 수 있어요.");
+            return;
+          }
+          addPhotosToSpace(spaceId, files);
+          showToast(imageCount > 1 ? `📷 ${imageCount}장 드롭 추가` : "📷 드롭으로 추가");
+        },
+        true
+      );
+    })();
 
     document.addEventListener(
       "paste",
