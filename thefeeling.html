@@ -970,6 +970,8 @@
     let state = loadState();
     // track which photo is in edit mode: "spaceId__photoId"
     let editingKey = null;
+    /** 마지막으로 클릭한 공간 — 캡처 붙여넣기 시 대상 공간 추정에 사용 */
+    let lastPasteTargetSpaceId = null;
 
     function uid() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -987,6 +989,84 @@
       });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       return `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+    }
+
+    function addPhotosToSpace(spaceId, files) {
+      const imageFiles = Array.from(files).filter((f) => !f.type || f.type.startsWith("image/"));
+      if (!imageFiles.length) return;
+      for (let file of imageFiles) {
+        if (!file.type || !file.type.startsWith("image/")) {
+          file = new File([file], `clipboard_${uid()}.png`, { type: "image/png" });
+        }
+        const space = state.spaces.find((s) => s.id === spaceId);
+        if (!space) continue;
+        const localUrl = URL.createObjectURL(file);
+        const photo = { id: uid(), url: localUrl, productName: "", photoTitle: "", uploading: true };
+        space.photos.push(photo);
+        saveState();
+        render();
+
+        (async () => {
+          try {
+            const remoteUrl = await uploadPhoto(file);
+            URL.revokeObjectURL(localUrl);
+            const sp = state.spaces.find((s) => s.id === spaceId);
+            const ph = sp?.photos.find((p) => p.id === photo.id);
+            if (ph) {
+              ph.url = remoteUrl;
+              ph.uploading = false;
+            }
+          } catch (e) {
+            console.error("[TheFeeling] Upload error:", e);
+            const sp = state.spaces.find((s) => s.id === spaceId);
+            const ph = sp?.photos.find((p) => p.id === photo.id);
+            if (ph) ph.uploading = false;
+          }
+          saveState();
+          render();
+        })();
+      }
+    }
+
+    function getClipboardImageFiles(clipboardData) {
+      const out = [];
+      if (!clipboardData) return out;
+      if (clipboardData.files && clipboardData.files.length) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+          const f = clipboardData.files[i];
+          if (f.type.startsWith("image/")) out.push(f);
+        }
+      }
+      if (!out.length && clipboardData.items) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+          const it = clipboardData.items[i];
+          if (it.kind === "file" && it.type.startsWith("image/")) {
+            const f = it.getAsFile();
+            if (f) out.push(f);
+          }
+        }
+      }
+      return out;
+    }
+
+    function shouldIgnoreImagePasteForElement(el) {
+      if (!el || !el.closest) return false;
+      const promptEl = document.getElementById("spacePrompt");
+      if (promptEl && promptEl.style.display !== "none" && el.closest("#spacePrompt")) return true;
+      if (el.closest("textarea.product-name-input")) return true;
+      if (el.closest(".category-name-input")) return true;
+      if (el.closest(".photo-title-input")) return true;
+      return false;
+    }
+
+    function resolvePasteSpaceId(target) {
+      if (!target || !target.closest) return null;
+      const sec = target.closest(".category-section[data-space-id]");
+      if (sec) return sec.dataset.spaceId;
+      if (lastPasteTargetSpaceId && state.spaces.some((s) => s.id === lastPasteTargetSpaceId)) {
+        return lastPasteTargetSpaceId;
+      }
+      return state.spaces[0]?.id || null;
     }
 
     // ─── Copy toast ────────────────────────────────────────────────────────────
@@ -1166,7 +1246,7 @@
           </div>
           <div class="photo-grid">
             ${photos}
-            <label class="upload-slot" title="사진 추가">
+            <label class="upload-slot" title="사진 추가 · 캡처 후 Ctrl+V(⌘+V)로 붙여넣기">
               <span class="upload-slot-inner">
                 <span class="upload-slot-icon">📷</span>
                 <span>사진 추가</span>
@@ -1424,36 +1504,12 @@
 
       // File upload
       document.querySelectorAll("[data-upload]").forEach(fileInput => {
-        fileInput.addEventListener("change", async () => {
+        fileInput.addEventListener("change", () => {
           const spaceId = fileInput.dataset.upload;
-          const files   = Array.from(fileInput.files);
+          const files = Array.from(fileInput.files);
           if (!files.length) return;
           fileInput.value = "";
-
-          for (const file of files) {
-            const space = state.spaces.find(s => s.id === spaceId);
-            if (!space) continue;
-            const localUrl = URL.createObjectURL(file);
-            const photo = { id: uid(), url: localUrl, productName: "", photoTitle: "", uploading: true };
-            space.photos.push(photo);
-            saveState(); render();
-
-            (async () => {
-              try {
-                const remoteUrl = await uploadPhoto(file);
-                URL.revokeObjectURL(localUrl);
-                const sp = state.spaces.find(s => s.id === spaceId);
-                const ph = sp?.photos.find(p => p.id === photo.id);
-                if (ph) { ph.url = remoteUrl; ph.uploading = false; }
-              } catch (e) {
-                console.error("[TheFeeling] Upload error:", e);
-                const sp = state.spaces.find(s => s.id === spaceId);
-                const ph = sp?.photos.find(p => p.id === photo.id);
-                if (ph) ph.uploading = false;
-              }
-              saveState(); render();
-            })();
-          }
+          addPhotosToSpace(spaceId, files);
         });
       });
     }
@@ -1539,6 +1595,34 @@
       state = loadState();
       render();
     })();
+
+    document.addEventListener(
+      "mousedown",
+      (e) => {
+        const sec = e.target.closest?.(".category-section[data-space-id]");
+        if (sec) lastPasteTargetSpaceId = sec.dataset.spaceId;
+      },
+      true
+    );
+
+    document.addEventListener(
+      "paste",
+      (e) => {
+        const files = getClipboardImageFiles(e.clipboardData);
+        if (!files.length) return;
+        const t = e.target;
+        if (shouldIgnoreImagePasteForElement(t)) return;
+        const spaceId = resolvePasteSpaceId(t);
+        if (!spaceId) {
+          showToast("⚠️ 공간을 먼저 추가한 뒤 붙여넣기 하세요.");
+          return;
+        }
+        e.preventDefault();
+        addPhotosToSpace(spaceId, files);
+        showToast(files.length > 1 ? `📷 캡처 ${files.length}장 붙여넣기` : "📷 캡처 붙여넣기 추가");
+      },
+      true
+    );
 
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) void refreshTheFeelingFromCloudIfVisible();
