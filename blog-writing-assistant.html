@@ -387,11 +387,11 @@
       </div>
 
       <div class="card card--local-tool">
-        <h2>5. 사진 압축 후 공유폴더에 저장 (맥 로컬)</h2>
+        <h2>5. 사진 용량 줄이기 (서버 없음)</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
-          이 Mac에서 <code>node server.js</code>를 띄운 뒤, 사진을 올리면 서버가 <strong>JPEG로 줄인 뒤</strong> 아래에 적은
-          <strong>공유폴더 경로</strong>에 저장합니다. NAS는 <code>/Volumes/이름/...</code>처럼 마운트된 경로를 입력하세요.
-          (원본 파일은 브라우저·서버가 지우지 않습니다.)
+          <strong>브라우저만</strong>으로 JPEG 압축합니다. <strong>폴더에 저장</strong>은 Chrome·Edge 등에서
+          <strong>폴더 선택 창</strong>이 뜨면 NAS·공유 디스크(예: 사이드바의 <code>/Volumes</code>)를 골라 저장할 수 있습니다.
+          Safari·모바일은 <strong>ZIP 받기</strong>를 쓰세요. HEIC 등 일부 형식은 브라우저에 따라 건너뛸 수 있습니다.
         </p>
         <label>압축할 사진</label>
         <input type="file" id="blogShrinkFiles" accept="image/*" multiple style="display: none" />
@@ -399,15 +399,6 @@
           사진을 끌어놓기 또는 클릭<br />
           <span style="font-size: 0.8rem; font-weight: 500" id="blogShrinkFileHint">선택된 파일 없음</span>
         </div>
-        <label for="blogShrinkDest">저장할 공유폴더 경로</label>
-        <input
-          type="text"
-          id="blogShrinkDest"
-          class="blog-shrink-path"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="예: /Volumes/디스크이름/블로그사진"
-        />
         <div class="row-shrink-opts">
           <div>
             <label for="blogShrinkMaxSide">긴 변 최대 픽셀</label>
@@ -418,14 +409,10 @@
             <input type="number" id="blogShrinkQuality" min="40" max="95" value="82" />
           </div>
         </div>
-        <p class="hint" style="margin-bottom: 8px">
-          <label style="display: inline; font-weight: 600; color: var(--text)">
-            <input type="checkbox" id="blogShrinkAlsoZip" />
-            압축본 ZIP을 브라우저로도 받기
-          </label>
-          (공유폴더 저장은 항상 먼저 수행됩니다.)
-        </p>
-        <button type="button" class="btn" id="btnBlogShrinkSave">압축 후 공유폴더에 저장</button>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btnBlogShrinkFolder">압축 후 폴더에 저장…</button>
+          <button type="button" class="btn secondary" id="btnBlogShrinkZip">JPEG 압축 ZIP 받기</button>
+        </div>
         <p class="hint" id="blogShrinkWebStatus" style="min-height: 1.3em; margin-top: 8px; margin-bottom: 0"></p>
         <details class="blog-shrink-advanced">
           <summary>터미널에서 폴더 지정 · 원본 삭제 옵션</summary>
@@ -454,6 +441,7 @@ python3 tools/blog-photo-shrink/shrink_photos.py \
     </div>
     <div class="toast" id="toast" role="status"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" crossorigin></script>
     <script>
       const GEMINI_MODEL = "gemini-3-flash-preview";
 
@@ -1259,16 +1247,16 @@ ${orderLines}
       })();
 
       (function initBlogShrinkWeb() {
-        const btn = document.getElementById("btnBlogShrinkSave");
+        const BLOG_SHRINK_MAX = 200;
+        const btnFolder = document.getElementById("btnBlogShrinkFolder");
+        const btnZip = document.getElementById("btnBlogShrinkZip");
         const fileInput = document.getElementById("blogShrinkFiles");
         const dropZone = document.getElementById("blogShrinkDropZone");
         const fileHint = document.getElementById("blogShrinkFileHint");
-        const destEl = document.getElementById("blogShrinkDest");
         const maxEl = document.getElementById("blogShrinkMaxSide");
         const qEl = document.getElementById("blogShrinkQuality");
-        const alsoZipEl = document.getElementById("blogShrinkAlsoZip");
         const st = document.getElementById("blogShrinkWebStatus");
-        if (!btn || !fileInput || !destEl) return;
+        if (!btnFolder || !btnZip || !fileInput) return;
 
         function refreshShrinkFileHint() {
           const n = fileInput.files ? fileInput.files.length : 0;
@@ -1307,63 +1295,170 @@ ${orderLines}
         }
         fileInput.addEventListener("change", refreshShrinkFileHint);
 
-        btn.addEventListener("click", async () => {
+        function getOpts() {
+          const maxSide = Math.min(8192, Math.max(256, parseInt(maxEl && maxEl.value, 10) || 2560));
+          const q = Math.min(95, Math.max(40, parseInt(qEl && qEl.value, 10) || 82));
+          return { maxSide, quality: q / 100 };
+        }
+
+        async function fileToJpegBlob(file, maxSide, quality01) {
+          let bmp;
+          try {
+            bmp = await createImageBitmap(file);
+          } catch {
+            throw new Error(`열 수 없음(형식·HEIC 등): ${file.name || "파일"}`);
+          }
+          const w = bmp.width;
+          const h = bmp.height;
+          const scale = Math.min(1, maxSide / Math.max(w, h));
+          const tw = Math.max(1, Math.round(w * scale));
+          const th = Math.max(1, Math.round(h * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = tw;
+          canvas.height = th;
+          const ctx = canvas.getContext("2d");
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(bmp, 0, 0, tw, th);
+          bmp.close();
+          return new Promise((resolve, reject) => {
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) reject(new Error("JPEG 변환 실패"));
+                else resolve(blob);
+              },
+              "image/jpeg",
+              quality01
+            );
+          });
+        }
+
+        function jpegFileName(file, index) {
+          const stem = (file.name || `photo_${index}`).replace(/\.[^.]+$/, "");
+          const safe = stem.replace(/[^\w.\-\uAC00-\uD7A3]/g, "_") || `photo_${index}`;
+          return `${safe}.jpg`;
+        }
+
+        async function buildJpegItems(files, maxSide, quality01) {
+          const items = [];
+          const used = new Set();
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            st.textContent = `압축 중… ${i + 1}/${files.length}`;
+            let name = jpegFileName(f, i);
+            let base = name;
+            let k = 0;
+            while (used.has(name)) {
+              k++;
+              name = base.replace(/\.jpg$/i, `_${k}.jpg`);
+            }
+            used.add(name);
+            const blob = await fileToJpegBlob(f, maxSide, quality01);
+            items.push({ name, blob });
+          }
+          return items;
+        }
+
+        async function saveItemsToFolder(items) {
+          if (typeof window.showDirectoryPicker !== "function") {
+            throw new Error("이 브라우저는 폴더 선택 저장을 지원하지 않습니다.「ZIP 받기」를 사용하세요.");
+          }
+          const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+          for (let i = 0; i < items.length; i++) {
+            st.textContent = `저장 중… ${i + 1}/${items.length}`;
+            const { name, blob } = items[i];
+            const fh = await dirHandle.getFileHandle(name, { create: true });
+            const writable = await fh.createWritable();
+            await writable.write(blob);
+            await writable.close();
+          }
+        }
+
+        async function downloadZip(items) {
+          if (typeof JSZip === "undefined") {
+            throw new Error("JSZip을 불러오지 못했습니다. 페이지를 새로고침하세요.");
+          }
+          const zip = new JSZip();
+          for (const { name, blob } of items) {
+            zip.file(name, blob);
+          }
+          st.textContent = "ZIP 만드는 중…";
+          const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "blog_shrink_photos.zip";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        function setBusy(on) {
+          btnFolder.disabled = on;
+          btnZip.disabled = on;
+        }
+
+        async function runFolder() {
           const files = fileInput.files;
           if (!files || !files.length) {
             showToast("사진을 한 장 이상 선택하세요.");
             return;
           }
-          const dest = destEl.value.trim();
-          if (!dest) {
-            showToast("공유폴더 경로를 입력하세요.");
+          if (files.length > BLOG_SHRINK_MAX) {
+            showToast(`한 번에 ${BLOG_SHRINK_MAX}장 이하로 선택하세요.`);
             return;
           }
-          st.textContent = "업로드·압축·저장 중… (장수에 따라 수 분 걸릴 수 있습니다)";
-          btn.disabled = true;
+          if (!window.isSecureContext) {
+            st.textContent =
+              "「폴더에 저장」은 HTTPS 또는 http://localhost 같은 보안 연결에서만 됩니다. file://로 연 경우「ZIP 받기」를 쓰세요.";
+            showToast("보안 연결 필요");
+            return;
+          }
+          const { maxSide, quality } = getOpts();
+          setBusy(true);
+          st.textContent = "준비 중…";
           try {
-            const fd = new FormData();
-            for (let i = 0; i < files.length; i++) {
-              fd.append("images", files[i]);
-            }
-            fd.append("dest", dest);
-            fd.append("maxSide", String(parseInt(maxEl && maxEl.value, 10) || 2560));
-            fd.append("quality", String(parseInt(qEl && qEl.value, 10) || 82));
-            fd.append("alsoZip", alsoZipEl && alsoZipEl.checked ? "1" : "0");
-
-            const r = await fetch(`${getApiBase()}/api/blog-photo-save-compressed`, {
-              method: "POST",
-              body: fd
-            });
-            const ct = (r.headers.get("Content-Type") || "").toLowerCase();
-            if (ct.includes("application/json")) {
-              const j = await r.json().catch(() => ({}));
-              if (!r.ok) throw new Error(j.message || r.statusText);
-              st.textContent = j.message || "완료";
-              showToast(j.message || "공유폴더에 저장했습니다.");
-              return;
-            }
-            if (!r.ok) {
-              const t = await r.text();
-              throw new Error(t.slice(0, 400) || r.statusText);
-            }
-            const blob = await r.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "blog_shrink_photos.zip";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            st.textContent = "공유폴더에 저장했고, ZIP도 받았습니다.";
-            showToast("저장 및 ZIP 완료");
+            const items = await buildJpegItems(files, maxSide, quality);
+            await saveItemsToFolder(items);
+            st.textContent = `${items.length}장을 선택한 폴더에 저장했습니다.`;
+            showToast("폴더에 저장 완료");
           } catch (e) {
             st.textContent = e.message || String(e);
-            showToast("실패 — 아래 메시지 확인");
+            showToast("실패");
           } finally {
-            btn.disabled = false;
+            setBusy(false);
           }
-        });
+        }
+
+        async function runZip() {
+          const files = fileInput.files;
+          if (!files || !files.length) {
+            showToast("사진을 한 장 이상 선택하세요.");
+            return;
+          }
+          if (files.length > BLOG_SHRINK_MAX) {
+            showToast(`한 번에 ${BLOG_SHRINK_MAX}장 이하로 선택하세요.`);
+            return;
+          }
+          const { maxSide, quality } = getOpts();
+          setBusy(true);
+          st.textContent = "준비 중…";
+          try {
+            const items = await buildJpegItems(files, maxSide, quality);
+            await downloadZip(items);
+            st.textContent = `${items.length}장 JPEG ZIP을 받았습니다. 압축본을 NAS 등에 옮기면 됩니다.`;
+            showToast("ZIP 완료");
+          } catch (e) {
+            st.textContent = e.message || String(e);
+            showToast("실패");
+          } finally {
+            setBusy(false);
+          }
+        }
+
+        btnFolder.addEventListener("click", () => void runFolder());
+        btnZip.addEventListener("click", () => void runZip());
       })();
 
       document.getElementById("btnCopyDraft").addEventListener("click", async () => {
