@@ -1,1 +1,1549 @@
-에
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>더필링</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #fff;
+      --line: #e2e8f0;
+      --blue: #2563eb;
+      --blue-dark: #1d4ed8;
+      --text: #1e293b;
+      --muted: #94a3b8;
+      --green: #16a34a;
+      --red: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      background: #0f172a;
+      color: #fff;
+      padding: 14px 28px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    }
+    .page-header-right {
+      margin-left: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .sync-status-hint {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      font-weight: 600;
+      max-width: 280px;
+      text-align: right;
+      line-height: 1.3;
+    }
+    .page-header h1 {
+      font-size: 1.45rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .page-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .btn-backup {
+      background: #334155;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 10px;
+      padding: 9px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-backup:hover {
+      background: #475569;
+      color: #fff;
+    }
+    .btn-restore {
+      background: #fff;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-restore:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+    }
+    .storage-hint {
+      background: #fffbeb;
+      border-bottom: 1px solid #fde68a;
+      color: #78350f;
+      font-size: 0.78rem;
+      padding: 9px 24px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .btn-add-space {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 20px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-add-space:hover { background: var(--blue-dark); }
+
+    /* ── Space Nav Bar ── */
+    .space-nav {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      position: sticky;
+      top: 57px;
+      z-index: 99;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .space-nav::-webkit-scrollbar { display: none; }
+    .space-nav-inner {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 20px;
+      min-width: max-content;
+    }
+    .space-nav-btn {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+      border-radius: 20px;
+      padding: 5px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .space-nav-btn:hover,
+    .space-nav-btn.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+
+    /* ── Main ── */
+    .main-content {
+      padding: 28px;
+      max-width: 1700px;
+      margin: 0 auto;
+    }
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      padding: 80px 0;
+    }
+    .empty-state p { font-size: 1rem; margin-bottom: 20px; line-height: 1.9; }
+    .empty-state button {
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 12px; padding: 13px 30px; font-size: 1rem;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+    /* ── Category Section ── */
+    .category-section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px 22px 26px;
+      margin-bottom: 28px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .category-name-input {
+      font-size: 1.15rem;
+      font-weight: 800;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      outline: none;
+      flex: 1;
+      min-width: 0;
+      padding: 2px 0;
+      border-bottom: 2px solid transparent;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    .category-name-input:focus { border-bottom-color: var(--blue); }
+    .category-photo-count {
+      font-size: 0.82rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .btn-delete-category {
+      background: transparent;
+      border: 1px solid #fca5a5;
+      color: var(--red);
+      border-radius: 8px;
+      padding: 5px 13px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .btn-delete-category:hover { background: #fef2f2; }
+
+    /* ── Photo Grid (5 cols) ── */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    @media (max-width: 1400px) { .photo-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 1050px) { .photo-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 700px)  { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ── Photo Card ── */
+    .photo-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #f8faff;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      align-self: stretch;
+    }
+
+    /* Photo thumb area — click to copy (padding-bottom으로 4:3 고정, 그리드/플렉스에서 aspect-ratio 깨짐 방지) */
+    .photo-thumb-wrap {
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      flex: 0 0 auto;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      height: 0;
+      padding-bottom: 75%;
+    }
+    .photo-thumb-wrap img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+      transition: opacity 0.15s;
+    }
+    .photo-thumb-wrap:hover img { opacity: 0.88; }
+    /* Copy feedback overlay */
+    .copy-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      background: rgba(37,99,235,0.82);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 800;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s;
+      border-radius: 0;
+    }
+    .photo-thumb-wrap.flashing .copy-flash { opacity: 1; }
+    /* 사진 위 제목 (복사 없음, 편집만) */
+    .photo-title-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 5;
+      padding: 8px 8px 16px;
+      background: linear-gradient(to bottom, rgba(15,23,42,0.78) 0%, rgba(15,23,42,0.35) 55%, transparent 100%);
+      pointer-events: auto;
+    }
+    .photo-title-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.95);
+      padding: 5px 9px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+    }
+    .photo-title-input::placeholder {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .photo-title-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(37,99,235,0.25);
+    }
+    /* Uploading overlay */
+    .uploading-badge {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      background: rgba(255,255,255,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 10px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex: 1 1 auto;
+      min-height: 0;
+      min-width: 0;
+    }
+    .card-view,
+    .card-edit {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      gap: 7px;
+    }
+    .card-view .card-actions,
+    .card-edit .card-actions {
+      margin-top: auto;
+    }
+
+    /* View mode */
+    .product-name-text {
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.4;
+      word-break: break-all;
+      min-height: 1.2em;
+    }
+    .product-name-text.empty {
+      color: var(--muted);
+      font-weight: 400;
+      font-style: italic;
+    }
+    .card-actions {
+      display: flex;
+      gap: 5px;
+    }
+    .btn-card {
+      flex: 1;
+      padding: 5px 0;
+      border-radius: 7px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: #f1f5f9;
+      color: var(--text);
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .btn-card:hover { background: #e2e8f0; }
+    .btn-card.danger {
+      border-color: #fca5a5;
+      color: var(--red);
+      background: transparent;
+    }
+    .btn-card.danger:hover { background: #fef2f2; }
+
+    /* Edit mode */
+    .product-name-input {
+      width: 100%;
+      border: 1.5px solid var(--blue);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+      background: #fff;
+      resize: none;
+      line-height: 1.5;
+      min-height: 5.5em;
+      box-sizing: border-box;
+    }
+    .btn-card.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .btn-card.primary:hover { background: var(--blue-dark); }
+
+    /* Upload slot — 카드와 동일한 4:3 비율 + 행 높이 맞춤 */
+    .upload-slot {
+      border: 2px dashed #cbd5e1;
+      border-radius: 14px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      font-weight: 600;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      min-height: 0;
+      align-self: stretch;
+      box-sizing: border-box;
+    }
+    .upload-slot-inner {
+      flex: 1 1 auto;
+      min-height: 120px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .upload-slot:hover {
+      border-color: var(--blue);
+      background: #eff6ff;
+      color: var(--blue);
+    }
+    .upload-slot-icon { font-size: 2rem; }
+
+    /* Space name prompt */
+    .prompt-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .prompt-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 24px;
+      width: min(400px, 96vw);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+    .prompt-box h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 8px; }
+    .prompt-hint { font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; }
+    .prompt-input {
+      width: 100%;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      outline: none;
+      font-family: inherit;
+      margin-bottom: 14px;
+      color: var(--text);
+      transition: border-color 0.15s;
+    }
+    .prompt-input:focus { border-color: var(--blue); }
+    .prompt-actions { display: flex; gap: 8px; }
+    .btn-prompt-ok {
+      flex: 2;
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 10px; padding: 11px; font-size: 0.9rem;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .btn-prompt-ok:hover { background: var(--blue-dark); }
+    .btn-prompt-cancel {
+      flex: 1;
+      background: #f1f5f9; border: 1px solid var(--line);
+      border-radius: 10px; padding: 11px; font-size: 0.85rem;
+      font-weight: 600; cursor: pointer; font-family: inherit; color: var(--text);
+    }
+    .btn-prompt-cancel:hover { background: #e2e8f0; }
+
+    /* ── AI 브랜드 섹션 ── */
+    .brand-section {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      padding: 20px 24px 22px;
+      margin: 20px 24px 0;
+    }
+    .brand-section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .brand-section-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .btn-add-brand {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      margin-left: auto;
+      transition: background 0.15s;
+    }
+    .btn-add-brand:hover { background: var(--blue-dark); }
+    .brand-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      min-height: 36px;
+    }
+    .brand-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #eff6ff;
+      border: 1.5px solid #bfdbfe;
+      border-radius: 999px;
+      padding: 6px 14px 6px 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--blue-dark);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .brand-chip:hover { background: #dbeafe; border-color: var(--blue); }
+    .brand-chip-icon { font-size: 1rem; }
+    .brand-chip.no-url {
+      background: #f8faff;
+      border-color: #cbd5e1;
+      color: #64748b;
+    }
+    .brand-chip.no-url:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .brand-chip-edit {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #93c5fd;
+      font-size: 0.85rem;
+      line-height: 1;
+      padding: 0 0 0 2px;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .brand-chip-edit:hover { color: var(--blue); }
+    .brand-chip-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #93c5fd;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 0 0 2px;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .brand-chip-del:hover { color: var(--red); }
+    .brand-empty-hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    /* ── 공간 순서 이동 버튼 ── */
+    .space-order-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .btn-order {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      width: 26px;
+      height: 22px;
+      font-size: 0.65rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      transition: background 0.12s, color 0.12s;
+      padding: 0;
+      line-height: 1;
+    }
+    .btn-order:hover:not(:disabled) { background: #dbeafe; color: var(--blue); border-color: #bfdbfe; }
+    .btn-order:disabled { opacity: 0.3; cursor: default; }
+
+    /* 사진 카드 행 (순서 ▲▼) */
+    .photo-card-row {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .photo-card-row .photo-card {
+      flex: 1;
+      min-width: 0;
+    }
+    .photo-order-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+      justify-content: center;
+      padding: 4px 0;
+    }
+
+    /* Copy toast */
+    .copy-toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="page-header">
+    <h1>더필링</h1>
+    <div class="page-header-right">
+      <div class="page-header-actions">
+        <button type="button" class="btn-backup" id="backupBtn" title="저장된 공간·사진·브랜드 데이터를 JSON 파일로 저장">💾 백업</button>
+        <button type="button" class="btn-restore" id="restoreBtn" title="백업 JSON 파일 불러오기">📂 복원</button>
+        <button type="button" class="btn-add-space" id="addSpaceBtn">＋ 공간 추가</button>
+      </div>
+      <span id="syncStatusHint" class="sync-status-hint" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <input type="file" id="restoreFileInput" accept=".json,application/json" style="display:none;" />
+
+  <p class="storage-hint">
+    ※ <strong>Supabase 연동(sync-config)</strong>이 되어 있으면 모든 PC·휴대폰에서 같은 데이터가 자동 동기화됩니다. 연동이 없을 때만 기기마다 따로 저장되므로, 그때는 <strong>백업/복원</strong>으로 옮겨 주세요.
+  </p>
+
+  <nav class="space-nav" id="spaceNav" style="display:none;">
+    <div class="space-nav-inner" id="spaceNavInner"></div>
+  </nav>
+
+  <!-- AI 브랜드 섹션 (고정) -->
+  <section class="brand-section" id="brandSection">
+    <div class="brand-section-header">
+      <span class="brand-section-title">🤖 AI용 브랜드</span>
+      <button class="btn-add-brand" id="addBrandBtn">＋ 브랜드명 추가</button>
+    </div>
+    <div class="brand-chips" id="brandChips"></div>
+  </section>
+
+  <main class="main-content" id="mainContent"></main>
+
+  <!-- Copy toast -->
+  <div class="copy-toast" id="copyToast">📋 복사 완료!</div>
+
+  <!-- Space name prompt -->
+  <div class="prompt-overlay" id="spacePrompt" style="display:none;">
+    <div class="prompt-box">
+      <h3>🏠 공간 추가</h3>
+      <p class="prompt-hint">예: 거실, 주방, 침실, 욕실, 드레스룸 …</p>
+      <input class="prompt-input" id="spaceNameInput" type="text" placeholder="공간 이름 입력" maxlength="30" />
+      <div class="prompt-actions">
+        <button class="btn-prompt-ok" id="btnConfirmSpace">추가</button>
+        <button class="btn-prompt-cancel" id="btnCancelSpace">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sync-config.js"></script>
+  <script>
+    // ─── Supabase ──────────────────────────────────────────────────────────────
+    const _cfg  = window.SCHEDULE_SITE_SYNC_CONFIG || {};
+    const SUPA_URL = _cfg.supabaseUrl  || "";
+    const SUPA_KEY = _cfg.supabaseAnonKey || "";
+    const BUCKET   = "inlog_home";
+    const THEFEELING_KV_TABLE = "schedule_site_client_kv";
+    const THEFEELING_KV_ROW_ID = "thefeeling_state_v1";
+    const LS_KNOWN_SERVER_AT = "__thefeelingKnownServerAt";
+    const LS_LOCAL_DIRTY = "__thefeelingLocalDirty";
+    const USE_THEFEELING_CLOUD = Boolean(SUPA_URL && SUPA_KEY);
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+    const STORE_KEY = "thefeelingData_v2";
+
+    function normalizeTheFeelingState(s) {
+      if (!s || typeof s !== "object") return { spaces: [], brands: [] };
+      if (!Array.isArray(s.spaces)) s.spaces = [];
+      if (!s.brands) s.brands = [];
+      if (!Array.isArray(s.brands)) s.brands = [];
+      s.brands = s.brands.map((b) =>
+        typeof b === "string" ? { name: b, url: "" } : { name: String(b?.name || ""), url: String(b?.url || "") }
+      );
+      s.spaces.forEach((sp) => {
+        if (!Array.isArray(sp.photos)) sp.photos = [];
+        sp.photos.forEach((p) => {
+          if (p.photoTitle == null) p.photoTitle = "";
+        });
+      });
+      return s;
+    }
+
+    function loadState() {
+      try {
+        const r = localStorage.getItem(STORE_KEY);
+        if (r) return normalizeTheFeelingState(JSON.parse(r));
+      } catch {}
+      return { spaces: [], brands: [] };
+    }
+
+    function persistStateToLocalStorage() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    let theFeelingPushTimer = null;
+    let theFeelingPushInFlight = false;
+
+    function hasMeaningfulTheFeelingData(obj) {
+      if (!obj || typeof obj !== "object") return false;
+      if (Array.isArray(obj.brands) && obj.brands.length) return true;
+      return Array.isArray(obj.spaces) && obj.spaces.length > 0;
+    }
+
+    function setSyncStatusHint(text) {
+      const el = document.getElementById("syncStatusHint");
+      if (el) el.textContent = text || "";
+    }
+
+    /** 서버가 더 최신이면 로컬 덮어씀 → true */
+    async function pullTheFeelingFromSupabase() {
+      if (!USE_THEFEELING_CLOUD) return false;
+      try {
+        const res = await fetch(
+          `${SUPA_URL}/rest/v1/${THEFEELING_KV_TABLE}?id=eq.${encodeURIComponent(THEFEELING_KV_ROW_ID)}&select=kv,updated_at&limit=1`,
+          {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
+            cache: "no-store"
+          }
+        );
+        if (!res.ok) return false;
+        const rows = await res.json();
+        if (!Array.isArray(rows) || !rows.length) return false;
+        const row = rows[0];
+        const serverAt = String(row?.updated_at || "").trim();
+        const data = row?.kv?.data;
+        if (!data || typeof data !== "object") return false;
+        const known = (localStorage.getItem(LS_KNOWN_SERVER_AT) || "").trim();
+        if (known && serverAt && serverAt <= known) return false;
+        const normalized = normalizeTheFeelingState(JSON.parse(JSON.stringify(data)));
+        localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
+        localStorage.setItem(LS_KNOWN_SERVER_AT, serverAt);
+        try { localStorage.removeItem(LS_LOCAL_DIRTY); } catch (_) {}
+        return true;
+      } catch (e) {
+        console.warn("[TheFeeling] pull", e);
+        return false;
+      }
+    }
+
+    async function pushTheFeelingToSupabase() {
+      if (!USE_THEFEELING_CLOUD || theFeelingPushInFlight) return;
+      theFeelingPushInFlight = true;
+      try {
+        persistStateToLocalStorage();
+        let data;
+        try {
+          const raw = localStorage.getItem(STORE_KEY);
+          data = raw ? JSON.parse(raw) : { spaces: [], brands: [] };
+        } catch {
+          data = { spaces: [], brands: [] };
+        }
+        data = normalizeTheFeelingState(data);
+        const body = [{ id: THEFEELING_KV_ROW_ID, kv: { data } }];
+        const res = await fetch(`${SUPA_URL}/rest/v1/${THEFEELING_KV_TABLE}?on_conflict=id`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=representation",
+            apikey: SUPA_KEY,
+            Authorization: `Bearer ${SUPA_KEY}`
+          },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          console.error("[TheFeeling] push", res.status, await res.text());
+          return;
+        }
+        const out = await res.json();
+        const updatedAt = out?.[0]?.updated_at;
+        if (updatedAt) localStorage.setItem(LS_KNOWN_SERVER_AT, String(updatedAt).trim());
+        try { localStorage.removeItem(LS_LOCAL_DIRTY); } catch (_) {}
+      } catch (e) {
+        console.error("[TheFeeling] push", e);
+      } finally {
+        theFeelingPushInFlight = false;
+      }
+    }
+
+    function saveState() {
+      persistStateToLocalStorage();
+      if (!USE_THEFEELING_CLOUD) return;
+      try { localStorage.setItem(LS_LOCAL_DIRTY, "1"); } catch (_) {}
+      clearTimeout(theFeelingPushTimer);
+      theFeelingPushTimer = setTimeout(() => void pushTheFeelingToSupabase(), 1500);
+    }
+
+    async function bootstrapTheFeelingCloud() {
+      if (!USE_THEFEELING_CLOUD) {
+        setSyncStatusHint("");
+        return;
+      }
+      setSyncStatusHint("☁️ 동기화 중…");
+      try {
+        const applied = await pullTheFeelingFromSupabase();
+        let serverHasRow = true;
+        try {
+          const chk = await fetch(
+            `${SUPA_URL}/rest/v1/${THEFEELING_KV_TABLE}?id=eq.${encodeURIComponent(THEFEELING_KV_ROW_ID)}&select=id&limit=1`,
+            { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }, cache: "no-store" }
+          );
+          const r = await chk.json();
+          serverHasRow = Array.isArray(r) && r.length > 0;
+        } catch {
+          serverHasRow = false;
+        }
+        if (!serverHasRow && hasMeaningfulTheFeelingData(loadState())) {
+          await pushTheFeelingToSupabase();
+        } else if (localStorage.getItem(LS_LOCAL_DIRTY) === "1") {
+          await pushTheFeelingToSupabase();
+        } else if (applied) {
+          /* pull already cleared dirty */
+        }
+        setSyncStatusHint("☁️ 모든 기기 동기화 (Supabase)");
+      } catch (e) {
+        console.warn("[TheFeeling] bootstrap cloud", e);
+        setSyncStatusHint("☁️ 동기화 실패 — 오프라인·백업 사용");
+      }
+    }
+
+    async function refreshTheFeelingFromCloudIfVisible() {
+      if (!USE_THEFEELING_CLOUD || document.hidden) return;
+      const applied = await pullTheFeelingFromSupabase();
+      if (applied) {
+        state = loadState();
+        editingKey = null;
+        render();
+      }
+    }
+
+    /** PC(데스크톱)에 JSON 파일로 백업 — 브라우저 저장 대화상자에서 바탕화면 등 원하는 위치 선택 가능 */
+    function downloadTheFeelingBackup() {
+      try {
+        saveState();
+        const raw = localStorage.getItem(STORE_KEY);
+        let data;
+        try {
+          data = raw ? JSON.parse(raw) : { spaces: [], brands: [] };
+        } catch {
+          data = { spaces: [], brands: [] };
+        }
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          version: 1,
+          storeKey: STORE_KEY,
+          data
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.download = `thefeeling-backup-${stamp}.json`;
+        a.href = URL.createObjectURL(blob);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        showToast("💾 백업 파일을 저장했습니다. (다운로드 또는 저장 위치를 확인하세요)");
+      } catch (e) {
+        console.error("[TheFeeling] backup", e);
+        alert("백업 저장에 실패했습니다.");
+      }
+    }
+
+    /** 백업 JSON 파일을 이 기기 localStorage에 반영 (휴대폰 등 다른 기기에서 사용) */
+    function restoreTheFeelingFromBackupFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ""));
+          const inner = parsed && typeof parsed === "object" && parsed.data != null ? parsed.data : parsed;
+          if (!inner || typeof inner !== "object") throw new Error("형식 오류");
+          const normalized = normalizeTheFeelingState(JSON.parse(JSON.stringify(inner)));
+          if (!confirm("선택한 백업으로 이 기기에 저장된 더필링 데이터를 모두 덮어씁니다. 계속할까요?")) return;
+          localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
+          if (USE_THEFEELING_CLOUD) {
+            try { localStorage.setItem(LS_LOCAL_DIRTY, "1"); } catch (_) {}
+            void pushTheFeelingToSupabase();
+          }
+          state = loadState();
+          editingKey = null;
+          render();
+          showToast("📂 복원했습니다.");
+        } catch (e) {
+          console.error("[TheFeeling] restore", e);
+          alert("백업 파일을 읽을 수 없습니다. 더필링에서 받은 .json 파일인지 확인해 주세요.");
+        }
+      };
+      reader.onerror = () => alert("파일을 읽지 못했습니다.");
+      reader.readAsText(file, "UTF-8");
+    }
+
+    let state = loadState();
+    // track which photo is in edit mode: "spaceId__photoId"
+    let editingKey = null;
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    // ─── Upload ────────────────────────────────────────────────────────────────
+    async function uploadPhoto(file) {
+      const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `thefeeling/${Date.now()}_${uid()}.${ext}`;
+      const res  = await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${path}`, {
+        method: "POST",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
+                   "Content-Type": file.type, "x-upsert": "true" },
+        body: file
+      });
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      return `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+    }
+
+    // ─── Copy toast ────────────────────────────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg = "📋 복사 완료!") {
+      const el = document.getElementById("copyToast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+    }
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); }
+      catch {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+    }
+
+    async function copyImageFromUrl(url) {
+      // 이미지를 Canvas에 그려 PNG blob으로 변환 후 클립보드에 복사
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url + (url.includes("?") ? "&" : "?") + "_cb=" + Date.now();
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d").drawImage(img, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("blob 변환 실패");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    }
+
+    // ─── Escape ────────────────────────────────────────────────────────────────
+    function esc(s) {
+      return String(s || "")
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    // ─── Brand Section ─────────────────────────────────────────────────────────
+    function renderBrands() {
+      const container = document.getElementById("brandChips");
+      if (!container) return;
+      if (!state.brands.length) {
+        container.innerHTML = `<span class="brand-empty-hint">브랜드명을 추가하면 아이콘으로 표시됩니다.</span>`;
+        return;
+      }
+      container.innerHTML = state.brands.map((b, i) => {
+        const hasUrl = Boolean(b.url);
+        return `
+          <div class="brand-chip ${hasUrl ? "has-url" : "no-url"}" data-brand-idx="${i}" title="${hasUrl ? b.url : "URL 미설정 — 편집으로 URL 추가"}">
+            <span class="brand-chip-icon">${hasUrl ? "🔗" : "🏷️"}</span>
+            <span class="brand-chip-name">${esc(b.name)}</span>
+            <button class="brand-chip-edit" data-edit-brand="${i}" title="URL 편집">✏️</button>
+            <button class="brand-chip-del" data-del-brand="${i}" title="삭제">✕</button>
+          </div>`;
+      }).join("");
+
+      // 칩 클릭 → URL 있으면 이동, 없으면 URL 입력 유도
+      container.querySelectorAll("[data-brand-idx]").forEach(chip => {
+        chip.addEventListener("click", (e) => {
+          if (e.target.closest("[data-del-brand]") || e.target.closest("[data-edit-brand]")) return;
+          const idx = Number(chip.dataset.brandIdx);
+          const brand = state.brands[idx];
+          if (!brand) return;
+          if (brand.url) {
+            window.open(brand.url, "_blank", "noopener,noreferrer");
+          } else {
+            promptBrandUrl(idx);
+          }
+        });
+      });
+
+      // 편집 버튼 → 이름/URL 수정
+      container.querySelectorAll("[data-edit-brand]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          promptBrandUrl(Number(btn.dataset.editBrand));
+        });
+      });
+
+      // 삭제 버튼
+      container.querySelectorAll("[data-del-brand]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const idx = Number(btn.dataset.delBrand);
+          if (!confirm(`"${state.brands[idx].name}" 브랜드를 삭제할까요?`)) return;
+          state.brands.splice(idx, 1);
+          saveState();
+          renderBrands();
+        });
+      });
+    }
+
+    function promptBrandUrl(idx) {
+      const brand = state.brands[idx];
+      if (!brand) return;
+      const newName = prompt("브랜드명", brand.name);
+      if (newName === null) return;
+      const trimName = newName.trim();
+      if (!trimName) return;
+      const newUrl = prompt("이동할 URL (예: https://www.bang-olufsen.com)", brand.url || "");
+      if (newUrl === null) return;
+      let trimUrl = newUrl.trim();
+      if (trimUrl && !/^https?:\/\//i.test(trimUrl)) trimUrl = "https://" + trimUrl;
+      state.brands[idx] = { name: trimName, url: trimUrl };
+      saveState();
+      renderBrands();
+    }
+
+    // ─── Render ────────────────────────────────────────────────────────────────
+    function renderSpaceNav() {
+      const nav = document.getElementById("spaceNav");
+      const inner = document.getElementById("spaceNavInner");
+      if (!state.spaces.length) { nav.style.display = "none"; return; }
+      nav.style.display = "";
+      inner.innerHTML = state.spaces.map(space =>
+        `<button class="space-nav-btn" data-nav-space="${esc(space.id)}">${esc(space.name || "공간")}</button>`
+      ).join("");
+      inner.querySelectorAll("[data-nav-space]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const section = document.querySelector(`[data-space-id="${btn.dataset.navSpace}"]`);
+          if (!section) return;
+          const navH = (document.getElementById("spaceNav")?.offsetHeight || 0)
+                     + (document.querySelector(".page-header")?.offsetHeight || 0);
+          const top = section.getBoundingClientRect().top + window.scrollY - navH - 12;
+          window.scrollTo({ top, behavior: "smooth" });
+          inner.querySelectorAll(".space-nav-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+      });
+      setupScrollSpy();
+    }
+
+    function render() {
+      renderBrands();
+      const main = document.getElementById("mainContent");
+      if (!state.spaces.length) {
+        main.innerHTML = `
+          <div class="empty-state">
+            <p>아직 등록된 공간이 없습니다.<br>공간을 추가하고 제품 사진을 업로드해보세요.</p>
+            <button onclick="openSpacePrompt()">＋ 공간 추가</button>
+          </div>`;
+        renderSpaceNav();
+        return;
+      }
+      main.innerHTML = state.spaces.map(renderSpace).join("");
+      renderSpaceNav();
+      bindAllEvents();
+    }
+
+    function renderSpace(space) {
+      const idx = state.spaces.findIndex(s => s.id === space.id);
+      const total = state.spaces.length;
+      const photos = space.photos.map((p, i) => renderCard(space.id, p, i)).join("");
+      return `
+        <section class="category-section" data-space-id="${space.id}">
+          <div class="category-header">
+            <div class="space-order-btns">
+              <button class="btn-order" data-move-up="${space.id}" title="위로" ${idx === 0 ? "disabled" : ""}>▲</button>
+              <button class="btn-order" data-move-down="${space.id}" title="아래로" ${idx === total - 1 ? "disabled" : ""}>▼</button>
+            </div>
+            <span>🏠</span>
+            <input class="category-name-input" type="text"
+              value="${esc(space.name)}" placeholder="공간 이름"
+              data-rename="${space.id}" />
+            <span class="category-photo-count">사진 ${space.photos.length}장</span>
+            <button class="btn-delete-category" data-del-space="${space.id}">공간 삭제</button>
+          </div>
+          <div class="photo-grid">
+            ${photos}
+            <label class="upload-slot" title="사진 추가">
+              <span class="upload-slot-inner">
+                <span class="upload-slot-icon">📷</span>
+                <span>사진 추가</span>
+              </span>
+              <input type="file" accept="image/*" multiple style="display:none;"
+                data-upload="${space.id}" />
+            </label>
+          </div>
+        </section>`;
+    }
+
+    function renderCard(spaceId, photo, photoIdx) {
+      const key      = `${spaceId}__${photo.id}`;
+      const isEditing = editingKey === key;
+      const name     = photo.productName || "";
+      const isEmpty  = !name;
+      const title    = photo.photoTitle != null ? String(photo.photoTitle) : "";
+      const space    = state.spaces.find(s => s.id === spaceId);
+      const pCount   = space?.photos?.length ?? 0;
+      const uploadOverlay = photo.uploading
+        ? `<div class="uploading-badge">업로드 중…</div>` : "";
+
+      const viewBody = `
+        <div class="card-view">
+          <div class="product-name-text ${isEmpty ? "empty" : ""}">${esc(isEmpty ? "제품명 없음" : name)}</div>
+          <div class="card-actions">
+            <button class="btn-card" data-edit="${photo.id}" data-edit-space="${spaceId}">수정</button>
+            <button class="btn-card" data-copy-img="${photo.id}" data-copy-img-space="${spaceId}">이미지 복사</button>
+            <button class="btn-card danger" data-del-photo="${photo.id}" data-del-space="${spaceId}">삭제</button>
+          </div>
+        </div>`;
+
+      const editBody = `
+        <div class="card-edit">
+          <textarea class="product-name-input" rows="4"
+            placeholder="제품명 입력"
+            data-edit-input="${photo.id}" data-edit-input-space="${spaceId}">${esc(name)}</textarea>
+          <div class="card-actions">
+            <button class="btn-card primary" data-save="${photo.id}" data-save-space="${spaceId}">저장</button>
+            <button class="btn-card" data-cancel-edit="${photo.id}">취소</button>
+          </div>
+        </div>`;
+
+      return `
+        <div class="photo-card-row">
+          <div class="photo-order-btns">
+            <button type="button" class="btn-order" data-photo-move-up="${photo.id}" data-photo-move-up-space="${spaceId}"
+              title="앞으로" ${photoIdx === 0 ? "disabled" : ""}>▲</button>
+            <button type="button" class="btn-order" data-photo-move-down="${photo.id}" data-photo-move-down-space="${spaceId}"
+              title="뒤로" ${photoIdx >= pCount - 1 ? "disabled" : ""}>▼</button>
+          </div>
+          <div class="photo-card">
+            <div class="photo-thumb-wrap" data-copy-photo="${photo.id}" data-copy-space="${spaceId}">
+              <div class="photo-title-overlay">
+                <input type="text" class="photo-title-input" maxlength="80"
+                  placeholder="사진 위 제목"
+                  value="${esc(title)}"
+                  data-photo-title="${photo.id}" data-photo-title-space="${spaceId}" />
+              </div>
+              <img src="${esc(photo.url)}" alt="${esc(name)}" loading="lazy" />
+              <div class="copy-flash">📋 복사!</div>
+              ${uploadOverlay}
+            </div>
+            <div class="card-body">
+              ${isEditing ? editBody : viewBody}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ─── Events ────────────────────────────────────────────────────────────────
+    function bindAllEvents() {
+      // Move space up/down
+      document.querySelectorAll("[data-move-up]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = state.spaces.findIndex(s => s.id === btn.dataset.moveUp);
+          if (idx <= 0) return;
+          [state.spaces[idx - 1], state.spaces[idx]] = [state.spaces[idx], state.spaces[idx - 1]];
+          saveState(); render();
+        });
+      });
+      document.querySelectorAll("[data-move-down]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = state.spaces.findIndex(s => s.id === btn.dataset.moveDown);
+          if (idx < 0 || idx >= state.spaces.length - 1) return;
+          [state.spaces[idx], state.spaces[idx + 1]] = [state.spaces[idx + 1], state.spaces[idx]];
+          saveState(); render();
+        });
+      });
+
+      // 사진 순서 (같은 공간 안에서)
+      document.querySelectorAll("[data-photo-move-up]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.photoMoveUpSpace;
+          const photoId = btn.dataset.photoMoveUp;
+          const sp = state.spaces.find(s => s.id === spaceId);
+          if (!sp || !sp.photos) return;
+          const i = sp.photos.findIndex(p => p.id === photoId);
+          if (i <= 0) return;
+          [sp.photos[i - 1], sp.photos[i]] = [sp.photos[i], sp.photos[i - 1]];
+          saveState(); render();
+        });
+      });
+      document.querySelectorAll("[data-photo-move-down]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.photoMoveDownSpace;
+          const photoId = btn.dataset.photoMoveDown;
+          const sp = state.spaces.find(s => s.id === spaceId);
+          if (!sp || !sp.photos) return;
+          const i = sp.photos.findIndex(p => p.id === photoId);
+          if (i < 0 || i >= sp.photos.length - 1) return;
+          [sp.photos[i], sp.photos[i + 1]] = [sp.photos[i + 1], sp.photos[i]];
+          saveState(); render();
+        });
+      });
+
+      // Rename space
+      document.querySelectorAll("[data-rename]").forEach(inp => {
+        inp.addEventListener("input", () => {
+          const sp = state.spaces.find(s => s.id === inp.dataset.rename);
+          if (sp) { sp.name = inp.value.trim() || "공간"; }
+          const navBtn = document.querySelector(`[data-nav-space="${inp.dataset.rename}"]`);
+          if (navBtn) navBtn.textContent = inp.value.trim() || "공간";
+        });
+        inp.addEventListener("change", () => {
+          const sp = state.spaces.find(s => s.id === inp.dataset.rename);
+          if (sp) { sp.name = inp.value.trim() || "공간"; saveState(); }
+          renderSpaceNav();
+        });
+      });
+
+      // Delete space
+      document.querySelectorAll("[data-del-space]").forEach(btn => {
+        if (btn.hasAttribute("data-del-photo")) return;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!confirm("이 공간을 삭제할까요?")) return;
+          state.spaces = state.spaces.filter(s => s.id !== btn.dataset.delSpace);
+          saveState(); editingKey = null; render();
+        });
+      });
+
+      // 사진 위 제목 편집 (클릭 시 제품명 복사 방지)
+      let titleSaveTimer = null;
+      document.querySelectorAll("[data-photo-title]").forEach(inp => {
+        inp.addEventListener("click", e => e.stopPropagation());
+        inp.addEventListener("mousedown", e => e.stopPropagation());
+        inp.addEventListener("input", () => {
+          const spaceId = inp.dataset.photoTitleSpace;
+          const photoId = inp.dataset.photoTitle;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          photo.photoTitle = inp.value;
+          clearTimeout(titleSaveTimer);
+          titleSaveTimer = setTimeout(() => saveState(), 400);
+        });
+        inp.addEventListener("change", () => {
+          const spaceId = inp.dataset.photoTitleSpace;
+          const photoId = inp.dataset.photoTitle;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          photo.photoTitle = inp.value.trim();
+          saveState();
+        });
+      });
+
+      // Click photo → copy product name
+      document.querySelectorAll("[data-copy-photo]").forEach(wrap => {
+        wrap.addEventListener("click", async (e) => {
+          if (e.target.closest(".photo-title-input")) return;
+          const spaceId = wrap.dataset.copySpace;
+          const photoId = wrap.dataset.copyPhoto;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          const name = photo.productName || "";
+          if (!name) { showToast("⚠️ 제품명이 없습니다"); return; }
+          await copyText(name);
+          // Flash effect
+          wrap.classList.add("flashing");
+          setTimeout(() => wrap.classList.remove("flashing"), 600);
+          showToast(`📋 "${name}" 복사 완료!`);
+        });
+      });
+
+      // Click "이미지 복사" → copy actual image to clipboard
+      document.querySelectorAll("[data-copy-img]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const spaceId = btn.dataset.copyImgSpace;
+          const photoId = btn.dataset.copyImg;
+          const space   = state.spaces.find(s => s.id === spaceId);
+          const photo   = space?.photos.find(p => p.id === photoId);
+          if (!photo?.url) { showToast("⚠️ 이미지를 찾을 수 없습니다"); return; }
+          try {
+            btn.textContent = "복사 중…";
+            btn.disabled = true;
+            await copyImageFromUrl(photo.url);
+            showToast("🖼️ 이미지 복사 완료!");
+          } catch (err) {
+            console.warn("이미지 복사 실패:", err);
+            showToast("⚠️ 이미지 복사 실패 (Chrome/Edge에서만 지원)");
+          } finally {
+            btn.textContent = "이미지 복사";
+            btn.disabled = false;
+          }
+        });
+      });
+
+      // Enter edit mode
+      document.querySelectorAll("[data-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          editingKey = `${btn.dataset.editSpace}__${btn.dataset.edit}`;
+          render();
+          // Focus the input after render
+          setTimeout(() => {
+            const inp = document.querySelector(`[data-edit-input="${btn.dataset.edit}"]`);
+            inp?.focus();
+          }, 30);
+        });
+      });
+
+      // Cancel edit
+      document.querySelectorAll("[data-cancel-edit]").forEach(btn => {
+        btn.addEventListener("click", () => { editingKey = null; render(); });
+      });
+
+      // Save product name
+      document.querySelectorAll("[data-save]").forEach(btn => {
+        btn.addEventListener("click", () => saveProductName(btn.dataset.saveSpace, btn.dataset.save));
+      });
+
+      // Ctrl+Enter → save, Escape → cancel
+      document.querySelectorAll("[data-edit-input]").forEach(inp => {
+        inp.addEventListener("keydown", e => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveProductName(inp.dataset.editInputSpace, inp.dataset.editInput);
+          if (e.key === "Escape") { editingKey = null; render(); }
+        });
+      });
+
+      // Delete photo
+      document.querySelectorAll("[data-del-photo]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!confirm("이 사진을 삭제할까요?")) return;
+          const space = state.spaces.find(s => s.id === btn.dataset.delSpace);
+          if (space) space.photos = space.photos.filter(p => p.id !== btn.dataset.delPhoto);
+          saveState(); editingKey = null; render();
+        });
+      });
+
+      // File upload
+      document.querySelectorAll("[data-upload]").forEach(fileInput => {
+        fileInput.addEventListener("change", async () => {
+          const spaceId = fileInput.dataset.upload;
+          const files   = Array.from(fileInput.files);
+          if (!files.length) return;
+          fileInput.value = "";
+
+          for (const file of files) {
+            const space = state.spaces.find(s => s.id === spaceId);
+            if (!space) continue;
+            const localUrl = URL.createObjectURL(file);
+            const photo = { id: uid(), url: localUrl, productName: "", photoTitle: "", uploading: true };
+            space.photos.push(photo);
+            saveState(); render();
+
+            (async () => {
+              try {
+                const remoteUrl = await uploadPhoto(file);
+                URL.revokeObjectURL(localUrl);
+                const sp = state.spaces.find(s => s.id === spaceId);
+                const ph = sp?.photos.find(p => p.id === photo.id);
+                if (ph) { ph.url = remoteUrl; ph.uploading = false; }
+              } catch (e) {
+                console.error("[TheFeeling] Upload error:", e);
+                const sp = state.spaces.find(s => s.id === spaceId);
+                const ph = sp?.photos.find(p => p.id === photo.id);
+                if (ph) ph.uploading = false;
+              }
+              saveState(); render();
+            })();
+          }
+        });
+      });
+    }
+
+    function saveProductName(spaceId, photoId) {
+      const space = state.spaces.find(s => s.id === spaceId);
+      const photo = space?.photos.find(p => p.id === photoId);
+      if (!photo) return;
+      const inp = document.querySelector(`[data-edit-input="${photoId}"]`);
+      if (inp) photo.productName = inp.value.trim();
+      saveState(); editingKey = null; render();
+    }
+
+    // ─── Space prompt ──────────────────────────────────────────────────────────
+    function openSpacePrompt() {
+      document.getElementById("spaceNameInput").value = "";
+      document.getElementById("spacePrompt").style.display = "flex";
+      setTimeout(() => document.getElementById("spaceNameInput").focus(), 50);
+    }
+    function closeSpacePrompt() { document.getElementById("spacePrompt").style.display = "none"; }
+    function confirmAddSpace() {
+      const name = document.getElementById("spaceNameInput").value.trim();
+      if (!name) { document.getElementById("spaceNameInput").focus(); return; }
+      state.spaces.unshift({ id: uid(), name, photos: [] });
+      saveState(); render(); closeSpacePrompt();
+    }
+
+    document.getElementById("addSpaceBtn").addEventListener("click", openSpacePrompt);
+    document.getElementById("backupBtn").addEventListener("click", downloadTheFeelingBackup);
+    document.getElementById("restoreBtn").addEventListener("click", () => document.getElementById("restoreFileInput").click());
+    document.getElementById("restoreFileInput").addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (f) restoreTheFeelingFromBackupFile(f);
+    });
+    document.getElementById("btnConfirmSpace").addEventListener("click", confirmAddSpace);
+    document.getElementById("btnCancelSpace").addEventListener("click", closeSpacePrompt);
+    document.getElementById("spacePrompt").addEventListener("click", e => {
+      if (e.target === document.getElementById("spacePrompt")) closeSpacePrompt();
+    });
+    document.getElementById("spaceNameInput").addEventListener("keydown", e => {
+      if (e.key === "Enter")  confirmAddSpace();
+      if (e.key === "Escape") closeSpacePrompt();
+    });
+
+    // ─── Scroll spy ───────────────────────────────────────────────────────────
+    let scrollSpyObserver = null;
+    function setupScrollSpy() {
+      if (scrollSpyObserver) scrollSpyObserver.disconnect();
+      const sections = document.querySelectorAll("[data-space-id]");
+      if (!sections.length) return;
+      const navH = (document.getElementById("spaceNav")?.offsetHeight || 0)
+                 + (document.querySelector(".page-header")?.offsetHeight || 0);
+      scrollSpyObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.spaceId;
+          document.querySelectorAll(".space-nav-btn").forEach(b => {
+            b.classList.toggle("active", b.dataset.navSpace === id);
+          });
+          const activeBtn = document.querySelector(`.space-nav-btn[data-nav-space="${id}"]`);
+          if (activeBtn) activeBtn.scrollIntoView({ inline: "nearest", block: "nearest" });
+        });
+      }, { rootMargin: `-${navH + 10}px 0px -60% 0px`, threshold: 0 });
+      sections.forEach(s => scrollSpyObserver.observe(s));
+    }
+
+    // ─── Brand Add ────────────────────────────────────────────────────────────
+    document.getElementById("addBrandBtn").addEventListener("click", () => {
+      const input = prompt("브랜드명을 입력하세요.", "");
+      if (input === null) return;
+      const name = String(input).trim();
+      if (!name) return;
+      state.brands.push({ name, url: "" });
+      saveState();
+      renderBrands();
+    });
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    render();
+    (async () => {
+      await bootstrapTheFeelingCloud();
+      state = loadState();
+      render();
+    })();
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) void refreshTheFeelingFromCloudIfVisible();
+    });
+    window.addEventListener("focus", () => { void refreshTheFeelingFromCloudIfVisible(); });
+  </script>
+</body>
+</html>
