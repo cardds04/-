@@ -291,6 +291,30 @@
         white-space: pre-wrap;
         word-break: break-all;
       }
+      .blog-shrink-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.88rem;
+      }
+      .row-shrink-opts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 10px 0 12px;
+      }
+      .row-shrink-opts input[type="number"] {
+        width: 100%;
+        margin-bottom: 0;
+      }
+      .blog-shrink-advanced {
+        margin-top: 12px;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .blog-shrink-advanced summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
@@ -365,23 +389,42 @@
       <div class="card card--local-tool">
         <h2>5. 공유폴더 사진 정리 (맥 로컬)</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
-          브라우저가 아니라 <strong>이 Mac에서 터미널로 실행</strong>하는 스크립트입니다. NAS·공유폴더를
-          <code>/Volumes/이름</code>처럼 마운트한 뒤 Finder로 받아 둔 사진을 읽어 <strong>JPEG로 줄여서</strong> 내장 디스크
-          폴더에 저장합니다. (웹에서 자동으로 내려받는 기능은 아니며, 공유폴더에 이미 있는 파일을 처리합니다.) 처리가 끝나면
-          옵션으로 <strong>일정 크기 이상 원본만</strong> 공유폴더 쪽에서 지웁니다.
+          이 Mac에서 <code>node server.js</code>로 사이트 서버를 띄운 뒤, NAS·공유폴더를
+          <code>/Volumes/이름/...</code>처럼 마운트한 경로를 입력하면 서버가 사진을 읽어 <strong>JPEG로 줄인 ZIP</strong>을
+          브라우저로 내려받습니다. (<strong>원본은 삭제하지 않습니다.</strong> 인터넷에만 올린 공개 서버에서는 동작하지 않을 수
+          있습니다.)
         </p>
-        <ol class="local-tool-steps">
-          <li>공유폴더에 사진을 넣거나 Finder로 복사해 둡니다.</li>
-          <li>저장할 내장 경로 폴더를 만듭니다. (예: <code>~/Pictures/blog_shrunk</code>)</li>
-          <li>처음 한 번: <code>pip install pillow</code> (HEIC면 추가로 <code>pip install pillow-heif</code>)</li>
-          <li>미리보기만: 아래 명령에 <code>--dry-run</code>을 붙여 실행합니다.</li>
-          <li>실제 실행 후 원본 삭제까지 하려면 <code>--delete-originals</code>를 켭니다.</li>
-        </ol>
-        <p class="hint" style="margin-bottom: 8px">
-          스크립트 위치(저장소 기준):
-          <code>tools/blog-photo-shrink/shrink_photos.py</code>
-        </p>
-        <pre class="cmd-example" id="blogShrinkCmdExample" translate="no"># schedule-site 저장소 루트에서 실행
+        <label for="blogShrinkSource">공유폴더 경로</label>
+        <input
+          type="text"
+          id="blogShrinkSource"
+          class="blog-shrink-path"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="예: /Volumes/디스크이름/사진"
+        />
+        <div class="row-shrink-opts">
+          <div>
+            <label for="blogShrinkMaxSide">긴 변 최대 픽셀</label>
+            <input type="number" id="blogShrinkMaxSide" min="256" max="8192" value="2560" />
+          </div>
+          <div>
+            <label for="blogShrinkQuality">JPEG 품질 (40–95)</label>
+            <input type="number" id="blogShrinkQuality" min="40" max="95" value="82" />
+          </div>
+        </div>
+        <button type="button" class="btn" id="btnBlogShrinkZip">JPEG 압축 ZIP 받기</button>
+        <p class="hint" id="blogShrinkWebStatus" style="min-height: 1.3em; margin-top: 8px; margin-bottom: 0"></p>
+        <details class="blog-shrink-advanced">
+          <summary>터미널에서 직접 실행 · 원본 삭제 옵션</summary>
+          <p class="hint" style="margin-top: 8px">
+            웹은 ZIP만 제공합니다. 공유폴더에서 <strong>압축 후 대용량 원본을 지우려면</strong> 아래처럼 터미널에서
+            <code>--delete-originals</code>를 사용하세요.
+          </p>
+          <ol class="local-tool-steps">
+            <li>처음 한 번: <code>pip install pillow</code> (HEIC면 <code>pip install pillow-heif</code>)</li>
+          </ol>
+          <pre class="cmd-example" id="blogShrinkCmdExample" translate="no"># schedule-site 저장소 루트에서 실행
 python3 tools/blog-photo-shrink/shrink_photos.py \
   --source "/Volumes/공유디스크이름/사진폴더" \
   --dest "$HOME/Pictures/blog_shrunk" \
@@ -389,14 +432,13 @@ python3 tools/blog-photo-shrink/shrink_photos.py \
   --quality 82 \
   --delete-if-larger-mb 2 \
   --dry-run</pre>
-        <p class="hint" style="margin-top: 8px; margin-bottom: 8px">
-          <code>--dry-run</code>으로 목록만 확인한 뒤, 마지막 줄만 빼고
-          <code>--delete-originals</code>를 추가하면 압축 저장 후 <strong>2MB 이상 원본</strong>을 삭제합니다. 삭제 전에
-          백업을 권장합니다.
-        </p>
-        <div class="btn-row">
-          <button type="button" class="btn secondary" id="btnCopyShrinkCmd">명령 예시 복사</button>
-        </div>
+          <p class="hint" style="margin-top: 8px; margin-bottom: 8px">
+            <code>--dry-run</code>으로 확인 후, <code>--delete-originals</code>로 2MB 이상 원본만 삭제할 수 있습니다.
+          </p>
+          <div class="btn-row">
+            <button type="button" class="btn secondary" id="btnCopyShrinkCmd">명령 예시 복사</button>
+          </div>
+        </details>
       </div>
     </div>
     <div class="toast" id="toast" role="status"></div>
@@ -1201,6 +1243,63 @@ ${orderLines}
             showToast("명령 예시 복사됨");
           } catch {
             showToast("복사 실패");
+          }
+        });
+      })();
+
+      (function initBlogShrinkWeb() {
+        const btn = document.getElementById("btnBlogShrinkZip");
+        const srcEl = document.getElementById("blogShrinkSource");
+        const maxEl = document.getElementById("blogShrinkMaxSide");
+        const qEl = document.getElementById("blogShrinkQuality");
+        const st = document.getElementById("blogShrinkWebStatus");
+        if (!btn || !srcEl) return;
+        btn.addEventListener("click", async () => {
+          const source = srcEl.value.trim();
+          if (!source) {
+            showToast("공유폴더 경로를 입력하세요.");
+            return;
+          }
+          st.textContent = "처리 중… (장수에 따라 수 분 걸릴 수 있습니다)";
+          btn.disabled = true;
+          try {
+            const r = await fetch(`${getApiBase()}/api/blog-photo-shrink`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                source,
+                maxSide: parseInt(maxEl && maxEl.value, 10) || 2560,
+                quality: parseInt(qEl && qEl.value, 10) || 82
+              })
+            });
+            if (!r.ok) {
+              const ct = r.headers.get("Content-Type") || "";
+              let msg = r.statusText || "오류";
+              if (ct.includes("application/json")) {
+                const j = await r.json().catch(() => ({}));
+                msg = j.message || msg;
+              } else {
+                const t = await r.text();
+                if (t) msg = t.slice(0, 300);
+              }
+              throw new Error(msg);
+            }
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "blog_shrink_photos.zip";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            showToast("ZIP 받기 완료");
+            st.textContent = "";
+          } catch (e) {
+            st.textContent = e.message || String(e);
+            showToast("실패 — 아래 메시지 확인");
+          } finally {
+            btn.disabled = false;
           }
         });
       })();
