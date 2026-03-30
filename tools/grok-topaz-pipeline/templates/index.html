@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <title>Grok 이미지 · 영상 · Topaz</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}" />
+</head>
+<body>
+  <div class="page">
+    <header class="head">
+      <h1>Grok 이미지 · 영상 만들기 · Topaz 후처리</h1>
+      <p class="sub">맨 위 <strong>Grok 이미지</strong>·<strong>① Grok 영상</strong>은 같은 xAI 키를 씁니다. <strong>팬 영상</strong>(로컬·MoviePy)은 API 키 없이 동작합니다. <strong>②</strong> Topaz만. 이 페이지는 <strong>내 맥에서만</strong> 씁니다.</p>
+    </header>
+
+    <div id="banner" class="banner banner--warn" hidden></div>
+
+    <main class="card">
+      <div class="card__workflow">
+      <section class="workflow-block workflow-block--grok-image">
+        <h2 class="workflow-title">AI 이미지 <span class="workflow-note">(Grok Imagine 또는 Gemini 나노바나나2)</span></h2>
+        <section class="step">
+          <h3 class="step__h">엔진</h3>
+          <div class="grok-image-engine-row">
+            <div class="pan-direction grok-image-engine-row__radios" role="radiogroup" aria-label="이미지 생성 엔진">
+              <label class="pan-direction__opt">
+                <input type="radio" name="imageProvider" value="xai" />
+                <span>Grok Imagine (xAI)</span>
+              </label>
+              <label class="pan-direction__opt">
+                <input type="radio" name="imageProvider" value="gemini" checked />
+                <span>Gemini 나노바나나2</span>
+              </label>
+            </div>
+            <div class="grok-image-engine-row__api">
+              <button type="button" class="btn btn--settings" id="btnToggleImageApiKeys" aria-expanded="false">API 키 (이 블록 전용) — 펼치기</button>
+            </div>
+          </div>
+        </section>
+        <div id="imageApiKeysPanel" class="grok-settings-panel image-api-keys-panel" hidden>
+          <p class="hint" style="margin:0 0 0.75rem;font-size:0.86rem;"><strong>저장</strong> 시 이 브라우저에만 보관됩니다. ① Grok 설정과 별도입니다. 비우면 환경 변수·① 설정 키를 이어서 씁니다.</p>
+          <div class="image-api-keys">
+            <div class="image-api-keys__row">
+              <label class="label" for="grok-image-xai-api-key">Grok (xAI) API 키</label>
+              <input type="password" id="grok-image-xai-api-key" autocomplete="off" spellcheck="false" placeholder="선택 · 비우면 ① Grok 설정 또는 XAI_API_KEY" class="image-api-keys__input" />
+              <p class="hint image-api-keys__actions">
+                <button type="button" class="btn btn--mini-save" id="btnSaveGrokImageXaiKey">저장</button>
+              </p>
+            </div>
+            <div class="image-api-keys__row">
+              <label class="label" for="gemini-api-key">Gemini API 키</label>
+              <input type="password" id="gemini-api-key" autocomplete="off" spellcheck="false" placeholder="선택 · 비우면 GEMINI_API_KEY" class="image-api-keys__input" />
+              <p class="hint image-api-keys__actions">
+                <button type="button" class="btn btn--mini-save" id="btnSaveGeminiKey">저장</button>
+              </p>
+            </div>
+          </div>
+        </div>
+        <section class="step">
+          <h3 class="step__h">참조 이미지 (선택, 최대 2장)</h3>
+          <p class="hint" style="margin:0 0 0.5rem;font-size:0.86rem;">비워 두면 텍스트만으로 생성합니다. <strong>Grok(xAI)</strong>에서 두 장을 쓸 때 프롬프트에 <code>\1</code> <code>\2</code>로 각 참조를 가리킬 수 있습니다. <strong>클립보드</strong>는 해당 드롭 영역 위에 마우스를 올린 뒤 붙여넣기(Ctrl+V) 하면 됩니다.</p>
+          <div class="row row--2 row--grok-ref-drops">
+            <div>
+              <div class="grok-ref-col-head">
+                <label class="label label--grok-ref" for="grokImageFile">참조 1</label>
+                <button type="button" class="btn btn--secondary btn--grok-ref-clear" id="btnClearGrokRef1" aria-label="참조 1 비우기">비우기</button>
+              </div>
+              <label class="drop drop--grok-ref" id="grokImageDropzone" tabindex="0" aria-label="참조 이미지 1 선택 또는 클립보드 붙여넣기">
+                <input type="file" id="grokImageFile" accept="image/*" hidden />
+                <span class="drop__hint">선택 · 드롭 · 붙여넣기</span>
+                <span class="drop__name" id="grokImageFileName"></span>
+              </label>
+            </div>
+            <div>
+              <div class="grok-ref-col-head">
+                <label class="label label--grok-ref" for="grokImageFile2">참조 2</label>
+                <button type="button" class="btn btn--secondary btn--grok-ref-clear" id="btnClearGrokRef2" aria-label="참조 2 비우기">비우기</button>
+              </div>
+              <label class="drop drop--grok-ref" id="grokImageDropzone2" tabindex="0" aria-label="참조 이미지 2 선택 또는 클립보드 붙여넣기">
+                <input type="file" id="grokImageFile2" accept="image/*" hidden />
+                <span class="drop__hint">선택 · 드롭 · 붙여넣기</span>
+                <span class="drop__name" id="grokImageFileName2"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+        <section class="step">
+          <h3 class="step__h">프롬프트</h3>
+          <label class="label" for="grokImagePrompt">프롬프트 (필수)</label>
+          <textarea id="grokImagePrompt" rows="3" placeholder="예: 석양 아래 도시 스카이라인, 시네마틱"></textarea>
+          <div class="grok-image-prompt-toolbar">
+            <div class="grok-image-prompt-toolbar__btns">
+              <button type="button" class="btn btn--prompt-save-main" id="btnSaveGrokImagePromptPreset">프롬프트 저장</button>
+              <button type="button" class="btn btn--grok-image" id="startBtnGrokImage">이미지 만들기</button>
+            </div>
+            <p class="hint prompt-save-hint grok-image-prompt-toolbar__hint">제목을 정하면 아래에 아이콘으로 쌓입니다. 누르면 이 칸에 불러옵니다.</p>
+          </div>
+          <div id="grokImagePromptPresetIcons" class="prompt-preset-icons" aria-label="저장된 이미지 프롬프트"></div>
+        </section>
+        <section class="step step--grok-image-dims">
+          <h3 class="step__h step__h--compact">비율 · 방향 · 해상도</h3>
+          <details class="image-aspect-details">
+            <summary class="image-aspect-details__summary">엔진·해상도 안내</summary>
+            <p class="hint image-aspect-legend">옵션 옆 표기: <strong>Grok</strong> = xAI만, <strong>나노</strong> = Gemini만, <strong>Grok·나노</strong> = 둘 다 가능. 비율·1k·2k는 양쪽 공통, <strong>4k는 나노만</strong>입니다.</p>
+          </details>
+          <div class="row row--3 row--grok-image-dims">
+            <div>
+              <label class="label label--compact" for="grokImageAspectBase">비율</label>
+              <select id="grokImageAspectBase" class="select--compact">
+                <option value="169">16∶9</option>
+                <option value="43">4∶3</option>
+                <option value="32" selected>3∶2</option>
+              </select>
+            </div>
+            <div class="grok-image-orient-cell">
+              <label class="label label--compact">방향</label>
+              <div class="pan-direction pan-direction--grok-image pan-direction--grok-compact" role="radiogroup" aria-label="가로 또는 세로">
+                <label class="pan-direction__opt">
+                  <input type="radio" name="grokImageOrientation" value="landscape" checked />
+                  <span>가로</span>
+                </label>
+                <label class="pan-direction__opt">
+                  <input type="radio" name="grokImageOrientation" value="portrait" />
+                  <span>세로</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label class="label label--compact" for="grokImageResolution">해상도</label>
+              <select id="grokImageResolution" class="select--compact">
+                <option value="1k" selected>1k</option>
+                <option value="2k">2k</option>
+                <option value="4k">4k (나노)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="workflow-block workflow-block--batch-aspect">
+        <h2 class="workflow-title">사진 대량 비율 맞추기 <span class="workflow-note">(로컬 · API 키 불필요)</span></h2>
+        <p class="hint workflow-lead">여러 장을 올리면 선택한 <strong>비율·가로/세로</strong>에 맞게 <strong>중앙에서 잘라</strong> 같은 화면비로 맞춥니다. (레터박스 없음) 결과는 JPEG ZIP입니다.</p>
+        <section class="step">
+          <h3 class="step__h">사진 (여러 장)</h3>
+          <label class="drop" id="batchAspectDropzone" tabindex="0">
+            <input type="file" id="batchAspectFiles" accept="image/*" multiple hidden />
+            <span class="drop__hint">눌러서 선택·끌어다 놓기 · 이 영역에 마우스를 두거나 포커스 후 붙여넣기(⌘V / Ctrl+V)</span>
+            <span class="drop__name" id="batchAspectFileNames"></span>
+          </label>
+        </section>
+        <section class="step">
+          <h3 class="step__h">출력 설정</h3>
+          <div class="row row--2 row--batch-aspect-opts">
+            <div>
+              <label class="label label--compact" for="batchAspectRatio">비율</label>
+              <select id="batchAspectRatio" class="select--compact">
+                <option value="16:9">16∶9</option>
+                <option value="4:3">4∶3</option>
+                <option value="3:2" selected>3∶2</option>
+              </select>
+            </div>
+            <div class="grok-image-orient-cell">
+              <label class="label label--compact">방향</label>
+              <div class="pan-direction pan-direction--grok-compact" role="radiogroup" aria-label="가로 또는 세로">
+                <label class="pan-direction__opt">
+                  <input type="radio" name="batchAspectOrientation" value="landscape" checked />
+                  <span>가로</span>
+                </label>
+                <label class="pan-direction__opt">
+                  <input type="radio" name="batchAspectOrientation" value="portrait" />
+                  <span>세로</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+        <div class="actions actions--batch-aspect">
+          <button type="button" class="btn btn--batch-aspect" id="btnBatchAspectDownload">ZIP으로 받기</button>
+        </div>
+      </section>
+
+      <div class="workflow-divider" role="separator"></div>
+
+      <section class="workflow-block workflow-block--pan">
+        <h2 class="workflow-title">사진 → 팬 영상 <span class="workflow-note">(로컬 · API 키 불필요)</span></h2>
+        <p class="hint workflow-lead">한 장당 1920×1080, <strong>5초</strong> 재생, <strong>60fps</strong> MP4. 이동·줌에 전 구간 <strong>15초</strong>를 쓰고 그중 앞 5초만 담습니다. 16:9 크롭·1.2배 확대. 여러 장이면 <code>이름_pan.mp4</code>로 각각 저장됩니다.</p>
+        <section class="step">
+          <h3 class="step__h">사진 (여러 장)</h3>
+          <label class="drop" id="panDropzone">
+            <input type="file" id="panFiles" accept="image/*" multiple hidden />
+            <span class="drop__hint">눌러서 선택하거나 끌어다 놓기</span>
+            <span class="drop__name" id="panFileNames"></span>
+          </label>
+        </section>
+        <section class="step">
+          <h3 class="step__h">이동 방식</h3>
+          <div class="pan-direction" role="radiogroup" aria-label="팬 이동 방식">
+            <label class="pan-direction__opt">
+              <input type="radio" name="panMode" value="lr" checked />
+              <span>왼쪽 → 오른쪽</span>
+            </label>
+            <label class="pan-direction__opt">
+              <input type="radio" name="panMode" value="rl" />
+              <span>오른쪽 → 왼쪽</span>
+            </label>
+            <label class="pan-direction__opt">
+              <input type="radio" name="panMode" value="forward" />
+              <span>앞으로 (줌 인)</span>
+            </label>
+          </div>
+        </section>
+        <div class="actions">
+          <button type="button" class="btn btn--pan" id="startBtnPan">팬 영상 만들기</button>
+        </div>
+      </section>
+
+      <div class="workflow-divider" role="separator"></div>
+
+      <section class="workflow-block workflow-block--grok">
+        <h2 class="workflow-title">① 사진 → Grok 영상 <span class="workflow-note">(+ 선택: Topaz)</span></h2>
+        <p class="hint workflow-lead">한 번에 진행: 사진·프롬프트만 넣고 주황 버튼을 누르면 됩니다. API 키는 서버에 기본값이 있어 따로 넣지 않아도 됩니다. 바꾸려면 아래 <strong>Grok 설정</strong>을 누르세요.</p>
+
+        <p class="grok-settings-bar">
+          <button type="button" class="btn btn--settings" id="btnToggleGrokSettings">Grok 설정 (API 키)</button>
+        </p>
+        <div id="grokSettingsPanel" class="grok-settings-panel" hidden>
+          <div class="grok-api-card" style="margin:0 0 1.25rem;padding:1rem 1rem 1.1rem;background:#fff7ed;border:3px solid #ea580c;border-radius:10px;">
+            <h3 style="margin:0 0 0.4rem;font-size:1.05rem;color:#9a3412;">Grok (xAI) API 키</h3>
+            <p style="margin:0 0 0.75rem;font-size:0.88rem;line-height:1.45;color:#44403c;">비워 두면 서버 기본 키를 사용합니다. 다른 키를 쓰려면 입력하세요. <a href="https://console.x.ai/" target="_blank" rel="noopener" style="color:#c2410c;font-weight:600;">console.x.ai</a></p>
+            <label for="grok-xai-api-key" style="display:block;font-size:0.75rem;font-weight:700;color:#57534e;letter-spacing:0.04em;margin-bottom:0.35rem;">API 키 (선택)</label>
+            <input type="text" id="grok-xai-api-key" name="xai_key_visible" autocomplete="off" spellcheck="false" placeholder="비우면 기본 키 사용" inputmode="text" style="box-sizing:border-box;width:100%;height:52px;padding:0 14px;font-size:17px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0c0a09;background:#ffffff;border:2px solid #78716c;border-radius:8px;" />
+            <p style="margin:0.55rem 0 0;font-size:0.85rem;color:#57534e;"><label style="cursor:pointer;"><input type="checkbox" id="grok-mask-key" style="width:1rem;height:1rem;vertical-align:middle;margin-right:0.35rem;accent-color:#ea580c;" />키 가리기</label></p>
+          </div>
+        </div>
+
+        <section class="step">
+          <h3 class="step__h">사진</h3>
+          <p class="hint" style="font-size:0.86rem;margin:0 0 0.5rem;line-height:1.45;">한 장이면 한 영상, 여러 장이면 같은 프롬프트·설정으로 <strong>장마다</strong> Grok를 돌립니다. Topaz 후처리는 서버에서 <strong>한 번에 한 건만</strong> 처리합니다. (최대 장수는 서버 설정, 기본 30장)</p>
+          <label class="drop" id="dropzone">
+            <input type="file" id="file" accept="image/*" multiple hidden />
+            <span class="drop__hint">이미지를 눌러 선택하거나 끌어다 놓기 (한 장 또는 여러 장)</span>
+            <span class="drop__name" id="fileName"></span>
+          </label>
+        </section>
+
+        <section class="step">
+          <h3 class="step__h">프롬프트 · 설정</h3>
+          <label class="label" for="prompt">프롬프트</label>
+          <textarea id="prompt" rows="3" placeholder="예: 부드러운 줌인, 석양, 영화 같은 분위기"></textarea>
+          <div class="prompt-save-row prompt-save-row--compact">
+            <button type="button" class="btn btn--prompt-save-main" id="btnSavePromptPreset">프롬프트 저장</button>
+            <p class="hint prompt-save-hint">제목을 정하면 아래에 아이콘으로 쌓입니다. 누르면 이 칸에 불러옵니다.</p>
+          </div>
+          <div id="promptPresetIcons" class="prompt-preset-icons" aria-label="저장된 프롬프트"></div>
+          <div class="row row--3">
+            <div>
+              <label class="label" for="duration">길이(초)</label>
+              <input type="number" id="duration" min="1" max="15" value="2" />
+            </div>
+            <div>
+              <label class="label" for="aspect">비율</label>
+              <select id="aspect">
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+              </select>
+            </div>
+            <div>
+              <label class="label" for="resolution">Grok 화질</label>
+              <select id="resolution">
+                <option value="720p">720p</option>
+                <option value="480p">480p</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="step">
+          <h3 class="step__h">
+            <label class="check-head">
+              <input type="checkbox" id="runTopaz" />
+              이어서 Topaz 후처리
+            </label>
+          </h3>
+          <p class="hint">체크 시 Grok 결과에 Topaz를 적용합니다. 체크 해제면 Grok mp4만 저장.</p>
+          <div id="topazGrokDetails" hidden>
+            <p class="hint" style="font-size:0.88rem;line-height:1.45;margin:0 0 0.5rem;">
+              <label style="cursor:pointer;">
+                <input type="checkbox" id="useTopazPresetGrok" checked />
+                저장된 프리셋 사용 (apo-8 슬로모 4배 + prob-4 1080p, 입력 불필요)
+              </label>
+            </p>
+            <p class="hint" style="font-size:0.82rem;margin:0 0 0.75rem;">FFmpeg 경로는 <code>topaz_preset.TOPAZ_FFMPEG_PATH</code>로 고정입니다. 프리셋 구간은 <code>TOPAZ_SEGMENT_DURATION_SEC</code>(기본 6초, 앞부분만)로 조절합니다.</p>
+            <div id="manualTopazGrok" hidden>
+              <label class="label" for="topazFf">FFmpeg 경로</label>
+              <input type="text" id="topazFf" class="mono" placeholder="/Volumes/ssd/Applications/Topaz Video.app/Contents/MacOS/ffmpeg" />
+              <label class="label" for="topazVf">Topaz 필터 (-vf, 간단한 경우)</label>
+              <textarea id="topazVf" class="mono" rows="2" placeholder="간단한 -vf 한 줄"></textarea>
+              <label class="label" for="topazFc">또는 -filter_complex (Topaz 내보내기 명령이 -filter_complex일 때)</label>
+              <p class="hint" style="font-size:0.82rem;margin:0 0 0.35rem;">내보내기 명령에서 <code>-filter_complex</code> 뒤 따옴표 안 문자열만 붙여 넣으세요. 위 <code>-vf</code> 칸은 비웁니다.</p>
+              <textarea id="topazFc" class="mono" rows="3" placeholder="tvai_fi=... ,tvai_up=... ,scale=..."></textarea>
+              <label class="label" for="topazExtra">추가 FFmpeg 인자 (선택)</label>
+              <p class="hint" style="font-size:0.82rem;margin:0 0 0.35rem;">Topaz 번들 FFmpeg에는 <code>libx264</code>가 없을 수 있음 → 맥은 <code>h264_videotoolbox</code> 권장.</p>
+              <input type="text" id="topazExtra" class="mono" placeholder="-c:v h264_videotoolbox -b:v 8M" />
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="startBtnGrok">① Grok로 영상 만들기 시작</button>
+        </div>
+      </section>
+
+      <div class="workflow-divider" role="separator"></div>
+
+      <section class="workflow-block workflow-block--topaz">
+        <h2 class="workflow-title">② 영상만 Topaz로 출력 <span class="workflow-note">(Grok 안 씀)</span></h2>
+        <p class="hint workflow-lead">이미 mp4/mov 등이 있을 때만 사용. 기본은 <strong>저장된 Topaz 내보내기 프리셋</strong>만 쓰므로 영상만 선택하면 됩니다. API 키·사진·프롬프트는 필요 없습니다.</p>
+
+        <section class="step">
+          <h3 class="step__h">영상 파일</h3>
+          <label class="drop" id="videoDropzone">
+            <input type="file" id="videoFile" multiple accept="video/*,.mp4,.mov,.mkv,.m4v,.avi,.webm" hidden />
+            <span class="drop__hint">영상을 눌러서 선택하거나 끌어다 놓기 (여러 개 선택 가능)</span>
+            <span class="drop__name" id="videoFileName"></span>
+          </label>
+        </section>
+
+        <section class="step">
+          <h3 class="step__h">Topaz 설정</h3>
+          <p class="hint" style="font-size:0.88rem;line-height:1.45;margin:0 0 0.5rem;">
+            <label style="cursor:pointer;">
+              <input type="checkbox" id="useTopazPreset" checked />
+              저장된 프리셋 사용 (apo-8 슬로모 4배 + prob-4 1080p, 입력 불필요)
+            </label>
+          </p>
+          <p class="hint" style="font-size:0.82rem;margin:0 0 0.75rem;">FFmpeg 경로는 고정입니다. 구간 자르기는 <code>topaz_preset.TOPAZ_SEGMENT_DURATION_SEC</code>(기본 전체). 직접 필터를 쓰려면 아래 체크를 해제하세요.</p>
+          <div id="manualTopazOnly" hidden>
+            <label class="label" for="topazFf2">FFmpeg 경로</label>
+            <input type="text" id="topazFf2" class="mono" placeholder="/Volumes/ssd/Applications/Topaz Video.app/Contents/MacOS/ffmpeg" />
+            <label class="label" for="topazVf2">Topaz 필터 (-vf)</label>
+            <textarea id="topazVf2" class="mono" rows="2" placeholder="간단한 -vf 한 줄"></textarea>
+            <label class="label" for="topazFc2">또는 -filter_complex (권장: Topaz 「보내기」와 동일)</label>
+            <p class="hint" style="font-size:0.82rem;margin:0 0 0.35rem;">예: <code>tvai_fi=model=apo-8:... ,tvai_up=model=prob-4:... ,scale=w=1920:h=1080:...</code> 한 줄. 위 -vf는 비움.</p>
+            <textarea id="topazFc2" class="mono" rows="4" placeholder="-filter_complex 뒤의 따옴표 안만"></textarea>
+            <label class="label" for="topazExtra2">추가 FFmpeg 인자 (선택, 출력 인코더 등)</label>
+            <p class="hint" style="font-size:0.82rem;margin:0 0 0.35rem;">Topaz 번들 FFmpeg에는 <code>libx264</code> 없음. 맥 예: <code>-c:v h264_videotoolbox -b:v 8M</code></p>
+            <p class="hint" style="font-size:0.82rem;margin:0 0 0.35rem;"><code>tvai_fi</code> 오류 시 서버가 내부에서 <code>fps=24</code>를 앞에 붙입니다. 환경 변수 <code>GROK_TVAI_PREPEND_FPS</code>로 조절(0이면 끔).</p>
+            <input type="text" id="topazExtra2" class="mono" placeholder="-c:v h264_videotoolbox -b:v 8M" />
+          </div>
+        </section>
+
+        <div class="actions">
+          <button type="button" class="btn btn--secondary" id="startBtnTopaz">② Topaz만 실행 (영상 → 출력)</button>
+          <p class="hint topaz-queue-hint" id="topazQueueHint" hidden></p>
+        </div>
+      </section>
+      </div>
+
+      <aside class="card__sidebar" aria-label="출력 및 진행 상황">
+      <section class="output-gallery output-gallery--sidebar" id="outputGallery" aria-label="출력 갤러리">
+        <h2 class="output-gallery__h">만든 영상·이미지 (아웃풋만)</h2>
+        <p class="hint output-gallery__lead">Grok 이미지·Grok·Topaz·팬 영상으로 <strong>완료된 파일</strong>만 여기에 모입니다. 영상 아래에 이미지 미리보기가 이어집니다. 왼쪽을 스크롤해도 이 블록은 오른쪽 상단에 고정됩니다.</p>
+        <div class="output-gallery__actions">
+          <button type="button" class="btn btn--secondary" id="btnBatchZip" disabled>ZIP으로 모두 받기</button>
+          <button type="button" class="btn btn--ghost" id="btnGalleryClear">목록 비우기</button>
+        </div>
+        <div class="output-gallery__chips" id="outputGalleryChips"></div>
+      </section>
+
+      <section class="status" id="statusPanel" hidden>
+        <h2>진행 상황 <span class="status__note">(Grok 이미지 / 팬 / Grok 영상 / Topaz)</span></h2>
+        <p class="hint status-queue-hint" id="statusQueueHint" hidden></p>
+        <div id="statusJobsList" class="status-jobs-list" aria-live="polite"></div>
+        <p class="error" id="errorBox" hidden></p>
+      </section>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <p><strong>주소:</strong> <code>http://127.0.0.1:5055</code> · 큰 영상은 환경 변수 <code>GROK_WEB_MAX_UPLOAD_MB</code>(기본 800MB)로 조절.</p>
+      <p>저장: <span class="mono" id="outDir">—</span></p>
+    </footer>
+  </div>
+
+  <script>
+(function () {
+  var card = document.querySelector("main.card");
+  if (!card || document.getElementById("grok-xai-api-key")) return;
+  var wrap = document.createElement("div");
+  wrap.style.cssText = "grid-column:1/-1;margin-bottom:1rem;padding:1rem;border:3px solid #dc2626;border-radius:10px;background:#fef2f2;";
+  wrap.innerHTML = "<strong>Grok API 키 (복구)</strong><br><input id=\"grok-xai-api-key\" type=\"text\" style=\"width:100%;margin-top:8px;padding:8px;box-sizing:border-box\">";
+  card.insertBefore(wrap, card.firstChild);
+})();
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_v }}"></script>
+</body>
+</html>
