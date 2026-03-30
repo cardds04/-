@@ -389,10 +389,21 @@
       <div class="card card--local-tool">
         <h2>5. 사진 용량 줄이기 (서버 없음)</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
-          <strong>브라우저만</strong>으로 JPEG 압축합니다. <strong>폴더에 저장</strong>은 Chrome·Edge 등에서
-          <strong>폴더 선택 창</strong>이 뜨면 NAS·공유 디스크(예: 사이드바의 <code>/Volumes</code>)를 골라 저장할 수 있습니다.
-          Safari·모바일은 <strong>ZIP 받기</strong>를 쓰세요. HEIC 등 일부 형식은 브라우저에 따라 건너뛸 수 있습니다.
+          <strong>브라우저만</strong>으로 JPEG 압축합니다. 아래에서 <strong>공유폴더를 한 번 연결</strong>해 두면, 다음부터는
+          경로를 다시 고르지 않고 <strong>바로 그 폴더에 저장</strong>됩니다. (웹 보안상 주소를 직접 입력하는 방식은 불가능하고,
+          Chrome·Edge 권장. Safari·모바일은 <strong>ZIP 받기</strong>.) HEIC 등은 기기마다 건너뛸 수 있습니다.
         </p>
+        <p class="hint blog-shrink-folder-line" style="margin-bottom: 10px">
+          <span id="blogShrinkFolderLabel">공유폴더: 확인 중…</span>
+        </p>
+        <div class="btn-row" style="margin-top: 0">
+          <button type="button" class="btn secondary" id="btnBlogShrinkLinkFolder" style="font-size: 0.85rem; padding: 6px 12px">
+            공유폴더 연결·바꾸기
+          </button>
+          <button type="button" class="btn secondary" id="btnBlogShrinkUnlinkFolder" style="font-size: 0.85rem; padding: 6px 12px">
+            연결 해제
+          </button>
+        </div>
         <label>압축할 사진</label>
         <input type="file" id="blogShrinkFiles" accept="image/*" multiple style="display: none" />
         <div id="blogShrinkDropZone" class="bulk-drop-zone" tabindex="0" role="button" style="margin-bottom: 10px">
@@ -410,7 +421,7 @@
           </div>
         </div>
         <div class="btn-row">
-          <button type="button" class="btn" id="btnBlogShrinkFolder">압축 후 폴더에 저장…</button>
+          <button type="button" class="btn" id="btnBlogShrinkFolder">압축 후 공유폴더에 저장</button>
           <button type="button" class="btn secondary" id="btnBlogShrinkZip">JPEG 압축 ZIP 받기</button>
         </div>
         <p class="hint" id="blogShrinkWebStatus" style="min-height: 1.3em; margin-top: 8px; margin-bottom: 0"></p>
@@ -1248,8 +1259,15 @@ ${orderLines}
 
       (function initBlogShrinkWeb() {
         const BLOG_SHRINK_MAX = 200;
+        const IDB_NAME = "blog-shrink-v1";
+        const IDB_STORE = "kv";
+        const IDB_KEY = "sharedFolderHandle";
+
         const btnFolder = document.getElementById("btnBlogShrinkFolder");
         const btnZip = document.getElementById("btnBlogShrinkZip");
+        const btnLink = document.getElementById("btnBlogShrinkLinkFolder");
+        const btnUnlink = document.getElementById("btnBlogShrinkUnlinkFolder");
+        const folderLabel = document.getElementById("blogShrinkFolderLabel");
         const fileInput = document.getElementById("blogShrinkFiles");
         const dropZone = document.getElementById("blogShrinkDropZone");
         const fileHint = document.getElementById("blogShrinkFileHint");
@@ -1257,6 +1275,155 @@ ${orderLines}
         const qEl = document.getElementById("blogShrinkQuality");
         const st = document.getElementById("blogShrinkWebStatus");
         if (!btnFolder || !btnZip || !fileInput) return;
+
+        function idbOpen() {
+          return new Promise((resolve, reject) => {
+            const req = indexedDB.open(IDB_NAME, 1);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => resolve(req.result);
+            req.onupgradeneeded = () => {
+              if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+                req.result.createObjectStore(IDB_STORE);
+              }
+            };
+          });
+        }
+
+        async function idbPut(val) {
+          const db = await idbOpen();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            tx.objectStore(IDB_STORE).put(val, IDB_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        }
+
+        async function idbGet() {
+          const db = await idbOpen();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readonly");
+            const r = tx.objectStore(IDB_STORE).get(IDB_KEY);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+          });
+        }
+
+        async function idbDelete() {
+          const db = await idbOpen();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            tx.objectStore(IDB_STORE).delete(IDB_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        }
+
+        async function refreshFolderLabel() {
+          if (!folderLabel) return;
+          if (!window.isSecureContext) {
+            folderLabel.textContent =
+              "공유폴더: HTTPS 또는 localhost에서만 연결·저장 가능 (ZIP은 어디서나)";
+            return;
+          }
+          if (typeof window.showDirectoryPicker !== "function") {
+            folderLabel.textContent = "공유폴더: 이 브라우저는 폴더 저장 미지원 → ZIP 사용";
+            return;
+          }
+          try {
+            const h = await idbGet();
+            if (!h || typeof h.queryPermission !== "function") {
+              folderLabel.textContent =
+                "공유폴더: 미연결 —「연결·바꾸기」또는 첫 저장 시 한 번 선택하면 이후 바로 저장";
+              return;
+            }
+            const nm = h.name || "폴더";
+            const p = await h.queryPermission({ mode: "readwrite" });
+            if (p === "granted") {
+              folderLabel.textContent = `공유폴더: 연결됨 「${nm}」— 저장 시 창 없이 바로 쓰기`;
+            } else if (p === "prompt") {
+              folderLabel.textContent = `공유폴더: 「${nm}」— 저장할 때마다 권한만 확인하면 됨`;
+            } else {
+              folderLabel.textContent = `공유폴더: 「${nm}」(권한 만료) —「연결·바꾸기」로 다시 지정`;
+            }
+          } catch {
+            folderLabel.textContent = "공유폴더: 미연결";
+          }
+        }
+
+        async function getDirHandleForSave() {
+          if (typeof window.showDirectoryPicker !== "function") {
+            throw new Error("이 브라우저는 폴더 저장을 지원하지 않습니다.「ZIP 받기」를 사용하세요.");
+          }
+          let handle = null;
+          try {
+            handle = await idbGet();
+          } catch {
+            handle = null;
+          }
+          if (handle && typeof handle.queryPermission === "function") {
+            try {
+              let perm = await handle.queryPermission({ mode: "readwrite" });
+              if (perm === "prompt") {
+                perm = await handle.requestPermission({ mode: "readwrite" });
+              }
+              if (perm === "granted") {
+                void refreshFolderLabel();
+                return handle;
+              }
+            } catch {
+              /* stale handle */
+            }
+          }
+          handle = await window.showDirectoryPicker({ mode: "readwrite" });
+          try {
+            await idbPut(handle);
+          } catch {
+            /* 사생활 모드 등으로 기억 실패 시에도 이번 저장은 됨 */
+          }
+          void refreshFolderLabel();
+          return handle;
+        }
+
+        if (btnLink) {
+          btnLink.addEventListener("click", async () => {
+            if (!window.isSecureContext) {
+              showToast("HTTPS 또는 localhost에서만 됩니다.");
+              return;
+            }
+            if (typeof window.showDirectoryPicker !== "function") {
+              showToast("이 브라우저는 폴더 선택을 지원하지 않습니다.");
+              return;
+            }
+            try {
+              const h = await window.showDirectoryPicker({ mode: "readwrite" });
+              try {
+                await idbPut(h);
+              } catch {
+                /* ignore */
+              }
+              showToast("공유폴더 연결됨");
+              await refreshFolderLabel();
+            } catch (e) {
+              if (e && e.name === "AbortError") return;
+              showToast("취소 또는 오류");
+            }
+          });
+        }
+
+        if (btnUnlink) {
+          btnUnlink.addEventListener("click", async () => {
+            try {
+              await idbDelete();
+              showToast("연결 해제됨");
+              await refreshFolderLabel();
+            } catch {
+              showToast("해제 실패");
+            }
+          });
+        }
+
+        void refreshFolderLabel();
 
         function refreshShrinkFileHint() {
           const n = fileInput.files ? fileInput.files.length : 0;
@@ -1360,10 +1527,7 @@ ${orderLines}
         }
 
         async function saveItemsToFolder(items) {
-          if (typeof window.showDirectoryPicker !== "function") {
-            throw new Error("이 브라우저는 폴더 선택 저장을 지원하지 않습니다.「ZIP 받기」를 사용하세요.");
-          }
-          const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+          const dirHandle = await getDirHandleForSave();
           for (let i = 0; i < items.length; i++) {
             st.textContent = `저장 중… ${i + 1}/${items.length}`;
             const { name, blob } = items[i];
@@ -1397,6 +1561,8 @@ ${orderLines}
         function setBusy(on) {
           btnFolder.disabled = on;
           btnZip.disabled = on;
+          if (btnLink) btnLink.disabled = on;
+          if (btnUnlink) btnUnlink.disabled = on;
         }
 
         async function runFolder() {
@@ -1421,8 +1587,8 @@ ${orderLines}
           try {
             const items = await buildJpegItems(files, maxSide, quality);
             await saveItemsToFolder(items);
-            st.textContent = `${items.length}장을 선택한 폴더에 저장했습니다.`;
-            showToast("폴더에 저장 완료");
+            st.textContent = `${items.length}장을 연결된 공유폴더에 저장했습니다. 다음에도 같은 폴더로 바로 저장됩니다.`;
+            showToast("공유폴더에 저장 완료");
           } catch (e) {
             st.textContent = e.message || String(e);
             showToast("실패");
