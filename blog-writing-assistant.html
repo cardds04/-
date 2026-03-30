@@ -264,6 +264,33 @@
         object-fit: contain;
         background: #1a1a1a;
       }
+      .card--local-tool {
+        border-left: 4px solid #64748b;
+        background: linear-gradient(180deg, #f8fafc 0%, #fff 48%);
+      }
+      .card--local-tool .local-tool-steps {
+        margin: 0 0 12px;
+        padding-left: 1.25rem;
+        font-size: 0.88rem;
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .card--local-tool .local-tool-steps li {
+        margin-bottom: 6px;
+      }
+      .cmd-example {
+        margin: 0;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #0f172a;
+        color: #e2e8f0;
+        font-size: 0.72rem;
+        line-height: 1.5;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
     </style>
   </head>
   <body>
@@ -333,6 +360,43 @@
         <p class="hint blog-ai-warning" role="alert">
           <strong>반드시 실제 사진과 대조하며 검수해 주세요.</strong> AI가 만든 문장·공간 설명·수치·자재명 등이 사실과 다를 수 있습니다. 게시 전에 직접 확인하는 것이 안전합니다.
         </p>
+      </div>
+
+      <div class="card card--local-tool">
+        <h2>5. 공유폴더 사진 정리 (맥 로컬)</h2>
+        <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
+          브라우저가 아니라 <strong>이 Mac에서 터미널로 실행</strong>하는 스크립트입니다. NAS·공유폴더를
+          <code>/Volumes/이름</code>처럼 마운트한 뒤 Finder로 받아 둔 사진을 읽어 <strong>JPEG로 줄여서</strong> 내장 디스크
+          폴더에 저장합니다. (웹에서 자동으로 내려받는 기능은 아니며, 공유폴더에 이미 있는 파일을 처리합니다.) 처리가 끝나면
+          옵션으로 <strong>일정 크기 이상 원본만</strong> 공유폴더 쪽에서 지웁니다.
+        </p>
+        <ol class="local-tool-steps">
+          <li>공유폴더에 사진을 넣거나 Finder로 복사해 둡니다.</li>
+          <li>저장할 내장 경로 폴더를 만듭니다. (예: <code>~/Pictures/blog_shrunk</code>)</li>
+          <li>처음 한 번: <code>pip install pillow</code> (HEIC면 추가로 <code>pip install pillow-heif</code>)</li>
+          <li>미리보기만: 아래 명령에 <code>--dry-run</code>을 붙여 실행합니다.</li>
+          <li>실제 실행 후 원본 삭제까지 하려면 <code>--delete-originals</code>를 켭니다.</li>
+        </ol>
+        <p class="hint" style="margin-bottom: 8px">
+          스크립트 위치(저장소 기준):
+          <code>tools/blog-photo-shrink/shrink_photos.py</code>
+        </p>
+        <pre class="cmd-example" id="blogShrinkCmdExample" translate="no"># schedule-site 저장소 루트에서 실행
+python3 tools/blog-photo-shrink/shrink_photos.py \
+  --source "/Volumes/공유디스크이름/사진폴더" \
+  --dest "$HOME/Pictures/blog_shrunk" \
+  --max-side 2560 \
+  --quality 82 \
+  --delete-if-larger-mb 2 \
+  --dry-run</pre>
+        <p class="hint" style="margin-top: 8px; margin-bottom: 8px">
+          <code>--dry-run</code>으로 목록만 확인한 뒤, 마지막 줄만 빼고
+          <code>--delete-originals</code>를 추가하면 압축 저장 후 <strong>2MB 이상 원본</strong>을 삭제합니다. 삭제 전에
+          백업을 권장합니다.
+        </p>
+        <div class="btn-row">
+          <button type="button" class="btn secondary" id="btnCopyShrinkCmd">명령 예시 복사</button>
+        </div>
       </div>
     </div>
     <div class="toast" id="toast" role="status"></div>
@@ -1125,6 +1189,21 @@ ${orderLines}
         }
         return out;
       }
+
+      (function initBlogShrinkCopy() {
+        const btn = document.getElementById("btnCopyShrinkCmd");
+        const pre = document.getElementById("blogShrinkCmdExample");
+        if (!btn || !pre) return;
+        btn.addEventListener("click", async () => {
+          const t = pre.textContent || "";
+          try {
+            await navigator.clipboard.writeText(t);
+            showToast("명령 예시 복사됨");
+          } catch {
+            showToast("복사 실패");
+          }
+        });
+      })();
 
       document.getElementById("btnCopyDraft").addEventListener("click", async () => {
         if (!lastDraftRaw.trim()) {

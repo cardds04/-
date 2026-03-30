@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>클립 보정 (로컬 웹)</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --panel: #262626;
+      --panel-hi: #2e2e2e;
+      --text: #e8e8e8;
+      --muted: #a3a3a3;
+      --border: #3f3f3f;
+      --accent: #0ea5e9;
+      --sel: #2563eb;
+      --track: #404040;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+      font-size: 13px;
+    }
+    header {
+      padding: 8px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+    header p { margin: 4px 0 0; font-size: 0.72rem; color: var(--muted); max-width: 72rem; }
+    .lr-workspace {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 0;
+      min-height: calc(100vh - 72px);
+      max-width: 100%;
+      margin: 0;
+    }
+    .thumb-sidebar {
+      width: 520px;
+      min-width: 520px;
+      flex-shrink: 0;
+      max-height: calc(100vh - 72px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 8px;
+      background: #141414;
+      border-right: 1px solid var(--border);
+    }
+    .thumbs-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .thumb {
+      cursor: grab;
+      border-radius: 3px;
+      overflow: hidden;
+      border: 2px solid transparent;
+      background: #1f1f1f;
+      min-width: 0;
+      user-select: none;
+      touch-action: none;
+    }
+    .thumb:active { cursor: grabbing; }
+    .thumb.dragging { opacity: 0.55; }
+    .thumbs-grid.drag-active { outline: 1px dashed var(--border); border-radius: 4px; }
+    .thumb img,
+    .thumb span {
+      -webkit-user-drag: none;
+      user-drag: none;
+      pointer-events: none;
+    }
+    .thumb img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      height: auto;
+      object-fit: cover;
+      display: block;
+    }
+    .thumb span {
+      display: block;
+      font-size: 0.62rem;
+      padding: 2px 3px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thumb.selected { border-color: var(--sel); }
+    .thumb.reorder-source { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
+    .thumb.reorder-target { outline: 2px dashed var(--sel); outline-offset: 1px; }
+    body.reorder-dragging { cursor: grabbing !important; user-select: none; }
+    .thumb-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 6px 4px 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .thumb-toolbar button { font-size: 0.72rem; padding: 4px 10px; }
+    .thumb-toolbar .hint { font-size: 0.65rem; color: var(--muted); }
+    .lr-panel {
+      width: 300px;
+      min-width: 300px;
+      flex-shrink: 0;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 72px);
+    }
+    .lr-panel-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 10px 12px 14px;
+    }
+    .lr-section-title {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 14px 0 8px;
+    }
+    .lr-section-title:first-child { margin-top: 0; }
+    .lr-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+    .lr-wb-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .lr-select {
+      flex: 1;
+      padding: 5px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--panel-hi);
+      color: var(--text);
+      font-size: 0.75rem;
+    }
+    .lr-row {
+      display: grid;
+      grid-template-columns: 76px 1fr 44px;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .lr-label {
+      font-size: 0.75rem;
+      color: #d4d4d4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--track);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 14px;
+      border-radius: 2px 2px 50% 50%;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      cursor: grab;
+      margin-top: -5px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 14px;
+      border-radius: 2px 2px 50% 50%;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      cursor: grab;
+    }
+    .lr-row.lr-temp input[type="range"] {
+      background: linear-gradient(90deg, #38bdf8 0%, #f5f5f4 50%, #fbbf24 100%);
+      height: 5px;
+    }
+    .lr-row.lr-tint input[type="range"] {
+      background: linear-gradient(90deg, #4ade80 0%, #f5f5f4 50%, #f472b6 100%);
+      height: 5px;
+    }
+    .lr-row.lr-sat input[type="range"] {
+      background: linear-gradient(90deg, #737373 0%, #ef4444 100%);
+      height: 5px;
+    }
+    .lr-row.lr-hue input[type="range"] {
+      background: linear-gradient(90deg, #ef4444, #fbbf24, #4ade80, #22d3ee, #6366f1, #ef4444);
+      height: 5px;
+    }
+    .lr-val {
+      width: 100%;
+      padding: 3px 4px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: #171717;
+      color: var(--text);
+      font-size: 0.7rem;
+      text-align: right;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--panel-hi);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    button:hover { background: #383838; }
+    button.primary { background: var(--sel); border-color: #1d4ed8; }
+    button.primary:hover { background: #1d4ed8; }
+    button.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button.lr-eyedrop {
+      width: 32px;
+      height: 28px;
+      padding: 0;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .preview-col {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      background: #0c0c0c;
+      border-right: 1px solid var(--border);
+    }
+    .preview-col .status { align-self: flex-start; }
+    .preview-wrap {
+      background: #0a0a0a;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      width: 100%;
+      max-width: min(100%, 760px);
+      align-self: center;
+      flex: 0 1 auto;
+      min-height: 240px;
+      max-height: min(56vh, 560px);
+      aspect-ratio: 16 / 9;
+      position: relative;
+    }
+    .preview-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      cursor: default;
+    }
+    .preview-wrap img.eyedrop { cursor: crosshair; }
+    .status { font-size: 0.75rem; color: var(--muted); min-height: 1.2em; margin-bottom: 6px; }
+    .err { color: #f87171; }
+    .ok { color: #4ade80; }
+    .lr-actions {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .lr-hint {
+      font-size: 0.68rem;
+      color: #737373;
+      margin-top: 6px;
+      max-width: 48rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>클립 보정 — 왼쪽 썸네일 · 가운데 미리보기 · 오른쪽 톤 보정</h1>
+    <p>
+      배치: <strong>썸네일(좌)</strong> → <strong>미리보기(중)</strong> → <strong>톤·색 보정(우)</strong>.
+      <strong>Shift+클릭</strong> 범위 선택 · <strong>Ctrl+클릭</strong>(macOS는 <strong>⌘+클릭</strong>) 떨어진 클립 개별 토글 ·
+      <strong>Shift+Ctrl+클릭</strong>은 기존 선택에 범위 추가.
+      범위/다중 선택 시 슬라이더가 선택 클립 전체에 적용.
+      단축키(슬라이더·입력칸에 포커스가 있어도 동작): <strong>Ctrl+Z</strong> 실행 취소 · <strong>Ctrl+Shift+Z</strong> 다시 실행 ·
+      <strong>Alt+D</strong> 다음 클립 · <strong>Alt+S</strong> 이전 · <strong>Alt+W</strong> 스포이드 on/off.
+      macOS는 <strong>⌘+Z</strong> / <strong>⌘+Shift+Z</strong> 도 동일합니다.
+      썸네일을 <strong>끌어 놓기(드래그)</strong>하면 순서가 바뀝니다. <strong>Delete</strong> / <strong>Backspace</strong> 또는 상단 <strong>선택 삭제</strong>로 제거(한글 입력 중·숫자 칸 포커스 시 Delete 제외).
+      변경 후 몽타주 GUI에서 <strong>「웹 저장값 불러오기」</strong> 하면 목록·순서가 반영됩니다.
+      저장 후 몽타주 GUI「웹 저장값 불러오기」→「만들기」 시 FFmpeg에 반영됩니다.
+    </p>
+  </header>
+  <main class="lr-workspace">
+    <aside class="thumb-sidebar">
+      <div class="thumb-toolbar">
+        <button type="button" id="btnDelClips">선택 삭제</button>
+        <button type="button" id="btnOrderUp" title="선택 클립을 앞으로">▲ 앞으로</button>
+        <button type="button" id="btnOrderDown" title="선택 클립을 뒤로">▼ 뒤로</button>
+        <span class="hint">순서는 버튼 또는 드래그 · 서버 주소(http://127.0.0.1:…)로 열어야 합니다</span>
+      </div>
+      <div class="thumbs-grid" id="thumbs"></div>
+    </aside>
+    <div class="preview-col">
+      <div class="status" id="status">불러오는 중…</div>
+      <div class="preview-wrap" id="previewBox">
+        <img id="previewImg" alt="미리보기" />
+      </div>
+      <p class="lr-hint">노출 0=없음 · 100=기본 · 200=최대(자동 노출 강도). 톤·외관은 FFmpeg에도 근사 적용.</p>
+    </div>
+    <section class="lr-panel" aria-label="톤 보정">
+      <div class="lr-panel-scroll">
+        <div class="lr-section-title" style="margin-top:0;">톤 보정 세트</div>
+        <div class="lr-section-title">흰색 균형</div>
+        <div class="lr-wb-tools">
+          <button type="button" class="lr-eyedrop" id="btnEyedrop" title="흰색 스포이드 (Alt+W)">💧</button>
+          <select id="wbPreset" class="lr-select" aria-label="흰색 균형 프리셋">
+            <option value="as_shot" selected>원본값</option>
+          </select>
+        </div>
+        <div class="lr-row lr-temp">
+          <span class="lr-label">색온도</span>
+          <input type="range" id="rngCt" min="3000" max="10000" step="100" />
+          <input type="number" id="numCt" class="lr-val" step="100" />
+        </div>
+        <div class="lr-row lr-tint">
+          <span class="lr-label">색조</span>
+          <input type="range" id="rngTint" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numTint" class="lr-val" />
+        </div>
+
+        <hr class="lr-divider" />
+        <div class="lr-section-title">톤 (Tone correction)</div>
+        <div class="lr-row">
+          <span class="lr-label">노출</span>
+          <input type="range" id="rngExpo" min="0" max="200" step="1" value="100" />
+          <input type="number" id="numExpo" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">대비</span>
+          <input type="range" id="rngContrast" min="0" max="200" step="1" value="100" />
+          <input type="number" id="numContrast" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">하이라이트 (Highlights)</span>
+          <input type="range" id="rngHi" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numHi" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">어두운 영역</span>
+          <input type="range" id="rngSh" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numSh" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">화이트 (Whites)</span>
+          <input type="range" id="rngWh" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numWh" class="lr-val" />
+        </div>
+        <div class="lr-row lr-hue">
+          <span class="lr-label">색상환 (Hue)</span>
+          <input type="range" id="rngHue" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numHue" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">검정</span>
+          <input type="range" id="rngBl" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numBl" class="lr-val" />
+        </div>
+
+        <hr class="lr-divider" />
+        <div class="lr-section-title">외관</div>
+        <div class="lr-row">
+          <span class="lr-label">텍스처</span>
+          <input type="range" id="rngTex" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numTex" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">선명(클래리티)</span>
+          <input type="range" id="rngClr" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numClr" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">디헤이즈</span>
+          <input type="range" id="rngDh" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numDh" class="lr-val" />
+        </div>
+        <div class="lr-row">
+          <span class="lr-label">생동감</span>
+          <input type="range" id="rngVib" min="-100" max="100" step="1" value="0" />
+          <input type="number" id="numVib" class="lr-val" />
+        </div>
+        <div class="lr-row lr-sat">
+          <span class="lr-label">채도</span>
+          <input type="range" id="rngSat" min="0" max="200" step="1" value="100" />
+          <input type="number" id="numSat" class="lr-val" />
+        </div>
+
+        <div class="lr-actions" style="margin-top: 16px;">
+          <button type="button" id="btnResetSpot">스포이드 초기화</button>
+          <button type="button" class="primary" id="btnSave">저장 (JSON)</button>
+        </div>
+        <p class="status" id="saveMsg" style="margin-top: 10px;"></p>
+      </div>
+    </section>
+  </main>
+  <script src="app.js?v=10"></script>
+</body>
+</html>
