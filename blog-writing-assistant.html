@@ -338,7 +338,11 @@
         </p>
       </div>
 
-      <div class="card card--local-tool" style="padding: 14px 16px">
+      <div class="card card--local-tool">
+        <h2>5. 사진용량줄이기</h2>
+        <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
+          <strong>JPEG 품질 80</strong> · <strong>가로·세로 각 최대 2000px</strong> 안으로 맞춤(비율 유지) · 저장할 폴더는 <strong>매번</strong> 선택(데스크톱 등 원하는 위치)
+        </p>
         <input type="file" id="blogShrinkFiles" accept="image/*" multiple style="display: none" />
         <div id="blogShrinkDropZone" class="bulk-drop-zone" tabindex="0" role="button" style="margin-bottom: 0">
           사진 끌어놓기 · 클릭<br />
@@ -1144,9 +1148,6 @@ ${orderLines}
         const BLOG_SHRINK_MAX = 200;
         const MAX_PX = 2000;
         const JPEG_Q = 0.8;
-        const IDB_NAME = "blog-shrink-v1";
-        const IDB_STORE = "kv";
-        const IDB_KEY = "sharedFolderHandle";
 
         const btnFolder = document.getElementById("btnBlogShrinkFolder");
         const fileInput = document.getElementById("blogShrinkFiles");
@@ -1154,74 +1155,31 @@ ${orderLines}
         const fileHint = document.getElementById("blogShrinkFileHint");
         if (!btnFolder || !fileInput) return;
 
-        function idbOpen() {
-          return new Promise((resolve, reject) => {
-            const req = indexedDB.open(IDB_NAME, 1);
-            req.onerror = () => reject(req.error);
-            req.onsuccess = () => resolve(req.result);
-            req.onupgradeneeded = () => {
-              if (!req.result.objectStoreNames.contains(IDB_STORE)) {
-                req.result.createObjectStore(IDB_STORE);
-              }
-            };
-          });
-        }
-
-        async function idbPut(val) {
-          const db = await idbOpen();
-          return new Promise((resolve, reject) => {
-            const tx = db.transaction(IDB_STORE, "readwrite");
-            tx.objectStore(IDB_STORE).put(val, IDB_KEY);
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-        }
-
-        async function idbGet() {
-          const db = await idbOpen();
-          return new Promise((resolve, reject) => {
-            const tx = db.transaction(IDB_STORE, "readonly");
-            const r = tx.objectStore(IDB_STORE).get(IDB_KEY);
-            r.onsuccess = () => resolve(r.result);
-            r.onerror = () => reject(r.error);
-          });
-        }
-
-        async function getDirHandleForSave() {
+        /** 매번 OS 폴더 선택 창을 띄움(이전 폴더 기억 없음). */
+        async function pickSaveFolderEveryTime() {
           if (typeof window.showDirectoryPicker !== "function") {
             throw new Error("이 브라우저는 폴더 저장을 지원하지 않습니다.");
           }
-          let handle = null;
-          try {
-            handle = await idbGet();
-          } catch {
-            handle = null;
-          }
-          if (handle && typeof handle.queryPermission === "function") {
-            try {
-              let perm = await handle.queryPermission({ mode: "readwrite" });
-              if (perm === "prompt") {
-                perm = await handle.requestPermission({ mode: "readwrite" });
-              }
-              if (perm === "granted") return handle;
-            } catch {
-              /* stale */
-            }
-          }
-          handle = await window.showDirectoryPicker({ mode: "readwrite" });
-          try {
-            await idbPut(handle);
-          } catch {
-            /* ignore */
-          }
-          return handle;
+          return window.showDirectoryPicker({ mode: "readwrite" });
+        }
+
+        function formatShrinkBytes(bytes) {
+          if (bytes < 1024) return `${bytes} B`;
+          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+          return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
         }
 
         function refreshShrinkFileHint() {
-          const n = fileInput.files ? fileInput.files.length : 0;
-          if (fileHint) {
-            fileHint.textContent = n ? `${n}장` : "";
+          const files = fileInput.files;
+          const n = files ? files.length : 0;
+          if (!fileHint) return;
+          if (!n) {
+            fileHint.textContent = "";
+            return;
           }
+          let total = 0;
+          for (let i = 0; i < n; i++) total += files[i].size || 0;
+          fileHint.textContent = `${n}장 · 원본 합계 ${formatShrinkBytes(total)}`;
         }
 
         if (dropZone) {
@@ -1336,8 +1294,8 @@ ${orderLines}
           }
           btnFolder.disabled = true;
           try {
+            const dirHandle = await pickSaveFolderEveryTime();
             const items = await buildJpegItems(files);
-            const dirHandle = await getDirHandleForSave();
             await saveItemsToFolder(items, dirHandle);
             showToast("저장됨");
           } catch (e) {
