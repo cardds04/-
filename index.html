@@ -5645,6 +5645,13 @@
       function normalizeCompanyCode(code) {
         return String(code || "").trim();
       }
+      /** company_directory.site_type → "" | "shopick" | "inlog" (미설정은 빈 문자열) */
+      function normalizeCompanySiteTypeField(value) {
+        const s = String(value || "").trim().toLowerCase();
+        if (s === "shopick") return "shopick";
+        if (s === "inlog") return "inlog";
+        return "";
+      }
       function getCompanyGroupKey(name, companyCode = "") {
         const normalizedCode = normalizeCompanyCode(companyCode);
         if (normalizedCode) return `code:${normalizedCode.toLowerCase()}`;
@@ -7053,7 +7060,8 @@
             name: normalizeCompanyName(item?.name),
             phone: String(item?.phone || "").trim() || "-",
             code: normalizeCompanyCode(item?.code),
-            defaultMemo: String(item?.defaultMemo || "").trim()
+            defaultMemo: String(item?.defaultMemo || "").trim(),
+            siteType: normalizeCompanySiteTypeField(item?.site_type ?? item?.siteType)
           }))
           .filter((item) => item.name);
       }
@@ -7070,7 +7078,7 @@
       async function fetchCompaniesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code,site_type,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -7118,10 +7126,12 @@
           const remote = remoteByName.get(key);
           const resolvedCode = normalizeCompanyCode(row?.code) || normalizeCompanyCode(remote?.code) || buildAutoCompanyCode(row?.name);
           if (!remote) {
+            const st = normalizeCompanySiteTypeField(row?.siteType);
             insertRows.push({
               name: row.name,
               phone: row.phone === "-" ? "" : row.phone,
-              code: resolvedCode
+              code: resolvedCode,
+              site_type: st || "inlog"
             });
             return;
           }
@@ -7248,10 +7258,18 @@
           const key = normalizeCompanyName(c?.name).toLowerCase();
           if (key && c?.defaultMemo) localMemoMap.set(key, String(c.defaultMemo));
         });
+        const customerUsersForSite = readStorageArray(STORAGE_CUSTOMERS);
         normalized.forEach((c) => {
           const key = normalizeCompanyName(c.name).toLowerCase();
           if (!c.defaultMemo && localMemoMap.has(key)) {
             c.defaultMemo = localMemoMap.get(key);
+          }
+          if (!c.siteType) {
+            const gk = getCompanyGroupKey(c.name, c.code);
+            const matched = gk ? customerUsersForSite.filter((u) => getCompanyGroupKey(u?.company, u?.companyCode) === gk) : [];
+            if (matched.length) {
+              c.siteType = normalizeCompanySiteTypeField(matched[0]?.siteType) || "";
+            }
           }
         });
         companies.splice(0, companies.length, ...normalized);
@@ -7440,11 +7458,15 @@
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim()
             };
+            const st = normalizeCompanySiteTypeField(item?.siteType);
+            if (st) row.siteType = st;
             if (dbId) row.dbId = dbId;
             uniqueMap.set(key, row);
           } else if (dbId) {
             const cur = uniqueMap.get(key);
             if (cur && !cur.dbId) cur.dbId = dbId;
+            const st = normalizeCompanySiteTypeField(item?.siteType);
+            if (cur && st && !cur.siteType) cur.siteType = st;
           }
         });
         let rows = [...uniqueMap.values()];
@@ -10258,7 +10280,9 @@
 
         // 사이트 타입 조회 헬퍼
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
-        function getCompanySiteType(companyName, companyCode) {
+        function getCompanySiteType(companyName, companyCode, companyRow = null) {
+          const fromRow = companyRow && normalizeCompanySiteTypeField(companyRow.siteType);
+          if (fromRow === "shopick" || fromRow === "inlog") return fromRow;
           const groupKey = getCompanyGroupKey(companyName, companyCode);
           const matched = customerUsers.filter((u) => getCompanyGroupKey(u?.company, u?.companyCode) === groupKey);
           if (!matched.length) return null;
@@ -10305,7 +10329,7 @@
           .map(({ company, index }) => {
             const isEditing = editingCompanyIndex === index;
             const isCustomerRegisteredCompany = customerCompanyNameSet.has(normalizeCompanyName(company?.name).toLowerCase());
-            const siteType = getCompanySiteType(company.name, company.code);
+            const siteType = getCompanySiteType(company.name, company.code, company);
             const badge = siteBadgeHtml(siteType);
             const customerMeta = getCustomerIdByCompanyName(company.name);
             const customerIdHtml = customerMeta.text ? ` (아이디: ${escapeHtml(customerMeta.text)})` : "";
@@ -14685,7 +14709,7 @@
           alert("이미 사용 중인 업체 계정 아이디입니다.");
           return;
         }
-        companies.unshift({ name, phone, code });
+        companies.unshift({ name, phone, code, siteType: accountSiteType });
         saveAdminCompaniesToStorage();
         users.unshift({
           id: accountId,
