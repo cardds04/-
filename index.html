@@ -7100,6 +7100,10 @@
         } finally {
           isApplyingRemoteSchedules = false;
         }
+        // pull 직후 hasLoadedSchedulesFromServer=true 상태에서 고객 로컬(STORAGE_CUSTOMER_SCHEDULES)에만 있는
+        // 행(orphan)을 다시 병합한다. 부트스트랩에서 hydrate가 pull보다 먼저 끝나면 서버 덮어쓰기로 빠질 수 있음.
+        hydrateFromCustomerPageStorage();
+        syncWriterSchedulesStorage();
         renderList();
         renderPaymentList();
         return true;
@@ -8024,10 +8028,6 @@
             companies.unshift({ name, phone: phone || "-" });
           }
         });
-        if (USE_SUPABASE_SYNC) {
-          // Supabase 사용 시 schedules 원본은 서버만 신뢰한다.
-          return;
-        }
 
         const existingScheduleIds = new Set(data.map((item) => String(item.customerScheduleId || "")).filter(Boolean));
         const shouldImportLocalCustomerSchedulesAsSource = !USE_SUPABASE_SYNC || !hasLoadedSchedulesFromServer;
@@ -8059,6 +8059,8 @@
             target.name = String(row?.name || target.name || "작가미정").trim() || "작가미정";
             target.writerPhone = String(row?.writerPhone || target.writerPhone || "").trim();
             target.writerCarNumber = String(row?.writerCarNumber || target.writerCarNumber || "").trim();
+            const rowCode = normalizeCompanyCode(row?.companyCode || row?.code);
+            if (rowCode) target.companyCode = rowCode;
             if (canHydratePaymentFieldsFromCustomerLocal) {
               target.paymentStatus = String(row?.paymentStatus || target.paymentStatus || "미입금").trim() || "미입금";
               target.paymentPayer = String(row?.paymentPayer || target.paymentPayer || "").trim();
@@ -8068,7 +8070,13 @@
             }
             return;
           }
-          if (!shouldImportLocalCustomerSchedulesAsSource) {
+          const orphanCustomerRowForSupabase =
+            USE_SUPABASE_SYNC &&
+            hasLoadedSchedulesFromServer &&
+            scheduleId &&
+            !existingScheduleIds.has(scheduleId) &&
+            fallbackIndex < 0;
+          if (!shouldImportLocalCustomerSchedulesAsSource && !orphanCustomerRowForSupabase) {
             return;
           }
           data.unshift({
@@ -8079,6 +8087,7 @@
             time: String(row?.time || "09:00").trim() || "09:00",
             name: String(row?.name || "작가미정").trim() || "작가미정",
             company,
+            companyCode: normalizeCompanyCode(row?.companyCode || row?.code),
             place,
             pyeong: String(row?.pyeong || "").trim(),
             jointCode: String(row?.jointCode || "").trim(),
