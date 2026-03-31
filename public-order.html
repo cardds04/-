@@ -560,7 +560,6 @@
     <script>
       const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
       const STORAGE_PUBLIC_CUSTOMERS = "scheduleSitePublicCustomers"; // 자체 가입 계정
-      const PUBLIC_CUSTOMERS_TABLE = "public_customers";              // Supabase 테이블
       const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_SESSION = "scheduleSiteCustomerSession";
@@ -609,6 +608,7 @@
       const SUPABASE_STATE_ID = "global";
       const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
       const SUPABASE_CLIENT_KV_ROW_ID = "scoped_local_v1";
+      const SUPABASE_COMPANY_DIRECTORY_TABLE = "company_directory";
       const STORAGE_SYNC_KEYS = [
         "scheduleSiteCustomerCompanies",
         "scheduleSiteCustomerSchedules",
@@ -1434,8 +1434,7 @@
         try {
           client
             .channel("customer-table-sync")
-            .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, queueCustomerTablePull)
-            .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, queueCustomerTablePull)
+            .on("postgres_changes", { event: "*", schema: "public", table: SUPABASE_COMPANY_DIRECTORY_TABLE }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, queueCustomerTablePull)
             .on("postgres_changes", { event: "*", schema: "public", table: "dayoff_requests" }, queueCustomerTablePull)
             .subscribe();
@@ -1701,15 +1700,18 @@
         };
         const fetchCustomersRowsForPull = async () => {
           try {
-            return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,site_type,created_at&order=updated_at.desc");
+            return await fetchJsonRows(
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id&login_id=not.is.null&order=created_at.desc`
+            );
           } catch (error) {
-            const fallbackNeeded = String(error?.message || "").includes("site_type");
-            if (!fallbackNeeded) throw error;
-            return await fetchJsonRows("customers?select=login_id,password,company_name,company_code,phone,created_at&order=updated_at.desc");
+            const all = await fetchJsonRows(
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id&order=created_at.desc`
+            );
+            return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
         };
         const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
-          fetchJsonRows("companies?select=id,name,phone,code&order=updated_at.desc"),
+          fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code&order=updated_at.desc`),
           fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
           fetchPaymentsRowsForPull(),
@@ -1791,9 +1793,9 @@
           .map((row) => ({
             id: String(row?.login_id || "").trim(),
             password: String(row?.password || "").trim(),
-            company: String(row?.company_name || "").trim(),
-            companyCode: String(row?.company_code || "").trim(),
-            phone: String(row?.phone || "").trim(),
+            company: String(row?.company_name || row?.name || "").trim(),
+            companyCode: String(row?.company_code || row?.code || "").trim(),
+            phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
             createdAt: String(row?.created_at || "").trim(),
             siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
           }))
@@ -1934,13 +1936,14 @@
           .map((item) => ({
             login_id: String(item?.id || "").trim(),
             password: String(item?.password || "").trim(),
-            company_name: String(item?.company || "").trim(),
-            company_code: String(item?.companyCode || "").trim(),
+            name: String(item?.company || "").trim(),
+            code: String(item?.companyCode || "").trim(),
             phone: String(item?.phone || "").trim(),
+            customer_phone: String(item?.phone || "").trim(),
             site_type: normalizeCustomerSiteType(item?.siteType)
           }))
           .filter((item) => item.login_id);
-        let response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+        let response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?on_conflict=login_id`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1955,10 +1958,10 @@
           const canRetryWithoutSiteType =
             (response.status === 400 || response.status === 404) && String(errorText || "").includes("site_type");
           if (!canRetryWithoutSiteType) {
-            throw new Error(`customers 저장 실패 (${response.status}): ${errorText}`);
+            throw new Error(`고객 계정 저장 실패 (${response.status}): ${errorText}`);
           }
           const fallbackRows = rows.map(({ site_type, ...rest }) => rest);
-          response = await fetch(`${SUPABASE_URL}/rest/v1/customers?on_conflict=login_id`, {
+          response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?on_conflict=login_id`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1971,7 +1974,7 @@
         }
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`customers 저장 실패 (${response.status}): ${errorText}`);
+          throw new Error(`고객 계정 저장 실패 (${response.status}): ${errorText}`);
         }
       }
       async function syncCompaniesTableFromStorage() {
@@ -1985,7 +1988,7 @@
           }))
           .filter((item) => item.name);
         if (!rows.length) return;
-        const existing = await fetchJsonRows("companies?select=name");
+        const existing = await fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name`);
         const existingSet = new Set((Array.isArray(existing) ? existing : []).map((row) => String(row?.name || "").trim().toLowerCase()).filter(Boolean));
         const insertRows = rows
           .filter((row) => !existingSet.has(row.name.toLowerCase()))
@@ -1995,7 +1998,7 @@
             code: row.code || `AUTO-${Date.now().toString(36).toUpperCase()}`
           }));
         if (!insertRows.length) return;
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2006,7 +2009,7 @@
         });
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`companies 저장 실패 (${response.status}): ${errorText}`);
+          throw new Error(`업체 저장 실패 (${response.status}): ${errorText}`);
         }
       }
       async function fetchRemoteSchedulePaymentStateByIds(ids) {
@@ -2834,9 +2837,9 @@
         checkCompanyBtnEl.disabled = true;
         checkCompanyBtnEl.textContent = "확인 중...";
         try {
-          // Supabase public_customers 에서 같은 업체명 검색
+          // Supabase company_directory 에서 같은 업체명 검색
           const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/${PUBLIC_CUSTOMERS_TABLE}?company_name=eq.${encodeURIComponent(company)}&select=id&limit=1`,
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?name=eq.${encodeURIComponent(company)}&select=id&limit=1`,
             { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
           );
           const rows = res.ok ? await res.json() : [];
@@ -2886,7 +2889,7 @@
         if (!USE_SUPABASE_SYNC) return null;
         try {
           const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/${PUBLIC_CUSTOMERS_TABLE}?username=eq.${encodeURIComponent(username)}&select=*&limit=1`,
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encodeURIComponent(username)}&select=*&limit=1`,
             { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
           );
           if (!res.ok) return null;
@@ -2896,7 +2899,16 @@
       }
 
       async function insertPublicCustomer(data) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${PUBLIC_CUSTOMERS_TABLE}`, {
+        const payload = {
+          name: String(data.company_name || "").trim(),
+          login_id: String(data.username || "").trim(),
+          password: String(data.password || "").trim(),
+          phone: String(data.phone || "").trim(),
+          customer_phone: String(data.phone || "").trim(),
+          site_type: "inlog",
+          code: `AUTO-${Date.now().toString(36).toUpperCase()}`
+        };
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2904,7 +2916,7 @@
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify([data])
+          body: JSON.stringify([payload])
         });
         if (!res.ok) {
           const errText = await res.text();
@@ -2916,12 +2928,12 @@
 
       function buildPublicUserObject(row) {
         return {
-          id: String(row.username || row.id || ""),
+          id: String(row.login_id || row.username || row.id || ""),
           password: String(row.password || ""),
-          company: String(row.company_name || ""),
+          company: String(row.name || row.company_name || ""),
           name: String(row.contact_name || ""),
-          phone: String(row.phone || ""),
-          siteType: "inlog",
+          phone: String(row.customer_phone || row.phone || ""),
+          siteType: normalizeCustomerSiteType(row.site_type) || "inlog",
           isPublicCustomer: true,
           publicCustomerId: String(row.id || "")
         };
