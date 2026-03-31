@@ -11747,6 +11747,9 @@
       }
 
       function renderPaymentList() {
+        if (syncScheduleRowsCompanyFromAdminCatalog()) {
+          persistSchedulesAfterCompanyCatalogSync();
+        }
         if (paymentUnpaidCompanyCountTextEl) {
           const unpaidScheduleCount = data.filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료").length;
           paymentUnpaidCompanyCountTextEl.textContent = `미입금총 스케줄수 ${unpaidScheduleCount}건`;
@@ -13063,13 +13066,68 @@
         dayFilterEl.value = "all";
       }
 
+      /**
+       * 스케줄·입금 행의 업체명·고유번호를 관리자 업체정보(companies)와 단일 기준으로 통합.
+       * renderList의 resolveCanonical(마스터맵 등)보다 우선해, 업체정보에서 저장한 이름이 화면·저장에 반영되게 함.
+       */
+      function syncScheduleRowsCompanyFromAdminCatalog() {
+        if (!Array.isArray(companies) || companies.length === 0) return false;
+        let changed = false;
+        const apply = (item) => {
+          if (!item) return;
+          const code = normalizeCompanyCode(item.companyCode);
+          if (code) {
+            const row = companies.find(
+              (c) =>
+                normalizeCompanyCode(c?.code) &&
+                normalizeCompanyCode(c.code).toLowerCase() === code.toLowerCase()
+            );
+            if (row && normalizeCompanyName(row.name)) {
+              const nextName = normalizeCompanyName(row.name);
+              const nextCode = normalizeCompanyCode(row.code);
+              if (item.company !== nextName || normalizeCompanyCode(item.companyCode) !== nextCode) {
+                item.company = nextName;
+                item.companyCode = nextCode;
+                changed = true;
+              }
+              return;
+            }
+          }
+          const gk = getCompanyGroupKey(item.company, item.companyCode);
+          if (!gk) return;
+          const row = companies.find((c) => getCompanyGroupKey(c.name, c.code) === gk);
+          if (row && normalizeCompanyName(row.name)) {
+            const nextName = normalizeCompanyName(row.name);
+            const nextCode = normalizeCompanyCode(row.code);
+            if (item.company !== nextName || normalizeCompanyCode(item.companyCode) !== nextCode) {
+              item.company = nextName;
+              item.companyCode = nextCode;
+              changed = true;
+            }
+          }
+        };
+        data.forEach(apply);
+        onHoldPayments.forEach(apply);
+        refundPayments.forEach(apply);
+        return changed;
+      }
+
+      function persistSchedulesAfterCompanyCatalogSync() {
+        try {
+          localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+        } catch (_) {}
+        syncWriterSchedulesStorage();
+      }
+
       function renderList() {
+        if (syncScheduleRowsCompanyFromAdminCatalog()) {
+          persistSchedulesAfterCompanyCatalogSync();
+        }
         data.forEach((item) => {
           ensureScheduleUuid(item);
-          const canonicalIdentity = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode);
-          item.company = canonicalIdentity.company || item.company || "";
-          item.companyCode = canonicalIdentity.companyCode || item.companyCode || "";
         });
+        onHoldPayments.forEach((item) => ensureScheduleUuid(item));
+        refundPayments.forEach((item) => ensureScheduleUuid(item));
         syncAdminSchedulesToCustomerStorage();
         syncWriterSchedulesStorage();
         renderOpenDayoffSummary();
