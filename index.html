@@ -6761,7 +6761,7 @@
           lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
         });
         const nextRows = buildSchedulesSnapshotRows();
-        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,updated_at`, {
+        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,updated_at`, {
           method: "GET",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -6774,16 +6774,26 @@
           throw new Error(`schedules id 조회 실패 (${remoteIdResponse.status}): ${errorText}`);
         }
         const remoteRows = await remoteIdResponse.json();
-        const remoteUpdatedAtMap = new Map(
+        const remoteMetaById = new Map(
           (Array.isArray(remoteRows) ? remoteRows : [])
-            .map((row) => [String(row?.id || "").trim(), String(row?.updated_at || "").trim()])
+            .map((row) => [
+              String(row?.id || "").trim(),
+              {
+                company_name: String(row?.company_name || "").trim(),
+                updated_at: String(row?.updated_at || "").trim()
+              }
+            ])
             .filter(([id]) => Boolean(id))
         );
         const localUpdatedAtMap = buildLocalScheduleUpdatedAtMap();
         const safeUpsertRows = nextRows.filter((row) => {
           const id = String(row?.id || "").trim();
           if (!id) return false;
-          const remoteUpdatedAt = remoteUpdatedAtMap.get(id);
+          const remote = remoteMetaById.get(id);
+          if (!remote) return true;
+          const builtName = String(row?.company_name || "").trim();
+          if (builtName !== remote.company_name) return true;
+          const remoteUpdatedAt = remote.updated_at;
           if (!remoteUpdatedAt) return true;
           const localUpdatedAt = String(localUpdatedAtMap.get(id) || "").trim();
           if (!localUpdatedAt) return false;
@@ -6929,6 +6939,11 @@
         const nextActive = [];
         const nextHold = [];
         const nextRefund = [];
+        const prevScheduleById = new Map();
+        [...data, ...onHoldPayments, ...refundPayments].forEach((item) => {
+          const pid = String(item?.customerScheduleId || "").trim();
+          if (pid) prevScheduleById.set(pid, item);
+        });
         (Array.isArray(rows) ? rows : []).filter((row) => {
           // source="deleted" 행 또는 pendingDeletion ID 행은 pull에서 항상 제외
           const rid = String(row?.id || "").trim();
@@ -6938,6 +6953,18 @@
           return true;
         }).forEach((row) => {
           const source = String(row?.source || "active").trim() || "active";
+          const rid = String(row?.id || "").trim();
+          const prevLocal = rid ? prevScheduleById.get(rid) : null;
+          if (prevLocal && prevLocal.localUpdatedAt) {
+            const localMs = new Date(prevLocal.localUpdatedAt).getTime();
+            const remoteMs = new Date(row?.updated_at || "").getTime();
+            if (Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs) {
+              if (source === "hold") nextHold.push(prevLocal);
+              else if (source === "refund") nextRefund.push(prevLocal);
+              else nextActive.push(prevLocal);
+              return;
+            }
+          }
           const status = String(row?.status || "").trim();
           const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
