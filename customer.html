@@ -2969,12 +2969,25 @@
         scheduleDayEl.classList.toggle("weekday-weekend", isWeekend(year, month, day));
       }
 
-      function getAdminCompanyDefaultMemo(companyName) {
+      function getAdminCompanyDefaultMemo(companyName, companyCode = "") {
         try {
           const map = JSON.parse(localStorage.getItem("scheduleSiteCompanyDefaultMemos") || "{}");
-          const key = normalize(companyName).toLowerCase();
-          return String(map[key] || "");
-        } catch { return ""; }
+          const adminRows = readStorageArray("scheduleSiteAdminCompanies");
+          let code = normalize(companyCode);
+          if (!code) {
+            const hit = adminRows.find((row) => normalize(row?.name).toLowerCase() === normalize(companyName).toLowerCase());
+            code = normalize(hit?.code);
+          }
+          const byCode = code && adminRows.find((row) => normalize(row?.code).toLowerCase() === code.toLowerCase());
+          const primaryName = byCode ? normalize(byCode.name) : normalize(companyName);
+          const primaryKey = primaryName.toLowerCase();
+          const legacyKey = normalize(companyName).toLowerCase();
+          if (primaryKey && map[primaryKey]) return String(map[primaryKey]);
+          if (legacyKey && map[legacyKey]) return String(map[legacyKey]);
+          return "";
+        } catch {
+          return "";
+        }
       }
 
       function getUserSchedules() {
@@ -3176,7 +3189,7 @@
                   작가연락처: ${item.writerPhone || "-"}<br />
                   작가차량번호: ${item.writerCarNumber || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
-                  메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
+                  메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}${(() => { const dm = getAdminCompanyDefaultMemo(item.company, item.companyCode); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
                 </div>
                 <div class="status-actions">
                   <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>

@@ -1212,18 +1212,6 @@
         background: #eef3fb;
       }
 
-      .payment-table-code {
-        max-width: 100px;
-        word-break: break-all;
-        font-size: 0.85rem;
-        color: #4a5568;
-      }
-
-      .schedule-company-code {
-        font-size: 0.85rem;
-        color: #4a5568;
-      }
-
       .coupon-register-row {
         display: flex;
         gap: 8px;
@@ -2003,7 +1991,6 @@
               <tr>
                 <th>날짜</th>
                 <th>업체명</th>
-                <th>고유번호</th>
                 <th>입금자명</th>
                 <th>입금날짜</th>
                 <th>입금금액</th>
@@ -5657,20 +5644,35 @@
       function saveCompanyDefaultMemos(memoMap) {
         localStorage.setItem(STORAGE_COMPANY_DEFAULT_MEMOS, JSON.stringify(memoMap));
       }
-      function getCompanyDefaultMemoByName(companyName) {
-        const key = normalizeCompanyName(companyName).toLowerCase();
-        if (!key) return "";
+      /** 기본요청사항: 고유번호가 같으면 동일 업체로 보고 canonical 업체명 키 하나로 저장·조회 */
+      function getCompanyDefaultMemoByName(companyName, companyCode = "") {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
         const map = loadCompanyDefaultMemos();
-        return String(map[key] || "");
+        const primaryKey = normalizeCompanyName(id.company).toLowerCase();
+        const legacyKey = normalizeCompanyName(companyName).toLowerCase();
+        if (primaryKey && map[primaryKey]) return String(map[primaryKey]);
+        if (legacyKey && map[legacyKey]) return String(map[legacyKey]);
+        return "";
       }
-      function setCompanyDefaultMemoByName(companyName, memo) {
-        const key = normalizeCompanyName(companyName).toLowerCase();
-        if (!key) return;
+      function setCompanyDefaultMemoByName(companyName, memo, companyCode = "") {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+        const primaryKey = normalizeCompanyName(id.company).toLowerCase();
+        if (!primaryKey) return;
         const map = loadCompanyDefaultMemos();
+        const legacyKey = normalizeCompanyName(companyName).toLowerCase();
+        if (primaryKey !== legacyKey) delete map[legacyKey];
+        const codeNorm = normalizeCompanyCode(id.companyCode).toLowerCase();
+        if (codeNorm) {
+          companies.forEach((c) => {
+            if (normalizeCompanyCode(c?.code).toLowerCase() !== codeNorm) return;
+            const k = normalizeCompanyName(c.name).toLowerCase();
+            if (k && k !== primaryKey) delete map[k];
+          });
+        }
         if (memo) {
-          map[key] = String(memo).trim();
+          map[primaryKey] = String(memo).trim();
         } else {
-          delete map[key];
+          delete map[primaryKey];
         }
         saveCompanyDefaultMemos(map);
       }
@@ -9677,18 +9679,8 @@
         return "-";
       }
 
-      /** 스케줄·입금 행 표시용: 행의 companyCode 우선, 없으면 업체정보(companies)에서 동일 업체명으로 찾은 고유번호(없으면 빈 문자열) */
-      function getCompanyCodeForScheduleDisplay(item) {
-        const direct = normalizeCompanyCode(item?.companyCode);
-        if (direct) return direct;
-        const name = normalizeCompanyName(item?.company);
-        if (!name) return "";
-        const row = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === name.toLowerCase());
-        return row ? normalizeCompanyCode(row?.code) : "";
-      }
-
-      function getCompanyDefaultMemo(companyName) {
-        return getCompanyDefaultMemoByName(companyName);
+      function getCompanyDefaultMemo(companyName, companyCode = "") {
+        return getCompanyDefaultMemoByName(companyName, companyCode);
       }
 
       function getCustomerIdByCompanyName(companyName) {
@@ -9714,16 +9706,90 @@
         return { text, isMasterCompany, total };
       }
 
-      function getCouponRemaining(companyName) {
-        const normalized = normalizeCompanyName(companyName);
-        if (!normalized) return 0;
-        return couponPasses[normalized] || 0;
+      function stripCouponAliasKeysForPrimary(primaryName, companyCode) {
+        const primary = normalizeCompanyName(primaryName);
+        if (!primary) return;
+        const codeNorm = normalizeCompanyCode(companyCode).toLowerCase();
+        if (!codeNorm) return;
+        companies.forEach((c) => {
+          if (normalizeCompanyCode(c?.code).toLowerCase() !== codeNorm) return;
+          const n = normalizeCompanyName(c.name);
+          if (n && n !== primary) delete couponPasses[n];
+        });
       }
 
-      function setCouponRemaining(companyName, remaining) {
-        const normalized = normalizeCompanyName(companyName);
-        if (!normalized) return;
-        couponPasses[normalized] = Math.max(0, Number(remaining) || 0);
+      /** 회차권 맵: 같은 고유번호(또는 canonical 동일)로 묶어 표기명별 중복 키를 하나로 합침 */
+      function mergeCouponPassesByCanonicalIdentity() {
+        if (Object.keys(couponPasses).length === 0) return false;
+        const byGk = new Map();
+        Object.entries(couponPasses).forEach(([key, val]) => {
+          const id = resolveCanonicalCompanyIdentity(key, "");
+          const gk = getCompanyGroupKey(id.company, id.companyCode);
+          if (!gk) return;
+          const amt = Math.max(0, Number(val) || 0);
+          const prev = byGk.get(gk) || { total: 0, primaryName: normalizeCompanyName(id.company) };
+          prev.total += amt;
+          prev.primaryName = normalizeCompanyName(id.company) || prev.primaryName;
+          byGk.set(gk, prev);
+        });
+        const next = {};
+        byGk.forEach(({ total, primaryName }) => {
+          if (primaryName) next[primaryName] = total;
+        });
+        if (Object.keys(next).length === 0) return false;
+        const sigNew = JSON.stringify(normalizeCouponPassesMap(next));
+        const sigOld = getCouponPassesSignature();
+        if (sigNew === sigOld) return false;
+        applyCouponPassesMap(next);
+        return true;
+      }
+
+      /** 업체 이전/병합/흡수 시 회차권을 대상 canonical 키로 합침 */
+      function mergeCouponPassesAfterCompanyRename(sourceName, sourceCode, targetName, targetCode) {
+        const sId = resolveCanonicalCompanyIdentity(sourceName, sourceCode);
+        const tId = resolveCanonicalCompanyIdentity(targetName, targetCode);
+        const gkS = getCompanyGroupKey(sId.company, sId.companyCode);
+        const gkT = getCompanyGroupKey(tId.company, tId.companyCode);
+        const sRem = getCouponRemaining(sourceName, sourceCode);
+        const tRem = getCouponRemaining(targetName, targetCode);
+        const combined = gkS && gkS === gkT ? Math.max(sRem, tRem) : sRem + tRem;
+        setCouponRemaining(targetName, combined, tId.companyCode);
+        if (!gkS || gkS !== gkT) {
+          setCouponRemaining(sourceName, 0, sId.companyCode);
+        }
+        mergeCouponPassesByCanonicalIdentity();
+      }
+
+      function mergeCompanyDefaultMemosAfterRename(sourceName, sourceCode, targetName, targetCode) {
+        const src = getCompanyDefaultMemoByName(sourceName, sourceCode);
+        const tgt = getCompanyDefaultMemoByName(targetName, targetCode);
+        if (src && !tgt) setCompanyDefaultMemoByName(targetName, src, targetCode);
+        setCompanyDefaultMemoByName(sourceName, "", sourceCode);
+      }
+
+      function getCouponRemaining(companyName, companyCode = "") {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+        const primary = normalizeCompanyName(id.company);
+        const legacy = normalizeCompanyName(companyName);
+        if (!primary && !legacy) return 0;
+        if (primary && Object.prototype.hasOwnProperty.call(couponPasses, primary)) {
+          return Math.max(0, Number(couponPasses[primary]) || 0);
+        }
+        if (legacy && Object.prototype.hasOwnProperty.call(couponPasses, legacy)) {
+          return Math.max(0, Number(couponPasses[legacy]) || 0);
+        }
+        return 0;
+      }
+
+      function setCouponRemaining(companyName, remaining, companyCode = "") {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+        const primary = normalizeCompanyName(id.company);
+        if (!primary) return;
+        const legacy = normalizeCompanyName(companyName);
+        const val = Math.max(0, Number(remaining) || 0);
+        couponPasses[primary] = val;
+        if (legacy !== primary) delete couponPasses[legacy];
+        stripCouponAliasKeysForPrimary(primary, id.companyCode);
       }
       function getCouponLowlistExcludedSet() {
         return new Set(
@@ -9847,7 +9913,9 @@
           alert("등록된 업체만 회차권 등록할 수 있어요.");
           return false;
         }
-        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)));
+        const companyRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
+        const companyRowCode = normalizeCompanyCode(companyRow?.code);
+        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)), companyRowCode);
         renderCouponPassList();
         renderPaymentList();
         return true;
@@ -9863,7 +9931,8 @@
           alert("남은 회차는 0 이상의 숫자로 입력해주세요.");
           return false;
         }
-        setCouponRemaining(companyName, Math.floor(remainingCount));
+        const companyRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
+        setCouponRemaining(companyName, Math.floor(remainingCount), normalizeCompanyCode(companyRow?.code));
         renderCouponPassList();
         renderPaymentList();
         return true;
@@ -10481,7 +10550,7 @@
               `;
             }
             const defaultMemoHtml = (() => {
-              const dm = getCompanyDefaultMemoByName(company.name);
+              const dm = getCompanyDefaultMemoByName(company.name, company.code);
               return dm ? `<div class="default-memo-label">기본요청사항</div><div class="default-memo-box">${escapeHtml(dm)}</div>` : "";
             })();
             return `
@@ -10630,7 +10699,7 @@
           .map(([month, count]) => `<tr><td>${escapeHtml(month)}</td><td>${count}건</td></tr>`)
           .join("");
 
-        const currentDefaultMemo = getCompanyDefaultMemoByName(companyName);
+        const currentDefaultMemo = getCompanyDefaultMemoByName(companyName, accountCompanyCode);
         companyOrderHistoryTitleEl.textContent = `${companyName} 주문 기록`;
         companyOrderHistorySummaryEl.innerHTML = `
           <div class="customer-stats-head">
@@ -10826,16 +10895,19 @@
       function getMergeCompanyCandidates() {
         const adminCompaniesFromUi = companies.map((item) => ({
           companyName: normalizeCompanyName(item?.name),
+          companyCode: normalizeCompanyCode(item?.code),
           phone: String(item?.phone || "").trim(),
           sourceType: "관리자"
         }));
         const adminCompaniesFromStorage = readStorageArray(STORAGE_ADMIN_COMPANIES).map((item) => ({
           companyName: normalizeCompanyName(item?.name),
+          companyCode: normalizeCompanyCode(item?.code),
           phone: String(item?.phone || "").trim(),
           sourceType: "관리자"
         }));
         const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES).map((item) => ({
           companyName: normalizeCompanyName(item?.name),
+          companyCode: normalizeCompanyCode(item?.companyCode || item?.code),
           phone: String(item?.phone || "").trim(),
           sourceType: "고객"
         }));
@@ -10845,11 +10917,13 @@
           const companyName = normalizeCompanyName(item?.companyName);
           const companyKey = companyCompareKey(companyName);
           if (!companyName || !companyKey) return;
+          const rowCode = normalizeCompanyCode(item?.companyCode);
           const existing = dedupedMap.get(companyKey);
           if (!existing) {
             dedupedMap.set(companyKey, {
               companyKey,
               companyName,
+              companyCode: rowCode,
               phone: String(item?.phone || "").trim() || "-",
               sourceType: item?.sourceType || "미분류"
             });
@@ -10858,6 +10932,7 @@
           if (!existing.phone || existing.phone === "-") {
             existing.phone = String(item?.phone || "").trim() || existing.phone;
           }
+          if (!existing.companyCode && rowCode) existing.companyCode = rowCode;
           if (existing.sourceType !== item.sourceType) {
             existing.sourceType = "관리자+고객";
           }
@@ -10902,6 +10977,13 @@
         );
         if (!confirmed) return;
 
+        const sourceCode = normalizeCompanyCode(
+          sourceCompany.companyCode || companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === sourceName.toLowerCase())?.code
+        );
+        const targetCode = normalizeCompanyCode(
+          targetCompany.companyCode || companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === targetName.toLowerCase())?.code
+        );
+
         const shouldRelink = (name) => {
           const key = companyCompareKey(name);
           return key === sourceKey || key === targetKey;
@@ -10915,20 +10997,26 @@
         data.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
         onHoldPayments.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         refundPayments.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
 
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         customerSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
@@ -10938,6 +11026,7 @@
         adminSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
@@ -10945,7 +11034,9 @@
 
         const writerSchedules = readStorageArray(STORAGE_WRITER_SCHEDULES);
         writerSchedules.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerSchedules));
 
@@ -10954,6 +11045,7 @@
           if (!shouldRelink(item?.name)) return;
           item.name = targetName;
           if (targetPhone) item.phone = targetPhone;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
 
@@ -10961,6 +11053,7 @@
         customers.forEach((item) => {
           if (shouldRelink(item?.company)) {
             item.company = targetName;
+            if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
             if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
           }
         });
@@ -10980,20 +11073,14 @@
 
         const canceledSchedules = readStorageArray(STORAGE_CANCELED_SCHEDULES);
         canceledSchedules.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_CANCELED_SCHEDULES, JSON.stringify(canceledSchedules));
 
-        let sourceCouponTotal = 0;
-        Object.keys(couponPasses).forEach((companyName) => {
-          if (!shouldRelink(companyName)) return;
-          if (companyCompareKey(companyName) === sourceKey) {
-            sourceCouponTotal += Number(couponPasses[companyName] || 0);
-          }
-          delete couponPasses[companyName];
-        });
-        const targetCouponBase = Number(couponPasses[targetName] || 0);
-        couponPasses[targetName] = targetCouponBase + Math.max(0, sourceCouponTotal);
+        mergeCouponPassesAfterCompanyRename(sourceName, sourceCode, targetName, targetCode);
+        mergeCompanyDefaultMemosAfterRename(sourceName, sourceCode, targetName, targetCode);
 
         for (let i = companies.length - 1; i >= 0; i -= 1) {
           const key = companyCompareKey(companies[i]?.name);
@@ -11001,7 +11088,7 @@
             companies.splice(i, 1);
           }
         }
-        companies.unshift({ name: targetName, phone: targetPhone || "-" });
+        companies.unshift({ name: targetName, phone: targetPhone || "-", code: targetCode || "" });
         saveAdminCompaniesToStorage();
         transferSourceCompanyKey = "";
         transferTargetCompanyKey = "";
@@ -11142,6 +11229,13 @@
         );
         if (!confirmed) return;
 
+        const sourceCode = normalizeCompanyCode(sourceCompany.code);
+        const targetCode = normalizeCompanyCode(
+          selectedCompany.companyCode ||
+            companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === targetName.toLowerCase())?.code ||
+            matchedCustomer?.companyCode
+        );
+
         const sourceKey = sourceName.toLowerCase();
         const targetKey = targetName.toLowerCase();
         const shouldRelink = (name) => {
@@ -11175,6 +11269,7 @@
 
         companies[companyIndex].name = targetName;
         if (targetPhone) companies[companyIndex].phone = targetPhone;
+        if (targetCode) companies[companyIndex].code = targetCode;
         for (let i = companies.length - 1; i >= 0; i -= 1) {
           if (i === companyIndex) continue;
           if (normalizeCompanyName(companies[i]?.name).toLowerCase() === targetKey) {
@@ -11186,22 +11281,32 @@
         data.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
         onHoldPayments.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         refundPayments.forEach((item) => {
-          if (shouldRelink(item?.company)) item.company = targetName;
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
 
-        if (sourceName !== targetName && couponPasses[sourceName] !== undefined) {
-          const oldValue = Number(couponPasses[sourceName] || 0);
-          const targetValue = Number(couponPasses[targetName] || 0);
-          couponPasses[targetName] = Math.max(0, oldValue) + Math.max(0, targetValue);
-          delete couponPasses[sourceName];
-        }
+        mergeCouponPassesAfterCompanyRename(sourceName, sourceCode, targetName, targetCode);
+        mergeCompanyDefaultMemosAfterRename(sourceName, sourceCode, targetName, targetCode);
+
+        const customersForMerge = readStorageArray(STORAGE_CUSTOMERS);
+        customersForMerge.forEach((item) => {
+          if (!shouldRelink(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
+          if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
+        });
+        localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customersForMerge));
 
         const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
         let hasTargetCompany = false;
@@ -11209,10 +11314,15 @@
           if (!shouldRelink(item?.name)) return;
           item.name = targetName;
           if (targetPhone) item.phone = targetPhone;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           hasTargetCompany = true;
         });
         if (!hasTargetCompany) {
-          customerCompanies.unshift({ name: targetName, phone: targetPhone || sourceCompany.phone || "-" });
+          customerCompanies.unshift({
+            name: targetName,
+            phone: targetPhone || sourceCompany.phone || "-",
+            companyCode: targetCode || ""
+          });
         }
         const dedupedCustomerCompanies = [];
         const seenCompanyKeys = new Set();
@@ -11222,7 +11332,8 @@
           seenCompanyKeys.add(key);
           dedupedCustomerCompanies.push({
             name: normalizeCompanyName(item?.name),
-            phone: String(item?.phone || "").trim() || "-"
+            phone: String(item?.phone || "").trim() || "-",
+            companyCode: normalizeCompanyCode(item?.companyCode || item?.code)
           });
         });
         localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(dedupedCustomerCompanies));
@@ -11231,6 +11342,7 @@
         customerSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
@@ -11247,6 +11359,7 @@
         adminSchedules.forEach((item) => {
           if (!shouldRelink(item?.company)) return;
           item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
           if (targetCustomerId) item.customerId = targetCustomerId;
           if (targetCustomerPhone) item.customerPhone = targetCustomerPhone;
         });
@@ -11388,6 +11501,8 @@
 
         const targetName = targetCompany ? normalizeCompanyName(targetCompany.name) : targetInput;
         const targetPhone = targetCompany ? String(targetCompany.phone || "").trim() : String(sourceCompany.phone || "").trim();
+        const sourceCode = normalizeCompanyCode(sourceCompany.code);
+        const targetCode = normalizeCompanyCode(targetCompany?.code || companies.find((c) => companyCompareKey(c?.name) === targetKey)?.code);
         const confirmed = confirm(
           `이전을 진행할까요?\n\n원본: ${sourceName}\n대상: ${targetName}\n\n진행하면 과거/미래 스케줄 포함 모든 "${sourceName}" 표기가 "${targetName}"로 변경됩니다.`
         );
@@ -11396,48 +11511,60 @@
         const isSource = (name) => companyCompareKey(name) === sourceKey;
 
         data.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         onHoldPayments.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         refundPayments.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
 
         const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         customerSchedules.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
 
         const adminSchedules = readStorageArray(STORAGE_ADMIN_SCHEDULES);
         adminSchedules.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(adminSchedules));
 
         const writerSchedules = readStorageArray(STORAGE_WRITER_SCHEDULES);
         writerSchedules.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerSchedules));
 
         const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
         customerCompanies.forEach((item) => {
-          if (isSource(item?.name)) {
-            item.name = targetName;
-            if (targetPhone) item.phone = targetPhone;
-          }
+          if (!isSource(item?.name)) return;
+          item.name = targetName;
+          if (targetPhone) item.phone = targetPhone;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
 
         const customers = readStorageArray(STORAGE_CUSTOMERS);
         customers.forEach((item) => {
-          if (isSource(item?.company)) {
-            item.company = targetName;
-            if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
-          }
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
+          if (targetPhone && !String(item?.phone || "").trim()) item.phone = targetPhone;
         });
         localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customers));
 
@@ -11455,19 +11582,14 @@
 
         const canceledSchedules = readStorageArray(STORAGE_CANCELED_SCHEDULES);
         canceledSchedules.forEach((item) => {
-          if (isSource(item?.company)) item.company = targetName;
+          if (!isSource(item?.company)) return;
+          item.company = targetName;
+          if (targetCode) item.companyCode = normalizeCompanyCode(targetCode);
         });
         localStorage.setItem(STORAGE_CANCELED_SCHEDULES, JSON.stringify(canceledSchedules));
 
-        let sourceCouponTotal = 0;
-        Object.keys(couponPasses).forEach((companyName) => {
-          if (!isSource(companyName)) return;
-          sourceCouponTotal += Number(couponPasses[companyName] || 0);
-          delete couponPasses[companyName];
-        });
-        if (sourceCouponTotal > 0) {
-          couponPasses[targetName] = Number(couponPasses[targetName] || 0) + sourceCouponTotal;
-        }
+        mergeCouponPassesAfterCompanyRename(sourceName, sourceCode, targetName, targetCode);
+        mergeCompanyDefaultMemosAfterRename(sourceName, sourceCode, targetName, targetCode);
 
         for (let i = companies.length - 1; i >= 0; i -= 1) {
           const itemKey = companyCompareKey(companies[i]?.name);
@@ -11475,7 +11597,7 @@
             companies.splice(i, 1);
           }
         }
-        companies.unshift({ name: targetName, phone: targetPhone || "-" });
+        companies.unshift({ name: targetName, phone: targetPhone || "-", code: targetCode || "" });
         saveAdminCompaniesToStorage();
         editingCompanyIndex = null;
         renderCompanies();
@@ -11762,7 +11884,7 @@
                               평수: ${escapeHtml(item.pyeong || "-")}<br />
                               비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                               메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                              ${(() => { const dm = getCompanyDefaultMemo(item.company); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
+                              ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                               구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                               쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                               구분: ${escapeHtml(item.sourceLabel || "진행중")}
@@ -11824,15 +11946,16 @@
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
-        const getCouponProgressText = (companyName) => {
+        const getCouponProgressText = (companyName, companyCode = "") => {
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
-          const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany)) || 0);
-          const used = [...data, ...onHoldPayments, ...refundPayments].filter(
-            (row) =>
-              normalizeCompanyName(row?.company || "") === normalizedCompany &&
-              Boolean(row?.couponUsed)
-          ).length;
+          const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany, companyCode)) || 0);
+          const id = resolveCanonicalCompanyIdentity(normalizedCompany, companyCode);
+          const gk = getCompanyGroupKey(id.company, id.companyCode);
+          const used = [...data, ...onHoldPayments, ...refundPayments].filter((row) => {
+            const r = resolveCanonicalCompanyIdentity(row?.company, row?.companyCode);
+            return getCompanyGroupKey(r.company, r.companyCode) === gk && Boolean(row?.couponUsed);
+          }).length;
           const total = remaining + used;
           if (total <= 0) return "";
           return `남은쿠폰 ${remaining}/${total}`;
@@ -11983,12 +12106,10 @@
               )
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
-            const companyCodeCell = escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-");
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}</td>
               <td>${escapeHtml(item.company || "-")}</td>
-              <td class="payment-table-code">${companyCodeCell}</td>
               <td>${
                 isEditing
                   ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
@@ -12027,8 +12148,8 @@
                 isEditing
                   ? `<span>완료/반만입금 버튼으로 처리</span>`
                   : `${
-                      source === "active" && getCouponProgressText(item.company)
-                        ? getCouponProgressText(item.company)
+                      source === "active" && getCouponProgressText(item.company, item.companyCode)
+                        ? getCouponProgressText(item.company, item.companyCode)
                         : source === "hold"
                         ? "보류"
                         : source === "refund"
@@ -12076,7 +12197,7 @@
         if (visibleRows.length === 0) {
           paymentListBodyEl.innerHTML = `
             <tr>
-              <td colspan="8">표시할 내역이 없습니다.</td>
+              <td colspan="7">표시할 내역이 없습니다.</td>
             </tr>
           `;
         }
@@ -12223,13 +12344,13 @@
           couponUsed: Boolean(item.couponUsed),
           partialPaid: Boolean(item.partialPaid)
         };
-        const remaining = getCouponRemaining(item.company);
+        const remaining = getCouponRemaining(item.company, item.companyCode);
         if (remaining < 1) {
           alert("남은 회차권이 없습니다. 회차권 등록에서 먼저 등록해주세요.");
           return;
         }
 
-        setCouponRemaining(item.company, remaining - 1);
+        setCouponRemaining(item.company, remaining - 1, item.companyCode);
         void appendCouponUsageHistoryLog({
           companyName: item.company,
           scheduleId: item.customerScheduleId,
@@ -12384,8 +12505,8 @@
 
         // 쿠폰으로 결제한 건은 1회 복구 후 보류 목록에서 제거
         if (holdItem.couponUsed) {
-          const remaining = getCouponRemaining(holdItem.company);
-          setCouponRemaining(holdItem.company, remaining + 1);
+          const remaining = getCouponRemaining(holdItem.company, holdItem.companyCode);
+          setCouponRemaining(holdItem.company, remaining + 1, holdItem.companyCode);
           void appendCouponUsageHistoryLog({
             companyName: holdItem.company,
             scheduleId: holdItem.customerScheduleId,
@@ -13325,7 +13446,7 @@
                           const photographerOptions = ["작가미정", ...photographers]
                             .map((name) => `<option value="${escapeHtml(name)}" ${item.name === name ? "selected" : ""}>${escapeHtml(name)}</option>`)
                             .join("");
-                          const companyDefaultMemo = getCompanyDefaultMemo(item.company);
+                          const companyDefaultMemo = getCompanyDefaultMemo(item.company, item.companyCode);
                           const memoWithDefault = (() => {
                             const base = item.memo || "";
                             if (!companyDefaultMemo) return base;
@@ -13345,7 +13466,6 @@
                                        <select class="inline-select edit-minute" style="width: 90px;">${minuteOptions}</select>
                                      </div>
                                      <div style="margin-bottom: 4px;">업체: <input class="inline-input edit-company" type="text" value="${escapeHtml(item.company || "")}" /></div>
-                                     <div style="margin-bottom: 4px; font-size: 0.9rem; color: #4a5568;">고유번호: ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")} <span style="color:#8892a6;font-size:0.8rem;">(업체정보와 동일 업체명일 때)</span></div>
                                      <div style="margin-bottom: 4px;">장소: <input class="inline-input edit-place" type="text" value="${escapeHtml(item.place || "")}" /></div>
                                      <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
                                      <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
@@ -13377,17 +13497,15 @@
                                     <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}<br />
-                                    <span class="schedule-company-code">고유번호 ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")}</span>
                                     <details class="schedule-extra-detail">
                                       <summary>상세보기</summary>
                                       업체: ${escapeHtml(item.company || "-")}<br />
-                                      고유번호: ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")}<br />
                                       장소(전체): ${formatPlaceForDisplay(item.place)}<br />
                                       연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
                                       평수: ${escapeHtml(item.pyeong || "-")}<br />
                                       비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                                       메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                                      ${(() => { const dm = getCompanyDefaultMemo(item.company); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
+                                      ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                                       구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                       쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                                     </details>
@@ -14454,17 +14572,21 @@
 
         if (action === "saveCompanyDefaultMemo") {
           const defaultMemoEl = companyOrderHistorySummaryEl.querySelector(".company-default-memo");
+          const codeInputForMemo = companyOrderHistorySummaryEl.querySelector(".company-account-code");
+          const memoCompanyCode = normalizeCompanyCode(codeInputForMemo?.value);
           const newDefaultMemo = String(defaultMemoEl?.value || "").trim();
-          setCompanyDefaultMemoByName(companyName, newDefaultMemo);
+          setCompanyDefaultMemoByName(companyName, newDefaultMemo, memoCompanyCode);
 
-          // 해당 업체의 모든 기존 스케줄 메모에 기본요청사항 삽입
+          // 해당 업체의 모든 기존 스케줄 메모에 기본요청사항 삽입 (고유번호 동일 그룹 포함)
           if (newDefaultMemo) {
-            const companyNameLower = normalizeCompanyName(companyName).toLowerCase();
+            const memoIdentity = resolveCanonicalCompanyIdentity(companyName, memoCompanyCode);
+            const memoGroupKey = getCompanyGroupKey(memoIdentity.company, memoIdentity.companyCode);
             let updatedCount = 0;
             const allScheduleLists = [data, onHoldPayments, refundPayments];
             allScheduleLists.forEach((list) => {
               list.forEach((item) => {
-                if (normalizeCompanyName(item?.company).toLowerCase() !== companyNameLower) return;
+                const r = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode);
+                if (getCompanyGroupKey(r.company, r.companyCode) !== memoGroupKey) return;
                 const currentMemo = String(item.memo || "").trim();
                 if (currentMemo.includes(newDefaultMemo)) return;
                 item.memo = currentMemo ? `${currentMemo}\n${newDefaultMemo}` : newDefaultMemo;
@@ -15039,7 +15161,8 @@
           alert("업체명을 먼저 입력해주세요.");
           return;
         }
-        const currentRemaining = getCouponRemaining(companyName);
+        const couponRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
+        const currentRemaining = getCouponRemaining(companyName, normalizeCompanyCode(couponRow?.code));
         const nextRaw = prompt("변경할 남은 쿠폰 횟수를 입력해주세요.", String(currentRemaining));
         if (nextRaw === null) return;
         const success = updateCouponPass(companyName, nextRaw);
@@ -15076,10 +15199,21 @@
         const button = event.target.closest("button[data-action='cancelCouponPass'][data-company-name]");
         if (!button) return;
         const companyName = normalizeCompanyName(button.dataset.companyName);
-        if (!companyName || !couponPasses[companyName]) return;
+        if (!companyName) return;
+        const couponRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
+        const couponCode = normalizeCompanyCode(couponRow?.code);
+        const id = resolveCanonicalCompanyIdentity(companyName, couponCode);
+        const primary = normalizeCompanyName(id.company);
+        const legacy = normalizeCompanyName(companyName);
+        const hasCoupon =
+          (primary && Object.prototype.hasOwnProperty.call(couponPasses, primary)) ||
+          (legacy && Object.prototype.hasOwnProperty.call(couponPasses, legacy));
+        if (!hasCoupon) return;
         const confirmed = confirm(`${companyName} 회차권 등록을 취소할까요?`);
         if (!confirmed) return;
-        delete couponPasses[companyName];
+        if (primary) delete couponPasses[primary];
+        if (legacy) delete couponPasses[legacy];
+        stripCouponAliasKeysForPrimary(primary, id.companyCode);
         editingCouponCompany = "";
         renderCouponPassList();
         renderPaymentList();
@@ -15204,6 +15338,7 @@
             company.code = newCode;
             company.defaultMemo = newDefaultMemo;
           });
+          setCompanyDefaultMemoByName(newName, newDefaultMemo, newCode);
           syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode, oldName);
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
@@ -15310,6 +15445,7 @@
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
           }
 
+          mergeCouponPassesByCanonicalIdentity();
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
           renderCompanies();
@@ -15334,6 +15470,9 @@
           }
           const confirmed = confirm(`${targetName} 업체를 목록에서 삭제할까요?`);
           if (!confirmed) return;
+          const deletedRowSnapshot = companies[index]
+            ? { name: companies[index].name, code: companies[index].code }
+            : null;
           for (let i = companies.length - 1; i >= 0; i -= 1) {
             if (normalizeCompanyName(companies[i]?.name).toLowerCase() === targetName.toLowerCase()) {
               companies.splice(i, 1);
@@ -15345,7 +15484,21 @@
             );
             localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify(customerCompanies));
           }
-          delete couponPasses[targetName];
+          {
+            const delId = resolveCanonicalCompanyIdentity(deletedRowSnapshot?.name, deletedRowSnapshot?.code);
+            const deletedGk = getCompanyGroupKey(delId.company, delId.companyCode);
+            const anySameGroupLeft =
+              deletedGk &&
+              companies.some((c) => {
+                const r = resolveCanonicalCompanyIdentity(c?.name, c?.code);
+                return getCompanyGroupKey(r.company, r.companyCode) === deletedGk;
+              });
+            if (!anySameGroupLeft) {
+              const delPrimary = normalizeCompanyName(delId.company);
+              if (delPrimary) delete couponPasses[delPrimary];
+              stripCouponAliasKeysForPrimary(delPrimary, delId.companyCode);
+            }
+          }
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
           renderCompanies();
@@ -16413,7 +16566,9 @@
           renderCompanies();
         });
         loadCouponPassesFromStorage();
+        mergeCouponPassesByCanonicalIdentity();
         void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          mergeCouponPassesByCanonicalIdentity();
           if (changed) {
             renderCouponPassList();
             renderPaymentList();
@@ -16455,6 +16610,7 @@
           // 서버 KV에 남아있는 구버전 scheduleSiteAdminSchedules로 data를 덮어쓰지 않도록 skip
           if (!USE_SUPABASE_SYNC) loadAdminSchedulesFromStorage();
           loadCouponPassesFromStorage();
+          mergeCouponPassesByCanonicalIdentity();
           hydrateFromCustomerPageStorage();
           hydrateFromWriterPageStorage();
           loadPhotographerProfilesFromStorage();
@@ -16563,7 +16719,9 @@
           renderCompanies();
         });
         loadCouponPassesFromStorage();
+        mergeCouponPassesByCanonicalIdentity();
         void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          mergeCouponPassesByCanonicalIdentity();
           if (changed) {
             renderCouponPassList();
             renderPaymentList();
@@ -16610,7 +16768,9 @@
           renderCompanies();
         });
         loadCouponPassesFromStorage();
+        mergeCouponPassesByCanonicalIdentity();
         void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+          mergeCouponPassesByCanonicalIdentity();
           if (changed) {
             renderCouponPassList();
             renderPaymentList();
