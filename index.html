@@ -7306,7 +7306,27 @@
             });
           }
         });
-        const rows = [...uniqueMap.values()];
+        let rows = [...uniqueMap.values()];
+        const codeCount = new Map();
+        rows.forEach((r) => {
+          const c = normalizeCompanyCode(r.code);
+          if (!c) return;
+          const ck = c.toLowerCase();
+          codeCount.set(ck, (codeCount.get(ck) || 0) + 1);
+        });
+        const hasDupCode = [...codeCount.values()].some((n) => n > 1);
+        if (hasDupCode) {
+          rows.sort((a, b) => b.name.length - a.name.length || a.name.localeCompare(b.name, "ko"));
+          const seenCode = new Set();
+          rows = rows.filter((row) => {
+            const code = normalizeCompanyCode(row.code);
+            if (!code) return true;
+            const ck = code.toLowerCase();
+            if (seenCode.has(ck)) return false;
+            seenCode.add(ck);
+            return true;
+          });
+        }
         companies.splice(0, companies.length, ...rows);
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(rows));
         // defaultMemo 등 로컬 변경이 원격 상태에 의해 덮어쓰이지 않도록 pending 표시
@@ -13935,15 +13955,15 @@
 
       /** 주문 기록 모달「계정저장」— 업체명 변경 시 목록·스케줄·고객 데이터와 동기화 (업체 목록 편집과 동일 규칙) */
       function applyCompanyRenameFromAccountModal(oldName, newName, newPhone, newCode) {
-        const companyRowIdx = companies.findIndex(
-          (c) => normalizeCompanyName(c?.name).toLowerCase() === oldName.toLowerCase()
-        );
-        const oldCodeBefore = companyRowIdx >= 0 ? normalizeCompanyCode(companies[companyRowIdx]?.code) : "";
-        if (companyRowIdx >= 0) {
-          companies[companyRowIdx].name = newName;
-          companies[companyRowIdx].phone = newPhone || "-";
-          companies[companyRowIdx].code = newCode;
-        }
+        const oldNameLower = oldName.toLowerCase();
+        let oldCodeBefore = "";
+        companies.forEach((c) => {
+          if (normalizeCompanyName(c?.name).toLowerCase() !== oldNameLower) return;
+          if (!oldCodeBefore) oldCodeBefore = normalizeCompanyCode(c?.code);
+          c.name = newName;
+          c.phone = newPhone || "-";
+          c.code = newCode;
+        });
         const oldGroupKey = getCompanyGroupKey(oldName, oldCodeBefore);
         const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
@@ -14271,6 +14291,28 @@
           company.code = newCompanyCode;
           adminCompanyChanged = true;
         });
+        if (!adminCompanyChanged) {
+          const fallbackIdx = companies.findIndex(
+            (c) => normalizeCompanyName(c?.name).toLowerCase() === originalNameLower
+          );
+          if (fallbackIdx >= 0) {
+            companies[fallbackIdx].name = newDisplayName;
+            companies[fallbackIdx].phone = newPhone || "-";
+            companies[fallbackIdx].code = newCompanyCode;
+            adminCompanyChanged = true;
+          } else if (newCompanyCode) {
+            const fc = normalizeCompanyCode(newCompanyCode).toLowerCase();
+            const codeIdx = companies.findIndex(
+              (c) => fc && normalizeCompanyCode(c?.code).toLowerCase() === fc
+            );
+            if (codeIdx >= 0) {
+              companies[codeIdx].name = newDisplayName;
+              companies[codeIdx].phone = newPhone || "-";
+              companies[codeIdx].code = newCompanyCode;
+              adminCompanyChanged = true;
+            }
+          }
+        }
         if (!adminCompanyChanged) {
           companies.unshift({
             name: newDisplayName,
@@ -14714,10 +14756,13 @@
             alert("이미 등록된 업체명입니다.");
             return;
           }
-          companies[index].name = newName;
-          companies[index].phone = newPhone;
-          companies[index].code = newCode;
-          companies[index].defaultMemo = newDefaultMemo;
+          companies.forEach((company) => {
+            if (normalizeCompanyName(company?.name).toLowerCase() !== oldName.toLowerCase()) return;
+            company.name = newName;
+            company.phone = newPhone;
+            company.code = newCode;
+            company.defaultMemo = newDefaultMemo;
+          });
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
