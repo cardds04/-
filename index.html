@@ -5729,7 +5729,28 @@
           effectiveCode = normalizeCompanyCode(matched?.code);
         }
         if (!effectiveCode) {
+          const adminByName = companies.find(
+            (row) => normalizeCompanyName(row?.name).toLowerCase() === normalizedName.toLowerCase()
+          );
+          if (adminByName) {
+            return {
+              company: normalizeCompanyName(adminByName.name),
+              companyCode: normalizeCompanyCode(adminByName.code || adminByName.companyCode || "")
+            };
+          }
           return { company: normalizedName, companyCode: "" };
+        }
+        /** 관리자 업체정보(companies) — 고유번호가 같으면 표시명은 항상 여기(저장 버튼으로 바꾼 이름)가 우선. 마스터 맵보다 먼저 적용 */
+        const adminRowByCode = companies.find(
+          (row) =>
+            normalizeCompanyCode(row?.code || row?.companyCode) &&
+            normalizeCompanyCode(row?.code || row?.companyCode).toLowerCase() === effectiveCode.toLowerCase()
+        );
+        if (adminRowByCode) {
+          return {
+            company: normalizeCompanyName(adminRowByCode.name),
+            companyCode: effectiveCode
+          };
         }
         const masterCompanyName = resolveMasterCompanyNameByCompanyCode(effectiveCode);
         if (masterCompanyName) {
