@@ -5664,8 +5664,8 @@
         localStorage.setItem(STORAGE_COMPANY_DEFAULT_MEMOS, JSON.stringify(memoMap));
       }
       /** 기본요청사항: 고유번호가 같으면 동일 업체로 보고 canonical 업체명 키 하나로 저장·조회 */
-      function getCompanyDefaultMemoByName(companyName, companyCode = "") {
-        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+      function getCompanyDefaultMemoByName(companyName, companyCode = "", ctx) {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const map = loadCompanyDefaultMemos();
         const primaryKey = normalizeCompanyName(id.company).toLowerCase();
         const legacyKey = normalizeCompanyName(companyName).toLowerCase();
@@ -5673,8 +5673,8 @@
         if (legacyKey && map[legacyKey]) return String(map[legacyKey]);
         return "";
       }
-      function setCompanyDefaultMemoByName(companyName, memo, companyCode = "") {
-        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+      function setCompanyDefaultMemoByName(companyName, memo, companyCode = "", ctx) {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const primaryKey = normalizeCompanyName(id.company).toLowerCase();
         if (!primaryKey) return;
         const map = loadCompanyDefaultMemos();
@@ -5737,11 +5737,15 @@
         }
         return raw;
       }
-      function resolveCanonicalCompanyIdentity(name, companyCode = "") {
+      /**
+       * @param {{ customerCompanies?: unknown[], customers?: unknown[] }} [ctx]
+       *   생략 시 매번 localStorage 파싱 — renderPaymentList 등 반복 호출 경로에서는 ctx를 넘겨 O(n²) 파싱 폭증을 막는다.
+       */
+      function resolveCanonicalCompanyIdentity(name, companyCode = "", ctx) {
         const normalizedName = normalizeCompanyName(applyConfigurableCompanyNameAlias(name));
         const normalizedCode = normalizeCompanyCode(companyCode);
-        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
-        const customers = readStorageArray(STORAGE_CUSTOMERS);
+        const customerCompanies = ctx?.customerCompanies ?? readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+        const customers = ctx?.customers ?? readStorageArray(STORAGE_CUSTOMERS);
         const companySources = [
           ...companies.map((row) => ({
             name: normalizeCompanyName(row?.name),
@@ -7026,6 +7030,10 @@
           const pid = String(item?.customerScheduleId || "").trim();
           if (pid) prevScheduleById.set(pid, item);
         });
+        const pullScheduleCanonicalCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
         (Array.isArray(rows) ? rows : []).filter((row) => {
           // source="deleted" 행 또는 pendingDeletion ID 행은 pull에서 항상 제외
           const rid = String(row?.id || "").trim();
@@ -7050,7 +7058,11 @@
           const status = String(row?.status || "").trim();
           const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
-          const canonicalIdentity = resolveCanonicalCompanyIdentity(String(row?.company_name || "").trim(), String(row?.code || "").trim());
+          const canonicalIdentity = resolveCanonicalCompanyIdentity(
+            String(row?.company_name || "").trim(),
+            String(row?.code || "").trim(),
+            pullScheduleCanonicalCtx
+          );
           const nextItem = {
             customerScheduleId: String(row?.id || "").trim(),
             date: String(row?.date_key || "").trim(),
@@ -9713,8 +9725,8 @@
         return "-";
       }
 
-      function getCompanyDefaultMemo(companyName, companyCode = "") {
-        return getCompanyDefaultMemoByName(companyName, companyCode);
+      function getCompanyDefaultMemo(companyName, companyCode = "", ctx) {
+        return getCompanyDefaultMemoByName(companyName, companyCode, ctx);
       }
 
       function getCustomerIdByCompanyName(companyName) {
@@ -9755,9 +9767,13 @@
       /** 회차권 맵: 같은 고유번호(또는 canonical 동일)로 묶어 표기명별 중복 키를 하나로 합침 */
       function mergeCouponPassesByCanonicalIdentity() {
         if (Object.keys(couponPasses).length === 0) return false;
+        const mergeCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
         const byGk = new Map();
         Object.entries(couponPasses).forEach(([key, val]) => {
-          const id = resolveCanonicalCompanyIdentity(key, "");
+          const id = resolveCanonicalCompanyIdentity(key, "", mergeCtx);
           const gk = getCompanyGroupKey(id.company, id.companyCode);
           if (!gk) return;
           const amt = Math.max(0, Number(val) || 0);
@@ -9801,8 +9817,8 @@
         setCompanyDefaultMemoByName(sourceName, "", sourceCode);
       }
 
-      function getCouponRemaining(companyName, companyCode = "") {
-        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+      function getCouponRemaining(companyName, companyCode = "", ctx) {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const primary = normalizeCompanyName(id.company);
         const legacy = normalizeCompanyName(companyName);
         if (!primary && !legacy) return 0;
@@ -9815,8 +9831,8 @@
         return 0;
       }
 
-      function setCouponRemaining(companyName, remaining, companyCode = "") {
-        const id = resolveCanonicalCompanyIdentity(companyName, companyCode);
+      function setCouponRemaining(companyName, remaining, companyCode = "", ctx) {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const primary = normalizeCompanyName(id.company);
         if (!primary) return;
         const legacy = normalizeCompanyName(companyName);
@@ -11733,6 +11749,10 @@
       }
 
       function renderPreviousScheduleHistory() {
+        const memoCanonicalCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
         const rows = [
           ...data.map((item) => ({ ...item, sourceLabel: "진행중" })),
           ...onHoldPayments.map((item) => ({ ...item, sourceLabel: "보류" })),
@@ -11918,7 +11938,7 @@
                               평수: ${escapeHtml(item.pyeong || "-")}<br />
                               비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                               메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                              ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
+                              ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                               구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                               쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                               구분: ${escapeHtml(item.sourceLabel || "진행중")}
@@ -11980,16 +12000,26 @@
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
+        const canonicalIdentityCtxPayment = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
+        const couponUsedByGroupKey = new Map();
+        for (const row of [...data, ...onHoldPayments, ...refundPayments]) {
+          if (!row?.couponUsed) continue;
+          const r = resolveCanonicalCompanyIdentity(row?.company, row?.companyCode, canonicalIdentityCtxPayment);
+          const gk = getCompanyGroupKey(r.company, r.companyCode);
+          if (!gk) continue;
+          couponUsedByGroupKey.set(gk, (couponUsedByGroupKey.get(gk) || 0) + 1);
+        }
         const getCouponProgressText = (companyName, companyCode = "") => {
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
-          const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany, companyCode)) || 0);
-          const id = resolveCanonicalCompanyIdentity(normalizedCompany, companyCode);
+          const ctx = canonicalIdentityCtxPayment;
+          const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany, companyCode, ctx)) || 0);
+          const id = resolveCanonicalCompanyIdentity(normalizedCompany, companyCode, ctx);
           const gk = getCompanyGroupKey(id.company, id.companyCode);
-          const used = [...data, ...onHoldPayments, ...refundPayments].filter((row) => {
-            const r = resolveCanonicalCompanyIdentity(row?.company, row?.companyCode);
-            return getCompanyGroupKey(r.company, r.companyCode) === gk && Boolean(row?.couponUsed);
-          }).length;
+          const used = gk ? couponUsedByGroupKey.get(gk) || 0 : 0;
           const total = remaining + used;
           if (total <= 0) return "";
           return `남은쿠폰 ${remaining}/${total}`;
@@ -12140,6 +12170,8 @@
               )
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
+            const couponProgressText =
+              source === "active" ? getCouponProgressText(item.company, item.companyCode) : "";
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}</td>
@@ -12182,8 +12214,8 @@
                 isEditing
                   ? `<span>완료/반만입금 버튼으로 처리</span>`
                   : `${
-                      source === "active" && getCouponProgressText(item.company, item.companyCode)
-                        ? getCouponProgressText(item.company, item.companyCode)
+                      couponProgressText
+                        ? couponProgressText
                         : source === "hold"
                         ? "보류"
                         : source === "refund"
@@ -13313,6 +13345,10 @@
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
+        const memoCanonicalCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
         data.forEach((item) => {
           ensureScheduleUuid(item);
         });
@@ -13479,7 +13515,7 @@
                           const photographerOptions = ["작가미정", ...photographers]
                             .map((name) => `<option value="${escapeHtml(name)}" ${item.name === name ? "selected" : ""}>${escapeHtml(name)}</option>`)
                             .join("");
-                          const companyDefaultMemo = getCompanyDefaultMemo(item.company, item.companyCode);
+                          const companyDefaultMemo = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx);
                           const memoWithDefault = (() => {
                             const base = item.memo || "";
                             if (!companyDefaultMemo) return base;
@@ -13538,7 +13574,7 @@
                                       평수: ${escapeHtml(item.pyeong || "-")}<br />
                                       비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
                                       메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                                      ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
+                                      ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                                       구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                       쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                                     </details>
