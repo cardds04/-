@@ -4124,6 +4124,8 @@
       let couponPassesSchemaMode = "";
       let lastScheduleSyncSignature = "";
       let hasLoadedSchedulesFromServer = false;
+      /** 다른 탭이 STORAGE_ADMIN_SCHEDULES 를 연속 갱신할 때 pull 이 과도하게 도는 것 완화 */
+      let storagePullSchedulesDebounceTimer = null;
       /** renderList가 짧은 시간에 여러 번 불릴 때 매번 고객 미러·서명 계산을 반복하지 않도록 디바운스 */
       let mirrorSyncDebounceTimer = null;
       function flushDeferredMirrorSync() {
@@ -8058,7 +8060,13 @@
         }, 0);
       }
 
-      function hydrateFromCustomerPageStorage() {
+      /**
+       * @param {{ skipOrphanScheduleImport?: boolean }} [options]
+       *   Supabase 모드에서 schedules pull 직후 한 번만 고아(customer 로컬만 있는 행)를 넣어야 할 때가 많다.
+       *   clientKvPullDone 등에서 두 번째 호출 시 skipOrphanScheduleImport 로 고아 unshift 를 막아 생겼다/사라졌다 반복을 줄인다.
+       */
+      function hydrateFromCustomerPageStorage(options = {}) {
+        const skipOrphanScheduleImport = Boolean(options.skipOrphanScheduleImport);
         const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
         customerCompanies.forEach((company) => {
           const name = normalizeCompanyName(company?.name);
@@ -8120,7 +8128,8 @@
             !existingScheduleIds.has(scheduleId) &&
             fallbackIndex < 0 &&
             !schedulePendingDeletionIds.has(scheduleId) &&
-            !isScheduleDeleteTombstoned(scheduleId);
+            !isScheduleDeleteTombstoned(scheduleId) &&
+            !skipOrphanScheduleImport;
           if (!shouldImportLocalCustomerSchedulesAsSource && !orphanCustomerRowForSupabase) {
             return;
           }
@@ -16748,7 +16757,7 @@
           if (!USE_SUPABASE_SYNC) loadAdminSchedulesFromStorage();
           loadCouponPassesFromStorage();
           mergeCouponPassesByCanonicalIdentity();
-          hydrateFromCustomerPageStorage();
+          hydrateFromCustomerPageStorage({ skipOrphanScheduleImport: USE_SUPABASE_SYNC });
           hydrateFromWriterPageStorage();
           loadPhotographerProfilesFromStorage();
           bootstrapMasterAccountsForExistingCompanies();
@@ -16790,7 +16799,11 @@
         }
         if (event.key === STORAGE_ADMIN_SCHEDULES) {
           if (USE_SUPABASE_SYNC) {
-            void pullSchedulesFromSupabaseAndApply();
+            if (storagePullSchedulesDebounceTimer) clearTimeout(storagePullSchedulesDebounceTimer);
+            storagePullSchedulesDebounceTimer = setTimeout(() => {
+              storagePullSchedulesDebounceTimer = null;
+              void pullSchedulesFromSupabaseAndApply();
+            }, 450);
           } else {
             loadAdminSchedulesFromStorage();
             renderList();
