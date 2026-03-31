@@ -1,5 +1,19 @@
 # 업체 · 고객 계정 통합 (`company_directory`)
 
+## 자주 하는 오해
+
+- **저장소에 마이그레이션 파일이 있다 = Supabase에 이미 테이블이 여러 개 생긴다**가 아닙니다. SQL을 **실제로 실행(또는 `supabase db push`)**했을 때만 DB에 반영됩니다.
+- **테이블이 많아서 연결이 끊긴다**기보다, 앱이 조회하는 **테이블 이름이 DB에 없을 때**(예: 아직 `company_directory`를 만들지 않았는데 코드만 통합 버전) 404·오류가 나기 쉽습니다.
+- 이 통합 마이그레이션은 **새 테이블을 무한히 쌓는** 구조가 아니라, `companies` + `customers`를 **한 테이블로 합친 뒤** 옛 테이블 이름을 `_deprecated_*`로 바꾸는 **일회성** 작업입니다. 적용 후에는 이 도메인은 **한 테이블**입니다.
+
+## 배포하지 않았거나, 기존 `companies` / `customers` 만 쓰고 싶다면
+
+1. **Supabase에 `20260330120000_company_directory_unified.sql` 을 적용하지 않는다**면, 원칙적으로는 **`public.company_directory` 테이블이 없습니다.**
+2. 그런데 **현재 이 저장소의 `index.html` / `customer.html` 등은 `company_directory` 를 REST로 조회하도록 되어 있습니다.** 따라서 마이그레이션 없이 이 코드만 배포하면, 테이블이 없어 요청이 실패할 수 있습니다.
+3. 선택지는 둘 중 하나입니다.
+   - **통합 스키마로 간다:** 백업 후 위 마이그레이션을 적용하고, 앱 그대로 사용한다.
+   - **옛 스키마만 쓴다:** 마이그레이션을 적용하지 않고, **`companies` + `customers` 를 가리키는 예전 앱 코드**로 맞춘다(Git에서 통합 이전 커밋을 쓰거나, 수동으로 REST 경로를 되돌림).
+
 ## 현재 구조 (권장)
 
 **`public.company_directory` 단일 테이블**에 업체 정보(`name`, `phone`, `code`)와 고객 로그인(`login_id`, `password`, `site_type`, `customer_phone`)을 한 행에 둡니다. 로그인이 없으면 `login_id` 는 NULL 입니다.

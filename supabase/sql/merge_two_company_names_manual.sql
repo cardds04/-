@@ -1,5 +1,8 @@
 -- =============================================================================
--- 수동 병합 예시: "꿈의공간" 과 "꿈의공간(무료)" 처럼 companies 에 행이 두 개일 때
+-- 수동 병합 예시 (구 companies / customers 시절)
+--
+-- company_directory 통합 이후에는 아래 대신 다음을 사용하세요:
+--   supabase/sql/merge_company_aliases_to_canonical.sql
 --
 -- ⚠️ 실행 전 반드시 백업: python3 tools/supabase_backup_tables.py
 -- ⚠️ 아래 UUID·문자열을 본인 DB 값으로 바꿔서 사용하세요.

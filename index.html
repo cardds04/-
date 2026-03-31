@@ -5676,8 +5676,24 @@
         const masterMap = getLocalMasterAccountMap();
         return normalizeCompanyName(masterMap[normalizedCode]);
       }
+      function applyConfigurableCompanyNameAlias(name) {
+        const raw = String(name || "").trim();
+        if (!raw) return raw;
+        const cfg =
+          typeof window !== "undefined" && window.SCHEDULE_SITE_SYNC_CONFIG && window.SCHEDULE_SITE_SYNC_CONFIG.companyNameAliases;
+        if (!cfg || typeof cfg !== "object") return raw;
+        if (Object.prototype.hasOwnProperty.call(cfg, raw)) {
+          const v = String(cfg[raw] || "").trim();
+          return v || raw;
+        }
+        const rawLower = raw.toLowerCase();
+        for (const [k, v] of Object.entries(cfg)) {
+          if (String(k).trim().toLowerCase() === rawLower) return String(v || "").trim() || raw;
+        }
+        return raw;
+      }
       function resolveCanonicalCompanyIdentity(name, companyCode = "") {
-        const normalizedName = normalizeCompanyName(name);
+        const normalizedName = normalizeCompanyName(applyConfigurableCompanyNameAlias(name));
         const normalizedCode = normalizeCompanyCode(companyCode);
         const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
         const customers = readStorageArray(STORAGE_CUSTOMERS);
