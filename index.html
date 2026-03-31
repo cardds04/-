@@ -6844,7 +6844,7 @@
           lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
         });
         const nextRows = buildSchedulesSnapshotRows();
-        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,updated_at`, {
+        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,updated_at,source`, {
           method: "GET",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -6864,7 +6864,8 @@
               {
                 company_name: String(row?.company_name || "").trim(),
                 code: String(row?.code || "").trim(),
-                updated_at: String(row?.updated_at || "").trim()
+                updated_at: String(row?.updated_at || "").trim(),
+                source: String(row?.source || "").trim()
               }
             ])
             .filter(([id]) => Boolean(id))
@@ -6874,6 +6875,8 @@
           const id = String(row?.id || "").trim();
           if (!id) return false;
           const remote = remoteMetaById.get(id);
+          // 서버가 소프트삭제(source=deleted)인 행은 upsert로 source=active 를 보내며 덮어쓰면 안 됨(고스트 로컬 복구 시 재발)
+          if (remote && remote.source === "deleted") return false;
           if (!remote) return true;
           const builtName = String(row?.company_name || "").trim();
           if (builtName !== remote.company_name) return true;
