@@ -2361,6 +2361,9 @@
       const STORAGE_INLOG_PRODUCT = "scheduleSiteInlogProductV1";
       const STORAGE_INLOG_LOGO = "scheduleSiteInlogLogoV1";
       const STORAGE_PENDING_DELETE_SCHEDULE_IDS = "scheduleSitePendingDeleteScheduleIds";
+      /** scheduleSite 접두사 아님 — localStorage 프록시·KV와 분리(삭제 UUID 목록만 로컬 네이티브 저장) */
+      const STORAGE_SCHEDULE_DELETE_TOMBSTONE_IDS = "__scheduleDeleteTombstoneIdsV1";
+      const SCHEDULE_DELETE_TOMBSTONE_CAP = 400;
       // 인로그 전용 키 집합: 스냅샷 preload 제외 + 배경 push 제외에 공통 사용
       const INLOG_DATA_KEYS = new Set([
         STORAGE_INLOG_PHOTO_ALBUMS,
@@ -7021,10 +7024,15 @@
           if (id && pendingDeletionSnapshot.has(id)) return false;
           return id && !serverIds.has(id);
         });
-        // 서버에 완전히 없는 pendingDeletion ID는 localNotOnServer 계산 후 정리
-        pendingDeletionSnapshot.forEach((pid) => {
-          if (!serverIds.has(pid)) removePendingDeleteId(pid);
-        });
+        // 서버에 완전히 없는 pendingDeletion ID 정리 — rows 가 비어 있으면(빈 배열 응답) pending 을 지우면 안 됨:
+        // 그 순간 삭제 필터가 사라져 다음 pull 에서 같은 id 가 다시 합쳐지는(삭제 눌렀는데 다시 나타남) 현상이 난다.
+        if (Array.isArray(rows) && rows.length > 0) {
+          pendingDeletionSnapshot.forEach((pid) => {
+            if (!serverIds.has(pid)) removePendingDeleteId(pid);
+          });
+        } else if (pendingDeletionSnapshot.size > 0) {
+          console.warn("[PULL] 서버 schedules 행이 0건 — pendingDeletion ID 정리 생략 (삭제 유실 방지)");
+        }
         const nextActive = [];
         const nextHold = [];
         const nextRefund = [];
@@ -8072,6 +8080,8 @@
           const company = normalizeCompanyName(row?.company);
           const place = String(row?.place || "").trim();
           if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !company || !place) return;
+          if (scheduleId && isScheduleDeleteTombstoned(scheduleId)) return;
+          if (scheduleId && schedulePendingDeletionIds.has(scheduleId)) return;
           if (scheduleId && existingScheduleIds.has(scheduleId)) return;
 
           const fallbackIndex = data.findIndex(
@@ -8108,7 +8118,9 @@
             hasLoadedSchedulesFromServer &&
             scheduleId &&
             !existingScheduleIds.has(scheduleId) &&
-            fallbackIndex < 0;
+            fallbackIndex < 0 &&
+            !schedulePendingDeletionIds.has(scheduleId) &&
+            !isScheduleDeleteTombstoned(scheduleId);
           if (!shouldImportLocalCustomerSchedulesAsSource && !orphanCustomerRowForSupabase) {
             return;
           }
@@ -12487,6 +12499,32 @@
         schedulePendingDeletionIds.delete(scheduleId);
         _savePendingIds();
       }
+      function getScheduleDeleteTombstoneSet() {
+        try {
+          const raw = localStorage.getItem(STORAGE_SCHEDULE_DELETE_TOMBSTONE_IDS);
+          const arr = raw ? JSON.parse(raw) : [];
+          return new Set(
+            Array.isArray(arr) ? arr.map((x) => String(x || "").trim()).filter((id) => isUuidLike(id)) : []
+          );
+        } catch {
+          return new Set();
+        }
+      }
+      function addScheduleDeleteTombstoneId(scheduleId) {
+        const id = String(scheduleId || "").trim();
+        if (!id || !isUuidLike(id)) return;
+        const set = getScheduleDeleteTombstoneSet();
+        set.add(id);
+        const arr = [...set].slice(-SCHEDULE_DELETE_TOMBSTONE_CAP);
+        try {
+          localStorage.setItem(STORAGE_SCHEDULE_DELETE_TOMBSTONE_IDS, JSON.stringify(arr));
+        } catch (_) {}
+      }
+      function isScheduleDeleteTombstoned(scheduleId) {
+        const id = String(scheduleId || "").trim();
+        if (!id) return false;
+        return getScheduleDeleteTombstoneSet().has(id);
+      }
 
       /**
        * 서버 schedules 테이블의 source 컬럼을 PATCH.
@@ -15924,6 +15962,7 @@
         const confirmed = confirm("삭제하시겠습니까?");
         if (!confirmed) return;
         const deletedItem = data[index];
+        ensureScheduleUuid(deletedItem);
         const deletedScheduleId = String(deletedItem?.customerScheduleId || "").trim();
         const deletedDate = String(deletedItem?.date || "").trim();
         const deletedTime = String(deletedItem?.time || "").trim();
@@ -15977,6 +16016,7 @@
         // 삭제 즉시 pull 차단 쿨다운 8초 — 서버 DELETE 완료 전 pull로 복구 방지
         scheduleSyncCooldownUntil = Date.now() + 8000;
         if (deletedScheduleId) addPendingDeleteId(deletedScheduleId);
+        if (deletedScheduleId) addScheduleDeleteTombstoneId(deletedScheduleId);
         renderList();
         queueSchedulesSyncWithRetry(true);
         queuePaymentsSyncWithRetry();
@@ -16260,6 +16300,7 @@
         syncWriterSchedulesStorage();
         if (scheduleId) {
           addPendingDeleteId(scheduleId);
+          addScheduleDeleteTombstoneId(scheduleId);
           scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 8000);
           void directPatchScheduleSource(scheduleId, "deleted");
           void deleteScheduleFromSupabaseByItem(targetItem);
