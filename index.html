@@ -4333,16 +4333,27 @@
       }
 
       /** 고유번호→표준 업체명 마스터 맵 동기화. renderList가 resolveCanonicalCompanyIdentity로 구 이름을 덮어쓰지 않게 함 */
-      function syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode) {
+      function syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode, oldDisplayName = "") {
         const normalizedName = normalizeCompanyName(newName);
         if (!normalizedName) return;
         const oldC = normalizeCompanyCode(oldCodeBefore);
         const newC = normalizeCompanyCode(newCode);
         const effectiveCode = newC || oldC;
-        if (!effectiveCode) return;
+        const oldNorm = normalizeCompanyName(oldDisplayName);
         const masterMap = { ...getLocalMasterAccountMap() };
         if (oldC && newC && oldC !== newC) {
           if (masterMap[oldC] !== undefined) delete masterMap[oldC];
+        }
+        if (oldNorm && oldNorm !== normalizedName) {
+          for (const key of Object.keys(masterMap)) {
+            if (normalizeCompanyName(masterMap[key]) === oldNorm) {
+              delete masterMap[key];
+            }
+          }
+        }
+        if (!effectiveCode) {
+          void persistMasterAccountMap(masterMap, true);
+          return;
         }
         masterMap[effectiveCode] = normalizedName;
         void persistMasterAccountMap(masterMap, true);
@@ -14199,7 +14210,7 @@
             normalizeCompanyName(item?.company).toLowerCase() === normalizeCompanyName(oldName).toLowerCase();
           const applyScheduleRename = (item) => {
             item.company = newName;
-            if (newCode) item.companyCode = newCode;
+            item.companyCode = normalizeCompanyCode(newCode);
             markScheduleRowDirty(item, "company_rename");
           };
           data.forEach((item) => {
@@ -14280,7 +14291,7 @@
           });
           localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
         }
-        syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode);
+        syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode, oldName);
       }
 
       companyOrderHistorySummaryEl.addEventListener("click", async (event) => {
@@ -15018,7 +15029,7 @@
             company.code = newCode;
             company.defaultMemo = newDefaultMemo;
           });
-          syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode);
+          syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode, oldName);
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
@@ -15028,7 +15039,7 @@
               normalizeCompanyName(item?.company).toLowerCase() === oldName.toLowerCase();
             const applyScheduleRename = (item) => {
               item.company = newName;
-              if (newCode) item.companyCode = newCode;
+              item.companyCode = normalizeCompanyCode(newCode);
               markScheduleRowDirty(item, "company_rename");
             };
             data.forEach((item) => {
