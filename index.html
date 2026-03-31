@@ -5069,12 +5069,17 @@
         renderCanceledSchedules();
       }
 
+      /** 백그라운드 push가 걸린 Promise는 네트워크 지연 시 무한 대기할 수 있어, 구간마다 상한을 둔다. */
       async function waitForSupabaseSyncPipelineIdle(maxMs = 25000) {
         const start = Date.now();
+        const pendingRaceMs = 8000;
         while (Date.now() - start < maxMs) {
           const pending = [paymentSyncPromise, scheduleSyncPromise].filter(Boolean);
           if (pending.length) {
-            await Promise.allSettled(pending);
+            await Promise.race([
+              Promise.allSettled(pending),
+              new Promise((r) => setTimeout(r, pendingRaceMs))
+            ]);
             continue;
           }
           if (paymentSyncQueued || scheduleSyncQueued) {
@@ -5117,13 +5122,19 @@
           const prev = btn.textContent;
           btn.textContent = "가져오는 중…";
           try {
-            setSyncStatus("서버에서 로컬로 가져오는 중…", "warn", { pinMs: 120000 });
+            setSyncStatus("서버에서 로컬로 가져오는 중… (잠시만)", "warn", { pinMs: 120000 });
 
             await waitForSupabaseSyncPipelineIdle();
+            setSyncStatus("동기화: 업체·고객·작가 불러오는 중…", "warn", { pinMs: 120000, force: true });
             await pullAdminCompaniesFromSupabaseAndRefresh();
             await pullCustomersFromSupabaseAndApply();
             await pullWritersFromSupabaseAndRefresh();
+            setSyncStatus("동기화: 스케줄 불러오는 중… (데이터 많으면 30초~1분 걸릴 수 있음)", "warn", {
+              pinMs: 120000,
+              force: true
+            });
             await pullWithRetryUntilSuccess(() => pullSchedulesFromSupabaseAndApply());
+            setSyncStatus("동기화: 입금·회차권·기타 불러오는 중…", "warn", { pinMs: 120000, force: true });
             await pullWithRetryUntilSuccess(() => pullPaymentsFromSupabaseAndApply());
             await pullCouponPassesFromSupabaseAndApply();
             await pullDayoffRequestsFromSupabaseAndApply();
@@ -5132,6 +5143,7 @@
             await pullSharedMasterAccountMapAndApply();
 
             if (typeof SUPABASE_ONLY_MODE !== "undefined" && SUPABASE_ONLY_MODE) {
+              setSyncStatus("동기화: 부가 설정(KV) 불러오는 중…", "warn", { pinMs: 120000, force: true });
               await pullScheduleSiteClientKvFromSupabase();
             }
 
