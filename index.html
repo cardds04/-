@@ -7100,32 +7100,9 @@
         } finally {
           isApplyingRemoteSchedules = false;
         }
-        // pull 직후 hasLoadedSchedulesFromServer=true 상태에서 고객 로컬(STORAGE_CUSTOMER_SCHEDULES)에만 있는
-        // 행(orphan)을 다시 병합한다. 부트스트랩에서 hydrate가 pull보다 먼저 끝나면 서버 덮어쓰기로 빠질 수 있음.
-        // syncWriterSchedulesStorage()는 여기서 쓰지 않는다 — hydrate가 기존 행만 덮어써도 서명이 바뀌어
-        // 매 pull마다 queueSchedulesSync → 전체 업로드가 반복되어 UI가 먹통처럼 느려질 수 있음.
-        const adminRowCountBeforeCustomerHydrate = data.length;
-        hydrateFromCustomerPageStorage();
-        const writerRowsAfterHydrate = data.map((item, index) => ({
-          writerMirrorId: String(item.customerScheduleId || `admin-${index}`),
-          date: String(item.date || "").trim(),
-          time: String(item.time || "").trim(),
-          name: String(item.name || "").trim(),
-          company: String(item.company || "").trim(),
-          place: String(item.place || "").trim(),
-          pyeong: String(item.pyeong || "").trim(),
-          memo: String(item.memo || "").trim(),
-          composition: String(item.composition || "").trim(),
-          writerPhone: String(item.writerPhone || "").trim(),
-          writerCarNumber: String(item.writerCarNumber || "").trim()
-        }));
-        originalSetItem(STORAGE_WRITER_SCHEDULES, JSON.stringify(writerRowsAfterHydrate));
-        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
-        if (data.length > adminRowCountBeforeCustomerHydrate) {
-          queueSchedulesSync(true);
-        } else {
-          lastScheduleSyncSignature = getSchedulesSnapshotSignature();
-        }
+        // 고객 로컬 병합(hydrate)은 여기서 하지 않는다. Realtime/포커스에서 pull이 매우 자주 호출되어
+        // 매번 hydrate + 이중 localStorage + renderList가 겹치면 UI가 심하게 느려진다.
+        // 부트스트랩·포커스·탭 복귀에서는 pull 완료 후 hydrate 순서로 처리한다.
         renderList();
         renderPaymentList();
         return true;
@@ -16610,7 +16587,7 @@
         // 이전 세션에서 PATCH 실패한 항목을 백그라운드에서 재시도 (source="deleted" 영구 설정)
         setTimeout(() => resumePendingDeletePatches(), 3000);
         initializeScheduleReceiptLedgerStorage();
-        void pullSchedulesFromSupabaseAndApply();
+        await pullSchedulesFromSupabaseAndApply();
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedLimitConfigAndApply();
@@ -16758,28 +16735,33 @@
             renderPaymentList();
           }
         });
-        if (USE_SUPABASE_SYNC) {
-          restorePendingDeleteIdsFromStorage();
-          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
-          void pullSchedulesFromSupabaseAndApply();
-        } else {
-          loadAdminSchedulesFromStorage();
-        }
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedMasterAccountMapAndApply();
-        hydrateFromCustomerPageStorage();
-        bootstrapMasterAccountsForExistingCompanies();
-        bootstrapMasterAccountsFromCurrentCustomersV2();
-        bootstrapMasterCompaniesFromRegisteredCompaniesV3();
-        loadPhotographerProfilesFromStorage();
-        hydrateFromWriterPageStorage();
-        renderPhotographers();
-        renderCustomerStatsDashboard();
-        renderCustomerUpdateNotices();
-        renderCustomerAlertHistory();
-        renderCompanies();
-        renderList();
+        const finishFocusUiAfterSchedulePull = () => {
+          hydrateFromCustomerPageStorage();
+          bootstrapMasterAccountsForExistingCompanies();
+          bootstrapMasterAccountsFromCurrentCustomersV2();
+          bootstrapMasterCompaniesFromRegisteredCompaniesV3();
+          loadPhotographerProfilesFromStorage();
+          hydrateFromWriterPageStorage();
+          renderPhotographers();
+          renderCustomerStatsDashboard();
+          renderCustomerUpdateNotices();
+          renderCustomerAlertHistory();
+          renderCompanies();
+          renderList();
+        };
+        if (USE_SUPABASE_SYNC) {
+          restorePendingDeleteIdsFromStorage();
+          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
+          void pullSchedulesFromSupabaseAndApply().then(() => {
+            finishFocusUiAfterSchedulePull();
+          });
+        } else {
+          loadAdminSchedulesFromStorage();
+          finishFocusUiAfterSchedulePull();
+        }
       });
 
       document.addEventListener("visibilitychange", () => {
@@ -16807,29 +16789,34 @@
             renderPaymentList();
           }
         });
-        if (USE_SUPABASE_SYNC) {
-          restorePendingDeleteIdsFromStorage();
-          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
-          void pullSchedulesFromSupabaseAndApply();
-        } else {
-          loadAdminSchedulesFromStorage();
-        }
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedMasterAccountMapAndApply();
-        hydrateFromCustomerPageStorage();
-        bootstrapMasterAccountsForExistingCompanies();
-        bootstrapMasterAccountsFromCurrentCustomersV2();
-        bootstrapMasterCompaniesFromRegisteredCompaniesV3();
-        loadPhotographerProfilesFromStorage();
-        hydrateFromWriterPageStorage();
-        renderPhotographers();
-        renderCustomerStatsDashboard();
-        renderCustomerUpdateNotices();
-        renderCustomerAlertHistory();
-        renderOpenDayoffSummary();
-        renderCanceledSchedules();
-        renderList();
+        const finishVisibilityUiAfterSchedulePull = () => {
+          hydrateFromCustomerPageStorage();
+          bootstrapMasterAccountsForExistingCompanies();
+          bootstrapMasterAccountsFromCurrentCustomersV2();
+          bootstrapMasterCompaniesFromRegisteredCompaniesV3();
+          loadPhotographerProfilesFromStorage();
+          hydrateFromWriterPageStorage();
+          renderPhotographers();
+          renderCustomerStatsDashboard();
+          renderCustomerUpdateNotices();
+          renderCustomerAlertHistory();
+          renderOpenDayoffSummary();
+          renderCanceledSchedules();
+          renderList();
+        };
+        if (USE_SUPABASE_SYNC) {
+          restorePendingDeleteIdsFromStorage();
+          void fetchAndApplyDashboardStateFromSupabase().then(() => renderList());
+          void pullSchedulesFromSupabaseAndApply().then(() => {
+            finishVisibilityUiAfterSchedulePull();
+          });
+        } else {
+          loadAdminSchedulesFromStorage();
+          finishVisibilityUiAfterSchedulePull();
+        }
       });
     </script>
   </body>
