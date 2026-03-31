@@ -69,22 +69,6 @@
         border-color: var(--blue);
       }
 
-      .blog-helper-frame-wrap {
-        width: 100%;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        overflow: hidden;
-        background: #f0f2f8;
-      }
-
-      .blog-helper-frame-wrap iframe {
-        width: 100%;
-        height: min(88vh, 920px);
-        min-height: 560px;
-        border: 0;
-        display: block;
-      }
-
       .board {
         display: grid;
         grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 4fr);
@@ -1694,7 +1678,6 @@
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
         <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 등록</button>
-        <button id="tabBlogHelper" data-tab="blogHelper" type="button">블로그 도우미</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -2141,23 +2124,6 @@
             <button id="inlogPhotoVerifyBtn" class="btn-sm" type="button">데이터 일치 확인</button>
             <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마/로고 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
-          </div>
-        </article>
-      </section>
-
-      <section id="blogHelperSection" class="hidden">
-        <article class="card" style="padding: 12px 14px 14px">
-          <div class="schedule-head" style="align-items: center; flex-wrap: wrap; gap: 8px">
-            <h2 style="margin: 0">블로그 글 도우미</h2>
-            <span class="helper" style="margin: 0"
-              ><a href="blog-writing-assistant.html" target="_blank" rel="noopener noreferrer">새 탭으로 열기</a></span
-            >
-          </div>
-          <p class="helper" style="margin: 6px 0 10px">
-            스케줄 관리 페이지와 <strong>같은 주소</strong>에서 동작합니다. 별도 배포 없이 <code>npm start</code> 후 여기서 바로 쓰면 됩니다.
-          </p>
-          <div class="blog-helper-frame-wrap">
-            <iframe id="blogHelperFrame" title="블로그 글쓰기 도우미"></iframe>
           </div>
         </article>
       </section>
@@ -5424,14 +5390,11 @@
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
-      const tabBlogHelperEl = document.getElementById("tabBlogHelper");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
-      const blogHelperSectionEl = document.getElementById("blogHelperSection");
-      const blogHelperFrameEl = document.getElementById("blogHelperFrame");
       const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
       const inlogCinemaAddBtnEl = document.getElementById("inlogCinemaAddBtn");
       const inlogPhotoVerifyBtnEl = document.getElementById("inlogPhotoVerifyBtn");
@@ -13893,19 +13856,16 @@
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isInlogPhoto = tab === "inlogPhoto";
-        const isBlogHelper = tab === "blogHelper";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
-        tabBlogHelperEl?.classList.toggle("active", isBlogHelper);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
-        blogHelperSectionEl?.classList.toggle("hidden", !isBlogHelper);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
@@ -13914,9 +13874,6 @@
           if (!inlogEditorDirty) {
             void refreshInlogFromSupabase("force");
           }
-        }
-        if (isBlogHelper && blogHelperFrameEl && !blogHelperFrameEl.getAttribute("src")) {
-          blogHelperFrameEl.src = "blog-writing-assistant.html";
         }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
       }
@@ -13930,7 +13887,6 @@
         wireInlogProductEditorIfNeeded();
         wireInlogLogoEditorIfNeeded();
       });
-      tabBlogHelperEl?.addEventListener("click", () => switchMainTab("blogHelper"));
       inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");
         if (!editor) return;
