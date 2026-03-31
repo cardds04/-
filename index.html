@@ -13604,7 +13604,9 @@
                                     </div>
                                      <span class="actions" style="justify-content: flex-start; margin-top: 6px;">
                                        <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
-                                       <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}">삭제</button>
+                                       <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}" data-schedule-id="${escapeHtml(
+                                         String(item.customerScheduleId || "")
+                                       )}">삭제</button>
                                       <button class="btn-sm" type="button" data-action="showScheduleHistory" data-schedule-id="${escapeHtml(
                                         String(item.customerScheduleId || "")
                                       )}">기록</button>
@@ -16252,6 +16254,17 @@
           localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
         }
 
+        try {
+          localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+        } catch (_) {}
+        syncWriterSchedulesStorage();
+        if (scheduleId) {
+          addPendingDeleteId(scheduleId);
+          scheduleSyncCooldownUntil = Math.max(scheduleSyncCooldownUntil, Date.now() + 8000);
+          void directPatchScheduleSource(scheduleId, "deleted");
+          void deleteScheduleFromSupabaseByItem(targetItem);
+        }
+
         renderPreviousScheduleHistory();
         renderList();
         renderPaymentList();
@@ -16348,8 +16361,18 @@
           saveDateEdit(index, itemEl);
           return;
         }
-        if (action === "deleteSchedule" && !Number.isNaN(index)) {
-          deleteSchedule(index);
+        if (action === "deleteSchedule") {
+          const sid = String(button.dataset.scheduleId || itemEl?.dataset.scheduleId || "").trim();
+          if (sid && isUuidLike(sid)) {
+            const byId = data.findIndex((row) => String(row?.customerScheduleId || "").trim() === sid);
+            if (byId >= 0) {
+              deleteSchedule(byId);
+              return;
+            }
+          }
+          if (!Number.isNaN(index) && index >= 0 && index < data.length) {
+            deleteSchedule(index);
+          }
           return;
         }
         if (action === "showMemo" && !Number.isNaN(index) && item) {
