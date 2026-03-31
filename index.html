@@ -14164,16 +14164,19 @@
           data.forEach((item) => {
             if (normalizeCompanyName(item.company) === oldName) {
               item.company = newName;
+              markScheduleRowDirty(item, "company_rename");
             }
           });
           onHoldPayments.forEach((item) => {
             if (normalizeCompanyName(item.company) === oldName) {
               item.company = newName;
+              markScheduleRowDirty(item, "company_rename");
             }
           });
           refundPayments.forEach((item) => {
             if (normalizeCompanyName(item.company) === oldName) {
               item.company = newName;
+              markScheduleRowDirty(item, "company_rename");
             }
           });
 
@@ -14555,6 +14558,7 @@
             if (!sameName && !sameCode) return;
             schedule.company = newDisplayName;
             schedule.companyCode = newCompanyCode;
+            markScheduleRowDirty(schedule, "company_rename");
           });
         });
         if (originalName !== newDisplayName) {
@@ -14974,6 +14978,7 @@
             company.code = newCode;
             company.defaultMemo = newDefaultMemo;
           });
+          syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode);
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
@@ -14981,16 +14986,19 @@
             data.forEach((item) => {
               if (normalizeCompanyName(item.company) === oldName) {
                 item.company = newName;
+                markScheduleRowDirty(item, "company_rename");
               }
             });
             onHoldPayments.forEach((item) => {
               if (normalizeCompanyName(item.company) === oldName) {
                 item.company = newName;
+                markScheduleRowDirty(item, "company_rename");
               }
             });
             refundPayments.forEach((item) => {
               if (normalizeCompanyName(item.company) === oldName) {
                 item.company = newName;
+                markScheduleRowDirty(item, "company_rename");
               }
             });
 
@@ -15055,8 +15063,6 @@
             });
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
           }
-
-          syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode);
 
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
