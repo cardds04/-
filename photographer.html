@@ -1068,7 +1068,7 @@
         if (!USE_SUPABASE_SYNC) return;
         const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
           fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
-          fetchWriterJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone&order=updated_at.desc`),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1091,6 +1091,7 @@
             time: normalize(row?.time_key) || "09:00",
             name: normalize(row?.writer_name) || "작가미정",
             company: normalize(row?.company_name),
+            companyCode: normalize(row?.code),
             place: normalize(row?.place),
             pyeong: normalize(row?.pyeong),
             composition: normalize(row?.composition) || "사진만",

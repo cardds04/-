@@ -1502,7 +1502,7 @@
           const rowsList = await Promise.all(
             companyNames.map((companyName) =>
               fetchJsonRows(
-                `payments?select=id,company_name,payer_name,amount,paid_at,status,memo,updated_at&company_name=eq.${encodeURIComponent(
+                `payments?select=id,company_name,code,payer_name,amount,paid_at,status,memo,updated_at&company_name=eq.${encodeURIComponent(
                   companyName
                 )}&order=updated_at.desc&limit=400`
               ).catch(() => [])
@@ -1525,7 +1525,7 @@
         const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
           fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code&order=updated_at.desc`),
           fetchCustomersRowsForPull(),
-          fetchJsonRows("schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
+          fetchJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
           fetchPaymentsRowsForPull(),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1606,7 +1606,7 @@
             id: String(row?.login_id || "").trim(),
             password: String(row?.password || "").trim(),
             company: String(row?.company_name || row?.name || "").trim(),
-            companyCode: String(row?.company_code || row?.code || "").trim(),
+            companyCode: String(row?.code || row?.company_code || "").trim(),
             phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
             createdAt: String(row?.created_at || "").trim(),
             siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
@@ -1647,7 +1647,10 @@
               writerPhone: normalize(writerPhoneCar.phones[writerName] || ""),
               writerCarNumber: normalize(writerPhoneCar.cars[writerName] || ""),
               company: String(row?.company_name || "").trim(),
-              companyCode: companyCodeByName.get(String(row?.company_name || "").trim().toLowerCase()) || "",
+              companyCode:
+                String(row?.code || "").trim() ||
+                companyCodeByName.get(String(row?.company_name || "").trim().toLowerCase()) ||
+                "",
               place: String(row?.place || "").trim(),
               pyeong: String(row?.pyeong || "").trim(),
               jointCode: String(row?.joint_code || "").trim(),

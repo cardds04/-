@@ -6155,7 +6155,7 @@
       async function fetchPaymentsFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/payments?select=id,company_name,payer_name,amount,paid_at,status,is_half_paid,memo,created_at,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/payments?select=id,company_name,code,payer_name,amount,paid_at,status,is_half_paid,memo,created_at,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -6388,6 +6388,7 @@
             schedule_id: null,
             company_id: null,
             company_name: companyNameForSupabasePush(item),
+            code: normalizeCompanyCode(item?.companyCode) || "",
             payer_name: String(item?.paymentPayer || "").trim(),
             amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
             paid_at: paymentDateDb,
@@ -6411,6 +6412,7 @@
                 time: String(item?.time || "").trim(),
                 name: String(item?.name || "").trim(),
                 company: String(item?.company || "").trim(),
+                companyCode: String(item?.companyCode || "").trim(),
                 place: String(item?.place || "").trim(),
                 pyeong: String(item?.pyeong || "").trim(),
                 composition: String(item?.composition || "").trim(),
@@ -6464,6 +6466,7 @@
           }
           const same =
             String(remote.company_name || "") === String(row.company_name || "") &&
+            String(remote.code || "") === String(row.code || "") &&
             String(remote.payer_name || "") === String(row.payer_name || "") &&
             Number(remote.amount || 0) === Number(row.amount || 0) &&
             String(remote.paid_at || "") === String(row.paid_at || "") &&
@@ -6606,6 +6609,7 @@
           const merged = {
             ...snapshot,
             company: String(row?.company_name || snapshot?.company || "").trim(),
+            companyCode: normalizeCompanyCode(row?.code || snapshot?.companyCode || ""),
             paymentPayer: String(row?.payer_name || snapshot?.paymentPayer || "").trim(),
             paymentAmount: String(payload?.amountRaw || snapshot?.paymentAmount || ""),
             paymentDate: normalizePaymentDateForUi(row?.paid_at || snapshot?.paymentDate || ""),
@@ -6670,6 +6674,7 @@
             item.paymentStatus = String(remote.paymentStatus || "미입금").trim() || "미입금";
             item.partialPaid = Boolean(remote.partialPaid);
             item.couponUsed = Boolean(remote.couponUsed);
+            item.companyCode = normalizeCompanyCode(remote.companyCode || item.companyCode || "");
           });
           onHoldPayments.splice(0, onHoldPayments.length, ...holdRows);
           refundPayments.splice(0, refundPayments.length, ...refundRows);
@@ -6725,6 +6730,7 @@
             id: scheduleId,
             company_id: null,
             company_name: companyNameForSupabasePush(item),
+            code: normalizeCompanyCode(item?.companyCode) || "",
             writer_name: String(item?.name || "작가미정").trim() || "작가미정",
             date_key: String(item?.date || "").trim(),
             time_key: String(item?.time || "09:00").trim() || "09:00",
@@ -6770,6 +6776,7 @@
           date_key: row.date_key,
           time_key: row.time_key,
           company_name: row.company_name,
+          code: row.code,
           pyeong: row.pyeong,
           composition: row.composition,
           memo: row.memo,
@@ -6788,7 +6795,7 @@
       async function fetchSchedulesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -6812,7 +6819,7 @@
           lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
         });
         const nextRows = buildSchedulesSnapshotRows();
-        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,updated_at`, {
+        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,updated_at`, {
           method: "GET",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -6831,6 +6838,7 @@
               String(row?.id || "").trim(),
               {
                 company_name: String(row?.company_name || "").trim(),
+                code: String(row?.code || "").trim(),
                 updated_at: String(row?.updated_at || "").trim()
               }
             ])
@@ -6844,6 +6852,8 @@
           if (!remote) return true;
           const builtName = String(row?.company_name || "").trim();
           if (builtName !== remote.company_name) return true;
+          const builtCode = String(row?.code || "").trim();
+          if (builtCode !== String(remote.code || "").trim()) return true;
           const remoteUpdatedAt = remote.updated_at;
           if (!remoteUpdatedAt) return true;
           const localUpdatedAt = String(localUpdatedAtMap.get(id) || "").trim();
@@ -7019,7 +7029,7 @@
           const status = String(row?.status || "").trim();
           const writerName = String(row?.writer_name || "작가미정").trim() || "작가미정";
           const parsedMemo = splitMemoAndTimePreference(row?.memo);
-          const canonicalIdentity = resolveCanonicalCompanyIdentity(String(row?.company_name || "").trim(), String(row?.company_code || "").trim());
+          const canonicalIdentity = resolveCanonicalCompanyIdentity(String(row?.company_name || "").trim(), String(row?.code || "").trim());
           const nextItem = {
             customerScheduleId: String(row?.id || "").trim(),
             date: String(row?.date_key || "").trim(),
@@ -7396,7 +7406,7 @@
             id: String(row?.login_id || row?.id || "").trim(),
             password: String(row?.password || "").trim(),
             company: normalizeCompanyName(row?.company_name || row?.name || row?.company),
-            companyCode: normalizeCompanyCode(row?.company_code || row?.code || row?.companyCode),
+            companyCode: normalizeCompanyCode(row?.code || row?.companyCode),
             companyId: String(row?.company_id || row?.companyId || row?.id || "").trim(),
             phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
             createdAt: String(row?.created_at || row?.createdAt || "").trim(),
@@ -14304,6 +14314,19 @@
         companies.forEach((c) => {
           if (normalizeCompanyName(c?.name).toLowerCase() !== oldNameLower) return;
           if (!oldCodeBefore) oldCodeBefore = normalizeCompanyCode(c?.code);
+        });
+        const oldCodeNorm = normalizeCompanyCode(oldCodeBefore).toLowerCase();
+        const couponNamesToMerge = new Set();
+        companies.forEach((c) => {
+          const sameName = normalizeCompanyName(c?.name).toLowerCase() === oldNameLower;
+          const sameCode = Boolean(oldCodeNorm) && normalizeCompanyCode(c?.code).toLowerCase() === oldCodeNorm;
+          if (!sameName && !sameCode) return;
+          couponNamesToMerge.add(normalizeCompanyName(c.name));
+        });
+        companies.forEach((c) => {
+          const sameName = normalizeCompanyName(c?.name).toLowerCase() === oldNameLower;
+          const sameCode = Boolean(oldCodeNorm) && normalizeCompanyCode(c?.code).toLowerCase() === oldCodeNorm;
+          if (!sameName && !sameCode) return;
           c.name = newName;
           c.phone = newPhone || "-";
           c.code = newCode;
@@ -14314,7 +14337,8 @@
         if (oldName && oldName !== newName) {
           const matchScheduleForRename = (item) =>
             getCompanyGroupKey(item?.company, item?.companyCode) === oldGroupKey ||
-            normalizeCompanyName(item?.company).toLowerCase() === normalizeCompanyName(oldName).toLowerCase();
+            normalizeCompanyName(item?.company).toLowerCase() === normalizeCompanyName(oldName).toLowerCase() ||
+            (Boolean(oldCodeNorm) && normalizeCompanyCode(item?.companyCode).toLowerCase() === oldCodeNorm);
           const applyScheduleRename = (item) => {
             item.company = newName;
             item.companyCode = normalizeCompanyCode(newCode);
@@ -14330,9 +14354,15 @@
             if (matchScheduleForRename(item)) applyScheduleRename(item);
           });
 
-          if (couponPasses[oldName] !== undefined) {
-            couponPasses[newName] = couponPasses[oldName];
-            delete couponPasses[oldName];
+          let couponMerged = 0;
+          couponNamesToMerge.forEach((n) => {
+            if (couponPasses[n] !== undefined) {
+              couponMerged += Math.max(0, Number(couponPasses[n]) || 0);
+              delete couponPasses[n];
+            }
+          });
+          if (couponMerged > 0) {
+            couponPasses[newName] = Math.max(0, Number(couponPasses[newName]) || 0) + couponMerged;
           }
 
           {
@@ -14351,7 +14381,11 @@
           const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
           customerCompanies.forEach((company) => {
             const companyGroupKey = getCompanyGroupKey(company?.name, company?.companyCode || company?.code);
-            if (companyGroupKey === oldGroupKey || normalizeCompanyName(company.name) === oldName) {
+            if (
+              companyGroupKey === oldGroupKey ||
+              normalizeCompanyName(company.name) === oldName ||
+              (Boolean(oldCodeNorm) && normalizeCompanyCode(company?.companyCode || company?.code).toLowerCase() === oldCodeNorm)
+            ) {
               company.name = newName;
               if (newCode) company.companyCode = newCode;
               if (newPhone) company.phone = newPhone;
@@ -14361,8 +14395,14 @@
 
           const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
           customerSchedules.forEach((schedule) => {
-            if (normalizeCompanyName(schedule.company) === oldName) {
+            const sk = getCompanyGroupKey(schedule?.company, schedule?.companyCode);
+            if (
+              sk === oldGroupKey ||
+              normalizeCompanyName(schedule.company) === oldName ||
+              (Boolean(oldCodeNorm) && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === oldCodeNorm)
+            ) {
               schedule.company = newName;
+              if (newCode) schedule.companyCode = newCode;
             }
           });
           localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
@@ -14370,7 +14410,11 @@
           const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
           customerUsers.forEach((user) => {
             const userGroupKey = getCompanyGroupKey(user?.company, user?.companyCode);
-            if (userGroupKey === oldGroupKey || normalizeCompanyName(user.company) === oldName) {
+            if (
+              userGroupKey === oldGroupKey ||
+              normalizeCompanyName(user.company) === oldName ||
+              (Boolean(oldCodeNorm) && normalizeCompanyCode(user?.companyCode).toLowerCase() === oldCodeNorm)
+            ) {
               user.company = newName;
               if (newCode) user.companyCode = newCode;
               if (newPhone) user.phone = newPhone;
@@ -14459,11 +14503,21 @@
           return;
         }
         if (newDisplayName !== originalName) {
-          const duplicate = companies.some(
-            (c) =>
-              normalizeCompanyName(c?.name).toLowerCase() === newDisplayName.toLowerCase() &&
-              normalizeCompanyName(c?.name).toLowerCase() !== originalName.toLowerCase()
-          );
+          let oldCodeForDup = "";
+          companies.forEach((c) => {
+            if (normalizeCompanyName(c?.name).toLowerCase() !== originalName.toLowerCase()) return;
+            if (!oldCodeForDup) oldCodeForDup = normalizeCompanyCode(c?.code);
+          });
+          const oldCodeNormDup = normalizeCompanyCode(oldCodeForDup).toLowerCase();
+          const willMergeWithEdit = (c) => {
+            const sameName = normalizeCompanyName(c?.name).toLowerCase() === originalName.toLowerCase();
+            const sameCode = Boolean(oldCodeNormDup) && normalizeCompanyCode(c?.code).toLowerCase() === oldCodeNormDup;
+            return sameName || sameCode;
+          };
+          const duplicate = companies.some((c) => {
+            if (willMergeWithEdit(c)) return false;
+            return normalizeCompanyName(c?.name).toLowerCase() === newDisplayName.toLowerCase();
+          });
           if (duplicate) {
             alert("이미 등록된 업체명입니다.");
             return;
@@ -15124,13 +15178,27 @@
             alert("업체명을 입력해주세요.");
             return;
           }
-          const duplicate = companies.some((company, companyIndex) => companyIndex !== index && normalizeCompanyName(company.name).toLowerCase() === newName.toLowerCase());
+          const oldCodeNorm = normalizeCompanyCode(oldCode).toLowerCase();
+          const willMergeWithSaveRow = (company, companyIndex) => {
+            if (companyIndex === index) return true;
+            const sameName = normalizeCompanyName(company?.name).toLowerCase() === oldName.toLowerCase();
+            const sameCode = Boolean(oldCodeNorm) && normalizeCompanyCode(company?.code).toLowerCase() === oldCodeNorm;
+            return sameName || sameCode;
+          };
+          const duplicate = companies.some((company, companyIndex) => {
+            if (willMergeWithSaveRow(company, companyIndex)) return false;
+            return normalizeCompanyName(company.name).toLowerCase() === newName.toLowerCase();
+          });
           if (duplicate) {
             alert("이미 등록된 업체명입니다.");
             return;
           }
+          const couponNamesToMerge = new Set();
           companies.forEach((company) => {
-            if (normalizeCompanyName(company?.name).toLowerCase() !== oldName.toLowerCase()) return;
+            const sameName = normalizeCompanyName(company?.name).toLowerCase() === oldName.toLowerCase();
+            const sameCode = Boolean(oldCodeNorm) && normalizeCompanyCode(company?.code).toLowerCase() === oldCodeNorm;
+            if (!sameName && !sameCode) return;
+            couponNamesToMerge.add(normalizeCompanyName(company.name));
             company.name = newName;
             company.phone = newPhone;
             company.code = newCode;
@@ -15143,7 +15211,8 @@
           if (oldName && oldName !== newName) {
             const matchScheduleForRename = (item) =>
               getCompanyGroupKey(item?.company, item?.companyCode) === oldGroupKey ||
-              normalizeCompanyName(item?.company).toLowerCase() === oldName.toLowerCase();
+              normalizeCompanyName(item?.company).toLowerCase() === oldName.toLowerCase() ||
+              (Boolean(oldCodeNorm) && normalizeCompanyCode(item?.companyCode).toLowerCase() === oldCodeNorm);
             const applyScheduleRename = (item) => {
               item.company = newName;
               item.companyCode = normalizeCompanyCode(newCode);
@@ -15159,15 +15228,25 @@
               if (matchScheduleForRename(item)) applyScheduleRename(item);
             });
 
-            if (couponPasses[oldName] !== undefined) {
-              couponPasses[newName] = couponPasses[oldName];
-              delete couponPasses[oldName];
+            let couponMerged = 0;
+            couponNamesToMerge.forEach((n) => {
+              if (couponPasses[n] !== undefined) {
+                couponMerged += Math.max(0, Number(couponPasses[n]) || 0);
+                delete couponPasses[n];
+              }
+            });
+            if (couponMerged > 0) {
+              couponPasses[newName] = Math.max(0, Number(couponPasses[newName]) || 0) + couponMerged;
             }
 
             const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
             customerCompanies.forEach((company) => {
               const companyGroupKey = getCompanyGroupKey(company?.name, company?.companyCode || company?.code);
-              if (companyGroupKey === oldGroupKey || normalizeCompanyName(company.name) === oldName) {
+              if (
+                companyGroupKey === oldGroupKey ||
+                normalizeCompanyName(company.name) === oldName ||
+                (Boolean(oldCodeNorm) && normalizeCompanyCode(company?.companyCode || company?.code).toLowerCase() === oldCodeNorm)
+              ) {
                 company.name = newName;
                 if (newCode) company.companyCode = newCode;
                 if (newPhone) company.phone = newPhone;
@@ -15177,8 +15256,14 @@
 
             const customerSchedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
             customerSchedules.forEach((schedule) => {
-              if (normalizeCompanyName(schedule.company) === oldName) {
+              const sk = getCompanyGroupKey(schedule?.company, schedule?.companyCode);
+              if (
+                sk === oldGroupKey ||
+                normalizeCompanyName(schedule.company) === oldName ||
+                (Boolean(oldCodeNorm) && normalizeCompanyCode(schedule?.companyCode).toLowerCase() === oldCodeNorm)
+              ) {
                 schedule.company = newName;
+                if (newCode) schedule.companyCode = newCode;
               }
             });
             localStorage.setItem(STORAGE_CUSTOMER_SCHEDULES, JSON.stringify(customerSchedules));
@@ -15186,7 +15271,11 @@
             const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
             customerUsers.forEach((user) => {
               const userGroupKey = getCompanyGroupKey(user?.company, user?.companyCode);
-              if (userGroupKey === oldGroupKey || normalizeCompanyName(user.company) === oldName) {
+              if (
+                userGroupKey === oldGroupKey ||
+                normalizeCompanyName(user.company) === oldName ||
+                (Boolean(oldCodeNorm) && normalizeCompanyCode(user?.companyCode).toLowerCase() === oldCodeNorm)
+              ) {
                 user.company = newName;
                 if (newCode) user.companyCode = newCode;
                 if (newPhone) user.phone = newPhone;
