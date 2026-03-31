@@ -15021,10 +15021,21 @@
             queueSchedulesSyncWithRetry(true);
             queuePaymentsSyncWithRetry();
           }
+          if (USE_SUPABASE_SYNC) {
+            if (companySyncPromise) {
+              try {
+                await companySyncPromise;
+              } catch (_) {}
+            }
+            await pullCustomersFromSupabaseAndApply();
+            await pullAdminCompaniesFromSupabaseAndRefresh();
+          } else {
+            renderCompanies();
+            renderList();
+          }
+          mergeCouponPassesByCanonicalIdentity();
           renderCompanyOrderHistory(newDisplayName);
           renderCustomerStatsDashboard();
-          renderCompanies();
-          renderList();
           renderScheduleCalendar();
           alert("아이디 이전(통합)이 완료되었습니다. 기존 아이디는 삭제되었습니다.");
           return;
@@ -15229,10 +15240,22 @@
           }
         }
 
+        // 서버 반영 후 최신 행으로 메모리·목록 갱신 (저장 직후 pull/업체 sync 큐와 경합하면 화면만 옛 값으로 남는 현상 방지)
+        if (USE_SUPABASE_SYNC) {
+          if (companySyncPromise) {
+            try {
+              await companySyncPromise;
+            } catch (_) {}
+          }
+          await pullCustomersFromSupabaseAndApply();
+          await pullAdminCompaniesFromSupabaseAndRefresh();
+        } else {
+          renderCompanies();
+          renderList();
+        }
+        mergeCouponPassesByCanonicalIdentity();
         renderCompanyOrderHistory(newDisplayName);
         renderCustomerStatsDashboard();
-        renderCompanies();
-        renderList();
         renderScheduleCalendar();
         alert("업체 계정이 변경되었습니다.");
       });
