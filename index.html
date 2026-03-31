@@ -4121,6 +4121,25 @@
       let couponPassesSchemaMode = "";
       let lastScheduleSyncSignature = "";
       let hasLoadedSchedulesFromServer = false;
+      /** renderList가 짧은 시간에 여러 번 불릴 때 매번 고객 미러·서명 계산을 반복하지 않도록 디바운스 */
+      let mirrorSyncDebounceTimer = null;
+      function flushDeferredMirrorSync() {
+        if (mirrorSyncDebounceTimer !== null) {
+          clearTimeout(mirrorSyncDebounceTimer);
+          mirrorSyncDebounceTimer = null;
+        }
+        syncAdminSchedulesToCustomerStorage();
+        syncWriterSchedulesStorage();
+      }
+      function scheduleDeferredMirrorSync() {
+        if (mirrorSyncDebounceTimer !== null) clearTimeout(mirrorSyncDebounceTimer);
+        mirrorSyncDebounceTimer = setTimeout(() => {
+          mirrorSyncDebounceTimer = null;
+          syncAdminSchedulesToCustomerStorage();
+          syncWriterSchedulesStorage();
+        }, 220);
+      }
+      window.addEventListener("pagehide", () => flushDeferredMirrorSync());
       let limitConfigSyncPromise = null;
       let syncStatusBadgeEl = null;
       let syncStatusPinnedUntilMs = 0;
@@ -5304,7 +5323,7 @@
                 if (scheduleRealtimeTimer) clearTimeout(scheduleRealtimeTimer);
                 scheduleRealtimeTimer = setTimeout(() => {
                   void pullSchedulesFromSupabaseAndApply();
-                }, 220);
+                }, 950);
               }
             )
             .subscribe();
@@ -8874,6 +8893,11 @@
             .map((user) => [normalizeCompanyName(user.company).toLowerCase(), user])
         );
         const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
+        const scheduleByCustomerId = new Map();
+        schedules.forEach((row) => {
+          const sid = String(row?.customerScheduleId || "").trim();
+          if (sid) scheduleByCustomerId.set(sid, row);
+        });
         let changed = false;
 
         data.forEach((item) => {
@@ -8892,7 +8916,7 @@
           const scheduleId = String(item.customerScheduleId || "").trim();
           if (!scheduleId) return;
 
-          const target = schedules.find((row) => String(row?.customerScheduleId || "").trim() === scheduleId);
+          const target = scheduleByCustomerId.get(scheduleId);
           if (target) {
             target.date = item.date || target.date || "";
             target.time = item.time || target.time || "09:00";
@@ -8918,7 +8942,7 @@
             return;
           }
 
-          schedules.unshift({
+          const newRow = {
             customerScheduleId: scheduleId,
             customerId: item.customerId,
             customerPhone: item.customerPhone,
@@ -8941,7 +8965,9 @@
             adminTimeUpdated: false,
             writerPhone: item.writerPhone || photographerPhones[item.name] || "",
             writerCarNumber: item.writerCarNumber || photographerCarNumbers[item.name] || ""
-          });
+          };
+          schedules.unshift(newRow);
+          scheduleByCustomerId.set(scheduleId, newRow);
           changed = true;
         });
 
@@ -13292,8 +13318,7 @@
         });
         onHoldPayments.forEach((item) => ensureScheduleUuid(item));
         refundPayments.forEach((item) => ensureScheduleUuid(item));
-        syncAdminSchedulesToCustomerStorage();
-        syncWriterSchedulesStorage();
+        scheduleDeferredMirrorSync();
         renderOpenDayoffSummary();
         renderCanceledSchedules();
         const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
