@@ -1083,7 +1083,10 @@
           }))
           .filter((row) => row.id && row.name);
         const schedules = (Array.isArray(schedulesRows) ? schedulesRows : [])
-          .filter((row) => normalize(row?.source) !== "hold" && normalize(row?.source) !== "refund")
+          .filter((row) => {
+            const src = normalize(row?.source).toLowerCase();
+            return src !== "hold" && src !== "refund" && src !== "deleted";
+          })
           .map((row) => ({
             customerScheduleId: normalize(row?.id),
             writerMirrorId: normalize(row?.id),
@@ -1506,7 +1509,8 @@
         if (!writer) return [];
         const writerName = normalize(writer.name).toLowerCase();
         if (!writerName) return [];
-        const merged = [...readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES), ...readStorageArray(STORAGE_SCHEDULES)];
+        // 고객 로컬(STORAGE_SCHEDULES) 후 서버·관리자 미러를 덮어써 동일 id 에서 서버가 우선(삭제 반영)
+        const merged = [...readStorageArray(STORAGE_SCHEDULES), ...readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES)];
         const dedupedMap = new Map();
         merged.forEach((row) => {
           const keyBase = normalize(row?.writerMirrorId || row?.customerScheduleId);
