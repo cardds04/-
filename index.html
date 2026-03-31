@@ -229,6 +229,24 @@
         gap: 6px;
       }
 
+      .company-account-line {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .company-account-line .company-account-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #4a5568;
+        line-height: 1.3;
+      }
+      .company-account-line .inline-input,
+      .company-account-line .inline-select {
+        width: 100%;
+        min-width: 0;
+      }
+
       .default-memo-box {
         background: #f0f4ff;
         border: 1px solid #c3cfee;
@@ -10294,15 +10312,33 @@
           </div>
           <div class="company-edit-row" style="margin: 8px 0 10px;">
             <div><strong>업체 계정 관리</strong></div>
-            <input class="inline-input company-account-name" type="text" placeholder="업체명" value="${escapeHtml(companyName)}" />
-            <input class="inline-input company-account-phone" type="text" placeholder="업체 연락처" value="${escapeHtml(accountPhone)}" />
-            <input class="inline-input company-account-id" type="text" placeholder="아이디" value="${escapeHtml(accountId)}" />
-            <input class="inline-input company-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(accountPassword)}" />
-            <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호" value="${escapeHtml(accountCompanyCode)}" />
-            <select class="inline-select company-account-site-type" style="width: 140px;">
+            <div class="company-account-line">
+              <span class="company-account-label">업체명</span>
+              <input class="inline-input company-account-name" type="text" placeholder="예: 홍길동인테리어" value="${escapeHtml(companyName)}" autocomplete="organization" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">전화번호</span>
+              <input class="inline-input company-account-phone" type="tel" placeholder="업체 연락처 (하이픈 없이)" value="${escapeHtml(accountPhone)}" autocomplete="tel" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">아이디</span>
+              <input class="inline-input company-account-id" type="text" placeholder="고객 로그인 아이디" value="${escapeHtml(accountId)}" autocomplete="username" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">비밀번호</span>
+              <input class="inline-input company-account-password" type="text" placeholder="고객 로그인 비밀번호" value="${escapeHtml(accountPassword)}" autocomplete="new-password" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">고유번호</span>
+              <input class="inline-input company-account-code" type="text" placeholder="업체 고유번호 (AUTO-…)" value="${escapeHtml(accountCompanyCode)}" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">사이트</span>
+              <select class="inline-select company-account-site-type" style="width: 100%; max-width: 100%;">
               <option value="inlog" ${accountSiteType === "inlog" ? "selected" : ""}>인로그</option>
               <option value="shopick" ${accountSiteType === "shopick" ? "selected" : ""}>쇼픽</option>
             </select>
+            </div>
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
               <button class="btn-sm" type="button" data-action="transferCompanyAccountId" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">아이디이전(통합)</button>
