@@ -1212,6 +1212,18 @@
         background: #eef3fb;
       }
 
+      .payment-table-code {
+        max-width: 100px;
+        word-break: break-all;
+        font-size: 0.85rem;
+        color: #4a5568;
+      }
+
+      .schedule-company-code {
+        font-size: 0.85rem;
+        color: #4a5568;
+      }
+
       .coupon-register-row {
         display: flex;
         gap: 8px;
@@ -1991,6 +2003,7 @@
               <tr>
                 <th>날짜</th>
                 <th>업체명</th>
+                <th>고유번호</th>
                 <th>입금자명</th>
                 <th>입금날짜</th>
                 <th>입금금액</th>
@@ -9654,6 +9667,16 @@
         return "-";
       }
 
+      /** 스케줄·입금 행 표시용: 행의 companyCode 우선, 없으면 업체정보(companies)에서 동일 업체명으로 찾은 고유번호(없으면 빈 문자열) */
+      function getCompanyCodeForScheduleDisplay(item) {
+        const direct = normalizeCompanyCode(item?.companyCode);
+        if (direct) return direct;
+        const name = normalizeCompanyName(item?.company);
+        if (!name) return "";
+        const row = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === name.toLowerCase());
+        return row ? normalizeCompanyCode(row?.code) : "";
+      }
+
       function getCompanyDefaultMemo(companyName) {
         return getCompanyDefaultMemoByName(companyName);
       }
@@ -11950,10 +11973,12 @@
               )
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
+            const companyCodeCell = escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-");
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}</td>
               <td>${escapeHtml(item.company || "-")}</td>
+              <td class="payment-table-code">${companyCodeCell}</td>
               <td>${
                 isEditing
                   ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
@@ -12041,7 +12066,7 @@
         if (visibleRows.length === 0) {
           paymentListBodyEl.innerHTML = `
             <tr>
-              <td colspan="7">표시할 내역이 없습니다.</td>
+              <td colspan="8">표시할 내역이 없습니다.</td>
             </tr>
           `;
         }
@@ -13310,6 +13335,7 @@
                                        <select class="inline-select edit-minute" style="width: 90px;">${minuteOptions}</select>
                                      </div>
                                      <div style="margin-bottom: 4px;">업체: <input class="inline-input edit-company" type="text" value="${escapeHtml(item.company || "")}" /></div>
+                                     <div style="margin-bottom: 4px; font-size: 0.9rem; color: #4a5568;">고유번호: ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")} <span style="color:#8892a6;font-size:0.8rem;">(업체정보와 동일 업체명일 때)</span></div>
                                      <div style="margin-bottom: 4px;">장소: <input class="inline-input edit-place" type="text" value="${escapeHtml(item.place || "")}" /></div>
                                      <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
                                      <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
@@ -13340,10 +13366,12 @@
                                     </div>
                                     <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
-                                    ${escapeHtml(item.company || "-")}
+                                    ${escapeHtml(item.company || "-")}<br />
+                                    <span class="schedule-company-code">고유번호 ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")}</span>
                                     <details class="schedule-extra-detail">
                                       <summary>상세보기</summary>
                                       업체: ${escapeHtml(item.company || "-")}<br />
+                                      고유번호: ${escapeHtml(getCompanyCodeForScheduleDisplay(item) || "-")}<br />
                                       장소(전체): ${formatPlaceForDisplay(item.place)}<br />
                                       연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
                                       평수: ${escapeHtml(item.pyeong || "-")}<br />
