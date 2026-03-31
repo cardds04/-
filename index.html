@@ -12061,25 +12061,38 @@
           customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
           customers: readStorageArray(STORAGE_CUSTOMERS)
         };
-        /** 입금관리 표시: 행 데이터보다 업체정보(companies)의 현재 이름을 우선 — pull·동기 타이밍에 옛 이름이 남는 현상 완화 */
-        const paymentCompanyDisplayName = (item) =>
-          resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, canonicalIdentityCtxPayment).company || "-";
-        const paymentCanonicalRow = (item) =>
-          resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, canonicalIdentityCtxPayment);
+        /** 행 객체당 1회만 resolve — 입금관리에서 동일 행에 대한 반복 호출로 느려지는 것 방지 */
+        const paymentCanonByRowRef = new WeakMap();
+        function paymentCanonForRow(item) {
+          if (!item || typeof item !== "object") return { company: "", companyCode: "" };
+          if (paymentCanonByRowRef.has(item)) return paymentCanonByRowRef.get(item);
+          const v = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, canonicalIdentityCtxPayment);
+          paymentCanonByRowRef.set(item, v);
+          return v;
+        }
+        const paymentCompanyDisplayName = (item) => paymentCanonForRow(item).company || "-";
+        /** data 행별 그룹키 1회 계산 — 행마다 data 전체를 다시 resolve 하지 않음 */
+        const dataRowsWithCompanyGk = data.map((row) => {
+          const pid = paymentCanonForRow(row);
+          return { row, gk: getCompanyGroupKey(pid.company, pid.companyCode) };
+        });
         const couponUsedByGroupKey = new Map();
         for (const row of [...data, ...onHoldPayments, ...refundPayments]) {
           if (!row?.couponUsed) continue;
-          const r = resolveCanonicalCompanyIdentity(row?.company, row?.companyCode, canonicalIdentityCtxPayment);
+          const r = paymentCanonForRow(row);
           const gk = getCompanyGroupKey(r.company, r.companyCode);
           if (!gk) continue;
           couponUsedByGroupKey.set(gk, (couponUsedByGroupKey.get(gk) || 0) + 1);
         }
-        const getCouponProgressText = (companyName, companyCode = "") => {
+        const getCouponProgressText = (companyName, companyCode = "", preResolvedIdentity = null) => {
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
           const ctx = canonicalIdentityCtxPayment;
           const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany, companyCode, ctx)) || 0);
-          const id = resolveCanonicalCompanyIdentity(normalizedCompany, companyCode, ctx);
+          const id =
+            preResolvedIdentity && typeof preResolvedIdentity === "object"
+              ? preResolvedIdentity
+              : resolveCanonicalCompanyIdentity(normalizedCompany, companyCode, ctx);
           const gk = getCompanyGroupKey(id.company, id.companyCode);
           const used = gk ? couponUsedByGroupKey.get(gk) || 0 : 0;
           const total = remaining + used;
@@ -12148,7 +12161,8 @@
             const statusLabelForSort = (entry) => {
               const { item, source } = entry;
               if (source === "active") {
-                const cp = getCouponProgressText(item.company, item.companyCode);
+                const pid = paymentCanonForRow(item);
+                const cp = getCouponProgressText(pid.company, pid.companyCode, pid);
                 if (cp) return cp;
               }
               if (source === "hold") return "보류";
@@ -12241,14 +12255,13 @@
                   `<option value="${day}" ${day === selectedDay ? "selected" : ""}>${Number(day)}일</option>`
               )
               .join("");
-            const payId = paymentCanonicalRow(item);
+            const payId = paymentCanonForRow(item);
             const companyDisplay = payId.company || "-";
             const companyGk = getCompanyGroupKey(payId.company, payId.companyCode);
-            const rowMatchesPaymentCompany = (row) =>
-              getCompanyGroupKey(paymentCanonicalRow(row).company, paymentCanonicalRow(row).companyCode) === companyGk;
             const payerHistoryButtons = [...new Set(
-              data
-                .filter((row) => rowMatchesPaymentCompany(row))
+              dataRowsWithCompanyGk
+                .filter(({ gk }) => gk && gk === companyGk)
+                .map(({ row }) => row)
                 .map((row) => String(row?.paymentPayer || "").trim())
                 .filter(
                   (name) =>
@@ -12262,8 +12275,9 @@
               )
               .join("");
             const amountHistoryButtons = [...new Set(
-              data
-                .filter((row) => rowMatchesPaymentCompany(row))
+              dataRowsWithCompanyGk
+                .filter(({ gk }) => gk && gk === companyGk)
+                .map(({ row }) => row)
                 .map((row) => String(row?.paymentAmount || "").trim())
                 .filter((amount) => amount && !["150000", "250000", "쿠폰사용"].includes(amount))
             )]
@@ -12275,7 +12289,7 @@
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
             const couponProgressText =
-              source === "active" ? getCouponProgressText(payId.company, payId.companyCode) : "";
+              source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
             const payerIsBusinessName =
               normalizeCompanyName(item.paymentPayer).toLowerCase() === normalizeCompanyName(payId.company).toLowerCase();
             return `
