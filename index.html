@@ -4320,6 +4320,23 @@
           }
         }
       }
+
+      /** 고유번호→표준 업체명 마스터 맵 동기화. renderList가 resolveCanonicalCompanyIdentity로 구 이름을 덮어쓰지 않게 함 */
+      function syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode) {
+        const normalizedName = normalizeCompanyName(newName);
+        if (!normalizedName) return;
+        const oldC = normalizeCompanyCode(oldCodeBefore);
+        const newC = normalizeCompanyCode(newCode);
+        const effectiveCode = newC || oldC;
+        if (!effectiveCode) return;
+        const masterMap = { ...getLocalMasterAccountMap() };
+        if (oldC && newC && oldC !== newC) {
+          if (masterMap[oldC] !== undefined) delete masterMap[oldC];
+        }
+        masterMap[effectiveCode] = normalizedName;
+        void persistMasterAccountMap(masterMap, true);
+      }
+
       function buildSharedLimitConfigPayload(config) {
         const { weekdayLimit, holidayLimit } = sanitizeLimitConfig(config);
         const emergencyLimitAdditions = normalizeEmergencyLimitAdditions(
@@ -14015,6 +14032,7 @@
           });
           localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
         }
+        syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode);
       }
 
       companyOrderHistorySummaryEl.addEventListener("click", async (event) => {
@@ -14178,6 +14196,7 @@
           renderCustomerStatsDashboard();
           renderCompanies();
           renderList();
+          renderScheduleCalendar();
           alert("아이디 이전(통합)이 완료되었습니다. 기존 아이디는 삭제되었습니다.");
           return;
         }
@@ -14354,6 +14373,7 @@
         renderCustomerStatsDashboard();
         renderCompanies();
         renderList();
+        renderScheduleCalendar();
         alert("업체 계정이 변경되었습니다.");
       });
       writerHistorySummaryEl.addEventListener("click", (event) => {
@@ -14773,6 +14793,8 @@
             });
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
           }
+
+          syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode);
 
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
