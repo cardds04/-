@@ -1968,6 +1968,16 @@
             <input id="paymentPayerSearchInput" class="small-select" type="text" placeholder="입금자명 검색" />
             <button id="clearPaymentCompanySearchBtn" class="btn-sm" type="button">전체</button>
           </div>
+          <div id="paymentSortRow" class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 6px; align-items: center;">
+            <span class="hint" style="white-space: nowrap;">정렬 기준</span>
+            <button type="button" class="btn-sm payment-sort-key-btn" data-payment-sort-key="shootDate">촬영일</button>
+            <button type="button" class="btn-sm payment-sort-key-btn" data-payment-sort-key="company">업체명</button>
+            <button type="button" class="btn-sm payment-sort-key-btn" data-payment-sort-key="paymentDate">입금날짜</button>
+            <button type="button" class="btn-sm payment-sort-key-btn" data-payment-sort-key="status">입금상태</button>
+            <span class="hint" style="margin-left: 4px; white-space: nowrap;">순서</span>
+            <button type="button" class="btn-sm payment-sort-dir-btn" data-payment-sort-dir="asc">오름차순</button>
+            <button type="button" class="btn-sm payment-sort-dir-btn" data-payment-sort-dir="desc">내림차순</button>
+          </div>
           <div id="paymentMonthNavigator" class="filter-row hidden" style="margin-bottom: 8px;">
             <button id="paymentMonthPrevBtn" class="btn-sm" type="button">이전</button>
             <strong id="paymentMonthLabel">-</strong>
@@ -5461,6 +5471,7 @@
       const paymentUnpaidCompanyCountTextEl = document.getElementById("paymentUnpaidCompanyCountText");
       const copyUnpaidSummaryBtnEl = document.getElementById("copyUnpaidSummaryBtn");
       const paymentListBodyEl = document.getElementById("paymentListBody");
+      const paymentSortRowEl = document.getElementById("paymentSortRow");
       const couponFormEl = document.getElementById("couponForm");
       const couponCompanyInputEl = document.getElementById("couponCompanyInput");
       const couponCompanySearchInputEl = document.getElementById("couponCompanySearchInput");
@@ -5617,6 +5628,10 @@
       let paymentPayerKeyword = "";
       let paymentViewYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
       let paymentShowAllMonthsForPaid = false;
+      /** @type {"shootDate"|"company"|"paymentDate"|"status"} */
+      let paymentSortKey = "shootDate";
+      /** @type {"asc"|"desc"} */
+      let paymentSortDir = "asc";
       let editingPaymentIndex = null;
       let couponApplyIndex = null;
       let couponCompanyKeyword = "";
@@ -12022,6 +12037,12 @@
           if (fromShoot) return fromShoot;
           return "0000-00-00";
         };
+        /** 표의 입금날짜 열 기준 정렬(미입력은 맨 뒤) */
+        const parsePaymentDateColumnOnly = (item) => {
+          const fromPay = normalizePaymentListYmd(item?.paymentDate);
+          if (fromPay) return fromPay;
+          return "9999-12-31";
+        };
         const getPaymentRowMonthKey = (item) => {
           const full =
             normalizePaymentListYmd(item?.date) || normalizePaymentListYmd(item?.paymentDate);
@@ -12110,19 +12131,46 @@
             return getPaymentRowMonthKey(item) === paymentViewYearMonth;
           })
           .sort((a, b) => {
-            if (isPaidAllView) {
-              const aPaidDate = parsePaidCompletedDateSortValue(a.item);
-              const bPaidDate = parsePaidCompletedDateSortValue(b.item);
-              const paidDateCompare = bPaidDate.localeCompare(aPaidDate);
-              if (paidDateCompare !== 0) return paidDateCompare;
+            const statusLabelForSort = (entry) => {
+              const { item, source } = entry;
+              if (source === "active") {
+                const cp = getCouponProgressText(item.company, item.companyCode);
+                if (cp) return cp;
+              }
+              if (source === "hold") return "보류";
+              if (source === "refund") return item.refundChecked ? "환불완료" : "미환불";
+              if (item.partialPaid) return "반만입금";
+              if (item.paymentStatus === "입금완료") return "입금완료";
+              return "미입금";
+            };
+            const mul = paymentSortDir === "asc" ? 1 : -1;
+            let primary = 0;
+            switch (paymentSortKey) {
+              case "shootDate":
+                primary = parsePaymentDateSortValue(a.item).localeCompare(parsePaymentDateSortValue(b.item));
+                break;
+              case "company":
+                primary = normalizeCompanyName(a.item?.company).localeCompare(normalizeCompanyName(b.item?.company), "ko");
+                break;
+              case "paymentDate":
+                primary = parsePaymentDateColumnOnly(a.item).localeCompare(parsePaymentDateColumnOnly(b.item));
+                break;
+              case "status":
+                primary = statusLabelForSort(a).localeCompare(statusLabelForSort(b), "ko");
+                break;
+              default:
+                primary = parsePaymentDateSortValue(a.item).localeCompare(parsePaymentDateSortValue(b.item));
             }
+            primary *= mul;
+            if (primary !== 0) return primary;
             const aDate = parsePaymentDateSortValue(a.item);
             const bDate = parsePaymentDateSortValue(b.item);
-            const dateCompare = aDate.localeCompare(bDate);
-            if (dateCompare !== 0) return dateCompare;
+            const dateTie = aDate.localeCompare(bDate);
+            if (dateTie !== 0) return dateTie;
             const aTime = parseScheduleTimeToMinutes(a.item?.time);
             const bTime = parseScheduleTimeToMinutes(b.item?.time);
-            return aTime - bTime;
+            if (aTime !== bTime) return aTime - bTime;
+            return normalizeCompanyName(a.item?.company).localeCompare(normalizeCompanyName(b.item?.company), "ko");
           });
         latestUnpaidSummaryRows = isUnpaidTab ? visibleRows.map(({ item }) => item) : [];
         copyUnpaidSummaryBtnEl?.classList.toggle("hidden", !isUnpaidTab);
@@ -12307,6 +12355,14 @@
               <td colspan="7">표시할 내역이 없습니다.</td>
             </tr>
           `;
+        }
+        if (paymentSortRowEl) {
+          paymentSortRowEl.querySelectorAll("[data-payment-sort-key]").forEach((btn) => {
+            btn.classList.toggle("primary", btn.dataset.paymentSortKey === paymentSortKey);
+          });
+          paymentSortRowEl.querySelectorAll("[data-payment-sort-dir]").forEach((btn) => {
+            btn.classList.toggle("primary", btn.dataset.paymentSortDir === paymentSortDir);
+          });
         }
       }
 
@@ -14016,6 +14072,25 @@
           btn.classList.toggle("active", btn === button);
         });
         renderPaymentList();
+      });
+      paymentSortRowEl?.addEventListener("click", (event) => {
+        const keyBtn = event.target.closest("button[data-payment-sort-key]");
+        if (keyBtn) {
+          const k = keyBtn.dataset.paymentSortKey || "";
+          if (k === "shootDate" || k === "company" || k === "paymentDate" || k === "status") {
+            paymentSortKey = k;
+            renderPaymentList();
+          }
+          return;
+        }
+        const dirBtn = event.target.closest("button[data-payment-sort-dir]");
+        if (dirBtn) {
+          const d = dirBtn.dataset.paymentSortDir || "";
+          if (d === "asc" || d === "desc") {
+            paymentSortDir = d;
+            renderPaymentList();
+          }
+        }
       });
       paymentCompanySearchInputEl?.addEventListener("input", () => {
         paymentCompanyKeyword = String(paymentCompanySearchInputEl.value || "").trim();
