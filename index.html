@@ -14557,6 +14557,14 @@
             schedule.companyCode = newCompanyCode;
           });
         });
+        if (originalName !== newDisplayName) {
+          try {
+            localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+          } catch (_) {}
+          syncWriterSchedulesStorage();
+          queueSchedulesSyncWithRetry(true);
+          queuePaymentsSyncWithRetry();
+        }
 
         if (oldId && oldId !== newId) {
           const logs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
@@ -15020,6 +15028,12 @@
               }
             });
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
+            try {
+              localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+            } catch (_) {}
+            syncWriterSchedulesStorage();
+            queueSchedulesSyncWithRetry(true);
+            queuePaymentsSyncWithRetry();
           }
           if (oldGroupKey !== nextGroupKey && nextGroupKey) {
             const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
