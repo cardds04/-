@@ -5734,6 +5734,12 @@
         const canonicalName = candidates[0] || normalizedName;
         return { company: canonicalName, companyCode: effectiveCode };
       }
+      /** 스케줄·입금 Supabase 푸시 — 행의 업체명을 우선(마스터 맵이 예전 표기로 덮는 것 방지) */
+      function companyNameForSupabasePush(item) {
+        const direct = normalizeCompanyName(item?.company);
+        if (direct) return direct;
+        return resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company;
+      }
       function bootstrapMasterAccountsForExistingCompanies() {
         if (localStorage.getItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED) === "1") return false;
         const adminCompanies = normalizeCompanyRows(readStorageArray(STORAGE_ADMIN_COMPANIES));
@@ -6336,7 +6342,7 @@
           const row = {
             schedule_id: null,
             company_id: null,
-            company_name: resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company,
+            company_name: companyNameForSupabasePush(item),
             payer_name: String(item?.paymentPayer || "").trim(),
             amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
             paid_at: paymentDateDb,
@@ -6673,7 +6679,7 @@
           const row = {
             id: scheduleId,
             company_id: null,
-            company_name: resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company,
+            company_name: companyNameForSupabasePush(item),
             writer_name: String(item?.name || "작가미정").trim() || "작가미정",
             date_key: String(item?.date || "").trim(),
             time_key: String(item?.time || "09:00").trim() || "09:00",
@@ -14188,23 +14194,22 @@
         const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
         if (oldName && oldName !== newName) {
+          const matchScheduleForRename = (item) =>
+            getCompanyGroupKey(item?.company, item?.companyCode) === oldGroupKey ||
+            normalizeCompanyName(item?.company).toLowerCase() === normalizeCompanyName(oldName).toLowerCase();
+          const applyScheduleRename = (item) => {
+            item.company = newName;
+            if (newCode) item.companyCode = newCode;
+            markScheduleRowDirty(item, "company_rename");
+          };
           data.forEach((item) => {
-            if (normalizeCompanyName(item.company) === oldName) {
-              item.company = newName;
-              markScheduleRowDirty(item, "company_rename");
-            }
+            if (matchScheduleForRename(item)) applyScheduleRename(item);
           });
           onHoldPayments.forEach((item) => {
-            if (normalizeCompanyName(item.company) === oldName) {
-              item.company = newName;
-              markScheduleRowDirty(item, "company_rename");
-            }
+            if (matchScheduleForRename(item)) applyScheduleRename(item);
           });
           refundPayments.forEach((item) => {
-            if (normalizeCompanyName(item.company) === oldName) {
-              item.company = newName;
-              markScheduleRowDirty(item, "company_rename");
-            }
+            if (matchScheduleForRename(item)) applyScheduleRename(item);
           });
 
           if (couponPasses[oldName] !== undefined) {
@@ -14434,6 +14439,14 @@
               console.error("[CUSTOMERS][index] 업체 아이디 이전 동기화 실패", error);
               alert("아이디 이전은 로컬에 적용되었지만 서버 동기화에 실패했습니다. 잠시 후 다시 시도해주세요.");
             }
+          }
+          if (normalizeCompanyName(originalName) !== normalizeCompanyName(newDisplayName)) {
+            try {
+              localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
+            } catch (_) {}
+            syncWriterSchedulesStorage();
+            queueSchedulesSyncWithRetry(true);
+            queuePaymentsSyncWithRetry();
           }
           renderCompanyOrderHistory(newDisplayName);
           renderCustomerStatsDashboard();
@@ -15010,23 +15023,22 @@
           const nextGroupKey = getCompanyGroupKey(newName, newCode);
 
           if (oldName && oldName !== newName) {
+            const matchScheduleForRename = (item) =>
+              getCompanyGroupKey(item?.company, item?.companyCode) === oldGroupKey ||
+              normalizeCompanyName(item?.company).toLowerCase() === oldName.toLowerCase();
+            const applyScheduleRename = (item) => {
+              item.company = newName;
+              if (newCode) item.companyCode = newCode;
+              markScheduleRowDirty(item, "company_rename");
+            };
             data.forEach((item) => {
-              if (normalizeCompanyName(item.company) === oldName) {
-                item.company = newName;
-                markScheduleRowDirty(item, "company_rename");
-              }
+              if (matchScheduleForRename(item)) applyScheduleRename(item);
             });
             onHoldPayments.forEach((item) => {
-              if (normalizeCompanyName(item.company) === oldName) {
-                item.company = newName;
-                markScheduleRowDirty(item, "company_rename");
-              }
+              if (matchScheduleForRename(item)) applyScheduleRename(item);
             });
             refundPayments.forEach((item) => {
-              if (normalizeCompanyName(item.company) === oldName) {
-                item.company = newName;
-                markScheduleRowDirty(item, "company_rename");
-              }
+              if (matchScheduleForRename(item)) applyScheduleRename(item);
             });
 
             if (couponPasses[oldName] !== undefined) {
