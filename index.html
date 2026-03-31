@@ -8061,18 +8061,32 @@
         }, 0);
       }
 
-      /** customer 로컬 스토리지에서 업체·일정 필드를 병합한다. Supabase 모드에서는 고아 unshift 비활성(스케줄 테이블 단일 소스). */
+      /** customer 로컬 스토리지에서 일정 필드를 병합한다. Supabase 모드에서는 스케줄 고아 unshift 비활성·업체는 서버 단일 소스. */
       function hydrateFromCustomerPageStorage() {
-        const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
-        customerCompanies.forEach((company) => {
-          const name = normalizeCompanyName(company?.name);
-          if (!name) return;
-          const phone = String(company?.phone || "").trim();
-          const exists = companies.some((item) => normalizeCompanyName(item.name).toLowerCase() === name.toLowerCase());
-          if (!exists) {
-            companies.unshift({ name, phone: phone || "-" });
-          }
-        });
+        // Supabase 모드: company_directory pull 이 단일 소스. customer 로컬만 있는 업체를 unshift 하면
+        // pull/업체 realtime 과 번갈아 덮어써 업체정보 목록이 깜빡인다(이름만 다른 중복 행 등).
+        if (!USE_SUPABASE_SYNC) {
+          const customerCompanies = readStorageArray(STORAGE_CUSTOMER_COMPANIES);
+          const normNameForCompanyDedupe = (n) => {
+            const s = normalizeCompanyName(n).replace(/\s+/g, "").toLowerCase();
+            return s.replace(/\(무료\)$/i, "").replace(/\(free\)$/i, "");
+          };
+          customerCompanies.forEach((company) => {
+            const name = normalizeCompanyName(company?.name);
+            if (!name) return;
+            const phone = String(company?.phone || "").trim();
+            const incomingGk = getCompanyGroupKey(name, company?.code);
+            const exists = companies.some((item) => {
+              if (normalizeCompanyName(item.name).toLowerCase() === name.toLowerCase()) return true;
+              if (incomingGk && getCompanyGroupKey(item.name, item.code) === incomingGk) return true;
+              if (normNameForCompanyDedupe(item.name) === normNameForCompanyDedupe(name)) return true;
+              return false;
+            });
+            if (!exists) {
+              companies.unshift({ name, phone: phone || "-", code: normalizeCompanyCode(company?.code) });
+            }
+          });
+        }
 
         const existingScheduleIds = new Set(data.map((item) => String(item.customerScheduleId || "")).filter(Boolean));
         const shouldImportLocalCustomerSchedulesAsSource = !USE_SUPABASE_SYNC || !hasLoadedSchedulesFromServer;
