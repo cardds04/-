@@ -10491,10 +10491,17 @@
           alert("복사할 미입금 내역이 없습니다.");
           return;
         }
+        const unpaidSummaryCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
         const companyGroups = new Map();
         latestUnpaidSummaryRows.forEach((item) => {
           const dateLabel = formatPaymentSummaryDateLabel(item?.date || item?.paymentDate || "");
-          const companyName = normalizeCompanyName(item?.company || "") || "-";
+          const companyName =
+            normalizeCompanyName(
+              resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, unpaidSummaryCtx).company || ""
+            ) || "-";
           const amountValue = parseAmountToNumber(item?.paymentAmount);
           const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
           if (!companyGroups.has(companyName)) {
@@ -12054,6 +12061,11 @@
           customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
           customers: readStorageArray(STORAGE_CUSTOMERS)
         };
+        /** 입금관리 표시: 행 데이터보다 업체정보(companies)의 현재 이름을 우선 — pull·동기 타이밍에 옛 이름이 남는 현상 완화 */
+        const paymentCompanyDisplayName = (item) =>
+          resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, canonicalIdentityCtxPayment).company || "-";
+        const paymentCanonicalRow = (item) =>
+          resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, canonicalIdentityCtxPayment);
         const couponUsedByGroupKey = new Map();
         for (const row of [...data, ...onHoldPayments, ...refundPayments]) {
           if (!row?.couponUsed) continue;
@@ -12120,7 +12132,9 @@
         const visibleRows = filtered
           .filter(({ item }) => {
             if (!keyword) return true;
-            return normalizeCompanyName(item?.company).toLowerCase().includes(keyword);
+            const raw = normalizeCompanyName(item?.company).toLowerCase();
+            const disp = normalizeCompanyName(paymentCompanyDisplayName(item)).toLowerCase();
+            return raw.includes(keyword) || disp.includes(keyword);
           })
           .filter(({ item }) => {
             if (!payerKeyword) return true;
@@ -12150,7 +12164,10 @@
                 primary = parsePaymentDateSortValue(a.item).localeCompare(parsePaymentDateSortValue(b.item));
                 break;
               case "company":
-                primary = normalizeCompanyName(a.item?.company).localeCompare(normalizeCompanyName(b.item?.company), "ko");
+                primary = normalizeCompanyName(paymentCompanyDisplayName(a.item)).localeCompare(
+                  normalizeCompanyName(paymentCompanyDisplayName(b.item)),
+                  "ko"
+                );
                 break;
               case "paymentDate":
                 primary = parsePaymentDateColumnOnly(a.item).localeCompare(parsePaymentDateColumnOnly(b.item));
@@ -12170,7 +12187,10 @@
             const aTime = parseScheduleTimeToMinutes(a.item?.time);
             const bTime = parseScheduleTimeToMinutes(b.item?.time);
             if (aTime !== bTime) return aTime - bTime;
-            return normalizeCompanyName(a.item?.company).localeCompare(normalizeCompanyName(b.item?.company), "ko");
+            return normalizeCompanyName(paymentCompanyDisplayName(a.item)).localeCompare(
+              normalizeCompanyName(paymentCompanyDisplayName(b.item)),
+              "ko"
+            );
           });
         latestUnpaidSummaryRows = isUnpaidTab ? visibleRows.map(({ item }) => item) : [];
         copyUnpaidSummaryBtnEl?.classList.toggle("hidden", !isUnpaidTab);
@@ -12221,12 +12241,19 @@
                   `<option value="${day}" ${day === selectedDay ? "selected" : ""}>${Number(day)}일</option>`
               )
               .join("");
-            const companyName = normalizeCompanyName(item.company || "");
+            const payId = paymentCanonicalRow(item);
+            const companyDisplay = payId.company || "-";
+            const companyGk = getCompanyGroupKey(payId.company, payId.companyCode);
+            const rowMatchesPaymentCompany = (row) =>
+              getCompanyGroupKey(paymentCanonicalRow(row).company, paymentCanonicalRow(row).companyCode) === companyGk;
             const payerHistoryButtons = [...new Set(
               data
-                .filter((row) => normalizeCompanyName(row?.company) === companyName)
+                .filter((row) => rowMatchesPaymentCompany(row))
                 .map((row) => String(row?.paymentPayer || "").trim())
-                .filter((name) => name && name !== companyName)
+                .filter(
+                  (name) =>
+                    name && normalizeCompanyName(name).toLowerCase() !== normalizeCompanyName(companyDisplay).toLowerCase()
+                )
             )]
               .slice(0, 5)
               .map(
@@ -12236,7 +12263,7 @@
               .join("");
             const amountHistoryButtons = [...new Set(
               data
-                .filter((row) => normalizeCompanyName(row?.company) === companyName)
+                .filter((row) => rowMatchesPaymentCompany(row))
                 .map((row) => String(row?.paymentAmount || "").trim())
                 .filter((amount) => amount && !["150000", "250000", "쿠폰사용"].includes(amount))
             )]
@@ -12248,20 +12275,22 @@
               .join("");
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
             const couponProgressText =
-              source === "active" ? getCouponProgressText(item.company, item.companyCode) : "";
+              source === "active" ? getCouponProgressText(payId.company, payId.companyCode) : "";
+            const payerIsBusinessName =
+              normalizeCompanyName(item.paymentPayer).toLowerCase() === normalizeCompanyName(payId.company).toLowerCase();
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}</td>
-              <td>${escapeHtml(item.company || "-")}</td>
+              <td>${escapeHtml(companyDisplay)}</td>
               <td>${
                 isEditing
                   ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
-                       <button class="btn-sm ${item.paymentPayer === item.company ? "primary" : ""}" type="button" data-action="setPayerBusinessName" data-index="${index}">사업자명</button>
-                       <button class="btn-sm ${item.paymentPayer !== item.company ? "primary" : ""}" type="button" data-action="setPayerCustomName" data-index="${index}">이름</button>
+                       <button class="btn-sm ${payerIsBusinessName ? "primary" : ""}" type="button" data-action="setPayerBusinessName" data-index="${index}">사업자명</button>
+                       <button class="btn-sm ${!payerIsBusinessName ? "primary" : ""}" type="button" data-action="setPayerCustomName" data-index="${index}">이름</button>
                      </div>
                      ${payerHistoryButtons ? `<div class="quick-writer-row" style="margin-bottom: 4px;">${payerHistoryButtons}</div>` : ""}
                      <input class="inline-input pay-payer" type="text" value="${escapeHtml(item.paymentPayer || "")}" ${
-                       item.paymentPayer === item.company ? "readonly" : ""
+                       payerIsBusinessName ? "readonly" : ""
                      } placeholder="입금자명 입력" />`
                   : `${escapeHtml(item.paymentPayer || "-")}`
               }</td>
@@ -14162,7 +14191,12 @@
         if (action === "setPayerBusinessName") {
           const payerInput = rowEl?.querySelector(".pay-payer");
           if (!payerInput) return;
-          payerInput.value = String(data[index]?.company || "").trim();
+          const item = data[index];
+          const id = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, {
+            customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+            customers: readStorageArray(STORAGE_CUSTOMERS)
+          });
+          payerInput.value = String(id.company || "").trim();
           payerInput.setAttribute("readonly", "readonly");
           return;
         }
