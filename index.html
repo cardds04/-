@@ -1688,15 +1688,6 @@
       <h1>촬영스케줄 관리자페이지</h1>
       <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
 
-      <div class="sync-toolbar" style="margin: 10px 0 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <button id="pullSupabaseToLocalBtn" type="button" class="btn-sm" title="Supabase에 저장된 데이터를 이 브라우저 localStorage에 맞춥니다.">
-          서버 → 로컬 동기화
-        </button>
-        <span class="helper" style="margin: 0; max-width: 52rem; line-height: 1.45;">
-          Supabase와 로컬이 어긋날 때만 사용하세요. 편집 중인데 아직 서버에 반영되지 않은 내용은 서버 기준으로 덮어쓸 수 있습니다.
-        </span>
-      </div>
-
       <div class="top-tabs">
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
@@ -5164,60 +5155,60 @@
         if (!confirmed) return;
 
         const btn = document.getElementById("pullSupabaseToLocalBtn");
+        const prevLabel = btn ? btn.textContent : "";
         if (btn) {
           btn.disabled = true;
-          const prev = btn.textContent;
           btn.textContent = "가져오는 중…";
-          try {
-            setSyncStatus("서버에서 로컬로 가져오는 중… (잠시만)", "warn", { pinMs: 120000 });
-
-            await waitForSupabaseSyncPipelineIdle();
-            setSyncStatus("동기화: 업체·고객·작가 불러오는 중…", "warn", { pinMs: 120000, force: true });
-            await pullAdminCompaniesFromSupabaseAndRefresh();
-            await pullCustomersFromSupabaseAndApply();
-            await pullWritersFromSupabaseAndRefresh();
-            setSyncStatus("동기화: 스케줄 불러오는 중… (데이터 많으면 30초~1분 걸릴 수 있음)", "warn", {
-              pinMs: 120000,
-              force: true
-            });
-            await pullWithRetryUntilSuccess(() => pullSchedulesFromSupabaseAndApply());
-            setSyncStatus("동기화: 입금·회차권·기타 불러오는 중…", "warn", { pinMs: 120000, force: true });
-            await pullWithRetryUntilSuccess(() => pullPaymentsFromSupabaseAndApply());
-            await pullCouponPassesFromSupabaseAndApply();
-            await pullDayoffRequestsFromSupabaseAndApply();
-            await pullSubmissionReceiptsFromSupabaseAndApply();
-            await pullSharedLimitConfigAndApply();
-            await pullSharedMasterAccountMapAndApply();
-
-            if (typeof SUPABASE_ONLY_MODE !== "undefined" && SUPABASE_ONLY_MODE) {
-              setSyncStatus("동기화: 부가 설정(KV) 불러오는 중…", "warn", { pinMs: 120000, force: true });
-              await pullScheduleSiteClientKvFromSupabase();
-            }
-
-            refreshAdminUiFromSyncedState();
-            renderPaymentList();
-            renderScheduleCalendar();
-            renderInlineScheduleCalendarFromFilters();
-            renderCouponPassList();
-            if (typeof updateFullBackupInfoText === "function") updateFullBackupInfoText();
-
-            pendingLocalSyncKeys.clear();
-            lastObservedState = buildCurrentStateSnapshot();
-
-            setSyncStatus(`로컬 동기화 완료 ${formatSyncTime()}`, "ok");
-          } catch (error) {
-            console.error("[SYNC] 전체 pull 실패", error);
-            const msg = error && error.message ? error.message : String(error);
-            setSyncStatus(`동기화 실패: ${msg}`, "error");
-            window.alert(`동기화 중 오류가 발생했습니다.\n${msg}`);
-          } finally {
-            btn.disabled = false;
-            btn.textContent = prev;
-          }
-        } else {
-          setSyncStatus("동기화 버튼을 찾을 수 없습니다.", "error");
         }
-      }
+        try {
+          setSyncStatus("서버에서 로컬로 가져오는 중… (잠시만)", "warn", { pinMs: 120000 });
+
+          await waitForSupabaseSyncPipelineIdle();
+          setSyncStatus("동기화: 업체·고객·작가 불러오는 중…", "warn", { pinMs: 120000, force: true });
+          await pullAdminCompaniesFromSupabaseAndRefresh();
+          await pullCustomersFromSupabaseAndApply();
+          await pullWritersFromSupabaseAndRefresh();
+          setSyncStatus("동기화: 스케줄 불러오는 중… (데이터 많으면 30초~1분 걸릴 수 있음)", "warn", {
+            pinMs: 120000,
+            force: true
+          });
+          await pullWithRetryUntilSuccess(() => pullSchedulesFromSupabaseAndApply());
+          setSyncStatus("동기화: 입금·회차권·기타 불러오는 중…", "warn", { pinMs: 120000, force: true });
+          await pullWithRetryUntilSuccess(() => pullPaymentsFromSupabaseAndApply());
+          await pullCouponPassesFromSupabaseAndApply();
+          await pullDayoffRequestsFromSupabaseAndApply();
+          await pullSubmissionReceiptsFromSupabaseAndApply();
+          await pullSharedLimitConfigAndApply();
+          await pullSharedMasterAccountMapAndApply();
+
+          if (typeof SUPABASE_ONLY_MODE !== "undefined" && SUPABASE_ONLY_MODE) {
+            setSyncStatus("동기화: 부가 설정(KV) 불러오는 중…", "warn", { pinMs: 120000, force: true });
+            await pullScheduleSiteClientKvFromSupabase();
+          }
+
+          refreshAdminUiFromSyncedState();
+          renderPaymentList();
+          renderScheduleCalendar();
+          renderInlineScheduleCalendarFromFilters();
+          renderCouponPassList();
+          if (typeof updateFullBackupInfoText === "function") updateFullBackupInfoText();
+
+          pendingLocalSyncKeys.clear();
+          lastObservedState = buildCurrentStateSnapshot();
+
+          setSyncStatus(`로컬 동기화 완료 ${formatSyncTime()}`, "ok");
+        } catch (error) {
+          console.error("[SYNC] 전체 pull 실패", error);
+          const msg = error && error.message ? error.message : String(error);
+          setSyncStatus(`동기화 실패: ${msg}`, "error");
+          window.alert(`동기화 중 오류가 발생했습니다.\n${msg}`);
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevLabel;
+          }
+        }
+  }
 
       /** Realtime/anon 전용 — 동일 페이지에서 createClient 반복 시 GoTrueClient 중복 경고 방지 */
       let supabaseBrowserClientSingleton = null;
@@ -5591,7 +5582,6 @@
       const memberNamesEl = document.getElementById("memberNames");
       const panelPhotographerListEl = document.getElementById("panelPhotographerList");
       const addCompanyBtnEl = document.getElementById("addCompanyBtn");
-      const pullSupabaseToLocalBtnEl = document.getElementById("pullSupabaseToLocalBtn");
       const downloadCompanyExcelBtnEl = document.getElementById("downloadCompanyExcelBtn");
       const uploadCompanyExcelBtnEl = document.getElementById("uploadCompanyExcelBtn");
       const companyRegisterPanelEl = document.getElementById("companyRegisterPanel");
@@ -12369,21 +12359,9 @@
                            : couponApplyIndex === index
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>${
-                                isUnpaidTab
-                                  ? ` <button class="btn-sm danger" type="button" data-action="deletePaymentScheduleRow" data-index="${index}" data-schedule-id="${escapeHtml(
-                                      String(item.customerScheduleId || "")
-                                    )}">삭제</button>`
-                                  : ""
-                              }`
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                            : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>${
-                                isUnpaidTab
-                                  ? ` <button class="btn-sm danger" type="button" data-action="deletePaymentScheduleRow" data-index="${index}" data-schedule-id="${escapeHtml(
-                                      String(item.customerScheduleId || "")
-                                    )}">삭제</button>`
-                                  : ""
-                              }`
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
                        }`
                 }
               </td>
@@ -14284,24 +14262,6 @@
           undoPaymentFromTable(index);
           return;
         }
-        if (action === "deletePaymentScheduleRow") {
-          const sid = String(button.dataset.scheduleId || "").trim();
-          if (sid && isUuidLike(sid)) {
-            const byId = data.findIndex((row) => String(row?.customerScheduleId || "").trim() === sid);
-            if (byId >= 0) {
-              couponApplyIndex = null;
-              editingPaymentIndex = null;
-              deleteSchedule(byId);
-              return;
-            }
-          }
-          if (index >= 0 && index < data.length) {
-            couponApplyIndex = null;
-            editingPaymentIndex = null;
-            deleteSchedule(index);
-          }
-          return;
-        }
         if (action === "cancelPaidPaymentRow") {
           cancelPaidPaymentFromTable(index);
           return;
@@ -15322,16 +15282,6 @@
       });
 
       companySearchInputEl.addEventListener("input", renderCompanies);
-
-      if (pullSupabaseToLocalBtnEl) {
-        if (!USE_SUPABASE_SYNC) {
-          pullSupabaseToLocalBtnEl.disabled = true;
-          pullSupabaseToLocalBtnEl.title = "Supabase 연동이 설정되지 않았습니다.";
-        }
-        pullSupabaseToLocalBtnEl.addEventListener("click", () => {
-          void syncAllFromSupabaseToLocalStorage();
-        });
-      }
 
       addCompanyBtnEl.addEventListener("click", () => {
         companyRegisterPanelEl.classList.toggle("hidden");
