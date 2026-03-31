@@ -924,9 +924,9 @@
       }
       function startRealtimeSyncSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getWriterTableSyncClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel(`app-state-${SUPABASE_STATE_ID}`)
             .on(
@@ -964,6 +964,7 @@
         }
       }
 
+      var writerTableSyncClient = null;
       setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
@@ -1019,7 +1020,6 @@
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
       const ALWAYS_SHOW_AUTH_FORMS = false;
-      var writerTableSyncClient = null;
       var writerTablePullTimer = null;
       var writerTablePullRunning = false;
 
@@ -1044,7 +1044,9 @@
         if (!USE_SUPABASE_SYNC) return null;
         if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
         if (writerTableSyncClient) return writerTableSyncClient;
-        writerTableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        writerTableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        });
         return writerTableSyncClient;
       }
       async function fetchWriterJsonRows(path) {

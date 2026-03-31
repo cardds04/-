@@ -5174,12 +5174,24 @@
         }
       }
 
+      /** Realtime/anon 전용 — 동일 페이지에서 createClient 반복 시 GoTrueClient 중복 경고 방지 */
+      let supabaseBrowserClientSingleton = null;
+      function getSupabaseBrowserClient() {
+        if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+        if (!supabaseBrowserClientSingleton) {
+          supabaseBrowserClientSingleton = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+          });
+        }
+        return supabaseBrowserClientSingleton;
+      }
+
       function startRealtimeSyncSubscription() {
         if (!ENABLE_APP_STATE_SYNC) return;
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel(`app-state-${SUPABASE_STATE_ID}`)
             .on(
@@ -5203,9 +5215,9 @@
       }
       function startCompaniesRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("companies-live-index")
             .on(
@@ -5225,9 +5237,9 @@
       }
       function startWritersRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("writers-live-index")
             .on(
@@ -5247,9 +5259,9 @@
       }
       function startPaymentsRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("payments-live-index")
             .on(
@@ -5269,9 +5281,9 @@
       }
       function startSchedulesRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("schedules-live-index")
             .on(
@@ -5291,9 +5303,9 @@
       }
       function startCouponPassesRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("coupon-passes-live-index")
             .on(
@@ -5314,9 +5326,9 @@
       }
       function startDayoffRequestsRealtimeSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getSupabaseBrowserClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel("dayoff-requests-live-index")
             .on(

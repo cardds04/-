@@ -1213,9 +1213,9 @@
       }
       function startRealtimeSyncSubscription() {
         if (!USE_SUPABASE_SYNC) return;
-        if (!window.supabase || typeof window.supabase.createClient !== "function") return;
+        const client = getTableSyncClient();
+        if (!client) return;
         try {
-          const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           client
             .channel(`app-state-${SUPABASE_STATE_ID}`)
             .on(
@@ -1252,6 +1252,7 @@
         }
       }
 
+      var tableSyncClient = null;
       setSyncStatus(`테이블 동기화 모드 ${formatSyncTime()}`, "ok");
       pendingLocalSyncKeys.clear();
       lastObservedState = buildCurrentStateSnapshot();
@@ -1326,7 +1327,6 @@
       let customerScheduleSubmitting = false;
       let myInfoOpen = false;
       let myInfoEditMode = false;
-      var tableSyncClient = null;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
       // 고객이 방금 취소한 스케줄 ID 집합 — pull 후 syncAdminSchedulesToCustomerUser가
@@ -1441,7 +1441,9 @@
         if (!USE_SUPABASE_SYNC) return null;
         if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
         if (tableSyncClient) return tableSyncClient;
-        tableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        tableSyncClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        });
         return tableSyncClient;
       }
       async function fetchJsonRows(path) {
