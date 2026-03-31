@@ -16583,13 +16583,14 @@
       // 자동 초기화 비활성화 (데이터 유실 방지)
       async function bootstrapAdminPageData() {
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
-        if (USE_SUPABASE_SYNC) {
-          try {
-            await fetchDashboardStateWithRetriesForBootstrap();
-          } catch (e) {
-            console.warn("[DASHBOARD_STATE] bootstrap", e);
-          }
-        } else {
+        // 대시보드 GET과 스케줄 GET을 순차(await)하지 않음 — 초기 체감 지연(합산 시간) 방지
+        const dashboardBootstrapPromise =
+          USE_SUPABASE_SYNC
+            ? fetchDashboardStateWithRetriesForBootstrap().catch((e) => {
+                console.warn("[DASHBOARD_STATE] bootstrap", e);
+              })
+            : Promise.resolve();
+        if (!USE_SUPABASE_SYNC) {
           loadDashboardPanelsFromNativeLocalStorageIfNoSupabase();
         }
         loadAdminCompaniesFromStorage();
@@ -16612,7 +16613,7 @@
         // 이전 세션에서 PATCH 실패한 항목을 백그라운드에서 재시도 (source="deleted" 영구 설정)
         setTimeout(() => resumePendingDeletePatches(), 3000);
         initializeScheduleReceiptLedgerStorage();
-        await pullSchedulesFromSupabaseAndApply();
+        await Promise.all([dashboardBootstrapPromise, pullSchedulesFromSupabaseAndApply()]);
         void pullDayoffRequestsFromSupabaseAndApply();
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedLimitConfigAndApply();
