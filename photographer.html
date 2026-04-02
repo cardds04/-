@@ -1710,10 +1710,14 @@
         });
         if (!response.ok) {
           const errorText = await response.text();
-          const hint =
-            response.status === 401 || response.status === 403
-              ? "\n\n(Supabase에서 dayoff_requests 에 anon INSERT 허용 RLS가 필요합니다. 저장소의 supabase/migrations/20260331150000_dayoff_requests_table_and_rls.sql 를 실행하세요.)"
-              : "";
+          let hint = "";
+          if (response.status === 401 || response.status === 403) {
+            hint =
+              "\n\n(Supabase에서 dayoff_requests 에 anon INSERT 허용 RLS가 필요합니다. migrations/20260331150000_dayoff_requests_table_and_rls.sql 실행)";
+          } else if (/22P02|invalid input syntax for type uuid/i.test(errorText)) {
+            hint =
+              "\n\n(writer_id 컬럼이 uuid 로 되어 있으면 로그인 ID(숫자)를 넣을 수 없습니다. Supabase SQL에서 migrations/20260331160000_dayoff_requests_writer_id_to_text.sql 실행)";
+          }
           alert(`휴무요청 저장 실패: ${errorText}${hint}`);
           return;
         }
