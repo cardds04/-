@@ -1692,26 +1692,29 @@
           alert("휴무요청이 반영되었습니다");
           return;
         }
+        const wid = String(writer.id || "").trim() || null;
+        const row = {
+          writer_id: wid,
+          writer_name: String(writer.name || "").trim(),
+          dayoff_date: dateKey
+        };
         const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Prefer: "return=minimal",
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify([
-            {
-              writer_id: null,
-              writer_name: String(writer.name || "").trim(),
-              dayoff_date: dateKey,
-              reason: "",
-              status: "pending"
-            }
-          ])
+          body: JSON.stringify([row])
         });
         if (!response.ok) {
           const errorText = await response.text();
-          alert(`휴무요청 저장 실패: ${errorText}`);
+          const hint =
+            response.status === 401 || response.status === 403
+              ? "\n\n(Supabase에서 dayoff_requests 에 anon INSERT 허용 RLS가 필요합니다. 저장소의 supabase/migrations/20260331150000_dayoff_requests_table_and_rls.sql 를 실행하세요.)"
+              : "";
+          alert(`휴무요청 저장 실패: ${errorText}${hint}`);
           return;
         }
         queueWriterTablePull();

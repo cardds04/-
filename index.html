@@ -7163,26 +7163,29 @@
       }
       async function saveAdminDayoffRequestToSupabase(dateKey, writerName, writerId = "") {
         if (!USE_SUPABASE_SYNC) return false;
+        // PostgREST: 테이블에 없는 컬럼을 보내면 400 → reason/status 는 선택 컬럼이 있을 때만 별도 마이그레이션
+        const row = {
+          writer_id: String(writerId || "").trim() || null,
+          writer_name: String(writerName || "").trim(),
+          dayoff_date: String(dateKey || "").trim()
+        };
         const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Prefer: "return=minimal",
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify([
-            {
-              writer_id: String(writerId || "").trim() || null,
-              writer_name: String(writerName || "").trim(),
-              dayoff_date: String(dateKey || "").trim(),
-              reason: "admin_assigned",
-              status: "pending"
-            }
-          ])
+          body: JSON.stringify([row])
         });
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`dayoff_requests 저장 실패 (${response.status}): ${errorText}`);
+          const hint =
+            response.status === 401 || response.status === 403
+              ? " Supabase dayoff_requests 테이블에 anon INSERT RLS 정책이 있는지 확인하세요."
+              : "";
+          throw new Error(`dayoff_requests 저장 실패 (${response.status}): ${errorText}${hint}`);
         }
         return true;
       }
