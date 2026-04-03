@@ -220,12 +220,6 @@
         font-weight: 900;
         color: #0f172a;
       }
-      .main-section-hint {
-        margin: 0 0 10px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #64748b;
-      }
       .main-section-done .main-section-title {
         color: #047857;
       }
@@ -359,9 +353,30 @@
         min-width: 0;
         align-items: start;
       }
+      .admin-three-grid .admin-col-cal {
+        order: 1;
+      }
+      .admin-three-grid .admin-col-tasks {
+        order: 2;
+      }
+      .admin-three-grid .admin-col-side {
+        order: 3;
+      }
+      .admin-three-grid.admin-side-first .admin-col-side {
+        order: 1;
+      }
+      .admin-three-grid.admin-side-first .admin-col-cal {
+        order: 2;
+      }
+      .admin-three-grid.admin-side-first .admin-col-tasks {
+        order: 3;
+      }
       @media (min-width: 1100px) {
         .admin-three-grid {
           grid-template-columns: minmax(240px, 0.95fr) minmax(300px, 1.15fr) minmax(260px, 1fr);
+        }
+        .admin-three-grid.admin-side-first {
+          grid-template-columns: 1fr;
         }
       }
       .admin-col-cal,
@@ -1244,14 +1259,11 @@
       <section id="viewMain" class="view hidden">
         <div class="main-today-wrap">
           <div class="main-section">
-            <h2 class="main-section-title">📌 오늘 할 일</h2>
-            <p class="main-section-hint">카드를 누르면 아래 「오늘 한 일」로 내려가요</p>
             <div class="main-grid" id="mainTodoGridPending"></div>
             <div class="main-empty-section hidden" id="mainEmptyPending"></div>
           </div>
           <div class="main-section main-section-done">
             <h2 class="main-section-title">✅ 오늘 한 일</h2>
-            <p class="main-section-hint">카드를 누르면 다시 위 「오늘 할 일」로 되돌려요</p>
             <div class="main-grid" id="mainTodoGridDone"></div>
             <div class="main-empty-section hidden" id="mainEmptyDone"></div>
           </div>
@@ -1502,6 +1514,7 @@
           $("adminSideTemplates").classList.toggle("hidden", tab !== "templates");
           $("adminSideKids").classList.toggle("hidden", tab !== "kids");
           $("adminSideCoupons").classList.toggle("hidden", tab !== "coupons");
+          $("adminWorkspace").classList.toggle("admin-side-first", tab === "templates" || tab === "kids" || tab === "coupons");
           document.querySelectorAll("#adminNav button").forEach(function (b) {
             b.classList.toggle("on", b.getAttribute("data-admin-tab") === tab);
           });
