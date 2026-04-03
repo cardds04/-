@@ -38,13 +38,25 @@
       .app-header {
         flex-shrink: 0;
         display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 10px 14px 12px;
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 2px solid rgba(15, 23, 42, 0.08);
+        box-shadow: 0 4px 20px rgba(14, 165, 233, 0.12);
+      }
+      .app-header-top {
+        display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 8px 12px;
-        padding: 10px 14px;
-        background: var(--card);
-        border-bottom: 2px solid rgba(15, 23, 42, 0.08);
-        box-shadow: 0 4px 20px rgba(14, 165, 233, 0.12);
+        width: 100%;
       }
       .app-header.hidden {
         display: none;
@@ -99,14 +111,35 @@
         color: #0369a1;
       }
       .stamp-badge {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        max-width: min(100%, 15rem);
+        font-size: 0.88rem;
         font-weight: 800;
-        font-size: 0.85rem;
         padding: 8px 12px;
         border-radius: 12px;
         background: linear-gradient(90deg, var(--sun), var(--coral));
         color: #422006;
       }
       .stamp-badge.hidden {
+        display: none;
+      }
+      .stamp-badge-line {
+        display: block;
+        line-height: 1.25;
+      }
+      .stamp-badge-sub {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 0.95;
+        white-space: normal;
+        word-break: keep-all;
+        line-height: 1.3;
+      }
+      .stamp-badge-sub.hidden {
         display: none;
       }
       #appMain {
@@ -168,13 +201,35 @@
         background: #e2e8f0;
         color: #334155;
       }
+      .main-today-wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding-bottom: 24px;
+      }
+      .main-section-title {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+        font-weight: 900;
+        color: #0f172a;
+      }
+      .main-section-hint {
+        margin: 0 0 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+      .main-section-done .main-section-title {
+        color: #047857;
+      }
       .main-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
         gap: 14px;
-        padding: 8px 4px 24px;
-        max-width: 1100px;
-        margin: 0 auto;
+        padding: 4px 2px;
         width: 100%;
       }
       @media (min-width: 600px) {
@@ -196,10 +251,45 @@
         align-items: center;
         gap: 8px;
       }
-      .main-card.done {
-        opacity: 0.72;
+      .main-card.main-card-todo {
+        cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+      }
+      .main-card.main-card-todo:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(14, 165, 233, 0.2);
+        border-color: #7dd3fc;
+      }
+      .main-card.main-card-todo:active {
+        transform: translateY(0);
+      }
+      .main-card.main-card-done {
         border-color: #6ee7b7;
         background: linear-gradient(180deg, #ecfdf5, #fff);
+        cursor: pointer;
+      }
+      .main-card.main-card-done:hover {
+        border-color: #34d399;
+      }
+      .main-card-tap-hint {
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: #0ea5e9;
+        margin-top: auto;
+        padding-top: 6px;
+      }
+      .main-card-done .main-card-tap-hint {
+        color: #059669;
+      }
+      .main-empty-section {
+        text-align: center;
+        color: #94a3b8;
+        font-weight: 700;
+        font-size: 0.9rem;
+        padding: 1.25rem 0.5rem;
+      }
+      .main-empty-section.hidden {
+        display: none;
       }
       .main-card .emoji {
         font-size: clamp(2.5rem, 8vw, 3.2rem);
@@ -223,12 +313,6 @@
         max-height: 4.5em;
         overflow: auto;
       }
-      .main-card input[type="checkbox"] {
-        width: 28px;
-        height: 28px;
-        accent-color: #10b981;
-        margin-top: 4px;
-      }
       .admin-nav {
         display: flex;
         flex-wrap: wrap;
@@ -237,6 +321,15 @@
         padding: 4px;
         background: rgba(255, 255, 255, 0.55);
         border-radius: 14px;
+      }
+      .admin-nav-in-header {
+        width: 100%;
+        margin-top: 10px;
+        margin-bottom: 0;
+        box-sizing: border-box;
+      }
+      .admin-nav-in-header.hidden {
+        display: none;
       }
       .admin-nav button {
         flex: 1 1 auto;
@@ -621,15 +714,26 @@
   </head>
   <body>
     <header id="appHeader" class="app-header hidden">
-      <button type="button" class="btn-exit-admin hidden" id="btnExitAdmin">← 메인으로</button>
-      <div class="header-title" id="headerTitle">🌈 오늘 할 일</div>
-      <div class="kid-chips">
-        <span class="label">누구?</span>
-        <button type="button" class="kid-chip active" data-kid="">전체</button>
-        <span id="kidChipsMount"></span>
+      <div class="app-header-top">
+        <button type="button" class="btn-exit-admin hidden" id="btnExitAdmin">← 메인으로</button>
+        <div class="header-title" id="headerTitle">🌈 오늘 할 일</div>
+        <div class="kid-chips">
+          <span class="label">누구?</span>
+          <button type="button" class="kid-chip active" data-kid="">전체</button>
+          <span id="kidChipsMount"></span>
+        </div>
+        <div class="stamp-badge hidden" id="stampBadge">
+          <span class="stamp-badge-line" id="stampBadgeLine1">🎟</span>
+          <span class="stamp-badge-sub hidden" id="stampBadgeLine2"></span>
+        </div>
+        <button type="button" class="btn-admin" id="btnOpenAdmin">⚙️ 관리자</button>
       </div>
-      <div class="stamp-badge hidden" id="stampBadge">🎟 스탬프 0개</div>
-      <button type="button" class="btn-admin" id="btnOpenAdmin">⚙️ 관리자</button>
+      <nav class="admin-nav admin-nav-in-header hidden" id="adminNav" aria-label="관리자 메뉴">
+        <button type="button" class="on" data-admin-tab="calendar">📅 투두 보기</button>
+        <button type="button" data-admin-tab="templates">📝 투두 등록</button>
+        <button type="button" data-admin-tab="kids">👧 아이 추가</button>
+        <button type="button" data-admin-tab="coupons">🎁 쿠폰 관리</button>
+      </nav>
     </header>
 
     <main id="appMain">
@@ -655,18 +759,24 @@
       </section>
 
       <section id="viewMain" class="view hidden">
-        <div class="main-grid" id="mainTodoGrid"></div>
+        <div class="main-today-wrap">
+          <div class="main-section">
+            <h2 class="main-section-title">📌 오늘 할 일</h2>
+            <p class="main-section-hint">카드를 누르면 아래 「오늘 한 일」로 내려가요</p>
+            <div class="main-grid" id="mainTodoGridPending"></div>
+            <div class="main-empty-section hidden" id="mainEmptyPending"></div>
+          </div>
+          <div class="main-section main-section-done">
+            <h2 class="main-section-title">✅ 오늘 한 일</h2>
+            <p class="main-section-hint">카드를 누르면 다시 위 「오늘 할 일」로 되돌려요</p>
+            <div class="main-grid" id="mainTodoGridDone"></div>
+            <div class="main-empty-section hidden" id="mainEmptyDone"></div>
+          </div>
+        </div>
         <p class="sb-status" id="sbStatus"></p>
       </section>
 
       <section id="viewAdmin" class="view hidden">
-        <nav class="admin-nav" id="adminNav">
-          <button type="button" class="on" data-admin-tab="calendar">📅 투두 보기</button>
-          <button type="button" data-admin-tab="templates">📝 투두 등록</button>
-          <button type="button" data-admin-tab="kids">👧 아이 추가</button>
-          <button type="button" data-admin-tab="coupons">🎁 쿠폰 관리</button>
-        </nav>
-
         <div id="adminWorkspace" class="admin-three-grid">
           <div class="cal-card admin-col-cal">
             <div class="cal-nav">
@@ -848,6 +958,7 @@
           $("appHeader").classList.toggle("hidden", name === "setup" || name === "gate");
           $("btnOpenAdmin").classList.toggle("hidden", name !== "main");
           $("btnExitAdmin").classList.toggle("hidden", name !== "admin");
+          $("adminNav").classList.toggle("hidden", name !== "admin");
           $("headerTitle").textContent = name === "admin" ? "🛠 관리자 페이지" : "🌈 오늘 할 일";
         }
 
@@ -961,18 +1072,55 @@
           };
         }
 
+        function activeCouponsSorted() {
+          return state.coupons
+            .filter(function (c) {
+              return c.active;
+            })
+            .sort(function (a, b) {
+              return a.stamps_required - b.stamps_required;
+            });
+        }
+
         function updateStampBadge() {
-          var el = $("stampBadge");
+          var wrap = $("stampBadge");
+          var line1 = $("stampBadgeLine1");
+          var line2 = $("stampBadgeLine2");
           if (!state.selectedKidId) {
-            el.classList.add("hidden");
+            wrap.classList.add("hidden");
             return;
           }
+          wrap.classList.remove("hidden");
           var w = state.wallets.find(function (x) {
             return x.kid_id === state.selectedKidId;
           });
-          var n = w ? w.stamps : 0;
-          el.classList.remove("hidden");
-          el.textContent = "🎟 스탬프 " + n + "개";
+          var stamps = w ? w.stamps : 0;
+          var active = activeCouponsSorted();
+          var nKinds = active.length;
+          var nextC = null;
+          for (var i = 0; i < active.length; i++) {
+            if (stamps < active[i].stamps_required) {
+              nextC = active[i];
+              break;
+            }
+          }
+          if (nextC) {
+            line1.textContent = "🎟 " + stamps + "/" + nextC.stamps_required;
+            line2.textContent = "다음 보상: " + nextC.title + " · 쿠폰 " + nKinds + "종";
+            line2.classList.remove("hidden");
+          } else {
+            line1.textContent = "🎟 스탬프 " + stamps + "개";
+            if (nKinds > 0) {
+              var maxReq = active.reduce(function (m, c) {
+                return Math.max(m, c.stamps_required);
+              }, 0);
+              line2.textContent = "목표 달성 (최대 " + maxReq + "개짜리) · 쿠폰 " + nKinds + "종";
+              line2.classList.remove("hidden");
+            } else {
+              line2.textContent = "등록된 보상 쿠폰이 없어요";
+              line2.classList.remove("hidden");
+            }
+          }
         }
 
         function slotsForDay(d) {
@@ -982,9 +1130,48 @@
           });
         }
 
+        function appendMainTodoCard(container, sl, tpl, kid, dstr, isDone) {
+          var card = document.createElement("div");
+          card.className = "main-card " + (isDone ? "main-card-done" : "main-card-todo");
+          var em = document.createElement("div");
+          em.className = "emoji";
+          em.textContent = tpl.emoji || "⭐";
+          card.appendChild(em);
+          var tit = document.createElement("div");
+          tit.className = "title";
+          tit.textContent = tpl.title;
+          card.appendChild(tit);
+          if (kid) {
+            var kn = document.createElement("div");
+            kn.className = "kid";
+            kn.textContent = kid.name;
+            card.appendChild(kn);
+          }
+          if (tpl.detail) {
+            var det = document.createElement("div");
+            det.className = "detail";
+            det.textContent = tpl.detail || "";
+            card.appendChild(det);
+          }
+          var hint = document.createElement("div");
+          hint.className = "main-card-tap-hint";
+          hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
+          card.appendChild(hint);
+          card.addEventListener("click", function () {
+            toggleComplete(sl, dstr, !isDone);
+          });
+          container.appendChild(card);
+        }
+
         function renderMainToday() {
-          var grid = $("mainTodoGrid");
-          grid.innerHTML = "";
+          var gridP = $("mainTodoGridPending");
+          var gridD = $("mainTodoGridDone");
+          var emptyP = $("mainEmptyPending");
+          var emptyD = $("mainEmptyDone");
+          gridP.innerHTML = "";
+          gridD.innerHTML = "";
+          emptyP.classList.add("hidden");
+          emptyD.classList.add("hidden");
           var today = new Date();
           var dstr = isoDate(today);
           var slots = slotsForDay(today);
@@ -993,10 +1180,14 @@
             return sl.kid_id === state.selectedKidId;
           });
           if (!filtered.length) {
-            grid.innerHTML =
+            gridP.innerHTML =
               '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 넣은 투두가 없어요 🌟<br><small style="font-weight:600">관리자 → 투두 보기 → 주간 배치에서 요일을 채워 주세요.</small></p>';
+            emptyD.classList.remove("hidden");
+            emptyD.textContent = "할 일이 생기면 완료한 뒤 여기에 모여요";
             return;
           }
+          var pending = [];
+          var doneList = [];
           filtered.forEach(function (sl) {
             var tpl = tplById(sl.template_id);
             if (!tpl) return;
@@ -1004,33 +1195,25 @@
             var done = state.completionsToday.some(function (c) {
               return c.slot_id === sl.id && c.for_date === dstr;
             });
-            var card = document.createElement("div");
-            card.className = "main-card" + (done ? " done" : "");
-            var em = document.createElement("div");
-            em.className = "emoji";
-            em.textContent = tpl.emoji || "⭐";
-            var tit = document.createElement("div");
-            tit.className = "title";
-            tit.textContent = tpl.title;
-            var kn = document.createElement("div");
-            kn.className = "kid";
-            kn.textContent = kid ? kid.name : "";
-            var det = document.createElement("div");
-            det.className = "detail";
-            det.textContent = tpl.detail || "";
-            var cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.checked = done;
-            cb.addEventListener("change", function () {
-              toggleComplete(sl, dstr, cb.checked);
-            });
-            card.appendChild(em);
-            card.appendChild(tit);
-            if (kid) card.appendChild(kn);
-            if (tpl.detail) card.appendChild(det);
-            card.appendChild(cb);
-            grid.appendChild(card);
+            if (done) doneList.push({ sl: sl, tpl: tpl, kid: kid });
+            else pending.push({ sl: sl, tpl: tpl, kid: kid });
           });
+          if (pending.length === 0) {
+            emptyP.classList.remove("hidden");
+            emptyP.textContent = "오늘 할 일을 모두 끝냈어요 🎉";
+          } else {
+            pending.forEach(function (item) {
+              appendMainTodoCard(gridP, item.sl, item.tpl, item.kid, dstr, false);
+            });
+          }
+          if (doneList.length === 0) {
+            emptyD.classList.remove("hidden");
+            emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 눌러 보세요!";
+          } else {
+            doneList.forEach(function (item) {
+              appendMainTodoCard(gridD, item.sl, item.tpl, item.kid, dstr, true);
+            });
+          }
         }
 
         function renderCalendar() {
