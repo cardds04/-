@@ -1680,6 +1680,9 @@
     <script>
       (function () {
         var PW_KEY = "family_todos_admin_pw_sha256";
+        var LS_LAST_VIEW_KEY = "family_todos_last_view";
+        var SS_RESTORE_ADMIN_TAB = "family_todos_restore_admin_tab";
+        var VALID_ADMIN_TABS = ["kids", "templates", "coupons", "guide"];
         var SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
         var SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
         var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1986,6 +1989,26 @@
           $("scheduleDateOverlay").setAttribute("aria-hidden", "false");
         }
 
+        function readLastViewRecord() {
+          try {
+            var raw = localStorage.getItem(LS_LAST_VIEW_KEY);
+            if (!raw) return null;
+            var o = JSON.parse(raw);
+            if (!o || typeof o !== "object" || typeof o.root !== "string") return null;
+            return o;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function persistLastView(root) {
+          try {
+            var o = { root: root };
+            if (root === "admin") o.adminTab = state.adminTab || "kids";
+            localStorage.setItem(LS_LAST_VIEW_KEY, JSON.stringify(o));
+          } catch (e) {}
+        }
+
         function openWeekPickOverlay(w) {
           if (!state.selectedKidId) return;
           state.weekPickWeekday = w;
@@ -2040,6 +2063,7 @@
           $("adminNav").classList.toggle("hidden", name !== "admin");
           $("headerTitle").textContent = name === "admin" ? "🛠 부모님 페이지" : "🌈 오늘 할 일";
           $("appHeader").classList.toggle("admin-page", name === "admin");
+          if (name === "main" || name === "setup") persistLastView(name);
         }
 
         function setAdminTab(tab) {
@@ -2053,6 +2077,9 @@
           });
           if (tab === "templates" || tab === "kids" || tab === "coupons" || tab === "guide") {
             scrollAdminInputIntoView(tab);
+          }
+          if (!$("viewAdmin").classList.contains("hidden")) {
+            persistLastView("admin");
           }
         }
 
@@ -3091,6 +3118,9 @@
             fixShowRoot("setup");
             return;
           }
+          try {
+            sessionStorage.removeItem(SS_RESTORE_ADMIN_TAB);
+          } catch (e) {}
           $("gateErr").innerHTML = "";
           $("gatePw").value = "";
           fixShowRoot("gate");
@@ -3112,8 +3142,14 @@
             return;
           }
           $("gatePw").value = "";
+          var tabRestore = "kids";
+          try {
+            var s = sessionStorage.getItem(SS_RESTORE_ADMIN_TAB);
+            sessionStorage.removeItem(SS_RESTORE_ADMIN_TAB);
+            if (s && VALID_ADMIN_TABS.indexOf(s) >= 0) tabRestore = s;
+          } catch (e) {}
           fixShowRoot("admin");
-          setAdminTab("kids");
+          setAdminTab(tabRestore);
           await refresh();
         });
 
@@ -3327,6 +3363,45 @@
         });
 
         function boot() {
+          var last = readLastViewRecord();
+          var hasPw = !!localStorage.getItem(PW_KEY);
+
+          if (!hasPw) {
+            if (last && last.root === "setup") {
+              fixShowRoot("setup");
+              return;
+            }
+            fixShowRoot("main");
+            refresh();
+            return;
+          }
+
+          if (!last || last.root === "main") {
+            fixShowRoot("main");
+            refresh();
+            return;
+          }
+
+          if (last.root === "setup") {
+            fixShowRoot("main");
+            refresh();
+            return;
+          }
+
+          if (last.root === "gate") {
+            fixShowRoot("gate");
+            return;
+          }
+
+          if (last.root === "admin") {
+            var t = last.adminTab;
+            try {
+              sessionStorage.setItem(SS_RESTORE_ADMIN_TAB, t && VALID_ADMIN_TABS.indexOf(t) >= 0 ? t : "kids");
+            } catch (e) {}
+            fixShowRoot("gate");
+            return;
+          }
+
           fixShowRoot("main");
           refresh();
         }
