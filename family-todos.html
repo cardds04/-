@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>우리 가족 투두 · 쿠폰</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      :root {
+        --sky: #7dd3fc;
+        --mint: #6ee7b7;
+        --lav: #c4b5fd;
+        --sun: #fcd34d;
+        --coral: #fda4af;
+        --ink: #0f172a;
+        --card: rgba(255, 255, 255, 0.92);
+        --radius: 18px;
+        --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: var(--font);
+        color: var(--ink);
+        background: linear-gradient(135deg, #e0f2fe 0%, #ecfccb 35%, #fef3c7 70%, #fce7f3 100%);
+        background-attachment: fixed;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+      }
+      .app-header {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+        padding: 10px 14px;
+        background: var(--card);
+        border-bottom: 2px solid rgba(15, 23, 42, 0.08);
+        box-shadow: 0 4px 20px rgba(14, 165, 233, 0.12);
+      }
+      .app-header.hidden {
+        display: none;
+      }
+      .btn-home {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.95rem;
+        cursor: pointer;
+        background: linear-gradient(90deg, var(--sky), var(--mint));
+        color: #0f172a;
+        box-shadow: 0 2px 10px rgba(14, 165, 233, 0.35);
+      }
+      .kid-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .kid-chips span {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #64748b;
+      }
+      .kid-chip {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background: #f1f5f9;
+        font-weight: 700;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .kid-chip.active {
+        border-color: #0ea5e9;
+        background: #e0f2fe;
+        color: #0369a1;
+      }
+      .stamp-badge {
+        margin-left: auto;
+        font-weight: 800;
+        font-size: 0.9rem;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, var(--sun), var(--coral));
+        color: #422006;
+      }
+      #appMain {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        overflow: auto;
+      }
+      .view {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .view.hidden {
+        display: none;
+      }
+      .home-grid {
+        max-width: 920px;
+        margin: auto;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+        padding: 20px 8px;
+      }
+      @media (min-width: 720px) {
+        .home-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 24px;
+        }
+      }
+      .home-tile {
+        border: none;
+        border-radius: var(--radius);
+        padding: clamp(24px, 5vw, 40px) 20px;
+        font-size: clamp(1.15rem, 3vw, 1.45rem);
+        font-weight: 800;
+        cursor: pointer;
+        color: #0f172a;
+        min-height: 120px;
+        box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .home-tile:active {
+        transform: scale(0.98);
+      }
+      .home-tile.t1 {
+        background: linear-gradient(145deg, #a5f3fc, #67e8f9);
+      }
+      .home-tile.t2 {
+        background: linear-gradient(145deg, #bbf7d0, #86efac);
+      }
+      .home-tile.t3 {
+        background: linear-gradient(145deg, #fde68a, #fcd34d);
+      }
+      .home-tile.t4 {
+        background: linear-gradient(145deg, #fbcfe8, #f9a8d4);
+      }
+      .home-title {
+        text-align: center;
+        font-size: clamp(1.5rem, 4vw, 2.1rem);
+        font-weight: 900;
+        margin: 12px 0 8px;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+      }
+      .home-sub {
+        text-align: center;
+        color: #475569;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+      }
+      .cal-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        flex: 1;
+        min-height: 0;
+      }
+      @media (min-width: 900px) {
+        .cal-layout {
+          grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+          align-items: stretch;
+        }
+      }
+      .cal-card {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 14px;
+        box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .cal-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .cal-nav button {
+        border: none;
+        background: #e2e8f0;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .cal-month-title {
+        font-weight: 900;
+        font-size: 1.1rem;
+      }
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+      }
+      .cal-dow {
+        padding: 4px 0;
+      }
+      .cal-cell {
+        aspect-ratio: 1;
+        max-height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 0.95rem;
+        border: 2px solid transparent;
+      }
+      .cal-cell:hover {
+        background: #f1f5f9;
+      }
+      .cal-cell.other {
+        opacity: 0.35;
+      }
+      .cal-cell.today {
+        border-color: #0ea5e9;
+        background: #e0f2fe;
+      }
+      .cal-cell.selected {
+        background: linear-gradient(145deg, var(--lav), var(--sky));
+        color: #0f172a;
+      }
+      .day-panel-title {
+        font-weight: 900;
+        font-size: 1.05rem;
+        margin-bottom: 10px;
+      }
+      .todo-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-radius: 14px;
+        margin-bottom: 8px;
+        border: 2px solid #e2e8f0;
+      }
+      .todo-row.done {
+        opacity: 0.65;
+        background: #ecfdf5;
+        border-color: #6ee7b7;
+      }
+      .todo-row input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        margin-top: 4px;
+        accent-color: #10b981;
+      }
+      .todo-emoji {
+        font-size: 1.6rem;
+        line-height: 1;
+      }
+      .todo-meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .todo-title {
+        font-weight: 800;
+        font-size: 1rem;
+      }
+      .todo-kid {
+        font-size: 0.78rem;
+        color: #64748b;
+        font-weight: 600;
+      }
+      .todo-detail {
+        font-size: 0.85rem;
+        color: #475569;
+        margin-top: 4px;
+        white-space: pre-wrap;
+      }
+      .week-editor {
+        margin-top: 12px;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .week-editor-h {
+        font-weight: 800;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        color: #0f172a;
+      }
+      .week-cols {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        flex: 1;
+        min-height: 140px;
+      }
+      .week-col {
+        flex: 0 0 min(140px, 22vw);
+        min-height: 120px;
+        background: #f1f5f9;
+        border-radius: 14px;
+        padding: 8px;
+        border: 3px dashed #cbd5e1;
+      }
+      .week-col.drag-over {
+        border-color: #0ea5e9;
+        background: #e0f2fe;
+      }
+      .week-col-h {
+        font-weight: 900;
+        font-size: 0.8rem;
+        text-align: center;
+        margin-bottom: 6px;
+        color: #475569;
+      }
+      .slot-chip {
+        font-size: 0.72rem;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: #fff;
+        margin-bottom: 4px;
+        cursor: grab;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 700;
+      }
+      .slot-chip button.del {
+        margin-left: auto;
+        border: none;
+        background: #fee2e2;
+        color: #b91c1c;
+        border-radius: 6px;
+        padding: 2px 6px;
+        cursor: pointer;
+        font-size: 0.65rem;
+      }
+      .library {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 2px solid #e2e8f0;
+      }
+      .library-h {
+        font-weight: 800;
+        font-size: 0.85rem;
+        margin-bottom: 6px;
+      }
+      .library-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .tpl-chip {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: linear-gradient(145deg, #fff, #f1f5f9);
+        border: 2px solid #cbd5e1;
+        cursor: grab;
+        font-weight: 800;
+        font-size: 0.85rem;
+      }
+      .tpl-chip:active {
+        cursor: grabbing;
+      }
+      .hint-bar {
+        font-size: 0.8rem;
+        color: #b45309;
+        background: #fffbeb;
+        padding: 8px 10px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .form-card {
+        max-width: 520px;
+        margin: 0 auto;
+        background: var(--card);
+        padding: 18px;
+        border-radius: var(--radius);
+        box-shadow: 0 8px 28px rgba(15, 23, 42, 0.1);
+      }
+      .form-card h2 {
+        margin: 0 0 14px;
+        font-size: 1.2rem;
+      }
+      .form-card label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #64748b;
+        margin: 10px 0 4px;
+      }
+      .form-card input,
+      .form-card textarea,
+      .form-card select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        font: inherit;
+      }
+      .form-card textarea {
+        min-height: 88px;
+        resize: vertical;
+      }
+      .form-card button[type="submit"] {
+        margin-top: 14px;
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 14px;
+        font-weight: 900;
+        font-size: 1rem;
+        cursor: pointer;
+        background: linear-gradient(90deg, var(--mint), var(--sky));
+        color: #0f172a;
+      }
+      .list-card {
+        margin-top: 16px;
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 14px;
+        max-width: 520px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 700;
+      }
+      .list-item button {
+        border: none;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .err {
+        background: #fef2f2;
+        color: #b91c1c;
+        padding: 10px;
+        border-radius: 10px;
+        margin: 8px 0;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .toolbar button {
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 2px solid #cbd5e1;
+        background: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .toolbar button.on {
+        border-color: #0ea5e9;
+        background: #e0f2fe;
+      }
+    </style>
+  </head>
+  <body>
+    <header id="appHeader" class="app-header hidden">
+      <button type="button" class="btn-home" id="btnGoHome">🏠 홈으로</button>
+      <div class="kid-chips">
+        <span>누구 투두?</span>
+        <button type="button" class="kid-chip active" data-kid="">전체</button>
+        <span id="kidChipsMount"></span>
+      </div>
+      <div class="stamp-badge" id="stampBadge" hidden></div>
+    </header>
+    <main id="appMain">
+      <section id="viewHome" class="view">
+        <h1 class="home-title">🌈 우리 가족 투두</h1>
+        <p class="home-sub">함께 만들고, 함께 해내요</p>
+        <div class="home-grid">
+          <button type="button" class="home-tile t1" data-go="templates">📝 투두 등록하기</button>
+          <button type="button" class="home-tile t2" data-go="kids">👧 아이 등록하기</button>
+          <button type="button" class="home-tile t3" data-go="calendar">📅 투두 보기</button>
+          <button type="button" class="home-tile t4" data-go="coupons">🎁 쿠폰</button>
+        </div>
+        <p class="home-sub" id="sbStatus" style="font-size: 0.82rem"></p>
+      </section>
+
+      <section id="viewCalendar" class="view hidden">
+        <div class="cal-layout">
+          <div class="cal-card">
+            <div class="cal-nav">
+              <button type="button" id="calPrev">◀</button>
+              <div class="cal-month-title" id="calMonthTitle"></div>
+              <button type="button" id="calNext">▶</button>
+            </div>
+            <div class="cal-grid" id="calDowRow"></div>
+            <div class="cal-grid" id="calCells"></div>
+          </div>
+          <div class="cal-card">
+            <div class="toolbar">
+              <button type="button" id="btnTabDay" class="on">📋 선택한 날 할 일</button>
+              <button type="button" id="btnTabWeek">📆 주간 배치(드래그)</button>
+            </div>
+            <div id="panelDay">
+              <div class="day-panel-title" id="dayPanelTitle">오늘 할 일</div>
+              <div id="dayTodoList"></div>
+            </div>
+            <div id="panelWeek" class="week-editor hidden">
+              <div id="weekHint" class="hint-bar" hidden>주간 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
+              <div class="week-editor-h">월 ~ 일 칸에 기본 투두를 끌어다 놓으세요 (여러 개 가능)</div>
+              <div class="week-cols" id="weekCols"></div>
+              <div class="library">
+                <div class="library-h">기본 투두 저장소 → 요일로 드래그</div>
+                <div class="library-row" id="libraryRow"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="viewTemplates" class="view hidden">
+        <div class="form-card">
+          <h2>기본 투두 저장하기</h2>
+          <div id="tplErr"></div>
+          <form id="formTemplate">
+            <label>짧은 이름(아이콘 옆)</label>
+            <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
+            <label>자세한 내용</label>
+            <textarea name="detail" placeholder="무엇을 하면 되는지 적어요"></textarea>
+            <label>이모지</label>
+            <select name="emoji">
+              <option value="⭐">⭐</option>
+              <option value="📚">📚</option>
+              <option value="🧹">🧹</option>
+              <option value="🍽️">🍽️</option>
+              <option value="🛁">🛁</option>
+              <option value="✏️">✏️</option>
+              <option value="🎨">🎨</option>
+              <option value="⚽">⚽</option>
+              <option value="🎹">🎹</option>
+              <option value="💤">💤</option>
+              <option value="🐶">🐶</option>
+              <option value="💪">💪</option>
+            </select>
+            <label>어느 아이 투두인가요? (비우면 공통)</label>
+            <select name="kid_id" id="tplKidSelect">
+              <option value="">공통</option>
+            </select>
+            <button type="submit">저장</button>
+          </form>
+        </div>
+        <div class="list-card">
+          <h3 style="margin-top: 0">저장된 투두</h3>
+          <div id="tplList"></div>
+        </div>
+      </section>
+
+      <section id="viewKids" class="view hidden">
+        <div class="form-card">
+          <h2>아이 등록</h2>
+          <div id="kidErr"></div>
+          <form id="formKid">
+            <label>이름</label>
+            <input name="name" required maxlength="40" placeholder="예: 김하준" />
+            <button type="submit">등록</button>
+          </form>
+        </div>
+        <div class="list-card">
+          <h3 style="margin-top: 0">아이 목록</h3>
+          <div id="kidList"></div>
+        </div>
+      </section>
+
+      <section id="viewCoupons" class="view hidden">
+        <div class="form-card">
+          <h2>쿠폰(보상) 만들기</h2>
+          <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">
+            투두를 하나 완료할 때마다 스탬프 1개가 쌓여요. 여기서 정한 개수만큼 모이면 보상을 줄 수 있어요.
+          </p>
+          <div id="coupErr"></div>
+          <form id="formCoupon">
+            <label>쿠폰 이름</label>
+            <input name="title" required maxlength="80" placeholder="예: 아이스크림 쿠폰" />
+            <label>모을 스탬프 개수</label>
+            <input name="stamps_required" type="number" min="1" max="999" value="10" required />
+            <label>보상 내용</label>
+            <textarea name="reward_text" placeholder="예: 네가 고른 맛 아이스크림 1개"></textarea>
+            <button type="submit">쿠폰 저장</button>
+          </form>
+        </div>
+        <div class="list-card">
+          <h3 style="margin-top: 0">쿠폰 목록 · 사용하기</h3>
+          <p style="font-size: 0.85rem; color: #64748b">아이를 선택하면 스탬프 수가 헤더에 보여요. 스탬프가 충분하면 사용할 수 있어요.</p>
+          <div id="couponList"></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+        var SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+        var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        var WD = ["월", "화", "수", "목", "금", "토", "일"];
+        var state = {
+          kids: [],
+          templates: [],
+          slots: [],
+          completions: [],
+          wallets: [],
+          coupons: [],
+          selectedKidId: "",
+          calYear: new Date().getFullYear(),
+          calMonth: new Date().getMonth(),
+          selectedDate: new Date(),
+          weekTab: false,
+        };
+
+        function weekdayMon0(d) {
+          var x = d.getDay();
+          return x === 0 ? 6 : x - 1;
+        }
+        function isoDate(d) {
+          var y = d.getFullYear();
+          var m = String(d.getMonth() + 1).padStart(2, "0");
+          var day = String(d.getDate()).padStart(2, "0");
+          return y + "-" + m + "-" + day;
+        }
+        function isSameDay(a, b) {
+          return isoDate(a) === isoDate(b);
+        }
+
+        function $(id) {
+          return document.getElementById(id);
+        }
+
+        function showHeader(on) {
+          $("appHeader").classList.toggle("hidden", !on);
+        }
+        function showView(name) {
+          ["viewHome", "viewCalendar", "viewTemplates", "viewKids", "viewCoupons"].forEach(function (id) {
+            $(id).classList.toggle("hidden", id !== "view" + capitalize(name));
+          });
+          showHeader(name !== "home");
+          if (name === "calendar") {
+            state.weekTab = false;
+            $("btnTabDay").classList.add("on");
+            $("btnTabWeek").classList.remove("on");
+            $("panelDay").classList.remove("hidden");
+            $("panelWeek").classList.add("hidden");
+          }
+        }
+        function capitalize(s) {
+          return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        async function refresh() {
+          var errEl = $("sbStatus");
+          try {
+            var k = await supabase.from("family_kids").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+            var t = await supabase.from("family_todo_templates").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+            var s = await supabase.from("family_weekly_slots").select("*");
+            var w = await supabase.from("family_kid_wallet").select("*");
+            var c = await supabase.from("family_reward_coupons").select("*").order("created_at", { ascending: false });
+            if (k.error) throw k.error;
+            if (t.error) throw t.error;
+            if (s.error) throw s.error;
+            if (w.error) throw w.error;
+            if (c.error) throw c.error;
+            var dstr = isoDate(state.selectedDate);
+            var comp = await supabase.from("family_todo_completions").select("*").eq("for_date", dstr);
+            if (comp.error) throw comp.error;
+            state.kids = k.data || [];
+            state.templates = t.data || [];
+            state.slots = s.data || [];
+            state.wallets = w.data || [];
+            state.coupons = c.data || [];
+            state.completions = comp.data || [];
+            errEl.textContent = "";
+            renderKidChips();
+            renderCalendar();
+            renderDayTodos();
+            renderWeekEditor();
+            renderLibrary();
+            renderTplList();
+            renderKidList();
+            renderCouponList();
+            fillKidSelects();
+            updateStampBadge();
+          } catch (e) {
+            console.error(e);
+            errEl.textContent =
+              "Supabase 연결 실패: 테이블·RLS·마이그레이션을 확인하세요. (" + (e.message || e) + ")";
+          }
+        }
+
+        function kidById(id) {
+          return state.kids.find(function (x) {
+            return x.id === id;
+          });
+        }
+        function tplById(id) {
+          return state.templates.find(function (x) {
+            return x.id === id;
+          });
+        }
+
+        function renderKidChips() {
+          var mount = $("kidChipsMount");
+          mount.innerHTML = "";
+          state.kids.forEach(function (kid) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "kid-chip" + (state.selectedKidId === kid.id ? " active" : "");
+            b.textContent = kid.name;
+            b.dataset.kid = kid.id;
+            b.addEventListener("click", function () {
+              state.selectedKidId = kid.id;
+              document.querySelectorAll(".kid-chip").forEach(function (el) {
+                el.classList.remove("active");
+              });
+              b.classList.add("active");
+              document.querySelector('.kid-chip[data-kid=""]').classList.remove("active");
+              renderDayTodos();
+              renderWeekEditor();
+              updateStampBadge();
+            });
+            mount.appendChild(b);
+          });
+          var allBtn = document.querySelector('.kid-chip[data-kid=""]');
+          allBtn.onclick = function () {
+            state.selectedKidId = "";
+            document.querySelectorAll(".kid-chip").forEach(function (el) {
+              el.classList.remove("active");
+            });
+            allBtn.classList.add("active");
+            renderDayTodos();
+            renderWeekEditor();
+            updateStampBadge();
+          };
+        }
+
+        function updateStampBadge() {
+          var el = $("stampBadge");
+          if (!state.selectedKidId) {
+            el.hidden = true;
+            return;
+          }
+          var w = state.wallets.find(function (x) {
+            return x.kid_id === state.selectedKidId;
+          });
+          var n = w ? w.stamps : 0;
+          el.hidden = false;
+          el.textContent = "🎟 스탬프 " + n + "개";
+        }
+
+        function renderCalendar() {
+          var y = state.calYear;
+          var m = state.calMonth;
+          $("calMonthTitle").textContent = y + "년 " + (m + 1) + "월";
+          var dow = $("calDowRow");
+          dow.innerHTML = "";
+          WD.forEach(function (w) {
+            var c = document.createElement("div");
+            c.className = "cal-dow";
+            c.textContent = w;
+            dow.appendChild(c);
+          });
+          var first = new Date(y, m, 1);
+          var startPad = weekdayMon0(first);
+          var daysInMonth = new Date(y, m + 1, 0).getDate();
+          var cells = $("calCells");
+          cells.innerHTML = "";
+          var prevMonthDays = new Date(y, m, 0).getDate();
+          for (var i = 0; i < startPad; i++) {
+            var d = prevMonthDays - startPad + i + 1;
+            var cell = document.createElement("div");
+            cell.className = "cal-cell other";
+            cell.textContent = d;
+            cells.appendChild(cell);
+          }
+          var today = new Date();
+          for (var day = 1; day <= daysInMonth; day++) {
+            (function (day) {
+              var dt = new Date(y, m, day);
+              var cell = document.createElement("div");
+              cell.className = "cal-cell";
+              cell.textContent = day;
+              if (isSameDay(dt, today)) cell.classList.add("today");
+              if (isSameDay(dt, state.selectedDate)) cell.classList.add("selected");
+              cell.addEventListener("click", function () {
+                state.selectedDate = dt;
+                refresh();
+              });
+              cells.appendChild(cell);
+            })(day);
+          }
+          var total = startPad + daysInMonth;
+          var endPad = (7 - (total % 7)) % 7;
+          for (var j = 1; j <= endPad; j++) {
+            var c2 = document.createElement("div");
+            c2.className = "cal-cell other";
+            c2.textContent = j;
+            cells.appendChild(c2);
+          }
+        }
+
+        function slotsForDay(d) {
+          var wd = weekdayMon0(d);
+          return state.slots.filter(function (sl) {
+            return sl.weekday === wd;
+          });
+        }
+
+        function renderDayTodos() {
+          var list = $("dayTodoList");
+          list.innerHTML = "";
+          var d = state.selectedDate;
+          $("dayPanelTitle").textContent =
+            d.getFullYear() + "년 " + (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WD[weekdayMon0(d)] + ") 할 일";
+          var slots = slotsForDay(d);
+          var filtered = slots.filter(function (sl) {
+            if (!state.selectedKidId) return true;
+            return sl.kid_id === state.selectedKidId;
+          });
+          if (!filtered.length) {
+            list.innerHTML = '<p style="color:#64748b;font-weight:600">이 날짜에 넣은 투두가 없어요. 주간 배치에서 넣어 보세요.</p>';
+            return;
+          }
+          var dstr = isoDate(d);
+          filtered.forEach(function (sl) {
+            var tpl = tplById(sl.template_id);
+            if (!tpl) return;
+            var kid = kidById(sl.kid_id);
+            var done = state.completions.some(function (c) {
+              return c.slot_id === sl.id && c.for_date === dstr;
+            });
+            var row = document.createElement("div");
+            row.className = "todo-row" + (done ? " done" : "");
+            var cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.checked = done;
+            cb.addEventListener("change", function () {
+              toggleComplete(sl, dstr, cb.checked);
+            });
+            var em = document.createElement("div");
+            em.className = "todo-emoji";
+            em.textContent = tpl.emoji || "⭐";
+            var meta = document.createElement("div");
+            meta.className = "todo-meta";
+            meta.innerHTML =
+              '<div class="todo-title">' +
+              escapeHtml(tpl.title) +
+              '</div><div class="todo-kid">' +
+              escapeHtml(kid ? kid.name : "") +
+              '</div><div class="todo-detail">' +
+              escapeHtml(tpl.detail || "") +
+              "</div>";
+            row.appendChild(cb);
+            row.appendChild(em);
+            row.appendChild(meta);
+            list.appendChild(row);
+          });
+        }
+
+        async function toggleComplete(slot, dstr, checked) {
+          if (checked) {
+            await supabase.from("family_todo_completions").insert({
+              kid_id: slot.kid_id,
+              slot_id: slot.id,
+              for_date: dstr,
+            });
+          } else {
+            await supabase
+              .from("family_todo_completions")
+              .delete()
+              .eq("kid_id", slot.kid_id)
+              .eq("slot_id", slot.id)
+              .eq("for_date", dstr);
+          }
+          await refresh();
+        }
+
+        function escapeHtml(s) {
+          if (!s) return "";
+          var d = document.createElement("div");
+          d.textContent = s;
+          return d.innerHTML;
+        }
+
+        function renderWeekEditor() {
+          var cols = $("weekCols");
+          cols.innerHTML = "";
+          var needKid = !state.selectedKidId;
+          $("weekHint").hidden = !needKid;
+          for (var w = 0; w < 7; w++) {
+            (function (w) {
+              var col = document.createElement("div");
+              col.className = "week-col";
+              col.dataset.weekday = String(w);
+              col.innerHTML = '<div class="week-col-h">' + WD[w] + "</div>";
+              var inner = document.createElement("div");
+              col.appendChild(inner);
+              var kidFilter = state.selectedKidId;
+              state.slots
+                .filter(function (sl) {
+                  return sl.weekday === w && (!kidFilter || sl.kid_id === kidFilter);
+                })
+                .sort(function (a, b) {
+                  return a.position - b.position;
+                })
+                .forEach(function (sl) {
+                  var tpl = tplById(sl.template_id);
+                  if (!tpl) return;
+                  var chip = document.createElement("div");
+                  chip.className = "slot-chip";
+                  chip.innerHTML =
+                    "<span>" +
+                    (tpl.emoji || "⭐") +
+                    "</span> " +
+                    escapeHtml(tpl.title) +
+                    ' <button type="button" class="del" title="이 요일에서 빼기">✕</button>';
+                  chip.querySelector(".del").addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    supabase.from("family_weekly_slots").delete().eq("id", sl.id).then(refresh);
+                  });
+                  inner.appendChild(chip);
+                });
+              if (!needKid) {
+                col.addEventListener("dragover", function (e) {
+                  e.preventDefault();
+                  col.classList.add("drag-over");
+                });
+                col.addEventListener("dragleave", function () {
+                  col.classList.remove("drag-over");
+                });
+                col.addEventListener("drop", function (e) {
+                  e.preventDefault();
+                  col.classList.remove("drag-over");
+                  var tid = e.dataTransfer.getData("text/template-id");
+                  if (!tid) return;
+                  var maxPos = 0;
+                  state.slots.forEach(function (s) {
+                    if (s.kid_id === state.selectedKidId && s.weekday === w) maxPos = Math.max(maxPos, s.position);
+                  });
+                  supabase
+                    .from("family_weekly_slots")
+                    .insert({
+                      kid_id: state.selectedKidId,
+                      template_id: tid,
+                      weekday: w,
+                      position: maxPos + 1,
+                    })
+                    .then(refresh);
+                });
+              }
+              cols.appendChild(col);
+            })(w);
+          }
+        }
+
+        function renderLibrary() {
+          var row = $("libraryRow");
+          row.innerHTML = "";
+          var list = state.templates.filter(function (t) {
+            if (!state.selectedKidId) return true;
+            return !t.kid_id || t.kid_id === state.selectedKidId;
+          });
+          list.forEach(function (t) {
+            var el = document.createElement("div");
+            el.className = "tpl-chip";
+            el.draggable = true;
+            el.dataset.templateId = t.id;
+            el.textContent = (t.emoji || "⭐") + " " + t.title;
+            el.addEventListener("dragstart", function (e) {
+              e.dataTransfer.setData("text/template-id", t.id);
+              e.dataTransfer.effectAllowed = "copy";
+            });
+            row.appendChild(el);
+          });
+          if (!list.length) {
+            row.innerHTML = '<span style="color:#64748b;font-weight:600">저장된 투두가 없어요. 투두 등록하기에서 추가하세요.</span>';
+          }
+        }
+
+        function renderTplList() {
+          var el = $("tplList");
+          el.innerHTML = "";
+          state.templates.forEach(function (t) {
+            var kid = t.kid_id ? kidById(t.kid_id) : null;
+            var div = document.createElement("div");
+            div.className = "list-item";
+            div.innerHTML =
+              "<span>" +
+              (t.emoji || "⭐") +
+              " " +
+              escapeHtml(t.title) +
+              (kid ? ' <small style="color:#64748b">(' + escapeHtml(kid.name) + ")</small>" : "") +
+              "</span>";
+            var del = document.createElement("button");
+            del.type = "button";
+            del.textContent = "삭제";
+            del.addEventListener("click", function () {
+              if (confirm("이 투두를 삭제할까요? 주간에 넣은 것도 함께 사라질 수 있어요."))
+                supabase.from("family_todo_templates").delete().eq("id", t.id).then(refresh);
+            });
+            div.appendChild(del);
+            el.appendChild(div);
+          });
+        }
+
+        function renderKidList() {
+          var el = $("kidList");
+          el.innerHTML = "";
+          state.kids.forEach(function (k) {
+            var div = document.createElement("div");
+            div.className = "list-item";
+            div.innerHTML = "<span>" + escapeHtml(k.name) + "</span>";
+            var del = document.createElement("button");
+            del.type = "button";
+            del.textContent = "삭제";
+            del.addEventListener("click", function () {
+              if (confirm("정말 삭제할까요? 이 아이의 주간 투두도 함께 지워져요."))
+                supabase.from("family_kids").delete().eq("id", k.id).then(refresh);
+            });
+            div.appendChild(del);
+            el.appendChild(div);
+          });
+        }
+
+        function renderCouponList() {
+          var el = $("couponList");
+          el.innerHTML = "";
+          if (!state.coupons.length) {
+            el.innerHTML = '<p style="color:#64748b">등록된 쿠폰이 없어요.</p>';
+            return;
+          }
+          state.coupons.forEach(function (c) {
+            if (!c.active) return;
+            var div = document.createElement("div");
+            div.className = "list-item";
+            div.style.flexWrap = "wrap";
+            div.style.gap = "8px";
+            var stamps = 0;
+            if (state.selectedKidId) {
+              var w = state.wallets.find(function (x) {
+                return x.kid_id === state.selectedKidId;
+              });
+              stamps = w ? w.stamps : 0;
+            }
+            var can = state.selectedKidId && stamps >= c.stamps_required;
+            div.innerHTML =
+              "<div style='flex:1;min-width:12rem'><strong>" +
+              escapeHtml(c.title) +
+              "</strong><br><small style='color:#64748b'>" +
+              escapeHtml(c.reward_text || "") +
+              "</small><br><small>필요 스탬프: " +
+              c.stamps_required +
+              "</small></div>";
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = can ? "🎁 보상 받기 (스탬프 " + c.stamps_required + " 사용)" : "스탬프 부족";
+            btn.disabled = !can;
+            btn.style.padding = "10px 12px";
+            btn.style.borderRadius = "10px";
+            btn.style.border = "none";
+            btn.style.fontWeight = "800";
+            btn.style.cursor = can ? "pointer" : "not-allowed";
+            btn.style.background = can ? "linear-gradient(90deg,#86efac,#67e8f9)" : "#e2e8f0";
+            btn.addEventListener("click", function () {
+              if (!can) return;
+              if (!confirm("스탬프 " + c.stamps_required + "개를 쓰고 보상을 확정할까요?")) return;
+              redeemCoupon(c);
+            });
+            div.appendChild(btn);
+            el.appendChild(div);
+          });
+        }
+
+        async function redeemCoupon(c) {
+          var kidId = state.selectedKidId;
+          if (!kidId) return;
+          var w = state.wallets.find(function (x) {
+            return x.kid_id === kidId;
+          });
+          var cur = w ? w.stamps : 0;
+          if (cur < c.stamps_required) return;
+          var next = cur - c.stamps_required;
+          await supabase.from("family_coupon_redemptions").insert({
+            kid_id: kidId,
+            coupon_id: c.id,
+            stamps_spent: c.stamps_required,
+          });
+          await supabase.from("family_kid_wallet").upsert(
+            { kid_id: kidId, stamps: next, updated_at: new Date().toISOString() },
+            { onConflict: "kid_id" },
+          );
+          alert("🎉 " + (c.reward_text || "보상") + " — 약속을 지켜 주세요!");
+          await refresh();
+        }
+
+        function fillKidSelects() {
+          var sel = $("tplKidSelect");
+          sel.innerHTML = '<option value="">공통</option>';
+          state.kids.forEach(function (k) {
+            var o = document.createElement("option");
+            o.value = k.id;
+            o.textContent = k.name;
+            sel.appendChild(o);
+          });
+        }
+
+        $("btnGoHome").addEventListener("click", function () {
+          showView("home");
+        });
+        document.querySelectorAll(".home-tile[data-go]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            showView(btn.dataset.go);
+            refresh();
+          });
+        });
+        $("calPrev").addEventListener("click", function () {
+          state.calMonth--;
+          if (state.calMonth < 0) {
+            state.calMonth = 11;
+            state.calYear--;
+          }
+          renderCalendar();
+        });
+        $("calNext").addEventListener("click", function () {
+          state.calMonth++;
+          if (state.calMonth > 11) {
+            state.calMonth = 0;
+            state.calYear++;
+          }
+          renderCalendar();
+        });
+        $("btnTabDay").addEventListener("click", function () {
+          state.weekTab = false;
+          $("btnTabDay").classList.add("on");
+          $("btnTabWeek").classList.remove("on");
+          $("panelDay").classList.remove("hidden");
+          $("panelWeek").classList.add("hidden");
+        });
+        $("btnTabWeek").addEventListener("click", function () {
+          state.weekTab = true;
+          $("btnTabWeek").classList.add("on");
+          $("btnTabDay").classList.remove("on");
+          $("panelDay").classList.add("hidden");
+          $("panelWeek").classList.remove("hidden");
+          renderWeekEditor();
+          renderLibrary();
+        });
+
+        $("formTemplate").addEventListener("submit", async function (e) {
+          e.preventDefault();
+          $("tplErr").innerHTML = "";
+          var fd = new FormData(e.target);
+          var kid = fd.get("kid_id");
+          var row = {
+            title: String(fd.get("title") || "").trim(),
+            detail: String(fd.get("detail") || "").trim(),
+            emoji: String(fd.get("emoji") || "⭐"),
+            kid_id: kid ? kid : null,
+          };
+          var r = await supabase.from("family_todo_templates").insert(row);
+          if (r.error) {
+            $("tplErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
+            return;
+          }
+          e.target.reset();
+          await refresh();
+        });
+
+        $("formKid").addEventListener("submit", async function (e) {
+          e.preventDefault();
+          $("kidErr").innerHTML = "";
+          var fd = new FormData(e.target);
+          var name = String(fd.get("name") || "").trim();
+          var r = await supabase.from("family_kids").insert({ name: name, sort_order: state.kids.length });
+          if (r.error) {
+            $("kidErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
+            return;
+          }
+          e.target.reset();
+          await refresh();
+        });
+
+        $("formCoupon").addEventListener("submit", async function (e) {
+          e.preventDefault();
+          $("coupErr").innerHTML = "";
+          var fd = new FormData(e.target);
+          var row = {
+            title: String(fd.get("title") || "").trim(),
+            reward_text: String(fd.get("reward_text") || "").trim(),
+            stamps_required: parseInt(String(fd.get("stamps_required") || "10"), 10),
+            active: true,
+          };
+          var r = await supabase.from("family_reward_coupons").insert(row);
+          if (r.error) {
+            $("coupErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
+            return;
+          }
+          e.target.reset();
+          await refresh();
+        });
+
+        refresh();
+      })();
+    </script>
+  </body>
+</html>
