@@ -254,18 +254,55 @@
         background: linear-gradient(145deg, #eef2ff, #e0e7ff);
         color: #3730a3;
       }
-      .cal-layout {
+      .admin-three-grid {
         display: grid;
         grid-template-columns: 1fr;
         gap: 12px;
         flex: 1;
         min-height: 0;
+        align-items: start;
       }
-      @media (min-width: 900px) {
-        .cal-layout {
-          grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
-          align-items: stretch;
+      @media (min-width: 1100px) {
+        .admin-three-grid {
+          grid-template-columns: minmax(240px, 0.95fr) minmax(300px, 1.15fr) minmax(260px, 1fr);
         }
+      }
+      .admin-col-cal,
+      .admin-col-tasks,
+      .admin-col-side {
+        min-width: 0;
+      }
+      .admin-col-side {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .admin-side-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+      }
+      .admin-side-panel.hidden {
+        display: none;
+      }
+      .side-panel-title {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        font-weight: 900;
+      }
+      .side-panel-text {
+        margin: 0;
+        font-size: 0.88rem;
+        color: #475569;
+        line-height: 1.5;
+        font-weight: 600;
+      }
+      .admin-col-side .form-card,
+      .admin-col-side .list-card {
+        max-width: none;
+        margin: 0;
+        width: 100%;
       }
       .cal-card {
         background: var(--card);
@@ -630,110 +667,111 @@
           <button type="button" data-admin-tab="coupons">🎁 쿠폰 관리</button>
         </nav>
 
-        <div id="adminPanelCalendar" class="admin-panel">
-          <div class="cal-layout">
-            <div class="cal-card">
-              <div class="cal-nav">
-                <button type="button" id="calPrev">◀</button>
-                <div class="cal-month-title" id="calMonthTitle"></div>
-                <button type="button" id="calNext">▶</button>
-              </div>
-              <div class="cal-grid" id="calDowRow"></div>
-              <div class="cal-grid" id="calCells"></div>
+        <div id="adminWorkspace" class="admin-three-grid">
+          <div class="cal-card admin-col-cal">
+            <div class="cal-nav">
+              <button type="button" id="calPrev">◀</button>
+              <div class="cal-month-title" id="calMonthTitle"></div>
+              <button type="button" id="calNext">▶</button>
             </div>
-            <div class="cal-card">
-              <div class="toolbar">
-                <button type="button" id="btnTabDay" class="on">📋 선택한 날 할 일</button>
-                <button type="button" id="btnTabWeek">📆 주간 배치(드래그)</button>
-              </div>
-              <div id="panelDay">
-                <div class="day-panel-title" id="dayPanelTitle">할 일</div>
-                <div id="dayTodoList"></div>
-              </div>
-              <div id="panelWeek" class="week-editor hidden">
-                <div id="weekHint" class="hint-bar" hidden>주간 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
-                <div class="week-editor-h">월 ~ 일 칸에 기본 투두를 끌어다 놓으세요 (여러 개 가능)</div>
-                <div class="week-cols" id="weekCols"></div>
-                <div class="library">
-                  <div class="library-h">기본 투두 저장소 → 요일로 드래그</div>
-                  <div class="library-row" id="libraryRow"></div>
-                </div>
+            <div class="cal-grid" id="calDowRow"></div>
+            <div class="cal-grid" id="calCells"></div>
+          </div>
+          <div class="cal-card admin-col-tasks">
+            <div class="toolbar">
+              <button type="button" id="btnTabDay" class="on">📋 선택한 날 할 일</button>
+              <button type="button" id="btnTabWeek">📆 주간 배치(드래그)</button>
+            </div>
+            <div id="panelDay">
+              <div class="day-panel-title" id="dayPanelTitle">할 일</div>
+              <div id="dayTodoList"></div>
+            </div>
+            <div id="panelWeek" class="week-editor hidden">
+              <div id="weekHint" class="hint-bar" hidden>주간 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
+              <div class="week-editor-h">월 ~ 일 칸에 기본 투두를 끌어다 놓으세요 (여러 개 가능)</div>
+              <div class="week-cols" id="weekCols"></div>
+              <div class="library">
+                <div class="library-h">기본 투두 저장소 → 요일로 드래그</div>
+                <div class="library-row" id="libraryRow"></div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div id="adminPanelTemplates" class="admin-panel hidden">
-          <div class="form-card">
-            <h2>기본 투두 저장하기</h2>
-            <div id="tplErr"></div>
-            <form id="formTemplate">
-              <label>짧은 이름</label>
-              <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
-              <label>자세한 내용</label>
-              <textarea name="detail" placeholder="무엇을 하면 되는지"></textarea>
-              <label>이모지</label>
-              <select name="emoji">
-                <option value="⭐">⭐</option>
-                <option value="📚">📚</option>
-                <option value="🧹">🧹</option>
-                <option value="🍽️">🍽️</option>
-                <option value="🛁">🛁</option>
-                <option value="✏️">✏️</option>
-                <option value="🎨">🎨</option>
-                <option value="⚽">⚽</option>
-                <option value="🎹">🎹</option>
-                <option value="💤">💤</option>
-                <option value="🐶">🐶</option>
-                <option value="💪">💪</option>
-              </select>
-              <label>담당 아이 (비우면 공통)</label>
-              <select name="kid_id" id="tplKidSelect">
-                <option value="">공통</option>
-              </select>
-              <button type="submit">저장</button>
-            </form>
-          </div>
-          <div class="list-card">
-            <h3 style="margin-top: 0">저장된 투두</h3>
-            <div id="tplList"></div>
-          </div>
-        </div>
-
-        <div id="adminPanelKids" class="admin-panel hidden">
-          <div class="form-card">
-            <h2>아이 등록</h2>
-            <div id="kidErr"></div>
-            <form id="formKid">
-              <label>이름</label>
-              <input name="name" required maxlength="40" placeholder="예: 김하준" />
-              <button type="submit">등록</button>
-            </form>
-          </div>
-          <div class="list-card">
-            <h3 style="margin-top: 0">아이 목록</h3>
-            <div id="kidList"></div>
-          </div>
-        </div>
-
-        <div id="adminPanelCoupons" class="admin-panel hidden">
-          <div class="form-card">
-            <h2>쿠폰(보상) 만들기</h2>
-            <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">투두 완료마다 스탬프 1개. 모이면 보상!</p>
-            <div id="coupErr"></div>
-            <form id="formCoupon">
-              <label>쿠폰 이름</label>
-              <input name="title" required maxlength="80" placeholder="예: 아이스크림 쿠폰" />
-              <label>필요 스탬프</label>
-              <input name="stamps_required" type="number" min="1" max="999" value="10" required />
-              <label>보상 내용</label>
-              <textarea name="reward_text" placeholder="예: 아이스크림 1개"></textarea>
-              <button type="submit">쿠폰 저장</button>
-            </form>
-          </div>
-          <div class="list-card">
-            <h3 style="margin-top: 0">쿠폰 · 사용 (아이 선택 후)</h3>
-            <div id="couponList"></div>
+          <div class="cal-card admin-col-side">
+            <div id="adminSideCalendar" class="admin-side-panel">
+              <h3 class="side-panel-title">💡 이렇게 써요</h3>
+              <p class="side-panel-text">
+                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>주간 배치</strong>에서 저장해 둔 투두를 요일 칸으로 끌어 넣으면 그 아이 주간 일정에 들어가요.
+              </p>
+              <p class="side-panel-text">새 투두 만들기는 <strong>투두 등록</strong> 탭, 아이·쿠폰은 각 탭에서 관리할 수 있어요.</p>
+            </div>
+            <div id="adminSideTemplates" class="admin-side-panel hidden">
+              <div class="form-card side-form">
+                <h2>기본 투두 저장하기</h2>
+                <p style="font-size: 0.82rem; color: #64748b; margin: -6px 0 10px; font-weight: 600">공통 저장소에만 넣어요. 아이는 위에서 고른 뒤 드래그로 배치하면 됩니다.</p>
+                <div id="tplErr"></div>
+                <form id="formTemplate">
+                  <label>짧은 이름</label>
+                  <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
+                  <label>자세한 내용</label>
+                  <textarea name="detail" placeholder="무엇을 하면 되는지"></textarea>
+                  <label>이모지</label>
+                  <select name="emoji">
+                    <option value="⭐">⭐</option>
+                    <option value="📚">📚</option>
+                    <option value="🧹">🧹</option>
+                    <option value="🍽️">🍽️</option>
+                    <option value="🛁">🛁</option>
+                    <option value="✏️">✏️</option>
+                    <option value="🎨">🎨</option>
+                    <option value="⚽">⚽</option>
+                    <option value="🎹">🎹</option>
+                    <option value="💤">💤</option>
+                    <option value="🐶">🐶</option>
+                    <option value="💪">💪</option>
+                  </select>
+                  <button type="submit">저장</button>
+                </form>
+              </div>
+              <div class="list-card side-list">
+                <h3 style="margin-top: 0">저장된 투두</h3>
+                <div id="tplList"></div>
+              </div>
+            </div>
+            <div id="adminSideKids" class="admin-side-panel hidden">
+              <div class="form-card side-form">
+                <h2>아이 등록</h2>
+                <div id="kidErr"></div>
+                <form id="formKid">
+                  <label>이름</label>
+                  <input name="name" required maxlength="40" placeholder="예: 김하준" />
+                  <button type="submit">등록</button>
+                </form>
+              </div>
+              <div class="list-card side-list">
+                <h3 style="margin-top: 0">아이 목록</h3>
+                <div id="kidList"></div>
+              </div>
+            </div>
+            <div id="adminSideCoupons" class="admin-side-panel hidden">
+              <div class="form-card side-form">
+                <h2>쿠폰(보상) 만들기</h2>
+                <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">투두 완료마다 스탬프 1개. 모이면 보상!</p>
+                <div id="coupErr"></div>
+                <form id="formCoupon">
+                  <label>쿠폰 이름</label>
+                  <input name="title" required maxlength="80" placeholder="예: 아이스크림 쿠폰" />
+                  <label>필요 스탬프</label>
+                  <input name="stamps_required" type="number" min="1" max="999" value="10" required />
+                  <label>보상 내용</label>
+                  <textarea name="reward_text" placeholder="예: 아이스크림 1개"></textarea>
+                  <button type="submit">쿠폰 저장</button>
+                </form>
+              </div>
+              <div class="list-card side-list">
+                <h3 style="margin-top: 0">쿠폰 · 사용 (아이 선택 후)</h3>
+                <div id="couponList"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -815,20 +853,13 @@
 
         function setAdminTab(tab) {
           state.adminTab = tab;
-          $("adminPanelCalendar").classList.toggle("hidden", tab !== "calendar");
-          $("adminPanelTemplates").classList.toggle("hidden", tab !== "templates");
-          $("adminPanelKids").classList.toggle("hidden", tab !== "kids");
-          $("adminPanelCoupons").classList.toggle("hidden", tab !== "coupons");
+          $("adminSideCalendar").classList.toggle("hidden", tab !== "calendar");
+          $("adminSideTemplates").classList.toggle("hidden", tab !== "templates");
+          $("adminSideKids").classList.toggle("hidden", tab !== "kids");
+          $("adminSideCoupons").classList.toggle("hidden", tab !== "coupons");
           document.querySelectorAll("#adminNav button").forEach(function (b) {
             b.classList.toggle("on", b.getAttribute("data-admin-tab") === tab);
           });
-          if (tab === "calendar") {
-            state.weekTab = false;
-            $("btnTabDay").classList.add("on");
-            $("btnTabWeek").classList.remove("on");
-            $("panelDay").classList.remove("hidden");
-            $("panelWeek").classList.add("hidden");
-          }
         }
 
         async function refresh() {
@@ -869,7 +900,6 @@
             renderTplList();
             renderKidList();
             renderCouponList();
-            fillKidSelects();
             updateStampBadge();
           } catch (e) {
             console.error(e);
@@ -1204,10 +1234,7 @@
         function renderLibrary() {
           var row = $("libraryRow");
           row.innerHTML = "";
-          var list = state.templates.filter(function (t) {
-            if (!state.selectedKidId) return true;
-            return !t.kid_id || t.kid_id === state.selectedKidId;
-          });
+          var list = state.templates;
           list.forEach(function (t) {
             var el = document.createElement("div");
             el.className = "tpl-chip";
@@ -1339,17 +1366,6 @@
           await refresh();
         }
 
-        function fillKidSelects() {
-          var sel = $("tplKidSelect");
-          sel.innerHTML = '<option value="">공통</option>';
-          state.kids.forEach(function (k) {
-            var o = document.createElement("option");
-            o.value = k.id;
-            o.textContent = k.name;
-            sel.appendChild(o);
-          });
-        }
-
         $("btnSetupSave").addEventListener("click", async function () {
           $("setupErr").innerHTML = "";
           var a = $("setupPw1").value;
@@ -1409,7 +1425,6 @@
         document.querySelectorAll("#adminNav button").forEach(function (b) {
           b.addEventListener("click", function () {
             setAdminTab(b.getAttribute("data-admin-tab"));
-            if (b.getAttribute("data-admin-tab") === "calendar") refresh();
           });
         });
 
@@ -1450,12 +1465,11 @@
           e.preventDefault();
           $("tplErr").innerHTML = "";
           var fd = new FormData(e.target);
-          var kid = fd.get("kid_id");
           var row = {
             title: String(fd.get("title") || "").trim(),
             detail: String(fd.get("detail") || "").trim(),
             emoji: String(fd.get("emoji") || "⭐"),
-            kid_id: kid ? kid : null,
+            kid_id: null,
           };
           var r = await supabase.from("family_todo_templates").insert(row);
           if (r.error) {
