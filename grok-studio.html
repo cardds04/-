@@ -913,8 +913,8 @@
                   <select id="grokImageAspectBase" class="select--compact">
                     <option value="169">16∶9</option>
                     <option value="43">4∶3</option>
-                    <option value="32" selected>3∶2</option>
-                    <option value="orig">원본 비율</option>
+                    <option value="32">3∶2</option>
+                    <option value="orig" selected>원본 비율</option>
                   </select>
                 </div>
                 <div class="grok-image-orient-cell" id="grokImageOrientationWrap">
@@ -938,8 +938,8 @@
                   <label class="label label--compact" for="grokImageResolution">해상도</label>
                   <select id="grokImageResolution" class="select--compact">
                     <option value="1k">1k</option>
-                    <option value="2k" selected>2k</option>
-                    <option value="4k">4k (나노)</option>
+                    <option value="2k">2k</option>
+                    <option value="4k" selected>4k (나노)</option>
                   </select>
                 </div>
               </div>
@@ -1077,7 +1077,7 @@
         }
 
         function getComputedImageAspectRatio() {
-          var base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+          var base = grokImageAspectBase ? grokImageAspectBase.value : "orig";
           if (base === "orig") return "auto";
           var oriEl = document.querySelector('input[name="grokImageOrientation"]:checked');
           var ori = oriEl ? oriEl.value : "landscape";
@@ -1153,7 +1153,7 @@
         }
 
         async function resolveAspectRatioForApi(prov, refFile) {
-          var base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+          var base = grokImageAspectBase ? grokImageAspectBase.value : "orig";
           if (base !== "orig") return getComputedImageAspectRatio();
           if (!refFile) {
             throw new Error("원본 비율은 참조 이미지 1이 필요합니다.");
@@ -1745,7 +1745,7 @@
             var provEl = document.querySelector('input[name="imageProvider"]:checked');
             var prov = provEl ? provEl.value : "gemini";
             var ref1 = grokImageFile && grokImageFile.files[0];
-            var resolution = grokImageResolution ? grokImageResolution.value : "2k";
+            var resolution = grokImageResolution ? grokImageResolution.value : "4k";
             var images = [];
             var aspect_ratio;
             try {
