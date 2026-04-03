@@ -768,8 +768,6 @@
 
       <main class="card">
         <div class="card__workflow">
-          <p id="errorBox" class="error" hidden></p>
-
           <section class="workflow-block workflow-block--grok-image">
             <h2 class="workflow-title">
               AI 이미지 <span class="workflow-note">(Grok Imagine 또는 Gemini 나노바나나2)</span>
@@ -887,6 +885,7 @@
                   제목을 정하면 아래에 아이콘으로 쌓입니다. 누르면 이 칸에 불러옵니다.
                 </p>
               </div>
+              <p id="errorBox" class="error" role="alert" hidden></p>
               <div id="grokImagePromptPresetIcons" class="prompt-preset-icons" aria-label="저장된 이미지 프롬프트"></div>
             </section>
 
@@ -1036,9 +1035,15 @@
         var imageSeq = 0;
 
         function setError(msg) {
+          if (!errorBox) return;
           if (msg) {
             errorBox.textContent = msg;
             errorBox.hidden = false;
+            try {
+              errorBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            } catch (e) {
+              errorBox.scrollIntoView();
+            }
           } else {
             errorBox.hidden = true;
           }
@@ -1148,24 +1153,27 @@
           });
         }
 
-        document.getElementById("btnSaveGrokImagePromptPreset").addEventListener("click", function () {
-          var text = grokImagePrompt.value.trim();
-          if (!text) {
-            setError("저장할 프롬프트를 먼저 입력하세요.");
-            return;
-          }
-          var title = window.prompt("저장할 제목을 입력하세요.");
-          if (title === null) return;
-          var list = loadImagePromptPresets();
-          list.push({
-            id: "imgp" + Date.now(),
-            title: (title || "").trim() || "(제목 없음)",
-            text: text,
+        var btnSaveGrokImagePromptPreset = document.getElementById("btnSaveGrokImagePromptPreset");
+        if (btnSaveGrokImagePromptPreset && grokImagePrompt) {
+          btnSaveGrokImagePromptPreset.addEventListener("click", function () {
+            var text = grokImagePrompt.value.trim();
+            if (!text) {
+              setError("저장할 프롬프트를 먼저 입력하세요.");
+              return;
+            }
+            var title = window.prompt("저장할 제목을 입력하세요.");
+            if (title === null) return;
+            var list = loadImagePromptPresets();
+            list.push({
+              id: "imgp" + Date.now(),
+              title: (title || "").trim() || "(제목 없음)",
+              text: text,
+            });
+            saveImagePromptPresets(list);
+            renderGrokImagePresetIcons();
+            setError("");
           });
-          saveImagePromptPresets(list);
-          renderGrokImagePresetIcons();
-          setError("");
-        });
+        }
 
         renderGrokImagePresetIcons();
 
@@ -1187,22 +1195,28 @@
           });
         }
 
-        document.getElementById("btnSaveGrokImageXaiKey").addEventListener("click", function () {
-          try {
-            localStorage.setItem(LS_SAVED_IMAGE_XAI_KEY, grokImageXaiKeyEl.value.trim());
-            setError("");
-          } catch (e) {
-            setError(String(e.message || e));
-          }
-        });
-        document.getElementById("btnSaveGeminiKey").addEventListener("click", function () {
-          try {
-            localStorage.setItem(LS_SAVED_IMAGE_GEMINI_KEY, geminiApiKeyEl.value.trim());
-            setError("");
-          } catch (e) {
-            setError(String(e.message || e));
-          }
-        });
+        var btnSaveGrokImageXaiKey = document.getElementById("btnSaveGrokImageXaiKey");
+        var btnSaveGeminiKey = document.getElementById("btnSaveGeminiKey");
+        if (btnSaveGrokImageXaiKey && grokImageXaiKeyEl) {
+          btnSaveGrokImageXaiKey.addEventListener("click", function () {
+            try {
+              localStorage.setItem(LS_SAVED_IMAGE_XAI_KEY, grokImageXaiKeyEl.value.trim());
+              setError("");
+            } catch (e) {
+              setError(String(e.message || e));
+            }
+          });
+        }
+        if (btnSaveGeminiKey && geminiApiKeyEl) {
+          btnSaveGeminiKey.addEventListener("click", function () {
+            try {
+              localStorage.setItem(LS_SAVED_IMAGE_GEMINI_KEY, geminiApiKeyEl.value.trim());
+              setError("");
+            } catch (e) {
+              setError(String(e.message || e));
+            }
+          });
+        }
 
         function syncGrokRefSlotUI(slot) {
           var input = slot === 2 ? grokImageFile2 : grokImageFile;
@@ -1276,10 +1290,16 @@
         });
 
         function refPasteTargetZone() {
-          if (document.getElementById("grokImageDropzone2").matches(":hover")) return 2;
-          if (document.getElementById("grokImageDropzone").matches(":hover")) return 1;
-          if (document.getElementById("grokImageDropzone2") === document.activeElement) return 2;
-          if (document.getElementById("grokImageDropzone") === document.activeElement) return 1;
+          try {
+            var z2 = document.getElementById("grokImageDropzone2");
+            var z1 = document.getElementById("grokImageDropzone");
+            if (z2 && z2.matches && z2.matches(":hover")) return 2;
+            if (z1 && z1.matches && z1.matches(":hover")) return 1;
+            if (z2 && document.activeElement === z2) return 2;
+            if (z1 && document.activeElement === z1) return 1;
+          } catch (err) {
+            /* 일부 환경에서 :hover 매칭이 실패할 수 있음 */
+          }
           return 0;
         }
 
@@ -1384,7 +1404,17 @@
 
         if (outputGalleryChips) {
           outputGalleryChips.addEventListener("click", function (e) {
-            var a = e.target.closest("a.job-file-chip");
+            var t = e.target;
+            var a = t && t.closest ? t.closest("a.job-file-chip") : null;
+            if (!a && t) {
+              while (t && t !== outputGalleryChips) {
+                if (t.tagName === "A" && t.classList && t.classList.contains("job-file-chip")) {
+                  a = t;
+                  break;
+                }
+                t = t.parentNode;
+              }
+            }
             if (!a || !outputGalleryChips.contains(a)) return;
             var raw = a.getAttribute("data-gallery-id");
             if (raw == null || raw === "") return;
@@ -1444,37 +1474,47 @@
           renderOutputGallery();
         }
 
-        startBtnGrokImage.addEventListener("click", async function () {
-          setError("");
-          var prompt = grokImagePrompt.value.trim();
-          if (!prompt) {
-            setError("프롬프트를 입력하세요.");
-            return;
-          }
-          var provEl = document.querySelector('input[name="imageProvider"]:checked');
-          var prov = provEl ? provEl.value : "gemini";
-          var aspect_ratio = getComputedImageAspectRatio();
-          var resolution = grokImageResolution.value;
-          var images = [];
-          try {
-            if (grokImageFile.files[0]) images.push(await fileToDataUrl(grokImageFile.files[0]));
-            if (grokImageFile2.files[0]) images.push(await fileToDataUrl(grokImageFile2.files[0]));
-          } catch (e) {
-            setError(String(e.message || e));
-            return;
-          }
+        var BTN_GEN_LABEL = "이미지 만들기";
+        if (startBtnGrokImage) {
+          startBtnGrokImage.addEventListener("click", async function () {
+            setError("");
+            if (!grokImagePrompt) {
+              setError("페이지 초기화 오류: 프롬프트 입력칸을 찾을 수 없습니다.");
+              return;
+            }
+            var prompt = grokImagePrompt.value.trim();
+            if (!prompt) {
+              setError("프롬프트를 입력하세요.");
+              return;
+            }
+            var provEl = document.querySelector('input[name="imageProvider"]:checked');
+            var prov = provEl ? provEl.value : "gemini";
+            var aspect_ratio = getComputedImageAspectRatio();
+            var resolution = grokImageResolution ? grokImageResolution.value : "1k";
+            var images = [];
+            try {
+              if (grokImageFile && grokImageFile.files[0])
+                images.push(await fileToDataUrl(grokImageFile.files[0]));
+              if (grokImageFile2 && grokImageFile2.files[0])
+                images.push(await fileToDataUrl(grokImageFile2.files[0]));
+            } catch (e) {
+              setError(String(e.message || e));
+              return;
+            }
 
-          startBtnGrokImage.disabled = true;
-          try {
-            if (prov === "xai") {
-              var body = {
-                action: "image",
-                prompt: prompt,
-                aspect_ratio: aspect_ratio,
-                resolution: resolution,
-              };
-              var xk = grokImageXaiKeyEl.value.trim();
-              if (xk) body.xai_api_key = xk;
+            var prevLabel = startBtnGrokImage.textContent;
+            startBtnGrokImage.disabled = true;
+            startBtnGrokImage.textContent = "생성 중…";
+            try {
+              if (prov === "xai") {
+                var body = {
+                  action: "image",
+                  prompt: prompt,
+                  aspect_ratio: aspect_ratio,
+                  resolution: resolution,
+                };
+                var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
+                if (xk) body.xai_api_key = xk;
               if (images.length) body.images = images;
               var r = await fetch(API_GROK, {
                 method: "POST",
@@ -1493,7 +1533,7 @@
                 aspect_ratio: aspect_ratio,
                 resolution: resolution,
               };
-              var gk = geminiApiKeyEl.value.trim();
+              var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
               if (gk) gbody.gemini_api_key = gk;
               if (images.length) gbody.images = images;
               var r2 = await fetch(API_GEMINI, {
@@ -1508,12 +1548,14 @@
               var blob2 = await blobFromImageResult(j2);
               await appendGeneratedToGallery(blob2, j2.mime_type || "image/png");
             }
-          } catch (e) {
-            setError(String(e.message || e));
-          } finally {
-            startBtnGrokImage.disabled = false;
-          }
-        });
+            } catch (e) {
+              setError(String(e.message || e));
+            } finally {
+              startBtnGrokImage.disabled = false;
+              startBtnGrokImage.textContent = prevLabel || BTN_GEN_LABEL;
+            }
+          });
+        }
 
         function targetWOverH(aspect, orientation) {
           var o = orientation === "portrait" ? "portrait" : "landscape";
