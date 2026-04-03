@@ -585,7 +585,8 @@
         min-height: 64px;
         resize: vertical;
       }
-      .schedule-form-panel button[type="submit"] {
+      .schedule-form-panel button[type="submit"],
+      .schedule-form-panel #btnScheduleOpenDateCal {
         margin-top: 10px;
         width: 100%;
         padding: 12px;
@@ -595,6 +596,15 @@
         cursor: pointer;
         background: linear-gradient(90deg, var(--mint), var(--sky));
         color: #0f172a;
+      }
+      .schedule-date-cal-wrap {
+        padding: 4px 14px 12px;
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      .schedule-date-sheet {
+        max-height: min(90vh, 640px);
       }
       .day-schedule-list {
         margin-bottom: 14px;
@@ -1401,6 +1411,23 @@
       </section>
 
       <section id="viewAdmin" class="view hidden">
+        <div id="scheduleDateOverlay" class="week-pick-overlay hidden" aria-hidden="true">
+          <div class="week-pick-sheet schedule-date-sheet" role="dialog" aria-labelledby="scheduleDateTitle">
+            <h3 id="scheduleDateTitle">넣을 날짜 선택</h3>
+            <div class="schedule-date-cal-wrap">
+              <div class="cal-nav">
+                <button type="button" id="schedPickPrev">◀</button>
+                <div class="cal-month-title" id="schedPickMonthTitle"></div>
+                <button type="button" id="schedPickNext">▶</button>
+              </div>
+              <div class="cal-grid" id="schedPickDow"></div>
+              <div class="cal-grid" id="schedPickCells"></div>
+            </div>
+            <div class="week-pick-actions">
+              <button type="button" class="week-pick-cancel" id="schedPickCancel">닫기</button>
+            </div>
+          </div>
+        </div>
         <div id="weekPickOverlay" class="week-pick-overlay hidden" aria-hidden="true">
           <div class="week-pick-sheet" id="weekPickSheet" role="dialog" aria-labelledby="weekPickTitle">
             <h3 id="weekPickTitle">요일에 넣기</h3>
@@ -1434,8 +1461,6 @@
               <form id="formDaySchedule">
                 <label>짧은 이름</label>
                 <input name="title" required maxlength="80" placeholder="예: 학원 숙제" />
-                <label>자세한 내용</label>
-                <textarea name="detail" placeholder="무엇을 하면 되는지"></textarea>
                 <label>이모지</label>
                 <select name="emoji">
                   <option value="⭐">⭐</option>
@@ -1448,7 +1473,7 @@
                   <option value="🎹">🎹</option>
                   <option value="💪">💪</option>
                 </select>
-                <button type="submit">이 날짜에 넣기</button>
+                <button type="button" id="btnScheduleOpenDateCal">달력에서 날짜 선택</button>
               </form>
             </div>
             <div class="day-schedule-list" id="dayScheduleList"></div>
@@ -1470,7 +1495,7 @@
               <p class="side-panel-text">
                 위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong> 아무 곳이나 눌러 투두를 여러 개 한 번에 넣거나, 끌어다 놓으면 매주 그 요일에 반복돼요.
               </p>
-              <p class="side-panel-text"><strong>스케줄 추가</strong>는 달력에서 날짜를 고른 뒤, 그날만 하는 일을 적을 때 써요.</p>
+              <p class="side-panel-text"><strong>스케줄 추가</strong>는 이름·이모지를 적은 뒤 「달력에서 날짜 선택」으로 넣을 날을 고르면 돼요.</p>
               <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
             </div>
             <div id="adminSideTemplates" class="admin-side-panel hidden">
@@ -1481,8 +1506,6 @@
                 <form id="formTemplate">
                   <label>이름 (제목)</label>
                   <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
-                  <label>자세한 내용 (선택)</label>
-                  <textarea name="detail" placeholder="적지 않아도 돼요"></textarea>
                   <label>이모지</label>
                   <select name="emoji">
                     <option value="⭐">⭐</option>
@@ -1579,6 +1602,8 @@
           mainOverlayPick: null,
           mainOverlaySchedules: [],
           weekPickWeekday: 0,
+          schedulePickYear: new Date().getFullYear(),
+          schedulePickMonth: new Date().getMonth(),
         };
 
         function weekdayMon0(d) {
@@ -1626,6 +1651,155 @@
           }
         }
 
+        function closeScheduleDateOverlay() {
+          var el = $("scheduleDateOverlay");
+          if (el) {
+            el.classList.add("hidden");
+            el.setAttribute("aria-hidden", "true");
+          }
+        }
+
+        function pickRandomEmojiFromSelect(selectEl) {
+          if (!selectEl) return;
+          var opts = selectEl.querySelectorAll("option");
+          if (!opts.length) return;
+          selectEl.selectedIndex = Math.floor(Math.random() * opts.length);
+        }
+
+        function scrollAdminInputIntoView(tab) {
+          var id =
+            tab === "templates" ? "adminSideTemplates" : tab === "kids" ? "adminSideKids" : tab === "coupons" ? "adminSideCoupons" : null;
+          if (!id || !$(id)) return;
+          requestAnimationFrame(function () {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            var m = $("appMain");
+            if (m) m.scrollTop = 0;
+            $(id).scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        }
+
+        function renderSchedulePickCalendar() {
+          var y = state.schedulePickYear;
+          var m = state.schedulePickMonth;
+          $("schedPickMonthTitle").textContent = y + "년 " + (m + 1) + "월";
+          var dow = $("schedPickDow");
+          dow.innerHTML = "";
+          WD.forEach(function (w) {
+            var c = document.createElement("div");
+            c.className = "cal-dow";
+            c.textContent = w;
+            dow.appendChild(c);
+          });
+          var first = new Date(y, m, 1);
+          var startPad = weekdayMon0(first);
+          var daysInMonth = new Date(y, m + 1, 0).getDate();
+          var cells = $("schedPickCells");
+          cells.innerHTML = "";
+          var prevMonthDays = new Date(y, m, 0).getDate();
+          for (var i = 0; i < startPad; i++) {
+            var d0 = prevMonthDays - startPad + i + 1;
+            var cell0 = document.createElement("div");
+            cell0.className = "cal-cell other";
+            cell0.textContent = d0;
+            cells.appendChild(cell0);
+          }
+          var today = new Date();
+          for (var day = 1; day <= daysInMonth; day++) {
+            (function (day) {
+              var dt = new Date(y, m, day);
+              var cell = document.createElement("div");
+              cell.className = "cal-cell";
+              cell.textContent = day;
+              if (isSameDay(dt, today)) cell.classList.add("today");
+              cell.addEventListener("click", async function () {
+                $("scheduleFormErr").innerHTML = "";
+                if (!state.selectedKidId) {
+                  $("scheduleFormErr").innerHTML = '<div class="err">위에서 아이를 한 명 선택한 뒤 저장해 주세요.</div>';
+                  closeScheduleDateOverlay();
+                  return;
+                }
+                if (!state.dayScheduleTablesOk) {
+                  $("scheduleFormErr").innerHTML =
+                    '<div class="err">DB에 날짜 스케줄 테이블이 없어요. Supabase 대시보드 → SQL에서 20260331200000_family_day_schedules.sql 내용을 실행해 주세요.</div>';
+                  closeScheduleDateOverlay();
+                  return;
+                }
+                var form = $("formDaySchedule");
+                var title = String(form.querySelector("[name=title]").value || "").trim();
+                if (!title) {
+                  $("scheduleFormErr").innerHTML = '<div class="err">짧은 이름을 적어 주세요.</div>';
+                  closeScheduleDateOverlay();
+                  return;
+                }
+                var emoji = String(form.querySelector("[name=emoji]").value || "⭐");
+                var forD = isoDate(dt);
+                var kid = state.selectedKidId;
+                var q = await supabase.from("family_day_schedules").select("sort_order").eq("kid_id", kid).eq("for_date", forD);
+                if (q.error) {
+                  $("scheduleFormErr").innerHTML = '<div class="err">' + escapeHtml(q.error.message) + "</div>";
+                  return;
+                }
+                var maxO = 0;
+                (q.data || []).forEach(function (s) {
+                  maxO = Math.max(maxO, s.sort_order || 0);
+                });
+                var r = await supabase.from("family_day_schedules").insert({
+                  kid_id: kid,
+                  for_date: forD,
+                  title: title,
+                  detail: "",
+                  emoji: emoji,
+                  sort_order: maxO + 1,
+                });
+                if (r.error) {
+                  $("scheduleFormErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
+                  return;
+                }
+                state.selectedDate = dt;
+                state.calYear = y;
+                state.calMonth = m;
+                form.reset();
+                pickRandomEmojiFromSelect(form.querySelector("select[name=emoji]"));
+                closeScheduleDateOverlay();
+                await refresh();
+              });
+              cells.appendChild(cell);
+            })(day);
+          }
+          var total = startPad + daysInMonth;
+          var endPad = (7 - (total % 7)) % 7;
+          for (var j = 1; j <= endPad; j++) {
+            var c2 = document.createElement("div");
+            c2.className = "cal-cell other";
+            c2.textContent = j;
+            cells.appendChild(c2);
+          }
+        }
+
+        function openScheduleDatePicker() {
+          $("scheduleFormErr").innerHTML = "";
+          if (!state.selectedKidId) {
+            $("scheduleFormErr").innerHTML = '<div class="err">위에서 아이를 한 명 선택한 뒤 저장해 주세요.</div>';
+            return;
+          }
+          if (!state.dayScheduleTablesOk) {
+            $("scheduleFormErr").innerHTML =
+              '<div class="err">DB에 날짜 스케줄 테이블이 없어요. Supabase 대시보드 → SQL에서 20260331200000_family_day_schedules.sql 내용을 실행해 주세요.</div>';
+            return;
+          }
+          var form = $("formDaySchedule");
+          var title = String(form.querySelector("[name=title]").value || "").trim();
+          if (!title) {
+            $("scheduleFormErr").innerHTML = '<div class="err">짧은 이름을 적어 주세요.</div>';
+            return;
+          }
+          state.schedulePickYear = state.selectedDate.getFullYear();
+          state.schedulePickMonth = state.selectedDate.getMonth();
+          renderSchedulePickCalendar();
+          $("scheduleDateOverlay").classList.remove("hidden");
+          $("scheduleDateOverlay").setAttribute("aria-hidden", "false");
+        }
+
         function openWeekPickOverlay(w) {
           if (!state.selectedKidId) return;
           state.weekPickWeekday = w;
@@ -1665,7 +1839,10 @@
 
         function fixShowRoot(name) {
           if (name !== "main") closeMainExplore();
-          if (name !== "admin") closeWeekPickOverlay();
+          if (name !== "admin") {
+            closeWeekPickOverlay();
+            closeScheduleDateOverlay();
+          }
           var map = { setup: "viewSetup", gate: "viewGate", main: "viewMain", admin: "viewAdmin" };
           Object.keys(map).forEach(function (k) {
             $(map[k]).classList.toggle("hidden", k !== name);
@@ -1686,6 +1863,9 @@
           document.querySelectorAll("#adminNav button").forEach(function (b) {
             b.classList.toggle("on", b.getAttribute("data-admin-tab") === tab);
           });
+          if (tab === "templates" || tab === "kids" || tab === "coupons") {
+            scrollAdminInputIntoView(tab);
+          }
         }
 
         async function refresh() {
@@ -2833,41 +3013,34 @@
           $("panelScheduleForm").classList.toggle("hidden");
         });
 
-        $("formDaySchedule").addEventListener("submit", async function (e) {
+        $("formDaySchedule").addEventListener("submit", function (e) {
           e.preventDefault();
-          $("scheduleFormErr").innerHTML = "";
-          if (!state.selectedKidId) {
-            $("scheduleFormErr").innerHTML = '<div class="err">위에서 아이를 한 명 선택한 뒤 저장해 주세요.</div>';
-            return;
+          openScheduleDatePicker();
+        });
+        $("btnScheduleOpenDateCal").addEventListener("click", function () {
+          openScheduleDatePicker();
+        });
+        $("schedPickPrev").addEventListener("click", function () {
+          state.schedulePickMonth--;
+          if (state.schedulePickMonth < 0) {
+            state.schedulePickMonth = 11;
+            state.schedulePickYear--;
           }
-          if (!state.dayScheduleTablesOk) {
-            $("scheduleFormErr").innerHTML =
-              '<div class="err">DB에 날짜 스케줄 테이블이 없어요. Supabase 대시보드 → SQL에서 20260331200000_family_day_schedules.sql 내용을 실행해 주세요.</div>';
-            return;
+          renderSchedulePickCalendar();
+        });
+        $("schedPickNext").addEventListener("click", function () {
+          state.schedulePickMonth++;
+          if (state.schedulePickMonth > 11) {
+            state.schedulePickMonth = 0;
+            state.schedulePickYear++;
           }
-          var fd = new FormData(e.target);
-          var forD = isoDate(state.selectedDate);
-          var sameDay = state.daySchedulesSelected.filter(function (s) {
-            return s.kid_id === state.selectedKidId;
-          });
-          var maxO = 0;
-          sameDay.forEach(function (s) {
-            maxO = Math.max(maxO, s.sort_order || 0);
-          });
-          var r = await supabase.from("family_day_schedules").insert({
-            kid_id: state.selectedKidId,
-            for_date: forD,
-            title: String(fd.get("title") || "").trim(),
-            detail: String(fd.get("detail") || "").trim(),
-            emoji: String(fd.get("emoji") || "⭐"),
-            sort_order: maxO + 1,
-          });
-          if (r.error) {
-            $("scheduleFormErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
-            return;
-          }
-          e.target.reset();
-          await refresh();
+          renderSchedulePickCalendar();
+        });
+        $("schedPickCancel").addEventListener("click", function () {
+          closeScheduleDateOverlay();
+        });
+        $("scheduleDateOverlay").addEventListener("click", function (e) {
+          if (e.target === $("scheduleDateOverlay")) closeScheduleDateOverlay();
         });
 
         $("formTemplate").addEventListener("submit", async function (e) {
@@ -2876,7 +3049,7 @@
           var fd = new FormData(e.target);
           var row = {
             title: String(fd.get("title") || "").trim(),
-            detail: String(fd.get("detail") || "").trim(),
+            detail: "",
             emoji: String(fd.get("emoji") || "⭐"),
             kid_id: null,
           };
@@ -2886,6 +3059,7 @@
             return;
           }
           e.target.reset();
+          pickRandomEmojiFromSelect(e.target.querySelector("select[name=emoji]"));
           await refresh();
         });
 
