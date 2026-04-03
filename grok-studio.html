@@ -738,6 +738,12 @@
         opacity: 0.55;
         cursor: not-allowed;
       }
+      .image-gen-queue-status {
+        margin: 0.35rem 0 0 !important;
+        font-size: 0.82rem !important;
+        font-weight: 600;
+        color: #92400e;
+      }
       .error {
         margin: 0 0 1rem;
         padding: 0.75rem;
@@ -885,6 +891,7 @@
                 <p class="hint grok-image-prompt-toolbar__hint">
                   제목을 정하면 아래에 아이콘으로 쌓입니다. 누르면 이 칸에 불러옵니다.
                 </p>
+                <p id="imageGenQueueStatus" class="hint image-gen-queue-status" hidden></p>
               </div>
               <p id="errorBox" class="error" role="alert" hidden></p>
               <div id="grokImagePromptPresetIcons" class="prompt-preset-icons" aria-label="저장된 이미지 프롬프트"></div>
@@ -1034,6 +1041,9 @@
         var grokRefPreviewUrls = { 1: null, 2: null };
         var outputGalleryItems = [];
         var imageSeq = 0;
+        var imageGenQueue = [];
+        var imageGenBusy = false;
+        var imageGenQueueStatusEl = document.getElementById("imageGenQueueStatus");
 
         function setError(msg) {
           if (!errorBox) return;
@@ -1525,10 +1535,97 @@
           renderOutputGallery();
         }
 
-        var BTN_GEN_LABEL = "이미지 만들기";
+        function updateImageGenQueueStatus() {
+          if (!imageGenQueueStatusEl) return;
+          var n = imageGenQueue.length;
+          if (imageGenBusy && n > 0) {
+            imageGenQueueStatusEl.textContent = "생성 중입니다. 대기열 " + n + "건";
+            imageGenQueueStatusEl.hidden = false;
+          } else if (imageGenBusy) {
+            imageGenQueueStatusEl.textContent = "생성 중입니다.";
+            imageGenQueueStatusEl.hidden = false;
+          } else if (n > 0) {
+            imageGenQueueStatusEl.textContent = "대기열 " + n + "건";
+            imageGenQueueStatusEl.hidden = false;
+          } else {
+            imageGenQueueStatusEl.hidden = true;
+          }
+        }
+
+        function setImageGenErrorFromException(e) {
+          var em = String(e.message || e);
+          if (em.indexOf("413") !== -1 || em.indexOf("요청 실패 413") !== -1) {
+            setError(
+              "요청 본문이 너무 큽니다(413). 참조 이미지를 한 장만 쓰거나 더 작은 파일로 시도하세요. 이미 자동 축소를 적용했는데도 나오면 해상도·프롬프트 길이를 줄여 주세요.",
+            );
+          } else {
+            setError(em);
+          }
+        }
+
+        async function runOneImageGenJob(job) {
+          setError("");
+          if (job.prov === "xai") {
+            var body = {
+              action: "image",
+              prompt: job.prompt,
+              aspect_ratio: job.aspect_ratio,
+              resolution: job.resolution,
+            };
+            if (job.xai_api_key) body.xai_api_key = job.xai_api_key;
+            if (job.images && job.images.length) body.images = job.images;
+            var r = await fetch(API_GROK, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            var j = await r.json().catch(function () {
+              return {};
+            });
+            if (!r.ok || j.ok === false) throw new Error(j.error || j.message || "요청 실패 " + r.status);
+            var blob = await blobFromImageResult(j);
+            await appendGeneratedToGallery(blob, j.mime_type || "image/png");
+          } else {
+            var gbody = {
+              prompt: job.prompt,
+              aspect_ratio: job.aspect_ratio,
+              resolution: job.resolution,
+            };
+            if (job.gemini_api_key) gbody.gemini_api_key = job.gemini_api_key;
+            if (job.images && job.images.length) gbody.images = job.images;
+            var r2 = await fetch(API_GEMINI, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(gbody),
+            });
+            var j2 = await r2.json().catch(function () {
+              return {};
+            });
+            if (!r2.ok || j2.ok === false) throw new Error(j2.error || j2.message || "요청 실패 " + r2.status);
+            var blob2 = await blobFromImageResult(j2);
+            await appendGeneratedToGallery(blob2, j2.mime_type || "image/png");
+          }
+        }
+
+        async function pumpImageGenQueue() {
+          if (imageGenBusy) return;
+          if (!imageGenQueue.length) return;
+          imageGenBusy = true;
+          var job = imageGenQueue.shift();
+          updateImageGenQueueStatus();
+          try {
+            await runOneImageGenJob(job);
+          } catch (e) {
+            setImageGenErrorFromException(e);
+          } finally {
+            imageGenBusy = false;
+            updateImageGenQueueStatus();
+            pumpImageGenQueue();
+          }
+        }
+
         if (startBtnGrokImage) {
           startBtnGrokImage.addEventListener("click", async function () {
-            setError("");
             if (!grokImagePrompt) {
               setError("페이지 초기화 오류: 프롬프트 입력칸을 찾을 수 없습니다.");
               return;
@@ -1538,6 +1635,7 @@
               setError("프롬프트를 입력하세요.");
               return;
             }
+            setError("");
             var provEl = document.querySelector('input[name="imageProvider"]:checked');
             var prov = provEl ? provEl.value : "gemini";
             var aspect_ratio = getComputedImageAspectRatio();
@@ -1552,66 +1650,20 @@
               setError(String(e.message || e));
               return;
             }
-
-            var prevLabel = startBtnGrokImage.textContent;
-            startBtnGrokImage.disabled = true;
-            startBtnGrokImage.textContent = "생성 중…";
-            try {
-              if (prov === "xai") {
-                var body = {
-                  action: "image",
-                  prompt: prompt,
-                  aspect_ratio: aspect_ratio,
-                  resolution: resolution,
-                };
-                var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
-                if (xk) body.xai_api_key = xk;
-              if (images.length) body.images = images;
-              var r = await fetch(API_GROK, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-              });
-              var j = await r.json().catch(function () {
-                return {};
-              });
-              if (!r.ok || j.ok === false) throw new Error(j.error || j.message || "요청 실패 " + r.status);
-              var blob = await blobFromImageResult(j);
-              await appendGeneratedToGallery(blob, j.mime_type || "image/png");
-            } else {
-              var gbody = {
-                prompt: prompt,
-                aspect_ratio: aspect_ratio,
-                resolution: resolution,
-              };
-              var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
-              if (gk) gbody.gemini_api_key = gk;
-              if (images.length) gbody.images = images;
-              var r2 = await fetch(API_GEMINI, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(gbody),
-              });
-              var j2 = await r2.json().catch(function () {
-                return {};
-              });
-              if (!r2.ok || j2.ok === false) throw new Error(j2.error || j2.message || "요청 실패 " + r2.status);
-              var blob2 = await blobFromImageResult(j2);
-              await appendGeneratedToGallery(blob2, j2.mime_type || "image/png");
-            }
-            } catch (e) {
-              var em = String(e.message || e);
-              if (em.indexOf("413") !== -1 || em.indexOf("요청 실패 413") !== -1) {
-                setError(
-                  "요청 본문이 너무 큽니다(413). 참조 이미지를 한 장만 쓰거나 더 작은 파일로 시도하세요. 이미 자동 축소를 적용했는데도 나오면 해상도·프롬프트 길이를 줄여 주세요.",
-                );
-              } else {
-                setError(em);
-              }
-            } finally {
-              startBtnGrokImage.disabled = false;
-              startBtnGrokImage.textContent = prevLabel || BTN_GEN_LABEL;
-            }
+            var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
+            var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
+            var job = {
+              prov: prov,
+              prompt: prompt,
+              aspect_ratio: aspect_ratio,
+              resolution: resolution,
+              images: images,
+              xai_api_key: xk || undefined,
+              gemini_api_key: gk || undefined,
+            };
+            imageGenQueue.push(job);
+            updateImageGenQueueStatus();
+            pumpImageGenQueue();
           });
         }
 
