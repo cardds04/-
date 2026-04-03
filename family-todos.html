@@ -362,15 +362,6 @@
       .admin-three-grid .admin-col-cal {
         order: 3;
       }
-      .admin-three-grid.admin-side-first .admin-col-side {
-        order: 1;
-      }
-      .admin-three-grid.admin-side-first .admin-col-cal {
-        order: 2;
-      }
-      .admin-three-grid.admin-side-first .admin-col-tasks {
-        order: 3;
-      }
       @media (min-width: 1100px) {
         .admin-three-grid {
           grid-template-columns: minmax(240px, 0.95fr) minmax(300px, 1.15fr) minmax(260px, 1fr);
@@ -658,18 +649,21 @@
         margin-bottom: 6px;
         color: #475569;
       }
-      .week-col-h.week-col-h-pick {
+      .week-col.week-col-pick {
         cursor: pointer;
-        padding: 6px 4px;
-        margin: -2px -4px 4px;
-        border-radius: 10px;
-        border: 2px dashed transparent;
-        transition: background 0.15s, border-color 0.15s;
+        transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
       }
-      .week-col-h.week-col-h-pick:hover {
-        background: #e0f2fe;
+      .week-col.week-col-pick:hover {
         border-color: #7dd3fc;
-        color: #0369a1;
+        background: #e8f4fc;
+        box-shadow: 0 2px 12px rgba(14, 165, 233, 0.12);
+      }
+      .week-col.week-col-pick:focus {
+        outline: none;
+      }
+      .week-col.week-col-pick:focus-visible {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.35);
       }
       .week-pick-overlay {
         position: fixed;
@@ -1461,7 +1455,7 @@
             <div class="week-editor">
               <div id="weekHint" class="hint-bar" hidden>요일 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
               <div class="week-editor-h">
-                월~일 요일별 기본 투두 — <strong>요일 이름</strong>을 누르면 저장된 투두를 여러 개 골라 넣을 수 있어요 (아래 저장소에서 끌어다 놓기도 됩니다)
+                월~일 요일별 기본 투두 — <strong>요일 칸</strong> 아무 곳이나 누르면 저장된 투두를 여러 개 골라 넣을 수 있어요 (아래 저장소에서 끌어다 놓기도 됩니다)
               </div>
               <div class="week-cols" id="weekCols"></div>
               <div class="library">
@@ -1474,7 +1468,7 @@
             <div id="adminSideCalendar" class="admin-side-panel">
               <h3 class="side-panel-title">💡 이렇게 써요</h3>
               <p class="side-panel-text">
-                위에서 <strong>아이</strong>를 고른 뒤, <strong>요일 이름</strong>을 눌러 투두를 여러 개 한 번에 넣거나, 가운데 <strong>요일 칸</strong>으로 끌어 넣으면 매주 그 요일에 반복돼요.
+                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong> 아무 곳이나 눌러 투두를 여러 개 한 번에 넣거나, 끌어다 놓으면 매주 그 요일에 반복돼요.
               </p>
               <p class="side-panel-text"><strong>스케줄 추가</strong>는 달력에서 날짜를 고른 뒤, 그날만 하는 일을 적을 때 써요.</p>
               <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
@@ -1689,7 +1683,6 @@
           $("adminSideTemplates").classList.toggle("hidden", tab !== "templates");
           $("adminSideKids").classList.toggle("hidden", tab !== "kids");
           $("adminSideCoupons").classList.toggle("hidden", tab !== "coupons");
-          $("adminWorkspace").classList.toggle("admin-side-first", tab === "templates" || tab === "kids" || tab === "coupons");
           document.querySelectorAll("#adminNav button").forEach(function (b) {
             b.classList.toggle("on", b.getAttribute("data-admin-tab") === tab);
           });
@@ -2161,18 +2154,18 @@
               col.innerHTML = '<div class="week-col-h">' + WD[w] + "</div>";
               var inner = document.createElement("div");
               col.appendChild(inner);
-              var wh = col.querySelector(".week-col-h");
               if (!needKid) {
-                wh.classList.add("week-col-h-pick");
-                wh.setAttribute("role", "button");
-                wh.setAttribute("tabindex", "0");
-                wh.title = "눌러서 저장된 투두 여러 개 넣기";
-                wh.addEventListener("click", function (e) {
-                  e.stopPropagation();
-                  e.preventDefault();
+                col.classList.add("week-col-pick");
+                col.setAttribute("tabindex", "0");
+                col.setAttribute("role", "button");
+                col.setAttribute("aria-label", WD[w] + "요일에 투두 넣기");
+                col.title = "칸 아무 곳이나 눌러 저장된 투두 여러 개 넣기 (또는 아래에서 드래그)";
+                col.addEventListener("click", function (e) {
+                  if (e.target.closest(".slot-chip")) return;
                   openWeekPickOverlay(w);
                 });
-                wh.addEventListener("keydown", function (e) {
+                col.addEventListener("keydown", function (e) {
+                  if (e.target !== col) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     openWeekPickOverlay(w);
@@ -2198,6 +2191,9 @@
                     "</span> " +
                     escapeHtml(tpl.title) +
                     ' <button type="button" class="del" title="빼기">✕</button>';
+                  chip.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                  });
                   chip.querySelector(".del").addEventListener("click", function (e) {
                     e.stopPropagation();
                     supabase.from("family_weekly_slots").delete().eq("id", sl.id).then(refresh);
