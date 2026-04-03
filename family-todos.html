@@ -353,13 +353,13 @@
         min-width: 0;
         align-items: start;
       }
-      .admin-three-grid .admin-col-cal {
+      .admin-three-grid .admin-col-side {
         order: 1;
       }
       .admin-three-grid .admin-col-tasks {
         order: 2;
       }
-      .admin-three-grid .admin-col-side {
+      .admin-three-grid .admin-col-cal {
         order: 3;
       }
       .admin-three-grid.admin-side-first .admin-col-side {
@@ -657,6 +657,123 @@
         text-align: center;
         margin-bottom: 6px;
         color: #475569;
+      }
+      .week-col-h.week-col-h-pick {
+        cursor: pointer;
+        padding: 6px 4px;
+        margin: -2px -4px 4px;
+        border-radius: 10px;
+        border: 2px dashed transparent;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .week-col-h.week-col-h-pick:hover {
+        background: #e0f2fe;
+        border-color: #7dd3fc;
+        color: #0369a1;
+      }
+      .week-pick-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 350;
+        background: rgba(15, 23, 42, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+      }
+      .week-pick-overlay.hidden {
+        display: none;
+      }
+      .week-pick-sheet {
+        width: 100%;
+        max-width: 440px;
+        max-height: min(85vh, 580px);
+        background: var(--card);
+        border-radius: var(--radius);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .week-pick-sheet h3 {
+        margin: 0;
+        padding: 16px 18px;
+        font-size: 1.05rem;
+        font-weight: 900;
+        border-bottom: 2px solid #e2e8f0;
+        color: #0f172a;
+      }
+      .week-pick-body {
+        overflow: auto;
+        padding: 12px 16px;
+        flex: 1;
+        min-height: 0;
+      }
+      .week-pick-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        border: 2px solid #e2e8f0;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #0f172a;
+      }
+      .week-pick-row.is-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        background: #f8fafc;
+      }
+      .week-pick-row.is-checked {
+        border-color: #0ea5e9;
+        background: #e0f2fe;
+      }
+      .week-pick-row input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        accent-color: #0ea5e9;
+        cursor: pointer;
+      }
+      .week-pick-row input[type="checkbox"]:disabled {
+        cursor: not-allowed;
+      }
+      .week-pick-err {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #b91c1c;
+        margin: 0 0 10px;
+      }
+      .week-pick-err.hidden {
+        display: none;
+      }
+      .week-pick-actions {
+        display: flex;
+        gap: 10px;
+        padding: 14px 16px;
+        border-top: 2px solid #e2e8f0;
+        flex-shrink: 0;
+      }
+      .week-pick-actions button {
+        flex: 1;
+        padding: 12px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.9rem;
+        cursor: pointer;
+        border: none;
+      }
+      .week-pick-actions .week-pick-cancel {
+        background: #e2e8f0;
+        color: #334155;
+      }
+      .week-pick-actions .week-pick-ok {
+        background: linear-gradient(90deg, var(--mint), var(--sky));
+        color: #0f172a;
       }
       .slot-chip {
         font-size: 0.72rem;
@@ -1290,6 +1407,19 @@
       </section>
 
       <section id="viewAdmin" class="view hidden">
+        <div id="weekPickOverlay" class="week-pick-overlay hidden" aria-hidden="true">
+          <div class="week-pick-sheet" id="weekPickSheet" role="dialog" aria-labelledby="weekPickTitle">
+            <h3 id="weekPickTitle">요일에 넣기</h3>
+            <div class="week-pick-body">
+              <p id="weekPickErr" class="week-pick-err hidden"></p>
+              <div id="weekPickList"></div>
+            </div>
+            <div class="week-pick-actions">
+              <button type="button" class="week-pick-cancel" id="weekPickCancel">취소</button>
+              <button type="button" class="week-pick-ok" id="weekPickOk">확인</button>
+            </div>
+          </div>
+        </div>
         <div id="adminWorkspace" class="admin-three-grid">
           <div class="cal-card admin-col-cal">
             <div class="cal-nav">
@@ -1330,7 +1460,9 @@
             <div class="day-schedule-list" id="dayScheduleList"></div>
             <div class="week-editor">
               <div id="weekHint" class="hint-bar" hidden>요일 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
-              <div class="week-editor-h">월~일 요일별 기본 투두 (아래 저장소에서 끌어다 놓기)</div>
+              <div class="week-editor-h">
+                월~일 요일별 기본 투두 — <strong>요일 이름</strong>을 누르면 저장된 투두를 여러 개 골라 넣을 수 있어요 (아래 저장소에서 끌어다 놓기도 됩니다)
+              </div>
               <div class="week-cols" id="weekCols"></div>
               <div class="library">
                 <div class="library-h">기본 투두 저장소 → 요일 칸으로 드래그</div>
@@ -1342,7 +1474,7 @@
             <div id="adminSideCalendar" class="admin-side-panel">
               <h3 class="side-panel-title">💡 이렇게 써요</h3>
               <p class="side-panel-text">
-                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong>으로 기본 투두를 끌어 넣으면 매주 그 요일에 반복돼요.
+                위에서 <strong>아이</strong>를 고른 뒤, <strong>요일 이름</strong>을 눌러 투두를 여러 개 한 번에 넣거나, 가운데 <strong>요일 칸</strong>으로 끌어 넣으면 매주 그 요일에 반복돼요.
               </p>
               <p class="side-panel-text"><strong>스케줄 추가</strong>는 달력에서 날짜를 고른 뒤, 그날만 하는 일을 적을 때 써요.</p>
               <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
@@ -1452,6 +1584,7 @@
           mainOverlayMonth: new Date().getMonth(),
           mainOverlayPick: null,
           mainOverlaySchedules: [],
+          weekPickWeekday: 0,
         };
 
         function weekdayMon0(d) {
@@ -1486,8 +1619,59 @@
             .join("");
         }
 
+        function closeWeekPickOverlay() {
+          var el = $("weekPickOverlay");
+          if (el) {
+            el.classList.add("hidden");
+            el.setAttribute("aria-hidden", "true");
+          }
+          var errEl = $("weekPickErr");
+          if (errEl) {
+            errEl.classList.add("hidden");
+            errEl.textContent = "";
+          }
+        }
+
+        function openWeekPickOverlay(w) {
+          if (!state.selectedKidId) return;
+          state.weekPickWeekday = w;
+          $("weekPickTitle").textContent = WD[w] + "요일에 넣을 투두";
+          $("weekPickErr").classList.add("hidden");
+          $("weekPickErr").textContent = "";
+          var mount = $("weekPickList");
+          mount.innerHTML = "";
+          var kid = state.selectedKidId;
+          if (!state.templates.length) {
+            mount.innerHTML =
+              '<p style="color:#64748b;font-weight:600;margin:0;font-size:0.9rem">저장된 투두가 없어요. 「투두 등록」에서 먼저 만들어 주세요.</p>';
+          } else {
+            state.templates.forEach(function (t) {
+              var exists = state.slots.some(function (s) {
+                return s.kid_id === kid && s.weekday === w && s.template_id === t.id;
+              });
+              var lab = document.createElement("label");
+              lab.className = "week-pick-row" + (exists ? " is-disabled" : "");
+              var cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.value = String(t.id);
+              if (exists) cb.disabled = true;
+              var span = document.createElement("span");
+              span.textContent = (t.emoji || "⭐") + " " + t.title + (exists ? " (이미 있음)" : "");
+              lab.appendChild(cb);
+              lab.appendChild(span);
+              cb.addEventListener("change", function () {
+                lab.classList.toggle("is-checked", cb.checked && !cb.disabled);
+              });
+              mount.appendChild(lab);
+            });
+          }
+          $("weekPickOverlay").classList.remove("hidden");
+          $("weekPickOverlay").setAttribute("aria-hidden", "false");
+        }
+
         function fixShowRoot(name) {
           if (name !== "main") closeMainExplore();
+          if (name !== "admin") closeWeekPickOverlay();
           var map = { setup: "viewSetup", gate: "viewGate", main: "viewMain", admin: "viewAdmin" };
           Object.keys(map).forEach(function (k) {
             $(map[k]).classList.toggle("hidden", k !== name);
@@ -1977,6 +2161,24 @@
               col.innerHTML = '<div class="week-col-h">' + WD[w] + "</div>";
               var inner = document.createElement("div");
               col.appendChild(inner);
+              var wh = col.querySelector(".week-col-h");
+              if (!needKid) {
+                wh.classList.add("week-col-h-pick");
+                wh.setAttribute("role", "button");
+                wh.setAttribute("tabindex", "0");
+                wh.title = "눌러서 저장된 투두 여러 개 넣기";
+                wh.addEventListener("click", function (e) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  openWeekPickOverlay(w);
+                });
+                wh.addEventListener("keydown", function (e) {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openWeekPickOverlay(w);
+                  }
+                });
+              }
               var kidFilter = state.selectedKidId;
               state.slots
                 .filter(function (sl) {
@@ -2552,6 +2754,61 @@
         $("btnAdminExit").addEventListener("click", function () {
           fixShowRoot("main");
           refresh();
+        });
+
+        $("weekPickCancel").addEventListener("click", function () {
+          closeWeekPickOverlay();
+        });
+        $("weekPickOverlay").addEventListener("click", function (e) {
+          if (e.target === $("weekPickOverlay")) closeWeekPickOverlay();
+        });
+        $("weekPickOk").addEventListener("click", async function () {
+          var errEl = $("weekPickErr");
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+          var w = state.weekPickWeekday;
+          var kid = state.selectedKidId;
+          if (!kid) {
+            closeWeekPickOverlay();
+            return;
+          }
+          var boxes = document.querySelectorAll("#weekPickList input[type=checkbox]:checked:not(:disabled)");
+          if (!boxes.length) {
+            errEl.textContent = "한 개 이상 선택해 주세요.";
+            errEl.classList.remove("hidden");
+            return;
+          }
+          var maxPos = 0;
+          state.slots.forEach(function (s) {
+            if (s.kid_id === kid && s.weekday === w) maxPos = Math.max(maxPos, s.position || 0);
+          });
+          var rows = [];
+          Array.prototype.forEach.call(boxes, function (cb) {
+            var tid = cb.value;
+            var exists = state.slots.some(function (s) {
+              return s.kid_id === kid && s.weekday === w && s.template_id === tid;
+            });
+            if (exists) return;
+            maxPos += 1;
+            rows.push({
+              kid_id: kid,
+              template_id: tid,
+              weekday: w,
+              position: maxPos,
+            });
+          });
+          if (!rows.length) {
+            closeWeekPickOverlay();
+            return;
+          }
+          var r = await supabase.from("family_weekly_slots").insert(rows);
+          if (r.error) {
+            errEl.textContent = "저장 오류: " + (r.error.message || "");
+            errEl.classList.remove("hidden");
+            return;
+          }
+          closeWeekPickOverlay();
+          await refresh();
         });
 
         document.querySelectorAll("#adminNav button").forEach(function (b) {
