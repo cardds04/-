@@ -1681,6 +1681,7 @@
       (function () {
         var PW_KEY = "family_todos_admin_pw_sha256";
         var LS_LAST_VIEW_KEY = "family_todos_last_view";
+        var LS_SELECTED_KID_KEY = "family_todos_selected_kid_id";
         var SS_RESTORE_ADMIN_TAB = "family_todos_restore_admin_tab";
         var VALID_ADMIN_TABS = ["kids", "templates", "coupons", "guide"];
         var SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
@@ -2160,14 +2161,41 @@
           });
         }
 
+        function persistSelectedKidId(kidId) {
+          try {
+            if (kidId) localStorage.setItem(LS_SELECTED_KID_KEY, String(kidId));
+            else localStorage.removeItem(LS_SELECTED_KID_KEY);
+          } catch (e) {}
+        }
+
+        function readPersistedKidId() {
+          try {
+            return localStorage.getItem(LS_SELECTED_KID_KEY) || "";
+          } catch (e) {
+            return "";
+          }
+        }
+
         function renderKidChips() {
           if (!state.kids.length) {
             state.selectedKidId = "";
+            persistSelectedKidId("");
           } else {
-            var valid = state.kids.some(function (k) {
+            var saved = readPersistedKidId();
+            var validSaved = saved && state.kids.some(function (k) {
+              return String(k.id) === String(saved);
+            });
+            var validCurrent = state.kids.some(function (k) {
               return k.id === state.selectedKidId;
             });
-            if (!valid) state.selectedKidId = state.kids[0].id;
+            if (validSaved) {
+              state.selectedKidId = state.kids.find(function (k) {
+                return String(k.id) === String(saved);
+              }).id;
+            } else if (!validCurrent) {
+              state.selectedKidId = state.kids[0].id;
+            }
+            persistSelectedKidId(state.selectedKidId);
           }
           var mount = $("kidChipsMount");
           mount.innerHTML = "";
@@ -2179,6 +2207,7 @@
             b.dataset.kid = kid.id;
             b.addEventListener("click", function () {
               state.selectedKidId = kid.id;
+              persistSelectedKidId(kid.id);
               document.querySelectorAll(".kid-chip").forEach(function (el) {
                 el.classList.remove("active");
               });
