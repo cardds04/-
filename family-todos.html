@@ -397,6 +397,13 @@
         line-height: 1.5;
         font-weight: 600;
       }
+      .admin-side-panel .side-panel-text + .side-panel-text {
+        margin-top: 12px;
+      }
+      .side-panel-lead {
+        padding-bottom: 2px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.45);
+      }
       .admin-col-side .form-card,
       .admin-col-side .list-card {
         max-width: none;
@@ -546,10 +553,13 @@
       }
       .btn-schedule-toggle,
       .btn-pick-view-date {
-        padding: 10px 16px;
+        padding: 10px 12px;
         border-radius: 12px;
         font-weight: 800;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
+        line-height: 1.25;
+        text-align: center;
+        white-space: normal;
         border: 2px solid #6366f1;
         background: linear-gradient(145deg, #eef2ff, #e0e7ff);
         color: #3730a3;
@@ -1526,7 +1536,7 @@
             <div class="day-schedule-head">
               <div class="day-panel-title" id="dayPanelTitle">날짜를 선택하세요</div>
               <button type="button" class="btn-pick-view-date" id="btnPickViewDate">📅 날짜 바꾸기</button>
-              <button type="button" class="btn-schedule-toggle" id="btnToggleScheduleForm">📅 스케줄 추가</button>
+              <button type="button" class="btn-schedule-toggle" id="btnToggleScheduleForm">📅 특정날짜스케줄추가</button>
             </div>
             <div id="panelScheduleForm" class="schedule-form-panel hidden">
               <div id="scheduleFormErr"></div>
@@ -1564,13 +1574,35 @@
           <div class="cal-card admin-col-side">
             <div id="adminSideCalendar" class="admin-side-panel">
               <h3 class="side-panel-title">💡 사용설명서</h3>
-              <p class="side-panel-text">
-                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong> 아무 곳이나 눌러 투두를 여러 개 한 번에 넣거나, 끌어다 놓으면 매주 그 요일에 반복돼요.
+              <p class="side-panel-text side-panel-lead">
+                <strong>1. 맨 위에서 아이 선택</strong><br />
+                헤더에서 아이 이름을 눌러 한 명을 고른 뒤 작업하세요. 요일 칸·스케줄은 선택한 아이 기준으로 보입니다.
               </p>
               <p class="side-panel-text">
-                <strong>날짜 바꾸기</strong>로 그날 스케줄을 볼 날을 고를 수 있어요. <strong>스케줄 추가</strong>는 이름·이모지를 적은 뒤 「달력에서 날짜 선택」으로 넣을 날을 고르면 돼요.
+                <strong>2. 위쪽 탭 메뉴</strong><br />
+                <strong>아이 추가</strong> — 아이 이름을 등록합니다.<br />
+                <strong>투두 등록</strong> — 「기본 투두 저장소」에 들어갈 항목을 만듭니다 (매주 반복할 때 재료로 씁니다).<br />
+                <strong>쿠폰 관리</strong> — 투두를 끝낼 때 쌓이는 스탬프로 받을 보상(쿠폰)을 만듭니다.<br />
+                <strong>사용설명서</strong> — 지금 보고 있는 이 안내입니다.
               </p>
-              <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
+              <p class="side-panel-text">
+                <strong>3. 가운데 — 특정 날짜 스케줄</strong><br />
+                <strong>날짜 바꾸기</strong> — 달력에서 「볼 날짜」를 고르면, 그날짜에만 해당하는 일(특정 날짜 스케줄) 목록이 아래에 보입니다.<br />
+                <strong>특정날짜스케줄추가</strong> — 그날 한 번만 하는 일을 넣을 때 씁니다. 짧은 이름·이모지를 적은 뒤 <strong>「달력에서 날짜 선택」</strong>을 눌러 실제로 넣을 날짜를 고르세요.
+              </p>
+              <p class="side-panel-text">
+                <strong>4. 가운데 — 매주 반복 기본 투두</strong><br />
+                <strong>월~일 요일 칸</strong> — 저장해 둔 기본 투두를 <strong>매주 그 요일</strong>에 자동으로 보이게 배치합니다. 칸 아무 곳이나 눌러 여러 개를 한꺼번에 고르거나, 아래 <strong>저장소</strong>에서 끌어다 놓을 수 있어요.
+              </p>
+              <p class="side-panel-text">
+                <strong>5. 한눈에 정리</strong><br />
+                • <strong>기본 투두 + 요일</strong> = 매주 반복<br />
+                • <strong>특정날짜스케줄추가</strong> = 선택한 하루에만 나오는 일
+              </p>
+              <p class="side-panel-text">
+                <strong>6. 데이터</strong><br />
+                내용은 서버(Supabase)에 저장되어 같은 계정으로 PC·태블릿·폰에서 같이 보입니다.
+              </p>
             </div>
             <div id="adminSideTemplates" class="admin-side-panel hidden">
               <div class="form-card side-form">
@@ -2307,7 +2339,7 @@
           });
           if (!pending.length && !doneList.length) {
             gridP.innerHTML =
-              '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">부모님 페이지에서 요일 배치나 「스케줄 추가」로 넣어 주세요.</small></p>';
+              '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">부모님 페이지에서 요일 배치나 「특정날짜스케줄추가」로 넣어 주세요.</small></p>';
             emptyD.classList.remove("hidden");
             emptyD.textContent = "할 일이 생기면 완료한 뒤 여기에 모여요";
             return;
@@ -2400,7 +2432,7 @@
           });
           if (!rows.length) {
             list.innerHTML =
-              '<p style="color:#64748b;font-weight:600;margin:0;font-size:0.9rem">이 날짜만의 스케줄이 없어요. 「스케줄 추가」에서 넣을 수 있어요.</p>';
+              '<p style="color:#64748b;font-weight:600;margin:0;font-size:0.9rem">이 날짜만의 스케줄이 없어요. 「특정날짜스케줄추가」에서 넣을 수 있어요.</p>';
             return;
           }
           rows.sort(function (a, b) {
