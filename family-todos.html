@@ -524,17 +524,105 @@
         margin-bottom: 8px;
         color: #0f172a;
       }
-      .week-cols {
+      .day-schedule-head {
         display: flex;
-        gap: 8px;
-        overflow-x: auto;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        margin-bottom: 10px;
+      }
+      .day-schedule-head .day-panel-title {
+        flex: 1 1 12rem;
+        margin-bottom: 0;
+      }
+      .btn-schedule-toggle {
+        padding: 10px 16px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.88rem;
+        border: 2px solid #6366f1;
+        background: linear-gradient(145deg, #eef2ff, #e0e7ff);
+        color: #3730a3;
+        cursor: pointer;
+      }
+      .schedule-form-panel {
+        background: #f8fafc;
+        border-radius: 14px;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 2px solid #e2e8f0;
+      }
+      .schedule-form-panel.hidden {
+        display: none;
+      }
+      .schedule-form-panel label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #64748b;
+        margin: 8px 0 4px;
+      }
+      .schedule-form-panel input,
+      .schedule-form-panel textarea,
+      .schedule-form-panel select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        font: inherit;
+      }
+      .schedule-form-panel textarea {
+        min-height: 64px;
+        resize: vertical;
+      }
+      .schedule-form-panel button[type="submit"] {
+        margin-top: 10px;
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        background: linear-gradient(90deg, var(--mint), var(--sky));
+        color: #0f172a;
+      }
+      .day-schedule-list {
+        margin-bottom: 14px;
+      }
+      .day-schedule-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #fff;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        margin-bottom: 8px;
+        font-weight: 700;
+        font-size: 0.9rem;
+      }
+      .day-schedule-row button.del {
+        margin-left: auto;
+        border: none;
+        background: #fee2e2;
+        color: #b91c1c;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 0.75rem;
+      }
+      .week-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
         padding-bottom: 8px;
-        flex: 1;
-        min-height: 140px;
+        flex: none;
+        min-height: 0;
       }
       .week-col {
-        flex: 0 0 min(140px, 22vw);
-        min-height: 120px;
+        min-height: 130px;
+        min-width: 0;
         background: #f1f5f9;
         border-radius: 14px;
         padding: 8px;
@@ -668,7 +756,7 @@
         border-bottom: 1px solid #e2e8f0;
         font-weight: 700;
       }
-      .list-item button {
+      .list-item > button {
         border: none;
         background: #fee2e2;
         color: #991b1b;
@@ -709,6 +797,189 @@
         font-size: 0.82rem;
         color: #64748b;
         margin-top: 8px;
+      }
+      .main-extra-btns {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .btn-main-extra {
+        padding: 10px 18px;
+        border-radius: 999px;
+        border: 2px solid #0ea5e9;
+        background: #e0f2fe;
+        font-weight: 800;
+        font-size: 0.88rem;
+        color: #0369a1;
+        cursor: pointer;
+      }
+      .main-explore-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 400;
+        background: rgba(15, 23, 42, 0.45);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 12px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+      }
+      .main-explore-overlay.hidden {
+        display: none;
+      }
+      .main-explore-sheet {
+        width: 100%;
+        max-width: 520px;
+        max-height: min(88vh, 720px);
+        background: var(--card);
+        border-radius: 20px 20px 16px 16px;
+        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .main-explore-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 900;
+        font-size: 1.05rem;
+      }
+      .main-explore-head button {
+        padding: 8px 16px;
+        border-radius: 10px;
+        border: none;
+        background: #e2e8f0;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .main-explore-body {
+        overflow: auto;
+        padding: 12px 14px 20px;
+        flex: 1;
+        min-height: 0;
+      }
+      .main-week-day {
+        background: #f8fafc;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        border: 2px solid #e2e8f0;
+      }
+      .main-week-day-h {
+        font-weight: 900;
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        color: #0f172a;
+      }
+      .main-week-item {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #334155;
+        padding: 4px 0;
+        padding-left: 0.5rem;
+        border-left: 3px solid #7dd3fc;
+        margin-bottom: 6px;
+      }
+      .main-week-kid {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-weight: 700;
+      }
+      .main-cal-mini-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .main-cal-mini-nav button {
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: none;
+        background: #e2e8f0;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .main-cal-mini-title {
+        font-weight: 900;
+        font-size: 1rem;
+      }
+      .main-cal-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        text-align: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #64748b;
+        margin-bottom: 6px;
+      }
+      .main-cal-mini-cells {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+      }
+      .main-cal-mini-cell {
+        aspect-ratio: 1;
+        max-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        font-weight: 800;
+        font-size: 0.85rem;
+        cursor: pointer;
+        border: 2px solid transparent;
+      }
+      .main-cal-mini-cell:hover {
+        background: #f1f5f9;
+      }
+      .main-cal-mini-cell.other {
+        opacity: 0.35;
+      }
+      .main-cal-mini-cell.today {
+        border-color: #0ea5e9;
+      }
+      .main-cal-mini-cell.picked {
+        background: linear-gradient(145deg, var(--lav), var(--sky));
+        color: #0f172a;
+      }
+      .main-cal-day-detail {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 2px solid #e2e8f0;
+      }
+      .main-cal-day-detail h4 {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+        font-weight: 900;
+      }
+      .coupon-row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+      .coupon-row-actions button {
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 800;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      .btn-coupon-edit {
+        background: #e0e7ff;
+        color: #3730a3;
+      }
+      .btn-coupon-del {
+        background: #fee2e2;
+        color: #991b1b;
       }
     </style>
   </head>
@@ -759,6 +1030,10 @@
       </section>
 
       <section id="viewMain" class="view hidden">
+        <div class="main-extra-btns">
+          <button type="button" class="btn-main-extra" id="btnMainWeek">📆 주간 할 일</button>
+          <button type="button" class="btn-main-extra" id="btnMainCal">📅 달력 보기</button>
+        </div>
         <div class="main-today-wrap">
           <div class="main-section">
             <h2 class="main-section-title">📌 오늘 할 일</h2>
@@ -774,6 +1049,15 @@
           </div>
         </div>
         <p class="sb-status" id="sbStatus"></p>
+        <div id="mainExploreOverlay" class="main-explore-overlay hidden" aria-hidden="true">
+          <div class="main-explore-sheet">
+            <div class="main-explore-head">
+              <span id="mainExploreTitle">보기</span>
+              <button type="button" id="btnMainExploreClose">닫기</button>
+            </div>
+            <div class="main-explore-body" id="mainExploreBody"></div>
+          </div>
+        </div>
       </section>
 
       <section id="viewAdmin" class="view hidden">
@@ -788,20 +1072,39 @@
             <div class="cal-grid" id="calCells"></div>
           </div>
           <div class="cal-card admin-col-tasks">
-            <div class="toolbar">
-              <button type="button" id="btnTabDay" class="on">📋 선택한 날 할 일</button>
-              <button type="button" id="btnTabWeek">📆 주간 배치(드래그)</button>
+            <div class="day-schedule-head">
+              <div class="day-panel-title" id="dayPanelTitle">날짜를 선택하세요</div>
+              <button type="button" class="btn-schedule-toggle" id="btnToggleScheduleForm">📅 스케줄 추가</button>
             </div>
-            <div id="panelDay">
-              <div class="day-panel-title" id="dayPanelTitle">할 일</div>
-              <div id="dayTodoList"></div>
+            <div id="panelScheduleForm" class="schedule-form-panel hidden">
+              <div id="scheduleFormErr"></div>
+              <form id="formDaySchedule">
+                <label>짧은 이름</label>
+                <input name="title" required maxlength="80" placeholder="예: 학원 숙제" />
+                <label>자세한 내용</label>
+                <textarea name="detail" placeholder="무엇을 하면 되는지"></textarea>
+                <label>이모지</label>
+                <select name="emoji">
+                  <option value="⭐">⭐</option>
+                  <option value="📚">📚</option>
+                  <option value="🧹">🧹</option>
+                  <option value="🍽️">🍽️</option>
+                  <option value="✏️">✏️</option>
+                  <option value="🎨">🎨</option>
+                  <option value="⚽">⚽</option>
+                  <option value="🎹">🎹</option>
+                  <option value="💪">💪</option>
+                </select>
+                <button type="submit">이 날짜에 넣기</button>
+              </form>
             </div>
-            <div id="panelWeek" class="week-editor hidden">
-              <div id="weekHint" class="hint-bar" hidden>주간 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
-              <div class="week-editor-h">월 ~ 일 칸에 기본 투두를 끌어다 놓으세요 (여러 개 가능)</div>
+            <div class="day-schedule-list" id="dayScheduleList"></div>
+            <div class="week-editor">
+              <div id="weekHint" class="hint-bar" hidden>요일 칸에 넣으려면 위에서 <strong>아이 한 명</strong>을 선택해 주세요.</div>
+              <div class="week-editor-h">월~일 요일별 기본 투두 (아래 저장소에서 끌어다 놓기)</div>
               <div class="week-cols" id="weekCols"></div>
               <div class="library">
-                <div class="library-h">기본 투두 저장소 → 요일로 드래그</div>
+                <div class="library-h">기본 투두 저장소 → 요일 칸으로 드래그</div>
                 <div class="library-row" id="libraryRow"></div>
               </div>
             </div>
@@ -810,9 +1113,10 @@
             <div id="adminSideCalendar" class="admin-side-panel">
               <h3 class="side-panel-title">💡 이렇게 써요</h3>
               <p class="side-panel-text">
-                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>주간 배치</strong>에서 저장해 둔 투두를 요일 칸으로 끌어 넣으면 그 아이 주간 일정에 들어가요.
+                위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong>으로 기본 투두를 끌어 넣으면 매주 그 요일에 반복돼요.
               </p>
-              <p class="side-panel-text">새 투두 만들기는 <strong>투두 등록</strong> 탭, 아이·쿠폰은 각 탭에서 관리할 수 있어요.</p>
+              <p class="side-panel-text"><strong>스케줄 추가</strong>는 달력에서 날짜를 고른 뒤, 그날만 하는 일을 적을 때 써요.</p>
+              <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
             </div>
             <div id="adminSideTemplates" class="admin-side-panel hidden">
               <div class="form-card side-form">
@@ -820,10 +1124,10 @@
                 <p style="font-size: 0.82rem; color: #64748b; margin: -6px 0 10px; font-weight: 600">공통 저장소에만 넣어요. 아이는 위에서 고른 뒤 드래그로 배치하면 됩니다.</p>
                 <div id="tplErr"></div>
                 <form id="formTemplate">
-                  <label>짧은 이름</label>
+                  <label>이름 (제목)</label>
                   <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
-                  <label>자세한 내용</label>
-                  <textarea name="detail" placeholder="무엇을 하면 되는지"></textarea>
+                  <label>자세한 내용 (선택)</label>
+                  <textarea name="detail" placeholder="적지 않아도 돼요"></textarea>
                   <label>이모지</label>
                   <select name="emoji">
                     <option value="⭐">⭐</option>
@@ -864,21 +1168,21 @@
             </div>
             <div id="adminSideCoupons" class="admin-side-panel hidden">
               <div class="form-card side-form">
-                <h2>쿠폰(보상) 만들기</h2>
-                <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">투두 완료마다 스탬프 1개. 모이면 보상!</p>
+                <h2>쿠폰 만들기</h2>
+                <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">투두 완료마다 스탬프 1개. 이름만 정해 주세요.</p>
                 <div id="coupErr"></div>
                 <form id="formCoupon">
+                  <input type="hidden" name="coupon_id" id="couponEditId" value="" />
                   <label>쿠폰 이름</label>
                   <input name="title" required maxlength="80" placeholder="예: 아이스크림 쿠폰" />
                   <label>필요 스탬프</label>
                   <input name="stamps_required" type="number" min="1" max="999" value="10" required />
-                  <label>보상 내용</label>
-                  <textarea name="reward_text" placeholder="예: 아이스크림 1개"></textarea>
-                  <button type="submit">쿠폰 저장</button>
+                  <button type="submit" id="btnCouponSubmit">쿠폰 저장</button>
+                  <button type="button" class="btn-muted" id="btnCouponCancelEdit" style="width: 100%; margin-top: 8px" hidden>수정 취소</button>
                 </form>
               </div>
               <div class="list-card side-list">
-                <h3 style="margin-top: 0">쿠폰 · 사용 (아이 선택 후)</h3>
+                <h3 style="margin-top: 0">등록된 쿠폰 (수정·삭제·교환)</h3>
                 <div id="couponList"></div>
               </div>
             </div>
@@ -910,8 +1214,15 @@
           calYear: new Date().getFullYear(),
           calMonth: new Date().getMonth(),
           selectedDate: new Date(),
-          weekTab: false,
           adminTab: "calendar",
+          daySchedulesToday: [],
+          daySchedulesSelected: [],
+          dayScheduleCompletionsToday: [],
+          mainExploreMode: null,
+          mainOverlayYear: new Date().getFullYear(),
+          mainOverlayMonth: new Date().getMonth(),
+          mainOverlayPick: null,
+          mainOverlaySchedules: [],
         };
 
         function weekdayMon0(d) {
@@ -951,6 +1262,7 @@
         }
 
         function fixShowRoot(name) {
+          if (name !== "main") closeMainExplore();
           var map = { setup: "viewSetup", gate: "viewGate", main: "viewMain", admin: "viewAdmin" };
           Object.keys(map).forEach(function (k) {
             $(map[k]).classList.toggle("hidden", k !== name);
@@ -990,22 +1302,28 @@
             var todayStr = isoDate(new Date());
             var dstr = isoDate(state.selectedDate);
             var compToday = await supabase.from("family_todo_completions").select("*").eq("for_date", todayStr);
-            var compSel = await supabase.from("family_todo_completions").select("*").eq("for_date", dstr);
             if (compToday.error) throw compToday.error;
-            if (compSel.error) throw compSel.error;
+            var dsToday = await supabase.from("family_day_schedules").select("*").eq("for_date", todayStr);
+            var dsSel = await supabase.from("family_day_schedules").select("*").eq("for_date", dstr);
+            var dscToday = await supabase.from("family_day_schedule_completions").select("*").eq("for_date", todayStr);
+            if (dsToday.error) throw dsToday.error;
+            if (dsSel.error) throw dsSel.error;
+            if (dscToday.error) throw dscToday.error;
             state.kids = k.data || [];
             state.templates = t.data || [];
             state.slots = s.data || [];
             state.wallets = w.data || [];
             state.coupons = c.data || [];
             state.completionsToday = compToday.data || [];
-            state.completions = compSel.data || [];
+            state.daySchedulesToday = dsToday.data || [];
+            state.daySchedulesSelected = dsSel.data || [];
+            state.dayScheduleCompletionsToday = dscToday.data || [];
             errMain.textContent = "";
             errAd.textContent = "";
             renderKidChips();
             renderMainToday();
             renderCalendar();
-            renderDayTodos();
+            renderDaySchedulesAdmin();
             renderWeekEditor();
             renderLibrary();
             renderTplList();
@@ -1048,7 +1366,7 @@
               b.classList.add("active");
               document.querySelector('.kid-chip[data-kid=""]').classList.remove("active");
               renderMainToday();
-              renderDayTodos();
+              renderDaySchedulesAdmin();
               renderWeekEditor();
               renderLibrary();
               updateStampBadge();
@@ -1064,7 +1382,7 @@
             });
             allBtn.classList.add("active");
             renderMainToday();
-            renderDayTodos();
+            renderDaySchedulesAdmin();
             renderWeekEditor();
             renderLibrary();
             updateStampBadge();
@@ -1163,6 +1481,45 @@
           container.appendChild(card);
         }
 
+        function appendMainScheduleCard(container, sched, kid, dstr, isDone) {
+          var card = document.createElement("div");
+          card.className = "main-card " + (isDone ? "main-card-done" : "main-card-todo");
+          var em = document.createElement("div");
+          em.className = "emoji";
+          em.textContent = sched.emoji || "⭐";
+          card.appendChild(em);
+          var tit = document.createElement("div");
+          tit.className = "title";
+          tit.textContent = sched.title;
+          card.appendChild(tit);
+          if (kid && !state.selectedKidId) {
+            var kn = document.createElement("div");
+            kn.className = "kid";
+            kn.textContent = kid.name;
+            card.appendChild(kn);
+          }
+          if (sched.detail) {
+            var det = document.createElement("div");
+            det.className = "detail";
+            det.textContent = sched.detail || "";
+            card.appendChild(det);
+          }
+          var tag = document.createElement("div");
+          tag.className = "kid";
+          tag.style.color = "#7c3aed";
+          tag.style.fontSize = "0.72rem";
+          tag.textContent = "📅 이 날만";
+          card.appendChild(tag);
+          var hint = document.createElement("div");
+          hint.className = "main-card-tap-hint";
+          hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
+          card.appendChild(hint);
+          card.addEventListener("click", function () {
+            toggleDayScheduleComplete(sched, dstr, !isDone);
+          });
+          container.appendChild(card);
+        }
+
         function renderMainToday() {
           var gridP = $("mainTodoGridPending");
           var gridD = $("mainTodoGridDone");
@@ -1179,13 +1536,10 @@
             if (!state.selectedKidId) return true;
             return sl.kid_id === state.selectedKidId;
           });
-          if (!filtered.length) {
-            gridP.innerHTML =
-              '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 넣은 투두가 없어요 🌟<br><small style="font-weight:600">관리자 → 투두 보기 → 주간 배치에서 요일을 채워 주세요.</small></p>';
-            emptyD.classList.remove("hidden");
-            emptyD.textContent = "할 일이 생기면 완료한 뒤 여기에 모여요";
-            return;
-          }
+          var daySch = state.daySchedulesToday.filter(function (sch) {
+            if (!state.selectedKidId) return true;
+            return sch.kid_id === state.selectedKidId;
+          });
           var pending = [];
           var doneList = [];
           filtered.forEach(function (sl) {
@@ -1195,15 +1549,32 @@
             var done = state.completionsToday.some(function (c) {
               return c.slot_id === sl.id && c.for_date === dstr;
             });
-            if (done) doneList.push({ sl: sl, tpl: tpl, kid: kid });
-            else pending.push({ sl: sl, tpl: tpl, kid: kid });
+            if (done) doneList.push({ kind: "slot", sl: sl, tpl: tpl, kid: kid });
+            else pending.push({ kind: "slot", sl: sl, tpl: tpl, kid: kid });
           });
+          daySch.forEach(function (sch) {
+            var kid = kidById(sch.kid_id);
+            var done = state.dayScheduleCompletionsToday.some(function (c) {
+              return c.schedule_id === sch.id && c.for_date === dstr;
+            });
+            if (done) doneList.push({ kind: "schedule", sched: sch, kid: kid });
+            else pending.push({ kind: "schedule", sched: sch, kid: kid });
+          });
+          if (!pending.length && !doneList.length) {
+            gridP.innerHTML =
+              '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">관리자에서 요일 배치나 「스케줄 추가」로 넣어 주세요.</small></p>';
+            emptyD.classList.remove("hidden");
+            emptyD.textContent = "할 일이 생기면 완료한 뒤 여기에 모여요";
+            return;
+          }
           if (pending.length === 0) {
             emptyP.classList.remove("hidden");
             emptyP.textContent = "오늘 할 일을 모두 끝냈어요 🎉";
           } else {
             pending.forEach(function (item) {
-              appendMainTodoCard(gridP, item.sl, item.tpl, item.kid, dstr, false);
+              if (item.kind === "slot")
+                appendMainTodoCard(gridP, item.sl, item.tpl, item.kid, dstr, false);
+              else appendMainScheduleCard(gridP, item.sched, item.kid, dstr, false);
             });
           }
           if (doneList.length === 0) {
@@ -1211,7 +1582,9 @@
             emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 눌러 보세요!";
           } else {
             doneList.forEach(function (item) {
-              appendMainTodoCard(gridD, item.sl, item.tpl, item.kid, dstr, true);
+              if (item.kind === "slot")
+                appendMainTodoCard(gridD, item.sl, item.tpl, item.kid, dstr, true);
+              else appendMainScheduleCard(gridD, item.sched, item.kid, dstr, true);
             });
           }
         }
@@ -1252,6 +1625,7 @@
               if (isSameDay(dt, state.selectedDate)) cell.classList.add("selected");
               cell.addEventListener("click", function () {
                 state.selectedDate = dt;
+                $("panelScheduleForm").classList.remove("hidden");
                 refresh();
               });
               cells.appendChild(cell);
@@ -1267,54 +1641,51 @@
           }
         }
 
-        function renderDayTodos() {
-          var list = $("dayTodoList");
-          list.innerHTML = "";
+        function renderDaySchedulesAdmin() {
           var d = state.selectedDate;
           $("dayPanelTitle").textContent =
-            d.getFullYear() + "년 " + (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WD[weekdayMon0(d)] + ") 할 일";
-          var slots = slotsForDay(d);
-          var filtered = slots.filter(function (sl) {
+            d.getFullYear() + "년 " + (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WD[weekdayMon0(d)] + ")";
+          var list = $("dayScheduleList");
+          list.innerHTML = "";
+          var rows = state.daySchedulesSelected.filter(function (sch) {
             if (!state.selectedKidId) return true;
-            return sl.kid_id === state.selectedKidId;
+            return sch.kid_id === state.selectedKidId;
           });
-          if (!filtered.length) {
-            list.innerHTML = '<p style="color:#64748b;font-weight:600">이 날짜에 넣은 투두가 없어요.</p>';
+          if (!rows.length) {
+            list.innerHTML =
+              '<p style="color:#64748b;font-weight:600;margin:0;font-size:0.9rem">이 날짜만의 스케줄이 없어요. 「스케줄 추가」에서 넣을 수 있어요.</p>';
             return;
           }
-          var dstr = isoDate(d);
-          filtered.forEach(function (sl) {
-            var tpl = tplById(sl.template_id);
-            if (!tpl) return;
-            var kid = kidById(sl.kid_id);
-            var done = state.completions.some(function (c) {
-              return c.slot_id === sl.id && c.for_date === dstr;
+          rows.sort(function (a, b) {
+            return (a.sort_order || 0) - (b.sort_order || 0) || String(a.created_at).localeCompare(String(b.created_at));
+          });
+          rows.forEach(function (sch) {
+            var kid = kidById(sch.kid_id);
+            var div = document.createElement("div");
+            div.className = "day-schedule-row";
+            var em = document.createElement("span");
+            em.textContent = sch.emoji || "⭐";
+            var tit = document.createElement("span");
+            tit.textContent = sch.title;
+            div.appendChild(em);
+            div.appendChild(tit);
+            if (kid && !state.selectedKidId) {
+              var sm = document.createElement("small");
+              sm.style.color = "#64748b";
+              sm.style.fontWeight = "600";
+              sm.textContent = kid.name;
+              div.appendChild(sm);
+            }
+            var del = document.createElement("button");
+            del.type = "button";
+            del.className = "del";
+            del.textContent = "삭제";
+            del.addEventListener("click", function () {
+              if (confirm("이날 스케줄을 지울까요?"))
+                supabase.from("family_day_schedules").delete().eq("id", sch.id).then(refresh);
             });
-            var row = document.createElement("div");
-            row.className = "todo-row" + (done ? " done" : "");
-            var cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.checked = done;
-            cb.addEventListener("change", function () {
-              toggleComplete(sl, dstr, cb.checked);
-            });
-            var em = document.createElement("div");
-            em.className = "todo-emoji";
-            em.textContent = tpl.emoji || "⭐";
-            var meta = document.createElement("div");
-            meta.className = "todo-meta";
-            meta.innerHTML =
-              '<div class="todo-title">' +
-              escapeHtml(tpl.title) +
-              '</div><div class="todo-kid">' +
-              escapeHtml(kid ? kid.name : "") +
-              '</div><div class="todo-detail">' +
-              escapeHtml(tpl.detail || "") +
-              "</div>";
-            row.appendChild(cb);
-            row.appendChild(em);
-            row.appendChild(meta);
-            list.appendChild(row);
+            div.appendChild(del);
+            list.appendChild(div);
           });
         }
 
@@ -1331,6 +1702,24 @@
               .delete()
               .eq("kid_id", slot.kid_id)
               .eq("slot_id", slot.id)
+              .eq("for_date", dstr);
+          }
+          await refresh();
+        }
+
+        async function toggleDayScheduleComplete(sched, dstr, checked) {
+          if (checked) {
+            await supabase.from("family_day_schedule_completions").insert({
+              kid_id: sched.kid_id,
+              schedule_id: sched.id,
+              for_date: dstr,
+            });
+          } else {
+            await supabase
+              .from("family_day_schedule_completions")
+              .delete()
+              .eq("kid_id", sched.kid_id)
+              .eq("schedule_id", sched.id)
               .eq("for_date", dstr);
           }
           await refresh();
@@ -1481,37 +1870,65 @@
         function renderCouponList() {
           var el = $("couponList");
           el.innerHTML = "";
-          if (!state.coupons.length) {
+          var activeList = state.coupons.filter(function (c) {
+            return c.active;
+          });
+          if (!activeList.length) {
             el.innerHTML = '<p style="color:#64748b">쿠폰이 없어요.</p>';
             return;
           }
-          state.coupons.forEach(function (c) {
-            if (!c.active) return;
+          var stamps = 0;
+          if (state.selectedKidId) {
+            var w0 = state.wallets.find(function (x) {
+              return x.kid_id === state.selectedKidId;
+            });
+            stamps = w0 ? w0.stamps : 0;
+          }
+          activeList.forEach(function (c) {
             var div = document.createElement("div");
             div.className = "list-item";
-            div.style.flexWrap = "wrap";
+            div.style.flexDirection = "column";
+            div.style.alignItems = "stretch";
             div.style.gap = "8px";
-            var stamps = 0;
-            if (state.selectedKidId) {
-              var w = state.wallets.find(function (x) {
-                return x.kid_id === state.selectedKidId;
-              });
-              stamps = w ? w.stamps : 0;
-            }
+            var top = document.createElement("div");
+            top.innerHTML =
+              "<strong>" + escapeHtml(c.title) + "</strong><br><small style='color:#64748b'>필요 스탬프 " + c.stamps_required + "개</small>";
+            div.appendChild(top);
+            var row = document.createElement("div");
+            row.className = "coupon-row-actions";
+            row.style.justifyContent = "space-between";
+            var left = document.createElement("div");
+            left.className = "coupon-row-actions";
+            var btnEd = document.createElement("button");
+            btnEd.type = "button";
+            btnEd.className = "btn-coupon-edit";
+            btnEd.textContent = "수정";
+            btnEd.addEventListener("click", function () {
+              $("formCoupon").querySelector("[name=title]").value = c.title;
+              $("formCoupon").querySelector("[name=stamps_required]").value = String(c.stamps_required);
+              $("couponEditId").value = c.id;
+              $("btnCouponSubmit").textContent = "수정 저장";
+              $("btnCouponCancelEdit").hidden = false;
+              $("coupErr").innerHTML = "";
+              setAdminTab("coupons");
+            });
+            var btnDel = document.createElement("button");
+            btnDel.type = "button";
+            btnDel.className = "btn-coupon-del";
+            btnDel.textContent = "삭제";
+            btnDel.addEventListener("click", function () {
+              if (!confirm("이 쿠폰을 삭제(비활성)할까요?")) return;
+              supabase.from("family_reward_coupons").update({ active: false }).eq("id", c.id).then(refresh);
+            });
+            left.appendChild(btnEd);
+            left.appendChild(btnDel);
+            row.appendChild(left);
             var can = state.selectedKidId && stamps >= c.stamps_required;
-            div.innerHTML =
-              "<div style='flex:1;min-width:12rem'><strong>" +
-              escapeHtml(c.title) +
-              "</strong><br><small style='color:#64748b'>" +
-              escapeHtml(c.reward_text || "") +
-              "</small><br><small>필요: " +
-              c.stamps_required +
-              "</small></div>";
             var btn = document.createElement("button");
             btn.type = "button";
             btn.textContent = can ? "🎁 보상 받기" : "스탬프 부족";
             btn.disabled = !can;
-            btn.style.padding = "10px 12px";
+            btn.style.padding = "8px 12px";
             btn.style.borderRadius = "10px";
             btn.style.border = "none";
             btn.style.fontWeight = "800";
@@ -1522,7 +1939,8 @@
               if (!confirm("스탬프 " + c.stamps_required + "개 사용할까요?")) return;
               redeemCoupon(c);
             });
-            div.appendChild(btn);
+            row.appendChild(btn);
+            div.appendChild(row);
             el.appendChild(div);
           });
         }
@@ -1545,8 +1963,288 @@
             { kid_id: kidId, stamps: next, updated_at: new Date().toISOString() },
             { onConflict: "kid_id" },
           );
-          alert("🎉 " + (c.reward_text || "보상"));
+          alert("🎉 " + c.title + " 교환했어요!");
           await refresh();
+        }
+
+        function clearCouponForm() {
+          $("formCoupon").reset();
+          $("couponEditId").value = "";
+          $("btnCouponSubmit").textContent = "쿠폰 저장";
+          $("btnCouponCancelEdit").hidden = true;
+        }
+
+        function startOfMonday(d) {
+          var copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          var wd = copy.getDay();
+          var diff = wd === 0 ? -6 : 1 - wd;
+          copy.setDate(copy.getDate() + diff);
+          return copy;
+        }
+
+        function addDaysDate(d, n) {
+          var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          x.setDate(x.getDate() + n);
+          return x;
+        }
+
+        function closeMainExplore() {
+          $("mainExploreOverlay").classList.add("hidden");
+          $("mainExploreOverlay").setAttribute("aria-hidden", "true");
+          state.mainExploreMode = null;
+        }
+
+        function mainTasksForDay(d) {
+          var dstr = isoDate(d);
+          var wd = weekdayMon0(d);
+          var out = [];
+          var kidF = state.selectedKidId;
+          state.slots.forEach(function (sl) {
+            if (sl.weekday !== wd) return;
+            if (kidF && sl.kid_id !== kidF) return;
+            var tpl = tplById(sl.template_id);
+            if (!tpl) return;
+            var kid = kidById(sl.kid_id);
+            out.push({ kind: "slot", label: (tpl.emoji || "⭐") + " " + tpl.title, kid: kid });
+          });
+          (state.mainOverlaySchedules || []).forEach(function (sch) {
+            if (sch.for_date !== dstr) return;
+            if (kidF && sch.kid_id !== kidF) return;
+            var kid = kidById(sch.kid_id);
+            out.push({ kind: "sched", label: (sch.emoji || "⭐") + " " + sch.title + " (이 날만)", kid: kid });
+          });
+          return out;
+        }
+
+        function renderMainExploreWeek(mon) {
+          var body = $("mainExploreBody");
+          body.innerHTML = "";
+          for (var i = 0; i < 7; i++) {
+            var d = addDaysDate(mon, i);
+            var items = mainTasksForDay(d);
+            var box = document.createElement("div");
+            box.className = "main-week-day";
+            var h = document.createElement("div");
+            h.className = "main-week-day-h";
+            h.textContent =
+              WD[weekdayMon0(d)] +
+              " " +
+              (d.getMonth() + 1) +
+              "/" +
+              d.getDate() +
+              (isSameDay(d, new Date()) ? " · 오늘" : "");
+            box.appendChild(h);
+            if (!items.length) {
+              var p = document.createElement("p");
+              p.style.margin = "0";
+              p.style.color = "#94a3b8";
+              p.style.fontWeight = "600";
+              p.style.fontSize = "0.85rem";
+              p.textContent = "일정 없음";
+              box.appendChild(p);
+            } else {
+              items.forEach(function (it) {
+                var row = document.createElement("div");
+                row.className = "main-week-item";
+                row.appendChild(document.createTextNode(it.label));
+                if (it.kid && !state.selectedKidId) {
+                  var k = document.createElement("div");
+                  k.className = "main-week-kid";
+                  k.textContent = it.kid.name;
+                  row.appendChild(k);
+                }
+                box.appendChild(row);
+              });
+            }
+            body.appendChild(box);
+          }
+        }
+
+        async function fetchMainOverlayMonthSchedules() {
+          var y = state.mainOverlayYear;
+          var m = state.mainOverlayMonth;
+          var first = new Date(y, m, 1);
+          var last = new Date(y, m + 1, 0);
+          var r = await supabase
+            .from("family_day_schedules")
+            .select("*")
+            .gte("for_date", isoDate(first))
+            .lte("for_date", isoDate(last));
+          if (r.error) throw r.error;
+          state.mainOverlaySchedules = r.data || [];
+        }
+
+        function renderMainExploreCal() {
+          var body = $("mainExploreBody");
+          body.innerHTML = "";
+          var y = state.mainOverlayYear;
+          var m = state.mainOverlayMonth;
+          if (state.mainOverlayPick) {
+            var p = state.mainOverlayPick;
+            if (p.getFullYear() !== y || p.getMonth() !== m) {
+              state.mainOverlayPick = new Date(y, m, 1);
+            }
+          } else {
+            state.mainOverlayPick = new Date(y, m, 1);
+          }
+          var nav = document.createElement("div");
+          nav.className = "main-cal-mini-nav";
+          var prev = document.createElement("button");
+          prev.type = "button";
+          prev.textContent = "◀";
+          prev.addEventListener("click", function () {
+            state.mainOverlayMonth--;
+            if (state.mainOverlayMonth < 0) {
+              state.mainOverlayMonth = 11;
+              state.mainOverlayYear--;
+            }
+            fetchMainOverlayMonthSchedules()
+              .then(function () {
+                renderMainExploreCal();
+              })
+              .catch(function (err) {
+                console.error(err);
+                $("mainExploreBody").innerHTML = '<p class="err">' + escapeHtml(err.message || String(err)) + "</p>";
+              });
+          });
+          var title = document.createElement("div");
+          title.className = "main-cal-mini-title";
+          title.textContent = state.mainOverlayYear + "년 " + (state.mainOverlayMonth + 1) + "월";
+          var next = document.createElement("button");
+          next.type = "button";
+          next.textContent = "▶";
+          next.addEventListener("click", function () {
+            state.mainOverlayMonth++;
+            if (state.mainOverlayMonth > 11) {
+              state.mainOverlayMonth = 0;
+              state.mainOverlayYear++;
+            }
+            fetchMainOverlayMonthSchedules()
+              .then(function () {
+                renderMainExploreCal();
+              })
+              .catch(function (err) {
+                console.error(err);
+              });
+          });
+          nav.appendChild(prev);
+          nav.appendChild(title);
+          nav.appendChild(next);
+          body.appendChild(nav);
+          var drow = document.createElement("div");
+          drow.className = "main-cal-mini-grid";
+          WD.forEach(function (w) {
+            var c0 = document.createElement("div");
+            c0.textContent = w;
+            drow.appendChild(c0);
+          });
+          body.appendChild(drow);
+          var cells = document.createElement("div");
+          cells.className = "main-cal-mini-cells";
+          var first = new Date(y, m, 1);
+          var startPad = weekdayMon0(first);
+          var daysInMonth = new Date(y, m + 1, 0).getDate();
+          var prevMonthDays = new Date(y, m, 0).getDate();
+          var today = new Date();
+          for (var i = 0; i < startPad; i++) {
+            var d0 = prevMonthDays - startPad + i + 1;
+            var ce0 = document.createElement("div");
+            ce0.className = "main-cal-mini-cell other";
+            ce0.textContent = d0;
+            cells.appendChild(ce0);
+          }
+          for (var day = 1; day <= daysInMonth; day++) {
+            (function (day) {
+              var dt = new Date(y, m, day);
+              var ce = document.createElement("div");
+              ce.className = "main-cal-mini-cell";
+              ce.textContent = day;
+              if (isSameDay(dt, today)) ce.classList.add("today");
+              if (state.mainOverlayPick && isSameDay(dt, state.mainOverlayPick)) ce.classList.add("picked");
+              ce.addEventListener("click", function () {
+                state.mainOverlayPick = dt;
+                renderMainExploreCal();
+              });
+              cells.appendChild(ce);
+            })(day);
+          }
+          var total = startPad + daysInMonth;
+          var endPad = (7 - (total % 7)) % 7;
+          for (var j = 1; j <= endPad; j++) {
+            var ce2 = document.createElement("div");
+            ce2.className = "main-cal-mini-cell other";
+            ce2.textContent = j;
+            cells.appendChild(ce2);
+          }
+          body.appendChild(cells);
+          var detail = document.createElement("div");
+          detail.className = "main-cal-day-detail";
+          var pick = state.mainOverlayPick;
+          var h4 = document.createElement("h4");
+          h4.textContent =
+            pick.getFullYear() + "년 " + (pick.getMonth() + 1) + "월 " + pick.getDate() + "일 (" + WD[weekdayMon0(pick)] + ")";
+          detail.appendChild(h4);
+          var items = mainTasksForDay(pick);
+          if (!items.length) {
+            var pe = document.createElement("p");
+            pe.style.color = "#64748b";
+            pe.style.fontWeight = "600";
+            pe.style.fontSize = "0.9rem";
+            pe.textContent = "이 날은 반복 요일·하루 스케줄이 없어요.";
+            detail.appendChild(pe);
+          } else {
+            items.forEach(function (it) {
+              var row = document.createElement("div");
+              row.className = "main-week-item";
+              row.appendChild(document.createTextNode(it.label));
+              if (it.kid && !state.selectedKidId) {
+                var k = document.createElement("div");
+                k.className = "main-week-kid";
+                k.textContent = it.kid.name;
+                row.appendChild(k);
+              }
+              detail.appendChild(row);
+            });
+          }
+          body.appendChild(detail);
+        }
+
+        async function openMainExploreWeek() {
+          state.mainExploreMode = "week";
+          $("mainExploreTitle").textContent = "📆 이번 주 할 일";
+          var mon = startOfMonday(new Date());
+          var sun = addDaysDate(mon, 6);
+          var r = await supabase
+            .from("family_day_schedules")
+            .select("*")
+            .gte("for_date", isoDate(mon))
+            .lte("for_date", isoDate(sun));
+          if (r.error) {
+            $("mainExploreBody").innerHTML = '<p class="err">' + escapeHtml(r.error.message) + "</p>";
+          } else {
+            state.mainOverlaySchedules = r.data || [];
+            renderMainExploreWeek(mon);
+          }
+          $("mainExploreOverlay").classList.remove("hidden");
+          $("mainExploreOverlay").setAttribute("aria-hidden", "false");
+        }
+
+        async function openMainExploreCal() {
+          state.mainExploreMode = "cal";
+          var t = new Date();
+          state.mainOverlayYear = t.getFullYear();
+          state.mainOverlayMonth = t.getMonth();
+          state.mainOverlayPick = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+          $("mainExploreTitle").textContent = "📅 달력 보기";
+          try {
+            await fetchMainOverlayMonthSchedules();
+            renderMainExploreCal();
+          } catch (err) {
+            console.error(err);
+            $("mainExploreBody").innerHTML = '<p class="err">' + escapeHtml(err.message || String(err)) + "</p>";
+          }
+          $("mainExploreOverlay").classList.remove("hidden");
+          $("mainExploreOverlay").setAttribute("aria-hidden", "false");
         }
 
         $("btnSetupSave").addEventListener("click", async function () {
@@ -1627,21 +2325,40 @@
           }
           renderCalendar();
         });
-        $("btnTabDay").addEventListener("click", function () {
-          state.weekTab = false;
-          $("btnTabDay").classList.add("on");
-          $("btnTabWeek").classList.remove("on");
-          $("panelDay").classList.remove("hidden");
-          $("panelWeek").classList.add("hidden");
+        $("btnToggleScheduleForm").addEventListener("click", function () {
+          $("panelScheduleForm").classList.toggle("hidden");
         });
-        $("btnTabWeek").addEventListener("click", function () {
-          state.weekTab = true;
-          $("btnTabWeek").classList.add("on");
-          $("btnTabDay").classList.remove("on");
-          $("panelDay").classList.add("hidden");
-          $("panelWeek").classList.remove("hidden");
-          renderWeekEditor();
-          renderLibrary();
+
+        $("formDaySchedule").addEventListener("submit", async function (e) {
+          e.preventDefault();
+          $("scheduleFormErr").innerHTML = "";
+          if (!state.selectedKidId) {
+            $("scheduleFormErr").innerHTML = '<div class="err">위에서 아이를 한 명 선택한 뒤 저장해 주세요.</div>';
+            return;
+          }
+          var fd = new FormData(e.target);
+          var forD = isoDate(state.selectedDate);
+          var sameDay = state.daySchedulesSelected.filter(function (s) {
+            return s.kid_id === state.selectedKidId;
+          });
+          var maxO = 0;
+          sameDay.forEach(function (s) {
+            maxO = Math.max(maxO, s.sort_order || 0);
+          });
+          var r = await supabase.from("family_day_schedules").insert({
+            kid_id: state.selectedKidId,
+            for_date: forD,
+            title: String(fd.get("title") || "").trim(),
+            detail: String(fd.get("detail") || "").trim(),
+            emoji: String(fd.get("emoji") || "⭐"),
+            sort_order: maxO + 1,
+          });
+          if (r.error) {
+            $("scheduleFormErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
+            return;
+          }
+          e.target.reset();
+          await refresh();
         });
 
         $("formTemplate").addEventListener("submit", async function (e) {
@@ -1681,19 +2398,50 @@
           e.preventDefault();
           $("coupErr").innerHTML = "";
           var fd = new FormData(e.target);
-          var row = {
-            title: String(fd.get("title") || "").trim(),
-            reward_text: String(fd.get("reward_text") || "").trim(),
-            stamps_required: parseInt(String(fd.get("stamps_required") || "10"), 10),
-            active: true,
-          };
-          var r = await supabase.from("family_reward_coupons").insert(row);
+          var editId = String(fd.get("coupon_id") || "").trim();
+          var title = String(fd.get("title") || "").trim();
+          var stampsReq = parseInt(String(fd.get("stamps_required") || "10"), 10);
+          var r;
+          if (editId) {
+            r = await supabase
+              .from("family_reward_coupons")
+              .update({ title: title, stamps_required: stampsReq })
+              .eq("id", editId);
+          } else {
+            r = await supabase.from("family_reward_coupons").insert({
+              title: title,
+              reward_text: "",
+              stamps_required: stampsReq,
+              active: true,
+            });
+          }
           if (r.error) {
             $("coupErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
             return;
           }
-          e.target.reset();
+          clearCouponForm();
           await refresh();
+        });
+
+        $("btnCouponCancelEdit").addEventListener("click", function () {
+          clearCouponForm();
+        });
+
+        $("btnMainWeek").addEventListener("click", function () {
+          openMainExploreWeek().catch(function (err) {
+            console.error(err);
+            $("sbStatus").textContent = "오류: " + (err.message || err);
+          });
+        });
+        $("btnMainCal").addEventListener("click", function () {
+          openMainExploreCal().catch(function (err) {
+            console.error(err);
+            $("sbStatus").textContent = "오류: " + (err.message || err);
+          });
+        });
+        $("btnMainExploreClose").addEventListener("click", closeMainExplore);
+        $("mainExploreOverlay").addEventListener("click", function (e) {
+          if (e.target === $("mainExploreOverlay")) closeMainExplore();
         });
 
         function boot() {
