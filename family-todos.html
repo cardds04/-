@@ -362,15 +362,11 @@
       .admin-three-grid .admin-col-tasks {
         order: 2;
       }
-      .admin-three-grid .admin-col-cal {
-        order: 3;
-      }
       @media (min-width: 1100px) {
         .admin-three-grid {
-          grid-template-columns: minmax(240px, 0.95fr) minmax(300px, 1.15fr) minmax(260px, 1fr);
+          grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.35fr);
         }
       }
-      .admin-col-cal,
       .admin-col-tasks,
       .admin-col-side {
         min-width: 0;
@@ -548,7 +544,8 @@
         flex: 1 1 12rem;
         margin-bottom: 0;
       }
-      .btn-schedule-toggle {
+      .btn-schedule-toggle,
+      .btn-pick-view-date {
         padding: 10px 16px;
         border-radius: 12px;
         font-weight: 800;
@@ -557,6 +554,11 @@
         background: linear-gradient(145deg, #eef2ff, #e0e7ff);
         color: #3730a3;
         cursor: pointer;
+      }
+      .btn-pick-view-date {
+        border-color: #0ea5e9;
+        background: linear-gradient(145deg, #e0f2fe, #bae6fd);
+        color: #0369a1;
       }
       .schedule-form-panel {
         background: #f8fafc;
@@ -1409,10 +1411,10 @@
         </div>
       </div>
       <nav class="admin-nav admin-nav-in-header hidden" id="adminNav" aria-label="부모님 메뉴">
-        <button type="button" class="on" data-admin-tab="calendar">📅 투두 보기</button>
+        <button type="button" class="on" data-admin-tab="kids">👧 아이 추가</button>
         <button type="button" data-admin-tab="templates">📝 투두 등록</button>
-        <button type="button" data-admin-tab="kids">👧 아이 추가</button>
         <button type="button" data-admin-tab="coupons">🎁 쿠폰 관리</button>
+        <button type="button" data-admin-tab="guide">📖 사용설명서</button>
       </nav>
     </header>
 
@@ -1472,6 +1474,23 @@
       </section>
 
       <section id="viewAdmin" class="view hidden">
+        <div id="viewDateOverlay" class="week-pick-overlay hidden" aria-hidden="true">
+          <div class="week-pick-sheet schedule-date-sheet" role="dialog" aria-labelledby="viewDateTitle">
+            <h3 id="viewDateTitle">볼 날짜 선택</h3>
+            <div class="schedule-date-cal-wrap">
+              <div class="cal-nav">
+                <button type="button" id="viewPickPrev">◀</button>
+                <div class="cal-month-title" id="viewPickMonthTitle"></div>
+                <button type="button" id="viewPickNext">▶</button>
+              </div>
+              <div class="cal-grid" id="viewPickDow"></div>
+              <div class="cal-grid" id="viewPickCells"></div>
+            </div>
+            <div class="week-pick-actions">
+              <button type="button" class="week-pick-cancel" id="viewPickCancel">닫기</button>
+            </div>
+          </div>
+        </div>
         <div id="scheduleDateOverlay" class="week-pick-overlay hidden" aria-hidden="true">
           <div class="week-pick-sheet schedule-date-sheet" role="dialog" aria-labelledby="scheduleDateTitle">
             <h3 id="scheduleDateTitle">넣을 날짜 선택</h3>
@@ -1503,18 +1522,10 @@
           </div>
         </div>
         <div id="adminWorkspace" class="admin-three-grid">
-          <div class="cal-card admin-col-cal">
-            <div class="cal-nav">
-              <button type="button" id="calPrev">◀</button>
-              <div class="cal-month-title" id="calMonthTitle"></div>
-              <button type="button" id="calNext">▶</button>
-            </div>
-            <div class="cal-grid" id="calDowRow"></div>
-            <div class="cal-grid" id="calCells"></div>
-          </div>
           <div class="cal-card admin-col-tasks">
             <div class="day-schedule-head">
               <div class="day-panel-title" id="dayPanelTitle">날짜를 선택하세요</div>
+              <button type="button" class="btn-pick-view-date" id="btnPickViewDate">📅 날짜 바꾸기</button>
               <button type="button" class="btn-schedule-toggle" id="btnToggleScheduleForm">📅 스케줄 추가</button>
             </div>
             <div id="panelScheduleForm" class="schedule-form-panel hidden">
@@ -1552,11 +1563,13 @@
           </div>
           <div class="cal-card admin-col-side">
             <div id="adminSideCalendar" class="admin-side-panel">
-              <h3 class="side-panel-title">💡 이렇게 써요</h3>
+              <h3 class="side-panel-title">💡 사용설명서</h3>
               <p class="side-panel-text">
                 위에서 <strong>아이</strong>를 고른 뒤, 가운데 <strong>요일 칸</strong> 아무 곳이나 눌러 투두를 여러 개 한 번에 넣거나, 끌어다 놓으면 매주 그 요일에 반복돼요.
               </p>
-              <p class="side-panel-text"><strong>스케줄 추가</strong>는 이름·이모지를 적은 뒤 「달력에서 날짜 선택」으로 넣을 날을 고르면 돼요.</p>
+              <p class="side-panel-text">
+                <strong>날짜 바꾸기</strong>로 그날 스케줄을 볼 날을 고를 수 있어요. <strong>스케줄 추가</strong>는 이름·이모지를 적은 뒤 「달력에서 날짜 선택」으로 넣을 날을 고르면 돼요.
+              </p>
               <p class="side-panel-text">데이터는 서버(Supabase)에 저장돼서 PC·태블릿·폰에서 같이 보여요.</p>
             </div>
             <div id="adminSideTemplates" class="admin-side-panel hidden">
@@ -1652,7 +1665,9 @@
           calYear: new Date().getFullYear(),
           calMonth: new Date().getMonth(),
           selectedDate: new Date(),
-          adminTab: "calendar",
+          adminTab: "kids",
+          viewPickYear: new Date().getFullYear(),
+          viewPickMonth: new Date().getMonth(),
           daySchedulesToday: [],
           daySchedulesSelected: [],
           dayScheduleCompletionsToday: [],
@@ -1720,6 +1735,76 @@
           }
         }
 
+        function closeViewDateOverlay() {
+          var el = $("viewDateOverlay");
+          if (el) {
+            el.classList.add("hidden");
+            el.setAttribute("aria-hidden", "true");
+          }
+        }
+
+        function renderViewDatePickCalendar() {
+          var y = state.viewPickYear;
+          var m = state.viewPickMonth;
+          $("viewPickMonthTitle").textContent = y + "년 " + (m + 1) + "월";
+          var dow = $("viewPickDow");
+          dow.innerHTML = "";
+          WD.forEach(function (w) {
+            var c = document.createElement("div");
+            c.className = "cal-dow";
+            c.textContent = w;
+            dow.appendChild(c);
+          });
+          var first = new Date(y, m, 1);
+          var startPad = weekdayMon0(first);
+          var daysInMonth = new Date(y, m + 1, 0).getDate();
+          var cells = $("viewPickCells");
+          cells.innerHTML = "";
+          var prevMonthDays = new Date(y, m, 0).getDate();
+          for (var i = 0; i < startPad; i++) {
+            var d0 = prevMonthDays - startPad + i + 1;
+            var cell0 = document.createElement("div");
+            cell0.className = "cal-cell other";
+            cell0.textContent = d0;
+            cells.appendChild(cell0);
+          }
+          var today = new Date();
+          for (var day = 1; day <= daysInMonth; day++) {
+            (function (day) {
+              var dt = new Date(y, m, day);
+              var cell = document.createElement("div");
+              cell.className = "cal-cell";
+              cell.textContent = day;
+              if (isSameDay(dt, today)) cell.classList.add("today");
+              if (isSameDay(dt, state.selectedDate)) cell.classList.add("selected");
+              cell.addEventListener("click", async function () {
+                state.selectedDate = dt;
+                state.calYear = y;
+                state.calMonth = m;
+                closeViewDateOverlay();
+                await refresh();
+              });
+              cells.appendChild(cell);
+            })(day);
+          }
+          var total = startPad + daysInMonth;
+          var endPad = (7 - (total % 7)) % 7;
+          for (var j = 1; j <= endPad; j++) {
+            var c2 = document.createElement("div");
+            c2.className = "cal-cell other";
+            c2.textContent = j;
+            cells.appendChild(c2);
+          }
+        }
+
+        function openViewDatePicker() {
+          state.viewPickYear = state.selectedDate.getFullYear();
+          state.viewPickMonth = state.selectedDate.getMonth();
+          renderViewDatePickCalendar();
+          $("viewDateOverlay").classList.remove("hidden");
+          $("viewDateOverlay").setAttribute("aria-hidden", "false");
+        }
+
         function pickRandomEmojiFromSelect(selectEl) {
           if (!selectEl) return;
           var opts = selectEl.querySelectorAll("option");
@@ -1729,7 +1814,15 @@
 
         function scrollAdminInputIntoView(tab) {
           var id =
-            tab === "templates" ? "adminSideTemplates" : tab === "kids" ? "adminSideKids" : tab === "coupons" ? "adminSideCoupons" : null;
+            tab === "templates"
+              ? "adminSideTemplates"
+              : tab === "kids"
+                ? "adminSideKids"
+                : tab === "coupons"
+                  ? "adminSideCoupons"
+                  : tab === "guide"
+                    ? "adminSideCalendar"
+                    : null;
           if (!id || !$(id)) return;
           requestAnimationFrame(function () {
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1903,6 +1996,7 @@
           if (name !== "admin") {
             closeWeekPickOverlay();
             closeScheduleDateOverlay();
+            closeViewDateOverlay();
           }
           var map = { setup: "viewSetup", gate: "viewGate", main: "viewMain", admin: "viewAdmin" };
           Object.keys(map).forEach(function (k) {
@@ -1918,14 +2012,14 @@
 
         function setAdminTab(tab) {
           state.adminTab = tab;
-          $("adminSideCalendar").classList.toggle("hidden", tab !== "calendar");
+          $("adminSideCalendar").classList.toggle("hidden", tab !== "guide");
           $("adminSideTemplates").classList.toggle("hidden", tab !== "templates");
           $("adminSideKids").classList.toggle("hidden", tab !== "kids");
           $("adminSideCoupons").classList.toggle("hidden", tab !== "coupons");
           document.querySelectorAll("#adminNav button").forEach(function (b) {
             b.classList.toggle("on", b.getAttribute("data-admin-tab") === tab);
           });
-          if (tab === "templates" || tab === "kids" || tab === "coupons") {
+          if (tab === "templates" || tab === "kids" || tab === "coupons" || tab === "guide") {
             scrollAdminInputIntoView(tab);
           }
         }
@@ -2241,10 +2335,13 @@
         }
 
         function renderCalendar() {
+          var cells = $("calCells");
+          var dow = $("calDowRow");
+          if (!cells || !dow) return;
           var y = state.calYear;
           var m = state.calMonth;
-          $("calMonthTitle").textContent = y + "년 " + (m + 1) + "월";
-          var dow = $("calDowRow");
+          var mt = $("calMonthTitle");
+          if (mt) mt.textContent = y + "년 " + (m + 1) + "월";
           dow.innerHTML = "";
           WD.forEach(function (w) {
             var c = document.createElement("div");
@@ -2255,7 +2352,6 @@
           var first = new Date(y, m, 1);
           var startPad = weekdayMon0(first);
           var daysInMonth = new Date(y, m + 1, 0).getDate();
-          var cells = $("calCells");
           cells.innerHTML = "";
           var prevMonthDays = new Date(y, m, 0).getDate();
           for (var i = 0; i < startPad; i++) {
@@ -2985,7 +3081,7 @@
           }
           $("gatePw").value = "";
           fixShowRoot("admin");
-          setAdminTab("calendar");
+          setAdminTab("kids");
           await refresh();
         });
 
@@ -3055,21 +3151,30 @@
           });
         });
 
-        $("calPrev").addEventListener("click", function () {
-          state.calMonth--;
-          if (state.calMonth < 0) {
-            state.calMonth = 11;
-            state.calYear--;
-          }
-          renderCalendar();
+        $("btnPickViewDate").addEventListener("click", function () {
+          openViewDatePicker();
         });
-        $("calNext").addEventListener("click", function () {
-          state.calMonth++;
-          if (state.calMonth > 11) {
-            state.calMonth = 0;
-            state.calYear++;
+        $("viewPickPrev").addEventListener("click", function () {
+          state.viewPickMonth--;
+          if (state.viewPickMonth < 0) {
+            state.viewPickMonth = 11;
+            state.viewPickYear--;
           }
-          renderCalendar();
+          renderViewDatePickCalendar();
+        });
+        $("viewPickNext").addEventListener("click", function () {
+          state.viewPickMonth++;
+          if (state.viewPickMonth > 11) {
+            state.viewPickMonth = 0;
+            state.viewPickYear++;
+          }
+          renderViewDatePickCalendar();
+        });
+        $("viewPickCancel").addEventListener("click", function () {
+          closeViewDateOverlay();
+        });
+        $("viewDateOverlay").addEventListener("click", function (e) {
+          if (e.target === $("viewDateOverlay")) closeViewDateOverlay();
         });
         $("btnToggleScheduleForm").addEventListener("click", function () {
           $("panelScheduleForm").classList.toggle("hidden");
