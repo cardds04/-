@@ -1242,6 +1242,7 @@
           }
           if (!f) {
             nameEl.textContent = "";
+            img.removeAttribute("src");
             wrap.hidden = true;
             zone.classList.remove("drop--has-preview");
             return;
@@ -1256,9 +1257,22 @@
 
         function setGrokRefFile(slot, file) {
           var input = slot === 2 ? grokImageFile2 : grokImageFile;
-          var dt = new DataTransfer();
-          if (file) dt.items.add(file);
-          input.files = dt.files;
+          if (!input) return;
+          if (!file) {
+            /* Safari 등: 빈 DataTransfer로는 files가 안 비워지는 경우가 많음 */
+            try {
+              input.value = "";
+            } catch (err) {}
+            syncGrokRefSlotUI(slot);
+            return;
+          }
+          try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+          } catch (err) {
+            /* 할당 실패 시 기존 값 유지 */
+          }
           syncGrokRefSlotUI(slot);
         }
 
@@ -1293,12 +1307,22 @@
         wireRefSlot(1);
         wireRefSlot(2);
 
-        document.getElementById("btnClearGrokRef1").addEventListener("click", function () {
-          setGrokRefFile(1, null);
-        });
-        document.getElementById("btnClearGrokRef2").addEventListener("click", function () {
-          setGrokRefFile(2, null);
-        });
+        var btnClearGrokRef1 = document.getElementById("btnClearGrokRef1");
+        var btnClearGrokRef2 = document.getElementById("btnClearGrokRef2");
+        if (btnClearGrokRef1) {
+          btnClearGrokRef1.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGrokRefFile(1, null);
+          });
+        }
+        if (btnClearGrokRef2) {
+          btnClearGrokRef2.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setGrokRefFile(2, null);
+          });
+        }
 
         function refPasteTargetZone() {
           try {
