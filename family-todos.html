@@ -129,6 +129,9 @@
       .stamp-badge.hidden {
         display: none;
       }
+      .app-header.admin-page .stamp-badge {
+        display: none !important;
+      }
       .stamp-badge-line {
         display: block;
         line-height: 1.25;
@@ -1331,6 +1334,64 @@
         .stamp-badge {
           max-width: 100%;
         }
+        .app-header.admin-page .app-header-top {
+          flex-direction: row;
+          flex-wrap: nowrap;
+          align-items: center;
+          gap: 6px;
+        }
+        .app-header.admin-page .btn-admin-exit {
+          align-self: center;
+          padding: 7px 10px;
+          font-size: 0.76rem;
+          flex-shrink: 0;
+        }
+        .app-header.admin-page .header-title {
+          flex: 1 1 0;
+          min-width: 0;
+          width: auto;
+          font-size: clamp(0.7rem, 3.4vw, 0.88rem);
+          line-height: 1.25;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .app-header.admin-page .kid-chips {
+          width: auto;
+          flex: 0 1 auto;
+          min-width: 0;
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin;
+        }
+        .app-header.admin-page .kid-chip {
+          padding: 8px 12px;
+          font-size: 0.82rem;
+          flex-shrink: 0;
+        }
+      }
+
+      @media (max-width: 639px) and (min-width: 481px) {
+        .app-header.admin-page .app-header-top {
+          flex-wrap: nowrap;
+          align-items: center;
+          gap: 8px;
+        }
+        .app-header.admin-page .header-title {
+          flex: 1 1 0;
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .app-header.admin-page .kid-chips {
+          flex: 0 1 auto;
+          min-width: 0;
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
       }
     </style>
   </head>
@@ -1852,6 +1913,7 @@
           $("btnAdminExit").hidden = name !== "admin";
           $("adminNav").classList.toggle("hidden", name !== "admin");
           $("headerTitle").textContent = name === "admin" ? "🛠 부모님 페이지" : "🌈 오늘 할 일";
+          $("appHeader").classList.toggle("admin-page", name === "admin");
         }
 
         function setAdminTab(tab) {
