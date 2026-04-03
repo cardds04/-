@@ -903,6 +903,8 @@
                 <summary class="image-aspect-details__summary">엔진·해상도 안내</summary>
                 <p class="hint image-aspect-legend">
                   비율·1k·2k는 양쪽 공통, <strong>4k는 나노(Gemini)만</strong>입니다.
+                  <strong>원본 비율</strong>은 참조 1 픽셀 기준입니다. Grok은 <code>auto</code>, Gemini는 API가 허용하는 비율 중
+                  <strong>가장 가까운 값</strong>으로 맞춥니다(완전 동일 픽셀 비율은 보장되지 않음).
                 </p>
               </details>
               <div class="row row--3 row--grok-image-dims">
@@ -912,9 +914,10 @@
                     <option value="169">16∶9</option>
                     <option value="43">4∶3</option>
                     <option value="32" selected>3∶2</option>
+                    <option value="orig">원본 비율</option>
                   </select>
                 </div>
-                <div class="grok-image-orient-cell">
+                <div class="grok-image-orient-cell" id="grokImageOrientationWrap">
                   <label class="label label--compact">방향</label>
                   <div
                     class="pan-direction pan-direction--grok-image pan-direction--grok-compact"
@@ -1075,6 +1078,7 @@
 
         function getComputedImageAspectRatio() {
           var base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+          if (base === "orig") return "auto";
           var oriEl = document.querySelector('input[name="grokImageOrientation"]:checked');
           var ori = oriEl ? oriEl.value : "landscape";
           var map = {
@@ -1084,6 +1088,79 @@
           };
           var row = map[base] || map[32];
           return ori === "portrait" ? row.portrait : row.landscape;
+        }
+
+        /** Gemini Flash Image 등이 허용하는 aspectRatio 문자열만 (가로 긴 순) */
+        var GEMINI_ASPECT_PRESETS = [
+          ["21:9", 21 / 9],
+          ["16:9", 16 / 9],
+          ["3:2", 3 / 2],
+          ["4:3", 4 / 3],
+          ["5:4", 5 / 4],
+          ["1:1", 1],
+          ["4:5", 4 / 5],
+          ["3:4", 3 / 4],
+          ["2:3", 2 / 3],
+          ["9:16", 9 / 16],
+        ];
+
+        function nearestGeminiAspectRatio(w, h) {
+          if (!w || !h || w <= 0 || h <= 0) return "3:2";
+          var t = w / h;
+          var best = GEMINI_ASPECT_PRESETS[0];
+          var bestScore = Math.abs(Math.log(t) - Math.log(best[1]));
+          for (var i = 1; i < GEMINI_ASPECT_PRESETS.length; i++) {
+            var row = GEMINI_ASPECT_PRESETS[i];
+            var sc = Math.abs(Math.log(t) - Math.log(row[1]));
+            if (sc < bestScore) {
+              bestScore = sc;
+              best = row;
+            }
+          }
+          return best[0];
+        }
+
+        function getImageFileNaturalSize(file) {
+          return new Promise(function (resolve, reject) {
+            if (!file) {
+              reject(new Error("파일이 없습니다."));
+              return;
+            }
+            var u = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+              URL.revokeObjectURL(u);
+              resolve({ w: img.naturalWidth, h: img.naturalHeight });
+            };
+            img.onerror = function () {
+              URL.revokeObjectURL(u);
+              reject(new Error("참조 이미지 크기를 읽을 수 없습니다."));
+            };
+            img.src = u;
+          });
+        }
+
+        function syncOriginalAspectUi() {
+          var orig = grokImageAspectBase && grokImageAspectBase.value === "orig";
+          var wrap = document.getElementById("grokImageOrientationWrap");
+          if (wrap) {
+            wrap.style.opacity = orig ? "0.5" : "";
+            wrap.style.pointerEvents = orig ? "none" : "";
+          }
+          document.querySelectorAll('input[name="grokImageOrientation"]').forEach(function (el) {
+            el.disabled = !!orig;
+          });
+        }
+
+        async function resolveAspectRatioForApi(prov, refFile) {
+          var base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+          if (base !== "orig") return getComputedImageAspectRatio();
+          if (!refFile) {
+            throw new Error("원본 비율은 참조 이미지 1이 필요합니다.");
+          }
+          if (prov === "xai") return "auto";
+          var dim = await getImageFileNaturalSize(refFile);
+          return nearestGeminiAspectRatio(dim.w, dim.h);
         }
 
         function syncImageResolutionForProvider() {
@@ -1104,6 +1181,11 @@
           el.addEventListener("change", syncImageResolutionForProvider);
         });
         syncImageResolutionForProvider();
+
+        if (grokImageAspectBase) {
+          grokImageAspectBase.addEventListener("change", syncOriginalAspectUi);
+        }
+        syncOriginalAspectUi();
 
         function loadImagePromptPresets() {
           try {
@@ -1662,14 +1744,15 @@
             setError("");
             var provEl = document.querySelector('input[name="imageProvider"]:checked');
             var prov = provEl ? provEl.value : "gemini";
-            var aspect_ratio = getComputedImageAspectRatio();
+            var ref1 = grokImageFile && grokImageFile.files[0];
             var resolution = grokImageResolution ? grokImageResolution.value : "2k";
             var images = [];
+            var aspect_ratio;
             try {
-              if (grokImageFile && grokImageFile.files[0])
-                images.push(await fileToDataUrlForApi(grokImageFile.files[0]));
+              if (ref1) images.push(await fileToDataUrlForApi(ref1));
               if (grokImageFile2 && grokImageFile2.files[0])
                 images.push(await fileToDataUrlForApi(grokImageFile2.files[0]));
+              aspect_ratio = await resolveAspectRatioForApi(prov, ref1);
             } catch (e) {
               setError(String(e.message || e));
               return;
