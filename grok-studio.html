@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grok 이미지 · 영상 스튜디오</title>
+    <style>
+      :root {
+        --bg: #0a0e14;
+        --card: #121a24;
+        --line: #243044;
+        --text: #e8eef6;
+        --muted: #8a9bb0;
+        --accent: #f97316;
+        --accent2: #ea580c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: radial-gradient(ellipse 90% 60% at 50% -20%, #1a2840 0%, var(--bg) 50%);
+        color: var(--text);
+        padding: 20px 16px 48px;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.45rem;
+        font-weight: 800;
+        margin: 0 0 6px;
+        letter-spacing: -0.02em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.88rem;
+        margin: 0 0 18px;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .tabs button {
+        flex: 1;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--muted);
+        font-weight: 700;
+        font-size: 0.92rem;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .tabs button.active {
+        border-color: var(--accent);
+        background: rgba(249, 115, 22, 0.12);
+        color: #fdba74;
+      }
+      .panel {
+        display: none;
+      }
+      .panel.active {
+        display: block;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--muted);
+        margin: 12px 0 6px;
+      }
+      label:first-child {
+        margin-top: 0;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #0d1219;
+        color: var(--text);
+        font-size: 0.92rem;
+        font-family: inherit;
+      }
+      textarea {
+        min-height: 88px;
+        resize: vertical;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.95rem;
+        cursor: pointer;
+        font-family: inherit;
+        margin-top: 14px;
+      }
+      .btn:hover {
+        background: var(--accent2);
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn.secondary {
+        background: #334155;
+      }
+      .hint {
+        font-size: 0.76rem;
+        color: var(--muted);
+        margin-top: 8px;
+        line-height: 1.45;
+      }
+      .err {
+        color: #f87171;
+        font-size: 0.85rem;
+        margin-top: 10px;
+      }
+      .out {
+        margin-top: 16px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: #0d1219;
+      }
+      .out img,
+      .out video {
+        display: block;
+        width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+      }
+      .progress {
+        height: 6px;
+        background: var(--line);
+        border-radius: 3px;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .progress > i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        width: 0%;
+        transition: width 0.3s;
+      }
+      .file-row {
+        margin-top: 8px;
+      }
+      .key-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+      .key-row input {
+        flex: 1;
+        min-width: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Grok 이미지 · 영상 스튜디오</h1>
+      <p class="sub">
+        xAI <strong>Grok Imagine</strong> 이미지·영상 생성. 배포된 사이트에서 바로 사용합니다. Topaz 후처리·팬 영상은 로컬
+        <code>tools/grok-topaz-pipeline</code> 전용입니다.
+      </p>
+
+      <div class="card">
+        <label for="apiKey">xAI API 키</label>
+        <div class="key-row">
+          <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="xai-…" />
+          <button type="button" class="btn secondary" id="btnSaveKey" style="margin-top: 0">브라우저에 저장</button>
+        </div>
+        <p class="hint">
+          Vercel에 <code>XAI_API_KEY</code>를 넣어 두었으면 비워도 됩니다. 키를 입력하면 이 기기 브라우저(sessionStorage)에만
+          보관됩니다.
+        </p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" class="active" data-tab="img">이미지</button>
+        <button type="button" data-tab="vid">영상</button>
+      </div>
+
+      <div id="panelImg" class="panel active">
+        <div class="card">
+          <label for="imgPrompt">프롬프트</label>
+          <textarea id="imgPrompt" placeholder="예: 석양 아래 미래 도시, 시네마틱"></textarea>
+          <label for="imgAspect">비율</label>
+          <select id="imgAspect">
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+            <option value="1:1">1:1</option>
+            <option value="4:3">4:3</option>
+            <option value="3:2">3:2</option>
+            <option value="2:3">2:3</option>
+          </select>
+          <label for="imgRes">해상도</label>
+          <select id="imgRes">
+            <option value="1k">1k</option>
+            <option value="2k">2k</option>
+          </select>
+          <label>참조 이미지 (선택, 최대 2장 · 용량 크면 실패할 수 있음)</label>
+          <div class="file-row">
+            <input type="file" id="imgRef1" accept="image/*" />
+          </div>
+          <div class="file-row">
+            <input type="file" id="imgRef2" accept="image/*" />
+          </div>
+          <button type="button" class="btn" id="btnGenImg">이미지 만들기</button>
+          <p class="err" id="imgErr" style="display: none"></p>
+          <div id="imgOut" class="out" style="display: none"></div>
+        </div>
+      </div>
+
+      <div id="panelVid" class="panel">
+        <div class="card">
+          <label for="vidPrompt">프롬프트</label>
+          <textarea id="vidPrompt" placeholder="영상에 담길 내용"></textarea>
+          <label for="vidFile">시작 이미지 (필수)</label>
+          <input type="file" id="vidFile" accept="image/*" />
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px">
+            <div>
+              <label for="vidDur">길이(초)</label>
+              <input type="number" id="vidDur" min="1" max="15" value="2" />
+            </div>
+            <div>
+              <label for="vidAspect">비율</label>
+              <select id="vidAspect">
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+              </select>
+            </div>
+            <div>
+              <label for="vidRes">화질</label>
+              <select id="vidRes">
+                <option value="720p">720p</option>
+                <option value="480p">480p</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" class="btn" id="btnGenVid">영상 생성 시작</button>
+          <div class="progress" id="vidProgressWrap" style="display: none">
+            <i id="vidProgressBar"></i>
+          </div>
+          <p class="hint" id="vidStatus"></p>
+          <p class="err" id="vidErr" style="display: none"></p>
+          <div id="vidOut" class="out" style="display: none"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const LS_KEY = "grok_studio_xai_key_v1";
+        const API = "/api/grok-xai";
+
+        const apiKeyEl = document.getElementById("apiKey");
+        try {
+          apiKeyEl.value = sessionStorage.getItem(LS_KEY) || "";
+        } catch (_) {}
+
+        document.getElementById("btnSaveKey").addEventListener("click", function () {
+          try {
+            sessionStorage.setItem(LS_KEY, apiKeyEl.value.trim());
+            alert("저장했습니다. (이 브라우저·이 탭 세션만)");
+          } catch (e) {
+            alert(String(e.message || e));
+          }
+        });
+
+        function getKeyPayload() {
+          const k = apiKeyEl.value.trim();
+          return k ? { xai_api_key: k } : {};
+        }
+
+        async function post(body) {
+          const r = await fetch(API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...body, ...getKeyPayload() }),
+          });
+          const j = await r.json().catch(function () {
+            return {};
+          });
+          if (!r.ok || j.ok === false) {
+            throw new Error(j.error || j.message || "요청 실패 " + r.status);
+          }
+          return j;
+        }
+
+        function fileToDataUrl(file) {
+          return new Promise(function (resolve, reject) {
+            const fr = new FileReader();
+            fr.onload = function () {
+              resolve(String(fr.result || ""));
+            };
+            fr.onerror = reject;
+            fr.readAsDataURL(file);
+          });
+        }
+
+        document.querySelectorAll(".tabs button").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const tab = btn.getAttribute("data-tab");
+            document.querySelectorAll(".tabs button").forEach(function (b) {
+              b.classList.toggle("active", b === btn);
+            });
+            document.getElementById("panelImg").classList.toggle("active", tab === "img");
+            document.getElementById("panelVid").classList.toggle("active", tab === "vid");
+          });
+        });
+
+        const imgErr = document.getElementById("imgErr");
+        const imgOut = document.getElementById("imgOut");
+
+        document.getElementById("btnGenImg").addEventListener("click", async function () {
+          const btn = document.getElementById("btnGenImg");
+          imgErr.style.display = "none";
+          imgOut.style.display = "none";
+          imgOut.innerHTML = "";
+          const prompt = document.getElementById("imgPrompt").value.trim();
+          if (!prompt) {
+            imgErr.textContent = "프롬프트를 입력하세요.";
+            imgErr.style.display = "block";
+            return;
+          }
+          const f1 = document.getElementById("imgRef1").files[0];
+          const f2 = document.getElementById("imgRef2").files[0];
+          const images = [];
+          try {
+            if (f1) images.push(await fileToDataUrl(f1));
+            if (f2) images.push(await fileToDataUrl(f2));
+          } catch (e) {
+            imgErr.textContent = String(e.message || e);
+            imgErr.style.display = "block";
+            return;
+          }
+          const body = {
+            action: "image",
+            prompt: prompt,
+            aspect_ratio: document.getElementById("imgAspect").value,
+            resolution: document.getElementById("imgRes").value,
+          };
+          if (images.length) body.images = images;
+          btn.disabled = true;
+          try {
+            const j = await post(body);
+            let src = j.url || null;
+            if (!src && j.b64_json) {
+              src = "data:image/png;base64," + j.b64_json;
+            }
+            if (!src) throw new Error("이미지 URL을 받지 못했습니다.");
+            imgOut.innerHTML = '<img src="' + src.replace(/"/g, "&quot;") + '" alt="생성 결과" />';
+            imgOut.style.display = "block";
+          } catch (e) {
+            imgErr.textContent = String(e.message || e);
+            imgErr.style.display = "block";
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        const vidErr = document.getElementById("vidErr");
+        const vidOut = document.getElementById("vidOut");
+        const vidStatus = document.getElementById("vidStatus");
+        const vidProgressWrap = document.getElementById("vidProgressWrap");
+        const vidProgressBar = document.getElementById("vidProgressBar");
+
+        document.getElementById("btnGenVid").addEventListener("click", async function () {
+          const btn = document.getElementById("btnGenVid");
+          vidErr.style.display = "none";
+          vidOut.style.display = "none";
+          vidOut.innerHTML = "";
+          vidStatus.textContent = "";
+          const prompt = document.getElementById("vidPrompt").value.trim();
+          const vf = document.getElementById("vidFile").files[0];
+          if (!prompt || !vf) {
+            vidErr.textContent = "프롬프트와 시작 이미지가 필요합니다.";
+            vidErr.style.display = "block";
+            return;
+          }
+          let image;
+          try {
+            image = await fileToDataUrl(vf);
+          } catch (e) {
+            vidErr.textContent = String(e.message || e);
+            vidErr.style.display = "block";
+            return;
+          }
+          btn.disabled = true;
+          vidProgressWrap.style.display = "block";
+          vidProgressBar.style.width = "5%";
+          try {
+            const start = await post({
+              action: "video_start",
+              prompt: prompt,
+              image: image,
+              duration: parseInt(document.getElementById("vidDur").value, 10) || 2,
+              aspect_ratio: document.getElementById("vidAspect").value,
+              resolution: document.getElementById("vidRes").value,
+            });
+            const rid = start.request_id;
+            vidStatus.textContent = "요청 접수: " + rid.slice(0, 12) + "…";
+            const t0 = Date.now();
+            let done = false;
+            while (!done && Date.now() - t0 < 600000) {
+              await new Promise(function (r) {
+                setTimeout(r, 2500);
+              });
+              const st = await post({ action: "video_poll", request_id: rid });
+              if (typeof st.progress === "number") {
+                vidProgressBar.style.width = Math.min(100, st.progress) + "%";
+              }
+              vidStatus.textContent = "상태: " + (st.status || "—") + (st.progress != null ? " (" + st.progress + "%)" : "");
+              if (st.status === "done" && st.video_url) {
+                vidOut.innerHTML =
+                  '<video controls playsinline src="' +
+                  String(st.video_url).replace(/"/g, "&quot;") +
+                  '"></video>';
+                vidOut.style.display = "block";
+                vidProgressBar.style.width = "100%";
+                done = true;
+                break;
+              }
+              if (st.status === "failed" || st.status === "expired") {
+                throw new Error(st.error ? JSON.stringify(st.error) : "생성 실패");
+              }
+            }
+            if (!done) throw new Error("시간 초과 — 나중에 다시 시도하세요.");
+          } catch (e) {
+            vidErr.textContent = String(e.message || e);
+            vidErr.style.display = "block";
+            vidProgressWrap.style.display = "none";
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
