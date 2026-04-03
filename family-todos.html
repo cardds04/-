@@ -66,8 +66,16 @@
         font-size: clamp(1rem, 2.5vw, 1.25rem);
         min-width: 8rem;
       }
-      .header-title.header-title--admin-tap {
+      .btn-admin-exit {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.88rem;
         cursor: pointer;
+        background: linear-gradient(90deg, var(--sky), var(--mint));
+        color: #0f172a;
+        flex-shrink: 0;
       }
       .btn-admin {
         padding: 10px 16px;
@@ -982,6 +990,7 @@
   <body>
     <header id="appHeader" class="app-header hidden">
       <div class="app-header-top">
+        <button type="button" class="btn-admin-exit hidden" id="btnAdminExit">나가기</button>
         <div class="header-title" id="headerTitle">🌈 오늘 할 일</div>
         <div class="kid-chips">
           <span class="label">누구?</span>
@@ -1213,6 +1222,7 @@
           daySchedulesToday: [],
           daySchedulesSelected: [],
           dayScheduleCompletionsToday: [],
+          dayScheduleTablesOk: false,
           mainExploreMode: null,
           mainOverlayYear: new Date().getFullYear(),
           mainOverlayMonth: new Date().getMonth(),
@@ -1235,6 +1245,12 @@
         }
         function $(id) {
           return document.getElementById(id);
+        }
+
+        function isMissingDayScheduleTableError(err) {
+          if (!err) return false;
+          var msg = String(err.message || "") + String(err.details || "") + String(err.hint || "");
+          return /family_day_schedule|Could not find the table|schema cache|does not exist|PGRST205/i.test(msg);
         }
 
         async function sha256Hex(str) {
@@ -1264,10 +1280,9 @@
           });
           $("appHeader").classList.toggle("hidden", name === "setup" || name === "gate");
           $("btnOpenAdmin").classList.toggle("hidden", name !== "main");
+          $("btnAdminExit").classList.toggle("hidden", name !== "admin");
           $("adminNav").classList.toggle("hidden", name !== "admin");
           $("headerTitle").textContent = name === "admin" ? "🛠 관리자 페이지" : "🌈 오늘 할 일";
-          $("headerTitle").classList.toggle("header-title--admin-tap", name === "admin");
-          $("headerTitle").title = name === "admin" ? "눌러서 오늘 화면으로" : "";
         }
 
         function setAdminTab(tab) {
@@ -1299,23 +1314,36 @@
             var dstr = isoDate(state.selectedDate);
             var compToday = await supabase.from("family_todo_completions").select("*").eq("for_date", todayStr);
             if (compToday.error) throw compToday.error;
-            var dsToday = await supabase.from("family_day_schedules").select("*").eq("for_date", todayStr);
-            var dsSel = await supabase.from("family_day_schedules").select("*").eq("for_date", dstr);
-            var dscToday = await supabase.from("family_day_schedule_completions").select("*").eq("for_date", todayStr);
-            if (dsToday.error) throw dsToday.error;
-            if (dsSel.error) throw dsSel.error;
-            if (dscToday.error) throw dscToday.error;
             state.kids = k.data || [];
             state.templates = t.data || [];
             state.slots = s.data || [];
             state.wallets = w.data || [];
             state.coupons = c.data || [];
             state.completionsToday = compToday.data || [];
-            state.daySchedulesToday = dsToday.data || [];
-            state.daySchedulesSelected = dsSel.data || [];
-            state.dayScheduleCompletionsToday = dscToday.data || [];
+            state.daySchedulesToday = [];
+            state.daySchedulesSelected = [];
+            state.dayScheduleCompletionsToday = [];
+            var schedDbWarn = "";
+            var dsToday = await supabase.from("family_day_schedules").select("*").eq("for_date", todayStr);
+            if (dsToday.error) {
+              if (isMissingDayScheduleTableError(dsToday.error)) {
+                schedDbWarn =
+                  "날짜 스케줄 DB가 아직 없어요. Supabase → SQL에서 supabase/migrations/20260331200000_family_day_schedules.sql 을 실행해 주세요.";
+              } else {
+                throw dsToday.error;
+              }
+            } else {
+              state.daySchedulesToday = dsToday.data || [];
+              var dsSel = await supabase.from("family_day_schedules").select("*").eq("for_date", dstr);
+              if (dsSel.error) throw dsSel.error;
+              state.daySchedulesSelected = dsSel.data || [];
+              var dscToday = await supabase.from("family_day_schedule_completions").select("*").eq("for_date", todayStr);
+              if (dscToday.error) throw dscToday.error;
+              state.dayScheduleCompletionsToday = dscToday.data || [];
+            }
+            state.dayScheduleTablesOk = !schedDbWarn;
             errMain.textContent = "";
-            errAd.textContent = "";
+            errAd.textContent = schedDbWarn;
             renderKidChips();
             renderMainToday();
             renderCalendar();
@@ -2066,7 +2094,13 @@
             .select("*")
             .gte("for_date", isoDate(first))
             .lte("for_date", isoDate(last));
-          if (r.error) throw r.error;
+          if (r.error) {
+            if (isMissingDayScheduleTableError(r.error)) {
+              state.mainOverlaySchedules = [];
+              return;
+            }
+            throw r.error;
+          }
           state.mainOverlaySchedules = r.data || [];
         }
 
@@ -2216,7 +2250,12 @@
             .gte("for_date", isoDate(mon))
             .lte("for_date", isoDate(sun));
           if (r.error) {
-            $("mainExploreBody").innerHTML = '<p class="err">' + escapeHtml(r.error.message) + "</p>";
+            if (isMissingDayScheduleTableError(r.error)) {
+              state.mainOverlaySchedules = [];
+              renderMainExploreWeek(mon);
+            } else {
+              $("mainExploreBody").innerHTML = '<p class="err">' + escapeHtml(r.error.message) + "</p>";
+            }
           } else {
             state.mainOverlaySchedules = r.data || [];
             renderMainExploreWeek(mon);
@@ -2293,12 +2332,10 @@
           await refresh();
         });
 
-        $("headerTitle").addEventListener("click", function () {
-          if (!$("viewAdmin").classList.contains("hidden")) {
-            clearAdminSession();
-            fixShowRoot("main");
-            refresh();
-          }
+        $("btnAdminExit").addEventListener("click", function () {
+          clearAdminSession();
+          fixShowRoot("main");
+          refresh();
         });
 
         document.querySelectorAll("#adminNav button").forEach(function (b) {
@@ -2332,6 +2369,11 @@
           $("scheduleFormErr").innerHTML = "";
           if (!state.selectedKidId) {
             $("scheduleFormErr").innerHTML = '<div class="err">위에서 아이를 한 명 선택한 뒤 저장해 주세요.</div>';
+            return;
+          }
+          if (!state.dayScheduleTablesOk) {
+            $("scheduleFormErr").innerHTML =
+              '<div class="err">DB에 날짜 스케줄 테이블이 없어요. Supabase 대시보드 → SQL에서 20260331200000_family_day_schedules.sql 내용을 실행해 주세요.</div>';
             return;
           }
           var fd = new FormData(e.target);
