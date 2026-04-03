@@ -66,24 +66,20 @@
         font-size: clamp(1rem, 2.5vw, 1.25rem);
         min-width: 8rem;
       }
-      .btn-admin,
-      .btn-exit-admin {
+      .header-title.header-title--admin-tap {
+        cursor: pointer;
+      }
+      .btn-admin {
         padding: 10px 16px;
         border: none;
         border-radius: 999px;
         font-weight: 800;
         font-size: 0.9rem;
         cursor: pointer;
-      }
-      .btn-admin {
         margin-left: auto;
         background: linear-gradient(90deg, #a78bfa, #818cf8);
         color: #fff;
         box-shadow: 0 2px 12px rgba(99, 102, 241, 0.35);
-      }
-      .btn-exit-admin {
-        background: linear-gradient(90deg, var(--sky), var(--mint));
-        color: #0f172a;
       }
       .kid-chips {
         display: flex;
@@ -986,7 +982,6 @@
   <body>
     <header id="appHeader" class="app-header hidden">
       <div class="app-header-top">
-        <button type="button" class="btn-exit-admin hidden" id="btnExitAdmin">← 메인으로</button>
         <div class="header-title" id="headerTitle">🌈 오늘 할 일</div>
         <div class="kid-chips">
           <span class="label">누구?</span>
@@ -1269,9 +1264,10 @@
           });
           $("appHeader").classList.toggle("hidden", name === "setup" || name === "gate");
           $("btnOpenAdmin").classList.toggle("hidden", name !== "main");
-          $("btnExitAdmin").classList.toggle("hidden", name !== "admin");
           $("adminNav").classList.toggle("hidden", name !== "admin");
           $("headerTitle").textContent = name === "admin" ? "🛠 관리자 페이지" : "🌈 오늘 할 일";
+          $("headerTitle").classList.toggle("header-title--admin-tap", name === "admin");
+          $("headerTitle").title = name === "admin" ? "눌러서 오늘 화면으로" : "";
         }
 
         function setAdminTab(tab) {
@@ -2297,10 +2293,12 @@
           await refresh();
         });
 
-        $("btnExitAdmin").addEventListener("click", function () {
-          clearAdminSession();
-          fixShowRoot("main");
-          refresh();
+        $("headerTitle").addEventListener("click", function () {
+          if (!$("viewAdmin").classList.contains("hidden")) {
+            clearAdminSession();
+            fixShowRoot("main");
+            refresh();
+          }
         });
 
         document.querySelectorAll("#adminNav button").forEach(function (b) {
