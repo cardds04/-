@@ -8,6 +8,12 @@ import ccxt
 from dotenv import load_dotenv
 
 load_dotenv()
+try:
+    from runtime_credentials import apply_runtime_credentials
+
+    apply_runtime_credentials()
+except ImportError:
+    pass
 
 
 def make_exchange():
@@ -17,7 +23,9 @@ def make_exchange():
         api_key = os.getenv("UPBIT_API_KEY")
         secret = os.getenv("UPBIT_SECRET")
         if not api_key or not secret:
-            sys.exit("UPBIT_API_KEY, UPBIT_SECRET 를 .env 에 설정하세요.")
+            sys.exit(
+                "UPBIT_API_KEY, UPBIT_SECRET 가 없습니다. .env 또는 대시보드 API 키 저장(.runtime_credentials.json)을 사용하세요."
+            )
         return ccxt.upbit(
             {
                 "apiKey": api_key,
@@ -30,7 +38,9 @@ def make_exchange():
         api_key = os.getenv("BITHUMB_API_KEY")
         secret = os.getenv("BITHUMB_SECRET")
         if not api_key or not secret:
-            sys.exit("BITHUMB_API_KEY, BITHUMB_SECRET 를 .env 에 설정하세요.")
+            sys.exit(
+                "BITHUMB_API_KEY, BITHUMB_SECRET 가 없습니다. .env 또는 대시보드 API 키 저장을 사용하세요."
+            )
         return ccxt.bithumb(
             {
                 "apiKey": api_key,

@@ -152,6 +152,12 @@ def _tool_declarations() -> list[types.FunctionDeclaration]:
 
 
 def _client() -> genai.Client:
+    try:
+        from runtime_credentials import apply_runtime_credentials
+
+        apply_runtime_credentials()
+    except ImportError:
+        pass
     key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
     if not key:
         raise RuntimeError(
@@ -738,4 +744,10 @@ def run_llm_chat(user_messages: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def is_llm_chat_configured() -> bool:
+    try:
+        from runtime_credentials import apply_runtime_credentials
+
+        apply_runtime_credentials()
+    except ImportError:
+        pass
     return bool((os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip())

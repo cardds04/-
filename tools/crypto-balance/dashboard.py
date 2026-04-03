@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from exchange_helper import UpbitExchange, list_krw_market_symbols
+from pending_market_confirm import execute_immediate_buy
 from reference_high import normalize_drop_reference_high, reference_high_for_drop
 from reference_midpoint import normalize_midpoint_window, reference_midpoint_for_window
 from scenario_performance import build_scenario_performance_list, invalidate_krw_price_cache
@@ -84,58 +85,14 @@ def _sum_allocated_krw_from_scenarios() -> float:
     return total
 from strategy_config import load_strategy_config, save_strategy_config
 from strategy_chat import process_chat_request, process_trader_chat_request
+from trade_fifo import fifo_remaining_lots_for_symbol as _fifo_remaining_lots_for_symbol
+from trade_fifo import merge_lots_by_scenario as _merge_lots_by_scenario
 from trade_log import append_trade, compute_stats, read_trades
-from trade_reason import cond_summary_ko_trend_buy, reason_manual_dashboard_buy
-
-
-def _fifo_remaining_lots_for_symbol(trades: list[dict[str, Any]], sym: str) -> list[dict[str, Any]]:
-    """해당 심볼(BTC/KRW 등)에 대해 매도를 FIFO로 차감한 뒤 남은 매수 lot."""
-    want = sym.strip().upper()
-    lst = [t for t in trades if str(t.get("symbol") or "").strip().upper() == want]
-    lst.sort(key=lambda x: str(x.get("ts") or ""))
-    lots: list[dict[str, Any]] = []
-    for t in lst:
-        side = str(t.get("side", "")).lower()
-        if side == "buy":
-            try:
-                amt = float(t.get("amount_base") or 0)
-            except (TypeError, ValueError):
-                amt = 0.0
-            if amt <= 1e-12:
-                continue
-            sid = str(t.get("scenario_id") or "").strip()
-            sname = str(t.get("scenario_name") or "").strip()
-            lots.append({"scenario_id": sid, "scenario_name": sname, "qty": amt})
-        elif side == "sell":
-            try:
-                sell_amt = float(t.get("amount_base") or 0)
-            except (TypeError, ValueError):
-                sell_amt = 0.0
-            while sell_amt > 1e-12 and lots:
-                first = lots[0]
-                q = float(first["qty"])
-                take = min(q, sell_amt)
-                first["qty"] = q - take
-                sell_amt -= take
-                if first["qty"] <= 1e-12:
-                    lots.pop(0)
-    return lots
-
-
-def _merge_lots_by_scenario(lots: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """같은 시나리오로 남은 수량을 합산."""
-    acc: dict[str, dict[str, Any]] = {}
-    for lot in lots:
-        sid = str(lot.get("scenario_id") or "").strip()
-        key = sid if sid else "__none__"
-        if key not in acc:
-            acc[key] = {
-                "scenario_id": sid,
-                "scenario_name": str(lot.get("scenario_name") or "").strip(),
-                "qty": 0.0,
-            }
-        acc[key]["qty"] += float(lot.get("qty") or 0)
-    return list(acc.values())
+from trade_reason import (
+    cond_summary_ko_trend_buy,
+    reason_manual_dashboard_buy,
+    reason_manual_dashboard_limit_buy,
+)
 
 
 def _enrich_holdings_attrib(
@@ -295,13 +252,27 @@ def _enrich_holdings_targets(
         }
 
 try:
-    from ccxt.base.errors import ExchangeError, InsufficientFunds, InvalidOrder
+    from ccxt.base.errors import (
+        ExchangeError,
+        ExchangeNotAvailable,
+        InsufficientFunds,
+        InvalidOrder,
+        NetworkError,
+        RequestTimeout,
+    )
 except ImportError:
     ExchangeError = Exception  # type: ignore
+    ExchangeNotAvailable = Exception  # type: ignore
     InsufficientFunds = Exception  # type: ignore
     InvalidOrder = Exception  # type: ignore
+    NetworkError = Exception  # type: ignore
+    RequestTimeout = Exception  # type: ignore
 
 load_dotenv()
+
+from runtime_credentials import apply_runtime_credentials, credentials_status, save_runtime_credentials
+
+apply_runtime_credentials()
 
 BASE_DIR = Path(__file__).resolve().parent
 STATUS_PATH = BASE_DIR / "status.json"
@@ -319,6 +290,8 @@ _KRW_CHANGE_REF_HOURS = {"24h": 24, "12h": 12, "6h": 6, "3h": 3, "1h": 1}
 app = FastAPI(title="업비트 봇 콘솔", docs_url=None, redoc_url=None)
 # 시나리오 JSON에 프로필 이미지(base64)가 있으면 응답이 매우 커짐 → gzip으로 전송량 축소
 app.add_middleware(GZipMiddleware, minimum_size=800)
+
+_MANUAL_LIMIT_MIN_KRW = 5000.0
 
 
 def _float_safe(v: Any) -> float:
@@ -612,7 +585,7 @@ _WATCH_MID1H_UP_BATCH_MAX = 40
 @app.post("/api/watch/midpoint-up-1h")
 async def api_watch_midpoint_up_1h(request: Request):
     """
-    감시 종목 전용: 선택 구간(15m·1h·24h) 미들포인트 대비 현재가가 min_pct%(기본 0.1) 이상 오른 심볼만 반환.
+    감시 종목 전용: 선택 구간(15m·1h·6h·24h) 미들포인트 대비 현재가가 min_pct%(기본 0.1) 이상 오른 심볼만 반환.
     본문 midpoint_window(기본 1h). (매수 기준 고가·거래 조건과 별개 — 표시용)
     """
     try:
@@ -839,6 +812,42 @@ def get_one_scenario(scenario_id: str):
     )
 
 
+@app.get("/api/credentials-status")
+def api_credentials_status():
+    """업비트·Gemini 키 설정 여부(값은 노출하지 않음)."""
+    return credentials_status()
+
+
+@app.post("/api/credentials")
+async def api_credentials_save(request: Request):
+    """
+    API 키를 .runtime_credentials.json 에 저장하고 현재 프로세스 env 에 반영.
+    JSON: upbit_api_key, upbit_secret, gemini_api_key, google_api_key (선택).
+    빈 문자열이나 null이면 해당 항목만 파일에서 제거합니다.
+    """
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "error": "JSON 객체가 필요합니다."}, status_code=400)
+    except json.JSONDecodeError:
+        return JSONResponse({"ok": False, "error": "JSON 파싱 실패"}, status_code=400)
+
+    key_map = {
+        "upbit_api_key": "UPBIT_API_KEY",
+        "upbit_secret": "UPBIT_SECRET",
+        "gemini_api_key": "GEMINI_API_KEY",
+        "google_api_key": "GOOGLE_API_KEY",
+    }
+    updates: dict[str, Any] = {}
+    for js_k, env_k in key_map.items():
+        if js_k not in body:
+            continue
+        updates[env_k] = body.get(js_k)
+
+    save_runtime_credentials(updates)
+    return {"ok": True, **credentials_status()}
+
+
 @app.post("/api/scenarios/preview-watch")
 async def post_preview_watch(request: Request):
     """
@@ -962,7 +971,7 @@ async def get_manual_order_context(scenario_id: str):
 @app.post("/api/scenarios/{scenario_id}/market_buy_now")
 async def post_market_buy_now(scenario_id: str, request: Request):
     """
-    시그널과 무관하게 시장가 매수(1회 매수 금액). JSON에 confirm: true 필요.
+    시장가 매수를 **즉시** 실행합니다. 본문 없이 POST 해도 됩니다.
     선택: symbol 예 BTC/KRW (없으면 감시 첫 종목 또는 trading_symbol).
     """
     try:
@@ -971,9 +980,66 @@ async def post_market_buy_now(scenario_id: str, request: Request):
             body = {}
     except json.JSONDecodeError:
         body = {}
-    if body.get("confirm") is not True:
+    migrate_if_needed()
+    scen = get_scenario_by_id(scenario_id)
+    if not scen:
+        return JSONResponse({"ok": False, "error": "시나리오를 찾을 수 없습니다."}, status_code=404)
+    if not scen.get("enabled", True):
+        return JSONResponse({"ok": False, "error": "비활성 트레이더입니다."}, status_code=400)
+    try:
+        symbol = _resolve_symbol_for_manual_buy(scen, body.get("symbol"))
+        buy_krw = float(effective_buy_krw(scen))
+        drp = scen.get("drop_from_high_pct")
+        summary_ko = (
+            cond_summary_ko_trend_buy(
+                buy_entry_mode=str(scen.get("buy_entry_mode") or "drop_from_high"),
+                drop_reference_high=str(scen.get("drop_reference_high") or "24h"),
+                drop_from_high_pct=float(drp) if drp is not None else None,
+            )
+            + " · 대시보드 시장가"
+        )
+        body_out, status = execute_immediate_buy(
+            scenario_id,
+            scen,
+            symbol=symbol,
+            buy_krw=buy_krw,
+            summary_ko=summary_ko,
+            kind="market",
+            ex=None,
+        )
+        return JSONResponse(body_out, status_code=status)
+    except RuntimeError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/scenarios/{scenario_id}/limit_buy_below_market")
+async def post_limit_buy_below_market(scenario_id: str, request: Request):
+    """
+    시장가(최근 체결) 대비 X%p 아래 호가에 지정가 매수 1건.
+    JSON: below_market_pct (퍼센트포인트, 예: 1.5 = 1.5% 하락), symbol 선택.
+    """
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            body = {}
+    except json.JSONDecodeError:
+        body = {}
+    raw_pct = body.get("below_market_pct")
+    try:
+        below_pct = float(raw_pct)
+    except (TypeError, ValueError):
         return JSONResponse(
-            {"ok": False, "error": "즉시 매수는 JSON에 confirm: true 가 필요합니다."},
+            {"ok": False, "error": "below_market_pct 는 숫자(퍼센트포인트)여야 합니다."},
+            status_code=400,
+        )
+    if below_pct < 0.01 or below_pct > 20.0:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "시장가 대비 하락은 0.01 ~ 20 (%p) 사이여야 합니다.",
+            },
             status_code=400,
         )
     migrate_if_needed()
@@ -992,11 +1058,14 @@ async def post_market_buy_now(scenario_id: str, request: Request):
         bal = ex.fetch_balance()
         krw_free = UpbitExchange.free_quote(bal, "KRW")
         buy_krw = float(effective_buy_krw(scen))
-        if buy_krw < 5000:
+        if buy_krw < _MANUAL_LIMIT_MIN_KRW:
             return JSONResponse(
                 {
                     "ok": False,
-                    "error": "매수 금액이 5,000원 미만입니다. 순위별 매수(중위) 금액·비율 또는 .env BUY_KRW_AMOUNT 를 확인하세요.",
+                    "error": (
+                        "매수 금액이 5,000원 미만입니다. 순위별 매수 금액·비율 또는 "
+                        ".env BUY_KRW_AMOUNT 를 확인하세요."
+                    ),
                 },
                 status_code=400,
             )
@@ -1020,26 +1089,35 @@ async def post_market_buy_now(scenario_id: str, request: Request):
             )
         ticker = ex.fetch_ticker(symbol)
         last = float(ticker.get("last") or 0)
+        if last <= 0:
+            return JSONResponse({"ok": False, "error": "현재가를 가져올 수 없습니다."}, status_code=400)
         try:
-            order = ex.market_buy_krw(symbol, buy_krw)
+            orders_pb = ex.limit_buy_krw_pullback(
+                symbol,
+                last_price=last,
+                total_krw=buy_krw,
+                offsets_pct_points=[below_pct],
+                min_krw_per_order=_MANUAL_LIMIT_MIN_KRW,
+            )
         except InsufficientFunds as e:
             return JSONResponse({"ok": False, "error": f"매수 실패(잔고): {e}"}, status_code=400)
         except InvalidOrder as e:
             return JSONResponse({"ok": False, "error": f"매수 실패(거절): {e}"}, status_code=400)
         except ExchangeError as e:
             return JSONResponse({"ok": False, "error": f"거래소 오류: {e}"}, status_code=502)
-        fill_price = UpbitExchange.average_fill_price(order)
-        fill = float(fill_price) if fill_price is not None else last
-        sym_p = positions.get(symbol) or {"entry_price": None, "last_trade_ts": None}
-        sym_p["entry_price"] = fill
-        sym_p["last_trade_ts"] = time.time()
-        positions[symbol] = sym_p
+        if not orders_pb:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "지정가 주문이 접수되지 않았습니다(최소 주문 금액·호가 단위를 확인하세요).",
+                },
+                status_code=400,
+            )
+        oid = ",".join(str(o.get("id") or "") for o in orders_pb if o.get("id") is not None)
+        limit_px = last * (1.0 - below_pct / 100.0)
         if virtual_krw is not None:
             virtual_krw = max(0.0, float(virtual_krw) - buy_krw)
         save_trader_runtime_state(scenario_id, positions=positions, virtual_krw=virtual_krw)
-        filled_amt = float(order.get("filled") or 0)
-        if filled_amt <= 0:
-            filled_amt = buy_krw / max(fill, 1e-12)
         drp = scen.get("drop_from_high_pct")
         append_trade(
             {
@@ -1047,22 +1125,20 @@ async def post_market_buy_now(scenario_id: str, request: Request):
                 "scenario_id": scenario_id,
                 "scenario_name": str(scen.get("name") or "시나리오"),
                 "symbol": symbol,
-                "price": fill,
-                "amount_base": filled_amt,
+                "price": last,
+                "amount_base": 0.0,
                 "cost_krw": buy_krw,
-                "order_id": str(order.get("id") or ""),
+                "order_id": oid,
                 "manual": True,
-                "cond_summary_ko": cond_summary_ko_trend_buy(
-                    buy_entry_mode=str(scen.get("buy_entry_mode") or "drop_from_high"),
-                    drop_reference_high=str(scen.get("drop_reference_high") or "24h"),
-                    drop_from_high_pct=float(drp) if drp is not None else None,
-                )
-                + " · 즉시매수",
-                "trade_reason_ko": reason_manual_dashboard_buy(
+                "cond_summary_ko": (
+                    f"즉시 지정가 · 시장가 대비 {below_pct:g}%p 하락"
+                ),
+                "trade_reason_ko": reason_manual_dashboard_limit_buy(
                     scenario_name=str(scen.get("name") or "시나리오"),
                     scenario_id=scenario_id,
                     symbol=symbol,
                     buy_krw=buy_krw,
+                    below_market_pct=below_pct,
                 ),
             }
         )
@@ -1070,8 +1146,10 @@ async def post_market_buy_now(scenario_id: str, request: Request):
             "ok": True,
             "symbol": symbol,
             "buy_krw": buy_krw,
-            "order_id": order.get("id"),
-            "fill_price": fill,
+            "below_market_pct": below_pct,
+            "last_price": last,
+            "limit_price_approx": limit_px,
+            "order_ids": [o.get("id") for o in orders_pb if o.get("id") is not None],
         }
     except RuntimeError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=503)

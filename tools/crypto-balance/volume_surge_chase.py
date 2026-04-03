@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from watch_filter import _volume_surge_ratio_for_symbol
@@ -71,56 +70,42 @@ def _pass_volume_surge_filters(
     return (symbol, surge_ratio, float(rise))
 
 
-def _score_one(
-    exchange: Any,
-    symbol: str,
-    cfg: dict[str, Any],
-    tickers_cache: dict[str, dict[str, Any]],
-) -> tuple[str, float] | None:
-    r = _pass_volume_surge_filters(exchange, symbol, cfg, tickers_cache)
-    if r is None:
-        return None
-    return (r[0], r[1])
-
-
 def list_volume_surge_chase_candidates(
     exchange: Any,
     symbols: list[str],
     cfg: dict[str, Any],
     *,
     tickers_map: dict[str, dict[str, Any]] | None = None,
-    max_workers: int = 6,
+    max_workers: int = 1,
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     """
     조건 통과 종목을 급등비(surge_ratio) 내림차순으로 최대 limit 개.
     각 항목: symbol, surge_ratio, rise_pct (단기 상승률 %).
+
+    업비트 요청 한도를 위해 후보 검사는 순차 실행한다(max_workers 는 호환용으로 무시).
     """
+    del max_workers
     if not symbols or exchange is None:
         return []
     lim = max(1, min(int(limit), 50))
     tm = tickers_map if isinstance(tickers_map, dict) else {}
     rows: list[dict[str, Any]] = []
-    workers = max(2, min(max_workers, 8))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {
-            pool.submit(_pass_volume_surge_filters, exchange, sym, cfg, tm): sym for sym in symbols
-        }
-        for fut in as_completed(futs):
-            try:
-                r = fut.result()
-            except Exception:
-                continue
-            if r is None:
-                continue
-            sym, srr, rise_p = r
-            rows.append(
-                {
-                    "symbol": sym,
-                    "surge_ratio": round(srr, 4),
-                    "rise_pct": round(rise_p, 4),
-                }
-            )
+    for sym in symbols:
+        try:
+            r = _pass_volume_surge_filters(exchange, sym, cfg, tm)
+        except Exception:
+            continue
+        if r is None:
+            continue
+        sym_r, srr, rise_p = r
+        rows.append(
+            {
+                "symbol": sym_r,
+                "surge_ratio": round(srr, 4),
+                "rise_pct": round(rise_p, 4),
+            }
+        )
     rows.sort(key=lambda x: -float(x["surge_ratio"]))
     return rows[:lim]
 
@@ -131,7 +116,7 @@ def pick_best_volume_surge_chase_symbol(
     cfg: dict[str, Any],
     *,
     tickers_map: dict[str, dict[str, Any]] | None = None,
-    max_workers: int = 6,
+    max_workers: int = 1,
 ) -> tuple[str | None, float | None]:
     """
     거래량 급등 비율·상승률을 통과한 심볼 중 surge ratio 가장 높은 하나.

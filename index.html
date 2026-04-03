@@ -1671,6 +1671,10 @@
     <main class="wrap">
       <h1>촬영스케줄 관리자페이지</h1>
       <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
+      <p class="subtitle" style="margin-top: 6px; font-size: clamp(12px, 1.15vw, 15px)">
+        <a href="crypto-lounge.html" target="_blank" rel="noopener noreferrer">코인 작업실</a>
+        <span style="color: var(--muted); font-weight: 500"> — 더필링처럼 개인 전용 주소로 온라인 메모·키 보관</span>
+      </p>
 
       <div class="top-tabs">
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
@@ -1678,6 +1682,7 @@
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
         <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 등록</button>
+        <button id="tabGrokTool" data-tab="grokTool" type="button">Grok 이미지·영상</button>
       </div>
 
       <section id="scheduleSection" class="board">
@@ -2125,6 +2130,39 @@
             <button id="inlogPhotoSaveBtn" class="btn-sm primary" type="button">사진/시네마/로고 저장</button>
             <span id="inlogPhotoSaveStatus" class="hint" style="margin-left: 10px"></span>
           </div>
+        </article>
+      </section>
+
+      <section id="grokToolSection" class="hidden">
+        <article class="card" style="max-width: 640px; margin: 0 auto;">
+          <div class="schedule-head">
+            <h2>Grok 이미지·영상</h2>
+          </div>
+          <p class="helper" style="margin-bottom: 10px;">
+            Grok·Topaz 파이프라인은 <strong>이 저장소의 Python 서버</strong>(<code>tools/grok-topaz-pipeline/web_app.py</code>)에서만 동작합니다.
+            정적 호스팅만으로는 생성이 되지 않습니다. 서버를 실행한 뒤 접속 주소를 아래에 저장해 두면, 휴대폰이나 다른 PC 브라우저에서도 같은 URL로 열 수 있습니다.
+          </p>
+          <p class="helper" style="margin-bottom: 12px;">
+            같은 Wi‑Fi에서 접속하려면 서버 실행 시 <code>GROK_WEB_HOST=0.0.0.0</code>을 지정하세요(기본은 <code>127.0.0.1</code>만 허용).
+            인터넷에 그대로 노출하면 API 키·파일 접근 위험이 있으니 방화벽·VPN 등으로 보호하는 것을 권장합니다.
+          </p>
+          <label class="hint" style="display: block; margin-bottom: 4px;">도구 페이지 URL</label>
+          <div class="input-row" style="margin-bottom: 10px;">
+            <input
+              id="grokWebToolBaseInput"
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              class="inline-input"
+              style="flex: 1; min-width: 0"
+              placeholder="예: http://192.168.0.12:5055 또는 https://나의도메인:5055"
+            />
+          </div>
+          <div class="actions" style="justify-content: flex-start; flex-wrap: wrap; gap: 8px">
+            <button type="button" id="saveGrokWebToolBaseBtn" class="btn-sm">URL 저장 (이 브라우저)</button>
+            <button type="button" id="openGrokWebToolBtn" class="btn-sm primary">도구 열기 (새 탭)</button>
+          </div>
+          <p id="grokWebToolSaveHint" class="hint" style="margin-top: 10px" aria-live="polite"></p>
         </article>
       </section>
 
@@ -5390,11 +5428,17 @@
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
+      const tabGrokToolEl = document.getElementById("tabGrokTool");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
+      const grokToolSectionEl = document.getElementById("grokToolSection");
+      const grokWebToolBaseInputEl = document.getElementById("grokWebToolBaseInput");
+      const saveGrokWebToolBaseBtnEl = document.getElementById("saveGrokWebToolBaseBtn");
+      const openGrokWebToolBtnEl = document.getElementById("openGrokWebToolBtn");
+      const grokWebToolSaveHintEl = document.getElementById("grokWebToolSaveHint");
       const inlogPhotoAddAlbumBtnEl = document.getElementById("inlogPhotoAddAlbumBtn");
       const inlogCinemaAddBtnEl = document.getElementById("inlogCinemaAddBtn");
       const inlogPhotoVerifyBtnEl = document.getElementById("inlogPhotoVerifyBtn");
@@ -13853,22 +13897,37 @@
         }
       });
 
+      const LS_GROK_WEB_TOOL_BASE = "schedule_site_grok_web_tool_base_v1";
+
+      function loadGrokWebToolBaseToInput() {
+        if (!grokWebToolBaseInputEl) return;
+        try {
+          const s = localStorage.getItem(LS_GROK_WEB_TOOL_BASE);
+          if (s) grokWebToolBaseInputEl.value = s;
+        } catch {
+          /* ignore */
+        }
+      }
+
       function switchMainTab(tab) {
         const isSchedule = tab === "schedule";
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isInlogPhoto = tab === "inlogPhoto";
+        const isGrokTool = tab === "grokTool";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
+        tabGrokToolEl?.classList.toggle("active", isGrokTool);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
+        grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
@@ -13879,6 +13938,7 @@
           }
         }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
+        if (isGrokTool) loadGrokWebToolBaseToInput();
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
@@ -13889,6 +13949,52 @@
         switchMainTab("inlogPhoto");
         wireInlogProductEditorIfNeeded();
         wireInlogLogoEditorIfNeeded();
+      });
+      tabGrokToolEl?.addEventListener("click", () => switchMainTab("grokTool"));
+      saveGrokWebToolBaseBtnEl?.addEventListener("click", () => {
+        const raw = String(grokWebToolBaseInputEl?.value || "").trim();
+        if (!raw) {
+          try {
+            localStorage.removeItem(LS_GROK_WEB_TOOL_BASE);
+          } catch {
+            /* ignore */
+          }
+          if (grokWebToolSaveHintEl) grokWebToolSaveHintEl.textContent = "저장된 URL을 지웠습니다.";
+          return;
+        }
+        try {
+          const u = new URL(raw);
+          if (u.protocol !== "http:" && u.protocol !== "https:") {
+            alert("http 또는 https 주소만 저장할 수 있습니다.");
+            return;
+          }
+          localStorage.setItem(LS_GROK_WEB_TOOL_BASE, u.toString().replace(/\/$/, ""));
+          if (grokWebToolBaseInputEl) grokWebToolBaseInputEl.value = localStorage.getItem(LS_GROK_WEB_TOOL_BASE) || "";
+          if (grokWebToolSaveHintEl) grokWebToolSaveHintEl.textContent = "이 브라우저에 저장했습니다.";
+        } catch {
+          alert("올바른 URL 형식인지 확인해 주세요.");
+        }
+      });
+      openGrokWebToolBtnEl?.addEventListener("click", () => {
+        const raw = String(grokWebToolBaseInputEl?.value || "").trim();
+        let href = raw;
+        if (!href) {
+          try {
+            href = localStorage.getItem(LS_GROK_WEB_TOOL_BASE) || "";
+          } catch {
+            href = "";
+          }
+        }
+        if (!href) {
+          alert("도구 페이지 URL을 입력하거나 먼저 저장해 주세요.\n(로컬: http://127.0.0.1:5055 )");
+          return;
+        }
+        try {
+          const u = new URL(href);
+          window.open(u.toString(), "_blank", "noopener,noreferrer");
+        } catch {
+          alert("URL 형식을 확인해 주세요.");
+        }
       });
       inlogPhotoAddAlbumBtnEl?.addEventListener("click", () => {
         const editor = document.getElementById("inlogPhotoAlbumsEditor");

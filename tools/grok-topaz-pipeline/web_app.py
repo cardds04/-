@@ -7,11 +7,18 @@
   (API 키는 웹 화면에 입력하거나, 선택적으로 export XAI_API_KEY='xai-...')
 
 브라우저: http://127.0.0.1:5055
+
+온라인/다른 기기에서 쓰려면:
+  GROK_WEB_HOST=0.0.0.0 GROK_WEB_PORT=5055 python web_app.py
+  같은 Wi‑Fi의 휴대폰 등에서는 http://<이 PC의 LAN IP>:5055 로 접속.
+  리버스 프록시로 경로 prefix를 쓰는 경우: GROK_WEB_PUBLIC_PATH=/grok (끝 슬래시 없음)
+  정적 호스트와 API 호스트이 다를 때만: GROK_WEB_CORS_ORIGINS=https://your-site.vercel.app
 """
 
 from __future__ import annotations
 
 import io
+import json
 import os
 import shutil
 import sys
@@ -23,7 +30,7 @@ from pathlib import Path
 
 from urllib.parse import quote
 
-from flask import Flask, jsonify, make_response, render_template, request, send_file
+from flask import Flask, Response, jsonify, make_response, render_template, request, send_file
 from werkzeug.utils import secure_filename
 
 ROOT = Path(__file__).resolve().parent
@@ -42,6 +49,14 @@ except ImportError:
     PV = None  # type: ignore
 
 OUTPUT_ROOT = Path(os.environ.get("GROK_WEB_OUTPUT", ROOT / "web_output")).expanduser().resolve()
+
+# 리버스 프록시 하위 경로(예: /grok)에서 정적·API fetch가 맞게 가도록 브라우저에 넘김
+_GROK_WEB_PUBLIC_PATH = (os.environ.get("GROK_WEB_PUBLIC_PATH") or "").strip().rstrip("/")
+_CORS_ORIGINS = frozenset(
+    x.strip()
+    for x in (os.environ.get("GROK_WEB_CORS_ORIGINS") or "").split(",")
+    if x.strip()
+)
 
 # Grok: 폼 비어 있을 때 사용 (우선순위: XAI_API_KEY → GROK_WEB_DEFAULT_XAI_KEY). 비밀은 코드에 넣지 말고 env만 사용.
 def _resolve_xai_key(form_key: str) -> str:
@@ -91,11 +106,32 @@ def _asset_version() -> int:
     return int(max(mtimes) if mtimes else 0)
 
 
+@app.before_request
+def _cors_preflight() -> Response | None:
+    if request.method != "OPTIONS" or not _CORS_ORIGINS:
+        return None
+    origin = (request.headers.get("Origin") or "").strip()
+    if origin not in _CORS_ORIGINS:
+        return None
+    r = Response(status=204)
+    r.headers["Access-Control-Allow-Origin"] = origin
+    r.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    r.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    r.headers["Access-Control-Max-Age"] = "86400"
+    return r
+
+
 @app.after_request
-def _disable_static_cache(response):
+def _response_headers(response):
     if request.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
+    if _CORS_ORIGINS:
+        origin = (request.headers.get("Origin") or "").strip()
+        if origin in _CORS_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 _jobs_lock = threading.Lock()
@@ -449,7 +485,13 @@ def _run_pan_batch(
 @app.route("/")
 def index():
     av = _asset_version()
-    r = make_response(render_template("index.html", asset_v=av))
+    r = make_response(
+        render_template(
+            "index.html",
+            asset_v=av,
+            grok_web_api_base_json=json.dumps(_GROK_WEB_PUBLIC_PATH),
+        )
+    )
     r.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     r.headers["Pragma"] = "no-cache"
     return r
@@ -1200,7 +1242,18 @@ def pan_clear_after_download(job_id: str):
 
 if __name__ == "__main__":
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    host = (os.environ.get("GROK_WEB_HOST") or "127.0.0.1").strip()
+    port = int(os.environ.get("GROK_WEB_PORT") or "5055")
+    display_host = "127.0.0.1" if host in ("0.0.0.0", "::", "[::]") else host
     print(f"저장 폴더: {OUTPUT_ROOT}")
     print(f"템플릿 폴더: {app.template_folder}")
-    print("브라우저: http://127.0.0.1:5055  (팬 영상 / ① Grok+Topaz / ② Topaz만)")
-    app.run(host="127.0.0.1", port=5055, debug=False, threaded=True)
+    print(f"listen: {host}:{port}")
+    print(f"브라우저: http://{display_host}:{port}/  (팬 영상 / ① Grok+Topaz / ② Topaz만)")
+    if host == "0.0.0.0":
+        print(
+            "  다른 기기(같은 네트워크 등)에서는 이 기기의 LAN IP로 접속하세요. "
+            "인터넷에 노출 시 API·Topaz·디스크 접근 보호(방화벽·VPN·인증)를 권장합니다."
+        )
+    if _CORS_ORIGINS:
+        print(f"  CORS 허용 Origin: {', '.join(sorted(_CORS_ORIGINS))}")
+    app.run(host=host, port=port, debug=False, threaded=True)

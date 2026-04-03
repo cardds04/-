@@ -140,6 +140,21 @@ def reason_manual_dashboard_buy(
     )
 
 
+def reason_manual_dashboard_limit_buy(
+    *,
+    scenario_name: str,
+    scenario_id: str,
+    symbol: str,
+    buy_krw: float,
+    below_market_pct: float,
+) -> str:
+    return (
+        f"「{scenario_name}」({scenario_id}) · {symbol}\n"
+        f"대시보드에서 수동으로 시장가 대비 {below_market_pct:g}%p 하락 호가에 "
+        f"지정가 매수 주문({buy_krw:,.0f}원)을 넣었습니다."
+    )
+
+
 def _fmt_pct_trim(x: float) -> str:
     s = f"{float(x):.4f}".rstrip("0").rstrip(".")
     return s if s else "0"
@@ -222,6 +237,8 @@ def _sell_trigger_line_ko(
             return "손실 구간 이후 회복 목표 수익률 도달 후 매도"
         if code == "loss_force":
             return "손실 구간 강제 청산(시간 경과) 후 매도"
+        if code == "trail":
+            return "트레일링 스톱(추적 고점 대비 되밀림)으로 매도"
         if code == "":
             tp_line = ep * (1.0 + rise)
             if float(sell_price) + eps >= tp_line:
@@ -239,6 +256,7 @@ def _sell_trigger_line_ko(
         "quick": "빠른 익절 조건 충족 후 매도",
         "loss_rec": "손실 구간 이후 회복 목표 도달 후 매도",
         "loss_force": "손실 구간 강제 청산 후 매도",
+        "trail": "트레일링 스톱으로 매도",
     }.get(code, "익절·손절 등 시그널 SELL 충족 후 시장가 매도 체결.")
 
 

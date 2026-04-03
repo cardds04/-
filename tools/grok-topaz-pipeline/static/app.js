@@ -1,6 +1,24 @@
 (function () {
   const $ = (id) => document.getElementById(id);
 
+  const API_BASE = (
+    typeof window !== "undefined" && window.GROK_WEB_API_BASE != null
+      ? String(window.GROK_WEB_API_BASE)
+      : ""
+  )
+    .trim()
+    .replace(/\/$/, "");
+  function apiUrl(path) {
+    const p = path.startsWith("/") ? path : `/${path}`;
+    return API_BASE ? `${API_BASE}${p}` : p;
+  }
+  function mediaUrl(u) {
+    if (u == null || u === "") return u;
+    const s = String(u);
+    if (/^https?:\/\//i.test(s)) return s;
+    return apiUrl(s);
+  }
+
   const apiKeyEl = $("grok-xai-api-key");
   const maskKey = $("grok-mask-key");
   const fileInput = $("file");
@@ -317,7 +335,7 @@
           job_id: jobId,
           role: "grok_image",
           image_name: name,
-          url: f.url,
+          url: mediaUrl(f.url),
           name,
           source: "grok_image",
           isImage: true,
@@ -333,7 +351,7 @@
           job_id: jobId,
           role: "pan",
           pan_name: name,
-          url: f.url,
+          url: mediaUrl(f.url),
           name,
           source: "pan",
         });
@@ -346,7 +364,7 @@
           id: `g-${jobId}-final`,
           job_id: jobId,
           role: "final",
-          url: `/api/jobs/${jobId}/download/final`,
+          url: apiUrl(`/api/jobs/${jobId}/download/final`),
           name: d.final_name || "topaz_out.mp4",
           source: "topaz",
         });
@@ -358,7 +376,7 @@
         id: `g-${jobId}-final`,
         job_id: jobId,
         role: "final",
-        url: `/api/jobs/${jobId}/download/final`,
+        url: apiUrl(`/api/jobs/${jobId}/download/final`),
         name: d.final_name || "out.mp4",
         source: "grok",
       });
@@ -367,7 +385,7 @@
         id: `g-${jobId}-raw`,
         job_id: jobId,
         role: "raw",
-        url: `/api/jobs/${jobId}/download/raw`,
+        url: apiUrl(`/api/jobs/${jobId}/download/raw`),
         name: d.raw_name || "grok.mp4",
         source: "grok",
       });
@@ -564,6 +582,76 @@
 
   loadSavedImageApiKeys();
 
+  const grokRefPreviewUrls = { 1: null, 2: null };
+
+  function defaultClipboardImageName(mime) {
+    if (mime === "image/jpeg" || mime === "image/jpg") return "clipboard.jpg";
+    if (mime === "image/webp") return "clipboard.webp";
+    if (mime === "image/gif") return "clipboard.gif";
+    return "clipboard.png";
+  }
+
+  function syncGrokRefSlotUI(slot) {
+    const input = slot === 2 ? grokImageFile2 : grokImageFile;
+    const nameEl = slot === 2 ? grokImageFileName2 : grokImageFileName;
+    const zone = slot === 2 ? grokImageDropzone2 : grokImageDropzone;
+    const wrap = slot === 2 ? $("grokImagePreview2") : $("grokImagePreview");
+    const img = slot === 2 ? $("grokImagePreviewImg2") : $("grokImagePreviewImg");
+    if (grokRefPreviewUrls[slot]) {
+      URL.revokeObjectURL(grokRefPreviewUrls[slot]);
+      grokRefPreviewUrls[slot] = null;
+    }
+    const f = input && input.files && input.files[0];
+    const hint = zone && zone.querySelector(".grok-ref-drop-hint");
+    if (!f || !String(f.type || "").startsWith("image/")) {
+      if (nameEl) nameEl.textContent = "";
+      if (wrap) wrap.hidden = true;
+      if (img) {
+        img.removeAttribute("src");
+        img.alt = "";
+      }
+      if (zone) zone.classList.remove("drop--has-preview");
+      if (hint) hint.hidden = false;
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    grokRefPreviewUrls[slot] = url;
+    if (img) {
+      img.src = url;
+      img.alt = slot === 2 ? "참조 2 미리보기" : "참조 1 미리보기";
+    }
+    if (wrap) wrap.hidden = false;
+    if (zone) zone.classList.add("drop--has-preview");
+    if (hint) hint.hidden = true;
+    const n = f.name && String(f.name).trim();
+    if (nameEl) nameEl.textContent = n || defaultClipboardImageName(f.type);
+  }
+
+  function bindGrokRefDrop(zone, input, slot) {
+    zone.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => syncGrokRefSlotUI(slot));
+    ["dragenter", "dragover"].forEach((ev) => {
+      zone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        zone.classList.add("drop--active");
+      });
+    });
+    ["dragleave", "drop"].forEach((ev) => {
+      zone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        zone.classList.remove("drop--active");
+      });
+    });
+    zone.addEventListener("drop", (e) => {
+      const f = e.dataTransfer.files[0];
+      if (!f || !f.type.startsWith("image/")) return;
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      input.files = dt.files;
+      syncGrokRefSlotUI(slot);
+    });
+  }
+
   function bindDrop(zone, input, nameEl, acceptPred) {
     zone.addEventListener("click", () => input.click());
     input.addEventListener("change", () => {
@@ -657,24 +745,14 @@
     );
   }
 
-  if (grokImageDropzone && grokImageFile && grokImageFileName) {
-    bindDrop(
-      grokImageDropzone,
-      grokImageFile,
-      grokImageFileName,
-      (f) => f.type.startsWith("image/"),
-    );
+  if (grokImageDropzone && grokImageFile) {
+    bindGrokRefDrop(grokImageDropzone, grokImageFile, 1);
   }
-  if (grokImageDropzone2 && grokImageFile2 && grokImageFileName2) {
-    bindDrop(
-      grokImageDropzone2,
-      grokImageFile2,
-      grokImageFileName2,
-      (f) => f.type.startsWith("image/"),
-    );
+  if (grokImageDropzone2 && grokImageFile2) {
+    bindGrokRefDrop(grokImageDropzone2, grokImageFile2, 2);
   }
 
-  if (grokImageFile && grokImageFileName) {
+  if (grokImageFile || grokImageFile2) {
     function clipboardImageFile(data) {
       const items = data?.items;
       if (!items) return null;
@@ -688,22 +766,13 @@
       return null;
     }
 
-    function defaultClipboardImageName(mime) {
-      if (mime === "image/jpeg" || mime === "image/jpg") return "clipboard.jpg";
-      if (mime === "image/webp") return "clipboard.webp";
-      if (mime === "image/gif") return "clipboard.gif";
-      return "clipboard.png";
-    }
-
     function applyGrokRefFromClipboard(file, slot) {
       const input = slot === 2 ? grokImageFile2 : grokImageFile;
-      const nameEl = slot === 2 ? grokImageFileName2 : grokImageFileName;
-      if (!input || !nameEl) return;
+      if (!input) return;
       const dt = new DataTransfer();
       dt.items.add(file);
       input.files = dt.files;
-      const n = file.name && String(file.name).trim();
-      nameEl.textContent = n || defaultClipboardImageName(file.type);
+      syncGrokRefSlotUI(slot);
     }
 
     let grokImageDropzoneHover = false;
@@ -756,11 +825,10 @@
   function clearGrokRefSlot(slot) {
     if (slot === 2) {
       if (grokImageFile2) grokImageFile2.value = "";
-      if (grokImageFileName2) grokImageFileName2.textContent = "";
     } else {
       if (grokImageFile) grokImageFile.value = "";
-      if (grokImageFileName) grokImageFileName.textContent = "";
     }
+    syncGrokRefSlotUI(slot);
   }
   if (btnClearGrokRef1) {
     btnClearGrokRef1.addEventListener("click", (e) => {
@@ -949,7 +1017,7 @@
           'input[name="batchAspectOrientation"]:checked',
         );
         fd.append("orientation", oEl ? oEl.value : "landscape");
-        const res = await fetch("/api/batch-aspect-ratio", {
+        const res = await fetch(apiUrl("/api/batch-aspect-ratio"), {
           method: "POST",
           body: fd,
         });
@@ -1116,7 +1184,7 @@
 
   async function checkReady() {
     try {
-      const r = await fetch("/api/ready");
+      const r = await fetch(apiUrl("/api/ready"));
       const d = await r.json();
       outDir.textContent = d.output_dir || "—";
       envHasXaiKey = !!d.env_has_xai_key;
@@ -1278,7 +1346,7 @@
     const results = await Promise.all(
       entries.map(async ([jobId, meta]) => {
         try {
-          const r = await fetch(`/api/jobs/${jobId}`);
+          const r = await fetch(apiUrl(`/api/jobs/${jobId}`));
           if (!r.ok) return { jobId, meta, d: null };
           const d = await r.json();
           return { jobId, meta, d };
@@ -1342,7 +1410,7 @@
     renderUploadingPlaceholder("pan_photo");
 
     try {
-      const r = await fetch("/api/pan-jobs", { method: "POST", body: fd });
+      const r = await fetch(apiUrl("/api/pan-jobs"), { method: "POST", body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(data.error || "요청 실패");
@@ -1377,7 +1445,7 @@
     }
 
     try {
-      const r = await fetch("/api/grok-image-jobs", { method: "POST", body: fd });
+      const r = await fetch(apiUrl("/api/grok-image-jobs"), { method: "POST", body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(data.error || "요청 실패");
@@ -1419,7 +1487,7 @@
     }
 
     try {
-      const r = await fetch("/api/jobs/batch-grok", { method: "POST", body: fd });
+      const r = await fetch(apiUrl("/api/jobs/batch-grok"), { method: "POST", body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(data.error || "요청 실패");
@@ -1472,7 +1540,7 @@
     }
 
     try {
-      const r = await fetch("/api/jobs", { method: "POST", body: fd });
+      const r = await fetch(apiUrl("/api/jobs"), { method: "POST", body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(data.error || "요청 실패");
@@ -1638,7 +1706,7 @@
             o.image_name = it.image_name;
           return o;
         });
-        const r = await fetch("/api/batch-zip", {
+        const r = await fetch(apiUrl("/api/batch-zip"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items }),

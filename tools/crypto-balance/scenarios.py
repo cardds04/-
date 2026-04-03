@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,18 @@ def default_scenario_dict(*, scenario_id: str | None = None, name: str = "기본
         "bollinger_squeeze": {},
         "scalp_flash": {},
         "time_limit_exit": {},
+        "trailing_stop": {
+            "enabled": False,
+            "activation_pct": 0.01,
+            "callback_pct": 0.003,
+        },
+        "second_midpoint_gate_min_pct": None,
+        "second_midpoint_gate_window": "15m",
+        "midpoint_pullback_limits": {
+            "enabled": False,
+            "offsets_pct_points": [1.0],
+            "pending_reset_sec": 86400,
+        },
     }
 
 
@@ -236,8 +249,8 @@ def _normalize_time_limit_exit(raw: Any) -> dict[str, Any]:
     if qwm < 1 or qwm > 120:
         raise ValueError("time_limit_exit.quick_take_window_minutes 는 1~120 입니다.")
     qtp = float(raw.get("quick_take_profit_pct") or 0.0003)
-    if not 0.000001 <= qtp <= 0.02:
-        raise ValueError("time_limit_exit.quick_take_profit_pct 는 0.0001% ~ 2% 범위(소수)입니다.")
+    if not 0.000001 <= qtp <= 0.10:
+        raise ValueError("time_limit_exit.quick_take_profit_pct 는 0.0001% ~ 10% 범위(소수)입니다.")
     lth = float(raw.get("loss_branch_threshold_pct") or -0.0001)
     if lth >= 0 or lth < -0.5:
         raise ValueError("time_limit_exit.loss_branch_threshold_pct 는 음수(손실 구간)여야 합니다.")
@@ -255,6 +268,70 @@ def _normalize_time_limit_exit(raw: Any) -> dict[str, Any]:
         "loss_branch_threshold_pct": lth,
         "loss_recovery_target_pct": lrt,
         "loss_force_exit_minutes": lfm,
+    }
+
+
+def _normalize_trailing_stop(raw: Any) -> dict[str, Any]:
+    """보유 종목 고점 추적 후 되밀림 매도. activation_pct·callback_pct 는 소수(0.01=1%, 0.003=0.3%)."""
+    if raw is None or raw == "":
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("trailing_stop 은 객체여야 합니다.")
+    en_raw = raw.get("enabled", False)
+    if isinstance(en_raw, str):
+        enabled = en_raw.strip().lower() in ("1", "true", "yes", "on")
+    else:
+        enabled = bool(en_raw)
+    try:
+        ap = float(raw.get("activation_pct") if raw.get("activation_pct") is not None else 0.01)
+    except (TypeError, ValueError):
+        ap = 0.01
+    try:
+        cb = float(raw.get("callback_pct") if raw.get("callback_pct") is not None else 0.003)
+    except (TypeError, ValueError):
+        cb = 0.003
+    if not 0.000001 <= ap <= 2.0:
+        raise ValueError("trailing_stop.activation_pct 는 0.000001 ~ 2.0 (소수)입니다.")
+    if not 0.000001 <= cb <= 0.95:
+        raise ValueError("trailing_stop.callback_pct 는 0.000001 ~ 0.95 (소수)입니다.")
+    return {"enabled": enabled, "activation_pct": ap, "callback_pct": cb}
+
+
+def _normalize_midpoint_pullback_limits(raw: Any) -> dict[str, Any]:
+    """미들 상승 BUY 시 시장가 대신 현재가 대비 하락 %p 지정가 1건."""
+    if raw is None or raw == "":
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("midpoint_pullback_limits 는 객체여야 합니다.")
+    en_raw = raw.get("enabled", False)
+    if isinstance(en_raw, str):
+        enabled = en_raw.strip().lower() in ("1", "true", "yes", "on")
+    else:
+        enabled = bool(en_raw)
+    off_raw = raw.get("offsets_pct_points")
+    one: float = 1.0
+    if off_raw is None or off_raw == "":
+        one = 1.0
+    elif isinstance(off_raw, list):
+        for x in off_raw:
+            try:
+                fx = float(x)
+            except (TypeError, ValueError):
+                continue
+            if 0.01 <= fx <= 20.0:
+                one = fx
+                break
+        else:
+            one = 1.0
+    else:
+        one = 1.0
+    prs = int(raw.get("pending_reset_sec") or 86400)
+    if prs < 60 or prs > 86400 * 7:
+        prs = 86400
+    return {
+        "enabled": enabled,
+        "offsets_pct_points": [one],
+        "pending_reset_sec": prs,
     }
 
 
@@ -776,6 +853,28 @@ def validate_scenario_dict(raw: dict[str, Any], *, require_id: bool = True) -> d
     elif out.get("buy_entry_mode") == BUY_ENTRY_MODE_DROP:
         out["drop_midpoint_gate_min_pct"] = None
     out["time_limit_exit"] = _normalize_time_limit_exit(raw.get("time_limit_exit"))
+
+    out["second_midpoint_gate_min_pct"] = None
+    out["second_midpoint_gate_window"] = normalize_midpoint_window(
+        raw.get("second_midpoint_gate_window") or "15m"
+    )
+    out["midpoint_pullback_limits"] = _normalize_midpoint_pullback_limits(
+        raw.get("midpoint_pullback_limits")
+    )
+    if out.get("trading_style") != TRADING_STYLE_TREND_FOLLOW:
+        mpl = dict(out["midpoint_pullback_limits"])
+        mpl["enabled"] = False
+        out["midpoint_pullback_limits"] = _normalize_midpoint_pullback_limits(mpl)
+    elif out.get("buy_entry_mode") != BUY_ENTRY_MODE_MIDPOINT_RISE:
+        mpl = dict(out["midpoint_pullback_limits"])
+        mpl["enabled"] = False
+        out["midpoint_pullback_limits"] = _normalize_midpoint_pullback_limits(mpl)
+
+    ts_tr = _normalize_trailing_stop(raw.get("trailing_stop"))
+    if out.get("trading_style") != TRADING_STYLE_TREND_FOLLOW:
+        ts_tr = {**ts_tr, "enabled": False}
+    out["trailing_stop"] = ts_tr
+
     return out
 
 
@@ -964,6 +1063,12 @@ def validate_scenario_patch(raw: dict[str, Any]) -> dict[str, Any]:
         out["scalp_flash"] = _normalize_scalp_flash(raw.get("scalp_flash"))
     if "time_limit_exit" in raw:
         out["time_limit_exit"] = _normalize_time_limit_exit(raw.get("time_limit_exit"))
+    if "trailing_stop" in raw:
+        out["trailing_stop"] = _normalize_trailing_stop(raw.get("trailing_stop"))
+    if "midpoint_pullback_limits" in raw:
+        out["midpoint_pullback_limits"] = _normalize_midpoint_pullback_limits(
+            raw.get("midpoint_pullback_limits")
+        )
     if "trader_style" in raw:
         ts = raw.get("trader_style")
         out["trader_style"] = str(ts).strip()[:4000] if ts is not None else ""
@@ -1335,6 +1440,14 @@ def scenario_to_flat(cfg: dict[str, Any]) -> dict[str, Any]:
         "time_limit_exit": cfg.get("time_limit_exit")
         if isinstance(cfg.get("time_limit_exit"), dict)
         else {},
+        "second_midpoint_gate_min_pct": cfg.get("second_midpoint_gate_min_pct"),
+        "second_midpoint_gate_window": normalize_midpoint_window(
+            cfg.get("second_midpoint_gate_window") or "15m"
+        ),
+        "midpoint_pullback_limits": _normalize_midpoint_pullback_limits(
+            cfg.get("midpoint_pullback_limits")
+        ),
+        "trailing_stop": _normalize_trailing_stop(cfg.get("trailing_stop")),
     }
 
 
@@ -1403,6 +1516,184 @@ def load_trader_runtime_state(scenario_id: str, scenario: dict[str, Any]) -> dic
     return _normalize_trader_state(raw, scenario)
 
 
+def _normalize_sold_rebuy_cooldown_map(raw: Any) -> dict[str, float]:
+    """
+    sold_rebuy_cooldown_until 맵: 값은 매도 체결 시각 epoch 초(last_sell_time[symbol]).
+    레거시(이전 버전): 값이 '재매수 허용 시각(until)'으로 저장된 경우(now보다 미래) until−window 로 환산한다.
+    """
+    out: dict[str, float] = {}
+    if not isinstance(raw, dict):
+        return out
+    w = rebuy_after_sell_cooldown_seconds()
+    now = time.time()
+    if w <= 0:
+        return out
+    for k, v in raw.items():
+        try:
+            ks = _validate_trading_symbol(str(k))
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if f > now + 0.5:
+            f = f - w
+        if now - f < w:
+            out[ks] = f
+    return out
+
+
+def rebuy_after_sell_cooldown_seconds() -> float:
+    """매도 직후 동일 종목 시장가 재매수 금지 시간(초). 0이면 비활성. 환경: REBUY_AFTER_SELL_SEC (기본 300)."""
+    try:
+        v = float(os.getenv("REBUY_AFTER_SELL_SEC", "300").strip() or "300")
+    except ValueError:
+        v = 300.0
+    return max(0.0, min(v, 86400.0))
+
+
+def prune_expired_sold_rebuy_cooldown(d: dict[str, float], now: float | None = None) -> None:
+    """last_sell_time 맵에서 (now − 매도시각) ≥ 윈도우 인 항목 제거. 레거시 until 값은 보정 후 판단."""
+    if not d:
+        return
+    t = time.time() if now is None else float(now)
+    w = rebuy_after_sell_cooldown_seconds()
+    if w <= 0:
+        d.clear()
+        return
+    for k in list(d.keys()):
+        try:
+            ls = float(d[k])
+        except (TypeError, ValueError):
+            del d[k]
+            continue
+        if ls > t + 0.5:
+            ls = ls - w
+            d[k] = ls
+        if t - ls >= w:
+            del d[k]
+
+
+def sold_symbol_rebuy_blocked(d: dict[str, float], symbol: str, now: float | None = None) -> tuple[bool, float]:
+    """
+    last_sell_time[symbol] 기준으로 time.time() − 매도시각 < REBUY_AFTER_SELL_SEC 이면 (True, 남은 초).
+    만료 시 d에서 제거. 레거시 until 값(미래 epoch)은 매도시각으로 환산한다.
+    """
+    w = rebuy_after_sell_cooldown_seconds()
+    if w <= 0:
+        return False, 0.0
+    t = time.time() if now is None else float(now)
+    try:
+        sym = _validate_trading_symbol(str(symbol))
+    except ValueError:
+        return False, 0.0
+    raw = d.get(sym)
+    if raw is None:
+        return False, 0.0
+    try:
+        ls = float(raw)
+    except (TypeError, ValueError):
+        d.pop(sym, None)
+        return False, 0.0
+    if ls > t + 0.5:
+        ls = ls - w
+        d[sym] = ls
+    elapsed = t - ls
+    if elapsed >= w:
+        d.pop(sym, None)
+        return False, 0.0
+    return True, w - elapsed
+
+
+def record_sell_rebuy_cooldown(d: dict[str, float], symbol: str) -> None:
+    """
+    시장가 매도 체결 성공 직후 호출. last_sell_time[symbol] = time.time() 과 동일(저장은 시나리오 상태 dict).
+    """
+    if rebuy_after_sell_cooldown_seconds() <= 0:
+        return
+    try:
+        sym = _validate_trading_symbol(str(symbol))
+    except ValueError:
+        return
+    d[sym] = time.time()
+
+
+def log_skip_buy_post_sell_rebuy_cooldown(
+    scenario_name: str,
+    symbol: str,
+    seconds_remaining: float,
+    *,
+    log_: logging.Logger | None = None,
+) -> None:
+    """매도 직후 재매수 금지 윈도 안에서 매수를 건너뛸 때 공통 로그."""
+    lg = log_ if log_ is not None else log
+    lg.info(
+        "[%s | %s] 아직 5분이 지나지 않았습니다. 매수를 건너뜁니다. (재매수 금지 %.0f초 남음)",
+        scenario_name,
+        symbol,
+        seconds_remaining,
+    )
+
+
+def watch_exclude_after_sell_seconds() -> float:
+    """익절·손절 등 매도 후 감시 목록에서 뺄 시간(초). WATCH_EXCLUDE_AFTER_SELL_SEC (기본 300)."""
+    try:
+        v = float(os.getenv("WATCH_EXCLUDE_AFTER_SELL_SEC", "300").strip() or "300")
+    except ValueError:
+        v = 300.0
+    return max(0.0, min(v, 86400.0))
+
+
+def prune_expired_watch_exclude_after_sell(d: dict[str, float], now: float | None = None) -> None:
+    """만료된 watch_exclude_after_sell_until 항목 제거(값 = 감시 재개 시각 epoch)."""
+    if not d:
+        return
+    t = time.time() if now is None else float(now)
+    for k in list(d.keys()):
+        try:
+            if t >= float(d[k]):
+                del d[k]
+        except (TypeError, ValueError):
+            del d[k]
+
+
+def record_watch_exclude_after_sell(d: dict[str, float], symbol: str) -> None:
+    """매도 체결 직후: 일정 시간 동안 assign_watch_symbols 결과에서 해당 심볼 제외."""
+    sec = watch_exclude_after_sell_seconds()
+    if sec <= 0:
+        return
+    try:
+        sym = _validate_trading_symbol(str(symbol))
+    except ValueError:
+        return
+    d[sym] = time.time() + sec
+
+
+def filter_watch_symbols_for_post_sell_cooldown(
+    symbols: list[str],
+    exclude_until: dict[str, float],
+    *,
+    now: float | None = None,
+) -> list[str]:
+    """exclude_until[sym] > now 인 심볼은 감시 목록에서 제외. 만료 항목은 exclude_until 에서 정리."""
+    t = time.time() if now is None else float(now)
+    prune_expired_watch_exclude_after_sell(exclude_until, now=t)
+    out: list[str] = []
+    for s in symbols:
+        try:
+            sym = _validate_trading_symbol(str(s))
+        except ValueError:
+            continue
+        u = exclude_until.get(sym)
+        if u is None:
+            out.append(s)
+            continue
+        try:
+            if t >= float(u):
+                out.append(s)
+        except (TypeError, ValueError):
+            out.append(s)
+    return out
+
+
 def _normalize_trader_state(raw: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
     legacy_sym = str(scenario.get("trading_symbol") or "BTC/KRW").strip().upper()
     if isinstance(raw.get("positions"), dict):
@@ -1416,10 +1707,27 @@ def _normalize_trader_state(raw: dict[str, Any], scenario: dict[str, Any]) -> di
                 continue
             ep = v.get("entry_price")
             lt = v.get("last_trade_ts")
-            positions[ks] = {
+            row: dict[str, Any] = {
                 "entry_price": float(ep) if isinstance(ep, (int, float)) else None,
                 "last_trade_ts": float(lt) if lt is not None and isinstance(lt, (int, float)) else None,
             }
+            hp = v.get("highest_price")
+            if hp is not None and isinstance(hp, (int, float)):
+                try:
+                    hf = float(hp)
+                    if hf > 0:
+                        row["highest_price"] = hf
+                except (TypeError, ValueError):
+                    pass
+            if v.get("midpoint_pullback_pending") is True:
+                row["midpoint_pullback_pending"] = True
+            mpt = v.get("midpoint_pullback_placed_ts")
+            if mpt is not None:
+                try:
+                    row["midpoint_pullback_placed_ts"] = float(mpt)
+                except (TypeError, ValueError):
+                    pass
+            positions[ks] = row
         vk = raw.get("virtual_krw")
         if vk is not None:
             try:
@@ -1428,7 +1736,16 @@ def _normalize_trader_state(raw: dict[str, Any], scenario: dict[str, Any]) -> di
                 vk = None
         if vk is None:
             vk = _initial_virtual_krw(scenario)
-        return {"positions": positions, "virtual_krw": vk}
+        sold_cd = _normalize_sold_rebuy_cooldown_map(raw.get("sold_rebuy_cooldown_until"))
+        wex = _normalize_sold_rebuy_cooldown_map(raw.get("watch_exclude_after_sell_until"))
+        prune_expired_watch_exclude_after_sell(wex)
+        return {
+            "positions": positions,
+            "virtual_krw": vk,
+            "pending_market_buys": [],
+            "sold_rebuy_cooldown_until": sold_cd,
+            "watch_exclude_after_sell_until": wex,
+        }
 
     ep = raw.get("entry_price")
     lt = raw.get("last_trade_ts")
@@ -1446,7 +1763,16 @@ def _normalize_trader_state(raw: dict[str, Any], scenario: dict[str, Any]) -> di
             vk = None
     if vk is None:
         vk = _initial_virtual_krw(scenario)
-    return {"positions": pos, "virtual_krw": vk}
+    sold_cd = _normalize_sold_rebuy_cooldown_map(raw.get("sold_rebuy_cooldown_until"))
+    wex = _normalize_sold_rebuy_cooldown_map(raw.get("watch_exclude_after_sell_until"))
+    prune_expired_watch_exclude_after_sell(wex)
+    return {
+        "positions": pos,
+        "virtual_krw": vk,
+        "pending_market_buys": [],
+        "sold_rebuy_cooldown_until": sold_cd,
+        "watch_exclude_after_sell_until": wex,
+    }
 
 
 def _initial_virtual_krw(scenario: dict[str, Any]) -> float | None:
@@ -1464,16 +1790,65 @@ def save_trader_runtime_state(
     *,
     positions: dict[str, dict[str, Any]],
     virtual_krw: float | None,
+    pending_market_buys: list[dict[str, Any]] | None = None,
+    sold_rebuy_cooldown_until: dict[str, float] | None = None,
+    watch_exclude_after_sell_until: dict[str, float] | None = None,
 ) -> None:
+    del pending_market_buys  # 호환용 인자(미사용). 매수 대기열은 저장하지 않음.
     blob = _load_state_blob()
     by_id: dict[str, Any] = blob.get("by_id") if isinstance(blob.get("by_id"), dict) else {}
+    prev = by_id.get(scenario_id) if isinstance(by_id.get(scenario_id), dict) else {}
+    prev_cd = _normalize_sold_rebuy_cooldown_map(prev.get("sold_rebuy_cooldown_until"))
+    if sold_rebuy_cooldown_until is not None:
+        final_cd = dict(sold_rebuy_cooldown_until)
+    else:
+        final_cd = prev_cd
+    prune_expired_sold_rebuy_cooldown(final_cd)
+    prev_wex = _normalize_sold_rebuy_cooldown_map(prev.get("watch_exclude_after_sell_until"))
+    if watch_exclude_after_sell_until is not None:
+        final_wex = dict(watch_exclude_after_sell_until)
+    else:
+        final_wex = prev_wex
+    prune_expired_watch_exclude_after_sell(final_wex)
     serial_pos: dict[str, Any] = {}
     for sym, p in positions.items():
-        serial_pos[sym] = {
+        row: dict[str, Any] = {
             "entry_price": p.get("entry_price"),
             "last_trade_ts": p.get("last_trade_ts"),
         }
-    by_id[scenario_id] = {"positions": serial_pos, "virtual_krw": virtual_krw}
+        if p.get("midpoint_pullback_pending") is True:
+            row["midpoint_pullback_pending"] = True
+        mpt = p.get("midpoint_pullback_placed_ts")
+        if mpt is not None:
+            row["midpoint_pullback_placed_ts"] = mpt
+        hp = p.get("highest_price")
+        if hp is not None and isinstance(hp, (int, float)):
+            try:
+                hf = float(hp)
+                if hf > 0:
+                    row["highest_price"] = hf
+            except (TypeError, ValueError):
+                pass
+        serial_pos[sym] = row
+    serial_sold: dict[str, float] = {}
+    for k, v in final_cd.items():
+        try:
+            serial_sold[_validate_trading_symbol(str(k))] = float(v)
+        except (TypeError, ValueError):
+            continue
+    serial_wex: dict[str, float] = {}
+    for k, v in final_wex.items():
+        try:
+            serial_wex[_validate_trading_symbol(str(k))] = float(v)
+        except (TypeError, ValueError):
+            continue
+    by_id[scenario_id] = {
+        "positions": serial_pos,
+        "virtual_krw": virtual_krw,
+        "pending_market_buys": [],
+        "sold_rebuy_cooldown_until": serial_sold,
+        "watch_exclude_after_sell_until": serial_wex,
+    }
     blob["by_id"] = by_id
     tmp = SCENARIOS_STATE_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(blob, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1644,6 +2019,21 @@ def manual_order_auto_buy_text(scenario: dict[str, Any]) -> str:
                     lines.append("매수 신호: 미들 대비 상승 — 값 오류")
             else:
                 lines.append("매수 신호: 미들 대비 상승 — 미설정")
+            mpl = scenario.get("midpoint_pullback_limits")
+            if isinstance(mpl, dict) and mpl.get("enabled"):
+                offs = mpl.get("offsets_pct_points")
+                pct_s = ""
+                if isinstance(offs, list) and offs:
+                    try:
+                        fx = float(offs[0])
+                        if fx > 0:
+                            pct_s = f"{fx:g}%"
+                    except (TypeError, ValueError):
+                        pass
+                if pct_s:
+                    lines.append(f"눌림목 지정가: 현재가 대비 {pct_s} 하락 호가에 지정가 1건")
+                else:
+                    lines.append("눌림목 지정가: 켜짐(하락 % 기본값)")
         else:
             bms = scenario.get("buy_min_watch_positive_share_pct")
             try:
@@ -1701,6 +2091,16 @@ def manual_order_auto_sell_text(scenario: dict[str, Any]) -> str:
             lines.append("손절: 값 오류")
     else:
         lines.append("손절: 없음(미설정)")
+    tr = scenario.get("trailing_stop")
+    if isinstance(tr, dict) and tr.get("enabled"):
+        try:
+            ap = float(tr.get("activation_pct") or 0) * 100.0
+            cb = float(tr.get("callback_pct") or 0) * 100.0
+            lines.append(
+                f"트레일링 스톱: 수익 ≥{ap:.4g}%일 때 추적 고가 대비 {cb:.4g}% 되밀림 시 매도(고정 익절보다 우선·손절선은 최우선)"
+            )
+        except (TypeError, ValueError):
+            lines.append("트레일링 스톱: 값 오류")
     lines.append(f"체결 후 쿨다운: {cdv}초")
     if ts == TRADING_STYLE_TREND_FOLLOW:
         tle = scenario.get("time_limit_exit")
@@ -1751,14 +2151,17 @@ def assign_watch_symbols_per_loop(
     rng: random.Random,
     tickers_map: dict[str, dict[str, Any]] | None = None,
     exchange: Any | None = None,
+    exclude_watch_until_by_sid: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, list[str]]:
     """
     수동 목록 트레이더: watch_symbols 고정.
     랜덤 트레이더: watch_pool_style 로 후보를 정렬·필터한 뒤 남은 풀에서 겹치지 않게 할당.
     tickers_map: ccxt fetch_tickers() 결과(스타일 필터에 필요).
     거래량급등·볼린저 스퀴즈·초단타 스타일은 감시 풀을 쓰지 않으며 빈 목록을 반환합니다.
+    exclude_watch_until_by_sid: 시나리오 id → 심볼 → 감시 재개 시각(epoch). 이전에 매도한 종목 일시 제외.
     """
     tm = tickers_map if isinstance(tickers_map, dict) else {}
+    excl_sid = exclude_watch_until_by_sid if isinstance(exclude_watch_until_by_sid, dict) else {}
     by_id: dict[str, list[str]] = {}
     used: set[str] = set()
     random_traders: list[dict[str, Any]] = []
@@ -1778,6 +2181,8 @@ def assign_watch_symbols_per_loop(
             random_traders.append(s)
             continue
         syms = effective_watch_symbols(s)
+        wmap = dict(excl_sid.get(sid) or {})
+        syms = filter_watch_symbols_for_post_sell_cooldown(syms, wmap)
         by_id[sid] = syms
         for sym in syms:
             used.add(sym)
@@ -1793,6 +2198,8 @@ def assign_watch_symbols_per_loop(
             pool_f = list(remaining)
         rng.shuffle(pool_f)
         chunk = pool_f[:want]
+        wmap = dict(excl_sid.get(sid) or {})
+        chunk = filter_watch_symbols_for_post_sell_cooldown(chunk, wmap)
         by_id[sid] = chunk
         for sym in chunk:
             if sym in remaining:

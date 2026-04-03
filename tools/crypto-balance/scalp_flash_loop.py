@@ -16,13 +16,21 @@ from ccxt.base.errors import (
 )
 
 from exchange_helper import UpbitExchange
+from pending_market_confirm import execute_immediate_buy
 from reference_high import reference_high_for_drop
 from reference_level import cache_ref_high, drop_ref_label_for_scenario
 from scalp_flash import build_scalp_watch_symbols, scalp_buy_conditions_ok
-from scenarios import TRADING_STYLE_SCALP_FLASH, save_trader_runtime_state
+from scenarios import (
+    TRADING_STYLE_SCALP_FLASH,
+    load_trader_runtime_state,
+    log_skip_buy_post_sell_rebuy_cooldown,
+    prune_expired_sold_rebuy_cooldown,
+    record_sell_rebuy_cooldown,
+    save_trader_runtime_state,
+    sold_symbol_rebuy_blocked,
+)
 from strategy import evaluate_signal
 from trade_log import append_trade
-from trade_reason import buy_reason_scalp_flash
 
 MIN_MARKET_BUY_KRW = 5000.0
 
@@ -41,6 +49,7 @@ def run_scalp_flash_scenario(
     bal: dict,
     positions: dict[str, dict],
     virtual_krw: float | None,
+    sold_rebuy_cooldown: dict[str, float],
     trading_enabled: bool,
     cooldown_sec: int,
     interval: int,
@@ -60,9 +69,16 @@ def run_scalp_flash_scenario(
     sp_36 = float(sf.get("high_3h_vs_6h_min_spread_pct") or 0.1)
     drop15 = float(sf.get("min_drop_from_15m_high_pct") or 0.07)
     ref_lbl = drop_ref_label_for_scenario(scen)
+    prune_expired_sold_rebuy_cooldown(sold_rebuy_cooldown)
 
     def _save_state() -> None:
-        save_trader_runtime_state(sid, positions=positions, virtual_krw=virtual_krw)
+        save_trader_runtime_state(
+            sid,
+            positions=positions,
+            virtual_krw=virtual_krw,
+            pending_market_buys=[],
+            sold_rebuy_cooldown_until=sold_rebuy_cooldown,
+        )
 
     def _push_snap(
         symbol: str,
@@ -132,9 +148,7 @@ def run_scalp_flash_scenario(
 
     for symbol in held_syms:
         base, quote = UpbitExchange.base_and_quote(symbol)
-        if symbol not in tickers:
-            tickers[symbol] = ex.fetch_ticker(symbol)
-        ticker = tickers[symbol]
+        ticker = ex.ensure_ticker(symbol, tickers_map=tickers_map, cache=tickers)
         last = float(ticker["last"] or 0)
         high_24h = max(float(ticker.get("high") or last), last)
         ref_high = cache_ref_high(ex.exchange, symbol, ticker, scen, ref_high_memo)
@@ -194,6 +208,7 @@ def run_scalp_flash_scenario(
                 positions[symbol] = sym_p
                 if virtual_krw is not None:
                     virtual_krw = float(virtual_krw) + proceeds
+                record_sell_rebuy_cooldown(sold_rebuy_cooldown, symbol)
                 _save_state()
 
                 append_trade(
@@ -242,9 +257,7 @@ def run_scalp_flash_scenario(
             continue
 
         base, quote = UpbitExchange.base_and_quote(symbol)
-        if symbol not in tickers:
-            tickers[symbol] = ex.fetch_ticker(symbol)
-        ticker = tickers[symbol]
+        ticker = ex.ensure_ticker(symbol, tickers_map=tickers_map, cache=tickers)
         last = float(ticker["last"] or 0)
         high_24h = max(float(ticker.get("high") or last), last)
 
@@ -289,88 +302,69 @@ def run_scalp_flash_scenario(
         )
 
         if base_free <= 1e-12 and can_trade and ok_buy:
-            buy_krw = buy_krw_v
-            if buy_krw + 1e-9 < MIN_MARKET_BUY_KRW:
-                log.info(
-                    "[%s | %s] 초단타 매수액 %.0f원(최소 %.0f원 미만) — 생략",
-                    sname,
-                    symbol,
-                    buy_krw,
-                    MIN_MARKET_BUY_KRW,
-                )
-            elif virtual_krw is not None and virtual_krw < buy_krw:
-                log.warning(
-                    "[%s | %s] 가상 KRW 부족 — 필요 %s, 남음 %s",
-                    sname,
-                    symbol,
-                    f"{buy_krw:,.0f}",
-                    f"{virtual_krw:,.2f}",
-                )
+            reb_blk, reb_rem = sold_symbol_rebuy_blocked(sold_rebuy_cooldown, symbol)
+            if reb_blk:
+                log_skip_buy_post_sell_rebuy_cooldown(sname, symbol, reb_rem, log_=log)
             else:
-                krw_free = UpbitExchange.free_quote(bal, quote)
-                if krw_free < buy_krw:
+                buy_krw = buy_krw_v
+                if buy_krw + 1e-9 < MIN_MARKET_BUY_KRW:
+                    log.info(
+                        "[%s | %s] 초단타 매수액 %.0f원(최소 %.0f원 미만) — 생략",
+                        sname,
+                        symbol,
+                        buy_krw,
+                        MIN_MARKET_BUY_KRW,
+                    )
+                elif virtual_krw is not None and virtual_krw < buy_krw:
                     log.warning(
-                        "[%s | %s] KRW 부족 — 필요 약 %s, 사용가능 %s",
+                        "[%s | %s] 가상 KRW 부족 — 필요 %s, 남음 %s",
                         sname,
                         symbol,
                         f"{buy_krw:,.0f}",
-                        f"{krw_free:,.2f}",
+                        f"{virtual_krw:,.2f}",
                     )
                 else:
-                    try:
-                        order = ex.market_buy_krw(symbol, buy_krw)
-                    except InsufficientFunds as e:
-                        log.error("[%s | %s] 매수 실패(잔고): %s", sname, symbol, e)
-                    except InvalidOrder as e:
-                        log.error("[%s | %s] 매수 실패(거절): %s", sname, symbol, e)
-                    except (RequestTimeout, NetworkError, ExchangeNotAvailable) as e:
-                        log.warning("[%s | %s] 매수 네트워크 오류: %s", sname, symbol, e)
-                    except ExchangeError as e:
-                        log.error("[%s | %s] 매수 실패: %s", sname, symbol, e)
-                    else:
-                        avg = UpbitExchange.average_fill_price(order)
-                        fill = avg if avg is not None else last
-                        sym_p["entry_price"] = fill
-                        sym_p["last_trade_ts"] = time.time()
-                        positions[symbol] = sym_p
-                        if virtual_krw is not None:
-                            virtual_krw = max(0.0, float(virtual_krw) - buy_krw)
-                        _save_state()
-
-                        filled_amt = float(order.get("filled") or 0)
-                        if filled_amt <= 0:
-                            filled_amt = buy_krw / max(fill, 1e-12)
-                        append_trade(
-                            {
-                                "side": "buy",
-                                "scenario_id": sid,
-                                "scenario_name": sname,
-                                "symbol": symbol,
-                                "price": fill,
-                                "amount_base": filled_amt,
-                                "cost_krw": buy_krw,
-                                "order_id": str(order.get("id") or ""),
-                                "trade_reason_ko": buy_reason_scalp_flash(
-                                    scenario_name=sname,
-                                    scenario_id=sid,
-                                    symbol=symbol,
-                                    buy_krw=buy_krw,
-                                    h3=h3,
-                                    h6=h6,
-                                    h15=h15,
-                                    last=last,
-                                    min_24h_rise_pct=min_24h,
-                                    sp_36=sp_36,
-                                    drop15=drop15,
-                                ),
-                            }
+                    krw_free = UpbitExchange.free_quote(bal, quote)
+                    if krw_free < buy_krw:
+                        log.warning(
+                            "[%s | %s] KRW 부족 — 필요 약 %s, 사용가능 %s",
+                            sname,
+                            symbol,
+                            f"{buy_krw:,.0f}",
+                            f"{krw_free:,.2f}",
                         )
+                    else:
+                        res_sf, _ = execute_immediate_buy(
+                            sid,
+                            scen,
+                            symbol=symbol,
+                            buy_krw=float(buy_krw),
+                            summary_ko="초단타(스캘프) 시장가 매수",
+                            kind="market",
+                            ex=ex,
+                        )
+                        if res_sf.get("ok"):
+                            st_sync = load_trader_runtime_state(sid, scen)
+                            positions.clear()
+                            positions.update(dict(st_sync["positions"]))
+                            virtual_krw = st_sync["virtual_krw"]
+                            _save_state()
+                            log.info(
+                                "[%s | %s] 초단타 시장가 즉시 매수 (%.0f원)",
+                                sname,
+                                symbol,
+                                buy_krw,
+                            )
+                            sig = "BOUGHT"
+                        else:
+                            log.warning(
+                                "[%s | %s] 초단타 시장가 매수 실패: %s",
+                                sname,
+                                symbol,
+                                res_sf.get("error"),
+                            )
 
-                        bal = ex.fetch_balance()
-                        latest_bal = bal
-                        sig = "BOUGHT"
-
-        if sig == "HOLD" and ok_buy:
+        if sig == "HOLD" and ok_buy and not sold_symbol_rebuy_blocked(sold_rebuy_cooldown, symbol)[0]:
             sig = "BUY"
 
         _push_snap(
@@ -390,9 +384,7 @@ def run_scalp_flash_scenario(
 
     if not watch_list and not held_syms:
         log.info("[%s] 초단타: 감시 종목 없음(거래대금·24h 등락 필터)", sname)
-        if snap_symbol not in tickers:
-            tickers[snap_symbol] = ex.fetch_ticker(snap_symbol)
-        t0 = tickers[snap_symbol]
+        t0 = ex.ensure_ticker(snap_symbol, tickers_map=tickers_map, cache=tickers)
         last0 = float(t0["last"] or 0)
         h24 = max(float(t0.get("high") or last0), last0)
         rh0 = cache_ref_high(ex.exchange, snap_symbol, t0, scen, ref_high_memo)

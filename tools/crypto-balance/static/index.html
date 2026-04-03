@@ -1351,6 +1351,33 @@
         letter-spacing: 0.06em;
         text-transform: uppercase;
       }
+      .upbit-holdings-list-title--row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .upbit-holdings-list-title--row > span {
+        text-transform: uppercase;
+      }
+      .holding-sell-all-btn {
+        font-size: 0.72rem;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(248, 113, 113, 0.45);
+        background: rgba(248, 113, 113, 0.12);
+        color: #f87171;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .holding-sell-all-btn:hover:not(:disabled) {
+        background: rgba(248, 113, 113, 0.2);
+      }
+      .holding-sell-all-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
       .upbit-holdings-panel {
         margin-top: 0;
         padding: 0;
@@ -1497,6 +1524,29 @@
       .upbit-holdings-summary .uhs-v {
         font-weight: 650;
         font-size: 0.86rem;
+      }
+      .holdings-stop-loss-panel {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(220, 90, 90, 0.55);
+        background: rgba(220, 60, 60, 0.07);
+      }
+      .holdings-stop-loss-panel .hsl-title {
+        font-size: 0.95rem;
+        font-weight: 650;
+        margin: 0 0 6px;
+        color: var(--text, #e8e8e8);
+      }
+      .holdings-stop-loss-panel .hsl-lead {
+        margin: 0 0 10px;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        opacity: 0.88;
+      }
+      .holdings-stop-loss-panel--krw-col {
+        margin-top: 10px;
+        margin-bottom: 0;
       }
       .upbit-holdings-table-wrap {
         overflow-x: auto;
@@ -2188,6 +2238,57 @@
       .dash-scenario-trades-table tbody tr.dash-st-row--sell {
         background: rgba(248, 113, 113, 0.07);
       }
+      .dash-scenario-trades-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .dash-scenario-trades-head .signal-safety-h {
+        margin: 0;
+      }
+      button.dash-copy-scenario-trades-btn {
+        font-size: 0.72rem;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button.dash-copy-scenario-trades-btn:hover:not(:disabled) {
+        border-color: var(--accent, #6366f1);
+        color: var(--accent, #6366f1);
+      }
+      button.dash-copy-scenario-trades-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      details.dash-trailing-hint {
+        margin: 0 0 10px;
+        font-size: 0.72rem;
+        line-height: 1.45;
+      }
+      details.dash-trailing-hint > summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-weight: 600;
+        list-style: none;
+      }
+      details.dash-trailing-hint > summary::-webkit-details-marker {
+        display: none;
+      }
+      details.dash-trailing-hint .dash-trailing-hint-body {
+        margin: 8px 0 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: rgba(15, 23, 42, 0.6);
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
@@ -2198,6 +2299,52 @@
       </p>
 
       <div id="banner"></div>
+
+      <details class="card" id="apiKeysPanel" style="margin-bottom: 12px">
+        <summary style="cursor: pointer; font-weight: 650; font-size: 0.95rem; user-select: none">
+          API 키 저장 (나중에 입력)
+        </summary>
+        <p class="hint" style="margin: 10px 0 12px; font-size: 0.8rem; line-height: 1.45">
+          <code>tools/crypto-balance/.runtime_credentials.json</code>에만 저장되며 git에 포함되지 않습니다. 칸을 비운 채로 저장하면 그 항목은
+          <strong>기존 파일 값 유지</strong>입니다. Gemini만 지우려면 아래 「Gemini 키 삭제」를 사용하세요.
+        </p>
+        <p id="apiKeysStatusLine" class="hint" style="margin: 0 0 10px; font-size: 0.78rem"></p>
+        <label class="hint" style="display: block; margin-bottom: 4px">업비트 Access Key</label>
+        <input
+          type="password"
+          id="credUpbitKey"
+          class="inline-input"
+          style="width: 100%; max-width: 420px; margin-bottom: 10px"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="새로 넣을 때만 입력"
+        />
+        <label class="hint" style="display: block; margin-bottom: 4px">업비트 Secret Key</label>
+        <input
+          type="password"
+          id="credUpbitSecret"
+          class="inline-input"
+          style="width: 100%; max-width: 420px; margin-bottom: 10px"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="새로 넣을 때만 입력"
+        />
+        <label class="hint" style="display: block; margin-bottom: 4px">Gemini API 키 (선택 · AI 채팅)</label>
+        <input
+          type="password"
+          id="credGeminiKey"
+          class="inline-input"
+          style="width: 100%; max-width: 420px; margin-bottom: 12px"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="새로 넣을 때만 입력"
+        />
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <button type="button" id="btnSaveApiCredentials" class="btn-sm primary">저장</button>
+          <button type="button" id="btnClearGeminiCred" class="btn-sm">Gemini 키 삭제</button>
+          <span id="apiKeysSaveMsg" class="hint" style="font-size: 0.78rem" aria-live="polite"></span>
+        </div>
+      </details>
 
       <div id="vscCandidatesStrip" class="card" style="display: none; margin-bottom: 12px">
         <h2 style="margin: 0 0 8px; font-size: 1.02rem; font-weight: 650">거래량급등 예비 후보</h2>
@@ -2418,6 +2565,12 @@
                 <div id="krwColHoldingsBody" class="krw-col-holdings-scroll">
                   <span class="hint" style="display: block; padding: 12px">잔고를 불러오는 중…</span>
                 </div>
+                <div
+                  id="holdingsStopLossPanel"
+                  class="holdings-stop-loss-panel holdings-stop-loss-panel--krw-col"
+                  style="display: none"
+                  aria-live="polite"
+                ></div>
               </div>
             </div>
 
@@ -2467,7 +2620,7 @@
                   <dd id="manualOrderWatchLine">—</dd>
                   <dt>왼쪽 시세 표 (참고)</dt>
                   <dd id="manualOrderKrwVisibleLine" class="manual-order-dd-multiline">—</dd>
-                  <dt>즉시 시장가 매수 금액</dt>
+                  <dt>시장가 매수 금액</dt>
                   <dd id="manualOrderBuyKrwLine">—</dd>
                   <dt>금액 기준</dt>
                   <dd id="manualOrderSourceLine">—</dd>
@@ -2477,10 +2630,22 @@
               </div>
 
               <div id="dashScenarioTradesWrap" class="dash-scenario-trades-wrap dash-scenario-trades-wrap--in-scenario-col">
-                <h3 class="signal-safety-h" style="margin-bottom: 8px">체결 내역</h3>
+                <div class="dash-scenario-trades-head">
+                  <h3 class="signal-safety-h">체결 내역</h3>
+                  <button
+                    type="button"
+                    id="dashCopyScenarioTradesBtn"
+                    class="dash-copy-scenario-trades-btn"
+                    disabled
+                    title="위에서 선택한 트레이더 저장 설정 1건을 먼저 두고, 그 아래에 체결 목록을 세로로 이어 붙여 복사합니다"
+                  >
+                    시나리오·체결 전체 복사
+                  </button>
+                </div>
                 <p class="hint" style="margin: 0 0 10px; font-size: 0.74rem; line-height: 1.5">
-                  시각은 <strong>시·분</strong>만 표시합니다. 금액은 <strong>매수 N원</strong> / <strong>매도 N원</strong>으로 구분합니다.
-                  조건 열의 <strong>ⓘ</strong>를 누르면 해당 체결의 전체 사유가 열립니다.
+                  <strong>전체 복사</strong>는 선택한 트레이더의 <strong>저장된 시나리오 1건</strong>과 <strong>체결 내역 목록</strong>을 위→아래 텍스트로 붙여넣기합니다.
+                  표의 시각은 <strong>시·분</strong>만 보이고, 금액은 <strong>매수 N원</strong> / <strong>매도 N원</strong>입니다.
+                  조건 열 <strong>ⓘ</strong>는 해당 체결 사유 전체를 엽니다.
                 </p>
                 <div style="overflow-x: auto">
                   <table class="dash-scenario-trades-table" style="width: 100%; font-size: 0.78rem; border-collapse: collapse">
@@ -2678,6 +2843,7 @@
                       >
                         <option value="15m">15분</option>
                         <option value="1h" selected>1시간</option>
+                        <option value="6h">6시간</option>
                         <option value="24h">24시간</option>
                       </select>
                       <p
@@ -2717,6 +2883,7 @@
                         <option value="high">기준 고가 (아래 기간)</option>
                         <option value="midpoint_15m">미들포인트 · 최근 15분 (고가+저가)÷2</option>
                         <option value="midpoint_1h">미들포인트 · 최근 1시간</option>
+                        <option value="midpoint_6h">미들포인트 · 최근 6시간</option>
                         <option value="midpoint_24h">미들포인트 · 최근 24시간(1일)</option>
                       </select>
                       <span class="hint" style="display: block; margin-top: 6px; font-size: 0.68rem; line-height: 1.35"
@@ -2837,21 +3004,62 @@
                             >
                               <option value="15m">15분 미들</option>
                               <option value="1h" selected>1시간 미들</option>
+                              <option value="6h">6시간 미들</option>
                               <option value="24h">24시간 미들</option>
                             </select>
+                          </div>
+                          <label
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 8px;
+                              margin-top: 10px;
+                              font-size: 0.78rem;
+                              cursor: pointer;
+                            "
+                          >
+                            <input type="checkbox" id="dashCondMidpointPullback" />
+                            <span>눌림목 지정가: BUY 시 시장가 대신, 아래 하락 %만큼 낮은 호가에 지정가 1건</span>
+                          </label>
+                          <div style="margin-top: 6px; margin-left: 22px">
+                            <label
+                              for="dashCondPullbackPct"
+                              style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 4px"
+                              >현재가 대비 하락 (%)</label
+                            >
+                            <input
+                              type="number"
+                              id="dashCondPullbackPct"
+                              min="0.01"
+                              max="20"
+                              step="0.01"
+                              inputmode="decimal"
+                              placeholder="비우면 1"
+                              style="
+                                width: 100%;
+                                max-width: 120px;
+                                padding: 6px 10px;
+                                border-radius: 8px;
+                                border: 1px solid var(--line);
+                                background: #0a0e14;
+                                color: var(--text);
+                                font-size: 0.82rem;
+                              "
+                            />
                           </div>
                           <span
                             class="hint"
                             style="display: block; margin-top: 6px; font-size: 0.68rem; line-height: 1.35"
                             >현재가 ≥ 선택 구간 미들×(1+상승%p) 이면 BUY 검토. 하락 매수와 동시에 쓰지 않습니다.
-                            <strong>② 감시(+0.01%)·③ 감시 기준 미들과 구간을 다르게 둘 수 있습니다.</strong></span
+                            <strong>② 감시(+0.01%)·③ 감시 기준 미들과 구간을 다르게 둘 수 있습니다.</strong><br />
+                            하락 %는 비우면 1%가 기본입니다.</span
                           >
                         </div>
                       </div>
                     </div>
                     <p class="hint" style="margin: 8px 0 0; font-size: 0.72rem; line-height: 1.45">
                       <strong>하락</strong>: 현재가 ≤ 기준고가×(1−하락%) 이면 종목별 BUY 검토.<br />
-                      <strong>미들 상승</strong>: 고른 구간(15m·1h·24h) 미들 대비 설정 %p 이상일 때만 BUY 검토(하락과 별도
+                      <strong>미들 상승</strong>: 고른 구간(15m·1h·6h·24h) 미들 대비 설정 %p 이상일 때만 BUY 검토(하락과 별도
                       전략).<br />
                       <strong>플러스 비중</strong>: 감시 종목 중 기준고가 대비 <strong>+0.5% 이상</strong>인 종목 비율이 아래
                       최소 % 이상일 때만 매수 진행(0.5%는 고정). 종목별로도 +0.5% 이상일 때 BUY 검토.
@@ -2881,6 +3089,76 @@
                           placeholder="비우면 미사용"
                         />
                       </div>
+                    </div>
+                    <div
+                      class="dash-cond-field"
+                      style="
+                        margin-top: 10px;
+                        padding-top: 10px;
+                        border-top: 1px solid var(--line);
+                        max-width: 100%;
+                      "
+                    >
+                      <label
+                        style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.8rem"
+                      >
+                        <input type="checkbox" id="dashCondTrailingEnabled" style="width: auto" />
+                        <span
+                          ><strong>트레일링 스톱</strong> — 추적 고가 대비 되밀림 시 매도
+                          (<strong>고정 익절보다 우선</strong>, 손절선은 항상 최우선)</span
+                        >
+                      </label>
+                      <div
+                        style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; align-items: flex-end"
+                      >
+                        <div class="dash-cond-field" style="margin: 0; max-width: 11rem">
+                          <label for="dashCondTrailingActPct" style="font-size: 0.72rem">작동 최소 수익률 (%)</label>
+                          <input
+                            type="number"
+                            id="dashCondTrailingActPct"
+                            min="0.01"
+                            max="200"
+                            step="0.01"
+                            inputmode="decimal"
+                            value="1"
+                            style="
+                              width: 100%;
+                              max-width: 9rem;
+                              padding: 6px 10px;
+                              border-radius: 8px;
+                              border: 1px solid var(--line);
+                              background: #0a0e14;
+                              color: var(--text);
+                              font-size: 0.82rem;
+                            "
+                          />
+                        </div>
+                        <div class="dash-cond-field" style="margin: 0; max-width: 11rem">
+                          <label for="dashCondTrailingCbPct" style="font-size: 0.72rem">고점 대비 되밀림 (%)</label>
+                          <input
+                            type="number"
+                            id="dashCondTrailingCbPct"
+                            min="0.01"
+                            max="50"
+                            step="0.01"
+                            inputmode="decimal"
+                            value="0.3"
+                            style="
+                              width: 100%;
+                              max-width: 9rem;
+                              padding: 6px 10px;
+                              border-radius: 8px;
+                              border: 1px solid var(--line);
+                              background: #0a0e14;
+                              color: var(--text);
+                              font-size: 0.82rem;
+                            "
+                          />
+                        </div>
+                      </div>
+                      <p class="hint" style="margin: 6px 0 0; font-size: 0.65rem; line-height: 1.35">
+                        종목별 <code>highest_price</code>는 시나리오 상태에 저장됩니다. 매도 시 초기화됩니다.
+                      </p>
                     </div>
                     <div class="dash-sell-mode-tab-row" role="tablist" style="display: flex; gap: 8px; margin: 12px 0 8px; flex-wrap: wrap">
                       <button
@@ -2943,7 +3221,7 @@
                             type="number"
                             id="dashCondTlQuickProfitPct"
                             min="0.0001"
-                            max="2"
+                            max="10"
                             step="0.0001"
                             inputmode="decimal"
                             value="0.03"
@@ -3015,6 +3293,24 @@
                 <p class="hint" style="margin: 12px 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--muted)">
                   ①~⑤는 각각 <strong>저장</strong>할 때만 시나리오에 반영됩니다. 필요한 구간만 골라 저장하세요.
                 </p>
+                <details class="dash-trailing-hint">
+                  <summary>트레일링 스톱이란? · 이 매수창과의 관계</summary>
+                  <div class="dash-trailing-hint-body">
+                    <p style="margin: 0 0 8px">
+                      <strong>트레일링 스톱</strong>은 가격이 유리한 방향으로 움직이면 <strong>기준가(고점 등)를 따라 올리고</strong>,
+                      그 기준에서 일정 비율(또는 금액)만큼 <strong>되밀릴 때 매도</strong>하는 방식입니다. 추세를 타면서 이익을 지키는 데 쓰입니다.
+                    </p>
+                    <p style="margin: 0 0 8px">
+                      이 봇에는 아직 <strong>전용 트레일링 스톱 로직은 없습니다.</strong> 아래 자동 매도는 위 <strong>④ 익절·손절</strong>(평단 대비
+                      <strong>고정 %</strong>)과 <strong>시간제한 매도</strong> 설정을 따릅니다. 수동으로 시장가 매수해도 같은 트레이더의 ④ 규칙이
+                      적용됩니다.
+                    </p>
+                    <p style="margin: 0; font-size: 0.68rem; color: var(--muted); line-height: 1.4">
+                      고정 % 익절만으로는 “고점 대비 n% 하락 시 청산”과 완전히 같지 않습니다. 유사하게 쓰려면 익절 %를 넉넉히 두고
+                      시간제한·손절으로 하방을 잡는 식으로 조합할 수 있습니다. 진짜 트레일링 자동화는 추후 엔진 확장이 필요합니다.
+                    </p>
+                  </div>
+                </details>
                 <p class="hint" style="margin: 14px 0 10px; font-size: 0.78rem; line-height: 1.5">
                   서버가 자동매매에 쓰는 <strong>동일 1회 매수 금액</strong>(<code>effective_buy_krw</code>)으로 시장가 주문합니다.
                   시그널(HOLD/BUY)과 무관합니다. 최소 주문(보통 5,000원 이상)은 서버가 검사합니다.
@@ -3079,7 +3375,44 @@
                     "
                   />
                   <datalist id="krwSymbolDatalist"></datalist>
-                  <button type="button" id="btnMarketBuyNow" class="primary">시장가 매수 실행</button>
+                  <button type="button" id="btnMarketBuyNow" class="primary">시장가 매수</button>
+                </div>
+                <div
+                  class="manual-order-limit-below"
+                  style="
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    align-items: center;
+                    margin: 0 0 12px;
+                    padding-top: 4px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <span style="font-size: 0.78rem; color: var(--muted); white-space: nowrap"
+                    >시장가 대비</span
+                  >
+                  <input
+                    type="number"
+                    id="manualBuyBelowPct"
+                    min="0.01"
+                    max="20"
+                    step="0.01"
+                    value="1"
+                    inputmode="decimal"
+                    title="최근 체결가 대비 몇 % 아래 호가에 지정가 매수할지 (%p)"
+                    style="
+                      width: 4.5rem;
+                      padding: 8px 10px;
+                      border-radius: 8px;
+                      border: 1px solid var(--line);
+                      background: var(--card);
+                      color: var(--text);
+                      font-size: 0.85rem;
+                    "
+                  />
+                  <span style="font-size: 0.78rem; color: var(--muted)">%p 이하 호가로</span>
+                  <button type="button" id="btnLimitBuyBelowMarket">지정가 매수 주문</button>
                 </div>
                 <p id="manualOrderExtraLine" class="hint" style="margin: 0 0 10px; font-size: 0.72rem; line-height: 1.45; display: none"></p>
               </div>
@@ -3594,12 +3927,13 @@
         return DROP_REF_ALLOWED.indexOf(v) >= 0 ? v : "24h";
       }
 
-      /** 감시 기준: 고가 vs 미들포인트(15m·1h·24h) */
+      /** 감시 기준: 고가 vs 미들포인트(15m·1h·6h·24h) */
       function getDashRefPriceKindForApi() {
         const el = document.getElementById("dashCondRefPriceKind");
         const v = el && el.value;
         if (!v || v === "high") return { kind: "high", midWindow: "1h" };
         if (v === "midpoint_15m") return { kind: "midpoint", midWindow: "15m" };
+        if (v === "midpoint_6h") return { kind: "midpoint", midWindow: "6h" };
         if (v === "midpoint_24h") return { kind: "midpoint", midWindow: "24h" };
         return { kind: "midpoint", midWindow: "1h" };
       }
@@ -3608,7 +3942,7 @@
       function getDashWatchMidpointUpWindow() {
         const el = document.getElementById("dashCondWatchMidpointUpWindow");
         const v = el && el.value ? String(el.value).toLowerCase() : "1h";
-        return ["15m", "1h", "24h"].indexOf(v) >= 0 ? v : "1h";
+        return ["15m", "1h", "6h", "24h"].indexOf(v) >= 0 ? v : "1h";
       }
 
       /** 왼쪽 시세 표 기준가 열: ③ 감시 기준 가격만 사용 (② 감시 적용과 분리) */
@@ -3622,6 +3956,7 @@
         if (!refSel || !wEl) return;
         const v = refSel.value;
         if (v === "midpoint_15m") wEl.value = "15m";
+        else if (v === "midpoint_6h") wEl.value = "6h";
         else if (v === "midpoint_24h") wEl.value = "24h";
         else if (v === "midpoint_1h") wEl.value = "1h";
       }
@@ -3631,7 +3966,14 @@
         const refSel = document.getElementById("dashCondRefPriceKind");
         if (!refSel || refSel.value.indexOf("midpoint_") !== 0) return;
         const w = getDashWatchMidpointUpWindow();
-        const next = w === "15m" ? "midpoint_15m" : w === "24h" ? "midpoint_24h" : "midpoint_1h";
+        const next =
+          w === "15m"
+            ? "midpoint_15m"
+            : w === "6h"
+              ? "midpoint_6h"
+              : w === "24h"
+                ? "midpoint_24h"
+                : "midpoint_1h";
         if (refSel.value !== next) refSel.value = next;
         syncDashRefPriceKindUi();
       }
@@ -3640,6 +3982,7 @@
         if (!s || String(s.reference_price_kind || "high").toLowerCase() !== "midpoint") return "high";
         const mw = String(s.midpoint_window || "1h").toLowerCase();
         if (mw === "15m") return "midpoint_15m";
+        if (mw === "6h") return "midpoint_6h";
         if (mw === "24h") return "midpoint_24h";
         return "midpoint_1h";
       }
@@ -3673,7 +4016,7 @@
         if (!el) return;
         const rk = getKrwRefPriceKindForLeftTable();
         if (rk.kind === "midpoint") {
-          const mk = { "15m": "15분", "1h": "1시간", "24h": "24시간" };
+          const mk = { "15m": "15분", "1h": "1시간", "6h": "6시간", "24h": "24시간" };
           const ko = mk[rk.midWindow] || rk.midWindow;
           el.textContent = "미들(" + ko + ")";
           const vs = document.getElementById("krwVsRefColLabel");
@@ -3977,7 +4320,7 @@
 
       function krwRefDisplayLabel(ref, rk) {
         if (rk.kind === "midpoint") {
-          const mk = { "15m": "15분", "1h": "1시간", "24h": "24시간" };
+          const mk = { "15m": "15분", "1h": "1시간", "6h": "6시간", "24h": "24시간" };
           return "미들(" + (mk[rk.midWindow] || rk.midWindow) + ")";
         }
         return "고가(" + (DROP_REF_LABEL_KO[ref] || ref) + ")";
@@ -4218,6 +4561,8 @@
           setVal("dashCondBuyEntryValue", "");
           setSel("dashCondDropMidpointGatePct", "");
           setSel("dashCondDropMidpointGateWindow", "1h");
+          setChk("dashCondMidpointPullback", false);
+          setVal("dashCondPullbackPct", "");
           setSel("dashCondWatchMidpointUpWindow", "1h");
           syncDashBuyEntryModeUi();
           setVal("dashCondRisePct", "");
@@ -4229,6 +4574,9 @@
           setVal("dashCondTlLossThPct", "-0.01");
           setVal("dashCondTlLossRecPct", "0.03");
           setVal("dashCondTlLossForceMin", "10");
+          setChk("dashCondTrailingEnabled", false);
+          setVal("dashCondTrailingActPct", "1");
+          setVal("dashCondTrailingCbPct", "0.3");
           setVal("dashCondLoopSec", "");
           setVal("dashCondCooldown", "");
           setChk("dashCondTradingEnabled", true);
@@ -4271,12 +4619,23 @@
         const dgw = String(s.drop_midpoint_gate_window || "1h").toLowerCase();
         setSel(
           "dashCondDropMidpointGateWindow",
-          ["15m", "1h", "24h"].indexOf(dgw) >= 0 ? dgw : "1h"
+          ["15m", "1h", "6h", "24h"].indexOf(dgw) >= 0 ? dgw : "1h"
         );
+        const mpl =
+          s.midpoint_pullback_limits && typeof s.midpoint_pullback_limits === "object"
+            ? s.midpoint_pullback_limits
+            : {};
+        setChk("dashCondMidpointPullback", !!mpl.enabled);
+        const offs = Array.isArray(mpl.offsets_pct_points) ? mpl.offsets_pct_points : [];
+        const oneOff =
+          offs.length > 0 && !Number.isNaN(Number(offs[0])) && Number(offs[0]) > 0
+            ? String(Number(offs[0]))
+            : "";
+        setVal("dashCondPullbackPct", oneOff);
         const wmup = String(s.watch_midpoint_up_window || "1h").toLowerCase();
         setSel(
           "dashCondWatchMidpointUpWindow",
-          ["15m", "1h", "24h"].indexOf(wmup) >= 0 ? wmup : "1h"
+          ["15m", "1h", "6h", "24h"].indexOf(wmup) >= 0 ? wmup : "1h"
         );
         syncDashRefPriceKindFromWatchMidpointWindow();
         syncDashBuyEntryModeUi();
@@ -4330,6 +4689,18 @@
           tl.loss_force_exit_minutes != null && !Number.isNaN(Number(tl.loss_force_exit_minutes))
             ? String(parseInt(String(tl.loss_force_exit_minutes), 10))
             : "10"
+        );
+        const trs = s.trailing_stop && typeof s.trailing_stop === "object" ? s.trailing_stop : {};
+        setChk("dashCondTrailingEnabled", !!trs.enabled);
+        const trA = trs.activation_pct != null ? Number(trs.activation_pct) : 0.01;
+        const trC = trs.callback_pct != null ? Number(trs.callback_pct) : 0.003;
+        setVal(
+          "dashCondTrailingActPct",
+          !Number.isNaN(trA) ? (trA * 100).toFixed(4).replace(/\.?0+$/, "") : "1"
+        );
+        setVal(
+          "dashCondTrailingCbPct",
+          !Number.isNaN(trC) ? (trC * 100).toFixed(4).replace(/\.?0+$/, "") : "0.3"
         );
         setChk("dashCondTradingEnabled", s.trading_enabled !== false);
         if (typeof window.armDashKrwPoll === "function") window.armDashKrwPoll();
@@ -4472,10 +4843,10 @@
             extra +=
               "부여(가상) KRW: 약 " +
               fmt(Number(j.virtual_krw), 0) +
-              "원 남음 — 즉시매수 시 여기서 차감됩니다.";
+              "원 남음 — 시장가 매수가 체결될 때 여기서 차감됩니다.";
           }
           if (j.trading_enabled === false) {
-            extra += (extra ? " " : "") + "자동매매는 꺼져 있어도 즉시매수는 가능합니다.";
+            extra += (extra ? " " : "") + "자동매매는 꺼져 있어도 대시보드에서 시장가 매수는 가능합니다.";
           }
           if (ex) {
             if (extra) {
@@ -4725,7 +5096,7 @@
         const symbols = gotSym.symbols;
         const wmupEl = document.getElementById("dashCondWatchMidpointUpWindow");
         const wmup =
-          wmupEl && wmupEl.value && ["15m", "1h", "24h"].indexOf(String(wmupEl.value).toLowerCase()) >= 0
+          wmupEl && wmupEl.value && ["15m", "1h", "6h", "24h"].indexOf(String(wmupEl.value).toLowerCase()) >= 0
             ? String(wmupEl.value).toLowerCase()
             : "1h";
         try {
@@ -4819,6 +5190,13 @@
           patch.buy_min_watch_positive_share_pct = null;
           patch.drop_midpoint_gate_min_pct = null;
           patch.drop_midpoint_gate_window = "1h";
+          patch.second_midpoint_gate_min_pct = null;
+          patch.second_midpoint_gate_window = "15m";
+          patch.midpoint_pullback_limits = {
+            enabled: false,
+            offsets_pct_points: [1.0],
+            pending_reset_sec: 86400,
+          };
         } else if (bem === BUY_ENTRY_MODE_MIDPOINT) {
           const gatePctEl = document.getElementById("dashCondDropMidpointGatePct");
           const gateWinEl = document.getElementById("dashCondDropMidpointGateWindow");
@@ -4836,6 +5214,24 @@
           patch.buy_min_watch_positive_share_pct = null;
           patch.drop_midpoint_gate_min_pct = gn;
           patch.drop_midpoint_gate_window = gateWinEl && gateWinEl.value ? gateWinEl.value : "1h";
+          const pbEl = document.getElementById("dashCondMidpointPullback");
+          const pkEl = document.getElementById("dashCondPullbackPct");
+          const rawOne = pkEl && String(pkEl.value != null ? pkEl.value : "").trim();
+          let offOne = 1.0;
+          if (rawOne !== "") {
+            offOne = parseFloat(rawOne.replace(",", "."));
+            if (Number.isNaN(offOne) || offOne < 0.01 || offOne > 20) {
+              alert("눌림목 하락 %는 0.01 ~ 20 사이이거나 비우면 기본(1)입니다.");
+              return;
+            }
+          }
+          patch.second_midpoint_gate_min_pct = null;
+          patch.second_midpoint_gate_window = "15m";
+          patch.midpoint_pullback_limits = {
+            enabled: !!(pbEl && pbEl.checked),
+            offsets_pct_points: [offOne],
+            pending_reset_sec: 86400,
+          };
         } else {
           if (vRaw === "") {
             alert("감시 종목 중 플러스 비중 최소(%)를 입력하세요.");
@@ -4850,6 +5246,13 @@
           patch.buy_min_watch_positive_share_pct = wpsN;
           patch.drop_midpoint_gate_min_pct = null;
           patch.drop_midpoint_gate_window = "1h";
+          patch.second_midpoint_gate_min_pct = null;
+          patch.second_midpoint_gate_window = "15m";
+          patch.midpoint_pullback_limits = {
+            enabled: false,
+            offsets_pct_points: [1.0],
+            pending_reset_sec: 86400,
+          };
         }
         try {
           await patchDashTradingCondMergeStrategy(sid, patch);
@@ -4915,8 +5318,8 @@
             alert("빠른 익절 경과 시간은 1~120분입니다.");
             return;
           }
-          if (Number.isNaN(qtpN) || qtpN < 0.0001 || qtpN > 2) {
-            alert("빠른 익절 수익률은 0.0001~2% 사이여야 합니다.");
+          if (Number.isNaN(qtpN) || qtpN < 0.0001 || qtpN > 10) {
+            alert("빠른 익절 수익률은 0.0001~10% 사이여야 합니다.");
             return;
           }
           if (Number.isNaN(lthN) || lthN >= 0 || lthN < -50) {
@@ -4941,6 +5344,28 @@
           loss_recovery_target_pct: Number.isNaN(lrtN) ? 0.0003 : lrtN / 100,
           loss_force_exit_minutes: Number.isNaN(lfN) ? 10 : lfN,
         };
+        const trEnEl = document.getElementById("dashCondTrailingEnabled");
+        const trActEl = document.getElementById("dashCondTrailingActPct");
+        const trCbEl = document.getElementById("dashCondTrailingCbPct");
+        const trActRaw = trActEl ? String(trActEl.value || "").trim().replace(",", ".") : "1";
+        const trCbRaw = trCbEl ? String(trCbEl.value || "").trim().replace(",", ".") : "0.3";
+        const trActN = parseFloat(trActRaw);
+        const trCbN = parseFloat(trCbRaw);
+        if (trEnEl && trEnEl.checked) {
+          if (Number.isNaN(trActN) || trActN < 0.0001 || trActN > 200) {
+            alert("트레일링 작동 수익률은 0.0001 ~ 200% 사이여야 합니다.");
+            return;
+          }
+          if (Number.isNaN(trCbN) || trCbN < 0.0001 || trCbN > 95) {
+            alert("트레일링 고점 대비 되밀림은 0.0001 ~ 95% 사이여야 합니다.");
+            return;
+          }
+        }
+        const trailing_stop = {
+          enabled: !!(trEnEl && trEnEl.checked),
+          activation_pct: (Number.isNaN(trActN) ? 1 : trActN) / 100,
+          callback_pct: (Number.isNaN(trCbN) ? 0.3 : trCbN) / 100,
+        };
         try {
           await patchDashTradingCondMergeStrategy(sid, {
             trading_style: TRADING_STYLE_TREND,
@@ -4950,6 +5375,7 @@
             rise_from_entry_pct: riseN / 100,
             stop_loss_from_entry_pct: stop_loss_from_entry_pct,
             time_limit_exit: time_limit_exit,
+            trailing_stop: trailing_stop,
           });
           dashScenarioRisePct = riseN / 100;
           persistDashScenarioId(sid);
@@ -5401,8 +5827,16 @@
           const j = await r.json();
           if (!j.ok) {
             lastBalancePayload = null;
+            clearHoldingsStopLossPanel();
+            const hintExtra =
+              r.status === 503
+                ? " 상단 「API 키 저장」에서 업비트 키를 넣거나 .env 의 UPBIT_* 를 채우세요."
+                : "";
             el.innerHTML =
-              '<p class="hint">' + escapeHtml(j.message || "잔고를 불러올 수 없습니다. UPBIT 키를 확인하세요.") + "</p>";
+              '<p class="hint">' +
+              escapeHtml(j.message || "잔고를 불러올 수 없습니다. UPBIT 키를 확인하세요.") +
+              escapeHtml(hintExtra) +
+              "</p>";
             const allocSummaryEl = document.getElementById("holdingsAllocSummary");
             if (allocSummaryEl) allocSummaryEl.textContent = "";
             document.querySelectorAll(".sc-alloc-available-line").forEach(function (p) {
@@ -5466,6 +5900,7 @@
           }
         } catch (e) {
           lastBalancePayload = null;
+          clearHoldingsStopLossPanel();
           el.innerHTML =
             '<p class="hint">' + escapeHtml(String(e.message || e)) + "</p>";
           const meta = document.getElementById("holdingsLiveMeta");
@@ -5628,10 +6063,160 @@
         return '<td class="num">' + tpCell + '</td><td class="num">' + slCell + "</td>" + sellTd;
       }
 
+      /** 봇 strategy.stop_loss_price_epsilon 과 동일 스케일(표시·손절 구간 판단). */
+      function holdingStopLossEpsilonKrw(avgBuyKrw) {
+        const ep = Number(avgBuyKrw);
+        if (!ep || ep <= 0 || Number.isNaN(ep)) return 1e-10;
+        return Math.max(1e-10, Math.abs(ep) * 1e-9);
+      }
+
+      /** 손절 %가 설정되어 있고, 현재가(체결가)가 손절 목표가 이하이면 true. */
+      function holdingIsInStopLossZone(h) {
+        const curU = String(h.currency || "").toUpperCase();
+        if (curU === "KRW") return false;
+        const tg = h.targets;
+        if (!tg || tg.sl_krw == null || tg.sl_krw === "" || Number.isNaN(Number(tg.sl_krw))) {
+          return false;
+        }
+        const slN = Number(tg.sl_krw);
+        if (slN <= 0) return false;
+        const lastN =
+          h.price_krw != null && h.price_krw !== "" && !Number.isNaN(Number(h.price_krw))
+            ? Number(h.price_krw)
+            : null;
+        if (lastN == null || lastN <= 0) return false;
+        const abN =
+          h.avg_buy_krw != null && h.avg_buy_krw !== "" && !Number.isNaN(Number(h.avg_buy_krw))
+            ? Number(h.avg_buy_krw)
+            : null;
+        const eps = abN != null && abN > 0 ? holdingStopLossEpsilonKrw(abN) : 1e-10;
+        return lastN <= slN + eps;
+      }
+
+      function clearHoldingsStopLossPanel() {
+        const slBox = document.getElementById("holdingsStopLossPanel");
+        if (!slBox) return;
+        slBox.style.display = "none";
+        slBox.innerHTML = "";
+      }
+
+      function renderHoldingsStopLossPanel(rowsAll) {
+        const slBox = document.getElementById("holdingsStopLossPanel");
+        if (!slBox) return;
+        if (!rowsAll || !rowsAll.length) {
+          clearHoldingsStopLossPanel();
+          return;
+        }
+        const inSl = [];
+        for (let i = 0; i < rowsAll.length; i++) {
+          const h = rowsAll[i];
+          if (holdingIsInStopLossZone(h)) inSl.push(h);
+        }
+        if (!inSl.length) {
+          slBox.style.display = "none";
+          slBox.innerHTML = "";
+          return;
+        }
+        inSl.sort(function (a, b) {
+          const pa = krwColHoldingsPctSortKey(a);
+          const pb = krwColHoldingsPctSortKey(b);
+          if (pa == null && pb == null) {
+            return String(a.currency || "").localeCompare(String(b.currency || ""));
+          }
+          if (pa == null) return 1;
+          if (pb == null) return -1;
+          return pb - pa;
+        });
+        const bodyRows = [];
+        for (let j = 0; j < inSl.length; j++) {
+          bodyRows.push(buildKrwColHoldingsRowHtml(inSl[j]));
+        }
+        slBox.style.display = "block";
+        slBox.innerHTML =
+          '<h3 class="hsl-title">손절 구간 (현재가 ≤ 손절 목표)</h3>' +
+          '<p class="hsl-lead hint">위 「내 보유 코인」과 <strong>같은 표</strong>입니다. 손절 목표가에 도달한 종목만 골라 봅니다. ' +
+          "봇 <code>main.py</code> 판단과 동일(평단·ε).</p>" +
+          '<div class="krw-col-holdings-scroll">' +
+          '<table class="krw-col-holdings-table">' +
+          "<thead><tr>" +
+          '<th>종목</th>' +
+          '<th class="num">매수가</th>' +
+          '<th class="num">현재가</th>' +
+          '<th class="num">수익률</th>' +
+          '<th class="num">매도목표</th>' +
+          '<th class="num">손절</th>' +
+          "<th>매도</th>" +
+          "</tr></thead><tbody>" +
+          bodyRows.join("") +
+          "</tbody></table></div>";
+      }
+
+      /** KRW 제외, 사용가능 수량이 있는 코인만 순서대로 시장가 매도 */
+      async function runMarketSellAllHoldings() {
+        if (!lastBalancePayload || lastBalancePayload.ok !== true) {
+          alert("잔고를 먼저 불러오세요.");
+          return;
+        }
+        const rowsAll = lastBalancePayload.holdings || [];
+        const currencies = [];
+        for (let i = 0; i < rowsAll.length; i++) {
+          const h = rowsAll[i];
+          const curU = String(h.currency || "").toUpperCase();
+          if (curU === "KRW") continue;
+          const frRaw = h.free != null && h.free !== "" ? h.free : h.total;
+          const fr = Number(frRaw);
+          if (!Number.isNaN(fr) && fr > 1e-10) currencies.push(curU);
+        }
+        if (!currencies.length) {
+          alert("매도할 코인이 없습니다.");
+          return;
+        }
+        if (
+          !confirm(
+            "KRW를 제외한 보유 코인 " +
+              currencies.length +
+              "종을 각각 시장가로 전량 매도합니다.\n\n" +
+              currencies.join(", ") +
+              "\n\n계속할까요? 실제 체결은 업비트·잔고에 따릅니다."
+          )
+        ) {
+          return;
+        }
+        const pickSell = document.getElementById("dashScenarioPick");
+        const sidSell = pickSell && pickSell.value ? String(pickSell.value).trim() : "";
+        const okList = [];
+        const errList = [];
+        for (let j = 0; j < currencies.length; j++) {
+          const cur = currencies[j];
+          const sellBody = { confirm: true, currency: cur };
+          if (sidSell) sellBody.scenario_id = sidSell;
+          try {
+            const r = await fetch("/api/holdings/market_sell", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(sellBody),
+            });
+            const res = await r.json();
+            if (res && res.ok) okList.push(cur);
+            else errList.push(cur + ": " + (res && res.error ? res.error : "실패"));
+          } catch (_e) {
+            errList.push(cur + ": 요청 실패");
+          }
+        }
+        let msg = "처리 결과: 성공 " + okList.length + "건";
+        if (okList.length) msg += "\n· " + okList.join(", ");
+        if (errList.length) {
+          msg += "\n\n실패 " + errList.length + "건:\n" + errList.join("\n");
+        }
+        alert(msg);
+        void loadHoldings();
+      }
+
       async function renderHoldingsUpbitPanel() {
         const box = document.getElementById("holdingsBody");
         if (!box) return;
         if (!lastBalancePayload || lastBalancePayload.ok !== true) {
+          clearHoldingsStopLossPanel();
           box.innerHTML =
             '<p class="hint" style="margin:0">잔고를 불러올 수 없습니다. UPBIT 키를 확인하세요.</p>';
           return;
@@ -5639,6 +6224,7 @@
         const j = lastBalancePayload;
         const rowsAll = j.holdings || [];
         if (!rowsAll.length) {
+          clearHoldingsStopLossPanel();
           box.innerHTML = '<p class="hint" style="margin:0">표시할 잔고가 없습니다.</p>';
           return;
         }
@@ -5722,6 +6308,15 @@
               "</tr>"
           );
         }
+        let sellableCryptoCount = 0;
+        for (let si = 0; si < rows.length; si++) {
+          const h = rows[si];
+          const curU = String(h.currency || "").toUpperCase();
+          if (curU === "KRW") continue;
+          const frRaw = h.free != null && h.free !== "" ? h.free : h.total;
+          const fr = Number(frRaw);
+          if (!Number.isNaN(fr) && fr > 1e-10) sellableCryptoCount++;
+        }
         const cryptoPnl = sumVal - sumCostKnown;
         const retPct = sumCostKnown > 0 ? (cryptoPnl / sumCostKnown) * 100 : null;
         const pnlSign = cryptoPnl >= 0 ? "+" : "";
@@ -5763,13 +6358,19 @@
           '<p class="hint" style="margin:0;padding:8px 14px;font-size:0.68rem;border-bottom:1px solid var(--line)">' +
           escapeHtml(filterNote) +
           "</p>" +
-          '<div class="upbit-holdings-list-title">보유 코인</div>' +
+          '<div class="upbit-holdings-list-title upbit-holdings-list-title--row">' +
+          "<span>보유 코인</span>" +
+          '<button type="button" class="holding-sell-all-btn" ' +
+          (sellableCryptoCount === 0 ? "disabled " : "") +
+          'title="KRW를 제외한 코인만, 사용가능 수량 기준으로 순서대로 시장가 전량 매도합니다.">' +
+          "전체 매도</button></div>" +
           '<div class="upbit-holdings-table-wrap"><table class="upbit-holdings-table"><thead><tr>' +
           "<th>보유자산</th><th class=\"num\">보유수량</th><th class=\"num\">매수평균가</th><th class=\"num\">매수금액</th><th class=\"num\">평가금액</th><th class=\"num\">평가손익(%)</th>" +
           "<th class=\"num\">익절 목표</th><th class=\"num\">손절 목표</th><th>매도</th>" +
           "</tr></thead><tbody>" +
           bodyRows.join("") +
           "</tbody></table></div></div>";
+        renderHoldingsStopLossPanel(rowsAll);
       }
 
       async function renderKrwColHoldingsSummary() {
@@ -5847,6 +6448,164 @@
           "</span>";
       }
 
+      /** 내 보유 코인 / 손절 구간 표 — 수익률 정렬용 키(높은 순). */
+      function krwColHoldingsPctSortKey(h) {
+        const ab = h.avg_buy_krw;
+        const last = h.price_krw;
+        const abN =
+          ab != null && ab !== "" && !Number.isNaN(Number(ab)) ? Number(ab) : null;
+        const lastN =
+          last != null && last !== "" && !Number.isNaN(Number(last)) ? Number(last) : null;
+        if (abN != null && abN > 0 && lastN != null && lastN > 0) {
+          return ((lastN - abN) / abN) * 100;
+        }
+        return null;
+      }
+
+      /** 내 보유 코인과 동일 한 줄(종목·매수가·현재가·수익률·매도목표·손절·매도). KRW 제외 보유만. */
+      function buildKrwColHoldingsRowHtml(h) {
+        const curU = String(h.currency || "").toUpperCase();
+        const ab = h.avg_buy_krw;
+        const last = h.price_krw;
+        const abN =
+          ab != null && ab !== "" && !Number.isNaN(Number(ab)) ? Number(ab) : null;
+        const lastN =
+          last != null && last !== "" && !Number.isNaN(Number(last)) ? Number(last) : null;
+        const costK =
+          h.cost_basis_krw != null && h.cost_basis_krw !== "" && !Number.isNaN(Number(h.cost_basis_krw))
+            ? Number(h.cost_basis_krw)
+            : null;
+        const valK =
+          h.value_krw != null && h.value_krw !== "" && !Number.isNaN(Number(h.value_krw))
+            ? Number(h.value_krw)
+            : null;
+        const abTxt = abN != null ? fmtPriceKrw(abN) : "—";
+        const abWonTxt = costK != null ? fmt(costK, 0) + "원" : "—";
+        const abCell =
+          abN != null
+            ? '<span class="krw-ch-pair"><span class="krw-ch-unit">' +
+              abTxt +
+              '</span><span class="krw-ch-won"> (' +
+              abWonTxt +
+              ")</span></span>"
+            : "—";
+        let lastCls = "num";
+        let lastTxt = "—";
+        if (lastN != null) {
+          lastTxt = fmtPriceKrw(lastN);
+          if (abN != null && abN > 0) {
+            if (lastN > abN) lastCls = "num upbit-pnl-plus";
+            else if (lastN < abN) lastCls = "num upbit-pnl-minus";
+            else lastCls = "num krw-ch-pct-flat";
+          } else {
+            lastCls = "num";
+          }
+        }
+        const valWonTxt = valK != null ? fmt(valK, 0) + "원" : "—";
+        const lastCell =
+          lastN != null
+            ? '<span class="krw-ch-pair"><span class="krw-ch-unit">' +
+              lastTxt +
+              '</span><span class="krw-ch-won"> (' +
+              valWonTxt +
+              ")</span></span>"
+            : "—";
+        let pctHtml = "—";
+        if (abN != null && abN > 0 && lastN != null && lastN > 0) {
+          const pct = ((lastN - abN) / abN) * 100;
+          const sign = pct >= 0 ? "+" : "";
+          const pctCls =
+            pct > 0 ? "upbit-pnl-plus" : pct < 0 ? "upbit-pnl-minus" : "krw-ch-pct-flat";
+          let pnlWonHtml = "";
+          if (costK != null && valK != null && !Number.isNaN(costK) && !Number.isNaN(valK)) {
+            const pnl = valK - costK;
+            const ps = pnl >= 0 ? "+" : "";
+            const wCls =
+              pnl > 0 ? "upbit-pnl-plus" : pnl < 0 ? "upbit-pnl-minus" : "krw-ch-pct-flat";
+            pnlWonHtml =
+              '<span class="krw-ch-won"> (<span class="krw-ch-pnl-won ' +
+              wCls +
+              '">' +
+              ps +
+              fmt(Math.abs(pnl), 0) +
+              "원</span>)</span>";
+          }
+          pctHtml =
+            '<span class="krw-ch-pair" style="justify-content:flex-end">' +
+            '<span class="' +
+            pctCls +
+            '">' +
+            sign +
+            pct.toFixed(2) +
+            "%</span>" +
+            pnlWonHtml +
+            "</span>";
+        } else {
+          pctHtml = '<span class="hint">—</span>';
+        }
+        const tg = h.targets;
+        let tpTxt = "—";
+        let slTxt = "—";
+        let tpTitle = "";
+        if (tg && curU !== "KRW") {
+          if (tg.basis === "no_avg") {
+            tpTxt = "—";
+            slTxt = "—";
+          } else if (tg.basis === "no_scenario") {
+            tpTxt = "—";
+            slTxt = "—";
+          } else {
+            if (tg.tp_krw != null && !Number.isNaN(Number(tg.tp_krw))) {
+              tpTxt = fmtPriceKrw(Number(tg.tp_krw));
+              if (
+                tg.expected_profit_krw != null &&
+                !Number.isNaN(Number(tg.expected_profit_krw))
+              ) {
+                const ep = Number(tg.expected_profit_krw);
+                const sign = ep >= 0 ? "+" : "";
+                tpTitle =
+                  "청산 시 예상 " + sign + fmt(Math.abs(ep), 0) + "원 (익절가 기준)";
+              }
+            }
+            if (tg.sl_krw != null && !Number.isNaN(Number(tg.sl_krw))) {
+              slTxt = fmtPriceKrw(Number(tg.sl_krw));
+            }
+          }
+        }
+        const tpAttr = tpTitle ? ' title="' + escapeHtml(tpTitle) + '"' : "";
+        return (
+          "<tr>" +
+          '<td class="sym-cell">' +
+          escapeHtml(curU) +
+          "</td>" +
+          '<td class="num">' +
+          abCell +
+          "</td>" +
+          '<td class="' +
+          lastCls +
+          '">' +
+          lastCell +
+          "</td>" +
+          '<td class="num">' +
+          pctHtml +
+          "</td>" +
+          '<td class="num"' +
+          tpAttr +
+          ">" +
+          tpTxt +
+          "</td>" +
+          '<td class="num">' +
+          slTxt +
+          "</td>" +
+          '<td class="holding-sell-cell">' +
+          '<button type="button" class="holding-sell-btn" data-currency="' +
+          escapeHtml(curU) +
+          '">매도</button>' +
+          "</td>" +
+          "</tr>"
+        );
+      }
+
       function renderKrwColumnHoldingsPanel() {
         const box = document.getElementById("krwColHoldingsBody");
         if (!box) return;
@@ -5864,21 +6623,9 @@
             '<p class="hint" style="margin:0;padding:12px">보유 중인 코인이 없습니다.</p>';
           return;
         }
-        function pctSortKey(h) {
-          const ab = h.avg_buy_krw;
-          const last = h.price_krw;
-          const abN =
-            ab != null && ab !== "" && !Number.isNaN(Number(ab)) ? Number(ab) : null;
-          const lastN =
-            last != null && last !== "" && !Number.isNaN(Number(last)) ? Number(last) : null;
-          if (abN != null && abN > 0 && lastN != null && lastN > 0) {
-            return ((lastN - abN) / abN) * 100;
-          }
-          return null;
-        }
         cryptoRows.sort(function (a, b) {
-          const pa = pctSortKey(a);
-          const pb = pctSortKey(b);
+          const pa = krwColHoldingsPctSortKey(a);
+          const pb = krwColHoldingsPctSortKey(b);
           if (pa == null && pb == null) {
             return String(a.currency || "").localeCompare(String(b.currency || ""));
           }
@@ -5888,147 +6635,7 @@
         });
         const bodyRows = [];
         for (let i = 0; i < cryptoRows.length; i++) {
-          const h = cryptoRows[i];
-          const curU = String(h.currency || "").toUpperCase();
-          const ab = h.avg_buy_krw;
-          const last = h.price_krw;
-          const abN =
-            ab != null && ab !== "" && !Number.isNaN(Number(ab)) ? Number(ab) : null;
-          const lastN =
-            last != null && last !== "" && !Number.isNaN(Number(last)) ? Number(last) : null;
-          const costK =
-            h.cost_basis_krw != null && h.cost_basis_krw !== "" && !Number.isNaN(Number(h.cost_basis_krw))
-              ? Number(h.cost_basis_krw)
-              : null;
-          const valK =
-            h.value_krw != null && h.value_krw !== "" && !Number.isNaN(Number(h.value_krw))
-              ? Number(h.value_krw)
-              : null;
-          const abTxt = abN != null ? fmtPriceKrw(abN) : "—";
-          const abWonTxt = costK != null ? fmt(costK, 0) + "원" : "—";
-          const abCell =
-            abN != null
-              ? '<span class="krw-ch-pair"><span class="krw-ch-unit">' +
-                abTxt +
-                '</span><span class="krw-ch-won"> (' +
-                abWonTxt +
-                ")</span></span>"
-              : "—";
-          let lastCls = "num";
-          let lastTxt = "—";
-          if (lastN != null) {
-            lastTxt = fmtPriceKrw(lastN);
-            if (abN != null && abN > 0) {
-              if (lastN > abN) lastCls = "num upbit-pnl-plus";
-              else if (lastN < abN) lastCls = "num upbit-pnl-minus";
-              else lastCls = "num krw-ch-pct-flat";
-            } else {
-              lastCls = "num";
-            }
-          }
-          const valWonTxt = valK != null ? fmt(valK, 0) + "원" : "—";
-          const lastCell =
-            lastN != null
-              ? '<span class="krw-ch-pair"><span class="krw-ch-unit">' +
-                lastTxt +
-                '</span><span class="krw-ch-won"> (' +
-                valWonTxt +
-                ")</span></span>"
-              : "—";
-          let pctHtml = "—";
-          if (abN != null && abN > 0 && lastN != null && lastN > 0) {
-            const pct = ((lastN - abN) / abN) * 100;
-            const sign = pct >= 0 ? "+" : "";
-            const pctCls =
-              pct > 0 ? "upbit-pnl-plus" : pct < 0 ? "upbit-pnl-minus" : "krw-ch-pct-flat";
-            let pnlWonHtml = "";
-            if (costK != null && valK != null && !Number.isNaN(costK) && !Number.isNaN(valK)) {
-              const pnl = valK - costK;
-              const ps = pnl >= 0 ? "+" : "";
-              const wCls =
-                pnl > 0 ? "upbit-pnl-plus" : pnl < 0 ? "upbit-pnl-minus" : "krw-ch-pct-flat";
-              pnlWonHtml =
-                '<span class="krw-ch-won"> (<span class="krw-ch-pnl-won ' +
-                wCls +
-                '">' +
-                ps +
-                fmt(Math.abs(pnl), 0) +
-                "원</span>)</span>";
-            }
-            pctHtml =
-              '<span class="krw-ch-pair" style="justify-content:flex-end">' +
-              '<span class="' +
-              pctCls +
-              '">' +
-              sign +
-              pct.toFixed(2) +
-              "%</span>" +
-              pnlWonHtml +
-              "</span>";
-          } else {
-            pctHtml = '<span class="hint">—</span>';
-          }
-          const tg = h.targets;
-          let tpTxt = "—";
-          let slTxt = "—";
-          let tpTitle = "";
-          if (tg && curU !== "KRW") {
-            if (tg.basis === "no_avg") {
-              tpTxt = "—";
-              slTxt = "—";
-            } else if (tg.basis === "no_scenario") {
-              tpTxt = "—";
-              slTxt = "—";
-            } else {
-              if (tg.tp_krw != null && !Number.isNaN(Number(tg.tp_krw))) {
-                tpTxt = fmtPriceKrw(Number(tg.tp_krw));
-                if (
-                  tg.expected_profit_krw != null &&
-                  !Number.isNaN(Number(tg.expected_profit_krw))
-                ) {
-                  const ep = Number(tg.expected_profit_krw);
-                  const sign = ep >= 0 ? "+" : "";
-                  tpTitle =
-                    "청산 시 예상 " + sign + fmt(Math.abs(ep), 0) + "원 (익절가 기준)";
-                }
-              }
-              if (tg.sl_krw != null && !Number.isNaN(Number(tg.sl_krw))) {
-                slTxt = fmtPriceKrw(Number(tg.sl_krw));
-              }
-            }
-          }
-          const tpAttr = tpTitle ? ' title="' + escapeHtml(tpTitle) + '"' : "";
-          bodyRows.push(
-            "<tr>" +
-              '<td class="sym-cell">' +
-              escapeHtml(curU) +
-              "</td>" +
-              '<td class="num">' +
-              abCell +
-              "</td>" +
-              '<td class="' +
-              lastCls +
-              '">' +
-              lastCell +
-              "</td>" +
-              '<td class="num">' +
-              pctHtml +
-              "</td>" +
-              '<td class="num"' +
-              tpAttr +
-              ">" +
-              tpTxt +
-              "</td>" +
-              '<td class="num">' +
-              slTxt +
-              "</td>" +
-              '<td class="holding-sell-cell">' +
-              '<button type="button" class="holding-sell-btn" data-currency="' +
-              escapeHtml(curU) +
-              '">매도</button>' +
-              "</td>" +
-              "</tr>"
-          );
+          bodyRows.push(buildKrwColHoldingsRowHtml(cryptoRows[i]));
         }
         box.innerHTML =
           '<table class="krw-col-holdings-table">' +
@@ -6382,6 +6989,171 @@
           return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
         } catch (_e) {
           return "—";
+        }
+      }
+
+      const DASH_COPY_SCENARIO_TRADES_LABEL = "시나리오·체결 전체 복사";
+
+      function formatDashTradeTsForPaste(ts) {
+        if (!ts) return "—";
+        try {
+          const d = new Date(ts);
+          if (Number.isNaN(d.getTime())) return "—";
+          return d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "medium" });
+        } catch (_e) {
+          return "—";
+        }
+      }
+
+      function formatDashTradeBlockForPaste(t) {
+        const side = String(t.side || "").toLowerCase();
+        const sideKo = side === "sell" ? "매도" : side === "buy" ? "매수" : String(t.side || "—");
+        const sym = String(t.symbol || "—");
+        const price =
+          t.price != null && t.price !== "" && !Number.isNaN(Number(t.price))
+            ? fmt(Number(t.price), 0)
+            : "—";
+        const amt =
+          t.amount_base != null && t.amount_base !== "" && !Number.isNaN(Number(t.amount_base))
+            ? fmt(Number(t.amount_base), 6)
+            : "—";
+        let krw = "";
+        if (side === "buy" && t.cost_krw != null && t.cost_krw !== "") {
+          krw = "매수 " + fmt(t.cost_krw, 0) + "원";
+        } else if (side === "sell" && t.proceeds_krw != null && t.proceeds_krw !== "") {
+          krw = "매도 " + fmt(t.proceeds_krw, 0) + "원";
+        }
+        let pnl = "";
+        if (side === "sell" && t.realized_pnl_krw != null && t.realized_pnl_krw !== "") {
+          pnl = " · 실현손익 " + fmt(t.realized_pnl_krw, 0) + "원";
+        }
+        const oid =
+          t.order_id != null && String(t.order_id).trim()
+            ? " · 주문 " + String(t.order_id).trim()
+            : "";
+        const head =
+          formatDashTradeTsForPaste(t.ts) +
+          " | " +
+          sideKo +
+          " | " +
+          sym +
+          " | 체결가 " +
+          price +
+          " | 수량 " +
+          amt +
+          (krw ? " | " + krw : "") +
+          pnl +
+          oid;
+        const sum = t.cond_summary_ko != null ? String(t.cond_summary_ko).trim() : "";
+        const reason = t.trade_reason_ko != null ? String(t.trade_reason_ko).trim() : "";
+        const sub = [];
+        if (sum) sub.push("요약: " + sum);
+        if (reason) sub.push("사유:\n" + reason);
+        if (!sub.length) return head;
+        return (
+          head +
+          "\n" +
+          sub
+            .map(function (x) {
+              return "   " + x.replace(/\n/g, "\n   ");
+            })
+            .join("\n")
+        );
+      }
+
+      function buildDashScenarioTradesPlainPasteText(scenario, trades) {
+        const lines = [];
+        lines.push("보낸 시각: " + new Date().toISOString());
+        lines.push("");
+        lines.push("========== 현재 저장된 시나리오 (이 트레이더 1명) ==========");
+        lines.push(JSON.stringify(scenario, null, 2));
+        lines.push("");
+        lines.push("========== 체결 내역 (위 시나리오 · 최신 순 · 아래로 목록) ==========");
+        if (!trades.length) {
+          lines.push("(체결 기록 없음)");
+        } else {
+          trades.forEach(function (t, i) {
+            lines.push("");
+            lines.push("— " + (i + 1) + " —");
+            lines.push(formatDashTradeBlockForPaste(t));
+          });
+        }
+        lines.push("");
+        lines.push("※ 체결은 최대 200건까지만 포함됩니다. 그 이전은 서버 trades.json 을 참고하세요.");
+        return lines.join("\n");
+      }
+
+      function updateDashCopyScenarioTradesButton() {
+        const btn = document.getElementById("dashCopyScenarioTradesBtn");
+        const pick = document.getElementById("dashScenarioPick");
+        if (!btn || !pick) return;
+        const sid = String(pick.value || "").trim();
+        btn.disabled = !sid || btn.textContent === "복사 중…";
+      }
+
+      async function copyDashScenarioAndTradesForPaste() {
+        const pick = document.getElementById("dashScenarioPick");
+        const sid = pick && pick.value ? String(pick.value).trim() : "";
+        if (!sid) {
+          alert("시나리오를 선택하세요.");
+          return;
+        }
+        const btn = document.getElementById("dashCopyScenarioTradesBtn");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "복사 중…";
+        }
+        try {
+          const scenJ = await fetchJsonTimeout(
+            "/api/scenarios/" + encodeURIComponent(sid),
+            FETCH_TIMEOUT_MS
+          );
+          const trR = await fetch("/api/trades/by-scenario?limit_per=200", { cache: "no-store" });
+          const trJ = await trR.json();
+          if (!scenJ || !scenJ.ok || !scenJ.scenario) {
+            alert("시나리오를 불러오지 못했습니다.");
+            return;
+          }
+          const trades =
+            trJ && trJ.ok && trJ.by_id && Array.isArray(trJ.by_id[sid]) ? trJ.by_id[sid] : [];
+          const text = buildDashScenarioTradesPlainPasteText(scenJ.scenario, trades);
+          let copied = false;
+          try {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          } catch (_clipErr) {
+            try {
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.setAttribute("aria-hidden", "true");
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              ta.style.top = "0";
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              copied = document.execCommand("copy");
+              document.body.removeChild(ta);
+            } catch (_e2) {
+              copied = false;
+            }
+          }
+          if (!copied) {
+            alert("클립보드 복사에 실패했습니다. 브라우저 권한을 확인하세요.");
+            return;
+          }
+          if (btn) btn.textContent = "복사됨!";
+          setTimeout(function () {
+            if (btn) btn.textContent = DASH_COPY_SCENARIO_TRADES_LABEL;
+            updateDashCopyScenarioTradesButton();
+          }, 1600);
+        } catch (e) {
+          alert("복사 실패: " + (e && e.message ? e.message : String(e)));
+        } finally {
+          if (btn && btn.textContent === "복사 중…") {
+            btn.textContent = DASH_COPY_SCENARIO_TRADES_LABEL;
+          }
+          updateDashCopyScenarioTradesButton();
         }
       }
 
@@ -6842,6 +7614,7 @@
       function watchMidpointWindowLabelKo(w) {
         const x = String(w || "1h").toLowerCase();
         if (x === "15m") return "15분";
+        if (x === "6h") return "6시간";
         if (x === "24h") return "24시간";
         return "1시간";
       }
@@ -7836,6 +8609,13 @@
       document.addEventListener("click", function (e) {
         const t = e.target;
         if (!t || !t.closest) return;
+        const sellAllBtn = t.closest(".holding-sell-all-btn");
+        if (sellAllBtn) {
+          e.preventDefault();
+          if (sellAllBtn.disabled) return;
+          void runMarketSellAllHoldings();
+          return;
+        }
         const sellBtn = t.closest(".holding-sell-btn");
         if (sellBtn) {
           e.preventDefault();
@@ -7977,39 +8757,10 @@
             alert("시나리오를 불러오지 못했습니다. 페이지를 새로고침하세요.");
             return;
           }
-          const ctx = window.manualOrderContext;
           const symIn = document.getElementById("manualBuySymbol");
           const symRaw = symIn && symIn.value.trim();
-          const defSym = ctx && ctx.default_symbol ? String(ctx.default_symbol) : "";
-          const buyKrwTxt =
-            ctx && ctx.buy_krw != null && !Number.isNaN(Number(ctx.buy_krw))
-              ? fmt(Number(ctx.buy_krw), 0) + "원"
-              : "(금액 확인 중)";
-          const nameLine = ctx && ctx.scenario_name ? String(ctx.scenario_name) : "기본 시나리오";
-          const symLine = symRaw
-            ? symRaw
-            : defSym
-              ? "기본 심볼 " + defSym + " (입력 비움)"
-              : "—";
-          if (
-            !confirm(
-              "시장가 매수 확인\n\n" +
-                "· 시나리오: " +
-                nameLine +
-                "\n" +
-                "· 종목: " +
-                symLine +
-                "\n" +
-                "· 금액: " +
-                buyKrwTxt +
-                " (서버 effective_buy_krw와 동일)\n\n" +
-                "실제 체결은 업비트·잔고에 따릅니다. 계속할까요?"
-            )
-          ) {
-            return;
-          }
           const sym = symRaw;
-          const body = { confirm: true };
+          const body = {};
           if (sym) body.symbol = sym;
           fetch("/api/scenarios/" + encodeURIComponent(sid) + "/market_buy_now", {
             method: "POST",
@@ -8025,11 +8776,70 @@
               if (!x.ok) throw new Error(x.j.error || x.r.statusText || "실패");
               const j = x.j;
               alert(
-                "주문 접수: " +
+                "시장가 매수 체결: " +
                   (j.symbol || "") +
                   " · " +
                   (j.buy_krw != null ? fmt(j.buy_krw, 0) + "원" : "") +
                   (j.fill_price != null ? " · 체결가 약 " + fmt(j.fill_price, 0) + "원" : "")
+              );
+              void poll();
+              void refreshScenarioTradeLogs();
+              void refreshTraderDashboardSummary();
+              void loadHoldings();
+            })
+            .catch(function (e) {
+              alert(String(e.message || e));
+            });
+        });
+      }
+      const btnLimitBuyBelowMarket = document.getElementById("btnLimitBuyBelowMarket");
+      if (btnLimitBuyBelowMarket) {
+        btnLimitBuyBelowMarket.addEventListener("click", function () {
+          const pick = document.getElementById("dashScenarioPick");
+          const sid = pick && pick.value;
+          if (!sid) {
+            alert("시나리오를 불러오지 못했습니다. 페이지를 새로고침하세요.");
+            return;
+          }
+          const pctEl = document.getElementById("manualBuyBelowPct");
+          const raw = pctEl && String(pctEl.value != null ? pctEl.value : "").trim().replace(",", ".");
+          const pct = parseFloat(raw);
+          if (raw === "" || Number.isNaN(pct) || pct < 0.01 || pct > 20) {
+            alert("시장가 대비 하락은 0.01 ~ 20 (%p) 사이 숫자로 입력하세요.");
+            return;
+          }
+          const symIn = document.getElementById("manualBuySymbol");
+          const symRaw = symIn && symIn.value.trim();
+          const sym = symRaw;
+          const body = { below_market_pct: pct };
+          if (sym) body.symbol = sym;
+          fetch("/api/scenarios/" + encodeURIComponent(sid) + "/limit_buy_below_market", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+            .then(function (r) {
+              return r.json().then(function (j) {
+                return { ok: r.ok, r: r, j: j };
+              });
+            })
+            .then(function (x) {
+              if (!x.ok) throw new Error(x.j.error || x.r.statusText || "실패");
+              const j = x.j;
+              const lp =
+                j.limit_price_approx != null ? " · 지정가 약 " + fmt(j.limit_price_approx, 0) + "원" : "";
+              const last =
+                j.last_price != null ? " (시장가 약 " + fmt(j.last_price, 0) + "원)" : "";
+              alert(
+                "지정가 주문 접수: " +
+                  (j.symbol || "") +
+                  " · " +
+                  (j.buy_krw != null ? fmt(j.buy_krw, 0) + "원" : "") +
+                  " · 시장가 대비 " +
+                  (j.below_market_pct != null ? String(j.below_market_pct) : "") +
+                  "%p 하락" +
+                  lp +
+                  last
               );
               void poll();
               void refreshScenarioTradeLogs();
@@ -8122,7 +8932,7 @@
         if (bem === BUY_ENTRY_MODE_MIDPOINT) {
           const dg = st.drop_midpoint_gate_min_pct;
           const dgw = String(st.drop_midpoint_gate_window || "1h").toLowerCase();
-          const mk = { "15m": "15분", "1h": "1시간", "24h": "24시간" };
+          const mk = { "15m": "15분", "1h": "1시간", "6h": "6시간", "24h": "24시간" };
           const wlab = mk[dgw] || dgw;
           if (dg != null && dg !== "" && !Number.isNaN(Number(dg)) && Number(dg) > 0) {
             dropMidpointGate = wlab + " 미들 대비 +" + Number(dg).toFixed(2) + "%p 이상";
@@ -8516,6 +9326,10 @@
         }
 
         banner.innerHTML = "";
+        if (d.keys_missing) {
+          banner.innerHTML +=
+            '<div class="banner warn"><strong>업비트 API 키 대기 중</strong> — 아래 「API 키 저장」에 입력하거나 .env 를 채우면 봇이 곧 연결됩니다.</div>';
+        }
         if (d.last_error) {
           banner.innerHTML =
             '<div class="banner err"><strong>오류</strong> ' +
@@ -8560,6 +9374,7 @@
         if (!pick || !sid) return;
         pick.value = sid;
         persistDashScenarioId(sid);
+        updateDashCopyScenarioTradesButton();
         clearDashCondBlockMsgs();
         signalDetailSymbol = null;
         void loadHoldings();
@@ -8760,6 +9575,7 @@
             pick.value = chosen;
             persistDashScenarioId(chosen);
           }
+          updateDashCopyScenarioTradesButton();
           msg.innerHTML = "";
           void refreshScenarioPerfOnly();
           void refreshScenarioTradeLogs();
@@ -8780,6 +9596,7 @@
               ? "시나리오 응답 시간 초과 — 새로고침하거나 프로필 사진(큰 이미지)을 줄여 보세요."
               : "시나리오 불러오기 실패: " + escapeHtml(String(e.message || e))) +
             "</div>";
+          updateDashCopyScenarioTradesButton();
           void loadKrwMarket();
           if (typeof window.armDashKrwPoll === "function") window.armDashKrwPoll();
         }
@@ -8845,7 +9662,16 @@
       document.getElementById("dashScenarioPick").addEventListener("change", function () {
         const p = document.getElementById("dashScenarioPick");
         if (p && p.value) applyDashScenarioSelection(p.value);
+        else updateDashCopyScenarioTradesButton();
       });
+      (function bindDashCopyScenarioTrades() {
+        const b = document.getElementById("dashCopyScenarioTradesBtn");
+        if (b) {
+          b.addEventListener("click", function () {
+            void copyDashScenarioAndTradesForPaste();
+          });
+        }
+      })();
       function bindDashCondSaveBtn(id, fn) {
         const b = document.getElementById(id);
         if (b) b.addEventListener("click", function () {
@@ -8967,6 +9793,95 @@
       }
 
       setInterval(poll, 8000);
+
+      async function refreshCredentialsStatus() {
+        const line = document.getElementById("apiKeysStatusLine");
+        if (!line) return;
+        try {
+          const r = await fetch("/api/credentials-status", { cache: "no-store" });
+          const j = await r.json();
+          if (!j.ok) {
+            line.textContent = "상태를 불러오지 못했습니다.";
+            return;
+          }
+          const u = j.upbit_configured ? "설정됨" : "미설정";
+          const g = j.gemini_configured ? "설정됨" : "미설정";
+          line.textContent = "업비트: " + u + " · Gemini: " + g + (j.credentials_file_exists ? " · 저장 파일 있음" : "");
+        } catch (_e) {
+          line.textContent = "";
+        }
+      }
+
+      (function wireApiCredentialsPanel() {
+        const btn = document.getElementById("btnSaveApiCredentials");
+        const btnClr = document.getElementById("btnClearGeminiCred");
+        const msg = document.getElementById("apiKeysSaveMsg");
+        if (btn) {
+          btn.addEventListener("click", async function () {
+            if (msg) msg.textContent = "";
+            const k = document.getElementById("credUpbitKey");
+            const s = document.getElementById("credUpbitSecret");
+            const g = document.getElementById("credGeminiKey");
+            const body = {};
+            const kv = k && String(k.value || "").trim();
+            const sv = s && String(s.value || "").trim();
+            const gv = g && String(g.value || "").trim();
+            if (kv) body.upbit_api_key = kv;
+            if (sv) body.upbit_secret = sv;
+            if (gv) body.gemini_api_key = gv;
+            if (!Object.keys(body).length) {
+              if (msg) msg.textContent = "저장할 값을 하나 이상 입력하세요.";
+              return;
+            }
+            try {
+              const r = await fetch("/api/credentials", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
+              const j = await r.json().catch(function () {
+                return {};
+              });
+              if (!r.ok || !j.ok) {
+                if (msg) msg.textContent = String(j.error || "저장 실패");
+                return;
+              }
+              if (k) k.value = "";
+              if (s) s.value = "";
+              if (g) g.value = "";
+              if (msg) msg.textContent = "저장했습니다.";
+              void refreshCredentialsStatus();
+              void loadHoldings();
+            } catch (e) {
+              if (msg) msg.textContent = String(e.message || e);
+            }
+          });
+        }
+        if (btnClr) {
+          btnClr.addEventListener("click", async function () {
+            if (msg) msg.textContent = "";
+            try {
+              const r = await fetch("/api/credentials", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gemini_api_key: "", google_api_key: "" }),
+              });
+              const j = await r.json().catch(function () {
+                return {};
+              });
+              if (!r.ok || !j.ok) {
+                if (msg) msg.textContent = String(j.error || "삭제 실패");
+                return;
+              }
+              if (msg) msg.textContent = "Gemini 키를 파일에서 제거했습니다.";
+              void refreshCredentialsStatus();
+            } catch (e) {
+              if (msg) msg.textContent = String(e.message || e);
+            }
+          });
+        }
+        void refreshCredentialsStatus();
+      })();
 
       (function () {
         const modal = document.getElementById("tradeReasonModal");

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 WATCH_POOL_STYLES = frozenset(
@@ -52,24 +51,23 @@ def filter_krw_symbols_by_volume_surge(
     exchange: Any,
     min_ratio: float,
     *,
-    max_workers: int = 6,
+    max_workers: int = 1,
 ) -> list[str]:
+    """거래량 급등비 필터. API 한도를 위해 순차 조회(max_workers 는 호환용)."""
+    del max_workers
     if not symbols or exchange is None or min_ratio <= 0:
         return list(symbols)
     scored: list[tuple[str, float]] = []
-    workers = max(2, min(max_workers, 8))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {pool.submit(_volume_surge_ratio_for_symbol, exchange, sym): sym for sym in symbols}
-        for fut in as_completed(futs):
-            try:
-                r = fut.result()
-            except Exception:
-                continue
-            if r is None:
-                continue
-            sym, ratio = r
-            if ratio >= min_ratio:
-                scored.append((sym, ratio))
+    for sym in symbols:
+        try:
+            r = _volume_surge_ratio_for_symbol(exchange, sym)
+        except Exception:
+            continue
+        if r is None:
+            continue
+        sym_r, ratio = r
+        if ratio >= min_ratio:
+            scored.append((sym_r, ratio))
     scored.sort(key=lambda x: -x[1])
     return [x[0] for x in scored]
 
