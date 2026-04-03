@@ -835,6 +835,7 @@
                 비워 두면 텍스트만으로 생성합니다. <strong>Grok(xAI)</strong>에서 두 장을 쓸 때 프롬프트에
                 <code>\1</code> <code>\2</code>로 각 참조를 가리킬 수 있습니다.
                 <strong>클립보드</strong>는 해당 드롭 영역 위에 마우스를 올린 뒤 붙여넣기(Ctrl+V) 하면 됩니다.
+                큰 참조 이미지는 전송 전에 <strong>긴 변 기준 1280px·JPEG</strong>로 자동 줄여서 Vercel 용량 한도(413)를 피합니다.
               </p>
               <div class="row row--2 row--grok-ref-drops">
                 <div>
@@ -1329,6 +1330,56 @@
           });
         }
 
+        /** Vercel 등은 JSON 본문 ~4.5MB 초과 시 413 — 참조 이미지는 API 전송 전에 축소 */
+        var API_REF_MAX_EDGE = 1280;
+        var API_REF_JPEG_QUALITY = 0.82;
+
+        function fileToDataUrlForApi(file) {
+          return new Promise(function (resolve, reject) {
+            if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+              reject(new Error("참조 파일이 이미지가 아닙니다."));
+              return;
+            }
+            if (file.type.indexOf("image/svg") === 0) {
+              fileToDataUrl(file).then(resolve).catch(reject);
+              return;
+            }
+            var objUrl = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+              URL.revokeObjectURL(objUrl);
+              try {
+                var w = img.naturalWidth;
+                var h = img.naturalHeight;
+                if (!w || !h) {
+                  fileToDataUrl(file).then(resolve).catch(reject);
+                  return;
+                }
+                var scale = Math.min(1, API_REF_MAX_EDGE / Math.max(w, h));
+                var tw = Math.max(1, Math.round(w * scale));
+                var th = Math.max(1, Math.round(h * scale));
+                var canvas = document.createElement("canvas");
+                canvas.width = tw;
+                canvas.height = th;
+                var ctx = canvas.getContext("2d");
+                if (!ctx) {
+                  fileToDataUrl(file).then(resolve).catch(reject);
+                  return;
+                }
+                ctx.drawImage(img, 0, 0, tw, th);
+                resolve(canvas.toDataURL("image/jpeg", API_REF_JPEG_QUALITY));
+              } catch (err) {
+                fileToDataUrl(file).then(resolve).catch(reject);
+              }
+            };
+            img.onerror = function () {
+              URL.revokeObjectURL(objUrl);
+              fileToDataUrl(file).then(resolve).catch(reject);
+            };
+            img.src = objUrl;
+          });
+        }
+
         async function blobFromImageResult(j) {
           var src = j.url || null;
           if (!src && j.b64_json) {
@@ -1494,9 +1545,9 @@
             var images = [];
             try {
               if (grokImageFile && grokImageFile.files[0])
-                images.push(await fileToDataUrl(grokImageFile.files[0]));
+                images.push(await fileToDataUrlForApi(grokImageFile.files[0]));
               if (grokImageFile2 && grokImageFile2.files[0])
-                images.push(await fileToDataUrl(grokImageFile2.files[0]));
+                images.push(await fileToDataUrlForApi(grokImageFile2.files[0]));
             } catch (e) {
               setError(String(e.message || e));
               return;
@@ -1549,7 +1600,14 @@
               await appendGeneratedToGallery(blob2, j2.mime_type || "image/png");
             }
             } catch (e) {
-              setError(String(e.message || e));
+              var em = String(e.message || e);
+              if (em.indexOf("413") !== -1 || em.indexOf("요청 실패 413") !== -1) {
+                setError(
+                  "요청 본문이 너무 큽니다(413). 참조 이미지를 한 장만 쓰거나 더 작은 파일로 시도하세요. 이미 자동 축소를 적용했는데도 나오면 해상도·프롬프트 길이를 줄여 주세요.",
+                );
+              } else {
+                setError(em);
+              }
             } finally {
               startBtnGrokImage.disabled = false;
               startBtnGrokImage.textContent = prevLabel || BTN_GEN_LABEL;
