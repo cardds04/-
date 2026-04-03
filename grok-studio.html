@@ -3,16 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Grok 이미지 · 영상 스튜디오</title>
+    <title>AI 이미지 스튜디오 (Grok · Gemini)</title>
     <style>
       :root {
-        --bg: #0a0e14;
-        --card: #121a24;
-        --line: #243044;
-        --text: #e8eef6;
-        --muted: #8a9bb0;
-        --accent: #f97316;
-        --accent2: #ea580c;
+        --bg: #f4f1ec;
+        --card: #fffefb;
+        --ink: #1c1917;
+        --muted: #57534e;
+        --line: #e7e5e4;
+        --accent: #b45309;
+        --accent-soft: #fff7ed;
+        --danger: #b91c1c;
+        --radius: 12px;
+        --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
       }
       * {
         box-sizing: border-box;
@@ -20,307 +23,1284 @@
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: ui-sans-serif, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-        background: radial-gradient(ellipse 90% 60% at 50% -20%, #1a2840 0%, var(--bg) 50%);
-        color: var(--text);
-        padding: 20px 16px 48px;
-        line-height: 1.5;
+        font-family: var(--font);
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--ink);
+        background: var(--bg);
       }
-      .wrap {
-        max-width: 720px;
+      .page {
+        max-width: 1120px;
         margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
       }
-      h1 {
-        font-size: 1.45rem;
-        font-weight: 800;
-        margin: 0 0 6px;
+      .head h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.65rem;
+        font-weight: 700;
         letter-spacing: -0.02em;
       }
       .sub {
+        margin: 0;
         color: var(--muted);
-        font-size: 0.88rem;
-        margin: 0 0 18px;
-      }
-      .tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 16px;
-      }
-      .tabs button {
-        flex: 1;
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        background: var(--card);
-        color: var(--muted);
-        font-weight: 700;
-        font-size: 0.92rem;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      .tabs button.active {
-        border-color: var(--accent);
-        background: rgba(249, 115, 22, 0.12);
-        color: #fdba74;
-      }
-      .panel {
-        display: none;
-      }
-      .panel.active {
-        display: block;
+        font-size: 0.95rem;
       }
       .card {
+        margin-top: 1.5rem;
         background: var(--card);
+        border-radius: calc(var(--radius) + 4px);
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 14px;
+        padding: 1.5rem 1.35rem;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+        display: grid;
+        gap: 1.5rem;
+        align-items: start;
       }
-      label {
+      .card__workflow {
+        min-width: 0;
+      }
+      .card__sidebar {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+      @media (min-width: 960px) {
+        .card {
+          grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+          gap: 1.75rem;
+          padding: 1.5rem 1.5rem 1.65rem;
+        }
+        .card__sidebar {
+          position: sticky;
+          top: 1rem;
+          align-self: start;
+          padding: 0.85rem 1.1rem 1.3rem;
+          background: #fafaf9;
+          border: 1px solid var(--line);
+          border-radius: var(--radius);
+          max-height: calc(100vh - 2rem);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .card__sidebar .output-gallery--sidebar {
+          position: sticky;
+          top: 0;
+          z-index: 3;
+          margin-top: 0;
+          margin-bottom: 0.35rem;
+          padding-top: 0.35rem;
+          padding-bottom: 0.85rem;
+          border-top: none;
+          background: #fafaf9;
+          box-shadow: 0 6px 10px -8px rgba(28, 25, 23, 0.2);
+        }
+      }
+      @media (max-width: 959px) {
+        .card__sidebar {
+          margin-top: 0.5rem;
+          padding-top: 1rem;
+          border-top: 1px solid var(--line);
+        }
+        .card__sidebar .output-gallery--sidebar {
+          position: sticky;
+          top: 0;
+          z-index: 3;
+          margin-top: 0;
+          padding-top: 0;
+          padding-bottom: 0.85rem;
+          border-top: none;
+          background: var(--card);
+          box-shadow: 0 6px 10px -8px rgba(28, 25, 23, 0.15);
+        }
+      }
+      .workflow-block {
+        margin-bottom: 0.25rem;
+      }
+      .workflow-block--grok-image {
+        padding: 1rem 1rem 1.15rem;
+        margin-bottom: 0.75rem;
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        border-radius: var(--radius);
+      }
+      .workflow-block--batch-aspect {
+        padding: 1rem 1rem 1.15rem;
+        margin-bottom: 0.25rem;
+        background: #f5f3ff;
+        border: 1px solid #c4b5fd;
+        border-radius: var(--radius);
+      }
+      .workflow-block--batch-aspect .drop:focus-visible {
+        outline: 2px solid #7c3aed;
+        outline-offset: 2px;
+      }
+      .workflow-block--batch-aspect .pan-direction__opt input {
+        accent-color: #7c3aed;
+      }
+      .workflow-title {
+        margin: 0 0 0.35rem;
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .workflow-note {
+        font-weight: 500;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .workflow-lead {
+        margin-top: 0;
+        margin-bottom: 1rem;
+      }
+      .grok-image-engine-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.5rem 1rem;
+        width: 100%;
+      }
+      .grok-image-engine-row__radios {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .grok-image-engine-row__api {
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+      .btn--settings {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #9a3412;
+        background: #fff7ed;
+        border: 1px solid #fdba74;
+        border-radius: 8px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .btn--settings:hover {
+        background: #ffedd5;
+      }
+      .grok-settings-panel {
+        margin-bottom: 0.5rem;
+      }
+      .pan-direction {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        align-items: center;
+      }
+      .pan-direction__opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        cursor: pointer;
+        font-size: 0.92rem;
+        font-weight: 500;
+        color: var(--ink);
+      }
+      .pan-direction__opt input {
+        accent-color: #0d9488;
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+      }
+      .workflow-block--grok-image .pan-direction--grok-image .pan-direction__opt input {
+        accent-color: #d97706;
+      }
+      .step {
+        margin-bottom: 1.75rem;
+      }
+      .step__h {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+      .step__h--compact {
+        margin-bottom: 0.35rem;
+        font-size: 0.98rem;
+      }
+      .step--grok-image-dims {
+        padding-top: 0.15rem;
+      }
+      .label {
         display: block;
+        margin: 0.5rem 0 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .label--compact {
+        display: block;
+        margin-bottom: 0.2rem;
         font-size: 0.78rem;
         font-weight: 600;
         color: var(--muted);
-        margin: 12px 0 6px;
+        text-transform: none;
+        letter-spacing: 0;
       }
-      label:first-child {
-        margin-top: 0;
+      .label--grok-ref {
+        display: block;
+        margin-bottom: 0;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: none;
+        letter-spacing: 0;
       }
+      textarea,
       input[type="text"],
       input[type="password"],
-      input[type="number"],
-      select,
-      textarea {
+      select {
         width: 100%;
-        padding: 10px 12px;
-        border-radius: 10px;
+        min-height: 2.75rem;
+        padding: 0.65rem 0.75rem;
         border: 1px solid var(--line);
-        background: #0d1219;
-        color: var(--text);
-        font-size: 0.92rem;
-        font-family: inherit;
+        border-radius: 8px;
+        font: inherit;
+        background: #fff;
+        color: var(--ink);
+        -webkit-appearance: none;
+        appearance: none;
       }
       textarea {
-        min-height: 88px;
+        min-height: auto;
         resize: vertical;
+      }
+      textarea:focus,
+      input:focus,
+      select:focus {
+        outline: 2px solid rgba(180, 83, 9, 0.25);
+        outline-offset: 1px;
+      }
+      .hint {
+        margin: 0 0 0.75rem;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .hint code {
+        font-size: 0.82em;
+        padding: 0.1em 0.35em;
+        background: #f5f5f4;
+        border-radius: 4px;
+      }
+      .row {
+        display: grid;
+        gap: 1rem;
+        margin-top: 0.75rem;
+      }
+      .row--grok-ref-drops {
+        align-items: start;
+      }
+      .row--grok-image-dims {
+        margin-top: 0.25rem !important;
+        gap: 0.55rem 0.65rem !important;
+      }
+      .row--batch-aspect-opts {
+        margin-top: 0.35rem !important;
+      }
+      @media (min-width: 520px) {
+        .row--2 {
+          grid-template-columns: 1fr 1fr;
+        }
+        .row--3 {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+      }
+      .grok-ref-col-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
+      }
+      .drop {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 1rem;
+        border: 2px dashed var(--line);
+        border-radius: var(--radius);
+        background: #fafaf9;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .drop:hover,
+      .drop--active {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .drop__hint {
+        color: var(--muted);
+        font-size: 0.9rem;
+        text-align: center;
+      }
+      .drop__name {
+        margin-top: 0.35rem;
+        font-size: 0.85rem;
+        color: var(--accent);
+        word-break: break-all;
+        text-align: center;
+      }
+      .drop--grok-ref {
+        min-height: 100px;
+        align-items: stretch;
+      }
+      .drop--grok-ref.drop--has-preview {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+      }
+      .drop--grok-ref.drop--has-preview .grok-ref-drop-hint {
+        display: none;
+      }
+      .grok-ref-preview {
+        margin: 0.35rem 0 0.25rem;
+        max-height: 160px;
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border: 1px solid var(--line);
+      }
+      .grok-ref-preview img {
+        max-width: 100%;
+        max-height: 160px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+      }
+      .drop--grok-ref .grok-ref-file-name {
+        font-size: 0.78rem;
+        margin-top: 0.25rem;
       }
       .btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        padding: 12px 20px;
-        border: 0;
-        border-radius: 12px;
-        background: var(--accent);
-        color: #fff;
-        font-weight: 800;
-        font-size: 0.95rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 10px;
+        font: inherit;
+        font-weight: 600;
         cursor: pointer;
-        font-family: inherit;
-        margin-top: 14px;
+        text-decoration: none;
+        border: none;
       }
-      .btn:hover {
-        background: var(--accent2);
+      .btn--secondary {
+        width: auto;
+        max-width: none;
+        flex-shrink: 0;
+        background: #44403c;
+        color: #fff;
+        font-size: 0.72rem;
+        padding: 0.2rem 0.45rem;
+        border-radius: 6px;
+        line-height: 1.25;
       }
-      .btn:disabled {
-        opacity: 0.45;
+      .btn--secondary:hover {
+        filter: brightness(1.06);
+      }
+      .btn--prompt-save-main {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.38rem 0.8rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #fff;
+        background: #c2410c;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        line-height: 1.25;
+        font: inherit;
+      }
+      .btn--prompt-save-main:hover {
+        filter: brightness(1.06);
+      }
+      .btn--grok-image {
+        flex: 1 1 0;
+        min-width: 0;
+        background: #d97706;
+        color: #fff;
+        padding: 0.45rem 1rem;
+        font-size: 0.85rem;
+        border-radius: 8px;
+      }
+      .btn--grok-image:hover {
+        filter: brightness(1.05);
+      }
+      .btn--grok-image:disabled {
+        opacity: 0.55;
         cursor: not-allowed;
       }
-      .btn.secondary {
-        background: #334155;
+      .grok-image-prompt-toolbar {
+        margin: 0.45rem 0 0.65rem;
       }
-      .hint {
-        font-size: 0.76rem;
-        color: var(--muted);
-        margin-top: 8px;
-        line-height: 1.45;
-      }
-      .err {
-        color: #f87171;
-        font-size: 0.85rem;
-        margin-top: 10px;
-      }
-      .out {
-        margin-top: 16px;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        background: #0d1219;
-      }
-      .out img,
-      .out video {
-        display: block;
-        width: 100%;
-        max-height: 70vh;
-        object-fit: contain;
-      }
-      .progress {
-        height: 6px;
-        background: var(--line);
-        border-radius: 3px;
-        margin-top: 10px;
-        overflow: hidden;
-      }
-      .progress > i {
-        display: block;
-        height: 100%;
-        background: var(--accent);
-        width: 0%;
-        transition: width 0.3s;
-      }
-      .file-row {
-        margin-top: 8px;
-      }
-      .key-row {
+      .grok-image-prompt-toolbar__btns {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: flex-end;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 0.5rem 0.75rem;
+        width: 100%;
       }
-      .key-row input {
-        flex: 1;
-        min-width: 200px;
+      .grok-image-prompt-toolbar__hint {
+        margin: 0.4rem 0 0 !important;
+        width: 100%;
+        font-size: 0.78rem !important;
+        line-height: 1.4 !important;
+      }
+      .image-api-keys__input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 2.75rem;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font: inherit;
+      }
+      .image-api-keys__actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.65rem 1rem;
+        margin: 0.4rem 0 0 !important;
+        font-size: 0.85rem !important;
+      }
+      .btn--mini-save {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+      }
+      .btn--mini-save:hover {
+        background: #fafaf9;
+      }
+      .select--compact {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 2.1rem;
+        padding: 0.35rem 0.45rem;
+        font-size: 0.86rem;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+      .pan-direction--grok-compact {
+        flex-wrap: nowrap;
+        gap: 0.45rem 0.65rem !important;
+        align-items: center;
+      }
+      .pan-direction--grok-compact .pan-direction__opt {
+        font-size: 0.86rem;
+        font-weight: 500;
+        gap: 0.3rem !important;
+      }
+      .image-aspect-details {
+        margin: 0 0 0.4rem;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.45);
+        padding: 0.2rem 0.55rem 0.45rem;
+      }
+      .image-aspect-details__summary {
+        cursor: pointer;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #92400e;
+        list-style: none;
+      }
+      .image-aspect-details__summary::-webkit-details-marker {
+        display: none;
+      }
+      .image-aspect-legend {
+        margin: 0.45rem 0 0 !important;
+        font-size: 0.78rem !important;
+        line-height: 1.45 !important;
+      }
+      .prompt-preset-icons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 0.85rem;
+        margin-bottom: 1rem;
+        min-height: 0;
+      }
+      .prompt-preset-chip-wrap {
+        position: relative;
+        display: inline-flex;
+        vertical-align: top;
+      }
+      .prompt-preset-chip__remove {
+        position: absolute;
+        top: -0.15rem;
+        right: -0.15rem;
+        z-index: 2;
+        width: 1.38rem;
+        height: 1.38rem;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: #78716c;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(28, 25, 23, 0.2);
+      }
+      .prompt-preset-chip__remove:hover {
+        background: #b91c1c;
+      }
+      .prompt-preset-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        width: 4.5rem;
+        padding: 0.35rem 0.25rem 0.45rem;
+        border: none;
+        border-radius: 12px;
+        background: transparent;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        text-align: center;
+      }
+      .prompt-preset-chip:hover {
+        background: #f5f5f4;
+      }
+      .prompt-preset-chip__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 14px;
+        background: linear-gradient(145deg, #fff7ed, #fed7aa);
+        border: 2px solid #fdba74;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #9a3412;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
+      }
+      .prompt-preset-chip__title {
+        font-size: 0.68rem;
+        line-height: 1.25;
+        color: var(--muted);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-all;
+      }
+      .actions--batch-aspect {
+        margin: 0.75rem 0 0;
+      }
+      .btn--batch-aspect {
+        width: 100%;
+        background: #7c3aed;
+        color: #fff;
+      }
+      .btn--batch-aspect:hover {
+        filter: brightness(1.05);
+      }
+      .btn--batch-aspect:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .output-gallery__h {
+        margin: 0 0 0.35rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .output-gallery__lead {
+        margin: 0 0 0.85rem !important;
+        font-size: 0.88rem !important;
+      }
+      .output-gallery__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        align-items: center;
+      }
+      .output-gallery__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 0.85rem;
+        align-items: flex-start;
+        min-height: 0.5rem;
+      }
+      .job-file-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        width: 4.75rem;
+        padding: 0.35rem 0.25rem 0.45rem;
+        border-radius: 12px;
+        background: transparent;
+        text-decoration: none;
+        color: inherit;
+        font: inherit;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .job-file-chip:hover {
+        background: #f5f5f4;
+      }
+      .job-file-chip__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 14px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
+      }
+      .job-file-chip--image .job-file-chip__icon {
+        background: linear-gradient(145deg, #fffbeb, #fde68a);
+        border: 2px solid #fbbf24;
+        color: #92400e;
+      }
+      .job-file-chip__name {
+        font-size: 0.68rem;
+        line-height: 1.25;
+        color: var(--muted);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-all;
+      }
+      .output-gallery__tile--image {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.45rem;
+        max-width: 11rem;
+      }
+      .output-gallery__tile--image .output-gallery__thumb {
+        width: 100%;
+        max-height: 7rem;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #f5f5f4;
+      }
+      .output-gallery__tile--image .job-file-chip {
+        width: 100%;
+        max-width: none;
+      }
+      .btn--secondary.output-zip {
+        width: auto;
+        flex: 1 1 auto;
+        min-width: 10rem;
+      }
+      .btn--ghost {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        padding: 0.65rem 1rem;
+        border-radius: 10px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn--ghost:hover {
+        background: #fafaf9;
+      }
+      .btn--secondary:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .error {
+        margin: 0 0 1rem;
+        padding: 0.75rem;
+        background: #fef2f2;
+        color: var(--danger);
+        border-radius: 8px;
+        font-size: 0.9rem;
+      }
+      .foot {
+        margin-top: 2rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .foot code {
+        font-size: 0.78rem;
       }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <h1>Grok 이미지 · 영상 스튜디오</h1>
-      <p class="sub">
-        xAI <strong>Grok Imagine</strong> 이미지·영상 생성. 배포된 사이트에서 바로 사용합니다. Topaz 후처리·팬 영상은 로컬
-        <code>tools/grok-topaz-pipeline</code> 전용입니다.
-      </p>
-
-      <div class="card">
-        <label for="apiKey">xAI API 키</label>
-        <div class="key-row">
-          <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="xai-…" />
-          <button type="button" class="btn secondary" id="btnSaveKey" style="margin-top: 0">브라우저에 저장</button>
-        </div>
-        <p class="hint">
-          Vercel에 <code>XAI_API_KEY</code>를 넣어 두었으면 비워도 됩니다. 키를 입력하면 이 기기 브라우저(sessionStorage)에만
-          보관됩니다.
+    <div class="page">
+      <header class="head">
+        <h1>AI 이미지 만들기</h1>
+        <p class="sub">
+          로컬 <code>tools/grok-topaz-pipeline</code>과 같은 <strong>이미지 블록</strong> 레이아웃입니다. Grok Imagine(xAI) 또는
+          Gemini 나노바나나2로 생성하고, 오른쪽에서 개별 다운로드·ZIP으로 모두 받기·목록 비우기를 할 수 있습니다.
         </p>
-      </div>
+      </header>
 
-      <div class="tabs" role="tablist">
-        <button type="button" class="active" data-tab="img">이미지</button>
-        <button type="button" data-tab="vid">영상</button>
-      </div>
+      <main class="card">
+        <div class="card__workflow">
+          <p id="errorBox" class="error" hidden></p>
 
-      <div id="panelImg" class="panel active">
-        <div class="card">
-          <label for="imgPrompt">프롬프트</label>
-          <textarea id="imgPrompt" placeholder="예: 석양 아래 미래 도시, 시네마틱"></textarea>
-          <label for="imgAspect">비율</label>
-          <select id="imgAspect">
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="1:1">1:1</option>
-            <option value="4:3">4:3</option>
-            <option value="3:2">3:2</option>
-            <option value="2:3">2:3</option>
-          </select>
-          <label for="imgRes">해상도</label>
-          <select id="imgRes">
-            <option value="1k">1k</option>
-            <option value="2k">2k</option>
-          </select>
-          <label>참조 이미지 (선택, 최대 2장 · 용량 크면 실패할 수 있음)</label>
-          <div class="file-row">
-            <input type="file" id="imgRef1" accept="image/*" />
-          </div>
-          <div class="file-row">
-            <input type="file" id="imgRef2" accept="image/*" />
-          </div>
-          <button type="button" class="btn" id="btnGenImg">이미지 만들기</button>
-          <p class="err" id="imgErr" style="display: none"></p>
-          <div id="imgOut" class="out" style="display: none"></div>
+          <section class="workflow-block workflow-block--grok-image">
+            <h2 class="workflow-title">
+              AI 이미지 <span class="workflow-note">(Grok Imagine 또는 Gemini 나노바나나2)</span>
+            </h2>
+            <section class="step">
+              <h3 class="step__h">엔진</h3>
+              <div class="grok-image-engine-row">
+                <div class="pan-direction grok-image-engine-row__radios" role="radiogroup" aria-label="이미지 생성 엔진">
+                  <label class="pan-direction__opt">
+                    <input type="radio" name="imageProvider" value="xai" />
+                    <span>Grok Imagine (xAI)</span>
+                  </label>
+                  <label class="pan-direction__opt">
+                    <input type="radio" name="imageProvider" value="gemini" checked />
+                    <span>Gemini 나노바나나2</span>
+                  </label>
+                </div>
+                <div class="grok-image-engine-row__api">
+                  <button type="button" class="btn--settings" id="btnToggleImageApiKeys" aria-expanded="false">
+                    API 키 (이 블록 전용) — 펼치기
+                  </button>
+                </div>
+              </div>
+            </section>
+            <div id="imageApiKeysPanel" class="grok-settings-panel" hidden>
+              <p class="hint" style="margin: 0 0 0.75rem; font-size: 0.86rem">
+                <strong>저장</strong> 시 이 브라우저에만 보관됩니다. 비우면 Vercel 환경 변수
+                <code>XAI_API_KEY</code> · <code>GEMINI_API_KEY</code>를 사용합니다.
+              </p>
+              <div class="image-api-keys">
+                <div class="image-api-keys__row">
+                  <label class="label" for="grok-image-xai-api-key">Grok (xAI) API 키</label>
+                  <input
+                    type="password"
+                    id="grok-image-xai-api-key"
+                    class="image-api-keys__input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="선택 · 비우면 서버 XAI_API_KEY"
+                  />
+                  <p class="hint image-api-keys__actions">
+                    <button type="button" class="btn--mini-save" id="btnSaveGrokImageXaiKey">저장</button>
+                  </p>
+                </div>
+                <div class="image-api-keys__row">
+                  <label class="label" for="gemini-api-key">Gemini API 키</label>
+                  <input
+                    type="password"
+                    id="gemini-api-key"
+                    class="image-api-keys__input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="선택 · 비우면 서버 GEMINI_API_KEY"
+                  />
+                  <p class="hint image-api-keys__actions">
+                    <button type="button" class="btn--mini-save" id="btnSaveGeminiKey">저장</button>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="step">
+              <h3 class="step__h">참조 이미지 (선택, 최대 2장)</h3>
+              <p class="hint" style="margin: 0 0 0.5rem; font-size: 0.86rem">
+                비워 두면 텍스트만으로 생성합니다. <strong>Grok(xAI)</strong>에서 두 장을 쓸 때 프롬프트에
+                <code>\1</code> <code>\2</code>로 각 참조를 가리킬 수 있습니다.
+                <strong>클립보드</strong>는 해당 드롭 영역 위에 마우스를 올린 뒤 붙여넣기(Ctrl+V) 하면 됩니다.
+              </p>
+              <div class="row row--2 row--grok-ref-drops">
+                <div>
+                  <div class="grok-ref-col-head">
+                    <label class="label label--grok-ref" for="grokImageFile">참조 1</label>
+                    <button type="button" class="btn btn--secondary" id="btnClearGrokRef1" aria-label="참조 1 비우기">
+                      비우기
+                    </button>
+                  </div>
+                  <label class="drop drop--grok-ref" id="grokImageDropzone" tabindex="0" aria-label="참조 이미지 1">
+                    <input type="file" id="grokImageFile" accept="image/*" hidden />
+                    <span class="drop__hint grok-ref-drop-hint">선택 · 드롭 · 붙여넣기</span>
+                    <div class="grok-ref-preview" id="grokImagePreview" hidden>
+                      <img id="grokImagePreviewImg" alt="" decoding="async" />
+                    </div>
+                    <span class="drop__name grok-ref-file-name" id="grokImageFileName"></span>
+                  </label>
+                </div>
+                <div>
+                  <div class="grok-ref-col-head">
+                    <label class="label label--grok-ref" for="grokImageFile2">참조 2</label>
+                    <button type="button" class="btn btn--secondary" id="btnClearGrokRef2" aria-label="참조 2 비우기">
+                      비우기
+                    </button>
+                  </div>
+                  <label class="drop drop--grok-ref" id="grokImageDropzone2" tabindex="0" aria-label="참조 이미지 2">
+                    <input type="file" id="grokImageFile2" accept="image/*" hidden />
+                    <span class="drop__hint grok-ref-drop-hint">선택 · 드롭 · 붙여넣기</span>
+                    <div class="grok-ref-preview" id="grokImagePreview2" hidden>
+                      <img id="grokImagePreviewImg2" alt="" decoding="async" />
+                    </div>
+                    <span class="drop__name grok-ref-file-name" id="grokImageFileName2"></span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="step">
+              <h3 class="step__h">프롬프트</h3>
+              <label class="label" for="grokImagePrompt">프롬프트 (필수)</label>
+              <textarea id="grokImagePrompt" rows="3" placeholder="예: 석양 아래 도시 스카이라인, 시네마틱"></textarea>
+              <div class="grok-image-prompt-toolbar">
+                <div class="grok-image-prompt-toolbar__btns">
+                  <button type="button" class="btn--prompt-save-main" id="btnSaveGrokImagePromptPreset">프롬프트 저장</button>
+                  <button type="button" class="btn btn--grok-image" id="startBtnGrokImage">이미지 만들기</button>
+                </div>
+                <p class="hint grok-image-prompt-toolbar__hint">
+                  제목을 정하면 아래에 아이콘으로 쌓입니다. 누르면 이 칸에 불러옵니다.
+                </p>
+              </div>
+              <div id="grokImagePromptPresetIcons" class="prompt-preset-icons" aria-label="저장된 이미지 프롬프트"></div>
+            </section>
+
+            <section class="step step--grok-image-dims">
+              <h3 class="step__h step__h--compact">비율 · 방향 · 해상도</h3>
+              <details class="image-aspect-details">
+                <summary class="image-aspect-details__summary">엔진·해상도 안내</summary>
+                <p class="hint image-aspect-legend">
+                  비율·1k·2k는 양쪽 공통, <strong>4k는 나노(Gemini)만</strong>입니다.
+                </p>
+              </details>
+              <div class="row row--3 row--grok-image-dims">
+                <div>
+                  <label class="label label--compact" for="grokImageAspectBase">비율</label>
+                  <select id="grokImageAspectBase" class="select--compact">
+                    <option value="169">16∶9</option>
+                    <option value="43">4∶3</option>
+                    <option value="32" selected>3∶2</option>
+                  </select>
+                </div>
+                <div class="grok-image-orient-cell">
+                  <label class="label label--compact">방향</label>
+                  <div
+                    class="pan-direction pan-direction--grok-image pan-direction--grok-compact"
+                    role="radiogroup"
+                    aria-label="가로 또는 세로"
+                  >
+                    <label class="pan-direction__opt">
+                      <input type="radio" name="grokImageOrientation" value="landscape" checked />
+                      <span>가로</span>
+                    </label>
+                    <label class="pan-direction__opt">
+                      <input type="radio" name="grokImageOrientation" value="portrait" />
+                      <span>세로</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="label label--compact" for="grokImageResolution">해상도</label>
+                  <select id="grokImageResolution" class="select--compact">
+                    <option value="1k" selected>1k</option>
+                    <option value="2k">2k</option>
+                    <option value="4k">4k (나노)</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="workflow-block workflow-block--batch-aspect">
+            <h2 class="workflow-title">
+              사진 대량 비율 맞추기 <span class="workflow-note">(브라우저 · API 키 불필요)</span>
+            </h2>
+            <p class="hint workflow-lead">
+              여러 장을 올리면 선택한 <strong>비율·가로/세로</strong>에 맞게 <strong>중앙에서 잘라</strong> 같은 화면비로 맞춥니다. (레터박스
+              없음) 결과는 JPEG ZIP입니다.
+            </p>
+            <section class="step">
+              <h3 class="step__h">사진 (여러 장)</h3>
+              <label class="drop" id="batchAspectDropzone" tabindex="0">
+                <input type="file" id="batchAspectFiles" accept="image/*" multiple hidden />
+                <span class="drop__hint"
+                  >눌러서 선택·끌어다 놓기 · 이 영역에 마우스를 두거나 포커스 후 붙여넣기(⌘V / Ctrl+V)</span
+                >
+                <span class="drop__name" id="batchAspectFileNames"></span>
+              </label>
+            </section>
+            <section class="step">
+              <h3 class="step__h">출력 설정</h3>
+              <div class="row row--2 row--batch-aspect-opts">
+                <div>
+                  <label class="label label--compact" for="batchAspectRatio">비율</label>
+                  <select id="batchAspectRatio" class="select--compact">
+                    <option value="16:9">16∶9</option>
+                    <option value="4:3">4∶3</option>
+                    <option value="3:2" selected>3∶2</option>
+                  </select>
+                </div>
+                <div class="grok-image-orient-cell">
+                  <label class="label label--compact">방향</label>
+                  <div class="pan-direction pan-direction--grok-compact" role="radiogroup" aria-label="가로 또는 세로">
+                    <label class="pan-direction__opt">
+                      <input type="radio" name="batchAspectOrientation" value="landscape" checked />
+                      <span>가로</span>
+                    </label>
+                    <label class="pan-direction__opt">
+                      <input type="radio" name="batchAspectOrientation" value="portrait" />
+                      <span>세로</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <div class="actions actions--batch-aspect">
+              <button type="button" class="btn btn--batch-aspect" id="btnBatchAspectDownload">ZIP으로 받기</button>
+            </div>
+          </section>
         </div>
-      </div>
 
-      <div id="panelVid" class="panel">
-        <div class="card">
-          <label for="vidPrompt">프롬프트</label>
-          <textarea id="vidPrompt" placeholder="영상에 담길 내용"></textarea>
-          <label for="vidFile">시작 이미지 (필수)</label>
-          <input type="file" id="vidFile" accept="image/*" />
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px">
-            <div>
-              <label for="vidDur">길이(초)</label>
-              <input type="number" id="vidDur" min="1" max="15" value="2" />
+        <aside class="card__sidebar" aria-label="출력">
+          <section class="output-gallery output-gallery--sidebar" id="outputGallery" aria-label="출력 갤러리">
+            <h2 class="output-gallery__h">만든 영상·이미지 (아웃풋만)</h2>
+            <p class="hint output-gallery__lead">
+              생성이 끝난 이미지가 여기에 쌓입니다. 아래 썸네일·칩을 누르면 다운로드되고 목록에서 빠집니다. 왼쪽을 스크롤해도 이 블록은
+              오른쪽 상단에 고정됩니다.
+            </p>
+            <div class="output-gallery__actions">
+              <button type="button" class="btn btn--secondary output-zip" id="btnBatchZip" disabled>ZIP으로 모두 받기</button>
+              <button type="button" class="btn--ghost" id="btnGalleryClear">목록 비우기</button>
             </div>
-            <div>
-              <label for="vidAspect">비율</label>
-              <select id="vidAspect">
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-                <option value="1:1">1:1</option>
-                <option value="4:3">4:3</option>
-              </select>
-            </div>
-            <div>
-              <label for="vidRes">화질</label>
-              <select id="vidRes">
-                <option value="720p">720p</option>
-                <option value="480p">480p</option>
-              </select>
-            </div>
-          </div>
-          <button type="button" class="btn" id="btnGenVid">영상 생성 시작</button>
-          <div class="progress" id="vidProgressWrap" style="display: none">
-            <i id="vidProgressBar"></i>
-          </div>
-          <p class="hint" id="vidStatus"></p>
-          <p class="err" id="vidErr" style="display: none"></p>
-          <div id="vidOut" class="out" style="display: none"></div>
-        </div>
-      </div>
+            <div class="output-gallery__chips" id="outputGalleryChips"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="foot">
+        <p>API: <code>/api/grok-xai</code> (이미지), <code>/api/gemini-image</code> (Gemini).</p>
+      </footer>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
     <script>
       (function () {
-        const LS_KEY = "grok_studio_xai_key_v1";
-        const API = "/api/grok-xai";
+        var API_GROK = "/api/grok-xai";
+        var API_GEMINI = "/api/gemini-image";
+        var LS_IMAGE_PROMPT_PRESETS = "grok_image_prompt_presets_v1";
+        var LS_SAVED_IMAGE_XAI_KEY = "grok_web_image_block_xai_key_v1";
+        var LS_SAVED_IMAGE_GEMINI_KEY = "grok_web_image_block_gemini_key_v1";
 
-        const apiKeyEl = document.getElementById("apiKey");
-        try {
-          apiKeyEl.value = sessionStorage.getItem(LS_KEY) || "";
-        } catch (_) {}
+        var errorBox = document.getElementById("errorBox");
+        var grokImagePrompt = document.getElementById("grokImagePrompt");
+        var grokImageAspectBase = document.getElementById("grokImageAspectBase");
+        var grokImageResolution = document.getElementById("grokImageResolution");
+        var grokImagePromptPresetIcons = document.getElementById("grokImagePromptPresetIcons");
+        var outputGalleryChips = document.getElementById("outputGalleryChips");
+        var btnBatchZip = document.getElementById("btnBatchZip");
+        var btnGalleryClear = document.getElementById("btnGalleryClear");
+        var btnToggleImageApiKeys = document.getElementById("btnToggleImageApiKeys");
+        var imageApiKeysPanel = document.getElementById("imageApiKeysPanel");
+        var grokImageXaiKeyEl = document.getElementById("grok-image-xai-api-key");
+        var geminiApiKeyEl = document.getElementById("gemini-api-key");
+        var startBtnGrokImage = document.getElementById("startBtnGrokImage");
+        var grokImageFile = document.getElementById("grokImageFile");
+        var grokImageFile2 = document.getElementById("grokImageFile2");
+        var grokRefPreviewUrls = { 1: null, 2: null };
+        var outputGalleryItems = [];
+        var imageSeq = 0;
 
-        document.getElementById("btnSaveKey").addEventListener("click", function () {
+        function setError(msg) {
+          if (msg) {
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+          } else {
+            errorBox.hidden = true;
+          }
+        }
+
+        function escapeHtml(s) {
+          if (s == null || s === "") return "";
+          var div = document.createElement("div");
+          div.textContent = String(s);
+          return div.innerHTML;
+        }
+
+        function truncateFileName(name, maxLen) {
+          var max = maxLen == null ? 22 : maxLen;
+          if (!name || name.length <= max) return name;
+          return name.slice(0, max - 1) + "…";
+        }
+
+        function getComputedImageAspectRatio() {
+          var base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+          var oriEl = document.querySelector('input[name="grokImageOrientation"]:checked');
+          var ori = oriEl ? oriEl.value : "landscape";
+          var map = {
+            169: { landscape: "16:9", portrait: "9:16" },
+            43: { landscape: "4:3", portrait: "3:4" },
+            32: { landscape: "3:2", portrait: "2:3" },
+          };
+          var row = map[base] || map[32];
+          return ori === "portrait" ? row.portrait : row.landscape;
+        }
+
+        function syncImageResolutionForProvider() {
+          if (!grokImageResolution) return;
+          var provEl = document.querySelector('input[name="imageProvider"]:checked');
+          var prov = provEl ? provEl.value : "gemini";
+          var opt4k = grokImageResolution.querySelector('option[value="4k"]');
+          if (!opt4k) return;
+          if (prov === "xai") {
+            opt4k.disabled = true;
+            if (grokImageResolution.value === "4k") grokImageResolution.value = "2k";
+          } else {
+            opt4k.disabled = false;
+          }
+        }
+
+        document.querySelectorAll('input[name="imageProvider"]').forEach(function (el) {
+          el.addEventListener("change", syncImageResolutionForProvider);
+        });
+        syncImageResolutionForProvider();
+
+        function loadImagePromptPresets() {
           try {
-            sessionStorage.setItem(LS_KEY, apiKeyEl.value.trim());
-            alert("저장했습니다. (이 브라우저·이 탭 세션만)");
+            var raw = localStorage.getItem(LS_IMAGE_PROMPT_PRESETS);
+            if (!raw) return [];
+            var arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr : [];
           } catch (e) {
-            alert(String(e.message || e));
+            return [];
+          }
+        }
+
+        function saveImagePromptPresets(list) {
+          localStorage.setItem(LS_IMAGE_PROMPT_PRESETS, JSON.stringify(list));
+        }
+
+        function renderGrokImagePresetIcons() {
+          if (!grokImagePromptPresetIcons) return;
+          grokImagePromptPresetIcons.innerHTML = "";
+          loadImagePromptPresets().forEach(function (p) {
+            var wrap = document.createElement("div");
+            wrap.className = "prompt-preset-chip-wrap";
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "prompt-preset-chip";
+            var titleStr = (p.title || "").trim() || "(제목 없음)";
+            var glyph = (titleStr[0] || "P").toUpperCase();
+            btn.innerHTML =
+              '<span class="prompt-preset-chip__icon" aria-hidden="true">' +
+              escapeHtml(glyph) +
+              "</span>" +
+              '<span class="prompt-preset-chip__title" title="' +
+              escapeHtml(titleStr) +
+              '">' +
+              escapeHtml(titleStr.length > 10 ? titleStr.slice(0, 10) + "…" : titleStr) +
+              "</span>";
+            btn.addEventListener("click", function () {
+              if (grokImagePrompt) grokImagePrompt.value = p.text;
+            });
+            var del = document.createElement("button");
+            del.type = "button";
+            del.className = "prompt-preset-chip__remove";
+            del.setAttribute("aria-label", '"' + titleStr + '" 저장 프롬프트 삭제');
+            del.textContent = "×";
+            del.addEventListener("click", function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              var next = loadImagePromptPresets().filter(function (x) {
+                return x.id !== p.id;
+              });
+              saveImagePromptPresets(next);
+              renderGrokImagePresetIcons();
+              setError("");
+            });
+            wrap.appendChild(btn);
+            wrap.appendChild(del);
+            grokImagePromptPresetIcons.appendChild(wrap);
+          });
+        }
+
+        document.getElementById("btnSaveGrokImagePromptPreset").addEventListener("click", function () {
+          var text = grokImagePrompt.value.trim();
+          if (!text) {
+            setError("저장할 프롬프트를 먼저 입력하세요.");
+            return;
+          }
+          var title = window.prompt("저장할 제목을 입력하세요.");
+          if (title === null) return;
+          var list = loadImagePromptPresets();
+          list.push({
+            id: "imgp" + Date.now(),
+            title: (title || "").trim() || "(제목 없음)",
+            text: text,
+          });
+          saveImagePromptPresets(list);
+          renderGrokImagePresetIcons();
+          setError("");
+        });
+
+        renderGrokImagePresetIcons();
+
+        try {
+          var x = localStorage.getItem(LS_SAVED_IMAGE_XAI_KEY);
+          if (x != null && grokImageXaiKeyEl) grokImageXaiKeyEl.value = x;
+          var g = localStorage.getItem(LS_SAVED_IMAGE_GEMINI_KEY);
+          if (g != null && geminiApiKeyEl) geminiApiKeyEl.value = g;
+        } catch (e) {}
+
+        if (btnToggleImageApiKeys && imageApiKeysPanel) {
+          btnToggleImageApiKeys.addEventListener("click", function () {
+            imageApiKeysPanel.hidden = !imageApiKeysPanel.hidden;
+            var expanded = !imageApiKeysPanel.hidden;
+            btnToggleImageApiKeys.setAttribute("aria-expanded", expanded ? "true" : "false");
+            btnToggleImageApiKeys.textContent = expanded
+              ? "API 키 (이 블록 전용) — 접기"
+              : "API 키 (이 블록 전용) — 펼치기";
+          });
+        }
+
+        document.getElementById("btnSaveGrokImageXaiKey").addEventListener("click", function () {
+          try {
+            localStorage.setItem(LS_SAVED_IMAGE_XAI_KEY, grokImageXaiKeyEl.value.trim());
+            setError("");
+          } catch (e) {
+            setError(String(e.message || e));
+          }
+        });
+        document.getElementById("btnSaveGeminiKey").addEventListener("click", function () {
+          try {
+            localStorage.setItem(LS_SAVED_IMAGE_GEMINI_KEY, geminiApiKeyEl.value.trim());
+            setError("");
+          } catch (e) {
+            setError(String(e.message || e));
           }
         });
 
-        function getKeyPayload() {
-          const k = apiKeyEl.value.trim();
-          return k ? { xai_api_key: k } : {};
+        function syncGrokRefSlotUI(slot) {
+          var input = slot === 2 ? grokImageFile2 : grokImageFile;
+          var nameEl = slot === 2 ? document.getElementById("grokImageFileName2") : document.getElementById("grokImageFileName");
+          var zone = slot === 2 ? document.getElementById("grokImageDropzone2") : document.getElementById("grokImageDropzone");
+          var wrap = slot === 2 ? document.getElementById("grokImagePreview2") : document.getElementById("grokImagePreview");
+          var img = slot === 2 ? document.getElementById("grokImagePreviewImg2") : document.getElementById("grokImagePreviewImg");
+          var f = input.files && input.files[0];
+          if (grokRefPreviewUrls[slot]) {
+            URL.revokeObjectURL(grokRefPreviewUrls[slot]);
+            grokRefPreviewUrls[slot] = null;
+          }
+          if (!f) {
+            nameEl.textContent = "";
+            wrap.hidden = true;
+            zone.classList.remove("drop--has-preview");
+            return;
+          }
+          nameEl.textContent = f.name;
+          var u = URL.createObjectURL(f);
+          grokRefPreviewUrls[slot] = u;
+          img.src = u;
+          wrap.hidden = false;
+          zone.classList.add("drop--has-preview");
         }
 
-        async function post(body) {
-          const r = await fetch(API, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, ...getKeyPayload() }),
-          });
-          const j = await r.json().catch(function () {
-            return {};
-          });
-          if (!r.ok || j.ok === false) {
-            throw new Error(j.error || j.message || "요청 실패 " + r.status);
-          }
-          return j;
+        function setGrokRefFile(slot, file) {
+          var input = slot === 2 ? grokImageFile2 : grokImageFile;
+          var dt = new DataTransfer();
+          if (file) dt.items.add(file);
+          input.files = dt.files;
+          syncGrokRefSlotUI(slot);
         }
+
+        function wireRefSlot(slot) {
+          var input = slot === 2 ? grokImageFile2 : grokImageFile;
+          var zone = slot === 2 ? document.getElementById("grokImageDropzone2") : document.getElementById("grokImageDropzone");
+          zone.addEventListener("click", function (e) {
+            if (e.target === input) return;
+            input.click();
+          });
+          input.addEventListener("change", function () {
+            syncGrokRefSlotUI(slot);
+          });
+          ["dragenter", "dragover"].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              zone.classList.add("drop--active");
+            });
+          });
+          ["dragleave", "drop"].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              if (ev === "drop") e.preventDefault();
+              zone.classList.remove("drop--active");
+            });
+          });
+          zone.addEventListener("drop", function (e) {
+            e.preventDefault();
+            var fl = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (fl && fl.type.indexOf("image/") === 0) setGrokRefFile(slot, fl);
+          });
+        }
+        wireRefSlot(1);
+        wireRefSlot(2);
+
+        document.getElementById("btnClearGrokRef1").addEventListener("click", function () {
+          setGrokRefFile(1, null);
+        });
+        document.getElementById("btnClearGrokRef2").addEventListener("click", function () {
+          setGrokRefFile(2, null);
+        });
+
+        function refPasteTargetZone() {
+          if (document.getElementById("grokImageDropzone2").matches(":hover")) return 2;
+          if (document.getElementById("grokImageDropzone").matches(":hover")) return 1;
+          if (document.getElementById("grokImageDropzone2") === document.activeElement) return 2;
+          if (document.getElementById("grokImageDropzone") === document.activeElement) return 1;
+          return 0;
+        }
+
+        document.addEventListener("paste", function (e) {
+          var z = refPasteTargetZone();
+          if (!z) return;
+          var items = e.clipboardData && e.clipboardData.items;
+          if (!items) return;
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image/") === 0) {
+              e.preventDefault();
+              var f = items[i].getAsFile();
+              if (f) setGrokRefFile(z, f);
+              break;
+            }
+          }
+        });
 
         function fileToDataUrl(file) {
           return new Promise(function (resolve, reject) {
-            const fr = new FileReader();
+            var fr = new FileReader();
             fr.onload = function () {
               resolve(String(fr.result || ""));
             };
@@ -329,142 +1309,395 @@
           });
         }
 
-        document.querySelectorAll(".tabs button").forEach(function (btn) {
-          btn.addEventListener("click", function () {
-            const tab = btn.getAttribute("data-tab");
-            document.querySelectorAll(".tabs button").forEach(function (b) {
-              b.classList.toggle("active", b === btn);
-            });
-            document.getElementById("panelImg").classList.toggle("active", tab === "img");
-            document.getElementById("panelVid").classList.toggle("active", tab === "vid");
+        async function blobFromImageResult(j) {
+          var src = j.url || null;
+          if (!src && j.b64_json) {
+            var mime = (j.mime_type || "image/png").split(";")[0];
+            src = "data:" + mime + ";base64," + j.b64_json;
+          }
+          if (!src) throw new Error("이미지 URL/데이터를 받지 못했습니다.");
+          var r = await fetch(src);
+          return await r.blob();
+        }
+
+        function extForMime(mime) {
+          var m = (mime || "").toLowerCase();
+          if (m.indexOf("jpeg") >= 0 || m === "image/jpg") return "jpg";
+          if (m.indexOf("webp") >= 0) return "webp";
+          return "png";
+        }
+
+        function revokeGalleryBlobs() {
+          outputGalleryItems.forEach(function (it) {
+            if (it.objectUrl) URL.revokeObjectURL(it.objectUrl);
           });
-        });
+          outputGalleryItems = [];
+        }
 
-        const imgErr = document.getElementById("imgErr");
-        const imgOut = document.getElementById("imgOut");
-
-        document.getElementById("btnGenImg").addEventListener("click", async function () {
-          const btn = document.getElementById("btnGenImg");
-          imgErr.style.display = "none";
-          imgOut.style.display = "none";
-          imgOut.innerHTML = "";
-          const prompt = document.getElementById("imgPrompt").value.trim();
-          if (!prompt) {
-            imgErr.textContent = "프롬프트를 입력하세요.";
-            imgErr.style.display = "block";
-            return;
-          }
-          const f1 = document.getElementById("imgRef1").files[0];
-          const f2 = document.getElementById("imgRef2").files[0];
-          const images = [];
-          try {
-            if (f1) images.push(await fileToDataUrl(f1));
-            if (f2) images.push(await fileToDataUrl(f2));
-          } catch (e) {
-            imgErr.textContent = String(e.message || e);
-            imgErr.style.display = "block";
-            return;
-          }
-          const body = {
-            action: "image",
-            prompt: prompt,
-            aspect_ratio: document.getElementById("imgAspect").value,
-            resolution: document.getElementById("imgRes").value,
-          };
-          if (images.length) body.images = images;
-          btn.disabled = true;
-          try {
-            const j = await post(body);
-            let src = j.url || null;
-            if (!src && j.b64_json) {
-              src = "data:image/png;base64," + j.b64_json;
+        function removeGalleryItemById(id) {
+          var before = outputGalleryItems.length;
+          var removed = null;
+          outputGalleryItems = outputGalleryItems.filter(function (it) {
+            if (it.id === id) {
+              removed = it;
+              return false;
             }
-            if (!src) throw new Error("이미지 URL을 받지 못했습니다.");
-            imgOut.innerHTML = '<img src="' + src.replace(/"/g, "&quot;") + '" alt="생성 결과" />';
-            imgOut.style.display = "block";
-          } catch (e) {
-            imgErr.textContent = String(e.message || e);
-            imgErr.style.display = "block";
-          } finally {
-            btn.disabled = false;
-          }
-        });
+            return true;
+          });
+          if (removed && removed.objectUrl) URL.revokeObjectURL(removed.objectUrl);
+          if (outputGalleryItems.length !== before) renderOutputGallery();
+        }
 
-        const vidErr = document.getElementById("vidErr");
-        const vidOut = document.getElementById("vidOut");
-        const vidStatus = document.getElementById("vidStatus");
-        const vidProgressWrap = document.getElementById("vidProgressWrap");
-        const vidProgressBar = document.getElementById("vidProgressBar");
-
-        document.getElementById("btnGenVid").addEventListener("click", async function () {
-          const btn = document.getElementById("btnGenVid");
-          vidErr.style.display = "none";
-          vidOut.style.display = "none";
-          vidOut.innerHTML = "";
-          vidStatus.textContent = "";
-          const prompt = document.getElementById("vidPrompt").value.trim();
-          const vf = document.getElementById("vidFile").files[0];
-          if (!prompt || !vf) {
-            vidErr.textContent = "프롬프트와 시작 이미지가 필요합니다.";
-            vidErr.style.display = "block";
+        function renderOutputGallery() {
+          if (!outputGalleryChips) return;
+          if (!outputGalleryItems.length) {
+            outputGalleryChips.innerHTML = "";
+            if (btnBatchZip) btnBatchZip.disabled = true;
             return;
           }
-          let image;
-          try {
-            image = await fileToDataUrl(vf);
-          } catch (e) {
-            vidErr.textContent = String(e.message || e);
-            vidErr.style.display = "block";
-            return;
-          }
-          btn.disabled = true;
-          vidProgressWrap.style.display = "block";
-          vidProgressBar.style.width = "5%";
-          try {
-            const start = await post({
-              action: "video_start",
-              prompt: prompt,
-              image: image,
-              duration: parseInt(document.getElementById("vidDur").value, 10) || 2,
-              aspect_ratio: document.getElementById("vidAspect").value,
-              resolution: document.getElementById("vidRes").value,
-            });
-            const rid = start.request_id;
-            vidStatus.textContent = "요청 접수: " + rid.slice(0, 12) + "…";
-            const t0 = Date.now();
-            let done = false;
-            while (!done && Date.now() - t0 < 600000) {
-              await new Promise(function (r) {
-                setTimeout(r, 2500);
+          if (btnBatchZip) btnBatchZip.disabled = false;
+          outputGalleryChips.innerHTML = outputGalleryItems
+            .map(function (it) {
+              var gid = encodeURIComponent(it.id);
+              return (
+                '<div class="output-gallery__tile output-gallery__tile--image">' +
+                '<img class="output-gallery__thumb" src="' +
+                escapeHtml(it.objectUrl) +
+                '" alt="" loading="lazy" />' +
+                '<a class="job-file-chip job-file-chip--image" href="' +
+                escapeHtml(it.objectUrl) +
+                '" download="' +
+                escapeHtml(it.name) +
+                '" data-gallery-id="' +
+                gid +
+                '" title="' +
+                escapeHtml(it.name) +
+                '">' +
+                '<span class="job-file-chip__icon" aria-hidden="true">↓</span>' +
+                '<span class="job-file-chip__name">' +
+                escapeHtml(truncateFileName(it.name)) +
+                "</span></a></div>"
+              );
+            })
+            .join("");
+        }
+
+        if (outputGalleryChips) {
+          outputGalleryChips.addEventListener("click", function (e) {
+            var a = e.target.closest("a.job-file-chip");
+            if (!a || !outputGalleryChips.contains(a)) return;
+            var raw = a.getAttribute("data-gallery-id");
+            if (raw == null || raw === "") return;
+            var id;
+            try {
+              id = decodeURIComponent(raw);
+            } catch (err) {
+              return;
+            }
+            window.setTimeout(function () {
+              removeGalleryItemById(id);
+            }, 0);
+          });
+        }
+
+        if (btnGalleryClear) {
+          btnGalleryClear.addEventListener("click", function () {
+            revokeGalleryBlobs();
+            renderOutputGallery();
+            setError("");
+          });
+        }
+
+        if (btnBatchZip) {
+          btnBatchZip.addEventListener("click", async function () {
+            if (!outputGalleryItems.length || typeof JSZip === "undefined") return;
+            setError("");
+            try {
+              var zip = new JSZip();
+              outputGalleryItems.forEach(function (it, idx) {
+                var n = String(idx + 1).padStart(3, "0") + "_" + it.name;
+                zip.file(n, it.blob);
               });
-              const st = await post({ action: "video_poll", request_id: rid });
-              if (typeof st.progress === "number") {
-                vidProgressBar.style.width = Math.min(100, st.progress) + "%";
-              }
-              vidStatus.textContent = "상태: " + (st.status || "—") + (st.progress != null ? " (" + st.progress + "%)" : "");
-              if (st.status === "done" && st.video_url) {
-                vidOut.innerHTML =
-                  '<video controls playsinline src="' +
-                  String(st.video_url).replace(/"/g, "&quot;") +
-                  '"></video>';
-                vidOut.style.display = "block";
-                vidProgressBar.style.width = "100%";
-                done = true;
-                break;
-              }
-              if (st.status === "failed" || st.status === "expired") {
-                throw new Error(st.error ? JSON.stringify(st.error) : "생성 실패");
-              }
+              var out = await zip.generateAsync({ type: "blob" });
+              var a = document.createElement("a");
+              a.href = URL.createObjectURL(out);
+              a.download = "outputs_batch.zip";
+              a.click();
+              URL.revokeObjectURL(a.href);
+            } catch (err) {
+              setError(String(err.message || err));
             }
-            if (!done) throw new Error("시간 초과 — 나중에 다시 시도하세요.");
+          });
+        }
+
+        async function appendGeneratedToGallery(blob, mimeHint) {
+          imageSeq += 1;
+          var ext = extForMime(mimeHint || blob.type);
+          var name = "grok_web_" + imageSeq + "." + ext;
+          var objectUrl = URL.createObjectURL(blob);
+          outputGalleryItems.push({
+            id: "g-web-" + Date.now() + "-" + imageSeq,
+            name: name,
+            blob: blob,
+            objectUrl: objectUrl,
+          });
+          renderOutputGallery();
+        }
+
+        startBtnGrokImage.addEventListener("click", async function () {
+          setError("");
+          var prompt = grokImagePrompt.value.trim();
+          if (!prompt) {
+            setError("프롬프트를 입력하세요.");
+            return;
+          }
+          var provEl = document.querySelector('input[name="imageProvider"]:checked');
+          var prov = provEl ? provEl.value : "gemini";
+          var aspect_ratio = getComputedImageAspectRatio();
+          var resolution = grokImageResolution.value;
+          var images = [];
+          try {
+            if (grokImageFile.files[0]) images.push(await fileToDataUrl(grokImageFile.files[0]));
+            if (grokImageFile2.files[0]) images.push(await fileToDataUrl(grokImageFile2.files[0]));
           } catch (e) {
-            vidErr.textContent = String(e.message || e);
-            vidErr.style.display = "block";
-            vidProgressWrap.style.display = "none";
+            setError(String(e.message || e));
+            return;
+          }
+
+          startBtnGrokImage.disabled = true;
+          try {
+            if (prov === "xai") {
+              var body = {
+                action: "image",
+                prompt: prompt,
+                aspect_ratio: aspect_ratio,
+                resolution: resolution,
+              };
+              var xk = grokImageXaiKeyEl.value.trim();
+              if (xk) body.xai_api_key = xk;
+              if (images.length) body.images = images;
+              var r = await fetch(API_GROK, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
+              var j = await r.json().catch(function () {
+                return {};
+              });
+              if (!r.ok || j.ok === false) throw new Error(j.error || j.message || "요청 실패 " + r.status);
+              var blob = await blobFromImageResult(j);
+              await appendGeneratedToGallery(blob, j.mime_type || "image/png");
+            } else {
+              var gbody = {
+                prompt: prompt,
+                aspect_ratio: aspect_ratio,
+                resolution: resolution,
+              };
+              var gk = geminiApiKeyEl.value.trim();
+              if (gk) gbody.gemini_api_key = gk;
+              if (images.length) gbody.images = images;
+              var r2 = await fetch(API_GEMINI, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(gbody),
+              });
+              var j2 = await r2.json().catch(function () {
+                return {};
+              });
+              if (!r2.ok || j2.ok === false) throw new Error(j2.error || j2.message || "요청 실패 " + r2.status);
+              var blob2 = await blobFromImageResult(j2);
+              await appendGeneratedToGallery(blob2, j2.mime_type || "image/png");
+            }
+          } catch (e) {
+            setError(String(e.message || e));
           } finally {
-            btn.disabled = false;
+            startBtnGrokImage.disabled = false;
           }
         });
+
+        function targetWOverH(aspect, orientation) {
+          var o = orientation === "portrait" ? "portrait" : "landscape";
+          var landscape = { "16:9": 16 / 9, "4:3": 4 / 3, "3:2": 3 / 2 };
+          var portrait = { "16:9": 9 / 16, "4:3": 3 / 4, "3:2": 2 / 3 };
+          var m = o === "landscape" ? landscape : portrait;
+          return m[aspect] != null ? m[aspect] : 3 / 2;
+        }
+
+        function loadImageEl(file) {
+          return new Promise(function (resolve, reject) {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+              URL.revokeObjectURL(url);
+              resolve(img);
+            };
+            img.onerror = function () {
+              URL.revokeObjectURL(url);
+              reject(new Error("이미지를 열 수 없습니다."));
+            };
+            img.src = url;
+          });
+        }
+
+        function cropCanvasFromImage(img, t) {
+          var w = img.naturalWidth;
+          var h = img.naturalHeight;
+          if (w <= 0 || h <= 0) throw new Error("잘못된 이미지 크기");
+          var cur = w / h;
+          var sx = 0;
+          var sy = 0;
+          var sw = w;
+          var sh = h;
+          if (Math.abs(cur - t) < 1e-5) {
+            /* no-op */
+          } else if (cur > t) {
+            sw = Math.max(1, Math.round(h * t));
+            sx = Math.floor((w - sw) / 2);
+          } else {
+            sh = Math.max(1, Math.round(w / t));
+            sy = Math.floor((h - sh) / 2);
+          }
+          var c = document.createElement("canvas");
+          c.width = sw;
+          c.height = sh;
+          var ctx = c.getContext("2d");
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+          return c;
+        }
+
+        function canvasToJpegBlob(canvas, q) {
+          return new Promise(function (resolve, reject) {
+            canvas.toBlob(
+              function (b) {
+                if (b) resolve(b);
+                else reject(new Error("JPEG 변환 실패"));
+              },
+              "image/jpeg",
+              q == null ? 0.92 : q,
+            );
+          });
+        }
+
+        var batchAspectFiles = document.getElementById("batchAspectFiles");
+        var batchAspectDropzone = document.getElementById("batchAspectDropzone");
+        var batchAspectFileNames = document.getElementById("batchAspectFileNames");
+        var batchAspectRatio = document.getElementById("batchAspectRatio");
+        var btnBatchAspectDownload = document.getElementById("btnBatchAspectDownload");
+
+        function refreshBatchAspectFileNames() {
+          if (!batchAspectFiles || !batchAspectFileNames) return;
+          var fs = batchAspectFiles.files;
+          if (!fs || !fs.length) {
+            batchAspectFileNames.textContent = "";
+            return;
+          }
+          batchAspectFileNames.textContent = Array.from(fs)
+            .map(function (f) {
+              return f.name;
+            })
+            .join(", ");
+        }
+
+        if (batchAspectDropzone && batchAspectFiles) {
+          batchAspectDropzone.addEventListener("click", function () {
+            batchAspectFiles.click();
+          });
+          batchAspectFiles.addEventListener("change", refreshBatchAspectFileNames);
+          ["dragenter", "dragover"].forEach(function (ev) {
+            batchAspectDropzone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              batchAspectDropzone.classList.add("drop--active");
+            });
+          });
+          ["dragleave", "drop"].forEach(function (ev) {
+            batchAspectDropzone.addEventListener(ev, function (e) {
+              if (ev === "drop") e.preventDefault();
+              batchAspectDropzone.classList.remove("drop--active");
+            });
+          });
+          batchAspectDropzone.addEventListener("drop", function (e) {
+            e.preventDefault();
+            var dt = e.dataTransfer;
+            if (!dt || !dt.files || !dt.files.length) return;
+            var list = new DataTransfer();
+            var existing = batchAspectFiles.files;
+            for (var i = 0; i < existing.length; i++) list.items.add(existing[i]);
+            for (var j = 0; j < dt.files.length; j++) {
+              if (dt.files[j].type.indexOf("image/") === 0) list.items.add(dt.files[j]);
+            }
+            batchAspectFiles.files = list.files;
+            refreshBatchAspectFileNames();
+          });
+        }
+
+        document.addEventListener("paste", function (e) {
+          if (!batchAspectDropzone || !batchAspectFiles) return;
+          var hover =
+            batchAspectDropzone.matches(":hover") ||
+            batchAspectDropzone.contains(document.activeElement);
+          if (!hover) return;
+          var items = e.clipboardData && e.clipboardData.items;
+          if (!items) return;
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image/") === 0) {
+              e.preventDefault();
+              var f = items[i].getAsFile();
+              if (!f) break;
+              var list = new DataTransfer();
+              var ex = batchAspectFiles.files;
+              for (var a = 0; a < ex.length; a++) list.items.add(ex[a]);
+              list.items.add(f);
+              batchAspectFiles.files = list.files;
+              refreshBatchAspectFileNames();
+              break;
+            }
+          }
+        });
+
+        if (btnBatchAspectDownload && batchAspectFiles) {
+          btnBatchAspectDownload.addEventListener("click", async function () {
+            setError("");
+            var fs = batchAspectFiles.files;
+            if (!fs || !fs.length) {
+              setError("이미지를 먼저 선택하세요.");
+              return;
+            }
+            if (typeof JSZip === "undefined") {
+              setError("JSZip을 불러오지 못했습니다. 네트워크를 확인하세요.");
+              return;
+            }
+            var aspect = batchAspectRatio ? batchAspectRatio.value : "3:2";
+            var oriEl = document.querySelector('input[name="batchAspectOrientation"]:checked');
+            var orientation = oriEl ? oriEl.value : "landscape";
+            var t = targetWOverH(aspect, orientation);
+            var aTag = aspect.replace(":", "x");
+            var oTag = orientation === "landscape" ? "L" : "P";
+            btnBatchAspectDownload.disabled = true;
+            try {
+              var zip = new JSZip();
+              for (var idx = 0; idx < fs.length; idx++) {
+                var file = fs[idx];
+                var img = await loadImageEl(file);
+                var canvas = cropCanvasFromImage(img, t);
+                var blob = await canvasToJpegBlob(canvas, 0.92);
+                var stem = file.name.replace(/\.[^.]+$/, "") || "img";
+                var n =
+                  String(idx + 1).padStart(3, "0") + "_" + stem + "_" + aTag + "_" + oTag + ".jpg";
+                zip.file(n, blob);
+              }
+              var out = await zip.generateAsync({ type: "blob" });
+              var a = document.createElement("a");
+              a.href = URL.createObjectURL(out);
+              a.download = "batch_aspect_" + Date.now() + ".zip";
+              a.click();
+              URL.revokeObjectURL(a.href);
+            } catch (err) {
+              setError(String(err.message || err));
+            } finally {
+              btnBatchAspectDownload.disabled = false;
+            }
+          });
+        }
       })();
     </script>
   </body>
