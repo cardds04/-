@@ -282,6 +282,23 @@
       .main-card-done .main-card-tap-hint {
         color: #059669;
       }
+      .main-card-armed {
+        outline: 3px solid rgba(14, 165, 233, 0.55);
+        outline-offset: 2px;
+        animation: main-card-armed-pulse 1s ease-in-out infinite;
+      }
+      .main-card-done.main-card-armed {
+        outline-color: rgba(5, 150, 105, 0.55);
+      }
+      @keyframes main-card-armed-pulse {
+        0%,
+        100% {
+          outline-width: 3px;
+        }
+        50% {
+          outline-width: 4px;
+        }
+      }
       .main-empty-section {
         text-align: center;
         color: #94a3b8;
@@ -1718,6 +1735,68 @@
           schedulePickMonth: new Date().getMonth(),
         };
 
+        var mainCardArm = null;
+
+        function cancelMainCardArm() {
+          if (mainCardArm && mainCardArm.timer) clearTimeout(mainCardArm.timer);
+          mainCardArm = null;
+        }
+
+        function disarmMainCard() {
+          if (!mainCardArm) return;
+          if (mainCardArm.timer) clearTimeout(mainCardArm.timer);
+          if (mainCardArm.cardEl && mainCardArm.cardEl.isConnected) {
+            var h = mainCardArm.cardEl.querySelector(".main-card-tap-hint");
+            if (h) h.textContent = mainCardArm.hintNormal;
+            mainCardArm.cardEl.classList.remove("main-card-armed");
+          }
+          mainCardArm = null;
+        }
+
+        function handleMainTodoCardTap(card, armKey, sl, dstr, isDone) {
+          var hintNormal = isDone ? "↩ 두 번 눌러 되돌리기" : "👆 두 번 눌러 완료";
+          var hintArmed = isDone ? "↩ 한 번 더 눌러 되돌리기" : "👆 한 번 더 눌러 완료";
+          if (mainCardArm && mainCardArm.key === armKey) {
+            clearTimeout(mainCardArm.timer);
+            mainCardArm = null;
+            if (!isDone) playTodoCompleteDingDong();
+            toggleComplete(sl, dstr, !isDone);
+            return;
+          }
+          disarmMainCard();
+          var hint = card.querySelector(".main-card-tap-hint");
+          if (hint) hint.textContent = hintArmed;
+          card.classList.add("main-card-armed");
+          mainCardArm = {
+            key: armKey,
+            cardEl: card,
+            hintNormal: hintNormal,
+            timer: setTimeout(disarmMainCard, 2800),
+          };
+        }
+
+        function handleMainScheduleCardTap(card, armKey, sched, dstr, isDone) {
+          var hintNormal = isDone ? "↩ 두 번 눌러 되돌리기" : "👆 두 번 눌러 완료";
+          var hintArmed = isDone ? "↩ 한 번 더 눌러 되돌리기" : "👆 한 번 더 눌러 완료";
+          if (mainCardArm && mainCardArm.key === armKey) {
+            clearTimeout(mainCardArm.timer);
+            mainCardArm = null;
+            if (!isDone) playTodoCompleteDingDong();
+            toggleDayScheduleComplete(sched, dstr, !isDone);
+            return;
+          }
+          disarmMainCard();
+          var hint = card.querySelector(".main-card-tap-hint");
+          if (hint) hint.textContent = hintArmed;
+          card.classList.add("main-card-armed");
+          mainCardArm = {
+            key: armKey,
+            cardEl: card,
+            hintNormal: hintNormal,
+            timer: setTimeout(disarmMainCard, 2800),
+          };
+        }
+
         function weekdayMon0(d) {
           var x = d.getDay();
           return x === 0 ? 6 : x - 1;
@@ -2282,6 +2361,7 @@
         }
 
         function appendMainTodoCard(container, sl, tpl, kid, dstr, isDone) {
+          var armKey = "slot:" + sl.id + ":" + dstr;
           var card = document.createElement("div");
           card.className = "main-card " + (isDone ? "main-card-done" : "main-card-todo");
           var em = document.createElement("div");
@@ -2306,16 +2386,16 @@
           }
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
-          hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
+          hint.textContent = isDone ? "↩ 두 번 눌러 되돌리기" : "👆 두 번 눌러 완료";
           card.appendChild(hint);
           card.addEventListener("click", function () {
-            if (!isDone) playTodoCompleteDingDong();
-            toggleComplete(sl, dstr, !isDone);
+            handleMainTodoCardTap(card, armKey, sl, dstr, isDone);
           });
           container.appendChild(card);
         }
 
         function appendMainScheduleCard(container, sched, kid, dstr, isDone) {
+          var armKey = "sched:" + sched.id + ":" + dstr;
           var card = document.createElement("div");
           card.className = "main-card " + (isDone ? "main-card-done" : "main-card-todo");
           var em = document.createElement("div");
@@ -2346,16 +2426,16 @@
           card.appendChild(tag);
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
-          hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
+          hint.textContent = isDone ? "↩ 두 번 눌러 되돌리기" : "👆 두 번 눌러 완료";
           card.appendChild(hint);
           card.addEventListener("click", function () {
-            if (!isDone) playTodoCompleteDingDong();
-            toggleDayScheduleComplete(sched, dstr, !isDone);
+            handleMainScheduleCardTap(card, armKey, sched, dstr, isDone);
           });
           container.appendChild(card);
         }
 
         function renderMainToday() {
+          cancelMainCardArm();
           var gridP = $("mainTodoGridPending");
           var gridD = $("mainTodoGridDone");
           var emptyP = $("mainEmptyPending");
@@ -2414,7 +2494,7 @@
           }
           if (doneList.length === 0) {
             emptyD.classList.remove("hidden");
-            emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 눌러 보세요!";
+            emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 두 번 눌러 완료해 보세요!";
           } else {
             doneList.forEach(function (item) {
               if (item.kind === "slot")
