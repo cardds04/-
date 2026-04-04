@@ -5,7 +5,7 @@
  * 또는 요청마다 JSON body / Authorization Bearer 로 xai_api_key 전달
  *
  * POST JSON:
- *  - { action: "image", prompt, aspect_ratio?, resolution?, images?: [dataUri...] }
+ *  - { action: "image", prompt, aspect_ratio?, resolution?, images?: [dataUri...], image_urls?: [https...] }
  *  - { action: "video_start", prompt, image (dataUri), duration?, aspect_ratio?, resolution? }
  *  - { action: "video_poll", request_id }
  */
@@ -38,7 +38,7 @@ function resolveKey(req, body) {
   return (env || "").trim();
 }
 
-function readJsonBody(req, maxLen = 12 * 1024 * 1024) {
+function readJsonBody(req, maxLen = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let raw = "";
     req.on("data", (chunk) => {
@@ -97,9 +97,16 @@ async function handleImage(apiKey, body) {
   let res = String(body.resolution || "1k").trim().toLowerCase();
   if (!RES_IMAGE.has(res)) res = "1k";
 
+  const urlRefs = Array.isArray(body.image_urls)
+    ? body.image_urls
+        .filter((x) => typeof x === "string" && /^https:\/\//i.test(String(x).trim()))
+        .map((x) => String(x).trim())
+    : [];
   const images = Array.isArray(body.images) ? body.images.filter((x) => typeof x === "string") : [];
   const ref0 = typeof body.image === "string" ? body.image : null;
-  const refs = images.length ? images.slice(0, 5) : ref0 ? [ref0] : [];
+  let refs;
+  if (urlRefs.length) refs = urlRefs.slice(0, 5);
+  else refs = images.length ? images.slice(0, 5) : ref0 ? [ref0] : [];
 
   let ep = XAI_IMG_GEN;
   let reqBody;

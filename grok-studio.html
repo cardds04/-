@@ -832,6 +832,42 @@
                     <button type="button" class="btn--mini-save" id="btnSaveGeminiKey">저장</button>
                   </p>
                 </div>
+                <div class="image-api-keys__row">
+                  <label class="label" for="grokStudioSupabaseUrl">참조 업로드 · Supabase URL</label>
+                  <input
+                    type="text"
+                    id="grokStudioSupabaseUrl"
+                    class="image-api-keys__input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="https://xxx.supabase.co · 비우면 사이트 기본값"
+                  />
+                  <label class="label" for="grokStudioSupabaseAnon" style="margin-top: 0.5rem">anon public key</label>
+                  <input
+                    type="password"
+                    id="grokStudioSupabaseAnon"
+                    class="image-api-keys__input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="비우면 사이트 기본 anon 키"
+                  />
+                  <label class="label" for="grokStudioRefBucket" style="margin-top: 0.5rem">Storage 버킷 ID</label>
+                  <input
+                    type="text"
+                    id="grokStudioRefBucket"
+                    class="image-api-keys__input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="grok-studio-refs"
+                  />
+                  <p class="hint" style="margin: 0.35rem 0 0; font-size: 0.82rem">
+                    참조 이미지가 있으면 브라우저가 이 버킷에 <strong>직접</strong> 올리고, Vercel API에는 공개 URL만 보냅니다. SQL:
+                    <code>supabase/migrations/20260331210000_grok_studio_refs_storage.sql</code>
+                  </p>
+                  <p class="hint image-api-keys__actions">
+                    <button type="button" class="btn--mini-save" id="btnSaveGrokStudioSupabase">Supabase 설정 저장</button>
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -841,7 +877,7 @@
                 비워 두면 텍스트만으로 생성합니다. <strong>Grok(xAI)</strong>에서 두 장을 쓸 때 프롬프트에
                 <code>\1</code> <code>\2</code>로 각 참조를 가리킬 수 있습니다.
                 <strong>클립보드</strong>는 해당 드롭 영역 위에 마우스를 올린 뒤 붙여넣기(Ctrl+V) 하면 됩니다.
-                큰 참조 이미지는 전송 전에 <strong>긴 변 기준 1280px·JPEG</strong>로 자동 줄여서 Vercel 용량 한도(413)를 피합니다.
+                참조가 있으면 <strong>Supabase Storage에 브라우저가 직접 업로드</strong>한 뒤 공개 URL만 API로 보냅니다. Supabase를 쓸 수 없으면 참조와 함께 생성할 수 없습니다(원본을 Vercel 본문으로 보내지 않습니다).
               </p>
               <div class="row row--2 row--grok-ref-drops">
                 <div>
@@ -1018,6 +1054,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       (function () {
         var API_GROK = "/api/grok-xai";
@@ -1025,6 +1062,12 @@
         var LS_IMAGE_PROMPT_PRESETS = "grok_image_prompt_presets_v1";
         var LS_SAVED_IMAGE_XAI_KEY = "grok_web_image_block_xai_key_v1";
         var LS_SAVED_IMAGE_GEMINI_KEY = "grok_web_image_block_gemini_key_v1";
+        var LS_GROK_STUDIO_SB_URL = "grok_studio_supabase_url_v1";
+        var LS_GROK_STUDIO_SB_KEY = "grok_studio_supabase_anon_v1";
+        var LS_GROK_STUDIO_SB_BUCKET = "grok_studio_ref_bucket_v1";
+        var FALLBACK_GROK_STUDIO_SB_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+        var FALLBACK_GROK_STUDIO_SB_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+        var DEFAULT_GROK_REF_BUCKET = "grok-studio-refs";
 
         var errorBox = document.getElementById("errorBox");
         var grokImagePrompt = document.getElementById("grokImagePrompt");
@@ -1038,6 +1081,9 @@
         var imageApiKeysPanel = document.getElementById("imageApiKeysPanel");
         var grokImageXaiKeyEl = document.getElementById("grok-image-xai-api-key");
         var geminiApiKeyEl = document.getElementById("gemini-api-key");
+        var grokStudioSupabaseUrlEl = document.getElementById("grokStudioSupabaseUrl");
+        var grokStudioSupabaseAnonEl = document.getElementById("grokStudioSupabaseAnon");
+        var grokStudioRefBucketEl = document.getElementById("grokStudioRefBucket");
         var startBtnGrokImage = document.getElementById("startBtnGrokImage");
         var grokImageFile = document.getElementById("grokImageFile");
         var grokImageFile2 = document.getElementById("grokImageFile2");
@@ -1275,6 +1321,12 @@
           if (x != null && grokImageXaiKeyEl) grokImageXaiKeyEl.value = x;
           var g = localStorage.getItem(LS_SAVED_IMAGE_GEMINI_KEY);
           if (g != null && geminiApiKeyEl) geminiApiKeyEl.value = g;
+          var su = localStorage.getItem(LS_GROK_STUDIO_SB_URL);
+          if (su != null && grokStudioSupabaseUrlEl) grokStudioSupabaseUrlEl.value = su;
+          var sk = localStorage.getItem(LS_GROK_STUDIO_SB_KEY);
+          if (sk != null && grokStudioSupabaseAnonEl) grokStudioSupabaseAnonEl.value = sk;
+          var sbk = localStorage.getItem(LS_GROK_STUDIO_SB_BUCKET);
+          if (sbk != null && grokStudioRefBucketEl) grokStudioRefBucketEl.value = sbk;
         } catch (e) {}
 
         if (btnToggleImageApiKeys && imageApiKeysPanel) {
@@ -1309,6 +1361,68 @@
               setError(String(e.message || e));
             }
           });
+        }
+
+        var btnSaveGrokStudioSupabase = document.getElementById("btnSaveGrokStudioSupabase");
+        if (btnSaveGrokStudioSupabase) {
+          btnSaveGrokStudioSupabase.addEventListener("click", function () {
+            try {
+              if (grokStudioSupabaseUrlEl)
+                localStorage.setItem(LS_GROK_STUDIO_SB_URL, grokStudioSupabaseUrlEl.value.trim());
+              if (grokStudioSupabaseAnonEl)
+                localStorage.setItem(LS_GROK_STUDIO_SB_KEY, grokStudioSupabaseAnonEl.value.trim());
+              if (grokStudioRefBucketEl)
+                localStorage.setItem(LS_GROK_STUDIO_SB_BUCKET, grokStudioRefBucketEl.value.trim());
+              setError("");
+            } catch (e) {
+              setError(String(e.message || e));
+            }
+          });
+        }
+
+        function getGrokStudioRefConfig() {
+          var u = (grokStudioSupabaseUrlEl && grokStudioSupabaseUrlEl.value.trim()) || "";
+          var k = (grokStudioSupabaseAnonEl && grokStudioSupabaseAnonEl.value.trim()) || "";
+          var b = (grokStudioRefBucketEl && grokStudioRefBucketEl.value.trim()) || "";
+          try {
+            if (!u) u = (localStorage.getItem(LS_GROK_STUDIO_SB_URL) || "").trim();
+            if (!k) k = (localStorage.getItem(LS_GROK_STUDIO_SB_KEY) || "").trim();
+            if (!b) b = (localStorage.getItem(LS_GROK_STUDIO_SB_BUCKET) || "").trim();
+          } catch (e) {}
+          return {
+            url: u || FALLBACK_GROK_STUDIO_SB_URL,
+            anonKey: k || FALLBACK_GROK_STUDIO_SB_KEY,
+            bucket: b || DEFAULT_GROK_REF_BUCKET,
+          };
+        }
+
+        async function uploadRefToSupabase(sb, bucket, file, slot) {
+          if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+            throw new Error("참조 파일이 이미지가 아닙니다.");
+          }
+          var ext = "jpg";
+          var t = (file.type || "").toLowerCase();
+          if (t.indexOf("png") >= 0) ext = "png";
+          else if (t.indexOf("webp") >= 0) ext = "webp";
+          else if (t.indexOf("gif") >= 0) ext = "gif";
+          var path =
+            "grok-studio-ref/" +
+            Date.now() +
+            "-" +
+            Math.random().toString(36).slice(2, 10) +
+            "-" +
+            slot +
+            "." +
+            ext;
+          var up = await sb.storage.from(bucket).upload(path, file, {
+            contentType: file.type || "image/jpeg",
+            upsert: false,
+          });
+          if (up.error) throw new Error(up.error.message || "Supabase Storage 업로드 실패");
+          var pub = sb.storage.from(bucket).getPublicUrl(path);
+          var out = pub.data && pub.data.publicUrl;
+          if (!out) throw new Error("공개 URL을 만들 수 없습니다. 버킷이 public인지 확인하세요.");
+          return out;
         }
 
         function syncGrokRefSlotUI(slot) {
@@ -1434,67 +1548,6 @@
             }
           }
         });
-
-        function fileToDataUrl(file) {
-          return new Promise(function (resolve, reject) {
-            var fr = new FileReader();
-            fr.onload = function () {
-              resolve(String(fr.result || ""));
-            };
-            fr.onerror = reject;
-            fr.readAsDataURL(file);
-          });
-        }
-
-        /** Vercel 등은 JSON 본문 ~4.5MB 초과 시 413 — 참조 이미지는 API 전송 전에 축소 */
-        var API_REF_MAX_EDGE = 1280;
-        var API_REF_JPEG_QUALITY = 0.82;
-
-        function fileToDataUrlForApi(file) {
-          return new Promise(function (resolve, reject) {
-            if (!file || !file.type || file.type.indexOf("image/") !== 0) {
-              reject(new Error("참조 파일이 이미지가 아닙니다."));
-              return;
-            }
-            if (file.type.indexOf("image/svg") === 0) {
-              fileToDataUrl(file).then(resolve).catch(reject);
-              return;
-            }
-            var objUrl = URL.createObjectURL(file);
-            var img = new Image();
-            img.onload = function () {
-              URL.revokeObjectURL(objUrl);
-              try {
-                var w = img.naturalWidth;
-                var h = img.naturalHeight;
-                if (!w || !h) {
-                  fileToDataUrl(file).then(resolve).catch(reject);
-                  return;
-                }
-                var scale = Math.min(1, API_REF_MAX_EDGE / Math.max(w, h));
-                var tw = Math.max(1, Math.round(w * scale));
-                var th = Math.max(1, Math.round(h * scale));
-                var canvas = document.createElement("canvas");
-                canvas.width = tw;
-                canvas.height = th;
-                var ctx = canvas.getContext("2d");
-                if (!ctx) {
-                  fileToDataUrl(file).then(resolve).catch(reject);
-                  return;
-                }
-                ctx.drawImage(img, 0, 0, tw, th);
-                resolve(canvas.toDataURL("image/jpeg", API_REF_JPEG_QUALITY));
-              } catch (err) {
-                fileToDataUrl(file).then(resolve).catch(reject);
-              }
-            };
-            img.onerror = function () {
-              URL.revokeObjectURL(objUrl);
-              fileToDataUrl(file).then(resolve).catch(reject);
-            };
-            img.src = objUrl;
-          });
-        }
 
         async function blobFromImageResult(j) {
           var src = j.url || null;
@@ -1662,7 +1715,7 @@
           var em = String(e.message || e);
           if (em.indexOf("413") !== -1 || em.indexOf("요청 실패 413") !== -1) {
             setError(
-              "요청 본문이 너무 큽니다(413). 참조 이미지를 한 장만 쓰거나 더 작은 파일로 시도하세요. 이미 자동 축소를 적용했는데도 나오면 해상도·프롬프트 길이를 줄여 주세요.",
+              "요청 본문이 너무 큽니다(413). 참조 이미지는 Supabase Storage 직업로드로만 보냅니다. 참조를 비우거나 업로드·버킷 설정을 확인해 주세요.",
             );
           } else {
             setError(em);
@@ -1679,6 +1732,7 @@
               resolution: job.resolution,
             };
             if (job.xai_api_key) body.xai_api_key = job.xai_api_key;
+            if (job.image_urls && job.image_urls.length) body.image_urls = job.image_urls;
             if (job.images && job.images.length) body.images = job.images;
             var r = await fetch(API_GROK, {
               method: "POST",
@@ -1698,6 +1752,7 @@
               resolution: job.resolution,
             };
             if (job.gemini_api_key) gbody.gemini_api_key = job.gemini_api_key;
+            if (job.image_urls && job.image_urls.length) gbody.image_urls = job.image_urls;
             if (job.images && job.images.length) gbody.images = job.images;
             var r2 = await fetch(API_GEMINI, {
               method: "POST",
@@ -1745,14 +1800,26 @@
             var provEl = document.querySelector('input[name="imageProvider"]:checked');
             var prov = provEl ? provEl.value : "gemini";
             var ref1 = grokImageFile && grokImageFile.files[0];
+            var ref2file = grokImageFile2 && grokImageFile2.files[0];
             var resolution = grokImageResolution ? grokImageResolution.value : "4k";
-            var images = [];
+            var image_urls = [];
             var aspect_ratio;
+            var hasRefs = !!(ref1 || ref2file);
+            var supabaseReady = window.supabase && typeof window.supabase.createClient === "function";
+            if (hasRefs && !supabaseReady) {
+              setError(
+                "참조 이미지는 Supabase Storage에 브라우저가 직접 올린 뒤에만 사용할 수 있습니다. Supabase 스크립트가 로드됐는지 확인하거나 참조를 비우고 텍스트만으로 생성하세요.",
+              );
+              return;
+            }
             try {
-              if (ref1) images.push(await fileToDataUrlForApi(ref1));
-              if (grokImageFile2 && grokImageFile2.files[0])
-                images.push(await fileToDataUrlForApi(grokImageFile2.files[0]));
               aspect_ratio = await resolveAspectRatioForApi(prov, ref1);
+              if (hasRefs) {
+                var sbc = getGrokStudioRefConfig();
+                var sb = window.supabase.createClient(sbc.url, sbc.anonKey);
+                if (ref1) image_urls.push(await uploadRefToSupabase(sb, sbc.bucket, ref1, 1));
+                if (ref2file) image_urls.push(await uploadRefToSupabase(sb, sbc.bucket, ref2file, 2));
+              }
             } catch (e) {
               setError(String(e.message || e));
               return;
@@ -1764,7 +1831,7 @@
               prompt: prompt,
               aspect_ratio: aspect_ratio,
               resolution: resolution,
-              images: images,
+              image_urls: image_urls.length ? image_urls : undefined,
               xai_api_key: xk || undefined,
               gemini_api_key: gk || undefined,
             };

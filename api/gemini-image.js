@@ -4,7 +4,8 @@
  * 환경: GEMINI_API_KEY (선택), GEMINI_IMAGE_MODEL (기본 gemini-3.1-flash-image-preview)
  * 본문: gemini_api_key 로 키 덮어쓰기 가능
  *
- * POST JSON: { prompt, aspect_ratio?, resolution?, images?: [dataUri...] }
+ * POST JSON: { prompt, aspect_ratio?, resolution?, images?: [dataUri...], image_urls?: [https...] }
+ * image_urls 가 있으면 서버가 URL에서 받아 인라인으로 넣습니다(Vercel 요청 본문은 URL만).
  */
 
 function cors(res) {
@@ -20,7 +21,7 @@ function resolveKey(body) {
   return (process.env.GEMINI_API_KEY || "").trim();
 }
 
-function readJsonBody(req, maxLen = 12 * 1024 * 1024) {
+function readJsonBody(req, maxLen = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let raw = "";
     req.on("data", (chunk) => {
@@ -48,6 +49,49 @@ function dataUriToPart(dataUri) {
   const data = m[2].replace(/\s/g, "");
   if (!data) return null;
   return { inlineData: { mimeType: mime, data } };
+}
+
+const REF_FETCH_MAX_BYTES = 25 * 1024 * 1024;
+const REF_FETCH_TIMEOUT_MS = 45000;
+
+function isHttpsImageUrl(s) {
+  const u = String(s || "").trim();
+  if (!u || u.length > 2048) return false;
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function fetchUrlToPart(imageUrl) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), REF_FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(imageUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: ctrl.signal,
+      headers: { Accept: "image/*,*/*" },
+    });
+    if (!r.ok) {
+      const e = new Error(`참조 이미지 URL 응답 오류: HTTP ${r.status}`);
+      e.status = 502;
+      throw e;
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > REF_FETCH_MAX_BYTES) {
+      const e = new Error("참조 이미지가 너무 큽니다(서버 한도).");
+      e.status = 413;
+      throw e;
+    }
+    let mime = (r.headers.get("content-type") || "").split(";")[0].trim() || "image/jpeg";
+    if (!mime.startsWith("image/")) mime = "image/jpeg";
+    return { inlineData: { mimeType: mime, data: buf.toString("base64") } };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 module.exports = async (req, res) => {
@@ -89,10 +133,20 @@ module.exports = async (req, res) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     const parts = [{ text: prompt }];
+    const urlList = Array.isArray(body.image_urls)
+      ? body.image_urls.filter((x) => typeof x === "string" && isHttpsImageUrl(x)).map((x) => x.trim())
+      : [];
     const imgs = Array.isArray(body.images) ? body.images.filter((x) => typeof x === "string") : [];
-    for (const uri of imgs.slice(0, 8)) {
-      const p = dataUriToPart(uri);
-      if (p) parts.push(p);
+
+    if (urlList.length) {
+      for (const u of urlList.slice(0, 8)) {
+        parts.push(await fetchUrlToPart(u));
+      }
+    } else {
+      for (const uri of imgs.slice(0, 8)) {
+        const p = dataUriToPart(uri);
+        if (p) parts.push(p);
+      }
     }
 
     const ar = String(body.aspect_ratio || "").trim();
@@ -172,6 +226,7 @@ module.exports = async (req, res) => {
     });
   } catch (e) {
     console.error("[api/gemini-image]", e);
-    res.status(500).json({ ok: false, error: e.message || "서버 오류" });
+    const st = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
+    res.status(st).json({ ok: false, error: e.message || "서버 오류" });
   }
 };
