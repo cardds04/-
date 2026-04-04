@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from montage_lib import montage_output_tag_from_preset, run_montage
+from montage_lib import montage_output_filename_stem_from_preset, run_montage
 
 
 def main() -> None:
@@ -25,7 +25,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=None,
-        help="출력 mp4. 생략 시 영상 폴더에 「폴더명_시네마|가로형|…」.mp4 (같은 이름 있으면 시각 접미사)",
+        help="출력 mp4. 생략 시 영상 폴더에 「폴더명_프리셋태그」.mp4 (같은 이름 있으면 시각 접미사)",
     )
     parser.add_argument("--window", type=float, default=4.0, help="피크 탐색 창 길이(초), 기본 4")
     parser.add_argument(
@@ -96,7 +96,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    out_tag = montage_output_tag_from_preset(
+    out_tag = montage_output_filename_stem_from_preset(
         {"layout": args.layout, "w": args.width, "h": args.height, "label": ""}
     )
 

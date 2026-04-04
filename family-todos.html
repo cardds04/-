@@ -2309,6 +2309,7 @@
           hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
           card.appendChild(hint);
           card.addEventListener("click", function () {
+            if (!isDone) playTodoCompleteDingDong();
             toggleComplete(sl, dstr, !isDone);
           });
           container.appendChild(card);
@@ -2348,6 +2349,7 @@
           hint.textContent = isDone ? "↩ 눌러서 되돌리기" : "👆 눌러서 완료";
           card.appendChild(hint);
           card.addEventListener("click", function () {
+            if (!isDone) playTodoCompleteDingDong();
             toggleDayScheduleComplete(sched, dstr, !isDone);
           });
           container.appendChild(card);
@@ -2522,6 +2524,35 @@
             div.appendChild(del);
             list.appendChild(div);
           });
+        }
+
+        function playTodoCompleteDingDong() {
+          try {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            var ctx = playTodoCompleteDingDong._ctx;
+            if (!ctx) {
+              ctx = new AC();
+              playTodoCompleteDingDong._ctx = ctx;
+            }
+            if (ctx.state === "suspended") ctx.resume();
+            var t0 = ctx.currentTime;
+            function chime(start, freqHz, lengthSec) {
+              var osc = ctx.createOscillator();
+              var g = ctx.createGain();
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(freqHz, start);
+              g.gain.setValueAtTime(0.0001, start);
+              g.gain.linearRampToValueAtTime(0.22, start + 0.025);
+              g.gain.linearRampToValueAtTime(0.0001, start + lengthSec);
+              osc.connect(g);
+              g.connect(ctx.destination);
+              osc.start(start);
+              osc.stop(start + lengthSec + 0.04);
+            }
+            chime(t0, 1046.5, 0.11);
+            chime(t0 + 0.13, 784, 0.16);
+          } catch (e) {}
         }
 
         async function toggleComplete(slot, dstr, checked) {

@@ -588,6 +588,16 @@ def sanitize_output_filename_tag(raw: str) -> str:
     return (s[:40] or "").strip()
 
 
+def montage_output_filename_stem_from_preset(p: dict) -> str:
+    """기본 mp4 파일명에 쓸 프리셋 부분: UI 라벨(한글·숫자) 우선, 없으면 montage_output_tag_from_preset."""
+    lab = str(p.get("label", "")).strip()
+    if lab:
+        slug = sanitize_output_filename_tag(lab.replace(" ", ""))
+        if slug:
+            return slug
+    return montage_output_tag_from_preset(p)
+
+
 def montage_output_tag_from_preset(p: dict) -> str:
     """기본 프리셋 라벨·해상도·레이아웃으로 저장 파일명 접두 태그."""
     ly = str(p.get("layout") or "").strip().lower()
@@ -627,7 +637,7 @@ def infer_output_path(
     videos_dir: Path | None,
     preset_tag: str | None = None,
 ) -> Path:
-    """영상 출력 폴더에 「폴더명_출력크기태그.mp4」로 저장(montage 접두 없음). 중복 시에만 시각 붙임."""
+    """영상이 있는 폴더에 「폴더명_프리셋이름.mp4」로 저장. 중복 시에만 시각 붙임."""
     if videos_dir is not None:
         base = Path(videos_dir).resolve()
         folder_key = base.name
@@ -1306,7 +1316,7 @@ def run_montage(
         if output_preset_tag and str(output_preset_tag).strip():
             tag = sanitize_output_filename_tag(str(output_preset_tag))
         if not tag:
-            tag = montage_output_tag_from_preset(
+            tag = montage_output_filename_stem_from_preset(
                 {"layout": layout_norm, "w": out_w, "h": out_h, "label": ""}
             )
         out = infer_output_path(videos, videos_dir, preset_tag=tag)

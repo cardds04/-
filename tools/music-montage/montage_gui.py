@@ -76,11 +76,10 @@ from montage_lib import (
     MONTAGE_CT_K_MAX,
     MONTAGE_CT_K_MIN,
     MONTAGE_CT_NEUTRAL_K,
-    montage_output_tag_from_preset,
+    montage_output_filename_stem_from_preset,
     list_sorted_videos,
     resolve_videos,
     run_montage,
-    sanitize_output_filename_tag,
 )
 from preview_frame_cache import (
     GRADE_EXPOSURE_PCT_MAX,
@@ -449,7 +448,7 @@ class MontageGuiApp:
 
     def _collect_ui_job(self) -> dict:
         pl = self._current_preset_dict()
-        tag = montage_output_tag_from_preset(pl)
+        tag = montage_output_filename_stem_from_preset(pl)
         return {
             "music_path": self.music_path_var.get().strip(),
             "videos_dir": self.videos_dir_var.get().strip() or None,
@@ -962,10 +961,35 @@ class MontageGuiApp:
         if HAS_DND:
             Label(top, text=" (드래그·드롭 가능)", fg="#666").pack(side=LEFT, padx=8)
 
-        wrap = Frame(self.root)
-        wrap.pack(fill=BOTH, expand=True)
-        self._main_scroll_canvas = Canvas(wrap, highlightthickness=0)
-        vsb = Scrollbar(wrap, orient=VERTICAL, command=self._main_scroll_canvas.yview)
+        main_h = Frame(self.root)
+        main_h.pack(fill=BOTH, expand=True)
+        main_h.grid_columnconfigure(0, weight=1)
+        main_h.grid_columnconfigure(1, weight=0, minsize=360)
+        main_h.grid_rowconfigure(0, weight=1)
+
+        right_sidebar = Frame(main_h)
+        right_sidebar.grid(row=0, column=1, sticky="nsew", padx=(8, 12), pady=(0, 8))
+        self._build_queue_section(right_sidebar, outer_padx=0)
+        self._build_log_section(right_sidebar, outer_padx=0)
+
+        btn_row = Frame(right_sidebar)
+        btn_row.pack(fill=X, pady=(8, 4), padx=0)
+        ttk.Button(btn_row, text="설정 저장", command=self._save_gui_settings).pack(
+            side=LEFT, padx=2
+        )
+        ttk.Button(btn_row, text="생성 예약", command=self._queue_current).pack(
+            side=LEFT, padx=2
+        )
+        ttk.Button(btn_row, text="만들기", command=self._launch_montage_thread).pack(
+            side=LEFT, padx=2
+        )
+        ttk.Button(btn_row, text="종료", command=self._on_close).pack(side=RIGHT, padx=(0, 4))
+
+        left_wrap = Frame(main_h)
+        left_wrap.grid(row=0, column=0, sticky="nsew")
+
+        self._main_scroll_canvas = Canvas(left_wrap, highlightthickness=0)
+        vsb = Scrollbar(left_wrap, orient=VERTICAL, command=self._main_scroll_canvas.yview)
         self._main_scroll_canvas.pack(side=LEFT, fill=BOTH, expand=True)
         vsb.pack(side=RIGHT, fill=Y)
         self._main_scroll_canvas.configure(yscrollcommand=vsb.set)
@@ -984,21 +1008,6 @@ class MontageGuiApp:
         self._build_preset_section(body)
         self._build_montage_options(body)
         self._build_auto_exposure_section(body)
-        self._build_queue_section(body)
-        self._build_log_section(body)
-
-        btn_row = Frame(self.root)
-        btn_row.pack(fill=X, padx=8, pady=8)
-        ttk.Button(btn_row, text="설정 저장", command=self._save_gui_settings).pack(
-            side=LEFT, padx=4
-        )
-        ttk.Button(btn_row, text="생성 예약", command=self._queue_current).pack(
-            side=LEFT, padx=4
-        )
-        ttk.Button(btn_row, text="만들기", command=self._launch_montage_thread).pack(
-            side=LEFT, padx=4
-        )
-        ttk.Button(btn_row, text="종료", command=self._on_close).pack(side=RIGHT, padx=4)
 
     def _build_inputs(self, parent: Frame) -> None:
         f = ttk.LabelFrame(parent, text="입력", padding=8)
@@ -1071,7 +1080,9 @@ class MontageGuiApp:
         ).pack()
         r4 = Frame(f)
         r4.pack(fill=X, pady=2)
-        Label(r4, text="출력 mp4 (선택):", width=14, anchor=W).pack(side=LEFT)
+        Label(r4, text="출력 mp4 (선택·비우면 영상 폴더):", width=30, anchor=W).pack(
+            side=LEFT
+        )
         ttk.Entry(r4, textvariable=self.output_path_var).pack(side=LEFT, fill=X, expand=True)
         ttk.Button(r4, text="저장 위치…", command=self.browse_output).pack(side=LEFT, padx=4)
         self._output_hint = Label(f, text="", fg="#444", wraplength=820, justify=LEFT)
@@ -1865,9 +1876,9 @@ class MontageGuiApp:
         """레거시 호출 호환(위젯은 _create_grade_spin_compat_widgets에서 생성)."""
         return
 
-    def _build_queue_section(self, parent: Frame) -> None:
+    def _build_queue_section(self, parent: Frame, *, outer_padx: int = 8) -> None:
         f = ttk.LabelFrame(parent, text="실행 대기열", padding=8)
-        f.pack(fill=X, padx=8, pady=6)
+        f.pack(fill=X, padx=outer_padx, pady=6)
         self._queue_list = Listbox(f, height=5, selectmode=EXTENDED)
         self._queue_list.pack(fill=X)
         qb = Frame(f)
@@ -1883,11 +1894,13 @@ class MontageGuiApp:
             text="「만들기」: 맨 위부터 순서대로 바로 이어서 실행합니다. 실행 중에도 대기열에 넣으면 앞 작업이 끝난 뒤 곧바로 이어집니다. 완료된 항목은 목록에서 빠집니다.",
             fg="#64748b",
             font=("", 9),
+            wraplength=320,
+            justify=LEFT,
         ).pack(anchor=W, pady=(4, 0))
 
-    def _build_log_section(self, parent: Frame) -> None:
+    def _build_log_section(self, parent: Frame, *, outer_padx: int = 8) -> None:
         f = ttk.LabelFrame(parent, text="로그", padding=8)
-        f.pack(fill=BOTH, expand=True, padx=8, pady=6)
+        f.pack(fill=BOTH, expand=True, padx=outer_padx, pady=6)
         self._log = scrolledtext.ScrolledText(f, height=12, state="disabled", wrap="word")
         self._log.pack(fill=BOTH, expand=True)
 
@@ -3931,7 +3944,7 @@ class MontageGuiApp:
     def _refresh_output_hint(self) -> None:
         snap = self._try_build_montage_snapshot()
         pl = self._current_preset_dict()
-        tag = montage_output_tag_from_preset(pl)
+        tag = montage_output_filename_stem_from_preset(pl)
         op = self.output_path_var.get().strip()
         if op:
             self._output_hint.config(text=f"출력: {op}")
@@ -3948,7 +3961,7 @@ class MontageGuiApp:
             self._output_hint.config(text="출력 힌트 계산 실패")
             return
         self._output_hint.config(
-            text=f"자동 출력 힌트: {hint}  (태그: {sanitize_output_filename_tag(tag)})"
+            text=f"자동 출력 힌트: {hint}  (프리셋 파일명: {tag})"
         )
 
     def _log_line(self, s: str) -> None:
@@ -3988,7 +4001,7 @@ class MontageGuiApp:
         out_s = (job.get("output_path") or "").strip()
         if out_s:
             return Path(out_s).name
-        tag = job.get("_output_preset_tag") or montage_output_tag_from_preset(
+        tag = job.get("_output_preset_tag") or montage_output_filename_stem_from_preset(
             self._preset_for_montage_job(job)
         )
         vd = job.get("videos_dir")
@@ -4301,7 +4314,9 @@ class MontageGuiApp:
                 content_h_opt = int(raw_ch)
             except (TypeError, ValueError):
                 content_h_opt = None
-        tag = job.get("_output_preset_tag") or montage_output_tag_from_preset(preset)
+        tag = job.get("_output_preset_tag") or montage_output_filename_stem_from_preset(
+            preset
+        )
 
         logo = (job.get("logo_path") or "").strip()
         logo_p = Path(logo) if logo else None
