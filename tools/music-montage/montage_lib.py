@@ -710,6 +710,56 @@ def resolve_music_file(music_path: Path) -> Path:
     return random.choice(files)
 
 
+def list_montage_music_pool(music_path: Path) -> list[Path]:
+    """
+    영상이 음악보다 길 때 이어붙일 후보 곡 목록.
+    폴더면 그 안의 음악 전부, 단일 파일이면 같은 폴더 안의 음악 전부(형제 파일).
+    """
+    p = music_path.expanduser().resolve()
+    if p.is_dir():
+        folder = p
+    else:
+        folder = p.parent
+    files = [
+        x
+        for x in folder.iterdir()
+        if x.is_file()
+        and not is_skipped_media_filename(x.name)
+        and x.suffix.lower() in AUDIO_EXTS
+    ]
+    files.sort(key=lambda x: x.name.lower())
+    return files
+
+
+def ffmpeg_concat_wav_files(parts: list[Path], out_wav: Path) -> None:
+    """동일 포맷(PCM mono) WAV 를 이어붙여 하나의 WAV 로 (복사만, 재인코딩 없음)."""
+    if not parts:
+        raise ValueError("concat 할 WAV 가 없습니다.")
+    out_wav = Path(out_wav)
+    lst = out_wav.parent / f".{out_wav.stem}_concat_list.txt"
+    lines: list[str] = []
+    for part in parts:
+        ap = part.resolve()
+        s = str(ap).replace("'", "'\\''")
+        lines.append(f"file '{s}'")
+    lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(lst),
+            "-c",
+            "copy",
+            str(out_wav),
+        ]
+    )
+
+
 def resolve_videos(videos_dir: Path | None, video_files: list[Path] | None) -> list[Path]:
     if video_files:
         out: list[Path] = []
@@ -774,6 +824,7 @@ def compute_cut_times(
 ) -> list[float]:
     """
     각 클립 구간은 음악 타임라인에서 [w0, w1] (길이 최대 window_sec).
+    마지막 클립도 동일하게 최대 window_sec(음악 끝이 더 가깝으면 그때까지)로 끝낸다.
     컷(다음 클립 시작)은 **이 구간 안에서만** 보되, 기본은 윈도우 시작 기준
     peak_band_start 초 ~ w1 까지(예: 4초 창이면 3~4초 구간)에서 RMS 최대 지점.
     너무 이른 피크로 클립이 짧아지는 것을 줄입니다.
@@ -819,7 +870,15 @@ def compute_cut_times(
             cuts.append(a + (duration - a) * k / remain)
     if len(cuts) < num_clips + 1:
         cuts.append(duration)
-    cuts[-1] = duration
+    # 이전에는 마지막 컷을 항상 음악 끝(duration)으로 고정해서, 마지막 클립 구간만
+    # 앞 클립들(최대 window_sec)과 달리 음악 끝까지 길어지고 FFmpeg -t 가 그만큼 커짐.
+    if len(cuts) >= 2:
+        cap_end = cuts[-2] + float(window_sec)
+        cuts[-1] = min(float(duration), cap_end)
+        if cuts[-1] <= cuts[-2] + 1e-6:
+            cuts[-1] = min(float(duration), cuts[-2] + max(float(min_seg), 1e-3))
+    else:
+        cuts[-1] = float(duration)
     return cuts
 
 
@@ -1663,9 +1722,46 @@ def run_montage(
             except OSError:
                 log(f"로고: 경로 오류 — 생략 ({logo_path})")
         tb = max(0.0, float(tail_black_sec))
+        need_audio_sec = float(vlen) + tb
+        first_music_dur = float(len(y)) / float(sr)
+        music_for_mux: Path = music_file
+        if first_music_dur + 0.08 < need_audio_sec:
+            pool = list_montage_music_pool(music_src)
+            if not pool:
+                pool = [music_file]
+            parts_wav: list[Path] = [wav]
+            total_a = first_music_dur
+            seq_names = [music_file.name]
+            last_resolved = music_file.resolve()
+            pick_guard = 0
+            while total_a < need_audio_sec - 0.05 and pick_guard < 100:
+                pick_guard += 1
+                alt = [p for p in pool if p.resolve() != last_resolved] or pool
+                nxt = random.choice(alt)
+                wextra = tmp / f"music_chain_{pick_guard:03d}.wav"
+                extract_mono_wav(nxt, wextra)
+                try:
+                    td = ffprobe_duration(wextra)
+                except (OSError, ValueError, RuntimeError):
+                    td = 0.0
+                if td < 1e-3:
+                    log(f"경고: 이어붙일 음악 길이 확인 실패 ({nxt.name}) — 중단")
+                    break
+                parts_wav.append(wextra)
+                total_a += td
+                seq_names.append(nxt.name)
+                last_resolved = nxt.resolve()
+            if len(parts_wav) > 1:
+                chained = tmp / "music_chain_concat.wav"
+                ffmpeg_concat_wav_files(parts_wav, chained)
+                music_for_mux = chained
+                log(
+                    f"영상(본문+끝검정 약 {need_audio_sec:.1f}s)이 첫 곡({first_music_dur:.1f}s)보다 길어 "
+                    f"음악 이어붙임: {' → '.join(seq_names)} (합계 약 {total_a:.1f}s)"
+                )
         mux_final_output(
             vconcat,
-            music_file,
+            music_for_mux,
             out,
             content_duration=vlen,
             width=out_w,
