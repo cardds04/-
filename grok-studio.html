@@ -902,8 +902,8 @@
                 <code>\1</code> <code>\2</code>로 각 참조를 가리킬 수 있습니다.
                 <strong>클립보드</strong>는 해당 드롭 영역 위에 마우스를 올린 뒤 붙여넣기(Ctrl+V) 하면 됩니다.
                 참조가 있으면 <strong>Supabase Storage에 브라우저가 직접 업로드</strong>한 뒤 공개 URL만 API로 보냅니다. Supabase를 쓸 수 없으면 참조와 함께 생성할 수 없습니다(원본을 Vercel 본문으로 보내지 않습니다).
-                <strong>참조 2</strong>에는 5×5 격자(1~25번, 왼쪽→오른쪽·위→아래)가 반투명으로 겹쳐 보입니다. 프롬프트에
-                <code>5번 공간</code>·<code>12번 칸</code>처럼 쓰면 API로 보낼 때 정규화된 위치(행·열·비율)로 바꿉니다.
+                <strong>참조 1·2</strong> 미리보기에는 5×5 격자(1~25번, 왼쪽→오른쪽·위→아래)가 반투명으로 겹쳐 보입니다.
+                <strong>참조 2</strong>를 넣은 경우에만 프롬프트의 <code>5번 공간</code>·<code>12번 칸</code> 같은 표현을 API로 보낼 때 정규화된 위치(행·열·비율)로 바꿉니다.
               </p>
               <div class="row row--2 row--grok-ref-drops">
                 <div>
@@ -917,7 +917,10 @@
                     <input type="file" id="grokImageFile" accept="image/*" hidden />
                     <span class="drop__hint grok-ref-drop-hint">선택 · 드롭 · 붙여넣기</span>
                     <div class="grok-ref-preview" id="grokImagePreview" hidden>
-                      <img id="grokImagePreviewImg" alt="" decoding="async" />
+                      <div class="grok-ref-preview__stack">
+                        <img id="grokImagePreviewImg" alt="" decoding="async" />
+                        <div class="grok-ref-grid-overlay" id="grokRef1GridOverlay" aria-hidden="true"></div>
+                      </div>
                     </div>
                     <span class="drop__name grok-ref-file-name" id="grokImageFileName"></span>
                   </label>
@@ -932,7 +935,7 @@
                   <label class="drop drop--grok-ref" id="grokImageDropzone2" tabindex="0" aria-label="참조 이미지 2">
                     <input type="file" id="grokImageFile2" accept="image/*" hidden />
                     <span class="drop__hint grok-ref-drop-hint">선택 · 드롭 · 붙여넣기</span>
-                    <div class="grok-ref-preview grok-ref-preview--ref2" id="grokImagePreview2" hidden>
+                    <div class="grok-ref-preview" id="grokImagePreview2" hidden>
                       <div class="grok-ref-preview__stack">
                         <img id="grokImagePreviewImg2" alt="" decoding="async" />
                         <div class="grok-ref-grid-overlay" id="grokRef2GridOverlay" aria-hidden="true"></div>
@@ -1118,9 +1121,7 @@
         var grokImageFile2 = document.getElementById("grokImageFile2");
         var grokRefPreviewUrls = { 1: null, 2: null };
 
-        function initGrokRef2GridOverlay() {
-          var ov = document.getElementById("grokRef2GridOverlay");
-          if (!ov) return;
+        function buildGrokRefGridOverlaySvgHtml() {
           var parts = [];
           parts.push(
             '<svg class="grok-ref-grid-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">',
@@ -1162,9 +1163,17 @@
             );
           }
           parts.push("</svg>");
-          ov.innerHTML = parts.join("");
+          return parts.join("");
         }
-        initGrokRef2GridOverlay();
+
+        function initGrokRefGridOverlays() {
+          var html = buildGrokRefGridOverlaySvgHtml();
+          ["grokRef1GridOverlay", "grokRef2GridOverlay"].forEach(function (id) {
+            var ov = document.getElementById(id);
+            if (ov) ov.innerHTML = html;
+          });
+        }
+        initGrokRefGridOverlays();
 
         function grokRef2CellBounds(n) {
           if (n < 1 || n > 25) return null;
