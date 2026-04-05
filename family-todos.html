@@ -1047,6 +1047,36 @@
         border-color: #f59e0b;
         background: linear-gradient(180deg, #fef3c7, #fff);
       }
+      .main-card.main-card-praise.main-card-todo {
+        position: relative;
+      }
+      button.main-card-praise-remove {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 4;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 50%;
+        border: none;
+        background: rgba(15, 23, 42, 0.28);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-tap-highlight-color: transparent;
+      }
+      button.main-card-praise-remove:hover {
+        background: rgba(220, 38, 38, 0.92);
+      }
+      button.main-card-praise-remove:active {
+        transform: scale(0.94);
+      }
       .main-extra-btns {
         display: flex;
         flex-wrap: wrap;
@@ -1943,6 +1973,29 @@
           var armKey = "praiseP:" + row.id;
           var card = document.createElement("div");
           card.className = "main-card main-card-praise main-card-todo";
+          var rmBtn = document.createElement("button");
+          rmBtn.type = "button";
+          rmBtn.className = "main-card-praise-remove";
+          rmBtn.setAttribute("aria-label", "칭찬 스티커 삭제");
+          rmBtn.textContent = "×";
+          rmBtn.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            if (mainCardArm && mainCardArm.cardEl === card) disarmMainCard();
+            supabase
+              .from("family_praise_pending")
+              .delete()
+              .eq("id", row.id)
+              .then(function (res) {
+                if (res.error) {
+                  console.error(res.error);
+                  $("sbStatus").textContent = "Supabase 오류: " + (res.error.message || res.error);
+                  return;
+                }
+                $("sbStatus").textContent = "";
+                refresh();
+              });
+          });
+          card.appendChild(rmBtn);
           var em = document.createElement("div");
           em.className = "emoji";
           em.textContent = "💛";
