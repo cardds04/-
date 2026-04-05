@@ -1,7 +1,18 @@
--- 칭찬: 부모 insert → 오늘 할 일(pending)에만 스티커, 스탬프 변동 없음.
--- 아이가 완료(consume) → claim insert 시 스탬프 +1. claim 삭제 시 스탬프 -1.
+-- 기존 DB: pending 에 걸린 스탬프 트리거 제거, claim + consume RPC 정리
 
-create extension if not exists "pgcrypto";
+do $t$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'family_praise_claim'
+  ) then
+    drop trigger if exists trg_family_wallet_on_praise_claim on public.family_praise_claim;
+    drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
+  end if;
+end $t$;
+
+drop trigger if exists trg_family_wallet_on_praise_pending_ins on public.family_praise_pending;
+drop trigger if exists trg_family_wallet_on_praise_pending_del on public.family_praise_pending;
 
 create table if not exists public.family_praise_pending (
   id uuid primary key default gen_random_uuid(),
@@ -26,16 +37,26 @@ create policy "family_praise_pending_all" on public.family_praise_pending for al
 drop policy if exists "family_praise_claim_all" on public.family_praise_claim;
 create policy "family_praise_claim_all" on public.family_praise_claim for all to anon, authenticated using (true) with check (true);
 
-drop trigger if exists trg_family_wallet_on_praise_pending_ins on public.family_praise_pending;
-drop trigger if exists trg_family_wallet_on_praise_pending_del on public.family_praise_pending;
+do $mig$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'family_praise_offer'
+  ) then
+    insert into public.family_praise_pending (kid_id, for_date, created_at)
+    select kid_id, for_date, created_at from public.family_praise_offer;
+    drop table public.family_praise_offer;
+  end if;
+end $mig$;
 
 drop trigger if exists trg_family_wallet_on_praise_claim on public.family_praise_claim;
+drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
+
 create trigger trg_family_wallet_on_praise_claim
   after insert on public.family_praise_claim
   for each row
   execute function public.family_bump_wallet_on_complete ();
 
-drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
 create trigger trg_family_wallet_on_praise_claim_del
   after delete on public.family_praise_claim
   for each row

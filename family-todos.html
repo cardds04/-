@@ -1663,7 +1663,7 @@
                 <strong>5. 한눈에 정리</strong><br />
                 • <strong>기본 투두 + 요일</strong> = 매주 반복<br />
                 • <strong>특정날짜스케줄추가</strong> = 선택한 하루에만 나오는 일<br />
-                • <strong>👏 칭찬합니다</strong> (화면 맨아래) — 아이 선택 후 누르고 부모 비밀번호를 입력하면 「오늘 한 일」에 칭찬 카드가 생깁니다. 아이가 두 번 눌러 받으면 투두와 같이 스탬프 1개가 쌓이고, 두 번 다시 누르면 되돌릴 수 있어요.
+                • <strong>👏 칭찬합니다</strong> (화면 맨아래) — 아이 선택 후 비밀번호를 입력하면 「오늘 할 일」에 칭찬 스티커가 생겨요. 아이가 스티커를 <strong>두 번 누르면</strong> 「오늘 한 일」로 내려가며 <strong>스탬프 +1</strong> 이에요. 완료된 스티커를 두 번 누르면 다시 오늘 할 일로 되돌리며 스탬프 -1.
               </p>
               <p class="side-panel-text">
                 <strong>6. 데이터</strong><br />
@@ -1781,7 +1781,7 @@
           daySchedulesSelected: [],
           dayScheduleCompletionsToday: [],
           dayScheduleTablesOk: false,
-          praiseOffersToday: [],
+          praisePendingToday: [],
           praiseClaimsToday: [],
           praiseTablesOk: true,
           mainExploreMode: null,
@@ -1856,30 +1856,25 @@
           };
         }
 
-        async function togglePraiseClaim(kidId, dstr, claim) {
-          if (claim) {
-            var ins = await supabase.from("family_praise_claim").insert({ kid_id: kidId, for_date: dstr });
-            if (ins.error) throw ins.error;
-          } else {
-            var del = await supabase
-              .from("family_praise_claim")
-              .delete()
-              .eq("kid_id", kidId)
-              .eq("for_date", dstr);
-            if (del.error) throw del.error;
-          }
-          await refresh();
-        }
-
-        function handleMainPraiseTap(card, armKey, kidId, dstr, isClaimed) {
-          var hintArmed = isClaimed ? "↩ 한 번 더 눌러 되돌리기" : "👆 한 번 더 눌러 받기";
+        function handleMainPraisePendingTap(card, armKey, pendingId) {
+          var hintNormal = "👆 두 번 눌러 오늘 한 일로 (스탬프 +1)";
+          var hintArmed = "👆 한 번 더 눌러 완료";
           if (mainCardArm && mainCardArm.key === armKey) {
             clearTimeout(mainCardArm.timer);
             mainCardArm = null;
-            if (!isClaimed) playTodoCompleteDingDong();
-            togglePraiseClaim(kidId, dstr, !isClaimed).catch(function (err) {
-              console.error(err);
-              $("sbStatus").textContent = "Supabase 오류: " + (err.message || err);
+            supabase.rpc("family_consume_praise_pending", { p_pending_id: pendingId }).then(function (res) {
+              if (res.error) {
+                console.error(res.error);
+                $("sbStatus").textContent = "Supabase 오류: " + (res.error.message || res.error);
+                return;
+              }
+              if (res.data === false) {
+                $("sbStatus").textContent = "이미 처리된 스티커예요. 새로고침해 보세요.";
+              } else {
+                $("sbStatus").textContent = "";
+                playTodoCompleteDingDong();
+              }
+              refresh();
             });
             return;
           }
@@ -1895,19 +1890,61 @@
           };
         }
 
-        function appendPraiseCard(container, kid, dstr, isClaimed) {
-          if (!kid) return;
-          var armKey = "praise:" + kid.id + ":" + dstr + ":" + (isClaimed ? "1" : "0");
+        function handleMainPraiseClaimTap(card, armKey, claimRow, kidId, dstr) {
+          var hintNormal = "↩ 두 번 눌러 되돌리기 (스탬프 -1)";
+          var hintArmed = "↩ 한 번 더 눌러 되돌리기";
+          if (mainCardArm && mainCardArm.key === armKey) {
+            clearTimeout(mainCardArm.timer);
+            mainCardArm = null;
+            supabase
+              .from("family_praise_claim")
+              .delete()
+              .eq("id", claimRow.id)
+              .then(function (delRes) {
+                if (delRes.error) {
+                  console.error(delRes.error);
+                  $("sbStatus").textContent = "Supabase 오류: " + (delRes.error.message || delRes.error);
+                  return;
+                }
+                supabase
+                  .from("family_praise_pending")
+                  .insert({ kid_id: kidId, for_date: dstr })
+                  .then(function (insRes) {
+                    if (insRes.error) {
+                      console.error(insRes.error);
+                      $("sbStatus").textContent = "Supabase 오류: " + (insRes.error.message || insRes.error);
+                      return;
+                    }
+                    $("sbStatus").textContent = "";
+                    refresh();
+                  });
+              });
+            return;
+          }
+          disarmMainCard();
+          var hint = card.querySelector(".main-card-tap-hint");
+          if (hint) hint.textContent = hintArmed;
+          card.classList.add("main-card-armed");
+          mainCardArm = {
+            key: armKey,
+            cardEl: card,
+            hintNormal: hintNormal,
+            timer: setTimeout(disarmMainCard, 2800),
+          };
+        }
+
+        function appendPraisePendingCard(container, row, kid, dstr) {
+          if (!kid || !row || !row.id) return;
+          var armKey = "praiseP:" + row.id;
           var card = document.createElement("div");
-          card.className =
-            "main-card main-card-praise" + (isClaimed ? " main-card-praise-done main-card-done" : " main-card-todo");
+          card.className = "main-card main-card-praise main-card-todo";
           var em = document.createElement("div");
           em.className = "emoji";
           em.textContent = "💛";
           card.appendChild(em);
           var tit = document.createElement("div");
           tit.className = "title";
-          tit.textContent = isClaimed ? "칭찬해요 (받았어요!)" : "칭찬해요";
+          tit.textContent = "칭찬 스티커";
           card.appendChild(tit);
           var kn = document.createElement("div");
           kn.className = "kid";
@@ -1917,14 +1954,47 @@
           tag.className = "kid";
           tag.style.color = "#b45309";
           tag.style.fontSize = "0.72rem";
-          tag.textContent = "👏 부모님 칭찬 스탬프";
+          tag.textContent = "👏 부모님 칭찬 · 완료하면 스탬프 +1";
           card.appendChild(tag);
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
-          hint.textContent = isClaimed ? "↩ 두 번 눌러 되돌리기" : "👆 두 번 눌러 칭찬 스탬프";
+          hint.textContent = "👆 두 번 눌러 오늘 한 일로 (스탬프 +1)";
           card.appendChild(hint);
           card.addEventListener("click", function () {
-            handleMainPraiseTap(card, armKey, kid.id, dstr, isClaimed);
+            handleMainPraisePendingTap(card, armKey, row.id);
+          });
+          container.appendChild(card);
+        }
+
+        function appendPraiseClaimDoneCard(container, claimRow, kid, dstr) {
+          if (!kid || !claimRow || !claimRow.id) return;
+          var armKey = "praiseC:" + claimRow.id;
+          var card = document.createElement("div");
+          card.className = "main-card main-card-praise main-card-praise-done main-card-done";
+          var em = document.createElement("div");
+          em.className = "emoji";
+          em.textContent = "💛";
+          card.appendChild(em);
+          var tit = document.createElement("div");
+          tit.className = "title";
+          tit.textContent = "칭찬 스티커 (완료)";
+          card.appendChild(tit);
+          var kn = document.createElement("div");
+          kn.className = "kid";
+          kn.textContent = kid.name;
+          card.appendChild(kn);
+          var tag = document.createElement("div");
+          tag.className = "kid";
+          tag.style.color = "#047857";
+          tag.style.fontSize = "0.72rem";
+          tag.textContent = "🎟 스탬프 +1 반영됨";
+          card.appendChild(tag);
+          var hint = document.createElement("div");
+          hint.className = "main-card-tap-hint";
+          hint.textContent = "↩ 두 번 눌러 되돌리기 (스탬프 -1)";
+          card.appendChild(hint);
+          card.addEventListener("click", function () {
+            handleMainPraiseClaimTap(card, armKey, claimRow, kid.id, dstr);
           });
           container.appendChild(card);
         }
@@ -2350,18 +2420,18 @@
               state.dayScheduleCompletionsToday = dscToday.data || [];
             }
             state.dayScheduleTablesOk = !schedDbWarn;
-            state.praiseOffersToday = [];
+            state.praisePendingToday = [];
             state.praiseClaimsToday = [];
             state.praiseTablesOk = true;
-            var prOff = await supabase.from("family_praise_offer").select("*").eq("for_date", todayStr);
-            if (prOff.error) {
-              if (isMissingPraiseTablesError(prOff.error)) {
+            var prPen = await supabase.from("family_praise_pending").select("*").eq("for_date", todayStr);
+            if (prPen.error) {
+              if (isMissingPraiseTablesError(prPen.error)) {
                 state.praiseTablesOk = false;
               } else {
-                throw prOff.error;
+                throw prPen.error;
               }
             } else {
-              state.praiseOffersToday = prOff.data || [];
+              state.praisePendingToday = prPen.data || [];
               var prCl = await supabase.from("family_praise_claim").select("*").eq("for_date", todayStr);
               if (prCl.error) {
                 if (isMissingPraiseTablesError(prCl.error)) state.praiseTablesOk = false;
@@ -2636,54 +2706,61 @@
             if (done) doneList.push({ kind: "schedule", sched: sch, kid: kid });
             else pending.push({ kind: "schedule", sched: sch, kid: kid });
           });
-          var praiseOffer =
-            state.selectedKidId &&
-            state.praiseTablesOk &&
-            (state.praiseOffersToday.find(function (o) {
-              return String(o.kid_id) === String(state.selectedKidId) && String(o.for_date) === dstr;
-            }) ||
-              null);
-          if (!pending.length && !doneList.length && !praiseOffer) {
+          var praisePendingRows =
+            state.selectedKidId && state.praiseTablesOk
+              ? state.praisePendingToday.filter(function (o) {
+                  return String(o.kid_id) === String(state.selectedKidId) && String(o.for_date) === dstr;
+                })
+              : [];
+          var praiseClaimRows =
+            state.selectedKidId && state.praiseTablesOk
+              ? state.praiseClaimsToday.filter(function (o) {
+                  return String(o.kid_id) === String(state.selectedKidId) && String(o.for_date) === dstr;
+                })
+              : [];
+          var hasPraisePending = praisePendingRows.length > 0;
+          var hasPraiseDone = praiseClaimRows.length > 0;
+          if (!pending.length && !doneList.length && !hasPraisePending && !hasPraiseDone) {
             gridP.innerHTML =
               '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">부모님 페이지에서 요일 배치나 「특정날짜스케줄추가」로 넣어 주세요.</small></p>';
             emptyD.classList.remove("hidden");
             emptyD.textContent = "할 일이 생기면 완료한 뒤 여기에 모여요";
             return;
           }
-          if (pending.length === 0) {
+          var pk = kidById(state.selectedKidId);
+          var showPendingEmpty = pending.length === 0 && !hasPraisePending;
+          if (showPendingEmpty) {
             emptyP.classList.remove("hidden");
             if (filtered.length === 0 && daySch.length === 0) {
-              emptyP.textContent = praiseOffer
-                ? "오늘은 등록된 할 일이 없어요. 아래 칭찬을 확인해 보세요! 💛"
-                : "오늘 할 일이 없어요 🌟";
+              emptyP.textContent = "오늘 할 일이 없어요 🌟";
             } else {
               emptyP.textContent = "오늘 할 일을 모두 끝냈어요 🎉";
             }
           } else {
+            emptyP.classList.add("hidden");
             pending.forEach(function (item) {
               if (item.kind === "slot")
                 appendMainTodoCard(gridP, item.sl, item.tpl, item.kid, dstr, false);
               else appendMainScheduleCard(gridP, item.sched, item.kid, dstr, false);
             });
+            praisePendingRows.forEach(function (row) {
+              appendPraisePendingCard(gridP, row, pk, dstr);
+            });
           }
-          if (doneList.length === 0) {
-            if (!praiseOffer) {
-              emptyD.classList.remove("hidden");
-              emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 두 번 눌러 완료해 보세요!";
-            }
+          var showDoneEmpty = doneList.length === 0 && !hasPraiseDone;
+          if (showDoneEmpty) {
+            emptyD.classList.remove("hidden");
+            emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 두 번 눌러 완료해 보세요!";
           } else {
+            emptyD.classList.add("hidden");
             doneList.forEach(function (item) {
               if (item.kind === "slot")
                 appendMainTodoCard(gridD, item.sl, item.tpl, item.kid, dstr, true);
               else appendMainScheduleCard(gridD, item.sched, item.kid, dstr, true);
             });
-          }
-          if (praiseOffer) {
-            emptyD.classList.add("hidden");
-            var claimed = state.praiseClaimsToday.some(function (c) {
-              return String(c.kid_id) === String(state.selectedKidId) && String(c.for_date) === dstr;
+            praiseClaimRows.forEach(function (row) {
+              appendPraiseClaimDoneCard(gridD, row, pk, dstr);
             });
-            appendPraiseCard(gridD, kidById(state.selectedKidId), dstr, claimed);
           }
         }
 
@@ -3469,7 +3546,7 @@
           }
           if (!state.praiseTablesOk) {
             alert(
-              "칭찬 기능 DB가 아직 없어요. Supabase SQL 에디터에서 supabase/migrations/20260404130000_family_praise_stamps.sql 을 실행해 주세요."
+              "칭찬 기능 DB가 아직 없어요. Supabase SQL에서 supabase/migrations/20260404130000_family_praise_stamps.sql 을 실행하고, 예전에 구버전만 쓰셨다면 20260404200000_family_praise_multi.sql 도 이어서 실행해 주세요."
             );
             return;
           }
@@ -3477,7 +3554,7 @@
           var gt = $("gateTitle");
           var gs = $("gateSubtitle");
           if (gt) gt.textContent = "👏 칭찬 스탬프 열기";
-          if (gs) gs.textContent = "부모님 비밀번호를 입력하면 오늘 한 일에 「칭찬해요」가 나타나요.";
+          if (gs) gs.textContent = "비밀번호 입력 시 「오늘 할 일」에 칭찬 스티커가 생겨요. (여러 번 가능)";
           $("gateErr").innerHTML = "";
           $("gatePw").value = "";
           fixShowRoot("gate");
@@ -3509,10 +3586,7 @@
               await refresh();
               return;
             }
-            var r = await supabase.from("family_praise_offer").upsert(
-              { kid_id: kd, for_date: todayStr },
-              { onConflict: "kid_id,for_date" }
-            );
+            var r = await supabase.from("family_praise_pending").insert({ kid_id: kd, for_date: todayStr });
             if (r.error) {
               $("gateErr").innerHTML =
                 '<div class="err">저장 오류: ' + escapeHtml(r.error.message || String(r.error)) + "</div>";
@@ -3520,7 +3594,7 @@
               var gt = $("gateTitle");
               var gs = $("gateSubtitle");
               if (gt) gt.textContent = "👏 칭찬 스탬프 열기";
-              if (gs) gs.textContent = "부모님 비밀번호를 입력하면 오늘 한 일에 「칭찬해요」가 나타나요.";
+              if (gs) gs.textContent = "비밀번호 입력 시 「오늘 할 일」에 칭찬 스티커가 생겨요. (여러 번 가능)";
               fixShowRoot("gate");
               return;
             }
