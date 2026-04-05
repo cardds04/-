@@ -1,18 +1,5 @@
--- 기존 DB: pending 에 걸린 스탬프 트리거 제거, claim + consume RPC 정리
-
-do $t$
-begin
-  if exists (
-    select 1 from information_schema.tables
-    where table_schema = 'public' and table_name = 'family_praise_claim'
-  ) then
-    drop trigger if exists trg_family_wallet_on_praise_claim on public.family_praise_claim;
-    drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
-  end if;
-end $t$;
-
-drop trigger if exists trg_family_wallet_on_praise_pending_ins on public.family_praise_pending;
-drop trigger if exists trg_family_wallet_on_praise_pending_del on public.family_praise_pending;
+-- 칭찬 기능 전체(또는 구 DB 정리). 20260404130000 을 안 돌리고 이 파일만 실행해도 됩니다.
+-- 주의: 테이블을 먼저 만든 뒤에만 DROP TRIGGER 가능 (없는 테이블에 DROP 하면 42P01)
 
 create table if not exists public.family_praise_pending (
   id uuid primary key default gen_random_uuid(),
@@ -27,6 +14,11 @@ create table if not exists public.family_praise_claim (
   for_date date not null,
   claimed_at timestamptz not null default now()
 );
+
+drop trigger if exists trg_family_wallet_on_praise_claim on public.family_praise_claim;
+drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
+drop trigger if exists trg_family_wallet_on_praise_pending_ins on public.family_praise_pending;
+drop trigger if exists trg_family_wallet_on_praise_pending_del on public.family_praise_pending;
 
 alter table public.family_praise_pending enable row level security;
 alter table public.family_praise_claim enable row level security;
@@ -49,9 +41,6 @@ begin
   end if;
 end $mig$;
 
-drop trigger if exists trg_family_wallet_on_praise_claim on public.family_praise_claim;
-drop trigger if exists trg_family_wallet_on_praise_claim_del on public.family_praise_claim;
-
 create trigger trg_family_wallet_on_praise_claim
   after insert on public.family_praise_claim
   for each row
@@ -69,17 +58,18 @@ create or replace function public.family_consume_praise_pending (p_pending_id uu
   set search_path = public
 as $$
 declare
-  n int;
+  v_kid uuid;
+  v_date date;
 begin
+  delete from public.family_praise_pending
+  where id = p_pending_id
+  returning kid_id, for_date into v_kid, v_date;
+  if v_kid is null then
+    return false;
+  end if;
   insert into public.family_praise_claim (kid_id, for_date)
-  select kid_id, for_date
-  from (
-    delete from public.family_praise_pending
-    where id = p_pending_id
-    returning kid_id, for_date
-  ) sub;
-  get diagnostics n = row_count;
-  return n > 0;
+  values (v_kid, v_date);
+  return true;
 end;
 $$;
 

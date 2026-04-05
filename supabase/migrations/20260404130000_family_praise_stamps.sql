@@ -48,17 +48,18 @@ create or replace function public.family_consume_praise_pending (p_pending_id uu
   set search_path = public
 as $$
 declare
-  n int;
+  v_kid uuid;
+  v_date date;
 begin
+  delete from public.family_praise_pending
+  where id = p_pending_id
+  returning kid_id, for_date into v_kid, v_date;
+  if v_kid is null then
+    return false;
+  end if;
   insert into public.family_praise_claim (kid_id, for_date)
-  select kid_id, for_date
-  from (
-    delete from public.family_praise_pending
-    where id = p_pending_id
-    returning kid_id, for_date
-  ) sub;
-  get diagnostics n = row_count;
-  return n > 0;
+  values (v_kid, v_date);
+  return true;
 end;
 $$;
 

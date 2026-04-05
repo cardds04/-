@@ -1865,7 +1865,12 @@
             supabase.rpc("family_consume_praise_pending", { p_pending_id: pendingId }).then(function (res) {
               if (res.error) {
                 console.error(res.error);
-                $("sbStatus").textContent = "Supabase 오류: " + (res.error.message || res.error);
+                var em = res.error.message || String(res.error);
+                $("sbStatus").textContent =
+                  /duplicate|23505|unique constraint/i.test(em)
+                    ? "같은 날 스티커를 여러 개 쓰려면 DB 마이그레이션(20260404210000)이 필요해요. 적용 후 새로고침해 주세요."
+                    : "Supabase 오류: " + em;
+                refresh();
                 return;
               }
               if (res.data === false) {
