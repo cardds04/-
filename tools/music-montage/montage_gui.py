@@ -119,6 +119,10 @@ GRADE_THUMB_MAX = 128
 GRADE_THUMB_STRIP_MIN_W = 160
 GRADE_THUMB_STRIP_MAX_W = 520
 GRADE_THUMB_STRIP_CANVAS_W = GRADE_THUMB_STRIP_MIN_W
+
+# 「선택하기」 모드: 3컷 묶음마다 초록·빨강만 번갈아 테두리(1묶음=초록, 2묶음=빨강, …)
+THUMB_PICK_TRIPLET_BORDER_COLORS = ("#16a34a", "#dc2626")
+THUMB_PICK_TRIPLET_POS = ("위", "중간", "아래")
 _LARGE_PREVIEW_FALLBACK_W = 1100
 # 썸네일: 캐시 JPG + Pillow(FFmpeg 없음).
 THUMB_WORKER_COUNT = 2
@@ -254,6 +258,7 @@ class MontageGuiApp:
         self._tone_grade_preset: dict[str, object] | None = None
         self._tone_preset_seeded_paths: set[str] = set()
         self._grade_checked: set[str] = set()
+        self._grade_triplet_labels: dict[str, Label] = {}
         self._thumb_pick_mode = False
         self._grade_drag_start: tuple[float, float, str | None] | None = None
         self._grade_thumb_images: dict[str, PhotoImage] = {}
@@ -3151,7 +3156,60 @@ class MontageGuiApp:
         self._schedule_large_preview_refresh()
         self._refresh_pills_from_preview()
 
+    def _apply_thumb_pick_mode_triplet_highlights(self) -> None:
+        """체크 안 된 클립만 순서대로 세어 3컷 묶음별 테두리 색(위·중간·아래). 체크=삭제 예정은 회색."""
+        snap = self._try_build_montage_snapshot()
+        if not snap:
+            return
+        keys_in_order = [str(p.resolve()) for p in snap[0]]
+        keep_i = 0
+        n_colors = len(THUMB_PICK_TRIPLET_BORDER_COLORS)
+        for pk in keys_in_order:
+            fr = self._grade_row_frames.get(pk)
+            trip = self._grade_triplet_labels.get(pk)
+            if pk in self._grade_checked:
+                try:
+                    if fr is not None:
+                        fr.config(
+                            highlightbackground="#64748b",
+                            highlightthickness=3,
+                            highlightcolor="#64748b",
+                        )
+                    if trip is not None:
+                        trip.config(text="삭제 예정", fg="#94a3b8")
+                except TclError:
+                    pass
+                continue
+            g = keep_i // 3
+            pos = keep_i % 3
+            color = THUMB_PICK_TRIPLET_BORDER_COLORS[g % n_colors]
+            try:
+                if fr is not None:
+                    fr.config(
+                        highlightbackground=color,
+                        highlightthickness=4,
+                        highlightcolor=color,
+                    )
+                if trip is not None:
+                    trip.config(
+                        text=f"{g + 1}묶음·{THUMB_PICK_TRIPLET_POS[pos]}",
+                        fg=color,
+                    )
+            except TclError:
+                pass
+            keep_i += 1
+
     def _update_grade_selection_highlights(self) -> None:
+        if getattr(self, "_thumb_pick_mode", False) and self._video_files_mode():
+            for pk, var in getattr(self, "_grade_thumb_check_vars", {}).items():
+                try:
+                    want = pk in self._grade_checked
+                    if bool(var.get()) != want:
+                        var.set(want)
+                except TclError:
+                    pass
+            self._apply_thumb_pick_mode_triplet_highlights()
+            return
         for pk, fr in getattr(self, "_grade_row_frames", {}).items():
             sel = pk in self._grade_checked
             try:
@@ -3449,6 +3507,7 @@ class MontageGuiApp:
         self._grade_pill_labels = {}
         self._grade_ct_pill_labels = {}
         self._grade_thumb_check_vars = {}
+        self._grade_triplet_labels = {}
         inner = getattr(self, "_grade_inner", None)
         if inner is not None:
             for w in inner.winfo_children():
@@ -3459,8 +3518,8 @@ class MontageGuiApp:
             gh.config(
                 text=(
                     (
-                        "파일 목록: 「선택하기」를 켜면 썸네일에 체크가 보입니다. 여러 개 체크 후 「체크 삭제」로 한꺼번에 뺄 수 있습니다. "
-                        "클릭·Shift·Ctrl·드래그 순서 / # 더블클릭=순서. 큰 미리보기=마지막 클릭 클립."
+                        "파일 목록: 「선택하기」— 체크=삭제 예정. 체크 안 된 클립만 순서대로 3개씩 한 묶음(위·중간·아래)으로 색 테두리가 표시됩니다. "
+                        "「체크 삭제」로 한꺼번에 제거. 클릭·Shift·Ctrl·드래그 순서 / # 더블클릭=순서."
                         if getattr(self, "_thumb_pick_mode", False)
                         else "파일 목록: 왼쪽 썸네일은 가로 5열. 클릭·Shift 범위·Ctrl 토글(떨어진 클립)·드래그 순서 / # 더블클릭=순서 입력. "
                         "큰 미리보기=마지막 클릭 클립."
@@ -3544,6 +3603,16 @@ class MontageGuiApp:
                 fg="#1d4ed8",
             )
             num_lbl.pack(side=LEFT)
+            if getattr(self, "_thumb_pick_mode", False):
+                trip_lbl = Label(
+                    top_r,
+                    text="",
+                    font=("", 8),
+                    fg="#64748b",
+                    anchor=W,
+                )
+                trip_lbl.pack(side=LEFT, padx=(4, 0))
+                self._grade_triplet_labels[path_key] = trip_lbl
             num_lbl.bind(
                 "<Double-Button-1>",
                 lambda e, pk=path_key, r=idx: self._prompt_move_clip_to_position(pk, r),
