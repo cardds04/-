@@ -637,7 +637,7 @@ def run_llm_trader_chat(user_messages: list[dict[str, Any]], scenario_id: str) -
     mine = get_scenario_by_id(scenario_id)
     if not mine:
         return {"reply": "해당 시나리오를 찾을 수 없습니다.", "applied": False}
-    model = (os.getenv("GEMINI_MODEL") or "gemini-2.0-flash").strip()
+    model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
     client = _client()
     contents: list[Any] = _history_to_gemini_contents(_sanitize_history(user_messages))
     sys = _trader_chat_system_prompt(mine)
@@ -672,7 +672,7 @@ def run_llm_trader_chat(user_messages: list[dict[str, Any]], scenario_id: str) -
 
 
 def run_llm_chat(user_messages: list[dict[str, Any]]) -> dict[str, Any]:
-    model = (os.getenv("GEMINI_MODEL") or "gemini-2.0-flash").strip()
+    model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
     client = _client()
     tool = types.Tool(function_declarations=_tool_declarations())
 

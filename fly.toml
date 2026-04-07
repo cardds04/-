@@ -1,0 +1,29 @@
+# fly.toml app configuration file generated for raw on 2026-04-07T13:26:21+09:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'raw'
+primary_region = 'nrt'
+
+[build]
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # 0 이면 유휴 후 머신이 꺼져 첫 요청(채팅·헬스)이 콜드 스타트로 수십 초 걸릴 수 있음. 항상 켜 두려면 1.
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    method = 'GET'
+    path = '/health'
+
+[[vm]]
+  memory = '2gb'
+  cpus = 1
+  memory_mb = 2048

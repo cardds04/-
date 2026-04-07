@@ -1,4 +1,5 @@
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -83,12 +84,50 @@ app.post("/api/blog-generate", async (req, res) => {
   }
 });
 
+/** 참조 스타일 복제 — 로컬 uvicorn(style_transfer_server) 로 프록시 (Docker/온라인 동일 출처) */
+const STYLE_PROXY_HOST = process.env.STYLE_TRANSFER_HOST || "127.0.0.1";
+const STYLE_PROXY_PORT = Number(process.env.STYLE_TRANSFER_PORT || 8790);
+
+function proxyStyleTransferApi(req, res) {
+  const headers = { ...req.headers };
+  headers.host = `${STYLE_PROXY_HOST}:${STYLE_PROXY_PORT}`;
+  const preq = http.request(
+    {
+      hostname: STYLE_PROXY_HOST,
+      port: STYLE_PROXY_PORT,
+      path: req.originalUrl,
+      method: req.method,
+      headers,
+    },
+    (pres) => {
+      res.writeHead(pres.statusCode, pres.headers);
+      pres.pipe(res);
+    }
+  );
+  preq.on("error", (err) => {
+    console.error("[style-transfer proxy]", err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ detail: "스타일 API에 연결하지 못했습니다: " + err.message });
+    }
+  });
+  req.pipe(preq);
+}
+
+app.post("/api/phase1", proxyStyleTransferApi);
+app.post("/api/phase2", proxyStyleTransferApi);
+app.post("/api/chat", proxyStyleTransferApi);
+app.post("/api/raw-preview", proxyStyleTransferApi);
+
 app.use(express.static(__dirname));
 
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(PORT, HOST, () => {
   console.log(`Listening on http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT} (bind ${HOST})`);
   console.log(`Blog helper: http://localhost:${PORT}/blog-writing-assistant.html`);
+  console.log(`스타일 복제 웹: http://localhost:${PORT}/style-transfer-web.html`);
+  console.log(
+    `  → 같은 주소로 API 프록시: /api/phase1|phase2|chat|raw-preview → http://${STYLE_PROXY_HOST}:${STYLE_PROXY_PORT}`
+  );
   console.log(`State file path: ${STATE_PATH}`);
   console.log(
     `[blog-generate] Gemini 기본 후보: ${pickGeminiModel({})} (페이지에서 모델 선택 시 그 값이 우선)`

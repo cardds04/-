@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>참조 스타일 복제 · 웹</title>
+    <style>
+      :root {
+        --bg: #eef1f8;
+        --card: #fff;
+        --line: #d0d6e8;
+        --text: #1a2238;
+        --muted: #5c6478;
+        --accent: #3d5a9e;
+        --accent2: #2a4580;
+        --chat-bg: #f6f7fb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .app {
+        display: flex;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
+      }
+      .workspace {
+        flex: 1 1 52%;
+        min-width: 320px;
+        overflow: auto;
+        padding: 16px 20px 24px;
+        border-right: 1px solid var(--line);
+      }
+      .chat-panel {
+        flex: 1 1 48%;
+        min-width: 380px;
+        max-width: min(720px, 55vw);
+        display: flex;
+        flex-direction: column;
+        background: var(--card);
+        box-shadow: -4px 0 24px rgba(26, 34, 56, 0.06);
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.35rem;
+      }
+      .title-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 14px;
+        margin-bottom: 4px;
+      }
+      .build-badge {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #fff;
+        background: var(--accent2);
+        padding: 4px 10px;
+        border-radius: 999px;
+        letter-spacing: 0.02em;
+      }
+      .build-api-line {
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin: 0 0 10px;
+        line-height: 1.4;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-bottom: 14px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--muted);
+      }
+      input[type="text"],
+      input[type="password"],
+      select,
+      textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .ref-preview-wrap,
+      .raw-preview-wrap {
+        margin-top: 10px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: #eef0f5;
+        max-height: 240px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .ref-preview-wrap.is-visible,
+      .raw-preview-wrap.is-visible {
+        display: flex;
+      }
+      #refPreviewImg,
+      #rawPreviewImg {
+        max-width: 100%;
+        max-height: 240px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+      .ref-preview-hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      button {
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+      }
+      button:hover {
+        background: var(--accent2);
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      button.secondary {
+        background: #e8ebf4;
+        color: var(--text);
+      }
+      /* 샘플 1장: auto-fill 은 빈 열이 생겨 썸네일만 차지하는 문제 → 단일 1fr 열 */
+      .samples-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        width: 100%;
+        min-height: min(52vh, 520px);
+        max-height: min(78vh, 900px);
+        overflow: auto;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f8f9fc;
+        box-sizing: border-box;
+      }
+      .sample-cell {
+        text-align: center;
+        width: 100%;
+        min-width: 0;
+      }
+      .sample-cell img {
+        width: 100%;
+        height: auto;
+        max-height: min(72vh, 860px);
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #e8eaf0;
+        object-fit: contain;
+        display: block;
+        margin: 0 auto;
+      }
+      .sample-cap {
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-align: center;
+        margin-top: 4px;
+      }
+      .status {
+        font-weight: 700;
+        color: var(--accent);
+        min-height: 1.2em;
+        margin: 8px 0;
+      }
+      .api-base {
+        font-size: 0.75rem;
+        margin-top: 8px;
+      }
+      .chat-header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+      .chat-messages {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 12px 16px;
+        background: var(--chat-bg);
+        min-height: 200px;
+      }
+      .bubble {
+        max-width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+      .bubble.user {
+        background: #dce6ff;
+        margin-left: 12px;
+      }
+      .bubble.model {
+        background: #fff;
+        border: 1px solid var(--line);
+        margin-right: 12px;
+      }
+      .bubble .who {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .chat-input {
+        padding: 12px 16px 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      .chat-input textarea {
+        flex: 1;
+        min-height: 56px;
+        max-height: 160px;
+      }
+      .chat-paste-strip {
+        display: none;
+        padding: 8px;
+        background: #e8ecf7;
+        border-radius: 8px;
+        border: 1px dashed var(--line);
+      }
+      .chat-paste-strip.is-visible {
+        display: block;
+      }
+      .chat-paste-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .chat-paste-thumbs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .chat-paste-item {
+        position: relative;
+        width: 72px;
+        height: 72px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+      .chat-paste-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .chat-paste-item button {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        line-height: 1;
+        font-size: 14px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+      }
+      .chat-paste-item button:hover {
+        background: rgba(180, 0, 0, 0.85);
+      }
+      .bubble .chat-attached-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .bubble .chat-attached-row img {
+        max-width: 160px;
+        max-height: 120px;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        object-fit: contain;
+      }
+      @media (max-width: 960px) {
+        .app {
+          flex-direction: column;
+          height: auto;
+          max-height: none;
+          overflow: auto;
+        }
+        .workspace {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .chat-panel {
+          max-width: none;
+          min-height: 70vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="workspace">
+        <div class="title-row">
+          <h1>참조 스타일 복제</h1>
+          <span class="build-badge" id="uiBuildBadge" title="코드 반영 시각(시:분) — style_transfer_core.STYLE_TRANSFER_BUILD 과 맞춤">UI …</span>
+        </div>
+        <p class="build-api-line" id="apiBuildLine">API 시각: 확인 중…</p>
+        <p class="sub">RAW·참조 이미지는 이 PC에 업로드되어 서버(로컬 Python)에서 처리됩니다.</p>
+
+        <div class="card">
+          <label>API 서버 주소 (비우면 이 페이지와 같은 도메인으로 요청 — 온라인 배포 시 그대로 두세요)</label>
+          <input type="text" id="apiBase" value="" placeholder="예: http://127.0.0.1:8790 또는 비움" autocomplete="off" />
+          <p class="api-base">
+            로컬만 Python 직접 쓸 때:
+            <code>python3 tools/darktable-gemini-batch/style_transfer_server.py</code>
+            후 위에 <code>http://127.0.0.1:8790</code> 입력.
+            <br />
+            <span style="color: var(--accent); font-weight: 600">주소·키·모델은 이 브라우저에 자동 저장됩니다.</span> (다른 PC·시크릿 창에는 없음)
+          </p>
+        </div>
+
+        <div class="card row2">
+          <div>
+            <label>Gemini API 키</label>
+            <input type="password" id="apiKey" placeholder="GEMINI_API_KEY" autocomplete="off" />
+          </div>
+          <div>
+            <label>모델</label>
+            <input type="text" id="model" value="gemini-2.5-flash" />
+            <p class="api-base" style="margin-top: 8px; margin-bottom: 0">
+              <button type="button" class="secondary" id="btnClearSaved" style="padding: 6px 12px; font-size: 0.8rem">
+                이 페이지 저장 지우기
+              </button>
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <label>멀티에이전트 토론 (선택) — R1 독립 제안(Gemini·Grok) → R2 교차 비판 → R3 합의안 평균 병합</label>
+          <div class="row2" style="gap: 14px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px">
+            <div style="flex: 1; min-width: 200px">
+              <label style="font-size: 0.82rem">xAI Grok API 키</label>
+              <input type="password" id="grokApiKey" placeholder="XAI_API_KEY (선택)" autocomplete="off" />
+            </div>
+            <div style="min-width: 160px">
+              <label style="font-size: 0.82rem">Grok 모델</label>
+              <input type="text" id="grokModel" value="grok-2" autocomplete="off" />
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer">
+              <input type="checkbox" id="multiAgentChk" />
+              Phase1에서 Gemini×Grok 토론(R1–R3) 사용
+            </label>
+          </div>
+          <p class="api-base" style="margin-top: 8px; margin-bottom: 0">
+            체크 시에도 Grok 키가 비어 있으면 기존과 같이 2차(Gemini)까지만 실행됩니다.
+          </p>
+        </div>
+
+        <div class="card row2">
+          <div>
+            <label>참조 이미지 (JPG/PNG)</label>
+            <input type="file" id="refFile" accept="image/jpeg,image/png,image/webp,image/*" />
+            <div class="ref-preview-wrap" id="refPreviewWrap" aria-live="polite">
+              <img id="refPreviewImg" alt="참조 이미지 미리보기" />
+            </div>
+            <p class="ref-preview-hint" id="refPreviewHint">파일을 고르면 위에 미리보기가 표시됩니다.</p>
+          </div>
+          <div>
+            <label>기준 RAW 1장</label>
+            <input type="file" id="rawFile" accept=".arw,.cr2,.cr3,.nef,.dng,.raf,.orf,.rw2,.pef,.raw" />
+            <div class="raw-preview-wrap" id="rawPreviewWrap" aria-live="polite">
+              <img id="rawPreviewImg" alt="RAW 미리보기" />
+            </div>
+            <p class="ref-preview-hint" id="rawPreviewHint">
+              파일을 고르면 서버(rawpy)에서 썸네일을 만들어 보여 줍니다.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <label>참조 XMP (선택) — Phase1 미리보기에도 반영</label>
+          <input type="file" id="refXmpFile" accept=".xmp,application/octet-stream,text/xml,application/xml" />
+          <p class="api-base" style="margin-top: 8px; margin-bottom: 0">
+            웹 Phase1은 업로드된 파일만 볼 수 있어서, 같은 폴더에 XMP가 있어도 자동으로 찾지 못합니다. 여기서 XMP를 같이 올려 주세요.
+          </p>
+        </div>
+
+        <div class="card">
+          <label>참조 히스토그램 블렌드 α (Gemini 게인 적용 후, 0~1)</label>
+          <div class="row2" style="align-items: center; gap: 12px; margin-bottom: 10px">
+            <input type="range" id="histogramMatchAlpha" min="0" max="1" step="0.05" value="0.35" style="flex: 1" />
+            <span id="histogramMatchAlphaVal" style="min-width: 2.5rem">0</span>
+          </div>
+          <label style="margin-top: 8px">Phase1 수동 보정값 (채팅/사용자 조정 → 샘플에 반영)</label>
+          <div class="row2" style="gap: 10px; align-items: center; margin-top: 6px">
+            <div>
+              <label style="font-size: 0.82rem; margin-bottom: 4px">r_gain</label>
+              <input type="number" id="manualRGain" step="0.01" min="0.5" max="2" value="1" />
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; margin-bottom: 4px">g_gain</label>
+              <input type="number" id="manualGGain" step="0.01" min="0.5" max="2" value="1" />
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; margin-bottom: 4px">b_gain</label>
+              <input type="number" id="manualBGain" step="0.01" min="0.5" max="2" value="1" />
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; margin-bottom: 4px">exposure_mul</label>
+              <input type="number" id="manualExposureMul" step="0.01" min="0.5" max="2" value="1" />
+            </div>
+          </div>
+          <div style="margin-top: 10px">
+            <label style="font-size: 0.82rem; margin-bottom: 4px">반영 강도 (0=기본 평균정렬만, 1=수동/제안값 100%)</label>
+            <div class="row2" style="align-items: center; gap: 12px">
+              <input type="range" id="overrideStrength" min="0" max="1" step="0.05" value="0" style="flex: 1" />
+              <span id="overrideStrengthVal" style="min-width: 2.5rem">0</span>
+            </div>
+            <p class="api-base" style="margin-top: 6px">
+              팁: 채팅에서 JSON, <code>exposure_mul = 1.2</code>, 또는
+              <code>params['exposure'] = ... - 0.1</code> 같은 줄이 있으면 위 칸이 갱신됩니다.
+              (백엔드 파일만 고치라는 답은 자동 반영되지 않습니다.)
+              반영 강도 1 + 수치 전부 1이면 Phase1은 평균 정렬을 유지합니다.
+            </p>
+          </div>
+          <button type="button" id="btnPhase1">
+            ① Phase1 — 1차(XMP+정렬) + Gemini 2차 또는 (+옵션) Gemini×Grok 토론 → 최종 샘플
+          </button>
+          <div class="status" id="phase1Status"></div>
+          <label>분석 요약</label>
+          <textarea id="analysis" readonly rows="4"></textarea>
+          <label style="margin-top: 12px">토론 요약 (멀티에이전트 Phase1 성공 시)</label>
+          <textarea
+            id="debateSummary"
+            readonly
+            rows="10"
+            spellcheck="false"
+            placeholder="멀티에이전트를 켜고 Grok 키를 넣은 뒤 Phase1을 실행하면 Gemini×Grok R1~R3 토론 요약이 여기에 표시됩니다."
+          ></textarea>
+        </div>
+
+        <div class="card">
+          <label>미리보기 샘플 (참조 노출·WB 정렬)</label>
+          <div class="samples-grid" id="samplesGrid"></div>
+          <div style="margin-top: 10px">
+            <label>Phase2 (변형)</label>
+            <select id="choice"></select>
+          </div>
+        </div>
+
+        <div class="card">
+          <label>variants_ABC.json (Phase1 후 자동 채움)</label>
+          <textarea id="variantsJson" rows="10" spellcheck="false"></textarea>
+        </div>
+
+        <div class="card">
+          <label>Phase2 — 일괄 RAW (여러 개 선택)</label>
+          <input type="file" id="rawBatch" multiple accept=".arw,.cr2,.cr3,.nef,.dng,.raf,.orf,.rw2,.pef,.raw" />
+          <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap">
+            <button type="button" id="btnPhase2">② Phase2 — JPG ZIP 받기</button>
+            <span class="status" id="phase2Status"></span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="chat-panel">
+        <div class="chat-header" id="chatHeader">Gemini 대화</div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input">
+          <div class="chat-paste-strip" id="chatPasteStrip">
+            <span class="chat-paste-label">첨부 이미지 (캡처 후 ⌘V / Ctrl+V)</span>
+            <div class="chat-paste-thumbs" id="chatPasteThumbs"></div>
+          </div>
+          <div class="chat-input-row">
+            <textarea
+              id="chatInput"
+              placeholder="텍스트 입력… 캡처는 입력칸에 포커스 두고 붙여넣기"
+            ></textarea>
+            <button type="button" id="btnSend">전송</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const LS_API_BASE = "style_transfer_web_api_base";
+      const LS_API_KEY = "style_transfer_web_api_key";
+      const LS_MODEL = "style_transfer_web_model";
+      const LS_GROK_KEY = "style_transfer_web_grok_key";
+      const LS_GROK_MODEL = "style_transfer_web_grok_model";
+      const LS_MULTI_AGENT = "style_transfer_web_multi_agent";
+
+      function loadStyleTransferPrefs() {
+        try {
+          const b = localStorage.getItem(LS_API_BASE);
+          if (b !== null) $("apiBase").value = b;
+          const k = localStorage.getItem(LS_API_KEY);
+          if (k !== null) $("apiKey").value = k;
+          const m = localStorage.getItem(LS_MODEL);
+          if (m !== null && m !== "") $("model").value = m;
+          const gk = localStorage.getItem(LS_GROK_KEY);
+          if (gk !== null) $("grokApiKey").value = gk;
+          const gm = localStorage.getItem(LS_GROK_MODEL);
+          if (gm !== null && gm !== "") $("grokModel").value = gm;
+          const ma = localStorage.getItem(LS_MULTI_AGENT);
+          if (ma === "1") $("multiAgentChk").checked = true;
+        } catch (e) {
+          /* 비공개 창 등 */
+        }
+      }
+
+      function saveStyleTransferPrefs() {
+        try {
+          localStorage.setItem(LS_API_BASE, $("apiBase").value.trim());
+          localStorage.setItem(LS_API_KEY, $("apiKey").value);
+          const mv = $("model").value.trim() || "gemini-2.5-flash";
+          localStorage.setItem(LS_MODEL, mv);
+          localStorage.setItem(LS_GROK_KEY, $("grokApiKey").value);
+          const gmv = $("grokModel").value.trim() || "grok-2";
+          localStorage.setItem(LS_GROK_MODEL, gmv);
+          localStorage.setItem(LS_MULTI_AGENT, $("multiAgentChk").checked ? "1" : "0");
+        } catch (e) {
+          /* 저장 불가 */
+        }
+      }
+
+      loadStyleTransferPrefs();
+
+      ["apiBase", "apiKey", "model", "grokApiKey", "grokModel", "multiAgentChk"].forEach((id) => {
+        const el = $(id);
+        el.addEventListener("change", saveStyleTransferPrefs);
+        el.addEventListener("blur", saveStyleTransferPrefs);
+      });
+
+      $("btnClearSaved").addEventListener("click", () => {
+        try {
+          localStorage.removeItem(LS_API_BASE);
+          localStorage.removeItem(LS_API_KEY);
+          localStorage.removeItem(LS_MODEL);
+          localStorage.removeItem(LS_GROK_KEY);
+          localStorage.removeItem(LS_GROK_MODEL);
+          localStorage.removeItem(LS_MULTI_AGENT);
+        } catch (e) {}
+        $("apiBase").value = "";
+        $("apiKey").value = "";
+        $("model").value = "gemini-2.5-flash";
+        $("grokApiKey").value = "";
+        $("grokModel").value = "grok-2";
+        $("multiAgentChk").checked = false;
+        refreshApiBuild();
+      });
+
+      window.addEventListener("beforeunload", saveStyleTransferPrefs);
+
+      const STYLE_TRANSFER_UI_BUILD = "25:03";
+
+      /** Phase2 에 넘길 변형 키 (최종만) */
+      const PHASE2_VARIANT_KEYS = ["01"];
+
+      const PREVIEW_KEYS_3 = ["01_stage1", "01_round2", "01"];
+
+      function defaultCaptionForPreviewKey(k) {
+        if (k === "01_stage1") return "1차 (XMP+정렬)";
+        if (k === "01_round2") return "2차 (Gemini 재조정)";
+        return "3차 (최종)";
+      }
+
+      /** 항상 1차 · 2차 · 3차 세 칸 */
+      function renderPreviewGrid(keys) {
+        const wrap = $("samplesGrid");
+        wrap.innerHTML = "";
+        keys.forEach((k) => {
+          const cell = document.createElement("div");
+          cell.className = "sample-cell";
+          const im = document.createElement("img");
+          im.alt = k;
+          im.id = "img" + k;
+          const cap = document.createElement("div");
+          cap.className = "sample-cap";
+          cap.id = "cap" + k;
+          cap.textContent = defaultCaptionForPreviewKey(k);
+          cell.appendChild(im);
+          cell.appendChild(cap);
+          wrap.appendChild(cell);
+        });
+      }
+
+      function rebuildPhase2Select(variantLabels) {
+        const sel = $("choice");
+        sel.innerHTML = "";
+        PHASE2_VARIANT_KEYS.forEach((k) => {
+          const lab = variantLabels[k] || "";
+          const opt = document.createElement("option");
+          opt.value = k;
+          opt.textContent = lab ? k + " — " + lab : k;
+          sel.appendChild(opt);
+        });
+      }
+
+      renderPreviewGrid(PREVIEW_KEYS_3);
+      rebuildPhase2Select({});
+      $("uiBuildBadge").textContent = "UI " + STYLE_TRANSFER_UI_BUILD;
+
+      const histSl = $("histogramMatchAlpha");
+      const histValEl = $("histogramMatchAlphaVal");
+      function syncHistogramAlphaLabel() {
+        histValEl.textContent = histSl.value;
+      }
+      histSl.addEventListener("input", syncHistogramAlphaLabel);
+      syncHistogramAlphaLabel();
+
+      const apiBase = () => $("apiBase").value.trim().replace(/\/$/, "");
+      function apiUrl(path) {
+        const b = apiBase();
+        if (!b) return path;
+        return b + path;
+      }
+      function errDetail(data) {
+        const d = data && data.detail;
+        if (d == null || d === "") return "";
+        if (typeof d === "string") return d;
+        if (Array.isArray(d))
+          return d.map((x) => (x && x.msg != null ? x.msg : JSON.stringify(x))).join("; ");
+        return String(d);
+      }
+
+      function extractFirstJsonObjectFromText(t) {
+        const s = String(t || "");
+        const m = s.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        let body = m ? m[1] : s;
+        const i0 = body.indexOf("{");
+        const i1 = body.lastIndexOf("}");
+        if (i0 < 0 || i1 <= i0) return null;
+        try {
+          return JSON.parse(body.slice(i0, i1 + 1));
+        } catch {
+          return null;
+        }
+      }
+
+      function extractGainHintsFromPlainText(t) {
+        const s = String(t || "");
+        const out = {};
+        const num = (x) => {
+          const n = Number(x);
+          return Number.isFinite(n) ? n : null;
+        };
+        const grab = (re, key) => {
+          const m = s.match(re);
+          if (!m) return;
+          const n = num(m[1]);
+          if (n != null) out[key] = n;
+        };
+        grab(/\br_gain\s*[:=]\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/i, "r_gain");
+        grab(/\bg_gain\s*[:=]\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/i, "g_gain");
+        grab(/\bb_gain\s*[:=]\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/i, "b_gain");
+        grab(/\bexposure_mul\s*[:=]\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/i, "exposure_mul");
+        grab(/\bbrightness_mul\s*[:=]\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/i, "exposure_mul");
+        if (out.exposure_mul == null) {
+          const m = s.match(/['"]exposure['"]\s*:\s*([+-]?\d*\.?\d+)/);
+          if (m) {
+            const ev = num(m[1]);
+            if (ev != null) out.exposure_mul = Math.pow(2, ev);
+          }
+        }
+        if (out.exposure_mul == null) {
+          const lines = s.split(/\r?\n/);
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const ln = line.toLowerCase();
+            if (!ln.includes("exposure") || !line.includes("=") || !line.includes("+")) continue;
+            const pm = line.match(/\+\s*([+-]?\d*\.?\d+)/);
+            if (!pm) continue;
+            const d = num(pm[1]);
+            if (d != null) {
+              out.exposure_mul = Math.pow(2, d);
+              break;
+            }
+          }
+        }
+        return out;
+      }
+
+      /** params['exposure'] = ... - 0.1 → ΔEV (음수면 어둡게) */
+      function extractRelativeExposureEvDeltaFromChat(s) {
+        const lines = String(s).split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const ln = line.toLowerCase();
+          if (!ln.includes("exposure") || !line.includes("=")) continue;
+          if (!/\bparams\s*\[\s*['"]exposure['"]\s*\]\s*=/.test(line)) continue;
+          const rhs = line.split("=").slice(1).join("=").trim();
+          const mm = rhs.match(/-\s*([0-9]*\.?[0-9]+)\s*(?:#.*)?$/);
+          if (mm) return -Number(mm[1]);
+          const pp = rhs.match(/\+\s*([0-9]*\.?[0-9]+)\s*(?:#.*)?$/);
+          if (pp) return Number(pp[1]);
+        }
+        return null;
+      }
+
+      function maybeApplyOverridesFromChatReply(replyText) {
+        const map = {
+          r_gain: "manualRGain",
+          g_gain: "manualGGain",
+          b_gain: "manualBGain",
+          exposure_mul: "manualExposureMul",
+        };
+        let touched = false;
+        const applyKey = (k, val) => {
+          if (val == null) return;
+          const num = Number(val);
+          if (!Number.isFinite(num)) return;
+          const el = $(map[k]);
+          if (!el) return;
+          el.value = String(num);
+          touched = true;
+        };
+        const hints = extractGainHintsFromPlainText(replyText);
+        Object.keys(map).forEach((k) => applyKey(k, hints[k]));
+        const o = extractFirstJsonObjectFromText(replyText);
+        if (o && typeof o === "object") {
+          const v = (o.variants && o.variants["01"]) || o.variant || o;
+          if (v && typeof v === "object") {
+            Object.keys(map).forEach((k) => applyKey(k, v[k]));
+          }
+        }
+        const dEv = extractRelativeExposureEvDeltaFromChat(replyText);
+        if (dEv != null && Number.isFinite(dEv) && Math.abs(dEv) > 1e-12) {
+          const cur = Number($("manualExposureMul").value);
+          const base = Number.isFinite(cur) && cur > 0 ? cur : 1;
+          applyKey("exposure_mul", base * Math.pow(2, dEv));
+          touched = true;
+        }
+        if (touched) {
+          const st = $("overrideStrength");
+          if (st && Number(st.value) <= 0) {
+            st.value = "0.5";
+            $("overrideStrengthVal").textContent = "0.5";
+          }
+        }
+      }
+      let chatHistory = [];
+      let refPreviewObjectUrl = null;
+      /** @type {{ id: number, file: File, url: string }[]} */
+      let pendingChatImages = [];
+      let pendingChatImageId = 0;
+      const MAX_CHAT_IMAGES = 6;
+      const MAX_CHAT_IMAGE_BYTES = 6 * 1024 * 1024;
+
+      function updateRefImagePreview() {
+        const input = $("refFile");
+        const wrap = $("refPreviewWrap");
+        const img = $("refPreviewImg");
+        const hint = $("refPreviewHint");
+        if (refPreviewObjectUrl) {
+          URL.revokeObjectURL(refPreviewObjectUrl);
+          refPreviewObjectUrl = null;
+        }
+        const f = input.files && input.files[0];
+        if (!f || !/^image\//.test(f.type)) {
+          wrap.classList.remove("is-visible");
+          img.removeAttribute("src");
+          if (hint) hint.textContent = "파일을 고르면 위에 미리보기가 표시됩니다.";
+          return;
+        }
+        refPreviewObjectUrl = URL.createObjectURL(f);
+        img.src = refPreviewObjectUrl;
+        img.alt = "참조 미리보기: " + f.name;
+        wrap.classList.add("is-visible");
+        if (hint) hint.textContent = f.name + " · 브라우저에서만 보이는 미리보기입니다.";
+      }
+      $("refFile").addEventListener("change", updateRefImagePreview);
+
+      let rawPreviewDebounce = null;
+      let rawPreviewAbort = null;
+
+      async function updateRawPreviewFromServer() {
+        const input = $("rawFile");
+        const wrap = $("rawPreviewWrap");
+        const img = $("rawPreviewImg");
+        const hint = $("rawPreviewHint");
+        const f = input.files && input.files[0];
+        if (!f) {
+          wrap.classList.remove("is-visible");
+          img.removeAttribute("src");
+          hint.textContent = "파일을 고르면 서버(rawpy)에서 썸네일을 만들어 보여 줍니다.";
+          return;
+        }
+        if (rawPreviewAbort) rawPreviewAbort.abort();
+        rawPreviewAbort = new AbortController();
+        hint.textContent = "미리보기 생성 중… (업로드·디코딩에 시간이 걸릴 수 있음)";
+        wrap.classList.remove("is-visible");
+        img.removeAttribute("src");
+        try {
+          const fd = new FormData();
+          fd.append("raw_file", f, f.name);
+          const res = await fetch(apiUrl("/api/raw-preview"), {
+            method: "POST",
+            body: fd,
+            signal: rawPreviewAbort.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(errDetail(data) || res.statusText);
+          const b64 = data.preview_base64;
+          if (!b64) throw new Error("응답에 썸네일이 없습니다.");
+          img.src = "data:image/jpeg;base64," + b64;
+          img.alt = "RAW 미리보기: " + f.name;
+          wrap.classList.add("is-visible");
+          hint.textContent = f.name + " · 서버에서 만든 썸네일(내장 JPG 또는 반디코딩)";
+        } catch (e) {
+          if (e.name === "AbortError") return;
+          wrap.classList.remove("is-visible");
+          hint.textContent = "미리보기 실패: " + e.message;
+        }
+      }
+
+      $("rawFile").addEventListener("change", () => {
+        if (rawPreviewDebounce) clearTimeout(rawPreviewDebounce);
+        rawPreviewDebounce = setTimeout(() => updateRawPreviewFromServer(), 350);
+      });
+
+      function appendBubble(role, text) {
+        const wrap = $("chatMessages");
+        const div = document.createElement("div");
+        div.className = "bubble " + (role === "user" ? "user" : "model");
+        const who = document.createElement("div");
+        who.className = "who";
+        who.textContent = role === "user" ? "나" : "Gemini";
+        div.appendChild(who);
+        div.appendChild(document.createTextNode(text));
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+
+      function appendUserBubbleWithImages(text, imageUrls) {
+        const wrap = $("chatMessages");
+        const div = document.createElement("div");
+        div.className = "bubble user";
+        const who = document.createElement("div");
+        who.className = "who";
+        who.textContent = "나";
+        div.appendChild(who);
+        if (text) div.appendChild(document.createTextNode(text));
+        if (imageUrls && imageUrls.length) {
+          const row = document.createElement("div");
+          row.className = "chat-attached-row";
+          imageUrls.forEach((u) => {
+            const im = document.createElement("img");
+            im.src = u;
+            im.alt = "첨부";
+            row.appendChild(im);
+          });
+          div.appendChild(row);
+        }
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+
+      function renderPendingChatStrip() {
+        const strip = $("chatPasteStrip");
+        const thumbs = $("chatPasteThumbs");
+        thumbs.innerHTML = "";
+        pendingChatImages.forEach(({ id, url }) => {
+          const w = document.createElement("div");
+          w.className = "chat-paste-item";
+          const im = document.createElement("img");
+          im.src = url;
+          im.alt = "";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.setAttribute("aria-label", "첨부 제거");
+          btn.textContent = "×";
+          btn.addEventListener("click", () => removePendingChatImage(id));
+          w.appendChild(im);
+          w.appendChild(btn);
+          thumbs.appendChild(w);
+        });
+        strip.classList.toggle("is-visible", pendingChatImages.length > 0);
+      }
+
+      function removePendingChatImage(id) {
+        const i = pendingChatImages.findIndex((x) => x.id === id);
+        if (i < 0) return;
+        URL.revokeObjectURL(pendingChatImages[i].url);
+        pendingChatImages.splice(i, 1);
+        renderPendingChatStrip();
+      }
+
+      function addPendingChatImageFromFile(file) {
+        if (!file || !/^image\//.test(file.type)) return false;
+        if (pendingChatImages.length >= MAX_CHAT_IMAGES) {
+          alert("이미지는 최대 " + MAX_CHAT_IMAGES + "장까지입니다.");
+          return true;
+        }
+        if (file.size > MAX_CHAT_IMAGE_BYTES) {
+          alert("한 장당 " + MAX_CHAT_IMAGE_BYTES / (1024 * 1024) + "MB 이하만 가능합니다.");
+          return true;
+        }
+        const id = ++pendingChatImageId;
+        const url = URL.createObjectURL(file);
+        pendingChatImages.push({ id, file, url });
+        renderPendingChatStrip();
+        return true;
+      }
+
+      function fileToImagePart(file) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => {
+            const s = String(r.result || "");
+            const i = s.indexOf(",");
+            const b64 = i >= 0 ? s.slice(i + 1) : s;
+            resolve({ mime_type: file.type || "image/png", data: b64 });
+          };
+          r.onerror = () => reject(new Error("파일 읽기 실패"));
+          r.readAsDataURL(file);
+        });
+      }
+
+      $("chatInput").addEventListener("paste", (e) => {
+        const cd = e.clipboardData;
+        if (!cd || !cd.items) return;
+        let added = false;
+        for (let i = 0; i < cd.items.length; i++) {
+          const it = cd.items[i];
+          if (it.kind === "file" && it.type.startsWith("image/")) {
+            const f = it.getAsFile();
+            if (f && addPendingChatImageFromFile(f)) {
+              added = true;
+            }
+          }
+        }
+        if (added) e.preventDefault();
+      });
+
+      function parsePreviewLabels(variantsJsonStr, multiAgent) {
+        const labels = { "01_stage1": "", "01": "", "01_round2": "" };
+        try {
+          const o = JSON.parse(variantsJsonStr || "{}");
+          const v = o.variants || {};
+          if (v["01"] && v["01"].label) labels["01"] = String(v["01"].label);
+          const r1 = multiAgent && multiAgent.debate && multiAgent.debate.round1;
+          const gp = r1 && r1.gemini_proposal;
+          if (gp && gp.label) labels["01_round2"] = String(gp.label);
+        } catch {
+          /* ignore */
+        }
+        return labels;
+      }
+
+      $("btnPhase1").onclick = async () => {
+        const key = $("apiKey").value.trim();
+        const ref = $("refFile").files[0];
+        const raw = $("rawFile").files[0];
+        if (!key) {
+          alert("API 키를 입력하세요.");
+          return;
+        }
+        if (!ref || !raw) {
+          alert("참조 이미지와 RAW 1장을 선택하세요.");
+          return;
+        }
+        const st = $("phase1Status");
+        const useMa = $("multiAgentChk").checked && $("grokApiKey").value.trim();
+        st.textContent = useMa
+          ? "생성 중… (1차 → 토론 R1·R2·R3 → 최종)"
+          : "생성 중… (1차 미리보기 → Gemini 재조정 → 최종)";
+        $("btnPhase1").disabled = true;
+        $("debateSummary").value = "";
+        renderPreviewGrid(PREVIEW_KEYS_3);
+        rebuildPhase2Select({});
+        PREVIEW_KEYS_3.forEach((k) => {
+          const im = $("img" + k);
+          if (im) im.removeAttribute("src");
+          const c = $("cap" + k);
+          if (c) c.textContent = defaultCaptionForPreviewKey(k);
+        });
+        try {
+          const fd = new FormData();
+          fd.append("reference", ref);
+          const xmp = $("refXmpFile").files && $("refXmpFile").files[0];
+          if (xmp) fd.append("reference_xmp", xmp);
+          fd.append("raw_one", raw);
+          fd.append("api_key", key);
+          fd.append("model", $("model").value.trim() || "gemini-2.5-flash");
+          fd.append("histogram_match_alpha", histSl.value || "0");
+          fd.append("override_strength", $("overrideStrength").value || "0");
+          fd.append("r_gain", $("manualRGain").value || "");
+          fd.append("g_gain", $("manualGGain").value || "");
+          fd.append("b_gain", $("manualBGain").value || "");
+          fd.append("exposure_mul", $("manualExposureMul").value || "");
+          fd.append("grok_api_key", $("grokApiKey").value || "");
+          fd.append("grok_model", ($("grokModel").value || "").trim() || "grok-2");
+          fd.append("multi_agent", $("multiAgentChk").checked ? "1" : "");
+          const res = await fetch(apiUrl("/api/phase1"), { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(errDetail(data) || res.statusText);
+          $("analysis").value = data.analysis_ko || "";
+          $("variantsJson").value = data.variants_ABC_json || "";
+          const b64 = data.samples_base64 || {};
+          const ma = data.multi_agent || {};
+          const maOk = !!ma.pipeline_complete_ok;
+          const maReq = !!ma.requested && !!ma.grok_key_configured;
+          const ds =
+            String(data.debate_summary_ko || "").trim() ||
+            String(ma.debate_summary_ko || "").trim();
+          $("debateSummary").value = ds;
+          renderPreviewGrid(PREVIEW_KEYS_3);
+          const labels = parsePreviewLabels(data.variants_ABC_json || "{}", ma);
+          rebuildPhase2Select(labels);
+          PREVIEW_KEYS_3.forEach((k) => {
+            const img = $("img" + k);
+            if (img && b64[k]) img.src = "data:image/jpeg;base64," + b64[k];
+            const cap = $("cap" + k);
+            const lab = labels[k] || "";
+            if (!cap) return;
+            if (k === "01_stage1") {
+              cap.textContent = lab || "1차 (XMP+정렬)";
+            } else if (k === "01_round2") {
+              if (maOk) {
+                cap.textContent = lab ? "01 · " + lab : "2차 (토론·Gemini R1)";
+              } else {
+                cap.textContent = lab ? "01 · " + lab : "2차 (Gemini 재조정)";
+              }
+            } else if (k === "01") {
+              if (maOk) {
+                cap.textContent = lab ? "01 · " + lab : "3차 (토론 합의 최종)";
+              } else if (maReq) {
+                cap.textContent = lab ? "01 · " + lab : "3차 (단일 Gemini·최종)";
+              } else {
+                cap.textContent = lab ? "01 · " + lab : "3차 (최종)";
+              }
+            }
+          });
+          st.textContent = maOk
+            ? "Phase1 완료 (토론 R1–R3 합의)"
+            : maReq
+              ? "Phase1 완료 (토론 실패 후 폴백 — variants_meta.json 확인)"
+              : "Phase1 완료 (1·2·3차 미리보기)";
+        } catch (e) {
+          st.textContent = "";
+          alert("Phase1 실패: " + e.message);
+        } finally {
+          $("btnPhase1").disabled = false;
+        }
+      };
+
+      $("btnPhase2").onclick = async () => {
+        const key = $("apiKey").value.trim();
+        const vtext = $("variantsJson").value.trim();
+        const files = $("rawBatch").files;
+        if (!key) {
+          alert("API 키를 입력하세요.");
+          return;
+        }
+        if (!vtext) {
+          alert("먼저 Phase1 을 실행하거나 variants JSON 을 붙여넣으세요.");
+          return;
+        }
+        if (!files || !files.length) {
+          alert("RAW 파일을 여러 개 선택하세요.");
+          return;
+        }
+        const st = $("phase2Status");
+        st.textContent = "처리 중…";
+        $("btnPhase2").disabled = true;
+        try {
+          const fd = new FormData();
+          const vBlob = new Blob([vtext], { type: "application/json" });
+          fd.append("variants_json", vBlob, "variants_ABC.json");
+          fd.append("choice", $("choice").value);
+          fd.append("histogram_match_alpha", histSl.value || "0");
+          const refH = $("refFile").files[0];
+          if (refH) fd.append("histogram_reference", refH);
+          for (let i = 0; i < files.length; i++) {
+            fd.append("raws", files[i]);
+          }
+          const res = await fetch(apiUrl("/api/phase2"), { method: "POST", body: fd });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(errDetail(err) || res.statusText);
+          }
+          const blob = await res.blob();
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "style_jpg_out.zip";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          st.textContent = "ZIP 저장됨";
+        } catch (e) {
+          st.textContent = "";
+          alert("Phase2 실패: " + e.message);
+        } finally {
+          $("btnPhase2").disabled = false;
+        }
+      };
+
+      async function sendChat() {
+        const key = $("apiKey").value.trim();
+        const textRaw = $("chatInput").value.trim();
+        if (!textRaw && !pendingChatImages.length) return;
+        if (!key) {
+          alert("API 키를 입력하세요.");
+          return;
+        }
+        const savedInput = textRaw;
+        const displayText =
+          textRaw ||
+          (pendingChatImages.length ? "(이미지 " + pendingChatImages.length + "장 첨부)" : "");
+        const outText =
+          textRaw ||
+          (pendingChatImages.length
+            ? "사용자가 화면 캡처 등 이미지를 첨부했습니다. 이미지를 보고 답해 주세요."
+            : "");
+
+        let imageParts = [];
+        if (pendingChatImages.length) {
+          try {
+            imageParts = await Promise.all(pendingChatImages.map((x) => fileToImagePart(x.file)));
+          } catch (err) {
+            alert("이미지 인코딩 실패: " + err.message);
+            return;
+          }
+        }
+
+        $("chatInput").value = "";
+        const previewUrls = pendingChatImages.map((x) => URL.createObjectURL(x.file));
+        chatHistory.push({ role: "user", text: displayText });
+        appendUserBubbleWithImages(displayText, previewUrls);
+        $("btnSend").disabled = true;
+        const hdr = $("chatHeader");
+        const hdrPrev = hdr.textContent;
+        hdr.textContent = "Gemini 대화 · 응답 생성 중…";
+        try {
+          const messagesPayload = chatHistory.map((m, idx) => {
+            const o = { role: m.role, text: m.text };
+            if (
+              idx === chatHistory.length - 1 &&
+              m.role === "user" &&
+              imageParts.length
+            ) {
+              o.images = imageParts;
+            }
+            return o;
+          });
+          const res = await fetch(apiUrl("/api/chat"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: messagesPayload,
+              api_key: key,
+              model: $("model").value.trim() || "gemini-2.5-flash",
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(errDetail(data) || res.statusText);
+          const reply = data.text || "";
+          chatHistory.push({ role: "model", text: reply });
+          appendBubble("model", reply);
+          maybeApplyOverridesFromChatReply(reply);
+          pendingChatImages.forEach((x) => URL.revokeObjectURL(x.url));
+          pendingChatImages = [];
+          renderPendingChatStrip();
+        } catch (e) {
+          chatHistory.pop();
+          const wrap = $("chatMessages");
+          if (wrap.lastChild) wrap.removeChild(wrap.lastChild);
+          appendBubble("model", "(오류) " + e.message);
+          $("chatInput").value = savedInput;
+        } finally {
+          hdr.textContent = hdrPrev;
+          $("btnSend").disabled = false;
+        }
+      }
+
+      $("btnSend").onclick = sendChat;
+      $("chatInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          sendChat();
+        }
+      });
+
+      async function refreshApiBuild() {
+        const line = $("apiBuildLine");
+        const base = apiBase();
+        if (!base) {
+          line.textContent =
+            "API 시각: 주소 비움 → 요청은 이 페이지와 같은 호스트(8787)로 갑니다. Python(8790) 시각을 보려면 API 주소에 http://127.0.0.1:8790 을 넣고 새로고침하세요.";
+          return;
+        }
+        try {
+          const res = await fetch(base + "/health");
+          const data = await res.json().catch(() => ({}));
+          const b = data.build != null ? String(data.build) : "(필드 없음)";
+          line.textContent =
+            "API 시각: " + b + " · " + base + "/health (style_transfer_core 의 STYLE_TRANSFER_BUILD 시:분 과 같으면 최신)";
+        } catch (e) {
+          line.textContent = "API 시각: /health 요청 실패 — " + e.message;
+        }
+      }
+      refreshApiBuild();
+      $("apiBase").addEventListener("change", refreshApiBuild);
+      $("apiBase").addEventListener("blur", refreshApiBuild);
+
+      const ovSl = $("overrideStrength");
+      const ovVal = $("overrideStrengthVal");
+      ovVal.textContent = String(ovSl.value || "0");
+      ovSl.addEventListener("input", () => {
+        ovVal.textContent = String(ovSl.value || "0");
+      });
+    </script>
+  </body>
+</html>

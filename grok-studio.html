@@ -1236,8 +1236,8 @@
         }
         var outputGalleryItems = [];
         var imageSeq = 0;
-        var imageGenQueue = [];
-        var imageGenBusy = false;
+        /** 동시에 API로 나가 있는 이미지 생성 요청 수(대기열 없음, 버튼 비활성화 없음) */
+        var imageGenInFlight = 0;
         var imageGenQueueStatusEl = document.getElementById("imageGenQueueStatus");
 
         function setError(msg) {
@@ -1842,18 +1842,14 @@
 
         function updateImageGenQueueStatus() {
           if (!imageGenQueueStatusEl) return;
-          var n = imageGenQueue.length;
-          if (imageGenBusy && n > 0) {
-            imageGenQueueStatusEl.textContent = "생성 중입니다. 대기열 " + n + "건";
-            imageGenQueueStatusEl.hidden = false;
-          } else if (imageGenBusy) {
-            imageGenQueueStatusEl.textContent = "생성 중입니다.";
-            imageGenQueueStatusEl.hidden = false;
-          } else if (n > 0) {
-            imageGenQueueStatusEl.textContent = "대기열 " + n + "건";
+          var n = imageGenInFlight;
+          if (n > 0) {
+            imageGenQueueStatusEl.textContent =
+              "생성 중 " + n + "건 · 연속 클릭 시 각각 바로 전송됩니다(대기열 없음)";
             imageGenQueueStatusEl.hidden = false;
           } else {
             imageGenQueueStatusEl.hidden = true;
+            imageGenQueueStatusEl.textContent = "";
           }
         }
 
@@ -1869,7 +1865,6 @@
         }
 
         async function runOneImageGenJob(job) {
-          setError("");
           if (job.prov === "xai") {
             var body = {
               action: "image",
@@ -1914,21 +1909,17 @@
           }
         }
 
-        async function pumpImageGenQueue() {
-          if (imageGenBusy) return;
-          if (!imageGenQueue.length) return;
-          imageGenBusy = true;
-          var job = imageGenQueue.shift();
+        function launchImageGenJob(job) {
+          imageGenInFlight += 1;
           updateImageGenQueueStatus();
-          try {
-            await runOneImageGenJob(job);
-          } catch (e) {
-            setImageGenErrorFromException(e);
-          } finally {
-            imageGenBusy = false;
-            updateImageGenQueueStatus();
-            pumpImageGenQueue();
-          }
+          runOneImageGenJob(job)
+            .catch(function (e) {
+              setImageGenErrorFromException(e);
+            })
+            .finally(function () {
+              imageGenInFlight = Math.max(0, imageGenInFlight - 1);
+              updateImageGenQueueStatus();
+            });
         }
 
         if (startBtnGrokImage) {
@@ -1982,9 +1973,7 @@
               xai_api_key: xk || undefined,
               gemini_api_key: gk || undefined,
             };
-            imageGenQueue.push(job);
-            updateImageGenQueueStatus();
-            pumpImageGenQueue();
+            launchImageGenJob(job);
           });
         }
 
