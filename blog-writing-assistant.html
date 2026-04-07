@@ -267,11 +267,42 @@
       .card--local-tool {
         border-left: 3px solid #cbd5e1;
       }
+      .mode-bar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .mode-bar .mode-btn {
+        flex: 1;
+        padding: 11px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        color: var(--text);
+      }
+      .mode-bar .mode-btn:hover {
+        background: #eef2fa;
+      }
+      .mode-bar .mode-btn.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .wrap.mode-narration .final-draft:empty::before {
+        content: "「나레이션 생성」을 누르면 여기에 대본이 표시됩니다.";
+      }
     </style>
   </head>
   <body>
-    <div class="wrap">
+    <div class="wrap" id="appWrap">
       <h1>블로그 글쓰기 도우미</h1>
+      <div class="mode-bar" role="tablist" aria-label="작성 모드">
+        <button type="button" class="mode-btn active" id="modeBlog" data-mode="blog" aria-selected="true">블로그</button>
+        <button type="button" class="mode-btn" id="modeNarration" data-mode="narration" aria-selected="false">나레이션</button>
+      </div>
 
       <div class="card">
         <h2>1. 기본 정보</h2>
@@ -283,10 +314,17 @@
         <p class="hint" id="areaPreview" style="margin-top: -4px; margin-bottom: 10px"></p>
         <label for="aptName">아파트 이름</label>
         <input type="text" id="aptName" placeholder="예: 별빛마을아파트" autocomplete="off" />
+        <div id="companyNameRow" hidden>
+          <label for="companyName">업체 이름</label>
+          <input type="text" id="companyName" value="점선면디자인" placeholder="예: 점선면디자인" autocomplete="organization" />
+          <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
+            나레이션은 이 이름을 기준으로 말합니다. 위 <strong>동네·주소</strong>·<strong>아파트 이름</strong>이 대본 안에 그대로 반영됩니다.
+          </p>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>2. 메인 사진 (1:1)</h2>
+      <div class="card" id="cardMainPhoto">
+        <h2 id="h2MainPhoto">2. 메인 사진 (1:1)</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
           글 본문용 순번 사진과 <strong>별도</strong>입니다. 가운데 기준으로 정사각형 자른 뒤, 왼쪽 아래에 INTERIOR / DESIGN / 구분선 / 동네 / 아파트명을 얹습니다. 문구는 위
           <strong>동네·주소</strong>·<strong>아파트 이름</strong>을 씁니다.
@@ -305,8 +343,8 @@
         </div>
       </div>
 
-      <div class="card">
-        <h2>3. 사진 (글 생성용 순서)</h2>
+      <div class="card" id="cardBulkPhotos">
+        <h2 id="h2Bulk">3. 사진 (글 생성용 순서)</h2>
         <input type="file" id="bulkPhotoInput" accept="image/*" multiple style="display: none" />
         <div id="bulkDropZone" class="bulk-drop-zone" tabindex="0" role="button">
           사진을 여기로 끌어놓기<br />
@@ -318,8 +356,8 @@
         </button>
       </div>
 
-      <div class="card">
-        <h2>4. Gemini로 생성</h2>
+      <div class="card" id="cardGemini">
+        <h2 id="h2Gemini">4. Gemini로 생성</h2>
         <div id="apiBaseWrap">
           <label for="apiBase">서버 주소 (<code>file://</code>로 열 때만)</label>
           <input type="text" id="apiBase" placeholder="http://localhost:8787" autocomplete="off" />
@@ -328,7 +366,7 @@
         <input type="password" id="aiApiKey" autocomplete="off" placeholder="비워두면 서버에 GEMINI_API_KEY가 있을 때만 동작" />
         <button type="button" class="btn" id="btnAutoGenerate">글 자동 생성</button>
         <p class="hint" id="autoGenStatus" style="min-height: 1.3em; color: var(--text)"></p>
-        <label style="margin-top: 14px">최종 글 (미리보기)</label>
+        <label style="margin-top: 14px" id="labelFinalDraft">최종 글 (미리보기)</label>
         <div id="finalDraft" class="final-draft" role="region" aria-live="polite"></div>
         <div class="btn-row">
           <button type="button" class="btn secondary" id="btnCopyDraft">글복사</button>
@@ -338,8 +376,8 @@
         </p>
       </div>
 
-      <div class="card card--local-tool">
-        <h2>5. 사진용량줄이기</h2>
+      <div class="card card--local-tool" id="cardShrink">
+        <h2 id="h2Shrink">5. 사진용량줄이기</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
           <strong>JPEG 품질 80</strong> · <strong>가로·세로 각 최대 2000px</strong> 안으로 맞춤(비율 유지) · 저장할 폴더는 <strong>매번</strong> 선택(데스크톱 등 원하는 위치)
         </p>
@@ -357,6 +395,75 @@
 
     <script>
       const GEMINI_MODEL = "gemini-3-flash-preview";
+      const ASSISTANT_MODE_LS = "blog_assistant_mode";
+      const MODE_BLOG = "blog";
+      const MODE_NARRATION = "narration";
+
+      function getAssistantMode() {
+        return document.getElementById("appWrap")?.classList.contains("mode-narration")
+          ? MODE_NARRATION
+          : MODE_BLOG;
+      }
+
+      function setAssistantMode(mode) {
+        const wrap = document.getElementById("appWrap");
+        const blogBtn = document.getElementById("modeBlog");
+        const narBtn = document.getElementById("modeNarration");
+        const companyRow = document.getElementById("companyNameRow");
+        const cardMain = document.getElementById("cardMainPhoto");
+        const isNar = mode === MODE_NARRATION;
+        if (wrap) wrap.classList.toggle("mode-narration", isNar);
+        if (blogBtn) {
+          blogBtn.classList.toggle("active", !isNar);
+          blogBtn.setAttribute("aria-selected", String(!isNar));
+        }
+        if (narBtn) {
+          narBtn.classList.toggle("active", isNar);
+          narBtn.setAttribute("aria-selected", String(isNar));
+        }
+        if (companyRow) companyRow.hidden = !isNar;
+        if (cardMain) cardMain.hidden = isNar;
+        const nh = document.getElementById("neighborhood");
+        const aptEl = document.getElementById("aptName");
+        if (nh) {
+          nh.placeholder = isNar ? "예: 중구 신당동" : "예: 송파구 가락동 / 고양시 화정동";
+        }
+        if (aptEl) {
+          aptEl.placeholder = isNar ? "예: 이편한세상아파트" : "예: 별빛마을아파트";
+        }
+        const h2Main = document.getElementById("h2MainPhoto");
+        const h2Bulk = document.getElementById("h2Bulk");
+        const h2Gem = document.getElementById("h2Gemini");
+        const h2Sh = document.getElementById("h2Shrink");
+        if (h2Main) h2Main.textContent = "2. 메인 사진 (1:1)";
+        if (h2Bulk) h2Bulk.textContent = isNar ? "2. 사진 (대본용 순서)" : "3. 사진 (글 생성용 순서)";
+        if (h2Gem) h2Gem.textContent = isNar ? "3. 나레이션 생성 (Gemini)" : "4. Gemini로 생성";
+        if (h2Sh) h2Sh.textContent = isNar ? "4. 사진용량줄이기" : "5. 사진용량줄이기";
+        const btnGen = document.getElementById("btnAutoGenerate");
+        const lblDraft = document.getElementById("labelFinalDraft");
+        const btnCopy = document.getElementById("btnCopyDraft");
+        if (btnGen) btnGen.textContent = isNar ? "나레이션 생성" : "글 자동 생성";
+        if (lblDraft) lblDraft.textContent = isNar ? "나레이션 대본 (미리보기)" : "최종 글 (미리보기)";
+        if (btnCopy) btnCopy.textContent = isNar ? "대본 복사" : "글복사";
+        try {
+          localStorage.setItem(ASSISTANT_MODE_LS, mode);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      (function initAssistantMode() {
+        let m = MODE_BLOG;
+        try {
+          const s = localStorage.getItem(ASSISTANT_MODE_LS);
+          if (s === MODE_NARRATION) m = MODE_NARRATION;
+        } catch {
+          /* ignore */
+        }
+        setAssistantMode(m);
+        document.getElementById("modeBlog")?.addEventListener("click", () => setAssistantMode(MODE_BLOG));
+        document.getElementById("modeNarration")?.addEventListener("click", () => setAssistantMode(MODE_NARRATION));
+      })();
 
       const bulkListEl = document.getElementById("bulkList");
       const bulkDropZone = document.getElementById("bulkDropZone");
@@ -733,7 +840,61 @@
         showToast("메인 사진을 지웠습니다.");
       });
 
-      function buildPrompt() {
+      function escapeHtmlText(s) {
+        return String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function buildNarrationDraftDisplayHtml(raw) {
+        const t = String(raw || "").trim();
+        if (!t) return "";
+        const blocks = t.split(/\n\s*\n/).filter((b) => b.trim());
+        const style =
+          "margin:0 0 1em;line-height:1.65;font-size:12pt;font-weight:400;color:#111;";
+        return blocks
+          .map((b) => `<p style="${style}">${escapeHtmlText(b.trim()).replace(/\n/g, "<br/>")}</p>`)
+          .join("");
+      }
+
+      function buildNarrationPrompt() {
+        const apt = document.getElementById("aptName").value.trim();
+        const neighborhood = document.getElementById("neighborhood").value.trim();
+        const companyEl = document.getElementById("companyName");
+        const company = (companyEl && companyEl.value.trim()) || "점선면디자인";
+        let orderLines = "";
+        bulkFileList.forEach((file, i) => {
+          orderLines += `${i + 1}) 파일명: ${file.name}\n`;
+        });
+        return `당신은 인테리어 시공 브랜드 "${company}"의 유튜브 영상 나레이션 대본 작가입니다.
+시청자가 영상을 보며 듣는 것처럼, 자연스러운 구어체로 한국어 대본만 작성하세요. 화면을 보며 설명하듯이 진행합니다.
+
+[현장 정보 — 반드시 아래 문구를 대본 안에 그대로 반영]
+- 말하는 주체(업체): ${company}
+- 위치(동네·주소): ${neighborhood || "(위 입력란에 적은 값)"}
+- 아파트(단지명): ${apt || "(위 입력란에 적은 값)"}
+- 한 줄로 요약하면: 위치는 「${neighborhood || "…"}」에 있는 「${apt || "…"}」 현장입니다.
+
+[참고 이미지 순서 — 영상 컷·장면 순서로 가정]
+${orderLines || "(목록 없음)"}
+
+[구성]
+1) 처음에는 공간 전체 분위기·첫인상·거주자를 배려한 시공 철학을 짧게 소개합니다.
+2) 이어서 거실·주방·현관·욕실·안방 등으로 넘어가며 세부를 채워 나갑니다. 장면마다 번호를 붙이지 말고 한 편의 이야기처럼 연결하세요.
+3) "${company}" 입장에서 말합니다(「저희 ○○는…」「○○에서는…」 등). 가족을 생각하는 마음으로 꼼꼼히 시공했다는 진심이 느껴지게 하되, 과장 광고체·낚시성 표현은 피합니다.
+
+[형식]
+- 하나의 연속된 나레이션 대본으로만 출력합니다. 블로그 제목·해시태그·마크다운 제목(#)·목록 기호는 넣지 마세요.
+- TTS·오디오 녹음에 바로 넣을 수 있게 읽기 쉬운 문장과 호흡으로 씁니다.
+- **굵게** 같은 마크다운은 쓰지 마세요.
+
+[출력]
+설명 문·메타 코멘트 없이 대본 본문만 출력하세요.`;
+      }
+
+      function buildBlogPrompt() {
         const apt = document.getElementById("aptName").value.trim();
         const neighborhood = document.getElementById("neighborhood").value.trim();
         const areaTag = areaInteriorePrefix(neighborhood) || "지역";
@@ -798,6 +959,10 @@ ${orderLines}
 [톤] 과장 광고체 금지, 차분하게.
 
 [출력] 설명 문 없이 위 형식의 본문만 출력.`;
+      }
+
+      function buildPrompt() {
+        return getAssistantMode() === MODE_NARRATION ? buildNarrationPrompt() : buildBlogPrompt();
       }
 
       /** Vercel 등 서버리스는 요청 본문 약 4.5MB 제한 → 장수 많을수록 해상도·품질 낮춤 */
@@ -919,10 +1084,16 @@ ${orderLines}
             throw new Error(detail);
           }
           if (!data.text) throw new Error("응답에 본문이 없습니다.");
-          lastDraftRaw = reflowDraftBySentenceLength(data.text.trim(), 150);
-          finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
+          const trimmed = data.text.trim();
+          if (getAssistantMode() === MODE_NARRATION) {
+            lastDraftRaw = trimmed;
+            finalDraft.innerHTML = buildNarrationDraftDisplayHtml(lastDraftRaw);
+          } else {
+            lastDraftRaw = reflowDraftBySentenceLength(trimmed, 150);
+            finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
+          }
           status.textContent = `생성 완료 · Gemini 전송 이미지 ${images.length}장, 처리 후 합계 약 ${formatDataSize(totalImageBytes)} (Base64 포함 약 ${formatDataSize(approxBase64Bytes)})`;
-          showToast("생성 완료");
+          showToast(getAssistantMode() === MODE_NARRATION ? "나레이션 생성 완료" : "생성 완료");
         } catch (e) {
           console.error(e);
           status.textContent = "";
@@ -1310,6 +1481,15 @@ ${orderLines}
       document.getElementById("btnCopyDraft").addEventListener("click", async () => {
         if (!lastDraftRaw.trim()) {
           showToast("복사할 내용이 없습니다.");
+          return;
+        }
+        if (getAssistantMode() === MODE_NARRATION) {
+          try {
+            await navigator.clipboard.writeText(lastDraftRaw.trim());
+            showToast("대본 복사 완료");
+          } catch {
+            showToast("복사 실패");
+          }
           return;
         }
         const inner = buildFinalDraftDisplayHtml(lastDraftRaw);
