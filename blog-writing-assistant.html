@@ -291,6 +291,120 @@
         color: #fff;
         border-color: var(--accent);
       }
+      .tts-mode-bar {
+        display: flex;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+      .tts-mode-opt {
+        flex: 1;
+        padding: 12px 8px;
+        text-align: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted);
+        background: #f1f5f9;
+        line-height: 1.35;
+      }
+      .tts-mode-opt--on {
+        background: #fff;
+        color: var(--text);
+      }
+      .tts-gender-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .tts-gender-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .prompt-preset-icons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem 0.75rem;
+        margin: 4px 0 12px;
+        min-height: 0;
+      }
+      .prompt-preset-chip-wrap {
+        position: relative;
+        display: inline-flex;
+        vertical-align: top;
+      }
+      .prompt-preset-chip__remove {
+        position: absolute;
+        top: -0.12rem;
+        right: -0.12rem;
+        z-index: 2;
+        width: 1.25rem;
+        height: 1.25rem;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: #64748b;
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .prompt-preset-chip__remove:hover {
+        background: #b91c1c;
+      }
+      .prompt-preset-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        width: 4.2rem;
+        padding: 0.3rem 0.2rem 0.4rem;
+        border: none;
+        border-radius: 12px;
+        background: transparent;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        text-align: center;
+      }
+      .prompt-preset-chip:hover {
+        background: #f1f5f9;
+      }
+      .prompt-preset-chip__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #eff6ff, #dbeafe);
+        border: 2px solid #93c5fd;
+        font-size: 1rem;
+        font-weight: 800;
+        color: #1d4ed8;
+      }
+      .prompt-preset-chip__title {
+        font-size: 0.65rem;
+        line-height: 1.25;
+        color: var(--muted);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-all;
+      }
       .wrap.mode-narration .final-draft:empty::before {
         content: "「나레이션 생성」을 누르면 여기에 대본이 표시됩니다.";
       }
@@ -390,12 +504,50 @@
           <button type="button" class="btn" id="btnBlogShrinkFolder">폴더에 저장</button>
         </div>
       </div>
+
+      <div class="card card--local-tool" id="cardNarrationTts" hidden>
+        <h2 id="h2NarrationTts">4. 나레이션 오디오 생성</h2>
+        <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
+          <strong>Gemini 2.5 Flash TTS</strong> · 위에서 만든 나레이션 대본을 음성으로 만듭니다. API 키는 위 Gemini란과 동일합니다.
+        </p>
+        <div class="tts-mode-bar" role="group" aria-label="스피커 모드">
+          <div class="tts-mode-opt tts-mode-opt--on">싱글 스피커 오디오</div>
+          <div class="tts-mode-opt" style="opacity: 0.5; pointer-events: none">멀티 스피커</div>
+        </div>
+        <p class="hint" style="margin-top: -4px; margin-bottom: 10px">나레이션은 1인 낭독만 지원합니다.</p>
+        <span class="labelish" style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 6px">목소리</span>
+        <div class="tts-gender-row">
+          <label><input type="radio" name="ttsGender" value="male" checked /> 남성</label>
+          <label><input type="radio" name="ttsGender" value="female" /> 여성</label>
+        </div>
+        <label for="ttsStyleInput">음성 스타일 (프롬프트)</label>
+        <input
+          type="text"
+          id="ttsStyleInput"
+          autocomplete="off"
+          placeholder="예: 차분하고 신뢰감 있는 톤으로 읽어 주세요."
+          value="차분하고 신뢰감 있는 톤으로 한국어 나레이션을 읽어 주세요."
+        />
+        <div class="btn-row" style="margin-top: 4px; margin-bottom: 0">
+          <button type="button" class="btn secondary" id="btnTtsStyleSave">스타일 저장</button>
+        </div>
+        <div id="ttsStylePresetIcons" class="prompt-preset-icons" aria-label="저장된 음성 스타일"></div>
+        <div class="btn-row" style="margin-top: 0">
+          <button type="button" class="btn" id="btnNarrationTts">나레이션 오디오 생성</button>
+        </div>
+        <p class="hint" id="ttsGenStatus" style="min-height: 1.3em"></p>
+        <audio id="ttsAudioPlayer" controls style="width: 100%; margin-top: 6px; display: none"></audio>
+        <div class="btn-row" style="margin-top: 6px">
+          <a class="btn secondary" id="ttsDownloadLink" href="#" download="narration.wav" style="display: none; text-decoration: none">WAV 다운로드</a>
+        </div>
+      </div>
     </div>
     <div class="toast" id="toast" role="status"></div>
 
     <script>
       const GEMINI_MODEL = "gemini-3-flash-preview";
       const ASSISTANT_MODE_LS = "blog_assistant_mode";
+      const LS_TTS_STYLE_PRESETS = "blog_narration_tts_style_presets_v1";
       const MODE_BLOG = "blog";
       const MODE_NARRATION = "narration";
 
@@ -435,10 +587,14 @@
         const h2Bulk = document.getElementById("h2Bulk");
         const h2Gem = document.getElementById("h2Gemini");
         const h2Sh = document.getElementById("h2Shrink");
+        const cardShrink = document.getElementById("cardShrink");
+        const cardNarTts = document.getElementById("cardNarrationTts");
         if (h2Main) h2Main.textContent = "2. 메인 사진 (1:1)";
         if (h2Bulk) h2Bulk.textContent = isNar ? "2. 사진 (대본용 순서)" : "3. 사진 (글 생성용 순서)";
         if (h2Gem) h2Gem.textContent = isNar ? "3. 나레이션 생성 (Gemini)" : "4. Gemini로 생성";
-        if (h2Sh) h2Sh.textContent = isNar ? "4. 사진용량줄이기" : "5. 사진용량줄이기";
+        if (h2Sh) h2Sh.textContent = "5. 사진용량줄이기";
+        if (cardShrink) cardShrink.hidden = isNar;
+        if (cardNarTts) cardNarTts.hidden = !isNar;
         const btnGen = document.getElementById("btnAutoGenerate");
         const lblDraft = document.getElementById("labelFinalDraft");
         const btnCopy = document.getElementById("btnCopyDraft");
@@ -1476,6 +1632,179 @@ ${orderLines}
             btnFolder.disabled = false;
           }
         });
+      })();
+
+      (function initNarrationTts() {
+        const presetRoot = document.getElementById("ttsStylePresetIcons");
+        const styleInput = document.getElementById("ttsStyleInput");
+        const btnSave = document.getElementById("btnTtsStyleSave");
+        const btnGen = document.getElementById("btnNarrationTts");
+        const statusEl = document.getElementById("ttsGenStatus");
+        const audioEl = document.getElementById("ttsAudioPlayer");
+        const dlEl = document.getElementById("ttsDownloadLink");
+        if (!presetRoot || !styleInput || !btnSave || !btnGen || !audioEl || !dlEl) return;
+
+        function loadTtsStylePresets() {
+          try {
+            const raw = localStorage.getItem(LS_TTS_STYLE_PRESETS);
+            const p = raw ? JSON.parse(raw) : [];
+            return Array.isArray(p) ? p : [];
+          } catch {
+            return [];
+          }
+        }
+
+        function saveTtsStylePresets(list) {
+          try {
+            localStorage.setItem(LS_TTS_STYLE_PRESETS, JSON.stringify(list.slice(0, 24)));
+          } catch {
+            /* ignore */
+          }
+        }
+
+        function renderTtsStylePresetIcons() {
+          presetRoot.innerHTML = "";
+          loadTtsStylePresets().forEach((p) => {
+            if (!p || typeof p.text !== "string") return;
+            const text = p.text.trim();
+            if (!text) return;
+            const wrap = document.createElement("div");
+            wrap.className = "prompt-preset-chip-wrap";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "prompt-preset-chip";
+            const titleStr = text.length > 80 ? text.slice(0, 80) + "…" : text;
+            const short = text.length > 10 ? text.slice(0, 10) + "…" : text;
+            const glyph = (text[0] || "·").toUpperCase();
+            btn.innerHTML =
+              '<span class="prompt-preset-chip__icon" aria-hidden="true">' +
+              escapeHtml(glyph) +
+              "</span>" +
+              '<span class="prompt-preset-chip__title" title="' +
+              escapeHtml(titleStr) +
+              '">' +
+              escapeHtml(short) +
+              "</span>";
+            btn.addEventListener("click", () => {
+              styleInput.value = text;
+            });
+            const del = document.createElement("button");
+            del.type = "button";
+            del.className = "prompt-preset-chip__remove";
+            del.setAttribute("aria-label", "이 스타일 프리셋 삭제");
+            del.textContent = "×";
+            del.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const next = loadTtsStylePresets().filter((x) => x && x.id !== p.id);
+              saveTtsStylePresets(next);
+              renderTtsStylePresetIcons();
+            });
+            wrap.appendChild(btn);
+            wrap.appendChild(del);
+            presetRoot.appendChild(wrap);
+          });
+        }
+
+        btnSave.addEventListener("click", () => {
+          const text = styleInput.value.trim();
+          if (!text) {
+            showToast("저장할 스타일 문구를 입력하세요.");
+            return;
+          }
+          const list = loadTtsStylePresets();
+          if (list.some((x) => x && x.text === text)) {
+            showToast("이미 같은 스타일이 저장되어 있습니다.");
+            return;
+          }
+          list.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            text
+          });
+          saveTtsStylePresets(list);
+          renderTtsStylePresetIcons();
+          showToast("스타일을 저장했습니다.");
+        });
+
+        btnGen.addEventListener("click", async () => {
+          if (getAssistantMode() !== MODE_NARRATION) {
+            showToast("나레이션 모드에서만 사용할 수 있습니다.");
+            return;
+          }
+          const script = lastDraftRaw.trim();
+          if (!script) {
+            showToast("먼저 나레이션 대본을 생성하세요.");
+            return;
+          }
+          const apiKey = (document.getElementById("aiApiKey")?.value || "").trim();
+          const voiceGender =
+            document.querySelector('input[name="ttsGender"]:checked')?.value || "male";
+          const styleHint = styleInput.value.trim();
+          const payload = { script, voiceGender, styleHint };
+          if (apiKey) payload.apiKey = apiKey;
+
+          btnGen.disabled = true;
+          if (statusEl) statusEl.textContent = "오디오 생성 중…";
+          try {
+            const res = await fetch(`${getApiBase()}/api/gemini-tts`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const rawText = await res.text();
+            let data = {};
+            try {
+              data = rawText ? JSON.parse(rawText) : {};
+            } catch {
+              data = { message: rawText ? rawText.slice(0, 280) : "(본문 없음)" };
+            }
+            if (!res.ok) {
+              let detail = data.message || res.statusText || `HTTP ${res.status}`;
+              if (res.status === 404) {
+                detail +=
+                  " — /api/gemini-tts 가 없습니다. 서버·배포에 api/gemini-tts.js 포함 여부를 확인하세요.";
+              }
+              throw new Error(detail);
+            }
+            const wavB64 = data.audioBase64;
+            if (!wavB64 || typeof wavB64 !== "string") {
+              throw new Error("응답에 오디오가 없습니다.");
+            }
+            const bin = atob(wavB64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/wav" });
+            if (audioEl._ttsObjectUrl) {
+              try {
+                URL.revokeObjectURL(audioEl._ttsObjectUrl);
+              } catch {
+                /* ignore */
+              }
+            }
+            audioEl._ttsObjectUrl = URL.createObjectURL(blob);
+            audioEl.src = audioEl._ttsObjectUrl;
+            audioEl.style.display = "block";
+            dlEl.href = audioEl._ttsObjectUrl;
+            dlEl.download = `narration-${Date.now()}.wav`;
+            dlEl.style.display = "inline-flex";
+            if (statusEl) {
+              statusEl.textContent = data.voiceName
+                ? `생성 완료 · 보이스 ${data.voiceName} · 재생 또는 다운로드`
+                : "생성 완료 · 재생 또는 다운로드";
+            }
+            showToast("나레이션 오디오 생성 완료");
+          } catch (e) {
+            console.error(e);
+            if (statusEl) statusEl.textContent = "";
+            const msg = e?.message || String(e);
+            showToast(msg);
+            alert(msg);
+          } finally {
+            btnGen.disabled = false;
+          }
+        });
+
+        renderTtsStylePresetIcons();
       })();
 
       document.getElementById("btnCopyDraft").addEventListener("click", async () => {

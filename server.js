@@ -24,6 +24,7 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
 const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-generate-logic.cjs");
+const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -80,6 +81,18 @@ app.post("/api/blog-generate", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[blog-generate]", error);
+    res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** 나레이션 TTS — lib/gemini-tts-logic.cjs (Vercel api/gemini-tts.js 와 공유) */
+app.post("/api/gemini-tts", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleGeminiTtsRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[gemini-tts]", error);
     res.status(500).json({ message: error?.message || "서버 오류" });
   }
 });
