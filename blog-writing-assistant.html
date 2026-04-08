@@ -92,6 +92,25 @@
         color: var(--muted);
         font-size: 0.88rem;
       }
+      .nar-draft-edit {
+        width: 100%;
+        min-height: 280px;
+        max-height: 520px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: #111;
+        font: inherit;
+        line-height: 1.55;
+        resize: vertical;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+      }
+      .nar-draft-edit::placeholder {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
       .final-draft strong {
         font-weight: 800;
       }
@@ -430,7 +449,7 @@
         <input type="text" id="aptName" placeholder="예: 별빛마을아파트" autocomplete="off" />
         <div id="companyNameRow" hidden>
           <label for="companyName">업체 이름</label>
-          <input type="text" id="companyName" value="점선면디자인" placeholder="예: 점선면디자인" autocomplete="organization" />
+          <input type="text" id="companyName" placeholder="예: 점선면디자인" autocomplete="organization" />
           <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
             나레이션은 이 이름을 기준으로 말합니다. 위 <strong>동네·주소</strong>·<strong>아파트 이름</strong>이 대본 안에 그대로 반영됩니다.
           </p>
@@ -482,8 +501,18 @@
         <p class="hint" id="autoGenStatus" style="min-height: 1.3em; color: var(--text)"></p>
         <label style="margin-top: 14px" id="labelFinalDraft">최종 글 (미리보기)</label>
         <div id="finalDraft" class="final-draft" role="region" aria-live="polite"></div>
+        <textarea
+          id="narrationDraftEdit"
+          class="nar-draft-edit"
+          hidden
+          rows="14"
+          spellcheck="true"
+          aria-labelledby="labelFinalDraft"
+          placeholder="「나레이션 생성」을 누르면 여기에 대본이 표시됩니다. 직접 수정한 뒤 「대본 저장」을 누르면 오디오 생성에 반영됩니다."
+        ></textarea>
         <div class="btn-row">
           <button type="button" class="btn secondary" id="btnCopyDraft">글복사</button>
+          <button type="button" class="btn secondary" id="btnNarrationSaveDraft" hidden>대본 저장</button>
         </div>
         <p class="hint blog-ai-warning" role="alert">
           <strong>반드시 실제 사진과 대조하며 검수해 주세요.</strong> AI가 만든 문장·공간 설명·수치·자재명 등이 사실과 다를 수 있습니다. 게시 전에 직접 확인하는 것이 안전합니다.
@@ -517,8 +546,8 @@
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">나레이션은 1인 낭독만 지원합니다.</p>
         <span class="labelish" style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 6px">목소리</span>
         <div class="tts-gender-row">
-          <label><input type="radio" name="ttsGender" value="male" checked /> 남성</label>
-          <label><input type="radio" name="ttsGender" value="female" /> 여성</label>
+          <label><input type="radio" name="ttsGender" value="male" /> 남성</label>
+          <label><input type="radio" name="ttsGender" value="female" checked /> 여성</label>
         </div>
         <label for="ttsStyleInput">음성 스타일 (프롬프트)</label>
         <input
@@ -601,12 +630,37 @@
         if (btnGen) btnGen.textContent = isNar ? "나레이션 생성" : "글 자동 생성";
         if (lblDraft) lblDraft.textContent = isNar ? "나레이션 대본 (미리보기)" : "최종 글 (미리보기)";
         if (btnCopy) btnCopy.textContent = isNar ? "대본 복사" : "글복사";
+        const finalDraftEl = document.getElementById("finalDraft");
+        const narTa = document.getElementById("narrationDraftEdit");
+        const btnNarSave = document.getElementById("btnNarrationSaveDraft");
+        if (finalDraftEl && narTa) {
+          if (isNar) {
+            finalDraftEl.hidden = true;
+            narTa.hidden = false;
+            narTa.value = lastDraftRaw;
+          } else {
+            finalDraftEl.hidden = false;
+            narTa.hidden = true;
+          }
+        }
+        if (btnNarSave) btnNarSave.hidden = !isNar;
         try {
           localStorage.setItem(ASSISTANT_MODE_LS, mode);
         } catch {
           /* ignore */
         }
       }
+
+      const bulkListEl = document.getElementById("bulkList");
+      const bulkDropZone = document.getElementById("bulkDropZone");
+      const bulkPhotoInput = document.getElementById("bulkPhotoInput");
+      const finalDraft = document.getElementById("finalDraft");
+      const narrationDraftEdit = document.getElementById("narrationDraftEdit");
+      const toast = document.getElementById("toast");
+      /** @type {File[]} */
+      let bulkFileList = [];
+      /** @type {string} Gemini 원문(마크다운 ** 유지) */
+      let lastDraftRaw = "";
 
       (function initAssistantMode() {
         let m = MODE_BLOG;
@@ -620,16 +674,6 @@
         document.getElementById("modeBlog")?.addEventListener("click", () => setAssistantMode(MODE_BLOG));
         document.getElementById("modeNarration")?.addEventListener("click", () => setAssistantMode(MODE_NARRATION));
       })();
-
-      const bulkListEl = document.getElementById("bulkList");
-      const bulkDropZone = document.getElementById("bulkDropZone");
-      const bulkPhotoInput = document.getElementById("bulkPhotoInput");
-      const finalDraft = document.getElementById("finalDraft");
-      const toast = document.getElementById("toast");
-      /** @type {File[]} */
-      let bulkFileList = [];
-      /** @type {string} Gemini 원문(마크다운 ** 유지) */
-      let lastDraftRaw = "";
 
       (function initGeminiKeyField() {
         const el = document.getElementById("aiApiKey");
@@ -996,39 +1040,26 @@
         showToast("메인 사진을 지웠습니다.");
       });
 
-      function escapeHtmlText(s) {
-        return String(s || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;");
-      }
-
-      function buildNarrationDraftDisplayHtml(raw) {
-        const t = String(raw || "").trim();
-        if (!t) return "";
-        const blocks = t.split(/\n\s*\n/).filter((b) => b.trim());
-        const style =
-          "margin:0 0 1em;line-height:1.65;font-size:12pt;font-weight:400;color:#111;";
-        return blocks
-          .map((b) => `<p style="${style}">${escapeHtmlText(b.trim()).replace(/\n/g, "<br/>")}</p>`)
-          .join("");
-      }
-
       function buildNarrationPrompt() {
         const apt = document.getElementById("aptName").value.trim();
         const neighborhood = document.getElementById("neighborhood").value.trim();
         const companyEl = document.getElementById("companyName");
-        const company = (companyEl && companyEl.value.trim()) || "점선면디자인";
+        const company = companyEl && companyEl.value.trim() ? companyEl.value.trim() : "";
+        const opener = company
+          ? `당신은 인테리어 시공 브랜드 "${company}"의 유튜브 영상 나레이션 대본 작가입니다.`
+          : `당신은 인테리어 시공 현장을 다루는 유튜브 영상 나레이션 대본 작가입니다.`;
+        const stance = company
+          ? `3) "${company}" 입장에서 말합니다(「저희 ○○는…」「○○에서는…」 등). 가족을 생각하는 마음으로 꼼꼼히 시공했다는 진심이 느껴지게 하되, 과장 광고체·낚시성 표현은 피합니다.`
+          : `3) 시공사·현장 전문가 입장에서 말합니다(「저희는…」「현장에서는…」 등). 가족을 생각하는 마음으로 꼼꼼히 시공했다는 진심이 느껴지게 하되, 과장 광고체·낚시성 표현은 피합니다.`;
         let orderLines = "";
         bulkFileList.forEach((file, i) => {
           orderLines += `${i + 1}) 파일명: ${file.name}\n`;
         });
-        return `당신은 인테리어 시공 브랜드 "${company}"의 유튜브 영상 나레이션 대본 작가입니다.
+        return `${opener}
 시청자가 영상을 보며 듣는 것처럼, 자연스러운 구어체로 한국어 대본만 작성하세요. 화면을 보며 설명하듯이 진행합니다.
 
 [현장 정보 — 반드시 아래 문구를 대본 안에 그대로 반영]
-- 말하는 주체(업체): ${company}
+- 말하는 주체(업체): ${company || "(업체명 미입력 — 중립적 시공·현장 관점으로 서술)"}
 - 위치(동네·주소): ${neighborhood || "(위 입력란에 적은 값)"}
 - 아파트(단지명): ${apt || "(위 입력란에 적은 값)"}
 - 한 줄로 요약하면: 위치는 「${neighborhood || "…"}」에 있는 「${apt || "…"}」 현장입니다.
@@ -1039,7 +1070,7 @@ ${orderLines || "(목록 없음)"}
 [구성]
 1) 처음에는 공간 전체 분위기·첫인상·거주자를 배려한 시공 철학을 짧게 소개합니다.
 2) 이어서 거실·주방·현관·욕실·안방 등으로 넘어가며 세부를 채워 나갑니다. 장면마다 번호를 붙이지 말고 한 편의 이야기처럼 연결하세요.
-3) "${company}" 입장에서 말합니다(「저희 ○○는…」「○○에서는…」 등). 가족을 생각하는 마음으로 꼼꼼히 시공했다는 진심이 느껴지게 하되, 과장 광고체·낚시성 표현은 피합니다.
+${stance}
 
 [형식]
 - 하나의 연속된 나레이션 대본으로만 출력합니다. 블로그 제목·해시태그·마크다운 제목(#)·목록 기호는 넣지 마세요.
@@ -1191,6 +1222,7 @@ ${orderLines}
         btn.disabled = true;
         lastDraftRaw = "";
         finalDraft.innerHTML = "";
+        if (narrationDraftEdit) narrationDraftEdit.value = "";
         status.textContent = "처리 중…";
         try {
           const nFiles = bulkFileList.length;
@@ -1243,7 +1275,7 @@ ${orderLines}
           const trimmed = data.text.trim();
           if (getAssistantMode() === MODE_NARRATION) {
             lastDraftRaw = trimmed;
-            finalDraft.innerHTML = buildNarrationDraftDisplayHtml(lastDraftRaw);
+            if (narrationDraftEdit) narrationDraftEdit.value = trimmed;
           } else {
             lastDraftRaw = reflowDraftBySentenceLength(trimmed, 150);
             finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
@@ -1731,14 +1763,21 @@ ${orderLines}
             showToast("나레이션 모드에서만 사용할 수 있습니다.");
             return;
           }
-          const script = lastDraftRaw.trim();
-          if (!script) {
-            showToast("먼저 나레이션 대본을 생성하세요.");
+          const ta = document.getElementById("narrationDraftEdit");
+          const live = ta ? ta.value.trim() : "";
+          const saved = lastDraftRaw.trim();
+          if (!saved) {
+            showToast("먼저 나레이션 대본을 생성하거나, 편집 후 대본 저장을 해 주세요.");
             return;
           }
+          if (live !== saved) {
+            showToast("먼저 대본 저장을 눌러 주세요.");
+            return;
+          }
+          const script = saved;
           const apiKey = (document.getElementById("aiApiKey")?.value || "").trim();
           const voiceGender =
-            document.querySelector('input[name="ttsGender"]:checked')?.value || "male";
+            document.querySelector('input[name="ttsGender"]:checked')?.value || "female";
           const styleHint = styleInput.value.trim();
           const payload = { script, voiceGender, styleHint };
           if (apiKey) payload.apiKey = apiKey;
@@ -1807,18 +1846,37 @@ ${orderLines}
         renderTtsStylePresetIcons();
       })();
 
-      document.getElementById("btnCopyDraft").addEventListener("click", async () => {
-        if (!lastDraftRaw.trim()) {
-          showToast("복사할 내용이 없습니다.");
+      document.getElementById("btnNarrationSaveDraft")?.addEventListener("click", () => {
+        if (getAssistantMode() !== MODE_NARRATION) return;
+        const ta = narrationDraftEdit || document.getElementById("narrationDraftEdit");
+        if (!ta) return;
+        const t = ta.value.trim();
+        if (!t) {
+          showToast("저장할 대본이 없습니다.");
           return;
         }
+        lastDraftRaw = t;
+        showToast("나레이션 오디오에 대본으로 저장되었습니다");
+      });
+
+      document.getElementById("btnCopyDraft").addEventListener("click", async () => {
         if (getAssistantMode() === MODE_NARRATION) {
+          const ta = narrationDraftEdit || document.getElementById("narrationDraftEdit");
+          const narText = (ta && ta.value.trim()) || lastDraftRaw.trim();
+          if (!narText) {
+            showToast("복사할 내용이 없습니다.");
+            return;
+          }
           try {
-            await navigator.clipboard.writeText(lastDraftRaw.trim());
+            await navigator.clipboard.writeText(narText);
             showToast("대본 복사 완료");
           } catch {
             showToast("복사 실패");
           }
+          return;
+        }
+        if (!lastDraftRaw.trim()) {
+          showToast("복사할 내용이 없습니다.");
           return;
         }
         const inner = buildFinalDraftDisplayHtml(lastDraftRaw);
