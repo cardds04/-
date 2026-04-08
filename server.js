@@ -25,6 +25,7 @@ app.use(express.json({ limit: "50mb" }));
 
 const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-generate-logic.cjs");
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
+const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -93,6 +94,18 @@ app.post("/api/gemini-tts", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[gemini-tts]", error);
+    res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** Topaz Photo AI 2x 업스케일 — 로컬 전용 */
+app.post("/api/topaz-upscale", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleTopazUpscaleRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[topaz-upscale]", error);
     res.status(500).json({ message: error?.message || "서버 오류" });
   }
 });
