@@ -424,6 +424,23 @@
         -webkit-box-orient: vertical;
         word-break: break-all;
       }
+      .nar-draft-preset-wrap {
+        margin-top: 4px;
+        margin-bottom: 4px;
+      }
+      .nar-draft-preset-chip__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #ecfdf5, #a7f3d0);
+        border: 2px solid #34d399;
+        font-size: 1rem;
+        font-weight: 800;
+        color: #047857;
+      }
       .wrap.mode-narration .final-draft:empty::before {
         content: "「나레이션 생성」을 누르면 여기에 대본이 표시됩니다.";
       }
@@ -514,6 +531,16 @@
           <button type="button" class="btn secondary" id="btnCopyDraft">글복사</button>
           <button type="button" class="btn secondary" id="btnNarrationSaveDraft" hidden>대본 저장</button>
         </div>
+        <div id="narrationDraftPresetWrap" class="nar-draft-preset-wrap" hidden>
+          <span
+            class="labelish"
+            style="display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 8px 0 6px"
+            >저장된 대본</span>
+          <p class="hint" style="margin: -2px 0 6px; font-size: 0.74rem">
+            「나레이션 생성」이 끝나면 여기에 자동으로 추가됩니다. 대본 저장으로도 추가할 수 있어요. 아이콘을 누르면 편집창에 불러오고, × 로 목록에서 지웁니다.
+          </p>
+          <div id="narrationDraftPresetIcons" class="prompt-preset-icons" aria-label="저장된 나레이션 대본"></div>
+        </div>
         <p class="hint blog-ai-warning" role="alert">
           <strong>반드시 실제 사진과 대조하며 검수해 주세요.</strong> AI가 만든 문장·공간 설명·수치·자재명 등이 사실과 다를 수 있습니다. 게시 전에 직접 확인하는 것이 안전합니다.
         </p>
@@ -577,8 +604,108 @@
       const GEMINI_MODEL = "gemini-3-flash-preview";
       const ASSISTANT_MODE_LS = "blog_assistant_mode";
       const LS_TTS_STYLE_PRESETS = "blog_narration_tts_style_presets_v1";
+      const LS_NARRATION_DRAFT_PRESETS = "blog_narration_draft_presets_v1";
+      const NARRATION_DRAFT_PRESET_MAX = 30;
       const MODE_BLOG = "blog";
       const MODE_NARRATION = "narration";
+
+      function loadNarrationDraftPresets() {
+        try {
+          const raw = localStorage.getItem(LS_NARRATION_DRAFT_PRESETS);
+          const p = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(p)) return [];
+          return p.filter((x) => x && typeof x.id === "string" && typeof x.text === "string" && x.text.trim());
+        } catch {
+          return [];
+        }
+      }
+
+      function saveNarrationDraftPresets(list) {
+        try {
+          localStorage.setItem(LS_NARRATION_DRAFT_PRESETS, JSON.stringify(list.slice(0, NARRATION_DRAFT_PRESET_MAX)));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      /** 나레이션 대본을 저장 목록 맨 앞에 추가하고 아이콘 갱신 */
+      function pushNarrationDraftPreset(text) {
+        const t = String(text || "").trim();
+        if (!t) return;
+        const list = loadNarrationDraftPresets();
+        list.unshift({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+          text: t,
+          savedAt: Date.now()
+        });
+        saveNarrationDraftPresets(list);
+        renderNarrationDraftPresetIcons();
+      }
+
+      /** 나레이션 모드에서만 호출 (escapeHtml은 아래쪽 선언, 호출 시점에는 존재) */
+      function renderNarrationDraftPresetIcons() {
+        const root = document.getElementById("narrationDraftPresetIcons");
+        const ta = document.getElementById("narrationDraftEdit");
+        if (!root) return;
+        root.innerHTML = "";
+        const items = loadNarrationDraftPresets()
+          .map((x) => ({
+            ...x,
+            savedAt: typeof x.savedAt === "number" ? x.savedAt : 0
+          }))
+          .sort((a, b) => b.savedAt - a.savedAt);
+        items.forEach((p) => {
+          const text = p.text.trim();
+          if (!text) return;
+          const firstLine = text.split(/\r?\n/).find((l) => l.trim()) || text;
+          const titleStr = firstLine.trim().slice(0, 80) + (firstLine.length > 80 ? "…" : "");
+          const short = titleStr.length > 10 ? titleStr.slice(0, 10) + "…" : titleStr;
+          const glyph = (firstLine.trim()[0] || "대").toUpperCase();
+          const when = p.savedAt ? new Date(p.savedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" }) : "";
+          const wrap = document.createElement("div");
+          wrap.className = "prompt-preset-chip-wrap";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "prompt-preset-chip";
+          btn.innerHTML =
+            '<span class="nar-draft-preset-chip__icon" aria-hidden="true">' +
+            escapeHtml(glyph) +
+            "</span>" +
+            '<span class="prompt-preset-chip__title" title="' +
+            escapeHtml(when ? `${when} — ${titleStr}` : titleStr) +
+            '">' +
+            escapeHtml(short) +
+            "</span>";
+          btn.addEventListener("click", () => {
+            if (ta) {
+              ta.value = text;
+              ta.focus();
+              try {
+                ta.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              } catch {
+                /* ignore */
+              }
+            }
+            showToast("저장된 대본을 불러왔습니다. 수정 후 필요하면 다시 대본 저장하세요.");
+          });
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "prompt-preset-chip__remove";
+          del.setAttribute("aria-label", "이 대본 프리셋 삭제");
+          del.textContent = "×";
+          del.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const next = loadNarrationDraftPresets().filter((x) => x && x.id !== p.id);
+            saveNarrationDraftPresets(next);
+            renderNarrationDraftPresetIcons();
+            showToast("저장 목록에서 삭제했습니다.");
+          });
+          wrap.appendChild(btn);
+          wrap.appendChild(del);
+          root.appendChild(wrap);
+        });
+      }
 
       function getAssistantMode() {
         return document.getElementById("appWrap")?.classList.contains("mode-narration")
@@ -644,6 +771,11 @@
           }
         }
         if (btnNarSave) btnNarSave.hidden = !isNar;
+        const narPresetWrap = document.getElementById("narrationDraftPresetWrap");
+        if (narPresetWrap) {
+          narPresetWrap.hidden = !isNar;
+          if (isNar) renderNarrationDraftPresetIcons();
+        }
         try {
           localStorage.setItem(ASSISTANT_MODE_LS, mode);
         } catch {
@@ -1276,6 +1408,7 @@ ${orderLines}
           if (getAssistantMode() === MODE_NARRATION) {
             lastDraftRaw = trimmed;
             if (narrationDraftEdit) narrationDraftEdit.value = trimmed;
+            pushNarrationDraftPreset(trimmed);
           } else {
             lastDraftRaw = reflowDraftBySentenceLength(trimmed, 150);
             finalDraft.innerHTML = buildFinalDraftDisplayHtml(lastDraftRaw);
@@ -1856,6 +1989,7 @@ ${orderLines}
           return;
         }
         lastDraftRaw = t;
+        pushNarrationDraftPreset(t);
         showToast("나레이션 오디오에 대본으로 저장되었습니다");
       });
 
