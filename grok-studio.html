@@ -2281,7 +2281,14 @@
                   data = { message: rawText ? rawText.slice(0, 240) : "(본문 없음)" };
                 }
                 if (!res.ok) {
-                  throw new Error(data.message || res.statusText || "Topaz 요청 실패");
+                  var extra = "";
+                  if (data && (data.tried || data.detail)) {
+                    extra =
+                      "\n\n" +
+                      (data.tried ? "시도한 명령:\n" + data.tried + "\n\n" : "") +
+                      (data.detail ? "상세:\n" + data.detail : "");
+                  }
+                  throw new Error((data.message || res.statusText || "Topaz 요청 실패") + extra);
                 }
                 if (!data.imageBase64) throw new Error("Topaz 응답에 이미지가 없습니다.");
                 var bin = atob(data.imageBase64);

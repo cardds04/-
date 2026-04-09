@@ -826,12 +826,12 @@
         });
       })();
 
-      /** 동네 문자열 → 제목용 [○○인테리어]의 ○○ (예: 송파구→송파, 고양시→고양) */
+      /** 동네 문자열 → 제목용 [○○인테리어]의 ○○ (예: 서초구→서초구, 고양시→고양) */
       function areaInteriorePrefix(raw) {
         const s = String(raw || "").trim();
         if (!s) return "";
         const gu = s.match(/([\uAC00-\uD7A3]{2,10})구(?=\s|$)/);
-        if (gu) return gu[1];
+        if (gu) return `${gu[1]}구`;
         const si = s.match(/([\uAC00-\uD7A3]{2,10})시(?=\s|$)/);
         if (si) return si[1];
         const gun = s.match(/([\uAC00-\uD7A3]{2,10})군(?=\s|$)/);

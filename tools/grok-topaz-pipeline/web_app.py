@@ -140,6 +140,156 @@ _jobs: dict[str, dict] = {}
 _topaz_run_lock = threading.Lock()
 
 
+def _topaz_photo_cli_candidates() -> list[str]:
+    """Topaz Photo AI CLI 후보 (환경변수 우선)."""
+    env = (os.environ.get("TOPAZ_PHOTO_AI_CLI") or "").strip()
+    if env:
+        return [env]
+    return [
+        "topaz-photo-ai",
+        "topaz_photo_ai",
+        "/Applications/Topaz Photo AI.app/Contents/MacOS/Topaz Photo AI",
+        "/Applications/Topaz Photo AI.app/Contents/MacOS/TopazPhotoAI",
+        # 사용자 환경(SSD)에 있는 경우가 많음
+        "/Volumes/ssd/Applications/Topaz Photo AI.app/Contents/MacOS/Topaz Photo AI",
+        "/Volumes/ssd/Applications/Topaz Photo AI.app/Contents/MacOS/TopazPhotoAI",
+        # 최신 앱명: Topaz Photo (Photo AI 리브랜딩)
+        "/Applications/Topaz Photo.app/Contents/MacOS/Topaz Photo",
+        "/Volumes/ssd/Applications/Topaz Photo.app/Contents/MacOS/Topaz Photo",
+    ]
+
+
+def _topaz_photo_help(cli: str) -> tuple[bool, str, str]:
+    """(ok, combined_text, err_code/message)"""
+    import subprocess
+
+    try:
+        r = subprocess.run(
+            [cli, "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False, "", "ENOENT"
+    except Exception as e:
+        return False, "", str(e)
+    text_out = (r.stdout or "") + "\n" + (r.stderr or "")
+    return r.returncode == 0 and bool(text_out.strip()), text_out, ""
+
+
+def _pick_topaz_photo_cli() -> tuple[str, str, str]:
+    """(cli, help_text, tried_summary)"""
+    tried = []
+    for cand in _topaz_photo_cli_candidates():
+        ok, txt, err = _topaz_photo_help(cand)
+        tried.append(f"{cand}{(' (' + err + ')') if err else ''}")
+        if ok:
+            return cand, txt, " | ".join(tried)
+    return "", "", " | ".join(tried)
+
+
+def _build_topaz_photo_args(help_text: str, input_path: Path, output_path: Path) -> list[str]:
+    h = help_text or ""
+    args: list[str] = []
+    has_input = "--input" in h
+    has_output = "--output" in h
+    if has_input:
+        args += ["--input", str(input_path)]
+    if has_output:
+        args += ["--output", str(output_path)]
+    if not has_input or not has_output:
+        if not has_input:
+            args.append(str(input_path))
+        if not has_output:
+            args.append(str(output_path))
+
+    # Autopilot on
+    if "--autopilot" in h:
+        args.append("--autopilot")
+    elif "--auto" in h:
+        args.append("--auto")
+
+    # 2x upscale (지원되는 경우만)
+    if "--upscale" in h:
+        args += ["--upscale", "2"]
+    elif "--scale" in h:
+        args += ["--scale", "2"]
+    return args
+
+
+def _run_topaz_photo_upscale(job_id: str, items: list[tuple[Path, str]]) -> None:
+    """items: [(input_path, stem)]"""
+    import subprocess
+
+    out_dir = _job_dir(job_id)
+    outputs: list[str] = []
+    cli, help_text, tried = _pick_topaz_photo_cli()
+    if not cli:
+        _set_job(
+            job_id,
+            phase="failed",
+            error="Topaz Photo AI CLI를 찾지 못했습니다. 환경변수 TOPAZ_PHOTO_AI_CLI를 설정하세요.",
+            message="Topaz CLI 없음",
+            tried=tried,
+        )
+        return
+
+    with _topaz_run_lock:
+        try:
+            for idx, (src, stem) in enumerate(items):
+                _set_job(
+                    job_id,
+                    phase="topaz_photo",
+                    message=f"Topaz Photo AI 처리 중… ({idx+1}/{len(items)})",
+                    error=None,
+                )
+                ext = src.suffix.lower() or ".png"
+                out_path = out_dir / f"{stem}_토파즈2x{ext}"
+                args = _build_topaz_photo_args(help_text, src, out_path)
+                r = subprocess.run(
+                    [cli] + args,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if r.returncode != 0:
+                    detail = ((r.stderr or "") + "\n" + (r.stdout or "")).strip()[:2000]
+                    _set_job(
+                        job_id,
+                        phase="failed",
+                        error=f"Topaz CLI 실패 (rc={r.returncode})\n{detail}",
+                        message="Topaz CLI 실행 실패",
+                        tried=" ".join([cli] + args),
+                    )
+                    return
+                if not out_path.is_file():
+                    detail = ((r.stderr or "") + "\n" + (r.stdout or "")).strip()[:2000]
+                    _set_job(
+                        job_id,
+                        phase="failed",
+                        error="Topaz 출력 파일이 생성되지 않았습니다.\n" + detail,
+                        message="Topaz 출력 없음",
+                        tried=" ".join([cli] + args),
+                    )
+                    return
+                outputs.append(str(out_path))
+            _set_job(
+                job_id,
+                phase="done",
+                message="완료 (Topaz Photo AI 2x)",
+                topaz_photo_outputs=outputs,
+                error=None,
+            )
+        except Exception as e:
+            _set_job(
+                job_id,
+                phase="failed",
+                error=str(e),
+                message="오류가 발생했습니다.",
+            )
+
+
 def _job_dir(job_id: str) -> Path:
     d = OUTPUT_ROOT / job_id
     d.mkdir(parents=True, exist_ok=True)
@@ -626,6 +776,54 @@ def api_batch_aspect_ratio():
     )
 
 
+@app.route("/api/topaz-photo-upscale-jobs", methods=["POST"])
+def create_topaz_photo_upscale_job():
+    files = request.files.getlist("images")
+    if not files or not any(f and getattr(f, "filename", None) for f in files):
+        return jsonify({"error": "이미지를 하나 이상 선택하세요."}), 400
+    job_id = uuid.uuid4().hex
+    job_out = _job_dir(job_id)
+    items: list[tuple[Path, str]] = []
+    idx = 0
+    for f in files:
+        if not f or not f.filename:
+            continue
+        safe = secure_filename(f.filename) or f"img{idx}.png"
+        ext = Path(safe).suffix.lower() or ".png"
+        if ext not in _GROK_IMAGE_EXT_OK:
+            continue
+        stem = Path(safe).stem or f"img{idx}"
+        dest = job_out / f"source_topaz_{idx}_{stem}{ext}"
+        f.save(dest)
+        items.append((dest, stem))
+        idx += 1
+        if len(items) >= 50:
+            break
+    if not items:
+        return jsonify({"error": "지원 형식(.jpg .png .webp 등) 이미지를 올려 주세요."}), 400
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "phase": "queued",
+            "message": "곧 시작합니다…",
+            "kind": "topaz_photo",
+            "grok_progress": None,
+            "xai_request_id": None,
+            "raw_mp4": None,
+            "final_mp4": None,
+            "pan_outputs": [],
+            "grok_image_outputs": [],
+            "topaz_photo_outputs": [],
+            "error": None,
+        }
+    t = threading.Thread(
+        target=_run_topaz_photo_upscale,
+        kwargs={"job_id": job_id, "items": items},
+        daemon=True,
+    )
+    t.start()
+    return jsonify({"job_id": job_id, "kind": "topaz_photo"})
+
+
 _GROK_IMAGE_EXT_OK = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 
 
@@ -1023,6 +1221,18 @@ def job_status(job_id: str):
                     "url": f"/api/jobs/{job_id}/download/grok-image/{quote(name, safe='')}",
                 }
             )
+    topaz_photo_outputs = j.get("topaz_photo_outputs") or []
+    topaz_photo_files = []
+    for p in topaz_photo_outputs:
+        pp = Path(p)
+        if pp.is_file():
+            name = pp.name
+            topaz_photo_files.append(
+                {
+                    "name": name,
+                    "url": f"/api/jobs/{job_id}/download/topaz-photo/{quote(name, safe='')}",
+                }
+            )
     raw_path = j.get("raw_mp4")
     final_path = j.get("final_mp4")
     has_raw = bool(raw_path and Path(raw_path).is_file())
@@ -1047,8 +1257,10 @@ def job_status(job_id: str):
             "pan_total": j.get("pan_total"),
             "pan_files": pan_files,
             "grok_image_files": grok_image_files,
+            "topaz_photo_files": topaz_photo_files,
             "batch_stem": j.get("batch_stem"),
             "batch_index": j.get("batch_index"),
+            "tried": j.get("tried"),
         }
     )
 
@@ -1168,6 +1380,26 @@ def download_grok_image(job_id: str, filename: str):
     if not j or j.get("kind") != "grok_image":
         return jsonify({"error": "파일 없음"}), 404
     outs = j.get("grok_image_outputs") or []
+    allowed = {Path(p).name for p in outs}
+    if name not in allowed:
+        return jsonify({"error": "파일 없음"}), 404
+    p = _job_dir(job_id) / name
+    if not p.is_file():
+        return jsonify({"error": "파일 없음"}), 404
+    return send_file(p, as_attachment=True, download_name=name)
+
+
+@app.route("/api/jobs/<job_id>/download/topaz-photo/<filename>")
+def download_topaz_photo(job_id: str, filename: str):
+    name = secure_filename(Path(filename).name)
+    suf = Path(name).suffix.lower()
+    if not name or suf not in _GROK_IMAGE_EXT_OK:
+        return jsonify({"error": "파일 없음"}), 404
+    with _jobs_lock:
+        j = _jobs.get(job_id)
+    if not j or j.get("kind") != "topaz_photo":
+        return jsonify({"error": "파일 없음"}), 404
+    outs = j.get("topaz_photo_outputs") or []
     allowed = {Path(p).name for p in outs}
     if name not in allowed:
         return jsonify({"error": "파일 없음"}), 404

@@ -56,6 +56,11 @@
   const batchAspectFileNames = $("batchAspectFileNames");
   const btnBatchAspectDownload = $("btnBatchAspectDownload");
   const batchAspectRatio = $("batchAspectRatio");
+  const topazPhotoFiles = $("topazPhotoFiles");
+  const topazPhotoDropzone = $("topazPhotoDropzone");
+  const topazPhotoFileNames = $("topazPhotoFileNames");
+  const btnTopazPhotoRun = $("btnTopazPhotoRun");
+  const topazPhotoStatus = $("topazPhotoStatus");
   const grokImagePrompt = $("grokImagePrompt");
   const grokImageFile = $("grokImageFile");
   const grokImageDropzone = $("grokImageDropzone");
@@ -248,11 +253,49 @@
   }
 
   function getComputedImageAspectRatio() {
-    const base = grokImageAspectBase ? grokImageAspectBase.value : "32";
+    const base = grokImageAspectBase ? grokImageAspectBase.value : "orig";
     const oriEl = document.querySelector(
       'input[name="grokImageOrientation"]:checked',
     );
     const ori = oriEl ? oriEl.value : "landscape";
+    // 원본 비율: 참조 1 미리보기의 실제 픽셀 비율을 우선 사용
+    if (base === "orig") {
+      const f = grokImageFile && grokImageFile.files && grokImageFile.files[0];
+      if (f && f.type && f.type.indexOf("image/") === 0) {
+        const img = $("grokImagePreviewImg");
+        const w = img && img.naturalWidth ? img.naturalWidth : 0;
+        const h = img && img.naturalHeight ? img.naturalHeight : 0;
+        if (w > 0 && h > 0) {
+          const ratio = w / h;
+          // API가 허용하는 비율로 "가장 가까운 값" 선택
+          const candidates =
+            ori === "portrait"
+              ? [
+                  { v: "9:16", r: 9 / 16 },
+                  { v: "3:4", r: 3 / 4 },
+                  { v: "2:3", r: 2 / 3 },
+                ]
+              : [
+                  { v: "16:9", r: 16 / 9 },
+                  { v: "4:3", r: 4 / 3 },
+                  { v: "3:2", r: 3 / 2 },
+                ];
+          let best = candidates[0];
+          let bestErr = Math.abs(Math.log(ratio / best.r));
+          for (let i = 1; i < candidates.length; i++) {
+            const c = candidates[i];
+            const err = Math.abs(Math.log(ratio / c.r));
+            if (err < bestErr) {
+              best = c;
+              bestErr = err;
+            }
+          }
+          return best.v;
+        }
+      }
+      // fallback
+      return ori === "portrait" ? "2:3" : "3:2";
+    }
     const map = {
       169: { landscape: "16:9", portrait: "9:16" },
       43: { landscape: "4:3", portrait: "3:4" },
@@ -371,6 +414,23 @@
       }
       return out;
     }
+    if (kind === "topaz_photo") {
+      const fs = d.topaz_photo_files || [];
+      for (let i = 0; i < fs.length; i++) {
+        const f = fs[i];
+        if (!f || !f.url) continue;
+        out.push({
+          id: `g-${jobId}-topaz-photo-${i}`,
+          job_id: jobId,
+          role: "image",
+          url: apiUrl(f.url),
+          name: f.name || "topaz_photo.png",
+          source: "topaz_photo",
+          isImage: true,
+        });
+      }
+      return out;
+    }
     if (d.has_final) {
       out.push({
         id: `g-${jobId}-final`,
@@ -419,11 +479,11 @@
       .map((it) => {
         const cls = chipClassForOutput(it);
         const gid = encodeURIComponent(it.id);
-        if (it.isImage || it.source === "grok_image") {
+        if (it.isImage || it.source === "grok_image" || it.source === "topaz_photo") {
           return (
             `<div class="output-gallery__tile output-gallery__tile--image">` +
             `<img class="output-gallery__thumb" src="${it.url}" alt="" loading="lazy" />` +
-            `<a class="job-file-chip job-file-chip--image ${cls}" href="${it.url}" data-gallery-id="${gid}" title="${escapeHtml(it.name)}">` +
+            `<a class="job-file-chip job-file-chip--image ${cls}" draggable="true" href="${it.url}" data-gallery-id="${gid}" title="${escapeHtml(it.name)}">` +
             `<span class="job-file-chip__icon" aria-hidden="true">↓</span>` +
             `<span class="job-file-chip__name">${escapeHtml(truncateFileName(it.name))}</span></a></div>`
           );
@@ -452,6 +512,23 @@
   }
 
   if (outputGalleryChips) {
+    outputGalleryChips.addEventListener("dragstart", (e) => {
+      const a = e.target.closest("a.job-file-chip");
+      if (!a || !outputGalleryChips.contains(a)) return;
+      const raw = a.getAttribute("data-gallery-id");
+      if (!raw) return;
+      let id;
+      try {
+        id = decodeURIComponent(raw);
+      } catch {
+        return;
+      }
+      try {
+        e.dataTransfer.setData("application/x-output-gallery-id", id);
+        e.dataTransfer.setData("text/plain", id);
+        e.dataTransfer.effectAllowed = "copy";
+      } catch {}
+    });
     outputGalleryChips.addEventListener("click", (e) => {
       const a = e.target.closest("a.job-file-chip");
       if (!a || !outputGalleryChips.contains(a)) return;
@@ -490,6 +567,89 @@
     syncButtonStates();
   }
 
+  function setTopazPhotoStatus(msg) {
+    if (!topazPhotoStatus) return;
+    topazPhotoStatus.textContent = msg || "";
+  }
+
+  function refreshTopazPhotoFileNames() {
+    if (!topazPhotoFiles || !topazPhotoFileNames) return;
+    const fs = topazPhotoFiles.files;
+    if (!fs || !fs.length) {
+      topazPhotoFileNames.textContent = "";
+      return;
+    }
+    topazPhotoFileNames.textContent = Array.from(fs)
+      .map((f) => f.name)
+      .join(", ");
+  }
+
+  function galleryItemById(id) {
+    if (!id) return null;
+    for (let i = 0; i < outputGalleryItems.length; i++) {
+      if (outputGalleryItems[i].id === id) return outputGalleryItems[i];
+    }
+    return null;
+  }
+
+  async function addGalleryItemToTopazPhotoInput(gid) {
+    if (!topazPhotoFiles) return;
+    const it = galleryItemById(gid);
+    if (!it || !it.url) return;
+    const r = await fetch(it.url);
+    if (!r.ok) throw new Error("아웃풋 파일을 가져오지 못했습니다.");
+    const blob = await r.blob();
+    const name = it.name || "image.png";
+    let f;
+    try {
+      f = new File([blob], name, { type: blob.type || "image/png" });
+    } catch {
+      f = blob;
+      f.name = name;
+    }
+    const dt = new DataTransfer();
+    const existing = topazPhotoFiles.files;
+    for (let i = 0; i < existing.length; i++) dt.items.add(existing[i]);
+    dt.items.add(f);
+    topazPhotoFiles.files = dt.files;
+    refreshTopazPhotoFileNames();
+  }
+
+  async function postTopazPhotoJob(fd) {
+    currentJobKind = "topaz_photo";
+    setError("");
+    setTopazPhotoStatus("업로드 중…");
+    renderUploadingPlaceholder("topaz_photo");
+    try {
+      const r = await fetch(apiUrl("/api/topaz-photo-upscale-jobs"), {
+        method: "POST",
+        body: fd,
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setTopazPhotoStatus("");
+        setError(data.error || "요청 실패");
+        if (statusJobsList) statusJobsList.innerHTML = "";
+        if (trackedJobs.size === 0) statusPanel.hidden = true;
+        syncButtonStates();
+        return;
+      }
+      const jobId = data.job_id;
+      const kind = data.kind || "topaz_photo";
+      trackedJobs.set(jobId, { kind, t: Date.now() });
+      currentJobKind = kind;
+      setTopazPhotoStatus("처리 시작…");
+      ensurePoll();
+      syncButtonStates();
+    } catch (e) {
+      setTopazPhotoStatus("");
+      setError(String(e.message || e));
+      if (statusJobsList) statusJobsList.innerHTML = "";
+      if (trackedJobs.size === 0) statusPanel.hidden = true;
+      syncButtonStates();
+    }
+  }
+
   function updateTopazQueueHint() {
     const n = topazOnlyQueue.length;
     const text =
@@ -510,6 +670,72 @@
         statusQueueHintEl.textContent = `② Topaz 전용 ${text}`;
       }
     }
+  }
+
+  // Topaz Photo AI 업스케일 UI
+  if (topazPhotoDropzone && topazPhotoFiles) {
+    topazPhotoDropzone.addEventListener("click", () => topazPhotoFiles.click());
+    topazPhotoFiles.addEventListener("change", refreshTopazPhotoFileNames);
+    ["dragenter", "dragover"].forEach((ev) => {
+      topazPhotoDropzone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        topazPhotoDropzone.classList.add("drop--active");
+      });
+    });
+    ["dragleave", "drop"].forEach((ev) => {
+      topazPhotoDropzone.addEventListener(ev, (e) => {
+        if (ev === "drop") e.preventDefault();
+        topazPhotoDropzone.classList.remove("drop--active");
+      });
+    });
+    topazPhotoDropzone.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      if (dt.files && dt.files.length) {
+        const list = new DataTransfer();
+        const existing = topazPhotoFiles.files;
+        for (let i = 0; i < existing.length; i++) list.items.add(existing[i]);
+        for (let j = 0; j < dt.files.length; j++) {
+          if (dt.files[j].type.indexOf("image/") === 0) list.items.add(dt.files[j]);
+        }
+        topazPhotoFiles.files = list.files;
+        refreshTopazPhotoFileNames();
+        return;
+      }
+      // output-gallery 드래그
+      let gid = "";
+      try {
+        gid =
+          dt.getData("application/x-output-gallery-id") ||
+          dt.getData("text/plain") ||
+          "";
+      } catch {}
+      gid = String(gid || "").trim();
+      if (!gid) return;
+      try {
+        await addGalleryItemToTopazPhotoInput(gid);
+      } catch (err) {
+        setError(String(err.message || err));
+      }
+    });
+  }
+
+  if (btnTopazPhotoRun && topazPhotoFiles) {
+    btnTopazPhotoRun.addEventListener("click", async () => {
+      setError("");
+      setTopazPhotoStatus("");
+      const fs = topazPhotoFiles.files;
+      if (!fs || !fs.length) {
+        setError("업스케일할 이미지를 먼저 선택하세요.");
+        return;
+      }
+      const fd = new FormData();
+      for (let i = 0; i < fs.length; i++) {
+        fd.append("images", fs[i]);
+      }
+      await postTopazPhotoJob(fd);
+    });
   }
 
   if (maskKey && apiKeyEl) {
@@ -583,6 +809,51 @@
   loadSavedImageApiKeys();
 
   const grokRefPreviewUrls = { 1: null, 2: null };
+
+  function buildGrokRefGridOverlaySvgHtml() {
+    const parts = [];
+    parts.push(
+      '<svg class="grok-ref-grid-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">',
+    );
+    // outer box
+    parts.push(
+      '<rect x="0" y="0" width="100" height="100" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="0.6"/>',
+    );
+    // grid lines
+    for (let i = 1; i < 5; i++) {
+      const p = (i * 100) / 5;
+      parts.push(
+        `<line x1="${p}" y1="0" x2="${p}" y2="100" stroke="rgba(255,255,255,0.85)" stroke-width="0.35"/>`,
+      );
+      parts.push(
+        `<line x1="0" y1="${p}" x2="100" y2="${p}" stroke="rgba(255,255,255,0.85)" stroke-width="0.35"/>`,
+      );
+    }
+    // numbers 1..25 (top-left to bottom-right)
+    let n = 1;
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 5; col++) {
+        const x = (col * 100) / 5 + 2.2;
+        const y = (row * 100) / 5 + 6.5;
+        parts.push(
+          `<text x="${x}" y="${y}" font-size="4.2" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.9)" stroke-width="0.8" paint-order="stroke">` +
+            String(n) +
+            "</text>",
+        );
+        n += 1;
+      }
+    }
+    parts.push("</svg>");
+    return parts.join("");
+  }
+
+  function initGrokRef1GridOverlay() {
+    const ov = $("grokRef1GridOverlay");
+    if (!ov) return;
+    ov.innerHTML = buildGrokRefGridOverlaySvgHtml();
+  }
+
+  initGrokRef1GridOverlay();
 
   function defaultClipboardImageName(mime) {
     if (mime === "image/jpeg" || mime === "image/jpg") return "clipboard.jpg";
@@ -1220,6 +1491,7 @@
   function kindBadge(kind, d) {
     if (kind === "pan_photo") return "팬";
     if (kind === "topaz_only") return "Topaz";
+    if (kind === "topaz_photo") return "Topaz 2x";
     if (kind === "grok_image") {
       return d && d.image_provider === "gemini" ? "나노바나나2" : "Grok 이미지";
     }
@@ -1246,6 +1518,9 @@
     if (d.phase === "topaz" || d.phase === "queued") {
       return { pct: kind === "topaz_only" ? 30 : 8, show: true };
     }
+    if (kind === "topaz_photo" && d.phase === "topaz_photo") {
+      return { pct: 35, show: true };
+    }
     if (kind === "grok_image" && d.phase === "grok_image") {
       return { pct: 18, show: true };
     }
@@ -1254,6 +1529,7 @@
 
   function jobSubLine(d, kind, jobId) {
     if (kind === "pan_photo") return "팬 영상 (로컬 · MoviePy)";
+    if (kind === "topaz_photo") return "Topaz Photo AI 2x (로컬 · Autopilot)";
     if (kind === "grok_image") {
       return d && d.image_provider === "gemini"
         ? "Gemini 3.1 Flash Image (나노바나나2)"
@@ -1279,6 +1555,8 @@
         ? "팬"
         : kind === "topaz_only"
           ? "Topaz"
+          : kind === "topaz_photo"
+            ? "Topaz 2x"
           : kind === "grok_image"
             ? imageProvider === "gemini"
               ? "나노바나나2"
@@ -1368,7 +1646,15 @@
       if (d.phase === "done") {
         appendGalleryIfDone(jobId, d, meta.kind);
       }
-      if (d.error) setError(d.error);
+      if (d.error) {
+        setError(d.error);
+        if (meta.kind === "topaz_photo") {
+          const extra = d.tried ? `\n\n시도한 명령:\n${d.tried}` : "";
+          setTopazPhotoStatus("실패 — 아래 오류를 확인해 주세요." + extra);
+        }
+      } else if (meta.kind === "topaz_photo" && d.phase === "done") {
+        setTopazPhotoStatus("완료 — 아웃풋에 추가했습니다.");
+      }
       trackedJobs.delete(jobId);
       if (meta.kind === "topaz_only" && topazOnlyQueue.length > 0) {
         const nextFd = topazOnlyQueue.shift();
