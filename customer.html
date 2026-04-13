@@ -1336,7 +1336,9 @@
       var lastDbMutationAtMs = 0;
       function normalizeCustomerSiteType(value) {
         const normalized = String(value || "").trim().toLowerCase();
-        return normalized === "shopick" ? "shopick" : "inlog";
+        if (normalized === "shopick") return "shopick";
+        if (normalized === "thefeeling" || normalized === "the_feeling") return "thefeeling";
+        return "inlog";
       }
 
       function readStorageArray(key) {

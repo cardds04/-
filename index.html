@@ -996,6 +996,7 @@
       }
       .site-badge.inlog  { background: #16a34a; }
       .site-badge.shopick { background: #dc2626; }
+      .site-badge.thefeeling { background: #2563eb; }
 
       .today-new-companies {
         background: #f0fdf4;
@@ -1742,6 +1743,7 @@
                 <select id="companyAccountSiteTypeSelect">
                   <option value="inlog">인로그</option>
                   <option value="shopick">쇼픽</option>
+                  <option value="thefeeling">더필링</option>
                 </select>
               </div>
               <div class="actions" style="margin-top: 0; justify-content: flex-start;">
@@ -5777,12 +5779,20 @@
       function normalizeCompanyCode(code) {
         return String(code || "").trim();
       }
-      /** company_directory.site_type → "" | "shopick" | "inlog" (미설정은 빈 문자열) */
+      /** company_directory.site_type → "" | "shopick" | "inlog" | "thefeeling" (미설정은 빈 문자열) */
       function normalizeCompanySiteTypeField(value) {
         const s = String(value || "").trim().toLowerCase();
         if (s === "shopick") return "shopick";
+        if (s === "thefeeling" || s === "the_feeling") return "thefeeling";
         if (s === "inlog") return "inlog";
         return "";
+      }
+      /** 고객 계정 저장용 site_type (기본 inlog) */
+      function normalizeCustomerSiteTypeForStorage(value) {
+        const s = String(value || "").trim().toLowerCase();
+        if (s === "shopick") return "shopick";
+        if (s === "thefeeling" || s === "the_feeling") return "thefeeling";
+        return "inlog";
       }
       function getCompanyGroupKey(name, companyCode = "") {
         const normalizedCode = normalizeCompanyCode(companyCode);
@@ -7519,10 +7529,7 @@
         return true;
       }
       function normalizeCustomerRows(rows) {
-        const normalizeCustomerSiteType = (value) => {
-          const normalized = String(value || "").trim().toLowerCase();
-          return normalized === "shopick" ? "shopick" : "inlog";
-        };
+        const normalizeCustomerSiteType = (value) => normalizeCustomerSiteTypeForStorage(value);
         const list = Array.isArray(rows) ? rows : [];
         const mapped = list
           .map((row) => ({
@@ -7595,7 +7602,7 @@
         if (!normalizedLoginId) {
           throw new Error("고객 계정 아이디가 비어있습니다.");
         }
-        const normalizedSiteType = String(siteType || "").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
+        const normalizedSiteType = normalizeCustomerSiteTypeForStorage(siteType);
         const resolvedCompanyId = resolveCompanyDbIdForCustomer({ companyName, companyCode });
         const nameMatch = companies.find(
           (c) => normalizeCompanyName(c?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase()
@@ -10639,18 +10646,17 @@
         const customerUsers = readStorageArray(STORAGE_CUSTOMERS);
         function getCompanySiteType(companyName, companyCode, companyRow = null) {
           const fromRow = companyRow && normalizeCompanySiteTypeField(companyRow.siteType);
-          if (fromRow === "shopick" || fromRow === "inlog") return fromRow;
+          if (fromRow === "shopick" || fromRow === "inlog" || fromRow === "thefeeling") return fromRow;
           const groupKey = getCompanyGroupKey(companyName, companyCode);
           const matched = customerUsers.filter((u) => getCompanyGroupKey(u?.company, u?.companyCode) === groupKey);
           if (!matched.length) return null;
-          const st = String(matched[0]?.siteType || "inlog").trim().toLowerCase();
-          return st === "shopick" ? "shopick" : "inlog";
+          return normalizeCustomerSiteTypeForStorage(matched[0]?.siteType);
         }
         function siteBadgeHtml(siteType) {
           if (!siteType) return "";
-          return siteType === "shopick"
-            ? `<span class="site-badge shopick">쇼</span>`
-            : `<span class="site-badge inlog">인</span>`;
+          if (siteType === "shopick") return `<span class="site-badge shopick">쇼</span>`;
+          if (siteType === "thefeeling") return `<span class="site-badge thefeeling">필</span>`;
+          return `<span class="site-badge inlog">인</span>`;
         }
 
         // 오늘의 신규업체 (오늘 가입한 고객 계정 기준)
@@ -10796,7 +10802,7 @@
         const accountId = String(matchedUser?.id || "").trim();
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
-        const accountSiteType = String(matchedUser?.siteType || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
+        const accountSiteType = normalizeCustomerSiteTypeForStorage(matchedUser?.siteType);
         const accountLogs = matchedUser
           ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
           : [];
@@ -10896,6 +10902,7 @@
               <select class="inline-select company-account-site-type" style="width: 100%; max-width: 100%;">
               <option value="inlog" ${accountSiteType === "inlog" ? "selected" : ""}>인로그</option>
               <option value="shopick" ${accountSiteType === "shopick" ? "selected" : ""}>쇼픽</option>
+              <option value="thefeeling" ${accountSiteType === "thefeeling" ? "selected" : ""}>더필링</option>
             </select>
             </div>
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
@@ -14984,7 +14991,7 @@
         const newId = String(idInputEl?.value || "").trim();
         const newPassword = String(passwordInputEl?.value || "").trim();
         const newCompanyCode = normalizeCompanyCode(codeInputEl?.value);
-        const newSiteType = String(siteTypeSelectEl?.value || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
+        const newSiteType = normalizeCustomerSiteTypeForStorage(siteTypeSelectEl?.value);
 
         if (!newDisplayName) {
           alert("업체명을 입력해주세요.");
@@ -15439,7 +15446,7 @@
         const code = normalizeCompanyCode(companyCodeInputEl?.value);
         const accountId = normalizeCompanyName(companyAccountIdInputEl?.value || name);
         const accountPassword = String(companyAccountPasswordInputEl?.value || "").trim();
-        const accountSiteType = String(companyAccountSiteTypeSelectEl?.value || "inlog").trim().toLowerCase() === "shopick" ? "shopick" : "inlog";
+        const accountSiteType = normalizeCustomerSiteTypeForStorage(companyAccountSiteTypeSelectEl?.value);
         if (!name) return;
         if (!accountPassword) {
           alert("업체 계정 비밀번호를 입력해주세요.");
