@@ -3381,16 +3381,69 @@
         writeStorageArray(STORAGE_CUSTOMERS, users);
       }
 
+      const THEFEELING_EDIT_STATUS_KEYS = ["submitted", "confirmed", "kakao_open", "upload", "in_progress", "completed"];
+      function thefeelingEditStatusRank(st) {
+        const i = THEFEELING_EDIT_STATUS_KEYS.indexOf(st);
+        return i < 0 ? 0 : i;
+      }
       function normalizeThefeelingEditWorkflowStatus(row) {
         const s = normalize(String(row?.status || "")).toLowerCase();
-        if (s === "confirmed" || s === "in_progress" || s === "completed") return s;
+        if (THEFEELING_EDIT_STATUS_KEYS.includes(s)) return s;
+        if (row?.completedAt && !normalize(String(row?.status || ""))) return "completed";
         return "submitted";
+      }
+      function mergeThefeelingEditRowsById(a, b) {
+        const sa = normalizeThefeelingEditWorkflowStatus(a);
+        const sb = normalizeThefeelingEditWorkflowStatus(b);
+        const ra = thefeelingEditStatusRank(sa);
+        const rb = thefeelingEditStatusRank(sb);
+        const ta = new Date(String(a?.statusUpdatedAt || a?.completedAt || 0)).getTime();
+        const tb = new Date(String(b?.statusUpdatedAt || b?.completedAt || 0)).getTime();
+        let win = a;
+        if (rb > ra) win = b;
+        else if (ra > rb) win = a;
+        else win = tb >= ta ? b : a;
+        const lose = win === a ? b : a;
+        const createdEarly =
+          new Date(String(lose?.createdAt || 0)).getTime() < new Date(String(win?.createdAt || 0)).getTime()
+            ? lose.createdAt
+            : win.createdAt;
+        const st = normalizeThefeelingEditWorkflowStatus(win);
+        const next = { ...lose, ...win, id: String(win?.id || lose?.id || "").trim(), createdAt: createdEarly || win.createdAt };
+        next.status = st;
+        if (st === "completed" && !next.completedAt) next.completedAt = win.completedAt || lose.completedAt || new Date().toISOString();
+        if (st !== "completed") delete next.completedAt;
+        return next;
+      }
+      function consolidateThefeelingEditRequestsStorage() {
+        const main = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
+        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
+        const byId = new Map();
+        const ingest = (row) => {
+          const id = String(row?.id || "").trim();
+          if (!id) return;
+          const prev = byId.get(id);
+          byId.set(id, prev ? mergeThefeelingEditRowsById(prev, row) : { ...row });
+        };
+        main.forEach(ingest);
+        arch.forEach(ingest);
+        const merged = Array.from(byId.values()).sort(
+          (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime()
+        );
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(merged));
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, "[]");
       }
       function getThefeelingEditCustomerStatusLabel(row) {
         const st = normalizeThefeelingEditWorkflowStatus(row);
-        if (st === "confirmed") return "접수확인";
-        if (st === "in_progress") return "편집진행중";
-        return "편집신청";
+        const map = {
+          submitted: "편집신청",
+          confirmed: "접수확인",
+          kakao_open: "카톡방오픈",
+          upload: "편집본업로드",
+          in_progress: "편집진행",
+          completed: "편집완료"
+        };
+        return map[st] || "편집신청";
       }
       function renderEditRequestMyList() {
         const el = document.getElementById("editRequestMyList");
@@ -3404,25 +3457,33 @@
           el.innerHTML = '<p class="hint">로그인 후 내역을 확인할 수 있습니다.</p>';
           return;
         }
+        consolidateThefeelingEditRequestsStorage();
         const uid = String(user.id || "").trim();
-        const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.customerId || "").trim() === uid);
-        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE).filter((r) => String(r?.customerId || "").trim() === uid);
-        const merged = [
-          ...pending.map((r) => ({ row: r, done: false })),
-          ...arch.map((r) => ({ row: r, done: true }))
-        ].sort((a, b) => new Date(b.row?.createdAt || 0) - new Date(a.row?.createdAt || 0));
-        if (!merged.length) {
+        const byId = new Map();
+        readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS)
+          .filter((r) => String(r?.customerId || "").trim() === uid)
+          .forEach((row) => {
+            const id = String(row?.id || "").trim();
+            if (!id) return;
+            const prev = byId.get(id);
+            byId.set(id, prev ? mergeThefeelingEditRowsById(prev, row) : { ...row });
+          });
+        const list = Array.from(byId.values()).sort(
+          (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime()
+        );
+        if (!list.length) {
           el.innerHTML = '<p class="hint">아직 신청 내역이 없습니다.</p>';
           return;
         }
-        el.innerHTML = merged
-          .map(({ row, done }) => {
+        el.innerHTML = list
+          .map((row) => {
             const types = Array.isArray(row.types) ? row.types.map((t) => escapeHtml(String(t))).join(", ") : "-";
-            const label = done ? "편집완료" : getThefeelingEditCustomerStatusLabel(row);
+            const st = normalizeThefeelingEditWorkflowStatus(row);
+            const label = getThefeelingEditCustomerStatusLabel(row);
             let badgeClass = "edit-req-badge";
-            if (done || label === "편집완료") badgeClass += " edit-req-badge--done";
-            else if (label === "편집진행중") badgeClass += " edit-req-badge--work";
-            else if (label === "접수확인") badgeClass += " edit-req-badge--ok";
+            if (st === "completed") badgeClass += " edit-req-badge--done";
+            else if (st === "in_progress") badgeClass += " edit-req-badge--work";
+            else if (st === "confirmed" || st === "kakao_open" || st === "upload") badgeClass += " edit-req-badge--ok";
             const created = String(row.createdAt || "").replace("T", " ").slice(0, 16);
             const memoText = String(row.memo || "");
             const memoShort =

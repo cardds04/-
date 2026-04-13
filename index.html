@@ -8612,50 +8612,105 @@
           : '<div class="company-item">접수기록이 없습니다.</div>';
       }
 
+      const THEFEELING_EDIT_STATUS_KEYS = ["submitted", "confirmed", "kakao_open", "upload", "in_progress", "completed"];
+      function thefeelingEditStatusRank(st) {
+        const i = THEFEELING_EDIT_STATUS_KEYS.indexOf(st);
+        return i < 0 ? 0 : i;
+      }
       function normalizeThefeelingEditWorkflowStatus(row) {
         const s = String(row?.status || "").trim().toLowerCase();
-        if (s === "confirmed" || s === "in_progress" || s === "completed") return s;
+        if (THEFEELING_EDIT_STATUS_KEYS.includes(s)) return s;
+        if (row?.completedAt && !String(row?.status || "").trim()) return "completed";
         return "submitted";
       }
       function getThefeelingEditAdminStatusLabel(item) {
-        if (item?.completedAt || normalizeThefeelingEditWorkflowStatus(item) === "completed") return "편집완료";
         const st = normalizeThefeelingEditWorkflowStatus(item);
-        if (st === "confirmed") return "접수확인";
-        if (st === "in_progress") return "편집진행중";
-        return "편집신청";
+        const map = {
+          submitted: "편집신청",
+          confirmed: "접수확인",
+          kakao_open: "카톡방오픈",
+          upload: "편집본업로드",
+          in_progress: "편집진행",
+          completed: "편집완료"
+        };
+        return map[st] || "편집신청";
+      }
+      function mergeThefeelingEditRowsById(a, b) {
+        const sa = normalizeThefeelingEditWorkflowStatus(a);
+        const sb = normalizeThefeelingEditWorkflowStatus(b);
+        const ra = thefeelingEditStatusRank(sa);
+        const rb = thefeelingEditStatusRank(sb);
+        const ta = new Date(String(a?.statusUpdatedAt || a?.completedAt || 0)).getTime();
+        const tb = new Date(String(b?.statusUpdatedAt || b?.completedAt || 0)).getTime();
+        let win = a;
+        if (rb > ra) win = b;
+        else if (ra > rb) win = a;
+        else win = tb >= ta ? b : a;
+        const lose = win === a ? b : a;
+        const createdEarly =
+          new Date(String(lose?.createdAt || 0)).getTime() < new Date(String(win?.createdAt || 0)).getTime()
+            ? lose.createdAt
+            : win.createdAt;
+        const st = normalizeThefeelingEditWorkflowStatus(win);
+        const next = { ...lose, ...win, id: String(win?.id || lose?.id || "").trim(), createdAt: createdEarly || win.createdAt };
+        next.status = st;
+        if (st === "completed" && !next.completedAt) next.completedAt = win.completedAt || lose.completedAt || new Date().toISOString();
+        if (st !== "completed") delete next.completedAt;
+        return next;
+      }
+      function consolidateThefeelingEditRequestsStorage() {
+        const main = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
+        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
+        const byId = new Map();
+        const ingest = (row) => {
+          const id = String(row?.id || "").trim();
+          if (!id) return;
+          const prev = byId.get(id);
+          byId.set(id, prev ? mergeThefeelingEditRowsById(prev, row) : { ...row });
+        };
+        main.forEach(ingest);
+        arch.forEach(ingest);
+        const merged = Array.from(byId.values()).sort(
+          (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime()
+        );
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(merged));
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, "[]");
       }
       function buildThefeelingEditAdminActionButtons(item) {
         const id = escapeHtml(String(item.id || ""));
-        const st = normalizeThefeelingEditWorkflowStatus(item);
-        if (st === "submitted") {
-          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="confirmed">접수확인</button>`;
-        }
-        if (st === "confirmed") {
-          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="in_progress">편집진행</button>`;
-        }
-        if (st === "in_progress") {
-          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="completed">편집완료</button>`;
-        }
-        return "";
+        const cur = normalizeThefeelingEditWorkflowStatus(item);
+        const steps = [
+          { key: "submitted", label: "편집신청" },
+          { key: "confirmed", label: "접수확인" },
+          { key: "kakao_open", label: "카톡방오픈" },
+          { key: "upload", label: "편집본업로드" },
+          { key: "in_progress", label: "편집진행" },
+          { key: "completed", label: "편집완료" }
+        ];
+        return `<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:min(100%,420px);">${steps
+          .map(
+            ({ key, label }) =>
+              `<button class="btn-sm${cur === key ? " primary" : ""}" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-status="${key}">${label}</button>`
+          )
+          .join("")}</div>`;
       }
       function renderThefeelingEditRequests() {
         if (!thefeelingEditPendingListEl || !thefeelingEditArchiveListEl) return;
-        const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.id || "").trim());
-        const archive = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE).filter((r) => String(r?.id || "").trim());
-        pending.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
-        archive.sort((a, b) => new Date(b?.completedAt || b?.createdAt || 0).getTime() - new Date(a?.completedAt || a?.createdAt || 0).getTime());
+        consolidateThefeelingEditRequestsStorage();
+        const all = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.id || "").trim());
+        all.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+        const inProgress = all.filter((r) => normalizeThefeelingEditWorkflowStatus(r) !== "completed");
+        const done = all.filter((r) => normalizeThefeelingEditWorkflowStatus(r) === "completed");
         if (thefeelingEditPendingCountEl) {
-          thefeelingEditPendingCountEl.textContent = `진행 중 ${pending.length}건`;
+          thefeelingEditPendingCountEl.textContent = `진행 중 ${inProgress.length}건`;
         }
-        const rowHtml = (item, isArchive) => {
+        const rowHtml = (item, isDoneSection) => {
           const types = Array.isArray(item.types) ? item.types : [];
           const typesText = types.length ? types.map((t) => escapeHtml(String(t))).join(", ") : "-";
           const created = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
           const completed = String(item?.completedAt || "").replace("T", " ").slice(0, 16);
           const statusLabel = getThefeelingEditAdminStatusLabel(item);
-          const actions = isArchive
-            ? `<span class="hint" style="opacity:0.75;">기록</span>`
-            : buildThefeelingEditAdminActionButtons(item) || '<span class="hint">—</span>';
+          const actions = buildThefeelingEditAdminActionButtons(item);
           return `
             <div class="customer-alert-row" style="align-items: flex-start;">
               <div>
@@ -8666,17 +8721,17 @@
                 장 수(대략): <strong>${escapeHtml(String(item.sheetCount ?? "-"))}</strong><br />
                 요청: ${escapeHtml(item.memo || "-")}<br />
                 접수: ${escapeHtml(created)}
-                ${isArchive ? `<br />편집완료 시각: ${escapeHtml(completed || "-")}` : ""}
+                ${isDoneSection && completed ? `<br />편집완료 시각: ${escapeHtml(completed)}` : ""}
               </div>
-              <div class="actions" style="margin-top: 0; justify-content: flex-end; flex-direction: column; gap: 6px; align-items: flex-end;">${actions}</div>
+              <div class="actions" style="margin-top: 0; justify-content: flex-end; align-items: flex-end;">${actions}</div>
             </div>
           `;
         };
-        thefeelingEditPendingListEl.innerHTML = pending.length
-          ? pending.map((item) => rowHtml(item, false)).join("")
+        thefeelingEditPendingListEl.innerHTML = inProgress.length
+          ? inProgress.map((item) => rowHtml(item, false)).join("")
           : '<div class="company-item">진행 중인 편집 신청이 없습니다.</div>';
-        thefeelingEditArchiveListEl.innerHTML = archive.length
-          ? archive.map((item) => rowHtml(item, true)).join("")
+        thefeelingEditArchiveListEl.innerHTML = done.length
+          ? done.map((item) => rowHtml(item, true)).join("")
           : '<div class="company-item">완료 기록이 없습니다.</div>';
       }
 
@@ -14191,36 +14246,25 @@
         const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
         if (!btn) return;
         const id = String(btn.dataset.id || "").trim();
-        const next = String(btn.dataset.next || "").trim();
-        if (!id || !next) return;
-        let pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
-        const idx = pending.findIndex((r) => String(r?.id || "").trim() === id);
+        const status = String(btn.dataset.status || "").trim();
+        if (!id || !THEFEELING_EDIT_STATUS_KEYS.includes(status)) return;
+        consolidateThefeelingEditRequestsStorage();
+        const rows = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
+        const idx = rows.findIndex((r) => String(r?.id || "").trim() === id);
         if (idx < 0) return;
-        const row = pending[idx];
-        const cur = normalizeThefeelingEditWorkflowStatus(row);
-        if (next === "confirmed" && cur !== "submitted") return;
-        if (next === "in_progress" && cur !== "confirmed") return;
-        if (next === "completed" && cur !== "in_progress") return;
-        if (next === "completed") {
-          pending.splice(idx, 1);
-          const doneRow = {
-            ...row,
-            status: "completed",
-            completedAt: new Date().toISOString(),
-            statusUpdatedAt: new Date().toISOString()
-          };
-          const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
-          arch.unshift(doneRow);
-          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
-          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, JSON.stringify(arch.slice(0, 2000)));
+        const row = rows[idx];
+        const nextRow = {
+          ...row,
+          status,
+          statusUpdatedAt: new Date().toISOString()
+        };
+        if (status === "completed") {
+          nextRow.completedAt = row.completedAt || new Date().toISOString();
         } else {
-          pending[idx] = {
-            ...row,
-            status: next,
-            statusUpdatedAt: new Date().toISOString()
-          };
-          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
+          delete nextRow.completedAt;
         }
+        rows[idx] = nextRow;
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(rows));
         renderThefeelingEditRequests();
       });
       tabInlogPhotoEl?.addEventListener("click", () => {
