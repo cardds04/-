@@ -580,12 +580,17 @@
     <script src="./sync-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+      const customerPageMode = new URLSearchParams(window.location.search).get("mode");
+      const isLiteCustomerMode = customerPageMode === "lite";
+      const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "thefeeling";
+      const CUSTOMER_ORDER_STORAGE_TAG = isLiteCustomerMode ? "shopick" : "thefeeling";
+
       const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
       const STORAGE_PUBLIC_CUSTOMERS = "scheduleSitePublicCustomers"; // 자체 가입 계정
       const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
-      const STORAGE_SESSION = "scheduleSiteCustomerSession";
-      const STORAGE_CUSTOMER_REMEMBERED_LOGIN = "scheduleSiteCustomerRememberedLogin";
+      const STORAGE_SESSION = `scheduleSiteCustomerSession_${CUSTOMER_ORDER_STORAGE_TAG}`;
+      const STORAGE_CUSTOMER_REMEMBERED_LOGIN = `scheduleSiteCustomerRememberedLogin_${CUSTOMER_ORDER_STORAGE_TAG}`;
       const PRIVATE_LOCAL_KEYS = new Set([
         STORAGE_SESSION,
         STORAGE_CUSTOMER_REMEMBERED_LOGIN,
@@ -623,9 +628,6 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-      const customerPageMode = new URLSearchParams(window.location.search).get("mode");
-      const isLiteCustomerMode = customerPageMode === "lite";
-      const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "thefeeling";
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
@@ -803,6 +805,35 @@
       };
       scheduleSiteClientKvState.installProxy();
 
+      (function migrateLegacyNativeCustomerSession() {
+        try {
+          const legacyS = "scheduleSiteCustomerSession";
+          const legacyR = "scheduleSiteCustomerRememberedLogin";
+          if (scheduleSiteClientKvState.nativeGetItem(STORAGE_SESSION)) return;
+          const legId = scheduleSiteClientKvState.nativeGetItem(legacyS);
+          if (!legId || !String(legId).trim()) return;
+          const raw =
+            scheduleSiteClientKvState.memoryStore.get("scheduleSiteCustomers") ||
+            scheduleSiteClientKvState.nativeGetItem("scheduleSiteCustomers") ||
+            "[]";
+          let users = [];
+          try {
+            users = JSON.parse(String(raw));
+          } catch (_) {
+            users = [];
+          }
+          const u = Array.isArray(users) ? users.find((x) => String(x.id || "").trim() === String(legId).trim()) : null;
+          const st = String(u?.site_type || u?.siteType || "").toLowerCase();
+          if (st === requiredCustomerSiteType) {
+            scheduleSiteClientKvState.nativeSetItem(STORAGE_SESSION, String(legId));
+            const r = scheduleSiteClientKvState.nativeGetItem(legacyR);
+            if (r && !scheduleSiteClientKvState.nativeGetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN)) {
+              scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, r);
+            }
+          }
+        } catch (_) {}
+      })();
+
       // ══════════════════════════════════════════════════════════════════════
       // 공개 가입 세션 영속성 보장
       // ─────────────────────────────────────────────────────────────────────
@@ -814,9 +845,9 @@
       // 해결: 공개 가입 세션 데이터는 KV 프록시 밖의 네이티브 localStorage 키에
       //       별도 저장하고, hydrateFromServerKv 후에 자동으로 복원한다.
       // ══════════════════════════════════════════════════════════════════════
-      const PUB_SESSION_KEY    = "__pubOrdSess";       // native only (not "scheduleSite*")
-      const PUB_USER_KEY       = "__pubOrdUser";       // native only
-      const PUB_REMEMBERED_KEY = "__pubOrdRemembered"; // native only
+      const PUB_SESSION_KEY    = `__pubOrdSess_${CUSTOMER_ORDER_STORAGE_TAG}`;       // native only (not "scheduleSite*")
+      const PUB_USER_KEY       = `__pubOrdUser_${CUSTOMER_ORDER_STORAGE_TAG}`;       // native only
+      const PUB_REMEMBERED_KEY = `__pubOrdRemembered_${CUSTOMER_ORDER_STORAGE_TAG}`; // native only
 
       function savePubSessionNative(userId, userObj) {
         try {
@@ -834,9 +865,30 @@
       }
       function restorePubSessionToMemory() {
         try {
-          const userId = scheduleSiteClientKvState.nativeGetItem(PUB_SESSION_KEY);
+          let userId = scheduleSiteClientKvState.nativeGetItem(PUB_SESSION_KEY);
+          let userJson = scheduleSiteClientKvState.nativeGetItem(PUB_USER_KEY);
+          if (!userId || !String(userId).trim() || !userJson) {
+            const legSess = scheduleSiteClientKvState.nativeGetItem("__pubOrdSess");
+            const legUser = scheduleSiteClientKvState.nativeGetItem("__pubOrdUser");
+            if (legSess && String(legSess).trim() && legUser) {
+              try {
+                const uo = JSON.parse(legUser);
+                const st = String(uo?.site_type || uo?.siteType || "").toLowerCase();
+                if (st === requiredCustomerSiteType) {
+                  const legRem = scheduleSiteClientKvState.nativeGetItem("__pubOrdRemembered");
+                  scheduleSiteClientKvState.nativeSetItem(PUB_SESSION_KEY, String(legSess));
+                  scheduleSiteClientKvState.nativeSetItem(PUB_USER_KEY, legUser);
+                  if (legRem) scheduleSiteClientKvState.nativeSetItem(PUB_REMEMBERED_KEY, legRem);
+                  scheduleSiteClientKvState.nativeRemoveItem("__pubOrdSess");
+                  scheduleSiteClientKvState.nativeRemoveItem("__pubOrdUser");
+                  scheduleSiteClientKvState.nativeRemoveItem("__pubOrdRemembered");
+                  userId = legSess;
+                  userJson = legUser;
+                }
+              } catch (_) {}
+            }
+          }
           if (!userId || !String(userId).trim()) return false;
-          const userJson = scheduleSiteClientKvState.nativeGetItem(PUB_USER_KEY);
           if (!userJson) return false;
           const userObj = JSON.parse(userJson);
           if (!userObj || !userObj.id) return false;
@@ -850,10 +902,10 @@
           else users.push(userObj);
           scheduleSiteClientKvState.memoryStore.set("scheduleSiteCustomers", JSON.stringify(users));
           // STORAGE_SESSION 복원 — native localStorage에만 저장 (memoryStore/Supabase 동기화 금지)
-          scheduleSiteClientKvState.nativeSetItem("scheduleSiteCustomerSession", String(userId));
+          scheduleSiteClientKvState.nativeSetItem(STORAGE_SESSION, String(userId));
           // STORAGE_CUSTOMER_REMEMBERED_LOGIN 복원 — native localStorage에만 저장
           const remJson = scheduleSiteClientKvState.nativeGetItem(PUB_REMEMBERED_KEY);
-          if (remJson) scheduleSiteClientKvState.nativeSetItem("scheduleSiteCustomerRememberedLogin", remJson);
+          if (remJson) scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, remJson);
           return true;
         } catch (_) { return false; }
       }

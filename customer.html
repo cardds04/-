@@ -436,11 +436,16 @@
     <script src="./sync-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+      const customerPageMode = new URLSearchParams(window.location.search).get("mode");
+      const isLiteCustomerMode = customerPageMode === "lite";
+      const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "inlog";
+      const CUSTOMER_PAGE_STORAGE_TAG = isLiteCustomerMode ? "shopick" : "inlog";
+
       const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
       const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
-      const STORAGE_SESSION = "scheduleSiteCustomerSession";
-      const STORAGE_CUSTOMER_REMEMBERED_LOGIN = "scheduleSiteCustomerRememberedLogin";
+      const STORAGE_SESSION = `scheduleSiteCustomerSession_${CUSTOMER_PAGE_STORAGE_TAG}`;
+      const STORAGE_CUSTOMER_REMEMBERED_LOGIN = `scheduleSiteCustomerRememberedLogin_${CUSTOMER_PAGE_STORAGE_TAG}`;
       // 고객·작가 로그인 세션은 Supabase KV에 절대 올리지 않음 (타인 계정 전파 방지)
       const PRIVATE_LOCAL_KEYS = new Set([
         STORAGE_SESSION,
@@ -479,9 +484,6 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-      const customerPageMode = new URLSearchParams(window.location.search).get("mode");
-      const isLiteCustomerMode = customerPageMode === "lite";
-      const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "inlog";
       const SUPABASE_STATE_TABLE = "app_state";
       const SUPABASE_STATE_ID = "global";
       const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
@@ -659,6 +661,36 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
+
+      (function migrateLegacyNativeCustomerSession() {
+        try {
+          const legacyS = "scheduleSiteCustomerSession";
+          const legacyR = "scheduleSiteCustomerRememberedLogin";
+          if (scheduleSiteClientKvState.nativeGetItem(STORAGE_SESSION)) return;
+          const legId = scheduleSiteClientKvState.nativeGetItem(legacyS);
+          if (!legId || !String(legId).trim()) return;
+          const raw =
+            scheduleSiteClientKvState.memoryStore.get("scheduleSiteCustomers") ||
+            scheduleSiteClientKvState.nativeGetItem("scheduleSiteCustomers") ||
+            "[]";
+          let users = [];
+          try {
+            users = JSON.parse(String(raw));
+          } catch (_) {
+            users = [];
+          }
+          const u = Array.isArray(users) ? users.find((x) => String(x.id || "").trim() === String(legId).trim()) : null;
+          const st = String(u?.site_type || u?.siteType || "").toLowerCase();
+          if (st === requiredCustomerSiteType) {
+            scheduleSiteClientKvState.nativeSetItem(STORAGE_SESSION, String(legId));
+            const r = scheduleSiteClientKvState.nativeGetItem(legacyR);
+            if (r && !scheduleSiteClientKvState.nativeGetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN)) {
+              scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, r);
+            }
+          }
+        } catch (_) {}
+      })();
+
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
       const CLIENT_KV_SEED_PUSH_INTERVAL_MS = 180000;

@@ -2328,6 +2328,42 @@
       const STORAGE_CUSTOMERS = "scheduleSiteCustomers";
       const STORAGE_CUSTOMER_LOGINS = "scheduleSiteCustomerLogins";
       const STORAGE_CUSTOMER_SESSION = "scheduleSiteCustomerSession";
+      const CUSTOMER_SITE_SESSION_KEY_TAGS = ["inlog", "shopick", "thefeeling"];
+      function rewriteCustomerSessionStorageIds(oldId, newId) {
+        const from = String(oldId || "").trim();
+        const to = String(newId || "").trim();
+        if (!from || !to || from === to) return;
+        try {
+          CUSTOMER_SITE_SESSION_KEY_TAGS.forEach((tag) => {
+            const k = `scheduleSiteCustomerSession_${tag}`;
+            if (localStorage.getItem(k) === from) localStorage.setItem(k, to);
+            const remKey = `scheduleSiteCustomerRememberedLogin_${tag}`;
+            const remRaw = localStorage.getItem(remKey);
+            if (remRaw) {
+              try {
+                const o = JSON.parse(remRaw);
+                if (String(o?.id || "").trim() === from) {
+                  o.id = to;
+                  localStorage.setItem(remKey, JSON.stringify(o));
+                }
+              } catch (_) {}
+            }
+          });
+          if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === from) {
+            localStorage.setItem(STORAGE_CUSTOMER_SESSION, to);
+          }
+          const legRem = localStorage.getItem("scheduleSiteCustomerRememberedLogin");
+          if (legRem) {
+            try {
+              const o = JSON.parse(legRem);
+              if (String(o?.id || "").trim() === from) {
+                o.id = to;
+                localStorage.setItem("scheduleSiteCustomerRememberedLogin", JSON.stringify(o));
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
       const STORAGE_WRITERS = "scheduleSiteWriters";
       const STORAGE_PHOTOGRAPHER_PROFILES = "scheduleSitePhotographerProfiles";
       const STORAGE_EXCLUDED_PHOTOGRAPHERS = "scheduleSiteExcludedPhotographers";
@@ -15107,9 +15143,7 @@
             }
           });
           localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(logs));
-          if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === fromAccountId) {
-            localStorage.setItem(STORAGE_CUSTOMER_SESSION, newId);
-          }
+          rewriteCustomerSessionStorageIds(fromAccountId, newId);
           if (USE_SUPABASE_SYNC) {
             try {
               await saveSingleCustomerAccountToSupabase({
@@ -15330,9 +15364,7 @@
           });
           localStorage.setItem(STORAGE_CUSTOMER_LOGINS, JSON.stringify(logs));
 
-          if (localStorage.getItem(STORAGE_CUSTOMER_SESSION) === oldId) {
-            localStorage.setItem(STORAGE_CUSTOMER_SESSION, newId);
-          }
+          rewriteCustomerSessionStorageIds(oldId, newId);
         }
         if (USE_SUPABASE_SYNC) {
           try {
