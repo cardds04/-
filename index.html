@@ -7528,6 +7528,38 @@
         renderCustomerStatsDashboard();
         return true;
       }
+
+      /** 고객(company_directory 가입)만 있고 관리자 업체 목록에 없을 때 검색 리스트에 안 보이는 문제 방지 */
+      async function mergeMissingCompaniesFromCompanyDirectory() {
+        if (!USE_SUPABASE_SYNC) return false;
+        try {
+          const remoteRows = await fetchCompaniesFromSupabase();
+          if (!remoteRows || !Array.isArray(remoteRows)) return false;
+          const normalized = normalizeCompanyRows(remoteRows);
+          const existingKeys = new Set(
+            companies.map((c) => normalizeCompanyName(c?.name).toLowerCase()).filter(Boolean)
+          );
+          let added = 0;
+          normalized.forEach((row) => {
+            const key = normalizeCompanyName(row?.name).toLowerCase();
+            if (!key || existingKeys.has(key)) return;
+            companies.push({ ...row });
+            existingKeys.add(key);
+            added += 1;
+          });
+          if (added > 0) {
+            saveAdminCompaniesToStorage();
+            renderCompanies();
+            renderList();
+            renderCustomerStatsDashboard();
+            return true;
+          }
+        } catch (error) {
+          console.warn("[COMPANIES] mergeMissingCompaniesFromCompanyDirectory", error);
+        }
+        return false;
+      }
+
       function normalizeCustomerRows(rows) {
         const normalizeCustomerSiteType = (value) => normalizeCustomerSiteTypeForStorage(value);
         const list = Array.isArray(rows) ? rows : [];
@@ -7682,6 +7714,7 @@
         const remoteRows = await fetchCustomersFromSupabase();
         const normalized = normalizeCustomerRows(remoteRows);
         originalSetItem(STORAGE_CUSTOMERS, JSON.stringify(normalized));
+        await mergeMissingCompaniesFromCompanyDirectory();
         return true;
       }
 
