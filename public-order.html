@@ -464,6 +464,77 @@
         font-size: 0.88rem;
         line-height: 1.65;
       }
+      .tf-edit-flow {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 12px;
+        margin-bottom: 4px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #faf7f3, #fff);
+        border: 1px solid var(--line);
+        scrollbar-width: thin;
+      }
+      .tf-edit-flow__step {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        min-width: 4.5rem;
+        max-width: 5.4rem;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--muted);
+        line-height: 1.3;
+      }
+      .tf-edit-flow__ico {
+        font-size: 1.28rem;
+        line-height: 1.2;
+        margin-bottom: 5px;
+      }
+      .tf-edit-flow__arr {
+        flex: 0 0 auto;
+        color: var(--gold);
+        font-weight: 800;
+        font-size: 0.95rem;
+        padding: 0 3px;
+        user-select: none;
+      }
+      #editRequestMyListWrap {
+        margin-top: 18px;
+      }
+      #editRequestMyList .status-card {
+        margin-bottom: 0;
+      }
+      #editRequestMyList .edit-req-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(184, 82, 63, 0.1);
+        color: var(--gold-dim);
+        white-space: nowrap;
+      }
+      #editRequestMyList .edit-req-badge--done {
+        background: rgba(22, 163, 74, 0.12);
+        color: #15803d;
+        border-color: rgba(22, 163, 74, 0.28);
+      }
+      #editRequestMyList .edit-req-badge--work {
+        background: rgba(59, 130, 246, 0.1);
+        color: #1d4ed8;
+        border-color: rgba(59, 130, 246, 0.25);
+      }
+      #editRequestMyList .edit-req-badge--ok {
+        background: rgba(184, 82, 63, 0.12);
+        color: var(--gold-dim);
+        border-color: rgba(184, 82, 63, 0.28);
+      }
       body.customer-lite {
         --gold: #0f775d;
         --gold-dim: #0a5f4a;
@@ -758,11 +829,12 @@
                   <button class="compose-btn" type="button" data-edit-type="핸드폰사진수정">핸드폰사진수정</button>
                   <button class="compose-btn" type="button" data-edit-type="거실가구넣기">거실가구넣기</button>
                   <button class="compose-btn" type="button" data-edit-type="블로그글쓰기 신청">블로그글쓰기 신청</button>
+                  <button class="compose-btn" type="button" data-edit-type="기타">기타</button>
                 </div>
               </div>
               <div class="row">
                 <span>📄</span>
-                <input id="editRequestSheetCount" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="총 몇 장을 수정할지 입력" required />
+                <input id="editRequestSheetCount" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="대략적인 편집장수를 적어주세요" required />
               </div>
               <div>
                 <label class="compose-label" for="editRequestMemo" style="margin-bottom:8px;">요청사항</label>
@@ -771,8 +843,25 @@
               <p class="hint tf-kakao-notice">
                 신청이 접수되면 <strong>관리자가 카카오톡으로 직접 연락</strong>드립니다. 남겨주신 연락처(가입 시 등록한 번호)로 소통이 진행됩니다.
               </p>
+              <div class="tf-edit-flow" aria-label="편집 진행 단계 안내">
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">📝</span>편집신청</div>
+                <span class="tf-edit-flow__arr" aria-hidden="true">→</span>
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">✅</span>접수확인</div>
+                <span class="tf-edit-flow__arr" aria-hidden="true">→</span>
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">💬</span>카톡방오픈</div>
+                <span class="tf-edit-flow__arr" aria-hidden="true">→</span>
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">📤</span>편집본업로드</div>
+                <span class="tf-edit-flow__arr" aria-hidden="true">→</span>
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">✏️</span>편집진행</div>
+                <span class="tf-edit-flow__arr" aria-hidden="true">→</span>
+                <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">🎉</span>편집완료</div>
+              </div>
               <button class="btn" type="submit" id="editRequestSubmitBtn">편집 신청 보내기</button>
             </form>
+            <div id="editRequestMyListWrap" class="compose-wrap">
+              <span class="compose-label">내 편집 신청 내역</span>
+              <div id="editRequestMyList" class="status-list" style="margin-top: 8px;"></div>
+            </div>
           </section>
 
           <section id="statusSection" class="hidden">
@@ -3292,6 +3381,67 @@
         writeStorageArray(STORAGE_CUSTOMERS, users);
       }
 
+      function normalizeThefeelingEditWorkflowStatus(row) {
+        const s = normalize(String(row?.status || "")).toLowerCase();
+        if (s === "confirmed" || s === "in_progress" || s === "completed") return s;
+        return "submitted";
+      }
+      function getThefeelingEditCustomerStatusLabel(row) {
+        const st = normalizeThefeelingEditWorkflowStatus(row);
+        if (st === "confirmed") return "접수확인";
+        if (st === "in_progress") return "편집진행중";
+        return "편집신청";
+      }
+      function renderEditRequestMyList() {
+        const el = document.getElementById("editRequestMyList");
+        if (!el) return;
+        if (isLiteCustomerMode) {
+          el.innerHTML = "";
+          return;
+        }
+        const user = getCurrentSessionUser();
+        if (!user) {
+          el.innerHTML = '<p class="hint">로그인 후 내역을 확인할 수 있습니다.</p>';
+          return;
+        }
+        const uid = String(user.id || "").trim();
+        const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.customerId || "").trim() === uid);
+        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE).filter((r) => String(r?.customerId || "").trim() === uid);
+        const merged = [
+          ...pending.map((r) => ({ row: r, done: false })),
+          ...arch.map((r) => ({ row: r, done: true }))
+        ].sort((a, b) => new Date(b.row?.createdAt || 0) - new Date(a.row?.createdAt || 0));
+        if (!merged.length) {
+          el.innerHTML = '<p class="hint">아직 신청 내역이 없습니다.</p>';
+          return;
+        }
+        el.innerHTML = merged
+          .map(({ row, done }) => {
+            const types = Array.isArray(row.types) ? row.types.map((t) => escapeHtml(String(t))).join(", ") : "-";
+            const label = done ? "편집완료" : getThefeelingEditCustomerStatusLabel(row);
+            let badgeClass = "edit-req-badge";
+            if (done || label === "편집완료") badgeClass += " edit-req-badge--done";
+            else if (label === "편집진행중") badgeClass += " edit-req-badge--work";
+            else if (label === "접수확인") badgeClass += " edit-req-badge--ok";
+            const created = String(row.createdAt || "").replace("T", " ").slice(0, 16);
+            const memoText = String(row.memo || "");
+            const memoShort =
+              memoText.length > 140 ? `${escapeHtml(memoText.slice(0, 140))}…` : escapeHtml(memoText);
+            return `<article class="status-card">
+            <div class="status-head" style="align-items:center;">
+              <span style="font-size:0.85rem;color:var(--muted);">${escapeHtml(created)}</span>
+              <span class="${badgeClass}">${escapeHtml(label)}</span>
+            </div>
+            <div class="status-meta" style="margin-top:8px;">
+              유형: ${types}<br />
+              장 수(대략): <strong>${escapeHtml(String(row.sheetCount ?? "-"))}</strong><br />
+              요청: ${memoShort || "-"}
+            </div>
+          </article>`;
+          })
+          .join("");
+      }
+
       function switchCustomerTab(tab) {
         const t = tab === "editRequest" && isLiteCustomerMode ? "register" : tab;
         currentCustomerTab = t === "status" ? "status" : t === "editRequest" ? "editRequest" : "register";
@@ -3308,6 +3458,7 @@
         statusSectionEl.classList.toggle("hidden", !isStatus);
         if (isRegister) renderClosedDatesNotice();
         if (isStatus) renderStatusList();
+        if (isEditRequest) renderEditRequestMyList();
       }
 
       function getCurrentSessionUser() {
@@ -4736,7 +4887,7 @@
         }
         const sheetCount = Math.floor(Number(editRequestSheetCountEl?.value) || 0);
         if (sheetCount < 1) {
-          alert("총 수정 장 수를 1장 이상 입력해주세요.");
+          alert("대략적인 편집 장수를 1 이상으로 입력해주세요.");
           return;
         }
         const memo = normalize(editRequestMemoEl?.value || "");
@@ -4758,13 +4909,15 @@
             types,
             sheetCount,
             memo,
-            source: "thefeeling_edit_request"
+            source: "thefeeling_edit_request",
+            status: "submitted"
           };
           const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
           pending.unshift(row);
           writeStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS, pending);
           editRequestFormEl.reset();
           editRequestTypeButtonsEl?.querySelectorAll("button[data-edit-type]").forEach((b) => b.classList.remove("active"));
+          renderEditRequestMyList();
           alert("편집 신청이 접수되었습니다. 관리자가 카카오톡으로 연락드립니다.");
         } finally {
           editRequestSubmitting = false;
@@ -4834,6 +4987,9 @@
         }
         if (event.key === STORAGE_MASTER_ACCOUNT_MAP) {
           renderAuthState();
+        }
+        if (event.key === STORAGE_THEFEELING_EDIT_REQUESTS || event.key === STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE) {
+          if (currentCustomerTab === "editRequest") renderEditRequestMyList();
         }
       });
     </script>

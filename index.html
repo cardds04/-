@@ -2026,15 +2026,16 @@
           <div class="schedule-head">
             <h2>더필링 편집 신청</h2>
             <div class="head-right">
-              <span id="thefeelingEditPendingCount" class="count">대기 0건</span>
+              <span id="thefeelingEditPendingCount" class="count">진행 중 0건</span>
             </div>
           </div>
           <p class="helper" style="margin-bottom: 10px;">
-            고객이 <code>public-order.html</code>의 <strong>편집신청</strong> 탭에서 보낸 요청입니다. 처리가 끝나면 <strong>완료</strong>를 눌러 기록으로 옮기세요.
+            고객이 <code>public-order.html</code>의 <strong>편집신청</strong> 탭에서 보낸 요청입니다.
+            <strong>접수확인</strong> → <strong>편집진행</strong> → <strong>편집완료</strong> 순으로 눌러 주세요. 편집완료 시 고객 화면에도 완료로 표시됩니다.
           </p>
-          <h3 class="sub-title" style="margin: 0 0 8px;">처리 대기</h3>
+          <h3 class="sub-title" style="margin: 0 0 8px;">진행 중 (접수확인 → 편집진행 → 편집완료)</h3>
           <div id="thefeelingEditPendingList" class="customer-alert-history" style="max-height: 42vh; margin-bottom: 16px;"></div>
-          <h3 class="sub-title" style="margin: 0 0 8px;">처리 완료(기록)</h3>
+          <h3 class="sub-title" style="margin: 0 0 8px;">편집완료(기록)</h3>
           <div id="thefeelingEditArchiveList" class="customer-alert-history" style="max-height: 36vh;"></div>
         </article>
       </section>
@@ -8611,6 +8612,32 @@
           : '<div class="company-item">접수기록이 없습니다.</div>';
       }
 
+      function normalizeThefeelingEditWorkflowStatus(row) {
+        const s = String(row?.status || "").trim().toLowerCase();
+        if (s === "confirmed" || s === "in_progress" || s === "completed") return s;
+        return "submitted";
+      }
+      function getThefeelingEditAdminStatusLabel(item) {
+        if (item?.completedAt || normalizeThefeelingEditWorkflowStatus(item) === "completed") return "편집완료";
+        const st = normalizeThefeelingEditWorkflowStatus(item);
+        if (st === "confirmed") return "접수확인";
+        if (st === "in_progress") return "편집진행중";
+        return "편집신청";
+      }
+      function buildThefeelingEditAdminActionButtons(item) {
+        const id = escapeHtml(String(item.id || ""));
+        const st = normalizeThefeelingEditWorkflowStatus(item);
+        if (st === "submitted") {
+          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="confirmed">접수확인</button>`;
+        }
+        if (st === "confirmed") {
+          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="in_progress">편집진행</button>`;
+        }
+        if (st === "in_progress") {
+          return `<button class="btn-sm primary" type="button" data-action="thefeelingEditSetStatus" data-id="${id}" data-next="completed">편집완료</button>`;
+        }
+        return "";
+      }
       function renderThefeelingEditRequests() {
         if (!thefeelingEditPendingListEl || !thefeelingEditArchiveListEl) return;
         const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.id || "").trim());
@@ -8618,36 +8645,38 @@
         pending.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
         archive.sort((a, b) => new Date(b?.completedAt || b?.createdAt || 0).getTime() - new Date(a?.completedAt || a?.createdAt || 0).getTime());
         if (thefeelingEditPendingCountEl) {
-          thefeelingEditPendingCountEl.textContent = `대기 ${pending.length}건`;
+          thefeelingEditPendingCountEl.textContent = `진행 중 ${pending.length}건`;
         }
-        const rowHtml = (item, showComplete) => {
+        const rowHtml = (item, isArchive) => {
           const types = Array.isArray(item.types) ? item.types : [];
           const typesText = types.length ? types.map((t) => escapeHtml(String(t))).join(", ") : "-";
           const created = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
           const completed = String(item?.completedAt || "").replace("T", " ").slice(0, 16);
-          const completeBtn = showComplete
-            ? `<button class="btn-sm primary" type="button" data-action="thefeelingEditComplete" data-id="${escapeHtml(String(item.id))}">완료</button>`
-            : `<span class="hint" style="opacity:0.75;">기록</span>`;
+          const statusLabel = getThefeelingEditAdminStatusLabel(item);
+          const actions = isArchive
+            ? `<span class="hint" style="opacity:0.75;">기록</span>`
+            : buildThefeelingEditAdminActionButtons(item) || '<span class="hint">—</span>';
           return `
             <div class="customer-alert-row" style="align-items: flex-start;">
               <div>
                 <strong>${escapeHtml(item.company || "-")}</strong> · 아이디 ${escapeHtml(item.customerId || "-")}<br />
+                <strong>상태: ${escapeHtml(statusLabel)}</strong><br />
                 연락처: ${escapeHtml(item.customerPhone || "-")}<br />
                 유형: ${typesText}<br />
-                장 수: <strong>${escapeHtml(String(item.sheetCount ?? "-"))}</strong><br />
+                장 수(대략): <strong>${escapeHtml(String(item.sheetCount ?? "-"))}</strong><br />
                 요청: ${escapeHtml(item.memo || "-")}<br />
                 접수: ${escapeHtml(created)}
-                ${showComplete ? "" : `<br />처리완료: ${escapeHtml(completed || "-")}`}
+                ${isArchive ? `<br />편집완료 시각: ${escapeHtml(completed || "-")}` : ""}
               </div>
-              <div class="actions" style="margin-top: 0; justify-content: flex-end;">${completeBtn}</div>
+              <div class="actions" style="margin-top: 0; justify-content: flex-end; flex-direction: column; gap: 6px; align-items: flex-end;">${actions}</div>
             </div>
           `;
         };
         thefeelingEditPendingListEl.innerHTML = pending.length
-          ? pending.map((item) => rowHtml(item, true)).join("")
-          : '<div class="company-item">대기 중인 편집 신청이 없습니다.</div>';
+          ? pending.map((item) => rowHtml(item, false)).join("")
+          : '<div class="company-item">진행 중인 편집 신청이 없습니다.</div>';
         thefeelingEditArchiveListEl.innerHTML = archive.length
-          ? archive.map((item) => rowHtml(item, false)).join("")
+          ? archive.map((item) => rowHtml(item, true)).join("")
           : '<div class="company-item">완료 기록이 없습니다.</div>';
       }
 
@@ -14159,19 +14188,39 @@
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
-        const btn = event.target.closest("button[data-action='thefeelingEditComplete']");
+        const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
         if (!btn) return;
         const id = String(btn.dataset.id || "").trim();
-        if (!id) return;
+        const next = String(btn.dataset.next || "").trim();
+        if (!id || !next) return;
         let pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
         const idx = pending.findIndex((r) => String(r?.id || "").trim() === id);
         if (idx < 0) return;
-        const [row] = pending.splice(idx, 1);
-        row.completedAt = new Date().toISOString();
-        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
-        arch.unshift(row);
-        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
-        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, JSON.stringify(arch.slice(0, 2000)));
+        const row = pending[idx];
+        const cur = normalizeThefeelingEditWorkflowStatus(row);
+        if (next === "confirmed" && cur !== "submitted") return;
+        if (next === "in_progress" && cur !== "confirmed") return;
+        if (next === "completed" && cur !== "in_progress") return;
+        if (next === "completed") {
+          pending.splice(idx, 1);
+          const doneRow = {
+            ...row,
+            status: "completed",
+            completedAt: new Date().toISOString(),
+            statusUpdatedAt: new Date().toISOString()
+          };
+          const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
+          arch.unshift(doneRow);
+          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
+          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, JSON.stringify(arch.slice(0, 2000)));
+        } else {
+          pending[idx] = {
+            ...row,
+            status: next,
+            statusUpdatedAt: new Date().toISOString()
+          };
+          localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
+        }
         renderThefeelingEditRequests();
       });
       tabInlogPhotoEl?.addEventListener("click", () => {
