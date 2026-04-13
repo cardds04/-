@@ -4123,6 +4123,8 @@
       let scheduleSyncCooldownUntil = 0; // push 직후 pull 차단 쿨다운
       const schedulePendingDeletionIds = new Set(); // 서버 DELETE 진행 중인 스케줄 ID 집합
       let couponPassesSyncPromise = null;
+      let couponPassesSyncCooldownUntil = 0; // push 진행·직후 pull 로 남은 회차가 0으로 덮이는 것 방지 (입금 동기화와 동일 패턴)
+      let couponRealtimeTimer = null;
       let isApplyingRemoteCouponPasses = false;
       let lastCouponPassesSignature = "";
       let couponPassesSchemaMode = "";
@@ -4697,6 +4699,7 @@
           })
           .finally(() => {
             couponPassesSyncPromise = null;
+            couponPassesSyncCooldownUntil = Date.now() + 800;
           });
       }
       function syncCouponPassesStorageAndRemote() {
@@ -4704,13 +4707,16 @@
         const signature = getCouponPassesSignature();
         if (signature === lastCouponPassesSignature) return;
         lastCouponPassesSignature = signature;
+        couponPassesSyncCooldownUntil = Math.max(couponPassesSyncCooldownUntil, Date.now() + 400);
         queueCouponPassesSync();
       }
       async function pullCouponPassesFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
+        if (couponPassesSyncPromise || Date.now() < couponPassesSyncCooldownUntil) return false;
         try {
           const { map: remoteMap, rows: remoteRows } = await fetchSharedCouponPassesFromSupabase();
           if (!remoteMap) return false;
+          if (couponPassesSyncPromise || Date.now() < couponPassesSyncCooldownUntil) return false;
           updateLastPullTime(STORAGE_LAST_COUPON_PULL_AT, remoteRows, "updatedAt");
           const localSignature = getCouponPassesSignature();
           const remoteSignature = JSON.stringify(remoteMap);
@@ -5351,11 +5357,15 @@
               "postgres_changes",
               { event: "*", schema: "public", table: "coupon_passes" },
               () => {
-                void pullCouponPassesFromSupabaseAndApply().then((changed) => {
-                  if (!changed) return;
-                  renderCouponPassList();
-                  renderPaymentList();
-                });
+                if (couponRealtimeTimer) clearTimeout(couponRealtimeTimer);
+                couponRealtimeTimer = setTimeout(() => {
+                  couponRealtimeTimer = null;
+                  void pullCouponPassesFromSupabaseAndApply().then((changed) => {
+                    if (!changed) return;
+                    renderCouponPassList();
+                    renderPaymentList();
+                  });
+                }, 250);
               }
             )
             .subscribe();

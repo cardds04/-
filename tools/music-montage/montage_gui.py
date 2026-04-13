@@ -2713,6 +2713,7 @@ class MontageGuiApp:
         self.auto_wb_strength_var.set(0)
         self.auto_ct_kelvin_var.set(int(MONTAGE_CT_NEUTRAL_K))
         self._save_gui_settings()
+        self._write_clip_grade_preview_sidecar()
         self._sync_apply_slider_from_selection()
         self._refresh_pills_from_preview()
         messagebox.showinfo(

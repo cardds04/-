@@ -456,6 +456,27 @@ def montage_auto_grade_vf_prefix(
     return ",".join(chunks) if chunks else None
 
 
+def montage_exposure_vf_from_manual_pct(exposure_pct: int) -> str | None:
+    """
+    GUI·웹 미리보기(apply_grade_preview_pil)의 Brightness 배율과 맞추기 위한 근사값을
+    FFmpeg exposure= (EV)로 변환. 100 → 기준(미리보기에서 fac≈1.05) 대비 상대 스톱.
+    """
+    e = max(0, min(200, int(exposure_pct)))
+    if e <= 100:
+        fac = 0.5 + 0.0055 * float(e)
+    else:
+        fac = 1.05 + 0.011 * float(e - 100)
+    fac = min(2.35, max(0.28, fac))
+    ref = 1.05
+    if abs(fac - ref) < 0.008:
+        return None
+    ev = math.log(fac / ref) / math.log(2.0)
+    ev = max(-2.5, min(2.5, ev))
+    if abs(ev) < 1e-4:
+        return None
+    return f"exposure={ev:.5f}"
+
+
 def montage_tone_curves_vf(
     shadows_pct: int,
     highlights_pct: int,
@@ -500,12 +521,21 @@ def montage_tone_curves_vf(
 def montage_manual_clip_grade_vf(grade: dict | None) -> str | None:
     """
     웹/GUI clip_grade_preview(정규화 dict)에서 FFmpeg 자동 체인에 없는 항목만 vf 문자열로 변환.
-    노출 강도·색온도·스포이드는 montage_auto_grade_vf_prefix 에서 이미 처리.
+    색온도·스포이드는 montage_auto_grade_vf_prefix 에서 처리.
+    히스토그램 자동 노출(auto_exposure_grade)과 별개로, 슬라이더 노출(exposure_pct)은 여기서 반영.
     """
     if not isinstance(grade, dict):
         return None
     g = grade
     chunks: list[str] = []
+
+    try:
+        ep = int(g.get("exposure_pct", 100) or 100)
+    except (TypeError, ValueError):
+        ep = 100
+    ex_vf = montage_exposure_vf_from_manual_pct(ep)
+    if ex_vf:
+        chunks.append(ex_vf)
 
     tint = int(g.get("tint_pct", 0) or 0)
     if abs(tint) >= 1:
