@@ -2353,6 +2353,8 @@
       const STORAGE_LAST_PAYMENT_PULL_AT = "scheduleSiteLastPaymentPullAt";
       const STORAGE_LAST_COMPANY_PULL_AT = "scheduleSiteLastCompanyPullAt";
       const STORAGE_LAST_COUPON_PULL_AT = "scheduleSiteLastCouponPullAt";
+      /** Supabase 저장 실패·스키마 불일치 시에도 새로고침 후 유지 */
+      const STORAGE_COUPON_PASSES = "scheduleSiteCouponPassesV1";
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
@@ -4501,31 +4503,31 @@
       function getCouponPassesSignature(source = couponPasses) {
         return JSON.stringify(normalizeCouponPassesMap(source));
       }
+      function persistCouponPassesToDevice() {
+        try {
+          originalSetItem(STORAGE_COUPON_PASSES, JSON.stringify(normalizeCouponPassesMap(couponPasses)));
+        } catch (_) {}
+      }
       function applyCouponPassesMap(nextMap) {
         Object.keys(couponPasses).forEach((key) => delete couponPasses[key]);
         Object.assign(couponPasses, normalizeCouponPassesMap(nextMap));
+        persistCouponPassesToDevice();
       }
       function loadCouponPassesFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_COUPON_PASSES);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            applyCouponPassesMap(parsed);
+          }
+        } catch (_) {}
         lastCouponPassesSignature = getCouponPassesSignature();
       }
       async function detectCouponPassesSchemaMode() {
         if (couponPassesSchemaMode) return couponPassesSchemaMode;
         if (!USE_SUPABASE_SYNC) return "";
-        const companyIdResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_id&limit=1`,
-          {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store"
-          }
-        );
-        if (companyIdResponse.ok) {
-          couponPassesSchemaMode = "company_id";
-          return couponPassesSchemaMode;
-        }
+        // company_name 을 먼저 본다: company_id 컬럼만 추가된 테이블에서 id 경로로 upsert 하면
+        // company_directory 에 아직 없는 업체는 행이 빠져 서버에 안 남고, 새로고침 시 0으로 보인다.
         const companyNameResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_name&limit=1`,
           {
@@ -4541,9 +4543,24 @@
           couponPassesSchemaMode = "company_name";
           return couponPassesSchemaMode;
         }
-        const idErrorText = await companyIdResponse.text();
+        const companyIdResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/coupon_passes?select=company_id&limit=1`,
+          {
+            method: "GET",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            cache: "no-store"
+          }
+        );
+        if (companyIdResponse.ok) {
+          couponPassesSchemaMode = "company_id";
+          return couponPassesSchemaMode;
+        }
         const nameErrorText = await companyNameResponse.text();
-        throw new Error(`coupon_passes 스키마 확인 실패: company_id(${idErrorText}) / company_name(${nameErrorText})`);
+        const idErrorText = await companyIdResponse.text();
+        throw new Error(`coupon_passes 스키마 확인 실패: company_name(${nameErrorText}) / company_id(${idErrorText})`);
       }
       async function fetchCompanyIdNameMapFromSupabase() {
         const rows = await fetchCompaniesFromSupabase();
@@ -4629,8 +4646,10 @@
         if (nextEntries.length > 0) {
           let upsertRows = [];
           let onConflictKey = "company_name";
+          let nameToIdForCoupon = null;
           if (schemaMode === "company_id") {
             const { nameToId } = await fetchCompanyIdNameMapFromSupabase();
+            nameToIdForCoupon = nameToId;
             upsertRows = nextEntries
               .map(([companyName, remaining]) => {
                 const companyId = nameToId.get(String(companyName || "").toLowerCase());
@@ -4662,6 +4681,33 @@
             if (!upsertResponse.ok) {
               const errorText = await upsertResponse.text();
               throw new Error(`coupon_passes upsert 실패 (${upsertResponse.status}): ${errorText}`);
+            }
+          }
+          if (schemaMode === "company_id" && nameToIdForCoupon) {
+            const nameFallbackRows = nextEntries
+              .filter(([companyName]) => !nameToIdForCoupon.get(String(companyName || "").toLowerCase()))
+              .map(([companyName, remaining]) => ({
+                company_name: companyName,
+                remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
+              }));
+            if (nameFallbackRows.length > 0) {
+              try {
+                const fb = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=company_name`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Prefer: "resolution=merge-duplicates,return=minimal",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                  },
+                  body: JSON.stringify(nameFallbackRows)
+                });
+                if (!fb.ok) {
+                  console.error("[COUPON][index] company_name 보조 upsert 실패", await fb.text());
+                }
+              } catch (error) {
+                console.error("[COUPON][index] company_name 보조 upsert 예외", error);
+              }
             }
           }
         }
@@ -4718,12 +4764,15 @@
           if (!remoteMap) return false;
           if (couponPassesSyncPromise || Date.now() < couponPassesSyncCooldownUntil) return false;
           updateLastPullTime(STORAGE_LAST_COUPON_PULL_AT, remoteRows, "updatedAt");
-          const localSignature = getCouponPassesSignature();
-          const remoteSignature = JSON.stringify(remoteMap);
-          if (localSignature === remoteSignature) return false;
+          const localNorm = normalizeCouponPassesMap(couponPasses);
+          const remoteNorm = normalizeCouponPassesMap(remoteMap);
+          const merged = { ...localNorm, ...remoteNorm };
+          const mergedSig = JSON.stringify(merged);
+          const localSig = JSON.stringify(localNorm);
+          if (mergedSig === localSig) return false;
           isApplyingRemoteCouponPasses = true;
-          applyCouponPassesMap(remoteMap);
-          lastCouponPassesSignature = remoteSignature;
+          applyCouponPassesMap(merged);
+          lastCouponPassesSignature = mergedSig;
           return true;
         } catch (error) {
           console.error("[COUPON][index] 원격 적용 실패", error);
@@ -9755,6 +9804,7 @@
         if (!confirmed) return;
         companies.length = 0;
         Object.keys(couponPasses).forEach((key) => delete couponPasses[key]);
+        persistCouponPassesToDevice();
         localStorage.setItem(STORAGE_ADMIN_COMPANIES, JSON.stringify([]));
         localStorage.setItem(STORAGE_CUSTOMER_COMPANIES, JSON.stringify([]));
         editingCompanyIndex = null;
@@ -9893,6 +9943,7 @@
         couponPasses[primary] = val;
         if (legacy !== primary) delete couponPasses[legacy];
         stripCouponAliasKeysForPrimary(primary, id.companyCode);
+        persistCouponPassesToDevice();
       }
       function getCouponLowlistExcludedSet() {
         return new Set(
@@ -9995,6 +10046,7 @@
             </tr>
           `;
         }
+        persistCouponPassesToDevice();
         syncCouponPassesStorageAndRemote();
       }
 
@@ -14873,6 +14925,7 @@
           });
           localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
         }
+        persistCouponPassesToDevice();
         syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode, oldName);
       }
 
@@ -15771,6 +15824,7 @@
             localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customerUsers));
           }
 
+          persistCouponPassesToDevice();
           mergeCouponPassesByCanonicalIdentity();
           editingCompanyIndex = null;
           saveAdminCompaniesToStorage();
