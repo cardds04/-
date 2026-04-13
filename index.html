@@ -1678,6 +1678,7 @@
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
+        <button id="tabThefeelingEdit" data-tab="thefeelingEdit" type="button">더필링 편집신청</button>
         <button id="tabInlogPhoto" data-tab="inlogPhoto" type="button">인로그 등록</button>
         <button id="tabGrokTool" data-tab="grokTool" type="button">AI 이미지 스튜디오</button>
       </div>
@@ -2017,6 +2018,24 @@
             </thead>
             <tbody id="couponListBody"></tbody>
           </table>
+        </article>
+      </section>
+
+      <section id="thefeelingEditSection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>더필링 편집 신청</h2>
+            <div class="head-right">
+              <span id="thefeelingEditPendingCount" class="count">대기 0건</span>
+            </div>
+          </div>
+          <p class="helper" style="margin-bottom: 10px;">
+            고객이 <code>public-order.html</code>의 <strong>편집신청</strong> 탭에서 보낸 요청입니다. 처리가 끝나면 <strong>완료</strong>를 눌러 기록으로 옮기세요.
+          </p>
+          <h3 class="sub-title" style="margin: 0 0 8px;">처리 대기</h3>
+          <div id="thefeelingEditPendingList" class="customer-alert-history" style="max-height: 42vh; margin-bottom: 16px;"></div>
+          <h3 class="sub-title" style="margin: 0 0 8px;">처리 완료(기록)</h3>
+          <div id="thefeelingEditArchiveList" class="customer-alert-history" style="max-height: 36vh;"></div>
         </article>
       </section>
 
@@ -2394,6 +2413,8 @@
       /** Supabase 저장 실패·스키마 불일치 시에도 새로고침 후 유지 */
       const STORAGE_COUPON_PASSES = "scheduleSiteCouponPassesV1";
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
+      const STORAGE_THEFEELING_EDIT_REQUESTS = "scheduleSiteThefeelingEditRequests";
+      const STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE = "scheduleSiteThefeelingEditRequestsArchive";
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
@@ -2465,7 +2486,9 @@
         STORAGE_DAYOFF_ALERT_READ_IDS,
         STORAGE_LIMIT_CONFIG,
         STORAGE_EXCLUDED_PHOTOGRAPHERS,
-        STORAGE_PHOTOGRAPHER_PROFILES
+        STORAGE_PHOTOGRAPHER_PROFILES,
+        STORAGE_THEFEELING_EDIT_REQUESTS,
+        STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE
       ];
       const STORAGE_SYNC_DEFAULTS = {
         [STORAGE_CUSTOMER_COMPANIES]: "[]",
@@ -2482,7 +2505,9 @@
         [STORAGE_DAYOFF_ALERT_READ_IDS]: "[]",
         [STORAGE_LIMIT_CONFIG]: "{}",
         [STORAGE_EXCLUDED_PHOTOGRAPHERS]: "[]",
-        [STORAGE_PHOTOGRAPHER_PROFILES]: "[]"
+        [STORAGE_PHOTOGRAPHER_PROFILES]: "[]",
+        [STORAGE_THEFEELING_EDIT_REQUESTS]: "[]",
+        [STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
       /** Storage 업로드 등 fetch 래퍼와 무관하게 브라우저 원본 fetch 보관 */
@@ -5523,12 +5548,17 @@
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
+      const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const tabGrokToolEl = document.getElementById("tabGrokTool");
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
+      const thefeelingEditSectionEl = document.getElementById("thefeelingEditSection");
+      const thefeelingEditPendingListEl = document.getElementById("thefeelingEditPendingList");
+      const thefeelingEditArchiveListEl = document.getElementById("thefeelingEditArchiveList");
+      const thefeelingEditPendingCountEl = document.getElementById("thefeelingEditPendingCount");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const grokToolSectionEl = document.getElementById("grokToolSection");
       const grokWebToolBaseInputEl = document.getElementById("grokWebToolBaseInput");
@@ -8580,6 +8610,47 @@
               .join("")
           : '<div class="company-item">접수기록이 없습니다.</div>';
       }
+
+      function renderThefeelingEditRequests() {
+        if (!thefeelingEditPendingListEl || !thefeelingEditArchiveListEl) return;
+        const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS).filter((r) => String(r?.id || "").trim());
+        const archive = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE).filter((r) => String(r?.id || "").trim());
+        pending.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+        archive.sort((a, b) => new Date(b?.completedAt || b?.createdAt || 0).getTime() - new Date(a?.completedAt || a?.createdAt || 0).getTime());
+        if (thefeelingEditPendingCountEl) {
+          thefeelingEditPendingCountEl.textContent = `대기 ${pending.length}건`;
+        }
+        const rowHtml = (item, showComplete) => {
+          const types = Array.isArray(item.types) ? item.types : [];
+          const typesText = types.length ? types.map((t) => escapeHtml(String(t))).join(", ") : "-";
+          const created = String(item?.createdAt || "").replace("T", " ").slice(0, 16);
+          const completed = String(item?.completedAt || "").replace("T", " ").slice(0, 16);
+          const completeBtn = showComplete
+            ? `<button class="btn-sm primary" type="button" data-action="thefeelingEditComplete" data-id="${escapeHtml(String(item.id))}">완료</button>`
+            : `<span class="hint" style="opacity:0.75;">기록</span>`;
+          return `
+            <div class="customer-alert-row" style="align-items: flex-start;">
+              <div>
+                <strong>${escapeHtml(item.company || "-")}</strong> · 아이디 ${escapeHtml(item.customerId || "-")}<br />
+                연락처: ${escapeHtml(item.customerPhone || "-")}<br />
+                유형: ${typesText}<br />
+                장 수: <strong>${escapeHtml(String(item.sheetCount ?? "-"))}</strong><br />
+                요청: ${escapeHtml(item.memo || "-")}<br />
+                접수: ${escapeHtml(created)}
+                ${showComplete ? "" : `<br />처리완료: ${escapeHtml(completed || "-")}`}
+              </div>
+              <div class="actions" style="margin-top: 0; justify-content: flex-end;">${completeBtn}</div>
+            </div>
+          `;
+        };
+        thefeelingEditPendingListEl.innerHTML = pending.length
+          ? pending.map((item) => rowHtml(item, true)).join("")
+          : '<div class="company-item">대기 중인 편집 신청이 없습니다.</div>';
+        thefeelingEditArchiveListEl.innerHTML = archive.length
+          ? archive.map((item) => rowHtml(item, false)).join("")
+          : '<div class="company-item">완료 기록이 없습니다.</div>';
+      }
+
       function findInitialScheduleReceiptEntry(scheduleItem) {
         const scheduleId = String(scheduleItem?.customerScheduleId || "").trim();
         if (!scheduleId) return null;
@@ -14051,23 +14122,27 @@
         const isPayment = tab === "payment";
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
+        const isThefeelingEdit = tab === "thefeelingEdit";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
+        tabThefeelingEditEl?.classList.toggle("active", isThefeelingEdit);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
+        thefeelingEditSectionEl?.classList.toggle("hidden", !isThefeelingEdit);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         if (isPayment) renderPaymentList();
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
+        if (isThefeelingEdit) renderThefeelingEditRequests();
         if (isInlogPhoto) {
           // 편집 중에는 서버 pull로 DOM을 덮어쓰지 않음 · Supabase 반영은 저장/일치 확인/탭 재진입(저장 완료 후)에만
           if (!inlogEditorDirty) {
@@ -14082,6 +14157,23 @@
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
+      tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
+      thefeelingEditSectionEl?.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-action='thefeelingEditComplete']");
+        if (!btn) return;
+        const id = String(btn.dataset.id || "").trim();
+        if (!id) return;
+        let pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
+        const idx = pending.findIndex((r) => String(r?.id || "").trim() === id);
+        if (idx < 0) return;
+        const [row] = pending.splice(idx, 1);
+        row.completedAt = new Date().toISOString();
+        const arch = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE);
+        arch.unshift(row);
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS, JSON.stringify(pending));
+        localStorage.setItem(STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE, JSON.stringify(arch.slice(0, 2000)));
+        renderThefeelingEditRequests();
+      });
       tabInlogPhotoEl?.addEventListener("click", () => {
         switchMainTab("inlogPhoto");
         wireInlogProductEditorIfNeeded();
@@ -17166,6 +17258,11 @@
         }
         if (event.key === STORAGE_SCHEDULE_RECEIPT_LEDGER) {
           renderScheduleReceiptLedger();
+        }
+        if (event.key === STORAGE_THEFEELING_EDIT_REQUESTS || event.key === STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE) {
+          if (!thefeelingEditSectionEl?.classList.contains("hidden")) {
+            renderThefeelingEditRequests();
+          }
         }
         if (event.key === STORAGE_CUSTOMERS || event.key === STORAGE_CUSTOMER_LOGINS) {
           renderCustomerStatsDashboard();

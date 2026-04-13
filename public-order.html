@@ -437,6 +437,33 @@
         font-size: 1.02rem;
         letter-spacing: 0.02em;
       }
+      .edit-request-textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.95rem;
+        line-height: 1.55;
+      }
+      .edit-request-textarea:focus {
+        outline: none;
+        border-color: var(--gold);
+        box-shadow: 0 0 0 2px rgba(184, 82, 63, 0.15);
+      }
+      .tf-kakao-notice {
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(184, 82, 63, 0.08);
+        border: 1px solid rgba(184, 82, 63, 0.22);
+        color: var(--text);
+        font-size: 0.88rem;
+        line-height: 1.65;
+      }
       body.customer-lite {
         --gold: #0f775d;
         --gold-dim: #0a5f4a;
@@ -666,8 +693,9 @@
           </div>
           <div id="myInfoBox" class="status-card hidden" style="margin-bottom:8px;"></div>
 
-          <div class="tabs" style="margin-top: 4px;">
+          <div class="tabs tf-main-tabs" style="margin-top: 4px;">
             <button id="registerTabBtn" class="active" type="button">스케줄등록</button>
+            <button id="editRequestTabBtn" type="button">편집신청</button>
             <button id="statusTabBtn" type="button">내등록현황</button>
           </div>
 
@@ -706,11 +734,6 @@
                   <button class="compose-btn active" type="button" data-compose="미선택">미선택</button>
                   <button class="compose-btn" type="button" data-compose="사진만">사진만</button>
                   <button class="compose-btn" type="button" data-compose="사진영상 둘다">사진영상둘다</button>
-                  <button class="compose-btn" type="button" data-compose="편집만">편집만</button>
-                </div>
-                <div id="editSheetsRow" class="edit-sheets-row hidden">
-                  <label class="edit-sheets-label" for="scheduleEditSheets">편집 신청 장 수</label>
-                  <input id="scheduleEditSheets" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="예: 8" />
                 </div>
                 <input id="scheduleComposition" type="hidden" value="미선택" />
                 <input id="scheduleTaxInvoiceRequested" type="hidden" value="off" />
@@ -718,12 +741,37 @@
                   <strong>금액 산출 기준 (더필링)</strong><br />
                   사진 패키지: 20만(45평↓) → +5만(46~99평) → +5만(100평~)<br />
                   사진+영상: 위 사진금액 + 영상 15만 + 평형별 영상 추가(46평~ +3만, 100평~ +3만)<br />
-                  편집만(촬영 제외): 1~10장 장당 5천원 · 11장~ 장당 3천원
+                  사진 외 편집만 의뢰는 상단 <strong>편집신청</strong> 메뉴에서 접수해 주세요.
                 </p>
               </div>
               <p id="expectedPaymentText" class="hint"><strong>결제예정금액:</strong> -</p>
               <button class="btn" type="submit">스케줄 등록</button>
               <p class="hint">스케줄 등록 후에는 <strong>내등록현황</strong> 탭에서 확인할 수 있습니다.</p>
+            </form>
+          </section>
+
+          <section id="editRequestSection" class="hidden">
+            <form id="editRequestForm" class="form">
+              <div class="compose-wrap">
+                <span class="compose-label">편집 유형 <span style="font-weight:500; text-transform:none; letter-spacing:0;">(복수 선택 가능)</span></span>
+                <div class="compose-buttons" id="editRequestTypeButtons">
+                  <button class="compose-btn" type="button" data-edit-type="핸드폰사진수정">핸드폰사진수정</button>
+                  <button class="compose-btn" type="button" data-edit-type="거실가구넣기">거실가구넣기</button>
+                  <button class="compose-btn" type="button" data-edit-type="블로그글쓰기 신청">블로그글쓰기 신청</button>
+                </div>
+              </div>
+              <div class="row">
+                <span>📄</span>
+                <input id="editRequestSheetCount" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="총 몇 장을 수정할지 입력" required />
+              </div>
+              <div>
+                <label class="compose-label" for="editRequestMemo" style="margin-bottom:8px;">요청사항</label>
+                <textarea id="editRequestMemo" class="edit-request-textarea" placeholder="상세 요청사항을 적어주세요." rows="5"></textarea>
+              </div>
+              <p class="hint tf-kakao-notice">
+                신청이 접수되면 <strong>관리자가 카카오톡으로 직접 연락</strong>드립니다. 남겨주신 연락처(가입 시 등록한 번호)로 소통이 진행됩니다.
+              </p>
+              <button class="btn" type="submit" id="editRequestSubmitBtn">편집 신청 보내기</button>
             </form>
           </section>
 
@@ -799,6 +847,8 @@
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_MASTER_ACCOUNT_MAP = "scheduleSiteMasterAccountMapV1";
       const STORAGE_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
+      const STORAGE_THEFEELING_EDIT_REQUESTS = "scheduleSiteThefeelingEditRequests";
+      const STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE = "scheduleSiteThefeelingEditRequestsArchive";
       const STORAGE_CUSTOMER_HOLD_PAYMENTS = "scheduleSiteCustomerHoldPayments";
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_AUTO_BACKUP_ENTRIES = "scheduleSiteAutoBackupEntriesV1";
@@ -840,7 +890,9 @@
         "scheduleSiteDayoffAlertReadIds",
         "scheduleSiteLimitConfig",
         "scheduleSiteExcludedPhotographers",
-        "scheduleSitePhotographerProfiles"
+        "scheduleSitePhotographerProfiles",
+        "scheduleSiteThefeelingEditRequests",
+        "scheduleSiteThefeelingEditRequestsArchive"
       ];
       const STORAGE_SYNC_DEFAULTS = {
         scheduleSiteCustomerCompanies: "[]",
@@ -860,7 +912,9 @@
         scheduleSiteDayoffAlertReadIds: "[]",
         scheduleSiteLimitConfig: "{}",
         scheduleSiteExcludedPhotographers: "[]",
-        scheduleSitePhotographerProfiles: "[]"
+        scheduleSitePhotographerProfiles: "[]",
+        scheduleSiteThefeelingEditRequests: "[]",
+        scheduleSiteThefeelingEditRequestsArchive: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
       const scheduleSiteClientKvState = {
@@ -1743,8 +1797,10 @@
       const logoutBtnEl = document.getElementById("logoutBtn");
 
       const registerTabBtnEl = document.getElementById("registerTabBtn");
+      const editRequestTabBtnEl = document.getElementById("editRequestTabBtn");
       const statusTabBtnEl = document.getElementById("statusTabBtn");
       const registerSectionEl = document.getElementById("registerSection");
+      const editRequestSectionEl = document.getElementById("editRequestSection");
       const statusSectionEl = document.getElementById("statusSection");
       const statusListEl = document.getElementById("statusList");
       const orderHistoryBtnEl = document.getElementById("orderHistoryBtn");
@@ -1770,8 +1826,11 @@
       const expectedPaymentTextEl = document.getElementById("expectedPaymentText");
       const closedDatesNoticeBoxEl = document.getElementById("closedDatesNoticeBox");
       const composeButtonsEl = document.getElementById("composeButtons");
-      const editSheetsRowEl = document.getElementById("editSheetsRow");
-      const scheduleEditSheetsEl = document.getElementById("scheduleEditSheets");
+      const editRequestFormEl = document.getElementById("editRequestForm");
+      const editRequestTypeButtonsEl = document.getElementById("editRequestTypeButtons");
+      const editRequestSheetCountEl = document.getElementById("editRequestSheetCount");
+      const editRequestMemoEl = document.getElementById("editRequestMemo");
+      const editRequestSubmitBtnEl = document.getElementById("editRequestSubmitBtn");
       const paymentSummaryBoxEl = document.getElementById("paymentSummaryBox");
 
       const currentYear = new Date().getFullYear();
@@ -2697,22 +2756,8 @@
         const n = parseInt(m[1], 10);
         return Number.isFinite(n) && n >= 1 ? n : 1;
       }
-      function formatEditOnlyMemo(baseMemo, sheetCount) {
-        const n = Math.max(1, Math.floor(Number(sheetCount) || 0));
-        const base = String(baseMemo || "")
-          .replace(/\s*\|\s*AI편집\s*\d+\s*장/g, "")
-          .replace(/^AI편집\s*\d+\s*장(\s*\|\s*)?/g, "")
-          .trim();
-        const suffix = `AI편집 ${n}장`;
-        return base ? `${base} | ${suffix}` : suffix;
-      }
-      /** 더필링(inlog.html) 가격 기준. 편집만은 장당 단가. */
-      function calculateExpectedPaymentAmount(
-        pyeong,
-        composition,
-        taxInvoiceRequested = false,
-        editSheetsCount = 0
-      ) {
+      /** 더필링 촬영 스케줄 가격 (사진/사진+영상). 편집만 단가는 별도 편집신청 탭에서 처리. */
+      function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false) {
         const areaRaw = normalize(pyeong);
         const area =
           areaRaw === "45평이상" || areaRaw === "95평이상" || areaRaw === "145평이상"
@@ -2723,13 +2768,6 @@
         let compose = normalize(composition);
         if (compose === "사진영상둘다") compose = "사진영상 둘다";
         if (!compose || compose === "미선택") return null;
-        if (compose === "편집만") {
-          const n = Math.floor(Number(editSheetsCount) || 0);
-          if (n < 1) return null;
-          const baseAmount = n <= 10 ? n * 5000 : n * 3000;
-          if (!taxInvoiceRequested) return baseAmount;
-          return Math.round(baseAmount * 1.1);
-        }
         if (!area || area === "미선택") return null;
         const priceTable = {
           "45평이하": { "사진만": 200000, "사진영상 둘다": 350000 },
@@ -2767,6 +2805,7 @@
         if (schedulePyeongEl) schedulePyeongEl.value = "";
         if (scheduleCompositionEl) scheduleCompositionEl.value = "사진만";
         setTaxInvoiceRequested(false);
+        if (editRequestTabBtnEl) editRequestTabBtnEl.classList.add("hidden");
       }
       function updateExpectedPaymentText() {
         if (!expectedPaymentTextEl) return;
@@ -2774,15 +2813,10 @@
           expectedPaymentTextEl.textContent = "";
           return;
         }
-        const sheets =
-          normalize(scheduleCompositionEl?.value) === "편집만"
-            ? Math.floor(Number(scheduleEditSheetsEl?.value) || 0)
-            : 0;
         const amount = calculateExpectedPaymentAmount(
           schedulePyeongEl?.value,
           scheduleCompositionEl?.value,
-          isTaxInvoiceRequested(),
-          sheets
+          isTaxInvoiceRequested()
         );
         expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
       }
@@ -3115,13 +3149,6 @@
         rootEl.querySelectorAll("button[data-compose]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.compose === value);
         });
-        const v = normalize(value);
-        if (editSheetsRowEl) {
-          editSheetsRowEl.classList.toggle("hidden", v !== "편집만");
-        }
-        if (pyeongSectionEl && !isLiteCustomerMode) {
-          pyeongSectionEl.classList.toggle("hidden", v === "편집만");
-        }
         updateExpectedPaymentText();
       }
       function setSelectedPyeong(value, rootEl = pyeongButtonsEl, hiddenInputEl = schedulePyeongEl) {
@@ -3266,14 +3293,21 @@
       }
 
       function switchCustomerTab(tab) {
-        const isRegister = tab === "register";
-        currentCustomerTab = isRegister ? "register" : "status";
+        const t = tab === "editRequest" && isLiteCustomerMode ? "register" : tab;
+        currentCustomerTab = t === "status" ? "status" : t === "editRequest" ? "editRequest" : "register";
+        const isRegister = currentCustomerTab === "register";
+        const isEditRequest = currentCustomerTab === "editRequest";
+        const isStatus = currentCustomerTab === "status";
         registerTabBtnEl.classList.toggle("active", isRegister);
-        statusTabBtnEl.classList.toggle("active", !isRegister);
+        if (editRequestTabBtnEl && !editRequestTabBtnEl.classList.contains("hidden")) {
+          editRequestTabBtnEl.classList.toggle("active", isEditRequest);
+        }
+        statusTabBtnEl.classList.toggle("active", isStatus);
         registerSectionEl.classList.toggle("hidden", !isRegister);
-        statusSectionEl.classList.toggle("hidden", isRegister);
+        if (editRequestSectionEl) editRequestSectionEl.classList.toggle("hidden", !isEditRequest);
+        statusSectionEl.classList.toggle("hidden", !isStatus);
         if (isRegister) renderClosedDatesNotice();
-        if (!isRegister) renderStatusList();
+        if (isStatus) renderStatusList();
       }
 
       function getCurrentSessionUser() {
@@ -3725,6 +3759,36 @@
                 .map((month) => `<option value="${month}" ${month === editMonth ? "selected" : ""}>${month}월</option>`)
                 .join("");
               const dayOptions = buildDayOptionsHtml(editYear, editMonth, editDay).html;
+              const legacyEditOnly = normalize(item.composition) === "편집만";
+              const editPhotoCompose = normalize(item.composition) === "사진영상 둘다" ? "사진영상 둘다" : "사진만";
+              const escMemo = String(item.memo || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/"/g, "&quot;");
+              const escPlace = String(item.place || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/"/g, "&quot;");
+              const photoComposeBlock = `
+                    <div class="row edit-pyeong-row">
+                      <span>📐</span>
+                      <select class="edit-pyeong">
+                        <option value="미선택" ${!item.pyeong || item.pyeong === "미선택" || item.pyeong === "해당없음" ? "selected" : ""}>미선택</option>
+                        <option value="45평이하" ${item.pyeong === "45평이하" ? "selected" : ""}>45평이하</option>
+                        <option value="46평이상" ${item.pyeong === "46평이상" || item.pyeong === "45평이상" ? "selected" : ""}>46평이상</option>
+                        <option value="100평이상" ${item.pyeong === "100평이상" || item.pyeong === "95평이상" || item.pyeong === "145평이상" ? "selected" : ""}>100평이상</option>
+                      </select>
+                    </div>
+                    <div class="row"><span>📝</span><input class="edit-memo" type="text" value="${escMemo}" /></div>
+                    <div class="compose-buttons">
+                      <button class="compose-btn ${editPhotoCompose === "사진만" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진만">사진만</button>
+                      <button class="compose-btn ${editPhotoCompose === "사진영상 둘다" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진영상 둘다">사진영상둘다</button>
+                    </div>
+                    <input class="edit-composition" type="hidden" value="${editPhotoCompose}" />`;
+              const legacyEditOnlyBlock = `
+                    <div class="row"><span>📝</span><input class="edit-memo" type="text" value="${escMemo}" /></div>
+                    <p class="hint">촬영구성: <strong>편집만</strong> (기존 등록). 신규 편집 의뢰는 <strong>편집신청</strong> 탭을 이용해 주세요.</p>
+                    <input class="edit-composition" type="hidden" value="편집만" />`;
               return `
                 <article class="status-card" data-id="${item.customerScheduleId}" data-row-key="${rowIdentityKey}">
                   <div class="status-head">수정 중</div>
@@ -3758,27 +3822,8 @@
                         </select>
                       </div>
                     </div>
-                    <div class="row"><span>📍</span><input class="edit-place" type="text" value="${item.place || ""}" /></div>
-                    <div class="row edit-pyeong-row" style="display:${item.composition === "편집만" ? "none" : "flex"};">
-                      <span>📐</span>
-                      <select class="edit-pyeong">
-                        <option value="미선택" ${!item.pyeong || item.pyeong === "미선택" || item.pyeong === "해당없음" ? "selected" : ""}>미선택</option>
-                        <option value="45평이하" ${item.pyeong === "45평이하" ? "selected" : ""}>45평이하</option>
-                        <option value="46평이상" ${item.pyeong === "46평이상" || item.pyeong === "45평이상" ? "selected" : ""}>46평이상</option>
-                        <option value="100평이상" ${item.pyeong === "100평이상" || item.pyeong === "95평이상" || item.pyeong === "145평이상" ? "selected" : ""}>100평이상</option>
-                      </select>
-                    </div>
-                    <div class="row"><span>📝</span><input class="edit-memo" type="text" value="${item.memo || ""}" /></div>
-                    <div class="compose-buttons">
-                      <button class="compose-btn ${item.composition === "사진만" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진만">사진만</button>
-                      <button class="compose-btn ${item.composition === "사진영상 둘다" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="사진영상 둘다">사진영상둘다</button>
-                      <button class="compose-btn ${item.composition === "편집만" ? "active" : ""}" type="button" data-action="pickEditCompose" data-value="편집만">편집만</button>
-                    </div>
-                    <div class="row edit-sheets-editor" style="display:${item.composition === "편집만" ? "flex" : "none"};">
-                      <span>🖼</span>
-                      <input class="edit-edit-sheets" type="number" min="1" max="999" value="${parseEditSheetsFromMemo(item.memo)}" placeholder="편집 장수" />
-                    </div>
-                    <input class="edit-composition" type="hidden" value="${item.composition || "사진만"}" />
+                    <div class="row"><span>📍</span><input class="edit-place" type="text" value="${escPlace}" /></div>
+                    ${legacyEditOnly ? legacyEditOnlyBlock : photoComposeBlock}
                     <div class="status-actions">
                       <button class="btn small" type="button" data-action="saveEdit" data-id="${item.customerScheduleId}">저장</button>
                       <button class="btn outline small" type="button" data-action="cancelEdit">취소</button>
@@ -4254,28 +4299,17 @@
             timePreference === "any" || timePreference === "other"
               ? "시간상관없음"
               : `${selectedHour === "any-time" ? "09" : selectedHour}:00`;
-          const compNorm = normalize(scheduleCompositionEl.value);
-          const editSheets = Math.floor(Number(scheduleEditSheetsEl?.value) || 0);
           const taxInvoiceRequested = isLiteCustomerMode ? false : isTaxInvoiceRequested();
           const expectedAmount = isLiteCustomerMode
             ? null
-            : calculateExpectedPaymentAmount(
-                schedulePyeongEl?.value,
-                scheduleCompositionEl.value,
-                taxInvoiceRequested,
-                editSheets
-              );
+            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
           const place = normalize(document.getElementById("schedulePlace").value);
           if (!place) {
             alert("주소를 입력해주세요.");
             return;
           }
-          if (!isLiteCustomerMode && compNorm !== "편집만" && schedulePyeongEl.value === "미선택") {
+          if (!isLiteCustomerMode && schedulePyeongEl.value === "미선택") {
             alert("평수를 선택해주세요.");
-            return;
-          }
-          if (!isLiteCustomerMode && compNorm === "편집만" && editSheets < 1) {
-            alert("편집 신청 장 수를 1장 이상 입력해주세요.");
             return;
           }
           if (!isLiteCustomerMode && scheduleCompositionEl.value === "미선택") {
@@ -4309,24 +4343,16 @@
           const dateObj = new Date(`${date}T00:00:00`);
           const dayName = weekdayNames[dateObj.getDay()];
           const timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
-          const pyeong = isLiteCustomerMode
-            ? ""
-            : compNorm === "편집만"
-              ? "해당없음"
-              : normalize(document.getElementById("schedulePyeong").value);
+          const pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
           const composition = isLiteCustomerMode ? "사진영상 둘다" : (scheduleCompositionEl.value || "미선택");
-          let memo = normalize(document.getElementById("scheduleMemo").value);
-          if (!isLiteCustomerMode && compNorm === "편집만") {
-            memo = formatEditOnlyMemo(memo, editSheets);
-          }
+          const memo = normalize(document.getElementById("scheduleMemo").value);
           const amountText = expectedAmount ? `${Number(expectedAmount).toLocaleString()}원` : "-";
           const summaryRows = [
             ["업체", scheduleCompanyName],
             ["날짜", `${date} (${dayName})`],
             ["시간", timeLabel],
             ["장소", place],
-            !isLiteCustomerMode && compNorm === "편집만" ? ["편집 장수", `${editSheets}장`] : null,
-            !isLiteCustomerMode && compNorm !== "편집만" && pyeong && pyeong !== "해당없음" ? ["평수", pyeong] : null,
+            !isLiteCustomerMode && pyeong && pyeong !== "해당없음" ? ["평수", pyeong] : null,
             ["촬영구성", composition],
             amountText !== "-" ? ["결제예정금액", amountText] : null,
             memo ? ["메모", memo] : null,
@@ -4480,15 +4506,6 @@
           cardEl.querySelectorAll("button[data-action='pickEditCompose']").forEach((btn) => {
             btn.classList.toggle("active", btn === button);
           });
-          const val = normalize(button.dataset.value || "");
-          const sheetsEditor = cardEl.querySelector(".edit-sheets-editor");
-          if (sheetsEditor) {
-            sheetsEditor.style.display = val === "편집만" ? "flex" : "none";
-          }
-          const pyeongRow = cardEl.querySelector(".edit-pyeong-row");
-          if (pyeongRow) {
-            pyeongRow.style.display = val === "편집만" ? "none" : "flex";
-          }
           return;
         }
 
@@ -4511,26 +4528,30 @@
           item.time = `${cardEl.querySelector(".edit-hour")?.value || "09"}:${cardEl.querySelector(".edit-minute")?.value || "00"}`;
           item.place = normalize(cardEl.querySelector(".edit-place")?.value);
           const nextComp = normalize(cardEl.querySelector(".edit-composition")?.value) || "사진만";
-          const editSheets = Math.floor(Number(cardEl.querySelector(".edit-edit-sheets")?.value) || 0);
-          if (nextComp === "편집만" && editSheets < 1) {
-            alert("편집 장수를 1장 이상 입력해주세요.");
-            return;
-          }
-          item.pyeong =
-            nextComp === "편집만" ? "해당없음" : normalize(cardEl.querySelector(".edit-pyeong")?.value);
-          let nextMemo = normalize(cardEl.querySelector(".edit-memo")?.value);
           if (nextComp === "편집만") {
-            nextMemo = formatEditOnlyMemo(nextMemo, editSheets);
+            item.memo = normalize(cardEl.querySelector(".edit-memo")?.value);
+            item.pyeong = "해당없음";
+            item.composition = "편집만";
+            const sheetsFromMemo = parseEditSheetsFromMemo(item.memo);
+            if (sheetsFromMemo >= 1) {
+              const amt = sheetsFromMemo <= 10 ? sheetsFromMemo * 5000 : sheetsFromMemo * 3000;
+              item.paymentAmount = String(amt);
+            }
+          } else {
+            if (nextComp !== "사진만" && nextComp !== "사진영상 둘다") {
+              alert("촬영구성을 선택해주세요.");
+              return;
+            }
+            item.pyeong = normalize(cardEl.querySelector(".edit-pyeong")?.value);
+            if (item.pyeong === "미선택") {
+              alert("평수를 선택해주세요.");
+              return;
+            }
+            item.memo = normalize(cardEl.querySelector(".edit-memo")?.value);
+            item.composition = nextComp;
+            const recalcAmt = calculateExpectedPaymentAmount(item.pyeong, item.composition, false);
+            if (recalcAmt) item.paymentAmount = String(recalcAmt);
           }
-          item.memo = nextMemo;
-          item.composition = nextComp;
-          const recalcAmt = calculateExpectedPaymentAmount(
-            item.pyeong,
-            item.composition,
-            false,
-            nextComp === "편집만" ? editSheets : 0
-          );
-          if (recalcAmt) item.paymentAmount = String(recalcAmt);
           item.adminTimeUpdated = false;
           item.localUpdatedAt = new Date().toISOString();
           schedules[index] = item;
@@ -4663,6 +4684,7 @@
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
       registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
+      editRequestTabBtnEl?.addEventListener("click", () => switchCustomerTab("editRequest"));
       statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
       orderHistoryBtnEl.addEventListener("click", () => {
         renderOrderHistorySummary();
@@ -4689,8 +4711,68 @@
         if (!button) return;
         setSelectedPyeong(button.dataset.pyeong || "미선택");
       });
-      scheduleEditSheetsEl?.addEventListener("input", () => {
-        updateExpectedPaymentText();
+      editRequestTypeButtonsEl?.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-edit-type]");
+        if (!btn) return;
+        btn.classList.toggle("active");
+      });
+
+      let editRequestSubmitting = false;
+      editRequestFormEl?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (isLiteCustomerMode) return;
+        if (editRequestSubmitting) return;
+        const user = getCurrentSessionUser();
+        if (!user) {
+          alert("로그인이 필요합니다.");
+          return;
+        }
+        const types = Array.from(editRequestTypeButtonsEl?.querySelectorAll("button[data-edit-type].active") || [])
+          .map((b) => String(b.dataset.editType || "").trim())
+          .filter(Boolean);
+        if (!types.length) {
+          alert("편집 유형을 한 가지 이상 선택해주세요.");
+          return;
+        }
+        const sheetCount = Math.floor(Number(editRequestSheetCountEl?.value) || 0);
+        if (sheetCount < 1) {
+          alert("총 수정 장 수를 1장 이상 입력해주세요.");
+          return;
+        }
+        const memo = normalize(editRequestMemoEl?.value || "");
+        editRequestSubmitting = true;
+        if (editRequestSubmitBtnEl) {
+          editRequestSubmitBtnEl.disabled = true;
+          editRequestSubmitBtnEl.textContent = "전송 중...";
+        }
+        try {
+          const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+          const scheduleCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode) || normalize(user.company);
+          const row = {
+            id: `tf-edit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            createdAt: new Date().toISOString(),
+            customerId: String(user.id || "").trim(),
+            company: scheduleCompanyName,
+            companyCode: String(effectiveCompanyCode || "").trim(),
+            customerPhone: String(user.phone || "").trim(),
+            types,
+            sheetCount,
+            memo,
+            source: "thefeeling_edit_request"
+          };
+          const pending = readStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS);
+          pending.unshift(row);
+          writeStorageArray(STORAGE_THEFEELING_EDIT_REQUESTS, pending);
+          editRequestFormEl.reset();
+          editRequestTypeButtonsEl?.querySelectorAll("button[data-edit-type]").forEach((b) => b.classList.remove("active"));
+          alert("편집 신청이 접수되었습니다. 관리자가 카카오톡으로 연락드립니다.");
+        } finally {
+          editRequestSubmitting = false;
+          if (editRequestSubmitBtnEl) {
+            editRequestSubmitBtnEl.disabled = false;
+            editRequestSubmitBtnEl.textContent = "편집 신청 보내기";
+          }
+        }
       });
       scheduleMinuteEl?.addEventListener("change", () => {
         const mode = normalizeTimePreference(scheduleMinuteEl.value);
