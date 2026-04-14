@@ -1356,7 +1356,7 @@
 
       const currentYear = new Date().getFullYear();
       const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
-      const CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS = 2 * 60 * 1000;
+      const CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS = 30 * 60 * 1000;
       let editingScheduleId = null;
       let currentCustomerTab = "register";
       let skipAutoLoginOnce = false;
@@ -1959,7 +1959,9 @@
           if (isFreshLocalCustomerRow) return true;
           const rowId = normalize(row?.customerScheduleId);
           if (rowId && adminIdSet.has(rowId)) return true;
-          return adminKeySet.has(buildScheduleIdentityKey(row));
+          if (adminKeySet.has(buildScheduleIdentityKey(row))) return true;
+          if (rowSource === "customer") return true;
+          return false;
         });
         if (!filteredUserRows.length) return;
         let remotePaymentStateById = new Map();

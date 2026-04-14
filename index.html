@@ -9361,12 +9361,13 @@
       }
       function normalizeTimePreference(value) {
         const normalized = String(value || "").trim().toLowerCase();
-        if (normalized === "before" || normalized === "after" || normalized === "other") return normalized;
+        if (normalized === "before" || normalized === "after" || normalized === "other" || normalized === "any")
+          return normalized;
         return "exact";
       }
       function splitMemoAndTimePreference(rawMemo) {
         const source = String(rawMemo || "");
-        const matched = source.match(/\s*\[time_pref:(before|after|other)\]\s*$/i);
+        const matched = source.match(/\s*\[time_pref:(before|after|other|any)\]\s*$/i);
         if (!matched) return { memo: source.trim(), timePreference: "exact" };
         const cleanMemo = source.slice(0, matched.index).trim();
         return { memo: cleanMemo, timePreference: normalizeTimePreference(matched[1]) };
@@ -9380,8 +9381,10 @@
       function formatScheduleTimeWithPreference(timeText, timePreference) {
         const normalizedTime = String(timeText || "").trim();
         if (normalizedTime === "상관없음") return "상관없음";
+        if (normalizedTime === "시간상관없음") return "시간상관없음";
         const base = formatScheduleTimeSimple(timeText);
         const pref = normalizeTimePreference(timePreference);
+        if (pref === "any") return "시간상관없음";
         if (pref === "before") return `${base}이전`;
         if (pref === "after") return `${base}이후`;
         if (pref === "other") return `${base} 그외시간`;

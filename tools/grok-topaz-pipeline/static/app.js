@@ -324,16 +324,37 @@
   }
 
   function showBanner(text, show) {
+    if (!banner) return;
     banner.textContent = text;
     banner.hidden = !show;
   }
 
+  function syncStatusPanelAfterError() {
+    if (!statusPanel || !errorBox) return;
+    const hasErr = !errorBox.hidden && String(errorBox.textContent || "").trim();
+    const hasJobs =
+      trackedJobs.size > 0 ||
+      topazOnlyQueue.length > 0 ||
+      (statusJobsList && String(statusJobsList.innerHTML || "").trim() !== "");
+    statusPanel.hidden = !hasErr && !hasJobs;
+  }
+
   function setError(msg) {
+    if (!errorBox) return;
     if (msg) {
       errorBox.textContent = msg;
       errorBox.hidden = false;
+      if (statusPanel) {
+        statusPanel.hidden = false;
+        try {
+          statusPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch {
+          /* ignore */
+        }
+      }
     } else {
       errorBox.hidden = true;
+      syncStatusPanelAfterError();
     }
   }
 
@@ -630,7 +651,7 @@
         setTopazPhotoStatus("");
         setError(data.error || "요청 실패");
         if (statusJobsList) statusJobsList.innerHTML = "";
-        if (trackedJobs.size === 0) statusPanel.hidden = true;
+        if (trackedJobs.size === 0) syncStatusPanelAfterError();
         syncButtonStates();
         return;
       }
@@ -645,7 +666,7 @@
       setTopazPhotoStatus("");
       setError(String(e.message || e));
       if (statusJobsList) statusJobsList.innerHTML = "";
-      if (trackedJobs.size === 0) statusPanel.hidden = true;
+      if (trackedJobs.size === 0) syncStatusPanelAfterError();
       syncButtonStates();
     }
   }
@@ -1457,7 +1478,7 @@
     try {
       const r = await fetch(apiUrl("/api/ready"));
       const d = await r.json();
-      outDir.textContent = d.output_dir || "—";
+      if (outDir) outDir.textContent = d.output_dir || "—";
       envHasXaiKey = !!d.env_has_xai_key;
       grokKeyReady = !!d.grok_key_ready;
       envHasGeminiKey = !!d.env_has_gemini_key;
@@ -1607,8 +1628,11 @@
     const errActive = rows.find((r) => r.d && r.d.error);
     if (errActive) setError(errActive.d.error);
 
-    if (statusPanel) {
-      statusPanel.hidden = rows.length === 0 && topazOnlyQueue.length === 0;
+    if (statusPanel && errorBox) {
+      const hasErr =
+        !errorBox.hidden && String(errorBox.textContent || "").trim();
+      statusPanel.hidden =
+        rows.length === 0 && topazOnlyQueue.length === 0 && !hasErr;
     }
     updateTopazQueueHint();
   }
@@ -1701,7 +1725,7 @@
       if (!r.ok) {
         setError(data.error || "요청 실패");
         if (statusJobsList) statusJobsList.innerHTML = "";
-        if (trackedJobs.size === 0) statusPanel.hidden = true;
+        if (trackedJobs.size === 0) syncStatusPanelAfterError();
         syncButtonStates();
         return;
       }
@@ -1714,7 +1738,7 @@
     } catch (e) {
       setError(String(e.message || e));
       if (statusJobsList) statusJobsList.innerHTML = "";
-      if (trackedJobs.size === 0) statusPanel.hidden = true;
+      if (trackedJobs.size === 0) syncStatusPanelAfterError();
       syncButtonStates();
     }
   }
@@ -1737,7 +1761,7 @@
         setError(data.error || "요청 실패");
         if (trackedJobs.size === 0) {
           if (statusJobsList) statusJobsList.innerHTML = "";
-          statusPanel.hidden = true;
+          syncStatusPanelAfterError();
         } else {
           void pollAllTracked();
         }
@@ -1754,7 +1778,7 @@
       setError(String(e.message || e));
       if (trackedJobs.size === 0) {
         if (statusJobsList) statusJobsList.innerHTML = "";
-        statusPanel.hidden = true;
+        syncStatusPanelAfterError();
       } else {
         void pollAllTracked();
       }
@@ -1779,7 +1803,7 @@
         setError(data.error || "요청 실패");
         if (trackedJobs.size === 0) {
           if (statusJobsList) statusJobsList.innerHTML = "";
-          statusPanel.hidden = true;
+          syncStatusPanelAfterError();
         } else {
           void pollAllTracked();
         }
@@ -1791,7 +1815,7 @@
         setError("작업이 생성되지 않았습니다.");
         if (trackedJobs.size === 0) {
           if (statusJobsList) statusJobsList.innerHTML = "";
-          statusPanel.hidden = true;
+          syncStatusPanelAfterError();
         }
         syncButtonStates();
         return;
@@ -1806,7 +1830,7 @@
       setError(String(e.message || e));
       if (trackedJobs.size === 0) {
         if (statusJobsList) statusJobsList.innerHTML = "";
-        statusPanel.hidden = true;
+        syncStatusPanelAfterError();
       } else {
         void pollAllTracked();
       }
@@ -1832,7 +1856,7 @@
         setError(data.error || "요청 실패");
         if (trackedJobs.size === 0) {
           if (statusJobsList) statusJobsList.innerHTML = "";
-          statusPanel.hidden = true;
+          syncStatusPanelAfterError();
         } else {
           void pollAllTracked();
         }
@@ -1848,7 +1872,7 @@
       setError(String(e.message || e));
       if (trackedJobs.size === 0) {
         if (statusJobsList) statusJobsList.innerHTML = "";
-        statusPanel.hidden = true;
+        syncStatusPanelAfterError();
       } else {
         void pollAllTracked();
       }
@@ -1904,79 +1928,94 @@
 
   if (startBtnGrok) {
     startBtnGrok.addEventListener("click", async () => {
-      const files = fileInput.files;
-      if (!files || !files.length) {
-        setError("사진을 한 장 이상 선택하세요.");
-        return;
-      }
-      const prompt = promptEl.value.trim();
-      if (!prompt) {
-        setError("프롬프트를 입력하세요.");
-        return;
-      }
-      if (!grokKeyReady && !envHasXaiKey && !(apiKeyEl && apiKeyEl.value.trim())) {
-        setError("Grok 설정에서 API 키를 넣거나, 터미널에 XAI_API_KEY를 설정하세요.");
-        return;
-      }
-      /* 저장된 프리셋: 체크박스가 없거나 켜져 있으면 프리셋(요소 없으면 기본 프리셋으로 간주) */
-      const grokUseSavedPreset =
-        runTopaz.checked &&
-        (!useTopazPresetGrok || useTopazPresetGrok.checked);
-      if (runTopaz.checked) {
-        if (!grokUseSavedPreset) {
-          const vg = (topazVf.value || "").trim();
-          const cg = (topazFc && topazFc.value ? topazFc.value : "").trim();
-          if (!vg && !cg) {
-            setError("프리셋을 끈 경우 Topaz에 -vf 또는 -filter_complex 중 하나를 입력하세요.");
-            return;
-          }
-          if (vg && cg) {
-            setError("-vf와 filter_complex 칸을 동시에 채우지 마세요. 하나만 쓰세요.");
-            return;
+      try {
+        if (!fileInput || !promptEl || !durationEl || !aspectEl || !resolutionEl) {
+          setError("페이지 요소를 불러오지 못했습니다. 새로고침(F5) 후 다시 시도하세요.");
+          return;
+        }
+        const files = fileInput.files;
+        if (!files || !files.length) {
+          setError("사진을 한 장 이상 선택하세요.");
+          return;
+        }
+        const prompt = promptEl.value.trim();
+        if (!prompt) {
+          setError("프롬프트를 입력하세요.");
+          return;
+        }
+        if (!grokKeyReady && !envHasXaiKey && !(apiKeyEl && apiKeyEl.value.trim())) {
+          setError("Grok 설정에서 API 키를 넣거나, 터미널에 XAI_API_KEY를 설정하세요.");
+          return;
+        }
+        const topazOn = !!(runTopaz && runTopaz.checked);
+        /* 저장된 프리셋: 체크박스가 없거나 켜져 있으면 프리셋(요소 없으면 기본 프리셋으로 간주) */
+        const grokUseSavedPreset =
+          topazOn && (!useTopazPresetGrok || useTopazPresetGrok.checked);
+        if (topazOn) {
+          if (!grokUseSavedPreset) {
+            const vg = (topazVf && topazVf.value ? topazVf.value : "").trim();
+            const cg = (topazFc && topazFc.value ? topazFc.value : "").trim();
+            if (!vg && !cg) {
+              setError("프리셋을 끈 경우 Topaz에 -vf 또는 -filter_complex 중 하나를 입력하세요.");
+              return;
+            }
+            if (vg && cg) {
+              setError("-vf와 filter_complex 칸을 동시에 채우지 마세요. 하나만 쓰세요.");
+              return;
+            }
           }
         }
-      }
 
-      if (hasPanRunning()) {
-        setError("맨 위 팬 영상 작업이 끝난 뒤에 Grok를 실행하세요.");
-        return;
-      }
+        if (hasPanRunning()) {
+          setError("맨 위 팬 영상 작업이 끝난 뒤에 Grok를 실행하세요.");
+          return;
+        }
 
-      if (files.length === 1) {
+        const xaiKey = apiKeyEl ? apiKeyEl.value.trim() : "";
+        const tvf = topazVf && topazVf.value != null ? topazVf.value : "";
+        const tfc = topazFc && topazFc.value != null ? topazFc.value.trim() : "";
+        const tff = topazFf && topazFf.value != null ? topazFf.value.trim() : "";
+        const tex = topazExtra && topazExtra.value != null ? topazExtra.value.trim() : "";
+
+        if (files.length === 1) {
+          const fd = new FormData();
+          fd.append("pipeline_mode", "grok");
+          fd.append("xai_api_key", xaiKey);
+          fd.append("image", files[0]);
+          fd.append("prompt", prompt);
+          fd.append("duration", String(parseInt(durationEl.value, 10) || 2));
+          fd.append("aspect_ratio", aspectEl.value);
+          fd.append("resolution", resolutionEl.value);
+          fd.append("run_topaz", topazOn ? "1" : "0");
+          fd.append("use_topaz_preset", grokUseSavedPreset ? "1" : "0");
+          fd.append("topaz_vf", tvf);
+          fd.append("topaz_filter_complex", tfc);
+          fd.append("topaz_ffmpeg", tff);
+          fd.append("topaz_extra", tex);
+          await postJob(fd);
+          return;
+        }
+
         const fd = new FormData();
-        fd.append("pipeline_mode", "grok");
-        fd.append("xai_api_key", apiKeyEl.value.trim());
-        fd.append("image", files[0]);
+        fd.append("xai_api_key", xaiKey);
+        for (let i = 0; i < files.length; i++) {
+          fd.append("images", files[i]);
+        }
         fd.append("prompt", prompt);
         fd.append("duration", String(parseInt(durationEl.value, 10) || 2));
         fd.append("aspect_ratio", aspectEl.value);
         fd.append("resolution", resolutionEl.value);
-        fd.append("run_topaz", runTopaz.checked ? "1" : "0");
+        fd.append("run_topaz", topazOn ? "1" : "0");
         fd.append("use_topaz_preset", grokUseSavedPreset ? "1" : "0");
-        fd.append("topaz_vf", topazVf.value);
-        fd.append("topaz_filter_complex", topazFc ? topazFc.value.trim() : "");
-        fd.append("topaz_ffmpeg", topazFf.value.trim());
-        fd.append("topaz_extra", topazExtra.value.trim());
-        await postJob(fd);
-        return;
+        fd.append("topaz_vf", tvf);
+        fd.append("topaz_filter_complex", tfc);
+        fd.append("topaz_ffmpeg", tff);
+        fd.append("topaz_extra", tex);
+        await postBatchGrokJob(fd);
+      } catch (e) {
+        console.error(e);
+        setError(String((e && e.message) || e || "알 수 없는 오류"));
       }
-
-      const fd = new FormData();
-      fd.append("xai_api_key", apiKeyEl.value.trim());
-      for (let i = 0; i < files.length; i++) {
-        fd.append("images", files[i]);
-      }
-      fd.append("prompt", prompt);
-      fd.append("duration", String(parseInt(durationEl.value, 10) || 2));
-      fd.append("aspect_ratio", aspectEl.value);
-      fd.append("resolution", resolutionEl.value);
-      fd.append("run_topaz", runTopaz.checked ? "1" : "0");
-      fd.append("use_topaz_preset", grokUseSavedPreset ? "1" : "0");
-      fd.append("topaz_vf", topazVf.value);
-      fd.append("topaz_filter_complex", topazFc ? topazFc.value.trim() : "");
-      fd.append("topaz_ffmpeg", topazFf.value.trim());
-      fd.append("topaz_extra", topazExtra.value.trim());
-      await postBatchGrokJob(fd);
     });
   }
 

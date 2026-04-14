@@ -66,6 +66,19 @@ def file_to_image_data_uri(path: Path) -> str:
     return f"data:{mime};base64,{b64}"
 
 
+# xAI 문서: 1:1, 16:9/9:16, 4:3/3:4, 3:2/2:3 — auto/원본 미지원
+_XAI_VIDEO_ASPECTS = frozenset(
+    {"16:9", "9:16", "1:1", "4:3", "3:2", "2:3", "3:4"}
+)
+
+
+def _normalize_xai_video_aspect_ratio(aspect_ratio: str) -> str:
+    s = (aspect_ratio or "").strip().lower().replace("∶", ":")
+    if s in _XAI_VIDEO_ASPECTS:
+        return s
+    return "16:9"
+
+
 def start_generation(
     api_key: str,
     prompt: str,
@@ -74,11 +87,12 @@ def start_generation(
     aspect_ratio: str,
     resolution: str,
 ) -> str:
+    ar = _normalize_xai_video_aspect_ratio(aspect_ratio)
     body = {
         "model": "grok-imagine-video",
         "prompt": prompt,
         "duration": duration,
-        "aspect_ratio": aspect_ratio,
+        "aspect_ratio": ar,
         "resolution": resolution,
         "image": {"url": file_to_image_data_uri(image_path)},
     }
@@ -568,7 +582,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--aspect-ratio",
         default="16:9",
-        help="16:9, 9:16, 1:1 등",
+        help="16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3 (xAI 문서 기준)",
     )
     p.add_argument(
         "--resolution",

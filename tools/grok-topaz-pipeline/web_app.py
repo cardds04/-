@@ -79,6 +79,19 @@ def _resolve_gemini_key(form_key: str) -> str:
     return (os.environ.get("GEMINI_API_KEY") or "").strip()
 
 
+# grok-imagine-video — xAI 문서: 1:1, 16:9/9:16, 4:3/3:4, 3:2/2:3 (auto/원본비율 없음)
+_GROK_IMAGINE_VIDEO_ASPECTS = frozenset(
+    {"16:9", "9:16", "1:1", "4:3", "3:2", "2:3", "3:4"}
+)
+
+
+def _normalize_grok_video_aspect_ratio(raw: str | None) -> str:
+    s_norm = (raw or "").strip().lower().replace("∶", ":")
+    if s_norm in _GROK_IMAGINE_VIDEO_ASPECTS:
+        return s_norm
+    return "16:9"
+
+
 app = Flask(
     __name__,
     template_folder=str(ROOT / "templates"),
@@ -99,6 +112,7 @@ def _asset_version() -> int:
         "pan_static_video.py",
         "pipeline.py",
         "batch_aspect_ratio.py",
+        "topaz_preset.py",
     ):
         p = ROOT / rel
         if p.is_file():
@@ -399,7 +413,7 @@ def _run_pipeline(
                     final_path,
                     TP.extra_after_filter(),
                     vf=None,
-                    filter_complex=TP.filter_complex(),
+                    filter_complex=TP.filter_complex_for_grok_aspect(aspect_ratio),
                     post_input_args=TP.post_input_args(),
                     segment_start_sec=TP.segment_start_sec_for_ffmpeg(),
                     segment_duration_sec=TP.segment_duration_sec_for_ffmpeg(),
@@ -1001,7 +1015,7 @@ def create_job():
     except ValueError:
         duration = 2
 
-    aspect_ratio = request.form.get("aspect_ratio") or "16:9"
+    aspect_ratio = _normalize_grok_video_aspect_ratio(request.form.get("aspect_ratio"))
     resolution = request.form.get("resolution") or "720p"
     if resolution not in ("480p", "720p"):
         resolution = "720p"
@@ -1098,7 +1112,7 @@ def create_batch_grok_jobs():
     except ValueError:
         duration = 2
 
-    aspect_ratio = request.form.get("aspect_ratio") or "16:9"
+    aspect_ratio = _normalize_grok_video_aspect_ratio(request.form.get("aspect_ratio"))
     resolution = request.form.get("resolution") or "720p"
     if resolution not in ("480p", "720p"):
         resolution = "720p"

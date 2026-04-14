@@ -89,6 +89,25 @@ def filter_complex() -> str:
     return FILTER_COMPLEX
 
 
+# xAI 문서 기준 비율 → Topaz prob-4 최종 scale (16:9 기본 프리셋의 1920×1080 패턴을 비율에 맞게 치환)
+_GROK_TOPAZ_OUT_WH: dict[str, tuple[int, int]] = {
+    "16:9": (1920, 1080),
+    "9:16": (1080, 1920),
+    "1:1": (1080, 1080),
+    "4:3": (1920, 1440),
+    "3:4": (1080, 1440),
+    "3:2": (1920, 1280),
+    "2:3": (1080, 1620),
+}
+
+
+def filter_complex_for_grok_aspect(aspect_ratio: str) -> str:
+    """Grok(+Topaz 프리셋)용: Grok에서 고른 비율에 맞춰 출력 해상도만 바꿉니다."""
+    ar = (aspect_ratio or "16:9").strip().lower().replace("∶", ":")
+    w, h = _GROK_TOPAZ_OUT_WH.get(ar, (1920, 1080))
+    return FILTER_COMPLEX.replace("w=1920:h=1080", f"w={w}:h={h}")
+
+
 def post_input_args() -> list[str]:
     return list(POST_INPUT_ARGS)
 
