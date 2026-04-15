@@ -283,6 +283,40 @@
         object-fit: contain;
         background: #1a1a1a;
       }
+      .main-photo-preview-img.main-photo-preview-img--169 {
+        max-width: min(100%, 560px);
+        aspect-ratio: 16 / 9;
+      }
+      .main-photo-aspect-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 16px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .main-photo-aspect-row > span:first-child {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--muted);
+        margin: 0;
+      }
+      .main-photo-aspect-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .main-photo-aspect-row input {
+        accent-color: var(--accent);
+      }
       .card--local-tool {
         border-left: 3px solid #cbd5e1;
       }
@@ -474,11 +508,22 @@
       </div>
 
       <div class="card" id="cardMainPhoto">
-        <h2 id="h2MainPhoto">2. 메인 사진 (1:1)</h2>
+        <h2 id="h2MainPhoto">2. 메인 사진 (1:1 · 16:9)</h2>
         <p class="hint" style="margin-top: -4px; margin-bottom: 10px">
-          글 본문용 순번 사진과 <strong>별도</strong>입니다. 가운데 기준으로 정사각형 자른 뒤, 왼쪽 아래에 INTERIOR / DESIGN / 구분선 / 동네 / 아파트명을 얹습니다. 문구는 위
+          글 본문용 순번 사진과 <strong>별도</strong>입니다. 가운데 기준으로 <strong>1:1</strong>은 정사각형, <strong>16:9</strong>는 와이드(유튜브 썸네일)로 자른 뒤, 왼쪽 아래에 INTERIOR / DESIGN / 구분선 / 동네 / 아파트명을 얹습니다. 문구는 위
           <strong>동네·주소</strong>·<strong>아파트 이름</strong>을 씁니다.
         </p>
+        <div class="main-photo-aspect-row" role="group" aria-label="메인 사진 출력 비율">
+          <span>출력 비율</span>
+          <label
+            ><input type="radio" name="mainPhotoAspect" value="1:1" checked />
+            1:1 (블로그 본문)</label
+          >
+          <label
+            ><input type="radio" name="mainPhotoAspect" value="16:9" />
+            16:9 (유튜브 썸네일)</label
+          >
+        </div>
         <input type="file" id="mainPhotoInput" accept="image/*" style="display: none" />
         <div id="mainPhotoDropZone" class="bulk-drop-zone" tabindex="0" role="button" style="padding: 20px 16px">
           메인 사진 한 장 넣기<br />
@@ -745,7 +790,7 @@
         const h2Sh = document.getElementById("h2Shrink");
         const cardShrink = document.getElementById("cardShrink");
         const cardNarTts = document.getElementById("cardNarrationTts");
-        if (h2Main) h2Main.textContent = "2. 메인 사진 (1:1)";
+        if (h2Main) h2Main.textContent = "2. 메인 사진 (1:1 · 16:9)";
         if (h2Bulk) h2Bulk.textContent = isNar ? "2. 사진 (대본용 순서)" : "3. 사진 (글 생성용 순서)";
         if (h2Gem) h2Gem.textContent = isNar ? "3. 나레이션 생성 (Gemini)" : "4. Gemini로 생성";
         if (h2Sh) h2Sh.textContent = "5. 사진용량줄이기";
@@ -849,8 +894,15 @@
           : "동네를 입력하면 [○○인테리어]가 자동으로 정해집니다.";
       }
 
+      const MAIN_PHOTO_ASPECT_LS = "blog_main_photo_aspect";
+
       let mainPhotoFile = null;
       let mainPhotoDataUrl = "";
+
+      function getMainPhotoAspect() {
+        const el = document.querySelector('input[name="mainPhotoAspect"]:checked');
+        return el && el.value === "16:9" ? "16:9" : "1:1";
+      }
 
       function tryRefreshMainPhotoPreview() {
         if (mainPhotoFile) void buildMainPhotoPreview(mainPhotoFile);
@@ -875,31 +927,55 @@
         }
         const bmp = await createImageBitmap(file);
         try {
-          const OUT = 1080;
+          const aspect169 = getMainPhotoAspect() === "16:9";
+          const OUT_W = aspect169 ? 1920 : 1080;
+          const OUT_H = aspect169 ? 1080 : 1080;
           const pret = '"Pretendard",sans-serif';
           await document.fonts.ready;
           await Promise.all([
-            document.fonts.load(`700 ${Math.round(OUT * 0.04)}px Pretendard`),
-            document.fonts.load(`400 ${Math.round(OUT * 0.04)}px Pretendard`)
+            document.fonts.load(`700 ${Math.round(OUT_H * 0.04)}px Pretendard`),
+            document.fonts.load(`400 ${Math.round(OUT_H * 0.04)}px Pretendard`)
           ]).catch(() => {});
 
           const canvas = document.createElement("canvas");
-          canvas.width = OUT;
-          canvas.height = OUT;
+          canvas.width = OUT_W;
+          canvas.height = OUT_H;
           const ctx = canvas.getContext("2d");
           ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;
           const iw = bmp.width;
           const ih = bmp.height;
-          const side = Math.min(iw, ih);
-          const sx = (iw - side) / 2;
-          const sy = (ih - side) / 2;
-          ctx.drawImage(bmp, sx, sy, side, side, 0, 0, OUT, OUT);
+          let sx;
+          let sy;
+          let sw;
+          let sh;
+          if (aspect169) {
+            const targ = 16 / 9;
+            const imgRatio = iw / ih;
+            if (imgRatio > targ) {
+              sh = ih;
+              sw = ih * targ;
+              sx = (iw - sw) / 2;
+              sy = 0;
+            } else {
+              sw = iw;
+              sh = iw / targ;
+              sx = 0;
+              sy = (ih - sh) / 2;
+            }
+          } else {
+            const side = Math.min(iw, ih);
+            sx = (iw - side) / 2;
+            sy = (ih - side) / 2;
+            sw = side;
+            sh = side;
+          }
+          ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H);
 
-          const padL = Math.round(OUT * 0.048);
-          const padB = Math.round(OUT * 0.056);
-          const shiftUp = Math.round(OUT * 0.052);
-          const maxTextW = OUT - padL * 2;
+          const padL = Math.round(OUT_W * 0.048);
+          const padB = Math.round(OUT_H * 0.056);
+          const shiftUp = Math.round(OUT_H * 0.052);
+          const maxTextW = OUT_W - padL * 2;
           const district = document.getElementById("neighborhood").value.trim() || "동네 · 주소";
           const apt = document.getElementById("aptName").value.trim() || "아파트명";
 
@@ -907,25 +983,25 @@
           ctx.textBaseline = "bottom";
           ctx.fillStyle = "#ffffff";
 
-          let y = OUT - padB - shiftUp;
-          const gapSmall = Math.round(OUT * 0.01);
-          const gapBlock = Math.round(OUT * 0.022);
+          let y = OUT_H - padB - shiftUp;
+          const gapSmall = Math.round(OUT_H * 0.01);
+          const gapBlock = Math.round(OUT_H * 0.022);
 
-          const fAptBase = Math.round(OUT * 0.059);
-          const fApt = fitFontSize(ctx, apt, pret, 700, maxTextW, fAptBase, Math.round(OUT * 0.037));
+          const fAptBase = Math.round(OUT_H * 0.059);
+          const fApt = fitFontSize(ctx, apt, pret, 700, maxTextW, fAptBase, Math.round(OUT_H * 0.037));
           ctx.font = `700 ${fApt}px ${pret}`;
           ctx.fillText(apt, padL, y);
           y -= fApt + gapSmall;
 
-          const fDistBase = Math.round(OUT * 0.055);
-          const fDist = fitFontSize(ctx, district, pret, 400, maxTextW, fDistBase, Math.round(OUT * 0.035));
+          const fDistBase = Math.round(OUT_H * 0.055);
+          const fDist = fitFontSize(ctx, district, pret, 400, maxTextW, fDistBase, Math.round(OUT_H * 0.035));
           ctx.font = `400 ${fDist}px ${pret}`;
           ctx.fillText(district, padL, y);
           y -= fDist + gapBlock;
 
           ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = Math.max(1.2, OUT / 720);
-          const lineRight = OUT - padL;
+          ctx.lineWidth = Math.max(1.2, OUT_H / 720);
+          const lineRight = OUT_W - padL;
           ctx.beginPath();
           ctx.moveTo(padL, y);
           ctx.lineTo(lineRight, y);
@@ -933,7 +1009,7 @@
 
           y -= gapBlock;
 
-          const fDesign = Math.round(OUT * 0.024);
+          const fDesign = Math.round(OUT_H * 0.024);
           ctx.font = `400 ${fDesign}px ${pret}`;
           try {
             ctx.letterSpacing = "0.05em";
@@ -946,9 +1022,9 @@
           } catch {
             /* ignore */
           }
-          y -= fDesign + Math.round(OUT * 0.002);
+          y -= fDesign + Math.round(OUT_H * 0.002);
 
-          const fInt = Math.round(OUT * 0.036);
+          const fInt = Math.round(OUT_H * 0.036);
           ctx.font = `700 ${fInt}px ${pret}`;
           try {
             ctx.letterSpacing = "0.04em";
@@ -963,6 +1039,7 @@
           }
 
           mainPhotoDataUrl = canvas.toDataURL("image/png");
+          imgEl.classList.toggle("main-photo-preview-img--169", aspect169);
           imgEl.src = mainPhotoDataUrl;
           wrap.hidden = false;
         } finally {
@@ -1108,6 +1185,28 @@
       const mainPhotoPreviewWrap = document.getElementById("mainPhotoPreviewWrap");
       const mainPhotoPreviewImg = document.getElementById("mainPhotoPreviewImg");
 
+      (function initMainPhotoAspectRadios() {
+        try {
+          const s = localStorage.getItem(MAIN_PHOTO_ASPECT_LS);
+          if (s === "16:9") {
+            const r = document.querySelector('input[name="mainPhotoAspect"][value="16:9"]');
+            if (r) r.checked = true;
+          }
+        } catch {
+          /* ignore */
+        }
+        document.querySelectorAll('input[name="mainPhotoAspect"]').forEach((inp) => {
+          inp.addEventListener("change", () => {
+            try {
+              localStorage.setItem(MAIN_PHOTO_ASPECT_LS, getMainPhotoAspect());
+            } catch {
+              /* ignore */
+            }
+            tryRefreshMainPhotoPreview();
+          });
+        });
+      })();
+
       function setMainPhotoFromFile(file) {
         if (!file || !file.type?.startsWith("image/")) {
           showToast("이미지 파일만 넣어 주세요.");
@@ -1118,6 +1217,7 @@
           console.error(err);
           mainPhotoFile = null;
           mainPhotoDataUrl = "";
+          mainPhotoPreviewImg.classList.remove("main-photo-preview-img--169");
           mainPhotoPreviewWrap.hidden = true;
           showToast(err?.message || String(err));
         });
@@ -1159,7 +1259,7 @@
         }
         const a = document.createElement("a");
         a.href = mainPhotoDataUrl;
-        a.download = "blog-main-thumbnail.png";
+        a.download = getMainPhotoAspect() === "16:9" ? "blog-main-16x9.png" : "blog-main-1x1.png";
         a.click();
         showToast("PNG 저장");
       });
@@ -1168,6 +1268,7 @@
         mainPhotoFile = null;
         mainPhotoDataUrl = "";
         mainPhotoPreviewImg.removeAttribute("src");
+        mainPhotoPreviewImg.classList.remove("main-photo-preview-img--169");
         mainPhotoPreviewWrap.hidden = true;
         showToast("메인 사진을 지웠습니다.");
       });
