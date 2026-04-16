@@ -808,6 +808,97 @@
         border-radius: 8px;
         font-size: 0.9rem;
       }
+      .logo-composite-block {
+        margin-top: 2rem;
+        padding: 1.5rem 1.35rem 1.65rem;
+        background: var(--card);
+        border-radius: calc(var(--radius) + 4px);
+        border: 1px solid #86efac;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+      }
+      .logo-composite-block .workflow-title {
+        margin-bottom: 0.35rem;
+      }
+      .logo-composite-block .drop:focus-visible {
+        outline: 2px solid #16a34a;
+        outline-offset: 2px;
+      }
+      .logo-composite-pan-stage {
+        margin-top: 0.75rem;
+        max-height: min(70vh, 520px);
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: repeating-conic-gradient(#f5f5f4 0% 25%, #e7e5e4 0% 50%) 50% / 16px 16px;
+        padding: 0.5rem;
+      }
+      .logo-composite-pan-inner {
+        position: relative;
+        display: inline-block;
+        vertical-align: top;
+        line-height: 0;
+      }
+      .logo-composite-pan-inner img {
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .logo-composite-crop-frame {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 2;
+        box-sizing: border-box;
+        border: 3px solid #0d9488;
+        border-radius: 4px;
+        cursor: grab;
+        touch-action: none;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42);
+      }
+      .logo-composite-crop-frame:active {
+        cursor: grabbing;
+      }
+      .logo-composite-sliders {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.65rem;
+      }
+      .logo-composite-sliders label {
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .logo-composite-sliders input[type="range"] {
+        width: 100%;
+        min-height: auto;
+        accent-color: #0d9488;
+      }
+      .logo-composite-preview-wrap {
+        margin-top: 0.75rem;
+        padding: 0.65rem;
+        background: repeating-conic-gradient(#f5f5f4 0% 25%, #e7e5e4 0% 50%) 50% / 16px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        display: inline-block;
+        max-width: 100%;
+        line-height: 0;
+      }
+      .logo-composite-preview-canvas {
+        display: block;
+        max-width: min(100%, 560px);
+        height: auto;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+      }
+      .logo-composite-actions {
+        margin-top: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: center;
+      }
       .foot {
         margin-top: 2rem;
         font-size: 0.8rem;
@@ -824,7 +915,8 @@
         <h1>AI 이미지 만들기</h1>
         <p class="sub">
           로컬 <code>tools/grok-topaz-pipeline</code>과 같은 <strong>이미지 블록</strong> 레이아웃입니다. Grok Imagine(xAI) 또는
-          Gemini 나노바나나2로 생성하고, 오른쪽에서 개별 다운로드·ZIP으로 모두 받기·목록 비우기를 할 수 있습니다.
+          Gemini 나노바나나2로 생성하고, 오른쪽에서 개별 다운로드·ZIP으로 모두 받기·목록 비우기를 할 수 있습니다. 페이지 맨 아래에서는
+          <strong>로고와 원본 이미지</strong>를 겹쳐 한 PNG로 저장할 수 있습니다.
         </p>
       </header>
 
@@ -1135,6 +1227,73 @@
           </section>
         </aside>
       </main>
+
+      <section class="logo-composite-block" id="logoCompositeBlock" aria-label="로고와 원본 합성">
+        <h2 class="workflow-title">로고 · 원본 합치기 <span class="workflow-note">(브라우저만 · API 불필요)</span></h2>
+        <p class="hint" style="margin-top: 0">
+          <strong>로고</strong>(보통 투명 PNG)와 <strong>원본 이미지</strong>를 각각 올리면, 출력 크기는 <strong>로고 픽셀 크기</strong>와 같습니다. 원본은 그 비율에 맞게
+          잘리고, <strong>로고가 위·원본이 아래</strong>로 겹쳐 한 장이 됩니다. 테두리 안(또는 슬라이더)으로 잘릴 위치를 정하세요.
+        </p>
+        <div class="row row--2 row--logo-composite-drops" style="margin-top: 1rem">
+          <div>
+            <div class="grok-ref-col-head">
+              <label class="label label--grok-ref" for="logoCompositeLogoInput">로고</label>
+              <button type="button" class="btn btn--secondary" id="btnLogoCompositeClearLogo" style="padding: 0.35rem 0.65rem; font-size: 0.8rem">
+                비우기
+              </button>
+            </div>
+            <label class="drop" id="logoCompositeLogoDrop" tabindex="0" aria-label="로고 파일 선택 또는 끌어다 놓기">
+              <input type="file" id="logoCompositeLogoInput" accept="image/png,image/webp,image/*" hidden />
+              <span class="drop__hint">클릭해서 선택 · 끌어다 놓기 (PNG 등)</span>
+              <span class="drop__name" id="logoCompositeLogoName"></span>
+            </label>
+          </div>
+          <div>
+            <div class="grok-ref-col-head">
+              <label class="label label--grok-ref" for="logoCompositeOrigInput">원본 이미지</label>
+              <button type="button" class="btn btn--secondary" id="btnLogoCompositeClearOrig" style="padding: 0.35rem 0.65rem; font-size: 0.8rem">
+                비우기
+              </button>
+            </div>
+            <label class="drop" id="logoCompositeOrigDrop" tabindex="0" aria-label="원본 이미지 선택 또는 끌어다 놓기">
+              <input type="file" id="logoCompositeOrigInput" accept="image/*" hidden />
+              <span class="drop__hint">클릭해서 선택 · 끌어다 놓기</span>
+              <span class="drop__name" id="logoCompositeOrigName"></span>
+            </label>
+          </div>
+        </div>
+
+        <div id="logoCompositeEditor" hidden style="margin-top: 1.25rem">
+          <h3 class="step__h step__h--compact">원본에서 잘릴 위치</h3>
+          <p class="hint" style="margin-bottom: 0.5rem">
+            초록 테두리를 드래그하거나 슬라이더로 옮기세요. 테두리 비율은 로고와 동일합니다.
+          </p>
+          <div class="logo-composite-pan-stage" id="logoCompositePanStage">
+            <div class="logo-composite-pan-inner" id="logoCompositePanInner">
+              <img id="logoCompositePanImg" alt="원본(위치 맞춤용)" decoding="async" />
+              <div class="logo-composite-crop-frame" id="logoCompositeCropFrame" role="presentation" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="logo-composite-sliders">
+            <label>
+              가로 (왼쪽 ↔ 오른쪽)
+              <input type="range" id="logoCompositeRangeX" min="0" max="0" value="0" step="1" />
+            </label>
+            <label>
+              세로 (위 ↔ 아래)
+              <input type="range" id="logoCompositeRangeY" min="0" max="0" value="0" step="1" />
+            </label>
+          </div>
+          <h3 class="step__h step__h--compact" style="margin-top: 1.15rem">합성 미리보기</h3>
+          <div class="logo-composite-preview-wrap">
+            <canvas id="logoCompositePreview" class="logo-composite-preview-canvas" width="1" height="1"></canvas>
+          </div>
+          <div class="logo-composite-actions">
+            <button type="button" class="btn" id="btnLogoCompositePng">PNG 저장</button>
+            <button type="button" class="btn btn--secondary" id="btnLogoCompositeClearAll">로고·원본 모두 비우기</button>
+          </div>
+        </div>
+      </section>
 
       <footer class="foot">
         <p>API: <code>/api/grok-xai</code> (이미지), <code>/api/gemini-image</code> (Gemini).</p>
@@ -2428,6 +2587,367 @@
             }
           });
         }
+
+        (function initLogoComposite() {
+          var logoInput = document.getElementById("logoCompositeLogoInput");
+          var origInput = document.getElementById("logoCompositeOrigInput");
+          var logoDrop = document.getElementById("logoCompositeLogoDrop");
+          var origDrop = document.getElementById("logoCompositeOrigDrop");
+          var logoName = document.getElementById("logoCompositeLogoName");
+          var origName = document.getElementById("logoCompositeOrigName");
+          var editor = document.getElementById("logoCompositeEditor");
+          var panImg = document.getElementById("logoCompositePanImg");
+          var cropFrame = document.getElementById("logoCompositeCropFrame");
+          var rangeX = document.getElementById("logoCompositeRangeX");
+          var rangeY = document.getElementById("logoCompositeRangeY");
+          var preview = document.getElementById("logoCompositePreview");
+          var btnPng = document.getElementById("btnLogoCompositePng");
+          var btnClearAll = document.getElementById("btnLogoCompositeClearAll");
+          var btnClearLogo = document.getElementById("btnLogoCompositeClearLogo");
+          var btnClearOrig = document.getElementById("btnLogoCompositeClearOrig");
+          if (
+            !logoInput ||
+            !origInput ||
+            !logoDrop ||
+            !origDrop ||
+            !editor ||
+            !panImg ||
+            !cropFrame ||
+            !rangeX ||
+            !rangeY ||
+            !preview ||
+            !btnPng
+          ) {
+            return;
+          }
+
+          var MAX_PAN_W = 640;
+          var MAX_PAN_H = 480;
+
+          var state = {
+            logoImg: null,
+            logoUrl: null,
+            origImg: null,
+            origUrl: null,
+            panX: 0,
+            panY: 0,
+            srcW: 0,
+            srcH: 0,
+            editorScale: 1,
+          };
+
+          function revokeIf(url) {
+            if (url) {
+              try {
+                URL.revokeObjectURL(url);
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+
+          function loadImageKeepUrl(file) {
+            return new Promise(function (resolve, reject) {
+              var url = URL.createObjectURL(file);
+              var img = new Image();
+              img.onload = function () {
+                resolve({ img: img, url: url });
+              };
+              img.onerror = function () {
+                revokeIf(url);
+                reject(new Error("이미지를 열 수 없습니다."));
+              };
+              img.src = url;
+            });
+          }
+
+          function recomputeSrcSize() {
+            if (!state.logoImg || !state.origImg) return;
+            var ow = state.origImg.naturalWidth;
+            var oh = state.origImg.naturalHeight;
+            var lw = state.logoImg.naturalWidth;
+            var lh = state.logoImg.naturalHeight;
+            if (lw < 1 || lh < 1 || ow < 1 || oh < 1) return;
+            var S = Math.max(lw / ow, lh / oh);
+            state.srcW = lw / S;
+            state.srcH = lh / S;
+          }
+
+          function clampPan() {
+            if (!state.logoImg || !state.origImg) return;
+            var ow = state.origImg.naturalWidth;
+            var oh = state.origImg.naturalHeight;
+            var maxX = Math.max(0, ow - state.srcW);
+            var maxY = Math.max(0, oh - state.srcH);
+            state.panX = Math.min(Math.max(state.panX, 0), maxX);
+            state.panY = Math.min(Math.max(state.panY, 0), maxY);
+          }
+
+          function centerPan() {
+            recomputeSrcSize();
+            if (!state.logoImg || !state.origImg) return;
+            var ow = state.origImg.naturalWidth;
+            var oh = state.origImg.naturalHeight;
+            state.panX = Math.max(0, (ow - state.srcW) / 2);
+            state.panY = Math.max(0, (oh - state.srcH) / 2);
+            clampPan();
+          }
+
+          function syncSlidersFromPan() {
+            if (!rangeX || !rangeY) return;
+            var ow = state.origImg ? state.origImg.naturalWidth : 0;
+            var oh = state.origImg ? state.origImg.naturalHeight : 0;
+            var maxX = Math.max(0, Math.round(ow - state.srcW));
+            var maxY = Math.max(0, Math.round(oh - state.srcH));
+            rangeX.max = String(maxX);
+            rangeY.max = String(maxY);
+            rangeX.value = String(Math.round(state.panX));
+            rangeY.value = String(Math.round(state.panY));
+            rangeX.disabled = maxX <= 0;
+            rangeY.disabled = maxY <= 0;
+          }
+
+          function layoutPanEditor() {
+            if (!state.origImg) return;
+            var ow = state.origImg.naturalWidth;
+            var oh = state.origImg.naturalHeight;
+            state.editorScale = Math.min(MAX_PAN_W / ow, MAX_PAN_H / oh, 1);
+            if (state.editorScale < 0.04) state.editorScale = 0.04;
+            var dw = ow * state.editorScale;
+            var dh = oh * state.editorScale;
+            panImg.style.width = dw + "px";
+            panImg.style.height = dh + "px";
+            if (state.origUrl) panImg.src = state.origUrl;
+            var fw = state.srcW * state.editorScale;
+            var fh = state.srcH * state.editorScale;
+            cropFrame.style.width = fw + "px";
+            cropFrame.style.height = fh + "px";
+            cropFrame.style.left = state.panX * state.editorScale + "px";
+            cropFrame.style.top = state.panY * state.editorScale + "px";
+            syncSlidersFromPan();
+          }
+
+          function renderComposite() {
+            if (!state.logoImg || !state.origImg) return;
+            var lw = state.logoImg.naturalWidth;
+            var lh = state.logoImg.naturalHeight;
+            preview.width = lw;
+            preview.height = lh;
+            var ctx = preview.getContext("2d");
+            ctx.clearRect(0, 0, lw, lh);
+            ctx.drawImage(state.origImg, state.panX, state.panY, state.srcW, state.srcH, 0, 0, lw, lh);
+            ctx.drawImage(state.logoImg, 0, 0, lw, lh);
+          }
+
+          function updateEditorVisibility() {
+            var ready = !!(state.logoImg && state.origImg);
+            editor.hidden = !ready;
+            if (ready) {
+              recomputeSrcSize();
+              clampPan();
+              layoutPanEditor();
+              renderComposite();
+            }
+          }
+
+          function wireDropActive(zone) {
+            ["dragenter", "dragover"].forEach(function (ev) {
+              zone.addEventListener(ev, function (e) {
+                e.preventDefault();
+                zone.classList.add("drop--active");
+              });
+            });
+            ["dragleave", "drop"].forEach(function (ev) {
+              zone.addEventListener(ev, function (e) {
+                if (ev === "drop") e.preventDefault();
+                zone.classList.remove("drop--active");
+              });
+            });
+          }
+
+          wireDropActive(logoDrop);
+          wireDropActive(origDrop);
+          logoDrop.addEventListener("click", function () {
+            logoInput.click();
+          });
+          origDrop.addEventListener("click", function () {
+            origInput.click();
+          });
+          logoDrop.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              logoInput.click();
+            }
+          });
+          origDrop.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              origInput.click();
+            }
+          });
+
+          logoDrop.addEventListener("drop", function (e) {
+            e.preventDefault();
+            var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f && f.type.indexOf("image/") === 0) void setLogoFile(f);
+          });
+          origDrop.addEventListener("drop", function (e) {
+            e.preventDefault();
+            var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f && f.type.indexOf("image/") === 0) void setOrigFile(f);
+          });
+
+          async function setLogoFile(file) {
+            setError("");
+            try {
+              if (/heic|heif/i.test(file.type || "") || /\.hei[cf]$/i.test(file.name)) {
+                throw new Error("HEIC는 JPG/PNG로 변환한 뒤 올려 주세요.");
+              }
+              var r = await loadImageKeepUrl(file);
+              revokeIf(state.logoUrl);
+              state.logoUrl = r.url;
+              state.logoImg = r.img;
+              if (logoName) logoName.textContent = file.name;
+              if (state.origImg) centerPan();
+              updateEditorVisibility();
+            } catch (err) {
+              setError(String(err.message || err));
+            }
+          }
+
+          async function setOrigFile(file) {
+            setError("");
+            try {
+              if (/heic|heif/i.test(file.type || "") || /\.hei[cf]$/i.test(file.name)) {
+                throw new Error("HEIC는 JPG/PNG로 변환한 뒤 올려 주세요.");
+              }
+              var r = await loadImageKeepUrl(file);
+              revokeIf(state.origUrl);
+              state.origUrl = r.url;
+              state.origImg = r.img;
+              if (origName) origName.textContent = file.name;
+              if (state.logoImg) centerPan();
+              updateEditorVisibility();
+            } catch (err) {
+              setError(String(err.message || err));
+            }
+          }
+
+          logoInput.addEventListener("change", function (e) {
+            var f = e.target.files && e.target.files[0];
+            e.target.value = "";
+            if (f) void setLogoFile(f);
+          });
+          origInput.addEventListener("change", function (e) {
+            var f = e.target.files && e.target.files[0];
+            e.target.value = "";
+            if (f) void setOrigFile(f);
+          });
+
+          function clearLogo() {
+            revokeIf(state.logoUrl);
+            state.logoUrl = null;
+            state.logoImg = null;
+            if (logoName) logoName.textContent = "";
+            updateEditorVisibility();
+          }
+
+          function clearOrig() {
+            revokeIf(state.origUrl);
+            state.origUrl = null;
+            state.origImg = null;
+            panImg.removeAttribute("src");
+            if (origName) origName.textContent = "";
+            updateEditorVisibility();
+          }
+
+          function clearAll() {
+            clearLogo();
+            clearOrig();
+            setError("");
+          }
+
+          if (btnClearLogo) btnClearLogo.addEventListener("click", clearLogo);
+          if (btnClearOrig) btnClearOrig.addEventListener("click", clearOrig);
+          if (btnClearAll) btnClearAll.addEventListener("click", clearAll);
+
+          rangeX.addEventListener("input", function () {
+            state.panX = parseFloat(rangeX.value) || 0;
+            clampPan();
+            layoutPanEditor();
+            renderComposite();
+          });
+          rangeY.addEventListener("input", function () {
+            state.panY = parseFloat(rangeY.value) || 0;
+            clampPan();
+            layoutPanEditor();
+            renderComposite();
+          });
+
+          var drag = null;
+          cropFrame.addEventListener("pointerdown", function (e) {
+            if (editor.hidden) return;
+            e.preventDefault();
+            drag = {
+              pid: e.pointerId,
+              sx: e.clientX,
+              sy: e.clientY,
+              px: state.panX,
+              py: state.panY,
+            };
+            try {
+              cropFrame.setPointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+            cropFrame.style.cursor = "grabbing";
+          });
+          cropFrame.addEventListener("pointermove", function (e) {
+            if (!drag || drag.pid !== e.pointerId) return;
+            var dx = (e.clientX - drag.sx) / state.editorScale;
+            var dy = (e.clientY - drag.sy) / state.editorScale;
+            state.panX = drag.px + dx;
+            state.panY = drag.py + dy;
+            clampPan();
+            layoutPanEditor();
+            renderComposite();
+          });
+          function endDrag(e) {
+            if (!drag || (e && e.pointerId !== drag.pid)) return;
+            try {
+              cropFrame.releasePointerCapture(drag.pid);
+            } catch {
+              /* ignore */
+            }
+            drag = null;
+            cropFrame.style.cursor = "grab";
+          }
+          cropFrame.addEventListener("pointerup", endDrag);
+          cropFrame.addEventListener("pointercancel", endDrag);
+
+          btnPng.addEventListener("click", function () {
+            setError("");
+            if (!state.logoImg || !state.origImg) {
+              setError("로고와 원본을 모두 올려 주세요.");
+              return;
+            }
+            renderComposite();
+            preview.toBlob(
+              function (blob) {
+                if (!blob) {
+                  setError("PNG 만들기에 실패했습니다.");
+                  return;
+                }
+                var a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "logo-composite.png";
+                a.click();
+                URL.revokeObjectURL(a.href);
+              },
+              "image/png",
+            );
+          });
+        })();
       })();
     </script>
   </body>
