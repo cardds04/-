@@ -5851,6 +5851,22 @@
         return String(value ?? "").trim();
       }
 
+      /**
+       * 급여/작가계정 매칭용: 관리자 카드의 이름과 scheduleSiteWriters.name이 미세하게 다를 때(유니코드·제로폭·공백) 대비
+       */
+      function normalizePayrollPersonName(name) {
+        let s = String(name ?? "");
+        try {
+          if (typeof s.normalize === "function") s = s.normalize("NFKC");
+        } catch (_) {}
+        return s.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+      }
+
+      /** 특정 작가 급여를 코드로 고정할 때(원인 조사용). 안 쓰면 객체 비우기 */
+      const PAYROLL_SEED_OVERRIDES_BY_CANONICAL_NAME = {
+        마창진: { fuelWon: 300000, salaryType: "tax_invoice" }
+      };
+
       function loadCompanyDefaultMemos() {
         try { return JSON.parse(localStorage.getItem(STORAGE_COMPANY_DEFAULT_MEMOS) || "{}"); } catch { return {}; }
       }
@@ -10673,21 +10689,37 @@
       const PAYROLL_SHOOT_WON_ADMIN = 50000;
       function findWriterIdByPhotographerName(name) {
         const writers = readStorageArray(STORAGE_WRITERS);
-        const key = normalize(name).toLowerCase();
-        const w = writers.find((u) => normalize(u.name).toLowerCase() === key);
+        const key = normalizePayrollPersonName(name).toLowerCase();
+        const w = writers.find((u) => normalizePayrollPersonName(u.name).toLowerCase() === key);
         return w && w.id ? String(w.id) : "";
+      }
+      function payrollNameKeysForStorage(displayName) {
+        const canon = normalizePayrollPersonName(displayName).toLowerCase();
+        const legacy = normalize(displayName).toLowerCase();
+        const keys = new Set();
+        if (canon) keys.add(canon);
+        if (legacy && legacy !== canon) keys.add(legacy);
+        return { canon, legacy, keys: [...keys] };
       }
       function getPhotographerPayrollConfigForWriter(writerId, photographerDisplayName) {
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
         const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
         const wid = String(writerId || "").trim();
-        const nk = photographerDisplayName ? normalize(photographerDisplayName).toLowerCase() : "";
+        const { canon: nk, keys: nameKeys } = payrollNameKeysForStorage(photographerDisplayName || "");
         let row = null;
         if (wid && Object.prototype.hasOwnProperty.call(byId, wid)) row = byId[wid];
-        else if (nk && Object.prototype.hasOwnProperty.call(byName, nk)) row = byName[nk];
-        else if (wid) row = byId[wid];
-        else if (nk) row = byName[nk];
+        if (!row) {
+          for (let i = 0; i < nameKeys.length; i += 1) {
+            const k = nameKeys[i];
+            if (k && Object.prototype.hasOwnProperty.call(byName, k)) {
+              row = byName[k];
+              break;
+            }
+          }
+        }
+        if (!row && wid) row = byId[wid];
+        if (!row && nk) row = byName[nk];
         return {
           fuelWon: Math.max(0, Number(row?.fuelWon) || 0),
           salaryType: row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
@@ -10695,8 +10727,8 @@
       }
       function savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType, photographerDisplayName) {
         const wid = String(writerId || "").trim();
-        const nk = photographerDisplayName ? normalize(photographerDisplayName).toLowerCase() : "";
-        if (!wid && !nk) return false;
+        const { keys: nameKeys } = payrollNameKeysForStorage(photographerDisplayName || "");
+        if (!wid && nameKeys.length === 0) return false;
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         if (!cfg.byWriterId) cfg.byWriterId = {};
         if (!cfg.byWriterNameKey) cfg.byWriterNameKey = {};
@@ -10705,11 +10737,57 @@
           salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
         };
         if (wid) cfg.byWriterId[wid] = payload;
-        if (nk) cfg.byWriterNameKey[nk] = payload;
+        nameKeys.forEach((k) => {
+          if (k) cfg.byWriterNameKey[k] = payload;
+        });
         localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
         renderPhotographerPayrollAdmin();
         if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         return true;
+      }
+      /** 마창진 등 시드: 작가명·writerId 둘 다에 써서 동기화/표기 불일치에도 남도록 함 */
+      function ensurePayrollSeedOverridesForKnownWriters() {
+        const entries = Object.entries(PAYROLL_SEED_OVERRIDES_BY_CANONICAL_NAME || {});
+        if (!entries.length) return;
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        if (!cfg.byWriterId) cfg.byWriterId = {};
+        if (!cfg.byWriterNameKey) cfg.byWriterNameKey = {};
+        const writers = readStorageArray(STORAGE_WRITERS);
+        let changed = false;
+        entries.forEach(([canonicalName, payload]) => {
+          const { keys } = payrollNameKeysForStorage(canonicalName);
+          keys.forEach((k) => {
+            if (!k) return;
+            const prev = cfg.byWriterNameKey[k];
+            const same =
+              prev &&
+              Number(prev.fuelWon) === Number(payload.fuelWon) &&
+              (prev.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer") ===
+                (payload.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer");
+            if (!same) {
+              cfg.byWriterNameKey[k] = { ...payload };
+              changed = true;
+            }
+          });
+          const w = writers.find((u) => normalizePayrollPersonName(u.name).toLowerCase() === normalizePayrollPersonName(canonicalName).toLowerCase());
+          if (w && w.id) {
+            const idStr = String(w.id).trim();
+            const prevId = cfg.byWriterId[idStr];
+            const sameId =
+              prevId &&
+              Number(prevId.fuelWon) === Number(payload.fuelWon) &&
+              (prevId.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer") ===
+                (payload.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer");
+            if (!sameId) {
+              cfg.byWriterId[idStr] = { ...payload };
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        }
       }
       /** 기존 byWriterId만 있던 항목을 작가명 키에도 복제해 아이디 불일치 시에도 조회되게 함 */
       function ensurePayrollWriterNameKeysFromIds() {
@@ -10721,7 +10799,7 @@
         let changed = false;
         writers.forEach((w) => {
           const wid = String(w?.id || "").trim();
-          const nk = normalize(w?.name || "").toLowerCase();
+          const nk = normalizePayrollPersonName(w?.name || "").toLowerCase();
           if (!wid || !nk || !Object.prototype.hasOwnProperty.call(byId, wid)) return;
           const payload = byId[wid];
           const prev = byName[nk];
@@ -10743,10 +10821,10 @@
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
         base.setHours(0, 0, 0, 0);
-        const nk = normalize(writerName).toLowerCase();
+        const nk = normalizePayrollPersonName(writerName).toLowerCase();
         const merged = [...readStorageArray(STORAGE_CUSTOMER_SCHEDULES), ...readStorageArray(STORAGE_WRITER_SCHEDULES)];
         return merged.filter((item) => {
-          if (normalize(item.name).toLowerCase() !== nk) return false;
+          if (normalizePayrollPersonName(item.name).toLowerCase() !== nk) return false;
           if (!String(item.date || "").startsWith(monthKey)) return false;
           if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
           const target = new Date(`${item.date}T00:00:00`);
@@ -10830,6 +10908,7 @@
 
       function renderPhotographers() {
         ensurePayrollWriterNameKeysFromIds();
+        ensurePayrollSeedOverridesForKnownWriters();
         memberCountEl.textContent = `${photographers.length}명`;
         const safeNames = photographers.map((name) => escapeHtml(name));
         const excludedNames = getExcludedPhotographerNames();
@@ -12298,12 +12377,17 @@
       }
 
       function renderWriterHistory(writerName) {
+        ensurePayrollSeedOverridesForKnownWriters();
         const targetName = String(writerName || "").trim();
+        const nkPerson = normalizePayrollPersonName(targetName).toLowerCase();
         const normalizedWriter = targetName.toLowerCase();
         const writers = readStorageArray(STORAGE_WRITERS);
-        const writerUser = writers.find((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter) || null;
+        const writerUser =
+          writers.find((item) => normalizePayrollPersonName(item?.name || "").toLowerCase() === nkPerson) || null;
         const excludedNameSet = new Set(getExcludedPhotographerNames().map((name) => String(name || "").trim().toLowerCase()));
-        const isExcludedWriter = excludedNameSet.has(normalizedWriter);
+        const isExcludedWriter =
+          excludedNameSet.has(normalizedWriter) ||
+          getExcludedPhotographerNames().some((n) => normalizePayrollPersonName(n || "").toLowerCase() === nkPerson);
         const writerId = String(writerUser?.id || "").trim();
         const writerPassword = String(writerUser?.password || "").trim();
         const writerPhone = String(writerUser?.phone || photographerPhones[targetName] || "").trim();
@@ -12313,7 +12397,7 @@
         const { fuelWon: payrollFuelWon, salaryType: payrollSalaryType } = getPhotographerPayrollConfigForWriter(payrollWid, targetName);
 
         const rows = [...data, ...onHoldPayments, ...refundPayments]
-          .filter((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter)
+          .filter((item) => normalizePayrollPersonName(item?.name || "").toLowerCase() === nkPerson)
           .sort((a, b) => {
             const at = new Date(`${a.date || "1900-01-01"}T${a.time || "00:00"}:00`).getTime();
             const bt = new Date(`${b.date || "1900-01-01"}T${b.time || "00:00"}:00`).getTime();

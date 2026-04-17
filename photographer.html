@@ -1291,6 +1291,71 @@
         return String(text || "").trim();
       }
 
+      function normalizePayrollPersonName(name) {
+        let s = String(name ?? "");
+        try {
+          if (typeof s.normalize === "function") s = s.normalize("NFKC");
+        } catch (_) {}
+        return s.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+      }
+      function payrollNameKeysForStorage(displayName) {
+        const canon = normalizePayrollPersonName(displayName).toLowerCase();
+        const legacy = normalize(displayName).toLowerCase();
+        const keys = new Set();
+        if (canon) keys.add(canon);
+        if (legacy && legacy !== canon) keys.add(legacy);
+        return { canon, legacy, keys: [...keys] };
+      }
+      const PAYROLL_SEED_OVERRIDES_BY_CANONICAL_NAME = {
+        마창진: { fuelWon: 300000, salaryType: "tax_invoice" }
+      };
+      function ensurePayrollSeedOverridesForKnownWriters() {
+        const entries = Object.entries(PAYROLL_SEED_OVERRIDES_BY_CANONICAL_NAME || {});
+        if (!entries.length) return;
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        if (!cfg.byWriterId) cfg.byWriterId = {};
+        if (!cfg.byWriterNameKey) cfg.byWriterNameKey = {};
+        const writers = readStorageArray(STORAGE_WRITERS);
+        let changed = false;
+        entries.forEach(([canonicalName, payload]) => {
+          const { keys } = payrollNameKeysForStorage(canonicalName);
+          keys.forEach((k) => {
+            if (!k) return;
+            const prev = cfg.byWriterNameKey[k];
+            const same =
+              prev &&
+              Number(prev.fuelWon) === Number(payload.fuelWon) &&
+              (prev.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer") ===
+                (payload.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer");
+            if (!same) {
+              cfg.byWriterNameKey[k] = { ...payload };
+              changed = true;
+            }
+          });
+          const w = writers.find(
+            (u) =>
+              normalizePayrollPersonName(u.name).toLowerCase() === normalizePayrollPersonName(canonicalName).toLowerCase()
+          );
+          if (w && w.id) {
+            const idStr = String(w.id).trim();
+            const prevId = cfg.byWriterId[idStr];
+            const sameId =
+              prevId &&
+              Number(prevId.fuelWon) === Number(payload.fuelWon) &&
+              (prevId.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer") ===
+                (payload.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer");
+            if (!sameId) {
+              cfg.byWriterId[idStr] = { ...payload };
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        }
+      }
+
       function pad2(value) {
         return String(value).padStart(2, "0");
       }
@@ -1710,12 +1775,20 @@
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
         const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
         const wid = String(writerId || "").trim();
-        const nk = writerDisplayName ? normalize(writerDisplayName).toLowerCase() : "";
+        const { canon: nk, keys: nameKeys } = payrollNameKeysForStorage(writerDisplayName || "");
         let row = null;
         if (wid && Object.prototype.hasOwnProperty.call(byId, wid)) row = byId[wid];
-        else if (nk && Object.prototype.hasOwnProperty.call(byName, nk)) row = byName[nk];
-        else if (wid) row = byId[wid];
-        else if (nk) row = byName[nk];
+        if (!row) {
+          for (let i = 0; i < nameKeys.length; i += 1) {
+            const k = nameKeys[i];
+            if (k && Object.prototype.hasOwnProperty.call(byName, k)) {
+              row = byName[k];
+              break;
+            }
+          }
+        }
+        if (!row && wid) row = byId[wid];
+        if (!row && nk) row = byName[nk];
         const fuelWon = Math.max(0, Number(row?.fuelWon) || 0);
         const salaryType = row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer";
         return { fuelWon, salaryType };
@@ -1758,6 +1831,7 @@
 
       function renderPhotographerPayroll() {
         ensurePayrollCategoryOptions();
+        ensurePayrollSeedOverridesForKnownWriters();
         const writer = getCurrentWriter();
         if (!writer || !payrollPanelEl || !payrollSummaryEl || !payrollLinesListEl) return;
         payrollPanelEl.classList.remove("hidden");
