@@ -10779,7 +10779,7 @@
       }
       /**
        * 미입금 요약 복사용 장소 문자열.
-       * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 시·도·구·군·읍·면·도로명+번지·선행번지를 지우고 단지명(첫 한글~) + 동·호만.
+       * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 시·도·구·군·읍·면·행정동+지번·도로명+번지 등을 지운 뒤 단지명만(동·호는 출력 안 함).
        * 2) 아니면 문자열 끝이 …로|길|리 + 지번(숫자·하이픈)이면 그 한 덩어리만.
        * 3) 둘 다 아니면 "-".
        */
@@ -10787,6 +10787,8 @@
         let s = String(raw || "").trim();
         if (!s) return "-";
         s = s
+          .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000]/g, " ")
+          .replace(/^주소\s*[:：]\s*/i, "")
           .replace(/[,，、]/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -10795,7 +10797,6 @@
         const aptM = s.match(aptTailRe);
         if (aptM) {
           let prefix = s.slice(0, aptM.index).trim();
-          const tail = String(aptM[1]).replace(/\s+/g, " ").trim();
           const adminOrRoadRules = [
             /^[가-힣]{2,}특별자치시\s*/u,
             /^[가-힣]{2,}특별시\s*/u,
@@ -10825,8 +10826,8 @@
             if (!hit) break;
           }
           prefix = prefix.replace(/^[^가-힣]*\s*/u, "").trim();
-          const out = [prefix, tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-          return out || tail || "-";
+          const out = prefix.replace(/\s+/g, " ").trim();
+          return out || "-";
         }
 
         const landTailRe = /([가-힣0-9\-]{2,}(?:로|길|리))\s*(\d+(?:-\d+)*)\s*$/u;
