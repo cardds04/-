@@ -10928,13 +10928,33 @@
             <button type="button" class="btn-sm primary" id="payrollAdminMonthApplyBtn">적용</button>
           </div>`;
       }
+      /** 작가 화면 getMySchedules()와 동일: 고객·작가 미러 병합 후 id/날짜키로 중복 제거 */
+      function dedupeCustomerAndWriterScheduleRowsForPayroll() {
+        const merged = [...readStorageArray(STORAGE_CUSTOMER_SCHEDULES), ...readStorageArray(STORAGE_WRITER_SCHEDULES)];
+        const dedupedMap = new Map();
+        merged.forEach((row) => {
+          const keyBase = normalize(row?.writerMirrorId || row?.customerScheduleId);
+          const fallbackKey = [
+            normalize(row?.date),
+            normalize(row?.time),
+            normalize(row?.name),
+            normalize(row?.company),
+            normalize(row?.place)
+          ].join("|");
+          const key = keyBase || fallbackKey;
+          if (!key) return;
+          dedupedMap.set(key, row);
+        });
+        return [...dedupedMap.values()];
+      }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
         base.setHours(0, 0, 0, 0);
-        const nk = normalizePayrollPersonName(writerName).toLowerCase();
-        const merged = [...readStorageArray(STORAGE_CUSTOMER_SCHEDULES), ...readStorageArray(STORAGE_WRITER_SCHEDULES)];
-        return merged.filter((item) => {
-          if (normalizePayrollPersonName(item.name).toLowerCase() !== nk) return false;
+        const nameKey = normalize(writerName).toLowerCase();
+        const rows = dedupeCustomerAndWriterScheduleRowsForPayroll().filter(
+          (row) => normalize(row?.name).toLowerCase() === nameKey
+        );
+        return rows.filter((item) => {
           if (!String(item.date || "").startsWith(monthKey)) return false;
           if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
           const target = new Date(`${item.date}T00:00:00`);
