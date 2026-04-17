@@ -10833,6 +10833,97 @@
           .replace(/\s+/g, " ")
           .trim();
 
+        function trimLeadingRoadAndBonbeon(t) {
+          let h = String(t || "").trim();
+          for (let n = 0; n < 20; n++) {
+            const u = h
+              .replace(/^[가-힣0-9\-]+(?:로|길)\s+\d+(?:-\d+)?\s+/u, "")
+              .replace(/^\d+(?:-\d+)?\s+/u, "")
+              .trim();
+            if (u === h) break;
+            h = u;
+          }
+          return h;
+        }
+
+        function sliceHeadFromAptBrand(head) {
+          const h = String(head || "").trim();
+          if (!h) return h;
+          const brands = [
+            "힐스테이트",
+            "e편한세상",
+            "E편한세상",
+            "편한세상",
+            "아이파크",
+            "래미안",
+            "자이",
+            "더샵",
+            "센트럴파크",
+            "센트럴",
+            "푸르지오",
+            "하늘채",
+            "트리스",
+            "듀오",
+            "타운",
+            "빌리지",
+            "캐슬",
+            "스카이",
+            "채운",
+            "파크",
+          ];
+          let bestStart = -1;
+          for (let bi = 0; bi < brands.length; bi++) {
+            const b = brands[bi];
+            let from = h.length;
+            while (from > 0) {
+              const j = h.lastIndexOf(b, from - 1);
+              if (j < 0) break;
+              let st = j;
+              while (st > 0 && h.charAt(st - 1) !== " ") st -= 1;
+              let wordEnd = h.indexOf(" ", j + b.length);
+              if (wordEnd < 0) wordEnd = h.length;
+              const word = h.slice(st, wordEnd).trim();
+              if (word.length <= b.length + 2 && word.includes(b)) {
+                let p = st - 1;
+                while (p >= 0 && h.charAt(p) === " ") p -= 1;
+                while (p >= 0 && h.charAt(p) !== " ") p -= 1;
+                st = p + 1;
+              }
+              if (st > 0 && (bestStart < 0 || st < bestStart)) bestStart = st;
+              from = j;
+            }
+          }
+          if (bestStart > 0) return h.slice(bestStart).trim();
+          return h;
+        }
+
+        function joinHeadTail(head0, tailPart) {
+          const head = sliceHeadFromAptBrand(trimLeadingRoadAndBonbeon(String(head0 || "").trim()));
+          const t = String(tailPart || "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!head && !t) return "";
+          if (!head) return t;
+          if (!t) return head;
+          return `${head} ${t}`.replace(/\s+/g, " ").trim();
+        }
+
+        function applyDongHoAptSnip(text) {
+          const t0 = String(text || "").trim();
+          if (!t0) return "";
+          const reHo = /(\d{1,4}동\s*\d+\s*호|[a-zA-Z]동\s*\d+\s*호)\s*$/iu;
+          const m = t0.match(reHo);
+          if (m) {
+            const head0 = t0.slice(0, m.index).trim();
+            return joinHeadTail(head0, m[1]);
+          }
+          let u = trimLeadingRoadAndBonbeon(t0);
+          u = sliceHeadFromAptBrand(u);
+          return u.trim();
+        }
+
+        s = applyDongHoAptSnip(s);
+
         return s || "-";
       }
 
