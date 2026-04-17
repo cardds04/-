@@ -2094,7 +2094,7 @@ class MontageGuiApp:
                 )
             else:
                 self._music_info_lbl.config(
-                    text=f"폴더 내 음악 {n}곡 (실행 시 그중 무작위 1곡 사용)",
+                    text=f"폴더 내 음악 {n}곡 (파일명 순서대로, 다음 실행까지 이어서 사용 · ~/.music_montage/bgm_folder_order.json)",
                     fg="#1e40af",
                 )
             return
@@ -3777,7 +3777,7 @@ class MontageGuiApp:
             self._update_music_info_label()
 
     def browse_music_folder(self) -> None:
-        p = filedialog.askdirectory(title="음악이 들어 있는 폴더 (실행 시 그중 무작위 1곡)")
+        p = filedialog.askdirectory(title="음악이 들어 있는 폴더 (파일명 순서대로, 재실행 시 이어서)")
         if p:
             folder = Path(p)
             n = self._count_audio_files_in_dir(folder)

@@ -4,9 +4,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
-import random
 import re
 import shutil
 import subprocess
@@ -715,8 +716,81 @@ def list_sorted_videos(folder: Path) -> list[Path]:
     return files
 
 
-def resolve_music_file(music_path: Path) -> Path:
-    p = music_path.resolve()
+BGM_ORDER_STATE_DIR = Path.home() / ".music_montage"
+BGM_ORDER_STATE_FILE = BGM_ORDER_STATE_DIR / "bgm_folder_order.json"
+
+
+def _bgm_pool_signature(files: list[Path]) -> str:
+    """같은 폴더라도 곡 목록이 바뀌면 순서 카운터를 리셋하기 위한 지문."""
+    h = hashlib.sha256()
+    for p in files:
+        h.update(str(p.resolve()).lower().encode())
+    return h.hexdigest()[:24]
+
+
+def _load_bgm_order_state() -> dict:
+    try:
+        if BGM_ORDER_STATE_FILE.is_file():
+            return json.loads(BGM_ORDER_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return {"version": 1, "folders": {}}
+
+
+def _save_bgm_order_state(data: dict) -> None:
+    BGM_ORDER_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = BGM_ORDER_STATE_FILE.with_suffix(".tmp.json")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(BGM_ORDER_STATE_FILE)
+
+
+def _bgm_state_folder_key(folder: Path) -> str:
+    try:
+        return str(folder.resolve())
+    except OSError:
+        return str(folder)
+
+
+def read_next_bgm_track_index(state_folder: Path, n: int, sig: str) -> int:
+    """다음에 재생할 곡의 인덱스 [0, n-1]. 폴더·목록이 바뀌면 0부터 다시."""
+    if n <= 0:
+        return 0
+    data = _load_bgm_order_state()
+    folders: dict = data.setdefault("folders", {})
+    key = _bgm_state_folder_key(state_folder)
+    ent = folders.get(key)
+    if not isinstance(ent, dict) or ent.get("sig") != sig:
+        return 0
+    return int(ent.get("next", 0)) % n
+
+
+def persist_bgm_track_position(
+    state_folder: Path, n: int, sig: str, start_index: int, num_tracks_used: int
+) -> None:
+    """이번 실행에서 num_tracks_used곡을 썼다고 저장해 다음 실행 때 이어서 순서대로 고름."""
+    if n <= 0 or num_tracks_used <= 0:
+        return
+    data = _load_bgm_order_state()
+    folders: dict = data.setdefault("folders", {})
+    key = _bgm_state_folder_key(state_folder)
+    new_next = (start_index + num_tracks_used) % n
+    folders[key] = {"sig": sig, "next": new_next}
+    try:
+        _save_bgm_order_state(data)
+    except OSError:
+        pass
+
+
+def prepare_music_pool_and_pick(
+    music_path: Path,
+) -> tuple[Path, list[Path], int, Path, str]:
+    """
+    음악 1곡 선택 + 이어붙임용 정렬 풀.
+
+    Returns:
+        (선택 파일, 정렬된 풀, 풀 안에서의 시작 인덱스, 순서 상태를 저장할 폴더, 풀 지문)
+    """
+    p = music_path.expanduser().resolve()
     if p.is_file():
         if is_skipped_media_filename(p.name):
             raise ValueError(
@@ -725,19 +799,38 @@ def resolve_music_file(music_path: Path) -> Path:
             )
         if p.suffix.lower() not in AUDIO_EXTS:
             raise ValueError(f"지원하지 않는 음악 형식입니다: {p.suffix}")
-        return p
+        pool = list_montage_music_pool(p)
+        if not pool:
+            sig = _bgm_pool_signature([p])
+            return p, [p], 0, p.parent.resolve(), sig
+        state_dir = p.parent.resolve()
+        sig = _bgm_pool_signature(pool)
+        n = len(pool)
+        idx = read_next_bgm_track_index(state_dir, n, sig)
+        return pool[idx], pool, idx, state_dir, sig
     if not p.is_dir():
         raise FileNotFoundError(f"경로가 없습니다: {music_path}")
-    files = [
+    pool = [
         x
         for x in p.iterdir()
         if x.is_file()
         and not is_skipped_media_filename(x.name)
         and x.suffix.lower() in AUDIO_EXTS
     ]
-    if not files:
+    pool.sort(key=lambda x: x.name.lower())
+    if not pool:
         raise ValueError(f"폴더에 음악 파일이 없습니다. 지원: {AUDIO_EXTS}")
-    return random.choice(files)
+    state_dir = p.resolve()
+    sig = _bgm_pool_signature(pool)
+    n = len(pool)
+    idx = read_next_bgm_track_index(state_dir, n, sig)
+    return pool[idx], pool, idx, state_dir, sig
+
+
+def resolve_music_file(music_path: Path) -> Path:
+    """단일 파일이면 그대로, 폴더·형제 풀이면 정렬 목록에서 순서대로 1곡."""
+    f, _, _, _, _ = prepare_music_pool_and_pick(music_path)
+    return f
 
 
 def list_montage_music_pool(music_path: Path) -> list[Path]:
@@ -1399,7 +1492,9 @@ def run_montage(
                     f"최종 합성에서 상·하 검은 레터박스로 {out_w}×{out_h}로 맞춥니다."
                 )
     music_src = music_path.resolve()
-    music_file = resolve_music_file(music_path)
+    music_file, music_pool, pool_start_idx, music_state_dir, music_pool_sig = (
+        prepare_music_pool_and_pick(music_path)
+    )
     if output_path is None:
         tag = ""
         if output_preset_tag and str(output_preset_tag).strip():
@@ -1423,7 +1518,14 @@ def run_montage(
 
     log(f"영상 {len(videos)}개")
     if music_src.is_dir():
-        log(f"음악(폴더에서 무작위): {music_file.name}")
+        log(
+            f"음악(폴더 순서 {pool_start_idx + 1}/{len(music_pool)}번째, 다음 실행은 이어서): "
+            f"{music_file.name} · 상태 {BGM_ORDER_STATE_FILE}"
+        )
+    elif len(music_pool) > 1:
+        log(
+            f"음악(같은 폴더 곡 순서 {pool_start_idx + 1}/{len(music_pool)}번째): {music_file.name} · 상태 {BGM_ORDER_STATE_FILE}"
+        )
     else:
         log(f"음악: {music_file.name}")
 
@@ -1755,19 +1857,21 @@ def run_montage(
         need_audio_sec = float(vlen) + tb
         first_music_dur = float(len(y)) / float(sr)
         music_for_mux: Path = music_file
+        music_tracks_used = 1
         if first_music_dur + 0.08 < need_audio_sec:
-            pool = list_montage_music_pool(music_src)
+            pool = music_pool
             if not pool:
                 pool = [music_file]
+            n_pool = len(pool)
             parts_wav: list[Path] = [wav]
             total_a = first_music_dur
             seq_names = [music_file.name]
-            last_resolved = music_file.resolve()
+            cur_pool_idx = pool_start_idx
             pick_guard = 0
             while total_a < need_audio_sec - 0.05 and pick_guard < 100:
                 pick_guard += 1
-                alt = [p for p in pool if p.resolve() != last_resolved] or pool
-                nxt = random.choice(alt)
+                cur_pool_idx = (cur_pool_idx + 1) % n_pool
+                nxt = pool[cur_pool_idx]
                 wextra = tmp / f"music_chain_{pick_guard:03d}.wav"
                 extract_mono_wav(nxt, wextra)
                 try:
@@ -1780,14 +1884,14 @@ def run_montage(
                 parts_wav.append(wextra)
                 total_a += td
                 seq_names.append(nxt.name)
-                last_resolved = nxt.resolve()
+                music_tracks_used += 1
             if len(parts_wav) > 1:
                 chained = tmp / "music_chain_concat.wav"
                 ffmpeg_concat_wav_files(parts_wav, chained)
                 music_for_mux = chained
                 log(
                     f"영상(본문+끝검정 약 {need_audio_sec:.1f}s)이 첫 곡({first_music_dur:.1f}s)보다 길어 "
-                    f"음악 이어붙임: {' → '.join(seq_names)} (합계 약 {total_a:.1f}s)"
+                    f"음악 이어붙임(순서): {' → '.join(seq_names)} (합계 약 {total_a:.1f}s)"
                 )
         mux_final_output(
             vconcat,
@@ -1804,6 +1908,13 @@ def run_montage(
             tail_black_sec=tb,
             logo_path=logo_resolved,
             log=log,
+        )
+        persist_bgm_track_position(
+            music_state_dir,
+            len(music_pool),
+            music_pool_sig,
+            pool_start_idx,
+            music_tracks_used,
         )
 
     log(f"완료: {out}")

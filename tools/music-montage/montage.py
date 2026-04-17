@@ -18,7 +18,7 @@ def main() -> None:
         "--music",
         required=True,
         type=Path,
-        help="음악 파일 또는 음악이 있는 폴더(폴더면 지원 형식 중 무작위 1곡)",
+        help="음악 파일 또는 음악이 있는 폴더(폴더면 파일명 순서대로, 재실행 시 이어서 1곡)",
     )
     parser.add_argument(
         "-o",
