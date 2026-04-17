@@ -2002,7 +2002,7 @@
             <h2>작가 급여</h2>
           </div>
           <p class="helper" style="margin-bottom: 12px;">
-            이번 달 기준 완료 촬영·기본급·유류·추가요금·급여 형태를 확인합니다. 작가 화면에서 입력한 추가요금은 아래 요약에 반영됩니다. 유류비·급여형태 저장은 작가 계정 이름과 관리자 등록 작가명이 같을 때 가능합니다.
+            <strong>조회 월</strong>을 선택하면 해당 월 기준 완료 촬영·기본급·유류·추가요금·급여 형태를 확인합니다. 작가 화면에서 입력한 추가요금은 <strong>선택한 월</strong>에 맞춰 요약에 반영됩니다. 유류비·급여형태 저장은 작가 계정 이름과 관리자 등록 작가명이 같을 때 가능합니다.
           </p>
           <div id="photographerPayrollAdminPanel" class="register-panel" style="margin-top: 0;">
             <div id="photographerPayrollConfigRows"></div>
@@ -10836,6 +10836,41 @@
           if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         }
       }
+      let payrollAdminMonthKey = (function () {
+        const t = new Date();
+        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`;
+      })();
+      function normalizePayrollAdminMonthKey(key) {
+        const s = String(key || "").trim();
+        if (/^\d{4}-\d{2}$/.test(s)) return s;
+        const t = new Date();
+        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`;
+      }
+      function buildPayrollAdminMonthSelectorHtml(selectedMonthKey) {
+        const mk = normalizePayrollAdminMonthKey(selectedMonthKey);
+        const parts = mk.split("-");
+        const year = parseInt(parts[0], 10) || new Date().getFullYear();
+        const month = parseInt(parts[1], 10) || new Date().getMonth() + 1;
+        const nowY = new Date().getFullYear();
+        const yearOpts = [];
+        for (let y = nowY - 4; y <= nowY + 1; y += 1) {
+          yearOpts.push(`<option value="${y}" ${y === year ? "selected" : ""}>${y}</option>`);
+        }
+        const monthOpts = [];
+        for (let m = 1; m <= 12; m += 1) {
+          const mm = String(m).padStart(2, "0");
+          monthOpts.push(`<option value="${mm}" ${m === month ? "selected" : ""}>${m}</option>`);
+        }
+        return `
+          <div class="filter-row" style="margin-bottom:10px; flex-wrap:wrap; align-items:center; gap:8px;">
+            <span class="hint" style="font-weight:700;">조회 월</span>
+            <select id="payrollAdminYearSelect" class="small-select" aria-label="급여 조회 연도">${yearOpts.join("")}</select>
+            <span>년</span>
+            <select id="payrollAdminMonthSelect" class="small-select" aria-label="급여 조회 월">${monthOpts.join("")}</select>
+            <span>월</span>
+            <button type="button" class="btn-sm primary" id="payrollAdminMonthApplyBtn">적용</button>
+          </div>`;
+      }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
         base.setHours(0, 0, 0, 0);
@@ -10855,7 +10890,8 @@
         const summaryEl = document.getElementById("photographerPayrollMonthlySummaryAdmin");
         if (!configEl || !summaryEl) return;
         const names = photographers.filter((n) => n && n !== "작가미정");
-        const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+        const monthKey = normalizePayrollAdminMonthKey(payrollAdminMonthKey);
+        payrollAdminMonthKey = monthKey;
         const monthlyAll = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
         if (!names.length) {
           configEl.innerHTML = '<div class="company-item">등록된 작가가 없습니다.</div>';
@@ -10916,7 +10952,8 @@
           })
           .join("");
         summaryEl.innerHTML = `
-          <div style="font-weight:700; margin-bottom:6px;">이번달(${monthKey}) 작가별 급여 요약</div>
+          ${buildPayrollAdminMonthSelectorHtml(monthKey)}
+          <div style="font-weight:700; margin-bottom:6px;">${monthKey} 작가별 급여 요약</div>
           <div style="overflow:auto;">
             <table class="payment-table" style="font-size:0.85rem;"><thead><tr>
               <th>작가</th><th>완료촬영</th><th>기본급</th><th>유류</th><th>추가요금</th><th>세전</th><th>형태</th><th>최종표시</th>
@@ -17529,6 +17566,26 @@
         const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
         savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType, writerName);
         alert(`급여 설정을 저장했습니다. (${writerName})`);
+      });
+
+      function applyPayrollAdminMonthFromDom() {
+        const y = document.getElementById("payrollAdminYearSelect");
+        const m = document.getElementById("payrollAdminMonthSelect");
+        if (!y || !m) return;
+        payrollAdminMonthKey = `${String(y.value).trim()}-${String(m.value).trim()}`;
+        renderPhotographerPayrollAdmin();
+      }
+      payrollSectionEl?.addEventListener("click", (event) => {
+        if (event.target.closest("#payrollAdminMonthApplyBtn")) {
+          event.preventDefault();
+          applyPayrollAdminMonthFromDom();
+        }
+      });
+      payrollSectionEl?.addEventListener("change", (event) => {
+        const id = event.target?.id;
+        if (id === "payrollAdminYearSelect" || id === "payrollAdminMonthSelect") {
+          applyPayrollAdminMonthFromDom();
+        }
       });
 
       registerPhotographerBtnEl.addEventListener("click", addPhotographerFromInput);
