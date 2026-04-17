@@ -10777,6 +10777,23 @@
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
+      /** 짧은 앞 토큰(금곡 등) 제거 후 마지막 단지명만, 또는 sk + 북한산시티처럼 영문+한글 합침 */
+      function primaryAptNameTokenForSummary(prefix) {
+        const t = String(prefix || "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!t) return t;
+        const parts = t.split(" ");
+        if (parts.length === 2 && /^[a-z]{1,4}$/i.test(parts[0]) && /[가-힣]/.test(parts[1])) {
+          return (parts[0] + parts[1]).trim();
+        }
+        if (parts.length !== 2) return t;
+        const first = parts[0];
+        const last = parts[1];
+        if (first.length <= 2 && last.length > first.length) return last;
+        return t;
+      }
+
       /**
        * 미입금 요약 복사용 장소 문자열.
        * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 시·도·구·군·읍·면·행정동+지번·도로명+번지 등을 지운 뒤 단지명만(동·호는 출력 안 함).
@@ -10808,7 +10825,7 @@
             /^[가-힣]{2,}군\s*/u,
             /^[가-힣]{2,}구\s*/u,
             /^[가-힣]{2,}(?:읍|면)\s*/u,
-            /^[가-힣]{2,}동\s*\d+(?:-\d+)?\s*(?=[가-힣])/u,
+            /^[가-힣]{2,}동\s*\d+(?:-\d+)?\s*(?=[가-힣a-zA-Z])/u,
             /^\d+(?:-\d+)?\s+/u,
             /^[가-힣0-9\-]{2,}길\s*\d+(?:-\d+)?\s*/u,
             /^[가-힣0-9\-]{2,}(?:로|대로)(?:\d+번길)?\s*\d+(?:-\d+)?\s*/u,
@@ -10825,8 +10842,9 @@
             }
             if (!hit) break;
           }
-          prefix = prefix.replace(/^[^가-힣]*\s*/u, "").trim();
-          const out = prefix.replace(/\s+/g, " ").trim();
+          prefix = prefix.replace(/^[^가-힣a-zA-Z]*\s*/iu, "").trim();
+          prefix = prefix.replace(/\s+/g, " ").trim();
+          const out = primaryAptNameTokenForSummary(prefix).replace(/\s+아파트\s*$/iu, "").trim();
           return out || "-";
         }
 
