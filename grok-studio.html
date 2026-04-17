@@ -899,6 +899,57 @@
         gap: 0.65rem;
         align-items: center;
       }
+      .logo-composite-orig-list {
+        list-style: none;
+        margin: 0.55rem 0 0;
+        padding: 0;
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+      .logo-composite-orig-list li {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.55rem;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+        font-size: 0.82rem;
+        color: var(--ink);
+      }
+      .logo-composite-orig-list li:last-child {
+        border-bottom: 0;
+      }
+      .logo-composite-orig-list li.is-active {
+        background: #ecfdf5;
+        font-weight: 700;
+      }
+      .logo-composite-orig-list__name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .logo-composite-orig-list__rm {
+        flex-shrink: 0;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        font-size: 0.95rem;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .logo-composite-orig-list__rm:hover {
+        background: #fef2f2;
+        color: var(--danger);
+        border-color: #fecaca;
+      }
       .foot {
         margin-top: 2rem;
         font-size: 0.8rem;
@@ -916,7 +967,7 @@
         <p class="sub">
           로컬 <code>tools/grok-topaz-pipeline</code>과 같은 <strong>이미지 블록</strong> 레이아웃입니다. Grok Imagine(xAI) 또는
           Gemini 나노바나나2로 생성하고, 오른쪽에서 개별 다운로드·ZIP으로 모두 받기·목록 비우기를 할 수 있습니다. 페이지 맨 아래에서는
-          <strong>로고와 원본 이미지</strong>를 겹쳐 한 PNG로 저장할 수 있습니다.
+          <strong>로고와 원본 이미지</strong>를 겹쳐 PNG로 저장할 수 있습니다(원본 여러 장은 ZIP).
         </p>
       </header>
 
@@ -1231,8 +1282,9 @@
       <section class="logo-composite-block" id="logoCompositeBlock" aria-label="로고와 원본 합성">
         <h2 class="workflow-title">로고 · 원본 합치기 <span class="workflow-note">(브라우저만 · API 불필요)</span></h2>
         <p class="hint" style="margin-top: 0">
-          <strong>로고</strong>(보통 투명 PNG)와 <strong>원본 이미지</strong>를 각각 올리면, 출력 크기는 <strong>로고 픽셀 크기</strong>와 같습니다. 원본은 그 비율에 맞게
-          잘리고, <strong>로고가 위·원본이 아래</strong>로 겹쳐 한 장이 됩니다. 테두리 안(또는 슬라이더)으로 잘릴 위치를 정하세요.
+          <strong>로고</strong>(보통 투명 PNG)와 <strong>원본 이미지</strong>를 올리면, 출력 크기는 <strong>로고 픽셀 크기</strong>와 같습니다. 원본은 그 비율에 맞게
+          잘리고, <strong>로고가 위·원본이 아래</strong>로 겹칩니다. 원본은 <strong>여러 장</strong>을 한 번에 넣을 수 있고, 아래 목록에서 장을 골라
+          <strong>장마다</strong> 잘릴 위치를 따로 정할 수 있습니다.
         </p>
         <div class="row row--2 row--logo-composite-drops" style="margin-top: 1rem">
           <div>
@@ -1255,18 +1307,18 @@
                 비우기
               </button>
             </div>
-            <label class="drop" id="logoCompositeOrigDrop" tabindex="0" aria-label="원본 이미지 선택 또는 끌어다 놓기">
-              <input type="file" id="logoCompositeOrigInput" accept="image/*" hidden />
-              <span class="drop__hint">클릭해서 선택 · 끌어다 놓기</span>
-              <span class="drop__name" id="logoCompositeOrigName"></span>
+            <label class="drop" id="logoCompositeOrigDrop" tabindex="0" aria-label="원본 이미지 선택 또는 끌어다 놓기(여러 장)">
+              <input type="file" id="logoCompositeOrigInput" accept="image/*" multiple hidden />
+              <span class="drop__hint">클릭 · 끌어다 놓기 · <strong>여러 장</strong> 가능</span>
             </label>
+            <ul id="logoCompositeOrigList" class="logo-composite-orig-list" aria-label="원본 목록"></ul>
           </div>
         </div>
 
         <div id="logoCompositeEditor" hidden style="margin-top: 1.25rem">
           <h3 class="step__h step__h--compact">원본에서 잘릴 위치</h3>
           <p class="hint" style="margin-bottom: 0.5rem">
-            초록 테두리를 드래그하거나 슬라이더로 옮기세요. 테두리 비율은 로고와 동일합니다.
+            왼쪽 목록에서 원본을 고른 뒤, 초록 테두리를 드래그하거나 슬라이더로 옮기세요. 테두리 비율은 로고와 동일합니다.
           </p>
           <div class="logo-composite-pan-stage" id="logoCompositePanStage">
             <div class="logo-composite-pan-inner" id="logoCompositePanInner">
@@ -1289,7 +1341,8 @@
             <canvas id="logoCompositePreview" class="logo-composite-preview-canvas" width="1" height="1"></canvas>
           </div>
           <div class="logo-composite-actions">
-            <button type="button" class="btn" id="btnLogoCompositePng">PNG 저장</button>
+            <button type="button" class="btn" id="btnLogoCompositePng">현재 장 PNG 저장</button>
+            <button type="button" class="btn btn--secondary" id="btnLogoCompositeZip">ZIP으로 모두 받기</button>
             <button type="button" class="btn btn--secondary" id="btnLogoCompositeClearAll">로고·원본 모두 비우기</button>
           </div>
         </div>
@@ -2594,7 +2647,7 @@
           var logoDrop = document.getElementById("logoCompositeLogoDrop");
           var origDrop = document.getElementById("logoCompositeOrigDrop");
           var logoName = document.getElementById("logoCompositeLogoName");
-          var origName = document.getElementById("logoCompositeOrigName");
+          var origListEl = document.getElementById("logoCompositeOrigList");
           var editor = document.getElementById("logoCompositeEditor");
           var panImg = document.getElementById("logoCompositePanImg");
           var cropFrame = document.getElementById("logoCompositeCropFrame");
@@ -2602,6 +2655,7 @@
           var rangeY = document.getElementById("logoCompositeRangeY");
           var preview = document.getElementById("logoCompositePreview");
           var btnPng = document.getElementById("btnLogoCompositePng");
+          var btnZip = document.getElementById("btnLogoCompositeZip");
           var btnClearAll = document.getElementById("btnLogoCompositeClearAll");
           var btnClearLogo = document.getElementById("btnLogoCompositeClearLogo");
           var btnClearOrig = document.getElementById("btnLogoCompositeClearOrig");
@@ -2610,29 +2664,28 @@
             !origInput ||
             !logoDrop ||
             !origDrop ||
+            !origListEl ||
             !editor ||
             !panImg ||
             !cropFrame ||
             !rangeX ||
             !rangeY ||
             !preview ||
-            !btnPng
+            !btnPng ||
+            !btnZip
           ) {
             return;
           }
 
           var MAX_PAN_W = 640;
           var MAX_PAN_H = 480;
+          var nextOrigId = 1;
 
           var state = {
             logoImg: null,
             logoUrl: null,
-            origImg: null,
-            origUrl: null,
-            panX: 0,
-            panY: 0,
-            srcW: 0,
-            srcH: 0,
+            origItems: [],
+            activeId: null,
             editorScale: 1,
           };
 
@@ -2661,94 +2714,220 @@
             });
           }
 
-          function recomputeSrcSize() {
-            if (!state.logoImg || !state.origImg) return;
-            var ow = state.origImg.naturalWidth;
-            var oh = state.origImg.naturalHeight;
-            var lw = state.logoImg.naturalWidth;
-            var lh = state.logoImg.naturalHeight;
-            if (lw < 1 || lh < 1 || ow < 1 || oh < 1) return;
+          function getCropMetrics(logoImg, origImg) {
+            var ow = origImg.naturalWidth;
+            var oh = origImg.naturalHeight;
+            var lw = logoImg.naturalWidth;
+            var lh = logoImg.naturalHeight;
+            if (lw < 1 || lh < 1 || ow < 1 || oh < 1) return { srcW: 0, srcH: 0 };
             var S = Math.max(lw / ow, lh / oh);
-            state.srcW = lw / S;
-            state.srcH = lh / S;
+            return { srcW: lw / S, srcH: lh / S };
           }
 
-          function clampPan() {
-            if (!state.logoImg || !state.origImg) return;
-            var ow = state.origImg.naturalWidth;
-            var oh = state.origImg.naturalHeight;
-            var maxX = Math.max(0, ow - state.srcW);
-            var maxY = Math.max(0, oh - state.srcH);
-            state.panX = Math.min(Math.max(state.panX, 0), maxX);
-            state.panY = Math.min(Math.max(state.panY, 0), maxY);
+          function getActive() {
+            if (state.activeId == null) return null;
+            for (var i = 0; i < state.origItems.length; i++) {
+              if (state.origItems[i].id === state.activeId) return state.origItems[i];
+            }
+            return null;
           }
 
-          function centerPan() {
-            recomputeSrcSize();
-            if (!state.logoImg || !state.origImg) return;
-            var ow = state.origImg.naturalWidth;
-            var oh = state.origImg.naturalHeight;
-            state.panX = Math.max(0, (ow - state.srcW) / 2);
-            state.panY = Math.max(0, (oh - state.srcH) / 2);
-            clampPan();
+          function clampPanForItem(it) {
+            if (!state.logoImg || !it || !it.img) return;
+            var m = getCropMetrics(state.logoImg, it.img);
+            if (m.srcW <= 0) return;
+            var ow = it.img.naturalWidth;
+            var oh = it.img.naturalHeight;
+            var maxX = Math.max(0, ow - m.srcW);
+            var maxY = Math.max(0, oh - m.srcH);
+            it.panX = Math.min(Math.max(it.panX, 0), maxX);
+            it.panY = Math.min(Math.max(it.panY, 0), maxY);
+          }
+
+          function centerPanForItem(it) {
+            if (!it || !it.img) return;
+            if (!state.logoImg) {
+              it.panX = 0;
+              it.panY = 0;
+              return;
+            }
+            var m = getCropMetrics(state.logoImg, it.img);
+            var ow = it.img.naturalWidth;
+            var oh = it.img.naturalHeight;
+            it.panX = Math.max(0, (ow - m.srcW) / 2);
+            it.panY = Math.max(0, (oh - m.srcH) / 2);
+            clampPanForItem(it);
           }
 
           function syncSlidersFromPan() {
             if (!rangeX || !rangeY) return;
-            var ow = state.origImg ? state.origImg.naturalWidth : 0;
-            var oh = state.origImg ? state.origImg.naturalHeight : 0;
-            var maxX = Math.max(0, Math.round(ow - state.srcW));
-            var maxY = Math.max(0, Math.round(oh - state.srcH));
+            var it = getActive();
+            if (!it || !state.logoImg) return;
+            var m = getCropMetrics(state.logoImg, it.img);
+            var ow = it.img.naturalWidth;
+            var oh = it.img.naturalHeight;
+            var maxX = Math.max(0, Math.round(ow - m.srcW));
+            var maxY = Math.max(0, Math.round(oh - m.srcH));
             rangeX.max = String(maxX);
             rangeY.max = String(maxY);
-            rangeX.value = String(Math.round(state.panX));
-            rangeY.value = String(Math.round(state.panY));
+            rangeX.value = String(Math.round(it.panX));
+            rangeY.value = String(Math.round(it.panY));
             rangeX.disabled = maxX <= 0;
             rangeY.disabled = maxY <= 0;
           }
 
           function layoutPanEditor() {
-            if (!state.origImg) return;
-            var ow = state.origImg.naturalWidth;
-            var oh = state.origImg.naturalHeight;
+            var it = getActive();
+            if (!it || !it.img || !state.logoImg) return;
+            var m = getCropMetrics(state.logoImg, it.img);
+            var ow = it.img.naturalWidth;
+            var oh = it.img.naturalHeight;
             state.editorScale = Math.min(MAX_PAN_W / ow, MAX_PAN_H / oh, 1);
             if (state.editorScale < 0.04) state.editorScale = 0.04;
             var dw = ow * state.editorScale;
             var dh = oh * state.editorScale;
             panImg.style.width = dw + "px";
             panImg.style.height = dh + "px";
-            if (state.origUrl) panImg.src = state.origUrl;
-            var fw = state.srcW * state.editorScale;
-            var fh = state.srcH * state.editorScale;
+            if (it.url) panImg.src = it.url;
+            var fw = m.srcW * state.editorScale;
+            var fh = m.srcH * state.editorScale;
             cropFrame.style.width = fw + "px";
             cropFrame.style.height = fh + "px";
-            cropFrame.style.left = state.panX * state.editorScale + "px";
-            cropFrame.style.top = state.panY * state.editorScale + "px";
+            cropFrame.style.left = it.panX * state.editorScale + "px";
+            cropFrame.style.top = it.panY * state.editorScale + "px";
             syncSlidersFromPan();
           }
 
           function renderComposite() {
-            if (!state.logoImg || !state.origImg) return;
+            var it = getActive();
+            if (!state.logoImg || !it || !it.img) return;
             var lw = state.logoImg.naturalWidth;
             var lh = state.logoImg.naturalHeight;
+            var m = getCropMetrics(state.logoImg, it.img);
             preview.width = lw;
             preview.height = lh;
             var ctx = preview.getContext("2d");
             ctx.clearRect(0, 0, lw, lh);
-            ctx.drawImage(state.origImg, state.panX, state.panY, state.srcW, state.srcH, 0, 0, lw, lh);
+            ctx.drawImage(it.img, it.panX, it.panY, m.srcW, m.srcH, 0, 0, lw, lh);
             ctx.drawImage(state.logoImg, 0, 0, lw, lh);
           }
 
+          function renderItemToCanvas(it) {
+            var lw = state.logoImg.naturalWidth;
+            var lh = state.logoImg.naturalHeight;
+            var m = getCropMetrics(state.logoImg, it.img);
+            var c = document.createElement("canvas");
+            c.width = lw;
+            c.height = lh;
+            var ctx = c.getContext("2d");
+            ctx.drawImage(it.img, it.panX, it.panY, m.srcW, m.srcH, 0, 0, lw, lh);
+            ctx.drawImage(state.logoImg, 0, 0, lw, lh);
+            return c;
+          }
+
+          function renderOrigList() {
+            origListEl.innerHTML = "";
+            state.origItems.forEach(function (it, idx) {
+              var li = document.createElement("li");
+              li.dataset.id = String(it.id);
+              if (it.id === state.activeId) li.className = "is-active";
+              var nm = document.createElement("span");
+              nm.className = "logo-composite-orig-list__name";
+              nm.textContent = String(idx + 1) + ". " + it.name;
+              nm.title = it.name;
+              var rm = document.createElement("button");
+              rm.type = "button";
+              rm.className = "logo-composite-orig-list__rm";
+              rm.textContent = "×";
+              rm.dataset.id = String(it.id);
+              rm.setAttribute("aria-label", "목록에서 제거");
+              li.appendChild(nm);
+              li.appendChild(rm);
+              origListEl.appendChild(li);
+            });
+          }
+
+          function selectOrig(id) {
+            var found = false;
+            for (var i = 0; i < state.origItems.length; i++) {
+              if (state.origItems[i].id === id) {
+                found = true;
+                break;
+              }
+            }
+            if (!found) return;
+            state.activeId = id;
+            renderOrigList();
+            layoutPanEditor();
+            renderComposite();
+          }
+
+          function removeOrigItem(id) {
+            var next = [];
+            var removed = false;
+            for (var i = 0; i < state.origItems.length; i++) {
+              if (state.origItems[i].id === id) {
+                revokeIf(state.origItems[i].url);
+                removed = true;
+              } else {
+                next.push(state.origItems[i]);
+              }
+            }
+            if (!removed) return;
+            state.origItems = next;
+            if (state.activeId === id) {
+              state.activeId = next.length ? next[0].id : null;
+            }
+            if (!next.length) {
+              state.activeId = null;
+              panImg.removeAttribute("src");
+            }
+            updateEditorVisibility();
+          }
+
           function updateEditorVisibility() {
-            var ready = !!(state.logoImg && state.origImg);
+            if (state.origItems.length && state.activeId == null) {
+              state.activeId = state.origItems[0].id;
+            }
+            if (state.activeId != null) {
+              var ok = false;
+              for (var j = 0; j < state.origItems.length; j++) {
+                if (state.origItems[j].id === state.activeId) {
+                  ok = true;
+                  break;
+                }
+              }
+              if (!ok) state.activeId = state.origItems.length ? state.origItems[0].id : null;
+            }
+            var ready = !!(state.logoImg && state.origItems.length > 0);
             editor.hidden = !ready;
+            renderOrigList();
             if (ready) {
-              recomputeSrcSize();
-              clampPan();
-              layoutPanEditor();
-              renderComposite();
+              var a = getActive();
+              if (a) {
+                clampPanForItem(a);
+                layoutPanEditor();
+                renderComposite();
+              }
             }
           }
+
+          origListEl.addEventListener("click", function (e) {
+            var t = e.target;
+            if (t && t.closest) {
+              var rmBtn = t.closest(".logo-composite-orig-list__rm");
+              if (rmBtn && rmBtn.dataset.id) {
+                e.preventDefault();
+                e.stopPropagation();
+                removeOrigItem(parseInt(rmBtn.dataset.id, 10));
+                return;
+              }
+              var li = t.closest("li");
+              if (li && li.dataset.id) {
+                selectOrig(parseInt(li.dataset.id, 10));
+              }
+            }
+          });
 
           function wireDropActive(zone) {
             ["dragenter", "dragover"].forEach(function (ev) {
@@ -2793,8 +2972,13 @@
           });
           origDrop.addEventListener("drop", function (e) {
             e.preventDefault();
-            var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f && f.type.indexOf("image/") === 0) void setOrigFile(f);
+            var dt = e.dataTransfer && e.dataTransfer.files;
+            if (!dt || !dt.length) return;
+            var arr = [];
+            for (var i = 0; i < dt.length; i++) {
+              if (dt[i].type.indexOf("image/") === 0) arr.push(dt[i]);
+            }
+            if (arr.length) void addOrigFiles(arr);
           });
 
           async function setLogoFile(file) {
@@ -2808,29 +2992,43 @@
               state.logoUrl = r.url;
               state.logoImg = r.img;
               if (logoName) logoName.textContent = file.name;
-              if (state.origImg) centerPan();
+              for (var i = 0; i < state.origItems.length; i++) {
+                centerPanForItem(state.origItems[i]);
+              }
               updateEditorVisibility();
             } catch (err) {
               setError(String(err.message || err));
             }
           }
 
-          async function setOrigFile(file) {
+          async function addOrigFiles(files) {
             setError("");
-            try {
-              if (/heic|heif/i.test(file.type || "") || /\.hei[cf]$/i.test(file.name)) {
-                throw new Error("HEIC는 JPG/PNG로 변환한 뒤 올려 주세요.");
+            var list = Array.isArray(files) ? files : Array.from(files || []);
+            for (var i = 0; i < list.length; i++) {
+              var file = list[i];
+              if (!file || file.type.indexOf("image/") !== 0) continue;
+              try {
+                if (/heic|heif/i.test(file.type || "") || /\.hei[cf]$/i.test(file.name)) {
+                  throw new Error("HEIC는 JPG/PNG로 변환한 뒤 올려 주세요.");
+                }
+                var r = await loadImageKeepUrl(file);
+                var it = {
+                  id: nextOrigId++,
+                  name: file.name || "image",
+                  url: r.url,
+                  img: r.img,
+                  panX: 0,
+                  panY: 0,
+                };
+                centerPanForItem(it);
+                state.origItems.push(it);
+                state.activeId = it.id;
+              } catch (err) {
+                setError(String(err.message || err));
+                break;
               }
-              var r = await loadImageKeepUrl(file);
-              revokeIf(state.origUrl);
-              state.origUrl = r.url;
-              state.origImg = r.img;
-              if (origName) origName.textContent = file.name;
-              if (state.logoImg) centerPan();
-              updateEditorVisibility();
-            } catch (err) {
-              setError(String(err.message || err));
             }
+            updateEditorVisibility();
           }
 
           logoInput.addEventListener("change", function (e) {
@@ -2839,9 +3037,9 @@
             if (f) void setLogoFile(f);
           });
           origInput.addEventListener("change", function (e) {
-            var f = e.target.files && e.target.files[0];
+            var fs = e.target.files;
             e.target.value = "";
-            if (f) void setOrigFile(f);
+            if (fs && fs.length) void addOrigFiles(fs);
           });
 
           function clearLogo() {
@@ -2853,11 +3051,12 @@
           }
 
           function clearOrig() {
-            revokeIf(state.origUrl);
-            state.origUrl = null;
-            state.origImg = null;
+            for (var i = 0; i < state.origItems.length; i++) {
+              revokeIf(state.origItems[i].url);
+            }
+            state.origItems = [];
+            state.activeId = null;
             panImg.removeAttribute("src");
-            if (origName) origName.textContent = "";
             updateEditorVisibility();
           }
 
@@ -2872,14 +3071,18 @@
           if (btnClearAll) btnClearAll.addEventListener("click", clearAll);
 
           rangeX.addEventListener("input", function () {
-            state.panX = parseFloat(rangeX.value) || 0;
-            clampPan();
+            var it = getActive();
+            if (!it) return;
+            it.panX = parseFloat(rangeX.value) || 0;
+            clampPanForItem(it);
             layoutPanEditor();
             renderComposite();
           });
           rangeY.addEventListener("input", function () {
-            state.panY = parseFloat(rangeY.value) || 0;
-            clampPan();
+            var it = getActive();
+            if (!it) return;
+            it.panY = parseFloat(rangeY.value) || 0;
+            clampPanForItem(it);
             layoutPanEditor();
             renderComposite();
           });
@@ -2887,13 +3090,16 @@
           var drag = null;
           cropFrame.addEventListener("pointerdown", function (e) {
             if (editor.hidden) return;
+            var it = getActive();
+            if (!it) return;
             e.preventDefault();
             drag = {
               pid: e.pointerId,
               sx: e.clientX,
               sy: e.clientY,
-              px: state.panX,
-              py: state.panY,
+              item: it,
+              px: it.panX,
+              py: it.panY,
             };
             try {
               cropFrame.setPointerCapture(e.pointerId);
@@ -2903,12 +3109,12 @@
             cropFrame.style.cursor = "grabbing";
           });
           cropFrame.addEventListener("pointermove", function (e) {
-            if (!drag || drag.pid !== e.pointerId) return;
+            if (!drag || drag.pid !== e.pointerId || !drag.item) return;
             var dx = (e.clientX - drag.sx) / state.editorScale;
             var dy = (e.clientY - drag.sy) / state.editorScale;
-            state.panX = drag.px + dx;
-            state.panY = drag.py + dy;
-            clampPan();
+            drag.item.panX = drag.px + dx;
+            drag.item.panY = drag.py + dy;
+            clampPanForItem(drag.item);
             layoutPanEditor();
             renderComposite();
           });
@@ -2925,10 +3131,21 @@
           cropFrame.addEventListener("pointerup", endDrag);
           cropFrame.addEventListener("pointercancel", endDrag);
 
+          function safeStem(name) {
+            var s = String(name || "image").replace(/\.[^.]+$/, "");
+            var t = s.replace(/[^\w\-\uAC00-\uD7A3]+/g, "_").replace(/^_+|_+$/g, "");
+            return (t || "image").slice(0, 80);
+          }
+
           btnPng.addEventListener("click", function () {
             setError("");
-            if (!state.logoImg || !state.origImg) {
+            if (!state.logoImg || !state.origItems.length) {
               setError("로고와 원본을 모두 올려 주세요.");
+              return;
+            }
+            var it = getActive();
+            if (!it) {
+              setError("목록에서 원본을 선택하세요.");
               return;
             }
             renderComposite();
@@ -2940,12 +3157,52 @@
                 }
                 var a = document.createElement("a");
                 a.href = URL.createObjectURL(blob);
-                a.download = "logo-composite.png";
+                a.download = "logo-composite_" + safeStem(it.name) + ".png";
                 a.click();
                 URL.revokeObjectURL(a.href);
               },
               "image/png",
             );
+          });
+
+          btnZip.addEventListener("click", async function () {
+            setError("");
+            if (!state.logoImg || !state.origItems.length) {
+              setError("로고와 원본을 모두 올려 주세요.");
+              return;
+            }
+            if (typeof JSZip === "undefined") {
+              setError("JSZip을 불러오지 못했습니다. 네트워크를 확인하세요.");
+              return;
+            }
+            btnZip.disabled = true;
+            try {
+              var zip = new JSZip();
+              for (var idx = 0; idx < state.origItems.length; idx++) {
+                var it = state.origItems[idx];
+                clampPanForItem(it);
+                var c = renderItemToCanvas(it);
+                var blob = await new Promise(function (resolve, reject) {
+                  c.toBlob(function (b) {
+                    if (b) resolve(b);
+                    else reject(new Error("PNG 변환 실패"));
+                  }, "image/png");
+                });
+                var n =
+                  String(idx + 1).padStart(3, "0") + "_" + safeStem(it.name) + ".png";
+                zip.file(n, blob);
+              }
+              var out = await zip.generateAsync({ type: "blob" });
+              var a = document.createElement("a");
+              a.href = URL.createObjectURL(out);
+              a.download = "logo-composite_batch_" + Date.now() + ".zip";
+              a.click();
+              URL.revokeObjectURL(a.href);
+            } catch (err) {
+              setError(String(err.message || err));
+            } finally {
+              btnZip.disabled = false;
+            }
           });
         })();
       })();
