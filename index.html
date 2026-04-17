@@ -1707,6 +1707,14 @@
           </div>
           <p class="helper">등록 인원: <strong id="memberCount">2명</strong></p>
           <div id="memberNames" class="company-list"></div>
+          <div id="photographerPayrollAdminPanel" class="register-panel" style="margin-top: 12px;">
+            <h3 style="margin: 0 0 8px; font-size: 1rem;">작가 급여·유류 설정</h3>
+            <p class="helper" style="margin-bottom: 8px;">
+              작가 계정(<code>scheduleSiteWriters</code>)과 이름이 일치하는 경우에만 유류비·급여형태가 적용됩니다. 작가 화면에서 입력한 추가요금은 아래 요약에서 확인할 수 있습니다.
+            </p>
+            <div id="photographerPayrollConfigRows"></div>
+            <div id="photographerPayrollMonthlySummaryAdmin" style="margin-top: 12px;"></div>
+          </div>
         </article>
 
         <article class="card fill-card">
@@ -2416,6 +2424,8 @@
       const STORAGE_CUSTOMER_SUBMISSION_LOGS = "scheduleSiteCustomerSubmissionLogs";
       const STORAGE_THEFEELING_EDIT_REQUESTS = "scheduleSiteThefeelingEditRequests";
       const STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE = "scheduleSiteThefeelingEditRequestsArchive";
+      const STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG = "scheduleSitePhotographerPayrollConfigV1";
+      const STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY = "scheduleSitePhotographerPayrollMonthlyV1";
       const STORAGE_SCHEDULE_RECEIPT_LEDGER = "scheduleSiteScheduleReceiptLedger";
       const STORAGE_SUBMISSION_RECEIPT_READ_IDS = "scheduleSiteSubmissionReceiptReadIds";
       const STORAGE_ADMIN_WRITER_PROCESS_LOG = "scheduleSiteAdminWriterProcessLogV1";
@@ -2489,7 +2499,9 @@
         STORAGE_EXCLUDED_PHOTOGRAPHERS,
         STORAGE_PHOTOGRAPHER_PROFILES,
         STORAGE_THEFEELING_EDIT_REQUESTS,
-        STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE
+        STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE,
+        STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG,
+        STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
       ];
       const STORAGE_SYNC_DEFAULTS = {
         [STORAGE_CUSTOMER_COMPANIES]: "[]",
@@ -2508,7 +2520,9 @@
         [STORAGE_EXCLUDED_PHOTOGRAPHERS]: "[]",
         [STORAGE_PHOTOGRAPHER_PROFILES]: "[]",
         [STORAGE_THEFEELING_EDIT_REQUESTS]: "[]",
-        [STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE]: "[]"
+        [STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE]: "[]",
+        [STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG]: "{}",
+        [STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
       /** Storage 업로드 등 fetch 래퍼와 무관하게 브라우저 원본 fetch 보관 */
@@ -10620,6 +10634,110 @@
         return firstToken.slice(0, 8);
       }
 
+      const PAYROLL_SHOOT_WON_ADMIN = 50000;
+      function findWriterIdByPhotographerName(name) {
+        const writers = readStorageArray(STORAGE_WRITERS);
+        const key = normalize(name).toLowerCase();
+        const w = writers.find((u) => normalize(u.name).toLowerCase() === key);
+        return w && w.id ? String(w.id) : "";
+      }
+      function getPhotographerPayrollConfigForWriter(writerId) {
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
+        const row = writerId ? byId[writerId] : null;
+        return {
+          fuelWon: Math.max(0, Number(row?.fuelWon) || 0),
+          salaryType: row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
+        };
+      }
+      function countMonthDoneShotsForWriterName(writerName, monthKey) {
+        const base = new Date();
+        base.setHours(0, 0, 0, 0);
+        const nk = normalize(writerName).toLowerCase();
+        const merged = [...readStorageArray(STORAGE_CUSTOMER_SCHEDULES), ...readStorageArray(STORAGE_WRITER_SCHEDULES)];
+        return merged.filter((item) => {
+          if (normalize(item.name).toLowerCase() !== nk) return false;
+          if (!String(item.date || "").startsWith(monthKey)) return false;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
+          const target = new Date(`${item.date}T00:00:00`);
+          target.setHours(0, 0, 0, 0);
+          return target.getTime() <= base.getTime();
+        }).length;
+      }
+      function renderPhotographerPayrollAdmin() {
+        const configEl = document.getElementById("photographerPayrollConfigRows");
+        const summaryEl = document.getElementById("photographerPayrollMonthlySummaryAdmin");
+        if (!configEl || !summaryEl) return;
+        const names = photographers.filter((n) => n && n !== "작가미정");
+        const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+        const monthlyAll = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+        if (!names.length) {
+          configEl.innerHTML = '<div class="company-item">등록된 작가가 없습니다.</div>';
+          summaryEl.innerHTML = "";
+          return;
+        }
+        configEl.innerHTML = names
+          .map((name) => {
+            const wid = findWriterIdByPhotographerName(name);
+            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid);
+            const disabled = !wid;
+            return `
+          <div class="company-item" style="margin-top:8px;">
+            <div style="font-weight:700;">${escapeHtml(name)}</div>
+            ${
+              disabled
+                ? '<p class="hint">작가 회원 가입 이름과 동일해야 유류·급여형태를 저장할 수 있습니다.</p>'
+                : ""
+            }
+            <div class="input-row" style="flex-wrap:wrap; gap:8px; align-items:center;">
+              <span>유류비(원)</span>
+              <input type="number" min="0" step="1000" class="inline-input payroll-admin-fuel" data-writer-id="${escapeHtml(wid)}" value="${fuelWon}" ${
+              disabled ? "disabled" : ""
+            } style="width:130px;" />
+              <span>급여형태</span>
+              <select class="inline-input payroll-admin-type" data-writer-id="${escapeHtml(wid)}" ${disabled ? "disabled" : ""}>
+                <option value="freelancer" ${salaryType === "freelancer" ? "selected" : ""}>프리랜서형</option>
+                <option value="tax_invoice" ${salaryType === "tax_invoice" ? "selected" : ""}>세금계산서형</option>
+              </select>
+              <button type="button" class="btn-sm primary payroll-admin-save" data-writer-id="${escapeHtml(wid)}" data-writer-name="${escapeHtml(
+              name
+            )}" ${disabled ? "disabled" : ""}>저장</button>
+            </div>
+          </div>`;
+          })
+          .join("");
+        const summaryLines = names
+          .map((name) => {
+            const wid = findWriterIdByPhotographerName(name);
+            if (!wid) {
+              return `<tr><td>${escapeHtml(name)}</td><td colspan="7" class="hint">작가 계정 미연동</td></tr>`;
+            }
+            const shots = countMonthDoneShotsForWriterName(name, monthKey);
+            const basePay = shots * PAYROLL_SHOOT_WON_ADMIN;
+            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid);
+            const rec = monthlyAll.find((r) => r.writerId === wid && r.monthKey === monthKey);
+            const lines = Array.isArray(rec?.lines) ? rec.lines : [];
+            const extraSum = lines.reduce((s, ln) => s + Math.max(0, Number(ln.amountWon) || 0), 0);
+            const gross = basePay + fuelWon + extraSum;
+            const final =
+              salaryType === "tax_invoice" ? Math.round(gross * 1.1) : Math.round(gross * (1 - 0.033));
+            const typeLabel = salaryType === "tax_invoice" ? "세금계산서 포함" : "프리랜서 3.3%";
+            return `<tr><td>${escapeHtml(name)}</td><td>${shots}회</td><td>${basePay.toLocaleString("ko-KR")}원</td><td>${fuelWon.toLocaleString(
+              "ko-KR"
+            )}원</td><td>${extraSum.toLocaleString("ko-KR")}원</td><td>${gross.toLocaleString("ko-KR")}원</td><td>${typeLabel}</td><td><strong>${final.toLocaleString(
+              "ko-KR"
+            )}원</strong></td></tr>`;
+          })
+          .join("");
+        summaryEl.innerHTML = `
+          <div style="font-weight:700; margin-bottom:6px;">이번달(${monthKey}) 작가별 급여 요약</div>
+          <div style="overflow:auto;">
+            <table class="payment-table" style="font-size:0.85rem;"><thead><tr>
+              <th>작가</th><th>완료촬영</th><th>기본급</th><th>유류</th><th>추가요금</th><th>세전</th><th>형태</th><th>최종표시</th>
+            </tr></thead><tbody>${summaryLines}</tbody></table>
+          </div>`;
+      }
+
       function renderPhotographers() {
         memberCountEl.textContent = `${photographers.length}명`;
         const safeNames = photographers.map((name) => escapeHtml(name));
@@ -10696,6 +10814,7 @@
               .join(", ")}`
           : "현재 작가가 없습니다.";
         renderPhotographerTabs();
+        renderPhotographerPayrollAdmin();
       }
 
       function renderPhotographerTabs() {
@@ -17138,6 +17257,28 @@
         writerHistoryModalEl.classList.remove("hidden");
       });
 
+      document.getElementById("photographerPayrollAdminPanel")?.addEventListener("click", (event) => {
+        const btn = event.target.closest(".payroll-admin-save");
+        if (!btn) return;
+        const writerId = String(btn.dataset.writerId || "").trim();
+        const writerName = String(btn.dataset.writerName || "").trim();
+        if (!writerId) {
+          alert("작가 계정과 이름이 연결되지 않았습니다. 작가용 페이지에서 가입한 작가명과 동일한지 확인해 주세요.");
+          return;
+        }
+        const wrap = btn.closest(".company-item");
+        const fuelEl = wrap?.querySelector(".payroll-admin-fuel");
+        const typeEl = wrap?.querySelector(".payroll-admin-type");
+        const fuelWon = Math.max(0, Number(fuelEl?.value) || 0);
+        const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        if (!cfg.byWriterId) cfg.byWriterId = {};
+        cfg.byWriterId[writerId] = { fuelWon, salaryType };
+        localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+        renderPhotographerPayrollAdmin();
+        alert(`급여 설정을 저장했습니다. (${writerName})`);
+      });
+
       registerPhotographerBtnEl.addEventListener("click", addPhotographerFromInput);
       closePhotographerPanelBtnEl.addEventListener("click", () => {
         newPhotographerNameEl.value = "";
@@ -17425,6 +17566,9 @@
           hydrateFromWriterPageStorage();
           renderPhotographers();
           renderList();
+        }
+        if (event.key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG || event.key === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) {
+          renderPhotographerPayrollAdmin();
         }
         if (
           event.key === STORAGE_CUSTOMER_ALERTS ||

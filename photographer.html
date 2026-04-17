@@ -105,6 +105,43 @@
         font-size: 0.88rem;
         line-height: 1.45;
       }
+      .payroll-panel {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8fbff;
+        padding: 12px;
+        margin-top: 10px;
+      }
+      .payroll-panel h3 { margin: 0 0 8px; font-size: 1rem; }
+      .payroll-summary { font-size: 0.9rem; line-height: 1.65; color: #2f3c58; margin-bottom: 10px; }
+      .payroll-summary strong { color: var(--text); }
+      .payroll-line {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 6px;
+        align-items: center;
+        font-size: 0.85rem;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        margin-bottom: 6px;
+      }
+      .payroll-line-meta { font-size: 0.78rem; color: var(--muted); }
+      .payroll-add {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .payroll-add select, .payroll-add input[type="number"], .payroll-add input[type="text"] {
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 0.88rem;
+      }
+      .payroll-thumb { max-height: 40px; border-radius: 4px; vertical-align: middle; margin-left: 4px; }
       @media (max-width: 720px) {
         .pair, .triple { grid-template-columns: 1fr; }
       }
@@ -147,6 +184,20 @@
               <button id="historyBtn" class="btn outline small" type="button">기록보기</button>
               <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
             </div>
+          </div>
+
+          <div id="payrollPanel" class="payroll-panel hidden">
+            <h3>이번달 급여</h3>
+            <div id="payrollSummary" class="payroll-summary"></div>
+            <div id="payrollLinesList"></div>
+            <div class="payroll-add">
+              <select id="payrollCategorySelect" aria-label="추가요금 유형"></select>
+              <input id="payrollAmountInput" type="number" min="0" step="1000" placeholder="금액(원)" style="width:120px;" />
+              <input id="payrollMemoInput" type="text" placeholder="메모(선택)" style="min-width:120px; flex:1;" />
+              <input id="payrollFileInput" type="file" accept="image/*" />
+              <button id="payrollAddBtn" class="btn outline small" type="button">항목 추가</button>
+            </div>
+            <p class="hint" style="margin-top:8px;">추가요금은 톨비·주차비·기타·대기료·현장취소비 등을 입력할 수 있으며, 증빙 사진을 첨부할 수 있습니다.</p>
           </div>
 
           <div class="filter-wrap">
@@ -210,6 +261,16 @@
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
+      const STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG = "scheduleSitePhotographerPayrollConfigV1";
+      const STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY = "scheduleSitePhotographerPayrollMonthlyV1";
+      const SHOOT_PAY_WON = 50000;
+      const PAYROLL_LINE_CATEGORY_LABELS = {
+        toll: "톨비",
+        parking: "주차비",
+        etc: "기타",
+        waiting: "대기료",
+        on_site_cancel: "현장취소비"
+      };
       const syncConfig = window.SCHEDULE_SITE_SYNC_CONFIG || {};
       const FALLBACK_SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
       const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
@@ -245,7 +306,9 @@
         "scheduleSiteExcludedPhotographers",
         "scheduleSitePhotographerProfiles",
         "scheduleSiteThefeelingEditRequests",
-        "scheduleSiteThefeelingEditRequestsArchive"
+        "scheduleSiteThefeelingEditRequestsArchive",
+        "scheduleSitePhotographerPayrollConfigV1",
+        "scheduleSitePhotographerPayrollMonthlyV1"
       ];
       const STORAGE_SYNC_DEFAULTS = {
         scheduleSiteCustomerCompanies: "[]",
@@ -266,7 +329,9 @@
         scheduleSiteExcludedPhotographers: "[]",
         scheduleSitePhotographerProfiles: "[]",
         scheduleSiteThefeelingEditRequests: "[]",
-        scheduleSiteThefeelingEditRequestsArchive: "[]"
+        scheduleSiteThefeelingEditRequestsArchive: "[]",
+        scheduleSitePhotographerPayrollConfigV1: "{}",
+        scheduleSitePhotographerPayrollMonthlyV1: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
       // 작가·고객 로그인 세션은 Supabase KV에 절대 올리지 않음 (타 계정 전파 방지)
@@ -1018,6 +1083,14 @@
 
       const historyBtnEl = document.getElementById("historyBtn");
       const monthlyShotCountEl = document.getElementById("monthlyShotCount");
+      const payrollPanelEl = document.getElementById("payrollPanel");
+      const payrollSummaryEl = document.getElementById("payrollSummary");
+      const payrollLinesListEl = document.getElementById("payrollLinesList");
+      const payrollCategorySelectEl = document.getElementById("payrollCategorySelect");
+      const payrollAmountInputEl = document.getElementById("payrollAmountInput");
+      const payrollMemoInputEl = document.getElementById("payrollMemoInput");
+      const payrollFileInputEl = document.getElementById("payrollFileInput");
+      const payrollAddBtnEl = document.getElementById("payrollAddBtn");
       const historyModalEl = document.getElementById("historyModal");
       const historyCloseBtnEl = document.getElementById("historyCloseBtn");
       const historySummaryEl = document.getElementById("historySummary");
@@ -1199,6 +1272,11 @@
         } catch (error) {
           return {};
         }
+      }
+      function writeStorageObject(key, obj) {
+        try {
+          localStorage.setItem(key, JSON.stringify(obj && typeof obj === "object" ? obj : {}));
+        } catch (error) {}
       }
 
       function getAdminCompanyDefaultMemo(companyName) {
@@ -1609,6 +1687,132 @@
         refreshDayOptions("all");
         renderScheduleList();
       }
+
+      function getCurrentMonthKey() {
+        const t = new Date();
+        return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}`;
+      }
+
+      function getMonthDoneRowsForPayroll(rows, monthKey) {
+        const base = new Date();
+        base.setHours(0, 0, 0, 0);
+        return rows.filter((item) => {
+          if (!String(item.date || "").startsWith(monthKey)) return false;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
+          const target = new Date(`${item.date}T00:00:00`);
+          target.setHours(0, 0, 0, 0);
+          return target.getTime() <= base.getTime();
+        });
+      }
+
+      function getPayrollWriterConfig(writerId) {
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
+        const row = byId[writerId];
+        const fuelWon = Math.max(0, Number(row?.fuelWon) || 0);
+        const salaryType = row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer";
+        return { fuelWon, salaryType };
+      }
+
+      function getMonthlyPayrollRecord(writerId, monthKey) {
+        const arr = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+        let rec = arr.find((r) => r.writerId === writerId && r.monthKey === monthKey);
+        if (!rec) {
+          rec = {
+            id: `ppm-${writerId}-${monthKey}`,
+            writerId,
+            monthKey,
+            lines: [],
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return { arr, rec };
+      }
+
+      function persistMonthlyPayrollRecord(newRec) {
+        const arr = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+        const rest = arr.filter((r) => !(r.writerId === newRec.writerId && r.monthKey === newRec.monthKey));
+        newRec.updatedAt = new Date().toISOString();
+        rest.push(newRec);
+        writeStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY, rest);
+      }
+
+      function formatWonPay(n) {
+        const x = Number(n) || 0;
+        return `${x.toLocaleString("ko-KR")}원`;
+      }
+
+      function ensurePayrollCategoryOptions() {
+        if (!payrollCategorySelectEl || payrollCategorySelectEl.options.length) return;
+        payrollCategorySelectEl.innerHTML = Object.entries(PAYROLL_LINE_CATEGORY_LABELS)
+          .map(([k, lab]) => `<option value="${k}">${lab}</option>`)
+          .join("");
+      }
+
+      function renderPhotographerPayroll() {
+        ensurePayrollCategoryOptions();
+        const writer = getCurrentWriter();
+        if (!writer || !payrollPanelEl || !payrollSummaryEl || !payrollLinesListEl) return;
+        payrollPanelEl.classList.remove("hidden");
+        const monthKey = getCurrentMonthKey();
+        const rows = getMySchedules();
+        const monthDone = getMonthDoneRowsForPayroll(rows, monthKey);
+        const shootCount = monthDone.length;
+        const { fuelWon, salaryType } = getPayrollWriterConfig(writer.id);
+        const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
+        const lines = Array.isArray(rec.lines) ? rec.lines : [];
+        const baseShootPay = shootCount * SHOOT_PAY_WON;
+        const extraSum = lines.reduce((s, ln) => s + Math.max(0, Number(ln.amountWon) || 0), 0);
+        const gross = baseShootPay + fuelWon + extraSum;
+        let finalAmount = gross;
+        let finalNote = "";
+        if (salaryType === "tax_invoice") {
+          finalAmount = Math.round(gross * 1.1);
+          finalNote = "세금계산서 포함 (총액에 10% 부가)";
+        } else {
+          finalAmount = Math.round(gross * (1 - 0.033));
+          finalNote = "프리랜서 (원천징수 3.3% 반영)";
+        }
+        payrollSummaryEl.innerHTML = `
+          <div>촬영 기본급: <strong>${formatWonPay(baseShootPay)}</strong> (${shootCount}회 × ${formatWonPay(SHOOT_PAY_WON)})</div>
+          <div>관리자 지정 유류비: <strong>${formatWonPay(fuelWon)}</strong></div>
+          <div>추가요금 합계: <strong>${formatWonPay(extraSum)}</strong></div>
+          <div>세전 합계: <strong>${formatWonPay(gross)}</strong></div>
+          <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);">
+            급여형태: <strong>${salaryType === "tax_invoice" ? "세금계산서형" : "프리랜서형"}</strong><br/>
+            <strong>${finalNote}</strong><br/>
+            최종 표시 급여: <strong style="color:#1c9b4a;font-size:1.05rem;">${formatWonPay(finalAmount)}</strong>
+          </div>
+        `;
+        payrollLinesListEl.innerHTML =
+          lines.length === 0
+            ? '<div class="hint">입력된 추가요금이 없습니다.</div>'
+            : lines
+                .map((ln) => {
+                  const lab = PAYROLL_LINE_CATEGORY_LABELS[ln.category] || ln.category || "기타";
+                  const att = ln.attachmentDataUrl
+                    ? `<img class="payroll-thumb" src="${ln.attachmentDataUrl}" alt="" />`
+                    : "";
+                  return `
+              <div class="payroll-line" data-line-id="${ln.id || ""}">
+                <div>
+                  <div>${lab}${ln.memo ? ` · ${escapeHtmlPayroll(ln.memo)}` : ""}</div>
+                  <div class="payroll-line-meta">${formatWonPay(ln.amountWon)}</div>
+                </div>
+                <div>${att}</div>
+                <button type="button" class="btn outline small payroll-line-remove" data-line-id="${ln.id || ""}">삭제</button>
+              </div>`;
+                })
+                .join("");
+      }
+
+      function escapeHtmlPayroll(s) {
+        return String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
+      }
+
       function renderMonthlyShotCount() {
         if (!monthlyShotCountEl) return;
         const rows = getMySchedules();
@@ -1624,6 +1828,7 @@
           return target.getTime() <= base.getTime();
         });
         monthlyShotCountEl.textContent = `이번달 촬영횟수 ${monthDoneRows.length}회`;
+        renderPhotographerPayroll();
       }
 
       function renderAuthState() {
@@ -1637,6 +1842,7 @@
         const isLoggedIn = Boolean(writer);
         authBlockEl.classList.toggle("hidden", isLoggedIn);
         scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
+        if (payrollPanelEl) payrollPanelEl.classList.toggle("hidden", !isLoggedIn);
         if (!isLoggedIn) {
           switchAuthTab("login");
           const remembered = loadRememberedWriterLogin();
@@ -1658,6 +1864,7 @@
         switchFilterMode("day");
         renderUpcomingList();
         renderMyDayoffRequests();
+        renderMonthlyShotCount();
       }
 
       async function requestDayOffReduction(selectedDate) {
@@ -2145,6 +2352,59 @@
         if (event.target === historyModalEl) historyModalEl.classList.add("hidden");
       });
 
+      payrollAddBtnEl?.addEventListener("click", async () => {
+        const writer = getCurrentWriter();
+        if (!writer || !payrollCategorySelectEl || !payrollAmountInputEl) return;
+        const amount = Math.max(0, Number(payrollAmountInputEl.value) || 0);
+        if (amount <= 0) {
+          alert("금액을 입력해 주세요.");
+          return;
+        }
+        const monthKey = getCurrentMonthKey();
+        const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
+        const lines = Array.isArray(rec.lines) ? rec.lines.slice() : [];
+        let attachmentDataUrl = "";
+        const file = payrollFileInputEl?.files && payrollFileInputEl.files[0];
+        if (file) {
+          if (file.size > 900 * 1024) {
+            alert("첨부 이미지는 900KB 이하로 올려 주세요.");
+            return;
+          }
+          attachmentDataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          });
+        }
+        lines.push({
+          id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          category: payrollCategorySelectEl.value || "etc",
+          amountWon: amount,
+          memo: normalize(payrollMemoInputEl?.value || ""),
+          attachmentDataUrl
+        });
+        rec.lines = lines;
+        persistMonthlyPayrollRecord(rec);
+        if (payrollAmountInputEl) payrollAmountInputEl.value = "";
+        if (payrollMemoInputEl) payrollMemoInputEl.value = "";
+        if (payrollFileInputEl) payrollFileInputEl.value = "";
+        renderPhotographerPayroll();
+      });
+
+      payrollLinesListEl?.addEventListener("click", (event) => {
+        const btn = event.target.closest(".payroll-line-remove");
+        if (!btn || !btn.dataset.lineId) return;
+        const writer = getCurrentWriter();
+        if (!writer) return;
+        const monthKey = getCurrentMonthKey();
+        const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
+        const lines = (Array.isArray(rec.lines) ? rec.lines : []).filter((ln) => ln.id !== btn.dataset.lineId);
+        rec.lines = lines;
+        persistMonthlyPayrollRecord(rec);
+        renderPhotographerPayroll();
+      });
+
       window.addEventListener("storage", (event) => {
         if (
           event.key === STORAGE_SCHEDULES ||
@@ -2154,7 +2414,9 @@
           event.key === STORAGE_DAYOFF_DEDUCTIONS ||
           event.key === STORAGE_DAYOFF_REQUESTS ||
           event.key === STORAGE_WRITER_SESSION ||
-          event.key === STORAGE_WRITERS
+          event.key === STORAGE_WRITERS ||
+          event.key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG ||
+          event.key === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
         ) {
           renderAuthState();
         }
