@@ -5018,6 +5018,33 @@
               }
             } catch (_) {}
           }
+          if (key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
+            try {
+              const incoming = JSON.parse(incomingText);
+              const localRaw = localStorage.getItem(key);
+              const local = localRaw ? JSON.parse(localRaw) : {};
+              if (
+                incoming &&
+                typeof incoming === "object" &&
+                local &&
+                typeof local === "object" &&
+                !Array.isArray(incoming) &&
+                !Array.isArray(local)
+              ) {
+                return JSON.stringify({
+                  ...incoming,
+                  ...local,
+                  byWriterId: { ...(incoming.byWriterId || {}), ...(local.byWriterId || {}) },
+                  byWriterNameKey: { ...(incoming.byWriterNameKey || {}), ...(local.byWriterNameKey || {}) }
+                });
+              }
+            } catch (_) {}
+          }
+          if (key === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) {
+            const localCurrent = localStorage.getItem(key);
+            const merged = mergeStorageValue(incomingText, localCurrent);
+            return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
+          }
           return incomingText;
         }
         const localCurrent = localStorage.getItem(key);
@@ -10681,6 +10708,7 @@
         if (nk) cfg.byWriterNameKey[nk] = payload;
         localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
         renderPhotographerPayrollAdmin();
+        if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         return true;
       }
       /** 기존 byWriterId만 있던 항목을 작가명 키에도 복제해 아이디 불일치 시에도 조회되게 함 */
@@ -10709,6 +10737,7 @@
         });
         if (changed) {
           localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         }
       }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
@@ -15968,6 +15997,7 @@
             payCfg.byWriterId[newId] = payCfg.byWriterId[oldId];
             delete payCfg.byWriterId[oldId];
             localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(payCfg));
+            if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
           }
         }
         setWritersStorage(writers);
