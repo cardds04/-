@@ -927,6 +927,7 @@
       const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const STORAGE_ADMIN_COMPANIES = "scheduleSiteAdminCompanies";
       const STORAGE_CANCELED_SCHEDULES = "scheduleSiteCanceledSchedules";
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
@@ -3071,6 +3072,51 @@
         return uniqueNames[0] || fallbackName;
       }
 
+      function normalizeCompanyCodeLite(value) {
+        return String(value || "").trim();
+      }
+      function normalizeShopickServiceFlagsLite(photo, video, blog) {
+        const p = Boolean(photo);
+        const v = Boolean(video);
+        const b = Boolean(blog);
+        if (!p && !v && !b) return { photo: true, video: true, blog: false };
+        return { photo: p, video: v, blog: b };
+      }
+      function formatShopickCompositionLabelLite(flags) {
+        const f = normalizeShopickServiceFlagsLite(flags.photo, flags.video, flags.blog);
+        let s = "";
+        if (f.photo) s += "사진";
+        if (f.video) s += "영상";
+        if (f.blog) s += "블로그";
+        return s || "사진영상";
+      }
+      function getShopickFlagsFromAdminCompanyRowLite(row) {
+        if (!row) return { photo: true, video: true, blog: false };
+        const unset =
+          row.shopickPhoto === undefined && row.shopickVideo === undefined && row.shopickBlog === undefined;
+        if (unset) return { photo: true, video: true, blog: false };
+        return normalizeShopickServiceFlagsLite(row.shopickPhoto, row.shopickVideo, row.shopickBlog);
+      }
+      function findAdminCompanyRowForShopickLite(user) {
+        if (!user) return null;
+        const code = getEffectiveUserCompanyCode(user);
+        const adminRows = readStorageArray(STORAGE_ADMIN_COMPANIES);
+        if (code) {
+          const hit = adminRows.find(
+            (r) => normalizeCompanyCodeLite(r?.code || r?.companyCode) === normalizeCompanyCodeLite(code)
+          );
+          if (hit) return hit;
+        }
+        const resolved = resolveRegisteredCompanyNameForUser(user, code);
+        let hit = adminRows.find((r) => normalize(r?.name).toLowerCase() === normalize(resolved).toLowerCase());
+        if (!hit) hit = adminRows.find((r) => normalize(r?.name).toLowerCase() === normalize(user?.company).toLowerCase());
+        return hit || null;
+      }
+      function getShopickLiteCompositionString(user) {
+        const row = findAdminCompanyRowForShopickLite(user);
+        return formatShopickCompositionLabelLite(getShopickFlagsFromAdminCompanyRowLite(row));
+      }
+
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
         const date = normalize(row?.date) || "nodate";
         const time = normalize(row?.time) || "notime";
@@ -4560,7 +4606,7 @@
           const dayName = weekdayNames[dateObj.getDay()];
           const timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
           const pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-          const composition = isLiteCustomerMode ? "사진영상 둘다" : (scheduleCompositionEl.value || "미선택");
+          const composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (scheduleCompositionEl.value || "미선택");
           const memo = normalize(document.getElementById("scheduleMemo").value);
           const amountText = expectedAmount ? `${Number(expectedAmount).toLocaleString()}원` : "-";
           const summaryRows = [
@@ -4600,7 +4646,7 @@
             jointCode: normalize(document.getElementById("scheduleJointCode").value),
             doorCode: normalize(document.getElementById("scheduleDoorCode").value),
             memo,
-            composition: isLiteCustomerMode ? "사진만" : scheduleCompositionEl.value || "사진만",
+            composition: isLiteCustomerMode ? getShopickLiteCompositionString(user) : scheduleCompositionEl.value || "사진만",
             paymentStatus: "미입금",
             paymentPayer: "",
             paymentAmount: expectedAmount ? String(expectedAmount) : "",

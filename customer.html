@@ -455,6 +455,7 @@
       const STORAGE_LOGIN_LOGS = "scheduleSiteCustomerLogins";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const STORAGE_ADMIN_COMPANIES = "scheduleSiteAdminCompanies";
       const STORAGE_CANCELED_SCHEDULES = "scheduleSiteCanceledSchedules";
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
@@ -2437,6 +2438,48 @@
           .replace(/\s+/g, "")
           .toLowerCase()}`;
       }
+      function normalizeShopickServiceFlagsLite(photo, video, blog) {
+        const p = Boolean(photo);
+        const v = Boolean(video);
+        const b = Boolean(blog);
+        if (!p && !v && !b) return { photo: true, video: true, blog: false };
+        return { photo: p, video: v, blog: b };
+      }
+      function formatShopickCompositionLabelLite(flags) {
+        const f = normalizeShopickServiceFlagsLite(flags.photo, flags.video, flags.blog);
+        let s = "";
+        if (f.photo) s += "사진";
+        if (f.video) s += "영상";
+        if (f.blog) s += "블로그";
+        return s || "사진영상";
+      }
+      function getShopickFlagsFromAdminCompanyRowLite(row) {
+        if (!row) return { photo: true, video: true, blog: false };
+        const unset =
+          row.shopickPhoto === undefined && row.shopickVideo === undefined && row.shopickBlog === undefined;
+        if (unset) return { photo: true, video: true, blog: false };
+        return normalizeShopickServiceFlagsLite(row.shopickPhoto, row.shopickVideo, row.shopickBlog);
+      }
+      function findAdminCompanyRowForShopickLite(user) {
+        if (!user) return null;
+        const code = getEffectiveUserCompanyCode(user);
+        const adminRows = readStorageArray(STORAGE_ADMIN_COMPANIES);
+        if (code) {
+          const hit = adminRows.find((r) => normalizeCompanyCode(r?.code || r?.companyCode) === normalizeCompanyCode(code));
+          if (hit) return hit;
+        }
+        const resolved = resolveRegisteredCompanyNameForUser(user, code);
+        let hit = adminRows.find((r) => normalize(r?.name).toLowerCase() === normalize(resolved).toLowerCase());
+        if (!hit) hit = adminRows.find((r) => normalize(r?.name).toLowerCase() === normalize(user?.company).toLowerCase());
+        return hit || null;
+      }
+      function normalizeCompanyCode(value) {
+        return String(value || "").trim();
+      }
+      function getShopickLiteCompositionString(user) {
+        const row = findAdminCompanyRowForShopickLite(user);
+        return formatShopickCompositionLabelLite(getShopickFlagsFromAdminCompanyRowLite(row));
+      }
       function getEffectiveUserCompanyCode(user) {
         const directCode = normalize(user?.companyCode);
         if (directCode) return directCode;
@@ -3619,7 +3662,7 @@
           const _dayName = _wdNames[_dateObj.getDay()];
           const _timeLabel = time === "시간상관없음" ? "시간 상관없음" : time;
           const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-          const _composition = isLiteCustomerMode ? "사진영상 둘다" : (scheduleCompositionEl.value || "미선택");
+          const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (scheduleCompositionEl.value || "미선택");
           const _memo = normalize(document.getElementById("scheduleMemo").value);
           const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
           const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
@@ -3659,7 +3702,7 @@
             jointCode: normalize(document.getElementById("scheduleJointCode").value),
             doorCode: normalize(document.getElementById("scheduleDoorCode").value),
             memo: _memo,
-            composition: isLiteCustomerMode ? "사진영상 둘다" : scheduleCompositionEl.value || "사진만",
+            composition: isLiteCustomerMode ? getShopickLiteCompositionString(user) : scheduleCompositionEl.value || "사진만",
             paymentStatus: "미입금",
             paymentPayer: "",
             paymentAmount: expectedAmount ? String(expectedAmount) : "",

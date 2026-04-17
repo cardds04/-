@@ -1893,11 +1893,18 @@
             </div>
             <div>
               <strong>촬영 구성</strong>
-              <div class="radio-line">
-                <label><input type="radio" name="composition" value="" checked /> 미선택</label>
-                <label><input type="radio" name="composition" value="사진만" /> 사진만</label>
-                <label><input type="radio" name="composition" value="사진영상 둘다" /> 사진영상 둘다</label>
-              </div>
+              <select name="composition" class="inline-input" style="max-width: 100%; margin-top: 4px;">
+                <option value="" selected>미선택</option>
+                <option value="사진만">사진만</option>
+                <option value="사진영상 둘다">사진영상 둘다</option>
+                <option value="사진">사진 (쇼픽형)</option>
+                <option value="영상">영상 (쇼픽형)</option>
+                <option value="블로그">블로그 (쇼픽형)</option>
+                <option value="사진영상">사진영상 (쇼픽형)</option>
+                <option value="사진블로그">사진블로그 (쇼픽형)</option>
+                <option value="영상블로그">영상블로그 (쇼픽형)</option>
+                <option value="사진영상블로그">사진영상블로그 (쇼픽형)</option>
+              </select>
             </div>
             <button class="btn-main" type="submit">+ 새 스케줄 추가</button>
             <div class="actions" style="margin-top: 8px; justify-content: flex-start;">
@@ -6000,6 +6007,68 @@
         if (s === "thefeeling" || s === "the_feeling") return "thefeeling";
         return "inlog";
       }
+      /** 쇼픽: 사진·영상·블로그 토글 → 접두 순서대로 이어붙인 표기 (예: 사진영상블로그) */
+      function normalizeShopickServiceFlags(photo, video, blog) {
+        const p = Boolean(photo);
+        const v = Boolean(video);
+        const b = Boolean(blog);
+        if (!p && !v && !b) return { photo: true, video: true, blog: false };
+        return { photo: p, video: v, blog: b };
+      }
+      function formatShopickCompositionLabel(flags) {
+        const f = normalizeShopickServiceFlags(flags.photo, flags.video, flags.blog);
+        let s = "";
+        if (f.photo) s += "사진";
+        if (f.video) s += "영상";
+        if (f.blog) s += "블로그";
+        return s || "사진영상";
+      }
+      function getShopickServiceFlagsFromCompanyRow(companyRow) {
+        if (!companyRow) return { photo: true, video: true, blog: false };
+        const unset =
+          companyRow.shopickPhoto === undefined &&
+          companyRow.shopickVideo === undefined &&
+          companyRow.shopickBlog === undefined;
+        if (unset) return { photo: true, video: true, blog: false };
+        return normalizeShopickServiceFlags(companyRow.shopickPhoto, companyRow.shopickVideo, companyRow.shopickBlog);
+      }
+      function getAdminCompositionPresetList() {
+        return [
+          "사진만",
+          "사진영상 둘다",
+          "사진",
+          "영상",
+          "블로그",
+          "사진영상",
+          "사진블로그",
+          "영상블로그",
+          "사진영상블로그"
+        ];
+      }
+      function buildAdminCompositionSelectOptionsHtml(selectedValue) {
+        const cur = String(selectedValue || "").trim();
+        const presets = getAdminCompositionPresetList();
+        const presetSet = new Set(presets);
+        const opts = [...presets];
+        if (cur && !presetSet.has(cur)) opts.unshift(cur);
+        return opts
+          .map(
+            (value) =>
+              `<option value="${escapeHtml(value)}" ${cur === value ? "selected" : ""}>${escapeHtml(value)}</option>`
+          )
+          .join("");
+      }
+      const ADMIN_SUBMITTABLE_COMPOSITIONS = new Set([
+        "사진만",
+        "사진영상 둘다",
+        "사진",
+        "영상",
+        "블로그",
+        "사진영상",
+        "사진블로그",
+        "영상블로그",
+        "사진영상블로그"
+      ]);
       function getCompanyGroupKey(name, companyCode = "") {
         const normalizedCode = normalizeCompanyCode(companyCode);
         if (normalizedCode) return `code:${normalizedCode.toLowerCase()}`;
@@ -7510,14 +7579,29 @@
 
       function normalizeCompanyRows(rows) {
         return (Array.isArray(rows) ? rows : [])
-          .map((item) => ({
-            dbId: String(item?.dbId ?? item?.id ?? "").trim(),
-            name: normalizeCompanyName(item?.name),
-            phone: String(item?.phone || "").trim() || "-",
-            code: normalizeCompanyCode(item?.code),
-            defaultMemo: String(item?.defaultMemo || "").trim(),
-            siteType: normalizeCompanySiteTypeField(item?.site_type ?? item?.siteType)
-          }))
+          .map((item) => {
+            const siteType = normalizeCompanySiteTypeField(item?.site_type ?? item?.siteType);
+            const row = {
+              dbId: String(item?.dbId ?? item?.id ?? "").trim(),
+              name: normalizeCompanyName(item?.name),
+              phone: String(item?.phone || "").trim() || "-",
+              code: normalizeCompanyCode(item?.code),
+              defaultMemo: String(item?.defaultMemo || "").trim(),
+              siteType
+            };
+            if (
+              siteType === "shopick" ||
+              item.shopickPhoto !== undefined ||
+              item.shopickVideo !== undefined ||
+              item.shopickBlog !== undefined
+            ) {
+              const f = getShopickServiceFlagsFromCompanyRow(item);
+              row.shopickPhoto = f.photo;
+              row.shopickVideo = f.video;
+              row.shopickBlog = f.blog;
+            }
+            return row;
+          })
           .filter((item) => item.name);
       }
       function buildAutoCompanyCode(name) {
@@ -7709,15 +7793,32 @@
         // 로컬에 저장된 defaultMemo를 병합하여 유실 방지
         const localCompanies = readStorageArray(STORAGE_ADMIN_COMPANIES);
         const localMemoMap = new Map();
+        const localShopickMap = new Map();
         localCompanies.forEach((c) => {
           const key = normalizeCompanyName(c?.name).toLowerCase();
           if (key && c?.defaultMemo) localMemoMap.set(key, String(c.defaultMemo));
+          if (
+            key &&
+            (normalizeCompanySiteTypeField(c?.siteType) === "shopick" ||
+              c.shopickPhoto !== undefined ||
+              c.shopickVideo !== undefined ||
+              c.shopickBlog !== undefined)
+          ) {
+            const f = getShopickServiceFlagsFromCompanyRow(c);
+            localShopickMap.set(key, f);
+          }
         });
         const customerUsersForSite = readStorageArray(STORAGE_CUSTOMERS);
         normalized.forEach((c) => {
           const key = normalizeCompanyName(c.name).toLowerCase();
           if (!c.defaultMemo && localMemoMap.has(key)) {
             c.defaultMemo = localMemoMap.get(key);
+          }
+          if (localShopickMap.has(key)) {
+            const f = localShopickMap.get(key);
+            c.shopickPhoto = f.photo;
+            c.shopickVideo = f.video;
+            c.shopickBlog = f.blog;
           }
           if (!c.siteType) {
             const gk = getCompanyGroupKey(c.name, c.code);
@@ -7946,12 +8047,36 @@
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (st) row.siteType = st;
             if (dbId) row.dbId = dbId;
+            const shopickData =
+              st === "shopick" ||
+              item.shopickPhoto !== undefined ||
+              item.shopickVideo !== undefined ||
+              item.shopickBlog !== undefined;
+            if (shopickData) {
+              const f = getShopickServiceFlagsFromCompanyRow(item);
+              row.shopickPhoto = f.photo;
+              row.shopickVideo = f.video;
+              row.shopickBlog = f.blog;
+            }
             uniqueMap.set(key, row);
           } else if (dbId) {
             const cur = uniqueMap.get(key);
             if (cur && !cur.dbId) cur.dbId = dbId;
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (cur && st && !cur.siteType) cur.siteType = st;
+            const curSt = normalizeCompanySiteTypeField(cur?.siteType);
+            if (
+              cur &&
+              (curSt === "shopick" ||
+                item.shopickPhoto !== undefined ||
+                item.shopickVideo !== undefined ||
+                item.shopickBlog !== undefined)
+            ) {
+              const f = getShopickServiceFlagsFromCompanyRow(item);
+              cur.shopickPhoto = f.photo;
+              cur.shopickVideo = f.video;
+              cur.shopickBlog = f.blog;
+            }
           }
         });
         let rows = [...uniqueMap.values()];
@@ -11426,6 +11551,25 @@
             const badge = siteBadgeHtml(siteType);
             const customerMeta = getCustomerIdByCompanyName(company.name);
             const customerIdHtml = customerMeta.text ? ` (아이디: ${escapeHtml(customerMeta.text)})` : "";
+            const shopickFlags = getShopickServiceFlagsFromCompanyRow(company);
+            const shopickEditor =
+              siteType === "shopick"
+                ? `<div class="shopick-service-row" style="margin-top:8px;padding:8px;border:1px dashed var(--line);border-radius:8px;background:#fff;">
+                    <div style="font-size:0.8rem;color:#6b7a99;font-weight:600;margin-bottom:6px;">쇼픽 — 간편 접수 시 촬영구성 (각 항목 클릭으로 켜기/끄기)</div>
+                    <label style="margin-right:10px;font-size:0.88rem;"><input type="checkbox" class="edit-shopick-photo" ${
+                      shopickFlags.photo ? "checked" : ""
+                    }/> 사진</label>
+                    <label style="margin-right:10px;font-size:0.88rem;"><input type="checkbox" class="edit-shopick-video" ${
+                      shopickFlags.video ? "checked" : ""
+                    }/> 영상</label>
+                    <label style="font-size:0.88rem;"><input type="checkbox" class="edit-shopick-blog" ${
+                      shopickFlags.blog ? "checked" : ""
+                    }/> 블로그</label>
+                    <div class="hint" style="margin-top:6px;">접수 시 스케줄 표기: <strong class="shopick-preview">${escapeHtml(
+                      formatShopickCompositionLabel(shopickFlags)
+                    )}</strong></div>
+                  </div>`
+                : "";
             if (isEditing) {
               return `
                 <div class="company-item" data-company-index="${index}">
@@ -11436,6 +11580,7 @@
                     <input class="inline-input edit-company-code" type="text" value="${escapeHtml(company.code || "")}" placeholder="업체 고유번호" style="width: 100%; min-width: 260px;" />
                     <div style="font-size:0.8rem;color:#6b7a99;font-weight:600;margin-top:4px;">기본요청사항</div>
                     <textarea class="inline-input edit-company-default-memo" rows="3" placeholder="스케줄 메모에 자동 삽입될 기본요청사항을 입력하세요" style="width:100%;min-width:260px;resize:vertical;font-size:0.85rem;">${escapeHtml(company.defaultMemo || "")}</textarea>
+                    ${shopickEditor}
                     <div class="actions" style="margin-top: 0; justify-content: flex-start;">
                       <button class="btn-sm primary" type="button" data-action="saveCompanyInfo" data-company-index="${index}">저장</button>
                       <button class="btn-sm danger" type="button" data-action="deleteCompanyInfo" data-company-index="${index}" data-customer-company="${
@@ -11457,6 +11602,13 @@
                 <div class="company-item-row" style="margin-top: 4px;">
                   <span style="color:#6b7a99;font-size:0.85rem;">연락처: ${escapeHtml(company.phone || "-")}</span>
                 </div>
+                ${
+                  siteType === "shopick"
+                    ? `<div class="hint" style="margin-top:6px;">쇼픽 접수·표기 구성: <strong>${escapeHtml(
+                        formatShopickCompositionLabel(shopickFlags)
+                      )}</strong></div>`
+                    : ""
+                }
                 ${defaultMemoHtml}
               </div>
             `;
@@ -14488,9 +14640,7 @@
                           const minuteOptions = ["00", "30"]
                             .map((minute) => `<option value="${minute}" ${minute === rawMinute ? "selected" : ""}>${minute}분</option>`)
                             .join("");
-                          const compositionOptions = ["사진만", "사진영상 둘다"]
-                            .map((value) => `<option value="${value}" ${item.composition === value ? "selected" : ""}>${value}</option>`)
-                            .join("");
+                          const compositionOptions = buildAdminCompositionSelectOptionsHtml(item.composition);
                           const pyeongOptions = ["45평이하", "45평이상", "95평이상", "145평이상"]
                             .map((value) => `<option value="${value}" ${item.pyeong === value ? "selected" : ""}>${value}</option>`)
                             .join("");
@@ -16285,7 +16435,14 @@
           alert("이미 사용 중인 업체 계정 아이디입니다.");
           return;
         }
-        companies.unshift({ name, phone, code, siteType: accountSiteType });
+        const newCompanyRow = { name, phone, code, siteType: accountSiteType };
+        if (accountSiteType === "shopick") {
+          const f = normalizeShopickServiceFlags(true, true, false);
+          newCompanyRow.shopickPhoto = f.photo;
+          newCompanyRow.shopickVideo = f.video;
+          newCompanyRow.shopickBlog = f.blog;
+        }
+        companies.unshift(newCompanyRow);
         saveAdminCompaniesToStorage();
         users.unshift({
           id: accountId,
@@ -16510,6 +16667,13 @@
           const newPhone = phoneInputEl?.value?.trim() || "";
           const newCode = normalizeCompanyCode(codeInputEl?.value);
           const newDefaultMemo = defaultMemoInputEl?.value?.trim() || "";
+          const photoEl = itemEl?.querySelector(".edit-shopick-photo");
+          const videoEl = itemEl?.querySelector(".edit-shopick-video");
+          const blogEl = itemEl?.querySelector(".edit-shopick-blog");
+          let nextShopickFlags = null;
+          if (photoEl && videoEl && blogEl) {
+            nextShopickFlags = normalizeShopickServiceFlags(photoEl.checked, videoEl.checked, blogEl.checked);
+          }
           if (!newName) {
             alert("업체명을 입력해주세요.");
             return;
@@ -16540,6 +16704,22 @@
             company.code = newCode;
             company.defaultMemo = newDefaultMemo;
           });
+          if (nextShopickFlags) {
+            const nameKeyLower = normalizeCompanyName(newName).toLowerCase();
+            const customersSnap = readStorageArray(STORAGE_CUSTOMERS);
+            companies.forEach((c) => {
+              if (normalizeCompanyName(c?.name).toLowerCase() !== nameKeyLower) return;
+              const rowSt = normalizeCompanySiteTypeField(c?.siteType);
+              const gk = getCompanyGroupKey(c.name, c.code);
+              const matchedUser = customersSnap.find((u) => getCompanyGroupKey(u?.company, u?.companyCode) === gk);
+              const userSt = matchedUser ? normalizeCustomerSiteTypeForStorage(matchedUser.siteType) : "inlog";
+              if (rowSt === "shopick" || userSt === "shopick") {
+                c.shopickPhoto = nextShopickFlags.photo;
+                c.shopickVideo = nextShopickFlags.video;
+                c.shopickBlog = nextShopickFlags.blog;
+              }
+            });
+          }
           setCompanyDefaultMemoByName(newName, newDefaultMemo, newCode);
           syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode, oldName);
           const oldGroupKey = getCompanyGroupKey(oldName, oldCode);
@@ -16709,6 +16889,27 @@
           renderList();
           return;
         }
+      });
+
+      companyListEl.addEventListener("change", (event) => {
+        const t = event.target;
+        if (!(t instanceof HTMLInputElement)) return;
+        if (
+          !t.classList.contains("edit-shopick-photo") &&
+          !t.classList.contains("edit-shopick-video") &&
+          !t.classList.contains("edit-shopick-blog")
+        ) {
+          return;
+        }
+        const wrap = t.closest(".shopick-service-row");
+        if (!wrap) return;
+        const preview = wrap.querySelector(".shopick-preview");
+        const photo = wrap.querySelector(".edit-shopick-photo");
+        const video = wrap.querySelector(".edit-shopick-video");
+        const blog = wrap.querySelector(".edit-shopick-blog");
+        if (!preview || !photo || !video || !blog) return;
+        const flags = normalizeShopickServiceFlags(photo.checked, video.checked, blog.checked);
+        preview.textContent = formatShopickCompositionLabel(flags);
       });
 
       companyListEl.addEventListener("click", (event) => {
@@ -17700,8 +17901,8 @@
           alert("등록된 업체만 스케줄 등록할 수 있어요. 먼저 업체 등록에서 추가해주세요.");
           return;
         }
-        if (!["사진만", "사진영상 둘다"].includes(pickedComposition)) {
-          alert("촬영 구성에서 '사진만' 또는 '사진영상 둘다'를 선택해주세요.");
+        if (!pickedComposition || !ADMIN_SUBMITTABLE_COMPOSITIONS.has(pickedComposition)) {
+          alert("촬영 구성을 목록에서 선택해주세요.");
           return false;
         }
         const dailyLimit = getEffectiveDailyLimit(pickedDate);
