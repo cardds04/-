@@ -10777,18 +10777,63 @@
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
-      /** 미입금 요약 복사: 맨 앞 「○○도」「○○특별자치시」 등 행정 접두를 빼고 나머지 앞 10자 */
+      /** 미입금 요약 복사: 행정구역·동·지번·도로명 등 주소 토큰 제거, 아파트/빌라 등 유형어 제거, 단지·동·호만 남김(길이 제한 없음) */
+      function looksLikeKoreanStreetAddressForSummary(full) {
+        const f = String(full || "").trim();
+        if (!f) return false;
+        if (/^\d{5}(?:\s|[-,])/u.test(f)) return true;
+        if (/[가-힣]{2,}(도|특별시|광역시|특별자치시|특별자치도)/u.test(f)) return true;
+        if (/[가-힣]{2,}시\s/u.test(f)) return true;
+        if (/[가-힣]{2,}(군|구)\s/u.test(f)) return true;
+        if (/[가-힣]{2,}(읍|면|동|리)(\s|\d)/u.test(f)) return true;
+        if (/[가-힣0-9][가-힣0-9\-]*(로|길)\s/u.test(f)) return true;
+        return false;
+      }
+
       function formatReceivedAddressSnippetForUnpaidSummary(raw) {
-        const full = String(raw || "").trim();
-        if (!full) return "-";
-        let s = full;
-        s = s.replace(/^[가-힣]{2,}도(?:\s+|$)/u, "").trim();
-        s = s.replace(/^[가-힣]{2,}특별자치시(?:\s+|$)/u, "").trim();
-        s = s.replace(/^[가-힣]{2,}특별시(?:\s+|$)/u, "").trim();
-        s = s.replace(/^[가-힣]{2,}광역시(?:\s+|$)/u, "").trim();
-        s = s.replace(/^[가-힣]{2,}시(?:\s+|$)/u, "").trim();
+        let s = String(raw || "").trim();
         if (!s) return "-";
-        return s.slice(0, 10);
+        if (looksLikeKoreanStreetAddressForSummary(s)) {
+          s = s.slice(5).trim();
+        }
+        if (!s) return "-";
+
+        const stripLeadingAddressTokenOnce = (t) => {
+          const rules = [
+            /^[가-힣]{2,}특별자치시(?:\s+|$)/u,
+            /^[가-힣]{2,}특별시(?:\s+|$)/u,
+            /^[가-힣]{2,}광역시(?:\s+|$)/u,
+            /^[가-힣]{2,}특별자치도(?:\s+|$)/u,
+            /^[가-힣]{2,}도(?:\s+|$)/u,
+            /^[가-힣]{2,}시(?:\s+|$)/u,
+            /^[가-힣]{2,}군(?:\s+|$)/u,
+            /^[가-힣]{2,}구(?:\s+|$)/u,
+            /^[가-힣]{2,}(?:읍|면|동|리)(?:\s+|$)/u,
+            /^[가-힣]{2,}(?:읍|면|동|리)(?=\d)/u,
+            /^\d+(?:-\d+)?(?=\s|$)/u,
+            /^[가-힣0-9\-]+(?:로|길)(?:\s+\d+(?:-\d+)?)?(?:\s+|$)/u,
+          ];
+          for (let i = 0; i < rules.length; i++) {
+            const next = t.replace(rules[i], "").trim();
+            if (next !== t) return next;
+          }
+          return t;
+        };
+
+        let guard = 0;
+        while (guard++ < 80) {
+          const next = stripLeadingAddressTokenOnce(s);
+          if (next === s) break;
+          s = next;
+        }
+
+        s = s
+          .replace(/\s*아파트\s*/gi, " ")
+          .replace(/\s*(?:빌라|오피스텔|연립|다세대)\s*/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        return s || "-";
       }
 
       async function copyUnpaidSummaryList() {
@@ -10812,14 +10857,14 @@
               resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, unpaidSummaryCtx).company || ""
             ) || "-";
           const receivedAddressRaw = String(item?.place || item?.address || "").trim();
-          const receivedAddress10 = formatReceivedAddressSnippetForUnpaidSummary(receivedAddressRaw);
+          const placeSnippet = formatReceivedAddressSnippetForUnpaidSummary(receivedAddressRaw);
           const amountValue = parseAmountToNumber(item?.paymentAmount);
           const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
           if (!companyGroups.has(companyName)) {
             companyGroups.set(companyName, { rows: [], sum: 0 });
           }
           const bucket = companyGroups.get(companyName);
-          bucket.rows.push(`${dateLabel} ${companyName} ${receivedAddress10} ${amountText}`);
+          bucket.rows.push(`${dateLabel} ${companyName} ${placeSnippet} ${amountText}`);
           bucket.sum += Math.max(0, Number(amountValue) || 0);
         });
 
