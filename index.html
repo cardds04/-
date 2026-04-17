@@ -5083,15 +5083,32 @@
               const local = JSON.parse(localStorage.getItem(key) || "[]");
               if (Array.isArray(incoming) && Array.isArray(local)) {
                 const localMemoMap = new Map();
+                const localShopickMap = new Map();
                 local.forEach((c) => {
+                  const nk = normalizeCompanyName(c?.name).toLowerCase();
+                  if (!nk) return;
                   if (c?.defaultMemo) {
-                    localMemoMap.set(normalizeCompanyName(c.name).toLowerCase(), String(c.defaultMemo));
+                    localMemoMap.set(nk, String(c.defaultMemo));
+                  }
+                  if (
+                    normalizeCompanySiteTypeField(c?.siteType) === "shopick" ||
+                    c.shopickPhoto !== undefined ||
+                    c.shopickVideo !== undefined ||
+                    c.shopickBlog !== undefined
+                  ) {
+                    localShopickMap.set(nk, getShopickServiceFlagsFromCompanyRow(c));
                   }
                 });
                 incoming.forEach((c) => {
                   const k = normalizeCompanyName(c?.name).toLowerCase();
                   if (!c.defaultMemo && localMemoMap.has(k)) {
                     c.defaultMemo = localMemoMap.get(k);
+                  }
+                  if (localShopickMap.has(k)) {
+                    const f = localShopickMap.get(k);
+                    c.shopickPhoto = f.photo;
+                    c.shopickVideo = f.video;
+                    c.shopickBlog = f.blog;
                   }
                 });
                 return JSON.stringify(incoming);
