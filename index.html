@@ -1707,14 +1707,6 @@
           </div>
           <p class="helper">등록 인원: <strong id="memberCount">2명</strong></p>
           <div id="memberNames" class="company-list"></div>
-          <div id="photographerPayrollAdminPanel" class="register-panel" style="margin-top: 12px;">
-            <h3 style="margin: 0 0 8px; font-size: 1rem;">작가 급여·유류 설정</h3>
-            <p class="helper" style="margin-bottom: 8px;">
-              작가 계정(<code>scheduleSiteWriters</code>)과 이름이 일치하는 경우에만 유류비·급여형태가 적용됩니다. 작가 화면에서 입력한 추가요금은 아래 요약에서 확인할 수 있습니다.
-            </p>
-            <div id="photographerPayrollConfigRows"></div>
-            <div id="photographerPayrollMonthlySummaryAdmin" style="margin-top: 12px;"></div>
-          </div>
         </article>
 
         <article class="card fill-card">
@@ -5809,6 +5801,14 @@
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      /** 클릭 시 target이 Text 노드면 closest가 없어 오류가 나므로 Element로 올려서 사용 */
+      function scheduleSiteClickTargetElement(event) {
+        const t = event?.target;
+        if (t && t.nodeType === Node.ELEMENT_NODE) return t;
+        if (t && t.nodeType === Node.TEXT_NODE && t.parentElement) return t.parentElement;
+        return null;
       }
 
       function normalizeCompanyName(name) {
@@ -10827,7 +10827,6 @@
               .join(", ")}`
           : "현재 작가가 없습니다.";
         renderPhotographerTabs();
-        renderPhotographerPayrollAdmin();
       }
 
       function renderPhotographerTabs() {
@@ -17261,72 +17260,58 @@
       });
 
       memberNamesEl.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-action]");
-        if (!button) return;
-        const action = button.dataset.action;
-        const name = button.dataset.name || "";
+        const el = scheduleSiteClickTargetElement(event);
+        if (!el) return;
 
-        if (action === "startPhotographerEdit") {
-          if (!name) return;
-          editingPhotographerName = name;
-          renderPhotographers();
+        const actionButton = el.closest("button[data-action]");
+        if (actionButton) {
+          const action = actionButton.dataset.action;
+          const name = actionButton.dataset.name || "";
+
+          if (action === "startPhotographerEdit") {
+            if (!name) return;
+            editingPhotographerName = name;
+            renderPhotographers();
+            return;
+          }
+
+          if (action === "cancelPhotographerEdit") {
+            editingPhotographerName = null;
+            renderPhotographers();
+            return;
+          }
+
+          if (action === "savePhotographerInfo") {
+            const itemEl = actionButton.closest(".company-item");
+            if (!name || !itemEl) return;
+            savePhotographerInfo(name, itemEl);
+            return;
+          }
+
+          if (action === "excludePhotographer") {
+            if (!name) return;
+            const confirmed = confirm(`${name} 작가를 제외할까요?`);
+            if (!confirmed) return;
+            excludePhotographerByName(name);
+            return;
+          }
+
+          if (action === "deletePhotographer") {
+            if (!name) return;
+            const confirmed = confirm(`${name} 작가를 삭제할까요? 배정된 스케줄은 작가미정으로 변경됩니다.`);
+            if (!confirmed) return;
+            deletePhotographerByName(name);
+          }
           return;
         }
 
-        if (action === "cancelPhotographerEdit") {
-          editingPhotographerName = null;
-          renderPhotographers();
-          return;
-        }
-
-        if (action === "savePhotographerInfo") {
-          const itemEl = button.closest(".company-item");
-          if (!name || !itemEl) return;
-          savePhotographerInfo(name, itemEl);
-          return;
-        }
-
-        if (action === "excludePhotographer") {
-          if (!name) return;
-          const confirmed = confirm(`${name} 작가를 제외할까요?`);
-          if (!confirmed) return;
-          excludePhotographerByName(name);
-          return;
-        }
-
-        if (action === "deletePhotographer") {
-          if (!name) return;
-          const confirmed = confirm(`${name} 작가를 삭제할까요? 배정된 스케줄은 작가미정으로 변경됩니다.`);
-          if (!confirmed) return;
-          deletePhotographerByName(name);
-        }
-      });
-      memberNamesEl.addEventListener("click", (event) => {
-        if (event.target.closest("button, input, select, textarea, label")) return;
-        const itemEl = event.target.closest(".company-item[data-writer-name]");
+        if (el.closest("button, input, select, textarea, label")) return;
+        const itemEl = el.closest(".company-item[data-writer-name]");
         if (!itemEl) return;
         const writerName = String(itemEl.dataset.writerName || "").trim();
         if (!writerName) return;
         renderWriterHistory(writerName);
         writerHistoryModalEl.classList.remove("hidden");
-      });
-
-      document.getElementById("photographerPayrollAdminPanel")?.addEventListener("click", (event) => {
-        const btn = event.target.closest(".payroll-admin-save");
-        if (!btn) return;
-        const writerId = String(btn.dataset.writerId || "").trim();
-        const writerName = String(btn.dataset.writerName || "").trim();
-        if (!writerId) {
-          alert("작가 계정과 이름이 연결되지 않았습니다. 작가용 페이지에서 가입한 작가명과 동일한지 확인해 주세요.");
-          return;
-        }
-        const wrap = btn.closest(".company-item");
-        const fuelEl = wrap?.querySelector(".payroll-admin-fuel");
-        const typeEl = wrap?.querySelector(".payroll-admin-type");
-        const fuelWon = Math.max(0, Number(fuelEl?.value) || 0);
-        const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
-        savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType);
-        alert(`급여 설정을 저장했습니다. (${writerName})`);
       });
 
       registerPhotographerBtnEl.addEventListener("click", addPhotographerFromInput);
