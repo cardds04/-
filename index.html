@@ -10650,27 +10650,66 @@
         const w = writers.find((u) => normalize(u.name).toLowerCase() === key);
         return w && w.id ? String(w.id) : "";
       }
-      function getPhotographerPayrollConfigForWriter(writerId) {
+      function getPhotographerPayrollConfigForWriter(writerId, photographerDisplayName) {
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
-        const row = writerId ? byId[writerId] : null;
+        const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
+        const wid = String(writerId || "").trim();
+        const nk = photographerDisplayName ? normalize(photographerDisplayName).toLowerCase() : "";
+        let row = null;
+        if (wid && Object.prototype.hasOwnProperty.call(byId, wid)) row = byId[wid];
+        else if (nk && Object.prototype.hasOwnProperty.call(byName, nk)) row = byName[nk];
+        else if (wid) row = byId[wid];
+        else if (nk) row = byName[nk];
         return {
           fuelWon: Math.max(0, Number(row?.fuelWon) || 0),
           salaryType: row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
         };
       }
-      function savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType) {
+      function savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType, photographerDisplayName) {
         const wid = String(writerId || "").trim();
-        if (!wid) return false;
+        const nk = photographerDisplayName ? normalize(photographerDisplayName).toLowerCase() : "";
+        if (!wid && !nk) return false;
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         if (!cfg.byWriterId) cfg.byWriterId = {};
-        cfg.byWriterId[wid] = {
+        if (!cfg.byWriterNameKey) cfg.byWriterNameKey = {};
+        const payload = {
           fuelWon: Math.max(0, Number(fuelWon) || 0),
           salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
         };
+        if (wid) cfg.byWriterId[wid] = payload;
+        if (nk) cfg.byWriterNameKey[nk] = payload;
         localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
         renderPhotographerPayrollAdmin();
         return true;
+      }
+      /** 기존 byWriterId만 있던 항목을 작가명 키에도 복제해 아이디 불일치 시에도 조회되게 함 */
+      function ensurePayrollWriterNameKeysFromIds() {
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
+        if (!cfg.byWriterNameKey || typeof cfg.byWriterNameKey !== "object") cfg.byWriterNameKey = {};
+        const byName = cfg.byWriterNameKey;
+        const writers = readStorageArray(STORAGE_WRITERS);
+        let changed = false;
+        writers.forEach((w) => {
+          const wid = String(w?.id || "").trim();
+          const nk = normalize(w?.name || "").toLowerCase();
+          if (!wid || !nk || !Object.prototype.hasOwnProperty.call(byId, wid)) return;
+          const payload = byId[wid];
+          const prev = byName[nk];
+          const same =
+            prev &&
+            Number(prev.fuelWon) === Number(payload.fuelWon) &&
+            (prev.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer") ===
+              (payload.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer");
+          if (!same) {
+            byName[nk] = { ...payload };
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+        }
       }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
@@ -10701,7 +10740,7 @@
         configEl.innerHTML = names
           .map((name) => {
             const wid = findWriterIdByPhotographerName(name);
-            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid);
+            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid, name);
             const disabled = !wid;
             return `
           <div class="company-item" style="margin-top:8px;">
@@ -10736,7 +10775,7 @@
             }
             const shots = countMonthDoneShotsForWriterName(name, monthKey);
             const basePay = shots * PAYROLL_SHOOT_WON_ADMIN;
-            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid);
+            const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid, name);
             const rec = monthlyAll.find((r) => r.writerId === wid && r.monthKey === monthKey);
             const lines = Array.isArray(rec?.lines) ? rec.lines : [];
             const extraSum = lines.reduce((s, ln) => s + Math.max(0, Number(ln.amountWon) || 0), 0);
@@ -10761,6 +10800,7 @@
       }
 
       function renderPhotographers() {
+        ensurePayrollWriterNameKeysFromIds();
         memberCountEl.textContent = `${photographers.length}명`;
         const safeNames = photographers.map((name) => escapeHtml(name));
         const excludedNames = getExcludedPhotographerNames();
@@ -12241,7 +12281,7 @@
         const writerCarNumber = String(writerUser?.carNumber || photographerCarNumbers[targetName] || "").trim();
         const payrollWid = findWriterIdByPhotographerName(targetName);
         const payrollLinked = Boolean(payrollWid);
-        const { fuelWon: payrollFuelWon, salaryType: payrollSalaryType } = getPhotographerPayrollConfigForWriter(payrollWid);
+        const { fuelWon: payrollFuelWon, salaryType: payrollSalaryType } = getPhotographerPayrollConfigForWriter(payrollWid, targetName);
 
         const rows = [...data, ...onHoldPayments, ...refundPayments]
           .filter((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter)
@@ -15875,7 +15915,7 @@
           const typeEl = writerHistorySummaryEl.querySelector(".writer-payroll-type");
           const fuelWon = Math.max(0, Number(fuelEl?.value) || 0);
           const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
-          savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType);
+          savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType, writerName);
           alert(`급여 설정을 저장했습니다. (${writerName})`);
           return;
         }
@@ -15922,6 +15962,14 @@
         const oldId = String(writers[targetIndex].id || "").trim();
         writers[targetIndex].id = newId;
         writers[targetIndex].password = newPassword;
+        if (oldId && newId && oldId !== newId) {
+          const payCfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+          if (payCfg.byWriterId && typeof payCfg.byWriterId === "object" && Object.prototype.hasOwnProperty.call(payCfg.byWriterId, oldId)) {
+            payCfg.byWriterId[newId] = payCfg.byWriterId[oldId];
+            delete payCfg.byWriterId[oldId];
+            localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(payCfg));
+          }
+        }
         setWritersStorage(writers);
         if (localStorage.getItem(STORAGE_WRITER_SESSION) === oldId) {
           localStorage.setItem(STORAGE_WRITER_SESSION, newId);

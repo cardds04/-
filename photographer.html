@@ -1705,10 +1705,17 @@
         });
       }
 
-      function getPayrollWriterConfig(writerId) {
+      function getPayrollWriterConfig(writerId, writerDisplayName) {
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
-        const row = byId[writerId];
+        const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
+        const wid = String(writerId || "").trim();
+        const nk = writerDisplayName ? normalize(writerDisplayName).toLowerCase() : "";
+        let row = null;
+        if (wid && Object.prototype.hasOwnProperty.call(byId, wid)) row = byId[wid];
+        else if (nk && Object.prototype.hasOwnProperty.call(byName, nk)) row = byName[nk];
+        else if (wid) row = byId[wid];
+        else if (nk) row = byName[nk];
         const fuelWon = Math.max(0, Number(row?.fuelWon) || 0);
         const salaryType = row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer";
         return { fuelWon, salaryType };
@@ -1758,7 +1765,7 @@
         const rows = getMySchedules();
         const monthDone = getMonthDoneRowsForPayroll(rows, monthKey);
         const shootCount = monthDone.length;
-        const { fuelWon, salaryType } = getPayrollWriterConfig(writer.id);
+        const { fuelWon, salaryType } = getPayrollWriterConfig(writer.id, writer.name);
         const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
         const lines = Array.isArray(rec.lines) ? rec.lines : [];
         const baseShootPay = shootCount * SHOOT_PAY_WON;
