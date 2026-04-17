@@ -10777,154 +10777,42 @@
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
-      /** 미입금 요약 복사: 행정구역·동·지번·도로명 등 주소 토큰 제거, 아파트/빌라 등 유형어 제거, 단지·동·호만 남김(길이 제한 없음) */
-      function looksLikeKoreanStreetAddressForSummary(full) {
-        const f = String(full || "").trim();
-        if (!f) return false;
-        if (/^\d{5}(?:\s|[-,])/u.test(f)) return true;
-        if (/[가-힣]{2,}(도|특별시|광역시|특별자치시|특별자치도)/u.test(f)) return true;
-        if (/[가-힣]{2,}시\s/u.test(f)) return true;
-        if (/[가-힣]{2,}(군|구)\s/u.test(f)) return true;
-        if (/[가-힣]{2,}(읍|면|동|리)(\s|\d)/u.test(f)) return true;
-        if (/[가-힣0-9][가-힣0-9\-]*(로|길)\s/u.test(f)) return true;
-        return false;
-      }
-
+      /**
+       * 미입금 요약 복사용 장소 문자열.
+       * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 번지·도로명+번지 등을 지우고 첫 한글부터 + 동·호만.
+       * 2) 아니면 문자열 끝이 …로|길|리 + 지번(숫자·하이픈)이면 그 한 덩어리만.
+       * 3) 둘 다 아니면 "-".
+       */
       function formatReceivedAddressSnippetForUnpaidSummary(raw) {
         let s = String(raw || "").trim();
         if (!s) return "-";
-        if (looksLikeKoreanStreetAddressForSummary(s)) {
-          s = s.slice(5).trim();
-        }
-        if (!s) return "-";
+        s = s.replace(/\s+/g, " ").trim();
 
-        const stripLeadingAddressTokenOnce = (t) => {
-          const rules = [
-            /^[가-힣]{2,}특별자치시(?:\s+|$)/u,
-            /^[가-힣]{2,}특별시(?:\s+|$)/u,
-            /^[가-힣]{2,}광역시(?:\s+|$)/u,
-            /^[가-힣]{2,}특별자치도(?:\s+|$)/u,
-            /^[가-힣]{2,}도(?:\s+|$)/u,
-            /^[가-힣]{2,}시(?:\s+|$)/u,
-            /^[가-힣]{2,}군(?:\s+|$)/u,
-            /^[가-힣]{2,}구(?:\s+|$)/u,
-            /^[가-힣]{2,}(?:읍|면|동|리)(?:\s+|$)/u,
-            /^[가-힣]{2,}(?:읍|면|동|리)(?=\d)/u,
-            /^\d+(?:-\d+)?(?=\s|$)/u,
-            /^[가-힣0-9\-]+(?:로|길)(?:\s+\d+(?:-\d+)?)?(?:\s+|$)/u,
-          ];
-          for (let i = 0; i < rules.length; i++) {
-            const next = t.replace(rules[i], "").trim();
-            if (next !== t) return next;
-          }
-          return t;
-        };
-
-        let guard = 0;
-        while (guard++ < 80) {
-          const next = stripLeadingAddressTokenOnce(s);
-          if (next === s) break;
-          s = next;
-        }
-
-        s = s
-          .replace(/\s*아파트\s*/gi, " ")
-          .replace(/\s*(?:빌라|오피스텔|연립|다세대)\s*/gi, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        function trimLeadingRoadAndBonbeon(t) {
-          let h = String(t || "").trim();
-          for (let n = 0; n < 20; n++) {
-            const u = h
-              .replace(/^[가-힣0-9\-]+(?:로|길)\s+\d+(?:-\d+)?\s+/u, "")
+        const aptTailRe = /(\d{1,4}동\s*\d+\s*호|[a-zA-Z]동\s*\d+\s*호)\s*$/iu;
+        const aptM = s.match(aptTailRe);
+        if (aptM) {
+          let prefix = s.slice(0, aptM.index).trim();
+          const tail = String(aptM[1]).replace(/\s+/g, " ").trim();
+          for (let guard = 0; guard < 40; guard++) {
+            const next = prefix
               .replace(/^\d+(?:-\d+)?\s+/u, "")
+              .replace(/^[가-힣0-9\-]+(?:로|길)\s+\d+(?:-\d+)?\s+/u, "")
               .trim();
-            if (u === h) break;
-            h = u;
+            if (next === prefix) break;
+            prefix = next;
           }
-          return h;
+          prefix = prefix.replace(/^[^가-힣]*\s*/u, "").trim();
+          const out = [prefix, tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+          return out || tail || "-";
         }
 
-        function sliceHeadFromAptBrand(head) {
-          const h = String(head || "").trim();
-          if (!h) return h;
-          const brands = [
-            "힐스테이트",
-            "e편한세상",
-            "E편한세상",
-            "편한세상",
-            "아이파크",
-            "래미안",
-            "자이",
-            "더샵",
-            "센트럴파크",
-            "센트럴",
-            "푸르지오",
-            "하늘채",
-            "트리스",
-            "듀오",
-            "타운",
-            "빌리지",
-            "캐슬",
-            "스카이",
-            "채운",
-            "파크",
-          ];
-          let bestStart = -1;
-          for (let bi = 0; bi < brands.length; bi++) {
-            const b = brands[bi];
-            let from = h.length;
-            while (from > 0) {
-              const j = h.lastIndexOf(b, from - 1);
-              if (j < 0) break;
-              let st = j;
-              while (st > 0 && h.charAt(st - 1) !== " ") st -= 1;
-              let wordEnd = h.indexOf(" ", j + b.length);
-              if (wordEnd < 0) wordEnd = h.length;
-              const word = h.slice(st, wordEnd).trim();
-              if (word.length <= b.length + 2 && word.includes(b)) {
-                let p = st - 1;
-                while (p >= 0 && h.charAt(p) === " ") p -= 1;
-                while (p >= 0 && h.charAt(p) !== " ") p -= 1;
-                st = p + 1;
-              }
-              if (st > 0 && (bestStart < 0 || st < bestStart)) bestStart = st;
-              from = j;
-            }
-          }
-          if (bestStart > 0) return h.slice(bestStart).trim();
-          return h;
+        const landTailRe = /([가-힣0-9\-]{2,}(?:로|길|리))\s*(\d+(?:-\d+)*)\s*$/u;
+        const landM = s.match(landTailRe);
+        if (landM) {
+          return `${landM[1]} ${landM[2]}`.replace(/\s+/g, " ").trim();
         }
 
-        function joinHeadTail(head0, tailPart) {
-          const head = sliceHeadFromAptBrand(trimLeadingRoadAndBonbeon(String(head0 || "").trim()));
-          const t = String(tailPart || "")
-            .replace(/\s+/g, " ")
-            .trim();
-          if (!head && !t) return "";
-          if (!head) return t;
-          if (!t) return head;
-          return `${head} ${t}`.replace(/\s+/g, " ").trim();
-        }
-
-        function applyDongHoAptSnip(text) {
-          const t0 = String(text || "").trim();
-          if (!t0) return "";
-          const reHo = /(\d{1,4}동\s*\d+\s*호|[a-zA-Z]동\s*\d+\s*호)\s*$/iu;
-          const m = t0.match(reHo);
-          if (m) {
-            const head0 = t0.slice(0, m.index).trim();
-            return joinHeadTail(head0, m[1]);
-          }
-          let u = trimLeadingRoadAndBonbeon(t0);
-          u = sliceHeadFromAptBrand(u);
-          return u.trim();
-        }
-
-        s = applyDongHoAptSnip(s);
-
-        return s || "-";
+        return "-";
       }
 
       async function copyUnpaidSummaryList() {
