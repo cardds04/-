@@ -10650,6 +10650,19 @@
           salaryType: row?.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
         };
       }
+      function savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType) {
+        const wid = String(writerId || "").trim();
+        if (!wid) return false;
+        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
+        if (!cfg.byWriterId) cfg.byWriterId = {};
+        cfg.byWriterId[wid] = {
+          fuelWon: Math.max(0, Number(fuelWon) || 0),
+          salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
+        };
+        localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
+        renderPhotographerPayrollAdmin();
+        return true;
+      }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
         base.setHours(0, 0, 0, 0);
@@ -12218,6 +12231,9 @@
         const writerPassword = String(writerUser?.password || "").trim();
         const writerPhone = String(writerUser?.phone || photographerPhones[targetName] || "").trim();
         const writerCarNumber = String(writerUser?.carNumber || photographerCarNumbers[targetName] || "").trim();
+        const payrollWid = findWriterIdByPhotographerName(targetName);
+        const payrollLinked = Boolean(payrollWid);
+        const { fuelWon: payrollFuelWon, salaryType: payrollSalaryType } = getPhotographerPayrollConfigForWriter(payrollWid);
 
         const rows = [...data, ...onHoldPayments, ...refundPayments]
           .filter((item) => String(item?.name || "").trim().toLowerCase() === normalizedWriter)
@@ -12265,6 +12281,28 @@
             <input class="inline-input writer-account-password" type="text" placeholder="비밀번호" value="${escapeHtml(writerPassword)}" />
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveWriterAccount" data-writer-name="${escapeHtml(targetName)}">계정저장</button>
+            </div>
+          </div>
+          <div class="company-edit-row" style="margin: 8px 0 10px;">
+            <div><strong>급여·유류 설정</strong></div>
+            ${
+              !payrollLinked
+                ? `<p class="hint" style="margin:4px 0;">작가 계정(작가용 로그인)에 등록된 이름과 동일할 때만 유류비·급여형태를 저장할 수 있습니다.</p>`
+                : ""
+            }
+            <div class="input-row" style="flex-wrap:wrap; gap:8px; align-items:center;">
+              <span>유류비(원)</span>
+              <input type="number" min="0" step="1000" class="inline-input writer-payroll-fuel" value="${payrollFuelWon}" ${
+                payrollLinked ? "" : "disabled"
+              } style="width:130px;" />
+              <span>급여형태</span>
+              <select class="inline-input writer-payroll-type" ${payrollLinked ? "" : "disabled"}>
+                <option value="freelancer" ${payrollSalaryType === "freelancer" ? "selected" : ""}>프리랜서형</option>
+                <option value="tax_invoice" ${payrollSalaryType === "tax_invoice" ? "selected" : ""}>세금계산서형</option>
+              </select>
+              <button class="btn-sm primary" type="button" data-action="saveWriterPayroll" data-writer-id="${escapeHtml(
+                payrollWid
+              )}" data-writer-name="${escapeHtml(targetName)}" ${payrollLinked ? "" : "disabled"}>급여설정 저장</button>
             </div>
           </div>
           <table class="payment-table" style="margin-top: 0;">
@@ -15817,6 +15855,22 @@
           alert("작가가 복귀되었습니다.");
           return;
         }
+        const payrollButton = event.target.closest("button[data-action='saveWriterPayroll']");
+        if (payrollButton) {
+          const writerId = String(payrollButton.dataset.writerId || "").trim();
+          const writerName = String(payrollButton.dataset.writerName || "").trim();
+          if (!writerId) {
+            alert("작가 계정과 이름이 연결되지 않았습니다. 작가용 페이지에서 가입한 작가명과 동일한지 확인해 주세요.");
+            return;
+          }
+          const fuelEl = writerHistorySummaryEl.querySelector(".writer-payroll-fuel");
+          const typeEl = writerHistorySummaryEl.querySelector(".writer-payroll-type");
+          const fuelWon = Math.max(0, Number(fuelEl?.value) || 0);
+          const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
+          savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType);
+          alert(`급여 설정을 저장했습니다. (${writerName})`);
+          return;
+        }
         const profileButton = event.target.closest("button[data-action='saveWriterProfile'][data-writer-name]");
         if (profileButton) {
           const writerName = String(profileButton.dataset.writerName || "").trim();
@@ -17271,11 +17325,7 @@
         const typeEl = wrap?.querySelector(".payroll-admin-type");
         const fuelWon = Math.max(0, Number(fuelEl?.value) || 0);
         const salaryType = typeEl?.value === "tax_invoice" ? "tax_invoice" : "freelancer";
-        const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
-        if (!cfg.byWriterId) cfg.byWriterId = {};
-        cfg.byWriterId[writerId] = { fuelWon, salaryType };
-        localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
-        renderPhotographerPayrollAdmin();
+        savePhotographerPayrollConfigForWriter(writerId, fuelWon, salaryType);
         alert(`급여 설정을 저장했습니다. (${writerName})`);
       });
 
