@@ -10777,6 +10777,20 @@
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
+      /** 미입금 요약 복사: 맨 앞 「○○도」「○○특별자치시」 등 행정 접두를 빼고 나머지 앞 10자 */
+      function formatReceivedAddressSnippetForUnpaidSummary(raw) {
+        const full = String(raw || "").trim();
+        if (!full) return "-";
+        let s = full;
+        s = s.replace(/^[가-힣]{2,}도(?:\s+|$)/u, "").trim();
+        s = s.replace(/^[가-힣]{2,}특별자치시(?:\s+|$)/u, "").trim();
+        s = s.replace(/^[가-힣]{2,}특별시(?:\s+|$)/u, "").trim();
+        s = s.replace(/^[가-힣]{2,}광역시(?:\s+|$)/u, "").trim();
+        s = s.replace(/^[가-힣]{2,}시(?:\s+|$)/u, "").trim();
+        if (!s) return "-";
+        return s.slice(0, 10);
+      }
+
       async function copyUnpaidSummaryList() {
         if (currentPaymentFilter !== "unpaid") {
           alert("미입금 업체 탭에서만 복사할 수 있습니다.");
@@ -10798,7 +10812,7 @@
               resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, unpaidSummaryCtx).company || ""
             ) || "-";
           const receivedAddressRaw = String(item?.place || item?.address || "").trim();
-          const receivedAddress10 = receivedAddressRaw ? receivedAddressRaw.slice(0, 10) : "-";
+          const receivedAddress10 = formatReceivedAddressSnippetForUnpaidSummary(receivedAddressRaw);
           const amountValue = parseAmountToNumber(item?.paymentAmount);
           const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
           if (!companyGroups.has(companyName)) {
