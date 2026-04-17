@@ -10797,13 +10797,15 @@
             normalizeCompanyName(
               resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, unpaidSummaryCtx).company || ""
             ) || "-";
+          const receivedAddressRaw = String(item?.place || item?.address || "").trim();
+          const receivedAddress10 = receivedAddressRaw ? receivedAddressRaw.slice(0, 10) : "-";
           const amountValue = parseAmountToNumber(item?.paymentAmount);
           const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
           if (!companyGroups.has(companyName)) {
             companyGroups.set(companyName, { rows: [], sum: 0 });
           }
           const bucket = companyGroups.get(companyName);
-          bucket.rows.push(`${dateLabel} ${companyName} ${amountText}`);
+          bucket.rows.push(`${dateLabel} ${companyName} ${receivedAddress10} ${amountText}`);
           bucket.sum += Math.max(0, Number(amountValue) || 0);
         });
 
