@@ -11750,6 +11750,10 @@
           .join("");
 
         const currentDefaultMemo = getCompanyDefaultMemoByName(companyName, accountCompanyCode);
+        const modalShopickSite =
+          accountSiteType === "shopick" || normalizeCompanySiteTypeField(targetCompany?.siteType) === "shopick";
+        const modalShopickFlags = getShopickServiceFlagsFromCompanyRow(targetCompany || {});
+        const modalShopickUiHiddenClass = modalShopickSite ? "" : "hidden";
         companyOrderHistoryTitleEl.textContent = `${companyName} 주문 기록`;
         companyOrderHistorySummaryEl.innerHTML = `
           <div class="customer-stats-head">
@@ -11786,6 +11790,25 @@
               <option value="shopick" ${accountSiteType === "shopick" ? "selected" : ""}>쇼픽</option>
               <option value="thefeeling" ${accountSiteType === "thefeeling" ? "selected" : ""}>더필링</option>
             </select>
+            </div>
+            <div class="company-account-line company-modal-shopick-ui ${modalShopickUiHiddenClass}" style="flex-direction: column; align-items: flex-start; margin-top: 4px;">
+              <span class="company-account-label">쇼픽 촬영구성</span>
+              <div class="shopick-service-row" style="margin-top: 4px;">
+                <label style="margin-right: 10px; font-size: 0.88rem;"><input type="checkbox" class="company-modal-shopick-photo" ${
+                  modalShopickFlags.photo ? "checked" : ""
+                }/> 사진</label>
+                <label style="margin-right: 10px; font-size: 0.88rem;"><input type="checkbox" class="company-modal-shopick-video" ${
+                  modalShopickFlags.video ? "checked" : ""
+                }/> 영상</label>
+                <label style="font-size: 0.88rem;"><input type="checkbox" class="company-modal-shopick-blog" ${
+                  modalShopickFlags.blog ? "checked" : ""
+                }/> 블로그</label>
+              </div>
+              <div class="hint" style="margin-top: 6px; width: 100%;">
+                간편 접수 시 표기: <strong class="company-modal-shopick-preview">${escapeHtml(
+                  formatShopickCompositionLabel(modalShopickFlags)
+                )}</strong>
+              </div>
             </div>
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
               <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
@@ -15881,6 +15904,30 @@
         syncMasterAccountMapForCompanyIdentity(newName, oldCodeBefore, newCode, oldName);
       }
 
+      companyOrderHistorySummaryEl.addEventListener("change", (event) => {
+        const t = event.target;
+        if (t.classList.contains("company-account-site-type")) {
+          const wrap = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-ui");
+          if (!wrap) return;
+          const st = normalizeCustomerSiteTypeForStorage(t.value);
+          wrap.classList.toggle("hidden", st !== "shopick");
+        }
+        if (
+          t.classList.contains("company-modal-shopick-photo") ||
+          t.classList.contains("company-modal-shopick-video") ||
+          t.classList.contains("company-modal-shopick-blog")
+        ) {
+          const preview = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-preview");
+          const photo = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-photo");
+          const video = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-video");
+          const blog = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-blog");
+          if (preview && photo && video && blog) {
+            const flags = normalizeShopickServiceFlags(photo.checked, video.checked, blog.checked);
+            preview.textContent = formatShopickCompositionLabel(flags);
+          }
+        }
+      });
+
       companyOrderHistorySummaryEl.addEventListener("click", async (event) => {
         const button = event.target.closest("button[data-action][data-company-name]");
         if (!button) return;
@@ -16178,6 +16225,32 @@
           });
           adminCompanyChanged = true;
         }
+        const siteTypeField = normalizeCompanySiteTypeField(newSiteType);
+        const modalPhoto = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-photo");
+        const modalVideo = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-video");
+        const modalBlog = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-blog");
+        companies.forEach((company) => {
+          const n = normalizeCompanyName(company?.name).toLowerCase();
+          if (n !== effectiveNameLower && n !== originalNameLower) return;
+          if (siteTypeField) company.siteType = siteTypeField;
+          if (siteTypeField === "shopick") {
+            if (modalPhoto && modalVideo && modalBlog) {
+              const flags = normalizeShopickServiceFlags(modalPhoto.checked, modalVideo.checked, modalBlog.checked);
+              company.shopickPhoto = flags.photo;
+              company.shopickVideo = flags.video;
+              company.shopickBlog = flags.blog;
+            } else {
+              const f = normalizeShopickServiceFlags(true, true, false);
+              company.shopickPhoto = f.photo;
+              company.shopickVideo = f.video;
+              company.shopickBlog = f.blog;
+            }
+          } else {
+            delete company.shopickPhoto;
+            delete company.shopickVideo;
+            delete company.shopickBlog;
+          }
+        });
         if (adminCompanyChanged) {
           saveAdminCompaniesToStorage();
         }
