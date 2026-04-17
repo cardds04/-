@@ -950,6 +950,114 @@
         color: var(--danger);
         border-color: #fecaca;
       }
+      .logo-composite-saved-panel {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px dashed var(--line);
+      }
+      .logo-composite-saved-save-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.65rem;
+        align-items: center;
+        margin-bottom: 0.65rem;
+      }
+      .logo-composite-saved-save-row input[type="text"] {
+        flex: 1 1 200px;
+        min-width: 0;
+        min-height: auto;
+        padding: 0.55rem 0.7rem;
+      }
+      .logo-composite-saved-icons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 0.85rem;
+        min-height: 0;
+      }
+      .logo-composite-saved-wrap {
+        position: relative;
+        display: inline-flex;
+        vertical-align: top;
+      }
+      .logo-composite-saved-remove {
+        position: absolute;
+        top: -0.15rem;
+        right: -0.15rem;
+        z-index: 2;
+        width: 1.38rem;
+        height: 1.38rem;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: #78716c;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(28, 25, 23, 0.2);
+      }
+      .logo-composite-saved-remove:hover {
+        background: #b91c1c;
+      }
+      .logo-composite-saved-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        width: 4.5rem;
+        padding: 0.35rem 0.25rem 0.45rem;
+        border: none;
+        border-radius: 12px;
+        background: transparent;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        text-align: center;
+      }
+      .logo-composite-saved-chip:hover {
+        background: #f0fdf4;
+      }
+      .logo-composite-saved-chip.is-active {
+        background: #dcfce7;
+        outline: 2px solid #22c55e;
+        outline-offset: 1px;
+      }
+      .logo-composite-saved-chip__thumb {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 14px;
+        background: repeating-conic-gradient(#ecfdf5 0% 25%, #d1fae5 0% 50%) 50% / 12px 12px;
+        border: 2px solid #86efac;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
+        overflow: hidden;
+      }
+      .logo-composite-saved-chip__thumb img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+      .logo-composite-saved-chip__title {
+        font-size: 0.68rem;
+        line-height: 1.25;
+        color: var(--muted);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-all;
+      }
       .foot {
         margin-top: 2rem;
         font-size: 0.8rem;
@@ -1313,6 +1421,25 @@
             </label>
             <ul id="logoCompositeOrigList" class="logo-composite-orig-list" aria-label="원본 목록"></ul>
           </div>
+        </div>
+
+        <div class="logo-composite-saved-panel">
+          <h3 class="step__h step__h--compact">저장된 로고</h3>
+          <p class="hint" style="margin-bottom: 0.5rem">
+            위에서 로고를 올린 뒤 <strong>이름</strong>을 적고 저장하면 아래에 <strong>아이콘</strong>으로 쌓입니다. 아이콘을 누르면 그 로고를 불러옵니다. 이 브라우저(IndexedDB)에만
+            저장됩니다.
+          </p>
+          <div class="logo-composite-saved-save-row">
+            <input
+              type="text"
+              id="logoCompositeSaveName"
+              maxlength="48"
+              autocomplete="off"
+              placeholder="저장 이름 (예: 인테리어 워터마크)"
+            />
+            <button type="button" class="btn btn--secondary" id="btnLogoCompositeSaveLogo">이 로고 저장</button>
+          </div>
+          <div id="logoCompositeSavedIcons" class="logo-composite-saved-icons" aria-label="저장된 로고 아이콘"></div>
         </div>
 
         <div id="logoCompositeEditor" hidden style="margin-top: 1.25rem">
@@ -2659,6 +2786,9 @@
           var btnClearAll = document.getElementById("btnLogoCompositeClearAll");
           var btnClearLogo = document.getElementById("btnLogoCompositeClearLogo");
           var btnClearOrig = document.getElementById("btnLogoCompositeClearOrig");
+          var logoSaveNameInput = document.getElementById("logoCompositeSaveName");
+          var btnLogoSave = document.getElementById("btnLogoCompositeSaveLogo");
+          var savedIconsEl = document.getElementById("logoCompositeSavedIcons");
           if (
             !logoInput ||
             !origInput ||
@@ -2672,7 +2802,10 @@
             !rangeY ||
             !preview ||
             !btnPng ||
-            !btnZip
+            !btnZip ||
+            !logoSaveNameInput ||
+            !btnLogoSave ||
+            !savedIconsEl
           ) {
             return;
           }
@@ -2680,6 +2813,10 @@
           var MAX_PAN_W = 640;
           var MAX_PAN_H = 480;
           var nextOrigId = 1;
+          var IDB_NAME = "grok_studio_logo_composite_v1";
+          var IDB_STORE = "savedLogos";
+          var idbDb = null;
+          var activeSavedLogoId = null;
 
           var state = {
             logoImg: null,
@@ -2712,6 +2849,216 @@
               };
               img.src = url;
             });
+          }
+
+          function idbOpen() {
+            if (idbDb) return Promise.resolve(idbDb);
+            if (!window.indexedDB) return Promise.reject(new Error("IndexedDB를 사용할 수 없습니다."));
+            return new Promise(function (resolve, reject) {
+              var req = indexedDB.open(IDB_NAME, 1);
+              req.onerror = function () {
+                reject(req.error || new Error("IndexedDB 열기 실패"));
+              };
+              req.onupgradeneeded = function () {
+                var database = req.result;
+                if (!database.objectStoreNames.contains(IDB_STORE)) {
+                  var os = database.createObjectStore(IDB_STORE, { keyPath: "id" });
+                  os.createIndex("savedAt", "savedAt", { unique: false });
+                }
+              };
+              req.onsuccess = function () {
+                idbDb = req.result;
+                idbDb.onclose = function () {
+                  idbDb = null;
+                };
+                resolve(idbDb);
+              };
+            });
+          }
+
+          function idbGetAll() {
+            return idbOpen().then(function (db) {
+              return new Promise(function (resolve, reject) {
+                var tx = db.transaction(IDB_STORE, "readonly");
+                var q = tx.objectStore(IDB_STORE).getAll();
+                q.onerror = function () {
+                  reject(q.error);
+                };
+                q.onsuccess = function () {
+                  resolve(q.result || []);
+                };
+              });
+            });
+          }
+
+          function idbGet(id) {
+            return idbOpen().then(function (db) {
+              return new Promise(function (resolve, reject) {
+                var tx = db.transaction(IDB_STORE, "readonly");
+                var q = tx.objectStore(IDB_STORE).get(id);
+                q.onerror = function () {
+                  reject(q.error);
+                };
+                q.onsuccess = function () {
+                  resolve(q.result);
+                };
+              });
+            });
+          }
+
+          function idbPut(record) {
+            return idbOpen().then(function (db) {
+              return new Promise(function (resolve, reject) {
+                var tx = db.transaction(IDB_STORE, "readwrite");
+                tx.oncomplete = function () {
+                  resolve();
+                };
+                tx.onerror = function () {
+                  reject(tx.error);
+                };
+                tx.objectStore(IDB_STORE).put(record);
+              });
+            });
+          }
+
+          function idbDelete(id) {
+            return idbOpen().then(function (db) {
+              return new Promise(function (resolve, reject) {
+                var tx = db.transaction(IDB_STORE, "readwrite");
+                tx.oncomplete = function () {
+                  resolve();
+                };
+                tx.onerror = function () {
+                  reject(tx.error);
+                };
+                tx.objectStore(IDB_STORE).delete(id);
+              });
+            });
+          }
+
+          function revokeSavedIconThumbs() {
+            savedIconsEl.querySelectorAll("img[data-logo-thumb]").forEach(function (im) {
+              if (im.src && im.src.indexOf("blob:") === 0) {
+                try {
+                  URL.revokeObjectURL(im.src);
+                } catch {
+                  /* ignore */
+                }
+              }
+            });
+          }
+
+          function renderSavedLogoIcons() {
+            revokeSavedIconThumbs();
+            savedIconsEl.innerHTML = "";
+            idbGetAll()
+              .then(function (rows) {
+                rows.sort(function (a, b) {
+                  return (b.savedAt || 0) - (a.savedAt || 0);
+                });
+                rows.forEach(function (rec) {
+                  var wrap = document.createElement("span");
+                  wrap.className = "logo-composite-saved-wrap";
+                  var btn = document.createElement("button");
+                  btn.type = "button";
+                  btn.className = "logo-composite-saved-chip";
+                  if (rec.id === activeSavedLogoId) btn.classList.add("is-active");
+                  btn.dataset.savedLogoId = rec.id;
+                  btn.setAttribute("aria-label", "저장된 로고 불러오기: " + (rec.name || ""));
+                  var thumbBox = document.createElement("span");
+                  thumbBox.className = "logo-composite-saved-chip__thumb";
+                  var im = document.createElement("img");
+                  im.dataset.logoThumb = "1";
+                  im.alt = "";
+                  im.src = URL.createObjectURL(rec.blob);
+                  thumbBox.appendChild(im);
+                  var title = document.createElement("span");
+                  title.className = "logo-composite-saved-chip__title";
+                  title.textContent = rec.name || "로고";
+                  title.title = rec.name || "";
+                  btn.appendChild(thumbBox);
+                  btn.appendChild(title);
+                  var del = document.createElement("button");
+                  del.type = "button";
+                  del.className = "logo-composite-saved-remove";
+                  del.textContent = "×";
+                  del.dataset.savedLogoRemove = rec.id;
+                  del.setAttribute("aria-label", "저장된 로고 삭제");
+                  wrap.appendChild(btn);
+                  wrap.appendChild(del);
+                  savedIconsEl.appendChild(wrap);
+                });
+              })
+              .catch(function () {
+                /* 목록 없음 등은 조용히 무시 */
+              });
+          }
+
+          savedIconsEl.addEventListener("click", function (e) {
+            var t = e.target;
+            if (!t || !t.closest) return;
+            var rm = t.closest("[data-saved-logo-remove]");
+            if (rm && rm.dataset.savedLogoRemove) {
+              e.preventDefault();
+              e.stopPropagation();
+              var rid = rm.dataset.savedLogoRemove;
+              idbDelete(rid)
+                .then(function () {
+                  if (activeSavedLogoId === rid) activeSavedLogoId = null;
+                  renderSavedLogoIcons();
+                })
+                .catch(function (err) {
+                  setError(String(err.message || err));
+                });
+              return;
+            }
+            var chip = t.closest("[data-saved-logo-id]");
+            if (chip && chip.dataset.savedLogoId) {
+              e.preventDefault();
+              var sid = chip.dataset.savedLogoId;
+              activeSavedLogoId = sid;
+              idbGet(sid)
+                .then(function (rec) {
+                  if (!rec || !rec.blob) {
+                    activeSavedLogoId = null;
+                    renderSavedLogoIcons();
+                    return;
+                  }
+                  loadLogoFromSavedRecord(rec);
+                })
+                .catch(function (err) {
+                  activeSavedLogoId = null;
+                  renderSavedLogoIcons();
+                  setError(String(err.message || err));
+                });
+            }
+          });
+
+          function applyLogoFromBitmap(url, img, displayName) {
+            revokeIf(state.logoUrl);
+            state.logoUrl = url;
+            state.logoImg = img;
+            if (logoName) logoName.textContent = displayName || "로고";
+            for (var i = 0; i < state.origItems.length; i++) {
+              centerPanForItem(state.origItems[i]);
+            }
+            updateEditorVisibility();
+          }
+
+          function loadLogoFromSavedRecord(rec) {
+            var url = URL.createObjectURL(rec.blob);
+            var img = new Image();
+            img.onload = function () {
+              applyLogoFromBitmap(url, img, rec.name || "로고");
+              renderSavedLogoIcons();
+            };
+            img.onerror = function () {
+              revokeIf(url);
+              activeSavedLogoId = null;
+              renderSavedLogoIcons();
+              setError("저장된 로고를 불러오지 못했습니다.");
+            };
+            img.src = url;
           }
 
           function getCropMetrics(logoImg, origImg) {
@@ -2988,14 +3335,9 @@
                 throw new Error("HEIC는 JPG/PNG로 변환한 뒤 올려 주세요.");
               }
               var r = await loadImageKeepUrl(file);
-              revokeIf(state.logoUrl);
-              state.logoUrl = r.url;
-              state.logoImg = r.img;
-              if (logoName) logoName.textContent = file.name;
-              for (var i = 0; i < state.origItems.length; i++) {
-                centerPanForItem(state.origItems[i]);
-              }
-              updateEditorVisibility();
+              activeSavedLogoId = null;
+              applyLogoFromBitmap(r.url, r.img, file.name);
+              renderSavedLogoIcons();
             } catch (err) {
               setError(String(err.message || err));
             }
@@ -3043,11 +3385,13 @@
           });
 
           function clearLogo() {
+            activeSavedLogoId = null;
             revokeIf(state.logoUrl);
             state.logoUrl = null;
             state.logoImg = null;
             if (logoName) logoName.textContent = "";
             updateEditorVisibility();
+            renderSavedLogoIcons();
           }
 
           function clearOrig() {
@@ -3204,6 +3548,56 @@
               btnZip.disabled = false;
             }
           });
+
+          btnLogoSave.addEventListener("click", function () {
+            setError("");
+            if (!state.logoImg || !state.logoUrl) {
+              setError("먼저 로고 이미지를 올려 주세요.");
+              return;
+            }
+            var nm = (logoSaveNameInput.value || "").trim();
+            if (!nm) {
+              setError("저장할 이름을 입력해 주세요.");
+              logoSaveNameInput.focus();
+              return;
+            }
+            fetch(state.logoUrl)
+              .then(function (res) {
+                return res.blob();
+              })
+              .then(function (blob) {
+                var rec = {
+                  id: "logo_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10),
+                  name: nm.slice(0, 48),
+                  blob: blob,
+                  mime: blob.type || "image/png",
+                  savedAt: Date.now(),
+                };
+                return idbPut(rec);
+              })
+              .then(function () {
+                logoSaveNameInput.value = "";
+                renderSavedLogoIcons();
+              })
+              .catch(function (err) {
+                var msg = String(err && err.message ? err.message : err);
+                if ((err && err.name === "QuotaExceededError") || msg.indexOf("QuotaExceeded") !== -1) {
+                  setError(
+                    "저장 공간이 부족합니다. 브라우저 저장 데이터를 줄이거나 로고 파일 크기를 줄여 보세요.",
+                  );
+                } else {
+                  setError(msg);
+                }
+              });
+          });
+
+          idbOpen()
+            .then(function () {
+              renderSavedLogoIcons();
+            })
+            .catch(function () {
+              /* IndexedDB 미지원 시 저장 칸만 동작하지 않음 */
+            });
         })();
       })();
     </script>
