@@ -895,16 +895,29 @@
       }
       .logo-composite-editor-body {
         display: grid;
-        gap: 1rem 1.25rem;
+        gap: 1rem 1.1rem;
         align-items: start;
+      }
+      .logo-composite-orig-list-mount {
+        min-height: 0;
+      }
+      .logo-composite-orig-list-heading {
+        margin: 0 0 0.35rem;
+        font-size: 0.92rem;
+      }
+      .logo-composite-editor-col--list .logo-composite-orig-list {
+        max-height: min(45vh, 320px);
       }
       @media (min-width: 760px) {
         .logo-composite-editor-body {
-          grid-template-columns: minmax(0, 1fr) minmax(220px, 360px);
+          grid-template-columns: minmax(128px, 200px) minmax(0, 1fr) minmax(220px, 360px);
         }
         .logo-composite-editor-col--preview {
           position: sticky;
           top: 0.75rem;
+        }
+        .logo-composite-editor-col--list .logo-composite-orig-list {
+          max-height: min(70vh, 520px);
         }
       }
       .logo-composite-editor-col--preview .step__h--compact {
@@ -1434,8 +1447,8 @@
         <h2 class="workflow-title">로고 · 원본 합치기 <span class="workflow-note">(브라우저 · 피드 분위기 문장만 Gemini)</span></h2>
         <p class="hint" style="margin-top: 0">
           <strong>로고</strong>(보통 투명 PNG)와 <strong>원본 이미지</strong>를 올리면, 출력 크기는 <strong>로고 픽셀 크기</strong>와 같습니다. 원본은 그 비율에 맞게
-          잘리고, <strong>로고가 위·원본이 아래</strong>로 겹칩니다. 원본은 <strong>여러 장</strong>을 한 번에 넣을 수 있고, 아래 목록에서 장을 골라
-          <strong>장마다</strong> 잘릴 위치를 따로 정할 수 있습니다.
+          잘리고, <strong>로고가 위·원본이 아래</strong>로 겹칩니다. 원본은 <strong>여러 장</strong>을 한 번에 넣을 수 있고, 로고까지 올리면
+          <strong>잘릴 위치·미리보기</strong> 왼쪽에서 장을 골라 <strong>장마다</strong> 잘릴 위치를 정할 수 있습니다.
         </p>
         <div class="row row--2 row--logo-composite-drops" style="margin-top: 1rem">
           <div>
@@ -1462,7 +1475,14 @@
               <input type="file" id="logoCompositeOrigInput" accept="image/*" multiple hidden />
               <span class="drop__hint">클릭 · 끌어다 놓기 · <strong>여러 장</strong> 가능</span>
             </label>
-            <ul id="logoCompositeOrigList" class="logo-composite-orig-list" aria-label="원본 목록"></ul>
+            <div
+              id="logoCompositeOrigListMountDrop"
+              class="logo-composite-orig-list-mount"
+              hidden
+              aria-label="원본 목록(로고를 올리기 전)"
+            >
+              <ul id="logoCompositeOrigList" class="logo-composite-orig-list" aria-label="원본 목록"></ul>
+            </div>
           </div>
         </div>
 
@@ -1504,10 +1524,14 @@
         <div id="logoCompositeEditor" hidden style="margin-top: 1.25rem">
           <h3 class="step__h step__h--compact">원본에서 잘릴 위치 · 합성 미리보기</h3>
           <p class="hint" style="margin-bottom: 0.65rem">
-            왼쪽 목록에서 원본을 고른 뒤, 초록 테두리를 드래그하거나 슬라이더로 옮기세요. 넓은 화면에서는 오른쪽에
-            <strong>합성 결과</strong>가 같은 줄에 붙어 나옵니다.
+            맨 왼쪽 <strong>원본 목록</strong>에서 장을 고른 뒤, 초록 테두리를 드래그하거나 슬라이더로 옮기세요. 넓은 화면에서는 가운데 크롭·오른쪽
+            <strong>합성 결과</strong>가 한 줄에 붙습니다.
           </p>
           <div class="logo-composite-editor-body">
+            <div class="logo-composite-editor-col logo-composite-editor-col--list">
+              <h4 class="step__h step__h--compact logo-composite-orig-list-heading">원본 목록</h4>
+              <div id="logoCompositeOrigListMountEditor" class="logo-composite-orig-list-mount"></div>
+            </div>
             <div class="logo-composite-editor-col logo-composite-editor-col--pan">
               <div class="logo-composite-pan-stage" id="logoCompositePanStage">
                 <div class="logo-composite-pan-inner" id="logoCompositePanInner">
@@ -2870,6 +2894,8 @@
           var origDrop = document.getElementById("logoCompositeOrigDrop");
           var logoName = document.getElementById("logoCompositeLogoName");
           var origListEl = document.getElementById("logoCompositeOrigList");
+          var origListMountDrop = document.getElementById("logoCompositeOrigListMountDrop");
+          var origListMountEditor = document.getElementById("logoCompositeOrigListMountEditor");
           var editor = document.getElementById("logoCompositeEditor");
           var panImg = document.getElementById("logoCompositePanImg");
           var cropFrame = document.getElementById("logoCompositeCropFrame");
@@ -2890,6 +2916,8 @@
             !logoDrop ||
             !origDrop ||
             !origListEl ||
+            !origListMountDrop ||
+            !origListMountEditor ||
             !editor ||
             !panImg ||
             !cropFrame ||
@@ -2903,6 +2931,18 @@
             !savedIconsEl
           ) {
             return;
+          }
+
+          function mountOrigListToDrop() {
+            if (origListEl.parentNode !== origListMountDrop) {
+              origListMountDrop.appendChild(origListEl);
+            }
+          }
+
+          function mountOrigListToEditor() {
+            if (origListEl.parentNode !== origListMountEditor) {
+              origListMountEditor.appendChild(origListEl);
+            }
           }
 
           var MAX_PAN_W = 640;
@@ -3348,8 +3388,17 @@
               }
               if (!ok) state.activeId = state.origItems.length ? state.origItems[0].id : null;
             }
-            var ready = !!(state.logoImg && state.origItems.length > 0);
-            editor.hidden = !ready;
+            var hasOrig = state.origItems.length > 0;
+            var ready = !!(state.logoImg && hasOrig);
+            if (ready) {
+              mountOrigListToEditor();
+              origListMountDrop.hidden = true;
+              editor.hidden = false;
+            } else {
+              mountOrigListToDrop();
+              editor.hidden = true;
+              origListMountDrop.hidden = !hasOrig;
+            }
             renderOrigList();
             if (ready) {
               var a = getActive();
