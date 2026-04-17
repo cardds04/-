@@ -10779,7 +10779,7 @@
       }
       /**
        * 미입금 요약 복사용 장소 문자열.
-       * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 번지·도로명+번지 등을 지우고 첫 한글부터 + 동·호만.
+       * 1) 끝이 숫자동+숫자호(또는 영문동+호)면: 그 앞의 시·도·구·군·읍·면·도로명+번지·선행번지를 지우고 단지명(첫 한글~) + 동·호만.
        * 2) 아니면 문자열 끝이 …로|길|리 + 지번(숫자·하이픈)이면 그 한 덩어리만.
        * 3) 둘 다 아니면 "-".
        */
@@ -10793,13 +10793,30 @@
         if (aptM) {
           let prefix = s.slice(0, aptM.index).trim();
           const tail = String(aptM[1]).replace(/\s+/g, " ").trim();
-          for (let guard = 0; guard < 40; guard++) {
-            const next = prefix
-              .replace(/^\d+(?:-\d+)?\s+/u, "")
-              .replace(/^[가-힣0-9\-]+(?:로|길)\s+\d+(?:-\d+)?\s+/u, "")
-              .trim();
-            if (next === prefix) break;
-            prefix = next;
+          const adminOrRoadRules = [
+            /^[가-힣]{2,}특별자치시\s*/u,
+            /^[가-힣]{2,}특별시\s*/u,
+            /^[가-힣]{2,}광역시\s*/u,
+            /^[가-힣]{2,}특별자치도\s*/u,
+            /^[가-힣]{2,}도\s*/u,
+            /^[가-힣]{2,}시(?=\s|[가-힣])/u,
+            /^[가-힣]{2,}군\s*/u,
+            /^[가-힣]{2,}구\s*/u,
+            /^[가-힣]{2,}(?:읍|면)\s*/u,
+            /^\d+(?:-\d+)?\s+/u,
+            /^[가-힣0-9\-]+(?:로|길)\s+\d+(?:-\d+)?\s*/u,
+          ];
+          for (let guard = 0; guard < 80; guard++) {
+            let hit = false;
+            for (let ri = 0; ri < adminOrRoadRules.length; ri++) {
+              const next = prefix.replace(adminOrRoadRules[ri], "").trim();
+              if (next !== prefix) {
+                prefix = next;
+                hit = true;
+                break;
+              }
+            }
+            if (!hit) break;
           }
           prefix = prefix.replace(/^[^가-힣]*\s*/u, "").trim();
           const out = [prefix, tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
