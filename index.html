@@ -6020,20 +6020,23 @@
         if (!primaryKey) return;
         const map = loadCompanyDefaultMemos();
         const legacyKey = normalizeCompanyName(companyName).toLowerCase();
-        if (primaryKey !== legacyKey) delete map[legacyKey];
+        // 빈 값으로 "삭제" 의도를 남길 때는 키를 제거하지 않고 "" 로 남긴다 (tombstone).
+        // - 서버 client_kv pull 후 getAppliedStorageValue 가 {...incoming, ...local} 로 병합하는데,
+        //   local 에서 키 자체를 delete 하면 incoming(서버의 옛 값)이 살아나 메모가 계속 부활함.
+        // - 빈 문자열을 명시적으로 저장하면 local 의 "" 이 서버 값을 덮어써 실제로 지워진 상태로 유지됨.
+        const normalizedMemo = String(memo || "").trim();
+        if (primaryKey !== legacyKey) {
+          map[legacyKey] = "";
+        }
         const codeNorm = normalizeCompanyCode(id.companyCode).toLowerCase();
         if (codeNorm) {
           companies.forEach((c) => {
             if (normalizeCompanyCode(c?.code).toLowerCase() !== codeNorm) return;
             const k = normalizeCompanyName(c.name).toLowerCase();
-            if (k && k !== primaryKey) delete map[k];
+            if (k && k !== primaryKey) map[k] = "";
           });
         }
-        if (memo) {
-          map[primaryKey] = String(memo).trim();
-        } else {
-          delete map[primaryKey];
-        }
+        map[primaryKey] = normalizedMemo;
         saveCompanyDefaultMemos(map);
       }
 
