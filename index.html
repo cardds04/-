@@ -2682,7 +2682,9 @@
               k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY ||
               k === STORAGE_ADMIN_SCHEDULES || // schedules 테이블로 관리 — 서버 KV 복원 금지
-              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
+              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS || // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
+              k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG || // state 테이블이 권위 있는 소스 — client_kv 복원 금지
+              k === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
             )
               return;
             const normalizedValue = this.normalizeKvValue(v);
@@ -3762,7 +3764,11 @@
         const EXCLUDED_KEYS = new Set([
           STORAGE_ADMIN_DASHBOARD_COMPLETED,
           STORAGE_ADMIN_WRITER_PROCESS_LOG,
-          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY,
+          // 급여 설정/월별 기록은 state 테이블만 권위 있는 소스로 사용.
+          // client_kv 에 남은 과거 값이 부팅 시 stale merge 로 복구되는 것을 방지.
+          STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG,
+          STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
         ]);
         const kvFilteredLocal = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -3788,7 +3794,9 @@
               String(k || "").startsWith("scheduleSite") &&
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
               k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY &&
+              k !== STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG &&
+              k !== STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
           )
         );
         // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
