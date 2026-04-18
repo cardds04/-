@@ -1059,6 +1059,19 @@
       .site-badge.shopick { background: #dc2626; }
       .site-badge.thefeeling { background: #2563eb; }
 
+      .company-site-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .company-site-filter-btn.active {
+        background: #1f2940;
+        color: #fff;
+      }
+      .company-site-filter-btn.active.filter-inlog { background: #16a34a; color: #fff; }
+      .company-site-filter-btn.active.filter-shopick { background: #dc2626; color: #fff; }
+      .company-site-filter-btn.active.filter-thefeeling { background: #2563eb; color: #fff; }
+
       .today-new-companies {
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
@@ -1814,6 +1827,18 @@
                 <button id="closeCompanyPanelBtn" class="btn-sm" type="button">완료</button>
               </div>
             </form>
+          </div>
+          <div class="company-site-filter-row" style="margin-top: 8px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn-sm company-site-filter-btn active" data-company-site-filter="all">전체</button>
+            <button type="button" class="btn-sm company-site-filter-btn filter-inlog" data-company-site-filter="inlog">
+              <span class="site-badge inlog">인</span>인로그
+            </button>
+            <button type="button" class="btn-sm company-site-filter-btn filter-shopick" data-company-site-filter="shopick">
+              <span class="site-badge shopick">쇼</span>쇼픽
+            </button>
+            <button type="button" class="btn-sm company-site-filter-btn filter-thefeeling" data-company-site-filter="thefeeling">
+              <span class="site-badge thefeeling">필</span>더필링
+            </button>
           </div>
           <div class="input-row" style="margin-top: 8px;">
             <span>🔎</span>
@@ -2661,10 +2686,14 @@
             )
               return;
             const normalizedValue = this.normalizeKvValue(v);
-            // admin 업체(STORAGE_ADMIN_COMPANIES)와 기본요청사항(STORAGE_COMPANY_DEFAULT_MEMOS)은
-            // 로컬 편집값(쇼픽 플래그/defaultMemo)이 서버 구버전 값으로 덮여 사라지지 않도록 병합한다.
+            // 로컬 편집값이 서버 구버전으로 덮여 사라지지 않도록 병합 로직이 있는 키는 getAppliedStorageValue 경유.
+            // - STORAGE_ADMIN_COMPANIES / STORAGE_COMPANY_DEFAULT_MEMOS: 쇼픽 플래그·defaultMemo 보존
+            // - STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG / _MONTHLY: 유류비·급여형태 보존
             if (
-              (k === STORAGE_ADMIN_COMPANIES || k === STORAGE_COMPANY_DEFAULT_MEMOS) &&
+              (k === STORAGE_ADMIN_COMPANIES ||
+                k === STORAGE_COMPANY_DEFAULT_MEMOS ||
+                k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG ||
+                k === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) &&
               typeof getAppliedStorageValue === "function"
             ) {
               try {
@@ -5908,6 +5937,8 @@
       const companyAutocompleteListEl = document.getElementById("companyAutocompleteList");
       const couponCompanyAutocompleteListEl = document.getElementById("couponCompanyAutocompleteList");
       const companySearchInputEl = document.getElementById("companySearchInput");
+      // 업체 목록 사이트 구분 필터("" = 전체, "inlog"|"shopick"|"thefeeling")
+      let companySiteFilter = "";
       const companyListEl = document.getElementById("companyList");
       let currentPhotographerFilter = "all";
       let dashboardDayDetailOpenKey = "";
@@ -10995,6 +11026,7 @@
         localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
         renderPhotographerPayrollAdmin();
         if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        if (typeof requestClientKvPushWhenReady === "function") requestClientKvPushWhenReady();
         return true;
       }
       /** 마창진 등 시드: 작가명·writerId 둘 다에 써서 동기화/표기 불일치에도 남도록 함 */
@@ -11593,6 +11625,11 @@
         const filtered = companies
           .map((company, index) => ({ company, index }))
           .filter(({ company }) => {
+            // 사이트 구분 필터: 선택된 경우 해당 site_type 만 통과
+            if (companySiteFilter) {
+              const st = getCompanySiteType(company.name, company.code, company);
+              if (st !== companySiteFilter) return false;
+            }
             if (!keyword) return true;
             return company.name.toLowerCase().includes(keyword) || company.phone.toLowerCase().includes(keyword);
           });
@@ -16561,6 +16598,19 @@
       });
 
       companySearchInputEl.addEventListener("input", renderCompanies);
+      // 업체 목록 사이트 구분 필터: 전체 / 인로그 / 쇼픽 / 더필링 — 하나만 활성
+      document.querySelectorAll(".company-site-filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = String(btn.dataset.companySiteFilter || "all");
+          companySiteFilter = value === "all" ? "" : value;
+          document.querySelectorAll(".company-site-filter-btn").forEach((b) => {
+            const bv = String(b.dataset.companySiteFilter || "all");
+            const isActive = (value === "all" && bv === "all") || bv === value;
+            b.classList.toggle("active", isActive);
+          });
+          renderCompanies();
+        });
+      });
 
       addCompanyBtnEl.addEventListener("click", () => {
         companyRegisterPanelEl.classList.toggle("hidden");
