@@ -2682,9 +2682,7 @@
               k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY ||
               k === STORAGE_ADMIN_SCHEDULES || // schedules 테이블로 관리 — 서버 KV 복원 금지
-              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS || // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
-              k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG || // state 테이블이 권위 있는 소스 — client_kv 복원 금지
-              k === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
+              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
             )
               return;
             const normalizedValue = this.normalizeKvValue(v);
@@ -3764,11 +3762,7 @@
         const EXCLUDED_KEYS = new Set([
           STORAGE_ADMIN_DASHBOARD_COMPLETED,
           STORAGE_ADMIN_WRITER_PROCESS_LOG,
-          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY,
-          // 급여 설정/월별 기록은 state 테이블만 권위 있는 소스로 사용.
-          // client_kv 에 남은 과거 값이 부팅 시 stale merge 로 복구되는 것을 방지.
-          STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG,
-          STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
+          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
         ]);
         const kvFilteredLocal = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -3794,9 +3788,7 @@
               String(k || "").startsWith("scheduleSite") &&
               k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
               k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY &&
-              k !== STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG &&
-              k !== STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
+              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
           )
         );
         // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
@@ -5141,7 +5133,7 @@
         }
         return `json:${JSON.stringify(row)}`;
       }
-      function mergeStorageValue(remoteValue, localValue) {
+      function mergeStorageValue(remoteValue, localValue, keyHint) {
         if (localValue === null || localValue === undefined) {
           return remoteValue === undefined ? null : remoteValue;
         }
@@ -5166,6 +5158,16 @@
           !Array.isArray(remoteJson) &&
           !Array.isArray(localJson)
         ) {
+          // 급여 설정은 byWriterId/byWriterNameKey 중첩 맵을 깊게 병합해야
+          // 한 작가만 저장해도 다른 작가 엔트리가 지워지지 않는다.
+          if (keyHint === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
+            return JSON.stringify({
+              ...remoteJson,
+              ...localJson,
+              byWriterId: { ...(remoteJson.byWriterId || {}), ...(localJson.byWriterId || {}) },
+              byWriterNameKey: { ...(remoteJson.byWriterNameKey || {}), ...(localJson.byWriterNameKey || {}) }
+            });
+          }
           return JSON.stringify({ ...remoteJson, ...localJson });
         }
         return localValue;
@@ -5239,7 +5241,7 @@
           }
           if (key === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) {
             const localCurrent = localStorage.getItem(key);
-            const merged = mergeStorageValue(incomingText, localCurrent);
+            const merged = mergeStorageValue(incomingText, localCurrent, key);
             return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
           }
           if (key === STORAGE_COMPANY_DEFAULT_MEMOS) {
@@ -5264,7 +5266,7 @@
           return incomingText;
         }
         const localCurrent = localStorage.getItem(key);
-        const merged = mergeStorageValue(incomingText, localCurrent);
+        const merged = mergeStorageValue(incomingText, localCurrent, key);
         return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
       }
       function buildMergedStateForPush(remoteState, localState) {
@@ -5286,7 +5288,7 @@
             }
             return;
           }
-          mergedState[key] = mergeStorageValue(remoteValue, localValue);
+          mergedState[key] = mergeStorageValue(remoteValue, localValue, key);
           if (mergedState[key] === null || mergedState[key] === undefined) {
             mergedState[key] = getSyncDefaultValue(key);
           }
