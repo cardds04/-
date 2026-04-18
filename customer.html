@@ -764,6 +764,21 @@
               } catch (_) {}
             }
           }
+          // 관리자 업체 정보(쇼픽 촬영구성 플래그 포함)는 항상 최신 서버값으로 갱신
+          // (고객 로컬의 최종 쓰기 시각이 최근이어도 쇼픽 구성은 관리자 쪽이 단일 소스)
+          if (kv && typeof kv[STORAGE_ADMIN_COMPANIES] !== "undefined") {
+            const serverAdminRaw = scheduleSiteClientKvState.normalizeKvValue(kv[STORAGE_ADMIN_COMPANIES]);
+            const localAdminRaw = scheduleSiteClientKvState.memoryStore.get(STORAGE_ADMIN_COMPANIES) || "";
+            if (serverAdminRaw && serverAdminRaw !== localAdminRaw) {
+              scheduleSiteClientKvState.memoryStore.set(STORAGE_ADMIN_COMPANIES, serverAdminRaw);
+              try {
+                const snap = scheduleSiteClientKvState.nativeGetItem(scheduleSiteClientKvState.snapshotStorageKey);
+                const snapObj = snap ? JSON.parse(snap) : {};
+                snapObj[STORAGE_ADMIN_COMPANIES] = serverAdminRaw;
+                scheduleSiteClientKvState.nativeSetItem(scheduleSiteClientKvState.snapshotStorageKey, JSON.stringify(snapObj));
+              } catch (_) {}
+            }
+          }
           if (shouldApply) {
             scheduleSiteClientKvState.hydrateFromServerKv(kv);
             scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
@@ -3657,6 +3672,11 @@
           }
 
           // ── 예약 확인 모달 표시 및 대기 ────────────────────────────────
+          // 쇼픽 촬영구성은 관리자 쪽에서 업체정보로 변경될 수 있으므로, 접수 직전에 client_kv 를 한 번 더 pull 하여
+          // STORAGE_ADMIN_COMPANIES 의 최신 쇼픽 플래그(사진/영상/블로그)를 반영한다.
+          if (isLiteCustomerMode) {
+            try { await pullScheduleSiteClientKvFromSupabase(); } catch (_) {}
+          }
           const _wdNames = ["일","월","화","수","목","금","토"];
           const _dateObj = new Date(`${date}T00:00:00`);
           const _dayName = _wdNames[_dateObj.getDay()];
