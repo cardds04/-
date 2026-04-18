@@ -2660,7 +2660,22 @@
               k === STORAGE_PENDING_DELETE_SCHEDULE_IDS // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
             )
               return;
-            this.memoryStore.set(String(k), this.normalizeKvValue(v));
+            const normalizedValue = this.normalizeKvValue(v);
+            // admin 업체(STORAGE_ADMIN_COMPANIES)와 기본요청사항(STORAGE_COMPANY_DEFAULT_MEMOS)은
+            // 로컬 편집값(쇼픽 플래그/defaultMemo)이 서버 구버전 값으로 덮여 사라지지 않도록 병합한다.
+            if (
+              (k === STORAGE_ADMIN_COMPANIES || k === STORAGE_COMPANY_DEFAULT_MEMOS) &&
+              typeof getAppliedStorageValue === "function"
+            ) {
+              try {
+                const merged = getAppliedStorageValue(k, normalizedValue);
+                this.memoryStore.set(String(k), this.normalizeKvValue(merged));
+                return;
+              } catch (_) {
+                // 병합 실패 시 서버 값을 그대로 사용
+              }
+            }
+            this.memoryStore.set(String(k), normalizedValue);
           });
           try {
             this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
@@ -5141,6 +5156,25 @@
             const localCurrent = localStorage.getItem(key);
             const merged = mergeStorageValue(incomingText, localCurrent);
             return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
+          }
+          if (key === STORAGE_COMPANY_DEFAULT_MEMOS) {
+            // 기본요청사항 map: 로컬에 값이 있으면 로컬 우선(편집 직후 구버전 서버가 덮는 것 방지).
+            // 로컬에 없으면 서버 값을 사용한다.
+            try {
+              const incoming = JSON.parse(incomingText);
+              const localRaw = localStorage.getItem(key);
+              const local = localRaw ? JSON.parse(localRaw) : {};
+              if (
+                incoming &&
+                typeof incoming === "object" &&
+                !Array.isArray(incoming) &&
+                local &&
+                typeof local === "object" &&
+                !Array.isArray(local)
+              ) {
+                return JSON.stringify({ ...incoming, ...local });
+              }
+            } catch (_) {}
           }
           return incomingText;
         }
@@ -15982,6 +16016,11 @@
             }
           }
 
+          // 기본요청사항(companyDefaultMemos)은 STORAGE_SYNC_KEYS가 아니라 client_kv 로만 동기화된다.
+          // 저장 즉시 Supabase 로 push 하지 않으면 새로고침 시 서버의 이전 값이 로컬을 덮어써 값이 사라짐.
+          if (typeof requestClientKvPushWhenReady === "function") {
+            requestClientKvPushWhenReady();
+          }
           renderCompanyOrderHistory(companyName);
           renderList();
           alert("기본요청사항이 저장되었습니다.");
@@ -16028,7 +16067,52 @@
           }
         }
         applyCompanyRenameFromAccountModal(originalName, newDisplayName, newPhone, newCompanyCode);
+
+        // 사이트 타입 + 쇼픽 촬영구성은 아이디/비밀번호 입력과 무관하게 항상 먼저 저장한다.
+        // (이전에는 `!newId || !newPassword` 분기에서 early-return 되어 쇼픽 플래그가 누락되던 버그)
+        {
+          const preSiteTypeField = normalizeCompanySiteTypeField(newSiteType);
+          const preModalPhoto = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-photo");
+          const preModalVideo = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-video");
+          const preModalBlog = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-blog");
+          const preEffectiveNameLower = newDisplayName.toLowerCase();
+          const preOriginalNameLower = originalName.toLowerCase();
+          companies.forEach((company) => {
+            const n = normalizeCompanyName(company?.name).toLowerCase();
+            if (n !== preEffectiveNameLower && n !== preOriginalNameLower) return;
+            if (preSiteTypeField) company.siteType = preSiteTypeField;
+            if (preSiteTypeField === "shopick") {
+              if (preModalPhoto && preModalVideo && preModalBlog) {
+                const flags = normalizeShopickServiceFlags(
+                  preModalPhoto.checked,
+                  preModalVideo.checked,
+                  preModalBlog.checked
+                );
+                company.shopickPhoto = flags.photo;
+                company.shopickVideo = flags.video;
+                company.shopickBlog = flags.blog;
+              } else if (
+                company.shopickPhoto === undefined &&
+                company.shopickVideo === undefined &&
+                company.shopickBlog === undefined
+              ) {
+                const f = normalizeShopickServiceFlags(true, true, false);
+                company.shopickPhoto = f.photo;
+                company.shopickVideo = f.video;
+                company.shopickBlog = f.blog;
+              }
+            } else {
+              delete company.shopickPhoto;
+              delete company.shopickVideo;
+              delete company.shopickBlog;
+            }
+          });
+        }
         saveAdminCompaniesToStorage();
+        // 쇼픽 플래그·siteType 이 유실되지 않도록 Supabase client_kv 에도 즉시 push
+        if (typeof requestClientKvPushWhenReady === "function") {
+          requestClientKvPushWhenReady();
+        }
 
         if (action === "transferCompanyAccountId") {
           const fromAccountId = String(button.dataset.accountId || "").trim();
@@ -16242,32 +16326,7 @@
           });
           adminCompanyChanged = true;
         }
-        const siteTypeField = normalizeCompanySiteTypeField(newSiteType);
-        const modalPhoto = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-photo");
-        const modalVideo = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-video");
-        const modalBlog = companyOrderHistorySummaryEl.querySelector(".company-modal-shopick-blog");
-        companies.forEach((company) => {
-          const n = normalizeCompanyName(company?.name).toLowerCase();
-          if (n !== effectiveNameLower && n !== originalNameLower) return;
-          if (siteTypeField) company.siteType = siteTypeField;
-          if (siteTypeField === "shopick") {
-            if (modalPhoto && modalVideo && modalBlog) {
-              const flags = normalizeShopickServiceFlags(modalPhoto.checked, modalVideo.checked, modalBlog.checked);
-              company.shopickPhoto = flags.photo;
-              company.shopickVideo = flags.video;
-              company.shopickBlog = flags.blog;
-            } else {
-              const f = normalizeShopickServiceFlags(true, true, false);
-              company.shopickPhoto = f.photo;
-              company.shopickVideo = f.video;
-              company.shopickBlog = f.blog;
-            }
-          } else {
-            delete company.shopickPhoto;
-            delete company.shopickVideo;
-            delete company.shopickBlog;
-          }
-        });
+        // 사이트 타입 + 쇼픽 촬영구성은 위쪽에서 이미 저장됨 (아이디/비번 입력 유무와 무관하게 반영)
         if (adminCompanyChanged) {
           saveAdminCompaniesToStorage();
         }
