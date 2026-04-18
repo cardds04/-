@@ -15991,23 +15991,50 @@
           const codeInputForMemo = companyOrderHistorySummaryEl.querySelector(".company-account-code");
           const memoCompanyCode = normalizeCompanyCode(codeInputForMemo?.value);
           const newDefaultMemo = String(defaultMemoEl?.value || "").trim();
+
+          // 변경 전 기본요청사항을 먼저 읽어둔다 — 기존 스케줄 메모에서 이전 값을 정확히 제거하기 위함.
+          let prevDefaultMemo = "";
+          try {
+            const prevMap = (typeof loadCompanyDefaultMemos === "function") ? loadCompanyDefaultMemos() : {};
+            const prevKey = normalizeCompanyName(companyName).toLowerCase();
+            if (prevMap && prevKey && prevMap[prevKey]) {
+              prevDefaultMemo = String(prevMap[prevKey]).trim();
+            }
+          } catch (_) {}
+
           setCompanyDefaultMemoByName(companyName, newDefaultMemo, memoCompanyCode);
 
-          // 해당 업체의 모든 기존 스케줄 메모에 기본요청사항 삽입 (고유번호 동일 그룹 포함)
-          if (newDefaultMemo) {
-            const memoIdentity = resolveCanonicalCompanyIdentity(companyName, memoCompanyCode);
-            const memoGroupKey = getCompanyGroupKey(memoIdentity.company, memoIdentity.companyCode);
+          // 해당 업체의 모든 기존 스케줄 메모 동기화:
+          //   (1) 이전 기본요청사항이 있고 변경됐다면 기존 스케줄 메모에서 제거
+          //   (2) 새 기본요청사항이 비어있지 않고 아직 포함돼있지 않으면 추가
+          const memoIdentity = resolveCanonicalCompanyIdentity(companyName, memoCompanyCode);
+          const memoGroupKey = getCompanyGroupKey(memoIdentity.company, memoIdentity.companyCode);
+          const removePrev = prevDefaultMemo && prevDefaultMemo !== newDefaultMemo;
+          const shouldTouchSchedules = removePrev || Boolean(newDefaultMemo);
+          if (shouldTouchSchedules) {
             let updatedCount = 0;
             const allScheduleLists = [data, onHoldPayments, refundPayments];
             allScheduleLists.forEach((list) => {
               list.forEach((item) => {
                 const r = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode);
                 if (getCompanyGroupKey(r.company, r.companyCode) !== memoGroupKey) return;
-                const currentMemo = String(item.memo || "").trim();
-                if (currentMemo.includes(newDefaultMemo)) return;
-                item.memo = currentMemo ? `${currentMemo}\n${newDefaultMemo}` : newDefaultMemo;
-                markScheduleRowDirty(item, "schedule_mutation");
-                updatedCount++;
+                const originalMemo = String(item.memo || "");
+                let nextMemo = originalMemo;
+                if (removePrev) {
+                  // 이전 기본요청사항과 정확히 일치하는 줄만 제거(다른 사용자 메모는 보존).
+                  // 줄 내부에 포함된 경우도 제거하되 해당 줄에 다른 텍스트가 있으면 그대로 둠.
+                  const lines = nextMemo.split("\n");
+                  const filtered = lines.filter((line) => line.trim() !== prevDefaultMemo);
+                  nextMemo = filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+                }
+                if (newDefaultMemo && !nextMemo.split("\n").some((line) => line.trim() === newDefaultMemo)) {
+                  nextMemo = nextMemo ? `${nextMemo}\n${newDefaultMemo}` : newDefaultMemo;
+                }
+                if (nextMemo !== originalMemo) {
+                  item.memo = nextMemo;
+                  markScheduleRowDirty(item, "schedule_mutation");
+                  updatedCount++;
+                }
               });
             });
             if (updatedCount > 0) {
