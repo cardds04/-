@@ -1028,6 +1028,13 @@
         lastObservedState = buildCurrentStateSnapshot();
         setSyncStatus(`서버 반영 ${formatSyncTime()}`, "ok");
         renderAuthState();
+        try {
+          if (typeof renderPhotographerPayroll === "function") renderPhotographerPayroll();
+        } catch (_) {}
+        // 관리자 권위 키(유류비/급여형태)는 client_kv 에서 강제 재반영해 확실히 최신화
+        try {
+          void pullScheduleSiteClientKvFromSupabase();
+        } catch (_) {}
       }
       function captureLocalChangesForSync() {
         if (isApplyingRemoteState) return;
@@ -1067,6 +1074,9 @@
                 pendingLocalSyncKeys.clear();
                 setSyncStatus(`실시간 반영 ${formatSyncTime()}`, "ok");
                 renderAuthState();
+                try {
+                  if (typeof renderPhotographerPayroll === "function") renderPhotographerPayroll();
+                } catch (_) {}
               }
             )
             .subscribe();
@@ -1096,12 +1106,26 @@
       lastObservedState = buildCurrentStateSnapshot();
       // app_state 동기화 비활성화: 테이블 동기화만 사용
       startWriterTableRealtimeSubscriptions();
+      function refreshPayrollConfigFromServerOnFocus() {
+        try {
+          const p = pullScheduleSiteClientKvFromSupabase();
+          if (p && typeof p.then === "function") {
+            p.then(() => {
+              try {
+                if (typeof renderPhotographerPayroll === "function") renderPhotographerPayroll();
+              } catch (_) {}
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      }
       window.addEventListener("focus", () => {
         queueWriterTablePull();
+        refreshPayrollConfigFromServerOnFocus();
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
           queueWriterTablePull();
+          refreshPayrollConfigFromServerOnFocus();
         }
       });
 
