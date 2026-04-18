@@ -11023,6 +11023,25 @@
         nameKeys.forEach((k) => {
           if (k) cfg.byWriterNameKey[k] = payload;
         });
+        // 동명이인 또는 동일 작가의 과거 writerId 가 서버 kv 에 남아 있을 때
+        // 재렌더링에서 findWriterIdByPhotographerName 결과가 다른 id 를 돌려주면
+        // byWriterId 안의 구버전 값이 선택되어 방금 저장한 값이 되돌아 보이는 문제 방지.
+        // 같은 이름(정규화 키)과 매칭되는 모든 작가 계정의 byWriterId 항목을 동일 payload 로 통일한다.
+        try {
+          const writers = readStorageArray(STORAGE_WRITERS);
+          const targetNameKeys = new Set(nameKeys.filter(Boolean));
+          if (writers && writers.length && targetNameKeys.size) {
+            writers.forEach((u) => {
+              if (!u || !u.id) return;
+              const { keys: uKeys } = payrollNameKeysForStorage(u.name || "");
+              const shares = uKeys.some((k) => k && targetNameKeys.has(k));
+              if (!shares) return;
+              const idStr = String(u.id).trim();
+              if (!idStr) return;
+              cfg.byWriterId[idStr] = { ...payload };
+            });
+          }
+        } catch (_) {}
         localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, JSON.stringify(cfg));
         renderPhotographerPayrollAdmin();
         if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
