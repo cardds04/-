@@ -2698,35 +2698,11 @@
             ) {
               try {
                 const merged = getAppliedStorageValue(k, normalizedValue);
-                const finalValue = this.normalizeKvValue(merged);
-                if (k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
-                  try {
-                    const before = this.memoryStore.get(String(k)) || "";
-                    if (String(before) !== String(finalValue)) {
-                      console.log("[payroll][hydrateFromServerKv] changing", {
-                        beforeParsed: before ? JSON.parse(String(before)) : null,
-                        incomingParsed: normalizedValue ? JSON.parse(String(normalizedValue)) : null,
-                        mergedParsed: finalValue ? JSON.parse(String(finalValue)) : null
-                      });
-                    }
-                  } catch (_) {}
-                }
-                this.memoryStore.set(String(k), finalValue);
+                this.memoryStore.set(String(k), this.normalizeKvValue(merged));
                 return;
               } catch (_) {
                 // 병합 실패 시 서버 값을 그대로 사용
               }
-            }
-            if (k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
-              try {
-                const before = this.memoryStore.get(String(k)) || "";
-                if (String(before) !== String(normalizedValue)) {
-                  console.log("[payroll][hydrateFromServerKv][RAW overwrite]", {
-                    beforeParsed: before ? JSON.parse(String(before)) : null,
-                    incomingParsed: normalizedValue ? JSON.parse(String(normalizedValue)) : null
-                  });
-                }
-              } catch (_) {}
             }
             this.memoryStore.set(String(k), normalizedValue);
           });
@@ -4270,19 +4246,7 @@
           STORAGE_SYNC_KEYS.forEach((key) => {
             if (!Object.prototype.hasOwnProperty.call(state, key)) return;
             const value = state[key];
-            const merged = getAppliedStorageValue(key, value);
-            if (key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
-              try {
-                const before = localStorage.getItem(key);
-                if (String(before) !== String(merged)) {
-                  console.log("[payroll][applyRemoteState] changing", {
-                    beforeParsed: before ? JSON.parse(before) : null,
-                    mergedParsed: merged ? JSON.parse(String(merged)) : null
-                  });
-                }
-              } catch (_) {}
-            }
-            originalSetItem(key, merged);
+            originalSetItem(key, getAppliedStorageValue(key, value));
           });
         } finally {
           isApplyingRemoteState = false;
@@ -5100,19 +5064,7 @@
           if (pendingLocalSyncKeys.has(key)) return;
           if (!Object.prototype.hasOwnProperty.call(remoteState, key)) return;
           const value = remoteState[key];
-          const merged = getAppliedStorageValue(key, value);
-          if (key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
-            try {
-              const before = localStorage.getItem(key);
-              if (String(before) !== String(merged)) {
-                console.log("[payroll][applyRemoteStateSnapshotWithPending] changing", {
-                  beforeParsed: before ? JSON.parse(before) : null,
-                  mergedParsed: merged ? JSON.parse(String(merged)) : null
-                });
-              }
-            } catch (_) {}
-          }
-          originalSetItem(key, merged);
+          originalSetItem(key, getAppliedStorageValue(key, value));
         });
       }
       function tryParseJsonValue(value) {
@@ -11106,30 +11058,9 @@
             pendingLocalSyncKeys.add(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
           }
         } catch (_) {}
-        try {
-          console.log("[payroll][save] saved", {
-            writerId: wid,
-            name: photographerDisplayName,
-            nameKeys,
-            payload,
-            byWriterId: cfg.byWriterId,
-            byWriterNameKey: cfg.byWriterNameKey
-          });
-        } catch (_) {}
         renderPhotographerPayrollAdmin();
         if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
         if (typeof requestClientKvPushWhenReady === "function") requestClientKvPushWhenReady();
-        setTimeout(() => {
-          try {
-            const after = JSON.parse(
-              localStorage.getItem(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) || "{}"
-            );
-            console.log("[payroll][save][t+1500ms] current", {
-              byWriterId: after.byWriterId,
-              byWriterNameKey: after.byWriterNameKey
-            });
-          } catch (_) {}
-        }, 1500);
         return true;
       }
       /** 마창진 등 시드: 작가명·writerId 둘 다에 써서 동기화/표기 불일치에도 남도록 함 */
