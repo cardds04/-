@@ -13,9 +13,14 @@
     />
     <style>
       :root {
-        --page-bg: #ffd503;
-        --ink: #000000;
-        --grid-line: #000000;
+        --page-bg: #f6f1e7;          /* 따뜻한 아이보리 본문 배경 */
+        --page-bg-soft: #faf6ec;     /* 더 옅은 아이보리 */
+        --card: #ffffff;             /* 흰 카드 */
+        --soft-accent: #efe7d3;      /* 강조 베이지 */
+        --ink: #2a2620;              /* 따뜻한 다크 텍스트 */
+        --ink-soft: #6b6459;         /* 보조 텍스트 */
+        --border: #e0d9cc;           /* 보조 테두리 */
+        --grid-line: #e0d9cc;
         --gallery-max: 1100px;
         /* 실제 높이는 헤더 바로 아래 스크립트가 .site-header-fixed offsetHeight 로 덮어씀 */
         --header-stack-h: 88px;
@@ -64,8 +69,9 @@
         left: 0;
         right: 0;
         z-index: 200;
-        background-color: var(--page-bg);
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+        background-color: var(--card);
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 2px 14px rgba(42, 38, 32, 0.06);
       }
 
       .site-header {
@@ -132,8 +138,7 @@
         max-width: 28rem;
         padding: 0 18px;
         font-size: 0.95rem;
-        color: var(--page-bg);
-        opacity: 0.85;
+        color: var(--ink-soft);
         line-height: 1.5;
       }
 
@@ -153,7 +158,9 @@
         width: 100vw;
         max-width: 100vw;
         margin: 0 0 0 calc(50% - 50vw);
-        background: #222;
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
         box-sizing: border-box;
         padding: 28px 24px 36px;
       }
@@ -162,7 +169,7 @@
         font-size: clamp(1.2rem, 3vw, 1.6rem);
         font-weight: 400;
         letter-spacing: 0.12em;
-        color: #ffd503;
+        color: var(--ink);
         margin: 0 0 16px 0;
       }
       .photo-covers-scroller {
@@ -173,7 +180,7 @@
         overscroll-behavior-x: contain;
         margin: 0;
         padding: 4px 0 12px;
-        scrollbar-color: rgba(255, 213, 3, 0.45) transparent;
+        scrollbar-color: rgba(42, 38, 32, 0.3) transparent;
       }
 
       .photo-covers-scroller::-webkit-scrollbar {
@@ -181,7 +188,7 @@
       }
 
       .photo-covers-scroller::-webkit-scrollbar-thumb {
-        background: rgba(255, 213, 3, 0.4);
+        background: rgba(42, 38, 32, 0.28);
         border-radius: 3px;
       }
 
@@ -211,8 +218,8 @@
         margin: 0;
         padding: 0;
         border: none;
-        border-radius: 6px;
-        background: #141414;
+        border-radius: 8px;
+        background: var(--soft-accent);
         cursor: pointer;
         aspect-ratio: 4 / 5;
         overflow: hidden;
@@ -220,15 +227,16 @@
         box-sizing: border-box;
         outline: 3px solid transparent;
         outline-offset: -3px;
-        transition: outline-color 0.15s;
+        transition: outline-color 0.15s, transform 0.2s;
+        box-shadow: 0 2px 10px rgba(42, 38, 32, 0.06);
       }
 
       .photo-cover-cell:focus-visible {
-        outline-color: var(--page-bg);
+        outline-color: var(--ink);
       }
 
       .photo-cover-cell.is-selected {
-        outline-color: var(--page-bg);
+        outline-color: var(--ink);
       }
 
       .photo-cover-cell img {
@@ -249,7 +257,7 @@
       .photo-expand {
         margin-top: 8px;
         padding: 20px 0 8px;
-        border-top: 1px solid rgba(255, 213, 3, 0.22);
+        border-top: 1px solid var(--border);
       }
 
       .photo-expand[hidden] {
@@ -262,15 +270,21 @@
         max-width: 16rem;
         margin: 0 auto 18px;
         padding: 10px 16px;
-        border: 1px solid rgba(255, 213, 3, 0.4);
-        border-radius: 6px;
-        background: transparent;
-        color: var(--page-bg);
+        border: 1px solid var(--ink);
+        border-radius: 999px;
+        background: var(--card);
+        color: var(--ink);
         font-family: "Montserrat", "Apple SD Gothic Neo", sans-serif;
         font-size: 0.88rem;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
         text-align: center;
+        transition: background 0.15s, color 0.15s;
+      }
+      .photo-expand__close:hover {
+        background: var(--ink);
+        color: var(--card);
+        opacity: 1 !important;
       }
 
       .photo-expand__close:hover {
@@ -291,9 +305,9 @@
         margin: 0;
         padding: 0;
         line-height: 0;
-        border-radius: 6px;
+        border-radius: 8px;
         overflow: hidden;
-        background: #0a0a0a;
+        background: var(--soft-accent);
       }
 
       .photo-expand__row img {
@@ -321,16 +335,17 @@
       .cinema-card {
         margin: 0;
         padding: 0;
-        border: 1px solid rgba(255, 213, 3, 0.25);
-        border-radius: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
         overflow: hidden;
-        background: #111;
+        background: var(--card);
+        box-shadow: 0 4px 18px rgba(42, 38, 32, 0.06);
       }
 
       .cinema-card__media {
         width: 100%;
         aspect-ratio: 16 / 8.6;
-        background: #000;
+        background: var(--soft-accent);
       }
 
       .cinema-card__media iframe {
@@ -347,7 +362,7 @@
         width: 100%;
         height: 100%;
         padding: 14px;
-        color: var(--page-bg);
+        color: var(--ink);
         font-size: 0.82rem;
         text-align: center;
         word-break: break-all;
@@ -365,7 +380,9 @@
         margin-left: calc(50% - 50vw);
         margin-top: 28px;
         margin-bottom: 0;
-        background: #222;
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
         padding: 36px 24px 40px;
         box-sizing: border-box;
       }
@@ -381,7 +398,7 @@
         justify-content: space-between;
         gap: 10px;
         margin: 0 0 18px;
-        color: #ffd503;
+        color: var(--ink);
       }
 
       .home-cinema__title {
@@ -389,18 +406,18 @@
         font-family: "Bebas Neue", "Montserrat", sans-serif;
         font-size: clamp(1.2rem, 3vw, 1.6rem);
         letter-spacing: 0.1em;
-        color: #ffd503;
+        color: var(--ink);
       }
 
       .home-cinema__more {
         font-size: 0.74rem;
-        color: #aaa;
+        color: var(--ink-soft);
         letter-spacing: 0.06em;
         opacity: 1;
       }
 
       .home-cinema__more:hover {
-        color: #ffd503;
+        color: var(--ink);
       }
 
       .home-cinema__rail {
@@ -420,7 +437,7 @@
       }
 
       .home-cinema__rail::-webkit-scrollbar-thumb {
-        background: rgba(255, 213, 3, 0.38);
+        background: rgba(42, 38, 32, 0.25);
         border-radius: 3px;
       }
 
@@ -428,10 +445,10 @@
         flex: 0 0 auto;
         width: clamp(260px, 52vw, 420px);
         aspect-ratio: 16 / 9;
-        border: none;
-        border-radius: 6px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
         overflow: hidden;
-        background: #333;
+        background: var(--soft-accent);
         scroll-snap-align: start;
       }
 
@@ -450,7 +467,7 @@
         justify-content: center;
         padding: 12px;
         text-align: center;
-        color: #ffd503;
+        color: var(--ink);
         font-size: 0.78rem;
         word-break: break-all;
       }
@@ -461,26 +478,23 @@
         max-width: 100vw;
         margin-left: calc(50% - 50vw);
         padding: 40px 18px 48px;
-        background: #000;
+        background: var(--card);
         text-align: center;
         box-sizing: border-box;
       }
 
-      /* 홈 hero만 노란 그라디언트 배경 */
+      /* 홈 hero: 부드러운 아이보리 그라디언트 */
       #inlog-view-home > section.latest {
-        background: radial-gradient(ellipse at 50% 30%, #ffe84d 0%, #ffd503 40%, #e8a800 100%);
+        background: linear-gradient(180deg, var(--page-bg-soft) 0%, var(--page-bg) 100%);
       }
 
-      #inlog-view-home > section.latest .latest__title-en {
-        color: #111;
-      }
-
+      #inlog-view-home > section.latest .latest__title-en,
       #inlog-view-home > section.latest .latest__title-ko {
-        color: #111;
+        color: var(--ink);
       }
 
       #inlog-view-home > section.latest .latest__desc {
-        color: #333;
+        color: var(--ink-soft);
         opacity: 1;
       }
 
@@ -499,7 +513,7 @@
         font-weight: 400;
         line-height: 0.95;
         letter-spacing: 0.06em;
-        color: var(--page-bg);
+        color: var(--ink);
       }
 
       .latest__title-ko {
@@ -509,7 +523,7 @@
         font-size: clamp(1.05rem, 3.2vw, 1.4rem);
         line-height: 1.35;
         letter-spacing: -0.02em;
-        color: var(--page-bg);
+        color: var(--ink);
       }
 
       .latest__desc {
@@ -519,8 +533,7 @@
         font-size: clamp(0.78rem, 2.2vw, 0.95rem);
         line-height: 1.55;
         letter-spacing: 0.01em;
-        color: var(--page-bg);
-        opacity: 0.95;
+        color: var(--ink-soft);
       }
 
       .gallery {
@@ -550,7 +563,8 @@
         margin: 0;
         aspect-ratio: 5 / 6;
         overflow: hidden;
-        background: #000;
+        background: var(--soft-accent);
+        border-radius: 8px;
       }
 
       .inlog-gallery-link {
@@ -568,7 +582,7 @@
       }
 
       .inlog-gallery-link:not(.inlog-gallery-link--inactive):focus-visible {
-        outline: 3px solid var(--page-bg);
+        outline: 3px solid var(--ink);
         outline-offset: -3px;
       }
 
@@ -593,14 +607,15 @@
         position: absolute;
         bottom: 10px;
         right: 10px;
-        background: rgba(0, 0, 0, 0.62);
-        color: #ffd503;
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--ink);
         font-size: 0.72rem;
         font-family: "Montserrat", sans-serif;
-        font-weight: 600;
+        font-weight: 700;
         letter-spacing: 0.06em;
         padding: 5px 10px;
-        border-radius: 4px;
+        border-radius: 999px;
+        border: 1px solid rgba(42, 38, 32, 0.12);
         pointer-events: none;
         opacity: 0;
         transition: opacity 0.25s ease;
@@ -625,11 +640,11 @@
         width: 52px;
         height: 52px;
         border-radius: 50%;
-        background: #ffd503;
-        color: #111;
+        background: var(--ink);
+        color: var(--card);
         border: none;
         cursor: pointer;
-        box-shadow: 0 3px 14px rgba(0,0,0,0.35);
+        box-shadow: 0 6px 18px rgba(42, 38, 32, 0.25);
         transition: opacity 0.2s, transform 0.2s;
         padding: 0;
       }
@@ -644,7 +659,7 @@
         height: 0;
         border-left: 8px solid transparent;
         border-right: 8px solid transparent;
-        border-bottom: 10px solid #111;
+        border-bottom: 10px solid var(--card);
         display: block;
       }
       #scroll-to-top .stt-label {
@@ -652,7 +667,7 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         line-height: 1;
-        color: #111;
+        color: var(--card);
         font-family: "Montserrat", sans-serif;
       }
 
@@ -662,25 +677,26 @@
         right: 10px;
         z-index: 1;
         padding: 5px 11px;
-        border-radius: 0;
-        background: var(--page-bg);
-        color: var(--ink);
+        border-radius: 999px;
+        background: var(--ink);
+        color: var(--card);
         font-weight: 800;
         font-size: clamp(0.58rem, 1.8vw, 0.68rem);
         letter-spacing: 0.06em;
         text-transform: uppercase;
         font-family: "Montserrat", sans-serif;
-        border: 1px solid var(--ink);
+        border: none;
         pointer-events: none;
       }
 
       .site-footer {
         width: 100%;
-        background-color: var(--page-bg);
+        background-color: var(--page-bg-soft);
         color: var(--ink);
         padding: 52px 18px 60px;
         text-align: center;
         box-sizing: border-box;
+        border-top: 1px solid var(--border);
       }
 
       .site-footer__inner {
@@ -762,8 +778,9 @@
         margin-bottom: clamp(28px, 5vw, 40px);
         padding: clamp(18px, 3vw, 24px);
         border-radius: 14px;
-        border: 1px solid rgba(255, 200, 50, 0.22);
-        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        background: var(--card);
+        box-shadow: 0 4px 16px rgba(42, 38, 32, 0.05);
         box-sizing: border-box;
       }
 
@@ -778,21 +795,21 @@
         font-weight: 800;
         letter-spacing: -0.02em;
         line-height: 1.4;
-        color: #f5c518;
+        color: var(--ink);
       }
 
       .pricing-block__p {
         margin: 0 0 18px;
         font-size: 0.92rem;
         line-height: 1.75;
-        color: rgba(255, 255, 255, 0.82);
+        color: var(--ink-soft);
       }
 
       .pricing-package-note {
         margin: 14px 0 0;
         font-size: 0.9rem;
         line-height: 1.65;
-        color: rgba(255, 255, 255, 0.78);
+        color: var(--ink-soft);
       }
 
       .pricing-table-wrap {
@@ -815,12 +832,12 @@
         padding: 12px 14px;
         text-align: left;
         vertical-align: top;
-        border: 1px solid rgba(255, 200, 50, 0.2);
+        border: 1px solid var(--border);
       }
 
       .pricing-table thead th {
-        background: rgba(255, 200, 50, 0.12);
-        color: #ffe066;
+        background: var(--soft-accent);
+        color: var(--ink);
         font-weight: 700;
         font-size: 0.78rem;
         letter-spacing: 0.04em;
@@ -829,19 +846,19 @@
       }
 
       .pricing-table tbody td {
-        color: rgba(255, 255, 255, 0.88);
+        color: var(--ink);
       }
 
       .pricing-table .pricing-price {
         white-space: nowrap;
         font-weight: 700;
-        color: #f5c518;
+        color: var(--ink);
         font-variant-numeric: tabular-nums;
       }
 
       .pricing-table .pricing-name {
         font-weight: 600;
-        color: #fff;
+        color: var(--ink);
       }
 
       @media (max-width: 520px) {
@@ -916,9 +933,9 @@
         bottom: 0;
         z-index: 250;
         display: flex;
-        background: #ffffff;
-        border-top: 1px solid rgba(0, 0, 0, 0.08);
-        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -2px 14px rgba(42, 38, 32, 0.06);
         padding-bottom: env(safe-area-inset-bottom, 0px);
       }
       .bottom-tabbar__btn {
@@ -935,7 +952,7 @@
         font-family: inherit;
         font-size: 0.72rem;
         font-weight: 600;
-        color: #888;
+        color: var(--ink-soft);
         cursor: pointer;
         text-decoration: none;
         -webkit-tap-highlight-color: transparent;
@@ -943,10 +960,10 @@
         min-height: var(--bottom-nav-h);
       }
       .bottom-tabbar__btn:hover {
-        color: #333;
+        color: var(--ink);
       }
       .bottom-tabbar__btn.is-active {
-        color: #000;
+        color: var(--ink);
       }
       .bottom-tabbar__icon {
         width: 26px;
@@ -999,29 +1016,31 @@
         max-width: 480px;
         margin: 24px auto;
         padding: 28px 22px;
-        background: rgba(0, 0, 0, 0.06);
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 14px;
         text-align: center;
+        box-shadow: 0 4px 18px rgba(42, 38, 32, 0.06);
       }
       .blog-redirect h2 {
         margin: 0 0 8px;
         font-size: 1.2rem;
         font-weight: 800;
+        color: var(--ink);
       }
       .blog-redirect p {
         margin: 0 0 16px;
         font-size: 0.92rem;
         line-height: 1.55;
-        color: var(--ink);
-        opacity: 0.8;
+        color: var(--ink-soft);
       }
       .blog-redirect a {
         display: inline-block;
         padding: 12px 22px;
         background: var(--ink);
-        color: var(--page-bg);
+        color: var(--card);
         font-weight: 700;
-        border-radius: 8px;
+        border-radius: 999px;
         font-size: 0.95rem;
       }
       .blog-redirect a:hover {
