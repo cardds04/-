@@ -1458,6 +1458,39 @@
         transform: translateY(-2px);
         border-color: #f97316;
       }
+      .saved-card.is-new {
+        animation: scPop 0.5s ease-out, scGlow 2.2s ease-out;
+        border-color: #10b981;
+      }
+      @keyframes scPop {
+        0% { transform: scale(0.7); opacity: 0; }
+        70% { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes scGlow {
+        0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+        60% { box-shadow: 0 0 0 14px rgba(16, 185, 129, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      }
+      .saved-card.is-new::after {
+        content: "방금 저장됨";
+        position: absolute;
+        top: -10px;
+        left: 8px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        font-size: 0.68rem;
+        font-weight: 900;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 2px solid #fff;
+        animation: scBadge 2.2s ease-out forwards;
+      }
+      @keyframes scBadge {
+        0% { opacity: 1; transform: translateY(0); }
+        80% { opacity: 1; }
+        100% { opacity: 0; transform: translateY(-6px); }
+      }
       .saved-card .sc-top {
         display: flex;
         justify-content: space-between;
@@ -3880,7 +3913,6 @@
           '<div class="prompt-small">📝 프롬프트를 골라 영어 문단을 써 보세요</div>' +
           '<button class="btn-today btn-help" id="btnHelpAsk" type="button">💬 도움요청</button>' +
           '</div>' +
-          '<div id="savedWritingsBox"></div>' +
           '<div class="prompt-picker" id="promptPicker"></div>' +
           '<div class="rubric-list" id="rubricList"></div>' +
           '<textarea class="write-area" id="writeArea" placeholder="  Earthquakes are one of the most..."></textarea>' +
@@ -3894,6 +3926,7 @@
           '<button class="btn btn-ghost" id="btnClearText">🧹 새 글</button>' +
           '<button class="btn btn-primary" id="btnSubmitPara">✓ 제출</button>' +
           '</div>' +
+          '<div id="savedWritingsBox"></div>' +
           '<div id="feedbackWrap"></div>';
         gameBody.appendChild(card);
 
@@ -3949,7 +3982,7 @@
         drawRubricLive();
 
         // 저장된 글 카드 렌더
-        function renderSavedBox() {
+        function renderSavedBox(highlightId) {
           const box = $("savedWritingsBox");
           if (!box) return;
           const items = getSavedWritings();
@@ -3968,7 +4001,7 @@
           items.forEach((entry) => {
             const c = document.createElement("button");
             c.type = "button";
-            c.className = "saved-card";
+            c.className = "saved-card" + (highlightId && entry.id === highlightId ? " is-new" : "");
             const isPass = entry.passCount && entry.passCount === entry.total;
             const scoreLbl = (typeof entry.passCount === "number")
               ? entry.passCount + "/" + (entry.total || 6)
@@ -4039,6 +4072,15 @@
             });
             row.appendChild(c);
           });
+          if (highlightId) {
+            const newEl = row.querySelector(".saved-card.is-new");
+            if (newEl) {
+              setTimeout(() => {
+                try { newEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }); } catch (e) {}
+              }, 80);
+              setTimeout(() => { newEl.classList.remove("is-new"); }, 2400);
+            }
+          }
         }
         renderSavedBox();
 
@@ -4107,14 +4149,15 @@
             alert("저장할 내용이 없어요.");
             return;
           }
+          const draftId = "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
           pushSavedWriting({
-            id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            id: draftId,
             ts: Date.now(),
             promptId: activePrompt,
             text: text,
             kind: "draft",
           });
-          renderSavedBox();
+          renderSavedBox(draftId);
           const btn = $("btnSaveDraft");
           const orig = btn.textContent;
           btn.textContent = "✓ 저장됨";
@@ -4429,8 +4472,9 @@
                 sourceText: text,
                 promptObj: promptObj,
               });
+              const submitId1 = "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
               pushSavedWriting({
-                id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                id: submitId1,
                 ts: Date.now(),
                 promptId: activePrompt,
                 text: text,
@@ -4438,7 +4482,7 @@
                 total: result.total,
                 kind: "submit",
               });
-              renderSavedBox();
+              renderSavedBox(submitId1);
               return;
             } catch (err) {
               console.warn("Gemini 첨삭 실패:", err);
@@ -4464,8 +4508,9 @@
             sourceText: text,
             promptObj: promptObj,
           });
+          const submitId2 = "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
           pushSavedWriting({
-            id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            id: submitId2,
             ts: Date.now(),
             promptId: activePrompt,
             text: text,
@@ -4473,7 +4518,7 @@
             total: result.total,
             kind: "submit",
           });
-          renderSavedBox();
+          renderSavedBox(submitId2);
         });
       }
 
