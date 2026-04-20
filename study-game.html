@@ -562,6 +562,123 @@
       .menu-card.is-perfect .card-badge {
         display: inline-block;
       }
+      /* ---- 단원 칩(아이콘) 행 ---- */
+      .units-section {
+        margin: 4px 0 14px;
+      }
+      .units-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin: 0 4px 8px;
+      }
+      .units-head h3 {
+        margin: 0;
+        font-size: 1rem;
+        color: #1e293b;
+      }
+      .units-head small { color: #94a3b8; font-weight: 700; font-size: 0.78rem; }
+      .units-row {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 2px 4px 8px;
+        scrollbar-width: thin;
+      }
+      .unit-chip {
+        flex: 0 0 auto;
+        position: relative;
+        background: #fff;
+        border: 3px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 12px 14px 12px 12px;
+        min-width: 120px;
+        max-width: 220px;
+        cursor: pointer;
+        font-family: inherit;
+        text-align: left;
+        transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+      }
+      .unit-chip:hover {
+        transform: translateY(-2px);
+        border-color: #6366f1;
+      }
+      .unit-chip.is-active {
+        border-color: #6366f1;
+        background: linear-gradient(135deg, #eef2ff, #fff);
+        box-shadow: 0 8px 18px rgba(99, 102, 241, 0.2);
+      }
+      .unit-chip .uc-ico {
+        font-size: 1.4rem;
+        margin-bottom: 2px;
+      }
+      .unit-chip .uc-title {
+        font-weight: 900;
+        color: #1e293b;
+        font-size: 0.92rem;
+        line-height: 1.2;
+      }
+      .unit-chip .uc-date {
+        color: #64748b;
+        font-size: 0.74rem;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .unit-chip .uc-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        margin-top: 6px;
+      }
+      .unit-chip .uc-tag {
+        background: #e0e7ff;
+        color: #4338ca;
+        font-size: 0.66rem;
+        font-weight: 800;
+        padding: 1px 6px;
+        border-radius: 999px;
+      }
+      .unit-chip.is-active .uc-tag { background: #c7d2fe; }
+      .unit-chip .uc-del {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #ef4444;
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 900;
+        cursor: pointer;
+        display: none;
+        line-height: 1;
+        font-family: inherit;
+      }
+      .unit-chip:hover .uc-del,
+      .unit-chip.is-active .uc-del { display: block; }
+      .unit-chip[data-default="1"] .uc-del { display: none !important; }
+
+      /* ---- 메뉴 카드 비활성화 ---- */
+      .menu-card.is-disabled {
+        opacity: 0.4;
+        filter: grayscale(0.6);
+        cursor: not-allowed;
+      }
+      .menu-card.is-disabled:hover { transform: none; }
+      .menu-card .card-locked {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #94a3b8;
+        color: #fff;
+        font-size: 0.66rem;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
       /* ---- AI 업로드 패널 ---- */
       .ai-panel {
         background: linear-gradient(135deg, #eef2ff, #fff);
@@ -751,6 +868,15 @@
       .study-item.is-wrong {
         background: linear-gradient(135deg, #fef2f2, #fff);
         border-color: #ef4444;
+      }
+      .study-item.is-excluded {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+        opacity: 0.65;
+      }
+      .study-item.is-excluded .sw {
+        text-decoration: line-through;
+        color: #64748b;
       }
       .study-item .mk {
         flex: 0 0 auto;
@@ -1084,12 +1210,26 @@
             </label>
             <div id="photoPreview" class="photo-preview"></div>
             <div class="ai-row">
-              <button type="button" class="btn btn-primary" id="btnApplyPhoto">🤖 분석해서 적용</button>
+              <button type="button" class="btn btn-primary" id="btnApplyPhoto">🆕 단원 업데이트 (전체)</button>
+              <button type="button" class="btn btn-primary" id="btnApplyPhotoVocab" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">📖 단어만 업데이트</button>
               <button type="button" class="btn btn-ghost" id="btnResetData">↺ 기본값으로 되돌리기</button>
             </div>
+            <small class="ai-help" style="display:block;margin-top:4px">
+              💡 <b>단원 업데이트</b>: 단어·스펠링·문장 종류·글쓰기까지 전부 추출 ·
+              <b>단어만 업데이트</b>: 단어 뜻 맞히기 게임만 활성화돼요.
+            </small>
             <div id="photoStatus" class="ai-status"></div>
             <div id="aiPreview" class="ai-preview hidden"></div>
           </div>
+        </section>
+
+        <!-- 단원 칩(아이콘) 행 -->
+        <section class="units-section" id="unitsSection">
+          <div class="units-head">
+            <h3>📚 내 단원</h3>
+            <small>아이콘을 눌러 단원을 바꿔요</small>
+          </div>
+          <div class="units-row" id="unitsRow"></div>
         </section>
 
         <div class="menu">
@@ -1542,33 +1682,22 @@
       }
 
       // ---- Vocab session persistence (wrong/right words) ----
-      const VOCAB_SESSION_KEY = "study_game_vocab_session_v1";
+      // 세션 기록은 활성 단원 안에 저장 (단원별 ○/× 추적)
       function getVocabSession() {
-        try {
-          const raw = localStorage.getItem(VOCAB_SESSION_KEY);
-          if (!raw) return { wrongs: [], rights: [] };
-          const obj = JSON.parse(raw);
-          return { wrongs: Array.isArray(obj.wrongs) ? obj.wrongs : [], rights: Array.isArray(obj.rights) ? obj.rights : [] };
-        } catch (e) { return { wrongs: [], rights: [] }; }
+        const u = getActiveUnit();
+        return { wrongs: (u.vocabWrongs || []).slice(), rights: (u.vocabRights || []).slice() };
       }
       function saveVocabSession(wrongs, rights) {
-        try {
-          localStorage.setItem(VOCAB_SESSION_KEY, JSON.stringify({ wrongs: wrongs || [], rights: rights || [] }));
-        } catch (e) {}
+        saveActiveUnitField("vocabWrongs", wrongs || []);
+        saveActiveUnitField("vocabRights", rights || []);
       }
-      const SPELL_SESSION_KEY = "study_game_spell_session_v1";
       function getSpellSession() {
-        try {
-          const raw = localStorage.getItem(SPELL_SESSION_KEY);
-          if (!raw) return { wrongs: [], rights: [] };
-          const obj = JSON.parse(raw);
-          return { wrongs: Array.isArray(obj.wrongs) ? obj.wrongs : [], rights: Array.isArray(obj.rights) ? obj.rights : [] };
-        } catch (e) { return { wrongs: [], rights: [] }; }
+        const u = getActiveUnit();
+        return { wrongs: (u.spellWrongs || []).slice(), rights: (u.spellRights || []).slice() };
       }
       function saveSpellSession(wrongs, rights) {
-        try {
-          localStorage.setItem(SPELL_SESSION_KEY, JSON.stringify({ wrongs: wrongs || [], rights: rights || [] }));
-        } catch (e) {}
+        saveActiveUnitField("spellWrongs", wrongs || []);
+        saveActiveUnitField("spellRights", rights || []);
       }
       // 저장된 이력 + 현재 세션을 합쳐서 {rights:Set, wrongs:Set} 반환
       function computeStatus(kind) {
@@ -1597,123 +1726,256 @@
       function showMenu() {
         state.mode = null;
         state.modeFilter = null;
+        applyActiveUnit();
         renderBadges();
         renderMenuDataInfo();
+        renderUnitsRow();
+        renderMenuCardsState();
         menuView.classList.remove("hidden");
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
       }
 
-      /* --------------- 📷 Gemini 사진 업로드 & 커스텀 데이터 --------------- */
-      const CUSTOM_DATA_KEY = "study_game_custom_data_v1";
+      /* --------------- 📷 Gemini 사진 업로드 & 다중 단원 시스템 --------------- */
       const GEMINI_KEY_KEY = "study_game_gemini_key_v1";
+      const UNITS_KEY = "study_game_units_v2";
+      const ACTIVE_UNIT_KEY = "study_game_active_unit_v2";
+      const DEFAULT_PERSIST_KEY = "study_game_default_persist_v2";
+      const CUSTOM_DATA_KEY = "study_game_custom_data_v1"; // legacy (마이그레이션용)
+      const DEFAULT_UNIT_ID = "default";
 
-      function getCustomData() {
+      function getUnits() {
         try {
-          const raw = localStorage.getItem(CUSTOM_DATA_KEY);
-          if (!raw) return null;
-          return JSON.parse(raw);
-        } catch (e) { return null; }
+          const raw = localStorage.getItem(UNITS_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
       }
-      function saveCustomData(data) {
-        try { localStorage.setItem(CUSTOM_DATA_KEY, JSON.stringify(data)); } catch (e) {}
+      function saveUnits(arr) {
+        try { localStorage.setItem(UNITS_KEY, JSON.stringify(arr || [])); } catch (e) {}
       }
-      function clearCustomData() {
-        try { localStorage.removeItem(CUSTOM_DATA_KEY); } catch (e) {}
+      function getActiveUnitId() {
+        try { return localStorage.getItem(ACTIVE_UNIT_KEY) || DEFAULT_UNIT_ID; } catch (e) { return DEFAULT_UNIT_ID; }
+      }
+      function setActiveUnitId(id) {
+        try { localStorage.setItem(ACTIVE_UNIT_KEY, id || DEFAULT_UNIT_ID); } catch (e) {}
+      }
+      function getDefaultPersisted() {
+        try {
+          const raw = localStorage.getItem(DEFAULT_PERSIST_KEY);
+          if (!raw) return {};
+          return JSON.parse(raw) || {};
+        } catch (e) { return {}; }
+      }
+      function saveDefaultPersisted(p) {
+        try { localStorage.setItem(DEFAULT_PERSIST_KEY, JSON.stringify(p || {})); } catch (e) {}
       }
 
-      // 업로드된 데이터를 게임 전역 변수에 적용 (카테고리 비어있으면 기본값 유지)
-      function applyCustomData(data) {
-        if (!data || typeof data !== "object") return false;
-        let any = false;
+      function makeDefaultUnit() {
+        const persisted = getDefaultPersisted();
+        return {
+          id: DEFAULT_UNIT_ID,
+          title: "기본 자연재해",
+          icon: "📚",
+          createdAt: 0,
+          mode: "full",
+          vocab: JSON.parse(JSON.stringify(DEFAULTS.VOCAB)),
+          spell: JSON.parse(JSON.stringify(DEFAULTS.SPELL)),
+          spell_meanings: JSON.parse(JSON.stringify(DEFAULTS.SPELL_MEANINGS)),
+          sentences: JSON.parse(JSON.stringify(DEFAULTS.SENTENCES)),
+          prompts: JSON.parse(JSON.stringify(DEFAULTS.WRITE_PROMPTS)),
+          disabledWords: persisted.disabledWords || [],
+          vocabRights: persisted.vocabRights || [],
+          vocabWrongs: persisted.vocabWrongs || [],
+          spellRights: persisted.spellRights || [],
+          spellWrongs: persisted.spellWrongs || [],
+        };
+      }
 
-        if (Array.isArray(data.vocab) && data.vocab.length) {
-          const cleaned = data.vocab
+      function getActiveUnit() {
+        const id = getActiveUnitId();
+        if (id === DEFAULT_UNIT_ID) return makeDefaultUnit();
+        const units = getUnits();
+        const found = units.find((u) => u.id === id);
+        if (!found) {
+          setActiveUnitId(DEFAULT_UNIT_ID);
+          return makeDefaultUnit();
+        }
+        // Defensive defaults for missing fields (forward compat)
+        found.disabledWords = found.disabledWords || [];
+        found.vocabRights = found.vocabRights || [];
+        found.vocabWrongs = found.vocabWrongs || [];
+        found.spellRights = found.spellRights || [];
+        found.spellWrongs = found.spellWrongs || [];
+        found.vocab = found.vocab || [];
+        found.spell = found.spell || [];
+        found.spell_meanings = found.spell_meanings || {};
+        found.sentences = found.sentences || [];
+        found.prompts = found.prompts || [];
+        return found;
+      }
+
+      function saveActiveUnitField(field, value) {
+        const id = getActiveUnitId();
+        if (id === DEFAULT_UNIT_ID) {
+          const p = getDefaultPersisted();
+          p[field] = value;
+          saveDefaultPersisted(p);
+          return;
+        }
+        const units = getUnits();
+        const idx = units.findIndex((u) => u.id === id);
+        if (idx >= 0) {
+          units[idx][field] = value;
+          saveUnits(units);
+        }
+      }
+
+      // 활성 단원 데이터를 게임 전역 변수에 적용
+      function applyActiveUnit() {
+        const u = getActiveUnit();
+        VOCAB = u.vocab && u.vocab.length ? u.vocab : [];
+        SPELL = u.spell && u.spell.length ? u.spell : [];
+        SPELL_MEANINGS = u.spell_meanings || {};
+        SENTENCES = u.sentences && u.sentences.length ? u.sentences : [];
+        WRITE_PROMPTS = u.prompts && u.prompts.length ? u.prompts : [];
+        return u;
+      }
+
+      function unitHasMode(u, mode) {
+        if (!u) return false;
+        if (mode === "vocab") return Array.isArray(u.vocab) && u.vocab.length > 0;
+        if (mode === "spell") return Array.isArray(u.spell) && u.spell.length > 0;
+        if (mode === "sent") return Array.isArray(u.sentences) && u.sentences.length > 0;
+        if (mode === "sentence") return Array.isArray(u.prompts) && u.prompts.length > 0;
+        return false;
+      }
+
+      // Gemini 응답 → 단원 객체 생성
+      function buildUnitFromGemini(parsed, opts) {
+        opts = opts || {};
+        const onlyVocab = opts.mode === "vocab";
+        const now = Date.now();
+        const d = new Date(now);
+        const dt = (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0");
+        const id = "u_" + now + "_" + Math.random().toString(36).slice(2, 7);
+
+        const unit = {
+          id: id,
+          title: dt + (onlyVocab ? " 단어" : " 단원"),
+          icon: onlyVocab ? "📖" : "🆕",
+          createdAt: now,
+          mode: onlyVocab ? "vocab" : "full",
+          vocab: [], spell: [], spell_meanings: {}, sentences: [], prompts: [],
+          disabledWords: [], vocabRights: [], vocabWrongs: [], spellRights: [], spellWrongs: [],
+        };
+
+        if (Array.isArray(parsed.vocab)) {
+          unit.vocab = parsed.vocab
             .filter((v) => v && typeof v.word === "string" && typeof v.meaning === "string")
             .map((v) => ({
               word: String(v.word).trim().toLowerCase(),
               meaning: String(v.meaning).trim(),
               en: typeof v.en === "string" ? String(v.en).trim() : "",
             }))
-            .filter((v) => v.word.length > 0 && v.meaning.length > 0);
-          if (cleaned.length >= 2) {
-            VOCAB = cleaned;
-            any = true;
-          }
+            .filter((v) => v.word && v.meaning);
         }
 
-        if (Array.isArray(data.spell) && data.spell.length) {
-          const words = [];
-          const meanings = {};
-          data.spell.forEach((it) => {
-            if (typeof it === "string") {
-              const w = it.trim().toLowerCase();
-              if (w.length > 0) { words.push(w); meanings[w] = ""; }
-            } else if (it && typeof it.word === "string") {
-              const w = String(it.word).trim().toLowerCase();
-              if (w.length > 0) {
-                words.push(w);
-                meanings[w] = typeof it.meaning === "string" ? String(it.meaning).trim() : "";
+        if (!onlyVocab) {
+          if (Array.isArray(parsed.spell)) {
+            const words = [];
+            const meanings = {};
+            parsed.spell.forEach((it) => {
+              if (typeof it === "string") {
+                const w = it.trim().toLowerCase();
+                if (w) { words.push(w); meanings[w] = ""; }
+              } else if (it && typeof it.word === "string") {
+                const w = String(it.word).trim().toLowerCase();
+                if (w) { words.push(w); meanings[w] = typeof it.meaning === "string" ? String(it.meaning).trim() : ""; }
               }
-            }
-          });
-          if (words.length >= 2) {
-            SPELL = words;
-            SPELL_MEANINGS = meanings;
-            any = true;
+            });
+            unit.spell = words;
+            unit.spell_meanings = meanings;
+          }
+          if (Array.isArray(parsed.sentences)) {
+            const allowed = new Set(["compound", "complex", "runon"]);
+            unit.sentences = parsed.sentences
+              .filter((x) => x && typeof x.s === "string" && typeof x.t === "string")
+              .map((x) => ({
+                s: String(x.s).trim(),
+                t: String(x.t).trim().toLowerCase().replace(/[-_\s]/g, ""),
+                why: typeof x.why === "string" ? String(x.why).trim() : "",
+              }))
+              .filter((x) => x.s.length > 4 && allowed.has(x.t));
+          }
+          if (Array.isArray(parsed.prompts)) {
+            unit.prompts = parsed.prompts
+              .filter((p) => p && typeof p.text === "string" && p.text.trim().length > 4)
+              .map((p, i) => ({
+                id: typeof p.id === "number" ? p.id : i + 1,
+                title: typeof p.title === "string" && p.title.trim() ? p.title.trim() : "Prompt " + (i + 1),
+                text: String(p.text).trim(),
+                ko: typeof p.ko === "string" ? String(p.ko).trim() : "",
+              }));
           }
         }
 
-        if (Array.isArray(data.sentences) && data.sentences.length) {
-          const allowed = new Set(["compound", "complex", "runon"]);
-          const cleaned = data.sentences
-            .filter((x) => x && typeof x.s === "string" && typeof x.t === "string")
-            .map((x) => ({
-              s: String(x.s).trim(),
-              t: String(x.t).trim().toLowerCase().replace(/[-_\s]/g, ""),
-              why: typeof x.why === "string" ? String(x.why).trim() : "",
-            }))
-            .filter((x) => x.s.length > 4 && allowed.has(x.t));
-          if (cleaned.length >= 2) {
-            SENTENCES = cleaned;
-            any = true;
-          }
-        }
-
-        if (Array.isArray(data.prompts) && data.prompts.length) {
-          const cleaned = data.prompts
-            .filter((p) => p && typeof p.text === "string" && p.text.trim().length > 4)
-            .map((p, i) => ({
-              id: typeof p.id === "number" ? p.id : i + 1,
-              title: typeof p.title === "string" && p.title.trim() ? p.title.trim() : "Prompt " + (i + 1),
-              text: String(p.text).trim(),
-              ko: typeof p.ko === "string" ? String(p.ko).trim() : "",
-            }));
-          if (cleaned.length >= 1) {
-            WRITE_PROMPTS = cleaned;
-            any = true;
-          }
-        }
-
-        return any;
+        return unit;
       }
 
-      // 시작 시 저장된 커스텀 데이터 불러오기
-      (function loadCustomOnStart() {
-        const cd = getCustomData();
-        if (cd) applyCustomData(cd);
+      function unitIsValid(unit, requireOnlyVocab) {
+        if (!unit) return false;
+        if (requireOnlyVocab) return Array.isArray(unit.vocab) && unit.vocab.length >= 2;
+        return (
+          (Array.isArray(unit.vocab) && unit.vocab.length >= 2) ||
+          (Array.isArray(unit.spell) && unit.spell.length >= 2) ||
+          (Array.isArray(unit.sentences) && unit.sentences.length >= 2) ||
+          (Array.isArray(unit.prompts) && unit.prompts.length >= 1)
+        );
+      }
+
+      // 기존 CUSTOM_DATA_KEY 데이터를 새 단원으로 1회 마이그레이션
+      (function migrateLegacyCustomData() {
+        try {
+          const oldRaw = localStorage.getItem(CUSTOM_DATA_KEY);
+          if (!oldRaw) return;
+          const old = JSON.parse(oldRaw);
+          if (!old || typeof old !== "object") return;
+          const units = getUnits();
+          if (units.some((u) => u._fromLegacy)) {
+            localStorage.removeItem(CUSTOM_DATA_KEY);
+            return;
+          }
+          const u = buildUnitFromGemini(old, { mode: "full" });
+          if (old._sourcedAt) u.createdAt = old._sourcedAt;
+          u._fromLegacy = true;
+          if (unitIsValid(u, false)) {
+            units.push(u);
+            saveUnits(units);
+          }
+          localStorage.removeItem(CUSTOM_DATA_KEY);
+        } catch (e) {}
       })();
+
+      // 시작 시 활성 단원 데이터 적용
+      applyActiveUnit();
 
       function renderMenuDataInfo() {
         const sub = document.querySelector(".page-sub");
         if (!sub) return;
-        const cd = getCustomData();
-        if (cd && cd._sourcedAt) {
-          const d = new Date(cd._sourcedAt);
-          const dt = d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
-          sub.textContent = "📷 사진 업로드 단원 · " + dt + " · 단어 " + VOCAB.length + " · 스펠링 " + SPELL.length + " · 문장 " + SENTENCES.length;
+        const u = getActiveUnit();
+        if (u.id === DEFAULT_UNIT_ID) {
+          sub.textContent = "📚 기본 단원 · 자연재해 어휘 (단어 " + VOCAB.length + ")";
         } else {
-          sub.textContent = "Unit 1 · 어휘 · 스펠링 · 문장 종류 학습";
+          const d = new Date(u.createdAt);
+          const dt = d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
+          const parts = [];
+          if (VOCAB.length) parts.push("단어 " + VOCAB.length);
+          if (SPELL.length) parts.push("스펠링 " + SPELL.length);
+          if (SENTENCES.length) parts.push("문장 " + SENTENCES.length);
+          if (WRITE_PROMPTS.length) parts.push("쓰기 " + WRITE_PROMPTS.length);
+          sub.textContent = "📷 " + u.title + " · " + dt + " · " + parts.join(" · ");
         }
       }
 
@@ -1730,32 +1992,48 @@
         });
       }
 
-      async function callGeminiVision(apiKey, files) {
+      async function callGeminiVision(apiKey, files, opts) {
+        opts = opts || {};
+        const onlyVocab = opts.mode === "vocab";
         const GEMINI_MODEL = "gemini-2.0-flash";
         const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
 
         const parts = [];
-        parts.push({
-          text: [
-            "You are a kind English study assistant helping a Korean elementary school student.",
-            "Analyze the attached study-guide photo(s). Extract ONLY content clearly present in the images.",
-            "Return a single valid JSON object with these keys (use empty arrays for any section not present):",
-            "{",
-            '  "vocab":     [ {"word":"lowercase English word","meaning":"Korean translation","en":"short English definition"} ],',
-            '  "spell":     [ {"word":"lowercase English word","meaning":"short Korean meaning"} ],',
-            '  "sentences": [ {"s":"example sentence exactly as shown","t":"compound|complex|runon","why":"short Korean reason why"} ],',
-            '  "prompts":   [ {"id":1,"title":"Prompt 1","text":"English prompt text","ko":"Korean translation"} ]',
-            "}",
-            "Rules:",
-            "- vocab: include ONLY words that are paired with a definition/meaning in the image.",
-            "- spell: include words from any spelling word list (Part B, spelling list, etc).",
-            "- sentences: include example sentences labeled or identifiable as compound, complex, or run-on. Use only those three labels for 't'.",
-            "- prompts: include writing prompts asking the student to write a paragraph.",
-            "- Meanings/explanations must be in simple Korean for an elementary student.",
-            "- Do NOT invent content that is not in the images.",
-            "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
-          ].join("\n"),
-        });
+        const promptLines = onlyVocab
+          ? [
+              "You are a kind English study assistant helping a Korean elementary school student.",
+              "Analyze the attached photo(s) and extract ONLY English vocabulary words for memorization.",
+              "Return a single valid JSON object:",
+              "{",
+              '  "vocab": [ {"word":"lowercase English word","meaning":"Korean translation","en":"short English definition"} ]',
+              "}",
+              "Rules:",
+              "- Include every English word that appears in the image(s) that a student should study.",
+              "- If a definition is shown next to a word, use it; otherwise provide a clear, simple Korean meaning yourself.",
+              "- Words must be lowercase English; meanings must be short Korean for an elementary student.",
+              "- Do NOT include spell/sentences/prompts keys.",
+              "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
+            ]
+          : [
+              "You are a kind English study assistant helping a Korean elementary school student.",
+              "Analyze the attached study-guide photo(s). Extract ONLY content clearly present in the images.",
+              "Return a single valid JSON object with these keys (use empty arrays for any section not present):",
+              "{",
+              '  "vocab":     [ {"word":"lowercase English word","meaning":"Korean translation","en":"short English definition"} ],',
+              '  "spell":     [ {"word":"lowercase English word","meaning":"short Korean meaning"} ],',
+              '  "sentences": [ {"s":"example sentence exactly as shown","t":"compound|complex|runon","why":"short Korean reason why"} ],',
+              '  "prompts":   [ {"id":1,"title":"Prompt 1","text":"English prompt text","ko":"Korean translation"} ]',
+              "}",
+              "Rules:",
+              "- vocab: include ONLY words that are paired with a definition/meaning in the image.",
+              "- spell: include words from any spelling word list (Part B, spelling list, etc).",
+              "- sentences: include example sentences labeled or identifiable as compound, complex, or run-on. Use only those three labels for 't'.",
+              "- prompts: include writing prompts asking the student to write a paragraph.",
+              "- Meanings/explanations must be in simple Korean for an elementary student.",
+              "- Do NOT invent content that is not in the images.",
+              "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
+            ];
+        parts.push({ text: promptLines.join("\n") });
 
         for (let i = 0; i < files.length; i++) {
           const f = files[i];
@@ -1832,6 +2110,7 @@
         const keyInput = $("geminiKey");
         const fileInput = $("photoInput");
         const btnApply = $("btnApplyPhoto");
+        const btnApplyVocab = $("btnApplyPhotoVocab");
         const btnReset = $("btnResetData");
         const status = $("photoStatus");
         const preview = $("photoPreview");
@@ -1927,7 +2206,8 @@
           });
         });
 
-        btnApply && btnApply.addEventListener("click", async () => {
+        async function runUpload(modeOpts, btnEl) {
+          const onlyVocab = modeOpts && modeOpts.mode === "vocab";
           const key = (keyInput.value || "").trim();
           const files = Array.from(fileInput.files || []);
           if (!key) {
@@ -1942,50 +2222,52 @@
           }
           try { localStorage.setItem(GEMINI_KEY_KEY, key); setKeyStatus(true, maskKey(key)); } catch (e) {}
 
-          btnApply.disabled = true;
+          if (btnApply) btnApply.disabled = true;
+          if (btnApplyVocab) btnApplyVocab.disabled = true;
           status.className = "ai-status is-loading";
-          status.textContent = "🤖 Gemini가 사진을 읽고 있어요… (10~30초 소요)";
+          status.textContent = (onlyVocab ? "🤖 단어를 추출하고 있어요…" : "🤖 Gemini가 사진을 읽고 있어요…") + " (10~30초 소요)";
           try {
-            const parsed = await callGeminiVision(key, files);
+            const parsed = await callGeminiVision(key, files, modeOpts);
             renderAiPreview(parsed);
-            const ok = applyCustomData(parsed);
-            if (!ok) {
+            const newUnit = buildUnitFromGemini(parsed, modeOpts);
+            if (!unitIsValid(newUnit, onlyVocab)) {
               status.className = "ai-status is-error";
-              status.textContent = "⚠️ 추출된 내용이 충분하지 않아요. 더 선명한 사진으로 다시 시도해 주세요.";
-            } else {
-              const toSave = Object.assign({}, parsed, { _sourcedAt: Date.now() });
-              saveCustomData(toSave);
-              renderMenuDataInfo();
-              status.className = "ai-status is-ok";
-              status.textContent = "✅ 단원이 업데이트됐어요! 메뉴에서 게임을 시작해 보세요.";
-              // 복습 기록은 새 단어 세트와 맞지 않을 수 있으므로 초기화 추천
-              try {
-                localStorage.removeItem("study_game_vocab_session_v1");
-                localStorage.removeItem("study_game_spell_session_v1");
-              } catch (e) {}
+              status.textContent = "⚠️ 추출된 내용이 충분하지 않아요" + (onlyVocab ? " (단어 2개 이상 필요)" : "") + ". 더 선명한 사진으로 다시 시도해 주세요.";
+              return;
             }
+            const units = getUnits();
+            units.push(newUnit);
+            saveUnits(units);
+            setActiveUnitId(newUnit.id);
+            applyActiveUnit();
+            renderMenuDataInfo();
+            renderUnitsRow();
+            renderMenuCardsState();
+            status.className = "ai-status is-ok";
+            status.textContent = "✅ 새 단원이 만들어졌어요: " + newUnit.title + (onlyVocab ? " (단어 뜻 맞히기만 가능)" : "");
+            // 파일 입력 비우기
+            if (fileInput) fileInput.value = "";
+            preview.innerHTML = "";
           } catch (e) {
             console.warn(e);
             status.className = "ai-status is-error";
             status.textContent = "⚠️ 실패: " + (e && e.message ? e.message : String(e));
           } finally {
-            btnApply.disabled = false;
+            if (btnApply) btnApply.disabled = false;
+            if (btnApplyVocab) btnApplyVocab.disabled = false;
           }
-        });
+        }
+
+        btnApply && btnApply.addEventListener("click", () => runUpload({ mode: "full" }, btnApply));
+        btnApplyVocab && btnApplyVocab.addEventListener("click", () => runUpload({ mode: "vocab" }, btnApplyVocab));
 
         btnReset && btnReset.addEventListener("click", () => {
-          if (!confirm("기본 단원(자연재해 어휘)으로 되돌릴까요? 업로드로 생성한 단원은 삭제돼요.")) return;
-          clearCustomData();
-          VOCAB = JSON.parse(JSON.stringify(DEFAULTS.VOCAB));
-          SPELL = JSON.parse(JSON.stringify(DEFAULTS.SPELL));
-          SPELL_MEANINGS = JSON.parse(JSON.stringify(DEFAULTS.SPELL_MEANINGS));
-          SENTENCES = JSON.parse(JSON.stringify(DEFAULTS.SENTENCES));
-          WRITE_PROMPTS = JSON.parse(JSON.stringify(DEFAULTS.WRITE_PROMPTS));
-          try {
-            localStorage.removeItem("study_game_vocab_session_v1");
-            localStorage.removeItem("study_game_spell_session_v1");
-          } catch (e) {}
+          if (!confirm("기본 단원(자연재해 어휘)으로 되돌릴까요? 활성 단원만 기본으로 바뀌어요. (다른 단원 칩은 유지)")) return;
+          setActiveUnitId(DEFAULT_UNIT_ID);
+          applyActiveUnit();
           renderMenuDataInfo();
+          renderUnitsRow();
+          renderMenuCardsState();
           status.className = "ai-status is-ok";
           status.textContent = "↺ 기본 단원으로 되돌렸어요.";
           const aiPreview = $("aiPreview");
@@ -1993,8 +2275,99 @@
         });
       }
       wireAiPanel();
+
+      /* ---------- 단원 칩 렌더 + 카드 비활성화 ---------- */
+      function fmtDate(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        return (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0");
+      }
+
+      function renderUnitsRow() {
+        const row = $("unitsRow");
+        if (!row) return;
+        row.innerHTML = "";
+        const activeId = getActiveUnitId();
+
+        const allUnits = [makeDefaultUnit()].concat(getUnits().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+
+        allUnits.forEach((u) => {
+          const isDefault = u.id === DEFAULT_UNIT_ID;
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "unit-chip" + (u.id === activeId ? " is-active" : "");
+          chip.dataset.id = u.id;
+          if (isDefault) chip.dataset.default = "1";
+
+          const tags = [];
+          if (Array.isArray(u.vocab) && u.vocab.length) tags.push('<span class="uc-tag">📖 ' + u.vocab.length + '</span>');
+          if (Array.isArray(u.spell) && u.spell.length) tags.push('<span class="uc-tag">✏️ ' + u.spell.length + '</span>');
+          if (Array.isArray(u.sentences) && u.sentences.length) tags.push('<span class="uc-tag">🔤 ' + u.sentences.length + '</span>');
+          if (Array.isArray(u.prompts) && u.prompts.length) tags.push('<span class="uc-tag">📝 ' + u.prompts.length + '</span>');
+
+          chip.innerHTML =
+            '<div class="uc-ico">' + (u.icon || "📚") + '</div>' +
+            '<div class="uc-title">' + u.title + '</div>' +
+            '<div class="uc-date">' + (isDefault ? "기본 제공" : fmtDate(u.createdAt)) + '</div>' +
+            '<div class="uc-tags">' + tags.join("") + '</div>' +
+            (isDefault ? "" : '<button type="button" class="uc-del" title="단원 삭제">✕</button>');
+
+          chip.addEventListener("click", (e) => {
+            if (e.target && e.target.classList && e.target.classList.contains("uc-del")) return;
+            setActiveUnitId(u.id);
+            applyActiveUnit();
+            renderMenuDataInfo();
+            renderUnitsRow();
+            renderMenuCardsState();
+          });
+          const delBtn = chip.querySelector(".uc-del");
+          if (delBtn) {
+            delBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (!confirm("이 단원을 삭제할까요? 단원에 저장된 ○/× 기록도 함께 사라져요.")) return;
+              const units = getUnits().filter((x) => x.id !== u.id);
+              saveUnits(units);
+              if (activeId === u.id) setActiveUnitId(DEFAULT_UNIT_ID);
+              applyActiveUnit();
+              renderMenuDataInfo();
+              renderUnitsRow();
+              renderMenuCardsState();
+            });
+          }
+
+          row.appendChild(chip);
+        });
+      }
+
+      function renderMenuCardsState() {
+        const u = getActiveUnit();
+        const map = { vocab: "card-vocab", spell: "card-spell", sent: "card-sent", sentence: "card-sentence" };
+        Object.keys(map).forEach((mode) => {
+          const el = document.getElementById(map[mode]);
+          if (!el) return;
+          const has = unitHasMode(u, mode);
+          el.classList.toggle("is-disabled", !has);
+          let lock = el.querySelector(".card-locked");
+          if (!has) {
+            if (!lock) {
+              lock = document.createElement("span");
+              lock.className = "card-locked";
+              lock.textContent = "🔒 자료 없음";
+              el.appendChild(lock);
+            }
+          } else if (lock) {
+            lock.remove();
+          }
+        });
+      }
+
       function startMode(mode, opts) {
         opts = opts || {};
+        const u = getActiveUnit();
+        if (!unitHasMode(u, mode)) {
+          alert("이 단원에는 " + ({ vocab: "단어 뜻 맞히기", spell: "스펠링 퍼즐", sent: "문장 종류 맞히기", sentence: "문장 만들기" }[mode] || mode) + " 자료가 없어요.\n사진을 더 업로드하거나 다른 단원을 선택해 주세요.");
+          return;
+        }
         state.mode = mode;
         state.modeFilter = opts.filter || null;
         state.score = 0;
@@ -2005,22 +2378,32 @@
         state.spellWrongs = [];
         state.spellRights = [];
         if (mode === "vocab") {
-          let pool = VOCAB;
+          // 비활성(아는 단어) 제외
+          const disabled = new Set(u.disabledWords || []);
+          let basePool = VOCAB.filter((v) => !disabled.has(v.word));
+          if (basePool.length === 0) basePool = VOCAB; // 모두 제외된 경우 안전장치
+          let pool = basePool;
           if (opts.filter === "wrong") {
             const saved = getVocabSession();
             const words = new Set(saved.wrongs || []);
-            const filtered = VOCAB.filter((v) => words.has(v.word));
+            const filtered = basePool.filter((v) => words.has(v.word));
             if (filtered.length > 0) pool = filtered;
           } else if (opts.filter === "right") {
             const saved = getVocabSession();
             const words = new Set(saved.rights || []);
-            const filtered = VOCAB.filter((v) => words.has(v.word));
+            const filtered = basePool.filter((v) => words.has(v.word));
             if (filtered.length > 0) pool = filtered;
           }
           const count = Math.min(10, Math.max(1, pool.length));
           state.questions = pickN(pool, count);
-        } else if (mode === "spell") state.questions = pickN(SPELL, 10);
-        else if (mode === "sent") state.questions = pickN(SENTENCES, 10);
+        } else if (mode === "spell") {
+          const count = Math.min(10, Math.max(1, SPELL.length));
+          state.questions = pickN(SPELL, count);
+        }
+        else if (mode === "sent") {
+          const count = Math.min(10, Math.max(1, SENTENCES.length));
+          state.questions = pickN(SENTENCES, count);
+        }
         else if (mode === "sentence") state.questions = null;
         menuView.classList.add("hidden");
         finalView.classList.add("hidden");
@@ -2156,11 +2539,15 @@
         const ov = document.getElementById("studyOverlay");
         if (ov) ov.remove();
       }
-      function openStudyListOverlay(kind) {
+      function openStudyListOverlay(kind, opts) {
+        opts = opts || {};
         closeStudyOverlay();
+        const excludeMode = !!opts.excludeMode && kind === "vocab";
         const st = computeStatus(kind);
         const rights = st.rights;
         const wrongs = st.wrongs;
+        const activeUnit = getActiveUnit();
+        const disabled = new Set(activeUnit.disabledWords || []);
 
         const ov = document.createElement("div");
         ov.className = "study-overlay";
@@ -2172,13 +2559,18 @@
         const sheet = document.createElement("div");
         sheet.className = "sheet pop";
 
-        const titleText = kind === "spell" ? "📚 오늘 외워야 할 스펠링 단어" : "📚 오늘 외워야 할 단어";
+        const titleText = excludeMode
+          ? "🚫 아는 단어 제외하기"
+          : (kind === "spell" ? "📚 오늘 외워야 할 스펠링 단어" : "📚 오늘 외워야 할 단어");
         const totalCount = kind === "spell" ? SPELL.length : VOCAB.length;
 
         const closeRow = document.createElement("div");
         closeRow.className = "close-row";
         const h = document.createElement("div");
-        h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">총 ' + totalCount + '개 · 뜻을 탭하면 가렸다 보였다 할 수 있어요</div>';
+        const subText = excludeMode
+          ? "단어를 탭하면 게임에서 제외 ⇄ 다시 포함 토글돼요. 제외된 단어는 회색으로 표시됩니다."
+          : "총 " + totalCount + "개 · 뜻을 탭하면 가렸다 보였다 할 수 있어요";
+        h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">' + subText + '</div>';
         const rightControls = document.createElement("div");
         rightControls.style.display = "flex";
         rightControls.style.alignItems = "center";
@@ -2206,29 +2598,40 @@
           ? SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }))
           : VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }));
 
-        let rightCnt = 0, wrongCnt = 0;
+        let rightCnt = 0, wrongCnt = 0, excludedCnt = 0;
         items.forEach((it) => {
           const row = document.createElement("div");
           const isR = rights.has(it.word);
           const isW = wrongs.has(it.word);
+          const isExcluded = disabled.has(it.word);
           if (isR) rightCnt++;
           if (isW) wrongCnt++;
-          row.className = "study-item" + (isR ? " is-right" : "") + (isW ? " is-wrong" : "");
+          if (isExcluded) excludedCnt++;
+          row.className = "study-item" + (isR ? " is-right" : "") + (isW ? " is-wrong" : "") + (isExcluded ? " is-excluded" : "");
 
           const mk = document.createElement("span");
           mk.className = "mk";
-          mk.textContent = isR ? "○" : isW ? "×" : "·";
+          if (excludeMode) mk.textContent = isExcluded ? "🚫" : "✓";
+          else mk.textContent = isR ? "○" : isW ? "×" : "·";
+
           const sw = document.createElement("span");
           sw.className = "sw";
           sw.textContent = it.word;
+
           const sm = document.createElement("span");
           sm.className = "sm";
           sm.textContent = it.meaning;
-          sm.title = "클릭해서 가리기/보이기";
-          sm.addEventListener("click", (e) => {
-            e.stopPropagation();
-            sm.classList.toggle("is-hidden");
-          });
+          if (excludeMode) {
+            sm.title = "탭하면 단어를 제외/포함 토글";
+            sm.style.cursor = "pointer";
+          } else {
+            sm.title = "클릭해서 가리기/보이기";
+            sm.addEventListener("click", (e) => {
+              e.stopPropagation();
+              sm.classList.toggle("is-hidden");
+            });
+          }
+
           const say = document.createElement("button");
           say.type = "button";
           say.className = "say";
@@ -2243,8 +2646,25 @@
           row.appendChild(sw);
           row.appendChild(sm);
           row.appendChild(say);
+
+          if (excludeMode) {
+            row.style.cursor = "pointer";
+            row.addEventListener("click", () => {
+              const isOn = row.classList.toggle("is-excluded");
+              mk.textContent = isOn ? "🚫" : "✓";
+              if (isOn) disabled.add(it.word);
+              else disabled.delete(it.word);
+              saveActiveUnitField("disabledWords", Array.from(disabled));
+              const remain = (VOCAB.filter((v) => !disabled.has(v.word))).length;
+              if (countText) countText.textContent = "🚫 제외 " + disabled.size + " · 학습 " + remain;
+            });
+          }
+
           list.appendChild(row);
         });
+
+        // excludeMode일 때 행 클릭 시 카운터 업데이트용 참조 (summary 렌더 후 할당)
+        let countText = null;
         sheet.appendChild(list);
 
         // 전체 가리기 / 전체 보이기 토글
@@ -2262,10 +2682,18 @@
 
         const summary = document.createElement("div");
         summary.className = "study-summary";
-        summary.innerHTML =
-          '<span class="right">○ 맞춘 단어 ' + rightCnt + '</span>' +
-          '<span class="wrong">× 틀린 단어 ' + wrongCnt + '</span>' +
-          '<span>· 남은 ' + (totalCount - rightCnt - wrongCnt) + '</span>';
+        if (excludeMode) {
+          const remain = (VOCAB.filter((v) => !disabled.has(v.word))).length;
+          summary.innerHTML =
+            '<span style="color:#475569">탭해서 ON/OFF</span>' +
+            '<span id="excludeCount" style="color:#7c3aed">🚫 제외 ' + disabled.size + ' · 학습 ' + remain + '</span>';
+          countText = summary.querySelector("#excludeCount");
+        } else {
+          summary.innerHTML =
+            '<span class="right">○ 맞춘 단어 ' + rightCnt + '</span>' +
+            '<span class="wrong">× 틀린 단어 ' + wrongCnt + '</span>' +
+            '<span>· 남은 ' + (totalCount - rightCnt - wrongCnt) + '</span>';
+        }
         sheet.appendChild(summary);
 
         ov.appendChild(sheet);
@@ -2283,7 +2711,10 @@
         card.innerHTML =
           '<div class="prompt-row">' +
           '<div class="prompt-small">📖 이 단어의 뜻은?</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
           '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
+          '<button class="btn-today" id="btnExcludeKnown" style="background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff">🚫 아는 단어 제외</button>' +
+          '</div>' +
           '</div>' +
           '<div class="prompt-big" id="vocabWord">' + item.word + '</div>' +
           '<div class="btn-row" style="margin:4px 0 10px"><button class="btn btn-say" id="btnSay">🔊 들어보기</button></div>' +
@@ -2303,6 +2734,7 @@
         $("btnSay").addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
+        $("btnExcludeKnown").addEventListener("click", () => openStudyListOverlay("vocab", { excludeMode: true }));
       }
       function pickVocab(btn, picked, correct) {
         const buttons = document.querySelectorAll(".choice-btn");
@@ -2865,7 +3297,15 @@
 
       /* --------------------------- Events --------------------------- */
       document.querySelectorAll(".menu-card").forEach((btn) => {
-        btn.addEventListener("click", () => startMode(btn.dataset.mode));
+        btn.addEventListener("click", () => {
+          if (btn.classList.contains("is-disabled")) {
+            const u = getActiveUnit();
+            const modeName = { vocab: "단어 뜻 맞히기", spell: "스펠링 퍼즐", sent: "문장 종류 맞히기", sentence: "문장 만들기" }[btn.dataset.mode] || btn.dataset.mode;
+            alert("'" + u.title + "' 단원에는 " + modeName + " 자료가 없어요. \n다른 단원을 선택하거나 사진을 업로드해 주세요.");
+            return;
+          }
+          startMode(btn.dataset.mode);
+        });
       });
       $("btnBack").addEventListener("click", () => {
         try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
