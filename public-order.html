@@ -915,6 +915,22 @@
       body.is-embed .status-badge {
         font-family: inherit;
       }
+
+      /* 내정보 전용 모드: 부모(inlog.html)에서 #myinfo 로 진입한 경우
+         스케줄 등록/편집/현황 등 주문 관련 영역은 전부 숨겨서
+         '내 정보'만 보이도록 한다. */
+      body.is-embed.is-myinfo-only #welcomeText { display: inline-block; }
+      body.is-embed.is-myinfo-only #myInfoBtn { display: none !important; }
+      body.is-embed.is-myinfo-only .tf-main-tabs,
+      body.is-embed.is-myinfo-only #registerSection,
+      body.is-embed.is-myinfo-only #editRequestSection,
+      body.is-embed.is-myinfo-only #statusSection,
+      body.is-embed.is-myinfo-only #closedDatesNoticeBox {
+        display: none !important;
+      }
+      body.is-embed.is-myinfo-only #myInfoBox {
+        margin-top: 4px;
+      }
     </style>
   </head>
   <body>
@@ -5316,7 +5332,8 @@
 
       // ── 임베드 모드 (?embed=1): 부모 inlog.html 안에서 iframe으로 표시될 때 ─────
       // - 외부 여백을 최소화하고 카드 그림자를 줄여 페이지 일부처럼 자연스럽게 보이도록.
-      // - 해시가 #myinfo 인 경우, 로그인 후 '내 정보' 박스를 자동으로 펼침.
+      // - 해시가 #myinfo 인 경우, 로그인 후 '내 정보' 박스를 자동으로 펼치고
+      //   스케줄 등록/편집/현황 영역은 CSS(.is-myinfo-only)로 숨겨 '내 정보'만 보이게 한다.
       (function setupEmbedMode() {
         const params = new URLSearchParams(location.search);
         const isEmbed = params.get("embed") === "1";
@@ -5326,19 +5343,29 @@
         function wantMyInfo() {
           return String(location.hash || "").replace(/^#/, "").trim() === "myinfo";
         }
+        function syncMyInfoOnlyClass() {
+          if (!isEmbed) return;
+          document.body.classList.toggle("is-myinfo-only", wantMyInfo());
+        }
         let myInfoAutoOpened = false;
         function tryAutoOpenMyInfo() {
           if (!wantMyInfo()) return;
           if (myInfoAutoOpened) return;
           const myInfoBtn = document.getElementById("myInfoBtn");
+          const myInfoBox = document.getElementById("myInfoBox");
           const scheduleBlock = document.getElementById("scheduleBlock");
           if (!myInfoBtn || !scheduleBlock) return;
           if (scheduleBlock.classList.contains("hidden")) return; // 아직 로그인 전
+          // 내 정보 박스가 닫혀있을 때만 클릭 (열려있으면 그대로 둠)
+          if (myInfoBox && myInfoBox.classList.contains("hidden")) {
+            try { myInfoBtn.click(); } catch (e) { /* noop */ }
+          }
           myInfoAutoOpened = true;
-          try { myInfoBtn.click(); } catch (e) { /* noop */ }
         }
+        syncMyInfoOnlyClass();
         window.addEventListener("hashchange", () => {
           myInfoAutoOpened = false;
+          syncMyInfoOnlyClass();
           tryAutoOpenMyInfo();
         });
         // 로그인 상태 변화를 폴링으로 감지 (renderAuthState 호출 후 schedule 블록이 보이게 됨)
