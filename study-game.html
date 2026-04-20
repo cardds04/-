@@ -562,6 +562,154 @@
       .menu-card.is-perfect .card-badge {
         display: inline-block;
       }
+      /* ---- 오늘 외워야 할 단어 오버레이 ---- */
+      .study-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 24px 16px;
+        z-index: 9999;
+        overflow-y: auto;
+      }
+      .study-overlay .sheet {
+        background: #fff;
+        border-radius: 22px;
+        width: 100%;
+        max-width: 520px;
+        padding: 20px 22px 22px;
+        box-shadow: 0 22px 56px rgba(0, 0, 0, 0.25);
+        border: 3px solid #e2e8f0;
+      }
+      .study-overlay .sheet h3 {
+        margin: 0 0 4px;
+        color: #1e293b;
+        font-size: 1.2rem;
+      }
+      .study-overlay .sheet .sub {
+        color: #64748b;
+        font-size: 0.84rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+      .study-overlay .close-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .study-overlay .close-btn {
+        background: #f1f5f9;
+        border: 2px solid #e2e8f0;
+        border-radius: 999px;
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #475569;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .study-overlay .close-btn:hover { background: #e2e8f0; }
+      .study-list { display: flex; flex-direction: column; gap: 6px; }
+      .study-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+      }
+      .study-item.is-right {
+        background: linear-gradient(135deg, #f0fdf4, #fff);
+        border-color: #10b981;
+      }
+      .study-item.is-wrong {
+        background: linear-gradient(135deg, #fef2f2, #fff);
+        border-color: #ef4444;
+      }
+      .study-item .mk {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 1rem;
+        color: #94a3b8;
+        background: #e2e8f0;
+      }
+      .study-item.is-right .mk { background: #10b981; color: #fff; }
+      .study-item.is-wrong .mk { background: #ef4444; color: #fff; }
+      .study-item .sw {
+        flex: 0 0 auto;
+        min-width: 110px;
+        font-weight: 900;
+        color: #1e293b;
+        font-size: 1rem;
+      }
+      .study-item .sm {
+        flex: 1 1 auto;
+        color: #475569;
+        font-weight: 600;
+        font-size: 0.9rem;
+        word-break: keep-all;
+      }
+      .study-item .say {
+        flex: 0 0 auto;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .study-summary {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-radius: 12px;
+        font-size: 0.86rem;
+        font-weight: 800;
+        color: #475569;
+        justify-content: space-around;
+      }
+      .study-summary .right { color: #059669; }
+      .study-summary .wrong { color: #b91c1c; }
+      .btn-today {
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #78350f;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-family: inherit;
+        font-weight: 900;
+        font-size: 0.82rem;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+        white-space: nowrap;
+      }
+      .btn-today:hover { transform: translateY(-1px); }
+      .prompt-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .prompt-row .prompt-small { margin: 0; }
+
       /* ---- 문장 만들기 ---- */
       .prompt-picker {
         display: grid;
@@ -836,6 +984,24 @@
         "question", "certain", "usually", "become",
         "together", "weekend", "field", "nobody",
       ];
+      const SPELL_MEANINGS = {
+        change: "바꾸다, 변화",
+        surface: "표면, 지면",
+        piece: "조각, 부분",
+        natural: "자연의, 자연스러운",
+        pressure: "압력, 압박",
+        quite: "꽤, 상당히",
+        important: "중요한",
+        except: "~를 제외하고",
+        question: "질문, 문제",
+        certain: "확실한, 어떤",
+        usually: "보통, 대개",
+        become: "~이 되다",
+        together: "함께",
+        weekend: "주말",
+        field: "들판, 분야",
+        nobody: "아무도 ~않다",
+      };
 
       // Writing prompts (Part D)
       const WRITE_PROMPTS = [
@@ -891,6 +1057,8 @@
         streak: 0,
         sessionWrongs: [],
         sessionRights: [],
+        spellWrongs: [],
+        spellRights: [],
       };
 
       const $ = (id) => document.getElementById(id);
@@ -1182,6 +1350,32 @@
           localStorage.setItem(VOCAB_SESSION_KEY, JSON.stringify({ wrongs: wrongs || [], rights: rights || [] }));
         } catch (e) {}
       }
+      const SPELL_SESSION_KEY = "study_game_spell_session_v1";
+      function getSpellSession() {
+        try {
+          const raw = localStorage.getItem(SPELL_SESSION_KEY);
+          if (!raw) return { wrongs: [], rights: [] };
+          const obj = JSON.parse(raw);
+          return { wrongs: Array.isArray(obj.wrongs) ? obj.wrongs : [], rights: Array.isArray(obj.rights) ? obj.rights : [] };
+        } catch (e) { return { wrongs: [], rights: [] }; }
+      }
+      function saveSpellSession(wrongs, rights) {
+        try {
+          localStorage.setItem(SPELL_SESSION_KEY, JSON.stringify({ wrongs: wrongs || [], rights: rights || [] }));
+        } catch (e) {}
+      }
+      // 저장된 이력 + 현재 세션을 합쳐서 {rights:Set, wrongs:Set} 반환
+      function computeStatus(kind) {
+        const saved = kind === "spell" ? getSpellSession() : getVocabSession();
+        const rights = new Set(saved.rights || []);
+        const wrongs = new Set(saved.wrongs || []);
+        // 현재 세션의 결과를 덮어씀 (틀리면 정답 기록보다 우선)
+        const curR = kind === "spell" ? (state.spellRights || []) : (state.sessionRights || []);
+        const curW = kind === "spell" ? (state.spellWrongs || []) : (state.sessionWrongs || []);
+        curR.forEach((w) => { rights.add(w); wrongs.delete(w); });
+        curW.forEach((w) => { wrongs.add(w); rights.delete(w); });
+        return { rights: rights, wrongs: wrongs };
+      }
       function getBest() {
         try {
           return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
@@ -1211,6 +1405,8 @@
         state.idx = 0;
         state.sessionWrongs = [];
         state.sessionRights = [];
+        state.spellWrongs = [];
+        state.spellRights = [];
         if (mode === "vocab") {
           let pool = VOCAB;
           if (opts.filter === "wrong") {
@@ -1326,6 +1522,18 @@
           reviewRow.appendChild(btnRight);
         }
 
+        // Spell: 세션을 localStorage에 병합 저장 (이후 오버레이에서 ○/× 유지)
+        if (state.mode === "spell") {
+          const prev = getSpellSession();
+          const prevRights = new Set(prev.rights || []);
+          const prevWrongs = new Set(prev.wrongs || []);
+          const nowWrongs = new Set(state.spellWrongs);
+          const nowRights = new Set(state.spellRights);
+          nowWrongs.forEach((w) => { prevWrongs.add(w); prevRights.delete(w); });
+          nowRights.forEach((w) => { prevRights.add(w); prevWrongs.delete(w); });
+          saveSpellSession(Array.from(prevWrongs), Array.from(prevRights));
+        }
+
         // 승리 효과음
         if (ratio >= 0.6) playWin();
         else playWrong();
@@ -1346,6 +1554,97 @@
         if (m === "sentence") return renderSentence();
       }
 
+      /* ---------- 오늘 외워야 할 단어 오버레이 ---------- */
+      function closeStudyOverlay() {
+        const ov = document.getElementById("studyOverlay");
+        if (ov) ov.remove();
+      }
+      function openStudyListOverlay(kind) {
+        closeStudyOverlay();
+        const st = computeStatus(kind);
+        const rights = st.rights;
+        const wrongs = st.wrongs;
+
+        const ov = document.createElement("div");
+        ov.className = "study-overlay";
+        ov.id = "studyOverlay";
+        ov.addEventListener("click", (e) => {
+          if (e.target === ov) closeStudyOverlay();
+        });
+
+        const sheet = document.createElement("div");
+        sheet.className = "sheet pop";
+
+        const titleText = kind === "spell" ? "📚 오늘 외워야 할 스펠링 단어" : "📚 오늘 외워야 할 단어";
+        const totalCount = kind === "spell" ? SPELL.length : VOCAB.length;
+
+        const closeRow = document.createElement("div");
+        closeRow.className = "close-row";
+        const h = document.createElement("div");
+        h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">총 ' + totalCount + '개 · 정답 <span class="right" style="color:#059669">○</span> / 오답 <span class="wrong" style="color:#b91c1c">×</span></div>';
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "close-btn";
+        closeBtn.textContent = "✕";
+        closeBtn.addEventListener("click", closeStudyOverlay);
+        closeRow.appendChild(h);
+        closeRow.appendChild(closeBtn);
+        sheet.appendChild(closeRow);
+
+        const list = document.createElement("div");
+        list.className = "study-list";
+
+        const items = kind === "spell"
+          ? SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }))
+          : VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }));
+
+        let rightCnt = 0, wrongCnt = 0;
+        items.forEach((it) => {
+          const row = document.createElement("div");
+          const isR = rights.has(it.word);
+          const isW = wrongs.has(it.word);
+          if (isR) rightCnt++;
+          if (isW) wrongCnt++;
+          row.className = "study-item" + (isR ? " is-right" : "") + (isW ? " is-wrong" : "");
+
+          const mk = document.createElement("span");
+          mk.className = "mk";
+          mk.textContent = isR ? "○" : isW ? "×" : "·";
+          const sw = document.createElement("span");
+          sw.className = "sw";
+          sw.textContent = it.word;
+          const sm = document.createElement("span");
+          sm.className = "sm";
+          sm.textContent = it.meaning;
+          const say = document.createElement("button");
+          say.type = "button";
+          say.className = "say";
+          say.title = "발음 듣기";
+          say.textContent = "🔊";
+          say.addEventListener("click", (e) => {
+            e.stopPropagation();
+            speak(it.word, { btn: e.currentTarget });
+          });
+
+          row.appendChild(mk);
+          row.appendChild(sw);
+          row.appendChild(sm);
+          row.appendChild(say);
+          list.appendChild(row);
+        });
+        sheet.appendChild(list);
+
+        const summary = document.createElement("div");
+        summary.className = "study-summary";
+        summary.innerHTML =
+          '<span class="right">○ 맞춘 단어 ' + rightCnt + '</span>' +
+          '<span class="wrong">× 틀린 단어 ' + wrongCnt + '</span>' +
+          '<span>· 남은 ' + (totalCount - rightCnt - wrongCnt) + '</span>';
+        sheet.appendChild(summary);
+
+        ov.appendChild(sheet);
+        document.body.appendChild(ov);
+      }
+
       /* ---------- Vocab quiz ---------- */
       function renderVocab() {
         const item = state.questions[state.idx];
@@ -1355,7 +1654,10 @@
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
+          '<div class="prompt-row">' +
           '<div class="prompt-small">📖 이 단어의 뜻은?</div>' +
+          '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
+          '</div>' +
           '<div class="prompt-big" id="vocabWord">' + item.word + '</div>' +
           '<div class="btn-row" style="margin:4px 0 10px"><button class="btn btn-say" id="btnSay">🔊 들어보기</button></div>' +
           '<div class="choices" id="choices"></div>' +
@@ -1373,6 +1675,7 @@
         });
         $("btnSay").addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
         $("btnNext").addEventListener("click", next);
+        $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
       }
       function pickVocab(btn, picked, correct) {
         const buttons = document.querySelectorAll(".choice-btn");
@@ -1447,7 +1750,10 @@
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
+          '<div class="prompt-row">' +
           '<div class="prompt-small">✏️ 필요한 글자만 골라서 배열해요 (방해 글자 포함)</div>' +
+          '<button class="btn-today" id="btnTodayListSp">📚 오늘 외워야 할 단어</button>' +
+          '</div>' +
           '<div style="text-align:center;margin:6px 0 4px"><button class="btn btn-say" id="btnSaySp">🔊 발음 듣기</button>' +
           ' <button class="btn btn-hint" id="btnHintSp">💡 힌트</button></div>' +
           '<div class="scramble-target" id="targetArea"><span class="scramble-hint" id="emptyHint">여기에 글자를 눌러 배열해요</span></div>' +
@@ -1509,6 +1815,7 @@
         });
         $("btnCheck").addEventListener("click", () => checkSpell(word));
         $("btnNext").addEventListener("click", next);
+        $("btnTodayListSp").addEventListener("click", () => openStudyListOverlay("spell"));
       }
       function checkSpell(word) {
         const tgt = $("targetArea");
@@ -1525,6 +1832,7 @@
           fb.className = "feedback ok pop";
           state.score += 1;
           state.streak += 1;
+          state.spellRights.push(word);
           playCorrect();
           $("btnCheck").classList.add("hidden");
           $("btnClear").classList.add("hidden");
@@ -1534,6 +1842,7 @@
           fb.textContent = "다시! 정답은 \"" + word + "\" 입니다.";
           fb.className = "feedback no shake";
           state.streak = 0;
+          state.spellWrongs.push(word);
           playWrong();
           updateHud();
           $("btnCheck").classList.add("hidden");
@@ -1933,6 +2242,7 @@
       });
       $("btnBack").addEventListener("click", () => {
         try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
+        try { closeStudyOverlay(); } catch (e) {}
         showMenu();
       });
       $("btnPlayAgain").addEventListener("click", () => startMode(state.mode, { filter: state.modeFilter }));
