@@ -761,6 +761,49 @@
         font-weight: 600;
         font-size: 0.9rem;
         word-break: keep-all;
+        cursor: pointer;
+        transition: filter 0.15s;
+        user-select: none;
+        position: relative;
+        padding: 2px 4px;
+        border-radius: 6px;
+      }
+      .study-item .sm:hover { background: #eef2ff; }
+      .study-item .sm.is-hidden {
+        background: #e2e8f0;
+        color: transparent;
+        text-shadow: 0 0 10px #94a3b8;
+      }
+      .study-item .sm.is-hidden::after {
+        content: "탭해서 보기 👆";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-shadow: none;
+      }
+      .btn-hideall {
+        background: #fff;
+        color: #4f46e5;
+        border: 2px solid #c7d2fe;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-right: 6px;
+        white-space: nowrap;
+      }
+      .btn-hideall:hover { background: #eef2ff; }
+      .btn-hideall.is-on {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: #fff;
+        border-color: #4f46e5;
       }
       .study-item .say {
         flex: 0 0 auto;
@@ -2051,13 +2094,25 @@
         const closeRow = document.createElement("div");
         closeRow.className = "close-row";
         const h = document.createElement("div");
-        h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">총 ' + totalCount + '개 · 정답 <span class="right" style="color:#059669">○</span> / 오답 <span class="wrong" style="color:#b91c1c">×</span></div>';
+        h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">총 ' + totalCount + '개 · 뜻을 탭하면 가렸다 보였다 할 수 있어요</div>';
+        const rightControls = document.createElement("div");
+        rightControls.style.display = "flex";
+        rightControls.style.alignItems = "center";
+
+        const btnHideAll = document.createElement("button");
+        btnHideAll.className = "btn-hideall";
+        btnHideAll.type = "button";
+        btnHideAll.textContent = "👁 전체 가리기";
+        rightControls.appendChild(btnHideAll);
+
         const closeBtn = document.createElement("button");
         closeBtn.className = "close-btn";
         closeBtn.textContent = "✕";
         closeBtn.addEventListener("click", closeStudyOverlay);
+        rightControls.appendChild(closeBtn);
+
         closeRow.appendChild(h);
-        closeRow.appendChild(closeBtn);
+        closeRow.appendChild(rightControls);
         sheet.appendChild(closeRow);
 
         const list = document.createElement("div");
@@ -2085,6 +2140,11 @@
           const sm = document.createElement("span");
           sm.className = "sm";
           sm.textContent = it.meaning;
+          sm.title = "클릭해서 가리기/보이기";
+          sm.addEventListener("click", (e) => {
+            e.stopPropagation();
+            sm.classList.toggle("is-hidden");
+          });
           const say = document.createElement("button");
           say.type = "button";
           say.className = "say";
@@ -2102,6 +2162,19 @@
           list.appendChild(row);
         });
         sheet.appendChild(list);
+
+        // 전체 가리기 / 전체 보이기 토글
+        let allHidden = false;
+        btnHideAll.addEventListener("click", () => {
+          allHidden = !allHidden;
+          const sms = list.querySelectorAll(".sm");
+          sms.forEach((el) => {
+            if (allHidden) el.classList.add("is-hidden");
+            else el.classList.remove("is-hidden");
+          });
+          btnHideAll.classList.toggle("is-on", allHidden);
+          btnHideAll.textContent = allHidden ? "👁 전체 보이기" : "👁 전체 가리기";
+        });
 
         const summary = document.createElement("div");
         summary.className = "study-summary";
