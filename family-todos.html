@@ -376,6 +376,77 @@
         font-size: 0.78rem;
         padding: 3px 10px;
       }
+      .main-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+      }
+      .subj-section {
+        width: 100%;
+      }
+      .subj-head {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #fff;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 12px 16px;
+        cursor: pointer;
+        font-weight: 800;
+        color: #334155;
+        text-align: left;
+        font-family: inherit;
+        font-size: 1rem;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+      }
+      .subj-head:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+      }
+      .subj-head .subj-name {
+        font-weight: 900;
+        font-size: 1.02rem;
+        color: #1e293b;
+      }
+      .subj-head .subj-count {
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 700;
+      }
+      .subj-head .arrow {
+        margin-left: auto;
+        transition: transform 0.2s;
+        font-size: 0.85rem;
+        color: #64748b;
+      }
+      .subj-section.is-open .subj-head {
+        border-color: #6366f1;
+        background: #eef2ff;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+      }
+      .subj-section.is-open .subj-head .arrow {
+        transform: rotate(90deg);
+      }
+      .subj-cards {
+        display: none;
+        margin-top: 10px;
+        padding: 4px 2px;
+      }
+      .subj-section.is-open .subj-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+        gap: 14px;
+      }
+      @media (min-width: 600px) {
+        .subj-section.is-open .subj-cards {
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 18px;
+        }
+      }
       .subj-row {
         display: flex;
         align-items: center;
@@ -1946,6 +2017,7 @@
         var LS_SELECTED_KID_KEY = "family_todos_selected_kid_id";
         var SS_RESTORE_ADMIN_TAB = "family_todos_restore_admin_tab";
         var LS_SUBJECTS_KEY = "family_todos_subject_list_v1";
+        var _openSubjects = {};
 
         function loadSavedSubjects() {
           try {
@@ -3036,6 +3108,8 @@
           pending.sort(_sortBySubject);
           doneList.sort(_sortBySubject);
           if (!pending.length && !doneList.length && !hasPraisePending && !hasPraiseDone) {
+            gridP.classList.remove("main-stack");
+            gridP.classList.add("main-grid");
             gridP.innerHTML =
               '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">부모님 페이지에서 요일 배치나 「특정날짜스케줄추가」로 넣어 주세요.</small></p>';
             emptyD.classList.remove("hidden");
@@ -3043,8 +3117,73 @@
             return;
           }
           var pk = kidById(state.selectedKidId);
+
+          function appendItemTo(grid, item, isDone) {
+            if (item.kind === "slot")
+              appendMainTodoCard(grid, item.sl, item.tpl, item.kid, dstr, isDone);
+            else
+              appendMainScheduleCard(grid, item.sched, item.kid, dstr, isDone);
+          }
+          function renderGroupedInto(container, items, isDone, extraAppender) {
+            container.classList.remove("main-grid");
+            container.classList.add("main-stack");
+            var groups = {};
+            var order = [];
+            var unclassified = [];
+            items.forEach(function (it) {
+              var s = _itemSubject(it);
+              if (!s) { unclassified.push(it); return; }
+              if (!groups[s]) { groups[s] = []; order.push(s); }
+              groups[s].push(it);
+            });
+            order.sort(function (a, b) { return a.localeCompare(b, "ko"); });
+            order.forEach(function (s) {
+              var sec = document.createElement("div");
+              sec.className = "subj-section";
+              var key = (isDone ? "D:" : "P:") + s;
+              if (_openSubjects[key]) sec.classList.add("is-open");
+              var head = document.createElement("button");
+              head.type = "button";
+              head.className = "subj-head";
+              head.appendChild(makeSubjectBadge(s));
+              var nameEl = document.createElement("span");
+              nameEl.className = "subj-name";
+              nameEl.textContent = s;
+              head.appendChild(nameEl);
+              var cntEl = document.createElement("span");
+              cntEl.className = "subj-count";
+              cntEl.textContent = "(" + groups[s].length + "개)";
+              head.appendChild(cntEl);
+              var arr = document.createElement("span");
+              arr.className = "arrow";
+              arr.textContent = "▶";
+              head.appendChild(arr);
+              sec.appendChild(head);
+              var inner = document.createElement("div");
+              inner.className = "subj-cards";
+              sec.appendChild(inner);
+              groups[s].forEach(function (it) { appendItemTo(inner, it, isDone); });
+              head.addEventListener("click", function () {
+                var isOpen = sec.classList.toggle("is-open");
+                if (isOpen) _openSubjects[key] = true;
+                else delete _openSubjects[key];
+              });
+              container.appendChild(sec);
+            });
+            var hasExtras = typeof extraAppender === "function";
+            if (unclassified.length > 0 || hasExtras) {
+              var unc = document.createElement("div");
+              unc.className = "main-grid";
+              container.appendChild(unc);
+              unclassified.forEach(function (it) { appendItemTo(unc, it, isDone); });
+              if (hasExtras) extraAppender(unc);
+            }
+          }
+
           var showPendingEmpty = pending.length === 0 && !hasPraisePending;
           if (showPendingEmpty) {
+            gridP.classList.remove("main-stack");
+            gridP.classList.add("main-grid");
             emptyP.classList.remove("hidden");
             if (filtered.length === 0 && daySch.length === 0) {
               emptyP.textContent = "오늘 할 일이 없어요 🌟";
@@ -3053,28 +3192,24 @@
             }
           } else {
             emptyP.classList.add("hidden");
-            pending.forEach(function (item) {
-              if (item.kind === "slot")
-                appendMainTodoCard(gridP, item.sl, item.tpl, item.kid, dstr, false);
-              else appendMainScheduleCard(gridP, item.sched, item.kid, dstr, false);
-            });
-            praisePendingRows.forEach(function (row) {
-              appendPraisePendingCard(gridP, row, pk, dstr);
+            renderGroupedInto(gridP, pending, false, function (uncGrid) {
+              praisePendingRows.forEach(function (row) {
+                appendPraisePendingCard(uncGrid, row, pk, dstr);
+              });
             });
           }
           var showDoneEmpty = doneList.length === 0 && !hasPraiseDone;
           if (showDoneEmpty) {
+            gridD.classList.remove("main-stack");
+            gridD.classList.add("main-grid");
             emptyD.classList.remove("hidden");
             emptyD.textContent = "아직 완료한 일이 없어요. 위 카드를 두 번 눌러 완료해 보세요!";
           } else {
             emptyD.classList.add("hidden");
-            doneList.forEach(function (item) {
-              if (item.kind === "slot")
-                appendMainTodoCard(gridD, item.sl, item.tpl, item.kid, dstr, true);
-              else appendMainScheduleCard(gridD, item.sched, item.kid, dstr, true);
-            });
-            praiseClaimRows.forEach(function (row) {
-              appendPraiseClaimDoneCard(gridD, row, pk, dstr);
+            renderGroupedInto(gridD, doneList, true, function (uncGrid) {
+              praiseClaimRows.forEach(function (row) {
+                appendPraiseClaimDoneCard(uncGrid, row, pk, dstr);
+              });
             });
           }
         }
