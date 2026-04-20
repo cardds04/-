@@ -851,6 +851,114 @@
         font-family: inherit;
       }
       .study-overlay .close-btn:hover { background: #e2e8f0; }
+      /* ---- 도움요청 챗 ---- */
+      .help-overlay .sheet.help-sheet {
+        max-width: 560px;
+      }
+      .help-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0 10px;
+      }
+      .help-chip {
+        background: #eef2ff;
+        border: 2px solid #c7d2fe;
+        color: #4338ca;
+        font-weight: 700;
+        font-size: 0.78rem;
+        padding: 6px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .help-chip:hover { background: #e0e7ff; }
+      .help-log {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 48vh;
+        overflow-y: auto;
+        padding: 10px;
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 14px;
+        margin-bottom: 10px;
+        min-height: 100px;
+      }
+      .help-log:empty::before {
+        content: "아직 질문이 없어요. 아래에 궁금한 걸 적어 보세요.";
+        color: #94a3b8;
+        font-weight: 700;
+        font-size: 0.85rem;
+        align-self: center;
+        margin: auto;
+      }
+      .help-msg {
+        max-width: 85%;
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .help-msg.help-user {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #818cf8, #6366f1);
+        color: #fff;
+        font-weight: 700;
+        border-bottom-right-radius: 4px;
+      }
+      .help-msg.help-bot {
+        align-self: flex-start;
+        background: #fff;
+        color: #1e293b;
+        border: 2px solid #e2e8f0;
+        font-weight: 600;
+        border-bottom-left-radius: 4px;
+      }
+      .help-msg.help-bot.is-loading {
+        color: #7c3aed;
+        font-weight: 700;
+        border-color: #ddd6fe;
+        background: #f5f3ff;
+      }
+      .help-msg.help-bot.is-warn {
+        color: #991b1b;
+        border-color: #fecaca;
+        background: #fef2f2;
+      }
+      .help-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .help-input {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-family: inherit;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      .help-input:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      }
+      .help-send {
+        padding: 10px 16px;
+        white-space: nowrap;
+      }
+      .btn-today.btn-help {
+        background: linear-gradient(135deg, #a78bfa, #7c3aed);
+        border-color: #7c3aed;
+      }
+      .btn-today.btn-help:hover { filter: brightness(1.05); }
       .study-list { display: flex; flex-direction: column; gap: 6px; }
       .study-item {
         display: flex;
@@ -3414,6 +3522,172 @@
         neat: "Neat writing (스펠링/대소문자/구두점)",
       };
 
+      // Gemini 도움요청 (간단한 질문 답변)
+      async function askGeminiHelp(question, opts, apiKey) {
+        opts = opts || {};
+        const GEMINI_MODEL = "gemini-2.0-flash";
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
+        const promptCtx = opts.prompt
+          ? "The student is currently working on this writing prompt: \"" + (opts.prompt.text || "") + "\" (" + (opts.prompt.ko || "") + ")"
+          : "";
+        const systemText = [
+          "You are a kind English tutor for a Korean elementary school student working on English homework.",
+          promptCtx,
+          "",
+          "STUDENT'S QUESTION (in Korean or English):",
+          String(question || ""),
+          "",
+          "RULES — VERY IMPORTANT:",
+          "- Answer in SIMPLE Korean a child can understand (friendly, short).",
+          "- Keep the whole answer under 6 short sentences.",
+          "- If the student asks for an English word or phrase translation, give 1~3 natural options (with short Korean note if helpful).",
+          "- If the student asks what a writing rule means (예: '문단 들여쓰기가 뭐야?'), explain in 1~2 sentences and give ONE tiny example.",
+          "- DO NOT write a full paragraph for the student. DO NOT solve the whole homework.",
+          "- If asked to write full sentences for the homework, politely decline and instead give 1~2 short example phrases they can adapt.",
+          "- You MAY show a VERY short example (max 1 sentence) to illustrate.",
+          "- Use plain text. No markdown headings, no lists longer than 3 items.",
+        ].join("\n");
+
+        const body = {
+          contents: [{ role: "user", parts: [{ text: systemText }] }],
+          generationConfig: { temperature: 0.3 },
+        };
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let msg = "Gemini 호출 실패 (" + res.status + ")";
+          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+        const combined = partsArr.map((p) => p.text || "").join("").trim();
+        if (!combined) throw new Error("응답이 비어있어요.");
+        return combined;
+      }
+
+      function openHelpChat(opts) {
+        opts = opts || {};
+        // 기존 오버레이 제거
+        const existed = document.querySelector(".help-overlay");
+        if (existed) existed.remove();
+
+        const ov = document.createElement("div");
+        ov.className = "study-overlay help-overlay";
+        ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+
+        const sheet = document.createElement("div");
+        sheet.className = "sheet help-sheet";
+
+        const head = document.createElement("div");
+        head.className = "close-row";
+        head.innerHTML = '<h3>💬 도움 요청</h3>';
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "close-btn";
+        closeBtn.textContent = "✕";
+        closeBtn.addEventListener("click", () => ov.remove());
+        head.appendChild(closeBtn);
+        sheet.appendChild(head);
+
+        const sub = document.createElement("div");
+        sub.className = "sub";
+        sub.textContent = "궁금한 걸 물어보세요. 예) \"경험이 영어로 뭐야?\", \"문단 들여쓰기가 뭐야?\"";
+        sheet.appendChild(sub);
+
+        // 빠른 질문 칩
+        const chipsRow = document.createElement("div");
+        chipsRow.className = "help-chips";
+        const CHIPS = [
+          "문단 들여쓰기가 뭐야?",
+          "Topic sentence가 뭐야?",
+          "Compound sentence 예시 하나만",
+          "'경험'이 영어로 뭐야?",
+          "'자연재해'가 영어로 뭐야?",
+        ];
+        CHIPS.forEach((q) => {
+          const c = document.createElement("button");
+          c.type = "button";
+          c.className = "help-chip";
+          c.textContent = q;
+          c.addEventListener("click", () => {
+            input.value = q;
+            submit();
+          });
+          chipsRow.appendChild(c);
+        });
+        sheet.appendChild(chipsRow);
+
+        // 대화 목록
+        const list = document.createElement("div");
+        list.className = "help-log";
+        sheet.appendChild(list);
+
+        // 입력 영역
+        const inputRow = document.createElement("div");
+        inputRow.className = "help-input-row";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "help-input";
+        input.placeholder = "질문을 써 주세요...";
+        const sendBtn = document.createElement("button");
+        sendBtn.type = "button";
+        sendBtn.className = "btn btn-primary help-send";
+        sendBtn.textContent = "보내기";
+        inputRow.appendChild(input);
+        inputRow.appendChild(sendBtn);
+        sheet.appendChild(inputRow);
+
+        ov.appendChild(sheet);
+        document.body.appendChild(ov);
+        setTimeout(() => input.focus(), 50);
+
+        function addMessage(role, text, extraClass) {
+          const msg = document.createElement("div");
+          msg.className = "help-msg help-" + role + (extraClass ? " " + extraClass : "");
+          msg.textContent = text;
+          list.appendChild(msg);
+          list.scrollTop = list.scrollHeight;
+          return msg;
+        }
+
+        async function submit() {
+          const q = (input.value || "").trim();
+          if (!q) return;
+          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+          if (!apiKey) {
+            addMessage("bot", "⚠️ 메인 화면에서 Gemini API 키를 먼저 저장해 주세요.", "is-warn");
+            return;
+          }
+          addMessage("user", q);
+          input.value = "";
+          const loading = addMessage("bot", "🤖 생각 중…", "is-loading");
+          sendBtn.disabled = true;
+          try {
+            const answer = await askGeminiHelp(q, { prompt: opts.prompt || null }, apiKey);
+            loading.classList.remove("is-loading");
+            loading.textContent = answer;
+          } catch (err) {
+            loading.classList.remove("is-loading");
+            loading.classList.add("is-warn");
+            loading.textContent = "⚠️ 답변을 가져오지 못했어요. (" + (err && err.message ? err.message : "오류") + ")";
+          } finally {
+            sendBtn.disabled = false;
+            input.focus();
+          }
+        }
+
+        sendBtn.addEventListener("click", submit);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        });
+      }
+
       // 저장된 글쓰기 (활성 단원에 보관)
       function getSavedWritings() {
         const u = getActiveUnit();
@@ -3441,7 +3715,10 @@
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
+          '<div class="prompt-row">' +
           '<div class="prompt-small">📝 프롬프트를 골라 영어 문단을 써 보세요</div>' +
+          '<button class="btn-today btn-help" id="btnHelpAsk" type="button">💬 도움요청</button>' +
+          '</div>' +
           '<div id="savedWritingsBox"></div>' +
           '<div class="prompt-picker" id="promptPicker"></div>' +
           '<div class="rubric-list" id="rubricList"></div>' +
@@ -3480,6 +3757,15 @@
           });
         }
         drawPicker();
+
+        // 도움요청 버튼
+        const btnHelp = $("btnHelpAsk");
+        if (btnHelp) {
+          btnHelp.addEventListener("click", () => {
+            const promptObj = (WRITE_PROMPTS || []).find((p) => p.id === activePrompt) || (WRITE_PROMPTS || [])[0] || null;
+            openHelpChat({ prompt: promptObj });
+          });
+        }
 
         // 루브릭 라이브 업데이트
         const writeArea = $("writeArea");
@@ -3858,6 +4144,7 @@
       $("btnBack").addEventListener("click", () => {
         try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
         try { closeStudyOverlay(); } catch (e) {}
+        try { const ov = document.querySelector(".help-overlay"); if (ov) ov.remove(); } catch (e) {}
         showMenu();
       });
       $("btnPlayAgain").addEventListener("click", () => startMode(state.mode, { filter: state.modeFilter }));
