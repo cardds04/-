@@ -31,6 +31,7 @@
         margin: 0 auto;
         padding: 18px 16px 120px;
       }
+      body.sentence-wide .app { max-width: 1180px; }
       .page-title {
         text-align: center;
         font-family: "Luckiest Guy", "Fredoka", sans-serif;
@@ -1358,6 +1359,68 @@
         animation: frSpin 0.8s linear infinite;
       }
       @keyframes frSpin { to { transform: rotate(360deg); } }
+      /* ---- 문장 만들기 2단 레이아웃 (메인 + 오른쪽 도움 패널) ---- */
+      .question-card.sentence-card {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .sentence-card .sentence-main {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .sentence-card .sentence-help {
+        flex: 0 0 340px;
+        position: sticky;
+        top: 16px;
+        max-height: calc(100vh - 32px);
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(180deg, #f5f3ff, #ffffff);
+        border: 2px solid #ddd6fe;
+        border-radius: 18px;
+        padding: 14px;
+        box-sizing: border-box;
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.08);
+      }
+      .sentence-help .sh-head h4 {
+        margin: 0 0 2px;
+        font-size: 1rem;
+        color: #5b21b6;
+      }
+      .sentence-help .sh-head small {
+        display: block;
+        color: #7c3aed;
+        font-weight: 700;
+        font-size: 0.74rem;
+        margin-bottom: 8px;
+      }
+      .sentence-help .help-chips {
+        margin: 4px 0 8px;
+      }
+      .sentence-help .help-log {
+        flex: 1 1 auto;
+        min-height: 160px;
+        max-height: none;
+        background: #fff;
+      }
+      @media (max-width: 920px) {
+        body.sentence-wide .app { max-width: 760px; }
+        .question-card.sentence-card {
+          flex-direction: column;
+        }
+        .sentence-card .sentence-help {
+          flex: 1 1 auto;
+          position: static;
+          max-height: none;
+          width: 100%;
+          order: 2;
+        }
+        .sentence-help .help-log {
+          max-height: 280px;
+          min-height: 120px;
+        }
+      }
       .btn.btn-fix {
         background: linear-gradient(135deg, #a78bfa, #7c3aed);
         color: #fff;
@@ -2142,6 +2205,7 @@
         menuView.classList.remove("hidden");
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
+        document.body.classList.remove("sentence-wide");
       }
 
       /* --------------- 📷 Gemini 사진 업로드 & 다중 단원 시스템 --------------- */
@@ -2815,6 +2879,8 @@
           state.questions = pickN(SENTENCES, count);
         }
         else if (mode === "sentence") state.questions = null;
+        if (mode === "sentence") document.body.classList.add("sentence-wide");
+        else document.body.classList.remove("sentence-wide");
         menuView.classList.add("hidden");
         finalView.classList.add("hidden");
         gameView.classList.remove("hidden");
@@ -2931,6 +2997,7 @@
         menuView.classList.add("hidden");
         gameView.classList.add("hidden");
         finalView.classList.remove("hidden");
+        document.body.classList.remove("sentence-wide");
       }
 
       /* ------------------------- Render by mode --------------------- */
@@ -3909,12 +3976,10 @@
       function renderSentence() {
         // 1) 저장된 글 목록 + 프롬프트 선택 + 루브릭 + 쓰기 영역 + 마이크 + 제출
         const card = document.createElement("div");
-        card.className = "question-card pop";
+        card.className = "question-card pop sentence-card";
         card.innerHTML =
-          '<div class="prompt-row">' +
+          '<div class="sentence-main">' +
           '<div class="prompt-small">📝 프롬프트를 골라 영어 문단을 써 보세요</div>' +
-          '<button class="btn-today btn-help" id="btnHelpAsk" type="button">💬 도움요청</button>' +
-          '</div>' +
           '<div class="prompt-picker" id="promptPicker"></div>' +
           '<div class="rubric-list" id="rubricList"></div>' +
           '<textarea class="write-area" id="writeArea" placeholder="  Earthquakes are one of the most..."></textarea>' +
@@ -3929,7 +3994,20 @@
           '<button class="btn btn-primary" id="btnSubmitPara">✓ 제출</button>' +
           '</div>' +
           '<div id="savedWritingsBox"></div>' +
-          '<div id="feedbackWrap"></div>';
+          '<div id="feedbackWrap"></div>' +
+          '</div>' +
+          '<aside class="sentence-help" id="sideHelp">' +
+          '<div class="sh-head">' +
+          '<h4>💬 도움요청</h4>' +
+          '<small>궁금한 걸 바로 물어봐요 · Gemini가 답해요</small>' +
+          '</div>' +
+          '<div class="help-chips" id="sideHelpChips"></div>' +
+          '<div class="help-log" id="sideHelpLog"></div>' +
+          '<div class="help-input-row">' +
+          '<input type="text" class="help-input" id="sideHelpInput" placeholder="예: 경험이 영어로 뭐야?" />' +
+          '<button type="button" class="btn btn-primary help-send" id="sideHelpSend">보내기</button>' +
+          '</div>' +
+          '</aside>';
         gameBody.appendChild(card);
 
         // 프롬프트 칩
@@ -3954,14 +4032,77 @@
         }
         drawPicker();
 
-        // 도움요청 버튼
-        const btnHelp = $("btnHelpAsk");
-        if (btnHelp) {
-          btnHelp.addEventListener("click", () => {
-            const promptObj = (WRITE_PROMPTS || []).find((p) => p.id === activePrompt) || (WRITE_PROMPTS || [])[0] || null;
-            openHelpChat({ prompt: promptObj });
+        // 오른쪽 사이드 도움 패널
+        (function mountSideHelp() {
+          const chipsWrap = $("sideHelpChips");
+          const log = $("sideHelpLog");
+          const input = $("sideHelpInput");
+          const sendBtn = $("sideHelpSend");
+          if (!chipsWrap || !log || !input || !sendBtn) return;
+
+          const CHIPS = [
+            "문단 들여쓰기가 뭐야?",
+            "Topic sentence가 뭐야?",
+            "Compound sentence 예시 하나만",
+            "'경험'이 영어로 뭐야?",
+            "'자연재해'가 영어로 뭐야?",
+          ];
+          CHIPS.forEach((q) => {
+            const c = document.createElement("button");
+            c.type = "button";
+            c.className = "help-chip";
+            c.textContent = q;
+            c.addEventListener("click", () => {
+              input.value = q;
+              submit();
+            });
+            chipsWrap.appendChild(c);
           });
-        }
+
+          function addMessage(role, text, extraClass) {
+            const msg = document.createElement("div");
+            msg.className = "help-msg help-" + role + (extraClass ? " " + extraClass : "");
+            msg.textContent = text;
+            log.appendChild(msg);
+            log.scrollTop = log.scrollHeight;
+            return msg;
+          }
+
+          async function submit() {
+            const q = (input.value || "").trim();
+            if (!q) return;
+            const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+            if (!apiKey) {
+              addMessage("bot", "⚠️ 메인 화면에서 Gemini API 키를 먼저 저장해 주세요.", "is-warn");
+              return;
+            }
+            const promptObj = (WRITE_PROMPTS || []).find((p) => p.id === activePrompt) || (WRITE_PROMPTS || [])[0] || null;
+            addMessage("user", q);
+            input.value = "";
+            const loading = addMessage("bot", "🤖 생각 중…", "is-loading");
+            sendBtn.disabled = true;
+            try {
+              const answer = await askGeminiHelp(q, { prompt: promptObj }, apiKey);
+              loading.classList.remove("is-loading");
+              loading.textContent = answer;
+            } catch (err) {
+              loading.classList.remove("is-loading");
+              loading.classList.add("is-warn");
+              loading.textContent = "⚠️ 답변을 가져오지 못했어요. (" + (err && err.message ? err.message : "오류") + ")";
+            } finally {
+              sendBtn.disabled = false;
+              input.focus();
+            }
+          }
+
+          sendBtn.addEventListener("click", submit);
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          });
+        })();
 
         // 루브릭 라이브 업데이트
         const writeArea = $("writeArea");
