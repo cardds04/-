@@ -1032,6 +1032,65 @@
         cursor: pointer;
         font-weight: 700;
       }
+      .list-item button {
+        border: none;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .list-item .btn-tpl-edit {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+      .tpl-edit-row {
+        padding: 10px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #f8fafc;
+        border-radius: 10px;
+        margin-bottom: 6px;
+      }
+      .tpl-edit-row .row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+      }
+      .tpl-edit-row select,
+      .tpl-edit-row input[type="text"] {
+        flex: 1 1 120px;
+        min-width: 0;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 2px solid #cbd5e1;
+        font-weight: 700;
+        background: #fff;
+      }
+      .tpl-edit-row .btn-row {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      .tpl-edit-row .btn-tpl-save {
+        background: #10b981;
+        color: #fff;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .tpl-edit-row .btn-tpl-cancel {
+        background: #e2e8f0;
+        color: #334155;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-weight: 800;
+        cursor: pointer;
+      }
       .err {
         background: #fef2f2;
         color: #b91c1c;
@@ -3341,6 +3400,125 @@
           });
           var noneList = state.templates.filter(function (t) { return !String(t.detail || "").trim(); });
 
+          var EMOJI_OPTIONS = ["⭐", "📚", "🧹", "🍽️", "🛁", "✏️", "🎨", "⚽", "🎹", "💤", "🐶", "💪"];
+
+          function buildEditRow(t, viewDiv) {
+            var box = document.createElement("div");
+            box.className = "tpl-edit-row";
+
+            var row1 = document.createElement("div");
+            row1.className = "row";
+            var subjSel = document.createElement("select");
+            var optNone = document.createElement("option");
+            optNone.value = "";
+            optNone.textContent = "(분류 없음)";
+            subjSel.appendChild(optNone);
+            var allSubj = getAllSubjects();
+            var curSubj = String(t.detail || "").trim();
+            if (curSubj && allSubj.indexOf(curSubj) === -1) allSubj.push(curSubj);
+            allSubj.forEach(function (s) {
+              var o = document.createElement("option");
+              o.value = s;
+              o.textContent = s;
+              if (s === curSubj) o.selected = true;
+              subjSel.appendChild(o);
+            });
+            var addSubjBtn = document.createElement("button");
+            addSubjBtn.type = "button";
+            addSubjBtn.className = "btn-subj-add";
+            addSubjBtn.textContent = "+ 과목 추가";
+            addSubjBtn.style.flex = "0 0 auto";
+            addSubjBtn.addEventListener("click", function () {
+              var name = window.prompt("추가할 과목 이름을 입력하세요");
+              if (name === null) return;
+              name = String(name || "").trim();
+              if (!name) return;
+              if (name.length > 20) { alert("과목 이름은 20자 이하"); return; }
+              var saved = loadSavedSubjects();
+              if (saved.indexOf(name) === -1) { saved.push(name); saveSubjectsList(saved); }
+              if (!Array.from(subjSel.options).some(function (o) { return o.value === name; })) {
+                var o2 = document.createElement("option");
+                o2.value = name;
+                o2.textContent = name;
+                subjSel.appendChild(o2);
+              }
+              subjSel.value = name;
+            });
+            row1.appendChild(subjSel);
+            row1.appendChild(addSubjBtn);
+            box.appendChild(row1);
+
+            var row2 = document.createElement("div");
+            row2.className = "row";
+            var emojiSel = document.createElement("select");
+            emojiSel.style.flex = "0 0 90px";
+            EMOJI_OPTIONS.forEach(function (em) {
+              var o = document.createElement("option");
+              o.value = em;
+              o.textContent = em;
+              if (em === (t.emoji || "⭐")) o.selected = true;
+              emojiSel.appendChild(o);
+            });
+            if (t.emoji && EMOJI_OPTIONS.indexOf(t.emoji) === -1) {
+              var oExtra = document.createElement("option");
+              oExtra.value = t.emoji;
+              oExtra.textContent = t.emoji;
+              oExtra.selected = true;
+              emojiSel.appendChild(oExtra);
+            }
+            var titleInp = document.createElement("input");
+            titleInp.type = "text";
+            titleInp.maxLength = 80;
+            titleInp.value = t.title || "";
+            titleInp.placeholder = "이름 (제목)";
+            row2.appendChild(emojiSel);
+            row2.appendChild(titleInp);
+            box.appendChild(row2);
+
+            var btnRow = document.createElement("div");
+            btnRow.className = "btn-row";
+            var saveBtn = document.createElement("button");
+            saveBtn.type = "button";
+            saveBtn.className = "btn-tpl-save";
+            saveBtn.textContent = "저장";
+            var cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.className = "btn-tpl-cancel";
+            cancelBtn.textContent = "취소";
+            btnRow.appendChild(cancelBtn);
+            btnRow.appendChild(saveBtn);
+            box.appendChild(btnRow);
+
+            cancelBtn.addEventListener("click", function () {
+              box.replaceWith(viewDiv);
+            });
+            saveBtn.addEventListener("click", async function () {
+              var newTitle = String(titleInp.value || "").trim();
+              if (!newTitle) { alert("제목을 입력해주세요."); return; }
+              var newSubj = String(subjSel.value || "").trim();
+              var newEmoji = String(emojiSel.value || "⭐");
+              saveBtn.disabled = true;
+              saveBtn.textContent = "저장 중…";
+              var r = await supabase
+                .from("family_todo_templates")
+                .update({ title: newTitle, detail: newSubj, emoji: newEmoji })
+                .eq("id", t.id);
+              if (r.error) {
+                alert("저장 실패: " + r.error.message);
+                saveBtn.disabled = false;
+                saveBtn.textContent = "저장";
+                return;
+              }
+              if (newSubj) {
+                var saved2 = loadSavedSubjects();
+                if (saved2.indexOf(newSubj) === -1) { saved2.push(newSubj); saveSubjectsList(saved2); }
+              }
+              await refresh();
+            });
+
+            return box;
+          }
+
           function appendItem(t) {
             var kid = t.kid_id ? kidById(t.kid_id) : null;
             var div = document.createElement("div");
@@ -3355,6 +3533,16 @@
               span.appendChild(sm);
             }
             div.appendChild(span);
+            var btnWrap = document.createElement("div");
+            btnWrap.style.cssText = "display:flex;gap:6px;flex-shrink:0;";
+            var edit = document.createElement("button");
+            edit.type = "button";
+            edit.className = "btn-tpl-edit";
+            edit.textContent = "수정";
+            edit.addEventListener("click", function () {
+              var box = buildEditRow(t, div);
+              div.replaceWith(box);
+            });
             var del = document.createElement("button");
             del.type = "button";
             del.textContent = "삭제";
@@ -3362,7 +3550,9 @@
               if (confirm("삭제할까요?"))
                 supabase.from("family_todo_templates").delete().eq("id", t.id).then(refresh);
             });
-            div.appendChild(del);
+            btnWrap.appendChild(edit);
+            btnWrap.appendChild(del);
+            div.appendChild(btnWrap);
             el.appendChild(div);
           }
 
