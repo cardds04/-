@@ -1158,6 +1158,113 @@
         color: #94a3b8;
         font-style: italic;
       }
+      /* ---- 저장된 글쓰기 ---- */
+      .saved-writings {
+        margin: 4px 0 12px;
+        background: #fff7ed;
+        border: 2px dashed #fdba74;
+        border-radius: 16px;
+        padding: 10px 12px;
+      }
+      .saved-writings .sw-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .saved-writings .sw-head h4 {
+        margin: 0;
+        font-size: 0.92rem;
+        color: #7c2d12;
+      }
+      .saved-writings .sw-head small { color: #b45309; font-weight: 700; font-size: 0.78rem; }
+      .saved-row {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .saved-card {
+        flex: 0 0 auto;
+        position: relative;
+        min-width: 180px;
+        max-width: 240px;
+        background: #fff;
+        border: 2px solid #fed7aa;
+        border-radius: 14px;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-family: inherit;
+        text-align: left;
+        transition: transform 0.1s, border-color 0.15s;
+      }
+      .saved-card:hover {
+        transform: translateY(-2px);
+        border-color: #f97316;
+      }
+      .saved-card .sc-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .saved-card .sc-date {
+        font-size: 0.74rem;
+        font-weight: 800;
+        color: #92400e;
+      }
+      .saved-card .sc-score {
+        font-size: 0.72rem;
+        font-weight: 900;
+        color: #fff;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        padding: 1px 8px;
+        border-radius: 999px;
+      }
+      .saved-card .sc-score.is-pass {
+        background: linear-gradient(135deg, #10b981, #059669);
+      }
+      .saved-card .sc-prompt {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #6366f1;
+        margin-bottom: 4px;
+      }
+      .saved-card .sc-text {
+        font-size: 0.82rem;
+        color: #1e293b;
+        line-height: 1.35;
+        font-weight: 600;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .saved-card .sc-del {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #ef4444;
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 900;
+        cursor: pointer;
+        display: none;
+        line-height: 1;
+        font-family: inherit;
+      }
+      .saved-card:hover .sc-del { display: block; }
+      .saved-empty {
+        color: #9a3412;
+        font-size: 0.84rem;
+        font-weight: 700;
+        padding: 4px 2px;
+      }
       @keyframes shine {
         0%, 100% { transform: translateX(-100%); }
         50% { transform: translateX(200%); }
@@ -3121,12 +3228,35 @@
         return out;
       }
 
+      // 저장된 글쓰기 (활성 단원에 보관)
+      function getSavedWritings() {
+        const u = getActiveUnit();
+        return Array.isArray(u.savedWritings) ? u.savedWritings.slice() : [];
+      }
+      function pushSavedWriting(entry) {
+        const arr = getSavedWritings();
+        arr.unshift(entry);
+        // 최대 30개 유지
+        const capped = arr.slice(0, 30);
+        saveActiveUnitField("savedWritings", capped);
+      }
+      function deleteSavedWriting(id) {
+        const arr = getSavedWritings().filter((e) => e.id !== id);
+        saveActiveUnitField("savedWritings", arr);
+      }
+      function fmtDateTime(ts) {
+        const d = new Date(ts);
+        return (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0") +
+               " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      }
+
       function renderSentence() {
-        // 1) 프롬프트 선택 + 루브릭 + 쓰기 영역 + 마이크 + 제출
+        // 1) 저장된 글 목록 + 프롬프트 선택 + 루브릭 + 쓰기 영역 + 마이크 + 제출
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
           '<div class="prompt-small">📝 프롬프트를 골라 영어 문단을 써 보세요</div>' +
+          '<div id="savedWritingsBox"></div>' +
           '<div class="prompt-picker" id="promptPicker"></div>' +
           '<div class="rubric-list" id="rubricList"></div>' +
           '<textarea class="write-area" id="writeArea" placeholder="  Earthquakes are one of the most..."></textarea>' +
@@ -3136,7 +3266,8 @@
           '</div>' +
           '<div class="btn-row" style="margin-top:4px">' +
           '<button class="btn btn-mic" id="btnMic">🎤 음성으로 말하기</button>' +
-          '<button class="btn btn-ghost" id="btnClearText">🧹 지우기</button>' +
+          '<button class="btn btn-ghost" id="btnSaveDraft">💾 임시저장</button>' +
+          '<button class="btn btn-ghost" id="btnClearText">🧹 새 글</button>' +
           '<button class="btn btn-primary" id="btnSubmitPara">✓ 제출</button>' +
           '</div>' +
           '<div id="feedbackWrap"></div>';
@@ -3183,6 +3314,65 @@
         }
         writeArea.addEventListener("input", drawRubricLive);
         drawRubricLive();
+
+        // 저장된 글 카드 렌더
+        function renderSavedBox() {
+          const box = $("savedWritingsBox");
+          if (!box) return;
+          const items = getSavedWritings();
+          if (items.length === 0) {
+            box.innerHTML = "";
+            return;
+          }
+          box.innerHTML = "";
+          const wrap = document.createElement("div");
+          wrap.className = "saved-writings";
+          wrap.innerHTML =
+            '<div class="sw-head"><h4>📂 저장된 글쓰기</h4><small>탭하면 불러와요 · 자동 저장됨</small></div>' +
+            '<div class="saved-row" id="savedRow"></div>';
+          box.appendChild(wrap);
+          const row = wrap.querySelector("#savedRow");
+          items.forEach((entry) => {
+            const c = document.createElement("button");
+            c.type = "button";
+            c.className = "saved-card";
+            const isPass = entry.passCount && entry.passCount === entry.total;
+            const scoreLbl = (typeof entry.passCount === "number")
+              ? entry.passCount + "/" + (entry.total || 6)
+              : "임시저장";
+            const promptLbl = entry.promptId === 1 ? "Prompt 1" : entry.promptId === 2 ? "Prompt 2" : ("Prompt " + entry.promptId);
+            const preview = (entry.text || "").trim().slice(0, 110).replace(/\s+/g, " ");
+            c.innerHTML =
+              '<div class="sc-top">' +
+              '<span class="sc-date">📅 ' + fmtDateTime(entry.ts) + '</span>' +
+              '<span class="sc-score' + (isPass ? ' is-pass' : '') + '">' + (isPass ? "🏆 " : "") + scoreLbl + '</span>' +
+              '</div>' +
+              '<div class="sc-prompt">' + promptLbl + '</div>' +
+              '<div class="sc-text">' + (preview || "(빈 글)") + '</div>' +
+              '<button type="button" class="sc-del" title="삭제">✕</button>';
+            c.addEventListener("click", (ev) => {
+              if (ev.target && ev.target.classList && ev.target.classList.contains("sc-del")) return;
+              writeArea.value = entry.text || "";
+              if (entry.promptId === 1 || entry.promptId === 2) {
+                activePrompt = entry.promptId;
+                drawPicker();
+              }
+              drawRubricLive();
+              writeArea.focus();
+              const wrap2 = $("feedbackWrap");
+              if (wrap2) wrap2.innerHTML = "";
+            });
+            const del = c.querySelector(".sc-del");
+            del.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              if (!confirm("이 저장 글을 삭제할까요?")) return;
+              deleteSavedWriting(entry.id);
+              renderSavedBox();
+            });
+            row.appendChild(c);
+          });
+        }
+        renderSavedBox();
 
         // 마이크 음성 입력
         const btnMic = $("btnMic");
@@ -3232,16 +3422,54 @@
         });
 
         $("btnClearText").addEventListener("click", () => {
-          if (!writeArea.value.trim()) return;
-          if (!confirm("지금까지 쓴 내용을 모두 지울까요?")) return;
+          if (writeArea.value.trim()) {
+            const yes = confirm("지금까지 쓴 내용을 새 글로 비울까요?\n걱정 마요 — 위쪽 '저장된 글쓰기'에 자동으로 저장돼 있어요. (저장 안 됐다면 취소를 누르고 💾 임시저장 먼저!)");
+            if (!yes) return;
+          }
           writeArea.value = "  ";
           drawRubricLive();
           writeArea.focus();
+          const wrap = $("feedbackWrap");
+          if (wrap) wrap.innerHTML = "";
+        });
+
+        $("btnSaveDraft").addEventListener("click", () => {
+          const text = writeArea.value;
+          if (!text.trim()) {
+            alert("저장할 내용이 없어요.");
+            return;
+          }
+          pushSavedWriting({
+            id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            ts: Date.now(),
+            promptId: activePrompt,
+            text: text,
+            kind: "draft",
+          });
+          renderSavedBox();
+          const btn = $("btnSaveDraft");
+          const orig = btn.textContent;
+          btn.textContent = "✓ 저장됨";
+          setTimeout(() => { btn.textContent = orig; }, 1200);
         });
 
         $("btnSubmitPara").addEventListener("click", () => {
           stopActiveRecog();
-          const ev = evaluateParagraph(writeArea.value, activePrompt);
+          const text = writeArea.value;
+          const ev = evaluateParagraph(text, activePrompt);
+          // 제출한 글은 자동으로 저장 (사라지지 않게)
+          if (text.trim()) {
+            pushSavedWriting({
+              id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+              ts: Date.now(),
+              promptId: activePrompt,
+              text: text,
+              passCount: ev.passCount,
+              total: ev.items.length,
+              kind: "submit",
+            });
+            renderSavedBox();
+          }
           const wrap = $("feedbackWrap");
           const panel = document.createElement("div");
           const pass = ev.passCount === ev.items.length;
