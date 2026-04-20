@@ -562,6 +562,165 @@
       .menu-card.is-perfect .card-badge {
         display: inline-block;
       }
+      /* ---- 문장 만들기 ---- */
+      .prompt-picker {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .prompt-pick {
+        background: #fff;
+        border: 3px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 14px 16px;
+        text-align: left;
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: 700;
+        color: #1e293b;
+        transition: transform 0.1s, border-color 0.15s, background 0.15s;
+      }
+      .prompt-pick:hover {
+        transform: translateY(-2px);
+        border-color: #6366f1;
+        background: #eef2ff;
+      }
+      .prompt-pick.is-active {
+        border-color: #6366f1;
+        background: linear-gradient(135deg, #eef2ff, #fff);
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
+      }
+      .prompt-pick .pp-tag {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 900;
+        color: #6366f1;
+        background: #e0e7ff;
+        padding: 2px 8px;
+        border-radius: 999px;
+        margin-bottom: 6px;
+      }
+      .rubric-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 6px;
+        margin: 10px 0 14px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-radius: 14px;
+        border: 2px dashed #cbd5e1;
+      }
+      .rubric-list .rub {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: #475569;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .rubric-list .rub .mk { font-size: 1rem; }
+      .rubric-list .rub.ok { color: #059669; }
+      .rubric-list .rub.no { color: #b91c1c; }
+      .write-area {
+        width: 100%;
+        min-height: 200px;
+        padding: 14px 16px;
+        border: 3px solid #e2e8f0;
+        border-radius: 18px;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.5;
+        color: #1e293b;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+      .write-area:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+      }
+      .write-area.is-listening {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+      }
+      .write-meta {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: center;
+        margin: 6px 2px 8px;
+        flex-wrap: wrap;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #64748b;
+      }
+      .btn-mic {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: #fff;
+      }
+      .btn-mic.is-on {
+        background: linear-gradient(135deg, #dc2626, #7f1d1d);
+        animation: micPulse 1.2s ease-in-out infinite;
+      }
+      @keyframes micPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+        50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      }
+      .feedback-panel {
+        margin-top: 14px;
+        background: #fff;
+        border-radius: 18px;
+        padding: 18px 20px;
+        border: 3px solid #e2e8f0;
+      }
+      .feedback-panel.is-pass {
+        border-color: #10b981;
+        background: linear-gradient(135deg, #f0fdf4, #fff);
+      }
+      .feedback-panel.is-fail {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fffbeb, #fff);
+      }
+      .feedback-panel h3 {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
+        color: #1e293b;
+      }
+      .feedback-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px dashed #e2e8f0;
+      }
+      .feedback-row:last-child { border-bottom: none; }
+      .feedback-row .fr-mk {
+        font-size: 1.1rem;
+        line-height: 1.4;
+        flex: 0 0 auto;
+      }
+      .feedback-row .fr-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .feedback-row .fr-label {
+        font-weight: 800;
+        color: #1e293b;
+      }
+      .feedback-row .fr-hint {
+        font-size: 0.86rem;
+        color: #475569;
+        margin-top: 2px;
+        font-weight: 600;
+      }
+      .feedback-row.ok .fr-label { color: #065f46; }
+      .feedback-row.no .fr-label { color: #991b1b; }
+      .live-interim {
+        color: #94a3b8;
+        font-style: italic;
+      }
       @keyframes shine {
         0%, 100% { transform: translateX(-100%); }
         50% { transform: translateX(200%); }
@@ -607,11 +766,11 @@
             <h3>문장 종류 맞히기</h3>
             <p>Compound · Complex · Run-on 구분</p>
           </button>
-          <button class="menu-card m-match" data-mode="match" id="card-match">
+          <button class="menu-card m-match" data-mode="sentence" id="card-sentence">
             <span class="card-badge">💯 완주</span>
-            <div class="ico">🎴</div>
-            <h3>단어 짝 맞추기</h3>
-            <p>카드 메모리 · 단어와 뜻을 맞추세요</p>
+            <div class="ico">📝</div>
+            <h3>문장 만들기</h3>
+            <p>자연재해에 대한 문단을 쓰기 · 🎤 음성 입력 지원</p>
           </button>
         </div>
       </div>
@@ -677,6 +836,33 @@
         "question", "certain", "usually", "become",
         "together", "weekend", "field", "nobody",
       ];
+
+      // Writing prompts (Part D)
+      const WRITE_PROMPTS = [
+        {
+          id: 1,
+          title: "Prompt 1",
+          text: "Which natural disaster is most interesting? Why?",
+          ko: "어떤 자연재해가 가장 흥미로운가요? 왜 그런가요?",
+        },
+        {
+          id: 2,
+          title: "Prompt 2",
+          text: "Choose a natural disaster. Using cause and effect, tell how this disaster affects people and land.",
+          ko: "자연재해를 하나 골라, 원인과 결과(cause and effect)를 써서 그 재해가 사람과 땅에 어떤 영향을 주는지 설명하세요.",
+        },
+      ];
+
+      const DISASTER_KEYWORDS = [
+        "earthquake", "earthquakes", "tornado", "tornadoes", "tornados", "hurricane", "hurricanes",
+        "tsunami", "tsunamis", "flood", "floods", "flooding", "wildfire", "wildfires",
+        "volcano", "volcanoes", "volcanic", "eruption", "eruptions", "blizzard", "blizzards",
+        "drought", "droughts", "storm", "storms", "thunderstorm", "thunderstorms",
+        "typhoon", "typhoons", "cyclone", "cyclones", "avalanche", "avalanches",
+        "landslide", "landslides", "disaster", "disasters",
+      ];
+
+      const COMPOUND_CONJ = ["and", "but", "or", "so", "yet"];
 
       // Sentence type data — labels: "compound" | "complex" | "runon"
       const SENTENCES = [
@@ -908,9 +1094,9 @@
         vocab: { name: "단어 뜻 맞히기", ico: "📖" },
         spell: { name: "스펠링 퍼즐", ico: "✏️" },
         sent: { name: "문장 종류 맞히기", ico: "🔤" },
-        match: { name: "단어 짝 맞추기", ico: "🎴" },
+        sentence: { name: "문장 만들기", ico: "📝" },
       };
-      const MODE_KEYS = ["vocab", "spell", "sent", "match"];
+      const MODE_KEYS = ["vocab", "spell", "sent", "sentence"];
       function getPerfects() {
         try {
           const raw = localStorage.getItem(PERFECT_KEY);
@@ -1042,15 +1228,15 @@
           state.questions = pickN(pool, count);
         } else if (mode === "spell") state.questions = pickN(SPELL, 10);
         else if (mode === "sent") state.questions = pickN(SENTENCES, 10);
-        else if (mode === "match") state.questions = null;
+        else if (mode === "sentence") state.questions = null;
         menuView.classList.add("hidden");
         finalView.classList.add("hidden");
         gameView.classList.remove("hidden");
         renderQuestion();
       }
       function updateHud() {
-        if (state.mode === "match") {
-          $("progressChip").textContent = "🎴 짝 맞추기";
+        if (state.mode === "sentence") {
+          $("progressChip").textContent = "📝 문장 쓰기";
         } else {
           const total = state.questions ? state.questions.length : 10;
           $("progressChip").textContent = (state.idx + 1) + " / " + total;
@@ -1067,7 +1253,7 @@
         renderQuestion();
       }
       function finishGame() {
-        const perfectMax = state.mode === "match" ? 16 : (state.questions ? state.questions.length : 10);
+        const perfectMax = state.mode === "sentence" ? 6 : (state.questions ? state.questions.length : 10);
         setBest(state.mode, state.score);
         const best = getBest()[state.mode] || 0;
         let emoji = "🏆", stars = "⭐⭐⭐", title = "최고예요!";
@@ -1157,7 +1343,7 @@
         if (m === "vocab") return renderVocab();
         if (m === "spell") return renderSpell();
         if (m === "sent") return renderSent();
-        if (m === "match") return renderMatch();
+        if (m === "sentence") return renderSentence();
       }
 
       /* ---------- Vocab quiz ---------- */
@@ -1402,85 +1588,353 @@
         $("btnNext").classList.remove("hidden");
       }
 
-      /* ---------- Memory match ---------- */
-      let matchState = null;
-      function renderMatch() {
-        const picks = pickN(VOCAB, 8);
-        const cards = [];
-        picks.forEach((v) => {
-          cards.push({ pair: v.word, label: v.word, side: "word" });
-          cards.push({ pair: v.word, label: v.meaning, side: "meaning" });
-        });
-        matchState = { cards: shuffle(cards), first: null, lock: false, matched: 0, total: picks.length };
+      /* ---------- 문장 만들기 (Sentence writing) ---------- */
+      let _activeRecog = null;
+      function stopActiveRecog() {
+        if (_activeRecog) {
+          try { _activeRecog.stop(); } catch (e) {}
+          _activeRecog = null;
+        }
+      }
 
+      function startSpeechInput(opts) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+          alert("이 브라우저는 음성 입력을 지원하지 않아요 😢\n크롬(안드로이드) 또는 사파리/크롬 데스크톱에서 열어주세요.");
+          return null;
+        }
+        const r = new SR();
+        r.continuous = true;
+        r.interimResults = true;
+        r.lang = "en-US";
+        r.onresult = (e) => {
+          let finalDelta = "";
+          let interim = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript;
+            if (e.results[i].isFinal) finalDelta += t;
+            else interim += t;
+          }
+          if (typeof opts.onDelta === "function") opts.onDelta(finalDelta, interim);
+        };
+        r.onerror = (e) => {
+          console.warn("recog error", e && e.error);
+          if (typeof opts.onEnd === "function") opts.onEnd(e && e.error);
+        };
+        r.onend = () => {
+          if (typeof opts.onEnd === "function") opts.onEnd(null);
+        };
+        try { r.start(); } catch (e) { console.warn(e); return null; }
+        return r;
+      }
+
+      function splitSentences(text) {
+        return String(text || "")
+          .split(/(?<=[.!?])\s+|\n+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 1);
+      }
+
+      function evaluateParagraph(text, promptId) {
+        const out = { items: [], passCount: 0 };
+        const clean = String(text || "");
+        const trimmed = clean.trim();
+        const lower = trimmed.toLowerCase();
+        const sentences = splitSentences(trimmed);
+        const words = lower.match(/[a-z']+/g) || [];
+        const sentCount = sentences.length;
+
+        // 1) 들여쓰기
+        const firstLine = String(clean.split("\n")[0] || "");
+        const hasIndent = /^(?:[ ]{2,}|\t)/.test(firstLine);
+        out.items.push({
+          ok: hasIndent,
+          label: "문단 들여쓰기 (Paragraph indenting)",
+          hint: hasIndent
+            ? "첫 줄 들여쓰기를 잘했어요."
+            : "문단 첫 줄을 공백 두 칸(또는 Tab)으로 시작해야 해요. 예: \"␣␣Earthquakes are very scary...\"",
+        });
+
+        // 2) Topic sentence (첫 문장이 자연재해를 소개하며 충분한 길이)
+        const firstSent = sentences[0] || "";
+        const disasterMentioned = DISASTER_KEYWORDS.some((w) => lower.includes(w));
+        const firstSentLower = firstSent.toLowerCase();
+        const firstHasDisaster = DISASTER_KEYWORDS.some((w) => firstSentLower.includes(w));
+        const topicOk = firstSent.length >= 18 && firstHasDisaster;
+        out.items.push({
+          ok: topicOk,
+          label: "Topic sentence (주제 문장)",
+          hint: topicOk
+            ? "첫 문장이 주제를 잘 소개했어요."
+            : "첫 문장에서 주제(자연재해)를 분명히 소개해 보세요. 예: \"Earthquakes are one of the most powerful natural disasters on Earth.\"",
+        });
+
+        // 3) Answer the prompt (자연재해 관련 키워드 포함)
+        out.items.push({
+          ok: disasterMentioned,
+          label: "Answer the prompt (주제에 맞는 답)",
+          hint: disasterMentioned
+            ? "자연재해 이야기를 잘 썼어요."
+            : "자연재해(earthquake, tornado, hurricane, flood, volcano 등)를 꼭 언급해야 해요.",
+        });
+
+        // 4) Compound sentence (쉼표 + and/but/or/so/yet)
+        const compoundRe = /,\s*(and|but|or|so|yet)\s+\w+/i;
+        const compoundOk = compoundRe.test(trimmed);
+        const badRunOn = !compoundOk && / (and|but|or|so) /i.test(trimmed);
+        out.items.push({
+          ok: compoundOk,
+          label: "Compound sentence 사용",
+          hint: compoundOk
+            ? "compound sentence를 잘 사용했어요."
+            : (badRunOn
+                ? "접속사 앞에 쉼표(,)를 넣어 compound sentence로 만들어 보세요. 예: \"Floods can destroy homes, and they can hurt animals.\""
+                : "쉼표와 and/but/or/so를 써서 두 독립절을 연결한 compound sentence 한 문장을 꼭 넣어 주세요."),
+        });
+
+        // 5) 8 or more lines (문장 8개 이상)
+        const linesOk = sentCount >= 8;
+        out.items.push({
+          ok: linesOk,
+          label: "8문장 이상 쓰기 (Have 8 or more lines)",
+          hint: linesOk
+            ? "문장 수: " + sentCount + "개 — 충분해요!"
+            : "지금 " + sentCount + "개. 조금 더 써서 8문장 이상을 채워 보세요.",
+        });
+
+        // 6) Neat writing — 간단한 스펠링/대소문자/구두점 체크
+        const issues = [];
+        // 6-1) 문장 첫 글자 대문자
+        const badCaps = sentences.filter((s) => /^[a-z]/.test(s));
+        if (badCaps.length) issues.push("문장을 대문자로 시작하지 않은 곳이 있어요: \"" + badCaps[0].slice(0, 28) + "…\"");
+        // 6-2) 문장 끝에 마침표/물음표/느낌표
+        const missingPunct = clean.trim().length > 0 && !/[.!?]\s*$/.test(clean.trim());
+        if (missingPunct) issues.push("마지막 문장 끝에 마침표(.)를 찍어 주세요.");
+        // 6-3) 두 칸 이상 띄어쓰기(공백)나 이상한 문자
+        if (/\s{3,}/.test(trimmed)) issues.push("공백이 너무 많은 곳이 있어요.");
+        // 6-4) 반복 글자 (heeeelp 같은 것)
+        const longRep = words.find((w) => /(.)\1{3,}/.test(w));
+        if (longRep) issues.push("같은 글자를 여러 번 반복한 단어가 있어요: \"" + longRep + "\" → 스펠링 확인!");
+        // 6-5) 흔히 틀리는 스펠링 감지
+        const commonMisspell = {
+          "earthquke": "earthquake", "earthqake": "earthquake",
+          "hurrican": "hurricane", "hurrikane": "hurricane",
+          "tornaddo": "tornado", "tornato": "tornado",
+          "volcanoe": "volcano", "volcanos": "volcanoes",
+          "tsunamy": "tsunami", "sunami": "tsunami",
+          "flod": "flood", "floud": "flood",
+          "wildfier": "wildfire", "wildefire": "wildfire",
+          "desaster": "disaster", "disastor": "disaster", "dissaster": "disaster",
+          "thier": "their", "recieve": "receive", "beacuse": "because", "becuase": "because",
+          "alot": "a lot", "definately": "definitely", "seperate": "separate",
+        };
+        const misspellFound = [];
+        words.forEach((w) => {
+          if (commonMisspell[w] && misspellFound.length < 3) {
+            misspellFound.push({ bad: w, good: commonMisspell[w] });
+          }
+        });
+        if (misspellFound.length) {
+          issues.push(
+            "스펠링을 확인해 보세요: " +
+              misspellFound.map((m) => '"' + m.bad + '" → "' + m.good + '"').join(", ")
+          );
+        }
+        const neatOk = issues.length === 0;
+        out.items.push({
+          ok: neatOk,
+          label: "Neat writing (깔끔한 글쓰기)",
+          hint: neatOk
+            ? "스펠링·대소문자·구두점이 깔끔해요."
+            : issues.join(" · "),
+        });
+
+        out.passCount = out.items.filter((x) => x.ok).length;
+        return out;
+      }
+
+      function renderSentence() {
+        // 1) 프롬프트 선택 + 루브릭 + 쓰기 영역 + 마이크 + 제출
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
-          '<div class="prompt-small">🎴 같은 짝을 찾아보세요 (단어 ↔ 뜻)</div>' +
-          '<div class="match-grid" id="matchGrid"></div>' +
-          '<div class="feedback" id="feedback"></div>';
+          '<div class="prompt-small">📝 프롬프트를 골라 영어 문단을 써 보세요</div>' +
+          '<div class="prompt-picker" id="promptPicker"></div>' +
+          '<div class="rubric-list" id="rubricList"></div>' +
+          '<textarea class="write-area" id="writeArea" placeholder="  Earthquakes are one of the most..."></textarea>' +
+          '<div class="write-meta">' +
+          '<span id="writeStats">문장 0 · 단어 0</span>' +
+          '<span style="color:#94a3b8">💡 Tip: 문단 첫 줄은 공백 두 칸으로 들여쓰기</span>' +
+          '</div>' +
+          '<div class="btn-row" style="margin-top:4px">' +
+          '<button class="btn btn-mic" id="btnMic">🎤 음성으로 말하기</button>' +
+          '<button class="btn btn-ghost" id="btnClearText">🧹 지우기</button>' +
+          '<button class="btn btn-primary" id="btnSubmitPara">✓ 제출</button>' +
+          '</div>' +
+          '<div id="feedbackWrap"></div>';
         gameBody.appendChild(card);
 
-        const grid = $("matchGrid");
-        matchState.cards.forEach((c, i) => {
-          const el = document.createElement("button");
-          el.className = "match-card";
-          el.dataset.i = String(i);
-          const inner = document.createElement("div");
-          inner.className = "inner";
-          inner.textContent = c.label;
-          el.appendChild(inner);
-          el.addEventListener("click", () => flipMatch(el, i));
-          grid.appendChild(el);
-        });
-      }
-      function flipMatch(el, i) {
-        if (matchState.lock) return;
-        if (el.classList.contains("flip") || el.classList.contains("done")) return;
-        el.classList.add("flip");
-        const c = matchState.cards[i];
-        if (!matchState.first) {
-          matchState.first = { el, i, c };
-          return;
+        // 프롬프트 칩
+        const picker = $("promptPicker");
+        let activePrompt = 1;
+        function drawPicker() {
+          picker.innerHTML = "";
+          WRITE_PROMPTS.forEach((p) => {
+            const el = document.createElement("button");
+            el.type = "button";
+            el.className = "prompt-pick" + (p.id === activePrompt ? " is-active" : "");
+            el.innerHTML =
+              '<span class="pp-tag">' + p.title + '</span><br>' +
+              '<strong>' + p.text + '</strong><br>' +
+              '<small style="color:#64748b;font-weight:600">' + p.ko + '</small>';
+            el.addEventListener("click", () => {
+              activePrompt = p.id;
+              drawPicker();
+            });
+            picker.appendChild(el);
+          });
         }
-        const f = matchState.first;
-        matchState.first = null;
-        if (f.i === i) return;
-        if (f.c.pair === c.pair && f.c.side !== c.side) {
-          f.el.classList.add("done");
-          el.classList.add("done");
-          matchState.matched += 1;
-          state.score += 2;
-          state.streak += 1;
-          playCorrect();
-          updateHud();
-          const fb = $("feedback");
-          fb.textContent = "짝 맞췄어요! 🎉  " + c.pair;
-          fb.className = "feedback ok pop";
-          if (matchState.matched === matchState.total) {
-            setTimeout(finishGame, 700);
+        drawPicker();
+
+        // 루브릭 라이브 업데이트
+        const writeArea = $("writeArea");
+        const rubricList = $("rubricList");
+        function drawRubricLive() {
+          const ev = evaluateParagraph(writeArea.value, activePrompt);
+          rubricList.innerHTML = "";
+          ev.items.forEach((it) => {
+            const el = document.createElement("span");
+            el.className = "rub " + (it.ok ? "ok" : "no");
+            el.innerHTML = '<span class="mk">' + (it.ok ? "✅" : "⚠️") + "</span>" + it.label;
+            rubricList.appendChild(el);
+          });
+          // 통계
+          const sents = splitSentences(writeArea.value);
+          const ws = (writeArea.value.match(/[A-Za-z']+/g) || []).length;
+          $("writeStats").textContent = "문장 " + sents.length + " · 단어 " + ws;
+        }
+        writeArea.addEventListener("input", drawRubricLive);
+        drawRubricLive();
+
+        // 마이크 음성 입력
+        const btnMic = $("btnMic");
+        btnMic.addEventListener("click", () => {
+          if (_activeRecog) {
+            stopActiveRecog();
+            btnMic.classList.remove("is-on");
+            btnMic.textContent = "🎤 음성으로 말하기";
+            writeArea.classList.remove("is-listening");
+            return;
           }
-        } else {
-          matchState.lock = true;
-          const fb = $("feedback");
-          fb.textContent = "다시 시도! 🙈";
-          fb.className = "feedback no";
-          state.streak = 0;
-          playWrong();
-          updateHud();
-          setTimeout(() => {
-            f.el.classList.remove("flip");
-            el.classList.remove("flip");
-            matchState.lock = false;
-          }, 800);
-        }
+          const r = startSpeechInput({
+            onDelta: (finalDelta, interim) => {
+              if (finalDelta) {
+                const cur = writeArea.value;
+                // 필요한 경우 공백/구두점 보정
+                const needsSpace = cur && !/[\s\n]$/.test(cur);
+                let add = finalDelta.trim();
+                // 첫 글자 대문자
+                if (!cur || /[.!?]\s*$/.test(cur.trim())) {
+                  add = add.charAt(0).toUpperCase() + add.slice(1);
+                }
+                writeArea.value = (cur + (needsSpace ? " " : "") + add).replace(/ {2,}/g, " ");
+                // 마지막 문장이 자동으로 마침표 없이 들어왔으면 임시 점 추가
+                if (!/[.!?]$/.test(writeArea.value.trim())) writeArea.value = writeArea.value.trim() + ".";
+                writeArea.value += " ";
+                drawRubricLive();
+              }
+              // interim은 표시만 (이번 MVP에서는 생략)
+            },
+            onEnd: (errCode) => {
+              _activeRecog = null;
+              btnMic.classList.remove("is-on");
+              btnMic.textContent = "🎤 음성으로 말하기";
+              writeArea.classList.remove("is-listening");
+              if (errCode === "not-allowed" || errCode === "service-not-allowed") {
+                alert("마이크 권한을 허용해 주세요 🎤");
+              }
+            },
+          });
+          if (r) {
+            _activeRecog = r;
+            btnMic.classList.add("is-on");
+            btnMic.textContent = "⏹ 듣는 중… (탭해서 멈추기)";
+            writeArea.classList.add("is-listening");
+          }
+        });
+
+        $("btnClearText").addEventListener("click", () => {
+          if (!writeArea.value.trim()) return;
+          if (!confirm("지금까지 쓴 내용을 모두 지울까요?")) return;
+          writeArea.value = "  ";
+          drawRubricLive();
+          writeArea.focus();
+        });
+
+        $("btnSubmitPara").addEventListener("click", () => {
+          stopActiveRecog();
+          const ev = evaluateParagraph(writeArea.value, activePrompt);
+          const wrap = $("feedbackWrap");
+          const panel = document.createElement("div");
+          const pass = ev.passCount === ev.items.length;
+          panel.className = "feedback-panel pop " + (pass ? "is-pass" : "is-fail");
+          const head = document.createElement("h3");
+          head.textContent = pass
+            ? "🏆 완벽해요! 모든 조건을 만족했어요 (" + ev.passCount + "/" + ev.items.length + ")"
+            : (ev.passCount >= 4
+                ? "👍 잘했어요. 조금만 더 다듬어 볼까요? (" + ev.passCount + "/" + ev.items.length + ")"
+                : "🌱 조언을 참고해 다시 써 볼까요? (" + ev.passCount + "/" + ev.items.length + ")");
+          panel.appendChild(head);
+          ev.items.forEach((it) => {
+            const row = document.createElement("div");
+            row.className = "feedback-row " + (it.ok ? "ok" : "no");
+            row.innerHTML =
+              '<span class="fr-mk">' + (it.ok ? "✅" : "⚠️") + "</span>" +
+              '<div class="fr-body">' +
+              '<div class="fr-label">' + it.label + "</div>" +
+              '<div class="fr-hint">' + it.hint + "</div>" +
+              "</div>";
+            panel.appendChild(row);
+          });
+          const btnsRow = document.createElement("div");
+          btnsRow.className = "btn-row";
+          btnsRow.style.marginTop = "14px";
+          const btnEnd = document.createElement("button");
+          btnEnd.className = "btn btn-primary";
+          btnEnd.textContent = "📊 최종 결과 보기";
+          btnEnd.addEventListener("click", () => {
+            state.score = ev.passCount;
+            state.streak = ev.passCount;
+            updateHud();
+            finishGame();
+          });
+          const btnRetry = document.createElement("button");
+          btnRetry.className = "btn btn-ghost";
+          btnRetry.textContent = "✏️ 더 고쳐 쓰기";
+          btnRetry.addEventListener("click", () => {
+            wrap.innerHTML = "";
+            writeArea.focus();
+          });
+          btnsRow.appendChild(btnRetry);
+          btnsRow.appendChild(btnEnd);
+          panel.appendChild(btnsRow);
+          wrap.innerHTML = "";
+          wrap.appendChild(panel);
+          if (pass) playWin();
+          else if (ev.passCount >= 4) playCorrect();
+          else playWrong();
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       }
 
       /* --------------------------- Events --------------------------- */
       document.querySelectorAll(".menu-card").forEach((btn) => {
         btn.addEventListener("click", () => startMode(btn.dataset.mode));
       });
-      $("btnBack").addEventListener("click", showMenu);
+      $("btnBack").addEventListener("click", () => {
+        try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
+        showMenu();
+      });
       $("btnPlayAgain").addEventListener("click", () => startMode(state.mode, { filter: state.modeFilter }));
       $("btnGoMenu").addEventListener("click", showMenu);
 
