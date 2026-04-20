@@ -562,6 +562,107 @@
       .menu-card.is-perfect .card-badge {
         display: inline-block;
       }
+      /* ---- AI 업로드 패널 ---- */
+      .ai-panel {
+        background: linear-gradient(135deg, #eef2ff, #fff);
+        border: 3px solid #c7d2fe;
+        border-radius: 20px;
+        padding: 16px 18px;
+        margin: 12px 0 18px;
+        box-shadow: 0 10px 24px rgba(99, 102, 241, 0.08);
+      }
+      .ai-panel .ai-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      .ai-panel h3 { margin: 0 0 2px; color: #1e293b; font-size: 1.05rem; }
+      .ai-panel p { margin: 0; color: #475569; font-size: 0.86rem; font-weight: 600; }
+      .ai-panel .ai-toggle {
+        background: #fff;
+        border: 2px solid #c7d2fe;
+        color: #4f46e5;
+        font-weight: 800;
+        padding: 6px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .ai-panel .ai-toggle:hover { background: #eef2ff; }
+      .ai-body { margin-top: 14px; }
+      .ai-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 10px;
+      }
+      .ai-field > span {
+        font-weight: 800;
+        color: #1e293b;
+        font-size: 0.88rem;
+      }
+      .ai-field > span small { font-weight: 600; color: #94a3b8; margin-left: 4px; }
+      .ai-field input[type="password"],
+      .ai-field input[type="text"],
+      .ai-field input[type="file"] {
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.94rem;
+        background: #fff;
+      }
+      .ai-field input:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+      }
+      .ai-help { color: #64748b; font-weight: 600; font-size: 0.78rem; }
+      .ai-help a { color: #4f46e5; text-decoration: underline; font-weight: 800; }
+      .ai-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+      .ai-status {
+        margin-top: 10px;
+        font-size: 0.86rem;
+        color: #475569;
+        min-height: 20px;
+        font-weight: 700;
+      }
+      .ai-status.is-loading { color: #4f46e5; }
+      .ai-status.is-error { color: #b91c1c; }
+      .ai-status.is-ok { color: #059669; }
+      .photo-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0 4px;
+      }
+      .photo-preview img {
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        background: #f8fafc;
+      }
+      .ai-preview {
+        margin-top: 12px;
+        background: #fff;
+        border: 2px dashed #c7d2fe;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 0.86rem;
+        color: #334155;
+      }
+      .ai-preview h4 {
+        margin: 6px 0 4px;
+        font-size: 0.92rem;
+        color: #1e293b;
+      }
+      .ai-preview ul { margin: 0 0 6px 18px; padding: 0; }
+      .ai-preview li { margin-bottom: 2px; }
+
       /* ---- 오늘 외워야 할 단어 오버레이 ---- */
       .study-overlay {
         position: fixed;
@@ -895,6 +996,36 @@
       <!-- Main Menu -->
       <div id="menuView">
         <div class="badges-wrap" id="badgesWrap"></div>
+
+        <!-- 📷 사진으로 단원 업데이트 -->
+        <section class="ai-panel" id="aiPanel">
+          <div class="ai-head">
+            <div>
+              <h3>📷 사진으로 단원 업데이트</h3>
+              <p>학습지 사진을 올리면 <b>단어·스펠링·문장 문제·글쓰기 프롬프트</b>가 자동으로 교체돼요.</p>
+            </div>
+            <button type="button" class="ai-toggle" id="aiToggle" aria-expanded="false" aria-controls="aiBody">열기 ▾</button>
+          </div>
+          <div class="ai-body hidden" id="aiBody">
+            <label class="ai-field">
+              <span>🔑 Gemini API 키 <small>(한 번만 저장 · 브라우저에 보관)</small></span>
+              <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off" />
+              <small class="ai-help">키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.</small>
+            </label>
+            <label class="ai-field">
+              <span>📎 사진 첨부 <small>(여러 장 가능)</small></span>
+              <input type="file" id="photoInput" accept="image/*" multiple />
+            </label>
+            <div id="photoPreview" class="photo-preview"></div>
+            <div class="ai-row">
+              <button type="button" class="btn btn-primary" id="btnApplyPhoto">🤖 분석해서 적용</button>
+              <button type="button" class="btn btn-ghost" id="btnResetData">↺ 기본값으로 되돌리기</button>
+            </div>
+            <div id="photoStatus" class="ai-status"></div>
+            <div id="aiPreview" class="ai-preview hidden"></div>
+          </div>
+        </section>
+
         <div class="menu">
           <button class="menu-card m-vocab" data-mode="vocab" id="card-vocab">
             <span class="card-badge">💯 완주</span>
@@ -959,7 +1090,7 @@
 
     <script>
       /* ----------------------------- Data ----------------------------- */
-      const VOCAB = [
+      let VOCAB = [
         { word: "alter", meaning: "바꾸다, 변경하다", en: "to change or modify something" },
         { word: "collapse", meaning: "무너지다, 붕괴하다", en: "to fall down suddenly" },
         { word: "crisis", meaning: "위기, 큰 어려움", en: "a time of serious trouble" },
@@ -978,13 +1109,13 @@
         { word: "delay", meaning: "지연시키다, 늦추다", en: "to make something happen later" },
       ];
 
-      const SPELL = [
+      let SPELL = [
         "change", "surface", "piece", "natural",
         "pressure", "quite", "important", "except",
         "question", "certain", "usually", "become",
         "together", "weekend", "field", "nobody",
       ];
-      const SPELL_MEANINGS = {
+      let SPELL_MEANINGS = {
         change: "바꾸다, 변화",
         surface: "표면, 지면",
         piece: "조각, 부분",
@@ -1004,7 +1135,7 @@
       };
 
       // Writing prompts (Part D)
-      const WRITE_PROMPTS = [
+      let WRITE_PROMPTS = [
         {
           id: 1,
           title: "Prompt 1",
@@ -1031,7 +1162,7 @@
       const COMPOUND_CONJ = ["and", "but", "or", "so", "yet"];
 
       // Sentence type data — labels: "compound" | "complex" | "runon"
-      const SENTENCES = [
+      let SENTENCES = [
         { s: "I like science fiction movies, but my father likes comedies.", t: "compound", why: "두 독립절을 and/or/but 로 연결 → Compound" },
         { s: "Because it was raining, we stayed inside.", t: "complex", why: "'because' 같은 종속 접속사가 쓰임 → Complex" },
         { s: "Kites are fun to fly people all over the world like to fly them.", t: "runon", why: "두 완전한 문장이 쉼표/접속사 없이 이어져 있어요 → Run-on" },
@@ -1045,6 +1176,15 @@
         { s: "You can take the bus, or you can walk home.", t: "compound", why: "or 로 두 독립절 연결 → Compound" },
         { s: "When the earthquake hit, the building collapsed.", t: "complex", why: "'when' → 종속 접속사 → Complex" },
       ];
+
+      // 기본 데이터 스냅샷(딥카피) - "기본값으로 되돌리기"용
+      const DEFAULTS = {
+        VOCAB: JSON.parse(JSON.stringify(VOCAB)),
+        SPELL: JSON.parse(JSON.stringify(SPELL)),
+        SPELL_MEANINGS: JSON.parse(JSON.stringify(SPELL_MEANINGS)),
+        SENTENCES: JSON.parse(JSON.stringify(SENTENCES)),
+        WRITE_PROMPTS: JSON.parse(JSON.stringify(WRITE_PROMPTS)),
+      };
 
       /* --------------------------- State ----------------------------- */
       const BEST_KEY = "study_game_best_v1";
@@ -1392,10 +1532,340 @@
         state.mode = null;
         state.modeFilter = null;
         renderBadges();
+        renderMenuDataInfo();
         menuView.classList.remove("hidden");
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
       }
+
+      /* --------------- 📷 Gemini 사진 업로드 & 커스텀 데이터 --------------- */
+      const CUSTOM_DATA_KEY = "study_game_custom_data_v1";
+      const GEMINI_KEY_KEY = "study_game_gemini_key_v1";
+
+      function getCustomData() {
+        try {
+          const raw = localStorage.getItem(CUSTOM_DATA_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) { return null; }
+      }
+      function saveCustomData(data) {
+        try { localStorage.setItem(CUSTOM_DATA_KEY, JSON.stringify(data)); } catch (e) {}
+      }
+      function clearCustomData() {
+        try { localStorage.removeItem(CUSTOM_DATA_KEY); } catch (e) {}
+      }
+
+      // 업로드된 데이터를 게임 전역 변수에 적용 (카테고리 비어있으면 기본값 유지)
+      function applyCustomData(data) {
+        if (!data || typeof data !== "object") return false;
+        let any = false;
+
+        if (Array.isArray(data.vocab) && data.vocab.length) {
+          const cleaned = data.vocab
+            .filter((v) => v && typeof v.word === "string" && typeof v.meaning === "string")
+            .map((v) => ({
+              word: String(v.word).trim().toLowerCase(),
+              meaning: String(v.meaning).trim(),
+              en: typeof v.en === "string" ? String(v.en).trim() : "",
+            }))
+            .filter((v) => v.word.length > 0 && v.meaning.length > 0);
+          if (cleaned.length >= 2) {
+            VOCAB = cleaned;
+            any = true;
+          }
+        }
+
+        if (Array.isArray(data.spell) && data.spell.length) {
+          const words = [];
+          const meanings = {};
+          data.spell.forEach((it) => {
+            if (typeof it === "string") {
+              const w = it.trim().toLowerCase();
+              if (w.length > 0) { words.push(w); meanings[w] = ""; }
+            } else if (it && typeof it.word === "string") {
+              const w = String(it.word).trim().toLowerCase();
+              if (w.length > 0) {
+                words.push(w);
+                meanings[w] = typeof it.meaning === "string" ? String(it.meaning).trim() : "";
+              }
+            }
+          });
+          if (words.length >= 2) {
+            SPELL = words;
+            SPELL_MEANINGS = meanings;
+            any = true;
+          }
+        }
+
+        if (Array.isArray(data.sentences) && data.sentences.length) {
+          const allowed = new Set(["compound", "complex", "runon"]);
+          const cleaned = data.sentences
+            .filter((x) => x && typeof x.s === "string" && typeof x.t === "string")
+            .map((x) => ({
+              s: String(x.s).trim(),
+              t: String(x.t).trim().toLowerCase().replace(/[-_\s]/g, ""),
+              why: typeof x.why === "string" ? String(x.why).trim() : "",
+            }))
+            .filter((x) => x.s.length > 4 && allowed.has(x.t));
+          if (cleaned.length >= 2) {
+            SENTENCES = cleaned;
+            any = true;
+          }
+        }
+
+        if (Array.isArray(data.prompts) && data.prompts.length) {
+          const cleaned = data.prompts
+            .filter((p) => p && typeof p.text === "string" && p.text.trim().length > 4)
+            .map((p, i) => ({
+              id: typeof p.id === "number" ? p.id : i + 1,
+              title: typeof p.title === "string" && p.title.trim() ? p.title.trim() : "Prompt " + (i + 1),
+              text: String(p.text).trim(),
+              ko: typeof p.ko === "string" ? String(p.ko).trim() : "",
+            }));
+          if (cleaned.length >= 1) {
+            WRITE_PROMPTS = cleaned;
+            any = true;
+          }
+        }
+
+        return any;
+      }
+
+      // 시작 시 저장된 커스텀 데이터 불러오기
+      (function loadCustomOnStart() {
+        const cd = getCustomData();
+        if (cd) applyCustomData(cd);
+      })();
+
+      function renderMenuDataInfo() {
+        const sub = document.querySelector(".page-sub");
+        if (!sub) return;
+        const cd = getCustomData();
+        if (cd && cd._sourcedAt) {
+          const d = new Date(cd._sourcedAt);
+          const dt = d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
+          sub.textContent = "📷 사진 업로드 단원 · " + dt + " · 단어 " + VOCAB.length + " · 스펠링 " + SPELL.length + " · 문장 " + SENTENCES.length;
+        } else {
+          sub.textContent = "Unit 1 · 어휘 · 스펠링 · 문장 종류 학습";
+        }
+      }
+
+      function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result || "";
+            const idx = String(res).indexOf(",");
+            resolve(idx >= 0 ? String(res).slice(idx + 1) : String(res));
+          };
+          reader.onerror = () => reject(new Error("파일을 읽지 못했어요."));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function callGeminiVision(apiKey, files) {
+        const GEMINI_MODEL = "gemini-2.0-flash";
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
+
+        const parts = [];
+        parts.push({
+          text: [
+            "You are a kind English study assistant helping a Korean elementary school student.",
+            "Analyze the attached study-guide photo(s). Extract ONLY content clearly present in the images.",
+            "Return a single valid JSON object with these keys (use empty arrays for any section not present):",
+            "{",
+            '  "vocab":     [ {"word":"lowercase English word","meaning":"Korean translation","en":"short English definition"} ],',
+            '  "spell":     [ {"word":"lowercase English word","meaning":"short Korean meaning"} ],',
+            '  "sentences": [ {"s":"example sentence exactly as shown","t":"compound|complex|runon","why":"short Korean reason why"} ],',
+            '  "prompts":   [ {"id":1,"title":"Prompt 1","text":"English prompt text","ko":"Korean translation"} ]',
+            "}",
+            "Rules:",
+            "- vocab: include ONLY words that are paired with a definition/meaning in the image.",
+            "- spell: include words from any spelling word list (Part B, spelling list, etc).",
+            "- sentences: include example sentences labeled or identifiable as compound, complex, or run-on. Use only those three labels for 't'.",
+            "- prompts: include writing prompts asking the student to write a paragraph.",
+            "- Meanings/explanations must be in simple Korean for an elementary student.",
+            "- Do NOT invent content that is not in the images.",
+            "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
+          ].join("\n"),
+        });
+
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const b64 = await fileToBase64(f);
+          parts.push({
+            inline_data: {
+              mime_type: f.type || "image/jpeg",
+              data: b64,
+            },
+          });
+        }
+
+        const body = {
+          contents: [{ role: "user", parts: parts }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+          },
+        };
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let msg = "Gemini 호출 실패 (" + res.status + ")";
+          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+        const combined = text.map((p) => p.text || "").join("").trim();
+        if (!combined) throw new Error("응답이 비어있어요.");
+
+        // 간혹 ```json ... ``` 로 감싸져 오는 경우 처리
+        let jsonStr = combined;
+        const fenceMatch = combined.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenceMatch) jsonStr = fenceMatch[1].trim();
+
+        try {
+          return JSON.parse(jsonStr);
+        } catch (e) {
+          throw new Error("JSON 파싱 실패: " + jsonStr.slice(0, 200));
+        }
+      }
+
+      function renderAiPreview(parsed) {
+        const box = $("aiPreview");
+        if (!box) return;
+        const parts = [];
+        const v = Array.isArray(parsed.vocab) ? parsed.vocab.length : 0;
+        const s = Array.isArray(parsed.spell) ? parsed.spell.length : 0;
+        const t = Array.isArray(parsed.sentences) ? parsed.sentences.length : 0;
+        const p = Array.isArray(parsed.prompts) ? parsed.prompts.length : 0;
+        parts.push("<h4>✅ 추출 결과</h4>");
+        parts.push("<ul>");
+        parts.push("<li>📖 단어 <b>" + v + "</b>개" + (v < 2 ? " <small style=\"color:#b91c1c\">(2개 미만이면 업데이트 안 됨)</small>" : "") + "</li>");
+        parts.push("<li>✏️ 스펠링 <b>" + s + "</b>개" + (s < 2 ? " <small style=\"color:#b91c1c\">(2개 미만이면 업데이트 안 됨)</small>" : "") + "</li>");
+        parts.push("<li>🔤 문장 예시 <b>" + t + "</b>개" + (t < 2 ? " <small style=\"color:#b91c1c\">(2개 미만이면 업데이트 안 됨)</small>" : "") + "</li>");
+        parts.push("<li>📝 글쓰기 프롬프트 <b>" + p + "</b>개</li>");
+        parts.push("</ul>");
+        if (v > 0) {
+          const sample = (parsed.vocab || []).slice(0, 5).map((x) => x.word + " — " + x.meaning).join(", ");
+          parts.push('<div style="color:#64748b;font-size:0.82rem">미리보기: ' + sample + (v > 5 ? " …" : "") + "</div>");
+        }
+        box.innerHTML = parts.join("");
+        box.classList.remove("hidden");
+      }
+
+      function wireAiPanel() {
+        const toggle = $("aiToggle");
+        const body = $("aiBody");
+        const keyInput = $("geminiKey");
+        const fileInput = $("photoInput");
+        const btnApply = $("btnApplyPhoto");
+        const btnReset = $("btnResetData");
+        const status = $("photoStatus");
+        const preview = $("photoPreview");
+        if (!toggle || !body) return;
+
+        // 저장된 API 키 복원
+        try {
+          const savedKey = localStorage.getItem(GEMINI_KEY_KEY);
+          if (savedKey && keyInput) keyInput.value = savedKey;
+        } catch (e) {}
+
+        toggle.addEventListener("click", () => {
+          const open = !body.classList.contains("hidden");
+          if (open) {
+            body.classList.add("hidden");
+            toggle.textContent = "열기 ▾";
+            toggle.setAttribute("aria-expanded", "false");
+          } else {
+            body.classList.remove("hidden");
+            toggle.textContent = "닫기 ▴";
+            toggle.setAttribute("aria-expanded", "true");
+          }
+        });
+
+        fileInput && fileInput.addEventListener("change", () => {
+          preview.innerHTML = "";
+          Array.from(fileInput.files || []).forEach((f) => {
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(f);
+            img.alt = f.name;
+            preview.appendChild(img);
+          });
+        });
+
+        btnApply && btnApply.addEventListener("click", async () => {
+          const key = (keyInput.value || "").trim();
+          const files = Array.from(fileInput.files || []);
+          if (!key) {
+            status.className = "ai-status is-error";
+            status.textContent = "⚠️ Gemini API 키를 먼저 입력해 주세요.";
+            return;
+          }
+          if (files.length === 0) {
+            status.className = "ai-status is-error";
+            status.textContent = "⚠️ 학습지 사진을 하나 이상 선택해 주세요.";
+            return;
+          }
+          try { localStorage.setItem(GEMINI_KEY_KEY, key); } catch (e) {}
+
+          btnApply.disabled = true;
+          status.className = "ai-status is-loading";
+          status.textContent = "🤖 Gemini가 사진을 읽고 있어요… (10~30초 소요)";
+          try {
+            const parsed = await callGeminiVision(key, files);
+            renderAiPreview(parsed);
+            const ok = applyCustomData(parsed);
+            if (!ok) {
+              status.className = "ai-status is-error";
+              status.textContent = "⚠️ 추출된 내용이 충분하지 않아요. 더 선명한 사진으로 다시 시도해 주세요.";
+            } else {
+              const toSave = Object.assign({}, parsed, { _sourcedAt: Date.now() });
+              saveCustomData(toSave);
+              renderMenuDataInfo();
+              status.className = "ai-status is-ok";
+              status.textContent = "✅ 단원이 업데이트됐어요! 메뉴에서 게임을 시작해 보세요.";
+              // 복습 기록은 새 단어 세트와 맞지 않을 수 있으므로 초기화 추천
+              try {
+                localStorage.removeItem("study_game_vocab_session_v1");
+                localStorage.removeItem("study_game_spell_session_v1");
+              } catch (e) {}
+            }
+          } catch (e) {
+            console.warn(e);
+            status.className = "ai-status is-error";
+            status.textContent = "⚠️ 실패: " + (e && e.message ? e.message : String(e));
+          } finally {
+            btnApply.disabled = false;
+          }
+        });
+
+        btnReset && btnReset.addEventListener("click", () => {
+          if (!confirm("기본 단원(자연재해 어휘)으로 되돌릴까요? 업로드로 생성한 단원은 삭제돼요.")) return;
+          clearCustomData();
+          VOCAB = JSON.parse(JSON.stringify(DEFAULTS.VOCAB));
+          SPELL = JSON.parse(JSON.stringify(DEFAULTS.SPELL));
+          SPELL_MEANINGS = JSON.parse(JSON.stringify(DEFAULTS.SPELL_MEANINGS));
+          SENTENCES = JSON.parse(JSON.stringify(DEFAULTS.SENTENCES));
+          WRITE_PROMPTS = JSON.parse(JSON.stringify(DEFAULTS.WRITE_PROMPTS));
+          try {
+            localStorage.removeItem("study_game_vocab_session_v1");
+            localStorage.removeItem("study_game_spell_session_v1");
+          } catch (e) {}
+          renderMenuDataInfo();
+          status.className = "ai-status is-ok";
+          status.textContent = "↺ 기본 단원으로 되돌렸어요.";
+          const aiPreview = $("aiPreview");
+          if (aiPreview) aiPreview.classList.add("hidden");
+        });
+      }
+      wireAiPanel();
       function startMode(mode, opts) {
         opts = opts || {};
         state.mode = mode;
