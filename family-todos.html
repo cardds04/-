@@ -331,6 +331,100 @@
         max-height: 4.5em;
         overflow: auto;
       }
+      .subj-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1.5;
+        color: #fff;
+        background: #6366f1;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+      }
+      .subj-badge.is-empty {
+        background: #cbd5e1;
+        color: #475569;
+      }
+      .main-card .subj-badge {
+        margin-bottom: 4px;
+        font-size: 0.68rem;
+        padding: 2px 7px;
+      }
+      .tpl-chip .subj-badge {
+        margin-right: 4px;
+        font-size: 0.68rem;
+      }
+      .subj-group-title {
+        margin: 14px 0 6px;
+        font-weight: 900;
+        font-size: 0.95rem;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .subj-group-title:first-child {
+        margin-top: 0;
+      }
+      .subj-group-title .subj-badge {
+        font-size: 0.78rem;
+        padding: 3px 10px;
+      }
+      .subj-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .subj-row label {
+        margin: 0;
+        font-weight: 800;
+        color: #334155;
+        white-space: nowrap;
+      }
+      .subj-row select {
+        flex: 1 1 auto;
+        min-width: 120px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        font-weight: 700;
+        background: #fff;
+      }
+      .btn-subj-add {
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 2px solid #6366f1;
+        background: #fff;
+        color: #4338ca;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-subj-add:hover {
+        background: #eef2ff;
+      }
+      .btn-subj-del {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        border-radius: 8px;
+        border: 2px solid #fca5a5;
+        background: #fff;
+        color: #b91c1c;
+        font-weight: 700;
+        cursor: pointer;
+        margin-left: auto;
+      }
+      .btn-subj-del:hover {
+        background: #fef2f2;
+      }
       .admin-nav {
         display: flex;
         flex-wrap: wrap;
@@ -1706,6 +1800,13 @@
                 <p style="font-size: 0.82rem; color: #64748b; margin: -6px 0 10px; font-weight: 600">공통 저장소에만 넣어요. 아이는 위에서 고른 뒤 드래그로 배치하면 됩니다.</p>
                 <div id="tplErr"></div>
                 <form id="formTemplate">
+                  <label>과목 (분류)</label>
+                  <div class="subj-row">
+                    <select name="subject" id="tplSubjectSelect">
+                      <option value="">(분류 없음)</option>
+                    </select>
+                    <button type="button" class="btn-subj-add" id="btnAddSubject">+ 과목 추가</button>
+                  </div>
                   <label>이름 (제목)</label>
                   <input name="title" required maxlength="80" placeholder="예: 책 읽기" />
                   <label>이모지</label>
@@ -1785,6 +1886,71 @@
         var LS_LAST_VIEW_KEY = "family_todos_last_view";
         var LS_SELECTED_KID_KEY = "family_todos_selected_kid_id";
         var SS_RESTORE_ADMIN_TAB = "family_todos_restore_admin_tab";
+        var LS_SUBJECTS_KEY = "family_todos_subject_list_v1";
+
+        function loadSavedSubjects() {
+          try {
+            var raw = localStorage.getItem(LS_SUBJECTS_KEY);
+            if (!raw) return [];
+            var arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) return [];
+            return arr.filter(function (s) { return typeof s === "string" && s.trim(); });
+          } catch (e) { return []; }
+        }
+        function saveSubjectsList(list) {
+          try {
+            var uniq = [];
+            (list || []).forEach(function (s) {
+              var v = String(s || "").trim();
+              if (v && uniq.indexOf(v) === -1) uniq.push(v);
+            });
+            localStorage.setItem(LS_SUBJECTS_KEY, JSON.stringify(uniq));
+          } catch (e) {}
+        }
+        function getAllSubjects() {
+          var saved = loadSavedSubjects();
+          var fromTpl = [];
+          var tpls = (typeof state !== "undefined" && state && state.templates) ? state.templates : [];
+          tpls.forEach(function (t) {
+            var v = String(t.detail || "").trim();
+            if (v && fromTpl.indexOf(v) === -1) fromTpl.push(v);
+          });
+          var merged = [];
+          saved.concat(fromTpl).forEach(function (s) {
+            if (s && merged.indexOf(s) === -1) merged.push(s);
+          });
+          merged.sort(function (a, b) { return a.localeCompare(b, "ko"); });
+          return merged;
+        }
+        function subjectColor(name) {
+          var s = String(name || "");
+          if (!s) return "#cbd5e1";
+          var palette = ["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#0ea5e9", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
+          var hash = 0;
+          for (var i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+          return palette[hash % palette.length];
+        }
+        function makeSubjectBadge(name) {
+          var v = String(name || "").trim();
+          var span = document.createElement("span");
+          span.className = "subj-badge" + (v ? "" : " is-empty");
+          span.textContent = v || "분류없음";
+          if (v) span.style.background = subjectColor(v);
+          return span;
+        }
+        function refreshSubjectSelect() {
+          var sel = document.getElementById("tplSubjectSelect");
+          if (!sel) return;
+          var prev = sel.value || "";
+          while (sel.options.length > 1) sel.remove(1);
+          getAllSubjects().forEach(function (s) {
+            var opt = document.createElement("option");
+            opt.value = s;
+            opt.textContent = s;
+            sel.appendChild(opt);
+          });
+          sel.value = prev;
+        }
         var VALID_ADMIN_TABS = ["kids", "templates", "coupons", "guide"];
         var gateIntent = "admin";
         var SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
@@ -2368,7 +2534,17 @@
             mount.innerHTML =
               '<p style="color:#64748b;font-weight:600;margin:0;font-size:0.9rem">저장된 투두가 없어요. 「투두 등록」에서 먼저 만들어 주세요.</p>';
           } else {
-            state.templates.forEach(function (t) {
+            var sortedTpls = state.templates.slice().sort(function (a, b) {
+              var sa = String(a.detail || "").trim();
+              var sb = String(b.detail || "").trim();
+              if (sa && !sb) return -1;
+              if (!sa && sb) return 1;
+              if (sa !== sb) return sa.localeCompare(sb, "ko");
+              var ca = String(a.created_at || "");
+              var cb2 = String(b.created_at || "");
+              return ca.localeCompare(cb2);
+            });
+            sortedTpls.forEach(function (t) {
               var exists = state.slots.some(function (s) {
                 return s.kid_id === kid && s.weekday === w && s.template_id === t.id;
               });
@@ -2379,7 +2555,12 @@
               cb.value = String(t.id);
               if (exists) cb.disabled = true;
               var span = document.createElement("span");
-              span.textContent = (t.emoji || "⭐") + " " + t.title + (exists ? " (이미 있음)" : "");
+              var subj = String(t.detail || "").trim();
+              if (subj) {
+                span.appendChild(makeSubjectBadge(subj));
+                span.appendChild(document.createTextNode(" "));
+              }
+              span.appendChild(document.createTextNode((t.emoji || "⭐") + " " + t.title + (exists ? " (이미 있음)" : "")));
               lab.appendChild(cb);
               lab.appendChild(span);
               cb.addEventListener("change", function () {
@@ -2653,6 +2834,13 @@
           var armKey = "slot:" + sl.id + ":" + dstr;
           var card = document.createElement("div");
           card.className = "main-card " + (isDone ? "main-card-done" : "main-card-todo");
+          var subj = String(tpl.detail || "").trim();
+          if (subj) {
+            var bw = document.createElement("div");
+            bw.style.cssText = "text-align:center;";
+            bw.appendChild(makeSubjectBadge(subj));
+            card.appendChild(bw);
+          }
           var em = document.createElement("div");
           em.className = "emoji";
           em.textContent = tpl.emoji || "⭐";
@@ -2666,12 +2854,6 @@
             kn.className = "kid";
             kn.textContent = kid.name;
             card.appendChild(kn);
-          }
-          if (tpl.detail) {
-            var det = document.createElement("div");
-            det.className = "detail";
-            det.textContent = tpl.detail || "";
-            card.appendChild(det);
           }
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
@@ -2778,6 +2960,22 @@
               : [];
           var hasPraisePending = praisePendingRows.length > 0;
           var hasPraiseDone = praiseClaimRows.length > 0;
+
+          function _itemSubject(it) {
+            if (it.kind === "slot" && it.tpl) return String(it.tpl.detail || "").trim();
+            if (it.kind === "schedule" && it.sched) return String(it.sched.detail || "").trim();
+            return "";
+          }
+          function _sortBySubject(a, b) {
+            var sa = _itemSubject(a);
+            var sb = _itemSubject(b);
+            if (sa && !sb) return -1;
+            if (!sa && sb) return 1;
+            if (sa !== sb) return sa.localeCompare(sb, "ko");
+            return 0;
+          }
+          pending.sort(_sortBySubject);
+          doneList.sort(_sortBySubject);
           if (!pending.length && !doneList.length && !hasPraisePending && !hasPraiseDone) {
             gridP.innerHTML =
               '<p style="grid-column:1/-1;text-align:center;color:#64748b;font-weight:700;padding:2rem">오늘 할 일이 없어요 🌟<br><small style="font-weight:600">부모님 페이지에서 요일 배치나 「특정날짜스케줄추가」로 넣어 주세요.</small></p>';
@@ -3040,7 +3238,14 @@
                   if (!tpl) return;
                   var chip = document.createElement("div");
                   chip.className = "slot-chip";
+                  var subj = String(tpl.detail || "").trim();
+                  var badgeHtml = "";
+                  if (subj) {
+                    var c = subjectColor(subj);
+                    badgeHtml = '<span class="subj-badge" style="background:' + c + '">' + escapeHtml(subj) + '</span> ';
+                  }
                   chip.innerHTML =
+                    badgeHtml +
                     "<span>" +
                     (tpl.emoji || "⭐") +
                     "</span> " +
@@ -3091,12 +3296,23 @@
         function renderLibrary() {
           var row = $("libraryRow");
           row.innerHTML = "";
-          var list = state.templates;
+          var list = (state.templates || []).slice().sort(function (a, b) {
+            var sa = String(a.detail || "").trim();
+            var sb = String(b.detail || "").trim();
+            if (sa && !sb) return -1;
+            if (!sa && sb) return 1;
+            if (sa !== sb) return sa.localeCompare(sb, "ko");
+            var ca = String(a.created_at || "");
+            var cb = String(b.created_at || "");
+            return ca.localeCompare(cb);
+          });
           list.forEach(function (t) {
             var el = document.createElement("div");
             el.className = "tpl-chip";
             el.draggable = true;
-            el.textContent = (t.emoji || "⭐") + " " + t.title;
+            var subj = String(t.detail || "").trim();
+            if (subj) el.appendChild(makeSubjectBadge(subj));
+            el.appendChild(document.createTextNode(" " + (t.emoji || "⭐") + " " + t.title));
             el.addEventListener("dragstart", function (e) {
               e.dataTransfer.setData("text/template-id", t.id);
               e.dataTransfer.effectAllowed = "copy";
@@ -3111,17 +3327,34 @@
         function renderTplList() {
           var el = $("tplList");
           el.innerHTML = "";
+          refreshSubjectSelect();
+
+          var subjects = getAllSubjects();
+          var groups = {};
+          var order = [];
+          subjects.forEach(function (s) { groups[s] = []; order.push(s); });
           state.templates.forEach(function (t) {
+            var s = String(t.detail || "").trim();
+            if (!s) return;
+            if (!groups[s]) { groups[s] = []; order.push(s); }
+            groups[s].push(t);
+          });
+          var noneList = state.templates.filter(function (t) { return !String(t.detail || "").trim(); });
+
+          function appendItem(t) {
             var kid = t.kid_id ? kidById(t.kid_id) : null;
             var div = document.createElement("div");
             div.className = "list-item";
-            div.innerHTML =
-              "<span>" +
-              (t.emoji || "⭐") +
-              " " +
-              escapeHtml(t.title) +
-              (kid ? ' <small style="color:#64748b">(' + escapeHtml(kid.name) + ")</small>" : "") +
-              "</span>";
+            var span = document.createElement("span");
+            span.appendChild(makeSubjectBadge(t.detail));
+            span.appendChild(document.createTextNode(" " + (t.emoji || "⭐") + " " + t.title));
+            if (kid) {
+              var sm = document.createElement("small");
+              sm.style.color = "#64748b";
+              sm.textContent = " (" + kid.name + ")";
+              span.appendChild(sm);
+            }
+            div.appendChild(span);
             var del = document.createElement("button");
             del.type = "button";
             del.textContent = "삭제";
@@ -3131,7 +3364,60 @@
             });
             div.appendChild(del);
             el.appendChild(div);
+          }
+
+          order.forEach(function (s) {
+            var list = groups[s] || [];
+            var head = document.createElement("div");
+            head.className = "subj-group-title";
+            head.appendChild(makeSubjectBadge(s));
+            var cnt = document.createElement("small");
+            cnt.style.color = "#64748b";
+            cnt.style.fontWeight = "700";
+            cnt.textContent = list.length + "개";
+            head.appendChild(cnt);
+            var delSub = document.createElement("button");
+            delSub.type = "button";
+            delSub.className = "btn-subj-del";
+            delSub.textContent = "과목 삭제";
+            delSub.addEventListener("click", function () {
+              if (list.length > 0) {
+                alert('"' + s + '" 과목에 등록된 투두가 ' + list.length + '개 있어요. 먼저 투두를 삭제하거나 다른 과목으로 옮긴 뒤 시도해주세요.');
+                return;
+              }
+              if (!confirm('"' + s + '" 과목을 목록에서 삭제할까요?')) return;
+              var saved = loadSavedSubjects().filter(function (x) { return x !== s; });
+              saveSubjectsList(saved);
+              renderTplList();
+            });
+            head.appendChild(delSub);
+            el.appendChild(head);
+            if (list.length === 0) {
+              var empty = document.createElement("div");
+              empty.style.cssText = "color:#94a3b8;font-size:0.82rem;font-weight:600;padding:4px 0 8px;";
+              empty.textContent = "(등록된 투두 없음)";
+              el.appendChild(empty);
+            } else {
+              list.forEach(appendItem);
+            }
           });
+
+          if (noneList.length > 0) {
+            var head2 = document.createElement("div");
+            head2.className = "subj-group-title";
+            head2.appendChild(makeSubjectBadge(""));
+            var cnt2 = document.createElement("small");
+            cnt2.style.color = "#64748b";
+            cnt2.style.fontWeight = "700";
+            cnt2.textContent = noneList.length + "개";
+            head2.appendChild(cnt2);
+            el.appendChild(head2);
+            noneList.forEach(appendItem);
+          }
+
+          if (state.templates.length === 0 && order.length === 0) {
+            el.innerHTML = '<p style="color:#64748b;font-weight:600;margin:0">저장된 투두가 없어요. 위에서 새 투두를 등록해 보세요.</p>';
+          }
         }
 
         function renderKidList() {
@@ -3800,9 +4086,10 @@
           e.preventDefault();
           $("tplErr").innerHTML = "";
           var fd = new FormData(e.target);
+          var subj = String(fd.get("subject") || "").trim();
           var row = {
             title: String(fd.get("title") || "").trim(),
-            detail: "",
+            detail: subj,
             emoji: String(fd.get("emoji") || "⭐"),
             kid_id: null,
           };
@@ -3811,10 +4098,41 @@
             $("tplErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
             return;
           }
+          if (subj) {
+            var saved = loadSavedSubjects();
+            if (saved.indexOf(subj) === -1) {
+              saved.push(subj);
+              saveSubjectsList(saved);
+            }
+          }
           e.target.reset();
           pickRandomEmojiFromSelect(e.target.querySelector("select[name=emoji]"));
+          refreshSubjectSelect();
           await refresh();
         });
+
+        var btnAddSubject = document.getElementById("btnAddSubject");
+        if (btnAddSubject) {
+          btnAddSubject.addEventListener("click", function () {
+            var name = window.prompt("추가할 과목 이름을 입력하세요 (예: 영어, 수학, 독서)");
+            if (name === null) return;
+            name = String(name || "").trim();
+            if (!name) return;
+            if (name.length > 20) {
+              alert("과목 이름은 20자 이하로 입력해주세요.");
+              return;
+            }
+            var saved = loadSavedSubjects();
+            if (saved.indexOf(name) === -1) {
+              saved.push(name);
+              saveSubjectsList(saved);
+            }
+            refreshSubjectSelect();
+            var sel = document.getElementById("tplSubjectSelect");
+            if (sel) sel.value = name;
+          });
+        }
+        refreshSubjectSelect();
 
         $("formKid").addEventListener("submit", async function (e) {
           e.preventDefault();
