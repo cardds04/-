@@ -715,25 +715,205 @@
         .top-line { flex-direction: column; align-items: flex-start; }
       }
 
-      /* ── 임베드 모드 (inlog.html iframe 안에서 표시될 때) ── */
-      body.is-embed { background: transparent; }
+      /* ── 임베드 모드: 부모(inlog.html, 노랑·검정 테마) 와 시각 통일 ── */
+      body.is-embed {
+        --gold: #000000;
+        --gold-dim: #1a1a1a;
+        --bg: #ffd503;
+        --bg-accent: #ffd503;
+        --card: #ffffff;
+        --card2: #fff8c2;
+        --line: #000000;
+        --text: #000000;
+        --muted: #444444;
+        background: #ffd503 !important;
+        color: #000;
+        font-family: "Montserrat", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+      body.is-embed html { background: #ffd503; }
       body.is-embed .wrap {
-        margin: 12px auto 28px;
+        margin: 0 auto;
         width: min(820px, 100%);
-        padding: 0 12px;
+        padding: 14px 16px 36px;
       }
-      body.is-embed .page-title {
-        font-size: clamp(1.5rem, 4.5vw, 2.1rem);
-        margin-bottom: 4px;
-      }
+
+      /* 헤더(타이틀)는 인로그 헤더와 중복되니 임베드에서는 숨김 */
+      body.is-embed .page-title,
       body.is-embed .page-sub {
-        font-size: 0.85rem;
+        display: none;
+      }
+
+      /* 카드: 흰 카드를 노란 페이지 위에 올린 느낌 */
+      body.is-embed .card {
+        background: #ffffff;
+        border: 1.5px solid #000;
+        border-radius: 14px;
+        padding: 18px 16px 22px;
+        box-shadow: 0 6px 0 0 #000;
+        margin-top: 4px;
+      }
+
+      /* 탭 (로그인/회원가입, 등록/편집/현황) */
+      body.is-embed .tabs {
+        border-bottom: 2px solid #000;
         margin-bottom: 16px;
       }
-      body.is-embed .card {
-        border-radius: 16px;
-        padding: 18px 16px 22px;
-        box-shadow: 0 6px 22px rgba(28, 25, 22, 0.08);
+      body.is-embed .tabs button {
+        color: #666;
+        font-weight: 700;
+        font-family: inherit;
+        font-size: 0.95rem;
+      }
+      body.is-embed .tabs button:hover { color: #000; }
+      body.is-embed .tabs button.active { color: #000; font-weight: 800; }
+      body.is-embed .tabs button.active::after {
+        background: #000 !important;
+        height: 3px;
+        bottom: -2px;
+        left: 8% !important;
+        right: 8% !important;
+        border-radius: 0 !important;
+      }
+
+      /* 폼 필드 */
+      body.is-embed .row {
+        border-bottom: 1.5px solid #000;
+        padding: 11px 4px 9px;
+      }
+      body.is-embed .row:focus-within {
+        border-bottom-color: #000;
+        box-shadow: 0 2px 0 0 #000;
+      }
+      body.is-embed .row input,
+      body.is-embed .row select,
+      body.is-embed .row textarea {
+        color: #000;
+        font-family: inherit;
+        font-weight: 600;
+      }
+      body.is-embed .row input::placeholder { color: #888; font-weight: 500; }
+
+      /* 버튼: 검정 바탕 + 노란 글씨 */
+      body.is-embed .btn {
+        background: #000 !important;
+        color: #ffd503 !important;
+        border-radius: 10px;
+        box-shadow: 0 4px 0 0 rgba(0,0,0,0.85);
+        font-family: inherit;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+      body.is-embed .btn:hover { filter: brightness(1.15); }
+      body.is-embed .btn:disabled {
+        background: #999 !important;
+        color: #fff !important;
+        box-shadow: none;
+        opacity: 0.7;
+      }
+      body.is-embed .btn.outline,
+      body.is-embed .outline {
+        background: #fff !important;
+        color: #000 !important;
+        border: 1.5px solid #000;
+        box-shadow: 0 3px 0 0 #000;
+      }
+      body.is-embed .btn.outline:hover,
+      body.is-embed .outline:hover {
+        background: #ffd503 !important;
+        color: #000 !important;
+      }
+
+      /* 회원가입 안내·링크 버튼 */
+      body.is-embed #goSignupLink,
+      body.is-embed #goLoginLink {
+        color: #000 !important;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        font-weight: 800;
+      }
+
+      /* 환영 / top-line */
+      body.is-embed #welcomeText {
+        font-family: inherit !important;
+        font-weight: 800;
+        font-size: 1.05rem !important;
+        letter-spacing: -0.01em;
+      }
+      body.is-embed .top-line { margin-bottom: 12px; }
+
+      /* 평수/구성 영역 */
+      body.is-embed .compose-wrap {
+        border: 1.5px solid #000;
+        border-left: 6px solid #000;
+        border-radius: 0 12px 12px 0;
+        background: #fff8c2;
+      }
+      body.is-embed .compose-label { color: #000; opacity: 1; }
+      body.is-embed .compose-btn {
+        border: 1.5px solid #000;
+        background: #fff;
+        color: #000;
+        font-weight: 700;
+      }
+      body.is-embed .compose-btn:hover { background: #ffd503; color: #000; }
+      body.is-embed .compose-btn.active {
+        background: #000;
+        color: #ffd503;
+        border-color: #000;
+      }
+      body.is-embed .compose-price-guide {
+        background: #fffceb;
+        border: 1.5px dashed #000;
+        color: #333;
+      }
+      body.is-embed .compose-price-guide strong { color: #000; }
+
+      /* 상태 카드 / 결제 박스 */
+      body.is-embed .status-card {
+        border: 1.5px solid #000;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 0 0 #000;
+      }
+      body.is-embed .status-card::before {
+        background: #000 !important;
+        opacity: 1;
+        width: 4px;
+      }
+      body.is-embed .status-meta { color: #333; }
+      body.is-embed .payment-summary-box {
+        border: 1.5px solid #000;
+        border-radius: 14px;
+        background: #fff8c2;
+        box-shadow: 0 4px 0 0 #000;
+      }
+      body.is-embed .payment-summary-title {
+        font-family: inherit;
+        color: #000;
+        font-weight: 800;
+      }
+      body.is-embed .payment-summary-grid .status-card {
+        border: 1px solid #000;
+        box-shadow: none;
+        background: #fff;
+      }
+
+      /* 편집 입력행 등 */
+      body.is-embed .edit-sheets-row input {
+        border: 1.5px solid #000;
+        background: #fff;
+        color: #000;
+        font-family: inherit;
+      }
+      body.is-embed .hint { color: #555; }
+      body.is-embed .hint.danger,
+      body.is-embed .danger { color: #c00; font-weight: 700; }
+      body.is-embed .divider { border-top: 1px dashed #000; opacity: 0.5; }
+
+      /* status badge들이 카드 안에서 잘 보이도록 */
+      body.is-embed .payment-state-badge,
+      body.is-embed .status-badge {
+        font-family: inherit;
       }
     </style>
   </head>
