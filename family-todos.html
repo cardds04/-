@@ -1112,55 +1112,131 @@
         cursor: pointer;
         font-weight: 700;
       }
-      .list-item .btn-tpl-edit {
-        background: #dbeafe;
-        color: #1d4ed8;
-      }
-      .tpl-edit-row {
-        padding: 10px;
+      .tpl-row {
+        display: block;
+        padding: 10px 0;
         border-bottom: 1px solid #e2e8f0;
-        background: #f8fafc;
-        border-radius: 10px;
-        margin-bottom: 6px;
+        font-weight: 700;
       }
-      .tpl-edit-row .row {
+      .tpl-row .tpl-row-main {
         display: flex;
+        align-items: center;
         gap: 6px;
-        margin-bottom: 6px;
         flex-wrap: wrap;
       }
-      .tpl-edit-row select,
-      .tpl-edit-row input[type="text"] {
-        flex: 1 1 120px;
-        min-width: 0;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 2px solid #cbd5e1;
+      .tpl-row .tpl-subj-badge,
+      .tpl-row .tpl-emoji,
+      .tpl-row .tpl-title {
+        cursor: pointer;
+        user-select: none;
+        border-radius: 8px;
+        transition: background 0.12s, box-shadow 0.12s;
+      }
+      .tpl-row .tpl-subj-badge {
+        margin-right: 2px;
+      }
+      .tpl-row .tpl-subj-badge:hover {
+        filter: brightness(1.1);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+      }
+      .tpl-row .tpl-emoji {
+        font-size: 1.25rem;
+        padding: 2px 6px;
+      }
+      .tpl-row .tpl-emoji:hover {
+        background: #eef2ff;
+      }
+      .tpl-row .tpl-title {
+        flex: 1 1 auto;
+        min-width: 80px;
+        padding: 4px 8px;
+        color: #1e293b;
+        font-size: 0.98rem;
+      }
+      .tpl-row .tpl-title:hover {
+        background: #f1f5f9;
+        box-shadow: inset 0 0 0 1px #cbd5e1;
+      }
+      .tpl-row .tpl-title-input {
+        flex: 1 1 auto;
+        min-width: 80px;
+        padding: 4px 8px;
+        border: 2px solid #6366f1;
+        border-radius: 8px;
         font-weight: 700;
+        font-size: 0.98rem;
         background: #fff;
+        color: #1e293b;
+        font-family: inherit;
       }
-      .tpl-edit-row .btn-row {
-        display: flex;
+      .tpl-row .tpl-del {
+        margin-left: auto;
+        border: none;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .tpl-row .tpl-kid {
+        color: #64748b;
+        font-size: 0.82rem;
+      }
+      .tpl-chip-tray {
+        display: none;
+        flex-wrap: wrap;
         gap: 6px;
-        justify-content: flex-end;
+        margin-top: 8px;
+        padding: 8px;
+        background: #f8fafc;
+        border-radius: 12px;
+        border: 2px dashed #cbd5e1;
       }
-      .tpl-edit-row .btn-tpl-save {
-        background: #10b981;
-        color: #fff;
-        border: none;
-        padding: 8px 14px;
-        border-radius: 8px;
+      .tpl-chip-tray.is-open {
+        display: flex;
+      }
+      .tpl-chip-tray .chip-label {
+        width: 100%;
+        font-size: 0.76rem;
+        color: #64748b;
         font-weight: 800;
-        cursor: pointer;
+        margin-bottom: 2px;
       }
-      .tpl-edit-row .btn-tpl-cancel {
-        background: #e2e8f0;
+      .tpl-chip-tray .chip {
+        border: 2px solid transparent;
+        background: #fff;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.82rem;
+        cursor: pointer;
         color: #334155;
-        border: none;
-        padding: 8px 14px;
-        border-radius: 8px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+      .tpl-chip-tray .chip:hover {
+        background: #eef2ff;
+      }
+      .tpl-chip-tray .chip.is-current {
+        border-color: #6366f1;
+        background: #e0e7ff;
+      }
+      .tpl-chip-tray .chip.chip-emoji {
+        font-size: 1.15rem;
+        padding: 3px 8px;
+      }
+      .tpl-chip-tray .chip-subj {
+        color: #fff;
         font-weight: 800;
-        cursor: pointer;
+      }
+      .tpl-chip-tray .chip-none {
+        background: #f1f5f9;
+        color: #475569;
+      }
+      .tpl-chip-tray .chip-add {
+        background: #fff;
+        color: #4338ca;
+        border-color: #6366f1;
       }
       .err {
         background: #fef2f2;
@@ -3537,158 +3613,195 @@
 
           var EMOJI_OPTIONS = ["⭐", "📚", "🧹", "🍽️", "🛁", "✏️", "🎨", "⚽", "🎹", "💤", "🐶", "💪"];
 
-          function buildEditRow(t, viewDiv) {
-            var box = document.createElement("div");
-            box.className = "tpl-edit-row";
-
-            var row1 = document.createElement("div");
-            row1.className = "row";
-            var subjSel = document.createElement("select");
-            var optNone = document.createElement("option");
-            optNone.value = "";
-            optNone.textContent = "(분류 없음)";
-            subjSel.appendChild(optNone);
-            var allSubj = getAllSubjects();
-            var curSubj = String(t.detail || "").trim();
-            if (curSubj && allSubj.indexOf(curSubj) === -1) allSubj.push(curSubj);
-            allSubj.forEach(function (s) {
-              var o = document.createElement("option");
-              o.value = s;
-              o.textContent = s;
-              if (s === curSubj) o.selected = true;
-              subjSel.appendChild(o);
-            });
-            var addSubjBtn = document.createElement("button");
-            addSubjBtn.type = "button";
-            addSubjBtn.className = "btn-subj-add";
-            addSubjBtn.textContent = "+ 과목 추가";
-            addSubjBtn.style.flex = "0 0 auto";
-            addSubjBtn.addEventListener("click", function () {
-              var name = window.prompt("추가할 과목 이름을 입력하세요");
-              if (name === null) return;
-              name = String(name || "").trim();
-              if (!name) return;
-              if (name.length > 20) { alert("과목 이름은 20자 이하"); return; }
-              var saved = loadSavedSubjects();
-              if (saved.indexOf(name) === -1) { saved.push(name); saveSubjectsList(saved); }
-              if (!Array.from(subjSel.options).some(function (o) { return o.value === name; })) {
-                var o2 = document.createElement("option");
-                o2.value = name;
-                o2.textContent = name;
-                subjSel.appendChild(o2);
-              }
-              subjSel.value = name;
-            });
-            row1.appendChild(subjSel);
-            row1.appendChild(addSubjBtn);
-            box.appendChild(row1);
-
-            var row2 = document.createElement("div");
-            row2.className = "row";
-            var emojiSel = document.createElement("select");
-            emojiSel.style.flex = "0 0 90px";
-            EMOJI_OPTIONS.forEach(function (em) {
-              var o = document.createElement("option");
-              o.value = em;
-              o.textContent = em;
-              if (em === (t.emoji || "⭐")) o.selected = true;
-              emojiSel.appendChild(o);
-            });
-            if (t.emoji && EMOJI_OPTIONS.indexOf(t.emoji) === -1) {
-              var oExtra = document.createElement("option");
-              oExtra.value = t.emoji;
-              oExtra.textContent = t.emoji;
-              oExtra.selected = true;
-              emojiSel.appendChild(oExtra);
+          async function updateTpl(t, patch) {
+            var r = await supabase.from("family_todo_templates").update(patch).eq("id", t.id);
+            if (r.error) { alert("저장 실패: " + r.error.message); return false; }
+            if (patch.detail) {
+              var saved2 = loadSavedSubjects();
+              if (saved2.indexOf(patch.detail) === -1) { saved2.push(patch.detail); saveSubjectsList(saved2); }
             }
-            var titleInp = document.createElement("input");
-            titleInp.type = "text";
-            titleInp.maxLength = 80;
-            titleInp.value = t.title || "";
-            titleInp.placeholder = "이름 (제목)";
-            row2.appendChild(emojiSel);
-            row2.appendChild(titleInp);
-            box.appendChild(row2);
-
-            var btnRow = document.createElement("div");
-            btnRow.className = "btn-row";
-            var saveBtn = document.createElement("button");
-            saveBtn.type = "button";
-            saveBtn.className = "btn-tpl-save";
-            saveBtn.textContent = "저장";
-            var cancelBtn = document.createElement("button");
-            cancelBtn.type = "button";
-            cancelBtn.className = "btn-tpl-cancel";
-            cancelBtn.textContent = "취소";
-            btnRow.appendChild(cancelBtn);
-            btnRow.appendChild(saveBtn);
-            box.appendChild(btnRow);
-
-            cancelBtn.addEventListener("click", function () {
-              box.replaceWith(viewDiv);
-            });
-            saveBtn.addEventListener("click", async function () {
-              var newTitle = String(titleInp.value || "").trim();
-              if (!newTitle) { alert("제목을 입력해주세요."); return; }
-              var newSubj = String(subjSel.value || "").trim();
-              var newEmoji = String(emojiSel.value || "⭐");
-              saveBtn.disabled = true;
-              saveBtn.textContent = "저장 중…";
-              var r = await supabase
-                .from("family_todo_templates")
-                .update({ title: newTitle, detail: newSubj, emoji: newEmoji })
-                .eq("id", t.id);
-              if (r.error) {
-                alert("저장 실패: " + r.error.message);
-                saveBtn.disabled = false;
-                saveBtn.textContent = "저장";
-                return;
-              }
-              if (newSubj) {
-                var saved2 = loadSavedSubjects();
-                if (saved2.indexOf(newSubj) === -1) { saved2.push(newSubj); saveSubjectsList(saved2); }
-              }
-              await refresh();
-            });
-
-            return box;
+            await refresh();
+            return true;
           }
 
           function appendItem(t) {
             var kid = t.kid_id ? kidById(t.kid_id) : null;
-            var div = document.createElement("div");
-            div.className = "list-item";
-            var span = document.createElement("span");
-            span.appendChild(makeSubjectBadge(t.detail));
-            span.appendChild(document.createTextNode(" " + (t.emoji || "⭐") + " " + t.title));
+            var row = document.createElement("div");
+            row.className = "tpl-row";
+
+            var main = document.createElement("div");
+            main.className = "tpl-row-main";
+
+            var badge = makeSubjectBadge(t.detail);
+            badge.classList.add("tpl-subj-badge");
+            badge.title = "눌러서 과목 변경";
+            main.appendChild(badge);
+
+            var emo = document.createElement("span");
+            emo.className = "tpl-emoji";
+            emo.textContent = t.emoji || "⭐";
+            emo.title = "눌러서 이모지 변경";
+            main.appendChild(emo);
+
+            var titleEl = document.createElement("span");
+            titleEl.className = "tpl-title";
+            titleEl.textContent = t.title;
+            titleEl.title = "눌러서 글씨 수정";
+            main.appendChild(titleEl);
+
             if (kid) {
-              var sm = document.createElement("small");
-              sm.style.color = "#64748b";
-              sm.textContent = " (" + kid.name + ")";
-              span.appendChild(sm);
+              var sm = document.createElement("span");
+              sm.className = "tpl-kid";
+              sm.textContent = "(" + kid.name + ")";
+              main.appendChild(sm);
             }
-            div.appendChild(span);
-            var btnWrap = document.createElement("div");
-            btnWrap.style.cssText = "display:flex;gap:6px;flex-shrink:0;";
-            var edit = document.createElement("button");
-            edit.type = "button";
-            edit.className = "btn-tpl-edit";
-            edit.textContent = "수정";
-            edit.addEventListener("click", function () {
-              var box = buildEditRow(t, div);
-              div.replaceWith(box);
-            });
+
             var del = document.createElement("button");
             del.type = "button";
+            del.className = "tpl-del";
             del.textContent = "삭제";
             del.addEventListener("click", function () {
               if (confirm("삭제할까요?"))
                 supabase.from("family_todo_templates").delete().eq("id", t.id).then(refresh);
             });
-            btnWrap.appendChild(edit);
-            btnWrap.appendChild(del);
-            div.appendChild(btnWrap);
-            el.appendChild(div);
+            main.appendChild(del);
+
+            row.appendChild(main);
+
+            var subjTray = document.createElement("div");
+            subjTray.className = "tpl-chip-tray";
+            row.appendChild(subjTray);
+
+            var emojiTray = document.createElement("div");
+            emojiTray.className = "tpl-chip-tray";
+            row.appendChild(emojiTray);
+
+            function closeTrays() {
+              subjTray.classList.remove("is-open");
+              emojiTray.classList.remove("is-open");
+            }
+
+            function buildSubjTray() {
+              subjTray.innerHTML = "";
+              var lab = document.createElement("div");
+              lab.className = "chip-label";
+              lab.textContent = "과목 선택 (눌러서 즉시 분류)";
+              subjTray.appendChild(lab);
+              var cur = String(t.detail || "").trim();
+              var list = getAllSubjects();
+              var noneChip = document.createElement("button");
+              noneChip.type = "button";
+              noneChip.className = "chip chip-none" + (!cur ? " is-current" : "");
+              noneChip.textContent = "분류없음";
+              noneChip.addEventListener("click", function () {
+                closeTrays();
+                if (cur === "") return;
+                updateTpl(t, { detail: "" });
+              });
+              subjTray.appendChild(noneChip);
+              list.forEach(function (s) {
+                var c = document.createElement("button");
+                c.type = "button";
+                c.className = "chip chip-subj" + (s === cur ? " is-current" : "");
+                c.style.background = subjectColor(s);
+                c.textContent = s;
+                c.addEventListener("click", function () {
+                  closeTrays();
+                  if (s === cur) return;
+                  updateTpl(t, { detail: s });
+                });
+                subjTray.appendChild(c);
+              });
+              var addChip = document.createElement("button");
+              addChip.type = "button";
+              addChip.className = "chip chip-add";
+              addChip.textContent = "+ 새 과목";
+              addChip.addEventListener("click", function () {
+                var name = window.prompt("추가할 과목 이름을 입력하세요");
+                if (name === null) return;
+                name = String(name || "").trim();
+                if (!name) return;
+                if (name.length > 20) { alert("과목 이름은 20자 이하"); return; }
+                var saved = loadSavedSubjects();
+                if (saved.indexOf(name) === -1) { saved.push(name); saveSubjectsList(saved); }
+                closeTrays();
+                updateTpl(t, { detail: name });
+              });
+              subjTray.appendChild(addChip);
+            }
+
+            function buildEmojiTray() {
+              emojiTray.innerHTML = "";
+              var lab = document.createElement("div");
+              lab.className = "chip-label";
+              lab.textContent = "이모지 선택";
+              emojiTray.appendChild(lab);
+              var cur = t.emoji || "⭐";
+              var opts = EMOJI_OPTIONS.slice();
+              if (opts.indexOf(cur) === -1) opts.unshift(cur);
+              opts.forEach(function (em) {
+                var c = document.createElement("button");
+                c.type = "button";
+                c.className = "chip chip-emoji" + (em === cur ? " is-current" : "");
+                c.textContent = em;
+                c.addEventListener("click", function () {
+                  closeTrays();
+                  if (em === cur) return;
+                  updateTpl(t, { emoji: em });
+                });
+                emojiTray.appendChild(c);
+              });
+            }
+
+            badge.addEventListener("click", function () {
+              var isOpen = subjTray.classList.contains("is-open");
+              emojiTray.classList.remove("is-open");
+              if (isOpen) { subjTray.classList.remove("is-open"); return; }
+              buildSubjTray();
+              subjTray.classList.add("is-open");
+            });
+
+            emo.addEventListener("click", function () {
+              var isOpen = emojiTray.classList.contains("is-open");
+              subjTray.classList.remove("is-open");
+              if (isOpen) { emojiTray.classList.remove("is-open"); return; }
+              buildEmojiTray();
+              emojiTray.classList.add("is-open");
+            });
+
+            function enterTitleEdit() {
+              closeTrays();
+              var inp = document.createElement("input");
+              inp.type = "text";
+              inp.maxLength = 80;
+              inp.value = t.title || "";
+              inp.className = "tpl-title-input";
+              titleEl.replaceWith(inp);
+              inp.focus();
+              inp.select();
+              var committed = false;
+              function commit() {
+                if (committed) return;
+                committed = true;
+                var v = String(inp.value || "").trim();
+                if (!v) { alert("제목을 입력해주세요."); inp.value = t.title || ""; inp.focus(); committed = false; return; }
+                if (v === (t.title || "")) { inp.replaceWith(titleEl); return; }
+                updateTpl(t, { title: v });
+              }
+              function cancel() {
+                if (committed) return;
+                committed = true;
+                inp.replaceWith(titleEl);
+              }
+              inp.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); commit(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+              });
+              inp.addEventListener("blur", commit);
+            }
+            titleEl.addEventListener("click", enterTitleEdit);
+
+            el.appendChild(row);
           }
 
           order.forEach(function (s) {
