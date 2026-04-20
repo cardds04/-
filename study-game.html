@@ -502,6 +502,7 @@
           <p style="color:#7c2d12;font-weight:700;margin:6px 0 16px" id="finalSub">
             최고 기록: <span id="bestScore">0</span>
           </p>
+          <div class="btn-row" id="finalReviewRow"></div>
           <div class="btn-row">
             <button class="btn btn-primary" id="btnPlayAgain">🔁 다시 하기</button>
             <button class="btn btn-ghost" id="btnGoMenu">🏠 메뉴로</button>
@@ -558,10 +559,13 @@
       const BEST_KEY = "study_game_best_v1";
       const state = {
         mode: null,
+        modeFilter: null,
         questions: [],
         idx: 0,
         score: 0,
         streak: 0,
+        sessionWrongs: [],
+        sessionRights: [],
       };
 
       const $ = (id) => document.getElementById(id);
@@ -665,16 +669,83 @@
         }
       }
 
+      // ---- Sound effects (Web Audio) ----
+      let _audioCtx = null;
+      function getAudio() {
+        if (_audioCtx) return _audioCtx;
+        try {
+          _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {}
+        return _audioCtx;
+      }
+      function playTone({ freq = 800, dur = 0.15, type = "sine", vol = 0.2, when = 0, slideTo = null }) {
+        const ctx = getAudio();
+        if (!ctx) return;
+        if (ctx.state === "suspended") {
+          try { ctx.resume(); } catch (e) {}
+        }
+        const t0 = ctx.currentTime + when;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t0);
+        if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.05);
+      }
+      function playCorrect() {
+        // C5 - E5 - G5 상행 아르페지오 (경쾌한 "띵동")
+        playTone({ freq: 523.25, dur: 0.1, vol: 0.18, type: "triangle", when: 0 });
+        playTone({ freq: 659.25, dur: 0.1, vol: 0.18, type: "triangle", when: 0.08 });
+        playTone({ freq: 783.99, dur: 0.22, vol: 0.2, type: "triangle", when: 0.16 });
+      }
+      function playWrong() {
+        // 낮은 "삐익" - 실수 음
+        playTone({ freq: 260, dur: 0.18, vol: 0.22, type: "square", when: 0, slideTo: 180 });
+        playTone({ freq: 160, dur: 0.28, vol: 0.18, type: "square", when: 0.16, slideTo: 110 });
+      }
+      function playWin() {
+        playTone({ freq: 523.25, dur: 0.12, vol: 0.2, type: "triangle", when: 0 });
+        playTone({ freq: 659.25, dur: 0.12, vol: 0.2, type: "triangle", when: 0.1 });
+        playTone({ freq: 783.99, dur: 0.12, vol: 0.2, type: "triangle", when: 0.2 });
+        playTone({ freq: 1046.5, dur: 0.32, vol: 0.22, type: "triangle", when: 0.3 });
+      }
+
       // Unlock audio on very first user interaction (iOS/Safari requirement)
       document.addEventListener(
         "click",
         function unlockOnce() {
           warmSpeech();
           loadVoicesOnce();
+          const ctx = getAudio();
+          if (ctx && ctx.state === "suspended") {
+            try { ctx.resume(); } catch (e) {}
+          }
           document.removeEventListener("click", unlockOnce);
         },
         { once: true, capture: true }
       );
+
+      // ---- Vocab session persistence (wrong/right words) ----
+      const VOCAB_SESSION_KEY = "study_game_vocab_session_v1";
+      function getVocabSession() {
+        try {
+          const raw = localStorage.getItem(VOCAB_SESSION_KEY);
+          if (!raw) return { wrongs: [], rights: [] };
+          const obj = JSON.parse(raw);
+          return { wrongs: Array.isArray(obj.wrongs) ? obj.wrongs : [], rights: Array.isArray(obj.rights) ? obj.rights : [] };
+        } catch (e) { return { wrongs: [], rights: [] }; }
+      }
+      function saveVocabSession(wrongs, rights) {
+        try {
+          localStorage.setItem(VOCAB_SESSION_KEY, JSON.stringify({ wrongs: wrongs || [], rights: rights || [] }));
+        } catch (e) {}
+      }
       function getBest() {
         try {
           return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
@@ -693,13 +764,31 @@
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
       }
-      function startMode(mode) {
+      function startMode(mode, opts) {
+        opts = opts || {};
         state.mode = mode;
+        state.modeFilter = opts.filter || null;
         state.score = 0;
         state.streak = 0;
         state.idx = 0;
-        if (mode === "vocab") state.questions = pickN(VOCAB, 10);
-        else if (mode === "spell") state.questions = pickN(SPELL, 10);
+        state.sessionWrongs = [];
+        state.sessionRights = [];
+        if (mode === "vocab") {
+          let pool = VOCAB;
+          if (opts.filter === "wrong") {
+            const saved = getVocabSession();
+            const words = new Set(saved.wrongs || []);
+            const filtered = VOCAB.filter((v) => words.has(v.word));
+            if (filtered.length > 0) pool = filtered;
+          } else if (opts.filter === "right") {
+            const saved = getVocabSession();
+            const words = new Set(saved.rights || []);
+            const filtered = VOCAB.filter((v) => words.has(v.word));
+            if (filtered.length > 0) pool = filtered;
+          }
+          const count = Math.min(10, Math.max(1, pool.length));
+          state.questions = pickN(pool, count);
+        } else if (mode === "spell") state.questions = pickN(SPELL, 10);
         else if (mode === "sent") state.questions = pickN(SENTENCES, 10);
         else if (mode === "match") state.questions = null;
         menuView.classList.add("hidden");
@@ -726,12 +815,10 @@
         renderQuestion();
       }
       function finishGame() {
-        const total = state.mode === "match" ? 16 : 10;
+        const perfectMax = state.mode === "match" ? 16 : (state.questions ? state.questions.length : 10);
         setBest(state.mode, state.score);
         const best = getBest()[state.mode] || 0;
-        const pct = state.score / (total * (state.mode === "match" ? 1 : 1));
         let emoji = "🏆", stars = "⭐⭐⭐", title = "최고예요!";
-        const perfectMax = state.mode === "match" ? 16 : 10;
         const ratio = state.score / perfectMax;
         if (ratio >= 1) { emoji = "🏆"; stars = "⭐⭐⭐⭐⭐"; title = "완벽해요!"; }
         else if (ratio >= 0.8) { emoji = "🎉"; stars = "⭐⭐⭐⭐"; title = "아주 잘했어요!"; }
@@ -744,6 +831,48 @@
         $("finalScoreText").textContent = state.score + " / " + perfectMax;
         $("finalStars").textContent = stars;
         $("bestScore").textContent = best;
+
+        // Vocab: 세션 저장 + 복습 버튼 구성
+        const reviewRow = $("finalReviewRow");
+        reviewRow.innerHTML = "";
+        if (state.mode === "vocab") {
+          // Merge current session into persisted history.
+          // - Words wrongs once stay wrong until the user gets them right
+          // - A wrong in this session overrides a previous right
+          const prev = getVocabSession();
+          const prevRights = new Set(prev.rights || []);
+          const prevWrongs = new Set(prev.wrongs || []);
+          const nowWrongs = new Set(state.sessionWrongs);
+          const nowRights = new Set(state.sessionRights);
+          // For words answered now:
+          nowWrongs.forEach((w) => { prevWrongs.add(w); prevRights.delete(w); });
+          nowRights.forEach((w) => { prevRights.add(w); prevWrongs.delete(w); });
+          saveVocabSession(Array.from(prevWrongs), Array.from(prevRights));
+
+          const wrongCount = prevWrongs.size;
+          const rightCount = prevRights.size;
+
+          const btnWrong = document.createElement("button");
+          btnWrong.className = "btn btn-primary";
+          btnWrong.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
+          btnWrong.textContent = "🔴 틀린 단어만 다시보기 (" + wrongCount + ")";
+          if (wrongCount === 0) { btnWrong.disabled = true; btnWrong.style.opacity = "0.5"; btnWrong.style.cursor = "not-allowed"; }
+          btnWrong.addEventListener("click", () => startMode("vocab", { filter: "wrong" }));
+          reviewRow.appendChild(btnWrong);
+
+          const btnRight = document.createElement("button");
+          btnRight.className = "btn btn-primary";
+          btnRight.style.background = "linear-gradient(135deg, #10b981, #059669)";
+          btnRight.textContent = "🟢 맞은 단어 다시보기 (" + rightCount + ")";
+          if (rightCount === 0) { btnRight.disabled = true; btnRight.style.opacity = "0.5"; btnRight.style.cursor = "not-allowed"; }
+          btnRight.addEventListener("click", () => startMode("vocab", { filter: "right" }));
+          reviewRow.appendChild(btnRight);
+        }
+
+        // 승리 효과음
+        if (ratio >= 0.6) playWin();
+        else playWrong();
+
         menuView.classList.add("hidden");
         gameView.classList.add("hidden");
         finalView.classList.remove("hidden");
@@ -796,6 +925,8 @@
           btn.classList.add("correct");
           state.score += 1;
           state.streak += 1;
+          state.sessionRights.push(correct.word);
+          playCorrect();
           fb.textContent = "정답! 🎉  " + correct.word + " = " + correct.meaning;
           fb.className = "feedback ok pop";
         } else {
@@ -804,6 +935,8 @@
             if (b.textContent === correct.meaning) b.classList.add("correct");
           });
           state.streak = 0;
+          state.sessionWrongs.push(correct.word);
+          playWrong();
           fb.textContent = "아쉬워요 😅  정답: " + correct.word + " = " + correct.meaning;
           fb.className = "feedback no shake";
         }
@@ -812,21 +945,52 @@
       }
 
       /* ---------- Spelling scramble ---------- */
+      function buildDistractorPool(word) {
+        // 단어 길이에 따라 방해용 글자 갯수 결정 (짧으면 많이, 길면 조금 덜)
+        const len = word.length;
+        let extras;
+        if (len <= 4) extras = 6;
+        else if (len <= 6) extras = 6;
+        else if (len <= 8) extras = 7;
+        else extras = 8;
+
+        // 후보 풀: 다른 스펠링 단어들의 글자 + 흔한 영어 글자
+        const common = "abcdefghijklmnopqrstuvwxyz".split("");
+        const fromOthers = [];
+        SPELL.forEach((w) => {
+          if (w !== word) w.split("").forEach((ch) => fromOthers.push(ch));
+        });
+        const pool = fromOthers.concat(common);
+
+        const wordLetterCounts = {};
+        word.split("").forEach((ch) => { wordLetterCounts[ch] = (wordLetterCounts[ch] || 0) + 1; });
+
+        const picks = [];
+        const maxTries = extras * 20;
+        let tries = 0;
+        while (picks.length < extras && tries < maxTries) {
+          tries++;
+          const candidate = pool[Math.floor(Math.random() * pool.length)];
+          // 난이도: 단어 안에 없는 글자를 우선, 가끔 단어 안에 있는 글자도 섞음(함정)
+          const inWord = !!wordLetterCounts[candidate];
+          if (inWord && Math.random() < 0.7) continue;
+          picks.push(candidate);
+        }
+        return picks;
+      }
+
       function renderSpell() {
         const word = state.questions[state.idx];
         const letters = word.split("");
-        let scrambled = shuffle(letters);
-        // ensure shuffled differs from original
-        let tries = 0;
-        while (scrambled.join("") === word && tries < 6) {
-          scrambled = shuffle(letters);
-          tries++;
-        }
+        const distractors = buildDistractorPool(word);
+        const combined = letters.concat(distractors);
+        let scrambled = shuffle(combined);
+        // 첫 글자가 우연히 단어 첫 글자와 같더라도 방해 글자가 섞여 있으니 문제없음
 
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
-          '<div class="prompt-small">✏️ 글자를 알맞게 배열해요</div>' +
+          '<div class="prompt-small">✏️ 필요한 글자만 골라서 배열해요 (방해 글자 포함)</div>' +
           '<div style="text-align:center;margin:6px 0 4px"><button class="btn btn-say" id="btnSaySp">🔊 발음 듣기</button>' +
           ' <button class="btn btn-hint" id="btnHintSp">💡 힌트</button></div>' +
           '<div class="scramble-target" id="targetArea"><span class="scramble-hint" id="emptyHint">여기에 글자를 눌러 배열해요</span></div>' +
@@ -904,6 +1068,7 @@
           fb.className = "feedback ok pop";
           state.score += 1;
           state.streak += 1;
+          playCorrect();
           $("btnCheck").classList.add("hidden");
           $("btnClear").classList.add("hidden");
           $("btnNext").classList.remove("hidden");
@@ -912,6 +1077,7 @@
           fb.textContent = "다시! 정답은 \"" + word + "\" 입니다.";
           fb.className = "feedback no shake";
           state.streak = 0;
+          playWrong();
           updateHud();
           $("btnCheck").classList.add("hidden");
           $("btnClear").classList.add("hidden");
@@ -950,12 +1116,14 @@
           btn.classList.add("correct");
           state.score += 1;
           state.streak += 1;
+          playCorrect();
           fb.textContent = "정답! 🎉  " + item.why;
           fb.className = "feedback ok pop";
         } else {
           btn.classList.add("wrong");
           all.forEach((b) => { if (b.dataset.v === item.t) b.classList.add("correct"); });
           state.streak = 0;
+          playWrong();
           fb.textContent = "아쉬워요. " + item.why;
           fb.className = "feedback no shake";
         }
@@ -1013,6 +1181,7 @@
           matchState.matched += 1;
           state.score += 2;
           state.streak += 1;
+          playCorrect();
           updateHud();
           const fb = $("feedback");
           fb.textContent = "짝 맞췄어요! 🎉  " + c.pair;
@@ -1026,6 +1195,7 @@
           fb.textContent = "다시 시도! 🙈";
           fb.className = "feedback no";
           state.streak = 0;
+          playWrong();
           updateHud();
           setTimeout(() => {
             f.el.classList.remove("flip");
@@ -1040,7 +1210,7 @@
         btn.addEventListener("click", () => startMode(btn.dataset.mode));
       });
       $("btnBack").addEventListener("click", showMenu);
-      $("btnPlayAgain").addEventListener("click", () => startMode(state.mode));
+      $("btnPlayAgain").addEventListener("click", () => startMode(state.mode, { filter: state.modeFilter }));
       $("btnGoMenu").addEventListener("click", showMenu);
 
       showMenu();
