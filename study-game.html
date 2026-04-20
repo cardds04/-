@@ -1358,6 +1358,58 @@
         animation: frSpin 0.8s linear infinite;
       }
       @keyframes frSpin { to { transform: rotate(360deg); } }
+      .btn.btn-fix {
+        background: linear-gradient(135deg, #a78bfa, #7c3aed);
+        color: #fff;
+        border: 2px solid #7c3aed;
+      }
+      .btn.btn-fix:hover { filter: brightness(1.05); }
+      .diff-view {
+        margin-top: 10px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 2px solid #c7d2fe;
+        border-radius: 14px;
+        font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+        font-size: 0.95rem;
+        line-height: 1.7;
+        color: #1e293b;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .diff-view u.diff-add {
+        text-decoration: underline;
+        text-decoration-color: #7c3aed;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+        background: #f5f3ff;
+        color: #5b21b6;
+        font-weight: 800;
+        padding: 0 2px;
+        border-radius: 4px;
+      }
+      details.diff-original {
+        margin-top: 10px;
+        background: #f8fafc;
+        border: 2px dashed #e2e8f0;
+        border-radius: 12px;
+        padding: 8px 12px;
+      }
+      details.diff-original summary {
+        cursor: pointer;
+        font-weight: 800;
+        color: #475569;
+        font-size: 0.88rem;
+      }
+      .diff-orig-text {
+        margin: 8px 0 0;
+        font-family: inherit;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #334155;
+        font-weight: 600;
+        font-size: 0.92rem;
+      }
       .live-interim {
         color: #94a3b8;
         font-style: italic;
@@ -1445,24 +1497,36 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
-      .saved-card .sc-del {
+      .saved-card .sc-del,
+      .saved-card .sc-copy {
         position: absolute;
         top: -6px;
-        right: -6px;
         width: 22px;
         height: 22px;
         border-radius: 50%;
         border: 2px solid #fff;
-        background: #ef4444;
         color: #fff;
-        font-size: 0.7rem;
+        font-size: 0.72rem;
         font-weight: 900;
         cursor: pointer;
         display: none;
         line-height: 1;
         font-family: inherit;
+        padding: 0;
       }
-      .saved-card:hover .sc-del { display: block; }
+      .saved-card .sc-del {
+        right: -6px;
+        background: #ef4444;
+      }
+      .saved-card .sc-copy {
+        right: 22px;
+        background: #6366f1;
+      }
+      .saved-card .sc-copy.is-copied {
+        background: #10b981;
+      }
+      .saved-card:hover .sc-del,
+      .saved-card:hover .sc-copy { display: block; }
       .saved-empty {
         color: #9a3412;
         font-size: 0.84rem;
@@ -2049,6 +2113,7 @@
 
       /* --------------- 📷 Gemini 사진 업로드 & 다중 단원 시스템 --------------- */
       const GEMINI_KEY_KEY = "study_game_gemini_key_v1";
+      const GEMINI_MODEL = "gemini-2.5-flash";
       const UNITS_KEY = "study_game_units_v2";
       const ACTIVE_UNIT_KEY = "study_game_active_unit_v2";
       const DEFAULT_PERSIST_KEY = "study_game_default_persist_v2";
@@ -2306,7 +2371,6 @@
       async function callGeminiVision(apiKey, files, opts) {
         opts = opts || {};
         const onlyVocab = opts.mode === "vocab";
-        const GEMINI_MODEL = "gemini-2.0-flash";
         const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
 
         const parts = [];
@@ -3440,7 +3504,6 @@
 
       // Gemini를 이용한 글쓰기 첨삭 (최소 개입 원칙)
       async function aiReviewParagraph(text, promptObj, apiKey) {
-        const GEMINI_MODEL = "gemini-2.0-flash";
         const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
         const promptText = [
           "You are a gentle English writing coach reviewing a Korean elementary school student's homework.",
@@ -3522,10 +3585,108 @@
         neat: "Neat writing (스펠링/대소문자/구두점)",
       };
 
+      // Gemini로 최소 수정 (원문 최대 유지)
+      async function aiCorrectParagraph(text, promptObj, apiKey) {
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
+        const promptText = [
+          "You are helping a Korean elementary school student fix obvious mistakes in their English homework paragraph.",
+          promptObj && promptObj.text ? ('The writing prompt is: "' + promptObj.text + '"') : "",
+          "",
+          "ORIGINAL PARAGRAPH (verbatim, between triple backticks):",
+          "```",
+          String(text || ""),
+          "```",
+          "",
+          "STRICT RULES — VERY IMPORTANT:",
+          "1) Keep the student's voice, ideas, sentence order, and word choices as much as possible.",
+          "2) Only change things that are CLEARLY WRONG: misspellings, missing capital letter at sentence start, missing ending punctuation (. ? !), obvious grammar errors (subject-verb agreement, a/an, wrong tense).",
+          "3) DO NOT rewrite sentences. DO NOT add new ideas, examples, adjectives, or details. DO NOT reorder sentences.",
+          "4) Keep the paragraph length about the same. Keep the first-line indentation (2 spaces or tab) if it was there; add 2 spaces if indentation is missing.",
+          "5) Keep correctly spelled words spelled the same way.",
+          "6) If the original is already correct, return it unchanged.",
+          "",
+          "Return ONLY this JSON (no code fences, no extra text):",
+          "{",
+          '  "corrected": "the full corrected paragraph, keeping line breaks and leading spaces",',
+          '  "note": "한국어 1~2문장으로 어떤 종류의 오류를 고쳤는지 간단히 요약"',
+          "}",
+        ].join("\n");
+
+        const body = {
+          contents: [{ role: "user", parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
+        };
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let msg = "Gemini 호출 실패 (" + res.status + ")";
+          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+        const combined = partsArr.map((p) => p.text || "").join("").trim();
+        if (!combined) throw new Error("응답이 비어있어요.");
+        let jsonStr = combined;
+        const fence = combined.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fence) jsonStr = fence[1].trim();
+        return JSON.parse(jsonStr);
+      }
+
+      // 단어/구두점 단위 diff → 변경된 토큰에 밑줄
+      function diffToHtml(originalText, correctedText) {
+        function esc(s) {
+          return String(s || "").replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+          });
+        }
+        function tokenize(s) {
+          // 단어(알파벳/숫자/어포스트로피), 공백, 기타 기호 단위로 분리
+          return String(s || "").match(/[A-Za-z0-9']+|\s+|[^\sA-Za-z0-9']+/g) || [];
+        }
+        const a = tokenize(originalText);
+        const b = tokenize(correctedText);
+        const n = a.length, m = b.length;
+        // LCS DP (뒤에서 앞으로)
+        const dp = [];
+        for (let i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+        for (let i = n - 1; i >= 0; i--) {
+          for (let j = m - 1; j >= 0; j--) {
+            if (a[i] === b[j]) dp[i][j] = dp[i + 1][j + 1] + 1;
+            else dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+          }
+        }
+        let i = 0, j = 0;
+        let html = "";
+        while (j < m) {
+          if (i < n && a[i] === b[j]) {
+            html += esc(b[j]).replace(/\n/g, "<br>");
+            i++; j++;
+          } else if (i < n && dp[i + 1][j] >= dp[i][j + 1]) {
+            i++;
+          } else {
+            const tok = b[j];
+            // 공백만 있는 토큰은 밑줄 대신 그대로
+            if (/^\s+$/.test(tok)) {
+              html += esc(tok).replace(/\n/g, "<br>");
+            } else {
+              html += '<u class="diff-add">' + esc(tok) + "</u>";
+            }
+            j++;
+          }
+        }
+        return html;
+      }
+
       // Gemini 도움요청 (간단한 질문 답변)
       async function askGeminiHelp(question, opts, apiKey) {
         opts = opts || {};
-        const GEMINI_MODEL = "gemini-2.0-flash";
         const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
         const promptCtx = opts.prompt
           ? "The student is currently working on this writing prompt: \"" + (opts.prompt.text || "") + "\" (" + (opts.prompt.ko || "") + ")"
@@ -3821,9 +3982,13 @@
               '</div>' +
               '<div class="sc-prompt">' + promptLbl + '</div>' +
               '<div class="sc-text">' + (preview || "(빈 글)") + '</div>' +
+              '<button type="button" class="sc-copy" title="복사">📋</button>' +
               '<button type="button" class="sc-del" title="삭제">✕</button>';
             c.addEventListener("click", (ev) => {
-              if (ev.target && ev.target.classList && ev.target.classList.contains("sc-del")) return;
+              if (ev.target && ev.target.classList && (
+                ev.target.classList.contains("sc-del") ||
+                ev.target.classList.contains("sc-copy")
+              )) return;
               writeArea.value = entry.text || "";
               if (entry.promptId === 1 || entry.promptId === 2) {
                 activePrompt = entry.promptId;
@@ -3833,6 +3998,37 @@
               writeArea.focus();
               const wrap2 = $("feedbackWrap");
               if (wrap2) wrap2.innerHTML = "";
+            });
+            const copy = c.querySelector(".sc-copy");
+            copy.addEventListener("click", async (ev) => {
+              ev.stopPropagation();
+              const txt = entry.text || "";
+              let ok = false;
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(txt);
+                  ok = true;
+                } else {
+                  const ta = document.createElement("textarea");
+                  ta.value = txt;
+                  ta.style.position = "fixed";
+                  ta.style.opacity = "0";
+                  document.body.appendChild(ta);
+                  ta.select();
+                  ok = document.execCommand("copy");
+                  document.body.removeChild(ta);
+                }
+              } catch (e) { ok = false; }
+              if (ok) {
+                copy.textContent = "✓";
+                copy.classList.add("is-copied");
+                setTimeout(() => {
+                  copy.textContent = "📋";
+                  copy.classList.remove("is-copied");
+                }, 1200);
+              } else {
+                alert("복사에 실패했어요. 길게 눌러 직접 복사해 주세요.");
+              }
             });
             const del = c.querySelector(".sc-del");
             del.addEventListener("click", (ev) => {
@@ -3931,6 +4127,135 @@
           });
         }
 
+        async function copyTextToClipboard(txt) {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(txt);
+              return true;
+            }
+            const ta = document.createElement("textarea");
+            ta.value = txt;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            return ok;
+          } catch (e) { return false; }
+        }
+
+        async function showCorrectionView(origText, promptObj, apiKey, ctx) {
+          const wrapEl = $("feedbackWrap");
+          if (!wrapEl) return;
+          wrapEl.innerHTML =
+            '<div class="feedback-panel pop"><div class="feedback-loading">' +
+            '<div class="spin"></div>' +
+            '<div>🪄 Gemini가 최소 수정안을 준비하고 있어요…</div>' +
+            "</div></div>";
+          wrapEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          let res;
+          try {
+            res = await aiCorrectParagraph(origText, promptObj, apiKey);
+          } catch (err) {
+            wrapEl.innerHTML = "";
+            const errBox = document.createElement("div");
+            errBox.className = "feedback-panel pop";
+            errBox.innerHTML =
+              '<div style="color:#991b1b;font-weight:800;margin-bottom:8px">⚠️ 고치기에 실패했어요.</div>' +
+              '<div style="color:#64748b;font-weight:600;font-size:0.9rem">' + escapeHtml(err && err.message ? err.message : "오류") + '</div>';
+            const back = document.createElement("button");
+            back.className = "btn btn-ghost";
+            back.textContent = "← 이전 화면";
+            back.style.marginTop = "10px";
+            back.addEventListener("click", () => {
+              if (ctx && ctx.feedbackOpts) renderFeedbackPanel(ctx.feedbackOpts);
+            });
+            errBox.appendChild(back);
+            wrapEl.appendChild(errBox);
+            return;
+          }
+          const corrected = (res && typeof res.corrected === "string") ? res.corrected : "";
+          const note = (res && typeof res.note === "string") ? res.note : "";
+          const panel = document.createElement("div");
+          panel.className = "feedback-panel pop is-pass";
+
+          const src = document.createElement("span");
+          src.className = "feedback-source";
+          src.textContent = "🪄 Gemini 최소 수정";
+          panel.appendChild(src);
+
+          const h = document.createElement("h3");
+          h.textContent = "✍️ 고친 글 (밑줄 = 바뀐 부분)";
+          panel.appendChild(h);
+
+          if (note) {
+            const ov = document.createElement("div");
+            ov.className = "feedback-overall";
+            ov.textContent = "💡 " + note;
+            panel.appendChild(ov);
+          }
+
+          const diffBox = document.createElement("div");
+          diffBox.className = "diff-view";
+          diffBox.innerHTML = diffToHtml(origText, corrected);
+          panel.appendChild(diffBox);
+
+          const origBox = document.createElement("details");
+          origBox.className = "diff-original";
+          origBox.innerHTML =
+            '<summary>📝 내 원래 글 보기</summary>' +
+            '<pre class="diff-orig-text">' + escapeHtml(origText) + '</pre>';
+          panel.appendChild(origBox);
+
+          const btnsRow = document.createElement("div");
+          btnsRow.className = "btn-row";
+          btnsRow.style.marginTop = "14px";
+
+          const btnBack = document.createElement("button");
+          btnBack.className = "btn btn-ghost";
+          btnBack.textContent = "← 첨삭으로 돌아가기";
+          btnBack.addEventListener("click", () => {
+            if (ctx && ctx.feedbackOpts) renderFeedbackPanel(ctx.feedbackOpts);
+            else wrapEl.innerHTML = "";
+          });
+
+          const btnCopy = document.createElement("button");
+          btnCopy.className = "btn btn-ghost";
+          btnCopy.textContent = "📋 고친 글 복사";
+          btnCopy.addEventListener("click", async () => {
+            const ok = await copyTextToClipboard(corrected);
+            if (ok) {
+              const o = btnCopy.textContent;
+              btnCopy.textContent = "✓ 복사됨";
+              setTimeout(() => { btnCopy.textContent = o; }, 1200);
+            } else {
+              alert("복사에 실패했어요.");
+            }
+          });
+
+          const btnApply = document.createElement("button");
+          btnApply.className = "btn btn-primary";
+          btnApply.textContent = "📝 이 글로 바꾸기";
+          btnApply.addEventListener("click", () => {
+            if (!confirm("지금 쓰고 있는 글을 고친 글로 바꿀까요?")) return;
+            writeArea.value = corrected;
+            try { drawRubricLive(); } catch (e) {}
+            wrapEl.innerHTML = "";
+            writeArea.focus();
+            writeArea.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+
+          btnsRow.appendChild(btnBack);
+          btnsRow.appendChild(btnCopy);
+          btnsRow.appendChild(btnApply);
+          panel.appendChild(btnsRow);
+
+          wrapEl.innerHTML = "";
+          wrapEl.appendChild(panel);
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
         function renderFeedbackPanel(opts) {
           // opts: { items:[{key,ok,reason}], fixes:[{original,suggested,why}], overall, total, source }
           const items = Array.isArray(opts.items) ? opts.items : [];
@@ -4026,7 +4351,26 @@
             wrap.innerHTML = "";
             writeArea.focus();
           });
+
+          const btnFix = document.createElement("button");
+          btnFix.className = "btn btn-fix";
+          btnFix.textContent = "🪄 고쳐줘요";
+          btnFix.addEventListener("click", async () => {
+            const origText = (opts && typeof opts.sourceText === "string") ? opts.sourceText : writeArea.value;
+            const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+            if (!apiKey) {
+              alert("메인 화면에서 Gemini API 키를 먼저 저장해 주세요.");
+              return;
+            }
+            if (!origText.trim()) {
+              alert("고칠 글이 없어요.");
+              return;
+            }
+            showCorrectionView(origText, opts && opts.promptObj ? opts.promptObj : null, apiKey, { feedbackOpts: opts });
+          });
+
           btnsRow.appendChild(btnRetry);
+          btnsRow.appendChild(btnFix);
           btnsRow.appendChild(btnEnd);
           panel.appendChild(btnsRow);
 
@@ -4082,6 +4426,8 @@
                 overall: ai.overall || "",
                 total: 6,
                 source: "ai",
+                sourceText: text,
+                promptObj: promptObj,
               });
               pushSavedWriting({
                 id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -4115,6 +4461,8 @@
             overall: !apiKey ? "AI 첨삭을 보려면 메인 화면에서 Gemini 키를 저장해 주세요." : "",
             total: ev.items.length,
             source: "local",
+            sourceText: text,
+            promptObj: promptObj,
           });
           pushSavedWriting({
             id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
