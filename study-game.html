@@ -1154,6 +1154,102 @@
       }
       .feedback-row.ok .fr-label { color: #065f46; }
       .feedback-row.no .fr-label { color: #991b1b; }
+      .feedback-source {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: #7c3aed;
+        background: #f5f3ff;
+        border: 1px solid #ddd6fe;
+        padding: 2px 8px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+      }
+      .feedback-source.is-local {
+        color: #64748b;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+      }
+      .feedback-overall {
+        margin-top: 12px;
+        padding: 10px 12px;
+        background: #fffbeb;
+        border: 2px dashed #fcd34d;
+        border-radius: 12px;
+        color: #78350f;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+      .feedback-fixes {
+        margin-top: 14px;
+      }
+      .feedback-fixes h4 {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+        color: #1e293b;
+      }
+      .fix-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .fix-item {
+        background: #fff;
+        border: 2px solid #fde68a;
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+      .fix-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 8px;
+        font-size: 0.92rem;
+      }
+      .fix-orig {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-weight: 700;
+        text-decoration: line-through;
+        word-break: break-word;
+      }
+      .fix-arrow { color: #94a3b8; font-weight: 800; }
+      .fix-sug {
+        background: #dcfce7;
+        color: #065f46;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-weight: 800;
+        word-break: break-word;
+      }
+      .fix-why {
+        margin-top: 4px;
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 600;
+      }
+      .feedback-loading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 2px dashed #c4b5fd;
+        border-radius: 14px;
+        color: #5b21b6;
+        font-weight: 800;
+      }
+      .feedback-loading .spin {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 3px solid #ddd6fe;
+        border-top-color: #7c3aed;
+        animation: frSpin 0.8s linear infinite;
+      }
+      @keyframes frSpin { to { transform: rotate(360deg); } }
       .live-interim {
         color: #94a3b8;
         font-style: italic;
@@ -3123,6 +3219,7 @@
         const firstLine = String(clean.split("\n")[0] || "");
         const hasIndent = /^(?:[ ]{2,}|\t)/.test(firstLine);
         out.items.push({
+          key: "indent",
           ok: hasIndent,
           label: "문단 들여쓰기 (Paragraph indenting)",
           hint: hasIndent
@@ -3137,6 +3234,7 @@
         const firstHasDisaster = DISASTER_KEYWORDS.some((w) => firstSentLower.includes(w));
         const topicOk = firstSent.length >= 18 && firstHasDisaster;
         out.items.push({
+          key: "topic",
           ok: topicOk,
           label: "Topic sentence (주제 문장)",
           hint: topicOk
@@ -3146,6 +3244,7 @@
 
         // 3) Answer the prompt (자연재해 관련 키워드 포함)
         out.items.push({
+          key: "prompt",
           ok: disasterMentioned,
           label: "Answer the prompt (주제에 맞는 답)",
           hint: disasterMentioned
@@ -3158,6 +3257,7 @@
         const compoundOk = compoundRe.test(trimmed);
         const badRunOn = !compoundOk && / (and|but|or|so) /i.test(trimmed);
         out.items.push({
+          key: "compound",
           ok: compoundOk,
           label: "Compound sentence 사용",
           hint: compoundOk
@@ -3170,6 +3270,7 @@
         // 5) 8 or more lines (문장 8개 이상)
         const linesOk = sentCount >= 8;
         out.items.push({
+          key: "length",
           ok: linesOk,
           label: "8문장 이상 쓰기 (Have 8 or more lines)",
           hint: linesOk
@@ -3217,6 +3318,7 @@
         }
         const neatOk = issues.length === 0;
         out.items.push({
+          key: "neat",
           ok: neatOk,
           label: "Neat writing (깔끔한 글쓰기)",
           hint: neatOk
@@ -3227,6 +3329,90 @@
         out.passCount = out.items.filter((x) => x.ok).length;
         return out;
       }
+
+      // Gemini를 이용한 글쓰기 첨삭 (최소 개입 원칙)
+      async function aiReviewParagraph(text, promptObj, apiKey) {
+        const GEMINI_MODEL = "gemini-2.0-flash";
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
+        const promptText = [
+          "You are a gentle English writing coach reviewing a Korean elementary school student's homework.",
+          "The student picked this writing prompt:",
+          'PROMPT: "' + (promptObj && promptObj.text ? promptObj.text : "") + '"',
+          "",
+          "Required rubric (Part D):",
+          "- indent: paragraph first line indented with at least 2 spaces (or a tab)",
+          "- topic: first sentence introduces the main topic clearly",
+          "- prompt: the writing answers the prompt (it should be about a natural disaster)",
+          "- compound: contains at least ONE compound sentence (independent clause, then comma + and/but/or/so/yet + another independent clause)",
+          "- length: 8 or more complete sentences",
+          "- neat: correct spelling, capitalization at sentence starts, ending punctuation, no obvious grammar errors",
+          "",
+          "STUDENT'S WRITING (verbatim, between triple backticks):",
+          "```",
+          String(text || ""),
+          "```",
+          "",
+          "STRICT RULES — VERY IMPORTANT:",
+          "1) This is a child's homework. DO NOT rewrite the student's sentences and DO NOT add new ideas, examples, or content.",
+          "2) Preserve the student's voice exactly. Only suggest fixes for things that are CLEARLY wrong (spelling errors, missing capital letters at sentence starts, missing end punctuation, obvious grammar mistakes such as subject-verb agreement).",
+          "3) If something is just a stylistic choice or not clearly wrong, DO NOT flag it.",
+          "4) Each fix must be MINIMAL: change only what is necessary. Do not paraphrase whole sentences.",
+          "5) If the writing already meets a rubric item, mark ok=true even if it could be 'better'.",
+          "6) Use simple, friendly Korean for the 'reason' and 'overall' fields. Keep them short (1 sentence each).",
+          "7) Limit 'fixes' to AT MOST 8 items. Pick the most important.",
+          "",
+          "Return ONLY this JSON (no code fences, no extra text):",
+          "{",
+          '  "items": [',
+          '    {"key":"indent","ok":true,"reason":"한국어 한 줄"},',
+          '    {"key":"topic","ok":true,"reason":"..."},',
+          '    {"key":"prompt","ok":true,"reason":"..."},',
+          '    {"key":"compound","ok":true,"reason":"..."},',
+          '    {"key":"length","ok":true,"reason":"..."},',
+          '    {"key":"neat","ok":true,"reason":"..."}',
+          "  ],",
+          '  "fixes": [',
+          '    {"original":"earthquke","suggested":"earthquake","why":"스펠링"}',
+          "  ],",
+          '  "overall": "한국어 1~2문장 격려"',
+          "}",
+        ].join("\n");
+
+        const body = {
+          contents: [{ role: "user", parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+          },
+        };
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let msg = "Gemini 호출 실패 (" + res.status + ")";
+          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+        const combined = partsArr.map((p) => p.text || "").join("").trim();
+        if (!combined) throw new Error("응답이 비어있어요.");
+        let jsonStr = combined;
+        const fence = combined.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fence) jsonStr = fence[1].trim();
+        return JSON.parse(jsonStr);
+      }
+
+      const RUBRIC_LABELS = {
+        indent: "문단 들여쓰기",
+        topic: "Topic sentence (주제 문장)",
+        prompt: "Answer the prompt (주제 답)",
+        compound: "Compound sentence 사용",
+        length: "8문장 이상 (Have 8 or more lines)",
+        neat: "Neat writing (스펠링/대소문자/구두점)",
+      };
 
       // 저장된 글쓰기 (활성 단원에 보관)
       function getSavedWritings() {
@@ -3453,45 +3639,88 @@
           setTimeout(() => { btn.textContent = orig; }, 1200);
         });
 
-        $("btnSubmitPara").addEventListener("click", () => {
-          stopActiveRecog();
-          const text = writeArea.value;
-          const ev = evaluateParagraph(text, activePrompt);
-          // 제출한 글은 자동으로 저장 (사라지지 않게)
-          if (text.trim()) {
-            pushSavedWriting({
-              id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-              ts: Date.now(),
-              promptId: activePrompt,
-              text: text,
-              passCount: ev.passCount,
-              total: ev.items.length,
-              kind: "submit",
-            });
-            renderSavedBox();
-          }
+        function escapeHtml(s) {
+          return String(s || "").replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+          });
+        }
+
+        function renderFeedbackPanel(opts) {
+          // opts: { items:[{key,ok,reason}], fixes:[{original,suggested,why}], overall, total, source }
+          const items = Array.isArray(opts.items) ? opts.items : [];
+          const fixes = Array.isArray(opts.fixes) ? opts.fixes : [];
+          const total = opts.total || items.length || 6;
+          const passCount = items.filter((it) => it.ok).length;
+          const pass = passCount === total && total > 0;
           const wrap = $("feedbackWrap");
           const panel = document.createElement("div");
-          const pass = ev.passCount === ev.items.length;
           panel.className = "feedback-panel pop " + (pass ? "is-pass" : "is-fail");
+
+          const src = document.createElement("span");
+          src.className = "feedback-source" + (opts.source === "ai" ? "" : " is-local");
+          src.textContent = opts.source === "ai" ? "🤖 Gemini 첨삭" : "📏 규칙 기반 첨삭";
+          panel.appendChild(src);
+
           const head = document.createElement("h3");
           head.textContent = pass
-            ? "🏆 완벽해요! 모든 조건을 만족했어요 (" + ev.passCount + "/" + ev.items.length + ")"
-            : (ev.passCount >= 4
-                ? "👍 잘했어요. 조금만 더 다듬어 볼까요? (" + ev.passCount + "/" + ev.items.length + ")"
-                : "🌱 조언을 참고해 다시 써 볼까요? (" + ev.passCount + "/" + ev.items.length + ")");
+            ? "🏆 완벽해요! 모든 조건을 만족했어요 (" + passCount + "/" + total + ")"
+            : (passCount >= Math.ceil(total * 0.66)
+                ? "👍 잘했어요. 조금만 더 다듬어 볼까요? (" + passCount + "/" + total + ")"
+                : "🌱 조언을 참고해 다시 써 볼까요? (" + passCount + "/" + total + ")");
           panel.appendChild(head);
-          ev.items.forEach((it) => {
+
+          items.forEach((it) => {
             const row = document.createElement("div");
             row.className = "feedback-row " + (it.ok ? "ok" : "no");
+            const label = RUBRIC_LABELS[it.key] || it.label || it.key || "항목";
+            const hint = it.reason || it.hint || "";
             row.innerHTML =
               '<span class="fr-mk">' + (it.ok ? "✅" : "⚠️") + "</span>" +
               '<div class="fr-body">' +
-              '<div class="fr-label">' + it.label + "</div>" +
-              '<div class="fr-hint">' + it.hint + "</div>" +
+              '<div class="fr-label">' + escapeHtml(label) + "</div>" +
+              '<div class="fr-hint">' + escapeHtml(hint) + "</div>" +
               "</div>";
             panel.appendChild(row);
           });
+
+          if (fixes.length) {
+            const fixWrap = document.createElement("div");
+            fixWrap.className = "feedback-fixes";
+            const h4 = document.createElement("h4");
+            h4.textContent = "✍️ 고치면 좋은 부분 (최소 수정)";
+            fixWrap.appendChild(h4);
+            const list = document.createElement("div");
+            list.className = "fix-list";
+            fixes.forEach((f) => {
+              if (!f || (!f.original && !f.suggested)) return;
+              const item = document.createElement("div");
+              item.className = "fix-item";
+              const line = document.createElement("div");
+              line.className = "fix-row";
+              line.innerHTML =
+                '<span class="fix-orig">' + escapeHtml(f.original || "") + "</span>" +
+                '<span class="fix-arrow">→</span>' +
+                '<span class="fix-sug">' + escapeHtml(f.suggested || "") + "</span>";
+              item.appendChild(line);
+              if (f.why) {
+                const why = document.createElement("div");
+                why.className = "fix-why";
+                why.textContent = "💡 " + f.why;
+                item.appendChild(why);
+              }
+              list.appendChild(item);
+            });
+            fixWrap.appendChild(list);
+            panel.appendChild(fixWrap);
+          }
+
+          if (opts.overall) {
+            const ov = document.createElement("div");
+            ov.className = "feedback-overall";
+            ov.textContent = "🌟 " + opts.overall;
+            panel.appendChild(ov);
+          }
+
           const btnsRow = document.createElement("div");
           btnsRow.className = "btn-row";
           btnsRow.style.marginTop = "14px";
@@ -3499,8 +3728,8 @@
           btnEnd.className = "btn btn-primary";
           btnEnd.textContent = "📊 최종 결과 보기";
           btnEnd.addEventListener("click", () => {
-            state.score = ev.passCount;
-            state.streak = ev.passCount;
+            state.score = passCount;
+            state.streak = passCount;
             updateHud();
             finishGame();
           });
@@ -3514,12 +3743,103 @@
           btnsRow.appendChild(btnRetry);
           btnsRow.appendChild(btnEnd);
           panel.appendChild(btnsRow);
+
           wrap.innerHTML = "";
           wrap.appendChild(panel);
           if (pass) playWin();
-          else if (ev.passCount >= 4) playCorrect();
+          else if (passCount >= Math.ceil(total * 0.66)) playCorrect();
           else playWrong();
           panel.scrollIntoView({ behavior: "smooth", block: "start" });
+          return { passCount: passCount, total: total };
+        }
+
+        $("btnSubmitPara").addEventListener("click", async () => {
+          stopActiveRecog();
+          const text = writeArea.value;
+          if (!text.trim()) {
+            alert("글을 먼저 써 주세요.");
+            return;
+          }
+          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+          const promptObj = (WRITE_PROMPTS || []).find(function (p) { return p.id === activePrompt; }) || (WRITE_PROMPTS || [])[0] || { id: activePrompt, text: "" };
+          const wrap = $("feedbackWrap");
+
+          // 로컬 규칙 기반 평가 (저장/폴백용)
+          const ev = evaluateParagraph(text, activePrompt);
+
+          if (apiKey) {
+            wrap.innerHTML =
+              '<div class="feedback-panel pop"><div class="feedback-loading">' +
+              '<div class="spin"></div>' +
+              '<div>🤖 Gemini가 글을 살펴보고 있어요… 잠시만요.</div>' +
+              "</div></div>";
+            wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+            try {
+              const ai = await aiReviewParagraph(text, promptObj, apiKey);
+              if (!ai || !Array.isArray(ai.items) || ai.items.length === 0) throw new Error("응답 형식 오류");
+              // 6개 항목이 모두 있는지 확인, 없으면 로컬로 채움
+              const aiByKey = {};
+              ai.items.forEach(function (it) { if (it && it.key) aiByKey[it.key] = it; });
+              const localByKey = {};
+              ev.items.forEach(function (it) { localByKey[it.key] = it; });
+              const mergedItems = ["indent", "topic", "prompt", "compound", "length", "neat"].map(function (k) {
+                const a = aiByKey[k];
+                const l = localByKey[k];
+                if (a && typeof a.ok === "boolean") {
+                  return { key: k, ok: !!a.ok, reason: a.reason || (l ? l.hint : "") };
+                }
+                return { key: k, ok: l ? !!l.ok : false, reason: l ? l.hint : "" };
+              });
+              const result = renderFeedbackPanel({
+                items: mergedItems,
+                fixes: Array.isArray(ai.fixes) ? ai.fixes : [],
+                overall: ai.overall || "",
+                total: 6,
+                source: "ai",
+              });
+              pushSavedWriting({
+                id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                ts: Date.now(),
+                promptId: activePrompt,
+                text: text,
+                passCount: result.passCount,
+                total: result.total,
+                kind: "submit",
+              });
+              renderSavedBox();
+              return;
+            } catch (err) {
+              console.warn("Gemini 첨삭 실패:", err);
+              const errBox = document.createElement("div");
+              errBox.style.cssText = "margin-bottom:10px; padding:10px 12px; background:#fef2f2; border:2px dashed #fecaca; border-radius:12px; color:#991b1b; font-weight:700; font-size:0.9rem;";
+              errBox.textContent = "⚠️ Gemini 첨삭을 불러오지 못해 규칙 기반 첨삭으로 보여줄게요. (" + (err && err.message ? err.message : "오류") + ")";
+              wrap.innerHTML = "";
+              wrap.appendChild(errBox);
+              // fall through to local
+            }
+          }
+
+          // 로컬 폴백 (API 키 없음 또는 실패)
+          const localItems = ev.items.map(function (it) {
+            return { key: it.key, ok: !!it.ok, reason: it.hint };
+          });
+          const result = renderFeedbackPanel({
+            items: localItems,
+            fixes: [],
+            overall: !apiKey ? "AI 첨삭을 보려면 메인 화면에서 Gemini 키를 저장해 주세요." : "",
+            total: ev.items.length,
+            source: "local",
+          });
+          pushSavedWriting({
+            id: "w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            ts: Date.now(),
+            promptId: activePrompt,
+            text: text,
+            passCount: result.passCount,
+            total: result.total,
+            kind: "submit",
+          });
+          renderSavedBox();
         });
       }
 
