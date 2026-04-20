@@ -621,6 +621,25 @@
       }
       .ai-help { color: #64748b; font-weight: 600; font-size: 0.78rem; }
       .ai-help a { color: #4f46e5; text-decoration: underline; font-weight: 800; }
+      .ai-help.is-saved { color: #059669; font-weight: 800; }
+      .key-row { display: flex; gap: 6px; align-items: stretch; }
+      .key-row input { flex: 1 1 auto; }
+      .key-row .key-eye,
+      .key-row .key-clear {
+        flex: 0 0 auto;
+        background: #f1f5f9;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0 12px;
+        font-size: 1rem;
+        cursor: pointer;
+        font-family: inherit;
+        color: #475569;
+      }
+      .key-row .key-eye:hover,
+      .key-row .key-clear:hover { background: #e2e8f0; }
+      .key-row .key-clear { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+      .key-row .key-clear:hover { background: #fee2e2; }
       .ai-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
       .ai-status {
         margin-top: 10px;
@@ -1051,9 +1070,13 @@
           </div>
           <div class="ai-body hidden" id="aiBody">
             <label class="ai-field">
-              <span>🔑 Gemini API 키 <small>(한 번만 저장 · 브라우저에 보관)</small></span>
-              <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off" />
-              <small class="ai-help">키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.</small>
+              <span>🔑 Gemini API 키 <small>(이 브라우저에 자동 저장돼요)</small></span>
+              <div class="key-row">
+                <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off" />
+                <button type="button" class="key-eye" id="btnToggleKey" title="보이기/숨기기">👁</button>
+                <button type="button" class="key-clear" id="btnClearKey" title="저장된 키 지우기">🗑</button>
+              </div>
+              <small class="ai-help" id="keyStatus">키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.</small>
             </label>
             <label class="ai-field">
               <span>📎 사진 첨부 <small>(여러 장 가능)</small></span>
@@ -1812,13 +1835,74 @@
         const btnReset = $("btnResetData");
         const status = $("photoStatus");
         const preview = $("photoPreview");
+        const keyStatus = $("keyStatus");
+        const btnToggleKey = $("btnToggleKey");
+        const btnClearKey = $("btnClearKey");
         if (!toggle || !body) return;
+
+        function setKeyStatus(saved, maskedKey) {
+          if (!keyStatus) return;
+          if (saved && maskedKey) {
+            keyStatus.classList.add("is-saved");
+            keyStatus.innerHTML = "✓ 저장됨 (" + maskedKey + ") · 다음에 다시 입력하지 않아도 돼요.";
+          } else {
+            keyStatus.classList.remove("is-saved");
+            keyStatus.innerHTML = '키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.';
+          }
+        }
+        function maskKey(k) {
+          if (!k) return "";
+          const s = String(k);
+          if (s.length <= 8) return s.slice(0, 2) + "…";
+          return s.slice(0, 4) + "…" + s.slice(-4);
+        }
 
         // 저장된 API 키 복원
         try {
           const savedKey = localStorage.getItem(GEMINI_KEY_KEY);
-          if (savedKey && keyInput) keyInput.value = savedKey;
+          if (savedKey && keyInput) {
+            keyInput.value = savedKey;
+            setKeyStatus(true, maskKey(savedKey));
+          }
         } catch (e) {}
+
+        // 입력할 때마다 자동 저장 (디바운스)
+        let _keyTimer = null;
+        keyInput && keyInput.addEventListener("input", () => {
+          clearTimeout(_keyTimer);
+          _keyTimer = setTimeout(() => {
+            const v = (keyInput.value || "").trim();
+            try {
+              if (v) {
+                localStorage.setItem(GEMINI_KEY_KEY, v);
+                setKeyStatus(true, maskKey(v));
+              } else {
+                localStorage.removeItem(GEMINI_KEY_KEY);
+                setKeyStatus(false);
+              }
+            } catch (e) {}
+          }, 350);
+        });
+
+        // 키 보이기/숨기기
+        btnToggleKey && btnToggleKey.addEventListener("click", () => {
+          if (!keyInput) return;
+          if (keyInput.type === "password") {
+            keyInput.type = "text";
+            btnToggleKey.textContent = "🙈";
+          } else {
+            keyInput.type = "password";
+            btnToggleKey.textContent = "👁";
+          }
+        });
+
+        // 저장된 키 삭제
+        btnClearKey && btnClearKey.addEventListener("click", () => {
+          if (!confirm("저장된 API 키를 삭제할까요?")) return;
+          try { localStorage.removeItem(GEMINI_KEY_KEY); } catch (e) {}
+          if (keyInput) keyInput.value = "";
+          setKeyStatus(false);
+        });
 
         toggle.addEventListener("click", () => {
           const open = !body.classList.contains("hidden");
@@ -1856,7 +1940,7 @@
             status.textContent = "⚠️ 학습지 사진을 하나 이상 선택해 주세요.";
             return;
           }
-          try { localStorage.setItem(GEMINI_KEY_KEY, key); } catch (e) {}
+          try { localStorage.setItem(GEMINI_KEY_KEY, key); setKeyStatus(true, maskKey(key)); } catch (e) {}
 
           btnApply.disabled = true;
           status.className = "ai-status is-loading";
