@@ -581,15 +581,100 @@
       function pickN(arr, n) {
         return shuffle(arr).slice(0, n);
       }
-      function speak(word) {
+      // ---- Speech (robust) ----
+      let _voicesReady = false;
+      let _cachedVoices = [];
+      let _speechWarmed = false;
+
+      function loadVoicesOnce() {
+        if (!("speechSynthesis" in window)) return;
+        const pull = () => {
+          _cachedVoices = window.speechSynthesis.getVoices() || [];
+          if (_cachedVoices.length) _voicesReady = true;
+        };
+        pull();
+        if (!_voicesReady) {
+          window.speechSynthesis.onvoiceschanged = () => pull();
+          // fallback timer
+          setTimeout(pull, 600);
+          setTimeout(pull, 1500);
+        }
+      }
+      loadVoicesOnce();
+
+      function pickEnVoice() {
+        const v = _cachedVoices.length ? _cachedVoices : (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
+        return (
+          v.find((x) => /en[-_]US/i.test(x.lang) && /google/i.test(x.name || "")) ||
+          v.find((x) => /en[-_]US/i.test(x.lang)) ||
+          v.find((x) => /^en[-_]GB/i.test(x.lang)) ||
+          v.find((x) => /^en/i.test(x.lang)) ||
+          null
+        );
+      }
+
+      function warmSpeech() {
+        if (_speechWarmed) return;
+        if (!("speechSynthesis" in window)) return;
         try {
-          const u = new SpeechSynthesisUtterance(word);
+          const u = new SpeechSynthesisUtterance(" ");
+          u.volume = 0;
           u.lang = "en-US";
-          u.rate = 0.9;
-          window.speechSynthesis.cancel();
           window.speechSynthesis.speak(u);
+          _speechWarmed = true;
         } catch (e) {}
       }
+
+      function flashButton(btn) {
+        if (!btn) return;
+        btn.classList.remove("pop");
+        void btn.offsetWidth;
+        btn.classList.add("pop");
+      }
+
+      function speak(word, opts) {
+        opts = opts || {};
+        const btn = opts.btn || null;
+        flashButton(btn);
+        if (!("speechSynthesis" in window)) {
+          alert("이 브라우저는 음성 재생을 지원하지 않아요 😢\nChrome/Safari에서 열어보세요.");
+          return;
+        }
+        try {
+          const synth = window.speechSynthesis;
+          warmSpeech();
+          // Some browsers get "stuck" after repeated speak without resume
+          try { synth.resume(); } catch (e) {}
+          try { synth.cancel(); } catch (e) {}
+          const utter = new SpeechSynthesisUtterance(String(word || ""));
+          utter.lang = "en-US";
+          utter.rate = 0.85;
+          utter.pitch = 1;
+          utter.volume = 1;
+          const v = pickEnVoice();
+          if (v) utter.voice = v;
+          utter.onerror = (e) => {
+            console.warn("speech error", e);
+          };
+          // Defer slightly so cancel() settles on some browsers (fixes first-click silence)
+          setTimeout(() => {
+            try { synth.speak(utter); } catch (e) { console.warn(e); }
+          }, 40);
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      // Unlock audio on very first user interaction (iOS/Safari requirement)
+      document.addEventListener(
+        "click",
+        function unlockOnce() {
+          warmSpeech();
+          loadVoicesOnce();
+          document.removeEventListener("click", unlockOnce);
+        },
+        { once: true, capture: true }
+      );
       function getBest() {
         try {
           return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
@@ -700,7 +785,7 @@
           btn.addEventListener("click", () => pickVocab(btn, c, item));
           choicesEl.appendChild(btn);
         });
-        $("btnSay").addEventListener("click", () => speak(item.word));
+        $("btnSay").addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
         $("btnNext").addEventListener("click", next);
       }
       function pickVocab(btn, picked, correct) {
@@ -787,7 +872,7 @@
           src.appendChild(tile);
         });
 
-        $("btnSaySp").addEventListener("click", () => speak(word));
+        $("btnSaySp").addEventListener("click", (e) => speak(word, { btn: e.currentTarget }));
         $("btnHintSp").addEventListener("click", () => {
           $("hintText").textContent = "💡 첫 글자: " + word[0].toUpperCase() + " · 글자 수: " + word.length;
         });
@@ -803,9 +888,6 @@
         });
         $("btnCheck").addEventListener("click", () => checkSpell(word));
         $("btnNext").addEventListener("click", next);
-
-        // auto-read
-        setTimeout(() => speak(word), 300);
       }
       function checkSpell(word) {
         const tgt = $("targetArea");
