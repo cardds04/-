@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>📚 Study Guide Game · 단원 학습 게임</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nanum+Gothic:wght@700;800&family=Luckiest+Guy&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Fredoka", "Nanum Gothic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #fde68a 0%, #fbcfe8 50%, #c7d2fe 100%);
+        color: #1e293b;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 18px 16px 120px;
+      }
+      .page-title {
+        text-align: center;
+        font-family: "Luckiest Guy", "Fredoka", sans-serif;
+        font-size: clamp(1.8rem, 6vw, 2.6rem);
+        color: #1e293b;
+        letter-spacing: 1px;
+        margin: 6px 0 2px;
+        text-shadow: 2px 2px 0 #fff, 4px 4px 0 rgba(0, 0, 0, 0.08);
+      }
+      .page-sub {
+        text-align: center;
+        color: #475569;
+        font-weight: 700;
+        margin: 0 0 18px;
+        font-size: 0.95rem;
+      }
+      .hud {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        background: #fff;
+        border-radius: 18px;
+        padding: 10px 14px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+        margin-bottom: 14px;
+      }
+      .hud .hud-left {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-weight: 800;
+        color: #334155;
+      }
+      .hud .hud-back {
+        background: #e2e8f0;
+        color: #334155;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .hud .hud-back:hover {
+        background: #cbd5e1;
+      }
+      .hud .score {
+        background: linear-gradient(135deg, #fde047, #fb923c);
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: #7c2d12;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .hud .streak {
+        background: linear-gradient(135deg, #fca5a5, #ef4444);
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: #fff;
+        font-weight: 800;
+      }
+      .hud .progress {
+        background: #e2e8f0;
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: #334155;
+        font-weight: 800;
+      }
+
+      .menu {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .menu-card {
+        background: #fff;
+        border-radius: 24px;
+        padding: 22px 18px;
+        border: 3px solid transparent;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+      }
+      .menu-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+      }
+      .menu-card:active {
+        transform: translateY(-1px);
+      }
+      .menu-card .ico {
+        font-size: 2.4rem;
+        line-height: 1;
+        margin-bottom: 8px;
+      }
+      .menu-card h3 {
+        margin: 4px 0 4px;
+        font-size: 1.2rem;
+        color: #1e293b;
+      }
+      .menu-card p {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.88rem;
+        font-weight: 600;
+      }
+      .menu-card.m-vocab {
+        border-color: #6366f1;
+      }
+      .menu-card.m-spell {
+        border-color: #10b981;
+      }
+      .menu-card.m-sent {
+        border-color: #f59e0b;
+      }
+      .menu-card.m-match {
+        border-color: #ec4899;
+      }
+
+      .question-card {
+        background: #fff;
+        border-radius: 24px;
+        padding: 26px 22px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+        margin-bottom: 14px;
+      }
+      .question-card .prompt-small {
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: #6366f1;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .question-card .prompt-big {
+        font-size: clamp(1.6rem, 6vw, 2.4rem);
+        font-weight: 800;
+        color: #0f172a;
+        text-align: center;
+        padding: 14px 10px;
+        font-family: "Fredoka", sans-serif;
+        letter-spacing: -0.01em;
+        word-break: break-word;
+      }
+      .question-card .sentence-box {
+        font-size: clamp(1.05rem, 3.6vw, 1.25rem);
+        line-height: 1.5;
+        background: #f8fafc;
+        border-radius: 16px;
+        padding: 16px 18px;
+        color: #1e293b;
+        font-weight: 600;
+        border: 2px dashed #cbd5e1;
+      }
+
+      .choices {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .choice-btn {
+        background: #fff;
+        border: 3px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 14px 16px;
+        text-align: left;
+        font-family: inherit;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #1e293b;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s, border-color 0.15s;
+      }
+      .choice-btn:hover:not(:disabled) {
+        background: #eef2ff;
+        border-color: #6366f1;
+        transform: translateY(-2px);
+      }
+      .choice-btn:disabled {
+        cursor: not-allowed;
+      }
+      .choice-btn.correct {
+        background: #dcfce7;
+        border-color: #10b981;
+        color: #065f46;
+      }
+      .choice-btn.wrong {
+        background: #fee2e2;
+        border-color: #ef4444;
+        color: #991b1b;
+      }
+
+      .scramble {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        padding: 14px 4px;
+      }
+      .letter-tile {
+        background: linear-gradient(145deg, #fff, #f1f5f9);
+        border: 3px solid #94a3b8;
+        color: #1e293b;
+        font-family: "Luckiest Guy", "Fredoka", sans-serif;
+        font-size: 1.8rem;
+        font-weight: 700;
+        padding: 8px 14px;
+        min-width: 48px;
+        min-height: 54px;
+        border-radius: 14px;
+        cursor: pointer;
+        text-align: center;
+        line-height: 1.2;
+        box-shadow: 0 4px 0 #64748b, 0 6px 10px rgba(15, 23, 42, 0.12);
+        transition: transform 0.08s, box-shadow 0.08s;
+        text-transform: lowercase;
+        user-select: none;
+      }
+      .letter-tile:hover {
+        transform: translateY(-2px);
+      }
+      .letter-tile:active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 0 #64748b, 0 3px 6px rgba(15, 23, 42, 0.1);
+      }
+      .letter-tile.used {
+        opacity: 0.2;
+        pointer-events: none;
+      }
+      .scramble-target {
+        min-height: 70px;
+        background: #fff7ed;
+        border: 3px dashed #fb923c;
+        border-radius: 16px;
+        padding: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        align-items: center;
+      }
+      .scramble-target .letter-tile {
+        border-color: #f59e0b;
+        box-shadow: 0 3px 0 #b45309;
+      }
+      .scramble-hint {
+        text-align: center;
+        color: #64748b;
+        font-weight: 700;
+        margin: 8px 0;
+        font-size: 0.9rem;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .btn {
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 1rem;
+        padding: 12px 22px;
+        border-radius: 14px;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        box-shadow: 0 6px 14px rgba(99, 102, 241, 0.4);
+      }
+      .btn-primary:hover {
+        transform: translateY(-2px);
+      }
+      .btn-ghost {
+        background: #f1f5f9;
+        color: #334155;
+      }
+      .btn-ghost:hover {
+        background: #e2e8f0;
+      }
+      .btn-say {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+      }
+      .btn-hint {
+        background: #fef3c7;
+        color: #78350f;
+      }
+
+      .feedback {
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin: 10px 0;
+        min-height: 1.6em;
+      }
+      .feedback.ok {
+        color: #059669;
+      }
+      .feedback.no {
+        color: #dc2626;
+      }
+
+      .match-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+      @media (max-width: 480px) {
+        .match-grid {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+        }
+      }
+      .match-card {
+        aspect-ratio: 3 / 4;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        border-radius: 14px;
+        border: 3px solid transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        cursor: pointer;
+        font-weight: 800;
+        text-align: center;
+        font-size: clamp(0.72rem, 2.6vw, 0.95rem);
+        line-height: 1.2;
+        font-family: inherit;
+        transition: transform 0.15s, background 0.15s;
+        word-break: keep-all;
+      }
+      .match-card.flip {
+        background: #fff;
+        color: #1e293b;
+        border-color: #6366f1;
+        transform: rotateY(0);
+      }
+      .match-card.done {
+        background: #dcfce7;
+        color: #065f46;
+        border-color: #10b981;
+        cursor: default;
+      }
+      .match-card:not(.flip):not(.done)::before {
+        content: "?";
+        font-size: 2rem;
+      }
+      .match-card:not(.flip):not(.done) .inner {
+        display: none;
+      }
+
+      .final-card {
+        background: linear-gradient(135deg, #fef3c7 0%, #fbcfe8 100%);
+        border-radius: 28px;
+        padding: 34px 22px;
+        text-align: center;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.15);
+      }
+      .final-card .trophy {
+        font-size: 4.5rem;
+        line-height: 1;
+      }
+      .final-card h2 {
+        font-family: "Luckiest Guy", sans-serif;
+        font-size: 2.2rem;
+        color: #7c2d12;
+        margin: 10px 0 6px;
+        text-shadow: 2px 2px 0 #fff;
+      }
+      .final-card .big-score {
+        font-size: 3.4rem;
+        font-weight: 900;
+        color: #7c2d12;
+        margin: 6px 0;
+        font-family: "Luckiest Guy", sans-serif;
+      }
+      .final-card .stars {
+        font-size: 2rem;
+        letter-spacing: 8px;
+        margin: 6px 0 14px;
+      }
+
+      @keyframes pop {
+        0% { transform: scale(0.8); opacity: 0; }
+        60% { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); }
+      }
+      .pop {
+        animation: pop 0.28s ease-out;
+      }
+
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-6px); }
+        75% { transform: translateX(6px); }
+      }
+      .shake {
+        animation: shake 0.24s ease-in-out;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <h1 class="page-title">📚 Study Game</h1>
+      <p class="page-sub">Unit 1 · 어휘 · 스펠링 · 문장 종류 학습</p>
+
+      <!-- Main Menu -->
+      <div id="menuView">
+        <div class="menu">
+          <button class="menu-card m-vocab" data-mode="vocab">
+            <div class="ico">📖</div>
+            <h3>단어 뜻 맞히기</h3>
+            <p>Vocabulary 16개 · 객관식 뜻풀이 퀴즈</p>
+          </button>
+          <button class="menu-card m-spell" data-mode="spell">
+            <div class="ico">✏️</div>
+            <h3>스펠링 퍼즐</h3>
+            <p>Spelling 16개 · 섞인 글자를 맞게 배열</p>
+          </button>
+          <button class="menu-card m-sent" data-mode="sent">
+            <div class="ico">🔤</div>
+            <h3>문장 종류 맞히기</h3>
+            <p>Compound · Complex · Run-on 구분</p>
+          </button>
+          <button class="menu-card m-match" data-mode="match">
+            <div class="ico">🎴</div>
+            <h3>단어 짝 맞추기</h3>
+            <p>카드 메모리 · 단어와 뜻을 맞추세요</p>
+          </button>
+        </div>
+      </div>
+
+      <!-- Game View -->
+      <div id="gameView" class="hidden">
+        <div class="hud">
+          <div class="hud-left">
+            <button type="button" class="hud-back" id="btnBack">← 메뉴</button>
+            <span class="progress" id="progressChip">1 / 10</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <span class="streak" id="streakChip">🔥 0</span>
+            <span class="score" id="scoreChip">⭐ 0</span>
+          </div>
+        </div>
+        <div id="gameBody"></div>
+      </div>
+
+      <!-- Final View -->
+      <div id="finalView" class="hidden">
+        <div class="final-card pop">
+          <div class="trophy" id="finalEmoji">🏆</div>
+          <h2 id="finalTitle">잘했어요!</h2>
+          <div class="big-score" id="finalScoreText">0 / 10</div>
+          <div class="stars" id="finalStars">⭐⭐⭐</div>
+          <p style="color:#7c2d12;font-weight:700;margin:6px 0 16px" id="finalSub">
+            최고 기록: <span id="bestScore">0</span>
+          </p>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnPlayAgain">🔁 다시 하기</button>
+            <button class="btn btn-ghost" id="btnGoMenu">🏠 메뉴로</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ----------------------------- Data ----------------------------- */
+      const VOCAB = [
+        { word: "alter", meaning: "바꾸다, 변경하다", en: "to change or modify something" },
+        { word: "collapse", meaning: "무너지다, 붕괴하다", en: "to fall down suddenly" },
+        { word: "crisis", meaning: "위기, 큰 어려움", en: "a time of serious trouble" },
+        { word: "effect", meaning: "영향, 결과", en: "a result of a cause" },
+        { word: "erode", meaning: "(땅·바위가) 침식되다", en: "to slowly wear away" },
+        { word: "force", meaning: "힘, 세력", en: "strength or power used on something" },
+        { word: "constant", meaning: "끊임없는, 일정한", en: "happening all the time without stopping" },
+        { word: "severe", meaning: "매우 심한, 극심한", en: "very bad or intense" },
+        { word: "substantial", meaning: "상당한, 꽤 큰", en: "large in amount or size" },
+        { word: "unpredictable", meaning: "예측할 수 없는", en: "cannot be known before it happens" },
+        { word: "landform", meaning: "지형 (산·강 같은 땅 모양)", en: "a natural feature of Earth's surface" },
+        { word: "emergency", meaning: "비상 사태", en: "a sudden dangerous situation" },
+        { word: "forecast", meaning: "예보, 예측하다", en: "to say what will happen in the future" },
+        { word: "hesitate", meaning: "망설이다, 주저하다", en: "to pause before doing something" },
+        { word: "submerge", meaning: "물에 잠기다, 물속에 넣다", en: "to go under water" },
+        { word: "delay", meaning: "지연시키다, 늦추다", en: "to make something happen later" },
+      ];
+
+      const SPELL = [
+        "change", "surface", "piece", "natural",
+        "pressure", "quite", "important", "except",
+        "question", "certain", "usually", "become",
+        "together", "weekend", "field", "nobody",
+      ];
+
+      // Sentence type data — labels: "compound" | "complex" | "runon"
+      const SENTENCES = [
+        { s: "I like science fiction movies, but my father likes comedies.", t: "compound", why: "두 독립절을 and/or/but 로 연결 → Compound" },
+        { s: "Because it was raining, we stayed inside.", t: "complex", why: "'because' 같은 종속 접속사가 쓰임 → Complex" },
+        { s: "Kites are fun to fly people all over the world like to fly them.", t: "runon", why: "두 완전한 문장이 쉼표/접속사 없이 이어져 있어요 → Run-on" },
+        { s: "She was tired, so she went to bed early.", t: "compound", why: "and/or/but/so 같은 등위 접속사 → Compound" },
+        { s: "Although he was nervous, he gave a great speech.", t: "complex", why: "'although' → 종속 접속사 → Complex" },
+        { s: "I love pizza my sister loves pasta.", t: "runon", why: "두 문장이 접속사 없이 붙어 있어요 → Run-on" },
+        { s: "We stayed inside because it was raining.", t: "complex", why: "'because' → 종속 접속사 (뒤쪽에 쓰임) → Complex" },
+        { s: "My dog barks a lot, and my cat is very quiet.", t: "compound", why: "and 로 두 독립절 연결 → Compound" },
+        { s: "Since we had time, we visited the museum.", t: "complex", why: "'since' → 종속 접속사 → Complex" },
+        { s: "The storm was severe it caused a lot of damage.", t: "runon", why: "두 독립 문장이 그냥 붙어 있음 → Run-on" },
+        { s: "You can take the bus, or you can walk home.", t: "compound", why: "or 로 두 독립절 연결 → Compound" },
+        { s: "When the earthquake hit, the building collapsed.", t: "complex", why: "'when' → 종속 접속사 → Complex" },
+      ];
+
+      /* --------------------------- State ----------------------------- */
+      const BEST_KEY = "study_game_best_v1";
+      const state = {
+        mode: null,
+        questions: [],
+        idx: 0,
+        score: 0,
+        streak: 0,
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const menuView = $("menuView");
+      const gameView = $("gameView");
+      const finalView = $("finalView");
+      const gameBody = $("gameBody");
+
+      function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+      function pickN(arr, n) {
+        return shuffle(arr).slice(0, n);
+      }
+      function speak(word) {
+        try {
+          const u = new SpeechSynthesisUtterance(word);
+          u.lang = "en-US";
+          u.rate = 0.9;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(u);
+        } catch (e) {}
+      }
+      function getBest() {
+        try {
+          return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
+        } catch (e) { return {}; }
+      }
+      function setBest(mode, score) {
+        const b = getBest();
+        b[mode] = Math.max(b[mode] || 0, score);
+        try { localStorage.setItem(BEST_KEY, JSON.stringify(b)); } catch (e) {}
+      }
+
+      /* --------------------------- Navigation ----------------------- */
+      function showMenu() {
+        state.mode = null;
+        menuView.classList.remove("hidden");
+        gameView.classList.add("hidden");
+        finalView.classList.add("hidden");
+      }
+      function startMode(mode) {
+        state.mode = mode;
+        state.score = 0;
+        state.streak = 0;
+        state.idx = 0;
+        if (mode === "vocab") state.questions = pickN(VOCAB, 10);
+        else if (mode === "spell") state.questions = pickN(SPELL, 10);
+        else if (mode === "sent") state.questions = pickN(SENTENCES, 10);
+        else if (mode === "match") state.questions = null;
+        menuView.classList.add("hidden");
+        finalView.classList.add("hidden");
+        gameView.classList.remove("hidden");
+        renderQuestion();
+      }
+      function updateHud() {
+        if (state.mode === "match") {
+          $("progressChip").textContent = "🎴 짝 맞추기";
+        } else {
+          const total = state.questions ? state.questions.length : 10;
+          $("progressChip").textContent = (state.idx + 1) + " / " + total;
+        }
+        $("scoreChip").textContent = "⭐ " + state.score;
+        $("streakChip").textContent = "🔥 " + state.streak;
+      }
+      function next() {
+        state.idx += 1;
+        if (!state.questions || state.idx >= state.questions.length) {
+          finishGame();
+          return;
+        }
+        renderQuestion();
+      }
+      function finishGame() {
+        const total = state.mode === "match" ? 16 : 10;
+        setBest(state.mode, state.score);
+        const best = getBest()[state.mode] || 0;
+        const pct = state.score / (total * (state.mode === "match" ? 1 : 1));
+        let emoji = "🏆", stars = "⭐⭐⭐", title = "최고예요!";
+        const perfectMax = state.mode === "match" ? 16 : 10;
+        const ratio = state.score / perfectMax;
+        if (ratio >= 1) { emoji = "🏆"; stars = "⭐⭐⭐⭐⭐"; title = "완벽해요!"; }
+        else if (ratio >= 0.8) { emoji = "🎉"; stars = "⭐⭐⭐⭐"; title = "아주 잘했어요!"; }
+        else if (ratio >= 0.6) { emoji = "👍"; stars = "⭐⭐⭐"; title = "잘했어요!"; }
+        else if (ratio >= 0.4) { emoji = "💪"; stars = "⭐⭐"; title = "조금 더 힘내요!"; }
+        else { emoji = "🌱"; stars = "⭐"; title = "다시 도전해봐요!"; }
+
+        $("finalEmoji").textContent = emoji;
+        $("finalTitle").textContent = title;
+        $("finalScoreText").textContent = state.score + " / " + perfectMax;
+        $("finalStars").textContent = stars;
+        $("bestScore").textContent = best;
+        menuView.classList.add("hidden");
+        gameView.classList.add("hidden");
+        finalView.classList.remove("hidden");
+      }
+
+      /* ------------------------- Render by mode --------------------- */
+      function renderQuestion() {
+        updateHud();
+        gameBody.innerHTML = "";
+        const m = state.mode;
+        if (m === "vocab") return renderVocab();
+        if (m === "spell") return renderSpell();
+        if (m === "sent") return renderSent();
+        if (m === "match") return renderMatch();
+      }
+
+      /* ---------- Vocab quiz ---------- */
+      function renderVocab() {
+        const item = state.questions[state.idx];
+        const others = shuffle(VOCAB.filter((v) => v.word !== item.word)).slice(0, 3);
+        const choices = shuffle([item, ...others]);
+
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-small">📖 이 단어의 뜻은?</div>' +
+          '<div class="prompt-big" id="vocabWord">' + item.word + '</div>' +
+          '<div class="btn-row" style="margin:4px 0 10px"><button class="btn btn-say" id="btnSay">🔊 들어보기</button></div>' +
+          '<div class="choices" id="choices"></div>' +
+          '<div class="feedback" id="feedback"></div>' +
+          '<div class="btn-row"><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
+        gameBody.appendChild(card);
+
+        const choicesEl = $("choices");
+        choices.forEach((c) => {
+          const btn = document.createElement("button");
+          btn.className = "choice-btn";
+          btn.textContent = c.meaning;
+          btn.addEventListener("click", () => pickVocab(btn, c, item));
+          choicesEl.appendChild(btn);
+        });
+        $("btnSay").addEventListener("click", () => speak(item.word));
+        $("btnNext").addEventListener("click", next);
+      }
+      function pickVocab(btn, picked, correct) {
+        const buttons = document.querySelectorAll(".choice-btn");
+        buttons.forEach((b) => (b.disabled = true));
+        const fb = $("feedback");
+        if (picked.word === correct.word) {
+          btn.classList.add("correct");
+          state.score += 1;
+          state.streak += 1;
+          fb.textContent = "정답! 🎉  " + correct.word + " = " + correct.meaning;
+          fb.className = "feedback ok pop";
+        } else {
+          btn.classList.add("wrong");
+          buttons.forEach((b) => {
+            if (b.textContent === correct.meaning) b.classList.add("correct");
+          });
+          state.streak = 0;
+          fb.textContent = "아쉬워요 😅  정답: " + correct.word + " = " + correct.meaning;
+          fb.className = "feedback no shake";
+        }
+        updateHud();
+        $("btnNext").classList.remove("hidden");
+      }
+
+      /* ---------- Spelling scramble ---------- */
+      function renderSpell() {
+        const word = state.questions[state.idx];
+        const letters = word.split("");
+        let scrambled = shuffle(letters);
+        // ensure shuffled differs from original
+        let tries = 0;
+        while (scrambled.join("") === word && tries < 6) {
+          scrambled = shuffle(letters);
+          tries++;
+        }
+
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-small">✏️ 글자를 알맞게 배열해요</div>' +
+          '<div style="text-align:center;margin:6px 0 4px"><button class="btn btn-say" id="btnSaySp">🔊 발음 듣기</button>' +
+          ' <button class="btn btn-hint" id="btnHintSp">💡 힌트</button></div>' +
+          '<div class="scramble-target" id="targetArea"><span class="scramble-hint" id="emptyHint">여기에 글자를 눌러 배열해요</span></div>' +
+          '<div class="scramble-hint" id="hintText"></div>' +
+          '<div class="scramble" id="sourceArea"></div>' +
+          '<div class="feedback" id="feedback"></div>' +
+          '<div class="btn-row">' +
+          '<button class="btn btn-ghost" id="btnClear">↺ 다시</button>' +
+          '<button class="btn btn-primary" id="btnCheck">확인 ✓</button>' +
+          '<button class="btn btn-primary hidden" id="btnNext">다음 →</button>' +
+          '</div>';
+        gameBody.appendChild(card);
+
+        const src = $("sourceArea");
+        const tgt = $("targetArea");
+        const emptyHint = $("emptyHint");
+
+        scrambled.forEach((ch, i) => {
+          const tile = document.createElement("button");
+          tile.className = "letter-tile";
+          tile.textContent = ch;
+          tile.dataset.srcIdx = i;
+          tile.addEventListener("click", () => {
+            if (tile.classList.contains("used")) return;
+            tile.classList.add("used");
+            emptyHint && emptyHint.remove();
+            const placed = document.createElement("button");
+            placed.className = "letter-tile pop";
+            placed.textContent = ch;
+            placed.addEventListener("click", () => {
+              placed.remove();
+              tile.classList.remove("used");
+              if (tgt.querySelectorAll(".letter-tile").length === 0) {
+                const eh = document.createElement("span");
+                eh.className = "scramble-hint";
+                eh.id = "emptyHint";
+                eh.textContent = "여기에 글자를 눌러 배열해요";
+                tgt.appendChild(eh);
+              }
+            });
+            tgt.appendChild(placed);
+          });
+          src.appendChild(tile);
+        });
+
+        $("btnSaySp").addEventListener("click", () => speak(word));
+        $("btnHintSp").addEventListener("click", () => {
+          $("hintText").textContent = "💡 첫 글자: " + word[0].toUpperCase() + " · 글자 수: " + word.length;
+        });
+        $("btnClear").addEventListener("click", () => {
+          tgt.querySelectorAll(".letter-tile").forEach((el) => el.remove());
+          src.querySelectorAll(".letter-tile").forEach((el) => el.classList.remove("used"));
+          const eh = document.createElement("span");
+          eh.className = "scramble-hint";
+          eh.id = "emptyHint";
+          eh.textContent = "여기에 글자를 눌러 배열해요";
+          const existing = tgt.querySelector(".scramble-hint");
+          if (!existing) tgt.appendChild(eh);
+        });
+        $("btnCheck").addEventListener("click", () => checkSpell(word));
+        $("btnNext").addEventListener("click", next);
+
+        // auto-read
+        setTimeout(() => speak(word), 300);
+      }
+      function checkSpell(word) {
+        const tgt = $("targetArea");
+        const tiles = Array.from(tgt.querySelectorAll(".letter-tile"));
+        const typed = tiles.map((t) => t.textContent).join("");
+        const fb = $("feedback");
+        if (!typed) {
+          fb.textContent = "글자를 배열해주세요!";
+          fb.className = "feedback no shake";
+          return;
+        }
+        if (typed === word) {
+          fb.textContent = "정답! 🎉  " + word;
+          fb.className = "feedback ok pop";
+          state.score += 1;
+          state.streak += 1;
+          $("btnCheck").classList.add("hidden");
+          $("btnClear").classList.add("hidden");
+          $("btnNext").classList.remove("hidden");
+          updateHud();
+        } else {
+          fb.textContent = "다시! 정답은 \"" + word + "\" 입니다.";
+          fb.className = "feedback no shake";
+          state.streak = 0;
+          updateHud();
+          $("btnCheck").classList.add("hidden");
+          $("btnClear").classList.add("hidden");
+          $("btnNext").classList.remove("hidden");
+        }
+      }
+
+      /* ---------- Sentence type ---------- */
+      function renderSent() {
+        const item = state.questions[state.idx];
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-small">🔤 이 문장의 종류는?</div>' +
+          '<div class="sentence-box">' + item.s + '</div>' +
+          '<div style="height:10px"></div>' +
+          '<div class="choices">' +
+          '<button class="choice-btn" data-v="compound"><b>Compound</b><br><small style="color:#64748b">and / or / but · 두 독립절 연결</small></button>' +
+          '<button class="choice-btn" data-v="complex"><b>Complex</b><br><small style="color:#64748b">because / although / since…</small></button>' +
+          '<button class="choice-btn" data-v="runon"><b>Run-on</b><br><small style="color:#64748b">접속사 없이 붙은 두 문장</small></button>' +
+          '</div>' +
+          '<div class="feedback" id="feedback"></div>' +
+          '<div class="btn-row"><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
+        gameBody.appendChild(card);
+
+        card.querySelectorAll(".choice-btn").forEach((btn) => {
+          btn.addEventListener("click", () => pickSent(btn, btn.dataset.v, item));
+        });
+        $("btnNext").addEventListener("click", next);
+      }
+      function pickSent(btn, value, item) {
+        const all = document.querySelectorAll(".choice-btn");
+        all.forEach((b) => (b.disabled = true));
+        const fb = $("feedback");
+        if (value === item.t) {
+          btn.classList.add("correct");
+          state.score += 1;
+          state.streak += 1;
+          fb.textContent = "정답! 🎉  " + item.why;
+          fb.className = "feedback ok pop";
+        } else {
+          btn.classList.add("wrong");
+          all.forEach((b) => { if (b.dataset.v === item.t) b.classList.add("correct"); });
+          state.streak = 0;
+          fb.textContent = "아쉬워요. " + item.why;
+          fb.className = "feedback no shake";
+        }
+        updateHud();
+        $("btnNext").classList.remove("hidden");
+      }
+
+      /* ---------- Memory match ---------- */
+      let matchState = null;
+      function renderMatch() {
+        const picks = pickN(VOCAB, 8);
+        const cards = [];
+        picks.forEach((v) => {
+          cards.push({ pair: v.word, label: v.word, side: "word" });
+          cards.push({ pair: v.word, label: v.meaning, side: "meaning" });
+        });
+        matchState = { cards: shuffle(cards), first: null, lock: false, matched: 0, total: picks.length };
+
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-small">🎴 같은 짝을 찾아보세요 (단어 ↔ 뜻)</div>' +
+          '<div class="match-grid" id="matchGrid"></div>' +
+          '<div class="feedback" id="feedback"></div>';
+        gameBody.appendChild(card);
+
+        const grid = $("matchGrid");
+        matchState.cards.forEach((c, i) => {
+          const el = document.createElement("button");
+          el.className = "match-card";
+          el.dataset.i = String(i);
+          const inner = document.createElement("div");
+          inner.className = "inner";
+          inner.textContent = c.label;
+          el.appendChild(inner);
+          el.addEventListener("click", () => flipMatch(el, i));
+          grid.appendChild(el);
+        });
+      }
+      function flipMatch(el, i) {
+        if (matchState.lock) return;
+        if (el.classList.contains("flip") || el.classList.contains("done")) return;
+        el.classList.add("flip");
+        const c = matchState.cards[i];
+        if (!matchState.first) {
+          matchState.first = { el, i, c };
+          return;
+        }
+        const f = matchState.first;
+        matchState.first = null;
+        if (f.i === i) return;
+        if (f.c.pair === c.pair && f.c.side !== c.side) {
+          f.el.classList.add("done");
+          el.classList.add("done");
+          matchState.matched += 1;
+          state.score += 2;
+          state.streak += 1;
+          updateHud();
+          const fb = $("feedback");
+          fb.textContent = "짝 맞췄어요! 🎉  " + c.pair;
+          fb.className = "feedback ok pop";
+          if (matchState.matched === matchState.total) {
+            setTimeout(finishGame, 700);
+          }
+        } else {
+          matchState.lock = true;
+          const fb = $("feedback");
+          fb.textContent = "다시 시도! 🙈";
+          fb.className = "feedback no";
+          state.streak = 0;
+          updateHud();
+          setTimeout(() => {
+            f.el.classList.remove("flip");
+            el.classList.remove("flip");
+            matchState.lock = false;
+          }, 800);
+        }
+      }
+
+      /* --------------------------- Events --------------------------- */
+      document.querySelectorAll(".menu-card").forEach((btn) => {
+        btn.addEventListener("click", () => startMode(btn.dataset.mode));
+      });
+      $("btnBack").addEventListener("click", showMenu);
+      $("btnPlayAgain").addEventListener("click", () => startMode(state.mode));
+      $("btnGoMenu").addEventListener("click", showMenu);
+
+      showMenu();
+    </script>
+  </body>
+</html>
