@@ -714,6 +714,27 @@
         .pair, .triple { grid-template-columns: 1fr; }
         .top-line { flex-direction: column; align-items: flex-start; }
       }
+
+      /* ── 임베드 모드 (inlog.html iframe 안에서 표시될 때) ── */
+      body.is-embed { background: transparent; }
+      body.is-embed .wrap {
+        margin: 12px auto 28px;
+        width: min(820px, 100%);
+        padding: 0 12px;
+      }
+      body.is-embed .page-title {
+        font-size: clamp(1.5rem, 4.5vw, 2.1rem);
+        margin-bottom: 4px;
+      }
+      body.is-embed .page-sub {
+        font-size: 0.85rem;
+        margin-bottom: 16px;
+      }
+      body.is-embed .card {
+        border-radius: 16px;
+        padding: 18px 16px 22px;
+        box-shadow: 0 6px 22px rgba(28, 25, 22, 0.08);
+      }
     </style>
   </head>
   <body>
@@ -5112,6 +5133,41 @@
         });
       }
       void bootstrapCustomerPageData();
+
+      // ── 임베드 모드 (?embed=1): 부모 inlog.html 안에서 iframe으로 표시될 때 ─────
+      // - 외부 여백을 최소화하고 카드 그림자를 줄여 페이지 일부처럼 자연스럽게 보이도록.
+      // - 해시가 #myinfo 인 경우, 로그인 후 '내 정보' 박스를 자동으로 펼침.
+      (function setupEmbedMode() {
+        const params = new URLSearchParams(location.search);
+        const isEmbed = params.get("embed") === "1";
+        if (isEmbed) {
+          document.body.classList.add("is-embed");
+        }
+        function wantMyInfo() {
+          return String(location.hash || "").replace(/^#/, "").trim() === "myinfo";
+        }
+        let myInfoAutoOpened = false;
+        function tryAutoOpenMyInfo() {
+          if (!wantMyInfo()) return;
+          if (myInfoAutoOpened) return;
+          const myInfoBtn = document.getElementById("myInfoBtn");
+          const scheduleBlock = document.getElementById("scheduleBlock");
+          if (!myInfoBtn || !scheduleBlock) return;
+          if (scheduleBlock.classList.contains("hidden")) return; // 아직 로그인 전
+          myInfoAutoOpened = true;
+          try { myInfoBtn.click(); } catch (e) { /* noop */ }
+        }
+        window.addEventListener("hashchange", () => {
+          myInfoAutoOpened = false;
+          tryAutoOpenMyInfo();
+        });
+        // 로그인 상태 변화를 폴링으로 감지 (renderAuthState 호출 후 schedule 블록이 보이게 됨)
+        const interval = setInterval(tryAutoOpenMyInfo, 500);
+        setTimeout(() => clearInterval(interval), 30000);
+        document.addEventListener("DOMContentLoaded", tryAutoOpenMyInfo);
+        tryAutoOpenMyInfo();
+      })();
+
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_ADMIN_SCHEDULES || event.key === STORAGE_SCHEDULES) {
           renderAuthState();
