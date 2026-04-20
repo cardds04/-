@@ -3862,17 +3862,64 @@
           var el = $("kidList");
           el.innerHTML = "";
           state.kids.forEach(function (k) {
-            var div = document.createElement("div");
-            div.className = "list-item";
-            div.innerHTML = "<span>" + escapeHtml(k.name) + "</span>";
+            var row = document.createElement("div");
+            row.className = "tpl-row";
+            var main = document.createElement("div");
+            main.className = "tpl-row-main";
+
+            var nameEl = document.createElement("span");
+            nameEl.className = "tpl-title";
+            nameEl.textContent = k.name;
+            nameEl.title = "눌러서 이름 수정";
+            main.appendChild(nameEl);
+
             var del = document.createElement("button");
             del.type = "button";
+            del.className = "tpl-del";
             del.textContent = "삭제";
             del.addEventListener("click", function () {
               if (confirm("삭제할까요?")) supabase.from("family_kids").delete().eq("id", k.id).then(refresh);
             });
-            div.appendChild(del);
-            el.appendChild(div);
+            main.appendChild(del);
+            row.appendChild(main);
+
+            nameEl.addEventListener("click", function () {
+              var inp = document.createElement("input");
+              inp.type = "text";
+              inp.maxLength = 40;
+              inp.value = k.name || "";
+              inp.className = "tpl-title-input";
+              nameEl.replaceWith(inp);
+              inp.focus();
+              inp.select();
+              var committed = false;
+              async function commit() {
+                if (committed) return;
+                committed = true;
+                var v = String(inp.value || "").trim();
+                if (!v) { alert("이름을 입력해주세요."); inp.value = k.name || ""; inp.focus(); committed = false; return; }
+                if (v === (k.name || "")) { inp.replaceWith(nameEl); return; }
+                var r = await supabase.from("family_kids").update({ name: v }).eq("id", k.id);
+                if (r.error) {
+                  alert("저장 실패: " + r.error.message);
+                  committed = false;
+                  return;
+                }
+                await refresh();
+              }
+              function cancel() {
+                if (committed) return;
+                committed = true;
+                inp.replaceWith(nameEl);
+              }
+              inp.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); commit(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+              });
+              inp.addEventListener("blur", commit);
+            });
+
+            el.appendChild(row);
           });
         }
 
