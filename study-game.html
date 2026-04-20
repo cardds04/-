@@ -444,6 +444,140 @@
       .hidden {
         display: none !important;
       }
+
+      /* ---- 100점 뱃지 ---- */
+      .badges-wrap {
+        margin: 0 0 16px;
+      }
+      .all-master {
+        background: linear-gradient(135deg, #fde68a 0%, #f59e0b 50%, #ef4444 100%);
+        border-radius: 22px;
+        padding: 18px 20px;
+        text-align: center;
+        color: #7c2d12;
+        box-shadow: 0 10px 26px rgba(239, 68, 68, 0.25);
+        border: 3px solid #fff;
+        margin-bottom: 14px;
+        position: relative;
+        overflow: hidden;
+      }
+      .all-master::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.45), transparent 40%),
+          radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.35), transparent 40%);
+        pointer-events: none;
+      }
+      .all-master .am-emoji {
+        font-size: 2.6rem;
+        line-height: 1;
+      }
+      .all-master h3 {
+        font-family: "Luckiest Guy", "Fredoka", sans-serif;
+        font-size: 1.6rem;
+        margin: 6px 0 4px;
+        letter-spacing: 1px;
+        color: #7c2d12;
+        text-shadow: 2px 2px 0 #fff;
+      }
+      .all-master p {
+        margin: 0;
+        font-weight: 800;
+        font-size: 0.92rem;
+      }
+      .badge-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .badge-chip {
+        background: #fff;
+        border-radius: 16px;
+        padding: 10px 12px;
+        border: 2px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+      }
+      .badge-chip.is-done {
+        border-color: #fbbf24;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      }
+      .badge-chip.is-pending {
+        opacity: 0.55;
+        filter: grayscale(0.3);
+      }
+      .badge-chip .bc-ico {
+        font-size: 1.6rem;
+        line-height: 1;
+        flex: 0 0 auto;
+      }
+      .badge-chip .bc-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .badge-chip .bc-name {
+        font-weight: 800;
+        font-size: 0.88rem;
+        color: #334155;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .badge-chip.is-done .bc-name {
+        color: #7c2d12;
+      }
+      .badge-chip .bc-date {
+        font-size: 0.76rem;
+        color: #64748b;
+        font-weight: 700;
+      }
+      .badge-chip.is-done .bc-date {
+        color: #b45309;
+      }
+      .menu-card {
+        position: relative;
+      }
+      .menu-card .card-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #7c2d12;
+        font-size: 0.72rem;
+        font-weight: 900;
+        padding: 4px 10px;
+        border-radius: 999px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
+        display: none;
+      }
+      .menu-card.is-perfect {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fffbeb 0%, #fff 50%);
+      }
+      .menu-card.is-perfect .card-badge {
+        display: inline-block;
+      }
+      @keyframes shine {
+        0%, 100% { transform: translateX(-100%); }
+        50% { transform: translateX(200%); }
+      }
+      .menu-card.is-perfect::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.18), transparent);
+        animation: shine 3s ease-in-out infinite;
+        pointer-events: none;
+        border-radius: 24px;
+      }
     </style>
   </head>
   <body>
@@ -453,23 +587,28 @@
 
       <!-- Main Menu -->
       <div id="menuView">
+        <div class="badges-wrap" id="badgesWrap"></div>
         <div class="menu">
-          <button class="menu-card m-vocab" data-mode="vocab">
+          <button class="menu-card m-vocab" data-mode="vocab" id="card-vocab">
+            <span class="card-badge">💯 완주</span>
             <div class="ico">📖</div>
             <h3>단어 뜻 맞히기</h3>
             <p>Vocabulary 16개 · 객관식 뜻풀이 퀴즈</p>
           </button>
-          <button class="menu-card m-spell" data-mode="spell">
+          <button class="menu-card m-spell" data-mode="spell" id="card-spell">
+            <span class="card-badge">💯 완주</span>
             <div class="ico">✏️</div>
             <h3>스펠링 퍼즐</h3>
             <p>Spelling 16개 · 섞인 글자를 맞게 배열</p>
           </button>
-          <button class="menu-card m-sent" data-mode="sent">
+          <button class="menu-card m-sent" data-mode="sent" id="card-sent">
+            <span class="card-badge">💯 완주</span>
             <div class="ico">🔤</div>
             <h3>문장 종류 맞히기</h3>
             <p>Compound · Complex · Run-on 구분</p>
           </button>
-          <button class="menu-card m-match" data-mode="match">
+          <button class="menu-card m-match" data-mode="match" id="card-match">
+            <span class="card-badge">💯 완주</span>
             <div class="ico">🎴</div>
             <h3>단어 짝 맞추기</h3>
             <p>카드 메모리 · 단어와 뜻을 맞추세요</p>
@@ -731,6 +870,85 @@
         { once: true, capture: true }
       );
 
+      // ---- Perfect badges (100점 완주 기록) ----
+      const PERFECT_KEY = "study_game_perfect_v1";
+      const MODE_META = {
+        vocab: { name: "단어 뜻 맞히기", ico: "📖" },
+        spell: { name: "스펠링 퍼즐", ico: "✏️" },
+        sent: { name: "문장 종류 맞히기", ico: "🔤" },
+        match: { name: "단어 짝 맞추기", ico: "🎴" },
+      };
+      const MODE_KEYS = ["vocab", "spell", "sent", "match"];
+      function getPerfects() {
+        try {
+          const raw = localStorage.getItem(PERFECT_KEY);
+          return raw ? JSON.parse(raw) || {} : {};
+        } catch (e) { return {}; }
+      }
+      function savePerfect(mode) {
+        const p = getPerfects();
+        if (p[mode]) return false;
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        p[mode] = y + "." + m + "." + d;
+        try { localStorage.setItem(PERFECT_KEY, JSON.stringify(p)); } catch (e) {}
+        return true;
+      }
+      function renderBadges() {
+        const wrap = document.getElementById("badgesWrap");
+        if (!wrap) return;
+        const p = getPerfects();
+        const doneCount = MODE_KEYS.filter((k) => p[k]).length;
+        wrap.innerHTML = "";
+
+        if (doneCount === MODE_KEYS.length) {
+          const banner = document.createElement("div");
+          banner.className = "all-master pop";
+          const allDates = MODE_KEYS.map((k) => p[k]).sort();
+          const firstDate = allDates[0];
+          const lastDate = allDates[allDates.length - 1];
+          const dateLine = firstDate === lastDate
+            ? firstDate + " 에 모두 달성!"
+            : firstDate + " ~ " + lastDate + " 동안 모두 달성!";
+          banner.innerHTML =
+            '<div class="am-emoji">🏆🌟🎉</div>' +
+            '<h3>모든 단원 완주!</h3>' +
+            '<p>' + dateLine + '</p>';
+          wrap.appendChild(banner);
+        } else {
+          const title = document.createElement("div");
+          title.style.cssText = "font-weight:800;color:#334155;margin-bottom:8px;font-size:0.92rem;text-align:center;";
+          title.innerHTML = "🏅 100점 완주 뱃지 <span style='color:#6366f1'>" + doneCount + " / " + MODE_KEYS.length + "</span>";
+          wrap.appendChild(title);
+        }
+
+        const strip = document.createElement("div");
+        strip.className = "badge-strip";
+        MODE_KEYS.forEach((key) => {
+          const meta = MODE_META[key];
+          const date = p[key];
+          const chip = document.createElement("div");
+          chip.className = "badge-chip " + (date ? "is-done" : "is-pending");
+          chip.innerHTML =
+            '<div class="bc-ico">' + (date ? "🏅" : meta.ico) + '</div>' +
+            '<div class="bc-body">' +
+            '<span class="bc-name">' + meta.name + '</span>' +
+            '<span class="bc-date">' + (date ? "💯 " + date : "아직 완주 전") + '</span>' +
+            '</div>';
+          strip.appendChild(chip);
+        });
+        wrap.appendChild(strip);
+
+        MODE_KEYS.forEach((key) => {
+          const card = document.getElementById("card-" + key);
+          if (!card) return;
+          if (p[key]) card.classList.add("is-perfect");
+          else card.classList.remove("is-perfect");
+        });
+      }
+
       // ---- Vocab session persistence (wrong/right words) ----
       const VOCAB_SESSION_KEY = "study_game_vocab_session_v1";
       function getVocabSession() {
@@ -760,6 +978,8 @@
       /* --------------------------- Navigation ----------------------- */
       function showMenu() {
         state.mode = null;
+        state.modeFilter = null;
+        renderBadges();
         menuView.classList.remove("hidden");
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
@@ -831,6 +1051,25 @@
         $("finalScoreText").textContent = state.score + " / " + perfectMax;
         $("finalStars").textContent = stars;
         $("bestScore").textContent = best;
+
+        // 100점 완주 뱃지 기록 (필터 없는 전체 모드일 때만)
+        let newlyEarned = false;
+        if (ratio >= 1 && !state.modeFilter) {
+          // vocab의 경우 전체 단어 10개 풀에서 10/10이어야 함. match는 16/16.
+          newlyEarned = savePerfect(state.mode);
+        }
+        const finalSub = $("finalSub");
+        if (newlyEarned) {
+          finalSub.innerHTML =
+            '<span style="display:inline-block;background:linear-gradient(135deg,#fde68a,#f59e0b);color:#7c2d12;padding:8px 14px;border-radius:12px;font-weight:900;box-shadow:0 4px 10px rgba(245,158,11,0.35)">🏅 100점 완주 뱃지 획득! ' +
+            (getPerfects()[state.mode] || "") + '</span><br><br>' +
+            '최고 기록: <span id="bestScore2">' + best + '</span>';
+          // 뱃지 획득 축하 사운드
+          setTimeout(() => playWin(), 250);
+          setTimeout(() => playWin(), 650);
+        } else {
+          finalSub.innerHTML = '최고 기록: <span id="bestScore2">' + best + '</span>';
+        }
 
         // Vocab: 세션 저장 + 복습 버튼 구성
         const reviewRow = $("finalReviewRow");
