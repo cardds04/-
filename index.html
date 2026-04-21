@@ -3726,6 +3726,10 @@
             if (inlogVisible && typeof hydrateInlogPhotoEditorFromStorage === "function") {
               hydrateInlogPhotoEditorFromStorage();
             }
+            // 작가 급여 탭이 열려 있으면 다른 브라우저에서 저장된 유류비·급여형태를 즉시 반영.
+            if (typeof renderPhotographerPayrollAdmin === "function") {
+              try { renderPhotographerPayrollAdmin(); } catch (_) {}
+            }
           })();
         }, CLIENT_KV_SOFT_PULL_DEBOUNCE_MS);
       }
@@ -5170,6 +5174,14 @@
             } catch (_) {}
           }
           if (key === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
+            // 미반영 로컬 변경이 있는 경우에만 로컬 우선 병합 (편집 중 서버 덮어쓰기 방지).
+            // 그 외에는 서버 값 우선 — 다른 브라우저(폰 등)에서 최신값이 즉시 반영되도록 한다.
+            const hasPendingLocal =
+              typeof pendingLocalSyncKeys !== "undefined" &&
+              pendingLocalSyncKeys &&
+              typeof pendingLocalSyncKeys.has === "function" &&
+              pendingLocalSyncKeys.has(key);
+            if (!hasPendingLocal) return incomingText;
             try {
               const incoming = JSON.parse(incomingText);
               const localRaw = localStorage.getItem(key);
@@ -5192,6 +5204,13 @@
             } catch (_) {}
           }
           if (key === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) {
+            // 동일 원칙: 미반영 로컬 변경이 있을 때만 병합, 그 외에는 서버 우선.
+            const hasPendingLocal =
+              typeof pendingLocalSyncKeys !== "undefined" &&
+              pendingLocalSyncKeys &&
+              typeof pendingLocalSyncKeys.has === "function" &&
+              pendingLocalSyncKeys.has(key);
+            if (!hasPendingLocal) return incomingText;
             const localCurrent = localStorage.getItem(key);
             const merged = mergeStorageValue(incomingText, localCurrent, key);
             return merged === null || merged === undefined ? getSyncDefaultValue(key) : String(merged);
@@ -18362,6 +18381,11 @@
           renderCustomerAlertHistory();
           renderList();
           renderPaymentList();
+          // 작가 급여 탭이 이미 열려 있을 수 있으므로 서버 KV pull 후에도 재렌더링.
+          // 다른 브라우저에서 저장한 유류비·급여형태가 즉시 반영되도록 한다.
+          if (typeof renderPhotographerPayrollAdmin === "function") {
+            try { renderPhotographerPayrollAdmin(); } catch (_) {}
+          }
         });
         startDashboardStateBackgroundSync();
       }

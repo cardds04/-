@@ -3943,8 +3943,12 @@
         }
 
         sendBtn.addEventListener("click", submit);
+        let _composing = false;
+        input.addEventListener("compositionstart", () => { _composing = true; });
+        input.addEventListener("compositionend", () => { _composing = false; });
         input.addEventListener("keydown", (e) => {
           if (e.key === "Enter" && !e.shiftKey) {
+            if (_composing || e.isComposing || e.keyCode === 229) return;
             e.preventDefault();
             submit();
           }
@@ -4096,8 +4100,12 @@
           }
 
           sendBtn.addEventListener("click", submit);
+          let _composing = false;
+          input.addEventListener("compositionstart", () => { _composing = true; });
+          input.addEventListener("compositionend", () => { _composing = false; });
           input.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
+              if (_composing || e.isComposing || e.keyCode === 229) return;
               e.preventDefault();
               submit();
             }
