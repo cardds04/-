@@ -26,6 +26,7 @@ app.use(express.json({ limit: "50mb" }));
 const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-generate-logic.cjs");
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
 const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
+const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -95,6 +96,18 @@ app.post("/api/gemini-tts", async (req, res) => {
   } catch (error) {
     console.error("[gemini-tts]", error);
     res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** AI 토론(제미나이 vs 그록) — lib/ai-debate-logic.cjs (Vercel api/ai-debate.js 와 공유) */
+app.post("/api/ai-debate", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleAiDebateRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[ai-debate]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });
 

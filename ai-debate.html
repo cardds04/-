@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>AI 토론장 · 제미나이 vs 그록</title>
+  <style>
+    :root {
+      --bg-0: #07080c;
+      --bg-1: #0e1118;
+      --bg-2: #141826;
+      --line: #252a3a;
+      --text: #e7ecf3;
+      --text-dim: #8a93a6;
+      --accent: #7c5cff;
+
+      --gemini: #4285f4;
+      --gemini-2: #1a73e8;
+      --gemini-soft: rgba(66, 133, 244, 0.12);
+
+      --grok: #00c2b8;
+      --grok-2: #008c85;
+      --grok-soft: rgba(0, 194, 184, 0.12);
+
+      --user: #f5b400;
+      --user-soft: rgba(245, 180, 0, 0.12);
+
+      --danger: #ff5c7a;
+      --radius: 14px;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+        "Noto Sans KR", "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% -10%, rgba(66, 133, 244, 0.18), transparent 60%),
+        radial-gradient(1000px 700px at 110% 10%, rgba(0, 194, 184, 0.18), transparent 60%),
+        radial-gradient(900px 600px at 50% 110%, rgba(124, 92, 255, 0.18), transparent 60%),
+        linear-gradient(180deg, var(--bg-0), var(--bg-1));
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 180px;
+    }
+
+    header.top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 4px 18px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .brand .logo {
+      width: 40px; height: 40px; border-radius: 12px;
+      background:
+        conic-gradient(from 220deg, var(--gemini), var(--grok), var(--user), var(--gemini));
+      box-shadow: 0 8px 30px rgba(124, 92, 255, 0.35);
+      position: relative;
+    }
+    .brand .logo::after {
+      content: "";
+      position: absolute; inset: 4px;
+      border-radius: 9px;
+      background: var(--bg-0);
+    }
+    .brand .logo::before {
+      content: "⚡"; position: absolute; inset: 0;
+      display: grid; place-items: center;
+      font-size: 18px; z-index: 2;
+    }
+    .brand h1 {
+      margin: 0; font-size: 19px; letter-spacing: 0.2px;
+    }
+    .brand .sub {
+      font-size: 12px; color: var(--text-dim); margin-top: 2px;
+    }
+
+    .header-actions { display: flex; gap: 8px; }
+    .icon-btn {
+      appearance: none; border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text); padding: 9px 14px;
+      border-radius: 10px; cursor: pointer; font-size: 13px;
+      transition: all .15s ease;
+    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.07); border-color: #3a4258; }
+    .icon-btn.primary {
+      background: linear-gradient(135deg, var(--gemini), var(--accent));
+      border-color: transparent;
+    }
+    .icon-btn.primary:hover { filter: brightness(1.1); }
+    .icon-btn.ghost { background: transparent; }
+    .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Topic card */
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .topic-card h2 {
+      margin: 0 0 8px; font-size: 14px; color: var(--text-dim);
+      font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+    }
+    .topic-row {
+      display: flex; gap: 10px; align-items: stretch;
+      flex-wrap: wrap;
+    }
+    .topic-input {
+      flex: 1 1 320px;
+      min-height: 60px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 15px; font-family: inherit;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .topic-input:focus { border-color: var(--accent); }
+
+    .examples { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      font-size: 12px; padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      color: var(--text-dim);
+      border-radius: 999px; cursor: pointer;
+      transition: all .15s;
+    }
+    .chip:hover { color: var(--text); border-color: #3a4258; }
+
+    .controls {
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 150px;
+    }
+    .controls .icon-btn { width: 100%; }
+
+    .status-bar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      margin-top: 12px; font-size: 12px; color: var(--text-dim);
+    }
+    .pill {
+      padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .pill.gemini { color: var(--gemini); border-color: rgba(66, 133, 244, 0.35); }
+    .pill.grok { color: var(--grok); border-color: rgba(0, 194, 184, 0.35); }
+
+    /* Debate log */
+    .debate {
+      margin-top: 22px;
+      display: flex; flex-direction: column; gap: 14px;
+      min-height: 200px;
+    }
+    .empty {
+      border: 1px dashed var(--line); border-radius: var(--radius);
+      padding: 34px 20px; text-align: center; color: var(--text-dim);
+      font-size: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .msg-row {
+      display: flex; gap: 10px;
+      align-items: flex-start;
+      animation: slide-in .28s ease both;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg-row.gemini { justify-content: flex-start; }
+    .msg-row.grok { justify-content: flex-end; flex-direction: row-reverse; }
+    .msg-row.user { justify-content: center; }
+
+    .avatar {
+      width: 38px; height: 38px; flex-shrink: 0;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-weight: 700; font-size: 13px;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+    .avatar.gemini { background: linear-gradient(135deg, var(--gemini), var(--gemini-2)); }
+    .avatar.grok { background: linear-gradient(135deg, var(--grok), var(--grok-2)); }
+    .avatar.user {
+      background: linear-gradient(135deg, var(--user), #c58f00);
+      color: #1a1200;
+    }
+
+    .bubble {
+      max-width: 72%;
+      padding: 12px 14px 10px;
+      border-radius: 14px;
+      line-height: 1.6;
+      font-size: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      position: relative;
+      border: 1px solid transparent;
+    }
+    .msg-row.gemini .bubble {
+      background: var(--gemini-soft);
+      border-color: rgba(66, 133, 244, 0.28);
+      border-top-left-radius: 4px;
+    }
+    .msg-row.grok .bubble {
+      background: var(--grok-soft);
+      border-color: rgba(0, 194, 184, 0.28);
+      border-top-right-radius: 4px;
+    }
+    .msg-row.user .bubble {
+      background: var(--user-soft);
+      border-color: rgba(245, 180, 0, 0.35);
+      max-width: 78%;
+    }
+    .msg-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .msg-meta strong { color: var(--text); font-size: 12px; }
+    .msg-meta .tag {
+      padding: 1px 7px; border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 10px; letter-spacing: 0.2px;
+    }
+    .msg-actions {
+      display: flex; gap: 6px; margin-top: 8px;
+      opacity: 0; transition: opacity .15s ease;
+    }
+    .msg-row:hover .msg-actions { opacity: 1; }
+    .mini-btn {
+      appearance: none; background: transparent;
+      border: 1px solid var(--line); color: var(--text-dim);
+      border-radius: 6px; font-size: 11px;
+      padding: 3px 8px; cursor: pointer;
+    }
+    .mini-btn:hover { color: var(--text); border-color: #3a4258; }
+
+    .typing {
+      display: inline-flex; gap: 4px; align-items: center; height: 20px;
+    }
+    .typing i {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; opacity: 0.5;
+      animation: blink 1.2s infinite ease-in-out;
+    }
+    .typing i:nth-child(2) { animation-delay: .15s; }
+    .typing i:nth-child(3) { animation-delay: .3s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+      40% { opacity: 1; transform: translateY(-2px); }
+    }
+
+    /* User input dock */
+    .dock {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(180deg, rgba(7, 8, 12, 0) 0%, rgba(7, 8, 12, 0.88) 40%, rgba(7, 8, 12, 0.98) 100%);
+      backdrop-filter: blur(10px);
+      z-index: 40;
+    }
+    .dock-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    .dock .user-input {
+      flex: 1;
+      min-height: 46px; max-height: 180px;
+      resize: none;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 15px; font-family: inherit;
+      outline: none;
+      line-height: 1.4;
+    }
+    .dock .user-input:focus { border-color: var(--accent); }
+    .dock-col {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .btn-row {
+      display: flex; gap: 6px;
+    }
+    .send-btn {
+      appearance: none; border: none;
+      background: linear-gradient(135deg, var(--user), #c58f00);
+      color: #1a1200; font-weight: 700;
+      padding: 12px 18px; border-radius: 12px; cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 8px 24px rgba(245, 180, 0, 0.25);
+      transition: transform .08s ease;
+    }
+    .send-btn:hover { filter: brightness(1.05); }
+    .send-btn:active { transform: translateY(1px); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+    .turn-btn {
+      appearance: none; border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text); padding: 9px 12px; border-radius: 10px;
+      font-size: 12.5px; cursor: pointer; font-weight: 600;
+      white-space: nowrap;
+    }
+    .turn-btn.gemini { border-color: rgba(66, 133, 244, 0.4); color: #9ab9ff; }
+    .turn-btn.grok { border-color: rgba(0, 194, 184, 0.4); color: #7adfd7; }
+    .turn-btn:hover { background: rgba(255, 255, 255, 0.07); }
+    .turn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Settings modal */
+    .modal-back {
+      position: fixed; inset: 0;
+      background: rgba(3, 5, 10, 0.72);
+      backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center;
+      z-index: 80;
+      padding: 16px;
+    }
+    .modal-back.open { display: flex; }
+    .modal {
+      width: 100%; max-width: 520px;
+      background: var(--bg-1);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .modal h3 { margin: 0 0 6px; font-size: 17px; }
+    .modal p.hint { color: var(--text-dim); font-size: 12.5px; margin: 0 0 14px; line-height: 1.5; }
+    .field { margin-top: 12px; }
+    .field label {
+      display: block; font-size: 12px; color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      background: var(--bg-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; font-size: 14px; font-family: inherit;
+      outline: none;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--accent);
+    }
+    .modal-actions {
+      margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translate(-50%, -20px);
+      padding: 10px 16px; border-radius: 10px;
+      background: #1d2030; color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 13px; z-index: 99;
+      opacity: 0; pointer-events: none;
+      transition: all .2s ease;
+      max-width: calc(100vw - 40px);
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .toast.err { border-color: rgba(255, 92, 122, 0.5); color: #ffb3c0; }
+
+    @media (max-width: 640px) {
+      .shell { padding: 18px 14px 200px; }
+      .brand h1 { font-size: 16px; }
+      .bubble { max-width: 82%; font-size: 14.5px; }
+      .controls { min-width: 100%; }
+      .dock-inner { flex-wrap: wrap; }
+      .dock-col { flex-direction: row; flex: 1; width: 100%; }
+      .dock-col .btn-row { width: 100%; }
+      .turn-btn { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>AI 토론장</h1>
+          <div class="sub">제미나이 · 그록 · 그리고 당신</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn ghost" id="btn-reset" title="대화 초기화">새 토론</button>
+        <button class="icon-btn" id="btn-settings" title="API 키/모델 설정">⚙ 설정</button>
+      </div>
+    </header>
+
+    <section class="card topic-card">
+      <h2>토론 주제</h2>
+      <div class="topic-row">
+        <textarea
+          id="topic"
+          class="topic-input"
+          placeholder="예) AI 시대에 초등학생에게 코딩을 가르쳐야 하는가?"
+          rows="2"
+        ></textarea>
+        <div class="controls">
+          <button class="icon-btn primary" id="btn-start">토론 시작</button>
+          <div class="pill" id="pill-round">0라운드</div>
+        </div>
+      </div>
+      <div class="examples">
+        <button class="chip" data-topic="AI 시대, 초등학생에게 코딩 교육은 꼭 필요한가?">AI 시대의 코딩 교육</button>
+        <button class="chip" data-topic="원격근무는 장기적으로 생산성에 이로운가, 해로운가?">원격근무의 미래</button>
+        <button class="chip" data-topic="SNS는 사회에 득보다 실이 크다.">SNS의 영향</button>
+        <button class="chip" data-topic="AI가 예술을 창작한다면 그것은 진정한 '예술'인가?">AI와 예술</button>
+        <button class="chip" data-topic="기본소득(UBI)을 지금 한국에 도입해야 하는가?">기본소득 도입</button>
+      </div>
+      <div class="status-bar">
+        <span class="pill gemini" id="pill-gemini">Gemini: <span data-model>-</span></span>
+        <span class="pill grok" id="pill-grok">Grok: <span data-model>-</span></span>
+        <span class="pill" id="pill-mode" title="요청 방식">모드: 자동</span>
+        <span id="status-note"></span>
+      </div>
+    </section>
+
+    <section class="debate" id="debate">
+      <div class="empty" id="empty">
+        주제를 입력하고 <b>토론 시작</b>을 누르면 제미나이와 그록이 번갈아 발언해.
+        <br />중간에 언제든 아래 입력창으로 당신의 의견을 보낼 수 있어.
+      </div>
+    </section>
+  </div>
+
+  <div class="dock">
+    <div class="dock-inner">
+      <div class="dock-col">
+        <div class="btn-row">
+          <button class="turn-btn gemini" id="btn-gemini" title="제미나이 발언 요청" disabled>
+            제미나이 차례
+          </button>
+          <button class="turn-btn grok" id="btn-grok" title="그록 발언 요청" disabled>
+            그록 차례
+          </button>
+        </div>
+      </div>
+      <textarea
+        id="user-input"
+        class="user-input"
+        placeholder="당신의 의견을 입력하고 Enter (줄바꿈은 Shift+Enter)"
+        rows="1"
+      ></textarea>
+      <button class="send-btn" id="btn-send" disabled>보내기</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-back" id="modal-back">
+    <div class="modal" role="dialog" aria-label="설정">
+      <h3>설정</h3>
+      <p class="hint">
+        API 키는 이 브라우저의 <code>localStorage</code> 에만 저장돼. 서버(`/api/ai-debate`)가
+        있으면 프록시 경유로, 없으면 브라우저에서 Gemini/xAI 를 <b>직접 호출</b>해.
+        <br />서버 배포 환경에 <code>GEMINI_API_KEY</code>·<code>XAI_API_KEY</code> 가 설정돼 있다면 키 입력은 생략 가능.
+      </p>
+      <div class="field">
+        <label for="s-gemini-key">Gemini API 키</label>
+        <input id="s-gemini-key" type="password" placeholder="AIza... (비워 두면 서버 환경변수 사용)" />
+      </div>
+      <div class="field">
+        <label for="s-grok-key">xAI (Grok) API 키</label>
+        <input id="s-grok-key" type="password" placeholder="xai-... (비워 두면 서버 환경변수 사용)" />
+      </div>
+      <div class="field">
+        <label for="s-gemini-model">Gemini 모델</label>
+        <input id="s-gemini-model" type="text" placeholder="gemini-3-flash-preview" />
+      </div>
+      <div class="field">
+        <label for="s-grok-model">Grok 모델</label>
+        <input id="s-grok-model" type="text" placeholder="grok-4" />
+      </div>
+      <div class="field">
+        <label for="s-mode">요청 방식</label>
+        <select id="s-mode">
+          <option value="auto">자동 (서버 우선, 안되면 브라우저에서 직접 호출)</option>
+          <option value="direct">브라우저에서 직접 호출 (서버 필요 없음, 키 필수)</option>
+          <option value="server">항상 서버 프록시 (/api/ai-debate)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="s-style">추가 지시 (선택)</label>
+        <textarea id="s-style" rows="2" placeholder="예) 두 AI는 반드시 서로 다른 입장을 취하라"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="icon-btn ghost" id="s-cancel">취소</button>
+        <button class="icon-btn primary" id="s-save">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const LS_KEY = "ai-debate:v1";
+  const els = {
+    topic: document.getElementById("topic"),
+    debate: document.getElementById("debate"),
+    empty: document.getElementById("empty"),
+    btnStart: document.getElementById("btn-start"),
+    btnGemini: document.getElementById("btn-gemini"),
+    btnGrok: document.getElementById("btn-grok"),
+    btnSend: document.getElementById("btn-send"),
+    btnReset: document.getElementById("btn-reset"),
+    btnSettings: document.getElementById("btn-settings"),
+    userInput: document.getElementById("user-input"),
+    pillRound: document.getElementById("pill-round"),
+    pillGemini: document.getElementById("pill-gemini").querySelector("[data-model]"),
+    pillGrok: document.getElementById("pill-grok").querySelector("[data-model]"),
+    pillMode: document.getElementById("pill-mode"),
+    statusNote: document.getElementById("status-note"),
+    modalBack: document.getElementById("modal-back"),
+    sGeminiKey: document.getElementById("s-gemini-key"),
+    sGrokKey: document.getElementById("s-grok-key"),
+    sGeminiModel: document.getElementById("s-gemini-model"),
+    sGrokModel: document.getElementById("s-grok-model"),
+    sMode: document.getElementById("s-mode"),
+    sStyle: document.getElementById("s-style"),
+    sCancel: document.getElementById("s-cancel"),
+    sSave: document.getElementById("s-save"),
+    toast: document.getElementById("toast"),
+  };
+
+  const state = {
+    topic: "",
+    messages: [],
+    round: 0,
+    busy: false,
+    lastSpeaker: null,
+    settings: {
+      geminiKey: "",
+      grokKey: "",
+      geminiModel: "gemini-3-flash-preview",
+      grokModel: "grok-4",
+      mode: "auto",
+      style: "",
+    },
+    serverAvailable: null,
+  };
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const j = JSON.parse(raw);
+      Object.assign(state.settings, j || {});
+    } catch {}
+  }
+  function saveSettings() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state.settings)); } catch {}
+  }
+
+  function toast(msg, err = false) {
+    els.toast.textContent = msg;
+    els.toast.classList.toggle("err", !!err);
+    els.toast.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => els.toast.classList.remove("show"), 2600);
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+    });
+  }
+
+  function renderPills() {
+    els.pillGemini.textContent = state.settings.geminiModel || "-";
+    els.pillGrok.textContent = state.settings.grokModel || "-";
+    els.pillRound.textContent = `${state.round}라운드`;
+    const modeLabel = {
+      auto: state.serverAvailable === false ? "모드: 브라우저 직접" : "모드: 자동",
+      direct: "모드: 브라우저 직접",
+      server: "모드: 서버 프록시",
+    }[state.settings.mode] || "모드: 자동";
+    els.pillMode.textContent = modeLabel;
+  }
+
+  /* ===== 브라우저 직접 호출 모드용 로직 (server.js 없이 작동) ===== */
+  function speakerLabel(role) {
+    if (role === "gemini") return "제미나이";
+    if (role === "grok") return "그록";
+    if (role === "user") return "사용자";
+    return "익명";
+  }
+  function sanitizeText(s) {
+    return String(s || "").replace(/^\s*(제미나이|그록|사용자)\s*[:：]\s*/i, "").trim();
+  }
+  function buildSystemPrompt(provider, topic, style) {
+    const myName = provider === "gemini" ? "제미나이 (Google Gemini)" : "그록 (xAI Grok)";
+    const opponent = provider === "gemini" ? "그록 (xAI Grok)" : "제미나이 (Google Gemini)";
+    const persona =
+      provider === "gemini"
+        ? "너는 침착하고 분석적이며 근거를 구조적으로 제시하는 편이다. 정돈된 논리와 균형잡힌 시각을 선호한다."
+        : "너는 솔직하고 재치있으며 통념에 도전하는 편이다. 날카롭지만 예의는 지키고, 때로는 농담과 비유를 섞는다.";
+    return [
+      `당신은 ${myName} 입니다.`,
+      `토론 상대는 ${opponent} 이며, 사용자가 주제를 던지고 중간에 개입할 수 있습니다.`,
+      persona,
+      "",
+      "[토론 주제]",
+      topic,
+      "",
+      "[규칙]",
+      "1) 한국어로 답하라.",
+      "2) 200~450자 사이의 한 번의 발언으로 응답하라. 너무 길게 늘어놓지 말 것.",
+      "3) 직전 상대 발언이나 사용자 발언을 구체적으로 인용/반박/확장하라. '동의합니다'만으로 끝내지 말 것.",
+      "4) 상대를 존중하되, 생각이 다르면 확실히 다르게 말하라. 가식적 중립은 금지.",
+      "5) 필요하면 예시·비유·간단한 수치/근거를 사용하라.",
+      "6) 머리말/꼬리말에 '제미나이:' 또는 '그록:' 같은 자기 이름 라벨을 붙이지 말고, 본문만 출력하라.",
+      "7) 마지막 한 줄은 상대 또는 사용자에게 던지는 짧은 질문/도전으로 마무리해도 좋다.",
+      style ? `\n[추가 지시]\n${style}` : "",
+    ].filter(Boolean).join("\n");
+  }
+  function buildTranscript(messages) {
+    const lines = [];
+    for (const m of messages) {
+      if (!m || m.loading) continue;
+      const t = (m.text || "").trim();
+      if (!t) continue;
+      lines.push(`${speakerLabel(m.role)}: ${t}`);
+    }
+    return lines.join("\n\n") || "(아직 발언이 없습니다.)";
+  }
+
+  async function callGeminiDirect({ topic, messages, provider }) {
+    const key = state.settings.geminiKey;
+    if (!key) throw new Error("Gemini API 키가 필요해. 설정에서 입력해줘.");
+    const model = state.settings.geminiModel || "gemini-3-flash-preview";
+    const sys = buildSystemPrompt(provider, topic, state.settings.style);
+    const transcript = buildTranscript(messages);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [{ text: sys + "\n\n[지금까지의 토론 로그]\n" + transcript + "\n\n위 흐름에 이어서, 당신의 다음 발언 한 번만 출력하세요." }],
+        }],
+        generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 1024 },
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = data?.error?.message || r.statusText;
+      throw new Error(`Gemini: ${msg}`);
+    }
+    const cand = data?.candidates?.[0];
+    if (cand?.finishReason === "SAFETY" || cand?.finishReason === "BLOCKLIST") {
+      throw new Error("Gemini 안전 정책으로 응답이 차단됨.");
+    }
+    let text = "";
+    for (const p of cand?.content?.parts || []) {
+      if (typeof p.text === "string") text += p.text;
+    }
+    text = sanitizeText(text);
+    if (!text) throw new Error("Gemini 응답이 비어 있어.");
+    return { text, model };
+  }
+
+  async function callGrokDirect({ topic, messages, provider }) {
+    const key = state.settings.grokKey;
+    if (!key) throw new Error("xAI(Grok) API 키가 필요해. 설정에서 입력해줘.");
+    const model = state.settings.grokModel || "grok-4";
+    const sys = buildSystemPrompt(provider, topic, state.settings.style);
+    const msgs = [{ role: "system", content: sys }];
+    for (const m of messages) {
+      if (!m || m.loading) continue;
+      const t = (m.text || "").trim();
+      if (!t) continue;
+      if (m.role === "grok") {
+        msgs.push({ role: "assistant", content: t });
+      } else {
+        msgs.push({ role: "user", content: `[${speakerLabel(m.role)}]\n${t}` });
+      }
+    }
+    msgs.push({ role: "user", content: "위 흐름에 이어 당신의 다음 발언을 한 번만 출력하세요." });
+
+    const r = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.9,
+        top_p: 0.95,
+        max_tokens: 1024,
+        messages: msgs,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = data?.error?.message || data?.error || r.statusText;
+      throw new Error(`Grok: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`);
+    }
+    const choice = data?.choices?.[0];
+    let text = "";
+    if (typeof choice?.message?.content === "string") text = choice.message.content;
+    else if (Array.isArray(choice?.message?.content)) {
+      text = choice.message.content.map((x) => (typeof x === "string" ? x : x?.text || "")).join("");
+    }
+    text = sanitizeText(text);
+    if (!text) throw new Error("Grok 응답이 비어 있어.");
+    return { text, model };
+  }
+
+  async function callDirect(provider, topic, messages) {
+    if (provider === "gemini") return callGeminiDirect({ provider, topic, messages });
+    return callGrokDirect({ provider, topic, messages });
+  }
+
+  async function probeServerOnce() {
+    if (state.serverAvailable !== null) return state.serverAvailable;
+    try {
+      const r = await fetch("/api/ai-debate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      state.serverAvailable = r.status !== 404;
+    } catch {
+      state.serverAvailable = false;
+    }
+    renderPills();
+    return state.serverAvailable;
+  }
+
+  function labelOf(role) {
+    if (role === "gemini") return "제미나이";
+    if (role === "grok") return "그록";
+    if (role === "user") return "당신";
+    return role;
+  }
+
+  function avatarText(role) {
+    if (role === "gemini") return "G";
+    if (role === "grok") return "X";
+    if (role === "user") return "나";
+    return "?";
+  }
+
+  function renderMessage(m, animate = true) {
+    if (els.empty && els.empty.parentNode) {
+      els.empty.parentNode.removeChild(els.empty);
+    }
+    const row = document.createElement("div");
+    row.className = `msg-row ${m.role}`;
+    if (!animate) row.style.animation = "none";
+
+    const avatar = document.createElement("div");
+    avatar.className = `avatar ${m.role}`;
+    avatar.textContent = avatarText(m.role);
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    const strong = document.createElement("strong");
+    strong.textContent = labelOf(m.role);
+    meta.appendChild(strong);
+    if (m.model) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = m.model;
+      meta.appendChild(tag);
+    }
+    bubble.appendChild(meta);
+
+    const body = document.createElement("div");
+    body.className = "msg-body";
+    if (m.loading) {
+      const typing = document.createElement("span");
+      typing.className = "typing";
+      typing.innerHTML = "<i></i><i></i><i></i>";
+      body.appendChild(typing);
+    } else {
+      body.textContent = m.text || "";
+    }
+    bubble.appendChild(body);
+
+    if (!m.loading && m.role !== "user") {
+      const actions = document.createElement("div");
+      actions.className = "msg-actions";
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "mini-btn";
+      copyBtn.textContent = "복사";
+      copyBtn.onclick = async () => {
+        try { await navigator.clipboard.writeText(m.text || ""); toast("복사했어"); }
+        catch { toast("복사 실패", true); }
+      };
+      actions.appendChild(copyBtn);
+      bubble.appendChild(actions);
+    }
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    els.debate.appendChild(row);
+    row._msg = m;
+    scrollToBottom();
+    return row;
+  }
+
+  function renderAll() {
+    els.debate.innerHTML = "";
+    if (!state.messages.length) {
+      els.debate.appendChild(els.empty);
+      return;
+    }
+    for (const m of state.messages) renderMessage(m, false);
+  }
+
+  function updateTurnButtons() {
+    const ready = !!state.topic && !state.busy;
+    els.btnGemini.disabled = !ready;
+    els.btnGrok.disabled = !ready;
+    els.btnSend.disabled = !ready || !els.userInput.value.trim();
+    els.btnStart.disabled = state.busy;
+  }
+
+  async function requestAiTurn(provider) {
+    if (state.busy) return;
+    const topic = state.topic || els.topic.value.trim();
+    if (!topic) { toast("먼저 주제를 입력해.", true); return; }
+    state.topic = topic;
+
+    state.busy = true;
+    updateTurnButtons();
+
+    const loadingMsg = { role: provider, text: "", loading: true };
+    state.messages.push(loadingMsg);
+    const row = renderMessage(loadingMsg);
+
+    try {
+      const history = state.messages
+        .filter((m) => !m.loading)
+        .map((m) => ({ role: m.role, text: m.text }));
+
+      let text, model;
+      const mode = state.settings.mode || "auto";
+
+      const tryServer = async () => {
+        const payload = {
+          provider,
+          topic,
+          messages: history,
+          style: state.settings.style || "",
+          geminiModel: state.settings.geminiModel,
+          grokModel: state.settings.grokModel,
+          gemini_api_key: state.settings.geminiKey || undefined,
+          xai_api_key: state.settings.grokKey || undefined,
+        };
+        const resp = await fetch("/api/ai-debate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (resp.status === 404) {
+          state.serverAvailable = false;
+          renderPills();
+          const e = new Error("서버 엔드포인트 없음");
+          e.code = "NO_SERVER";
+          throw e;
+        }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          const err = new Error(data.error || `HTTP ${resp.status}`);
+          if (resp.status === 401) err.code = "NO_KEY_ON_SERVER";
+          throw err;
+        }
+        state.serverAvailable = true;
+        return { text: data.text, model: data.model };
+      };
+
+      const tryDirect = async () => {
+        const out = await callDirect(provider, topic, history);
+        return { text: out.text, model: out.model };
+      };
+
+      if (mode === "direct") {
+        ({ text, model } = await tryDirect());
+      } else if (mode === "server") {
+        ({ text, model } = await tryServer());
+      } else {
+        try {
+          ({ text, model } = await tryServer());
+        } catch (e) {
+          const hasKey =
+            (provider === "gemini" && state.settings.geminiKey) ||
+            (provider === "grok" && state.settings.grokKey);
+          const canFallback =
+            e.code === "NO_SERVER" ||
+            e.name === "TypeError" ||
+            (e.code === "NO_KEY_ON_SERVER" && hasKey);
+          if (canFallback && hasKey) {
+            ({ text, model } = await tryDirect());
+          } else if (canFallback && !hasKey) {
+            throw new Error(
+              "서버도 없고 API 키도 저장돼 있지 않아. 우측 상단 ⚙ 설정에서 " +
+              (provider === "gemini" ? "Gemini" : "Grok") +
+              " 키를 넣어줘."
+            );
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      const idx = state.messages.indexOf(loadingMsg);
+      if (idx >= 0) state.messages.splice(idx, 1);
+      row.remove();
+
+      const msg = { role: provider, text, model };
+      state.messages.push(msg);
+      renderMessage(msg);
+
+      state.lastSpeaker = provider;
+      if (provider === "grok" || state.messages.filter(m => m.role !== "user").length % 2 === 0) {
+        state.round += 1;
+      }
+    } catch (e) {
+      const idx = state.messages.indexOf(loadingMsg);
+      if (idx >= 0) state.messages.splice(idx, 1);
+      row.remove();
+      toast(e.message || "요청 실패", true);
+    } finally {
+      state.busy = false;
+      updateTurnButtons();
+      renderPills();
+    }
+  }
+
+  async function runOpeningRound() {
+    const topic = els.topic.value.trim();
+    if (!topic) { toast("주제를 먼저 입력해.", true); els.topic.focus(); return; }
+    state.topic = topic;
+    if (state.messages.length === 0) {
+      els.statusNote.textContent = "제미나이가 먼저 포문을 엽니다…";
+    }
+    await requestAiTurn("gemini");
+    if (!state.busy) {
+      els.statusNote.textContent = "그록이 반응합니다…";
+      await requestAiTurn("grok");
+      els.statusNote.textContent = "";
+    }
+  }
+
+  function sendUserMessage() {
+    const t = els.userInput.value.trim();
+    if (!t) return;
+    if (!state.topic) {
+      const tp = els.topic.value.trim();
+      if (!tp) { toast("먼저 주제를 입력해.", true); return; }
+      state.topic = tp;
+    }
+    const msg = { role: "user", text: t };
+    state.messages.push(msg);
+    renderMessage(msg);
+    els.userInput.value = "";
+    autoGrow(els.userInput);
+    updateTurnButtons();
+  }
+
+  function autoGrow(el) {
+    el.style.height = "auto";
+    el.style.height = Math.min(180, el.scrollHeight) + "px";
+  }
+
+  function resetDebate() {
+    if (state.busy) return;
+    if (state.messages.length && !confirm("지금까지의 토론 내용을 모두 지울까?")) return;
+    state.messages = [];
+    state.round = 0;
+    state.lastSpeaker = null;
+    state.topic = "";
+    els.topic.value = "";
+    els.statusNote.textContent = "";
+    renderAll();
+    renderPills();
+    updateTurnButtons();
+  }
+
+  function openSettings() {
+    els.sGeminiKey.value = state.settings.geminiKey || "";
+    els.sGrokKey.value = state.settings.grokKey || "";
+    els.sGeminiModel.value = state.settings.geminiModel || "";
+    els.sGrokModel.value = state.settings.grokModel || "";
+    els.sMode.value = state.settings.mode || "auto";
+    els.sStyle.value = state.settings.style || "";
+    els.modalBack.classList.add("open");
+  }
+  function closeSettings() { els.modalBack.classList.remove("open"); }
+
+  els.btnStart.addEventListener("click", runOpeningRound);
+  els.btnGemini.addEventListener("click", () => requestAiTurn("gemini"));
+  els.btnGrok.addEventListener("click", () => requestAiTurn("grok"));
+  els.btnSend.addEventListener("click", sendUserMessage);
+  els.btnReset.addEventListener("click", resetDebate);
+  els.btnSettings.addEventListener("click", openSettings);
+  els.sCancel.addEventListener("click", closeSettings);
+  els.sSave.addEventListener("click", () => {
+    state.settings.geminiKey = els.sGeminiKey.value.trim();
+    state.settings.grokKey = els.sGrokKey.value.trim();
+    state.settings.geminiModel = els.sGeminiModel.value.trim() || "gemini-3-flash-preview";
+    state.settings.grokModel = els.sGrokModel.value.trim() || "grok-4";
+    state.settings.mode = els.sMode.value || "auto";
+    state.settings.style = els.sStyle.value.trim();
+    saveSettings();
+    state.serverAvailable = null;
+    renderPills();
+    closeSettings();
+    toast("저장했어");
+  });
+  els.modalBack.addEventListener("click", (e) => {
+    if (e.target === els.modalBack) closeSettings();
+  });
+
+  document.querySelectorAll(".chip").forEach((ch) => {
+    ch.addEventListener("click", () => {
+      els.topic.value = ch.dataset.topic || "";
+      els.topic.focus();
+    });
+  });
+
+  els.userInput.addEventListener("input", () => {
+    autoGrow(els.userInput);
+    updateTurnButtons();
+  });
+  els.userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (els.userInput.value.trim()) sendUserMessage();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && els.modalBack.classList.contains("open")) closeSettings();
+  });
+
+  loadSettings();
+  renderPills();
+  updateTurnButtons();
+  probeServerOnce().catch(() => {});
+})();
+</script>
+</body>
+</html>
