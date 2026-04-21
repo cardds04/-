@@ -650,6 +650,13 @@
     return lines.join("\n\n") || "(아직 발언이 없습니다.)";
   }
 
+  function isGemini3OrLater(model) {
+    const m = String(model || "").toLowerCase();
+    const match = m.match(/gemini-(\d+)(?:\.(\d+))?/);
+    if (!match) return false;
+    return (parseInt(match[1], 10) || 0) >= 3;
+  }
+
   async function callGeminiDirect({ topic, messages, provider }) {
     const key = state.settings.geminiKey;
     if (!key) throw new Error("Gemini API 키가 필요해. 설정에서 입력해줘.");
@@ -657,6 +664,17 @@
     const sys = buildSystemPrompt(provider, topic, state.settings.style);
     const transcript = buildTranscript(messages);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+
+    const generationConfig = {
+      temperature: 0.9,
+      topP: 0.95,
+      maxOutputTokens: 8192,
+    };
+    // Gemini 3 계열: thinking 토큰이 maxOutputTokens 안에 포함돼서 본문이 잘림 → thinking 비활성화
+    if (isGemini3OrLater(model)) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -665,7 +683,7 @@
           role: "user",
           parts: [{ text: sys + "\n\n[지금까지의 토론 로그]\n" + transcript + "\n\n위 흐름에 이어서, 당신의 다음 발언 한 번만 출력하세요." }],
         }],
-        generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 1024 },
+        generationConfig,
       }),
     });
     const data = await r.json().catch(() => ({}));
@@ -674,7 +692,8 @@
       throw new Error(`Gemini: ${msg}`);
     }
     const cand = data?.candidates?.[0];
-    if (cand?.finishReason === "SAFETY" || cand?.finishReason === "BLOCKLIST") {
+    const finish = cand?.finishReason;
+    if (finish === "SAFETY" || finish === "BLOCKLIST") {
       throw new Error("Gemini 안전 정책으로 응답이 차단됨.");
     }
     let text = "";
@@ -682,7 +701,13 @@
       if (typeof p.text === "string") text += p.text;
     }
     text = sanitizeText(text);
-    if (!text) throw new Error("Gemini 응답이 비어 있어.");
+    if (!text) {
+      if (finish === "MAX_TOKENS") {
+        throw new Error("Gemini 응답이 thinking 단계에서 토큰을 다 썼어. 설정에서 모델을 gemini-2.5-flash 등으로 바꿔봐.");
+      }
+      throw new Error("Gemini 응답이 비어 있어.");
+    }
+    if (finish === "MAX_TOKENS") text = text.trimEnd() + " …(토큰 한도로 잘림)";
     return { text, model };
   }
 
@@ -714,7 +739,7 @@
         model,
         temperature: 0.9,
         top_p: 0.95,
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: msgs,
       }),
     });
