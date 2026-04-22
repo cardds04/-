@@ -2951,7 +2951,8 @@
         $("finalTitle").textContent = title;
         $("finalScoreText").textContent = state.score + " / " + perfectMax;
         $("finalStars").textContent = stars;
-        $("bestScore").textContent = best;
+        const bestScoreEl = $("bestScore");
+        if (bestScoreEl) bestScoreEl.textContent = best;
 
         // 100점 완주 뱃지 기록 (필터 없는 전체 모드일 때만)
         let newlyEarned = false;
@@ -2964,12 +2965,12 @@
           finalSub.innerHTML =
             '<span style="display:inline-block;background:linear-gradient(135deg,#fde68a,#f59e0b);color:#7c2d12;padding:8px 14px;border-radius:12px;font-weight:900;box-shadow:0 4px 10px rgba(245,158,11,0.35)">🏅 100점 완주 뱃지 획득! ' +
             (getPerfects()[state.mode] || "") + '</span><br><br>' +
-            '최고 기록: <span id="bestScore2">' + best + '</span>';
+            '최고 기록: <span id="bestScore">' + best + '</span>';
           // 뱃지 획득 축하 사운드
           setTimeout(() => playWin(), 250);
           setTimeout(() => playWin(), 650);
         } else {
-          finalSub.innerHTML = '최고 기록: <span id="bestScore2">' + best + '</span>';
+          finalSub.innerHTML = '최고 기록: <span id="bestScore">' + best + '</span>';
         }
 
         // Vocab: 세션 저장 + 복습 버튼 구성
