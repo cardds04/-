@@ -387,7 +387,8 @@
         },
         hydrateFromServerKv(kvObj) {
           if (!kvObj || typeof kvObj !== "object") return;
-          this.memoryStore.clear();
+          // clear() 금지: 서버 kv 에 일시적으로 일부 키가 빠져 있을 때 memoryStore 에 캐시된
+          // 관리자 권위 키(PAYROLL_*) 까지 사라져 0원/프리랜서 기본값으로 보이는 문제 방지.
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
             if (PRIVATE_LOCAL_KEYS.has(String(k))) return;
@@ -557,6 +558,31 @@
             });
             if (anyForced) didHydrate = true;
           }
+          // 서버에 관리자 권위 키(유류비/급여형태)가 비어 있고 로컬 캐시에는 값이 남아 있다면
+          // 과거 사진기사 기기의 push 가 실수로 서버 값을 덮어썼을 가능성이 높다.
+          // 로컬 캐시 값을 서버에 다시 올려 복구 push 를 예약한다(2.5초 후).
+          try {
+            if (kv && typeof kv === "object") {
+              const authoritativeKeys = [STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG, STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY];
+              const needsRecovery = authoritativeKeys.some((k) => {
+                const srv = kv[k];
+                const hasServer =
+                  srv !== null &&
+                  srv !== undefined &&
+                  !(typeof srv === "string" && srv.trim() === "") &&
+                  !(typeof srv === "object" && srv !== null && Object.keys(srv).length === 0);
+                if (hasServer) return false;
+                const localRaw = scheduleSiteClientKvState.memoryStore.get(k);
+                if (localRaw === undefined || localRaw === null) return false;
+                const localStr = String(localRaw);
+                return localStr && localStr !== "{}" && localStr !== "[]";
+              });
+              if (needsRecovery) {
+                console.warn("[CLIENT_KV] 서버에서 관리자 권위 키 누락 감지 — 로컬 캐시로 복구 push 예약");
+                scheduleSiteClientKvState.queueSupabaseKvPush();
+              }
+            }
+          } catch (_) {}
           return didHydrate;
         } catch (error) {
           if (error && error.name === "AbortError") {
@@ -586,7 +612,9 @@
         );
         if (!Object.keys(localKv).length) return;
         // 서버 kv 를 먼저 읽어 병합 후 push — 덮어쓰기로 인한 타 키 유실 방지.
-        let serverKv = {};
+        // 서버 조회 실패 시 push 중단 — 빈 serverKv 로 병합하면 관리자 권위 키(유류비/급여형태)가
+        // kv 컬럼에서 통째로 사라져 다른 기기에서 0원/프리랜서 기본값으로 보이는 버그를 유발함.
+        let serverKv = null;
         try {
           const serverRes = await fetch(
             `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv&limit=1`,
@@ -603,9 +631,32 @@
             const serverRows = await serverRes.json();
             const srvRaw = Array.isArray(serverRows) && serverRows[0] ? serverRows[0].kv : null;
             if (srvRaw && typeof srvRaw === "object") serverKv = srvRaw;
+            else if (Array.isArray(serverRows) && serverRows.length === 0) serverKv = {};
           }
         } catch (_) {}
-        const kv = { ...serverKv, ...localKv };
+        if (serverKv === null) {
+          console.warn("[CLIENT_KV] 서버 조회 실패 — 관리자 권위 키 보호를 위해 push 중단");
+          return;
+        }
+        // 관리자 권위 키(PAYROLL_*)는 서버 값이 있으면 그대로 보존, 혹시 서버에서 이미 사라졌어도
+        // 로컬 메모리에 남아 있는 최근 값(관리자 또는 이전 pull 이 남긴)을 복구용으로 같이 올려
+        // 다시 한번 기기 간 불일치가 퍼지는 것을 막는다.
+        const restoredAuthoritative = {};
+        PHOTOGRAPHER_READONLY_KEYS.forEach((k) => {
+          const srv = Object.prototype.hasOwnProperty.call(serverKv, k) ? serverKv[k] : null;
+          const hasServer =
+            srv !== null &&
+            srv !== undefined &&
+            !(typeof srv === "string" && srv.trim() === "") &&
+            !(typeof srv === "object" && srv !== null && Object.keys(srv).length === 0);
+          if (hasServer) return;
+          const localRaw = scheduleSiteClientKvState.memoryStore.get(k);
+          if (localRaw === undefined || localRaw === null) return;
+          const localStr = String(localRaw);
+          if (!localStr || localStr === "{}" || localStr === "[]") return;
+          restoredAuthoritative[k] = localStr;
+        });
+        const kv = { ...serverKv, ...localKv, ...restoredAuthoritative };
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
         const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
