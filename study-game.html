@@ -2340,8 +2340,34 @@
       // 활성 단원 데이터를 게임 전역 변수에 적용
       function applyActiveUnit() {
         const u = getActiveUnit();
-        VOCAB = u.vocab && u.vocab.length ? u.vocab : [];
-        SPELL = u.spell && u.spell.length ? u.spell : [];
+        const dedupVocab = (arr) => {
+          if (!Array.isArray(arr)) return [];
+          const seen = new Set();
+          const out = [];
+          arr.forEach((v) => {
+            if (!v || typeof v.word !== "string") return;
+            const k = v.word.trim().toLowerCase();
+            if (!k || seen.has(k)) return;
+            seen.add(k);
+            out.push(v);
+          });
+          return out;
+        };
+        const dedupSpell = (arr) => {
+          if (!Array.isArray(arr)) return [];
+          const seen = new Set();
+          const out = [];
+          arr.forEach((w) => {
+            if (typeof w !== "string") return;
+            const k = w.trim().toLowerCase();
+            if (!k || seen.has(k)) return;
+            seen.add(k);
+            out.push(k);
+          });
+          return out;
+        };
+        VOCAB = u.vocab && u.vocab.length ? dedupVocab(u.vocab) : [];
+        SPELL = u.spell && u.spell.length ? dedupSpell(u.spell) : [];
         SPELL_MEANINGS = u.spell_meanings || {};
         SENTENCES = u.sentences && u.sentences.length ? u.sentences : [];
         WRITE_PROMPTS = u.prompts && u.prompts.length ? u.prompts : [];
@@ -2377,6 +2403,7 @@
         };
 
         if (Array.isArray(parsed.vocab)) {
+          const seenWords = new Set();
           unit.vocab = parsed.vocab
             .filter((v) => v && typeof v.word === "string" && typeof v.meaning === "string")
             .map((v) => ({
@@ -2384,20 +2411,34 @@
               meaning: String(v.meaning).trim(),
               en: typeof v.en === "string" ? String(v.en).trim() : "",
             }))
-            .filter((v) => v.word && v.meaning);
+            .filter((v) => {
+              if (!v.word || !v.meaning) return false;
+              if (seenWords.has(v.word)) return false;
+              seenWords.add(v.word);
+              return true;
+            });
         }
 
         if (!onlyVocab) {
           if (Array.isArray(parsed.spell)) {
             const words = [];
             const meanings = {};
+            const seenSpell = new Set();
             parsed.spell.forEach((it) => {
               if (typeof it === "string") {
                 const w = it.trim().toLowerCase();
-                if (w) { words.push(w); meanings[w] = ""; }
+                if (w && !seenSpell.has(w)) {
+                  seenSpell.add(w);
+                  words.push(w);
+                  meanings[w] = "";
+                }
               } else if (it && typeof it.word === "string") {
                 const w = String(it.word).trim().toLowerCase();
-                if (w) { words.push(w); meanings[w] = typeof it.meaning === "string" ? String(it.meaning).trim() : ""; }
+                if (w && !seenSpell.has(w)) {
+                  seenSpell.add(w);
+                  words.push(w);
+                  meanings[w] = typeof it.meaning === "string" ? String(it.meaning).trim() : "";
+                }
               }
             });
             unit.spell = words;
