@@ -1071,6 +1071,36 @@
         cursor: pointer;
         font-family: inherit;
       }
+      .study-item .ex-btn {
+        flex: 0 0 auto;
+        background: #fff;
+        color: #64748b;
+        border: 2px solid #cbd5e1;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.12s ease;
+      }
+      .study-item .ex-btn:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+        color: #334155;
+      }
+      .study-item .ex-btn.is-on {
+        background: linear-gradient(135deg, #14b8a6, #0d9488);
+        color: #fff;
+        border-color: #0d9488;
+      }
+      .study-item .ex-btn.is-on:hover { filter: brightness(1.05); }
+      @media (max-width: 520px) {
+        .study-item { flex-wrap: wrap; }
+        .study-item .sw { min-width: 0; }
+        .study-item .ex-btn { margin-left: auto; }
+      }
       .study-summary {
         display: flex;
         gap: 10px;
@@ -2868,7 +2898,8 @@
             const filtered = basePool.filter((v) => words.has(v.word));
             if (filtered.length > 0) pool = filtered;
           }
-          const count = Math.min(10, Math.max(1, pool.length));
+          // 아는 단어 제외 후 남은 전체 단어를 모두 퀴즈로 출제 (10개 제한 없음)
+          const count = Math.max(1, pool.length);
           state.questions = pickN(pool, count);
         } else if (mode === "spell") {
           const count = Math.min(10, Math.max(1, SPELL.length));
@@ -3019,33 +3050,46 @@
       function openStudyListOverlay(kind, opts) {
         opts = opts || {};
         closeStudyOverlay();
-        const excludeMode = !!opts.excludeMode && kind === "vocab";
+        const isVocab = kind === "vocab";
         const st = computeStatus(kind);
         const rights = st.rights;
         const wrongs = st.wrongs;
         const activeUnit = getActiveUnit();
         const disabled = new Set(activeUnit.disabledWords || []);
+        const initialDisabledSnapshot = new Set(disabled);
 
         const ov = document.createElement("div");
         ov.className = "study-overlay";
         ov.id = "studyOverlay";
+
+        // 창을 닫을 때: 제외 목록이 바뀌었고 vocab 퀴즈 중이면 새 풀로 자동 재시작
+        function closeAndMaybeRestart() {
+          closeStudyOverlay();
+          if (!isVocab) return;
+          const changed =
+            disabled.size !== initialDisabledSnapshot.size ||
+            Array.from(disabled).some((w) => !initialDisabledSnapshot.has(w));
+          if (changed && state.mode === "vocab" && Array.isArray(state.questions)) {
+            startMode("vocab", { filter: state.modeFilter });
+          }
+        }
         ov.addEventListener("click", (e) => {
-          if (e.target === ov) closeStudyOverlay();
+          if (e.target === ov) closeAndMaybeRestart();
         });
 
         const sheet = document.createElement("div");
         sheet.className = "sheet pop";
 
-        const titleText = excludeMode
-          ? "🚫 아는 단어 제외하기"
-          : (kind === "spell" ? "📚 오늘 외워야 할 스펠링 단어" : "📚 오늘 외워야 할 단어");
-        const totalCount = kind === "spell" ? SPELL.length : VOCAB.length;
+        const titleText = isVocab
+          ? "📚 오늘 외워야 할 단어"
+          : "📚 오늘 외워야 할 스펠링 단어";
+        const totalCount = isVocab ? VOCAB.length : SPELL.length;
 
         const closeRow = document.createElement("div");
         closeRow.className = "close-row";
         const h = document.createElement("div");
-        const subText = excludeMode
-          ? "단어를 탭하면 게임에서 제외 ⇄ 다시 포함 토글돼요. 제외된 단어는 회색으로 표시됩니다."
+        const subText = isVocab
+          ? "뜻은 기본으로 가려져 있어요. 단어 행을 탭하면 뜻이 보여요. 이미 아는 단어는 🚫 버튼을 눌러 제외하세요. 창을 닫으면 제외된 단어를 뺀 나머지 전체로 퀴즈가 시작돼요."
           : "총 " + totalCount + "개 · 뜻을 탭하면 가렸다 보였다 할 수 있어요";
         h.innerHTML = '<h3>' + titleText + '</h3><div class="sub">' + subText + '</div>';
         const rightControls = document.createElement("div");
@@ -3055,13 +3099,12 @@
         const btnHideAll = document.createElement("button");
         btnHideAll.className = "btn-hideall";
         btnHideAll.type = "button";
-        btnHideAll.textContent = "👁 전체 가리기";
         rightControls.appendChild(btnHideAll);
 
         const closeBtn = document.createElement("button");
         closeBtn.className = "close-btn";
         closeBtn.textContent = "✕";
-        closeBtn.addEventListener("click", closeStudyOverlay);
+        closeBtn.addEventListener("click", closeAndMaybeRestart);
         rightControls.appendChild(closeBtn);
 
         closeRow.appendChild(h);
@@ -3071,16 +3114,29 @@
         const list = document.createElement("div");
         list.className = "study-list";
 
-        const items = kind === "spell"
-          ? SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }))
-          : VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }));
+        const items = isVocab
+          ? VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }))
+          : SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }));
+
+        // vocab: 기본값으로 전체 가리기 ON 상태로 시작
+        let allHidden = isVocab;
+        btnHideAll.classList.toggle("is-on", allHidden);
+        btnHideAll.textContent = allHidden ? "👁 전체 보이기" : "👁 전체 가리기";
 
         let rightCnt = 0, wrongCnt = 0, excludedCnt = 0;
+        let summaryCountText = null;
+
+        function refreshExcludeSummary() {
+          if (!isVocab || !summaryCountText) return;
+          const remain = VOCAB.filter((v) => !disabled.has(v.word)).length;
+          summaryCountText.textContent = "🚫 제외 " + disabled.size + " · 퀴즈에 출제 " + remain;
+        }
+
         items.forEach((it) => {
           const row = document.createElement("div");
           const isR = rights.has(it.word);
           const isW = wrongs.has(it.word);
-          const isExcluded = disabled.has(it.word);
+          const isExcluded = isVocab && disabled.has(it.word);
           if (isR) rightCnt++;
           if (isW) wrongCnt++;
           if (isExcluded) excludedCnt++;
@@ -3088,8 +3144,7 @@
 
           const mk = document.createElement("span");
           mk.className = "mk";
-          if (excludeMode) mk.textContent = isExcluded ? "🚫" : "✓";
-          else mk.textContent = isR ? "○" : isW ? "×" : "·";
+          mk.textContent = isExcluded ? "🚫" : (isR ? "○" : isW ? "×" : "·");
 
           const sw = document.createElement("span");
           sw.className = "sw";
@@ -3098,16 +3153,12 @@
           const sm = document.createElement("span");
           sm.className = "sm";
           sm.textContent = it.meaning;
-          if (excludeMode) {
-            sm.title = "탭하면 단어를 제외/포함 토글";
-            sm.style.cursor = "pointer";
-          } else {
-            sm.title = "클릭해서 가리기/보이기";
-            sm.addEventListener("click", (e) => {
-              e.stopPropagation();
-              sm.classList.toggle("is-hidden");
-            });
-          }
+          sm.title = "탭하면 가리기/보이기";
+          if (allHidden) sm.classList.add("is-hidden");
+          sm.addEventListener("click", (e) => {
+            e.stopPropagation();
+            sm.classList.toggle("is-hidden");
+          });
 
           const say = document.createElement("button");
           say.type = "button";
@@ -3124,28 +3175,33 @@
           row.appendChild(sm);
           row.appendChild(say);
 
-          if (excludeMode) {
-            row.style.cursor = "pointer";
-            row.addEventListener("click", () => {
-              const isOn = row.classList.toggle("is-excluded");
-              mk.textContent = isOn ? "🚫" : "✓";
-              if (isOn) disabled.add(it.word);
+          if (isVocab) {
+            const ex = document.createElement("button");
+            ex.type = "button";
+            ex.className = "ex-btn" + (isExcluded ? " is-on" : "");
+            ex.title = "이 단어를 이미 안다면 퀴즈에서 제외 / 다시 포함";
+            ex.textContent = isExcluded ? "✓ 다시 포함" : "🚫 아는 단어 제외";
+            ex.addEventListener("click", (e) => {
+              e.stopPropagation();
+              const nowExcluded = !row.classList.contains("is-excluded");
+              row.classList.toggle("is-excluded", nowExcluded);
+              if (nowExcluded) disabled.add(it.word);
               else disabled.delete(it.word);
               saveActiveUnitField("disabledWords", Array.from(disabled));
-              const remain = (VOCAB.filter((v) => !disabled.has(v.word))).length;
-              if (countText) countText.textContent = "🚫 제외 " + disabled.size + " · 학습 " + remain;
+              mk.textContent = nowExcluded ? "🚫" : (isR ? "○" : isW ? "×" : "·");
+              ex.classList.toggle("is-on", nowExcluded);
+              ex.textContent = nowExcluded ? "✓ 다시 포함" : "🚫 아는 단어 제외";
+              refreshExcludeSummary();
             });
+            row.appendChild(ex);
           }
 
           list.appendChild(row);
         });
 
-        // excludeMode일 때 행 클릭 시 카운터 업데이트용 참조 (summary 렌더 후 할당)
-        let countText = null;
         sheet.appendChild(list);
 
         // 전체 가리기 / 전체 보이기 토글
-        let allHidden = false;
         btnHideAll.addEventListener("click", () => {
           allHidden = !allHidden;
           const sms = list.querySelectorAll(".sm");
@@ -3159,12 +3215,13 @@
 
         const summary = document.createElement("div");
         summary.className = "study-summary";
-        if (excludeMode) {
-          const remain = (VOCAB.filter((v) => !disabled.has(v.word))).length;
+        if (isVocab) {
+          const remain = VOCAB.filter((v) => !disabled.has(v.word)).length;
           summary.innerHTML =
-            '<span style="color:#475569">탭해서 ON/OFF</span>' +
-            '<span id="excludeCount" style="color:#7c3aed">🚫 제외 ' + disabled.size + ' · 학습 ' + remain + '</span>';
-          countText = summary.querySelector("#excludeCount");
+            '<span class="right">○ 맞춘 ' + rightCnt + '</span>' +
+            '<span class="wrong">× 틀린 ' + wrongCnt + '</span>' +
+            '<span id="excludeCount" style="color:#7c3aed;font-weight:800">🚫 제외 ' + disabled.size + ' · 퀴즈에 출제 ' + remain + '</span>';
+          summaryCountText = summary.querySelector("#excludeCount");
         } else {
           summary.innerHTML =
             '<span class="right">○ 맞춘 단어 ' + rightCnt + '</span>' +
@@ -3189,8 +3246,7 @@
           '<div class="prompt-row">' +
           '<div class="prompt-small">📖 이 단어의 뜻은?</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-          '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
-          '<button class="btn-today" id="btnExcludeKnown" style="background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff">🚫 아는 단어 제외</button>' +
+          '<button class="btn-today" id="btnTodayList" title="뜻은 기본 가려짐. 단어를 탭해 확인하고, 🚫로 아는 단어를 제외하세요.">📚 오늘 외워야 할 단어</button>' +
           '</div>' +
           '</div>' +
           '<div class="prompt-big" id="vocabWord">' + item.word + '</div>' +
@@ -3211,7 +3267,6 @@
         $("btnSay").addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
-        $("btnExcludeKnown").addEventListener("click", () => openStudyListOverlay("vocab", { excludeMode: true }));
       }
       function pickVocab(btn, picked, correct) {
         const buttons = document.querySelectorAll(".choice-btn");
