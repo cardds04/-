@@ -543,12 +543,17 @@
         <input type="file" id="bulkPhotoInput" accept="image/*" multiple style="display: none" />
         <div id="bulkDropZone" class="bulk-drop-zone" tabindex="0" role="button">
           사진을 여기로 끌어놓기<br />
-          <span style="font-size: 0.8rem; font-weight: 500">또는 클릭해서 고르기</span>
+          <span style="font-size: 0.8rem; font-weight: 500">또는 클릭해서 고르기 · 클립보드는 Ctrl/⌘+V로 붙여넣기</span>
         </div>
         <ul id="bulkList" class="bulk-list" aria-label="사진 순서"></ul>
-        <button type="button" class="btn secondary" id="btnClearBulk" style="padding: 6px 12px; font-size: 0.82rem">
-          목록 비우기
-        </button>
+        <div class="btn-row" style="margin-top: 6px; gap: 6px">
+          <button type="button" class="btn secondary" id="btnPasteBulk" style="padding: 6px 12px; font-size: 0.82rem">
+            클립보드 붙여넣기
+          </button>
+          <button type="button" class="btn secondary" id="btnClearBulk" style="padding: 6px 12px; font-size: 0.82rem">
+            목록 비우기
+          </button>
+        </div>
       </div>
 
       <div class="card" id="cardGemini">
@@ -598,11 +603,17 @@
         </p>
         <input type="file" id="blogShrinkFiles" accept="image/*" multiple style="display: none" />
         <div id="blogShrinkDropZone" class="bulk-drop-zone" tabindex="0" role="button" style="margin-bottom: 0">
-          사진 끌어놓기 · 클릭<br />
+          사진 끌어놓기 · 클릭 · 클립보드는 Ctrl/⌘+V<br />
           <span style="font-size: 0.8rem; font-weight: 500" id="blogShrinkFileHint"></span>
         </div>
-        <div class="btn-row" style="margin-top: 10px; margin-bottom: 0">
+        <div class="btn-row" style="margin-top: 10px; margin-bottom: 0; gap: 6px">
           <button type="button" class="btn" id="btnBlogShrinkFolder">폴더에 저장</button>
+          <button type="button" class="btn secondary" id="btnBlogShrinkPaste" style="padding: 6px 12px; font-size: 0.82rem">
+            클립보드 붙여넣기
+          </button>
+          <button type="button" class="btn secondary" id="btnBlogShrinkClear" style="padding: 6px 12px; font-size: 0.82rem">
+            목록 비우기
+          </button>
         </div>
       </div>
 
@@ -1178,6 +1189,66 @@
         const dt = e.dataTransfer?.files;
         if (dt?.length) addFilesToBulk(dt);
       });
+
+      function extractImageFilesFromClipboardEvent(e) {
+        const out = [];
+        const items = e.clipboardData?.items || [];
+        const ts = Date.now();
+        let idx = 0;
+        for (const it of items) {
+          if (it.kind === "file" && it.type && it.type.startsWith("image/")) {
+            const f = it.getAsFile();
+            if (!f) continue;
+            if (!f.name || /^image\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name) || f.name === "image.png") {
+              const ext = (f.type.split("/")[1] || "png").toLowerCase();
+              out.push(new File([f], `clipboard_${ts}_${idx++}.${ext}`, { type: f.type }));
+            } else {
+              out.push(f);
+            }
+          }
+        }
+        return out;
+      }
+
+      async function readClipboardImageFilesAsync() {
+        if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") return [];
+        const out = [];
+        const ts = Date.now();
+        let idx = 0;
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            for (const type of item.types) {
+              if (!type.startsWith("image/")) continue;
+              const blob = await item.getType(type);
+              const ext = (type.split("/")[1] || "png").toLowerCase();
+              out.push(new File([blob], `clipboard_${ts}_${idx++}.${ext}`, { type }));
+            }
+          }
+        } catch (err) {
+          console.warn("clipboard read failed", err);
+        }
+        return out;
+      }
+
+      bulkDropZone.addEventListener("paste", (e) => {
+        const files = extractImageFilesFromClipboardEvent(e);
+        if (files.length) {
+          e.preventDefault();
+          addFilesToBulk(files);
+          showToast(`${files.length}장 추가`);
+        }
+      });
+      document.getElementById("btnPasteBulk")?.addEventListener("click", async () => {
+        const files = await readClipboardImageFilesAsync();
+        if (!files.length) {
+          showToast("클립보드에 이미지가 없습니다.");
+          return;
+        }
+        addFilesToBulk(files);
+        showToast(`${files.length}장 추가`);
+      });
+
       renderBulkList();
 
       const mainPhotoInput = document.getElementById("mainPhotoInput");
@@ -1743,10 +1814,15 @@ ${orderLines}
         const JPEG_Q = 0.8;
 
         const btnFolder = document.getElementById("btnBlogShrinkFolder");
+        const btnPaste = document.getElementById("btnBlogShrinkPaste");
+        const btnClear = document.getElementById("btnBlogShrinkClear");
         const fileInput = document.getElementById("blogShrinkFiles");
         const dropZone = document.getElementById("blogShrinkDropZone");
         const fileHint = document.getElementById("blogShrinkFileHint");
         if (!btnFolder || !fileInput) return;
+
+        /** 누적 파일 목록(여러 번 추가 가능). */
+        let shrinkFiles = [];
 
         /** 매번 OS 폴더 선택 창을 띄움(이전 폴더 기억 없음). */
         async function pickSaveFolderEveryTime() {
@@ -1763,16 +1839,68 @@ ${orderLines}
         }
 
         function refreshShrinkFileHint() {
-          const files = fileInput.files;
-          const n = files ? files.length : 0;
+          const n = shrinkFiles.length;
           if (!fileHint) return;
           if (!n) {
             fileHint.textContent = "";
             return;
           }
           let total = 0;
-          for (let i = 0; i < n; i++) total += files[i].size || 0;
+          for (let i = 0; i < n; i++) total += shrinkFiles[i].size || 0;
           fileHint.textContent = `${n}장 · 원본 합계 ${formatShrinkBytes(total)}`;
+        }
+
+        function addShrinkFiles(fileArr) {
+          const arr = Array.from(fileArr || []).filter((f) => {
+            if (!f) return false;
+            if (f.type && f.type.startsWith("image/")) return true;
+            return /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name || "");
+          });
+          if (!arr.length) return 0;
+          shrinkFiles.push(...arr);
+          refreshShrinkFileHint();
+          return arr.length;
+        }
+
+        function extractImageFilesFromClipboardEvent(e) {
+          const out = [];
+          const items = e.clipboardData?.items || [];
+          const ts = Date.now();
+          let idx = 0;
+          for (const it of items) {
+            if (it.kind === "file" && it.type && it.type.startsWith("image/")) {
+              const f = it.getAsFile();
+              if (!f) continue;
+              if (!f.name || /^image\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name) || f.name === "image.png") {
+                const ext = (f.type.split("/")[1] || "png").toLowerCase();
+                out.push(new File([f], `clipboard_${ts}_${idx++}.${ext}`, { type: f.type }));
+              } else {
+                out.push(f);
+              }
+            }
+          }
+          return out;
+        }
+
+        async function readClipboardImageFilesAsync() {
+          if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") return [];
+          const out = [];
+          const ts = Date.now();
+          let idx = 0;
+          try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+              for (const type of item.types) {
+                if (!type.startsWith("image/")) continue;
+                const blob = await item.getType(type);
+                const ext = (type.split("/")[1] || "png").toLowerCase();
+                out.push(new File([blob], `clipboard_${ts}_${idx++}.${ext}`, { type }));
+              }
+            }
+          } catch (err) {
+            console.warn("shrink clipboard read failed", err);
+          }
+          return out;
         }
 
         if (dropZone) {
@@ -1798,11 +1926,40 @@ ${orderLines}
           dropZone.addEventListener("drop", (e) => {
             const dt = e.dataTransfer?.files;
             if (!dt || !dt.length) return;
-            fileInput.files = dt;
+            const added = addShrinkFiles(dt);
+            if (added) showToast(`${added}장 추가`);
+          });
+          dropZone.addEventListener("paste", (e) => {
+            const files = extractImageFilesFromClipboardEvent(e);
+            if (files.length) {
+              e.preventDefault();
+              addShrinkFiles(files);
+              showToast(`${files.length}장 추가`);
+            }
+          });
+        }
+        fileInput.addEventListener("change", (e) => {
+          const added = addShrinkFiles(e.target.files);
+          e.target.value = "";
+          if (added) showToast(`${added}장 추가`);
+        });
+        if (btnPaste) {
+          btnPaste.addEventListener("click", async () => {
+            const files = await readClipboardImageFilesAsync();
+            if (!files.length) {
+              showToast("클립보드에 이미지가 없습니다.");
+              return;
+            }
+            addShrinkFiles(files);
+            showToast(`${files.length}장 추가`);
+          });
+        }
+        if (btnClear) {
+          btnClear.addEventListener("click", () => {
+            shrinkFiles = [];
             refreshShrinkFileHint();
           });
         }
-        fileInput.addEventListener("change", refreshShrinkFileHint);
 
         async function fileToJpegBlob(file) {
           let bmp;
@@ -1872,8 +2029,8 @@ ${orderLines}
         }
 
         btnFolder.addEventListener("click", async () => {
-          const files = fileInput.files;
-          if (!files || !files.length) {
+          const files = shrinkFiles;
+          if (!files.length) {
             showToast("사진을 선택하세요.");
             return;
           }

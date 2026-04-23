@@ -614,18 +614,22 @@ def montage_manual_clip_grade_vf(grade: dict | None) -> str | None:
 
 
 def sanitize_output_filename_tag(raw: str) -> str:
-    """파일명에 넣을 짧은 태그(한글·숫자·밑줄만)."""
-    s = re.sub(r"[^\w가-힣]", "", str(raw), flags=re.UNICODE)
+    """파일명에 넣을 짧은 태그(한글·숫자·밑줄·소괄호)."""
+    s = re.sub(r"[^\w가-힣()]", "", str(raw), flags=re.UNICODE)
     return (s[:40] or "").strip()
 
 
+HORIZONTAL_OUTPUT_TAG = "가로형(고객선물용)"
+VERTICAL_OUTPUT_TAG = "3컷세로형"
+CINEMA_OUTPUT_TAG = "시네마(고객선물용)"
+
+
 def montage_output_filename_stem_from_preset(p: dict) -> str:
-    """기본 mp4 파일명에 쓸 프리셋 부분: UI 라벨(한글·숫자) 우선, 없으면 montage_output_tag_from_preset."""
-    lab = str(p.get("label", "")).strip()
-    if lab:
-        slug = sanitize_output_filename_tag(lab.replace(" ", ""))
-        if slug:
-            return slug
+    """기본 mp4 파일명에 쓸 프리셋 부분.
+
+    가로·세로·시네마 같은 표준 레이아웃은 고정 태그를 쓰고,
+    그 외(사용자 정의 등)는 montage_output_tag_from_preset 결과를 사용한다.
+    """
     return montage_output_tag_from_preset(p)
 
 
@@ -633,7 +637,7 @@ def montage_output_tag_from_preset(p: dict) -> str:
     """기본 프리셋 라벨·해상도·레이아웃으로 저장 파일명 접두 태그."""
     ly = str(p.get("layout") or "").strip().lower()
     if ly == "tri_stack":
-        return "3컷세로형"
+        return VERTICAL_OUTPUT_TAG
     lab = str(p.get("label", ""))
     try:
         w, h = int(p["w"]), int(p["h"])
@@ -646,19 +650,19 @@ def montage_output_tag_from_preset(p: dict) -> str:
     if "시네마" in lab or (w == 1920 and h in (817, 850)) or (
         w == 1920 and h == 1080 and ch == 850
     ):
-        return "시네마"
+        return CINEMA_OUTPUT_TAG
     if "가로" in lab:
-        return "가로형"
+        return HORIZONTAL_OUTPUT_TAG
     if "세로" in lab:
-        return "세로형"
+        return VERTICAL_OUTPUT_TAG
     if w == 1920 and h == 1080:
-        return "가로형"
+        return HORIZONTAL_OUTPUT_TAG
     if w == 1080 and h == 1920:
-        return "세로형"
+        return VERTICAL_OUTPUT_TAG
     if w > 0 and h > 0:
         if w >= h:
-            return "가로형"
-        return "세로형"
+            return HORIZONTAL_OUTPUT_TAG
+        return VERTICAL_OUTPUT_TAG
     slug = sanitize_output_filename_tag(lab.replace(" ", ""))
     return slug or "preset"
 
@@ -668,17 +672,14 @@ def infer_output_path(
     videos_dir: Path | None,
     preset_tag: str | None = None,
 ) -> Path:
-    """영상이 있는 폴더에 「폴더명_프리셋이름.mp4」로 저장. 중복 시에만 시각 붙임."""
+    """영상이 있는 폴더에 「프리셋이름.mp4」로 저장. 중복 시에만 시각 붙임."""
     if videos_dir is not None:
         base = Path(videos_dir).resolve()
-        folder_key = base.name
     else:
         base = videos[0].resolve().parent
-        folder_key = base.name
-    fk = sanitize_output_filename_tag(folder_key) or "folder"
     tg = sanitize_output_filename_tag(preset_tag) if preset_tag else ""
     tg = tg or "출력"
-    stem = f"{fk}_{tg}"
+    stem = tg
     candidate = base / f"{stem}.mp4"
     if not candidate.exists():
         return candidate
