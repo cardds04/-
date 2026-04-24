@@ -207,19 +207,19 @@
       }
       .kid-chip-x {
         position: absolute;
-        top: -6px;
-        right: -6px;
-        width: 22px;
-        height: 22px;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         border: 2px solid #fff;
-        background: #ef4444;
+        background: #f59e0b;
         color: #fff;
         font-weight: 900;
         font-size: 0.85rem;
         line-height: 1;
         cursor: pointer;
-        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.45);
         font-family: inherit;
         padding: 0;
         display: flex;
@@ -227,8 +227,43 @@
         justify-content: center;
       }
       .kid-chip-x:hover {
-        background: #dc2626;
+        background: #d97706;
         transform: scale(1.1);
+      }
+      .kid-hidden-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        background: #fffbeb;
+        border-radius: 18px;
+        padding: 8px 14px;
+        margin: -6px 0 14px;
+        border: 2px dashed #fcd34d;
+      }
+      .kid-hidden-label {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #92400e;
+      }
+      .kid-chip-hidden {
+        background: #fff;
+        border-color: #fcd34d;
+        color: #92400e;
+        opacity: 0.85;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .kid-chip-hidden:hover {
+        background: #fef3c7;
+        opacity: 1;
+      }
+      .kid-hidden-name {
+        text-decoration: line-through;
+      }
+      .kid-hidden-eye {
+        font-size: 0.95rem;
       }
       .kid-edit-toggle {
         font-family: inherit;
@@ -1874,6 +1909,11 @@
           <button type="button" class="kid-edit-toggle" id="kidEditToggle" style="display:none">✏️ 편집</button>
           <span class="kid-bar-status" id="kidBarStatus"></span>
         </section>
+        <!-- 🙈 숨긴 아이 다시 보기 (편집 모드에서만 노출) -->
+        <section class="kid-hidden-row" id="kidHiddenRow" style="display:none">
+          <span class="kid-hidden-label">🙈 숨긴 아이</span>
+          <div class="kid-hidden-list" style="display:flex;flex-wrap:wrap;gap:6px;flex:1"></div>
+        </section>
 
         <div class="badges-wrap" id="badgesWrap"></div>
 
@@ -2797,6 +2837,40 @@
 
       const familyState = { kids: [], selectedKidId: "", loaded: false, error: "", editMode: false };
 
+      // 이 기기에서만 숨길 아이 id 목록 (우리가족 투두에는 영향 없음)
+      const HIDDEN_KIDS_KEY = "study_game_hidden_kids_v1";
+      function getHiddenKids() {
+        try {
+          const raw = localStorage.getItem(HIDDEN_KIDS_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+        } catch (e) { return []; }
+      }
+      function setHiddenKids(arr) {
+        try { localStorage.setItem(HIDDEN_KIDS_KEY, JSON.stringify(arr || [])); } catch (e) {}
+      }
+      function isKidHidden(kidId) {
+        return getHiddenKids().indexOf(kidId) >= 0;
+      }
+      function hideKid(kidId) {
+        if (!kidId) return;
+        const arr = getHiddenKids();
+        if (arr.indexOf(kidId) < 0) {
+          arr.push(kidId);
+          setHiddenKids(arr);
+        }
+        // 숨긴 아이가 현재 선택된 아이라면 선택 해제
+        if (familyState.selectedKidId === kidId) {
+          setSelectedKidId("");
+        }
+      }
+      function unhideKid(kidId) {
+        if (!kidId) return;
+        const arr = getHiddenKids().filter((x) => x !== kidId);
+        setHiddenKids(arr);
+      }
+
       // 아이 변경 시 menu/단원/뱃지 모두 다시 그리기 (단원·뱃지·기록이 아이별로 분리됨)
       function refreshActiveKidView() {
         try {
@@ -2884,9 +2958,19 @@
           // 편집 토글 숨김
           const editBtn0 = document.getElementById("kidEditToggle");
           if (editBtn0) editBtn0.style.display = "none";
+          // 숨김 칸도 비우기
+          const hiddenRow0 = document.getElementById("kidHiddenRow");
+          if (hiddenRow0) hiddenRow0.style.display = "none";
           return;
         }
-        familyState.kids.forEach((k) => {
+        const hiddenIds = getHiddenKids();
+        const visibleKids = familyState.kids.filter((k) => hiddenIds.indexOf(k.id) < 0);
+        const hiddenKids = familyState.kids.filter((k) => hiddenIds.indexOf(k.id) >= 0);
+
+        if (!visibleKids.length) {
+          chips.innerHTML = '<span class="kid-chip-empty" style="color:#94a3b8">표시 중인 아이가 없어요. ✏️ 편집 → 다시 보기로 되돌려 주세요.</span>';
+        }
+        visibleKids.forEach((k) => {
           const wrap = document.createElement("span");
           wrap.className = "kid-chip-wrap";
           const b = document.createElement("button");
@@ -2905,17 +2989,20 @@
             const x = document.createElement("button");
             x.type = "button";
             x.className = "kid-chip-x";
-            x.textContent = "×";
-            x.title = k.name + " 삭제";
-            x.setAttribute("aria-label", k.name + " 삭제");
+            x.textContent = "🙈";
+            x.title = k.name + " 숨기기 (이 사이트에서만)";
+            x.setAttribute("aria-label", k.name + " 숨기기");
             x.addEventListener("click", (ev) => {
               ev.stopPropagation();
-              deleteKid(k);
+              hideKid(k.id);
+              renderKidBar();
+              refreshActiveKidView();
             });
             wrap.appendChild(x);
           }
           chips.appendChild(wrap);
         });
+
         // 편집 토글 표시
         const editBtn = document.getElementById("kidEditToggle");
         if (editBtn) {
@@ -2923,49 +3010,56 @@
           editBtn.textContent = familyState.editMode ? "✓ 완료" : "✏️ 편집";
           editBtn.classList.toggle("kid-edit-on", familyState.editMode);
         }
+
+        // 숨겨진 아이 목록 (편집 모드에서만 노출)
+        const hiddenRow = document.getElementById("kidHiddenRow");
+        if (hiddenRow) {
+          if (familyState.editMode && hiddenKids.length) {
+            hiddenRow.style.display = "";
+            const list = hiddenRow.querySelector(".kid-hidden-list");
+            if (list) {
+              list.innerHTML = "";
+              hiddenKids.forEach((k) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "kid-chip kid-chip-hidden";
+                b.title = k.name + " 다시 보기";
+                b.innerHTML = '<span class="kid-hidden-name">' + escapeHtml(k.name) + '</span><span class="kid-hidden-eye">👁</span>';
+                b.addEventListener("click", () => {
+                  unhideKid(k.id);
+                  renderKidBar();
+                  refreshActiveKidView();
+                });
+                list.appendChild(b);
+              });
+            }
+          } else {
+            hiddenRow.style.display = "none";
+          }
+        }
+
         if (status) {
-          status.textContent = familyState.editMode
-            ? "🗑 × 를 눌러 아이를 삭제할 수 있어요"
-            : (familyState.selectedKidId
+          if (familyState.editMode) {
+            status.textContent = "🙈 숨기면 이 사이트에서만 안 보여요 (우리가족 투두는 그대로)";
+          } else {
+            status.textContent = familyState.selectedKidId
               ? "✅ " + getSelectedKidName() + " 의 학습"
-              : "👆 아이 한 명을 선택해 주세요");
+              : "👆 아이 한 명을 선택해 주세요";
+          }
         }
       }
       function toggleKidEditMode() {
         familyState.editMode = !familyState.editMode;
         renderKidBar();
       }
-      async function deleteKid(kid) {
-        if (!_supabase || !kid || !kid.id) return;
-        const ok = confirm(
-          "정말 \"" + kid.name + "\" 을(를) 삭제할까요?\n\n" +
-          "• 우리가족 투두의 아이 정보 / 스탬프 지갑 / 칭찬 스티커 / 요일 슬롯 / 일정도 함께 삭제됩니다.\n" +
-          "• 이 동작은 되돌릴 수 없어요.",
-        );
-        if (!ok) return;
-        try {
-          const r = await _supabase.from("family_kids").delete().eq("id", kid.id);
-          if (r.error) throw r.error;
-          // 삭제된 아이가 현재 선택된 아이라면 선택 해제
-          if (familyState.selectedKidId === kid.id) {
-            setSelectedKidId("");
-          }
-          // 이 기기에 남은 per-kid localStorage 정리 (orphan 제거)
-          try {
-            const suffix = ":" + kid.id;
-            const toRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k && k.endsWith(suffix)) toRemove.push(k);
-            }
-            toRemove.forEach((k) => localStorage.removeItem(k));
-          } catch (e) {}
-          // 다시 로딩
-          await loadFamilyKids();
-          refreshActiveKidView();
-        } catch (e) {
-          alert("삭제 실패: " + (e && e.message ? e.message : String(e)));
-        }
+      // 간단한 HTML escape (innerHTML 으로 아이 이름 넣을 때만 사용)
+      function escapeHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
       }
       // 다른 탭(family-todos.html)에서 선택이 바뀌면 자동 동기화
       window.addEventListener("storage", (e) => {
