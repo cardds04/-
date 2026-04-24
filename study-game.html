@@ -10,6 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nanum+Gothic:wght@700;800&family=Luckiest+Guy&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
       * {
         box-sizing: border-box;
@@ -141,6 +142,138 @@
         font-size: 0.88rem;
         font-weight: 600;
       }
+      /* ---- Kid selector bar (synced with family-todos) ---- */
+      .kid-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        border-radius: 18px;
+        padding: 10px 14px;
+        margin: 0 0 14px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        border: 2px solid #ede9fe;
+      }
+      .kid-bar-label {
+        font-weight: 800;
+        color: #6366f1;
+        font-size: 0.9rem;
+        margin-right: 4px;
+      }
+      .kid-bar-status {
+        font-size: 0.78rem;
+        color: #64748b;
+        font-weight: 700;
+        margin-left: auto;
+      }
+      .kid-chip {
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.95rem;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 2px solid #c7d2fe;
+        background: #f5f3ff;
+        color: #4338ca;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s, border-color 0.15s;
+      }
+      .kid-chip:hover {
+        transform: translateY(-1px);
+        background: #ede9fe;
+      }
+      .kid-chip.active {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        border-color: #4338ca;
+        box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+      }
+      .kid-chip-empty {
+        font-size: 0.85rem;
+        color: #b91c1c;
+        font-weight: 700;
+      }
+      .kid-chip-link {
+        font-size: 0.8rem;
+        color: #2563eb;
+        text-decoration: underline;
+        font-weight: 700;
+      }
+
+      /* ---- Vocab review badge on menu card ---- */
+      .menu-card .review-chip {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: linear-gradient(135deg, #fef3c7, #fbbf24);
+        color: #78350f;
+        font-size: 0.74rem;
+        font-weight: 900;
+        padding: 4px 9px;
+        border-radius: 999px;
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+      }
+      .menu-card .review-chip.locked {
+        background: #f1f5f9;
+        color: #64748b;
+        box-shadow: none;
+      }
+      .menu-card .review-chip.ready {
+        background: linear-gradient(135deg, #34d399, #10b981);
+        color: #fff;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .menu-card .review-chip.done {
+        background: linear-gradient(135deg, #fde68a, #f59e0b);
+        color: #78350f;
+      }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.07); }
+      }
+      .menu-card { position: relative; }
+
+      /* ---- Vocab quiz: 2-second reveal countdown ---- */
+      .reveal-wait {
+        background: #f1f5f9;
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        padding: 22px 14px;
+        text-align: center;
+        font-weight: 800;
+        color: #475569;
+        margin-top: 8px;
+      }
+      .reveal-wait .reveal-num {
+        font-size: 2.4rem;
+        font-family: "Luckiest Guy", sans-serif;
+        color: #6366f1;
+        line-height: 1;
+        display: inline-block;
+        min-width: 50px;
+      }
+      .reveal-wait .reveal-msg {
+        font-size: 0.92rem;
+        color: #64748b;
+        margin-top: 6px;
+      }
+      .choices.choices-hidden {
+        display: none;
+      }
+
+      /* ---- Reward / sticker banner ---- */
+      .reward-banner {
+        display: inline-block;
+        background: linear-gradient(135deg, #fcd34d, #f59e0b);
+        color: #78350f;
+        padding: 10px 18px;
+        border-radius: 14px;
+        font-weight: 900;
+        margin: 8px 0;
+        box-shadow: 0 6px 14px rgba(245, 158, 11, 0.4);
+      }
+
       .menu-card.m-vocab {
         border-color: #6366f1;
       }
@@ -1684,6 +1817,13 @@
 
       <!-- Main Menu -->
       <div id="menuView">
+        <!-- 👧 아이 선택 (우리가족 투두와 동기화) -->
+        <section class="kid-bar" id="kidBar">
+          <span class="kid-bar-label">👧 누가 공부해요?</span>
+          <div id="kidChips" style="display:flex;flex-wrap:wrap;gap:6px;flex:1"></div>
+          <span class="kid-bar-status" id="kidBarStatus"></span>
+        </section>
+
         <div class="badges-wrap" id="badgesWrap"></div>
 
         <!-- 📷 사진으로 단원 업데이트 -->
@@ -1906,6 +2046,10 @@
         sessionRights: [],
         spellWrongs: [],
         spellRights: [],
+        vocabReviewStage: null,
+        replayOnly: false,
+        _vocabRevealTimer: null,
+        _vocabRevealTimer2: null,
       };
 
       const $ = (id) => document.getElementById(id);
@@ -2212,6 +2356,57 @@
         curW.forEach((w) => { wrongs.add(w); rights.delete(w); });
         return { rights: rights, wrongs: wrongs };
       }
+      /* ---------- 단어 뜻 맞히기: 시간차 복습 시스템 ---------- */
+      // 총 3번의 시험으로 단원이 완전 클리어:
+      //   stage 0 → 1차 시험(=초기 클리어) 통과 시 stage 1, 3시간 뒤 2차 시험 가능
+      //   stage 1 → 2차 시험(복습 #1) 통과 시 stage 2, 6시간 뒤 3차 시험 가능
+      //   stage 2 → 3차 시험(복습 #2) 통과 시 stage 3 (완전 클리어 → 5스티커 보상)
+      const REVIEW_DELAYS_MS = [
+        3 * 60 * 60 * 1000, // stage 0 → 1 통과 후 3시간 (다음 = 2차 시험)
+        6 * 60 * 60 * 1000, // stage 1 → 2 통과 후 6시간 (다음 = 3차 시험)
+      ];
+      const TOTAL_TESTS = REVIEW_DELAYS_MS.length + 1; // = 3
+      const FINAL_STAGE = TOTAL_TESTS;                 // = 3 (완전 클리어)
+      // 보상 스티커 갯수
+      const FINAL_REWARD_STICKERS = 5;
+
+      function getVocabReview() {
+        const u = getActiveUnit();
+        const r = u.vocabReview || {};
+        return {
+          stage: typeof r.stage === "number" ? r.stage : 0,
+          nextAt: typeof r.nextAt === "number" ? r.nextAt : 0,
+          history: Array.isArray(r.history) ? r.history : [],
+          rewardKidId: r.rewardKidId || "",
+          rewardedAt: typeof r.rewardedAt === "number" ? r.rewardedAt : 0,
+        };
+      }
+      function saveVocabReview(rev) {
+        saveActiveUnitField("vocabReview", rev);
+      }
+      // 다음 시험을 시작할 수 있는지
+      function isReviewReady(rev) {
+        if (!rev) rev = getVocabReview();
+        if (rev.stage === 0) return true; // 아직 한 번도 안 했으면 항상 시작 가능
+        if (rev.stage >= FINAL_STAGE) return false; // 모두 끝남
+        return Date.now() >= rev.nextAt;
+      }
+      function describeStageLabel(stage) {
+        // stage = 진행해야 할 시험의 인덱스 (0-based)
+        // 출력은 사람이 읽는 라벨: 1차/2차/3차
+        return (stage + 1) + "차 시험";
+      }
+      // 사람이 읽기 쉬운 남은시간 ("2시간 14분 후")
+      function formatRemain(ms) {
+        if (ms <= 0) return "지금!";
+        const totalMin = Math.ceil(ms / 60000);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        if (h > 0 && m > 0) return h + "시간 " + m + "분 후";
+        if (h > 0) return h + "시간 후";
+        return m + "분 후";
+      }
+
       function getBest() {
         try {
           return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
@@ -2232,6 +2427,8 @@
         renderMenuDataInfo();
         renderUnitsRow();
         renderMenuCardsState();
+        renderKidBar();
+        startMenuTick();
         menuView.classList.remove("hidden");
         gameView.classList.add("hidden");
         finalView.classList.add("hidden");
@@ -2294,6 +2491,7 @@
           spellRights: persisted.spellRights || [],
           spellWrongs: persisted.spellWrongs || [],
           savedWritings: Array.isArray(persisted.savedWritings) ? persisted.savedWritings : [],
+          vocabReview: persisted.vocabReview || { stage: 0, nextAt: 0, history: [] },
         };
       }
 
@@ -2318,6 +2516,7 @@
         found.sentences = found.sentences || [];
         found.prompts = found.prompts || [];
         found.savedWritings = Array.isArray(found.savedWritings) ? found.savedWritings : [];
+        found.vocabReview = found.vocabReview || { stage: 0, nextAt: 0, history: [] };
         return found;
       }
 
@@ -2400,6 +2599,7 @@
           mode: onlyVocab ? "vocab" : "full",
           vocab: [], spell: [], spell_meanings: {}, sentences: [], prompts: [],
           disabledWords: [], vocabRights: [], vocabWrongs: [], spellRights: [], spellWrongs: [],
+          vocabReview: { stage: 0, nextAt: 0, history: [] },
         };
 
         if (Array.isArray(parsed.vocab)) {
@@ -2506,6 +2706,145 @@
 
       // 시작 시 활성 단원 데이터 적용
       applyActiveUnit();
+
+      /* --------------- 👧 Family-Todos 연동 (아이 선택 + 스티커 보상) --------------- */
+      const SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+      const FAMILY_KID_KEY = "family_todos_selected_kid_id"; // family-todos.html과 동일 키 → 자동 동기화
+      let _supabase = null;
+      try {
+        if (window.supabase && window.supabase.createClient) {
+          _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+      } catch (e) { console.warn("Supabase init failed", e); }
+
+      const familyState = { kids: [], selectedKidId: "", loaded: false, error: "" };
+
+      function getSelectedKidId() {
+        try { return localStorage.getItem(FAMILY_KID_KEY) || ""; } catch (e) { return ""; }
+      }
+      function setSelectedKidId(id) {
+        try {
+          if (id) localStorage.setItem(FAMILY_KID_KEY, String(id));
+          else localStorage.removeItem(FAMILY_KID_KEY);
+        } catch (e) {}
+        familyState.selectedKidId = id || "";
+      }
+      function getSelectedKidName() {
+        const k = familyState.kids.find((x) => x.id === familyState.selectedKidId);
+        return k ? k.name : "";
+      }
+      async function loadFamilyKids() {
+        if (!_supabase) {
+          familyState.error = "supabase-unavailable";
+          renderKidBar();
+          return;
+        }
+        try {
+          const r = await _supabase
+            .from("family_kids")
+            .select("*")
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: true });
+          if (r.error) throw r.error;
+          familyState.kids = r.data || [];
+          familyState.loaded = true;
+          familyState.error = "";
+          // localStorage 선택값이 유효한지 검증
+          const saved = getSelectedKidId();
+          if (saved && familyState.kids.some((k) => k.id === saved)) {
+            familyState.selectedKidId = saved;
+          } else if (familyState.kids.length === 1) {
+            familyState.selectedKidId = familyState.kids[0].id;
+            setSelectedKidId(familyState.selectedKidId);
+          } else {
+            familyState.selectedKidId = "";
+          }
+        } catch (e) {
+          console.warn("Family kids load failed", e);
+          familyState.error = String(e.message || e);
+          familyState.loaded = true;
+        }
+        renderKidBar();
+        renderMenuCardsState();
+      }
+      function renderKidBar() {
+        const chips = document.getElementById("kidChips");
+        const status = document.getElementById("kidBarStatus");
+        if (!chips) return;
+        chips.innerHTML = "";
+        if (!_supabase) {
+          chips.innerHTML = '<span class="kid-chip-empty">⚠ 인터넷 연결 필요</span>';
+          if (status) status.textContent = "";
+          return;
+        }
+        if (!familyState.loaded) {
+          chips.innerHTML = '<span class="kid-chip-empty" style="color:#64748b">불러오는 중…</span>';
+          return;
+        }
+        if (familyState.error) {
+          chips.innerHTML = '<span class="kid-chip-empty">⚠ 연결 실패</span>';
+          if (status) status.textContent = "";
+          return;
+        }
+        if (!familyState.kids.length) {
+          chips.innerHTML =
+            '<span class="kid-chip-empty">아이가 없어요.</span>' +
+            ' <a class="kid-chip-link" href="family-todos.html" target="_blank" rel="noopener">우리가족 투두에서 아이 추가 →</a>';
+          if (status) status.textContent = "";
+          return;
+        }
+        familyState.kids.forEach((k) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "kid-chip" + (k.id === familyState.selectedKidId ? " active" : "");
+          b.textContent = k.name;
+          b.addEventListener("click", () => {
+            const sameToggle = familyState.selectedKidId === k.id;
+            setSelectedKidId(sameToggle ? "" : k.id);
+            renderKidBar();
+            renderMenuCardsState();
+          });
+          chips.appendChild(b);
+        });
+        if (status) {
+          status.textContent = familyState.selectedKidId
+            ? "✅ " + getSelectedKidName() + " 의 학습"
+            : "👆 아이 한 명을 선택해 주세요";
+        }
+      }
+      // 다른 탭(family-todos.html)에서 선택이 바뀌면 자동 동기화
+      window.addEventListener("storage", (e) => {
+        if (e.key === FAMILY_KID_KEY) {
+          familyState.selectedKidId = getSelectedKidId();
+          renderKidBar();
+          renderMenuCardsState();
+        }
+      });
+
+      // 5개의 칭찬 스티커를 family_praise_pending 에 insert
+      // → 우리가족 투두에서 아이가 두 번 탭하면 1개씩 스탬프(+1) 적립
+      async function awardFamilyStickers(kidId, count, label) {
+        if (!_supabase || !kidId || !count) return { ok: false, reason: "missing" };
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, "0");
+        const d = String(today.getDate()).padStart(2, "0");
+        const forDate = y + "-" + m + "-" + d;
+        const rows = [];
+        for (let i = 0; i < count; i++) rows.push({ kid_id: kidId, for_date: forDate });
+        try {
+          const r = await _supabase.from("family_praise_pending").insert(rows);
+          if (r.error) throw r.error;
+          return { ok: true, count: count, label: label || "" };
+        } catch (e) {
+          console.warn("awardFamilyStickers failed", e);
+          return { ok: false, reason: String(e.message || e) };
+        }
+      }
+
+      // 페이지 로딩 직후 아이 목록 가져오기
+      loadFamilyKids();
 
       function renderMenuDataInfo() {
         const sub = document.querySelector(".page-sub");
@@ -2904,6 +3243,48 @@
             lock.remove();
           }
         });
+
+        // 단어뜻맞히기 카드: 복습 상태 표시
+        const vocabCard = document.getElementById("card-vocab");
+        if (vocabCard) {
+          let chip = vocabCard.querySelector(".review-chip");
+          if (!chip) {
+            chip = document.createElement("span");
+            chip.className = "review-chip";
+            vocabCard.appendChild(chip);
+          }
+          const rev = getVocabReview();
+          if (!unitHasMode(u, "vocab")) {
+            chip.style.display = "none";
+          } else if (rev.stage === 0) {
+            chip.style.display = "";
+            chip.className = "review-chip";
+            chip.textContent = "1차 시험 시작 (1/" + TOTAL_TESTS + ")";
+          } else if (rev.stage >= FINAL_STAGE) {
+            chip.style.display = "";
+            chip.className = "review-chip done";
+            chip.textContent = "🏆 완전 클리어 (" + TOTAL_TESTS + "/" + TOTAL_TESTS + ")";
+          } else if (isReviewReady(rev)) {
+            chip.style.display = "";
+            chip.className = "review-chip ready";
+            chip.textContent = "🟢 " + (rev.stage + 1) + "차 시험 시작! (" + (rev.stage + 1) + "/" + TOTAL_TESTS + ")";
+          } else {
+            chip.style.display = "";
+            chip.className = "review-chip locked";
+            chip.textContent = "⏳ " + (rev.stage + 1) + "차 시험 " + formatRemain(rev.nextAt - Date.now());
+          }
+        }
+      }
+      // 메뉴에 있을 때만 1분마다 다시 그림 (카운트다운/언락 알림용)
+      let _menuTickTimer = null;
+      function startMenuTick() {
+        stopMenuTick();
+        _menuTickTimer = setInterval(() => {
+          if (!menuView.classList.contains("hidden")) renderMenuCardsState();
+        }, 60 * 1000);
+      }
+      function stopMenuTick() {
+        if (_menuTickTimer) { clearInterval(_menuTickTimer); _menuTickTimer = null; }
       }
 
       function startMode(mode, opts) {
@@ -2913,8 +3294,32 @@
           alert("이 단원에는 " + ({ vocab: "단어 뜻 맞히기", spell: "스펠링 퍼즐", sent: "문장 종류 맞히기", sentence: "문장 만들기" }[mode] || mode) + " 자료가 없어요.\n사진을 더 업로드하거나 다른 단원을 선택해 주세요.");
           return;
         }
+
+        // 단어 뜻 맞히기: 본 시험(필터 없음) 시 단계 잠금 확인
+        if (mode === "vocab" && !opts.filter) {
+          const rev = getVocabReview();
+          if (rev.stage >= FINAL_STAGE) {
+            const ok = confirm(
+              "🏆 이미 단원을 완전 클리어 했어요! (스티커 " + FINAL_REWARD_STICKERS + "개 지급 완료)\n다시 풀어보시겠어요? (기록은 바뀌지 않아요)",
+            );
+            if (!ok) return;
+            opts.replayOnly = true; // 더 이상 stage 진행 안 함
+          } else if (rev.stage > 0 && !isReviewReady(rev)) {
+            const remain = formatRemain(rev.nextAt - Date.now());
+            alert(
+              "⏳ " + (rev.stage + 1) + "차 시험은 " + remain + "에 풀 수 있어요.\n" +
+              "(시간차 복습이라 너무 자주 풀면 효과가 줄어들어요!)",
+            );
+            return;
+          }
+          state.vocabReviewStage = rev.stage; // 0,1,2 → 풀고 나면 +1
+        } else {
+          state.vocabReviewStage = null;
+        }
+
         state.mode = mode;
         state.modeFilter = opts.filter || null;
+        state.replayOnly = !!opts.replayOnly;
         state.score = 0;
         state.streak = 0;
         state.idx = 0;
@@ -2953,6 +3358,7 @@
         else if (mode === "sentence") state.questions = null;
         if (mode === "sentence") document.body.classList.add("sentence-wide");
         else document.body.classList.remove("sentence-wide");
+        stopMenuTick();
         menuView.classList.add("hidden");
         finalView.classList.add("hidden");
         gameView.classList.remove("hidden");
@@ -3033,6 +3439,98 @@
 
           const wrongCount = prevWrongs.size;
           const rightCount = prevRights.size;
+
+          // ---- 시간차 복습 시스템 진행 ----
+          // 본 시험(필터 없음 + replay 아님)일 때만 stage 진행
+          if (
+            state.vocabReviewStage !== null &&
+            state.vocabReviewStage !== undefined &&
+            !state.modeFilter &&
+            !state.replayOnly &&
+            ratio >= 1
+          ) {
+            const rev = getVocabReview();
+            // 같은 stage가 이미 끝났을 수도 있으니 한 번 더 확인
+            if (rev.stage === state.vocabReviewStage && rev.stage < FINAL_STAGE) {
+              const nextStage = rev.stage + 1;
+              // nextStage 가 FINAL_STAGE 면 보상 단계 → 다음 시험은 없음
+              const nextDelay = nextStage < FINAL_STAGE ? (REVIEW_DELAYS_MS[nextStage - 1] || 0) : 0;
+              const newRev = {
+                stage: nextStage,
+                nextAt: nextStage >= FINAL_STAGE ? 0 : Date.now() + nextDelay,
+                history: (rev.history || []).concat([{ stage: nextStage, at: Date.now() }]),
+                rewardKidId: rev.rewardKidId || "",
+                rewardedAt: rev.rewardedAt || 0,
+              };
+              saveVocabReview(newRev);
+
+              const stageName = nextStage >= FINAL_STAGE
+                ? "🏆 " + TOTAL_TESTS + "/" + TOTAL_TESTS + "차 시험 모두 통과!"
+                : nextStage + "/" + TOTAL_TESTS + " 차 시험 통과! ✅";
+              const nextMsg = nextStage >= FINAL_STAGE
+                ? "단원을 완전 클리어 했어요!"
+                : "다음 " + (nextStage + 1) + "/" + TOTAL_TESTS + "차 시험은 " +
+                  (nextDelay === 3 * 60 * 60 * 1000 ? "3시간" : "6시간") + " 후에 풀 수 있어요.";
+
+              // 보상: 마지막 stage(FINAL_STAGE)에 도달 + 아직 보상 안 받음 + 아이 선택됨
+              if (nextStage >= FINAL_STAGE && !newRev.rewardedAt) {
+                const kidId = familyState.selectedKidId || getSelectedKidId();
+                if (!kidId) {
+                  reviewRow.insertAdjacentHTML("beforeend",
+                    '<div class="reward-banner">' + stageName + ' ' + nextMsg + '<br>' +
+                    '⚠ 스티커를 받을 아이를 선택하지 않았어요. 메뉴로 돌아가 👧 칸에서 아이를 고르고 다시 풀어 보세요.</div>',
+                  );
+                } else {
+                  const banner = document.createElement("div");
+                  banner.className = "reward-banner";
+                  banner.innerHTML = "🎉 " + stageName + " " + nextMsg + "<br>스티커 " + FINAL_REWARD_STICKERS + "개를 우리가족 투두에 보내는 중…";
+                  reviewRow.appendChild(banner);
+                  awardFamilyStickers(kidId, FINAL_REWARD_STICKERS, "study-game-vocab-clear").then((res) => {
+                    if (res.ok) {
+                      banner.innerHTML =
+                        "🎉🏆 " + stageName + "<br>" +
+                        "👧 <b>" + (getSelectedKidName() || "아이") + "</b> 에게 스티커 " + FINAL_REWARD_STICKERS + "개 보냈어요! " +
+                        '(<a href="family-todos.html" target="_blank" rel="noopener" style="color:#7c2d12;text-decoration:underline">우리가족 투두에서 받기 →</a>)';
+                      const cur = getVocabReview();
+                      saveVocabReview({
+                        stage: cur.stage,
+                        nextAt: cur.nextAt,
+                        history: cur.history,
+                        rewardKidId: kidId,
+                        rewardedAt: Date.now(),
+                      });
+                      setTimeout(() => playWin(), 250);
+                      setTimeout(() => playWin(), 700);
+                      setTimeout(() => playWin(), 1100);
+                    } else {
+                      banner.innerHTML =
+                        "🎉 " + stageName + "<br>" +
+                        "⚠ 스티커 전송 실패: " + (res.reason || "알 수 없는 오류") + "<br>" +
+                        "(인터넷 연결 후 메뉴로 돌아가 다시 시도해 주세요.)";
+                    }
+                  });
+                }
+              } else {
+                reviewRow.insertAdjacentHTML("beforeend",
+                  '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">' +
+                  '✅ ' + stageName + ' ' + nextMsg + '</div>',
+                );
+              }
+            }
+          } else if (
+            state.vocabReviewStage !== null &&
+            state.vocabReviewStage !== undefined &&
+            !state.modeFilter &&
+            !state.replayOnly &&
+            ratio < 1
+          ) {
+            const rev = getVocabReview();
+            const which = (rev.stage + 1) + "/" + TOTAL_TESTS + "차 시험";
+            reviewRow.insertAdjacentHTML("beforeend",
+              '<div class="reward-banner" style="background:#fee2e2;color:#991b1b;box-shadow:none">' +
+              '⛔ ' + which + ' 미통과 — 100점이 되어야 통과! 틀린 단어 복습 후 다시 풀어 보세요. (이번 시험은 카운트되지 않아요)</div>',
+            );
+          }
 
           const btnWrong = document.createElement("button");
           btnWrong.className = "btn btn-primary";
@@ -3277,60 +3775,144 @@
       }
 
       /* ---------- Vocab quiz ---------- */
+      // 다른 단원 + 기본 자연재해 단원에서 distractor 풀을 만들어 "이 단원에 없는" 뜻도 섞어 출제
+      function buildOutsideMeaningPool() {
+        const pool = [];
+        const seen = new Set();
+        const add = (m) => {
+          if (!m || typeof m !== "string") return;
+          const k = m.trim();
+          if (!k || seen.has(k)) return;
+          seen.add(k);
+          pool.push(k);
+        };
+        try {
+          const units = getUnits();
+          units.forEach((u) => {
+            (u.vocab || []).forEach((v) => add(v && v.meaning));
+          });
+        } catch (e) {}
+        // 기본 단원 스냅샷도 항상 섞어줌
+        DEFAULTS.VOCAB.forEach((v) => add(v && v.meaning));
+        // 추가 안전망: 일반 학습용 distractor (어떤 단원에서도 정답이 아닐 가능성 높음)
+        const fallback = [
+          "기뻐하다", "걱정하다", "조용한", "시끄러운", "멀리", "가까이",
+          "성장하다", "줄어들다", "대답하다", "질문하다", "도착하다", "출발하다",
+          "허락하다", "금지하다", "잊다", "기억하다", "친절한", "엄격한",
+          "보호하다", "공격하다", "넘기다", "받다", "유명한", "비밀의",
+          "용감한", "수줍은", "전체의", "일부의", "선택하다", "포기하다",
+        ];
+        fallback.forEach((m) => add(m));
+        return pool;
+      }
       function renderVocab() {
         const item = state.questions[state.idx];
-        const others = shuffle(VOCAB.filter((v) => v.word !== item.word)).slice(0, 3);
-        const choices = shuffle([item, ...others]);
+        const totalChoices = 6; // 4 → 6 으로 확장
+        const insideOthers = shuffle(VOCAB.filter((v) => v.word !== item.word && v.meaning !== item.meaning))
+          .slice(0, 3)
+          .map((v) => v.meaning);
+        // 단원 외 distractor: 같은 뜻 / 정답 / 단원 내 다른 뜻과 겹치는건 제외
+        const inUnitMeanings = new Set(VOCAB.map((v) => v.meaning));
+        const outsidePool = buildOutsideMeaningPool().filter((m) => !inUnitMeanings.has(m) && m !== item.meaning);
+        const outsideOthers = shuffle(outsidePool).slice(0, 2);
+        // 합치고 모자라면 단원 내에서 추가로 채움
+        const meaningSet = new Set([item.meaning, ...insideOthers, ...outsideOthers]);
+        const merged = [item.meaning, ...insideOthers, ...outsideOthers];
+        if (merged.length < totalChoices) {
+          // outside가 부족할 때 unit 단어로 채움
+          const more = shuffle(VOCAB.filter((v) => !meaningSet.has(v.meaning))).map((v) => v.meaning);
+          for (let i = 0; i < more.length && merged.length < totalChoices; i++) {
+            if (!meaningSet.has(more[i])) {
+              meaningSet.add(more[i]);
+              merged.push(more[i]);
+            }
+          }
+        }
+        if (merged.length < totalChoices) {
+          // 그래도 부족하면 outside fallback 풀에서 더 채움
+          const morePool = shuffle(buildOutsideMeaningPool().filter((m) => !meaningSet.has(m)));
+          for (let i = 0; i < morePool.length && merged.length < totalChoices; i++) {
+            meaningSet.add(morePool[i]);
+            merged.push(morePool[i]);
+          }
+        }
+        const choices = shuffle(merged.slice(0, totalChoices));
+        const correctMeaning = item.meaning;
+
+        // 단계(시험 회차) 표시
+        let stageBadge = "";
+        if (state.vocabReviewStage !== null && state.vocabReviewStage !== undefined && !state.modeFilter && !state.replayOnly) {
+          const num = state.vocabReviewStage + 1;
+          const colorBg = num === 1 ? "#ede9fe" : "#fef3c7";
+          const colorFg = num === 1 ? "#4338ca" : "#78350f";
+          const ico = num === 1 ? "📝" : "⏳";
+          stageBadge = '<span style="margin-left:8px;background:' + colorBg + ';color:' + colorFg + ';padding:2px 8px;border-radius:999px;font-size:0.72rem;font-weight:900">' + ico + ' ' + num + '/' + TOTAL_TESTS + ' 차 시험</span>';
+        }
 
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
           '<div class="prompt-row">' +
-          '<div class="prompt-small">📖 이 단어의 뜻은?</div>' +
+          '<div class="prompt-small">📖 이 단어의 뜻은?' + stageBadge + '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
           '<button class="btn-today" id="btnTodayList" title="뜻은 기본 가려짐. 단어를 탭해 확인하고, 🚫로 아는 단어를 제외하세요.">📚 오늘 외워야 할 단어</button>' +
           '</div>' +
           '</div>' +
           '<div class="prompt-big" id="vocabWord">' + item.word + '</div>' +
           '<div class="btn-row" style="margin:4px 0 10px"><button class="btn btn-say" id="btnSay">🔊 들어보기</button></div>' +
-          '<div class="choices" id="choices"></div>' +
+          '<div class="reveal-wait" id="revealWait"><div><span class="reveal-num" id="revealNum">2</span></div><div class="reveal-msg">단어를 잘 읽고 뜻을 떠올려 보세요…</div></div>' +
+          '<div class="choices choices-hidden" id="choices"></div>' +
           '<div class="feedback" id="feedback"></div>' +
           '<div class="btn-row"><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
         gameBody.appendChild(card);
 
         const choicesEl = $("choices");
-        choices.forEach((c) => {
+        choices.forEach((m) => {
           const btn = document.createElement("button");
           btn.className = "choice-btn";
-          btn.textContent = c.meaning;
-          btn.addEventListener("click", () => pickVocab(btn, c, item));
+          btn.textContent = m;
+          btn.dataset.meaning = m;
+          btn.addEventListener("click", () => pickVocab(btn, m, correctMeaning, item));
           choicesEl.appendChild(btn);
         });
         $("btnSay").addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
+
+        // 2초 후에 객관식 보기 표시 (카운트다운 2 → 1)
+        const revealEl = $("revealWait");
+        const numEl = $("revealNum");
+        if (state._vocabRevealTimer) clearTimeout(state._vocabRevealTimer);
+        if (state._vocabRevealTimer2) clearTimeout(state._vocabRevealTimer2);
+        state._vocabRevealTimer = setTimeout(() => {
+          if (numEl) numEl.textContent = "1";
+        }, 1000);
+        state._vocabRevealTimer2 = setTimeout(() => {
+          if (revealEl) revealEl.style.display = "none";
+          if (choicesEl) choicesEl.classList.remove("choices-hidden");
+        }, 2000);
       }
-      function pickVocab(btn, picked, correct) {
+      function pickVocab(btn, pickedMeaning, correctMeaning, correctItem) {
         const buttons = document.querySelectorAll(".choice-btn");
         buttons.forEach((b) => (b.disabled = true));
         const fb = $("feedback");
-        if (picked.word === correct.word) {
+        if (pickedMeaning === correctMeaning) {
           btn.classList.add("correct");
           state.score += 1;
           state.streak += 1;
-          state.sessionRights.push(correct.word);
+          state.sessionRights.push(correctItem.word);
           playCorrect();
-          fb.textContent = "정답! 🎉  " + correct.word + " = " + correct.meaning;
+          fb.textContent = "정답! 🎉  " + correctItem.word + " = " + correctMeaning;
           fb.className = "feedback ok pop";
         } else {
           btn.classList.add("wrong");
           buttons.forEach((b) => {
-            if (b.textContent === correct.meaning) b.classList.add("correct");
+            if (b.dataset.meaning === correctMeaning) b.classList.add("correct");
           });
           state.streak = 0;
-          state.sessionWrongs.push(correct.word);
+          state.sessionWrongs.push(correctItem.word);
           playWrong();
-          fb.textContent = "아쉬워요 😅  정답: " + correct.word + " = " + correct.meaning;
+          fb.textContent = "아쉬워요 😅  정답: " + correctItem.word + " = " + correctMeaning;
           fb.className = "feedback no shake";
         }
         updateHud();
@@ -4788,7 +5370,9 @@
         try { const ov = document.querySelector(".help-overlay"); if (ov) ov.remove(); } catch (e) {}
         showMenu();
       });
-      $("btnPlayAgain").addEventListener("click", () => startMode(state.mode, { filter: state.modeFilter }));
+      $("btnPlayAgain").addEventListener("click", () =>
+        startMode(state.mode, { filter: state.modeFilter, replayOnly: state.replayOnly }),
+      );
       $("btnGoMenu").addEventListener("click", showMenu);
 
       showMenu();
