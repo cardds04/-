@@ -2396,6 +2396,22 @@
         // 출력은 사람이 읽는 라벨: 1차/2차/3차
         return (stage + 1) + "차 시험";
       }
+      // 현재 활성 단원의 누적 세션 기록을 보고, 모든 단어가 right 이고
+      // wrong 이 0개이면 stage 통과로 간주
+      // (즉, 1차 시험 + 틀린문제 다시보기로 모두 맞춘 경우에도 통과)
+      function hasMasteredAllVocab() {
+        const u = getActiveUnit();
+        const disabled = new Set(u.disabledWords || []);
+        const pool = (u.vocab || []).filter((v) => v && v.word && !disabled.has(v.word));
+        if (pool.length === 0) return false;
+        const sess = getVocabSession();
+        if ((sess.wrongs || []).length > 0) return false;
+        const rights = new Set(sess.rights || []);
+        for (let i = 0; i < pool.length; i++) {
+          if (!rights.has(pool[i].word)) return false;
+        }
+        return true;
+      }
       // 사람이 읽기 쉬운 남은시간 ("2시간 14분 후")
       function formatRemain(ms) {
         if (ms <= 0) return "지금!";
@@ -3295,8 +3311,8 @@
           return;
         }
 
-        // 단어 뜻 맞히기: 본 시험(필터 없음) 시 단계 잠금 확인
-        if (mode === "vocab" && !opts.filter) {
+        // 단어 뜻 맞히기: 단계 잠금 확인 (replay 가 아닌 모든 vocab 시도에 적용)
+        if (mode === "vocab" && !opts.replayOnly) {
           const rev = getVocabReview();
           if (rev.stage >= FINAL_STAGE) {
             const ok = confirm(
@@ -3312,14 +3328,18 @@
             );
             return;
           }
-          state.vocabReviewStage = rev.stage; // 0,1,2 → 풀고 나면 +1
-        } else {
-          state.vocabReviewStage = null;
         }
 
         state.mode = mode;
         state.modeFilter = opts.filter || null;
         state.replayOnly = !!opts.replayOnly;
+        // vocab의 경우 진행중인 stage를 항상 추적 (filter 모드에서도 통과 판정 가능하도록)
+        if (mode === "vocab" && !state.replayOnly) {
+          const rev2 = getVocabReview();
+          state.vocabReviewStage = rev2.stage < FINAL_STAGE ? rev2.stage : null;
+        } else {
+          state.vocabReviewStage = null;
+        }
         state.score = 0;
         state.streak = 0;
         state.idx = 0;
@@ -3441,110 +3461,141 @@
           const rightCount = prevRights.size;
 
           // ---- 시간차 복습 시스템 진행 ----
-          // 본 시험(필터 없음 + replay 아님)일 때만 stage 진행
+          // 누적 통과 판정: 한 세션에서 100점이 아니더라도 "1차 시험 + 틀린문제 다시보기"로
+          // 단원 모든 단어를 모두 맞히면 통과로 간주.
+          let stageJustCleared = false;
+          let stageClearedWasFinal = false;
+          let stageClearedNumber = 0; // 1, 2, 3
+          let nextDelayMs = 0;
+
           if (
             state.vocabReviewStage !== null &&
             state.vocabReviewStage !== undefined &&
-            !state.modeFilter &&
             !state.replayOnly &&
-            ratio >= 1
+            hasMasteredAllVocab()
           ) {
             const rev = getVocabReview();
-            // 같은 stage가 이미 끝났을 수도 있으니 한 번 더 확인
             if (rev.stage === state.vocabReviewStage && rev.stage < FINAL_STAGE) {
-              const nextStage = rev.stage + 1;
-              // nextStage 가 FINAL_STAGE 면 보상 단계 → 다음 시험은 없음
-              const nextDelay = nextStage < FINAL_STAGE ? (REVIEW_DELAYS_MS[nextStage - 1] || 0) : 0;
+              const newStage = rev.stage + 1;
+              nextDelayMs = newStage < FINAL_STAGE ? (REVIEW_DELAYS_MS[newStage - 1] || 0) : 0;
               const newRev = {
-                stage: nextStage,
-                nextAt: nextStage >= FINAL_STAGE ? 0 : Date.now() + nextDelay,
-                history: (rev.history || []).concat([{ stage: nextStage, at: Date.now() }]),
+                stage: newStage,
+                nextAt: newStage >= FINAL_STAGE ? 0 : Date.now() + nextDelayMs,
+                history: (rev.history || []).concat([{ stage: newStage, at: Date.now() }]),
                 rewardKidId: rev.rewardKidId || "",
                 rewardedAt: rev.rewardedAt || 0,
               };
               saveVocabReview(newRev);
+              // 다음 stage는 새 출발 — 누적 ○/× 초기화
+              saveVocabSession([], []);
+              stageJustCleared = true;
+              stageClearedWasFinal = newStage >= FINAL_STAGE;
+              stageClearedNumber = state.vocabReviewStage + 1; // 풀어서 통과한 시험 회차 (1,2,3)
+            }
+          }
 
-              const stageName = nextStage >= FINAL_STAGE
-                ? "🏆 " + TOTAL_TESTS + "/" + TOTAL_TESTS + "차 시험 모두 통과!"
-                : nextStage + "/" + TOTAL_TESTS + " 차 시험 통과! ✅";
-              const nextMsg = nextStage >= FINAL_STAGE
-                ? "단원을 완전 클리어 했어요!"
-                : "다음 " + (nextStage + 1) + "/" + TOTAL_TESTS + "차 시험은 " +
-                  (nextDelay === 3 * 60 * 60 * 1000 ? "3시간" : "6시간") + " 후에 풀 수 있어요.";
+          if (stageJustCleared) {
+            const passLabel = stageClearedNumber + "차 시험 통과!";
+            if (stageClearedWasFinal) {
+              const kidId = familyState.selectedKidId || getSelectedKidId();
+              const banner = document.createElement("div");
+              banner.className = "reward-banner";
+              banner.innerHTML =
+                "🏆 " + passLabel + "<br>" +
+                "🎟 스티커 " + FINAL_REWARD_STICKERS + "개가 누적되었습니다";
+              reviewRow.appendChild(banner);
 
-              // 보상: 마지막 stage(FINAL_STAGE)에 도달 + 아직 보상 안 받음 + 아이 선택됨
-              if (nextStage >= FINAL_STAGE && !newRev.rewardedAt) {
-                const kidId = familyState.selectedKidId || getSelectedKidId();
-                if (!kidId) {
-                  reviewRow.insertAdjacentHTML("beforeend",
-                    '<div class="reward-banner">' + stageName + ' ' + nextMsg + '<br>' +
-                    '⚠ 스티커를 받을 아이를 선택하지 않았어요. 메뉴로 돌아가 👧 칸에서 아이를 고르고 다시 풀어 보세요.</div>',
-                  );
-                } else {
-                  const banner = document.createElement("div");
-                  banner.className = "reward-banner";
-                  banner.innerHTML = "🎉 " + stageName + " " + nextMsg + "<br>스티커 " + FINAL_REWARD_STICKERS + "개를 우리가족 투두에 보내는 중…";
-                  reviewRow.appendChild(banner);
-                  awardFamilyStickers(kidId, FINAL_REWARD_STICKERS, "study-game-vocab-clear").then((res) => {
-                    if (res.ok) {
-                      banner.innerHTML =
-                        "🎉🏆 " + stageName + "<br>" +
-                        "👧 <b>" + (getSelectedKidName() || "아이") + "</b> 에게 스티커 " + FINAL_REWARD_STICKERS + "개 보냈어요! " +
-                        '(<a href="family-todos.html" target="_blank" rel="noopener" style="color:#7c2d12;text-decoration:underline">우리가족 투두에서 받기 →</a>)';
-                      const cur = getVocabReview();
-                      saveVocabReview({
-                        stage: cur.stage,
-                        nextAt: cur.nextAt,
-                        history: cur.history,
-                        rewardKidId: kidId,
-                        rewardedAt: Date.now(),
-                      });
-                      setTimeout(() => playWin(), 250);
-                      setTimeout(() => playWin(), 700);
-                      setTimeout(() => playWin(), 1100);
-                    } else {
-                      banner.innerHTML =
-                        "🎉 " + stageName + "<br>" +
-                        "⚠ 스티커 전송 실패: " + (res.reason || "알 수 없는 오류") + "<br>" +
-                        "(인터넷 연결 후 메뉴로 돌아가 다시 시도해 주세요.)";
-                    }
-                  });
-                }
+              if (!kidId) {
+                const note = document.createElement("div");
+                note.className = "reward-banner";
+                note.style.background = "#fef3c7";
+                note.style.color = "#78350f";
+                note.innerHTML =
+                  "⚠ 스티커를 받을 아이를 아직 선택하지 않았어요.<br>" +
+                  "메뉴로 돌아가 👧 칸에서 아이를 고르면 자동으로 우리가족 투두에 보내드려요.";
+                reviewRow.appendChild(note);
               } else {
-                reviewRow.insertAdjacentHTML("beforeend",
-                  '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">' +
-                  '✅ ' + stageName + ' ' + nextMsg + '</div>',
-                );
+                const sendNote = document.createElement("div");
+                sendNote.className = "reward-banner";
+                sendNote.style.background = "#e0e7ff";
+                sendNote.style.color = "#3730a3";
+                sendNote.textContent = "👧 " + (getSelectedKidName() || "아이") + " 의 우리가족 투두로 스티커 보내는 중…";
+                reviewRow.appendChild(sendNote);
+                awardFamilyStickers(kidId, FINAL_REWARD_STICKERS, "study-game-vocab-clear").then((res) => {
+                  if (res.ok) {
+                    sendNote.style.background = "#dcfce7";
+                    sendNote.style.color = "#065f46";
+                    sendNote.innerHTML =
+                      "🎉 <b>" + (getSelectedKidName() || "아이") + "</b> 에게 스티커 " + FINAL_REWARD_STICKERS + "개 전달 완료! " +
+                      '(<a href="family-todos.html" target="_blank" rel="noopener" style="color:#065f46;text-decoration:underline">우리가족 투두에서 받기 →</a>)';
+                    const cur = getVocabReview();
+                    saveVocabReview({
+                      stage: cur.stage,
+                      nextAt: cur.nextAt,
+                      history: cur.history,
+                      rewardKidId: kidId,
+                      rewardedAt: Date.now(),
+                    });
+                    setTimeout(() => playWin(), 250);
+                    setTimeout(() => playWin(), 700);
+                    setTimeout(() => playWin(), 1100);
+                  } else {
+                    sendNote.style.background = "#fee2e2";
+                    sendNote.style.color = "#991b1b";
+                    sendNote.innerHTML =
+                      "⚠ 스티커 전송 실패: " + (res.reason || "알 수 없는 오류") + "<br>" +
+                      "(인터넷 연결 후 메뉴로 돌아가 다시 시도해 주세요.)";
+                  }
+                });
               }
+            } else {
+              // 1차/2차 통과
+              const nextHrs = nextDelayMs === 3 * 60 * 60 * 1000 ? "3시간" : "6시간";
+              const nextNum = stageClearedNumber + 1;
+              const banner = document.createElement("div");
+              banner.className = "reward-banner";
+              banner.style.background = "linear-gradient(135deg,#a7f3d0,#34d399)";
+              banner.style.color = "#064e3b";
+              banner.innerHTML =
+                "✅ " + passLabel + "<br>" +
+                "다음 " + nextNum + "차 시험은 " + nextHrs + " 후에 풀 수 있어요.";
+              reviewRow.appendChild(banner);
+              setTimeout(() => playWin(), 200);
             }
           } else if (
             state.vocabReviewStage !== null &&
             state.vocabReviewStage !== undefined &&
-            !state.modeFilter &&
-            !state.replayOnly &&
-            ratio < 1
+            !state.replayOnly
           ) {
-            const rev = getVocabReview();
-            const which = (rev.stage + 1) + "/" + TOTAL_TESTS + "차 시험";
-            reviewRow.insertAdjacentHTML("beforeend",
-              '<div class="reward-banner" style="background:#fee2e2;color:#991b1b;box-shadow:none">' +
-              '⛔ ' + which + ' 미통과 — 100점이 되어야 통과! 틀린 단어 복습 후 다시 풀어 보세요. (이번 시험은 카운트되지 않아요)</div>',
+            // 아직 통과 못함 안내
+            const which = (state.vocabReviewStage + 1) + "차 시험";
+            const remain = (VOCAB.length - prevRights.size) >= 0 ? (VOCAB.length - prevRights.size) : 0;
+            const hintBg = wrongCount > 0 ? "#fef3c7" : "#f1f5f9";
+            const hintFg = wrongCount > 0 ? "#78350f" : "#475569";
+            const msg = wrongCount > 0
+              ? "🔴 아직 틀린 단어가 " + wrongCount + "개 있어요. 아래 \"틀린 단어만 다시보기\" 로 모두 맞히면 " + which + " 통과!"
+              : "📚 " + which + " 진행 중 — 단원의 모든 단어를 맞히면 통과해요. (남은 단어 " + remain + "개)";
+            reviewRow.insertAdjacentHTML(
+              "beforeend",
+              '<div class="reward-banner" style="background:' + hintBg + ';color:' + hintFg + ';box-shadow:none">' + msg + '</div>',
             );
           }
 
           const btnWrong = document.createElement("button");
           btnWrong.className = "btn btn-primary";
           btnWrong.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
-          btnWrong.textContent = "🔴 틀린 단어만 다시보기 (" + wrongCount + ")";
-          if (wrongCount === 0) { btnWrong.disabled = true; btnWrong.style.opacity = "0.5"; btnWrong.style.cursor = "not-allowed"; }
+          btnWrong.textContent = "🔴 틀린 단어만 다시보기 (" + (stageJustCleared ? 0 : wrongCount) + ")";
+          const wrongDisabled = stageJustCleared || wrongCount === 0;
+          if (wrongDisabled) { btnWrong.disabled = true; btnWrong.style.opacity = "0.5"; btnWrong.style.cursor = "not-allowed"; }
           btnWrong.addEventListener("click", () => startMode("vocab", { filter: "wrong" }));
           reviewRow.appendChild(btnWrong);
 
           const btnRight = document.createElement("button");
           btnRight.className = "btn btn-primary";
           btnRight.style.background = "linear-gradient(135deg, #10b981, #059669)";
-          btnRight.textContent = "🟢 맞은 단어 다시보기 (" + rightCount + ")";
-          if (rightCount === 0) { btnRight.disabled = true; btnRight.style.opacity = "0.5"; btnRight.style.cursor = "not-allowed"; }
+          btnRight.textContent = "🟢 맞은 단어 다시보기 (" + (stageJustCleared ? 0 : rightCount) + ")";
+          const rightDisabled = stageJustCleared || rightCount === 0;
+          if (rightDisabled) { btnRight.disabled = true; btnRight.style.opacity = "0.5"; btnRight.style.cursor = "not-allowed"; }
           btnRight.addEventListener("click", () => startMode("vocab", { filter: "right" }));
           reviewRow.appendChild(btnRight);
         }
