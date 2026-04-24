@@ -200,6 +200,56 @@
         text-decoration: underline;
         font-weight: 700;
       }
+      .kid-chip-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+      .kid-chip-x {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #ef4444;
+        color: #fff;
+        font-weight: 900;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+        font-family: inherit;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .kid-chip-x:hover {
+        background: #dc2626;
+        transform: scale(1.1);
+      }
+      .kid-edit-toggle {
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.78rem;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 2px solid #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+      .kid-edit-toggle:hover {
+        background: #e2e8f0;
+      }
+      .kid-edit-toggle.kid-edit-on {
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        border-color: #d97706;
+        color: #fff;
+      }
 
       /* ---- Vocab review badge on menu card ---- */
       .menu-card .review-chip {
@@ -1821,6 +1871,7 @@
         <section class="kid-bar" id="kidBar">
           <span class="kid-bar-label">👧 누가 공부해요?</span>
           <div id="kidChips" style="display:flex;flex-wrap:wrap;gap:6px;flex:1"></div>
+          <button type="button" class="kid-edit-toggle" id="kidEditToggle" style="display:none">✏️ 편집</button>
           <span class="kid-bar-status" id="kidBarStatus"></span>
         </section>
 
@@ -2058,6 +2109,16 @@
       const finalView = $("finalView");
       const gameBody = $("gameBody");
 
+      // ---- 아이별 네임스페이스: localStorage 키를 선택된 아이 id 로 분리 ----
+      // 아이 미선택 시: 기존 글로벌(legacy) 키 그대로 사용 (기존 데이터 보존)
+      // 아이 선택 시: "<base>:<kidId>" 키 사용 → 아이별로 단원/뱃지/기록이 분리됨
+      function nsKey(base) {
+        try {
+          const id = localStorage.getItem("family_todos_selected_kid_id") || "";
+          return id ? (base + ":" + id) : base;
+        } catch (e) { return base; }
+      }
+
       function shuffle(arr) {
         const a = arr.slice();
         for (let i = a.length - 1; i > 0; i--) {
@@ -2258,7 +2319,7 @@
       const MODE_KEYS = ["vocab", "spell", "sent", "sentence"];
       function getPerfects() {
         try {
-          const raw = localStorage.getItem(PERFECT_KEY);
+          const raw = localStorage.getItem(nsKey(PERFECT_KEY));
           return raw ? JSON.parse(raw) || {} : {};
         } catch (e) { return {}; }
       }
@@ -2270,7 +2331,7 @@
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const d = String(now.getDate()).padStart(2, "0");
         p[mode] = y + "." + m + "." + d;
-        try { localStorage.setItem(PERFECT_KEY, JSON.stringify(p)); } catch (e) {}
+        try { localStorage.setItem(nsKey(PERFECT_KEY), JSON.stringify(p)); } catch (e) {}
         return true;
       }
       function renderBadges() {
@@ -2425,13 +2486,13 @@
 
       function getBest() {
         try {
-          return JSON.parse(localStorage.getItem(BEST_KEY) || "{}");
+          return JSON.parse(localStorage.getItem(nsKey(BEST_KEY)) || "{}");
         } catch (e) { return {}; }
       }
       function setBest(mode, score) {
         const b = getBest();
         b[mode] = Math.max(b[mode] || 0, score);
-        try { localStorage.setItem(BEST_KEY, JSON.stringify(b)); } catch (e) {}
+        try { localStorage.setItem(nsKey(BEST_KEY), JSON.stringify(b)); } catch (e) {}
       }
 
       /* --------------------------- Navigation ----------------------- */
@@ -2462,30 +2523,30 @@
 
       function getUnits() {
         try {
-          const raw = localStorage.getItem(UNITS_KEY);
+          const raw = localStorage.getItem(nsKey(UNITS_KEY));
           if (!raw) return [];
           const arr = JSON.parse(raw);
           return Array.isArray(arr) ? arr : [];
         } catch (e) { return []; }
       }
       function saveUnits(arr) {
-        try { localStorage.setItem(UNITS_KEY, JSON.stringify(arr || [])); } catch (e) {}
+        try { localStorage.setItem(nsKey(UNITS_KEY), JSON.stringify(arr || [])); } catch (e) {}
       }
       function getActiveUnitId() {
-        try { return localStorage.getItem(ACTIVE_UNIT_KEY) || DEFAULT_UNIT_ID; } catch (e) { return DEFAULT_UNIT_ID; }
+        try { return localStorage.getItem(nsKey(ACTIVE_UNIT_KEY)) || DEFAULT_UNIT_ID; } catch (e) { return DEFAULT_UNIT_ID; }
       }
       function setActiveUnitId(id) {
-        try { localStorage.setItem(ACTIVE_UNIT_KEY, id || DEFAULT_UNIT_ID); } catch (e) {}
+        try { localStorage.setItem(nsKey(ACTIVE_UNIT_KEY), id || DEFAULT_UNIT_ID); } catch (e) {}
       }
       function getDefaultPersisted() {
         try {
-          const raw = localStorage.getItem(DEFAULT_PERSIST_KEY);
+          const raw = localStorage.getItem(nsKey(DEFAULT_PERSIST_KEY));
           if (!raw) return {};
           return JSON.parse(raw) || {};
         } catch (e) { return {}; }
       }
       function saveDefaultPersisted(p) {
-        try { localStorage.setItem(DEFAULT_PERSIST_KEY, JSON.stringify(p || {})); } catch (e) {}
+        try { localStorage.setItem(nsKey(DEFAULT_PERSIST_KEY), JSON.stringify(p || {})); } catch (e) {}
       }
 
       function makeDefaultUnit() {
@@ -2734,7 +2795,18 @@
         }
       } catch (e) { console.warn("Supabase init failed", e); }
 
-      const familyState = { kids: [], selectedKidId: "", loaded: false, error: "" };
+      const familyState = { kids: [], selectedKidId: "", loaded: false, error: "", editMode: false };
+
+      // 아이 변경 시 menu/단원/뱃지 모두 다시 그리기 (단원·뱃지·기록이 아이별로 분리됨)
+      function refreshActiveKidView() {
+        try {
+          applyActiveUnit();
+          renderBadges();
+          renderMenuDataInfo();
+          renderUnitsRow();
+          renderMenuCardsState();
+        } catch (e) { console.warn("refreshActiveKidView", e); }
+      }
 
       function getSelectedKidId() {
         try { return localStorage.getItem(FAMILY_KID_KEY) || ""; } catch (e) { return ""; }
@@ -2771,9 +2843,10 @@
           if (saved && familyState.kids.some((k) => k.id === saved)) {
             familyState.selectedKidId = saved;
           } else if (familyState.kids.length === 1) {
-            familyState.selectedKidId = familyState.kids[0].id;
-            setSelectedKidId(familyState.selectedKidId);
+            setSelectedKidId(familyState.kids[0].id);
           } else {
+            // 저장된 값이 더 이상 유효하지 않으면 정리 (안 그러면 nsKey가 stale 키를 가리킴)
+            if (saved) setSelectedKidId("");
             familyState.selectedKidId = "";
           }
         } catch (e) {
@@ -2782,7 +2855,7 @@
           familyState.loaded = true;
         }
         renderKidBar();
-        renderMenuCardsState();
+        refreshActiveKidView();
       }
       function renderKidBar() {
         const chips = document.getElementById("kidChips");
@@ -2808,25 +2881,90 @@
             '<span class="kid-chip-empty">아이가 없어요.</span>' +
             ' <a class="kid-chip-link" href="family-todos.html" target="_blank" rel="noopener">우리가족 투두에서 아이 추가 →</a>';
           if (status) status.textContent = "";
+          // 편집 토글 숨김
+          const editBtn0 = document.getElementById("kidEditToggle");
+          if (editBtn0) editBtn0.style.display = "none";
           return;
         }
         familyState.kids.forEach((k) => {
+          const wrap = document.createElement("span");
+          wrap.className = "kid-chip-wrap";
           const b = document.createElement("button");
           b.type = "button";
           b.className = "kid-chip" + (k.id === familyState.selectedKidId ? " active" : "");
           b.textContent = k.name;
           b.addEventListener("click", () => {
+            if (familyState.editMode) return; // 편집 모드에선 선택 차단
             const sameToggle = familyState.selectedKidId === k.id;
             setSelectedKidId(sameToggle ? "" : k.id);
             renderKidBar();
-            renderMenuCardsState();
+            refreshActiveKidView();
           });
-          chips.appendChild(b);
+          wrap.appendChild(b);
+          if (familyState.editMode) {
+            const x = document.createElement("button");
+            x.type = "button";
+            x.className = "kid-chip-x";
+            x.textContent = "×";
+            x.title = k.name + " 삭제";
+            x.setAttribute("aria-label", k.name + " 삭제");
+            x.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              deleteKid(k);
+            });
+            wrap.appendChild(x);
+          }
+          chips.appendChild(wrap);
         });
+        // 편집 토글 표시
+        const editBtn = document.getElementById("kidEditToggle");
+        if (editBtn) {
+          editBtn.style.display = "";
+          editBtn.textContent = familyState.editMode ? "✓ 완료" : "✏️ 편집";
+          editBtn.classList.toggle("kid-edit-on", familyState.editMode);
+        }
         if (status) {
-          status.textContent = familyState.selectedKidId
-            ? "✅ " + getSelectedKidName() + " 의 학습"
-            : "👆 아이 한 명을 선택해 주세요";
+          status.textContent = familyState.editMode
+            ? "🗑 × 를 눌러 아이를 삭제할 수 있어요"
+            : (familyState.selectedKidId
+              ? "✅ " + getSelectedKidName() + " 의 학습"
+              : "👆 아이 한 명을 선택해 주세요");
+        }
+      }
+      function toggleKidEditMode() {
+        familyState.editMode = !familyState.editMode;
+        renderKidBar();
+      }
+      async function deleteKid(kid) {
+        if (!_supabase || !kid || !kid.id) return;
+        const ok = confirm(
+          "정말 \"" + kid.name + "\" 을(를) 삭제할까요?\n\n" +
+          "• 우리가족 투두의 아이 정보 / 스탬프 지갑 / 칭찬 스티커 / 요일 슬롯 / 일정도 함께 삭제됩니다.\n" +
+          "• 이 동작은 되돌릴 수 없어요.",
+        );
+        if (!ok) return;
+        try {
+          const r = await _supabase.from("family_kids").delete().eq("id", kid.id);
+          if (r.error) throw r.error;
+          // 삭제된 아이가 현재 선택된 아이라면 선택 해제
+          if (familyState.selectedKidId === kid.id) {
+            setSelectedKidId("");
+          }
+          // 이 기기에 남은 per-kid localStorage 정리 (orphan 제거)
+          try {
+            const suffix = ":" + kid.id;
+            const toRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.endsWith(suffix)) toRemove.push(k);
+            }
+            toRemove.forEach((k) => localStorage.removeItem(k));
+          } catch (e) {}
+          // 다시 로딩
+          await loadFamilyKids();
+          refreshActiveKidView();
+        } catch (e) {
+          alert("삭제 실패: " + (e && e.message ? e.message : String(e)));
         }
       }
       // 다른 탭(family-todos.html)에서 선택이 바뀌면 자동 동기화
@@ -2834,7 +2972,7 @@
         if (e.key === FAMILY_KID_KEY) {
           familyState.selectedKidId = getSelectedKidId();
           renderKidBar();
-          renderMenuCardsState();
+          refreshActiveKidView();
         }
       });
 
@@ -5404,6 +5542,9 @@
       }
 
       /* --------------------------- Events --------------------------- */
+      const _kidEditBtn = document.getElementById("kidEditToggle");
+      if (_kidEditBtn) _kidEditBtn.addEventListener("click", toggleKidEditMode);
+
       document.querySelectorAll(".menu-card").forEach((btn) => {
         btn.addEventListener("click", () => {
           if (btn.classList.contains("is-disabled")) {
