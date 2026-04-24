@@ -797,6 +797,29 @@
         color: #1e293b;
       }
       .units-head small { color: #94a3b8; font-weight: 700; font-size: 0.78rem; }
+      .units-head-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .units-edit-toggle {
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.74rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 2px solid #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+      .units-edit-toggle:hover { background: #e2e8f0; }
+      .units-edit-toggle.units-edit-on {
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        border-color: #d97706;
+        color: #fff;
+      }
       .units-row {
         display: flex;
         gap: 10px;
@@ -860,24 +883,81 @@
       .unit-chip.is-active .uc-tag { background: #c7d2fe; }
       .unit-chip .uc-del {
         position: absolute;
-        top: -6px;
-        right: -6px;
-        width: 22px;
-        height: 22px;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         border: 2px solid #fff;
         background: #ef4444;
         color: #fff;
-        font-size: 0.7rem;
+        font-size: 0.78rem;
         font-weight: 900;
         cursor: pointer;
         display: none;
         line-height: 1;
         font-family: inherit;
+        padding: 0;
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
       }
+      .unit-chip .uc-del:hover { background: #dc2626; transform: scale(1.1); }
       .unit-chip:hover .uc-del,
       .unit-chip.is-active .uc-del { display: block; }
+      .units-row.units-edit-on .unit-chip .uc-del { display: flex; align-items: center; justify-content: center; }
       .unit-chip[data-default="1"] .uc-del { display: none !important; }
+      /* 편집 모드: 기본 단원에는 🙈 숨기기 버튼 (주황색) */
+      .unit-chip .uc-hide {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #f59e0b;
+        color: #fff;
+        font-weight: 900;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.45);
+        font-family: inherit;
+        padding: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .units-row.units-edit-on .unit-chip .uc-hide { display: flex; }
+      .unit-chip .uc-hide:hover { background: #d97706; transform: scale(1.1); }
+      /* 숨겨진 기본 단원: 점선 + 다시 보기 표시 */
+      .unit-chip.is-hidden-default {
+        opacity: 0.55;
+        border-style: dashed;
+        background: #fffbeb;
+      }
+      .unit-chip.is-hidden-default .uc-title { text-decoration: line-through; color: #92400e; }
+      .unit-chip .uc-show {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #10b981;
+        color: #fff;
+        font-weight: 900;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.45);
+        font-family: inherit;
+        padding: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .units-row.units-edit-on .unit-chip .uc-show { display: flex; }
 
       /* ---- 메뉴 카드 비활성화 ---- */
       .menu-card.is-disabled {
@@ -1959,7 +2039,10 @@
         <section class="units-section" id="unitsSection">
           <div class="units-head">
             <h3>📚 내 단원</h3>
-            <small>아이콘을 눌러 단원을 바꿔요</small>
+            <div class="units-head-right">
+              <small id="unitsHeadHint">아이콘을 눌러 단원을 바꿔요</small>
+              <button type="button" class="units-edit-toggle" id="unitsEditToggle">✏️ 편집</button>
+            </div>
           </div>
           <div class="units-row" id="unitsRow"></div>
         </section>
@@ -3415,19 +3498,57 @@
         return (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0");
       }
 
+      // 단원 편집 모드 (✕ 삭제 / 🙈 기본단원 숨기기)
+      const unitsState = { editMode: false };
+      // 기본 단원을 이 아이에게서만 숨길지 여부 (per-kid 네임스페이스 자동 적용)
+      const HIDE_DEFAULT_KEY = "study_game_hide_default_v1";
+      function isDefaultUnitHidden() {
+        try { return localStorage.getItem(nsKey(HIDE_DEFAULT_KEY)) === "1"; } catch (e) { return false; }
+      }
+      function setDefaultUnitHidden(hidden) {
+        try {
+          if (hidden) localStorage.setItem(nsKey(HIDE_DEFAULT_KEY), "1");
+          else localStorage.removeItem(nsKey(HIDE_DEFAULT_KEY));
+        } catch (e) {}
+      }
+
       function renderUnitsRow() {
         const row = $("unitsRow");
         if (!row) return;
         row.innerHTML = "";
-        const activeId = getActiveUnitId();
+        row.classList.toggle("units-edit-on", unitsState.editMode);
+        let activeId = getActiveUnitId();
 
-        const allUnits = [makeDefaultUnit()].concat(getUnits().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+        const defaultHidden = isDefaultUnitHidden();
+        const customUnits = getUnits().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        // 편집 모드에서는 숨겨진 기본 단원도 보여주고(다시 보기 버튼), 평소엔 숨김
+        const includeDefault = unitsState.editMode || !defaultHidden;
+        const allUnits = (includeDefault ? [makeDefaultUnit()] : []).concat(customUnits);
+
+        // 활성 단원이 숨겨진 기본 단원이고 편집 모드 아니라면 → 다른 단원으로 자동 전환
+        if (!unitsState.editMode && defaultHidden && activeId === DEFAULT_UNIT_ID && customUnits.length) {
+          activeId = customUnits[0].id;
+          setActiveUnitId(activeId);
+          applyActiveUnit();
+          renderMenuDataInfo();
+          renderMenuCardsState();
+        }
+
+        // 표시할 단원이 하나도 없으면 안내
+        if (!allUnits.length) {
+          const empty = document.createElement("div");
+          empty.style.cssText = "padding:14px;color:#94a3b8;font-weight:700;font-size:0.85rem";
+          empty.textContent = "표시 중인 단원이 없어요. ✏️ 편집을 눌러 단원을 다시 보여주거나 사진을 올려 단원을 추가해 주세요.";
+          row.appendChild(empty);
+        }
 
         allUnits.forEach((u) => {
           const isDefault = u.id === DEFAULT_UNIT_ID;
           const chip = document.createElement("button");
           chip.type = "button";
-          chip.className = "unit-chip" + (u.id === activeId ? " is-active" : "");
+          const isHiddenDefault = isDefault && defaultHidden;
+          chip.className = "unit-chip" + (u.id === activeId ? " is-active" : "") + (isHiddenDefault ? " is-hidden-default" : "");
           chip.dataset.id = u.id;
           if (isDefault) chip.dataset.default = "1";
 
@@ -3437,29 +3558,68 @@
           if (Array.isArray(u.sentences) && u.sentences.length) tags.push('<span class="uc-tag">🔤 ' + u.sentences.length + '</span>');
           if (Array.isArray(u.prompts) && u.prompts.length) tags.push('<span class="uc-tag">📝 ' + u.prompts.length + '</span>');
 
+          let actionBtnHtml = "";
+          if (!isDefault) {
+            actionBtnHtml = '<button type="button" class="uc-del" title="단원 삭제">✕</button>';
+          } else if (isHiddenDefault) {
+            actionBtnHtml = '<button type="button" class="uc-show" title="기본 단원 다시 보기">👁</button>';
+          } else {
+            actionBtnHtml = '<button type="button" class="uc-hide" title="이 사이트에서 기본 단원 숨기기">🙈</button>';
+          }
+
           chip.innerHTML =
             '<div class="uc-ico">' + (u.icon || "📚") + '</div>' +
             '<div class="uc-title">' + u.title + '</div>' +
             '<div class="uc-date">' + (isDefault ? "기본 제공" : fmtDate(u.createdAt)) + '</div>' +
             '<div class="uc-tags">' + tags.join("") + '</div>' +
-            (isDefault ? "" : '<button type="button" class="uc-del" title="단원 삭제">✕</button>');
+            actionBtnHtml;
 
           chip.addEventListener("click", (e) => {
-            if (e.target && e.target.classList && e.target.classList.contains("uc-del")) return;
+            const t = e.target;
+            if (t && t.classList && (t.classList.contains("uc-del") || t.classList.contains("uc-hide") || t.classList.contains("uc-show"))) return;
+            // 숨겨진 기본 단원은 활성화 불가
+            if (isHiddenDefault) return;
             setActiveUnitId(u.id);
             applyActiveUnit();
             renderMenuDataInfo();
             renderUnitsRow();
             renderMenuCardsState();
           });
+
           const delBtn = chip.querySelector(".uc-del");
           if (delBtn) {
             delBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              if (!confirm("이 단원을 삭제할까요? 단원에 저장된 ○/× 기록도 함께 사라져요.")) return;
+              if (!confirm("\"" + u.title + "\" 단원을 삭제할까요?\n\n저장된 ○/× 기록과 시험 진행도 함께 사라져요.")) return;
               const units = getUnits().filter((x) => x.id !== u.id);
               saveUnits(units);
-              if (activeId === u.id) setActiveUnitId(DEFAULT_UNIT_ID);
+              if (getActiveUnitId() === u.id) setActiveUnitId(DEFAULT_UNIT_ID);
+              applyActiveUnit();
+              renderMenuDataInfo();
+              renderUnitsRow();
+              renderMenuCardsState();
+            });
+          }
+          const hideBtn = chip.querySelector(".uc-hide");
+          if (hideBtn) {
+            hideBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              setDefaultUnitHidden(true);
+              if (getActiveUnitId() === DEFAULT_UNIT_ID) {
+                const remaining = getUnits();
+                setActiveUnitId(remaining.length ? remaining[0].id : DEFAULT_UNIT_ID);
+              }
+              applyActiveUnit();
+              renderMenuDataInfo();
+              renderUnitsRow();
+              renderMenuCardsState();
+            });
+          }
+          const showBtn = chip.querySelector(".uc-show");
+          if (showBtn) {
+            showBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              setDefaultUnitHidden(false);
               applyActiveUnit();
               renderMenuDataInfo();
               renderUnitsRow();
@@ -3469,6 +3629,23 @@
 
           row.appendChild(chip);
         });
+
+        // 편집 토글 / 안내문구
+        const editBtn = document.getElementById("unitsEditToggle");
+        if (editBtn) {
+          editBtn.textContent = unitsState.editMode ? "✓ 완료" : "✏️ 편집";
+          editBtn.classList.toggle("units-edit-on", unitsState.editMode);
+        }
+        const hint = document.getElementById("unitsHeadHint");
+        if (hint) {
+          hint.textContent = unitsState.editMode
+            ? "✕ 삭제 · 🙈 기본 단원 숨기기"
+            : "아이콘을 눌러 단원을 바꿔요";
+        }
+      }
+      function toggleUnitsEditMode() {
+        unitsState.editMode = !unitsState.editMode;
+        renderUnitsRow();
       }
 
       function renderMenuCardsState() {
@@ -5638,6 +5815,8 @@
       /* --------------------------- Events --------------------------- */
       const _kidEditBtn = document.getElementById("kidEditToggle");
       if (_kidEditBtn) _kidEditBtn.addEventListener("click", toggleKidEditMode);
+      const _unitsEditBtn = document.getElementById("unitsEditToggle");
+      if (_unitsEditBtn) _unitsEditBtn.addEventListener("click", toggleUnitsEditMode);
 
       document.querySelectorAll(".menu-card").forEach((btn) => {
         btn.addEventListener("click", () => {
