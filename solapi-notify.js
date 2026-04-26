@@ -39,6 +39,15 @@
     return String(n).padStart(2, "0");
   }
 
+  /** "YYYY-MM-DD" 기준 N일 뒤의 ISO 날짜 반환. 촬영본 전송예정일 계산용. */
+  function isoDatePlusDays(baseIso, daysToAdd) {
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(baseIso || "").trim());
+    if (!m) return "";
+    const t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    t.setDate(t.getDate() + Number(daysToAdd || 0));
+    return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
+  }
+
   /** "2026-04-30" → "4/30(목)" 형태로 짧게 표기 (미입금 요약과 비슷한 톤). */
   function formatShortDateLabel(dateStr) {
     const s = String(dateStr || "").trim();
@@ -164,6 +173,15 @@
         }
       }
       lines.push(ACCOUNT_LINE);
+    }
+    // 촬영본 전송예정일 = 촬영일 + 10일 — 인로그/쇼픽/더필링 공통
+    const deliveryIso = isoDatePlusDays(schedule?.date, 10);
+    if (deliveryIso) {
+      const deliveryLabel = formatShortDateLabel(deliveryIso);
+      lines.push(`촬영본 전송예정일 : ${deliveryLabel}`);
+      lines.push("(작업 기한은 최대 10일이나, 완료되는 즉시 신속히 전달해 드리겠습니다.)");
+    }
+    if (!isShopick) {
       lines.push("", TAIL_NOTICE);
     }
     return lines.join("\n");
