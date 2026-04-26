@@ -20,6 +20,7 @@
   if (window.SolapiNotify) return;
 
   const SOLAPI_ENDPOINT = "/api/solapi-send";
+  const ADMIN_NOTIFY_PHONE = "01028692443";
   const ACCOUNT_LINE = "계좌번호 : 농협 3021511169151 김진영";
   const TAIL_NOTICE =
     "입금자명은 사업자명으로 반드시 입금바랍니다.\n" +
@@ -185,6 +186,71 @@
       lines.push("", TAIL_NOTICE);
     }
     return lines.join("\n");
+  }
+
+  /**
+   * EUC-KR(CP949) 기준 대략적 바이트 길이 추정.
+   * 한글 1자 = 2 bytes, ASCII 1자 = 1 byte, 그 외 = 2 bytes.
+   * 솔라피 SMS 한도(90 bytes) 체크용.
+   */
+  function estimateEucKrBytes(str) {
+    const s = String(str || "");
+    let total = 0;
+    for (let i = 0; i < s.length; i++) {
+      total += s.charCodeAt(i) > 0x7f ? 2 : 1;
+    }
+    return total;
+  }
+
+  /** 주어진 본문 바이트가 한도를 넘으면 끝부분을 잘라 "…" 으로 마무리. */
+  function truncateToBytes(str, maxBytes) {
+    const s = String(str || "");
+    if (estimateEucKrBytes(s) <= maxBytes) return s;
+    let acc = "";
+    let used = 0;
+    const ellipsisBytes = 2; // "…" 1자 (2 bytes)
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      const chBytes = ch.charCodeAt(0) > 0x7f ? 2 : 1;
+      if (used + chBytes + ellipsisBytes > maxBytes) break;
+      acc += ch;
+      used += chBytes;
+    }
+    return acc + "…";
+  }
+
+  /**
+   * 관리자 확인용 단문(SMS) 본문 — 업체명 / 주소 / 촬영형태만.
+   * 솔라피 SMS 한도(90 bytes) 안에 들어가도록 주소를 우선 절단.
+   */
+  function buildAdminShortSmsText({ company, schedule }) {
+    const companyLabel = String(company || "").trim() || "(업체명없음)";
+    const placeRaw = formatPlaceForSms(schedule?.place);
+    const composition = String(schedule?.composition || "").trim() || "-";
+    const header = `[${companyLabel}]`;
+    const compLine = `촬영: ${composition}`;
+    const fixedBytes =
+      estimateEucKrBytes(header) +
+      1 + // \n
+      estimateEucKrBytes("주소: ") +
+      1 + // \n
+      estimateEucKrBytes(compLine);
+    const SMS_LIMIT = 88; // 90 bytes 한도에 약간 여유
+    const placeBudget = Math.max(10, SMS_LIMIT - fixedBytes);
+    const placeShort = truncateToBytes(placeRaw, placeBudget);
+    return `${header}\n주소: ${placeShort}\n${compLine}`;
+  }
+
+  /**
+   * 관리자(고정번호)에게 확인용 단문 SMS 별도 발송. 실패해도 사용자 흐름엔 영향 없음.
+   */
+  async function sendAdminShortNotice({ company, schedule }) {
+    try {
+      const text = buildAdminShortSmsText({ company, schedule });
+      await postSolapiSend({ to: ADMIN_NOTIFY_PHONE, text, type: "SMS" });
+    } catch (error) {
+      console.warn("[SolapiNotify] admin notify failed", error);
+    }
   }
 
   /** 작은 토스트 (몇 초 후 사라짐) — alert 와 충돌 방지. */
@@ -368,6 +434,9 @@
 
     let toPhone = initialPhone;
     let phoneJustEntered = false;
+
+    // 관리자(01028692443) 확인용 단문은 고객 문자 성공 여부와 무관하게 항상 시도.
+    sendAdminShortNotice({ company, schedule });
 
     if (!isValidKoreanMobile(toPhone)) {
       const entered = await promptPhoneNumber(siteLabel);
