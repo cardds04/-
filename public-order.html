@@ -1135,6 +1135,7 @@
 
     <script src="./sync-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./solapi-notify.js"></script>
     <script>
       const customerPageMode = new URLSearchParams(window.location.search).get("mode");
       const isLiteCustomerMode = customerPageMode === "lite";
@@ -4974,6 +4975,46 @@
           setTaxInvoiceRequested(false);
           updateExpectedPaymentText();
           renderPaymentSummary();
+
+          // ── 솔라피 SMS 알림 (사이트별 표기) ──
+          // 더필링 사이트 접수 시 항상 "더필링" 라벨로 발송. 알림 실패해도 등록은 유효.
+          try {
+            const __siteLabel = isLiteCustomerMode ? "쇼픽" : "더필링";
+            await window.SolapiNotify?.sendScheduleSubmitNotice({
+              siteLabel: __siteLabel,
+              company: scheduleCompanyName,
+              phone: user.phone,
+              schedule: createdSchedule,
+              onPhoneSaved: async (newPhone) => {
+                try {
+                  const __allUsers = readStorageArray(STORAGE_CUSTOMERS);
+                  const __idx = __allUsers.findIndex(
+                    (row) => String(row?.id || "") === String(user?.id || "")
+                  );
+                  if (__idx >= 0) {
+                    __allUsers[__idx].phone = newPhone;
+                    writeStorageArray(STORAGE_CUSTOMERS, __allUsers);
+                  }
+                  user.phone = newPhone;
+                } catch (e) {
+                  console.warn("[SolapiNotify] local user.phone 갱신 실패", e);
+                }
+                try {
+                  ensureCompanyStored(scheduleCompanyName, newPhone, effectiveCompanyCode);
+                } catch (e) {
+                  console.warn("[SolapiNotify] ensureCompanyStored 실패", e);
+                }
+                try {
+                  await syncCustomersTableFromStorage();
+                } catch (e) {
+                  console.warn("[SolapiNotify] syncCustomersTableFromStorage 실패", e);
+                }
+              },
+            });
+          } catch (smsError) {
+            console.warn("[SolapiNotify] 발송 통합 호출 실패", smsError);
+          }
+
           alert(`스케줄 등록 완료! 접수번호: ${submissionReceipt.receiptId}\n관리자 페이지에서 바로 확인할 수 있습니다.`);
         } finally {
           setCustomerScheduleSubmittingState(false);

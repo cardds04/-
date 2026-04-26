@@ -27,6 +27,7 @@ const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-gener
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
 const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
+const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -108,6 +109,19 @@ app.post("/api/ai-debate", async (req, res) => {
   } catch (error) {
     console.error("[ai-debate]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** Solapi 문자 발송 — lib/solapi-logic.cjs (Vercel api/solapi-send.js 와 공유)
+ *  환경변수: SOLAPI_API_KEY / SOLAPI_API_SECRET / SOLAPI_SENDER_NUMBER */
+app.post("/api/solapi-send", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleSolapiSendRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[solapi-send]", error);
+    res.status(500).json({ ok: false, message: error?.message || "서버 오류" });
   }
 });
 
