@@ -20,8 +20,10 @@
   if (window.SolapiNotify) return;
 
   const SOLAPI_ENDPOINT = "/api/solapi-send";
+  const ACCOUNT_LINE = "계좌번호 : 농협 3021511169151 김진영";
   const TAIL_NOTICE =
-    "접수된 날짜는 확정되었습니다만 시간은 변동될 수 있는 임시시간이며 변동시 추후 연락드리겠습니다.";
+    "입금자명은 사업자명으로 반드시 입금바랍니다.\n" +
+    "입금금액을 확인해주세요. 촬영 전 미입금 확인시 주문이 자동 취소될 수 있습니다.";
 
   function onlyDigits(value) {
     return String(value || "").replace(/[^\d]/g, "");
@@ -132,24 +134,29 @@
   }
 
   function buildSmsText({ siteLabel, schedule, company }) {
+    const label = String(siteLabel || "").trim();
+    const isShopick = label === "쇼픽";
     const dateLabel = formatShortDateLabel(schedule?.date);
     const timeLabel = formatShortTimeLabel(schedule?.time, schedule?.timePreference);
     const placeLabel = formatPlaceForSms(schedule?.place);
     const composition = String(schedule?.composition || "").trim();
     const amountLabel = formatAmountText(schedule?.paymentAmount);
     const lines = [
-      `[${String(siteLabel || "").trim()}] 촬영 접수 완료`,
-      `업체: ${String(company || "-").trim()}`,
-      `날짜: ${dateLabel}`,
+      `[${label}] 촬영 접수 완료`,
+      `날짜 : ${dateLabel} (날짜확정)`,
     ];
     if (timeLabel) {
       const isUndecided = timeLabel === "시간미정";
-      lines.push(isUndecided ? `희망시간: ${timeLabel}` : `희망시간: ${timeLabel} (확정아님)`);
+      lines.push(isUndecided ? `희망시간 : ${timeLabel}` : `희망시간 : ${timeLabel} (확정아님)`);
     }
-    lines.push(`장소: ${placeLabel}`);
-    if (composition) lines.push(`구성: ${composition}`);
-    if (amountLabel) lines.push(`결제예정: ${amountLabel}`);
-    lines.push("", TAIL_NOTICE);
+    lines.push(`장소 : ${placeLabel}`);
+    if (composition) lines.push(`구성 : ${composition}`);
+    // 쇼픽은 금액/계좌/입금 안내를 모두 생략 — 결제는 별도 흐름이므로 문자 본문 단순화
+    if (!isShopick) {
+      if (amountLabel) lines.push(`결제예정 : ${amountLabel}`);
+      lines.push(ACCOUNT_LINE);
+      lines.push("", TAIL_NOTICE);
+    }
     return lines.join("\n");
   }
 
