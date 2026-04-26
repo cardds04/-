@@ -140,9 +140,13 @@
     const lines = [
       `[${String(siteLabel || "").trim()}] 촬영 접수 완료`,
       `업체: ${String(company || "-").trim()}`,
-      `날짜: ${dateLabel}${timeLabel ? ` ${timeLabel}` : ""}`,
-      `장소: ${placeLabel}`,
+      `날짜: ${dateLabel}`,
     ];
+    if (timeLabel) {
+      const isUndecided = timeLabel === "시간미정";
+      lines.push(isUndecided ? `희망시간: ${timeLabel}` : `희망시간: ${timeLabel} (확정아님)`);
+    }
+    lines.push(`장소: ${placeLabel}`);
     if (composition) lines.push(`구성: ${composition}`);
     if (amountLabel) lines.push(`결제예정: ${amountLabel}`);
     lines.push("", TAIL_NOTICE);
