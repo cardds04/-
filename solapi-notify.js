@@ -23,7 +23,8 @@
   const ACCOUNT_LINE = "계좌번호 : 농협 3021511169151 김진영";
   const TAIL_NOTICE =
     "입금자명은 사업자명으로 반드시 입금바랍니다.\n" +
-    "입금금액을 확인해주세요. 촬영 전 미입금 확인시 주문이 자동 취소될 수 있습니다.";
+    "촬영전 미입금시 스케줄이 자동취소될수있습니다.\n" +
+    "스케줄시간조정이 필요할 경우 저희가 연락드리겠습니다.";
 
   function onlyDigits(value) {
     return String(value || "").replace(/[^\d]/g, "");
@@ -153,7 +154,15 @@
     if (composition) lines.push(`구성 : ${composition}`);
     // 쇼픽은 금액/계좌/입금 안내를 모두 생략 — 결제는 별도 흐름이므로 문자 본문 단순화
     if (!isShopick) {
-      if (amountLabel) lines.push(`결제예정 : ${amountLabel}`);
+      if (amountLabel) {
+        lines.push(`결제예정 : ${amountLabel}`);
+        const baseAmount = Number(schedule?.paymentAmount);
+        if (Number.isFinite(baseAmount) && baseAmount > 0) {
+          // 세금계산서 발행 시 부가세 10% 포함 금액
+          const taxIncluded = Math.round(baseAmount * 1.1);
+          lines.push(`(세금계산서 발행시 ${taxIncluded.toLocaleString("ko-KR")}원)`);
+        }
+      }
       lines.push(ACCOUNT_LINE);
       lines.push("", TAIL_NOTICE);
     }
