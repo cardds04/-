@@ -225,12 +225,16 @@
    */
   function buildAdminShortSmsText({ company, schedule }) {
     const companyLabel = String(company || "").trim() || "(업체명없음)";
+    const dateLabel = formatShortDateLabel(schedule?.date) || "-";
     const placeRaw = formatPlaceForSms(schedule?.place);
     const composition = String(schedule?.composition || "").trim() || "-";
     const header = `[${companyLabel}]`;
+    const dateLine = `촬영일: ${dateLabel}`;
     const compLine = `촬영: ${composition}`;
     const fixedBytes =
       estimateEucKrBytes(header) +
+      1 + // \n
+      estimateEucKrBytes(dateLine) +
       1 + // \n
       estimateEucKrBytes("주소: ") +
       1 + // \n
@@ -238,7 +242,7 @@
     const SMS_LIMIT = 88; // 90 bytes 한도에 약간 여유
     const placeBudget = Math.max(10, SMS_LIMIT - fixedBytes);
     const placeShort = truncateToBytes(placeRaw, placeBudget);
-    return `${header}\n주소: ${placeShort}\n${compLine}`;
+    return `${header}\n${dateLine}\n주소: ${placeShort}\n${compLine}`;
   }
 
   /**
