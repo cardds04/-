@@ -2455,6 +2455,7 @@
         const d = String(now.getDate()).padStart(2, "0");
         p[mode] = y + "." + m + "." + d;
         try { localStorage.setItem(nsKey(PERFECT_KEY), JSON.stringify(p)); } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
         return true;
       }
       function renderBadges() {
@@ -2616,6 +2617,7 @@
         const b = getBest();
         b[mode] = Math.max(b[mode] || 0, score);
         try { localStorage.setItem(nsKey(BEST_KEY), JSON.stringify(b)); } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
 
       /* --------------------------- Navigation ----------------------- */
@@ -2713,12 +2715,14 @@
       }
       function saveUnits(arr) {
         try { localStorage.setItem(nsKey(UNITS_KEY), JSON.stringify(arr || [])); } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
       function getActiveUnitId() {
         try { return localStorage.getItem(nsKey(ACTIVE_UNIT_KEY)) || DEFAULT_UNIT_ID; } catch (e) { return DEFAULT_UNIT_ID; }
       }
       function setActiveUnitId(id) {
         try { localStorage.setItem(nsKey(ACTIVE_UNIT_KEY), id || DEFAULT_UNIT_ID); } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
       function getDefaultPersisted() {
         try {
@@ -2729,6 +2733,7 @@
       }
       function saveDefaultPersisted(p) {
         try { localStorage.setItem(nsKey(DEFAULT_PERSIST_KEY), JSON.stringify(p || {})); } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
 
       function makeDefaultUnit() {
@@ -3558,6 +3563,7 @@
           if (hidden) localStorage.setItem(nsKey(HIDE_DEFAULT_KEY), "1");
           else localStorage.removeItem(nsKey(HIDE_DEFAULT_KEY));
         } catch (e) {}
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
 
       function renderUnitsRow() {
@@ -5854,6 +5860,160 @@
         startMode(state.mode, { filter: state.modeFilter, replayOnly: state.replayOnly }),
       );
       $("btnGoMenu").addEventListener("click", showMenu);
+
+      /* ============== 📡 study-game 전용 클라우드 동기화 (PC ↔ 폰) ==============
+       * 별도 테이블 study_game_state_kv 만 사용 (촬영 스케줄용 schedule_site_client_kv 와 분리).
+       * 행 id = "kid:<kidId>" — 아이별로 따로 저장. 아이 미선택 시 "kid:default".
+       * - 페이지 로드 / 포커스 복귀 시: 클라우드 → 로컬 (서버가 더 최신이면 덮어쓰고 화면 다시 그림)
+       * - saveUnits / setActiveUnitId / setDefaultUnitHidden / saveDefaultPersisted /
+       *   savePerfect / setBest 호출 직후: studyGameSync.markDirty() → 1.2초 디바운스로 서버 업서트.
+       */
+      (function setupStudyGameSync() {
+        const SYNC_TABLE = "study_game_state_kv";
+        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY];
+        const LOCAL_AT_KEY = "study_game_local_saved_at_v1";
+        let pushTimer = null;
+        let pulling = false;
+
+        function rowId() {
+          const kid = (typeof getSelectedKidId === "function" ? getSelectedKidId() : "") || "default";
+          return "kid:" + kid;
+        }
+        function readLocalSnapshot() {
+          const obj = {};
+          for (const k of SYNC_KEYS) {
+            try {
+              const v = localStorage.getItem(nsKey(k));
+              if (v != null) obj[k] = v;
+            } catch (e) {}
+          }
+          return obj;
+        }
+        function writeLocalSnapshot(obj) {
+          if (!obj || typeof obj !== "object") return;
+          for (const k of SYNC_KEYS) {
+            if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+            const v = obj[k];
+            try {
+              if (v == null) localStorage.removeItem(nsKey(k));
+              else if (typeof v === "string") localStorage.setItem(nsKey(k), v);
+            } catch (e) {}
+          }
+        }
+        function getLocalSavedAt() {
+          try { return Number(localStorage.getItem(nsKey(LOCAL_AT_KEY))) || 0; } catch (e) { return 0; }
+        }
+        function setLocalSavedAt(ts) {
+          try { localStorage.setItem(nsKey(LOCAL_AT_KEY), String(ts || Date.now())); } catch (e) {}
+        }
+
+        async function pull() {
+          if (pulling) return { applied: false };
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { applied: false };
+          pulling = true;
+          try {
+            const rid = rowId();
+            const url =
+              SUPABASE_URL + "/rest/v1/" + SYNC_TABLE +
+              "?id=eq." + encodeURIComponent(rid) +
+              "&select=kv,updated_at&limit=1";
+            const res = await fetch(url, {
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY },
+              cache: "no-store",
+            });
+            if (!res.ok) {
+              console.warn("[study-sync] pull HTTP", res.status);
+              return { applied: false };
+            }
+            const rows = await res.json();
+            if (!Array.isArray(rows) || !rows.length) return { applied: false };
+            const cloudKv = rows[0]?.kv || {};
+            const cloudSavedAt = Number(cloudKv.__savedAt || 0);
+            const localSavedAt = getLocalSavedAt();
+            if (cloudSavedAt && cloudSavedAt > localSavedAt) {
+              writeLocalSnapshot(cloudKv);
+              setLocalSavedAt(cloudSavedAt);
+              return { applied: true };
+            }
+            return { applied: false };
+          } catch (e) {
+            console.warn("[study-sync] pull error", e);
+            return { applied: false };
+          } finally {
+            pulling = false;
+          }
+        }
+
+        async function push() {
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+          try {
+            const rid = rowId();
+            const snapshot = readLocalSnapshot();
+            const ts = Date.now();
+            snapshot.__savedAt = ts;
+            const res = await fetch(SUPABASE_URL + "/rest/v1/" + SYNC_TABLE, {
+              method: "POST",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: "Bearer " + SUPABASE_ANON_KEY,
+                "Content-Type": "application/json",
+                Prefer: "resolution=merge-duplicates,return=minimal",
+              },
+              body: JSON.stringify({ id: rid, kv: snapshot }),
+            });
+            if (!res.ok) {
+              console.warn("[study-sync] push HTTP", res.status);
+              return;
+            }
+            setLocalSavedAt(ts);
+          } catch (e) {
+            console.warn("[study-sync] push error", e);
+          }
+        }
+
+        function markDirty() {
+          setLocalSavedAt(Date.now());
+          if (pushTimer) clearTimeout(pushTimer);
+          pushTimer = setTimeout(push, 1200);
+        }
+
+        async function pullAndRefresh() {
+          const r = await pull();
+          if (r.applied) {
+            try { refreshActiveKidView(); } catch (e) {}
+          }
+        }
+
+        // 전역 핸들 — 저장 함수들이 호출함
+        window.studyGameSync = { markDirty: markDirty, pullNow: pullAndRefresh, pushNow: push };
+
+        // 1) 첫 로드: 클라우드 → 로컬
+        pullAndRefresh();
+
+        // 2) 페이지가 다시 보일 때(폰 백그라운드 → 포그라운드) 자동 pull
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") pullAndRefresh();
+        });
+        window.addEventListener("focus", pullAndRefresh);
+
+        // 3) 아이 변경 시(setSelectedKidId 호출 후) 새 kid scope 으로 재pull
+        if (typeof setSelectedKidId === "function") {
+          const _origSetSelectedKidId = setSelectedKidId;
+          setSelectedKidId = function (id) {
+            _origSetSelectedKidId(id);
+            pullAndRefresh();
+          };
+        }
+
+        // 4) 페이지 떠날 때 보류 중인 push 즉시 flush (sendBeacon 같은 건 PostgREST가 안 받아서 그냥 동기 push 시도)
+        window.addEventListener("pagehide", () => {
+          if (pushTimer) {
+            clearTimeout(pushTimer);
+            pushTimer = null;
+            push();
+          }
+        });
+      })();
 
       showMenu();
     </script>
