@@ -2638,6 +2638,65 @@
       /* --------------- 📷 Gemini 사진 업로드 & 다중 단원 시스템 --------------- */
       const GEMINI_KEY_KEY = "study_game_gemini_key_v1";
       const GEMINI_MODEL = "gemini-2.5-flash";
+      // 1차 모델이 503/429 같은 일시 에러를 반환할 때 폴백할 보조 모델
+      const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite";
+
+      /**
+       * Gemini generateContent 호출. 503/429/500/502/504 일시 에러 시 지수 백오프로 재시도하고,
+       * 1차 모델이 끝까지 실패하면 폴백 모델로 한 번 더 시도. 영구 에러(400/401/403/404 등)는
+       * 즉시 throw 하여 잘못된 요청에 대해 무의미한 재시도를 하지 않음.
+       */
+      async function callGeminiAPI(apiKey, body) {
+        const models = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL];
+        let lastErr = null;
+        for (let mi = 0; mi < models.length; mi++) {
+          const url =
+            "https://generativelanguage.googleapis.com/v1beta/models/" +
+            models[mi] +
+            ":generateContent?key=" +
+            encodeURIComponent(apiKey);
+          const maxAttempts = 3;
+          let exhaustedTransient = false;
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            let res;
+            try {
+              res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
+            } catch (netErr) {
+              lastErr = netErr;
+              if (attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 800 * attempt));
+                continue;
+              }
+              exhaustedTransient = true;
+              break;
+            }
+            if (res.ok) return await res.json();
+            const status = res.status;
+            let msg = "Gemini 호출 실패 (" + status + ")";
+            try {
+              const errJson = await res.json();
+              if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message;
+            } catch (_) {}
+            lastErr = new Error(msg);
+            const transient =
+              status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+            if (!transient) throw lastErr;
+            if (attempt < maxAttempts) {
+              await new Promise((r) => setTimeout(r, 800 * attempt));
+            } else {
+              exhaustedTransient = true;
+            }
+          }
+          // 1차 모델이 일시 에러로 모두 실패 → 다음(폴백) 모델로 진행
+          if (!exhaustedTransient) break;
+        }
+        throw lastErr || new Error("Gemini 호출 실패");
+      }
+
       const UNITS_KEY = "study_game_units_v2";
       const ACTIVE_UNIT_KEY = "study_game_active_unit_v2";
       const DEFAULT_PERSIST_KEY = "study_game_default_persist_v2";
@@ -3211,7 +3270,6 @@
       async function callGeminiVision(apiKey, files, opts) {
         opts = opts || {};
         const onlyVocab = opts.mode === "vocab";
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
 
         const parts = [];
         const promptLines = onlyVocab
@@ -3269,17 +3327,7 @@
           },
         };
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let msg = "Gemini 호출 실패 (" + res.status + ")";
-          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
-          throw new Error(msg);
-        }
-        const data = await res.json();
+        const data = await callGeminiAPI(apiKey, body);
         const text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
         const combined = text.map((p) => p.text || "").join("").trim();
         if (!combined) throw new Error("응답이 비어있어요.");
@@ -4745,7 +4793,6 @@
 
       // Gemini를 이용한 글쓰기 첨삭 (최소 개입 원칙)
       async function aiReviewParagraph(text, promptObj, apiKey) {
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
         const promptText = [
           "You are a gentle English writing coach reviewing a Korean elementary school student's homework.",
           "The student picked this writing prompt:",
@@ -4797,17 +4844,7 @@
             responseMimeType: "application/json",
           },
         };
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let msg = "Gemini 호출 실패 (" + res.status + ")";
-          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
-          throw new Error(msg);
-        }
-        const data = await res.json();
+        const data = await callGeminiAPI(apiKey, body);
         const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
         const combined = partsArr.map((p) => p.text || "").join("").trim();
         if (!combined) throw new Error("응답이 비어있어요.");
@@ -4828,7 +4865,6 @@
 
       // Gemini로 최소 수정 (원문 최대 유지)
       async function aiCorrectParagraph(text, promptObj, apiKey) {
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
         const promptText = [
           "You are helping a Korean elementary school student fix obvious mistakes in their English homework paragraph.",
           promptObj && promptObj.text ? ('The writing prompt is: "' + promptObj.text + '"') : "",
@@ -4860,17 +4896,7 @@
             responseMimeType: "application/json",
           },
         };
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let msg = "Gemini 호출 실패 (" + res.status + ")";
-          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
-          throw new Error(msg);
-        }
-        const data = await res.json();
+        const data = await callGeminiAPI(apiKey, body);
         const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
         const combined = partsArr.map((p) => p.text || "").join("").trim();
         if (!combined) throw new Error("응답이 비어있어요.");
@@ -4928,7 +4954,6 @@
       // Gemini 도움요청 (간단한 질문 답변)
       async function askGeminiHelp(question, opts, apiKey) {
         opts = opts || {};
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
         const promptCtx = opts.prompt
           ? "The student is currently working on this writing prompt: \"" + (opts.prompt.text || "") + "\" (" + (opts.prompt.ko || "") + ")"
           : "";
@@ -4954,17 +4979,7 @@
           contents: [{ role: "user", parts: [{ text: systemText }] }],
           generationConfig: { temperature: 0.3 },
         };
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let msg = "Gemini 호출 실패 (" + res.status + ")";
-          try { const errJson = await res.json(); if (errJson && errJson.error && errJson.error.message) msg += ": " + errJson.error.message; } catch (e) {}
-          throw new Error(msg);
-        }
-        const data = await res.json();
+        const data = await callGeminiAPI(apiKey, body);
         const partsArr = (((data.candidates || [])[0] || {}).content || {}).parts || [];
         const combined = partsArr.map((p) => p.text || "").join("").trim();
         if (!combined) throw new Error("응답이 비어있어요.");
