@@ -958,6 +958,30 @@
         justify-content: center;
       }
       .units-row.units-edit-on .unit-chip .uc-show { display: flex; }
+      .unit-chip .uc-rename {
+        position: absolute;
+        top: -8px;
+        left: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #6366f1;
+        color: #fff;
+        font-weight: 900;
+        font-size: 0.78rem;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.45);
+        font-family: inherit;
+        padding: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .units-row.units-edit-on .unit-chip .uc-rename { display: flex; }
+      .unit-chip[data-default="1"] .uc-rename { display: none !important; }
+      .unit-chip .uc-rename:hover { background: #4f46e5; transform: scale(1.1); }
 
       /* ---- 메뉴 카드 비활성화 ---- */
       .menu-card.is-disabled {
@@ -2035,16 +2059,22 @@
 
             <hr style="margin:14px 0;border:0;border-top:1px dashed #cbd5e1" />
             <label class="ai-field">
-              <span>⌨️ 직접 입력 / 붙여넣기 <small>(영어 단어 + 한국어 뜻)</small></span>
-              <textarea id="vocabTextInput" rows="6" placeholder="예시 (한 줄에 하나):&#10;alter 바꾸다, 변경하다&#10;collapse 무너지다&#10;crisis 위기&#10;&#10;또는 한 줄에 여러 개 섞여 있어도 OK:&#10;alter 바꾸다 collapse 무너지다 crisis 위기&#10;&#10;구분자(탭/콜론/하이픈)도 자동 인식돼요:&#10;alter - 바꾸다&#10;collapse: 무너지다" style="width:100%;min-height:140px;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:0.92rem;resize:vertical;box-sizing:border-box"></textarea>
+              <span>📝 단원 이름 <small>(생략하면 오늘 날짜로 자동 생성)</small></span>
+              <input type="text" id="vocabUnitTitleInput" placeholder="예: Unit 5 어휘 / 4월 단어장 / 영단어 모음" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:0.92rem;box-sizing:border-box" />
+            </label>
+            <label class="ai-field" style="margin-top:8px">
+              <span>⌨️ 직접 입력 / 붙여넣기 <small>(영어 단어만 입력해도 OK · 뜻은 Gemini가 자동으로 채워줘요)</small></span>
+              <textarea id="vocabTextInput" rows="6" placeholder="✅ 영어만 적어도 OK (Gemini가 뜻 자동 채움):&#10;alter&#10;collapse&#10;crisis&#10;&#10;✅ 영어 + 한국어 짝지어 적어도 OK:&#10;alter 바꾸다, 변경하다&#10;collapse 무너지다&#10;crisis 위기&#10;&#10;✅ 한 줄에 여러 개 섞여 있어도 OK:&#10;alter 바꾸다 collapse 무너지다 crisis 위기&#10;&#10;✅ 구분자(탭/콜론/하이픈)도 자동 인식:&#10;alter - 바꾸다&#10;collapse: 무너지다" style="width:100%;min-height:160px;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:0.92rem;resize:vertical;box-sizing:border-box"></textarea>
             </label>
             <div id="vocabTextPreview" class="ai-preview hidden" style="margin-top:6px"></div>
             <div class="ai-row" style="margin-top:6px">
-              <button type="button" class="btn btn-primary" id="btnPreviewTextVocab" style="background:linear-gradient(135deg,#10b981,#059669)">🔍 미리보기 (자동 인식)</button>
-              <button type="button" class="btn btn-primary" id="btnApplyTextVocab" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">⌨️ 입력한 단어로 단원 만들기</button>
+              <button type="button" class="btn btn-primary" id="btnFillMeaningsAI" style="background:linear-gradient(135deg,#a855f7,#7c3aed)">🤖 뜻 자동 채우기 (Gemini)</button>
+              <button type="button" class="btn btn-primary" id="btnPreviewTextVocab" style="background:linear-gradient(135deg,#10b981,#059669)">🔍 미리보기</button>
+              <button type="button" class="btn btn-primary" id="btnApplyTextVocab" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">⌨️ 단원 만들기</button>
             </div>
             <small class="ai-help" style="display:block;margin-top:4px">
-              💡 영어/한국어가 섞여 있어도 자동으로 분리해서 짝을 맞춰요. 먼저 <b>미리보기</b>로 확인한 뒤 단원으로 만들 수 있어요.
+              💡 <b>뜻 자동 채우기</b>: 뜻이 없는 영어 단어를 Gemini가 한국어로 채워줘요(API 키 필요).
+              <b>미리보기</b>: 인식된 짝을 확인 · <b>단원 만들기</b>: 단원으로 저장.
             </small>
             <div id="vocabTextStatus" class="ai-status"></div>
           </div>
@@ -3608,30 +3638,104 @@
           return pairs;
         }
 
+        // 본문 어디에 있든 영어 단어를 모두 뽑아 중복 제거 (뜻이 함께 있든 없든)
+        function extractAllEnglishWords(text) {
+          const out = [];
+          const seen = new Set();
+          const re = /[A-Za-z][A-Za-z'\-]+/g;
+          let m;
+          while ((m = re.exec(String(text || ""))) !== null) {
+            const w = m[0].toLowerCase();
+            if (w.length < 2) continue;
+            if (seen.has(w)) continue;
+            seen.add(w);
+            out.push(w);
+          }
+          return out;
+        }
+
+        // Gemini로 영어 단어 → 한국어 뜻 번역 (배치)
+        async function fetchKoreanMeaningsFromGemini(words) {
+          if (!Array.isArray(words) || !words.length) return {};
+          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+          if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요. 위 🔑 칸에 키를 입력해 주세요.");
+          const prompt =
+            "다음 영어 단어들의 한국어 뜻을 알려줘. 초등/중등 수준의 가장 흔한 핵심 뜻 1~2개만 짧게(쉼표로 구분, 최대 18자).\n" +
+            "응답은 반드시 JSON만 출력. 형식: {\"items\":[{\"word\":\"alter\",\"meaning\":\"바꾸다, 변경하다\"}, ...]} 추가 텍스트 없이.\n" +
+            "단어 목록:\n" + words.map((w) => "- " + w).join("\n");
+          const body = {
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+          };
+          const data = await callGeminiAPI(apiKey, body);
+          let raw = "";
+          try {
+            raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || "";
+          } catch (_) {}
+          if (!raw) throw new Error("Gemini 응답이 비어 있어요. 잠시 후 다시 시도해 주세요.");
+          let parsed = null;
+          try { parsed = JSON.parse(raw); }
+          catch (_) {
+            // 응답에 코드펜스 등이 섞이는 경우 정리 후 재시도
+            const cleaned = String(raw).replace(/```json|```/g, "").trim();
+            try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+          }
+          if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+          const out = {};
+          parsed.items.forEach((it) => {
+            if (!it || typeof it !== "object") return;
+            const w = String(it.word || "").trim().toLowerCase();
+            const k = String(it.meaning || "").trim();
+            if (w && k) out[w] = k;
+          });
+          return out;
+        }
+
         const taInput = $("vocabTextInput");
+        const titleInput = $("vocabUnitTitleInput");
         const btnPreviewText = $("btnPreviewTextVocab");
         const btnApplyText = $("btnApplyTextVocab");
+        const btnFillMeaningsAI = $("btnFillMeaningsAI");
         const textPreview = $("vocabTextPreview");
         const textStatus = $("vocabTextStatus");
 
-        function renderTextVocabPreview(pairs) {
+        // 입력 텍스트로부터 (단어, 뜻) 짝과 뜻이 없는 단어들을 함께 계산
+        function computeAllItems(input) {
+          const pairs = parseVocabText(input);
+          const map = new Map();
+          pairs.forEach((p) => map.set(p.word, p.meaning));
+          const allWords = extractAllEnglishWords(input);
+          const items = allWords.map((w) => ({ word: w, meaning: map.get(w) || "" }));
+          return items;
+        }
+
+        function renderTextVocabPreview(items) {
           if (!textPreview) return;
-          if (!pairs.length) {
+          if (!items.length) {
             textPreview.classList.add("hidden");
             textPreview.innerHTML = "";
             return;
           }
-          const rows = pairs
-            .map(
-              (p, idx) =>
+          const filled = items.filter((p) => p.meaning).length;
+          const empty = items.length - filled;
+          const rows = items
+            .map((p, idx) => {
+              const meaningCell = p.meaning
+                ? '<td style="padding:4px 8px;color:#475569">' + p.meaning + '</td>'
+                : '<td style="padding:4px 8px;color:#dc2626;font-style:italic">— 뜻 없음 (Gemini로 채우기 가능) —</td>';
+              return (
                 '<tr><td style="padding:4px 8px;color:#94a3b8;font-size:0.8rem">' + (idx + 1) + '</td>' +
                 '<td style="padding:4px 8px;font-weight:800;color:#0f172a">' + p.word + '</td>' +
-                '<td style="padding:4px 8px;color:#475569">' + p.meaning + '</td></tr>'
-            )
+                meaningCell + '</tr>'
+              );
+            })
             .join("");
           textPreview.classList.remove("hidden");
+          const summary =
+            '📋 단어 총 ' + items.length + '개 · 뜻 채워짐 ' + filled + '개' +
+            (empty ? ' · <span style="color:#dc2626">뜻 없음 ' + empty + '개</span>' : '');
           textPreview.innerHTML =
-            '<div style="font-weight:800;color:#0f172a;margin-bottom:6px">📋 인식된 단어 ' + pairs.length + '개</div>' +
+            '<div style="font-weight:800;color:#0f172a;margin-bottom:6px">' + summary + '</div>' +
             '<div style="max-height:240px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff">' +
             '<table style="width:100%;border-collapse:collapse;font-size:0.88rem">' + rows + '</table>' +
             '</div>';
@@ -3639,53 +3743,128 @@
 
         btnPreviewText &&
           btnPreviewText.addEventListener("click", () => {
-            const pairs = parseVocabText(taInput && taInput.value);
-            renderTextVocabPreview(pairs);
+            const items = computeAllItems(taInput && taInput.value);
+            renderTextVocabPreview(items);
             if (!textStatus) return;
-            if (pairs.length) {
+            const filled = items.filter((p) => p.meaning).length;
+            const empty = items.length - filled;
+            if (items.length) {
               textStatus.className = "ai-status is-ok";
-              textStatus.textContent = "✅ " + pairs.length + "개의 (단어, 뜻)을 인식했어요. 확인 후 ‘단원 만들기’를 눌러주세요.";
+              textStatus.textContent =
+                "✅ " + items.length + "개 인식 (뜻 " + filled + "개)" +
+                (empty ? " · 뜻 없는 " + empty + "개는 🤖 ‘뜻 자동 채우기’로 채울 수 있어요." : "");
             } else {
               textStatus.className = "ai-status is-error";
-              textStatus.textContent = "⚠️ 인식된 단어가 없어요. 영어 단어 옆에 한국어 뜻이 함께 있는지 확인해 주세요.";
+              textStatus.textContent = "⚠️ 인식된 단어가 없어요. 영어 단어를 한 개 이상 입력해 주세요.";
             }
           });
 
         // 붙여넣기 직후 자동으로 미리보기 갱신 (사용자가 따로 누르지 않아도 보이게)
         taInput &&
           taInput.addEventListener("input", () => {
-            const pairs = parseVocabText(taInput.value);
-            renderTextVocabPreview(pairs);
+            const items = computeAllItems(taInput.value);
+            renderTextVocabPreview(items);
             if (textStatus) {
+              const filled = items.filter((p) => p.meaning).length;
+              const empty = items.length - filled;
               textStatus.className = "ai-status";
-              textStatus.textContent = pairs.length ? "🔍 " + pairs.length + "개 인식됨" : "";
+              textStatus.textContent = items.length
+                ? "🔍 " + items.length + "개 인식됨 (뜻 " + filled + "개" + (empty ? " · 뜻 없음 " + empty + "개" : "") + ")"
+                : "";
+            }
+          });
+
+        // 🤖 Gemini로 뜻 자동 채우기: 뜻이 비어있는 영어 단어들에 대해서만 호출 (입력 비용 절약)
+        btnFillMeaningsAI &&
+          btnFillMeaningsAI.addEventListener("click", async () => {
+            const items = computeAllItems(taInput && taInput.value);
+            const missing = items.filter((p) => !p.meaning).map((p) => p.word);
+            if (!items.length) {
+              if (textStatus) {
+                textStatus.className = "ai-status is-error";
+                textStatus.textContent = "⚠️ 먼저 영어 단어를 입력해 주세요.";
+              }
+              return;
+            }
+            if (!missing.length) {
+              if (textStatus) {
+                textStatus.className = "ai-status is-ok";
+                textStatus.textContent = "✅ 모든 단어에 이미 뜻이 있어요. 바로 ‘단원 만들기’를 눌러주세요.";
+              }
+              return;
+            }
+            const originalLabel = btnFillMeaningsAI.textContent;
+            btnFillMeaningsAI.disabled = true;
+            btnFillMeaningsAI.textContent = "🤖 Gemini가 " + missing.length + "개 단어 뜻을 찾는 중…";
+            if (textStatus) {
+              textStatus.className = "ai-status is-loading";
+              textStatus.textContent = "🤖 Gemini로 뜻 " + missing.length + "개 추출 중… (5~20초)";
+            }
+            try {
+              // 한 번에 너무 많이 요청하지 않도록 50개씩 배치
+              const batchSize = 50;
+              const merged = {};
+              for (let i = 0; i < missing.length; i += batchSize) {
+                const batch = missing.slice(i, i + batchSize);
+                const res = await fetchKoreanMeaningsFromGemini(batch);
+                Object.assign(merged, res);
+              }
+              // 입력란을 기존 짝지어진 것 + 새로 채운 것을 모두 한 줄에 하나씩 형식으로 다시 작성
+              const updated = items.map((it) => ({ word: it.word, meaning: it.meaning || merged[it.word] || "" }));
+              const newText = updated.map((p) => p.word + (p.meaning ? " " + p.meaning : "")).join("\n");
+              if (taInput) taInput.value = newText;
+              const filledCount = updated.filter((p) => p.meaning).length;
+              const stillEmpty = updated.length - filledCount;
+              renderTextVocabPreview(updated);
+              if (textStatus) {
+                textStatus.className = stillEmpty ? "ai-status is-error" : "ai-status is-ok";
+                textStatus.textContent =
+                  "✅ 자동 채우기 완료: 총 " + updated.length + "개 중 뜻 " + filledCount + "개 채워짐" +
+                  (stillEmpty ? " · " + stillEmpty + "개는 못 찾았어요 (수기 입력 필요)" : "");
+              }
+            } catch (e) {
+              console.warn(e);
+              if (textStatus) {
+                textStatus.className = "ai-status is-error";
+                textStatus.textContent = "⚠️ Gemini 호출 실패: " + (e && e.message ? e.message : String(e));
+              }
+            } finally {
+              btnFillMeaningsAI.disabled = false;
+              btnFillMeaningsAI.textContent = originalLabel;
             }
           });
 
         btnApplyText &&
           btnApplyText.addEventListener("click", () => {
-            const pairs = parseVocabText(taInput && taInput.value);
+            const items = computeAllItems(taInput && taInput.value);
+            const pairs = items.filter((p) => p.meaning); // 뜻 있는 것만 단원에 등록
             if (!pairs.length) {
               if (textStatus) {
                 textStatus.className = "ai-status is-error";
-                textStatus.textContent = "⚠️ 입력에서 (단어, 뜻) 짝을 찾지 못했어요. 예시 형식을 참고해 주세요.";
+                textStatus.textContent = "⚠️ 뜻이 있는 단어가 없어요. 🤖 ‘뜻 자동 채우기’를 먼저 눌러주세요.";
               }
               return;
             }
             if (pairs.length < 2) {
               if (textStatus) {
                 textStatus.className = "ai-status is-error";
-                textStatus.textContent = "⚠️ 단어가 최소 2개 이상이어야 단원을 만들 수 있어요. 현재 " + pairs.length + "개.";
+                textStatus.textContent = "⚠️ 뜻이 있는 단어가 최소 2개 이상이어야 단원을 만들 수 있어요. 현재 " + pairs.length + "개.";
               }
               return;
             }
             // Gemini 응답과 같은 형태로 만들어 buildUnitFromGemini 재사용
             const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "" })) };
             const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab" });
-            // 제목/아이콘을 "직접 입력" 표식으로 살짝 바꾼다.
-            const d = new Date();
-            newUnit.title = (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0") + " 단어 (직접입력)";
-            newUnit.icon = "⌨️";
+            // 사용자가 입력한 단원 이름이 있으면 그걸 사용, 없으면 날짜 기반 기본 이름
+            const customTitle = String((titleInput && titleInput.value) || "").trim();
+            if (customTitle) {
+              newUnit.title = customTitle;
+              newUnit.icon = "📖";
+            } else {
+              const d = new Date();
+              newUnit.title = (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0") + " 단어 (직접입력)";
+              newUnit.icon = "⌨️";
+            }
             if (!unitIsValid(newUnit, true)) {
               if (textStatus) {
                 textStatus.className = "ai-status is-error";
@@ -3703,9 +3882,13 @@
             renderMenuCardsState();
             if (textStatus) {
               textStatus.className = "ai-status is-ok";
-              textStatus.textContent = "✅ 새 단원 생성 완료: " + newUnit.title + " (단어 " + pairs.length + "개)";
+              const skipped = items.length - pairs.length;
+              textStatus.textContent =
+                "✅ 새 단원 생성: ‘" + newUnit.title + "’ (단어 " + pairs.length + "개)" +
+                (skipped ? " · 뜻 없는 " + skipped + "개는 제외됨" : "");
             }
             if (taInput) taInput.value = "";
+            if (titleInput) titleInput.value = "";
             renderTextVocabPreview([]);
           });
 
@@ -3801,16 +3984,22 @@
             actionBtnHtml = '<button type="button" class="uc-hide" title="이 사이트에서 기본 단원 숨기기">🙈</button>';
           }
 
+          // 사용자 단원만 이름 바꾸기 버튼 노출 (편집 모드일 때 좌상단)
+          const renameBtnHtml = !isDefault
+            ? '<button type="button" class="uc-rename" title="이름 바꾸기">✏️</button>'
+            : '';
+
           chip.innerHTML =
             '<div class="uc-ico">' + (u.icon || "📚") + '</div>' +
             '<div class="uc-title">' + u.title + '</div>' +
             '<div class="uc-date">' + (isDefault ? "기본 제공" : fmtDate(u.createdAt)) + '</div>' +
             '<div class="uc-tags">' + tags.join("") + '</div>' +
+            renameBtnHtml +
             actionBtnHtml;
 
           chip.addEventListener("click", (e) => {
             const t = e.target;
-            if (t && t.classList && (t.classList.contains("uc-del") || t.classList.contains("uc-hide") || t.classList.contains("uc-show"))) return;
+            if (t && t.classList && (t.classList.contains("uc-del") || t.classList.contains("uc-hide") || t.classList.contains("uc-show") || t.classList.contains("uc-rename"))) return;
             // 숨겨진 기본 단원은 활성화 불가
             if (isHiddenDefault) return;
             setActiveUnitId(u.id);
@@ -3854,6 +4043,26 @@
             showBtn.addEventListener("click", (e) => {
               e.stopPropagation();
               setDefaultUnitHidden(false);
+              applyActiveUnit();
+              renderMenuDataInfo();
+              renderUnitsRow();
+              renderMenuCardsState();
+            });
+          }
+          const renameBtn = chip.querySelector(".uc-rename");
+          if (renameBtn) {
+            renameBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              const next = prompt("새 단원 이름을 입력해 주세요.", u.title || "");
+              if (next === null) return;
+              const trimmed = String(next).trim();
+              if (!trimmed) {
+                alert("단원 이름은 비울 수 없어요.");
+                return;
+              }
+              if (trimmed === u.title) return;
+              const units = getUnits().map((x) => (x.id === u.id ? { ...x, title: trimmed } : x));
+              saveUnits(units);
               applyActiveUnit();
               renderMenuDataInfo();
               renderUnitsRow();
