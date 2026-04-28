@@ -13799,6 +13799,73 @@
        * 성공할 때까지 백그라운드에서 무한 재시도 (간격: 2s → 4s → 8s → 최대 30s).
        * source="deleted"로 설정되면 pull 필터에서 영구 제외 → 재등장 완전 차단.
        */
+      // 단일 schedule 행의 편집 필드를 즉시 Supabase에 PATCH한다.
+      // queueSchedulesSync의 safeUpsertRows 필터(서버 신선도/타임스탬프 비교)에 막혀
+      // 편집 결과(특히 jointCode/doorCode/memo 등)가 서버에 반영되지 않는 케이스를 보강하기 위한 안전망이다.
+      async function directPatchScheduleFields(item) {
+        if (!USE_SUPABASE_SYNC || !item) return false;
+        const scheduleId = String(item?.customerScheduleId || "").trim();
+        if (!scheduleId) return false;
+        const body = {
+          writer_name: String(item?.name || "작가미정").trim() || "작가미정",
+          date_key: String(item?.date || "").trim(),
+          time_key: String(item?.time || "09:00").trim() || "09:00",
+          place: String(item?.place || "").trim(),
+          pyeong: String(item?.pyeong || "").trim(),
+          composition: String(item?.composition || "사진만").trim() || "사진만",
+          memo: String(item?.memo || "").trim(),
+          joint_code: String(item?.jointCode || "").trim(),
+          door_code: String(item?.doorCode || "").trim()
+        };
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(scheduleId)}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify(body)
+            }
+          );
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.error(`[SCHEDULES] directPatchScheduleFields HTTP ${res.status} (id=${scheduleId})`, txt);
+            try { setSyncStatus(`스케줄 직접 PATCH 실패 (${res.status}) · RLS 정책 확인`, "error", { pinMs: 6000 }); } catch (_) {}
+            return false;
+          }
+          // 검증: 실제로 jointCode/doorCode가 반영됐는지 SELECT
+          try {
+            const vRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(scheduleId)}&select=joint_code,door_code,place,memo`,
+              { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+            );
+            if (vRes.ok) {
+              const rows = await vRes.json();
+              if (Array.isArray(rows) && rows.length === 0) {
+                // 서버에 행이 아직 없음 → upsert로 한 번 더 시도
+                console.log(`[SCHEDULES] PATCH 대상 없음 → upsert 재시도 (id=${scheduleId})`);
+                queueSchedulesSyncWithRetry(true);
+                return false;
+              }
+              const r = rows && rows[0];
+              if (r && (String(r.joint_code || "") !== body.joint_code || String(r.door_code || "") !== body.door_code)) {
+                console.warn(`[SCHEDULES] PATCH 검증 불일치 (id=${scheduleId})`, r, body);
+              }
+            }
+          } catch (_) {}
+          try { setSyncStatus(`스케줄 즉시 반영 ${formatSyncTime()}`, "ok", { pinMs: 2500 }); } catch (_) {}
+          return true;
+        } catch (e) {
+          console.error(`[SCHEDULES] directPatchScheduleFields 네트워크 오류 (id=${scheduleId})`, e);
+          try { setSyncStatus("스케줄 직접 PATCH 네트워크 오류", "error", { pinMs: 5000 }); } catch (_) {}
+          return false;
+        }
+      }
+
       async function directPatchScheduleSource(scheduleId, newSource) {
         if (!USE_SUPABASE_SYNC || !scheduleId) return;
         let delay = 2000;
@@ -17519,8 +17586,11 @@
         renderList();
         // 달력 인라인 수정도 즉시 Supabase에 push 해야 작가 페이지(원격 schedules 조회)에서 보인다.
         try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+        ensureScheduleUuid(item);
         syncWriterSchedulesStorage();
         queueSchedulesSyncWithRetry(true);
+        // queueSchedulesSync는 변화 비교/필터로 누락될 수 있어, 편집한 행은 직접 PATCH로 한 번 더 보장한다.
+        void directPatchScheduleFields(item);
       }
 
       function saveDateEdit(index, itemEl) {
@@ -17542,8 +17612,10 @@
         editingDateIndex = null;
         renderList();
         try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+        ensureScheduleUuid(item);
         syncWriterSchedulesStorage();
         queueSchedulesSyncWithRetry(true);
+        void directPatchScheduleFields(item);
       }
 
       function deleteSchedule(index) {
@@ -17930,8 +18002,10 @@
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          ensureScheduleUuid(item);
           syncWriterSchedulesStorage();
           queueSchedulesSyncWithRetry(true);
+          void directPatchScheduleFields(item);
           return;
         }
         if (action === "setQuickComposition" && !Number.isNaN(index) && item) {
@@ -17942,8 +18016,10 @@
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          ensureScheduleUuid(item);
           syncWriterSchedulesStorage();
           queueSchedulesSyncWithRetry(true);
+          void directPatchScheduleFields(item);
           return;
         }
         if (action === "startQuickPhotographer" && !Number.isNaN(index)) {
@@ -17965,8 +18041,10 @@
             markScheduleRowDirty(item, "schedule_mutation");
             syncCustomerScheduleFromAdminEdit(item, item.time || "");
             try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+            ensureScheduleUuid(item);
             syncWriterSchedulesStorage();
             queueSchedulesSyncWithRetry(true);
+            void directPatchScheduleFields(item);
           }
           quickPhotographerPickerIndex = null;
           renderList();
@@ -17982,8 +18060,10 @@
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
           try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          ensureScheduleUuid(item);
           syncWriterSchedulesStorage();
           queueSchedulesSyncWithRetry(true);
+          void directPatchScheduleFields(item);
           return;
         }
 
