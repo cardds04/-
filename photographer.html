@@ -1339,7 +1339,11 @@
           place: row.place,
           pyeong: row.pyeong,
           memo: row.memo,
-          composition: row.composition
+          composition: row.composition,
+          // ⚠️ jointCode/doorCode 누락 시 getMySchedules dedupe에서 customer 행을 덮어써
+          //    화면에 비번이 늘 "-"로만 보이는 회귀 버그가 발생한다. 반드시 함께 저장.
+          jointCode: row.jointCode,
+          doorCode: row.doorCode
         })));
         writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
         writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
@@ -1800,7 +1804,22 @@
           ].join("|");
           const key = keyBase || fallbackKey;
           if (!key) return;
-          dedupedMap.set(key, row);
+          // 같은 key 가 또 들어오면 객체를 병합한다.
+          // 단, 새로 들어온 행의 값이 빈 문자열/null/undefined면 기존 값을 유지(덮어쓰지 않음).
+          // 이게 없으면 STORAGE_ADMIN_WRITER_SCHEDULES 미러가 jointCode/doorCode/customerPhone 같은
+          // 필드를 누락한 채 들어왔을 때 customer 저장소의 진짜 값을 빈 값으로 지워버린다.
+          const prev = dedupedMap.get(key);
+          if (!prev) {
+            dedupedMap.set(key, row);
+            return;
+          }
+          const next = { ...prev };
+          Object.keys(row || {}).forEach((k) => {
+            const v = row[k];
+            if (v === undefined || v === null || v === "") return;
+            next[k] = v;
+          });
+          dedupedMap.set(key, next);
         });
         return [...dedupedMap.values()]
           .filter((row) => normalize(row?.name).toLowerCase() === writerName)
