@@ -13866,6 +13866,157 @@
         }
       }
 
+      // ─────────────────────────────────────────────────────────────────────
+      // 🛠 비번/메모/평수 등 로컬↔Supabase 불일치 진단 & 자동 복구
+      // 사용자가 작가 페이지에서 비번이 "-"로만 보이는 문제는 대부분
+      // (1) 처음 등록 시 비번을 비워두고 등록 → 나중에 인라인 편집으로 채웠는데
+      //     PATCH가 실패했거나 (customerScheduleId가 UUID 형식이 아님 등)
+      // (2) RLS 정책이 PATCH를 차단
+      // (3) 우연히 다른 sync가 빈 값으로 덮어씀
+      // 한 번에 모든 로컬 data를 훑어 차이가 나는 행만 직접 PATCH 한다.
+      // 콘솔에 결과를 표로 출력하므로 사용자/개발자가 원인을 즉시 알 수 있다.
+      // ─────────────────────────────────────────────────────────────────────
+      async function repairMissingScheduleCodesToSupabase(opts) {
+        opts = opts || {};
+        const verbose = opts.verbose !== false;
+        if (!USE_SUPABASE_SYNC) {
+          if (verbose) console.warn("[REPAIR] Supabase 동기화가 꺼져 있어 복구할 수 없습니다.");
+          return { skipped: true };
+        }
+        const localItems = (Array.isArray(data) ? data : []).filter((it) => {
+          if (!it) return false;
+          ensureScheduleUuid(it);
+          return Boolean(it.customerScheduleId);
+        });
+        if (!localItems.length) {
+          if (verbose) console.info("[REPAIR] 로컬 스케줄이 없어 종료.");
+          return { total: 0, mismatched: 0, fixed: 0, failed: 0, missingOnServer: 0 };
+        }
+        // 1) 서버 상태 조회
+        let remoteRows = [];
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?select=id,joint_code,door_code,memo,place,pyeong,composition,writer_name,date_key,time_key,source`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+          );
+          if (!res.ok) throw new Error(`schedules SELECT 실패 (${res.status})`);
+          remoteRows = await res.json();
+        } catch (e) {
+          console.error("[REPAIR] 원격 schedules 조회 실패", e);
+          return { error: e?.message || String(e) };
+        }
+        const remoteById = new Map((Array.isArray(remoteRows) ? remoteRows : []).map((r) => [String(r?.id || ""), r]));
+        // 2) 비교
+        const diagRows = [];
+        const toPatch = []; // { id, item, fields }
+        const missingOnServerIds = [];
+        localItems.forEach((it) => {
+          const id = String(it.customerScheduleId || "").trim();
+          if (!id) return;
+          const remote = remoteById.get(id);
+          const localJ = String(it.jointCode || "").trim();
+          const localD = String(it.doorCode || "").trim();
+          const localM = String(it.memo || "").trim();
+          const localP = String(it.place || "").trim();
+          const localPy = String(it.pyeong || "").trim();
+          if (!remote) {
+            if (localJ || localD || localM) missingOnServerIds.push(id);
+            diagRows.push({
+              id, company: it.company, date: it.date,
+              jointCode: localJ, doorCode: localD,
+              remote: "❌ 서버에 행 없음 (UUID 미일치 가능성 → upsert로 재생성)"
+            });
+            return;
+          }
+          const remoteJ = String(remote.joint_code || "").trim();
+          const remoteD = String(remote.door_code || "").trim();
+          const remoteM = String(remote.memo || "").trim();
+          const remoteP = String(remote.place || "").trim();
+          const remotePy = String(remote.pyeong || "").trim();
+          const diffFields = {};
+          if (localJ && localJ !== remoteJ) diffFields.joint_code = localJ;
+          if (localD && localD !== remoteD) diffFields.door_code = localD;
+          if (localM && localM !== remoteM) diffFields.memo = localM;
+          if (localP && localP !== remoteP) diffFields.place = localP;
+          if (localPy && localPy !== remotePy) diffFields.pyeong = localPy;
+          if (Object.keys(diffFields).length) {
+            toPatch.push({ id, item: it, fields: diffFields });
+            diagRows.push({
+              id, company: it.company, date: it.date,
+              jointCode: `${remoteJ || "(빈값)"} → ${localJ || "(빈값)"}`,
+              doorCode: `${remoteD || "(빈값)"} → ${localD || "(빈값)"}`,
+              remote: "🔧 차이 → PATCH 시도"
+            });
+          }
+        });
+        if (verbose) {
+          console.groupCollapsed(`[REPAIR] 점검 결과 (총 ${localItems.length}건 / 차이 ${toPatch.length}건 / 서버없음 ${missingOnServerIds.length}건)`);
+          if (diagRows.length) console.table(diagRows);
+          else console.info("✅ 모든 로컬 비번/메모가 서버와 일치합니다.");
+          console.groupEnd();
+        }
+        // 3) PATCH 실행
+        let fixed = 0, failed = 0;
+        for (const t of toPatch) {
+          try {
+            const res = await fetch(
+              `${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(t.id)}`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify(t.fields)
+              }
+            );
+            if (res.ok) {
+              fixed++;
+            } else {
+              failed++;
+              const txt = await res.text().catch(() => "");
+              console.error(`[REPAIR] PATCH 실패 id=${t.id} status=${res.status}`, txt);
+            }
+          } catch (e) {
+            failed++;
+            console.error(`[REPAIR] PATCH 네트워크 오류 id=${t.id}`, e);
+          }
+        }
+        // 4) 서버에 행이 아예 없는 항목은 일반 upsert로 재생성 시도
+        if (missingOnServerIds.length) {
+          try {
+            queueSchedulesSyncWithRetry(true);
+          } catch (_) {}
+        }
+        const summary = {
+          total: localItems.length,
+          mismatched: toPatch.length,
+          fixed,
+          failed,
+          missingOnServer: missingOnServerIds.length
+        };
+        if (verbose) console.info("[REPAIR] 요약", summary);
+        try {
+          if (fixed) setSyncStatus(`스케줄 비번 ${fixed}건 자동 복구 완료`, "ok", { pinMs: 4000 });
+          else if (failed) setSyncStatus(`스케줄 자동 복구 ${failed}건 실패 · 콘솔/RLS 확인`, "error", { pinMs: 6000 });
+        } catch (_) {}
+        return summary;
+      }
+      try { window.repairScheduleCodes = repairMissingScheduleCodesToSupabase; } catch (_) {}
+      // 페이지 로드 후 약간의 시간이 지나면(원격 pull 완료 후) 1회 자동 실행
+      try {
+        if (USE_SUPABASE_SYNC) {
+          setTimeout(() => {
+            // 첫 화면 로딩이 끝날 무렵에 한 번 실행 (콘솔에서 결과 확인 가능)
+            repairMissingScheduleCodesToSupabase({ verbose: true }).catch((e) =>
+              console.warn("[REPAIR] 자동 실행 실패", e)
+            );
+          }, 6000);
+        }
+      } catch (_) {}
+
       async function directPatchScheduleSource(scheduleId, newSource) {
         if (!USE_SUPABASE_SYNC || !scheduleId) return;
         let delay = 2000;
