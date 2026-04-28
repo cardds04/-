@@ -9557,6 +9557,14 @@
         target.name = item.name || "작가미정";
         target.writerPhone = item.writerPhone || photographerPhones[item.name] || "";
         target.writerCarNumber = item.writerCarNumber || photographerCarNumbers[item.name] || "";
+        // 달력 인라인 수정에서 바뀐 비번/장소/평수/메모/구성도 고객 저장소에 함께 반영해야
+        // 새로고침/재진입 시 옛 값으로 되돌아가지 않는다.
+        target.place = item.place || target.place || "";
+        target.pyeong = item.pyeong || "";
+        target.jointCode = item.jointCode || "";
+        target.doorCode = item.doorCode || "";
+        target.memo = item.memo || "";
+        if (item.composition) target.composition = item.composition;
         const isTimeChanged = Boolean(item.time) && item.time !== previousTime;
         const previousDateText = String(previousDate || "").trim();
         const currentDateText = String(item.date || "").trim();
@@ -17509,6 +17517,10 @@
 
         editingIndex = null;
         renderList();
+        // 달력 인라인 수정도 즉시 Supabase에 push 해야 작가 페이지(원격 schedules 조회)에서 보인다.
+        try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+        syncWriterSchedulesStorage();
+        queueSchedulesSyncWithRetry(true);
       }
 
       function saveDateEdit(index, itemEl) {
@@ -17529,6 +17541,9 @@
 
         editingDateIndex = null;
         renderList();
+        try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+        syncWriterSchedulesStorage();
+        queueSchedulesSyncWithRetry(true);
       }
 
       function deleteSchedule(index) {
@@ -17914,6 +17929,9 @@
           markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
+          try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          syncWriterSchedulesStorage();
+          queueSchedulesSyncWithRetry(true);
           return;
         }
         if (action === "setQuickComposition" && !Number.isNaN(index) && item) {
@@ -17923,6 +17941,9 @@
           markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
+          try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          syncWriterSchedulesStorage();
+          queueSchedulesSyncWithRetry(true);
           return;
         }
         if (action === "startQuickPhotographer" && !Number.isNaN(index)) {
@@ -17943,6 +17964,9 @@
             item.writerCarNumber = photographerCarNumbers[selected] || "";
             markScheduleRowDirty(item, "schedule_mutation");
             syncCustomerScheduleFromAdminEdit(item, item.time || "");
+            try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+            syncWriterSchedulesStorage();
+            queueSchedulesSyncWithRetry(true);
           }
           quickPhotographerPickerIndex = null;
           renderList();
@@ -17957,6 +17981,9 @@
           markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
+          try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          syncWriterSchedulesStorage();
+          queueSchedulesSyncWithRetry(true);
           return;
         }
 
