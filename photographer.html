@@ -2311,6 +2311,13 @@
             const statusLabel = target.getTime() < now.getTime() ? "촬영완료" : isToday ? "오늘촬영" : isTomorrow ? "내일촬영" : "촬영예정";
             const statusClass = isToday ? "status-label-today" : isTomorrow ? "status-label-tomorrow" : "";
             const navAddress = normalizeNavigationAddress(item.place || "-");
+            // 업체 전화번호: 등록된 게 있을 때만 한 줄 추가 (없으면 줄을 아예 표시하지 않음).
+            // 모바일에서 바로 통화할 수 있도록 tel: 링크로 감싸고, 옆에 작은 복사 버튼도 둔다.
+            const companyPhone = getCompanyPhoneForItem(item);
+            const hasCompanyPhone = companyPhone && companyPhone !== "-";
+            const companyPhoneLine = hasCompanyPhone
+              ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
+              : "";
             return `
               <article class="status-card">
                 <div class="status-head">
@@ -2319,7 +2326,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(navAddress)}">주소복사</button><br />
+                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(navAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
@@ -2332,13 +2339,24 @@
           .join("");
       }
       scheduleListEl.addEventListener("click", async (event) => {
-        const button = event.target.closest("button[data-action='copyNavAddress'][data-nav-address]");
-        if (!button) return;
-        const copied = await copyTextSmart(decodeURIComponent(String(button.dataset.navAddress || "")));
-        if (copied) {
-          alert("주소가 복사되었습니다.");
-        } else {
-          alert("주소 복사에 실패했습니다. 다시 시도해주세요.");
+        const navBtn = event.target.closest("button[data-action='copyNavAddress'][data-nav-address]");
+        if (navBtn) {
+          const copied = await copyTextSmart(decodeURIComponent(String(navBtn.dataset.navAddress || "")));
+          if (copied) {
+            alert("주소가 복사되었습니다.");
+          } else {
+            alert("주소 복사에 실패했습니다. 다시 시도해주세요.");
+          }
+          return;
+        }
+        const phoneBtn = event.target.closest("button[data-action='copyText'][data-copy-text]");
+        if (phoneBtn) {
+          const copied = await copyTextSmart(decodeURIComponent(String(phoneBtn.dataset.copyText || "")));
+          if (copied) {
+            alert("번호가 복사되었습니다.");
+          } else {
+            alert("번호 복사에 실패했습니다. 다시 시도해주세요.");
+          }
         }
       });
 
