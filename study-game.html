@@ -2032,6 +2032,21 @@
             </small>
             <div id="photoStatus" class="ai-status"></div>
             <div id="aiPreview" class="ai-preview hidden"></div>
+
+            <hr style="margin:14px 0;border:0;border-top:1px dashed #cbd5e1" />
+            <label class="ai-field">
+              <span>⌨️ 직접 입력 / 붙여넣기 <small>(영어 단어 + 한국어 뜻)</small></span>
+              <textarea id="vocabTextInput" rows="6" placeholder="예시 (한 줄에 하나):&#10;alter 바꾸다, 변경하다&#10;collapse 무너지다&#10;crisis 위기&#10;&#10;또는 한 줄에 여러 개 섞여 있어도 OK:&#10;alter 바꾸다 collapse 무너지다 crisis 위기&#10;&#10;구분자(탭/콜론/하이픈)도 자동 인식돼요:&#10;alter - 바꾸다&#10;collapse: 무너지다" style="width:100%;min-height:140px;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:0.92rem;resize:vertical;box-sizing:border-box"></textarea>
+            </label>
+            <div id="vocabTextPreview" class="ai-preview hidden" style="margin-top:6px"></div>
+            <div class="ai-row" style="margin-top:6px">
+              <button type="button" class="btn btn-primary" id="btnPreviewTextVocab" style="background:linear-gradient(135deg,#10b981,#059669)">🔍 미리보기 (자동 인식)</button>
+              <button type="button" class="btn btn-primary" id="btnApplyTextVocab" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)">⌨️ 입력한 단어로 단원 만들기</button>
+            </div>
+            <small class="ai-help" style="display:block;margin-top:4px">
+              💡 영어/한국어가 섞여 있어도 자동으로 분리해서 짝을 맞춰요. 먼저 <b>미리보기</b>로 확인한 뒤 단원으로 만들 수 있어요.
+            </small>
+            <div id="vocabTextStatus" class="ai-status"></div>
           </div>
         </section>
 
@@ -3529,6 +3544,171 @@
         btnApply && btnApply.addEventListener("click", () => runUpload({ mode: "full" }, btnApply));
         btnApplyVocab && btnApplyVocab.addEventListener("click", () => runUpload({ mode: "vocab" }, btnApplyVocab));
 
+        // ---------- ⌨️ 직접 입력 / 붙여넣기 → 자동 파싱 ----------
+        // 영어 + 한국어가 어떤 형식으로 섞여 있어도 (탭/콜론/하이픈/공백/번호 매김 등)
+        // 가능한 모든 (단어, 뜻) 짝을 추출한다.
+        function parseVocabText(input) {
+          const text = String(input || "");
+          const tokens = []; // { type: 'en' | 'ko', text }
+          let i = 0;
+          while (i < text.length) {
+            const ch = text[i];
+            if (/[A-Za-z]/.test(ch)) {
+              let j = i;
+              // 단어 내부 하이픈/어포스트로피 허용 + 공백으로 이어지는 두 단어 구(phrase)는 1단어로 처리하기엔
+              // 한국어 뜻 직전에 영어 뜻("to change")이 끼는 경우와 구분이 어려우므로 기본은 단일 토큰만 잡는다.
+              while (j < text.length && /[A-Za-z'\-]/.test(text[j])) j++;
+              tokens.push({ type: "en", text: text.slice(i, j), pos: i });
+              i = j;
+            } else if (/[가-힣]/.test(ch)) {
+              let j = i;
+              // 한국어 뜻은 한국어/숫자/공백/일반 구두점까지 포함하되, 다음 영어 또는 줄바꿈에서 멈춘다.
+              while (j < text.length && !/[A-Za-z\n\r]/.test(text[j])) j++;
+              tokens.push({ type: "ko", text: text.slice(i, j).trim().replace(/[\s,·.]+$/u, ""), pos: i });
+              i = j;
+            } else if (ch === "\n" || ch === "\r") {
+              tokens.push({ type: "br", text: "", pos: i });
+              i++;
+            } else {
+              i++;
+            }
+          }
+
+          const pairs = [];
+          const seen = new Set();
+          for (let k = 0; k < tokens.length; k++) {
+            const t = tokens[k];
+            if (t.type !== "en") continue;
+            // 다음 비-br 토큰을 찾아 그것이 ko 면 페어 성립.
+            // 사이에 br(줄바꿈) 1개까지는 허용 (다음 줄에 뜻이 적힌 경우),
+            // 다음 en 이 먼저 나오면 이 영어 단어는 짝 없음으로 무시.
+            let m = k + 1;
+            let allowedBr = 1;
+            while (m < tokens.length) {
+              const tm = tokens[m];
+              if (tm.type === "ko") {
+                const word = String(t.text).trim().toLowerCase();
+                const meaning = String(tm.text).trim();
+                if (word && meaning && word.length >= 2 && !seen.has(word)) {
+                  seen.add(word);
+                  pairs.push({ word, meaning });
+                }
+                break;
+              }
+              if (tm.type === "br") {
+                if (allowedBr <= 0) break;
+                allowedBr--;
+                m++;
+                continue;
+              }
+              if (tm.type === "en") break;
+              m++;
+            }
+          }
+          return pairs;
+        }
+
+        const taInput = $("vocabTextInput");
+        const btnPreviewText = $("btnPreviewTextVocab");
+        const btnApplyText = $("btnApplyTextVocab");
+        const textPreview = $("vocabTextPreview");
+        const textStatus = $("vocabTextStatus");
+
+        function renderTextVocabPreview(pairs) {
+          if (!textPreview) return;
+          if (!pairs.length) {
+            textPreview.classList.add("hidden");
+            textPreview.innerHTML = "";
+            return;
+          }
+          const rows = pairs
+            .map(
+              (p, idx) =>
+                '<tr><td style="padding:4px 8px;color:#94a3b8;font-size:0.8rem">' + (idx + 1) + '</td>' +
+                '<td style="padding:4px 8px;font-weight:800;color:#0f172a">' + p.word + '</td>' +
+                '<td style="padding:4px 8px;color:#475569">' + p.meaning + '</td></tr>'
+            )
+            .join("");
+          textPreview.classList.remove("hidden");
+          textPreview.innerHTML =
+            '<div style="font-weight:800;color:#0f172a;margin-bottom:6px">📋 인식된 단어 ' + pairs.length + '개</div>' +
+            '<div style="max-height:240px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.88rem">' + rows + '</table>' +
+            '</div>';
+        }
+
+        btnPreviewText &&
+          btnPreviewText.addEventListener("click", () => {
+            const pairs = parseVocabText(taInput && taInput.value);
+            renderTextVocabPreview(pairs);
+            if (!textStatus) return;
+            if (pairs.length) {
+              textStatus.className = "ai-status is-ok";
+              textStatus.textContent = "✅ " + pairs.length + "개의 (단어, 뜻)을 인식했어요. 확인 후 ‘단원 만들기’를 눌러주세요.";
+            } else {
+              textStatus.className = "ai-status is-error";
+              textStatus.textContent = "⚠️ 인식된 단어가 없어요. 영어 단어 옆에 한국어 뜻이 함께 있는지 확인해 주세요.";
+            }
+          });
+
+        // 붙여넣기 직후 자동으로 미리보기 갱신 (사용자가 따로 누르지 않아도 보이게)
+        taInput &&
+          taInput.addEventListener("input", () => {
+            const pairs = parseVocabText(taInput.value);
+            renderTextVocabPreview(pairs);
+            if (textStatus) {
+              textStatus.className = "ai-status";
+              textStatus.textContent = pairs.length ? "🔍 " + pairs.length + "개 인식됨" : "";
+            }
+          });
+
+        btnApplyText &&
+          btnApplyText.addEventListener("click", () => {
+            const pairs = parseVocabText(taInput && taInput.value);
+            if (!pairs.length) {
+              if (textStatus) {
+                textStatus.className = "ai-status is-error";
+                textStatus.textContent = "⚠️ 입력에서 (단어, 뜻) 짝을 찾지 못했어요. 예시 형식을 참고해 주세요.";
+              }
+              return;
+            }
+            if (pairs.length < 2) {
+              if (textStatus) {
+                textStatus.className = "ai-status is-error";
+                textStatus.textContent = "⚠️ 단어가 최소 2개 이상이어야 단원을 만들 수 있어요. 현재 " + pairs.length + "개.";
+              }
+              return;
+            }
+            // Gemini 응답과 같은 형태로 만들어 buildUnitFromGemini 재사용
+            const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "" })) };
+            const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab" });
+            // 제목/아이콘을 "직접 입력" 표식으로 살짝 바꾼다.
+            const d = new Date();
+            newUnit.title = (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0") + " 단어 (직접입력)";
+            newUnit.icon = "⌨️";
+            if (!unitIsValid(newUnit, true)) {
+              if (textStatus) {
+                textStatus.className = "ai-status is-error";
+                textStatus.textContent = "⚠️ 단원 생성에 실패했어요. 단어/뜻을 다시 확인해 주세요.";
+              }
+              return;
+            }
+            const units = getUnits();
+            units.push(newUnit);
+            saveUnits(units);
+            setActiveUnitId(newUnit.id);
+            applyActiveUnit();
+            renderMenuDataInfo();
+            renderUnitsRow();
+            renderMenuCardsState();
+            if (textStatus) {
+              textStatus.className = "ai-status is-ok";
+              textStatus.textContent = "✅ 새 단원 생성 완료: " + newUnit.title + " (단어 " + pairs.length + "개)";
+            }
+            if (taInput) taInput.value = "";
+            renderTextVocabPreview([]);
+          });
+
         btnReset && btnReset.addEventListener("click", () => {
           if (!confirm("기본 단원(자연재해 어휘)으로 되돌릴까요? 활성 단원만 기본으로 바뀌어요. (다른 단원 칩은 유지)")) return;
           setActiveUnitId(DEFAULT_UNIT_ID);
@@ -3750,7 +3930,7 @@
           } else {
             chip.style.display = "";
             chip.className = "review-chip locked";
-            chip.textContent = "⏳ " + (rev.stage + 1) + "차 시험 " + formatRemain(rev.nextAt - Date.now());
+            chip.textContent = "⏳ " + (rev.stage + 1) + "차 시험 " + formatRemain(rev.nextAt - Date.now()) + " · 📚 오늘 단어 보기";
           }
         }
       }
@@ -3785,10 +3965,16 @@
             opts.replayOnly = true; // 더 이상 stage 진행 안 함
           } else if (rev.stage > 0 && !isReviewReady(rev)) {
             const remain = formatRemain(rev.nextAt - Date.now());
-            alert(
+            // 시험은 잠겨있어도 오늘 외울 단어는 계속 볼 수 있도록 미리보기 모달을 연다.
+            const ok = confirm(
               "⏳ " + (rev.stage + 1) + "차 시험은 " + remain + "에 풀 수 있어요.\n" +
-              "(시간차 복습이라 너무 자주 풀면 효과가 줄어들어요!)",
+              "(시간차 복습이라 너무 자주 풀면 효과가 줄어들어요!)\n\n" +
+              "지금은 시험 대신 📚 오늘 외워야 할 단어를 미리 볼 수 있어요.\n" +
+              "단어 보기로 이동할까요? (확인 = 단어 보기 / 취소 = 닫기)"
             );
+            if (ok) {
+              try { openStudyListOverlay("vocab"); } catch (e) {}
+            }
             return;
           }
         }
