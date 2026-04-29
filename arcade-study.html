@@ -230,6 +230,15 @@
         <div class="units-grid" id="unitsGrid"></div>
 
         <div class="card" style="margin-top:18px">
+          <h3>🔍 블록 그림 미리보기 <span style="font-size:0.78rem;color:#64748b;font-weight:600">(시작 전에 메이크코드 블록이 어떻게 그려지는지 확인)</span></h3>
+          <div class="btn-row" style="margin-bottom:8px">
+            <button class="btn btn-secondary" id="btnPreviewBlocks">🧩 기본 단원 블록 미리 그려보기</button>
+            <button class="btn btn-secondary" id="btnPreviewClear">지우기</button>
+          </div>
+          <div id="previewArea" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
           <h3>🔑 Gemini API 키 (자동 저장)</h3>
           <p class="muted" style="margin:0 0 8px">사진을 올려서 단원을 자동 생성하려면 Google AI Studio에서 무료 API 키를 발급받아 입력하세요.</p>
           <div class="key-row">
@@ -327,8 +336,9 @@
       const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite";
 
       // MakeCode Arcade 공식 블록 렌더러 (한국어 모드)
+      // lang을 먼저 두고 forcelang=true 로 강제 적용 (영어로 빠지지 않게)
       const MAKECODE_RENDER_ORIGIN = "https://arcade.makecode.com";
-      const MAKECODE_RENDER_URL = MAKECODE_RENDER_ORIGIN + "/--docs?render=1&lang=ko";
+      const MAKECODE_RENDER_URL = MAKECODE_RENDER_ORIGIN + "/--docs?lang=ko&forcelang=true&render=1";
 
       /* ============================================================
        * MAKECODE BLOCK RENDERER (iframe + postMessage)
@@ -430,7 +440,8 @@
         questions: [
           {
             id: "d1",
-            code: "let mySprite: Sprite = null\nscene.setBackgroundImage(img`\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n`)\nmySprite = sprites.create(img`\n    . . . . . . . . . .\n    . . . . . . . . . .\n    . . . . 1 1 . . . .\n    . . . 1 1 1 1 . . .\n    . . . . 1 1 . . . .\n    . . . . . . . . . .\n`, SpriteKind.Player)\ncontroller.moveSprite(mySprite)",
+            // '시작하면'은 최상위 코드가 곧 on start 블록이 되도록 짧게 1줄만 둔다
+            code: "scene.setBackgroundImage(img`\n. . . . . . . . . . . . . . . .\n. . . . . . . . . . . . . . . .\n`)",
             blockText: "시작하면 (on start)",
             prompt: "이 '시작하면' 블록은 어떤 역할을 할까요?",
             options: [
@@ -444,8 +455,9 @@
           },
           {
             id: "d2",
-            code: "let mySprite = sprites.create(img`\n    . . . . 1 1 . . . .\n    . . . 1 1 1 1 . . .\n    . . 1 1 1 1 1 1 . .\n    . 1 1 1 1 1 1 1 1 .\n    . 1 1 . 1 1 . 1 1 .\n    . 1 1 1 1 1 1 1 1 .\n    . . 1 1 1 1 1 1 . .\n    . . . 1 1 1 1 . . .\n`, SpriteKind.Player)",
-            blockText: "스프라이트 만들기 + 변수에 저장",
+            // 사용자 게임의 변수 이름 '허연주'를 그대로 사용 (실제 블록과 똑같이 보이게)
+            code: "let 허연주 = sprites.create(img`\n. . . . 1 1 . . . .\n. . . 1 1 1 1 . . .\n. . 1 1 1 1 1 1 . .\n. 1 1 1 1 1 1 1 1 .\n. 1 1 . 1 1 . 1 1 .\n. 1 1 1 1 1 1 1 1 .\n. . 1 1 1 1 1 1 . .\n. . . 1 1 1 1 . . .\n`, SpriteKind.Player)",
+            blockText: "[허연주]에 스프라이트 (Player) 저장",
             prompt: "이 블록의 역할은 무엇일까요?",
             options: [
               "Player 종류의 새 스프라이트를 만들고, 변수에 저장해서 나중에 쓸 수 있게 함",
@@ -458,7 +470,7 @@
           },
           {
             id: "d3",
-            code: "scene.setBackgroundImage(img`\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n    7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n`)",
+            code: "scene.setBackgroundImage(img`\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n`)",
             blockText: "배경 이미지 설정",
             prompt: "이 블록은 어떤 일을 할까요?",
             options: [
@@ -486,8 +498,10 @@
           },
           {
             id: "d5",
-            code: "let mySprite: Sprite = null\ncontroller.moveSprite(mySprite, 100, 100)",
-            blockText: "스프라이트를 버튼으로 이동",
+            // 변수 이름을 '허연주'로 두고 controller.moveSprite 한 줄만 → 사용자가 보낸 스크린샷과 동일하게 1개 블록처럼 보이게 함
+            // (변수 선언이 같이 그려지지만, 변수명이 같아서 자연스러움)
+            code: "let 허연주: Sprite = null\ncontroller.moveSprite(허연주)",
+            blockText: "[허연주] 를 버튼으로 이동",
             prompt: "이 블록은 어떤 기능을 만들어 줄까요?",
             options: [
               "선택한 스프라이트를 방향키(↑↓←→) 또는 게임 패드 버튼으로 움직일 수 있게 해 줌",
@@ -1265,6 +1279,45 @@
       /* ============================================================
        * WIRING
        * ============================================================ */
+      /* ============================================================
+       * BLOCK PREVIEW (홈 화면에서 기본 단원 블록을 미리 그려보기)
+       * ============================================================ */
+      async function previewDefaultBlocks() {
+        const area = $("previewArea");
+        area.innerHTML = "";
+        const btn = $("btnPreviewBlocks");
+        btn.disabled = true; btn.textContent = "🧩 그리는 중...";
+        for (let i = 0; i < DEFAULT_UNIT.questions.length; i++) {
+          const q = DEFAULT_UNIT.questions[i];
+          const cell = document.createElement("div");
+          cell.style.cssText = "background:#fff;border-radius:14px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,0.08);min-width:200px;max-width:340px;flex:1 1 240px";
+          cell.innerHTML =
+            '<div style="font-weight:800;color:#1e293b;font-size:0.88rem;margin-bottom:6px">' +
+              (i + 1) + ". " + escapeHtml(q.blockText || "") +
+            '</div>' +
+            '<div class="preview-slot" style="background:#fef3c7;border-radius:10px;min-height:60px;display:flex;align-items:center;justify-content:center;padding:6px">' +
+              '<small style="color:#7c2d12;font-weight:700">⏳ 그리는 중...</small>' +
+            '</div>';
+          area.appendChild(cell);
+          const slot = cell.querySelector(".preview-slot");
+          try {
+            const res = await MakeCodeRenderer.render(q.code);
+            if (res && res.uri) {
+              slot.innerHTML = '<img src="' + res.uri + '" style="max-width:100%;max-height:200px"/>';
+            } else if (res && res.svg) {
+              slot.innerHTML = res.svg;
+              const svg = slot.querySelector("svg");
+              if (svg) { svg.style.maxWidth = "100%"; svg.style.maxHeight = "200px"; }
+            } else {
+              slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">⚠ 렌더 응답 없음</small>';
+            }
+          } catch (e) {
+            slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">❌ ' + escapeHtml(e.message || "렌더 실패") + '</small>';
+          }
+        }
+        btn.disabled = false; btn.textContent = "🧩 기본 단원 블록 미리 그려보기";
+      }
+
       function wireAll() {
         $("btnBack").addEventListener("click", goHome);
         $("btnAddBack").addEventListener("click", goHome);
@@ -1273,6 +1326,8 @@
         $("btnGenerate").addEventListener("click", handleGenerate);
         $("btnAddQuestion").addEventListener("click", () => { manualDraft.questions.push(makeBlankQuestion()); renderManualQuestions(); });
         $("btnSaveManual").addEventListener("click", saveManualUnit);
+        $("btnPreviewBlocks").addEventListener("click", previewDefaultBlocks);
+        $("btnPreviewClear").addEventListener("click", () => { $("previewArea").innerHTML = ""; });
         wirePhotoPreview();
         wireKeyUI();
       }
