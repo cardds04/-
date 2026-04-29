@@ -201,6 +201,27 @@
       .footer-link { text-align: center; margin-top: 26px; color: #64748b; font-weight: 700; font-size: 0.85rem; }
       .footer-link a { color: #4338ca; text-decoration: none; }
 
+      /* ── Category quick-launch (MakeCode 사이드바 스타일) ── */
+      .cat-bar { display: flex; flex-wrap: wrap; gap: 10px; }
+      .cat-btn {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 18px; border-radius: 14px; border: none;
+        font-family: inherit; font-weight: 900; font-size: 1rem;
+        color: #fff; cursor: pointer;
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
+        transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+        min-width: 130px; flex: 0 1 auto;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.18);
+      }
+      .cat-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.25); filter: brightness(1.08); }
+      .cat-btn:active { transform: translateY(0); }
+      .cat-btn .ico { font-size: 1.4rem; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); }
+      .cat-btn .label { letter-spacing: -0.01em; }
+      .cat-btn .count {
+        margin-left: auto; background: rgba(255,255,255,0.28);
+        padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 800;
+      }
+
       @media (max-width: 480px) {
         .grid-2 { grid-template-columns: 1fr; }
         .hud { padding: 8px 10px; flex-wrap: wrap; }
@@ -227,6 +248,11 @@
 
       <!-- VIEW: HOME (단원 목록) -->
       <div id="viewHome">
+        <div class="card" style="margin-bottom:14px">
+          <h3>🚀 카테고리별 빠르게 학습 <span style="font-size:0.78rem;color:#64748b;font-weight:600">(메이크코드 사이드바 그대로 — 클릭하면 바로 시작)</span></h3>
+          <div class="cat-bar" id="catBar"></div>
+        </div>
+
         <div class="units-grid" id="unitsGrid"></div>
 
         <div class="card" style="margin-top:18px">
@@ -962,7 +988,28 @@
       /* ============================================================
        * HOME - render unit list
        * ============================================================ */
+      function renderCategoryBar() {
+        const bar = $("catBar");
+        if (!bar) return;
+        bar.innerHTML = "";
+        DEFAULT_UNITS.forEach((u) => {
+          const total = (u.questions || []).length;
+          const best = bestScoreFor(u.id);
+          const btn = document.createElement("button");
+          btn.className = "cat-btn";
+          btn.style.background = u.accent || "#475569";
+          btn.title = u.title + " 단원 시작 (" + total + "문제)";
+          btn.innerHTML =
+            '<span class="ico">' + (u.icon || "🎮") + '</span>' +
+            '<span class="label">' + escapeHtml(u.title) + '</span>' +
+            '<span class="count">' + (best > 0 ? "🏆 " + best + "/" + total : total + "문제") + '</span>';
+          btn.addEventListener("click", () => startQuiz(u.id));
+          bar.appendChild(btn);
+        });
+      }
+
       function renderHome() {
+        renderCategoryBar();
         const grid = $("unitsGrid");
         grid.innerHTML = "";
         const units = getAllUnits();
