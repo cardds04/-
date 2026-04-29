@@ -210,7 +210,7 @@
   <body>
     <div class="app">
       <h1 class="page-title">🎮 Arcade Block Study</h1>
-      <p class="page-sub">메이크코드 아케이드 블록의 역할을 객관식으로 익히는 학습 게임</p>
+      <p class="page-sub">메이크코드 아케이드의 카테고리(스프라이트·컨트롤러·게임 등)별로 블록을 익히는 학습 게임</p>
 
       <!-- HUD -->
       <div class="hud" id="hud">
@@ -230,9 +230,9 @@
         <div class="units-grid" id="unitsGrid"></div>
 
         <div class="card" style="margin-top:18px">
-          <h3>🔍 블록 그림 미리보기 <span style="font-size:0.78rem;color:#64748b;font-weight:600">(시작 전에 메이크코드 블록이 어떻게 그려지는지 확인)</span></h3>
+          <h3>🔍 블록 그림 미리보기 <span style="font-size:0.78rem;color:#64748b;font-weight:600">(모든 카테고리의 블록이 어떻게 그려지는지 한눈에 보기)</span></h3>
           <div class="btn-row" style="margin-bottom:8px">
-            <button class="btn btn-secondary" id="btnPreviewBlocks">🧩 기본 단원 블록 미리 그려보기</button>
+            <button class="btn btn-secondary" id="btnPreviewBlocks">🧩 모든 카테고리 블록 미리 그려보기</button>
             <button class="btn btn-secondary" id="btnPreviewClear">지우기</button>
           </div>
           <div id="previewArea" style="display:flex;flex-wrap:wrap;gap:10px"></div>
@@ -428,162 +428,430 @@
       })();
 
       /* ============================================================
-       * DEFAULT BUILT-IN UNIT (메이크코드 아케이드 기본 블록 10문제)
-       * 첨부 스크린샷의 블록 + 자주 쓰이는 핵심 블록들
+       * DEFAULT BUILT-IN UNITS (메이크코드 카테고리별 단원)
+       * 카테고리: 🚀 스프라이트 / 🎮 컨트롤러 / 🎯 게임 / 🎧 음악
+       *           / 🌲 장면 / 📋 정보 / 🔁 반복 / 🔀 논리
+       * 변수명은 사용자 게임과 같이 '허연주'로 통일
        * ============================================================ */
-      const DEFAULT_UNIT = {
-        id: "default",
-        title: "MakeCode Arcade 기본 블록",
-        icon: "🎮",
-        builtin: true,
-        createdAt: 0,
-        questions: [
-          {
-            id: "d1",
-            // '시작하면'은 최상위 코드가 곧 on start 블록이 되도록 짧게 1줄만 둔다
-            code: "scene.setBackgroundImage(img`\n. . . . . . . . . . . . . . . .\n. . . . . . . . . . . . . . . .\n`)",
-            blockText: "시작하면 (on start)",
-            prompt: "이 '시작하면' 블록은 어떤 역할을 할까요?",
-            options: [
-              "게임이 처음 시작될 때 한 번만 실행되는 코드 영역",
-              "버튼을 누를 때마다 반복 실행되는 코드 영역",
-              "스프라이트가 충돌할 때 실행되는 코드 영역",
-              "1초마다 자동으로 실행되는 코드 영역"
-            ],
-            answer: 0,
-            explanation: "'시작하면(on start)' 블록 안에 넣은 코드는 게임이 시작될 때 딱 한 번만 실행돼요. 보통 변수 초기화, 배경 설정, 플레이어 만들기 같은 준비 작업을 넣어요."
-          },
-          {
-            id: "d2",
-            // 사용자 게임의 변수 이름 '허연주'를 그대로 사용 (실제 블록과 똑같이 보이게)
-            code: "let 허연주 = sprites.create(img`\n. . . . 1 1 . . . .\n. . . 1 1 1 1 . . .\n. . 1 1 1 1 1 1 . .\n. 1 1 1 1 1 1 1 1 .\n. 1 1 . 1 1 . 1 1 .\n. 1 1 1 1 1 1 1 1 .\n. . 1 1 1 1 1 1 . .\n. . . 1 1 1 1 . . .\n`, SpriteKind.Player)",
-            blockText: "[허연주]에 스프라이트 (Player) 저장",
-            prompt: "이 블록의 역할은 무엇일까요?",
-            options: [
-              "Player 종류의 새 스프라이트를 만들고, 변수에 저장해서 나중에 쓸 수 있게 함",
-              "Player라는 이름의 글자를 화면에 출력함",
-              "Player 종류 스프라이트를 화면에서 지움",
-              "Player 점수를 1만큼 늘림"
-            ],
-            answer: 0,
-            explanation: "'스프라이트 만들기' 블록은 이미지로 새 캐릭터(스프라이트)를 만들어요. '종류 Player'로 지정하면 이 스프라이트가 플레이어임을 표시하고, 변수에 저장하면 다른 블록에서 이 스프라이트를 다시 사용할 수 있어요."
-          },
-          {
-            id: "d3",
-            code: "scene.setBackgroundImage(img`\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n`)",
-            blockText: "배경 이미지 설정",
-            prompt: "이 블록은 어떤 일을 할까요?",
-            options: [
-              "게임 화면의 배경 그림을 설정함",
-              "스프라이트의 모양을 바꿈",
-              "음악을 배경으로 재생함",
-              "게임을 정지시킴"
-            ],
-            answer: 0,
-            explanation: "'배경 이미지 설정' 블록은 게임 무대(scene)의 배경 그림을 정해요. 보통 시작하면 블록 안에 한 번 넣어서 배경을 깔아두는 데 사용해요."
-          },
-          {
-            id: "d4",
-            code: "music.playMelody(\"C5 B A G F E D C \", 120)",
-            blockText: "멜로디 재생 (템포 120)",
-            prompt: "이 멜로디 재생 블록의 역할로 가장 알맞은 것은?",
-            options: [
-              "지정한 멜로디를 정해진 빠르기로 연주하고, 끝날 때까지 다음 블록을 기다리게 함",
-              "멜로디를 작곡해서 새로 만들어 줌",
-              "스피커 음량을 0으로 줄임",
-              "음악 파일을 인터넷에서 다운로드함"
-            ],
-            answer: 0,
-            explanation: "'멜로디 재생' 블록은 입력한 음표 패턴을 BPM(분당 박자)에 맞춰 연주해요. '완료될 때까지' 옵션을 선택하면 노래가 끝날 때까지 다음 블록을 실행하지 않고 기다려요."
-          },
-          {
-            id: "d5",
-            // 변수 이름을 '허연주'로 두고 controller.moveSprite 한 줄만 → 사용자가 보낸 스크린샷과 동일하게 1개 블록처럼 보이게 함
-            // (변수 선언이 같이 그려지지만, 변수명이 같아서 자연스러움)
-            code: "let 허연주: Sprite = null\ncontroller.moveSprite(허연주)",
-            blockText: "[허연주] 를 버튼으로 이동",
-            prompt: "이 블록은 어떤 기능을 만들어 줄까요?",
-            options: [
-              "선택한 스프라이트를 방향키(↑↓←→) 또는 게임 패드 버튼으로 움직일 수 있게 해 줌",
-              "스프라이트를 화면 가운데로 순간이동시킴",
-              "스프라이트의 색깔을 무지개로 바꿈",
-              "스프라이트를 마우스 클릭으로만 이동시킴"
-            ],
-            answer: 0,
-            explanation: "'~를 버튼으로 이동' 블록은 한 줄로 플레이어 스프라이트의 키보드/패드 조작을 켜 주는 아주 유용한 블록이에요. 보통 시작하면 블록 안에 넣어서 게임 시작과 함께 조작이 가능하게 해요."
-          },
-          {
-            id: "d6",
-            code: "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {\n})",
-            blockText: "A 버튼 누를 때",
-            prompt: "이 블록은 언제 안쪽 코드를 실행할까요?",
-            options: [
-              "사용자가 A 버튼을 누르는 순간에 실행됨",
-              "게임이 시작될 때 한 번 실행됨",
-              "A 버튼을 떼는 순간에만 실행됨",
-              "A라는 이름의 변수가 바뀔 때 실행됨"
-            ],
-            answer: 0,
-            explanation: "'~ 버튼 누를 때' 블록은 이벤트 블록이에요. 안에 넣은 코드는 사용자가 A 버튼을 누르는 그 순간에 한 번 실행돼요. (옵션을 '뗄 때'로 바꾸면 손가락을 떼는 순간 실행돼요.)"
-          },
-          {
-            id: "d7",
-            code: "game.onUpdate(function () {\n})",
-            blockText: "영원히 / 매 프레임마다 (forever)",
-            prompt: "'영원히' 블록은 어떻게 동작할까요?",
-            options: [
-              "안에 있는 코드를 게임이 끝날 때까지 계속 반복 실행함",
-              "안에 있는 코드를 한 번만 실행하고 끝냄",
-              "10초 동안만 코드를 실행함",
-              "코드를 실행하지 않고 무시함"
-            ],
-            answer: 0,
-            explanation: "'영원히(forever)' 블록은 무한 반복 블록이에요. 매 프레임마다 안의 코드를 다시 실행하기 때문에, 매 순간 체크해야 하는 일(예: 적 만들기, 상태 검사)에 잘 어울려요."
-          },
-          {
-            id: "d8",
-            code: "sprites.onOverlap(SpriteKind.Player, SpriteKind.Food, function (sprite, otherSprite) {\n})",
-            blockText: "스프라이트 (Player) 가 (Food) 와 겹쳤을 때",
-            prompt: "이 'on overlap' 블록의 동작으로 옳은 것은?",
-            options: [
-              "Player 종류 스프라이트와 Food 종류 스프라이트가 서로 닿는 순간 안의 코드가 실행됨",
-              "Player와 Food를 한 번에 같은 자리로 이동시킴",
-              "Food 스프라이트를 Player로 바꿔 줌",
-              "Player가 점프할 때마다 실행됨"
-            ],
-            answer: 0,
-            explanation: "'겹쳤을 때(on overlap)' 블록은 충돌 이벤트 블록이에요. 두 종류의 스프라이트가 화면에서 닿으면 안의 코드가 실행돼서, 점수 올리기·아이템 먹기·적과 부딪혀서 죽기 같은 동작을 만들 수 있어요."
-          },
-          {
-            id: "d9",
-            code: "info.changeScoreBy(1)",
-            blockText: "점수에 1만큼 변경",
-            prompt: "이 블록의 역할은 무엇일까요?",
-            options: [
-              "현재 점수에 1을 더해 줌",
-              "점수를 1로 새로 설정함 (덮어쓰기)",
-              "점수 글자색을 빨간색으로 바꿈",
-              "점수가 0이 되도록 초기화함"
-            ],
-            answer: 0,
-            explanation: "'점수에 ~만큼 변경(change score by)' 블록은 현재 점수에 입력한 값을 더해요. 1을 넣으면 +1, -1을 넣으면 -1이 돼요. 점수를 특정 값으로 바로 정하고 싶다면 '점수 설정' 블록을 사용해요."
-          },
-          {
-            id: "d10",
-            code: "game.over(false)",
-            blockText: "게임 종료 (LOSE)",
-            prompt: "이 블록은 무엇을 할까요?",
-            options: [
-              "게임을 끝내고 'LOSE'(패배) 결과 화면을 보여 줌",
-              "게임을 잠깐 일시정지함",
-              "현재 스프라이트만 사라지게 함",
-              "캐릭터를 처음 위치로 되돌림"
-            ],
-            answer: 0,
-            explanation: "'게임 종료(game over)' 블록은 게임을 마치고 결과 화면을 띄워요. LOSE를 선택하면 패배 화면, WIN을 선택하면 승리 화면이 나와요. 보통 체력이 0이 되거나 시간이 다 됐을 때 실행되도록 만들어요."
-          }
-        ]
-      };
+      const DEFAULT_UNITS = [
+        // ──────────────── 🚀 스프라이트 ────────────────
+        {
+          id: "cat-sprites",
+          title: "스프라이트",
+          icon: "🚀",
+          accent: "#dc4a3a",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "sp1",
+              code: "let 허연주 = sprites.create(img`\n. . . . 1 1 . . . .\n. . . 1 1 1 1 . . .\n. . 1 1 1 1 1 1 . .\n. 1 1 1 1 1 1 1 1 .\n. 1 1 . 1 1 . 1 1 .\n. 1 1 1 1 1 1 1 1 .\n. . 1 1 1 1 1 1 . .\n. . . 1 1 1 1 . . .\n`, SpriteKind.Player)",
+              blockText: "스프라이트 만들기 + 변수에 저장",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "Player 종류의 새 스프라이트를 만들고 변수 '허연주'에 저장함",
+                "변수 '허연주'에 들어 있는 글자를 화면에 출력함",
+                "변수 '허연주'를 0으로 초기화함",
+                "Player 종류 스프라이트를 화면에서 모두 지움"
+              ],
+              answer: 0,
+              explanation: "'스프라이트 만들기' 블록은 이미지를 가진 새 캐릭터를 만들어요. 종류(Player)를 정해두면 충돌 같은 이벤트에서 누가 누구인지 구분할 수 있어요. 변수에 저장해두면 다른 블록에서 이 스프라이트를 다시 사용할 수 있어요."
+            },
+            {
+              id: "sp2",
+              code: "sprites.onOverlap(SpriteKind.Player, SpriteKind.Food, function (sprite, otherSprite) {\n})",
+              blockText: "(Player)가 (Food)와 겹쳤을 때",
+              prompt: "이 'on overlap' 블록의 동작은?",
+              options: [
+                "Player 종류와 Food 종류 스프라이트가 서로 닿는 순간 안의 코드가 실행됨",
+                "Player와 Food를 같은 자리로 이동시킴",
+                "Food를 Player로 바꿔 줌",
+                "Player가 점프할 때마다 실행됨"
+              ],
+              answer: 0,
+              explanation: "'겹쳤을 때' 블록은 충돌 이벤트 블록이에요. 두 종류의 스프라이트가 닿으면 안의 코드가 실행되어 점수 올리기, 아이템 먹기, 적에게 맞기 같은 일을 만들 수 있어요."
+            },
+            {
+              id: "sp3",
+              code: "let 허연주: Sprite = null\n허연주.destroy()",
+              blockText: "스프라이트 없애기 (destroy)",
+              prompt: "이 블록은 어떤 일을 할까요?",
+              options: [
+                "변수에 저장된 스프라이트를 게임에서 사라지게 함",
+                "스프라이트를 화면 가운데로 이동시킴",
+                "스프라이트의 색을 빨간색으로 바꿈",
+                "스프라이트의 점수를 1만큼 늘림"
+              ],
+              answer: 0,
+              explanation: "'없애기(destroy)' 블록은 스프라이트를 게임 무대에서 완전히 제거해요. 적을 무찌르거나 아이템을 먹은 뒤 사라지게 만들 때 자주 사용해요."
+            },
+            {
+              id: "sp4",
+              code: "let 허연주: Sprite = null\n허연주.setPosition(80, 60)",
+              blockText: "스프라이트 위치 설정 (x, y)",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "스프라이트를 화면의 (80, 60) 위치로 즉시 옮김",
+                "스프라이트의 크기를 80x60으로 바꿈",
+                "스프라이트의 속도를 (80, 60)으로 설정함",
+                "80번부터 60번 픽셀까지 색칠함"
+              ],
+              answer: 0,
+              explanation: "'위치 설정' 블록은 스프라이트의 x, y 좌표를 한 번에 바꿔서 그 자리로 순간 이동시켜요. 게임을 다시 시작할 때 캐릭터를 시작 위치로 되돌릴 때 자주 써요."
+            }
+          ]
+        },
+
+        // ──────────────── 🎮 컨트롤러 ────────────────
+        {
+          id: "cat-controller",
+          title: "컨트롤러",
+          icon: "🎮",
+          accent: "#a04123",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "ct1",
+              code: "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {\n})",
+              blockText: "A 버튼 누를 때",
+              prompt: "이 블록은 언제 안쪽 코드를 실행할까요?",
+              options: [
+                "사용자가 A 버튼을 누르는 순간에 한 번 실행됨",
+                "게임이 시작될 때 한 번 실행됨",
+                "A라는 변수가 바뀔 때 실행됨",
+                "1초마다 자동으로 실행됨"
+              ],
+              answer: 0,
+              explanation: "이 블록은 이벤트 블록이에요. A 버튼을 누르는 순간 안의 코드가 한 번 실행돼서, 점프나 공격 같은 동작을 만들 때 써요."
+            },
+            {
+              id: "ct2",
+              code: "let 허연주: Sprite = null\ncontroller.moveSprite(허연주)",
+              blockText: "[허연주]를 버튼으로 이동",
+              prompt: "이 블록은 어떤 기능을 만들어 줄까요?",
+              options: [
+                "스프라이트를 방향 버튼(↑↓←→)으로 움직일 수 있게 해 줌",
+                "스프라이트를 화면 가운데로 순간이동시킴",
+                "스프라이트를 마우스 클릭으로만 이동시킴",
+                "스프라이트의 색깔을 바꿈"
+              ],
+              answer: 0,
+              explanation: "이 한 줄로 플레이어 스프라이트의 키보드/패드 조작이 자동으로 켜져요. 보통 시작하면 블록 안에 한 번만 넣어 두면 게임 내내 작동해요."
+            },
+            {
+              id: "ct3",
+              code: "controller.B.onEvent(ControllerButtonEvent.Released, function () {\n})",
+              blockText: "B 버튼 뗄 때",
+              prompt: "이 블록은 언제 실행될까요?",
+              options: [
+                "B 버튼을 누르고 있다가 손가락을 떼는 순간에 실행됨",
+                "B 버튼을 누르는 순간에 실행됨",
+                "B 버튼을 1초 이상 누르고 있을 때 실행됨",
+                "게임이 끝날 때 실행됨"
+              ],
+              answer: 0,
+              explanation: "'뗄 때(Released)'를 고르면 버튼에서 손가락이 떨어지는 순간 한 번 실행돼요. 누를 때(Pressed) 옵션과 짝을 이루는 이벤트예요."
+            },
+            {
+              id: "ct4",
+              code: "if (controller.left.isPressed()) {\n}",
+              blockText: "왼쪽 버튼이 눌려 있다면",
+              prompt: "이 코드는 어떤 동작을 할까요?",
+              options: [
+                "지금 이 순간 왼쪽 방향 버튼이 눌려있는지 확인해서, 눌려있으면 안의 코드를 실행함",
+                "왼쪽 버튼이 한 번이라도 눌렸으면 항상 실행됨",
+                "왼쪽 버튼을 자동으로 누르게 함",
+                "버튼을 왼쪽 방향으로 옮김"
+              ],
+              answer: 0,
+              explanation: "'~ is pressed' 블록은 그 순간 버튼이 눌려있는지 묻는 검사 블록이에요. 보통 '영원히' 안에 넣어서 매 프레임마다 검사하는 식으로 사용해요."
+            }
+          ]
+        },
+
+        // ──────────────── 🎯 게임 ────────────────
+        {
+          id: "cat-game",
+          title: "게임",
+          icon: "🎯",
+          accent: "#8c52cc",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "gm1",
+              code: "game.onUpdate(function () {\n})",
+              blockText: "영원히 / 매 프레임마다",
+              prompt: "이 '영원히' 블록은 어떻게 동작할까요?",
+              options: [
+                "안의 코드를 게임이 끝날 때까지 매 프레임마다 계속 실행함",
+                "안의 코드를 한 번만 실행하고 끝냄",
+                "10초 동안만 코드를 실행함",
+                "코드를 실행하지 않고 무시함"
+              ],
+              answer: 0,
+              explanation: "'영원히(forever)' 블록은 무한 반복이에요. 매 프레임마다 안의 코드를 다시 실행해서, 매 순간 체크해야 하는 일(상태 검사, 적 생성 등)에 어울려요."
+            },
+            {
+              id: "gm2",
+              code: "game.over(false)",
+              blockText: "게임 종료 (LOSE)",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "게임을 끝내고 'LOSE'(패배) 결과 화면을 보여 줌",
+                "게임을 잠깐 일시정지함",
+                "현재 스프라이트만 사라지게 함",
+                "점수를 0으로 되돌림"
+              ],
+              answer: 0,
+              explanation: "'게임 종료' 블록은 게임을 마치고 결과 화면을 띄워요. false는 패배(LOSE), true는 승리(WIN)예요. 체력이 0이 되거나 시간이 다 됐을 때 자주 사용해요."
+            },
+            {
+              id: "gm3",
+              code: "game.splash(\"안녕!\", \"게임 시작!\")",
+              blockText: "스플래시 메시지 보여주기",
+              prompt: "이 블록은 어떤 일을 할까요?",
+              options: [
+                "화면 가운데에 메시지 창을 띄워 글자를 보여주고, A 버튼을 누르면 닫힘",
+                "스피커에서 '안녕!' 소리를 재생함",
+                "배경 색을 안녕색으로 바꿈",
+                "스프라이트가 인사 동작을 하게 함"
+              ],
+              answer: 0,
+              explanation: "'splash' 블록은 게임을 잠깐 멈추고 알림 창을 띄워줘요. 게임 시작 안내, 스테이지 설명, 미션 안내 같은 메시지를 보여줄 때 좋아요."
+            }
+          ]
+        },
+
+        // ──────────────── 🎧 음악 ────────────────
+        {
+          id: "cat-music",
+          title: "음악",
+          icon: "🎧",
+          accent: "#ee519c",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "mu1",
+              code: "music.playMelody(\"C5 B A G F E D C \", 120)",
+              blockText: "멜로디 재생 (템포 120)",
+              prompt: "이 블록의 역할로 가장 알맞은 것은?",
+              options: [
+                "지정한 멜로디를 정해진 빠르기(BPM)로 연주함",
+                "멜로디를 새로 작곡해서 만들어 줌",
+                "스피커 음량을 0으로 줄임",
+                "음악을 인터넷에서 다운로드함"
+              ],
+              answer: 0,
+              explanation: "'멜로디 재생' 블록은 입력한 음표 패턴을 BPM(분당 박자)에 맞춰 연주해요. 숫자가 클수록 빠르게 재생돼요."
+            },
+            {
+              id: "mu2",
+              code: "music.play(music.melodyPlayable(music.powerUp), music.PlaybackMode.UntilDone)",
+              blockText: "효과음 재생 (Power Up)",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "미리 만들어진 'Power Up' 효과음을 재생하고, 끝날 때까지 다음 블록을 기다림",
+                "전원을 켜는 동작을 함",
+                "스프라이트의 힘을 1만큼 올림",
+                "스피커 음량을 최대로 올림"
+              ],
+              answer: 0,
+              explanation: "메이크코드에는 PowerUp, JumpUp, BaDing 같은 효과음이 미리 준비되어 있어요. 이 블록으로 골라서 재생할 수 있고, 'UntilDone'을 고르면 소리가 끝날 때까지 다음 블록을 멈춰서 기다려요."
+            }
+          ]
+        },
+
+        // ──────────────── 🌲 장면 ────────────────
+        {
+          id: "cat-scene",
+          title: "장면",
+          icon: "🌲",
+          accent: "#284f76",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "sc1",
+              code: "scene.setBackgroundImage(img`\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n`)",
+              blockText: "배경 이미지 설정",
+              prompt: "이 블록은 어떤 일을 할까요?",
+              options: [
+                "게임 화면의 배경 그림을 설정함",
+                "스프라이트의 모양을 바꿈",
+                "음악을 배경으로 재생함",
+                "게임을 정지시킴"
+              ],
+              answer: 0,
+              explanation: "'배경 이미지 설정' 블록은 게임 무대(scene)의 배경 그림을 정해요. 보통 시작하면 블록 안에 한 번 넣어서 배경을 깔아두는 데 사용해요."
+            },
+            {
+              id: "sc2",
+              code: "scene.setBackgroundColor(9)",
+              blockText: "배경색 설정",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "게임 화면의 배경을 단색(여기서는 9번 색)으로 채움",
+                "캐릭터의 색을 바꿈",
+                "9번 점수를 더해줌",
+                "9초 후에 게임을 종료함"
+              ],
+              answer: 0,
+              explanation: "'배경색 설정' 블록은 배경을 그림 없이 단색으로 채워요. 메이크코드 색상은 0~15번 팔레트로 정해져 있어요."
+            },
+            {
+              id: "sc3",
+              code: "let 허연주: Sprite = null\nscene.cameraFollowSprite(허연주)",
+              blockText: "카메라가 스프라이트를 따라가게 하기",
+              prompt: "이 블록은 어떤 효과를 줄까요?",
+              options: [
+                "카메라가 지정한 스프라이트를 따라다녀서, 큰 맵을 스크롤하며 보여줄 수 있게 함",
+                "스프라이트가 카메라 모양으로 바뀜",
+                "사진을 한 장 찍어 저장함",
+                "스프라이트를 카메라 앞으로 순간이동시킴"
+              ],
+              answer: 0,
+              explanation: "'cameraFollowSprite' 블록은 카메라(우리가 보는 화면)를 그 스프라이트에 묶어요. 화면보다 큰 맵을 만들고 캐릭터가 움직일 때 카메라가 따라가는 효과를 만들 수 있어요."
+            }
+          ]
+        },
+
+        // ──────────────── 📋 정보 ────────────────
+        {
+          id: "cat-info",
+          title: "정보",
+          icon: "📋",
+          accent: "#cc5b22",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "in1",
+              code: "info.changeScoreBy(1)",
+              blockText: "점수에 1만큼 변경",
+              prompt: "이 블록의 역할은?",
+              options: [
+                "현재 점수에 1을 더해 줌",
+                "점수를 1로 새로 설정함 (덮어쓰기)",
+                "점수 글자색을 빨간색으로 바꿈",
+                "점수가 0이 되도록 초기화함"
+              ],
+              answer: 0,
+              explanation: "'점수에 ~만큼 변경' 블록은 현재 점수에 입력 값을 더해요. -1을 넣으면 점수가 줄어들고, 1을 넣으면 늘어나요."
+            },
+            {
+              id: "in2",
+              code: "info.setLife(3)",
+              blockText: "목숨 설정 (3)",
+              prompt: "이 블록은 무엇을 할까요?",
+              options: [
+                "플레이어의 목숨(라이프)을 3개로 새로 설정함",
+                "목숨이 3개일 때만 실행됨",
+                "3초 후에 죽게 만듦",
+                "목숨을 3개 더 늘림"
+              ],
+              answer: 0,
+              explanation: "'목숨 설정(setLife)' 블록은 라이프 값을 그 숫자로 직접 정해요. (목숨을 늘리고 줄이고 싶을 때는 'changeLifeBy' 블록을 써요.)"
+            },
+            {
+              id: "in3",
+              code: "info.startCountdown(30)",
+              blockText: "30초 카운트다운 시작",
+              prompt: "이 블록은 어떤 일을 할까요?",
+              options: [
+                "30초짜리 타이머를 시작해서, 시간이 0이 되면 게임이 자동으로 끝남",
+                "30점을 추가해 줌",
+                "30초 동안 게임을 멈춤",
+                "초당 30번 코드를 실행함"
+              ],
+              answer: 0,
+              explanation: "'카운트다운 시작' 블록은 화면 위쪽에 남은 시간을 표시하는 타이머를 켜요. 시간이 0이 되면 자동으로 게임 오버 화면이 떠요."
+            }
+          ]
+        },
+
+        // ──────────────── 🔁 반복 ────────────────
+        {
+          id: "cat-loops",
+          title: "반복",
+          icon: "🔁",
+          accent: "#1f7a3a",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "lp1",
+              code: "for (let index = 0; index <= 4; index++) {\n}",
+              blockText: "for index 0 ~ 4 반복",
+              prompt: "이 반복 블록은 안의 코드를 몇 번 실행할까요?",
+              options: [
+                "5번 (index가 0, 1, 2, 3, 4 일 때 각각 한 번씩)",
+                "4번",
+                "1번",
+                "무한 번"
+              ],
+              answer: 0,
+              explanation: "'for 0 ~ 4' 블록은 변수 index 가 0부터 4까지 1씩 늘면서 반복해요. 0, 1, 2, 3, 4 — 다섯 번 실행돼요."
+            },
+            {
+              id: "lp2",
+              code: "while (true) {\n}",
+              blockText: "while (~인 동안) 반복",
+              prompt: "이 'while' 반복 블록은 어떻게 동작할까요?",
+              options: [
+                "조건이 참(true)인 동안 안의 코드를 계속 반복함",
+                "조건이 참이면 한 번만 실행함",
+                "조건이 거짓일 때만 반복함",
+                "10초 동안만 반복함"
+              ],
+              answer: 0,
+              explanation: "'while' 블록은 조건이 참일 때마다 안의 코드를 반복해요. 조건이 항상 true 라면 무한 반복이 돼서, 보통은 안에 break 같은 탈출 조건을 함께 써요."
+            }
+          ]
+        },
+
+        // ──────────────── 🔀 논리 ────────────────
+        {
+          id: "cat-logic",
+          title: "논리",
+          icon: "🔀",
+          accent: "#3a7be0",
+          builtin: true,
+          createdAt: 0,
+          questions: [
+            {
+              id: "lg1",
+              code: "if (info.score() > 10) {\n}",
+              blockText: "만약 점수 > 10 이라면",
+              prompt: "이 if 블록은 어떻게 동작할까요?",
+              options: [
+                "지금 점수가 10보다 클 때만 안의 코드가 한 번 실행됨",
+                "점수를 10보다 크게 만들어 줌",
+                "점수가 정확히 10일 때만 실행됨",
+                "점수가 10보다 작을 때 실행됨"
+              ],
+              answer: 0,
+              explanation: "'if' 블록은 조건이 참(true)일 때만 안의 코드를 실행해요. '>' 는 비교 블록으로, 왼쪽 값이 오른쪽 값보다 클 때 참이 돼요."
+            },
+            {
+              id: "lg2",
+              code: "if (info.life() <= 0) {\n    game.over(false)\n} else {\n    info.changeScoreBy(1)\n}",
+              blockText: "if / else (만약 ~ 아니면)",
+              prompt: "이 코드는 어떻게 동작할까요?",
+              options: [
+                "목숨이 0 이하면 게임을 끝내고, 그렇지 않으면 점수를 1 올림",
+                "목숨이 0 이하면 점수를 1 올리고, 그렇지 않으면 게임을 끝냄",
+                "목숨과 점수를 둘 다 0으로 만듦",
+                "목숨이 1일 때만 게임을 끝냄"
+              ],
+              answer: 0,
+              explanation: "'if / else' 블록은 갈림길이에요. if 조건이 참이면 위쪽 코드를, 거짓이면 else 쪽 코드를 실행해요. 두 길 중 하나만 실행돼요."
+            }
+          ]
+        }
+      ];
 
       /* ============================================================
        * UTIL
@@ -640,8 +908,8 @@
         try { localStorage.setItem(UNITS_KEY, JSON.stringify(arr || [])); } catch (e) {}
       }
       function getAllUnits() {
-        // builtin은 항상 첫 번째
-        return [DEFAULT_UNIT].concat(loadUnits());
+        // 카테고리별 기본 단원들이 항상 먼저 보이도록
+        return DEFAULT_UNITS.concat(loadUnits());
       }
       function findUnit(id) { return getAllUnits().find((u) => u.id === id); }
 
@@ -703,16 +971,20 @@
           const total = (u.questions || []).length;
           const card = document.createElement("button");
           card.className = "unit-card";
+          if (u.accent) {
+            card.style.borderTop = "8px solid " + u.accent;
+            card.style.paddingTop = "10px";
+          }
           card.innerHTML =
-            '<div class="ico">' + (u.icon || "🎮") + '</div>' +
+            '<div class="ico"' + (u.accent ? ' style="color:' + u.accent + '"' : "") + '>' + (u.icon || "🎮") + '</div>' +
             '<h4>' + escapeHtml(u.title) + '</h4>' +
             '<div class="meta">' +
               '<span class="pill pill-count">📦 ' + total + '문제</span> ' +
               (best > 0 ? '<span class="pill pill-best">🏆 최고 ' + best + '/' + total + '</span>' : '') +
-              (u.builtin ? ' <span class="pill">기본</span>' : '') +
+              (u.builtin ? ' <span class="pill">카테고리</span>' : '') +
             '</div>' +
             '<div class="actions">' +
-              '<span class="btn btn-primary" style="padding:6px 12px;font-size:0.85rem">▶ 시작</span>' +
+              '<span class="btn btn-primary" style="padding:6px 12px;font-size:0.85rem' + (u.accent ? ';background:' + u.accent + ';box-shadow:0 6px 16px ' + u.accent + '55' : '') + '">▶ 시작</span>' +
               (u.builtin ? '' : '<span class="btn btn-secondary" data-act="del" style="padding:6px 10px;font-size:0.8rem">🗑 삭제</span>') +
             '</div>';
           card.addEventListener("click", (e) => {
@@ -1280,42 +1552,50 @@
        * WIRING
        * ============================================================ */
       /* ============================================================
-       * BLOCK PREVIEW (홈 화면에서 기본 단원 블록을 미리 그려보기)
+       * BLOCK PREVIEW (홈 화면에서 카테고리별 모든 블록을 미리 그려보기)
        * ============================================================ */
       async function previewDefaultBlocks() {
         const area = $("previewArea");
         area.innerHTML = "";
         const btn = $("btnPreviewBlocks");
         btn.disabled = true; btn.textContent = "🧩 그리는 중...";
-        for (let i = 0; i < DEFAULT_UNIT.questions.length; i++) {
-          const q = DEFAULT_UNIT.questions[i];
-          const cell = document.createElement("div");
-          cell.style.cssText = "background:#fff;border-radius:14px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,0.08);min-width:200px;max-width:340px;flex:1 1 240px";
-          cell.innerHTML =
-            '<div style="font-weight:800;color:#1e293b;font-size:0.88rem;margin-bottom:6px">' +
-              (i + 1) + ". " + escapeHtml(q.blockText || "") +
-            '</div>' +
-            '<div class="preview-slot" style="background:#fef3c7;border-radius:10px;min-height:60px;display:flex;align-items:center;justify-content:center;padding:6px">' +
-              '<small style="color:#7c2d12;font-weight:700">⏳ 그리는 중...</small>' +
-            '</div>';
-          area.appendChild(cell);
-          const slot = cell.querySelector(".preview-slot");
-          try {
-            const res = await MakeCodeRenderer.render(q.code);
-            if (res && res.uri) {
-              slot.innerHTML = '<img src="' + res.uri + '" style="max-width:100%;max-height:200px"/>';
-            } else if (res && res.svg) {
-              slot.innerHTML = res.svg;
-              const svg = slot.querySelector("svg");
-              if (svg) { svg.style.maxWidth = "100%"; svg.style.maxHeight = "200px"; }
-            } else {
-              slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">⚠ 렌더 응답 없음</small>';
+
+        for (const unit of DEFAULT_UNITS) {
+          const header = document.createElement("div");
+          header.style.cssText = "flex:1 0 100%;font-weight:900;color:#1e293b;font-size:1rem;margin:14px 0 4px;padding:6px 10px;border-radius:10px;background:" + (unit.accent || "#64748b") + ";color:#fff";
+          header.textContent = (unit.icon || "🎮") + " " + unit.title;
+          area.appendChild(header);
+
+          for (let i = 0; i < unit.questions.length; i++) {
+            const q = unit.questions[i];
+            const cell = document.createElement("div");
+            cell.style.cssText = "background:#fff;border-radius:14px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,0.08);min-width:200px;max-width:340px;flex:1 1 240px";
+            cell.innerHTML =
+              '<div style="font-weight:800;color:#1e293b;font-size:0.85rem;margin-bottom:6px">' +
+                escapeHtml(q.blockText || "") +
+              '</div>' +
+              '<div class="preview-slot" style="background:#fef3c7;border-radius:10px;min-height:60px;display:flex;align-items:center;justify-content:center;padding:6px">' +
+                '<small style="color:#7c2d12;font-weight:700">⏳ 그리는 중...</small>' +
+              '</div>';
+            area.appendChild(cell);
+            const slot = cell.querySelector(".preview-slot");
+            try {
+              const res = await MakeCodeRenderer.render(q.code);
+              if (res && res.uri) {
+                slot.innerHTML = '<img src="' + res.uri + '" style="max-width:100%;max-height:200px"/>';
+              } else if (res && res.svg) {
+                slot.innerHTML = res.svg;
+                const svg = slot.querySelector("svg");
+                if (svg) { svg.style.maxWidth = "100%"; svg.style.maxHeight = "200px"; }
+              } else {
+                slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">⚠ 렌더 응답 없음</small>';
+              }
+            } catch (e) {
+              slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">❌ ' + escapeHtml(e.message || "렌더 실패") + '</small>';
             }
-          } catch (e) {
-            slot.innerHTML = '<small style="color:#b91c1c;font-weight:700">❌ ' + escapeHtml(e.message || "렌더 실패") + '</small>';
           }
         }
-        btn.disabled = false; btn.textContent = "🧩 기본 단원 블록 미리 그려보기";
+        btn.disabled = false; btn.textContent = "🧩 모든 카테고리 블록 미리 그려보기";
       }
 
       function wireAll() {
