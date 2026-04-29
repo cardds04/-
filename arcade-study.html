@@ -247,7 +247,7 @@
       <div id="viewAdd" class="hidden">
         <div class="card">
           <h3>📷 사진으로 단원 만들기 (Gemini 자동 생성)</h3>
-          <p class="muted" style="margin:0 0 10px">메이크코드 아케이드 블록 스크린샷을 여러 장 올려주세요. AI가 각 블록의 역할을 분석해서 객관식 문제를 만들어줍니다.</p>
+          <p class="muted" style="margin:0 0 10px">메이크코드 아케이드 블록 스크린샷을 여러 장 올려주세요. AI가 각 블록의 역할을 분석해서 객관식 문제를 만들고, <b>실제 메이크코드 블록 그림</b>으로 함께 보여줘요.</p>
 
           <div class="row">
             <label>📸 메이크코드 블록 스크린샷 (여러 장 가능)</label>
@@ -326,6 +326,97 @@
       const GEMINI_MODEL = "gemini-2.5-flash";
       const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite";
 
+      // MakeCode Arcade 공식 블록 렌더러 (한국어 모드)
+      const MAKECODE_RENDER_ORIGIN = "https://arcade.makecode.com";
+      const MAKECODE_RENDER_URL = MAKECODE_RENDER_ORIGIN + "/--docs?render=1&lang=ko";
+
+      /* ============================================================
+       * MAKECODE BLOCK RENDERER (iframe + postMessage)
+       * 공식 문서: https://arcade.makecode.com/blocks-embed
+       * ============================================================ */
+      const MakeCodeRenderer = (function () {
+        let iframe = null;
+        let isReady = false;
+        const readyQueue = [];
+        const pending = new Map(); // id -> { resolve, reject, timer }
+        let counter = 0;
+        const cache = new Map(); // code -> { uri, svg }
+
+        function ensureFrame() {
+          if (iframe) return;
+          iframe = document.createElement("iframe");
+          iframe.id = "makecoderenderer";
+          iframe.title = "MakeCode block renderer";
+          iframe.style.cssText = "position:absolute;left:0;bottom:0;width:1px;height:1px;border:0;visibility:hidden;pointer-events:none";
+          iframe.src = MAKECODE_RENDER_URL;
+          document.body.appendChild(iframe);
+          window.addEventListener("message", onMessage, false);
+        }
+
+        function onMessage(ev) {
+          const msg = ev.data;
+          if (!msg || msg.source !== "makecode") return;
+          if (msg.type === "renderready") {
+            isReady = true;
+            const q = readyQueue.splice(0);
+            q.forEach((cb) => { try { cb(); } catch (e) {} });
+            return;
+          }
+          if (msg.type === "renderblocks") {
+            const id = msg.id;
+            const p = pending.get(id);
+            if (!p) return;
+            pending.delete(id);
+            if (p.timer) clearTimeout(p.timer);
+            if (msg.uri || msg.svg) p.resolve({ uri: msg.uri || "", svg: msg.svg || "" });
+            else p.reject(new Error("MakeCode 렌더러가 빈 응답을 보냈어요."));
+          }
+        }
+
+        function whenReady() {
+          if (isReady) return Promise.resolve();
+          return new Promise((resolve) => readyQueue.push(resolve));
+        }
+
+        async function render(code) {
+          if (!code || typeof code !== "string") throw new Error("렌더할 코드가 없어요.");
+          const trimmed = code.trim();
+          if (cache.has(trimmed)) return cache.get(trimmed);
+          ensureFrame();
+          await whenReady();
+          return new Promise((resolve, reject) => {
+            const id = "snip_" + (++counter) + "_" + Date.now().toString(36);
+            const timer = setTimeout(() => {
+              if (pending.has(id)) {
+                pending.delete(id);
+                reject(new Error("렌더 타임아웃"));
+              }
+            }, 20000);
+            pending.set(id, {
+              resolve: (v) => { cache.set(trimmed, v); resolve(v); },
+              reject,
+              timer,
+            });
+            try {
+              iframe.contentWindow.postMessage({
+                type: "renderblocks",
+                id: id,
+                code: trimmed,
+              }, MAKECODE_RENDER_ORIGIN);
+            } catch (e) {
+              clearTimeout(timer);
+              pending.delete(id);
+              reject(e);
+            }
+          });
+        }
+
+        // 페이지 로드 후 미리 워밍업
+        function warmup() { ensureFrame(); }
+
+        return { render: render, warmup: warmup };
+      })();
+
       /* ============================================================
        * DEFAULT BUILT-IN UNIT (메이크코드 아케이드 기본 블록 10문제)
        * 첨부 스크린샷의 블록 + 자주 쓰이는 핵심 블록들
@@ -339,7 +430,8 @@
         questions: [
           {
             id: "d1",
-            blockText: "🟢 시작하면\n  ── (안에 들어간 블록들)",
+            code: "let mySprite: Sprite = null\nscene.setBackgroundImage(img`\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n    . . . . . . . . . . . . . . . .\n`)\nmySprite = sprites.create(img`\n    . . . . . . . . . .\n    . . . . . . . . . .\n    . . . . 1 1 . . . .\n    . . . 1 1 1 1 . . .\n    . . . . 1 1 . . . .\n    . . . . . . . . . .\n`, SpriteKind.Player)\ncontroller.moveSprite(mySprite)",
+            blockText: "시작하면 (on start)",
             prompt: "이 '시작하면' 블록은 어떤 역할을 할까요?",
             options: [
               "게임이 처음 시작될 때 한 번만 실행되는 코드 영역",
@@ -352,7 +444,8 @@
           },
           {
             id: "d2",
-            blockText: "🟦 변수에 ▾ 스프라이트 [🧑] 종류 Player ▾ 저장",
+            code: "let mySprite = sprites.create(img`\n    . . . . 1 1 . . . .\n    . . . 1 1 1 1 . . .\n    . . 1 1 1 1 1 1 . .\n    . 1 1 1 1 1 1 1 1 .\n    . 1 1 . 1 1 . 1 1 .\n    . 1 1 1 1 1 1 1 1 .\n    . . 1 1 1 1 1 1 . .\n    . . . 1 1 1 1 . . .\n`, SpriteKind.Player)",
+            blockText: "스프라이트 만들기 + 변수에 저장",
             prompt: "이 블록의 역할은 무엇일까요?",
             options: [
               "Player 종류의 새 스프라이트를 만들고, 변수에 저장해서 나중에 쓸 수 있게 함",
@@ -365,7 +458,8 @@
           },
           {
             id: "d3",
-            blockText: "🟪 배경 이미지 설정 [🖼]",
+            code: "scene.setBackgroundImage(img`\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9\n    7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n    7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7\n`)",
+            blockText: "배경 이미지 설정",
             prompt: "이 블록은 어떤 일을 할까요?",
             options: [
               "게임 화면의 배경 그림을 설정함",
@@ -378,7 +472,8 @@
           },
           {
             id: "d4",
-            blockText: "🟪 템포 (120) (bpm)의 멜로디 [🎵🎵🎵] 재생 [완료될 때까지 ▾]",
+            code: "music.playMelody(\"C5 B A G F E D C \", 120)",
+            blockText: "멜로디 재생 (템포 120)",
             prompt: "이 멜로디 재생 블록의 역할로 가장 알맞은 것은?",
             options: [
               "지정한 멜로디를 정해진 빠르기로 연주하고, 끝날 때까지 다음 블록을 기다리게 함",
@@ -391,7 +486,8 @@
           },
           {
             id: "d5",
-            blockText: "🟥 [허연주 ▾] 를 버튼으로 이동 ⊕",
+            code: "let mySprite: Sprite = null\ncontroller.moveSprite(mySprite, 100, 100)",
+            blockText: "스프라이트를 버튼으로 이동",
             prompt: "이 블록은 어떤 기능을 만들어 줄까요?",
             options: [
               "선택한 스프라이트를 방향키(↑↓←→) 또는 게임 패드 버튼으로 움직일 수 있게 해 줌",
@@ -404,7 +500,8 @@
           },
           {
             id: "d6",
-            blockText: "🟥 [A ▾] 버튼 [누를 때 ▾]\n  ── (실행할 블록들)",
+            code: "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {\n})",
+            blockText: "A 버튼 누를 때",
             prompt: "이 블록은 언제 안쪽 코드를 실행할까요?",
             options: [
               "사용자가 A 버튼을 누르는 순간에 실행됨",
@@ -417,7 +514,8 @@
           },
           {
             id: "d7",
-            blockText: "🔵 영원히\n  ── (반복할 블록들)",
+            code: "game.onUpdate(function () {\n})",
+            blockText: "영원히 / 매 프레임마다 (forever)",
             prompt: "'영원히' 블록은 어떻게 동작할까요?",
             options: [
               "안에 있는 코드를 게임이 끝날 때까지 계속 반복 실행함",
@@ -430,7 +528,8 @@
           },
           {
             id: "d8",
-            blockText: "🟧 스프라이트 [🧑](Player) 가 [🪙](Food) 와 겹쳤을 때\n  ── (실행할 블록들)",
+            code: "sprites.onOverlap(SpriteKind.Player, SpriteKind.Food, function (sprite, otherSprite) {\n})",
+            blockText: "스프라이트 (Player) 가 (Food) 와 겹쳤을 때",
             prompt: "이 'on overlap' 블록의 동작으로 옳은 것은?",
             options: [
               "Player 종류 스프라이트와 Food 종류 스프라이트가 서로 닿는 순간 안의 코드가 실행됨",
@@ -443,7 +542,8 @@
           },
           {
             id: "d9",
-            blockText: "🟨 정보 ▾ 점수에 (1) 만큼 변경",
+            code: "info.changeScoreBy(1)",
+            blockText: "점수에 1만큼 변경",
             prompt: "이 블록의 역할은 무엇일까요?",
             options: [
               "현재 점수에 1을 더해 줌",
@@ -456,7 +556,8 @@
           },
           {
             id: "d10",
-            blockText: "🟥 게임 종료 [😢 LOSE ▾]",
+            code: "game.over(false)",
+            blockText: "게임 종료 (LOSE)",
             prompt: "이 블록은 무엇을 할까요?",
             options: [
               "게임을 끝내고 'LOSE'(패배) 결과 화면을 보여 줌",
@@ -672,11 +773,20 @@
         const correctOrigIdx = q.answer == null ? 0 : q.answer;
 
         const view = $("viewQuiz");
-        const blockHtml = q.image
-          ? '<div class="block-image-wrap"><img src="' + q.image + '" alt="블록 이미지" /></div>'
-          : (q.blockText
-              ? '<div class="block-image-wrap"><pre class="block-text">' + escapeHtml(q.blockText) + '</pre></div>'
-              : "");
+
+        // 블록 표시 영역: 우선순위 (1) 사용자가 올린 사진(image) (2) MakeCode 코드 → 실제 블록 이미지(code) (3) 텍스트(blockText)
+        let blockHtml;
+        if (q.image) {
+          blockHtml = '<div class="block-image-wrap" id="blockArea"><img src="' + q.image + '" alt="블록 이미지" /></div>';
+        } else if (q.code) {
+          blockHtml = '<div class="block-image-wrap" id="blockArea">' +
+            '<div id="blockLoading" style="color:#7c2d12;font-weight:800">🧩 메이크코드 블록 그리는 중...</div>' +
+            '</div>';
+        } else if (q.blockText) {
+          blockHtml = '<div class="block-image-wrap"><pre class="block-text">' + escapeHtml(q.blockText) + '</pre></div>';
+        } else {
+          blockHtml = "";
+        }
 
         const promptText = q.prompt || "이 블록은 어떤 역할을 할까요?";
 
@@ -708,6 +818,35 @@
           btn.addEventListener("click", () => onPick(btn, parseInt(btn.dataset.orig, 10), correctOrigIdx, q));
         });
         $("btnNextQ") && $("btnNextQ").addEventListener("click", nextQuestion);
+
+        // code가 있으면 비동기로 실제 블록 이미지 렌더
+        if (!q.image && q.code) {
+          const renderTokenIdx = quizState.idx; // 문제가 바뀌면 무시
+          MakeCodeRenderer.render(q.code).then((res) => {
+            if (renderTokenIdx !== quizState.idx) return;
+            const area = document.getElementById("blockArea");
+            if (!area) return;
+            if (res && res.uri) {
+              area.innerHTML = '<img src="' + res.uri + '" alt="MakeCode 블록" />';
+            } else if (res && res.svg) {
+              area.innerHTML = res.svg;
+              const svg = area.querySelector("svg");
+              if (svg) { svg.style.maxWidth = "100%"; svg.style.maxHeight = "360px"; }
+            } else {
+              area.innerHTML = '<pre class="block-text">' + escapeHtml(q.blockText || q.code) + '</pre>';
+            }
+          }).catch((err) => {
+            if (renderTokenIdx !== quizState.idx) return;
+            const area = document.getElementById("blockArea");
+            if (!area) return;
+            console.warn("MakeCode 렌더 실패:", err);
+            area.innerHTML =
+              '<div style="text-align:left;width:100%">' +
+              '<div style="color:#b91c1c;font-weight:800;margin-bottom:6px">⚠️ 블록 그림을 불러올 수 없어 코드로 보여드려요</div>' +
+              '<pre class="block-text">' + escapeHtml(q.code) + '</pre>' +
+              '</div>';
+          });
+        }
       }
 
       function onPick(btn, pickedOrigIdx, correctOrigIdx, q) {
@@ -850,15 +989,27 @@
           '  "icon":  "이모지 한 개",',
           '  "questions": [',
           "    {",
-          '      "imageIndex": 0,                  // 어떤 사진에 해당하는지(0부터)',
+          '      "imageIndex": 0,',
           '      "blockSummary": "블록 한국어 요약(예: 시작하면 / A 버튼 누를 때 / 스프라이트 만들기)",',
+          '      "code": "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {})",',
           '      "prompt": "이 블록은 어떤 역할을 할까요?",',
           '      "options": ["정답", "오답1", "오답2", "오답3"],',
-          '      "answer": 0,                       // 정답이 들어있는 options 배열 인덱스(0~3)',
+          '      "answer": 0,',
           '      "explanation": "왜 그런 역할을 하는지 한국어 한 두 문장으로 친절하게 설명"',
           "    }",
           "  ]",
           "}",
+          "",
+          "필드 설명:",
+          "- imageIndex: 어떤 사진에 해당하는지(0부터). 사진이 1장이면 모두 0.",
+          "- code: 사진의 블록과 동등한 MakeCode Arcade TypeScript 한 조각(MakeCode 공식 블록 렌더러로 그릴 수 있어야 함).",
+          "        예시) 시작하면 → 최상위 코드, A 버튼 → controller.A.onEvent(ControllerButtonEvent.Pressed, function(){}),",
+          "        영원히 → game.onUpdate(function(){}), 충돌 → sprites.onOverlap(...), 점수 → info.changeScoreBy(1),",
+          "        멜로디 → music.playMelody(\"...\", 120), 배경 → scene.setBackgroundImage(img\\`...\\`),",
+          "        스프라이트 만들기 → sprites.create(img\\`...\\`, SpriteKind.Player),",
+          "        버튼 이동 → controller.moveSprite(mySprite), 게임 종료 → game.over(false).",
+          "        반드시 MakeCode Arcade에서 컴파일 가능한 형태여야 하며, 변수는 사용 전 선언하세요.",
+          "        해당 블록을 정확히 표현할 수 없으면 빈 문자열로 두세요.",
           "",
           "규칙:",
           "- 각 사진(또는 사진 안의 의미 있는 블록 단위)마다 1~3개의 문제를 만드세요.",
@@ -940,6 +1091,7 @@
             questions: (parsed.questions || []).map((q, i) => ({
               id: "q_" + i + "_" + Math.random().toString(36).slice(2, 6),
               image: imgUrls[Math.max(0, Math.min(imgUrls.length - 1, q.imageIndex || 0))] || imgUrls[0] || null,
+              code: typeof q.code === "string" ? q.code.trim() : "",
               blockText: q.blockSummary || "",
               prompt: q.prompt || "이 블록은 어떤 역할을 할까요?",
               options: Array.isArray(q.options) ? q.options.slice(0, 4) : [],
@@ -981,7 +1133,7 @@
         showView("viewManual");
       }
       function makeBlankQuestion() {
-        return { id: uid("mq"), blockText: "", prompt: "이 블록은 어떤 역할을 할까요?", options: ["", "", "", ""], answer: 0, explanation: "" };
+        return { id: uid("mq"), code: "", blockText: "", prompt: "이 블록은 어떤 역할을 할까요?", options: ["", "", "", ""], answer: 0, explanation: "" };
       }
       function renderManualQuestions() {
         const list = $("manualQuestionsList");
@@ -991,7 +1143,9 @@
           div.className = "q-editor";
           div.innerHTML =
             '<h5>문제 ' + (qi + 1) + '<button class="btn btn-secondary" data-act="del" style="padding:4px 10px;font-size:0.8rem">🗑 삭제</button></h5>' +
-            '<div class="row"><label>블록 설명/코드 (선택)</label><textarea data-k="blockText" placeholder="예: 시작하면 / 배경 이미지 설정 ..."></textarea></div>' +
+            '<div class="row"><label>🧩 MakeCode 코드 (선택, 입력하면 진짜 블록 그림으로 보여줘요)</label>' +
+              '<textarea data-k="code" placeholder="예시:\ncontroller.A.onEvent(ControllerButtonEvent.Pressed, function () {})\n또는\ninfo.changeScoreBy(1)" style="font-family:ui-monospace,Menlo,monospace;font-size:0.88rem"></textarea></div>' +
+            '<div class="row"><label>블록 설명 텍스트 (코드를 못 그릴 때 보여줄 대체 텍스트)</label><textarea data-k="blockText" placeholder="예: 시작하면 / 배경 이미지 설정 ..."></textarea></div>' +
             '<div class="row"><label>문제 질문</label><input type="text" data-k="prompt" /></div>' +
             '<div class="row"><label>보기 4개 (라디오로 정답 선택)</label>' +
               ['A','B','C','D'].map((L, oi) =>
@@ -1004,6 +1158,7 @@
           list.appendChild(div);
 
           // bind values
+          div.querySelector('[data-k="code"]').value = q.code || "";
           div.querySelector('[data-k="blockText"]').value = q.blockText || "";
           div.querySelector('[data-k="prompt"]').value = q.prompt || "";
           div.querySelector('[data-k="explanation"]').value = q.explanation || "";
@@ -1017,6 +1172,7 @@
             r.checked = q.answer === oi;
             r.addEventListener("change", () => { if (r.checked) q.answer = oi; });
           });
+          div.querySelector('[data-k="code"]').addEventListener("input", (e) => { q.code = e.target.value; });
           div.querySelector('[data-k="blockText"]').addEventListener("input", (e) => { q.blockText = e.target.value; });
           div.querySelector('[data-k="prompt"]').addEventListener("input", (e) => { q.prompt = e.target.value; });
           div.querySelector('[data-k="explanation"]').addEventListener("input", (e) => { q.explanation = e.target.value; });
@@ -1035,6 +1191,7 @@
         const cleaned = manualDraft.questions
           .map((q) => ({
             id: q.id || uid("mq"),
+            code: (q.code || "").trim(),
             blockText: (q.blockText || "").trim(),
             prompt: (q.prompt || "이 블록은 어떤 역할을 할까요?").trim(),
             options: (q.options || []).map((o) => (o || "").trim()),
@@ -1127,6 +1284,8 @@
         wireAll();
         renderHome();
         showView("viewHome");
+        // 메이크코드 블록 렌더러를 백그라운드에서 미리 준비 (퀴즈 시작 시 빠르게 표시되도록)
+        try { MakeCodeRenderer.warmup(); } catch (e) {}
       });
     </script>
   </body>
