@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎮 Arcade Block Study · 메이크코드 블록 학습 게임</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nanum+Gothic:wght@700;800&family=Luckiest+Guy&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: "Fredoka", "Nanum Gothic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #fde68a 0%, #fbcfe8 50%, #c7d2fe 100%);
+        color: #1e293b;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .app { max-width: 820px; margin: 0 auto; padding: 18px 16px 120px; }
+      .page-title {
+        text-align: center;
+        font-family: "Luckiest Guy", "Fredoka", sans-serif;
+        font-size: clamp(1.8rem, 6vw, 2.6rem);
+        color: #1e293b;
+        letter-spacing: 1px;
+        margin: 6px 0 2px;
+        text-shadow: 2px 2px 0 #fff, 4px 4px 0 rgba(0, 0, 0, 0.08);
+      }
+      .page-sub { text-align: center; color: #475569; font-weight: 700; margin: 0 0 18px; font-size: 0.95rem; }
+      .hidden { display: none !important; }
+
+      /* HUD */
+      .hud {
+        display: flex; gap: 8px; align-items: center; justify-content: space-between;
+        background: #fff; border-radius: 18px; padding: 10px 14px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1); margin-bottom: 14px;
+      }
+      .hud .hud-left { display: flex; gap: 10px; align-items: center; font-weight: 800; color: #334155; }
+      .hud-back { background: #e2e8f0; color: #334155; border: none; padding: 8px 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+      .hud-back:hover { background: #cbd5e1; }
+      .hud .score { background: linear-gradient(135deg, #fde047, #fb923c); padding: 6px 12px; border-radius: 999px; color: #7c2d12; font-weight: 800; }
+      .hud .streak { background: linear-gradient(135deg, #fca5a5, #ef4444); padding: 6px 12px; border-radius: 999px; color: #fff; font-weight: 800; }
+      .hud .progress { background: #e2e8f0; padding: 6px 12px; border-radius: 999px; color: #334155; font-weight: 800; }
+
+      /* Cards */
+      .card {
+        background: #fff; border-radius: 22px; padding: 20px 18px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); margin-bottom: 14px;
+      }
+      .card h3 { margin: 0 0 8px; font-size: 1.1rem; color: #1e293b; }
+      .card .muted { color: #64748b; font-weight: 600; font-size: 0.88rem; }
+
+      /* Unit list */
+      .units-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+      .unit-card {
+        background: #fff; border-radius: 22px; padding: 16px 14px; border: 3px solid transparent;
+        cursor: pointer; text-align: left; font-family: inherit;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1); transition: transform .15s, box-shadow .15s, border-color .15s;
+        display: flex; flex-direction: column; gap: 6px; min-height: 130px;
+      }
+      .unit-card:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16); border-color: #c7d2fe; }
+      .unit-card .ico { font-size: 2.2rem; line-height: 1; }
+      .unit-card h4 { margin: 0; font-size: 1.05rem; color: #1e293b; }
+      .unit-card .meta { color: #64748b; font-size: 0.82rem; font-weight: 700; }
+      .unit-card.add {
+        background: rgba(255,255,255,0.7); border: 3px dashed #94a3b8; color: #475569;
+        align-items: center; justify-content: center; text-align: center;
+      }
+      .unit-card.add:hover { border-color: #6366f1; color: #4338ca; }
+      .unit-card .actions { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+      .pill {
+        display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem;
+        font-weight: 800; background: #ede9fe; color: #4338ca;
+      }
+      .pill-best { background: #fef3c7; color: #78350f; }
+      .pill-count { background: #dcfce7; color: #166534; }
+
+      /* Buttons */
+      .btn {
+        appearance: none; border: none; cursor: pointer; font-family: inherit;
+        padding: 10px 16px; border-radius: 14px; font-weight: 800; font-size: 0.95rem;
+        transition: transform .12s, box-shadow .12s, background .12s;
+      }
+      .btn:active { transform: translateY(1px); }
+      .btn-primary { background: linear-gradient(135deg, #818cf8, #6366f1); color: #fff; box-shadow: 0 6px 16px rgba(99,102,241,0.35); }
+      .btn-primary:hover { box-shadow: 0 8px 22px rgba(99,102,241,0.45); }
+      .btn-secondary { background: #e2e8f0; color: #334155; }
+      .btn-secondary:hover { background: #cbd5e1; }
+      .btn-danger { background: linear-gradient(135deg, #fca5a5, #ef4444); color: #fff; }
+      .btn-success { background: linear-gradient(135deg, #6ee7b7, #10b981); color: #064e3b; }
+      .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .btn-icon { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: #e2e8f0; color: #475569; border: none; cursor: pointer; }
+      .btn-icon:hover { background: #cbd5e1; }
+
+      /* Inputs */
+      label { display: block; font-weight: 800; color: #334155; font-size: 0.88rem; margin-bottom: 4px; }
+      input[type="text"], input[type="password"], textarea, select {
+        width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 12px;
+        font-family: inherit; font-size: 0.95rem; font-weight: 600; background: #f8fafc;
+        outline: none; color: #1e293b;
+      }
+      input:focus, textarea:focus, select:focus { border-color: #818cf8; background: #fff; }
+      textarea { min-height: 70px; resize: vertical; }
+      .row { margin-bottom: 12px; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .grid-2 > * { min-width: 0; }
+      .key-row { display: flex; gap: 6px; align-items: stretch; }
+      .key-row input { flex: 1; }
+      .key-status { font-size: 0.82rem; color: #64748b; margin-top: 4px; font-weight: 600; }
+      .key-status.is-saved { color: #166534; }
+      .key-status a { color: #4338ca; text-decoration: underline; }
+
+      /* Quiz card */
+      .question-card {
+        background: #fff; border-radius: 26px; padding: 22px 20px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.14);
+      }
+      .prompt-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .prompt-small { color: #64748b; font-weight: 700; font-size: 0.92rem; }
+      .block-image-wrap {
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border-radius: 18px; padding: 14px; margin: 10px 0 14px; text-align: center;
+        min-height: 120px; display: flex; align-items: center; justify-content: center;
+      }
+      .block-image-wrap img { max-width: 100%; max-height: 360px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+      .block-text {
+        background: #1e293b; color: #f8fafc; border-radius: 14px; padding: 14px 18px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95rem;
+        white-space: pre-wrap; line-height: 1.6; text-align: left; max-width: 100%;
+      }
+      .question-text { font-size: 1.08rem; font-weight: 800; color: #1e293b; margin: 6px 0 12px; line-height: 1.45; }
+
+      .choices { display: grid; gap: 10px; }
+      .choice-btn {
+        text-align: left; padding: 14px 16px; border-radius: 16px; border: 3px solid transparent;
+        background: #f1f5f9; color: #1e293b; font-family: inherit; font-weight: 700; font-size: 1rem;
+        cursor: pointer; line-height: 1.4; transition: transform .12s, background .12s, border-color .12s;
+      }
+      .choice-btn:hover:not(:disabled) { background: #e0e7ff; transform: translateY(-1px); }
+      .choice-btn:disabled { cursor: default; }
+      .choice-btn.correct { background: #dcfce7; border-color: #16a34a; color: #14532d; }
+      .choice-btn.wrong { background: #fee2e2; border-color: #ef4444; color: #7f1d1d; }
+      .choice-letter {
+        display: inline-block; width: 26px; height: 26px; border-radius: 8px;
+        background: #cbd5e1; color: #1e293b; text-align: center; line-height: 26px;
+        font-weight: 900; margin-right: 10px; font-size: 0.9rem;
+      }
+      .choice-btn.correct .choice-letter { background: #16a34a; color: #fff; }
+      .choice-btn.wrong .choice-letter { background: #ef4444; color: #fff; }
+
+      .feedback { margin-top: 14px; border-radius: 14px; padding: 12px 14px; font-weight: 700; line-height: 1.5; }
+      .feedback.ok { background: #dcfce7; color: #14532d; }
+      .feedback.no { background: #fee2e2; color: #7f1d1d; }
+      .feedback .why { display: block; margin-top: 6px; font-weight: 600; font-size: 0.9rem; }
+
+      /* Result screen */
+      .result-card { text-align: center; background: #fff; border-radius: 26px; padding: 28px 18px; box-shadow: 0 12px 30px rgba(15,23,42,0.14); }
+      .result-card .big { font-size: 3rem; line-height: 1; }
+      .result-card .score-line { font-size: 1.4rem; font-weight: 900; margin: 8px 0; color: #1e293b; }
+      .stars { font-size: 1.8rem; letter-spacing: 4px; }
+
+      /* Photo upload */
+      .photo-preview { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+      .photo-preview img { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; border: 2px solid #e2e8f0; }
+      .ai-status { font-size: 0.88rem; color: #475569; font-weight: 700; min-height: 20px; margin: 6px 0; }
+      .ai-status.error { color: #b91c1c; }
+      .ai-status.ok { color: #166534; }
+
+      /* Manual editor */
+      .q-editor { background: #f8fafc; border-radius: 16px; padding: 14px; margin-bottom: 10px; border: 2px dashed #cbd5e1; }
+      .q-editor h5 { margin: 0 0 8px; font-size: 0.95rem; color: #334155; display: flex; justify-content: space-between; align-items: center; }
+      .q-editor .opt-row { display: grid; grid-template-columns: 30px 1fr 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
+      .q-editor .opt-row .letter { font-weight: 900; color: #475569; text-align: center; }
+      .q-editor .opt-row input[type="radio"] { width: 18px; height: 18px; cursor: pointer; }
+
+      /* Misc */
+      .pop { animation: pop 0.25s ease; }
+      @keyframes pop {
+        0% { transform: scale(0.92); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .shake { animation: shake 0.4s ease; }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-6px); }
+        50% { transform: translateX(6px); }
+        75% { transform: translateX(-3px); }
+      }
+      .toast {
+        position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+        background: #1e293b; color: #fff; padding: 12px 18px; border-radius: 14px;
+        font-weight: 700; box-shadow: 0 10px 26px rgba(0,0,0,0.25); z-index: 1000;
+        opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+      }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+      .footer-link { text-align: center; margin-top: 26px; color: #64748b; font-weight: 700; font-size: 0.85rem; }
+      .footer-link a { color: #4338ca; text-decoration: none; }
+
+      @media (max-width: 480px) {
+        .grid-2 { grid-template-columns: 1fr; }
+        .hud { padding: 8px 10px; flex-wrap: wrap; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <h1 class="page-title">🎮 Arcade Block Study</h1>
+      <p class="page-sub">메이크코드 아케이드 블록의 역할을 객관식으로 익히는 학습 게임</p>
+
+      <!-- HUD -->
+      <div class="hud" id="hud">
+        <div class="hud-left">
+          <button class="hud-back" id="btnBack" style="display:none">← 메뉴</button>
+          <span id="hudTitle">🏠 단원 고르기</span>
+        </div>
+        <div class="hud-left" id="hudStats" style="display:none">
+          <span class="progress" id="progress">1 / 10</span>
+          <span class="streak" id="streak">🔥 0</span>
+          <span class="score" id="score">⭐ 0</span>
+        </div>
+      </div>
+
+      <!-- VIEW: HOME (단원 목록) -->
+      <div id="viewHome">
+        <div class="units-grid" id="unitsGrid"></div>
+
+        <div class="card" style="margin-top:18px">
+          <h3>🔑 Gemini API 키 (자동 저장)</h3>
+          <p class="muted" style="margin:0 0 8px">사진을 올려서 단원을 자동 생성하려면 Google AI Studio에서 무료 API 키를 발급받아 입력하세요.</p>
+          <div class="key-row">
+            <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off" />
+            <button class="btn-icon" id="btnToggleKey" title="키 보기/숨기기">👁</button>
+            <button class="btn-icon" id="btnClearKey" title="저장된 키 삭제">🗑</button>
+          </div>
+          <div class="key-status" id="keyStatus">
+            키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: ADD UNIT -->
+      <div id="viewAdd" class="hidden">
+        <div class="card">
+          <h3>📷 사진으로 단원 만들기 (Gemini 자동 생성)</h3>
+          <p class="muted" style="margin:0 0 10px">메이크코드 아케이드 블록 스크린샷을 여러 장 올려주세요. AI가 각 블록의 역할을 분석해서 객관식 문제를 만들어줍니다.</p>
+
+          <div class="row">
+            <label>📸 메이크코드 블록 스크린샷 (여러 장 가능)</label>
+            <input type="file" id="photoInput" accept="image/*" multiple />
+            <div class="photo-preview" id="photoPreview"></div>
+          </div>
+
+          <div class="row">
+            <label>📝 단원 이름 (생략 가능)</label>
+            <input type="text" id="unitTitleInput" placeholder="예: 점프 게임 만들기 1단원" />
+          </div>
+
+          <div class="row">
+            <label>🎯 어려움 (선택)</label>
+            <select id="difficultySelect">
+              <option value="easy">쉬움 (초등 저학년)</option>
+              <option value="normal" selected>보통 (초등 고학년)</option>
+              <option value="hard">어려움 (중학생)</option>
+            </select>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnGenerate">🤖 AI로 문제 만들기</button>
+            <button class="btn btn-secondary" id="btnAddManual">✏️ 직접 만들기</button>
+            <button class="btn btn-secondary" id="btnAddBack">← 메뉴로</button>
+          </div>
+          <div class="ai-status" id="aiStatus"></div>
+        </div>
+      </div>
+
+      <!-- VIEW: MANUAL EDITOR -->
+      <div id="viewManual" class="hidden">
+        <div class="card">
+          <h3>✏️ 단원 직접 만들기</h3>
+          <div class="row">
+            <label>단원 이름</label>
+            <input type="text" id="manualUnitTitle" placeholder="예: 내가 만든 블록 단원" />
+          </div>
+          <div class="row">
+            <label>아이콘 (이모지 1개)</label>
+            <input type="text" id="manualUnitIcon" placeholder="🎮" maxlength="4" />
+          </div>
+          <div id="manualQuestionsList"></div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn btn-secondary" id="btnAddQuestion">➕ 문제 추가</button>
+          </div>
+          <div class="btn-row" style="margin-top:14px">
+            <button class="btn btn-success" id="btnSaveManual">💾 단원 저장</button>
+            <button class="btn btn-secondary" id="btnManualBack">← 메뉴로</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: QUIZ -->
+      <div id="viewQuiz" class="hidden"></div>
+
+      <!-- VIEW: RESULT -->
+      <div id="viewResult" class="hidden"></div>
+
+      <div class="footer-link">
+        <a href="study-game.html">← 단어 학습 게임으로</a> · <a href="index.html">메인으로</a>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      "use strict";
+
+      /* ============================================================
+       * STORAGE KEYS
+       * ============================================================ */
+      const GEMINI_KEY_KEY = "arcade_study_gemini_key_v1";
+      const UNITS_KEY = "arcade_study_units_v1";
+      const SCORES_KEY = "arcade_study_scores_v1";
+      const GEMINI_MODEL = "gemini-2.5-flash";
+      const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite";
+
+      /* ============================================================
+       * DEFAULT BUILT-IN UNIT (메이크코드 아케이드 기본 블록 10문제)
+       * 첨부 스크린샷의 블록 + 자주 쓰이는 핵심 블록들
+       * ============================================================ */
+      const DEFAULT_UNIT = {
+        id: "default",
+        title: "MakeCode Arcade 기본 블록",
+        icon: "🎮",
+        builtin: true,
+        createdAt: 0,
+        questions: [
+          {
+            id: "d1",
+            blockText: "🟢 시작하면\n  ── (안에 들어간 블록들)",
+            prompt: "이 '시작하면' 블록은 어떤 역할을 할까요?",
+            options: [
+              "게임이 처음 시작될 때 한 번만 실행되는 코드 영역",
+              "버튼을 누를 때마다 반복 실행되는 코드 영역",
+              "스프라이트가 충돌할 때 실행되는 코드 영역",
+              "1초마다 자동으로 실행되는 코드 영역"
+            ],
+            answer: 0,
+            explanation: "'시작하면(on start)' 블록 안에 넣은 코드는 게임이 시작될 때 딱 한 번만 실행돼요. 보통 변수 초기화, 배경 설정, 플레이어 만들기 같은 준비 작업을 넣어요."
+          },
+          {
+            id: "d2",
+            blockText: "🟦 변수에 ▾ 스프라이트 [🧑] 종류 Player ▾ 저장",
+            prompt: "이 블록의 역할은 무엇일까요?",
+            options: [
+              "Player 종류의 새 스프라이트를 만들고, 변수에 저장해서 나중에 쓸 수 있게 함",
+              "Player라는 이름의 글자를 화면에 출력함",
+              "Player 종류 스프라이트를 화면에서 지움",
+              "Player 점수를 1만큼 늘림"
+            ],
+            answer: 0,
+            explanation: "'스프라이트 만들기' 블록은 이미지로 새 캐릭터(스프라이트)를 만들어요. '종류 Player'로 지정하면 이 스프라이트가 플레이어임을 표시하고, 변수에 저장하면 다른 블록에서 이 스프라이트를 다시 사용할 수 있어요."
+          },
+          {
+            id: "d3",
+            blockText: "🟪 배경 이미지 설정 [🖼]",
+            prompt: "이 블록은 어떤 일을 할까요?",
+            options: [
+              "게임 화면의 배경 그림을 설정함",
+              "스프라이트의 모양을 바꿈",
+              "음악을 배경으로 재생함",
+              "게임을 정지시킴"
+            ],
+            answer: 0,
+            explanation: "'배경 이미지 설정' 블록은 게임 무대(scene)의 배경 그림을 정해요. 보통 시작하면 블록 안에 한 번 넣어서 배경을 깔아두는 데 사용해요."
+          },
+          {
+            id: "d4",
+            blockText: "🟪 템포 (120) (bpm)의 멜로디 [🎵🎵🎵] 재생 [완료될 때까지 ▾]",
+            prompt: "이 멜로디 재생 블록의 역할로 가장 알맞은 것은?",
+            options: [
+              "지정한 멜로디를 정해진 빠르기로 연주하고, 끝날 때까지 다음 블록을 기다리게 함",
+              "멜로디를 작곡해서 새로 만들어 줌",
+              "스피커 음량을 0으로 줄임",
+              "음악 파일을 인터넷에서 다운로드함"
+            ],
+            answer: 0,
+            explanation: "'멜로디 재생' 블록은 입력한 음표 패턴을 BPM(분당 박자)에 맞춰 연주해요. '완료될 때까지' 옵션을 선택하면 노래가 끝날 때까지 다음 블록을 실행하지 않고 기다려요."
+          },
+          {
+            id: "d5",
+            blockText: "🟥 [허연주 ▾] 를 버튼으로 이동 ⊕",
+            prompt: "이 블록은 어떤 기능을 만들어 줄까요?",
+            options: [
+              "선택한 스프라이트를 방향키(↑↓←→) 또는 게임 패드 버튼으로 움직일 수 있게 해 줌",
+              "스프라이트를 화면 가운데로 순간이동시킴",
+              "스프라이트의 색깔을 무지개로 바꿈",
+              "스프라이트를 마우스 클릭으로만 이동시킴"
+            ],
+            answer: 0,
+            explanation: "'~를 버튼으로 이동' 블록은 한 줄로 플레이어 스프라이트의 키보드/패드 조작을 켜 주는 아주 유용한 블록이에요. 보통 시작하면 블록 안에 넣어서 게임 시작과 함께 조작이 가능하게 해요."
+          },
+          {
+            id: "d6",
+            blockText: "🟥 [A ▾] 버튼 [누를 때 ▾]\n  ── (실행할 블록들)",
+            prompt: "이 블록은 언제 안쪽 코드를 실행할까요?",
+            options: [
+              "사용자가 A 버튼을 누르는 순간에 실행됨",
+              "게임이 시작될 때 한 번 실행됨",
+              "A 버튼을 떼는 순간에만 실행됨",
+              "A라는 이름의 변수가 바뀔 때 실행됨"
+            ],
+            answer: 0,
+            explanation: "'~ 버튼 누를 때' 블록은 이벤트 블록이에요. 안에 넣은 코드는 사용자가 A 버튼을 누르는 그 순간에 한 번 실행돼요. (옵션을 '뗄 때'로 바꾸면 손가락을 떼는 순간 실행돼요.)"
+          },
+          {
+            id: "d7",
+            blockText: "🔵 영원히\n  ── (반복할 블록들)",
+            prompt: "'영원히' 블록은 어떻게 동작할까요?",
+            options: [
+              "안에 있는 코드를 게임이 끝날 때까지 계속 반복 실행함",
+              "안에 있는 코드를 한 번만 실행하고 끝냄",
+              "10초 동안만 코드를 실행함",
+              "코드를 실행하지 않고 무시함"
+            ],
+            answer: 0,
+            explanation: "'영원히(forever)' 블록은 무한 반복 블록이에요. 매 프레임마다 안의 코드를 다시 실행하기 때문에, 매 순간 체크해야 하는 일(예: 적 만들기, 상태 검사)에 잘 어울려요."
+          },
+          {
+            id: "d8",
+            blockText: "🟧 스프라이트 [🧑](Player) 가 [🪙](Food) 와 겹쳤을 때\n  ── (실행할 블록들)",
+            prompt: "이 'on overlap' 블록의 동작으로 옳은 것은?",
+            options: [
+              "Player 종류 스프라이트와 Food 종류 스프라이트가 서로 닿는 순간 안의 코드가 실행됨",
+              "Player와 Food를 한 번에 같은 자리로 이동시킴",
+              "Food 스프라이트를 Player로 바꿔 줌",
+              "Player가 점프할 때마다 실행됨"
+            ],
+            answer: 0,
+            explanation: "'겹쳤을 때(on overlap)' 블록은 충돌 이벤트 블록이에요. 두 종류의 스프라이트가 화면에서 닿으면 안의 코드가 실행돼서, 점수 올리기·아이템 먹기·적과 부딪혀서 죽기 같은 동작을 만들 수 있어요."
+          },
+          {
+            id: "d9",
+            blockText: "🟨 정보 ▾ 점수에 (1) 만큼 변경",
+            prompt: "이 블록의 역할은 무엇일까요?",
+            options: [
+              "현재 점수에 1을 더해 줌",
+              "점수를 1로 새로 설정함 (덮어쓰기)",
+              "점수 글자색을 빨간색으로 바꿈",
+              "점수가 0이 되도록 초기화함"
+            ],
+            answer: 0,
+            explanation: "'점수에 ~만큼 변경(change score by)' 블록은 현재 점수에 입력한 값을 더해요. 1을 넣으면 +1, -1을 넣으면 -1이 돼요. 점수를 특정 값으로 바로 정하고 싶다면 '점수 설정' 블록을 사용해요."
+          },
+          {
+            id: "d10",
+            blockText: "🟥 게임 종료 [😢 LOSE ▾]",
+            prompt: "이 블록은 무엇을 할까요?",
+            options: [
+              "게임을 끝내고 'LOSE'(패배) 결과 화면을 보여 줌",
+              "게임을 잠깐 일시정지함",
+              "현재 스프라이트만 사라지게 함",
+              "캐릭터를 처음 위치로 되돌림"
+            ],
+            answer: 0,
+            explanation: "'게임 종료(game over)' 블록은 게임을 마치고 결과 화면을 띄워요. LOSE를 선택하면 패배 화면, WIN을 선택하면 승리 화면이 나와요. 보통 체력이 0이 되거나 시간이 다 됐을 때 실행되도록 만들어요."
+          }
+        ]
+      };
+
+      /* ============================================================
+       * UTIL
+       * ============================================================ */
+      const $ = (id) => document.getElementById(id);
+      function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+      function uid(prefix) { return (prefix || "u") + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+      function showToast(msg, ms) {
+        const t = $("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => t.classList.remove("show"), ms || 2200);
+      }
+      function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => {
+            const s = String(r.result || "");
+            const i = s.indexOf(",");
+            resolve(i >= 0 ? s.slice(i + 1) : s);
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+      function fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result || ""));
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+
+      /* ============================================================
+       * STORAGE - units & scores
+       * ============================================================ */
+      function loadUnits() {
+        try {
+          const raw = localStorage.getItem(UNITS_KEY);
+          const arr = raw ? JSON.parse(raw) : [];
+          return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+      }
+      function saveUnits(arr) {
+        try { localStorage.setItem(UNITS_KEY, JSON.stringify(arr || [])); } catch (e) {}
+      }
+      function getAllUnits() {
+        // builtin은 항상 첫 번째
+        return [DEFAULT_UNIT].concat(loadUnits());
+      }
+      function findUnit(id) { return getAllUnits().find((u) => u.id === id); }
+
+      function loadScores() {
+        try { return JSON.parse(localStorage.getItem(SCORES_KEY) || "{}") || {}; }
+        catch (e) { return {}; }
+      }
+      function saveScores(obj) {
+        try { localStorage.setItem(SCORES_KEY, JSON.stringify(obj || {})); } catch (e) {}
+      }
+      function bestScoreFor(unitId) {
+        const s = loadScores();
+        return (s[unitId] && s[unitId].best) || 0;
+      }
+      function recordScore(unitId, score, total) {
+        const s = loadScores();
+        const cur = s[unitId] || { best: 0, plays: 0 };
+        cur.plays = (cur.plays || 0) + 1;
+        if (score > (cur.best || 0)) cur.best = score;
+        cur.lastTotal = total;
+        cur.lastScore = score;
+        s[unitId] = cur;
+        saveScores(s);
+      }
+
+      /* ============================================================
+       * VIEW SWITCHING
+       * ============================================================ */
+      const VIEWS = ["viewHome", "viewAdd", "viewManual", "viewQuiz", "viewResult"];
+      function showView(id) {
+        VIEWS.forEach((v) => {
+          const el = $(v);
+          if (!el) return;
+          if (v === id) el.classList.remove("hidden");
+          else el.classList.add("hidden");
+        });
+      }
+      function setHud(opts) {
+        opts = opts || {};
+        $("hudTitle").textContent = opts.title || "🏠 단원 고르기";
+        $("btnBack").style.display = opts.back ? "" : "none";
+        $("hudStats").style.display = opts.stats ? "" : "none";
+        if (opts.stats) {
+          $("progress").textContent = (opts.idx + 1) + " / " + opts.total;
+          $("streak").textContent = "🔥 " + (opts.streak || 0);
+          $("score").textContent = "⭐ " + (opts.score || 0);
+        }
+      }
+
+      /* ============================================================
+       * HOME - render unit list
+       * ============================================================ */
+      function renderHome() {
+        const grid = $("unitsGrid");
+        grid.innerHTML = "";
+        const units = getAllUnits();
+        units.forEach((u) => {
+          const best = bestScoreFor(u.id);
+          const total = (u.questions || []).length;
+          const card = document.createElement("button");
+          card.className = "unit-card";
+          card.innerHTML =
+            '<div class="ico">' + (u.icon || "🎮") + '</div>' +
+            '<h4>' + escapeHtml(u.title) + '</h4>' +
+            '<div class="meta">' +
+              '<span class="pill pill-count">📦 ' + total + '문제</span> ' +
+              (best > 0 ? '<span class="pill pill-best">🏆 최고 ' + best + '/' + total + '</span>' : '') +
+              (u.builtin ? ' <span class="pill">기본</span>' : '') +
+            '</div>' +
+            '<div class="actions">' +
+              '<span class="btn btn-primary" style="padding:6px 12px;font-size:0.85rem">▶ 시작</span>' +
+              (u.builtin ? '' : '<span class="btn btn-secondary" data-act="del" style="padding:6px 10px;font-size:0.8rem">🗑 삭제</span>') +
+            '</div>';
+          card.addEventListener("click", (e) => {
+            const t = e.target;
+            if (t && t.dataset && t.dataset.act === "del") {
+              e.stopPropagation();
+              if (confirm("'" + u.title + "' 단원을 삭제할까요?")) {
+                const userUnits = loadUnits().filter((x) => x.id !== u.id);
+                saveUnits(userUnits);
+                renderHome();
+              }
+              return;
+            }
+            startQuiz(u.id);
+          });
+          grid.appendChild(card);
+        });
+
+        // + 단원 추가 카드
+        const addCard = document.createElement("button");
+        addCard.className = "unit-card add";
+        addCard.innerHTML =
+          '<div class="ico">➕</div>' +
+          '<h4>새 단원 만들기</h4>' +
+          '<div class="meta">사진 업로드 또는 직접 입력</div>';
+        addCard.addEventListener("click", () => openAddView());
+        grid.appendChild(addCard);
+      }
+      function escapeHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      /* ============================================================
+       * QUIZ
+       * ============================================================ */
+      const quizState = {
+        unit: null,
+        order: [],
+        idx: 0,
+        score: 0,
+        streak: 0,
+      };
+
+      function startQuiz(unitId) {
+        const u = findUnit(unitId);
+        if (!u || !u.questions || !u.questions.length) {
+          showToast("이 단원에는 문제가 없어요.");
+          return;
+        }
+        quizState.unit = u;
+        quizState.order = shuffle(u.questions.map((_, i) => i));
+        quizState.idx = 0;
+        quizState.score = 0;
+        quizState.streak = 0;
+        showView("viewQuiz");
+        renderQuestion();
+      }
+
+      function renderQuestion() {
+        const q = quizState.unit.questions[quizState.order[quizState.idx]];
+        const total = quizState.order.length;
+        setHud({ title: "🎮 " + quizState.unit.title, back: true, stats: true, idx: quizState.idx, total: total, score: quizState.score, streak: quizState.streak });
+
+        // 보기를 매번 섞되 정답 인덱스 추적
+        const indexed = (q.options || []).map((opt, i) => ({ opt, orig: i }));
+        const shuffled = shuffle(indexed);
+        const correctOrigIdx = q.answer == null ? 0 : q.answer;
+
+        const view = $("viewQuiz");
+        const blockHtml = q.image
+          ? '<div class="block-image-wrap"><img src="' + q.image + '" alt="블록 이미지" /></div>'
+          : (q.blockText
+              ? '<div class="block-image-wrap"><pre class="block-text">' + escapeHtml(q.blockText) + '</pre></div>'
+              : "");
+
+        const promptText = q.prompt || "이 블록은 어떤 역할을 할까요?";
+
+        const choicesHtml = shuffled
+          .map((c, i) => {
+            const letter = String.fromCharCode(65 + i);
+            return (
+              '<button class="choice-btn" data-orig="' + c.orig + '">' +
+              '<span class="choice-letter">' + letter + '</span>' +
+              '<span>' + escapeHtml(c.opt) + '</span>' +
+              "</button>"
+            );
+          })
+          .join("");
+
+        view.innerHTML =
+          '<div class="question-card pop">' +
+          '<div class="prompt-row"><div class="prompt-small">📦 블록을 보고 알맞은 설명을 골라요</div></div>' +
+          blockHtml +
+          '<div class="question-text">' + escapeHtml(promptText) + '</div>' +
+          '<div class="choices" id="choices">' + choicesHtml + '</div>' +
+          '<div class="feedback hidden" id="feedback"></div>' +
+          '<div class="btn-row hidden" id="nextRow" style="margin-top:14px;justify-content:flex-end">' +
+            '<button class="btn btn-primary" id="btnNextQ">다음 →</button>' +
+          '</div>' +
+          "</div>";
+
+        view.querySelectorAll(".choice-btn").forEach((btn) => {
+          btn.addEventListener("click", () => onPick(btn, parseInt(btn.dataset.orig, 10), correctOrigIdx, q));
+        });
+        $("btnNextQ") && $("btnNextQ").addEventListener("click", nextQuestion);
+      }
+
+      function onPick(btn, pickedOrigIdx, correctOrigIdx, q) {
+        const all = document.querySelectorAll(".choice-btn");
+        all.forEach((b) => (b.disabled = true));
+        const fb = $("feedback");
+        const isCorrect = pickedOrigIdx === correctOrigIdx;
+        if (isCorrect) {
+          btn.classList.add("correct");
+          quizState.score += 1;
+          quizState.streak += 1;
+          fb.className = "feedback ok pop";
+          fb.innerHTML = "🎉 정답!" + (q.explanation ? '<span class="why">💡 ' + escapeHtml(q.explanation) + "</span>" : "");
+        } else {
+          btn.classList.add("wrong");
+          all.forEach((b) => {
+            if (parseInt(b.dataset.orig, 10) === correctOrigIdx) b.classList.add("correct");
+          });
+          quizState.streak = 0;
+          fb.className = "feedback no shake";
+          const correctText = (q.options || [])[correctOrigIdx] || "";
+          fb.innerHTML = "😅 아쉬워요. 정답은 <b>" + escapeHtml(correctText) + "</b> 였어요." +
+            (q.explanation ? '<span class="why">💡 ' + escapeHtml(q.explanation) + "</span>" : "");
+        }
+        fb.classList.remove("hidden");
+        $("nextRow").classList.remove("hidden");
+        // HUD 업데이트
+        setHud({
+          title: "🎮 " + quizState.unit.title, back: true, stats: true,
+          idx: quizState.idx, total: quizState.order.length,
+          score: quizState.score, streak: quizState.streak,
+        });
+      }
+
+      function nextQuestion() {
+        quizState.idx += 1;
+        if (quizState.idx >= quizState.order.length) {
+          showResult();
+          return;
+        }
+        renderQuestion();
+      }
+
+      function showResult() {
+        const total = quizState.order.length;
+        const score = quizState.score;
+        const pct = total ? Math.round((score / total) * 100) : 0;
+        const stars = pct >= 90 ? "⭐⭐⭐" : pct >= 70 ? "⭐⭐" : pct >= 50 ? "⭐" : "✨";
+        recordScore(quizState.unit.id, score, total);
+        setHud({ title: "🏁 결과", back: true, stats: false });
+        $("viewResult").innerHTML =
+          '<div class="result-card pop">' +
+          '<div class="big">' + (pct >= 70 ? "🏆" : pct >= 40 ? "👍" : "💪") + '</div>' +
+          '<div class="score-line">' + score + " / " + total + "</div>" +
+          '<div class="stars">' + stars + '</div>' +
+          '<div class="muted" style="margin:6px 0 18px">정답률 ' + pct + '%</div>' +
+          '<div class="btn-row" style="justify-content:center">' +
+            '<button class="btn btn-primary" id="btnRetry">🔁 다시 하기</button>' +
+            '<button class="btn btn-secondary" id="btnHomeFromResult">🏠 메뉴로</button>' +
+          '</div>' +
+          '</div>';
+        showView("viewResult");
+        $("btnRetry").addEventListener("click", () => startQuiz(quizState.unit.id));
+        $("btnHomeFromResult").addEventListener("click", goHome);
+      }
+
+      function goHome() {
+        setHud({ title: "🏠 단원 고르기", back: false, stats: false });
+        renderHome();
+        showView("viewHome");
+      }
+
+      /* ============================================================
+       * ADD UNIT VIEW (Gemini upload + manual)
+       * ============================================================ */
+      function openAddView() {
+        $("photoInput").value = "";
+        $("photoPreview").innerHTML = "";
+        $("unitTitleInput").value = "";
+        $("aiStatus").textContent = "";
+        $("aiStatus").className = "ai-status";
+        setHud({ title: "➕ 새 단원 만들기", back: true, stats: false });
+        showView("viewAdd");
+      }
+
+      function wirePhotoPreview() {
+        $("photoInput").addEventListener("change", () => {
+          const prev = $("photoPreview");
+          prev.innerHTML = "";
+          Array.from($("photoInput").files || []).forEach((f) => {
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(f);
+            img.alt = f.name;
+            prev.appendChild(img);
+          });
+        });
+      }
+
+      /* --- Gemini API --- */
+      async function callGeminiAPI(apiKey, body) {
+        const models = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL];
+        let lastErr = null;
+        for (let mi = 0; mi < models.length; mi++) {
+          const url = "https://generativelanguage.googleapis.com/v1beta/models/" + models[mi] +
+            ":generateContent?key=" + encodeURIComponent(apiKey);
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            let res;
+            try {
+              res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            } catch (netErr) {
+              lastErr = netErr;
+              if (attempt < 3) { await new Promise((r) => setTimeout(r, 800 * attempt)); continue; }
+              break;
+            }
+            if (res.ok) return await res.json();
+            const status = res.status;
+            let msg = "Gemini 호출 실패 (" + status + ")";
+            try { const j = await res.json(); if (j && j.error && j.error.message) msg += ": " + j.error.message; } catch (_) {}
+            lastErr = new Error(msg);
+            const transient = status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+            if (!transient) throw lastErr;
+            if (attempt < 3) await new Promise((r) => setTimeout(r, 800 * attempt));
+          }
+        }
+        throw lastErr || new Error("Gemini 호출 실패");
+      }
+
+      async function generateUnitFromPhotos(apiKey, files, opts) {
+        opts = opts || {};
+        const difficulty = opts.difficulty || "normal";
+        const promptLines = [
+          "당신은 메이크코드 아케이드(MakeCode Arcade)를 가르치는 친절한 코딩 선생님입니다.",
+          "첨부된 사진들은 메이크코드 아케이드 블록(또는 블록 묶음)의 스크린샷입니다.",
+          "각 사진에 보이는 블록의 '역할/기능'을 한국어 객관식 4지선다 학습 문제로 만들어 주세요.",
+          "난이도: " + difficulty + " (easy=초등 저학년, normal=초등 고학년, hard=중학생).",
+          "",
+          "다음 형식의 JSON 객체 하나만 반환하세요(코드펜스나 추가 설명 없이):",
+          "{",
+          '  "title": "단원 이름(한국어, 짧게)",',
+          '  "icon":  "이모지 한 개",',
+          '  "questions": [',
+          "    {",
+          '      "imageIndex": 0,                  // 어떤 사진에 해당하는지(0부터)',
+          '      "blockSummary": "블록 한국어 요약(예: 시작하면 / A 버튼 누를 때 / 스프라이트 만들기)",',
+          '      "prompt": "이 블록은 어떤 역할을 할까요?",',
+          '      "options": ["정답", "오답1", "오답2", "오답3"],',
+          '      "answer": 0,                       // 정답이 들어있는 options 배열 인덱스(0~3)',
+          '      "explanation": "왜 그런 역할을 하는지 한국어 한 두 문장으로 친절하게 설명"',
+          "    }",
+          "  ]",
+          "}",
+          "",
+          "규칙:",
+          "- 각 사진(또는 사진 안의 의미 있는 블록 단위)마다 1~3개의 문제를 만드세요.",
+          "- 문제 수는 최소 4개, 가능하면 6~12개로 만들어 주세요.",
+          "- options는 항상 정확히 4개여야 합니다.",
+          "- 오답은 그럴듯하게 만들되, 사진의 블록과 명백히 다른 역할을 설명해야 합니다.",
+          "- 정답·오답·설명 모두 한국어로, 어린 학생도 이해할 수 있게 쉬운 말로 써주세요.",
+          "- 사진에 없는 내용을 만들어내지 마세요. 보이는 블록의 의미만 기반으로 하세요.",
+          "- JSON 외 다른 텍스트, 코드펜스, 주석을 절대 포함하지 마세요.",
+        ];
+
+        const parts = [{ text: promptLines.join("\n") }];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const b64 = await fileToBase64(f);
+          parts.push({ text: "[사진 " + i + "]" });
+          parts.push({ inline_data: { mime_type: f.type || "image/png", data: b64 } });
+        }
+
+        const body = {
+          contents: [{ role: "user", parts: parts }],
+          generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+        };
+
+        const data = await callGeminiAPI(apiKey, body);
+        const textParts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+        const combined = textParts.map((p) => p.text || "").join("").trim();
+        if (!combined) throw new Error("AI 응답이 비어있어요.");
+        let jsonStr = combined;
+        const fence = combined.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fence) jsonStr = fence[1].trim();
+        let parsed;
+        try { parsed = JSON.parse(jsonStr); }
+        catch (e) { throw new Error("JSON 파싱 실패: " + jsonStr.slice(0, 200)); }
+        if (!parsed || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+          throw new Error("문제를 만들지 못했어요. 사진을 다시 확인해 주세요.");
+        }
+        return parsed;
+      }
+
+      async function handleGenerate() {
+        const apiKey = ($("geminiKey").value || "").trim() || (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        const files = Array.from($("photoInput").files || []);
+        const status = $("aiStatus");
+        if (!apiKey) {
+          status.className = "ai-status error";
+          status.textContent = "❗ 먼저 Gemini API 키를 입력하세요. (메뉴 화면 하단에 있어요)";
+          showToast("API 키를 먼저 입력해 주세요");
+          return;
+        }
+        if (!files.length) {
+          status.className = "ai-status error";
+          status.textContent = "❗ 메이크코드 블록 스크린샷을 1장 이상 올려주세요.";
+          return;
+        }
+
+        try { localStorage.setItem(GEMINI_KEY_KEY, apiKey); } catch (e) {}
+
+        const btn = $("btnGenerate");
+        btn.disabled = true; btn.textContent = "🤖 AI가 분석 중...";
+        status.className = "ai-status";
+        status.textContent = "🤖 Gemini가 사진을 분석하고 객관식 문제를 만들고 있어요... (사진이 많으면 30초까지 걸려요)";
+
+        try {
+          const difficulty = $("difficultySelect").value;
+          const parsed = await generateUnitFromPhotos(apiKey, files, { difficulty: difficulty });
+
+          // 사진을 dataURL로 보관 → 문제에 image로 첨부
+          const imgUrls = [];
+          for (const f of files) imgUrls.push(await fileToDataURL(f));
+
+          const titleInput = ($("unitTitleInput").value || "").trim();
+          const newUnit = {
+            id: uid("unit"),
+            title: titleInput || parsed.title || ("AI 단원 " + new Date().toLocaleDateString("ko-KR")),
+            icon: parsed.icon || "🎮",
+            builtin: false,
+            createdAt: Date.now(),
+            questions: (parsed.questions || []).map((q, i) => ({
+              id: "q_" + i + "_" + Math.random().toString(36).slice(2, 6),
+              image: imgUrls[Math.max(0, Math.min(imgUrls.length - 1, q.imageIndex || 0))] || imgUrls[0] || null,
+              blockText: q.blockSummary || "",
+              prompt: q.prompt || "이 블록은 어떤 역할을 할까요?",
+              options: Array.isArray(q.options) ? q.options.slice(0, 4) : [],
+              answer: typeof q.answer === "number" ? q.answer : 0,
+              explanation: q.explanation || "",
+            })).filter((q) => q.options.length === 4),
+          };
+
+          if (!newUnit.questions.length) throw new Error("AI가 만든 문제가 형식을 맞추지 못했어요. 다시 시도해 주세요.");
+
+          const userUnits = loadUnits();
+          userUnits.unshift(newUnit);
+          saveUnits(userUnits);
+
+          status.className = "ai-status ok";
+          status.textContent = "✅ 단원 '" + newUnit.title + "'을 만들었어요! (" + newUnit.questions.length + "문제)";
+          showToast("새 단원이 추가됐어요 🎉");
+          setTimeout(() => goHome(), 800);
+        } catch (e) {
+          console.error(e);
+          status.className = "ai-status error";
+          status.textContent = "❌ " + (e && e.message ? e.message : "알 수 없는 에러가 발생했어요.");
+        } finally {
+          btn.disabled = false; btn.textContent = "🤖 AI로 문제 만들기";
+        }
+      }
+
+      /* ============================================================
+       * MANUAL EDITOR
+       * ============================================================ */
+      let manualDraft = { title: "", icon: "🎮", questions: [] };
+
+      function openManualView(prefill) {
+        manualDraft = prefill || { title: "", icon: "🎮", questions: [makeBlankQuestion()] };
+        $("manualUnitTitle").value = manualDraft.title;
+        $("manualUnitIcon").value = manualDraft.icon;
+        renderManualQuestions();
+        setHud({ title: "✏️ 단원 직접 만들기", back: true, stats: false });
+        showView("viewManual");
+      }
+      function makeBlankQuestion() {
+        return { id: uid("mq"), blockText: "", prompt: "이 블록은 어떤 역할을 할까요?", options: ["", "", "", ""], answer: 0, explanation: "" };
+      }
+      function renderManualQuestions() {
+        const list = $("manualQuestionsList");
+        list.innerHTML = "";
+        manualDraft.questions.forEach((q, qi) => {
+          const div = document.createElement("div");
+          div.className = "q-editor";
+          div.innerHTML =
+            '<h5>문제 ' + (qi + 1) + '<button class="btn btn-secondary" data-act="del" style="padding:4px 10px;font-size:0.8rem">🗑 삭제</button></h5>' +
+            '<div class="row"><label>블록 설명/코드 (선택)</label><textarea data-k="blockText" placeholder="예: 시작하면 / 배경 이미지 설정 ..."></textarea></div>' +
+            '<div class="row"><label>문제 질문</label><input type="text" data-k="prompt" /></div>' +
+            '<div class="row"><label>보기 4개 (라디오로 정답 선택)</label>' +
+              ['A','B','C','D'].map((L, oi) =>
+                '<div class="opt-row"><span class="letter">' + L + '</span>' +
+                '<input type="text" data-opt="' + oi + '" placeholder="보기 ' + L + '" />' +
+                '<input type="radio" name="ans_' + qi + '" data-ans="' + oi + '" title="이 보기를 정답으로" /></div>'
+              ).join("") +
+            '</div>' +
+            '<div class="row"><label>설명 (선택, 정답 해설)</label><textarea data-k="explanation" placeholder="왜 이게 정답인지 친절하게 설명해 주세요"></textarea></div>';
+          list.appendChild(div);
+
+          // bind values
+          div.querySelector('[data-k="blockText"]').value = q.blockText || "";
+          div.querySelector('[data-k="prompt"]').value = q.prompt || "";
+          div.querySelector('[data-k="explanation"]').value = q.explanation || "";
+          div.querySelectorAll('[data-opt]').forEach((inp) => {
+            const oi = parseInt(inp.dataset.opt, 10);
+            inp.value = q.options[oi] || "";
+            inp.addEventListener("input", () => { q.options[oi] = inp.value; });
+          });
+          div.querySelectorAll('[data-ans]').forEach((r) => {
+            const oi = parseInt(r.dataset.ans, 10);
+            r.checked = q.answer === oi;
+            r.addEventListener("change", () => { if (r.checked) q.answer = oi; });
+          });
+          div.querySelector('[data-k="blockText"]').addEventListener("input", (e) => { q.blockText = e.target.value; });
+          div.querySelector('[data-k="prompt"]').addEventListener("input", (e) => { q.prompt = e.target.value; });
+          div.querySelector('[data-k="explanation"]').addEventListener("input", (e) => { q.explanation = e.target.value; });
+
+          div.querySelector('[data-act="del"]').addEventListener("click", () => {
+            if (manualDraft.questions.length <= 1) { showToast("최소 1문제는 있어야 해요."); return; }
+            manualDraft.questions.splice(qi, 1);
+            renderManualQuestions();
+          });
+        });
+      }
+      function saveManualUnit() {
+        const title = ($("manualUnitTitle").value || "").trim();
+        const icon = ($("manualUnitIcon").value || "🎮").trim() || "🎮";
+        if (!title) { showToast("단원 이름을 입력해 주세요."); return; }
+        const cleaned = manualDraft.questions
+          .map((q) => ({
+            id: q.id || uid("mq"),
+            blockText: (q.blockText || "").trim(),
+            prompt: (q.prompt || "이 블록은 어떤 역할을 할까요?").trim(),
+            options: (q.options || []).map((o) => (o || "").trim()),
+            answer: q.answer | 0,
+            explanation: (q.explanation || "").trim(),
+          }))
+          .filter((q) => q.options.length === 4 && q.options.every((o) => o.length > 0));
+        if (cleaned.length === 0) { showToast("문제 보기 4개를 모두 채운 문제가 1개 이상 필요해요."); return; }
+
+        const newUnit = { id: uid("unit"), title: title, icon: icon, builtin: false, createdAt: Date.now(), questions: cleaned };
+        const userUnits = loadUnits();
+        userUnits.unshift(newUnit);
+        saveUnits(userUnits);
+        showToast("단원이 저장됐어요 🎉");
+        goHome();
+      }
+
+      /* ============================================================
+       * GEMINI KEY UI
+       * ============================================================ */
+      function wireKeyUI() {
+        const input = $("geminiKey");
+        const status = $("keyStatus");
+        const btnToggle = $("btnToggleKey");
+        const btnClear = $("btnClearKey");
+
+        function maskKey(k) {
+          if (!k) return "";
+          const s = String(k);
+          if (s.length <= 8) return s.slice(0, 2) + "…";
+          return s.slice(0, 4) + "…" + s.slice(-4);
+        }
+        function setStatus(saved, masked) {
+          if (saved) {
+            status.classList.add("is-saved");
+            status.innerHTML = "✓ 저장됨 (" + masked + ") · 다시 입력하지 않아도 돼요.";
+          } else {
+            status.classList.remove("is-saved");
+            status.innerHTML = '키는 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 만들 수 있어요.';
+          }
+        }
+
+        try {
+          const saved = localStorage.getItem(GEMINI_KEY_KEY);
+          if (saved) { input.value = saved; setStatus(true, maskKey(saved)); }
+        } catch (e) {}
+
+        let _t = null;
+        input.addEventListener("input", () => {
+          clearTimeout(_t);
+          _t = setTimeout(() => {
+            const v = (input.value || "").trim();
+            try {
+              if (v) { localStorage.setItem(GEMINI_KEY_KEY, v); setStatus(true, maskKey(v)); }
+              else { localStorage.removeItem(GEMINI_KEY_KEY); setStatus(false); }
+            } catch (e) {}
+          }, 300);
+        });
+
+        btnToggle.addEventListener("click", () => {
+          if (input.type === "password") { input.type = "text"; btnToggle.textContent = "🙈"; }
+          else { input.type = "password"; btnToggle.textContent = "👁"; }
+        });
+        btnClear.addEventListener("click", () => {
+          if (!confirm("저장된 API 키를 삭제할까요?")) return;
+          try { localStorage.removeItem(GEMINI_KEY_KEY); } catch (e) {}
+          input.value = ""; setStatus(false);
+        });
+      }
+
+      /* ============================================================
+       * WIRING
+       * ============================================================ */
+      function wireAll() {
+        $("btnBack").addEventListener("click", goHome);
+        $("btnAddBack").addEventListener("click", goHome);
+        $("btnManualBack").addEventListener("click", goHome);
+        $("btnAddManual").addEventListener("click", () => openManualView());
+        $("btnGenerate").addEventListener("click", handleGenerate);
+        $("btnAddQuestion").addEventListener("click", () => { manualDraft.questions.push(makeBlankQuestion()); renderManualQuestions(); });
+        $("btnSaveManual").addEventListener("click", saveManualUnit);
+        wirePhotoPreview();
+        wireKeyUI();
+      }
+
+      /* ============================================================
+       * BOOT
+       * ============================================================ */
+      document.addEventListener("DOMContentLoaded", () => {
+        wireAll();
+        renderHome();
+        showView("viewHome");
+      });
+    </script>
+  </body>
+</html>
