@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gemini Computer Use — Lightroom 자동 제어</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --border: #2a2d3e;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --thinking: #1e293b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+  }
+
+  /* 헤더 */
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { font-size: 18px; font-weight: 700; background: linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .badge { font-size:11px; padding:3px 8px; border-radius:99px; background:var(--border); color:var(--muted); font-weight:500; }
+  #statusText { font-size:13px; color:var(--muted); margin-left:auto; }
+  .status-dot { width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s;margin-left:8px;flex-shrink:0; }
+  .status-dot.running { background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1s infinite; }
+  .status-dot.error { background:var(--red); }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+  /* 사이드바 */
+  .sidebar { background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden; }
+
+  /* ── API 키 패널 ── */
+  .key-panel {
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .key-panel.collapsed { max-height: 44px; }
+  .key-panel.expanded  { max-height: 280px; }
+  .key-header {
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;cursor:pointer;user-select:none;
+  }
+  .key-header:hover { background:rgba(255,255,255,.03); }
+  .key-title { font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px; }
+  .key-indicator {
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;
+  }
+  .key-indicator.ok   { background:rgba(34,197,94,.15);color:var(--green); }
+  .key-indicator.none { background:rgba(239,68,68,.15);color:var(--red); }
+  .key-toggle { font-size:12px;color:var(--muted); }
+  .key-body { padding:0 16px 16px; }
+  .key-body label { font-size:11px;color:var(--muted);margin-bottom:4px;display:block;margin-top:10px; }
+  .key-input-wrap { display:flex;gap:6px; }
+  #keyInput {
+    flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:9px 12px;border-radius:8px;font-size:13px;outline:none;font-family:monospace;
+    letter-spacing:.05em;
+  }
+  #keyInput:focus { border-color:var(--accent); }
+  .btn-eye {
+    background:var(--border);border:none;color:var(--muted);
+    padding:0 10px;border-radius:8px;cursor:pointer;font-size:14px;
+  }
+  .btn-eye:hover{color:var(--text);}
+  #modelSelect {
+    width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:8px 10px;border-radius:8px;font-size:13px;outline:none;
+  }
+  #modelSelect:focus{border-color:var(--accent);}
+  .key-actions { display:flex;gap:8px;margin-top:12px; }
+  .btn-save-key { flex:1;background:var(--accent);color:#fff;border:none;padding:9px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer; }
+  .btn-save-key:hover{background:#4f46e5;}
+  .btn-save-key:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+  .save-check { display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer; }
+  .save-check input{accent-color:var(--accent);}
+  .masked-key { font-size:12px;color:var(--muted);margin-top:6px;font-family:monospace; }
+
+  /* 입력 영역 */
+  .input-area { padding:14px 16px;border-bottom:1px solid var(--border); }
+  .input-area label { font-size:12px;color:var(--muted);margin-bottom:6px;display:block; }
+  .input-row { display:flex;gap:8px; }
+  #requestInput {
+    flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:8px;font-size:14px;outline:none;
+    resize:none;height:76px;font-family:inherit;line-height:1.5;
+  }
+  #requestInput:focus{border-color:var(--accent);}
+  #requestInput:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-group{display:flex;flex-direction:column;gap:6px;}
+  .btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;height:36px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;}
+  .btn-run{background:var(--accent);color:#fff;}
+  .btn-run:hover{background:#4f46e5;}
+  .btn-run:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+  .btn-stop{background:var(--red);color:#fff;}
+  .btn-stop:hover{background:#dc2626;}
+  .btn-stop:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+  .btn-refresh{background:var(--border);color:var(--text);}
+  .btn-refresh:hover{background:#3a3d52;}
+
+  /* 빠른 명령 */
+  .quick-cmds{padding:10px 16px;border-bottom:1px solid var(--border);}
+  .quick-cmds label{font-size:12px;color:var(--muted);margin-bottom:7px;display:block;}
+  .quick-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .quick-btn{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;transition:all .15s;}
+  .quick-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  /* 생각 */
+  .thinking-box{margin:8px 16px 0;padding:10px 12px;background:var(--thinking);border-left:3px solid var(--accent2);border-radius:0 6px 6px 0;font-size:12px;color:#a5b4fc;line-height:1.6;display:none;max-height:90px;overflow-y:auto;}
+  .thinking-box.visible{display:block;}
+  .thinking-label{font-size:10px;color:var(--accent2);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
+
+  /* 로그 */
+  .log-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;font-size:12px;color:var(--muted);}
+  .log-clear{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;}
+  .log-clear:hover{color:var(--text);}
+  #logBox{flex:1;overflow-y:auto;padding:4px 16px 16px;font-size:12px;line-height:1.7;font-family:'SF Mono','Fira Code',monospace;}
+  .log-entry{padding:2px 0;}
+  .log-info{color:var(--text);}
+  .log-success{color:var(--green);}
+  .log-warn{color:var(--yellow);}
+  .log-error{color:var(--red);}
+  .log-dim{color:var(--muted);}
+  .log-time{color:var(--muted);margin-right:6px;font-size:10px;}
+
+  /* 메인 뷰 */
+  .main-view{display:flex;flex-direction:column;overflow:hidden;background:#0a0c14;}
+  .screen-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);}
+  .step-badge{background:var(--accent);color:#fff;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700;display:none;}
+  .step-badge.visible{display:inline;}
+  .screen-wrap{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;}
+  #screenImg{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;}
+  .overlay-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);font-size:15px;}
+  .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .screen-footer{padding:8px 16px;font-size:11px;color:var(--muted);background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+  #actionLabel{color:var(--accent2);font-weight:600;}
+
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- 헤더 -->
+  <header>
+    <span class="logo">⚡ Gemini Computer Use</span>
+    <span class="badge" id="modelBadge">gemini-2.5-flash</span>
+    <span id="statusText">연결 중...</span>
+    <div class="status-dot" id="statusDot"></div>
+  </header>
+
+  <!-- 사이드바 -->
+  <aside class="sidebar">
+
+    <!-- ── API 키 패널 ── -->
+    <div class="key-panel collapsed" id="keyPanel">
+      <div class="key-header" onclick="toggleKeyPanel()">
+        <span class="key-title">
+          🔑 Gemini API 키
+          <span class="key-indicator none" id="keyIndicator">미설정</span>
+        </span>
+        <span class="key-toggle" id="keyToggleIcon">▼</span>
+      </div>
+      <div class="key-body" id="keyBody">
+        <div class="masked-key" id="maskedKeyDisplay" style="display:none;"></div>
+        <label>API 키 입력 <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);font-size:10px;">발급받기 →</a></label>
+        <div class="key-input-wrap">
+          <input type="password" id="keyInput" placeholder="AIza..." autocomplete="off" />
+          <button class="btn-eye" onclick="toggleKeyVisibility()" title="표시/숨김">👁</button>
+        </div>
+        <label>모델 선택</label>
+        <select id="modelSelect">
+          <option value="gemini-2.5-flash" selected>gemini-2.5-flash (최신, 권장)</option>
+          <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (가벼움)</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro (고성능)</option>
+          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+        </select>
+        <div class="key-actions">
+          <label class="save-check">
+            <input type="checkbox" id="saveKeyCheck" checked />
+            .env에 저장
+          </label>
+          <button class="btn-save-key" id="btnSaveKey" onclick="submitKey()">✓ 적용</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 입력 영역 -->
+    <div class="input-area">
+      <label>자연어로 요청하세요</label>
+      <div class="input-row">
+        <textarea id="requestInput" placeholder="예) 노출을 -0.5로 설정해줘&#10;예) 하이라이트 -80으로 낮춰줘" disabled></textarea>
+        <div class="btn-group">
+          <button class="btn btn-run" id="btnRun" onclick="runTask()" disabled>▶ 실행</button>
+          <button class="btn btn-stop" id="btnStop" onclick="stopTask()" disabled>■ 중단</button>
+          <button class="btn btn-refresh" onclick="refreshScreen()" title="화면 새로고침">↻</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 빠른 명령 -->
+    <div class="quick-cmds">
+      <label>빠른 명령</label>
+      <div class="quick-list" id="quickList"></div>
+    </div>
+
+    <!-- AI 생각 -->
+    <div style="padding:0 0;">
+      <div class="thinking-box" id="thinkingBox">
+        <div class="thinking-label">🧠 AI 분석</div>
+        <div id="thinkingText"></div>
+      </div>
+    </div>
+
+    <!-- 로그 -->
+    <div class="log-header">
+      <span>실행 로그</span>
+      <button class="log-clear" onclick="clearLog()">지우기</button>
+    </div>
+    <div id="logBox"></div>
+  </aside>
+
+  <!-- 메인 화면 뷰 -->
+  <main class="main-view">
+    <div class="screen-header">
+      <span>실시간 화면 미리보기</span>
+      <span class="step-badge" id="stepBadge">스텝 1</span>
+    </div>
+    <div class="screen-wrap">
+      <img id="screenImg" src="" alt="" style="display:none;" />
+      <div class="overlay-msg" id="overlayMsg">
+        <div class="spinner"></div>
+        <span id="overlayText">서버 연결 중...</span>
+      </div>
+    </div>
+    <div class="screen-footer">
+      <span>현재 액션:</span>
+      <span id="actionLabel">대기 중</span>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── 빠른 명령 ─────────────────────────────────
+const QUICK_CMDS = [
+  "노출을 -0.3으로 설정해줘",
+  "하이라이트를 -80으로 낮춰줘",
+  "현재 슬라이더 값 알려줘",
+  "화이트 밸런스 자동으로",
+  "현상 패널 초기화",
+  "선명도 +30 올려줘",
+  "흑백으로 변환해줘",
+  "그림자 +50 올려줘",
+];
+document.getElementById("quickList").innerHTML = QUICK_CMDS.map(cmd =>
+  `<button class="quick-btn" onclick="setRequest(this)">${escHtml(cmd)}</button>`
+).join("");
+
+function setRequest(el) {
+  document.getElementById("requestInput").value = el.textContent;
+}
+
+// ── API 키 패널 ───────────────────────────────
+let keyPanelOpen = false;
+function toggleKeyPanel() {
+  keyPanelOpen = !keyPanelOpen;
+  const panel = document.getElementById("keyPanel");
+  panel.className = "key-panel " + (keyPanelOpen ? "expanded" : "collapsed");
+  document.getElementById("keyToggleIcon").textContent = keyPanelOpen ? "▲" : "▼";
+}
+
+function toggleKeyVisibility() {
+  const inp = document.getElementById("keyInput");
+  inp.type = inp.type === "password" ? "text" : "password";
+}
+
+function submitKey() {
+  const key = document.getElementById("keyInput").value.trim();
+  const model = document.getElementById("modelSelect").value;
+  const save = document.getElementById("saveKeyCheck").checked;
+  if (!key) { addLog("error","❌ API 키를 입력하세요."); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { addLog("error","❌ 서버에 연결되지 않았습니다."); return; }
+  document.getElementById("btnSaveKey").disabled = true;
+  ws.send(JSON.stringify({ action:"set_key", key, model, save }));
+}
+
+// ── WebSocket ──────────────────────────────────
+let ws = null;
+let isRunning = false;
+let hasKey = false;
+let reconnectDelay = 3000;
+let reconnectTimer = null;
+
+function connect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    reconnectDelay = 3000; // 재연결 성공 시 딜레이 리셋
+    setStatus("연결됨", false);
+    // 첫 연결 시에만 로그 출력 (재연결 깜빡임 방지)
+    if (!hasKey) addLog("info","🔌 서버에 연결되었습니다.");
+  };
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+  ws.onclose = () => {
+    setStatus("연결 끊김", false);
+    // 재연결 중 UI 비활성화만 하고 패널 상태는 유지
+    document.getElementById("btnRun").disabled = true;
+    document.getElementById("btnStop").disabled = true;
+    reconnectTimer = setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 1.5, 15000); // 지수 백오프 (최대 15초)
+  };
+  ws.onerror = () => {}; // onclose가 처리
+}
+
+function handleMessage(msg) {
+  switch(msg.type) {
+    case "screenshot":
+      showScreenshot(msg.data); break;
+    case "log":
+      addLog(msg.level, msg.message); break;
+    case "thinking":
+      showThinking(msg.text); break;
+    case "status":
+      setStatus(msg.text, msg.running); break;
+    case "step":
+      showStep(msg.number); break;
+    case "action":
+      document.getElementById("actionLabel").textContent =
+        msg.action_type + (msg.description ? " — "+msg.description : ""); break;
+    case "key_ok":
+      onKeyOk(msg.masked, msg.model); break;
+    case "key_fail":
+      document.getElementById("btnSaveKey").disabled = false; break;
+    case "need_key":
+      onNeedKey(); break;
+    case "error":
+      addLog("error","❌ "+msg.message); break;
+  }
+}
+
+function onKeyOk(masked, model) {
+  hasKey = true;
+  document.getElementById("btnSaveKey").disabled = false;
+  const ind = document.getElementById("keyIndicator");
+  ind.textContent = "설정됨"; ind.className = "key-indicator ok";
+  const md = document.getElementById("maskedKeyDisplay");
+  md.textContent = "현재 키: " + masked; md.style.display = "block";
+  document.getElementById("keyInput").value = "";
+  // 패널 닫기 (이미 닫혀있으면 그대로)
+  if (keyPanelOpen) {
+    keyPanelOpen = false;
+    document.getElementById("keyPanel").className = "key-panel collapsed";
+    document.getElementById("keyToggleIcon").textContent = "▼";
+  }
+  setInputEnabled(true);
+  if (model) {
+    document.getElementById("modelBadge").textContent = model;
+    document.getElementById("modelSelect").value = model;
+  }
+  // localStorage에 상태 저장 (재연결 시 깜빡임 방지)
+  localStorage.setItem("gemini_key_set", "1");
+  localStorage.setItem("gemini_masked", masked);
+}
+
+function onNeedKey() {
+  hasKey = false;
+  setInputEnabled(false);
+  const ind = document.getElementById("keyIndicator");
+  ind.textContent = "미설정"; ind.className = "key-indicator none";
+  localStorage.removeItem("gemini_key_set");
+  // 이미 열려있지 않을 때만 패널 오픈
+  if (!keyPanelOpen) {
+    keyPanelOpen = true;
+    document.getElementById("keyPanel").className = "key-panel expanded";
+    document.getElementById("keyToggleIcon").textContent = "▲";
+  }
+  document.getElementById("overlayText").textContent = "API 키를 입력하세요 →";
+}
+
+function setInputEnabled(enabled) {
+  document.getElementById("requestInput").disabled = !enabled;
+  document.getElementById("btnRun").disabled = !enabled;
+}
+
+// ── UI 헬퍼 ───────────────────────────────────
+function showScreenshot(b64) {
+  const img = document.getElementById("screenImg");
+  const overlay = document.getElementById("overlayMsg");
+  img.src = "data:image/jpeg;base64,"+b64;
+  img.style.display = "block";
+  overlay.style.display = "none";
+}
+
+function addLog(level, message) {
+  const box = document.getElementById("logBox");
+  const d = document.createElement("div");
+  d.className = "log-entry log-"+level;
+  const now = new Date();
+  const t = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  d.innerHTML = `<span class="log-time">${t}</span>${escHtml(message)}`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showThinking(text) {
+  document.getElementById("thinkingText").textContent = text;
+  document.getElementById("thinkingBox").classList.add("visible");
+}
+
+function setStatus(text, running) {
+  isRunning = running;
+  document.getElementById("statusText").textContent = text;
+  const dot = document.getElementById("statusDot");
+  dot.className = "status-dot"+(running?" running":"");
+  document.getElementById("btnRun").disabled = running || !hasKey;
+  document.getElementById("btnStop").disabled = !running;
+  if (!running) document.getElementById("actionLabel").textContent = "대기 중";
+}
+
+function showStep(n) {
+  const b = document.getElementById("stepBadge");
+  b.textContent = "스텝 "+n; b.classList.add("visible");
+}
+
+function clearLog() { document.getElementById("logBox").innerHTML = ""; }
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function pad(n) { return String(n).padStart(2,"0"); }
+
+// ── 컨트롤 ────────────────────────────────────
+function runTask() {
+  const req = document.getElementById("requestInput").value.trim();
+  if (!req) { alert("요청 내용을 입력하세요."); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { alert("서버에 연결되지 않았습니다."); return; }
+  document.getElementById("thinkingBox").classList.remove("visible");
+  document.getElementById("stepBadge").classList.remove("visible");
+  ws.send(JSON.stringify({ action:"run", request:req }));
+}
+
+function stopTask() {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ action:"stop" }));
+}
+
+function refreshScreen() {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ action:"refresh" }));
+}
+
+document.getElementById("requestInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (!isRunning && hasKey) runTask();
+  }
+});
+
+// 페이지 로드 시 이전 키 상태 복원 (재연결 깜빡임 방지)
+if (localStorage.getItem("gemini_key_set")) {
+  const prev = localStorage.getItem("gemini_masked") || "";
+  document.getElementById("maskedKeyDisplay").textContent = "현재 키: " + prev;
+  document.getElementById("maskedKeyDisplay").style.display = "block";
+  document.getElementById("keyIndicator").textContent = "설정됨";
+  document.getElementById("keyIndicator").className = "key-indicator ok";
+  // 패널은 닫힌 상태로 유지
+}
+
+connect();
+</script>
+</body>
+</html>

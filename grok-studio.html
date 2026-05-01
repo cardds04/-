@@ -350,6 +350,21 @@
         gap: 0.5rem;
         margin-bottom: 0.35rem;
       }
+      .ref1-batch-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.1em 0.55em;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1.6;
+        margin-left: 0.35em;
+        vertical-align: middle;
+        letter-spacing: 0.01em;
+      }
       .drop {
         display: flex;
         flex-direction: column;
@@ -1248,12 +1263,13 @@
                 <div>
                   <div class="grok-ref-col-head">
                     <label class="label label--grok-ref" for="grokImageFile">참조 1</label>
+                    <span id="ref1BatchBadge" class="ref1-batch-badge" hidden></span>
                     <button type="button" class="btn btn--secondary" id="btnClearGrokRef1" aria-label="참조 1 비우기">
                       비우기
                     </button>
                   </div>
                   <label class="drop drop--grok-ref" id="grokImageDropzone" tabindex="0" aria-label="참조 이미지 1">
-                    <input type="file" id="grokImageFile" accept="image/*" hidden />
+                    <input type="file" id="grokImageFile" accept="image/*" hidden multiple />
                     <span class="drop__hint grok-ref-drop-hint">선택 · 드롭 · 붙여넣기</span>
                     <div class="grok-ref-preview" id="grokImagePreview" hidden>
                       <div class="grok-ref-preview__stack">
@@ -1634,6 +1650,18 @@
         var grokImageFile = document.getElementById("grokImageFile");
         var grokImageFile2 = document.getElementById("grokImageFile2");
         var grokRefPreviewUrls = { 1: null, 2: null };
+        var ref1BatchFiles = [];
+
+        function updateRef1BatchBadge() {
+          var badge = document.getElementById("ref1BatchBadge");
+          if (!badge) return;
+          if (ref1BatchFiles.length > 1) {
+            badge.textContent = ref1BatchFiles.length + "장";
+            badge.hidden = false;
+          } else {
+            badge.hidden = true;
+          }
+        }
 
         function buildGrokRefGridOverlaySvgHtml() {
           var parts = [];
@@ -2115,6 +2143,7 @@
           var input = slot === 2 ? grokImageFile2 : grokImageFile;
           if (!input) return;
           if (!file) {
+            if (slot === 1) { ref1BatchFiles = []; updateRef1BatchBadge(); }
             /* Safari 등: 빈 DataTransfer로는 files가 안 비워지는 경우가 많음 */
             try {
               input.value = "";
@@ -2140,6 +2169,16 @@
             input.click();
           });
           input.addEventListener("change", function () {
+            if (slot === 1 && input.files && input.files.length > 1) {
+              var imgs = Array.from(input.files).filter(function (f) { return f.type.indexOf("image/") === 0; });
+              if (imgs.length > 1) {
+                ref1BatchFiles = imgs;
+                setGrokRefFile(1, imgs[0]);
+                updateRef1BatchBadge();
+                return;
+              }
+            }
+            if (slot === 1) { ref1BatchFiles = []; updateRef1BatchBadge(); }
             syncGrokRefSlotUI(slot);
           });
           ["dragenter", "dragover"].forEach(function (ev) {
@@ -2156,7 +2195,20 @@
           });
           zone.addEventListener("drop", function (e) {
             e.preventDefault();
-            var fl = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            var files = e.dataTransfer && e.dataTransfer.files;
+            if (!files || !files.length) return;
+            if (slot === 1) {
+              var imgs = Array.from(files).filter(function (f) { return f.type.indexOf("image/") === 0; });
+              if (imgs.length > 1) {
+                ref1BatchFiles = imgs;
+                setGrokRefFile(1, imgs[0]);
+                updateRef1BatchBadge();
+                return;
+              }
+              ref1BatchFiles = [];
+              updateRef1BatchBadge();
+            }
+            var fl = files[0];
             if (fl && fl.type.indexOf("image/") === 0) setGrokRefFile(slot, fl);
           });
         }
@@ -2492,9 +2544,73 @@
             setError("");
             var provEl = document.querySelector('input[name="imageProvider"]:checked');
             var prov = provEl ? provEl.value : "gemini";
-            var ref1 = grokImageFile && grokImageFile.files[0];
             var ref2file = grokImageFile2 && grokImageFile2.files[0];
             var resolution = grokImageResolution ? grokImageResolution.value : "2k";
+            var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
+            var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
+
+            /* ── 배치 모드: 참조 1에 여러 장이 있을 때 순차 처리 ── */
+            if (ref1BatchFiles.length > 1) {
+              var supabaseReady = window.supabase && typeof window.supabase.createClient === "function";
+              if (!supabaseReady) {
+                setError(
+                  "참조 이미지는 Supabase Storage에 브라우저가 직접 올린 뒤에만 사용할 수 있습니다. Supabase 스크립트가 로드됐는지 확인하거나 참조를 비우고 텍스트만으로 생성하세요.",
+                );
+                return;
+              }
+              var batchFiles = ref1BatchFiles.slice();
+              var sbc = getGrokStudioRefConfig();
+              var sbClient = window.supabase.createClient(sbc.url, sbc.anonKey);
+
+              for (var bi = 0; bi < batchFiles.length; bi++) {
+                var currentFile = batchFiles[bi];
+                /* 현재 처리 중인 파일을 참조 1 미리보기에 반영 */
+                setGrokRefFile(1, currentFile);
+
+                var batchUrls = [];
+                var batchAspect;
+                try {
+                  batchAspect = await resolveAspectRatioForApi(prov, currentFile);
+                  batchUrls.push(await uploadRefToSupabase(sbClient, sbc.bucket, currentFile, 1));
+                  if (ref2file) batchUrls.push(await uploadRefToSupabase(sbClient, sbc.bucket, ref2file, 2));
+                } catch (e) {
+                  setError("(" + (bi + 1) + "/" + batchFiles.length + ") 업로드 실패: " + String(e.message || e));
+                  break;
+                }
+
+                var batchPrompt = ref2file ? expandGrokRef2GridPrompt(prompt, true) : prompt;
+                var batchJob = {
+                  prov: prov,
+                  prompt: batchPrompt,
+                  aspect_ratio: batchAspect,
+                  resolution: resolution,
+                  image_urls: batchUrls,
+                  xai_api_key: xk || undefined,
+                  gemini_api_key: gk || undefined,
+                };
+
+                imageGenInFlight += 1;
+                if (imageGenQueueStatusEl) {
+                  imageGenQueueStatusEl.textContent =
+                    "배치 처리 중 " + (bi + 1) + " / " + batchFiles.length + " …";
+                  imageGenQueueStatusEl.hidden = false;
+                }
+                try {
+                  await runOneImageGenJob(batchJob);
+                } catch (e) {
+                  setImageGenErrorFromException(e);
+                  imageGenInFlight = Math.max(0, imageGenInFlight - 1);
+                  updateImageGenQueueStatus();
+                  break;
+                }
+                imageGenInFlight = Math.max(0, imageGenInFlight - 1);
+              }
+              updateImageGenQueueStatus();
+              return;
+            }
+
+            /* ── 단일 파일(기존 동작) ── */
+            var ref1 = grokImageFile && grokImageFile.files[0];
             var image_urls = [];
             var aspect_ratio;
             var hasRefs = !!(ref1 || ref2file);
@@ -2517,8 +2633,6 @@
               setError(String(e.message || e));
               return;
             }
-            var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
-            var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
             var promptForApi = ref2file ? expandGrokRef2GridPrompt(prompt, true) : prompt;
             var job = {
               prov: prov,
