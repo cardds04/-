@@ -1411,6 +1411,22 @@
         font-weight: 600;
         color: var(--ink);
       }
+      .wf-prefs-save-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+        margin-top: 0.85rem;
+        padding-top: 0.75rem;
+        border-top: 1px dashed #bbf7d0;
+      }
+      .wf-prefs-status {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #15803d;
+        flex: 1 1 140px;
+        min-width: 0;
+      }
     </style>
   </head>
   <body>
@@ -1889,6 +1905,7 @@
           원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 Gemini가 보정된 이미지를 만듭니다.
           <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
+          프롬프트·페더·선명도는 <strong>설정 저장</strong>을 누르면 이 브라우저에만 보관되며, 다음에 페이지를 열면 자동으로 불러옵니다.
         </p>
 
         <label class="drop" id="wfDropzone" tabindex="0" aria-label="원본 사진 선택 또는 끌어다 놓기">
@@ -1922,6 +1939,10 @@
                 <span class="wf-range-val"><span id="wfSharpenVal">1.5</span>×</span>
               </div>
               <p class="hint" style="font-size: 0.78rem; margin: 0">AI 이미지 업스케일 후 선명도 보정 강도</p>
+            </div>
+            <div class="wf-prefs-save-row">
+              <button type="button" class="btn--mini-save" id="wfSavePrefs">설정 저장</button>
+              <span id="wfPrefsStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
             </div>
           </div>
           <div class="wf-settings-actions">
@@ -4372,11 +4393,42 @@
         var wfClearAllBtn = document.getElementById('wfClearAll');
         var wfGrid = document.getElementById('wfGrid');
         var wfErrorEl = document.getElementById('wfError');
+        var wfSavePrefsBtn = document.getElementById('wfSavePrefs');
+        var wfPrefsStatusEl = document.getElementById('wfPrefsStatus');
 
         var PREVIEW_MAX_EDGE = 2048;
         var wfPreviewDebounce = null;
+        var LS_WF_PREFS = 'grok_studio_window_fix_prefs_v1';
+        var wfPrefsStatusTimer = null;
 
         if (!wfDropzone || !wfGrid) return;
+
+        function syncWfRangeDisplay() {
+          wfFeatherValEl.textContent = wfFeatherEl.value;
+          wfSharpenValEl.textContent = (parseInt(wfSharpenEl.value, 10) / 10).toFixed(1);
+        }
+
+        function loadWfPrefsFromStorage() {
+          if (!wfPromptEl || !wfFeatherEl || !wfSharpenEl) return;
+          try {
+            var raw = localStorage.getItem(LS_WF_PREFS);
+            if (!raw) return;
+            var o = JSON.parse(raw);
+            if (!o || typeof o !== 'object') return;
+            if (typeof o.prompt === 'string') wfPromptEl.value = o.prompt;
+            var f = parseInt(o.feather, 10);
+            if (!isNaN(f) && f >= 0 && f <= 300) wfFeatherEl.value = String(f);
+            var s = parseInt(o.sharpen, 10);
+            if (!isNaN(s) && s >= 0 && s <= 30) wfSharpenEl.value = String(s);
+            syncWfRangeDisplay();
+            wfItems.forEach(function (item) {
+              if (item.ctx) drawCanvas(item);
+            });
+            schedulePreviewRefreshAll();
+          } catch (err) {
+            /* 손상된 저장값 무시 */
+          }
+        }
 
         function showWfError(msg) {
           if (!msg) { wfErrorEl.style.display = 'none'; wfErrorEl.textContent = ''; return; }
@@ -5094,6 +5146,33 @@
           wfDropName.textContent = '';
           showWfError('');
         });
+
+        if (wfSavePrefsBtn) {
+          wfSavePrefsBtn.addEventListener('click', function () {
+            try {
+              var payload = {
+                prompt: String(wfPromptEl.value || ''),
+                feather: Math.min(300, Math.max(0, parseInt(wfFeatherEl.value, 10) || 0)),
+                sharpen: Math.min(30, Math.max(0, parseInt(wfSharpenEl.value, 10) || 0)),
+              };
+              localStorage.setItem(LS_WF_PREFS, JSON.stringify(payload));
+              showWfError('');
+              if (wfPrefsStatusEl) {
+                wfPrefsStatusEl.textContent =
+                  '이 브라우저에 저장했습니다. 다음에 이 페이지를 열면 자동으로 불러옵니다.';
+                if (wfPrefsStatusTimer) clearTimeout(wfPrefsStatusTimer);
+                wfPrefsStatusTimer = setTimeout(function () {
+                  wfPrefsStatusTimer = null;
+                  if (wfPrefsStatusEl) wfPrefsStatusEl.textContent = '';
+                }, 4000);
+              }
+            } catch (e) {
+              showWfError('설정을 저장할 수 없습니다: ' + (e.message || String(e)));
+            }
+          });
+        }
+
+        loadWfPrefsFromStorage();
       })();
     </script>
   </body>
