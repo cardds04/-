@@ -1188,9 +1188,9 @@
       }
       .wf-settings-row {
         display: flex;
-        flex-wrap: wrap;
-        gap: 1rem 1.5rem;
-        align-items: flex-start;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
         margin: 1rem 0 0.5rem;
         padding: 1rem;
         background: #f0fdf4;
@@ -1198,19 +1198,23 @@
         border-radius: var(--radius);
       }
       .wf-settings-col {
-        flex: 1 1 260px;
+        flex: 1 1 auto;
+        width: 100%;
         min-width: 0;
       }
       .wf-settings-actions {
-        flex: 0 0 auto;
         display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        padding-top: 1.4rem;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.65rem;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        padding-top: 0;
       }
       .wf-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        grid-template-columns: 1fr;
         gap: 1rem;
         margin-top: 1rem;
       }
@@ -1236,16 +1240,28 @@
       .wf-item--error .wf-item__header { background: #fee2e2; }
       .wf-item__body {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
+      }
+      .wf-item__tuning {
+        padding: 0.65rem 0.75rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+        background: #f0fdf4;
+      }
+      .wf-item__tuning .label {
+        font-size: 0.78rem;
+      }
+      .wf-item__tuning .hint {
+        font-size: 0.72rem;
       }
       .wf-item__orig {
-        border-right: 1px solid var(--line);
+        border-right: none;
+        border-bottom: 1px solid var(--line);
         background: #111;
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 140px;
+        min-height: 160px;
       }
       .wf-item__canvas {
         display: block;
@@ -1260,8 +1276,8 @@
         align-items: center;
         justify-content: center;
         gap: 0.45rem;
-        padding: 0.6rem 0.5rem;
-        min-height: 140px;
+        padding: 0.65rem 0.6rem;
+        min-height: 160px;
       }
       .wf-item__ai-placeholder {
         font-size: 0.8rem;
@@ -1271,7 +1287,7 @@
       }
       .wf-item__ai-img {
         max-width: 100%;
-        max-height: 130px;
+        max-height: min(42vh, 360px);
         object-fit: contain;
         border-radius: 4px;
         display: none;
@@ -1990,49 +2006,11 @@
               rows="3"
               style="width: 100%; resize: vertical"
             >창문 밖 풍경을 자연스럽게 보정해주세요. 실내와 외부의 밝기 차이로 인해 과노출된 창문 부분을 정상적인 노출로 수정하고, 하늘과 외부 풍경이 선명하게 보이도록 해주세요. 전체적인 실내 분위기는 그대로 유지해주세요.</textarea>
-          </div>
-          <div class="wf-settings-col">
-            <div style="margin-bottom: 0.75rem">
-              <label class="label" for="wfFeather">페더 값</label>
-              <div class="wf-range-row">
-                <input type="range" id="wfFeather" min="0" max="300" value="40" />
-                <span class="wf-range-val"><span id="wfFeatherVal">40</span> px</span>
-              </div>
-              <p class="hint" style="font-size: 0.78rem; margin: 0">선택 영역 경계의 부드러운 전환 범위</p>
-            </div>
-            <div>
-              <label class="label" for="wfSharpen">선명도 강화</label>
-              <div class="wf-range-row">
-                <input type="range" id="wfSharpen" min="0" max="30" value="15" />
-                <span class="wf-range-val"><span id="wfSharpenVal">1.5</span>×</span>
-              </div>
-              <p class="hint" style="font-size: 0.78rem; margin: 0">AI 이미지 업스케일 후 선명도 보정 강도</p>
-            </div>
-            <div style="margin-top: 0.75rem">
-              <label class="label" for="wfTintRg">색조 (빨강 ↔ 초록)</label>
-              <div class="wf-range-row wf-range-row--tint">
-                <span class="wf-range-tick" aria-hidden="true">빨강</span>
-                <input type="range" id="wfTintRg" min="-40" max="40" value="0" step="1" />
-                <span class="wf-range-tick" aria-hidden="true">초록</span>
-              </div>
-              <div class="wf-range-row" style="margin-top: 0.25rem">
-                <span class="wf-range-val" style="flex: 1; text-align: center"><span id="wfTintRgVal">0</span></span>
-              </div>
-              <p class="hint" style="font-size: 0.78rem; margin: 0">
-                합성 결과 전체에 적용됩니다. <strong>양수</strong>: 빨강·분홍 끼 줄이고 초록 쪽으로 · <strong>음수</strong>: 반대
-              </p>
-            </div>
-            <div style="margin-top: 0.75rem">
-              <label class="label" for="wfAiOpacity">생성 영역 불투명도</label>
-              <div class="wf-range-row">
-                <input type="range" id="wfAiOpacity" min="0" max="100" value="100" step="1" />
-                <span class="wf-range-val"><span id="wfAiOpacityVal">100</span>%</span>
-              </div>
-              <p class="hint" style="font-size: 0.78rem; margin: 0">
-                마스크 안에서 AI 결과가 얼마나 올라올지입니다. <strong>낮추면</strong> 원본이 더 비쳐 투명해 보입니다.
-              </p>
-            </div>
-            <div class="wf-prefs-save-row">
+            <p class="hint" style="font-size: 0.78rem; margin: 0.45rem 0 0">
+              페더·선명도·색조·불투명도는 <strong>각 사진 카드</strong>에서 따로 조절합니다. 「설정 저장」은 프롬프트와
+              <strong>첫 번째 카드</strong>의 보정 값을 다음 방문 시 새 카드 기본값으로 불러옵니다.
+            </p>
+            <div class="wf-prefs-save-row" style="margin-top: 0.65rem">
               <button type="button" class="btn--mini-save" id="wfSavePrefs">설정 저장</button>
               <span id="wfPrefsStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
             </div>
@@ -4492,14 +4470,13 @@
         var wfFiles = document.getElementById('wfFiles');
         var wfDropName = document.getElementById('wfDropName');
         var wfPromptEl = document.getElementById('wfPrompt');
-        var wfFeatherEl = document.getElementById('wfFeather');
-        var wfFeatherValEl = document.getElementById('wfFeatherVal');
-        var wfSharpenEl = document.getElementById('wfSharpen');
-        var wfSharpenValEl = document.getElementById('wfSharpenVal');
-        var wfTintRgEl = document.getElementById('wfTintRg');
-        var wfTintRgValEl = document.getElementById('wfTintRgVal');
-        var wfAiOpacityEl = document.getElementById('wfAiOpacity');
-        var wfAiOpacityValEl = document.getElementById('wfAiOpacityVal');
+        /* 새 카드 기본값 · 저장 시 첫 카드와 동기 (전역 슬라이더 없음) */
+        var wfDefaults = {
+          feather: 40,
+          sharpen: 15,
+          tintRg: 0,
+          aiOpacity: 100,
+        };
         var wfGenAllBtn = document.getElementById('wfGenAll');
         var wfCompositeAllBtn = document.getElementById('wfCompositeAll');
         var wfClearAllBtn = document.getElementById('wfClearAll');
@@ -4515,15 +4492,18 @@
 
         if (!wfDropzone || !wfGrid) return;
 
-        function syncWfRangeDisplay() {
-          wfFeatherValEl.textContent = wfFeatherEl.value;
-          wfSharpenValEl.textContent = (parseInt(wfSharpenEl.value, 10) / 10).toFixed(1);
-          if (wfTintRgValEl && wfTintRgEl) wfTintRgValEl.textContent = wfTintRgEl.value;
-          if (wfAiOpacityValEl && wfAiOpacityEl) wfAiOpacityValEl.textContent = wfAiOpacityEl.value;
+        function syncItemTuningLabels(item) {
+          if (!item || !item.featherEl) return;
+          if (item.featherValEl) item.featherValEl.textContent = item.featherEl.value;
+          if (item.sharpenValEl && item.sharpenEl) {
+            item.sharpenValEl.textContent = (parseInt(item.sharpenEl.value, 10) / 10).toFixed(1);
+          }
+          if (item.tintRgValEl && item.tintRgEl) item.tintRgValEl.textContent = item.tintRgEl.value;
+          if (item.aiOpacityValEl && item.aiOpacityEl) item.aiOpacityValEl.textContent = item.aiOpacityEl.value;
         }
 
         function loadWfPrefsFromStorage() {
-          if (!wfPromptEl || !wfFeatherEl || !wfSharpenEl) return;
+          if (!wfPromptEl) return;
           try {
             var raw = localStorage.getItem(LS_WF_PREFS);
             if (!raw) return;
@@ -4531,21 +4511,217 @@
             if (!o || typeof o !== 'object') return;
             if (typeof o.prompt === 'string') wfPromptEl.value = o.prompt;
             var f = parseInt(o.feather, 10);
-            if (!isNaN(f) && f >= 0 && f <= 300) wfFeatherEl.value = String(f);
+            if (!isNaN(f) && f >= 0 && f <= 300) wfDefaults.feather = f;
             var s = parseInt(o.sharpen, 10);
-            if (!isNaN(s) && s >= 0 && s <= 30) wfSharpenEl.value = String(s);
+            if (!isNaN(s) && s >= 0 && s <= 30) wfDefaults.sharpen = s;
             var t = parseInt(o.tintRg, 10);
-            if (wfTintRgEl && !isNaN(t) && t >= -40 && t <= 40) wfTintRgEl.value = String(t);
+            if (!isNaN(t) && t >= -40 && t <= 40) wfDefaults.tintRg = t;
             var op = parseInt(o.aiOpacity, 10);
-            if (wfAiOpacityEl && !isNaN(op) && op >= 0 && op <= 100) wfAiOpacityEl.value = String(op);
-            syncWfRangeDisplay();
+            if (!isNaN(op) && op >= 0 && op <= 100) wfDefaults.aiOpacity = op;
             wfItems.forEach(function (item) {
+              if (item.featherEl) item.featherEl.value = String(wfDefaults.feather);
+              if (item.sharpenEl) item.sharpenEl.value = String(wfDefaults.sharpen);
+              if (item.tintRgEl) item.tintRgEl.value = String(wfDefaults.tintRg);
+              if (item.aiOpacityEl) item.aiOpacityEl.value = String(wfDefaults.aiOpacity);
+              syncItemTuningLabels(item);
               if (item.ctx) drawCanvas(item);
             });
             schedulePreviewRefreshAll();
           } catch (err) {
             /* 손상된 저장값 무시 */
           }
+        }
+
+        function readItemTuning(item) {
+          var feather = Math.min(300, Math.max(0, parseInt(item.featherEl.value, 10) || 0));
+          var sharpenRaw = Math.min(30, Math.max(0, parseInt(item.sharpenEl.value, 10) || 0));
+          var tintRg = Math.min(40, Math.max(-40, parseInt(item.tintRgEl.value, 10) || 0));
+          var aiOpacity = Math.min(100, Math.max(0, parseInt(item.aiOpacityEl.value, 10) || 0));
+          return {
+            feather: feather,
+            sharpenAmt: sharpenRaw / 10,
+            tintRg: tintRg,
+            aiOpacity: aiOpacity,
+          };
+        }
+
+        function attachItemTuningListeners(item) {
+          function onFeather() {
+            syncItemTuningLabels(item);
+            if (item.ctx) drawCanvas(item);
+            schedulePreviewRefreshAll();
+          }
+          function onOther() {
+            syncItemTuningLabels(item);
+            schedulePreviewRefreshAll();
+          }
+          item.featherEl.addEventListener('input', onFeather);
+          item.sharpenEl.addEventListener('input', onOther);
+          item.tintRgEl.addEventListener('input', onOther);
+          item.aiOpacityEl.addEventListener('input', onOther);
+        }
+
+        function buildItemTuningEl(item) {
+          var tun = document.createElement('div');
+          tun.className = 'wf-item__tuning';
+
+          function mkFeather() {
+            var wrap = document.createElement('div');
+            wrap.style.marginBottom = '0.65rem';
+            var lab = document.createElement('label');
+            lab.className = 'label';
+            lab.textContent = '페더 값';
+            var row = document.createElement('div');
+            row.className = 'wf-range-row';
+            var inp = document.createElement('input');
+            inp.type = 'range';
+            inp.min = '0';
+            inp.max = '300';
+            inp.value = String(wfDefaults.feather);
+            var valWrap = document.createElement('span');
+            valWrap.className = 'wf-range-val';
+            var val = document.createElement('span');
+            val.textContent = inp.value;
+            valWrap.appendChild(val);
+            valWrap.appendChild(document.createTextNode(' px'));
+            row.appendChild(inp);
+            row.appendChild(valWrap);
+            var hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.margin = '0';
+            hint.textContent = '선택 영역 경계의 부드러운 전환 범위';
+            wrap.appendChild(lab);
+            wrap.appendChild(row);
+            wrap.appendChild(hint);
+            item.featherEl = inp;
+            item.featherValEl = val;
+            tun.appendChild(wrap);
+          }
+
+          function mkSharpen() {
+            var wrap = document.createElement('div');
+            wrap.style.marginBottom = '0.65rem';
+            var lab = document.createElement('label');
+            lab.className = 'label';
+            lab.textContent = '선명도 강화';
+            var row = document.createElement('div');
+            row.className = 'wf-range-row';
+            var inp = document.createElement('input');
+            inp.type = 'range';
+            inp.min = '0';
+            inp.max = '30';
+            inp.value = String(wfDefaults.sharpen);
+            var valWrap = document.createElement('span');
+            valWrap.className = 'wf-range-val';
+            var val = document.createElement('span');
+            val.textContent = (parseInt(inp.value, 10) / 10).toFixed(1);
+            valWrap.appendChild(val);
+            valWrap.appendChild(document.createTextNode('×'));
+            row.appendChild(inp);
+            row.appendChild(valWrap);
+            var hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.margin = '0';
+            hint.textContent = 'AI 이미지 업스케일 후 선명도 보정 강도';
+            wrap.appendChild(lab);
+            wrap.appendChild(row);
+            wrap.appendChild(hint);
+            item.sharpenEl = inp;
+            item.sharpenValEl = val;
+            tun.appendChild(wrap);
+          }
+
+          function mkTint() {
+            var wrap = document.createElement('div');
+            wrap.style.marginBottom = '0.65rem';
+            var lab = document.createElement('label');
+            lab.className = 'label';
+            lab.textContent = '색조 (빨강 ↔ 초록)';
+            var row = document.createElement('div');
+            row.className = 'wf-range-row wf-range-row--tint';
+            var tickL = document.createElement('span');
+            tickL.className = 'wf-range-tick';
+            tickL.setAttribute('aria-hidden', 'true');
+            tickL.textContent = '빨강';
+            var inp = document.createElement('input');
+            inp.type = 'range';
+            inp.min = '-40';
+            inp.max = '40';
+            inp.step = '1';
+            inp.value = String(wfDefaults.tintRg);
+            var tickR = document.createElement('span');
+            tickR.className = 'wf-range-tick';
+            tickR.setAttribute('aria-hidden', 'true');
+            tickR.textContent = '초록';
+            row.appendChild(tickL);
+            row.appendChild(inp);
+            row.appendChild(tickR);
+            var row2 = document.createElement('div');
+            row2.className = 'wf-range-row';
+            row2.style.marginTop = '0.25rem';
+            var valWrap = document.createElement('span');
+            valWrap.className = 'wf-range-val';
+            valWrap.style.flex = '1';
+            valWrap.style.textAlign = 'center';
+            var val = document.createElement('span');
+            val.textContent = inp.value;
+            valWrap.appendChild(val);
+            row2.appendChild(valWrap);
+            var hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.margin = '0';
+            hint.innerHTML =
+              '이 카드 합성 결과에 적용. <strong>양수</strong>: 빨강·분홍 줄이고 초록 쪽 · <strong>음수</strong>: 반대';
+            wrap.appendChild(lab);
+            wrap.appendChild(row);
+            wrap.appendChild(row2);
+            wrap.appendChild(hint);
+            item.tintRgEl = inp;
+            item.tintRgValEl = val;
+            tun.appendChild(wrap);
+          }
+
+          function mkOpacity() {
+            var wrap = document.createElement('div');
+            var lab = document.createElement('label');
+            lab.className = 'label';
+            lab.textContent = '생성 영역 불투명도';
+            var row = document.createElement('div');
+            row.className = 'wf-range-row';
+            var inp = document.createElement('input');
+            inp.type = 'range';
+            inp.min = '0';
+            inp.max = '100';
+            inp.step = '1';
+            inp.value = String(wfDefaults.aiOpacity);
+            var valWrap = document.createElement('span');
+            valWrap.className = 'wf-range-val';
+            var val = document.createElement('span');
+            val.textContent = inp.value;
+            valWrap.appendChild(val);
+            valWrap.appendChild(document.createTextNode('%'));
+            row.appendChild(inp);
+            row.appendChild(valWrap);
+            var hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.margin = '0';
+            hint.innerHTML =
+              '마스크 안에서 AI 결과 비중. <strong>낮추면</strong> 원본이 더 비쳐 보입니다.';
+            wrap.appendChild(lab);
+            wrap.appendChild(row);
+            wrap.appendChild(hint);
+            item.aiOpacityEl = inp;
+            item.aiOpacityValEl = val;
+            tun.appendChild(wrap);
+          }
+
+          mkFeather();
+          mkSharpen();
+          mkTint();
+          mkOpacity();
+          attachItemTuningListeners(item);
+          syncItemTuningLabels(item);
+          return tun;
         }
 
         function showWfError(msg) {
@@ -4739,6 +4915,7 @@
           footer.textContent = '이미지 로딩 중…';
 
           div.appendChild(hdr);
+          div.appendChild(buildItemTuningEl(item));
           div.appendChild(body);
           div.appendChild(previewRow);
           div.appendChild(footer);
@@ -4774,7 +4951,7 @@
         /* ---- 캔버스 초기화 ---- */
         function initCanvas(item) {
           var img = item.origImg;
-          var DISPLAY_W = 300, DISPLAY_H = 220;
+          var DISPLAY_W = 520, DISPLAY_H = 340;
           var scale = Math.min(DISPLAY_W / img.naturalWidth, DISPLAY_H / img.naturalHeight, 1);
           var dw = Math.max(1, Math.round(img.naturalWidth * scale));
           var dh = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -4816,7 +4993,8 @@
             ctx.setLineDash([]);
 
             /* 페더 범위 표시 */
-            var f = parseInt(wfFeatherEl.value, 10) * sc;
+            var featherPx = item.featherEl ? parseInt(item.featherEl.value, 10) || 0 : 0;
+            var f = featherPx * sc;
             if (f > 0) {
               ctx.strokeStyle = 'rgba(34,197,94,0.4)';
               ctx.lineWidth = 1;
@@ -5028,11 +5206,12 @@
                 w: Math.max(1, Math.round(s.w * scale)),
                 h: Math.max(1, Math.round(s.h * scale)),
               };
-              var featherFull = parseInt(wfFeatherEl.value, 10);
+              var tun = readItemTuning(item);
+              var featherFull = tun.feather;
               var feather = Math.max(0, Math.round(featherFull * scale));
-              var sharpenAmt = parseInt(wfSharpenEl.value, 10) / 10;
-              var tintRg = wfTintRgEl ? parseInt(wfTintRgEl.value, 10) || 0 : 0;
-              var aiOpacity = wfAiOpacityEl ? parseInt(wfAiOpacityEl.value, 10) : 100;
+              var sharpenAmt = tun.sharpenAmt;
+              var tintRg = tun.tintRg;
+              var aiOpacity = tun.aiOpacity;
               if (isNaN(aiOpacity)) aiOpacity = 100;
               var resultCanvas = doCompositeCore(
                 item.origImg,
@@ -5185,10 +5364,11 @@
           var ow = item.origImg.naturalWidth;
           var oh = item.origImg.naturalHeight;
           var sel = item.selection;
-          var feather = parseInt(wfFeatherEl.value, 10);
-          var sharpenAmt = parseInt(wfSharpenEl.value, 10) / 10;
-          var tintRg = wfTintRgEl ? parseInt(wfTintRgEl.value, 10) || 0 : 0;
-          var aiOpacity = wfAiOpacityEl ? parseInt(wfAiOpacityEl.value, 10) : 100;
+          var tun = readItemTuning(item);
+          var feather = tun.feather;
+          var sharpenAmt = tun.sharpenAmt;
+          var tintRg = tun.tintRg;
+          var aiOpacity = tun.aiOpacity;
           if (isNaN(aiOpacity)) aiOpacity = 100;
           return doCompositeCore(item.origImg, item.aiImg, sel, feather, sharpenAmt, ow, oh, tintRg, aiOpacity);
         }
@@ -5307,31 +5487,6 @@
           if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
         });
 
-        wfFeatherEl.addEventListener('input', function () {
-          wfFeatherValEl.textContent = wfFeatherEl.value;
-          wfItems.forEach(function (item) { if (item.ctx) drawCanvas(item); });
-          schedulePreviewRefreshAll();
-        });
-
-        wfSharpenEl.addEventListener('input', function () {
-          wfSharpenValEl.textContent = (parseInt(wfSharpenEl.value, 10) / 10).toFixed(1);
-          schedulePreviewRefreshAll();
-        });
-
-        if (wfTintRgEl) {
-          wfTintRgEl.addEventListener('input', function () {
-            if (wfTintRgValEl) wfTintRgValEl.textContent = wfTintRgEl.value;
-            schedulePreviewRefreshAll();
-          });
-        }
-
-        if (wfAiOpacityEl) {
-          wfAiOpacityEl.addEventListener('input', function () {
-            if (wfAiOpacityValEl) wfAiOpacityValEl.textContent = wfAiOpacityEl.value;
-            schedulePreviewRefreshAll();
-          });
-        }
-
         wfGenAllBtn.addEventListener('click', function () {
           wfItems.forEach(function (item) {
             if (item.status !== 'generating') generateForItem(item);
@@ -5358,16 +5513,27 @@
         if (wfSavePrefsBtn) {
           wfSavePrefsBtn.addEventListener('click', function () {
             try {
+              var feather = wfDefaults.feather;
+              var sharpen = wfDefaults.sharpen;
+              var tintRg = wfDefaults.tintRg;
+              var aiOpacity = wfDefaults.aiOpacity;
+              if (wfItems.length && wfItems[0].featherEl) {
+                var t0 = readItemTuning(wfItems[0]);
+                feather = t0.feather;
+                sharpen = Math.min(30, Math.max(0, Math.round(t0.sharpenAmt * 10)));
+                tintRg = t0.tintRg;
+                aiOpacity = t0.aiOpacity;
+              }
+              wfDefaults.feather = feather;
+              wfDefaults.sharpen = sharpen;
+              wfDefaults.tintRg = tintRg;
+              wfDefaults.aiOpacity = aiOpacity;
               var payload = {
                 prompt: String(wfPromptEl.value || ''),
-                feather: Math.min(300, Math.max(0, parseInt(wfFeatherEl.value, 10) || 0)),
-                sharpen: Math.min(30, Math.max(0, parseInt(wfSharpenEl.value, 10) || 0)),
-                tintRg: wfTintRgEl
-                  ? Math.min(40, Math.max(-40, parseInt(wfTintRgEl.value, 10) || 0))
-                  : 0,
-                aiOpacity: wfAiOpacityEl
-                  ? Math.min(100, Math.max(0, parseInt(wfAiOpacityEl.value, 10) || 0))
-                  : 100,
+                feather: feather,
+                sharpen: sharpen,
+                tintRg: tintRg,
+                aiOpacity: aiOpacity,
               };
               localStorage.setItem(LS_WF_PREFS, JSON.stringify(payload));
               showWfError('');
