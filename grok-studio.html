@@ -34,6 +34,90 @@
         margin: 0 auto;
         padding: 2rem 1.25rem 3rem;
       }
+      .page.page--studio {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 1.25rem;
+        max-width: 1540px;
+      }
+      .page__main {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 1120px;
+      }
+      .page-output-rail {
+        flex: 0 0 clamp(280px, 28vw, 400px);
+        width: clamp(280px, 28vw, 400px);
+        position: sticky;
+        top: 1rem;
+        align-self: flex-start;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.85rem 1rem 1.25rem;
+        background: #fafaf9;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-sizing: border-box;
+      }
+      .page-output-rail .output-gallery__h {
+        font-size: 1rem;
+      }
+      .page-output-rail .output-gallery__actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .page-output-rail .btn--secondary.output-zip,
+      .page-output-rail .output-gallery__actions .btn--ghost {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+      }
+      .page-output-rail .output-gallery__chips {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 0.85rem;
+      }
+      .page-output-rail .output-gallery__tile--image {
+        max-width: none;
+        width: 100%;
+      }
+      .page-output-rail .output-gallery__thumb {
+        width: 100%;
+        max-height: min(46vh, 360px);
+        object-fit: contain;
+        background: #1c1917;
+      }
+      .page-output-rail .job-file-chip {
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+      }
+      .page-output-rail .job-file-chip__name {
+        font-size: 0.72rem;
+        -webkit-line-clamp: 3;
+      }
+      @media (max-width: 959px) {
+        .page.page--studio {
+          flex-direction: column;
+          max-width: 1120px;
+          gap: 1rem;
+        }
+        .page__main {
+          max-width: none;
+        }
+        .page-output-rail {
+          order: -1;
+          width: 100%;
+          flex: none;
+          position: static;
+          max-height: none;
+        }
+      }
       .head h1 {
         margin: 0 0 0.5rem;
         font-size: 1.65rem;
@@ -52,66 +136,14 @@
         border: 1px solid var(--line);
         padding: 1.5rem 1.35rem;
         box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
-        display: grid;
-        gap: 1.5rem;
-        align-items: start;
+        display: block;
       }
       .card__workflow {
         min-width: 0;
       }
-      .card__sidebar {
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 1.25rem;
-      }
       @media (min-width: 960px) {
         .card {
-          grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-          gap: 1.75rem;
           padding: 1.5rem 1.5rem 1.65rem;
-        }
-        .card__sidebar {
-          position: sticky;
-          top: 1rem;
-          align-self: start;
-          padding: 0.85rem 1.1rem 1.3rem;
-          background: #fafaf9;
-          border: 1px solid var(--line);
-          border-radius: var(--radius);
-          max-height: calc(100vh - 2rem);
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .card__sidebar .output-gallery--sidebar {
-          position: sticky;
-          top: 0;
-          z-index: 3;
-          margin-top: 0;
-          margin-bottom: 0.35rem;
-          padding-top: 0.35rem;
-          padding-bottom: 0.85rem;
-          border-top: none;
-          background: #fafaf9;
-          box-shadow: 0 6px 10px -8px rgba(28, 25, 23, 0.2);
-        }
-      }
-      @media (max-width: 959px) {
-        .card__sidebar {
-          margin-top: 0.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid var(--line);
-        }
-        .card__sidebar .output-gallery--sidebar {
-          position: sticky;
-          top: 0;
-          z-index: 3;
-          margin-top: 0;
-          padding-top: 0;
-          padding-bottom: 0.85rem;
-          border-top: none;
-          background: var(--card);
-          box-shadow: 0 6px 10px -8px rgba(28, 25, 23, 0.15);
         }
       }
       .workflow-block {
@@ -1430,12 +1462,14 @@
     </style>
   </head>
   <body>
-    <div class="page">
+    <div class="page page--studio">
+      <div class="page__main">
       <header class="head">
         <h1>AI 이미지 만들기</h1>
         <p class="sub">
           로컬 <code>tools/grok-topaz-pipeline</code>과 같은 <strong>이미지 블록</strong> 레이아웃입니다. Grok Imagine(xAI) 또는
-          Gemini 나노바나나2로 생성하고, 오른쪽에서 개별 다운로드·ZIP으로 모두 받기·목록 비우기를 할 수 있습니다. 페이지 맨 아래에서는
+          Gemini 나노바나나2로 생성하면 결과가 <strong>페이지 오른쪽 출력 칸</strong>에 쌓이며, 넓은 화면에서는 아래로 스크롤해도 그 칸이
+          고정됩니다. 개별 다운로드·ZIP·목록 비우기를 할 수 있습니다. 페이지 맨 아래에서는
           <strong>로고와 원본 이미지</strong>를 겹쳐 PNG로 저장할 수 있습니다(원본 여러 장은 ZIP).
         </p>
       </header>
@@ -1732,21 +1766,6 @@
             </div>
           </section>
         </div>
-
-        <aside class="card__sidebar" aria-label="출력">
-          <section class="output-gallery output-gallery--sidebar" id="outputGallery" aria-label="출력 갤러리">
-            <h2 class="output-gallery__h">만든 영상·이미지 (아웃풋만)</h2>
-            <p class="hint output-gallery__lead">
-              생성이 끝난 이미지가 여기에 쌓입니다. 아래 썸네일·칩을 누르면 다운로드되고 목록에서 빠집니다. 왼쪽을 스크롤해도 이 블록은
-              오른쪽 상단에 고정됩니다.
-            </p>
-            <div class="output-gallery__actions">
-              <button type="button" class="btn btn--secondary output-zip" id="btnBatchZip" disabled>ZIP으로 모두 받기</button>
-              <button type="button" class="btn--ghost" id="btnGalleryClear">목록 비우기</button>
-            </div>
-            <div class="output-gallery__chips" id="outputGalleryChips"></div>
-          </section>
-        </aside>
       </main>
 
       <section class="logo-composite-block" id="logoCompositeBlock" aria-label="로고와 원본 합성">
@@ -1962,6 +1981,22 @@
           <code>/api/gemini-caption</code> (피드 분위기 문장).
         </p>
       </footer>
+      </div>
+
+      <aside class="page-output-rail" aria-label="출력">
+        <section class="output-gallery output-gallery--rail" id="outputGallery" aria-label="출력 갤러리">
+          <h2 class="output-gallery__h">만든 영상·이미지 (아웃풋만)</h2>
+          <p class="hint output-gallery__lead">
+            생성이 끝난 이미지가 여기에 쌓입니다. 썸네일·칩을 누르면 다운로드되고 목록에서 빠집니다. 넓은 화면에서는 로고·창문 보정 등
+            아무 메뉴에서든 페이지를 세로로 스크롤해도 이 칸이 오른쪽에 고정됩니다.
+          </p>
+          <div class="output-gallery__actions">
+            <button type="button" class="btn btn--secondary output-zip" id="btnBatchZip" disabled>ZIP으로 모두 받기</button>
+            <button type="button" class="btn--ghost" id="btnGalleryClear">목록 비우기</button>
+          </div>
+          <div class="output-gallery__chips" id="outputGalleryChips"></div>
+        </section>
+      </aside>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
