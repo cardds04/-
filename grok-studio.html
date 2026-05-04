@@ -1257,6 +1257,69 @@
         border-top: 1px solid var(--line);
         min-height: 1.6rem;
       }
+      .wf-item__preview-row {
+        padding: 0.65rem 0.75rem 0.85rem;
+        border-top: 1px solid var(--line);
+        background: linear-gradient(180deg, #fafaf9 0%, #f4f4f5 100%);
+      }
+      .wf-item__preview-head {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.65rem;
+        margin-bottom: 0.4rem;
+      }
+      .wf-item__preview-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .wf-item__preview-hint {
+        font-size: 0.76rem;
+        color: var(--muted);
+        flex: 1 1 140px;
+        min-width: 0;
+      }
+      .wf-item__preview-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 2.5rem;
+      }
+      .wf-item__preview-img {
+        display: none;
+        max-width: 100%;
+        max-height: 240px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        box-shadow: 0 2px 8px rgba(28, 25, 23, 0.08);
+        background: #111;
+      }
+      .wf-item__preview-img.wf-item__preview-img--visible {
+        display: block;
+      }
+      .btn--wf-preview {
+        padding: 0.36rem 0.72rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: #7c3aed;
+        color: #fff;
+        border: 1px solid #6d28d9;
+        border-radius: 8px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .btn--wf-preview:hover {
+        background: #6d28d9;
+      }
+      .btn--wf-preview:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
       .btn--wf-gen {
         padding: 0.38rem 0.7rem;
         font-size: 0.8rem;
@@ -1824,7 +1887,7 @@
         </h2>
         <p class="hint" style="margin-top: 0">
           원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 Gemini가 보정된 이미지를 만듭니다.
-          결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
+          <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
         </p>
 
@@ -4310,6 +4373,9 @@
         var wfGrid = document.getElementById('wfGrid');
         var wfErrorEl = document.getElementById('wfError');
 
+        var PREVIEW_MAX_EDGE = 1400;
+        var wfPreviewDebounce = null;
+
         if (!wfDropzone || !wfGrid) return;
 
         function showWfError(msg) {
@@ -4366,6 +4432,11 @@
             compositeBtn: null,
             aiImgEl: null,
             placeholder: null,
+            previewImgEl: null,
+            previewBtn: null,
+            previewHintEl: null,
+            previewObjectUrl: null,
+            previewEverShown: false,
           };
         }
 
@@ -4434,6 +4505,36 @@
           body.appendChild(origWrap);
           body.appendChild(aiWrap);
 
+          /* 합성 미리보기 행 */
+          var previewRow = document.createElement('div');
+          previewRow.className = 'wf-item__preview-row';
+          var previewHead = document.createElement('div');
+          previewHead.className = 'wf-item__preview-head';
+          var previewLabel = document.createElement('span');
+          previewLabel.className = 'wf-item__preview-label';
+          previewLabel.textContent = '합성 미리보기';
+          var previewHint = document.createElement('span');
+          previewHint.className = 'wf-item__preview-hint';
+          previewHint.textContent =
+            '영역 선택 후 생성하면 자동으로 표시됩니다. 「미리보기」로 다시 그릴 수 있습니다.';
+          var previewBtn = document.createElement('button');
+          previewBtn.type = 'button';
+          previewBtn.className = 'btn--wf-preview';
+          previewBtn.textContent = '미리보기';
+          previewBtn.disabled = true;
+          previewHead.appendChild(previewLabel);
+          previewHead.appendChild(previewHint);
+          previewHead.appendChild(previewBtn);
+
+          var previewInner = document.createElement('div');
+          previewInner.className = 'wf-item__preview-inner';
+          var previewImg = document.createElement('img');
+          previewImg.className = 'wf-item__preview-img';
+          previewImg.alt = '원본 + AI 마스크 합성 결과';
+          previewInner.appendChild(previewImg);
+          previewRow.appendChild(previewHead);
+          previewRow.appendChild(previewInner);
+
           /* 푸터 */
           var footer = document.createElement('div');
           footer.className = 'wf-item__footer';
@@ -4441,6 +4542,7 @@
 
           div.appendChild(hdr);
           div.appendChild(body);
+          div.appendChild(previewRow);
           div.appendChild(footer);
 
           item.el = div;
@@ -4451,10 +4553,17 @@
           item.regenBtn = regenBtn;
           item.compositeBtn = compositeBtn;
           item.footerEl = footer;
+          item.previewImgEl = previewImg;
+          item.previewBtn = previewBtn;
+          item.previewHintEl = previewHint;
 
           genBtn.addEventListener('click', function () { generateForItem(item); });
           regenBtn.addEventListener('click', function () { generateForItem(item); });
           compositeBtn.addEventListener('click', function () { compositeItem(item); });
+          previewBtn.addEventListener('click', function () {
+            if (!item.selection || !item.aiImg) return;
+            refreshCompositePreview(item);
+          });
 
           return div;
         }
@@ -4558,11 +4667,15 @@
               item.footerEl.textContent =
                 '선택: ' + item.selection.w + '×' + item.selection.h + 'px — 생성 버튼을 누르세요.';
               if (item.status === 'done') item.compositeBtn.disabled = false;
+              if (item.previewBtn) item.previewBtn.disabled = !item.aiImg;
+              if (item.aiImg) refreshCompositePreview(item);
             } else {
               item.selection = null;
               drawCanvas(item);
               item.footerEl.textContent = '너무 작습니다. 다시 드래그하세요.';
               item.compositeBtn.disabled = true;
+              if (item.previewBtn) item.previewBtn.disabled = true;
+              clearItemCompositePreview(item);
             }
           }
 
@@ -4614,6 +4727,7 @@
           item.genBtn.disabled = true;
           item.regenBtn.disabled = true;
           item.compositeBtn.disabled = true;
+          if (item.previewBtn) item.previewBtn.disabled = true;
 
           var refDataUrl = downscaleForApi(item.origImg, 2048);
           var body = { prompt: prompt, resolution: '2k', images: [refDataUrl] };
@@ -4644,16 +4758,99 @@
               var selTxt = item.selection ? '' : ' (영역을 드래그로 선택해야 합성 가능)';
               item.footerEl.textContent = '생성 완료.' + selTxt;
               item.compositeBtn.disabled = !item.selection;
+              if (item.previewBtn) item.previewBtn.disabled = !item.selection;
+              if (item.selection && item.aiImg) refreshCompositePreview(item);
             })
             .catch(function (err) {
               item.status = 'error';
               item.el.className = 'wf-item wf-item--error';
               item.footerEl.textContent = '오류: ' + (err.message || String(err));
+              if (item.previewBtn) item.previewBtn.disabled = !item.selection || !item.aiImg;
             })
             .finally(function () {
               item.genBtn.disabled = false;
               item.regenBtn.disabled = false;
             });
+        }
+
+        function clearItemCompositePreview(item) {
+          if (!item) return;
+          if (item.previewObjectUrl) {
+            URL.revokeObjectURL(item.previewObjectUrl);
+            item.previewObjectUrl = null;
+          }
+          if (item.previewImgEl) {
+            item.previewImgEl.removeAttribute('src');
+            item.previewImgEl.classList.remove('wf-item__preview-img--visible');
+          }
+          item.previewEverShown = false;
+          if (item.previewHintEl) {
+            item.previewHintEl.textContent =
+              '영역 선택 후 생성하면 자동으로 표시됩니다. 「미리보기」로 다시 그릴 수 있습니다.';
+          }
+        }
+
+        function schedulePreviewRefreshAll() {
+          if (wfPreviewDebounce) clearTimeout(wfPreviewDebounce);
+          wfPreviewDebounce = setTimeout(function () {
+            wfPreviewDebounce = null;
+            wfItems.forEach(function (it) {
+              if (it.previewEverShown && it.aiImg && it.selection) refreshCompositePreview(it);
+            });
+          }, 200);
+        }
+
+        function refreshCompositePreview(item) {
+          if (!item.origImg || !item.aiImg || !item.selection) return;
+          if (item.previewBtn) item.previewBtn.disabled = true;
+          setTimeout(function () {
+            try {
+              var ow = item.origImg.naturalWidth;
+              var oh = item.origImg.naturalHeight;
+              var scale = Math.min(PREVIEW_MAX_EDGE / Math.max(ow, oh), 1);
+              var cw = Math.max(1, Math.round(ow * scale));
+              var ch = Math.max(1, Math.round(oh * scale));
+              var s = item.selection;
+              var scaledSel = {
+                x: Math.round(s.x * scale),
+                y: Math.round(s.y * scale),
+                w: Math.max(1, Math.round(s.w * scale)),
+                h: Math.max(1, Math.round(s.h * scale)),
+              };
+              var featherFull = parseInt(wfFeatherEl.value, 10);
+              var feather = Math.max(0, Math.round(featherFull * scale));
+              var sharpenAmt = parseInt(wfSharpenEl.value, 10) / 10;
+              var resultCanvas = doCompositeCore(
+                item.origImg,
+                item.aiImg,
+                scaledSel,
+                feather,
+                sharpenAmt,
+                cw,
+                ch,
+              );
+              resultCanvas.toBlob(
+                function (blob) {
+                  if (item.previewBtn) item.previewBtn.disabled = false;
+                  if (!blob) return;
+                  if (item.previewObjectUrl) URL.revokeObjectURL(item.previewObjectUrl);
+                  item.previewObjectUrl = URL.createObjectURL(blob);
+                  item.previewImgEl.src = item.previewObjectUrl;
+                  item.previewImgEl.classList.add('wf-item__preview-img--visible');
+                  item.previewEverShown = true;
+                  if (item.previewHintEl) {
+                    item.previewHintEl.textContent =
+                      '저해상도 미리보기입니다. 「합성 출력」은 원본 픽셀 해상도입니다. 페더·선명도 변경 시 자동 갱신됩니다.';
+                  }
+                },
+                'image/jpeg',
+                0.88,
+              );
+            } catch (err) {
+              if (item.previewBtn) item.previewBtn.disabled = false;
+              showWfError('미리보기: ' + (err.message || String(err)));
+            }
+          }, 10);
         }
 
         /* ---- 합성 출력 ---- */
@@ -4699,55 +4896,56 @@
           }, 20);
         }
 
-        /* ---- 핵심 합성 로직 ---- */
-        function doComposite(item) {
-          var origW = item.origImg.naturalWidth;
-          var origH = item.origImg.naturalHeight;
-          var sel = item.selection;
-          var feather = parseInt(wfFeatherEl.value, 10);
-          var sharpenAmt = parseInt(wfSharpenEl.value, 10) / 10;
-
-          /* 1. 원본 캔버스 */
+        /* ---- 핵심 합성 로직 (출력·미리보기 공통) ---- */
+        function doCompositeCore(origImg, aiImg, sel, feather, sharpenAmt, cw, ch) {
           var canvas = document.createElement('canvas');
-          canvas.width = origW; canvas.height = origH;
+          canvas.width = cw;
+          canvas.height = ch;
           var ctx = canvas.getContext('2d');
-          ctx.drawImage(item.origImg, 0, 0);
+          ctx.drawImage(origImg, 0, 0, cw, ch);
 
-          /* 2. AI 이미지를 원본 크기로 스케일업 */
           var aiCanvas = document.createElement('canvas');
-          aiCanvas.width = origW; aiCanvas.height = origH;
+          aiCanvas.width = cw;
+          aiCanvas.height = ch;
           var aiCtx = aiCanvas.getContext('2d');
           aiCtx.imageSmoothingEnabled = true;
           aiCtx.imageSmoothingQuality = 'high';
-          aiCtx.drawImage(item.aiImg, 0, 0, origW, origH);
+          aiCtx.drawImage(aiImg, 0, 0, cw, ch);
 
-          /* 3. 선명도 강화 (선택 영역 + 페더 패딩 범위만) */
           if (sharpenAmt > 0.05) {
             var pad = Math.ceil(feather) + 4;
             var rx = Math.max(0, sel.x - pad);
             var ry = Math.max(0, sel.y - pad);
-            var rw = Math.min(origW - rx, sel.w + pad * 2);
-            var rh = Math.min(origH - ry, sel.h + pad * 2);
+            var rw = Math.min(cw - rx, sel.w + pad * 2);
+            var rh = Math.min(ch - ry, sel.h + pad * 2);
             if (rw > 0 && rh > 0) applyUnsharpMaskRegion(aiCtx, rx, ry, rw, rh, sharpenAmt);
           }
 
-          /* 4. 마스크 캔버스 (페더 적용 사각형) */
           var maskCanvas = document.createElement('canvas');
-          maskCanvas.width = origW; maskCanvas.height = origH;
-          drawFeatheredRect(maskCanvas.getContext('2d'), sel.x, sel.y, sel.w, sel.h, feather, origW, origH);
+          maskCanvas.width = cw;
+          maskCanvas.height = ch;
+          drawFeatheredRect(maskCanvas.getContext('2d'), sel.x, sel.y, sel.w, sel.h, feather, cw, ch);
 
-          /* 5. AI 이미지에 마스크 적용 (destination-in) */
           var compCanvas = document.createElement('canvas');
-          compCanvas.width = origW; compCanvas.height = origH;
+          compCanvas.width = cw;
+          compCanvas.height = ch;
           var compCtx = compCanvas.getContext('2d');
           compCtx.drawImage(aiCanvas, 0, 0);
           compCtx.globalCompositeOperation = 'destination-in';
           compCtx.drawImage(maskCanvas, 0, 0);
           compCtx.globalCompositeOperation = 'source-over';
 
-          /* 6. 마스크된 AI 이미지를 원본 위에 합성 */
           ctx.drawImage(compCanvas, 0, 0);
           return canvas;
+        }
+
+        function doComposite(item) {
+          var ow = item.origImg.naturalWidth;
+          var oh = item.origImg.naturalHeight;
+          var sel = item.selection;
+          var feather = parseInt(wfFeatherEl.value, 10);
+          var sharpenAmt = parseInt(wfSharpenEl.value, 10) / 10;
+          return doCompositeCore(item.origImg, item.aiImg, sel, feather, sharpenAmt, ow, oh);
         }
 
         /* 페더 처리된 흰색 사각형 그리기 (알파 채널 마스크용) */
@@ -4867,10 +5065,12 @@
         wfFeatherEl.addEventListener('input', function () {
           wfFeatherValEl.textContent = wfFeatherEl.value;
           wfItems.forEach(function (item) { if (item.ctx) drawCanvas(item); });
+          schedulePreviewRefreshAll();
         });
 
         wfSharpenEl.addEventListener('input', function () {
           wfSharpenValEl.textContent = (parseInt(wfSharpenEl.value, 10) / 10).toFixed(1);
+          schedulePreviewRefreshAll();
         });
 
         wfGenAllBtn.addEventListener('click', function () {
@@ -4888,6 +5088,7 @@
         wfClearAllBtn.addEventListener('click', function () {
           wfItems.forEach(function (item) {
             if (item.origObjectUrl) URL.revokeObjectURL(item.origObjectUrl);
+            clearItemCompositePreview(item);
           });
           wfItems = [];
           wfGrid.innerHTML = '';
