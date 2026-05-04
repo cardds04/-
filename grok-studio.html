@@ -1212,26 +1212,9 @@
         width: 100%;
         padding-top: 0;
       }
-      /* 카드 목록: 항상 1열(행당 1장). 예전 배포·캐시에서도 두 줄 그리드로 깨지지 않도록 특이도·minmax 고정 */
-      .window-fix-block #wfGrid.wf-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        grid-auto-flow: row;
-        grid-auto-columns: minmax(0, 1fr);
-        gap: 1rem;
-        margin-top: 1rem;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      .window-fix-block #wfGrid.wf-grid > .wf-item {
-        grid-column: 1 / -1;
-        min-width: 0;
-        width: 100%;
-        max-width: 100%;
-      }
       .wf-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
         gap: 1rem;
         margin-top: 1rem;
       }
@@ -1257,7 +1240,7 @@
       .wf-item--error .wf-item__header { background: #fee2e2; }
       .wf-item__body {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
       }
       .wf-item__tuning {
         padding: 0.65rem 0.75rem 0.75rem;
@@ -1271,14 +1254,14 @@
         font-size: 0.72rem;
       }
       .wf-item__orig {
-        border-right: none;
-        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        border-bottom: none;
         background: #111;
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 160px;
+        min-height: 140px;
       }
       .wf-item__canvas {
         display: block;
@@ -1293,8 +1276,8 @@
         align-items: center;
         justify-content: center;
         gap: 0.45rem;
-        padding: 0.65rem 0.6rem;
-        min-height: 160px;
+        padding: 0.6rem 0.5rem;
+        min-height: 140px;
       }
       .wf-item__ai-placeholder {
         font-size: 0.8rem;
@@ -1304,7 +1287,7 @@
       }
       .wf-item__ai-img {
         max-width: 100%;
-        max-height: min(50vh, 520px);
+        max-height: 130px;
         object-fit: contain;
         border-radius: 4px;
         display: none;
@@ -4968,14 +4951,7 @@
         /* ---- 캔버스 초기화 ---- */
         function initCanvas(item) {
           var img = item.origImg;
-          var gridW =
-            wfGrid && wfGrid.clientWidth
-              ? wfGrid.clientWidth
-              : item.el && item.el.parentElement
-                ? item.el.parentElement.clientWidth
-                : 520;
-          var DISPLAY_W = Math.min(960, Math.max(360, gridW - 24));
-          var DISPLAY_H = Math.round(DISPLAY_W * 0.58);
+          var DISPLAY_W = 300, DISPLAY_H = 220;
           var scale = Math.min(DISPLAY_W / img.naturalWidth, DISPLAY_H / img.naturalHeight, 1);
           var dw = Math.max(1, Math.round(img.naturalWidth * scale));
           var dh = Math.max(1, Math.round(img.naturalHeight * scale));
