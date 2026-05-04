@@ -1212,9 +1212,26 @@
         width: 100%;
         padding-top: 0;
       }
+      /* 카드 목록: 항상 1열(행당 1장). 예전 배포·캐시에서도 두 줄 그리드로 깨지지 않도록 특이도·minmax 고정 */
+      .window-fix-block #wfGrid.wf-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-auto-flow: row;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .window-fix-block #wfGrid.wf-grid > .wf-item {
+        grid-column: 1 / -1;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+      }
       .wf-grid {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         gap: 1rem;
         margin-top: 1rem;
       }
@@ -1287,7 +1304,7 @@
       }
       .wf-item__ai-img {
         max-width: 100%;
-        max-height: min(42vh, 360px);
+        max-height: min(50vh, 520px);
         object-fit: contain;
         border-radius: 4px;
         display: none;
@@ -4951,7 +4968,14 @@
         /* ---- 캔버스 초기화 ---- */
         function initCanvas(item) {
           var img = item.origImg;
-          var DISPLAY_W = 520, DISPLAY_H = 340;
+          var gridW =
+            wfGrid && wfGrid.clientWidth
+              ? wfGrid.clientWidth
+              : item.el && item.el.parentElement
+                ? item.el.parentElement.clientWidth
+                : 520;
+          var DISPLAY_W = Math.min(960, Math.max(360, gridW - 24));
+          var DISPLAY_H = Math.round(DISPLAY_W * 0.58);
           var scale = Math.min(DISPLAY_W / img.naturalWidth, DISPLAY_H / img.naturalHeight, 1);
           var dw = Math.max(1, Math.round(img.naturalWidth * scale));
           var dh = Math.max(1, Math.round(img.naturalHeight * scale));
