@@ -1962,13 +1962,13 @@
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-2">
               <div class="schedule-dashboard-head schedule-dashboard-head-with-action">
-                <span>완료된 작업</span>
+                <span id="dashboardCol2Headline">완료된 작업</span>
                 <button id="dashboardCompletedHistoryBtn" class="btn-sm dashboard-history-btn" type="button">기록보기</button>
               </div>
               <div id="scheduleDashboardCompletedList" class="schedule-dashboard-list schedule-dashboard-completed-list"></div>
             </div>
             <div class="schedule-dashboard-col schedule-dashboard-col-3">
-              <div class="schedule-dashboard-head">오늘 처리</div>
+              <div class="schedule-dashboard-head"><span id="dashboardCol3Headline">오늘 처리</span></div>
               <div id="scheduleDashboardTodayWrap" class="schedule-dashboard-today-column"></div>
             </div>
           </div>
@@ -2571,6 +2571,13 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      /** Drive 납품 자동화 — anon 이 읽을 수 있는 RPC 결과 캐시 */
+      const SUPABASE_RPC_SHOOT_DELIVERY_PROGRESS = "shoot_delivery_progress_list";
+      let dashDeliveryRpcMap = null;
+      let dashDeliveryRpcFailed = false;
+      let dashDeliveryRpcInFlight = false;
+      let dashDeliveryRpcLastFetchedAt = 0;
+      let dashDeliveryRpcEverLoaded = false;
       const SUPABASE_PUSH_ENABLED = USE_SUPABASE_SYNC && APP_MODE !== "dev";
       const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
@@ -10961,6 +10968,25 @@
         if (scheduleDetailNextDayBtnEl) scheduleDetailNextDayBtnEl.disabled = !hasExactDate;
         scheduleDetailModalEl.classList.remove("hidden");
       }
+      function openScheduleRowFromDashboard(dataIndexRaw) {
+        const idx = Number(dataIndexRaw);
+        if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+        const item = data[idx];
+        const ds = String(item?.date || "").trim();
+        const m = ds.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) {
+          alert("해당 건의 촬영일이 없어 일정 목록으로 이동할 수 없습니다.");
+          return;
+        }
+        yearFilterEl.value = m[1];
+        monthFilterEl.value = String(Number(m[2]));
+        dayFilterEl.value = String(Number(m[3]));
+        currentPhotographerFilter = "all";
+        currentScheduleDatePreset = "";
+        renderPhotographerTabs();
+        renderList();
+        openScheduleDetailModal();
+      }
       function moveScheduleDetailByDay(step) {
         const year = Number(yearFilterEl.value);
         if (monthFilterEl.value === "all" || dayFilterEl.value === "all" || Number.isNaN(year)) {
@@ -14275,6 +14301,292 @@
         return Array.from({ length: 7 }, (_, i) => addDaysToYmd(todayKey, -6 + i));
       }
 
+      /** ISO 시간 → Asia/Seoul 날짜 YYYY-MM-DD */
+      function isoUtcToKstYmd(iso) {
+        const s = String(iso || "").trim();
+        if (!s) return "";
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) return "";
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(d);
+        const y = parts.find((p) => p.type === "year")?.value;
+        const m = parts.find((p) => p.type === "month")?.value;
+        const day = parts.find((p) => p.type === "day")?.value;
+        return y && m && day ? `${y}-${m}-${day}` : "";
+      }
+
+      function dashDeliveryNeedsPhotoComposition(comp) {
+        const c = String(comp || "").trim();
+        return Boolean(c && /사진|블로그/.test(c));
+      }
+      function dashDeliveryNeedsVideoComposition(comp) {
+        const c = String(comp || "").trim();
+        return Boolean(c && /영상/.test(c));
+      }
+
+      function kickDashDeliveryRpcRefresh() {
+        if (!USE_SUPABASE_SYNC) return;
+        if (dashDeliveryRpcInFlight) return;
+        const stale = dashDeliveryRpcLastFetchedAt <= 0 || Date.now() - dashDeliveryRpcLastFetchedAt > 25000;
+        if (!stale) return;
+        dashDeliveryRpcInFlight = true;
+        void fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_SHOOT_DELIVERY_PROGRESS}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+          cache: "no-store",
+        })
+          .then(async (res) => {
+            const txt = await res.text();
+            if (!res.ok) throw new Error(txt || `RPC ${res.status}`);
+            let rows = [];
+            try {
+              rows = txt ? JSON.parse(txt) : [];
+            } catch (_) {
+              rows = [];
+            }
+            const nextMap = new Map();
+            for (const r of Array.isArray(rows) ? rows : []) {
+              const sid = String(r?.schedule_id || "").trim();
+              if (sid) nextMap.set(sid, r);
+            }
+            dashDeliveryRpcMap = nextMap;
+            dashDeliveryRpcFailed = false;
+          })
+          .catch((err) => {
+            console.warn("[DASHBOARD][delivery.rpc]", err);
+            dashDeliveryRpcMap = new Map();
+            dashDeliveryRpcFailed = true;
+          })
+          .finally(() => {
+            dashDeliveryRpcInFlight = false;
+            dashDeliveryRpcLastFetchedAt = Date.now();
+            dashDeliveryRpcEverLoaded = true;
+            try {
+              renderList();
+            } catch (_) {}
+          });
+      }
+
+      function renderScheduleDashboardFromDeliveryRpc(activeRows, todayKey) {
+        const listRoot = document.getElementById("scheduleDashboardList");
+        const completedRoot = document.getElementById("scheduleDashboardCompletedList");
+        const rangeHintEl = document.getElementById("scheduleDashboardRangeHint");
+        const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
+        const processedDateRow = document.querySelector(".schedule-dashboard-processed-date-row");
+        const historyBtn = document.getElementById("dashboardCompletedHistoryBtn");
+        if (!listRoot || !completedRoot || !todayWrap) return;
+
+        if (processedDateRow) processedDateRow.classList.add("hidden");
+        if (historyBtn) historyBtn.classList.add("hidden");
+        const headline2 = document.getElementById("dashboardCol2Headline");
+        const headline3 = document.getElementById("dashboardCol3Headline");
+        if (headline2) headline2.textContent = "납품 완료 로그";
+        if (headline3) headline3.textContent = "납품 집계";
+
+        ensureDashboardProcessedDatePickers(todayKey);
+
+        const map = dashDeliveryRpcMap instanceof Map ? dashDeliveryRpcMap : new Map();
+
+        const { start: windowStart, end: windowEnd } = getDashboardFifteenDayWindow(todayKey);
+        if (rangeHintEl) {
+          rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
+            windowEnd
+          )} · 오늘 포함 과거 15일 · 납품은 Drive 업로드 + 자동 문자 기준`;
+        }
+
+        const waitingFirstRpc = dashDeliveryRpcInFlight && !dashDeliveryRpcEverLoaded;
+
+        if (waitingFirstRpc) {
+          listRoot.innerHTML = '<div class="helper" style="margin:0;font-size:0.8rem;">Drive 납품 상태를 불러오는 중…</div>';
+          completedRoot.innerHTML = "";
+          todayWrap.innerHTML =
+            '<div class="helper" style="margin:0;">납품 집계를 불러오는 중입니다…</div>';
+          return;
+        }
+
+        if (dashDeliveryRpcFailed) {
+          listRoot.innerHTML =
+            '<div class="helper" style="margin:0;font-size:0.8rem;color:#b45309;">Drive 납품 상태를 불러오지 못했습니다.<br />Supabase SQL에 <strong>shoot_delivery_progress_list</strong> RPC 마이그레이션을 적용했는지 확인해 주세요.</div>';
+          completedRoot.innerHTML = "";
+          todayWrap.innerHTML = "";
+          return;
+        }
+
+        const inWin = activeRows
+          .filter((item) => {
+            const d = String(item?.date || "").trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= windowStart && d <= windowEnd;
+          })
+          .sort((a, b) => compareScheduleDateTime(a, b));
+
+        function rowForSchedule(item) {
+          const sid = String(item?.customerScheduleId || "").trim();
+          if (!sid) return null;
+          return map.get(sid) || null;
+        }
+
+        function compositionForItemRaw(item) {
+          return String(item?.composition || "").trim();
+        }
+
+        /** 남은 납품이 있는 행만 */
+        const pendingItems = inWin.filter((item) => {
+          const comp = compositionForItemRaw(item);
+          const np = dashDeliveryNeedsPhotoComposition(comp);
+          const nv = dashDeliveryNeedsVideoComposition(comp);
+          if (!np && !nv) return false;
+          const tr = rowForSchedule(item);
+          const pDone = tr && tr.photo_notified_at;
+          const vDone = tr && tr.video_notified_at;
+          const owe = (np && !pDone) || (nv && !vDone);
+          return owe;
+        });
+
+        function renderPendingRow(item) {
+          const dataIndex = data.indexOf(item);
+          if (dataIndex < 0) return "";
+          const dateStr = String(item?.date || "").trim();
+          const shortD = formatYmdToMdSlash(dateStr);
+          const daysPassed = Math.max(0, diffScheduleDaysPassedFromToday(dateStr, todayKey));
+          const passedLabel =
+            daysPassed === 0
+              ? "오늘"
+              : daysPassed === 7
+                ? "오늘 기한 마감"
+                : daysPassed === 6
+                  ? "내일 마감"
+                  : daysPassed > 7
+                    ? `기한 ${daysPassed - 7}일 경과`
+                    : `${daysPassed}일 지남`;
+          const passedClass =
+            daysPassed > 7 ? "schedule-days-passed schedule-days-passed-over" : "schedule-days-passed schedule-days-passed-within";
+          const company = normalizeCompanyName(item?.company) || "-";
+          const compRaw = compositionForItemRaw(item);
+          const compHint = compRaw || "(구성 미선택)";
+          const tr = rowForSchedule(item);
+          const np = dashDeliveryNeedsPhotoComposition(compRaw);
+          const nv = dashDeliveryNeedsVideoComposition(compRaw);
+          const bits = [];
+          if (np) bits.push(tr?.photo_notified_at ? `<span style="color:#258c55;">✓ 사진완료</span>` : "사진 대기");
+          if (nv) bits.push(tr?.video_notified_at ? `<span style="color:#258c55;">✓ 영상완료</span>` : "영상 대기");
+          const strip = `<span class="delivery-status-strip">${bits.join(" · ")}</span>`;
+          const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
+
+          const detailBtn =
+            `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openScheduleCardByIndex" data-data-index="${dataIndex}" title="목록으로 이동">상세</button>`;
+
+          return `<div class="schedule-dashboard-row-line">
+                  <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
+                  <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
+                  <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
+                  ${shootTodayBadge}
+                  ${strip}
+                  ${detailBtn}
+                </div>`;
+        }
+
+        listRoot.innerHTML = pendingItems.length
+          ? pendingItems.map((item) => renderPendingRow(item)).filter(Boolean).join("")
+          : '<div class="helper" style="margin:0;font-size:0.8rem;">남은 납품이 없습니다. (마감 7일 구간 표시 중)</div>';
+
+        /** 활동 로그: 사진/영상 납품 시각 순 */
+        const events = [];
+        for (const r of map.values()) {
+          const comp = normalizeCompanyName(r?.company_name) || "-";
+          const sd = String(r?.shoot_date_key || "").trim();
+          const sdLabel = sd && /^\d{4}-\d{2}-\d{2}$/.test(sd) ? formatYmdToMdSlash(sd) : "-";
+          if (r.photo_notified_at)
+            events.push({
+              ts: Date.parse(String(r.photo_notified_at)),
+              html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line">
+                <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.photo_notified_at))))} 납품</span>
+                <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
+                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 사진 완료</span>
+              </div>`,
+            });
+          if (r.video_notified_at)
+            events.push({
+              ts: Date.parse(String(r.video_notified_at)),
+              html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line">
+                <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.video_notified_at))))} 납품</span>
+                <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
+                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 영상 완료</span>
+              </div>`,
+            });
+        }
+        events.sort((a, b) => b.ts - a.ts);
+        completedRoot.innerHTML = events.length
+          ? events
+              .slice(0, 80)
+              .map((e) => e.html)
+              .join("")
+          : '<div class="helper" style="margin:0;font-size:0.76rem;">아직 Drive 납품 완료 기록이 없습니다.</div>';
+
+        const processSevenDays = getDashboardProcessSevenDays(todayKey);
+        /** 날짜키 → 카운트(사진·영상 각각 1건) */
+        const dayCounts = {};
+        const dayEntries = {};
+        processSevenDays.forEach((dk) => {
+          dayCounts[dk] = 0;
+          dayEntries[dk] = [];
+        });
+        const bump = (dayKeyIso, meta) => {
+          if (!dayKeyIso || !dayCounts.hasOwnProperty(dayKeyIso)) return;
+          dayCounts[dayKeyIso] += 1;
+          dayEntries[dayKeyIso].push(meta);
+        };
+        for (const r of map.values()) {
+          const co = normalizeCompanyName(r?.company_name) || "-";
+          const sd = String(r?.shoot_date_key || "").trim();
+          const sdSlash = sd && /^\d{4}-\d{2}-\d{2}$/.test(sd) ? formatYmdToMdSlash(sd) : "-";
+          if (r.photo_notified_at)
+            bump(isoUtcToKstYmd(String(r.photo_notified_at)), { scheduleDateFmt: sdSlash, company: co, tag: "사진" });
+          if (r.video_notified_at)
+            bump(isoUtcToKstYmd(String(r.video_notified_at)), { scheduleDateFmt: sdSlash, company: co, tag: "영상" });
+        }
+
+        const weekGrid = `<div class="writer-week-stats-grid">${processSevenDays
+          .map((dayKey) => {
+            const cnt = dayCounts[dayKey] || 0;
+            const tag = dayKey === todayKey ? '<span class="writer-week-stat-tag">오늘</span>' : "";
+            return `<button type="button" class="writer-week-stat-cell-btn" data-action="deliveryDayDetailClick" data-day="${escapeHtml(
+              dayKey
+            )}">
+                <div class="writer-week-stat-date">${escapeHtml(formatYmdToMdSlash(dayKey))}${tag}</div>
+                <div class="writer-week-stat-count">${cnt}건</div>
+              </button>`;
+          })
+          .join("")}</div>`;
+
+        todayWrap.innerHTML = `
+          <div class="writer-today-block delivery-week-summary-block">
+            <h4 style="margin:0 0 6px;font-size:0.95rem;">Drive 납품</h4>
+            <div class="helper" style="margin:0 0 8px;font-size:0.76rem;line-height:1.45;">
+              사진·영상 각각 업로드로 완료 처리됩니다.<br/>
+              카운트는 해당 날에 완료된 납품 이벤트 수(사진+영상)입니다.</div>
+            <div class="writer-week-summary" style="margin-top:0;border-top:0;padding-top:0;">
+              <div class="writer-week-summary-title">최근 7일 일별 납품 (칸 클릭 시 상세)</div>
+              ${weekGrid}
+            </div>
+            <div id="deliveryDayDetailPanel" class="writer-day-detail-panel hidden"></div>
+          </div>`;
+
+        /** 클릭 시 상세가 붙도록 dataset 스냅샷 */
+        try {
+          const block = todayWrap.querySelector(".delivery-week-summary-block");
+          if (block) block.__deliveryDayEntries = dayEntries;
+        } catch (_) {}
+      }
+
       function getDashboardScheduleKey(item) {
         const id = String(item?.customerScheduleId || "").trim();
         if (id) return `id:${id}`;
@@ -14658,11 +14970,28 @@
       }
 
       function renderScheduleDashboard(activeRows, todayKey) {
+        if (USE_SUPABASE_SYNC) {
+          renderScheduleDashboardFromDeliveryRpc(activeRows, todayKey);
+          return;
+        }
+        renderScheduleDashboardLegacy(activeRows, todayKey);
+      }
+
+      function renderScheduleDashboardLegacy(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
         const completedRoot = document.getElementById("scheduleDashboardCompletedList");
         const rangeHintEl = document.getElementById("scheduleDashboardRangeHint");
         const todayWrap = document.getElementById("scheduleDashboardTodayWrap");
         if (!listRoot || !completedRoot || !todayWrap) return;
+
+        const processedDateRow = document.querySelector(".schedule-dashboard-processed-date-row");
+        const historyBtn = document.getElementById("dashboardCompletedHistoryBtn");
+        if (processedDateRow) processedDateRow.classList.remove("hidden");
+        if (historyBtn) historyBtn.classList.remove("hidden");
+        const headline2 = document.getElementById("dashboardCol2Headline");
+        const headline3 = document.getElementById("dashboardCol3Headline");
+        if (headline2) headline2.textContent = "완료된 작업";
+        if (headline3) headline3.textContent = "오늘 처리";
 
         dashboardDayDetailOpenKey = "";
 
@@ -14924,6 +15253,7 @@
           if (itemScheduleId) return !canceledScheduleIdSet.has(itemScheduleId);
           return !canceledFallbackKeySet.has(itemFallbackKey);
         });
+        kickDashDeliveryRpcRefresh();
         renderScheduleDashboard(activeRows, todayKey);
         if (todayNewCountEl) {
           const todayNewCount = activeRows.filter((item) => String(item?.date || "").trim() === todayKey).length;
@@ -15172,6 +15502,49 @@
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
+        const openDashRow = event.target.closest("button[data-action='openScheduleCardByIndex']");
+        if (openDashRow) {
+          openScheduleRowFromDashboard(openDashRow.dataset.dataIndex);
+          return;
+        }
+        const deliveryDayBtn = event.target.closest("button[data-action='deliveryDayDetailClick']");
+        if (deliveryDayBtn) {
+          const day = String(deliveryDayBtn.dataset.day || "").trim();
+          const panel = document.getElementById("deliveryDayDetailPanel");
+          const block = document.querySelector(".delivery-week-summary-block");
+          if (!panel || !day) return;
+          const bag = block && block.__deliveryDayEntries;
+          const rows = bag && typeof bag === "object" && Array.isArray(bag[day]) ? bag[day] : [];
+          const openKey = `delivery|${day}`;
+          if (dashboardDayDetailOpenKey === openKey && !panel.classList.contains("hidden")) {
+            panel.classList.add("hidden");
+            panel.innerHTML = "";
+            dashboardDayDetailOpenKey = "";
+            return;
+          }
+          dashboardDayDetailOpenKey = openKey;
+          document.getElementById("writerDayDetailPanelPby")?.classList.add("hidden");
+          document.getElementById("writerDayDetailPanelKjy")?.classList.add("hidden");
+          if (!rows.length) {
+            panel.innerHTML = `<div class="writer-day-detail-head">${escapeHtml(
+              formatYmdToMdSlash(day)
+            )} · 납품 이벤트</div><div class="helper" style="margin:0;">기록이 없습니다.</div>`;
+          } else {
+            const lis = rows
+              .map(
+                (e) =>
+                  `<li>${escapeHtml(String(e.scheduleDateFmt || "-"))} · ${escapeHtml(String(e.company || "-"))} · ${escapeHtml(
+                    String(e.tag || "")
+                  )}</li>`
+              )
+              .join("");
+            panel.innerHTML = `<div class="writer-day-detail-head">${escapeHtml(
+              formatYmdToMdSlash(day)
+            )} · 납품 이벤트</div><ul class="writer-day-detail-list">${lis}</ul>`;
+          }
+          panel.classList.remove("hidden");
+          return;
+        }
         const writerCompleteBtn = event.target.closest("button[data-action='dashboardCompleteWithWriter']");
         if (writerCompleteBtn) {
           const writer = String(writerCompleteBtn.dataset.writer || "").trim();
@@ -15196,6 +15569,7 @@
           const writer = String(detailBtn.dataset.writer || "").trim();
           const day = String(detailBtn.dataset.day || "").trim();
           if (!writer || !day) return;
+          document.getElementById("deliveryDayDetailPanel")?.classList.add("hidden");
           const panelId = writer === "박보윤" ? "writerDayDetailPanelPby" : "writerDayDetailPanelKjy";
           const otherId = writer === "박보윤" ? "writerDayDetailPanelKjy" : "writerDayDetailPanelPby";
           const panel = document.getElementById(panelId);
