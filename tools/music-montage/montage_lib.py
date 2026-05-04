@@ -1532,14 +1532,67 @@ def run_montage(
 
     with tempfile.TemporaryDirectory(prefix="montage_") as tmp:
         tmp = Path(tmp)
-        wav = tmp / "music_mono.wav"
-        extract_mono_wav(music_file, wav)
+
+        # 클립 수 먼저 확정 (음악 필요량 추정에 사용)
+        n_units = len(videos) // 3 if layout_norm == "tri_stack" else len(videos)
+
+        # ── 영상 우선: 모든 클립을 커버할 음악을 미리 이어붙이기 ──────────────────
+        # 클립 수 × 창 길이 + 여유(끝 검은 화면·페이드 등)로 필요량 추정
+        _estimated_need = n_units * float(window_sec) + float(tail_black_sec) + 15.0
+        _pool_list: list[Path] = music_pool if music_pool else [music_file]
+        _n_pool = len(_pool_list)
+        _wav_parts: list[Path] = []
+        _total_a = 0.0
+        _cur_idx = pool_start_idx
+        _tracks_used = 0
+        _seq_names: list[str] = []
+        _guard = max(_n_pool * 20, 300)  # 무한루프 방지
+
+        while _total_a < _estimated_need - 0.05 and _tracks_used < _guard:
+            _nxt = _pool_list[_cur_idx % _n_pool]
+            _wp = tmp / f"mpart_{_tracks_used:04d}.wav"
+            extract_mono_wav(_nxt, _wp)
+            try:
+                _td = ffprobe_duration(_wp)
+            except (OSError, ValueError, RuntimeError):
+                _td = 0.0
+            if _td < 1e-3:
+                log(f"경고: 음악 길이 확인 실패 ({_nxt.name}) — 이어붙임 중단")
+                break
+            _wav_parts.append(_wp)
+            _total_a += _td
+            _seq_names.append(_nxt.name)
+            _tracks_used += 1
+            _cur_idx = (pool_start_idx + _tracks_used) % _n_pool
+
+        music_tracks_used = max(1, _tracks_used)
+
+        if len(_wav_parts) > 1:
+            wav = tmp / "music_full.wav"
+            ffmpeg_concat_wav_files(_wav_parts, wav)
+            log(
+                f"음악 이어붙임(영상 우선, {_tracks_used}곡): "
+                f"{' → '.join(_seq_names)}\n"
+                f"  합계 약 {_total_a:.1f}s "
+                f"(클립 {n_units}개 × 창 {window_sec}s ≈ {n_units * window_sec:.0f}s 커버)"
+            )
+        elif _wav_parts:
+            wav = _wav_parts[0]
+            log(f"음악: {_seq_names[0]} ({_total_a:.1f}s) — 단일 곡으로 커버 가능")
+        else:
+            # 풀이 완전히 비어 있는 경우 폴백
+            wav = tmp / "music_mono.wav"
+            extract_mono_wav(music_file, wav)
+            log("음악: 풀 없음, 첫 곡 단독 사용")
+            music_tracks_used = 1
+        # ──────────────────────────────────────────────────────────────────────
+
         y, sr = librosa.load(wav, sr=None, mono=True)
+        music_for_mux: Path = wav
         log(f"음악 길이(분석): {len(y) / sr:.2f}초")
         log(
             f"컷 규칙: {window_sec}초 창마다, 창 시작 +{pb:.2f}초 ~ 창 끝 구간에서 RMS 최대 지점에 맞춤"
         )
-        n_units = len(videos) // 3 if layout_norm == "tri_stack" else len(videos)
         cuts = compute_cut_times(
             y,
             sr,
@@ -1856,44 +1909,13 @@ def run_montage(
                 log(f"로고: 경로 오류 — 생략 ({logo_path})")
         tb = max(0.0, float(tail_black_sec))
         need_audio_sec = float(vlen) + tb
-        first_music_dur = float(len(y)) / float(sr)
-        music_for_mux: Path = music_file
-        music_tracks_used = 1
-        if first_music_dur + 0.08 < need_audio_sec:
-            pool = music_pool
-            if not pool:
-                pool = [music_file]
-            n_pool = len(pool)
-            parts_wav: list[Path] = [wav]
-            total_a = first_music_dur
-            seq_names = [music_file.name]
-            cur_pool_idx = pool_start_idx
-            pick_guard = 0
-            while total_a < need_audio_sec - 0.05 and pick_guard < 100:
-                pick_guard += 1
-                cur_pool_idx = (cur_pool_idx + 1) % n_pool
-                nxt = pool[cur_pool_idx]
-                wextra = tmp / f"music_chain_{pick_guard:03d}.wav"
-                extract_mono_wav(nxt, wextra)
-                try:
-                    td = ffprobe_duration(wextra)
-                except (OSError, ValueError, RuntimeError):
-                    td = 0.0
-                if td < 1e-3:
-                    log(f"경고: 이어붙일 음악 길이 확인 실패 ({nxt.name}) — 중단")
-                    break
-                parts_wav.append(wextra)
-                total_a += td
-                seq_names.append(nxt.name)
-                music_tracks_used += 1
-            if len(parts_wav) > 1:
-                chained = tmp / "music_chain_concat.wav"
-                ffmpeg_concat_wav_files(parts_wav, chained)
-                music_for_mux = chained
-                log(
-                    f"영상(본문+끝검정 약 {need_audio_sec:.1f}s)이 첫 곡({first_music_dur:.1f}s)보다 길어 "
-                    f"음악 이어붙임(순서): {' → '.join(seq_names)} (합계 약 {total_a:.1f}s)"
-                )
+        full_music_dur = float(len(y)) / float(sr)
+        # music_for_mux · music_tracks_used 는 영상 우선 이어붙임 단계에서 이미 확정됨
+        if full_music_dur + 0.08 < need_audio_sec:
+            log(
+                f"경고: 이어붙인 음악({full_music_dur:.1f}s)이 필요 길이({need_audio_sec:.1f}s)보다 짧음 "
+                f"— 음소거(apad)로 나머지 채움"
+            )
         mux_final_output(
             vconcat,
             music_for_mux,
