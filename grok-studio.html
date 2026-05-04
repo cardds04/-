@@ -1212,6 +1212,19 @@
         border-radius: 0;
         border-top: 1px solid #bbf7d0;
       }
+      .wf-grid5-tools__toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-size: 0.84rem;
+        color: var(--ink);
+        line-height: 1.35;
+      }
+      .wf-grid5-tools__toggle input {
+        margin-top: 0.2rem;
+        flex-shrink: 0;
+      }
       .wf-settings-row {
         display: flex;
         flex-direction: column;
@@ -2091,6 +2104,16 @@
                   <input type="range" id="wfAiOpacity" min="0" max="100" value="100" step="1" />
                   <span class="wf-range-val"><span id="wfAiOpacityVal">100</span>%</span>
                 </div>
+              </div>
+              <div class="wf-grid5-tools" style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px dashed #bbf7d0">
+                <label class="wf-grid5-tools__toggle" for="wfGrid5Overlay">
+                  <input type="checkbox" id="wfGrid5Overlay" />
+                  <span><strong>5×5 격자 (1–25)</strong> 원본 미리보기에 표시</span>
+                </label>
+                <p class="hint" style="font-size: 0.78rem; margin: 0.35rem 0 0">
+                  프롬프트에 <strong>14</strong> 또는 <strong>14, 15</strong>처럼 <strong>1–25 숫자</strong>를 넣으면, Gemini 요청 시 위쪽이 1·오른쪽으로 2…5, 다음 줄 6… 같은
+                  <strong>공간 위치 설명</strong>이 자동으로 덧붙습니다. 화면 겉보기 격자와 번호 체계가 같습니다.
+                </p>
               </div>
             </div>
             <p class="hint" style="font-size: 0.78rem; margin: 0.5rem 0 0">
@@ -4581,6 +4604,7 @@
         var wfErrorEl = document.getElementById('wfError');
         var wfSavePrefsBtn = document.getElementById('wfSavePrefs');
         var wfPrefsStatusEl = document.getElementById('wfPrefsStatus');
+        var wfGrid5OverlayEl = document.getElementById('wfGrid5Overlay');
 
         var PREVIEW_MAX_EDGE = 2048;
         var wfPreviewDebounce = null;
@@ -4651,6 +4675,116 @@
           return local.length ? String(item.perPromptEl.value || '') : globalPrompt;
         }
 
+        function extractWfGrid5Cells(promptText) {
+          var re = /\b([1-9]|1\d|2[0-5])\b/g;
+          var seen = {};
+          var out = [];
+          var m;
+          var s = String(promptText || '');
+          while ((m = re.exec(s)) !== null) {
+            var v = parseInt(m[1], 10);
+            if (v >= 1 && v <= 25 && !seen[v]) {
+              seen[v] = true;
+              out.push(v);
+            }
+          }
+          out.sort(function (a, b) {
+            return a - b;
+          });
+          return out;
+        }
+
+        function describeWfGrid5CellKrEn(n) {
+          var row = Math.floor((n - 1) / 5) + 1;
+          var col = ((n - 1) % 5) + 1;
+          var nx = (col - 0.5) / 5;
+          var ny = (row - 0.5) / 5;
+          return (
+            '번호 ' +
+            n +
+            ': 위에서 ' +
+            row +
+            '/5 번째 줄, 왼쪽에서 ' +
+            col +
+            '/5 번째 칸 (정규화 중심 대략 x=' +
+            nx.toFixed(2) +
+            ', y=' +
+            ny.toFixed(2) +
+            ', 좌상단 (0,0) · 우하단 (1,1)). / Cell #' +
+            n +
+            ': row ' +
+            row +
+            '/5 from top, col ' +
+            col +
+            '/5 from left; norm. center (~' +
+            nx.toFixed(2) +
+            ',' +
+            ny.toFixed(2) +
+            ').'
+          );
+        }
+
+        function augmentPromptWithGrid5(prompt) {
+          var cells = extractWfGrid5Cells(prompt);
+          if (!cells.length) return prompt;
+          var detailLines = cells.map(describeWfGrid5CellKrEn);
+          var block =
+            '\n\n---\n[5×5 spatial grid / 공간 격자 참조]\n' +
+            'The reference image is divided into 5 columns × 5 rows (25 cells). Numbering: top-left is 1; numbers increase to the right along the top row (1–5), then continue on the next row left-to-right (6–10), … bottom-right is 25.\n' +
+            '사용자가 지정한 칸 번호 / User-specified cell number(s): ' +
+            cells.join(', ') +
+            '.\n위 번호에 해당하는 영역을 사용자 요청과 함께 우선적으로 확인·보정하세요. / Prioritize edits in these regions together with the user request above.\n' +
+            detailLines.join('\n');
+          return prompt + block;
+        }
+
+        function redrawAllWfCanvases() {
+          wfItems.forEach(function (it) {
+            if (it.ctx) drawCanvas(it);
+          });
+        }
+
+        function drawWfGrid5Overlay(ctx, cw, ch) {
+          var i,
+            j,
+            n,
+            cx,
+            cy,
+            fontPx = Math.max(11, Math.round(Math.min(cw, ch) / 20));
+          ctx.save();
+          ctx.lineWidth = 1.25;
+          ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+          for (i = 1; i <= 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo((i * cw) / 5, 0);
+            ctx.lineTo((i * cw) / 5, ch);
+            ctx.stroke();
+          }
+          for (j = 1; j <= 5; j++) {
+            ctx.beginPath();
+            ctx.moveTo(0, (j * ch) / 5);
+            ctx.lineTo(cw, (j * ch) / 5);
+            ctx.stroke();
+          }
+          ctx.font = 'bold ' + fontPx + 'px ui-sans-serif, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          for (j = 0; j < 5; j++) {
+            for (i = 0; i < 5; i++) {
+              n = j * 5 + i + 1;
+              cx = ((i + 0.5) * cw) / 5;
+              cy = ((j + 0.5) * ch) / 5;
+              ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+              ctx.lineWidth = 3;
+              ctx.strokeText(String(n), cx, cy);
+              ctx.fillStyle = '#fff';
+              ctx.lineWidth = 1;
+              ctx.fillText(String(n), cx, cy);
+            }
+          }
+          ctx.restore();
+        }
+
         function syncItemTuningLabels(item) {
           if (!item || !item.featherEl) return;
           if (item.featherValEl) item.featherValEl.textContent = item.featherEl.value;
@@ -4678,6 +4812,7 @@
             var op = parseInt(o.aiOpacity, 10);
             if (!isNaN(op) && op >= 0 && op <= 100) wfDefaults.aiOpacity = op;
             applyMainSlidersFromDefaults();
+            if (wfGrid5OverlayEl && o.grid5Overlay === true) wfGrid5OverlayEl.checked = true;
             wfItems.forEach(function (item) {
               if (!item.tuningLocal) syncCardTuningUIFromMain(item);
               if (item.ctx) drawCanvas(item);
@@ -5221,6 +5356,10 @@
               ctx.setLineDash([]);
             }
           }
+
+          if (wfGrid5OverlayEl && wfGrid5OverlayEl.checked) {
+            drawWfGrid5Overlay(ctx, cw, ch);
+          }
         }
 
         /* ---- 선택 영역 드래그 ---- */
@@ -5337,7 +5476,8 @@
           syncWfItemPreviewActions(item);
 
           var refDataUrl = downscaleForApi(item.origImg, 2048);
-          var body = { prompt: prompt, resolution: '2k', images: [refDataUrl] };
+          var promptForApi = augmentPromptWithGrid5(prompt);
+          var body = { prompt: promptForApi, resolution: '2k', images: [refDataUrl] };
           var key = getGeminiKey();
           if (key) body.gemini_api_key = key;
 
@@ -5708,6 +5848,12 @@
           if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
         });
 
+        if (wfGrid5OverlayEl) {
+          wfGrid5OverlayEl.addEventListener('change', function () {
+            redrawAllWfCanvases();
+          });
+        }
+
         wfFeatherEl.addEventListener('input', function () {
           syncMainRangeDisplay();
           wfItems.forEach(function (item) {
@@ -5772,6 +5918,7 @@
                 sharpen: wfDefaults.sharpen,
                 tintRg: wfDefaults.tintRg,
                 aiOpacity: wfDefaults.aiOpacity,
+                grid5Overlay: !!(wfGrid5OverlayEl && wfGrid5OverlayEl.checked),
               };
               localStorage.setItem(LS_WF_PREFS, JSON.stringify(payload));
               showWfError('');
