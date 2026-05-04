@@ -12,6 +12,8 @@
  *   DELIVERY_MIN_SHOOT_DATE       — 선택, 기본 2026-04-28 (이 날짜 이상 스케줄만 처리)
  *   DELIVERY_FOLDER_MAX_LAG_DAYS — 선택, 촬영일로부터 폴더 생성 최대 후퇴 일수 (기본 120)
  *   DELIVERY_DRIVE_LINK_PERMISSION — anyone | private (기본 anyone, 고객용 링크 열람)
+ *   DELIVERY_BACKFILL_SHOOT_FROM — 선택 YYYY-MM-DD, DELIVERY_BACKFILL_SHOOT_TO 와 함께 쓰면
+ *                                   해당 촬영일 구간은 「다음날」 조건 없이 폴더 생성(일회성 백필).
  *   CRON_SECRET 또는 DELIVERY_DRIVE_CRON_SECRET — 설정 시 Bearer 토큰과 일치해야 호출 허용
  *
  * 준비: Google Drive에서 PARENT 폴더를 해당 서비스계정 메일 주소와 공유(편집자).
