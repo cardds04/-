@@ -363,7 +363,48 @@
 
         <section class="step">
           <h3 class="step__h">Topaz 설정</h3>
-          <p class="hint" style="font-size:0.88rem;line-height:1.45;margin:0 0 0.5rem;">
+
+          <!-- ☁️ 클라우드 API 섹션 -->
+          <details id="topazCloudApiDetails" class="topaz-cloud-details">
+            <summary class="topaz-cloud-summary">☁️ Topaz Cloud API 사용 (API 키로 클라우드 처리)</summary>
+            <div class="topaz-cloud-body">
+              <p class="hint" style="margin:0 0 0.6rem;">
+                Topaz Labs 계정에서 API 키를 발급하면 로컬 프로그램 없이 클라우드에서 처리됩니다.
+                키를 입력하면 아래 로컬 프리셋·FFmpeg 설정은 무시됩니다.<br>
+                <a href="https://account.topazlabs.com/manage-api" target="_blank" rel="noopener">🔑 API 키 발급 (account.topazlabs.com)</a>
+                &nbsp;|&nbsp;
+                <a href="https://developer.topazlabs.com/credit-calculator" target="_blank" rel="noopener">크레딧 계산기</a>
+              </p>
+              <label class="label" for="topazCloudKey">Topaz Cloud API 키</label>
+              <input type="password" id="topazCloudKey" placeholder="tl-xxxx… (입력 시 클라우드 모드 활성화)" style="margin-bottom:0.6rem;" />
+              <div class="topaz-cloud-opts" id="topazCloudOpts">
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                  <div style="flex:1;min-width:180px;">
+                    <label class="label label--compact" for="topazCloudModel">모델</label>
+                    <select id="topazCloudModel" class="select--compact">
+                      <option value="slp-2">Starlight Precise 2 (GenAI 영상 권장)</option>
+                      <option value="slp-1">Starlight Precise 1</option>
+                      <option value="slp-2-5">Starlight Precise 2.5</option>
+                      <option value="apo-8">Apollo-8 (프레임 보간)</option>
+                      <option value="proteus">Proteus (일반 영상)</option>
+                      <option value="rhea">Rhea</option>
+                    </select>
+                  </div>
+                  <div style="flex:1;min-width:140px;">
+                    <label class="label label--compact" for="topazCloudScale">출력 해상도</label>
+                    <select id="topazCloudScale" class="select--compact">
+                      <option value="1080p">1080p (FHD)</option>
+                      <option value="4k">4K (UHD)</option>
+                      <option value="2x">원본 2배</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- 로컬 FFmpeg 프리셋 설정 -->
+          <p class="hint" style="font-size:0.88rem;line-height:1.45;margin:0.75rem 0 0.5rem;">
             <label style="cursor:pointer;">
               <input type="checkbox" id="useTopazPreset" checked />
               저장된 프리셋 사용 (apo-8 슬로모 4배 + prob-4 1080p, 입력 불필요)

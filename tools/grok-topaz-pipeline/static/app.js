@@ -44,6 +44,9 @@
   const topazFc2 = $("topazFc2");
   const useTopazPresetGrok = $("useTopazPresetGrok");
   const useTopazPreset = $("useTopazPreset");
+  const topazCloudKey = $("topazCloudKey");
+  const topazCloudModel = $("topazCloudModel");
+  const topazCloudScale = $("topazCloudScale");
   const topazGrokDetails = $("topazGrokDetails");
   const manualTopazGrok = $("manualTopazGrok");
   const manualTopazOnly = $("manualTopazOnly");
@@ -2082,33 +2085,45 @@
   }
 
   function buildTopazOnlyFormData(videoFile) {
-    const presetOn = useTopazPreset && useTopazPreset.checked;
-    const vf = (topazVf2.value || "").trim();
-    const fc = (topazFc2 && topazFc2.value ? topazFc2.value : "").trim();
+    const cloudKey = (topazCloudKey && topazCloudKey.value || "").trim();
+    const useCloud = !!cloudKey;
+    const presetOn = !useCloud && useTopazPreset && useTopazPreset.checked;
+    const vf = useCloud ? "" : (topazVf2 ? topazVf2.value || "" : "").trim();
+    const fc = useCloud ? "" : (topazFc2 && topazFc2.value ? topazFc2.value : "").trim();
     const fd = new FormData();
     fd.append("pipeline_mode", "topaz_only");
     fd.append("use_topaz_preset", presetOn ? "1" : "0");
     fd.append("video", videoFile);
     fd.append("topaz_vf", vf);
     fd.append("topaz_filter_complex", fc);
-    fd.append("topaz_ffmpeg", topazFf2.value.trim());
-    fd.append("topaz_extra", topazExtra2.value.trim());
+    fd.append("topaz_ffmpeg", topazFf2 ? topazFf2.value.trim() : "");
+    fd.append("topaz_extra", topazExtra2 ? topazExtra2.value.trim() : "");
+    if (cloudKey) {
+      fd.append("topaz_cloud_key", cloudKey);
+      fd.append("topaz_cloud_model", topazCloudModel ? topazCloudModel.value : "slp-2");
+      fd.append("topaz_cloud_scale", topazCloudScale ? topazCloudScale.value : "1080p");
+    }
     return fd;
   }
 
   if (startBtnTopaz) {
     startBtnTopaz.addEventListener("click", async () => {
+      const cloudKey = (topazCloudKey && topazCloudKey.value || "").trim();
+      const useCloud = !!cloudKey;
       const presetOn = useTopazPreset && useTopazPreset.checked;
-      const vf = (topazVf2.value || "").trim();
+      const vf = (topazVf2 ? topazVf2.value || "" : "").trim();
       const fc = (topazFc2 && topazFc2.value ? topazFc2.value : "").trim();
-      if (!presetOn) {
-        if (!vf && !fc) {
-          setError("프리셋을 끈 경우 ②에서 Topaz -vf 또는 -filter_complex 중 하나를 입력하세요.");
-          return;
-        }
-        if (vf && fc) {
-          setError("-vf와 filter_complex 칸을 동시에 채우지 마세요.");
-          return;
+      // 로컬 모드일 때만 필터 유효성 검사
+      if (!useCloud) {
+        if (!presetOn) {
+          if (!vf && !fc) {
+            setError("프리셋을 끈 경우 ②에서 Topaz -vf 또는 -filter_complex 중 하나를 입력하세요.");
+            return;
+          }
+          if (vf && fc) {
+            setError("-vf와 filter_complex 칸을 동시에 채우지 마세요.");
+            return;
+          }
         }
       }
       const files = videoInput.files ? Array.from(videoInput.files) : [];

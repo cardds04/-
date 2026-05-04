@@ -462,6 +462,234 @@ _VIDEO_EXT_OK = frozenset({".mp4", ".mov", ".mkv", ".m4v", ".avi", ".webm"})
 _PAN_IMG_EXT = frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"})
 _MAX_PAN_IMAGES = 50
 
+TOPAZ_API_BASE = "https://api.topazlabs.com"
+
+
+def _ffprobe_path() -> str:
+    import shutil as _shutil
+    p = _shutil.which("ffprobe")
+    if p:
+        return p
+    # 로컬 Topaz FFmpeg 옆에 ffprobe가 있을 수 있음
+    try:
+        ff = TP.ffmpeg_path()
+        probe = Path(str(ff)).parent / "ffprobe"
+        if probe.is_file():
+            return str(probe)
+    except Exception:
+        pass
+    return "ffprobe"
+
+
+def _get_video_metadata(video_path: Path) -> dict:
+    """ffprobe로 비디오 메타데이터 추출. ffprobe 없으면 기본값 반환."""
+    import subprocess as _sp, json as _json
+    try:
+        r = _sp.run(
+            [_ffprobe_path(), "-v", "quiet", "-print_format", "json",
+             "-show_streams", "-show_format", str(video_path)],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        info = _json.loads(r.stdout or "{}")
+    except Exception:
+        info = {}
+    video_stream = next(
+        (s for s in info.get("streams", []) if s.get("codec_type") == "video"), {}
+    )
+    w = int(video_stream.get("width") or 1280)
+    h = int(video_stream.get("height") or 720)
+    fps = 24.0
+    for key in ("r_frame_rate", "avg_frame_rate"):
+        val = str(video_stream.get(key) or "")
+        if "/" in val:
+            try:
+                num, den = (int(x) for x in val.split("/"))
+                if den > 0:
+                    fps = num / den
+                    break
+            except Exception:
+                pass
+    fmt = info.get("format", {})
+    try:
+        duration = float(fmt.get("duration") or 0)
+    except Exception:
+        duration = 0.0
+    size = int(fmt.get("size") or video_path.stat().st_size)
+    nb_frames = str(video_stream.get("nb_frames") or "")
+    if nb_frames and nb_frames != "N/A":
+        try:
+            frame_count = int(nb_frames)
+        except Exception:
+            frame_count = max(1, int(round(fps * duration)))
+    else:
+        frame_count = max(1, int(round(fps * duration)))
+    container = video_path.suffix.lower().lstrip(".") or "mp4"
+    return {
+        "width": w, "height": h, "fps": round(fps, 3),
+        "duration": round(duration, 2), "size": size,
+        "frame_count": frame_count, "container": container,
+    }
+
+
+def _topaz_cloud_output_res(src_w: int, src_h: int, scale: str) -> tuple[int, int]:
+    landscape = src_w >= src_h
+    if scale == "4k":
+        return (3840, 2160) if landscape else (2160, 3840)
+    if scale == "2x":
+        return src_w * 2, src_h * 2
+    # 1080p default
+    return (1920, 1080) if landscape else (1080, 1920)
+
+
+def _run_topaz_cloud_api(
+    job_id: str,
+    video_path: Path,
+    stem: str,
+    api_key: str,
+    model: str = "slp-2",
+    output_scale: str = "1080p",
+) -> None:
+    """Topaz Labs Cloud API로 영상 업스케일링."""
+    import requests as _req, time as _time
+    out_dir = _job_dir(job_id)
+    final_path = out_dir / f"{stem}_topaz_cloud.mp4"
+    headers = {"X-API-Key": api_key, "accept": "application/json"}
+
+    try:
+        _set_job(job_id, phase="topaz_cloud", message="비디오 메타데이터 분석 중…", error=None,
+                 grok_progress=None, xai_request_id=None)
+        meta = _get_video_metadata(video_path)
+        out_w, out_h = _topaz_cloud_output_res(meta["width"], meta["height"], output_scale)
+
+        # 1단계: 요청 생성
+        _set_job(job_id, message="Topaz Cloud API 요청 생성 중…")
+        create_body = {
+            "source": {
+                "resolution": {"width": meta["width"], "height": meta["height"]},
+                "container": meta["container"],
+                "size": meta["size"],
+                "duration": meta["duration"],
+                "frameRate": meta["fps"],
+                "frameCount": meta["frame_count"],
+            },
+            "output": {
+                "resolution": {"width": out_w, "height": out_h},
+                "audioCodec": "AAC",
+                "audioTransfer": "Copy",
+                "frameRate": meta["fps"],
+                "dynamicCompressionLevel": "High",
+                "container": "mp4",
+            },
+            "filters": [{"model": model}],
+        }
+        r1 = _req.post(
+            f"{TOPAZ_API_BASE}/video/",
+            headers={**headers, "content-type": "application/json"},
+            json=create_body, timeout=30,
+        )
+        if not r1.ok:
+            raise RuntimeError(f"요청 생성 실패 ({r1.status_code}): {r1.text[:500]}")
+        data1 = r1.json()
+        request_id = data1.get("requestId") or data1.get("request_id")
+        if not request_id:
+            raise RuntimeError(f"requestId 없음: {data1}")
+        credit_est = data1.get("creditEstimate") or data1.get("credit_estimate") or "?"
+        _set_job(job_id, message=f"요청 승인 중… (크레딧 예상: {credit_est})",
+                 topaz_cloud_request_id=request_id)
+
+        # 2단계: 요청 수락 → S3 업로드 URL 받기
+        r2 = _req.patch(
+            f"{TOPAZ_API_BASE}/video/{request_id}/accept",
+            headers=headers, timeout=30,
+        )
+        if not r2.ok:
+            raise RuntimeError(f"요청 승인 실패 ({r2.status_code}): {r2.text[:500]}")
+        data2 = r2.json()
+        urls = data2.get("urls") or []
+        if not urls:
+            raise RuntimeError(f"업로드 URL 없음: {data2}")
+
+        # 3단계: S3로 영상 업로드
+        _set_job(job_id, message=f"영상 파일 업로드 중… ({meta['size'] // (1024*1024)} MB)")
+        ext = video_path.suffix.lower()
+        ct_map = {".mp4": "video/mp4", ".mov": "video/quicktime",
+                  ".mkv": "video/x-matroska", ".m4v": "video/x-m4v",
+                  ".avi": "video/x-msvideo", ".webm": "video/webm"}
+        content_type = ct_map.get(ext, "video/mp4")
+        upload_results = []
+        for i, upload_url in enumerate(urls):
+            with open(video_path, "rb") as fh:
+                r3 = _req.put(
+                    upload_url,
+                    data=fh,
+                    headers={"Content-Type": content_type},
+                    timeout=900,
+                )
+            if not r3.ok:
+                raise RuntimeError(f"파일 업로드 실패 ({r3.status_code}): {r3.text[:200]}")
+            etag = r3.headers.get("ETag", "").strip('"')
+            upload_results.append({"partNum": i + 1, "eTag": etag})
+
+        # 4단계: 업로드 완료 신호
+        _set_job(job_id, message="업로드 완료 확인 중…")
+        r4 = _req.patch(
+            f"{TOPAZ_API_BASE}/video/{request_id}/complete-upload",
+            headers={**headers, "content-type": "application/json"},
+            json={"uploadResults": upload_results}, timeout=30,
+        )
+        if not r4.ok:
+            raise RuntimeError(f"업로드 완료 신호 실패 ({r4.status_code}): {r4.text[:500]}")
+
+        # 5단계: 처리 완료 폴링
+        _set_job(job_id, message="Topaz 클라우드 처리 중… (보통 수 분 소요)")
+        wait = 5.0
+        while True:
+            _time.sleep(wait)
+            wait = min(wait * 1.4, 30.0)
+            r5 = _req.get(
+                f"{TOPAZ_API_BASE}/video/{request_id}/status",
+                headers=headers, timeout=30,
+            )
+            if not r5.ok:
+                if r5.status_code == 429:
+                    _time.sleep(10)
+                    continue
+                raise RuntimeError(f"상태 조회 실패 ({r5.status_code}): {r5.text[:200]}")
+            data5 = r5.json()
+            status = (data5.get("status") or "").lower()
+            if status == "completed":
+                output_url = (data5.get("output") or {}).get("url")
+                if not output_url:
+                    raise RuntimeError("처리 완료됐지만 다운로드 URL이 없습니다.")
+                break
+            if status in ("failed", "error"):
+                err_msg = data5.get("error") or data5.get("message") or "알 수 없는 오류"
+                raise RuntimeError(f"Topaz 클라우드 처리 실패: {err_msg}")
+            pct = data5.get("progress") or ""
+            msg = f"Topaz 클라우드 처리 중… ({pct}%)" if pct else "Topaz 클라우드 처리 중…"
+            _set_job(job_id, message=msg)
+
+        # 6단계: 결과 다운로드
+        _set_job(job_id, message="완료된 영상 다운로드 중…")
+        r6 = _req.get(output_url, stream=True, timeout=900)
+        if not r6.ok:
+            raise RuntimeError(f"결과 다운로드 실패 ({r6.status_code})")
+        with open(final_path, "wb") as fh:
+            for chunk in r6.iter_content(chunk_size=131072):
+                if chunk:
+                    fh.write(chunk)
+
+        _set_job(
+            job_id, phase="done",
+            message=f"완료 (Topaz Cloud API · {model} · {output_scale})",
+            final_mp4=str(final_path), error=None,
+        )
+    except Exception as e:
+        _set_job(job_id, phase="failed", error=str(e), message="오류가 발생했습니다.")
+
+
+
+
 
 def _run_topaz_only(
     job_id: str,
@@ -472,7 +700,15 @@ def _run_topaz_only(
     topaz_ffmpeg: str | None,
     topaz_extra: str,
     use_topaz_preset: bool = False,
+    topaz_cloud_key: str = "",
+    topaz_cloud_model: str = "slp-2",
+    topaz_cloud_scale: str = "1080p",
 ) -> None:
+    # 클라우드 API 키가 있으면 로컬 FFmpeg 대신 클라우드 처리
+    if topaz_cloud_key:
+        _run_topaz_cloud_api(job_id, video_path, stem,
+                             topaz_cloud_key, topaz_cloud_model, topaz_cloud_scale)
+        return
     out = _job_dir(job_id)
     final_path = out / f"{stem}_topaz_out.mp4"
     vf_s = (topaz_vf or "").strip()
@@ -937,17 +1173,22 @@ def create_job():
     topaz_extra = request.form.get("topaz_extra") or ""
 
     if mode == "topaz_only":
+        topaz_cloud_key = (request.form.get("topaz_cloud_key") or "").strip()
+        topaz_cloud_model = (request.form.get("topaz_cloud_model") or "slp-2").strip()
+        topaz_cloud_scale = (request.form.get("topaz_cloud_scale") or "1080p").strip()
         use_preset = request.form.get("use_topaz_preset") == "1"
         vf = topaz_vf.strip()
-        if not use_preset:
-            if not vf and not topaz_filter_complex:
-                return jsonify(
-                    {"error": "프리셋을 끈 경우 Topaz -vf 또는 -filter_complex 중 하나를 입력하세요."}
-                ), 400
-            if vf and topaz_filter_complex:
-                return jsonify(
-                    {"error": "-vf와 -filter_complex를 동시에 넣을 수 없습니다. 하나만 비우세요."}
-                ), 400
+        # 클라우드 API를 쓰지 않을 때만 로컬 필터 검증
+        if not topaz_cloud_key:
+            if not use_preset:
+                if not vf and not topaz_filter_complex:
+                    return jsonify(
+                        {"error": "프리셋을 끈 경우 Topaz -vf 또는 -filter_complex 중 하나를 입력하세요."}
+                    ), 400
+                if vf and topaz_filter_complex:
+                    return jsonify(
+                        {"error": "-vf와 -filter_complex를 동시에 넣을 수 없습니다. 하나만 비우세요."}
+                    ), 400
         if "video" not in request.files:
             return jsonify({"error": "영상 파일을 선택하세요."}), 400
         fv = request.files["video"]
@@ -970,6 +1211,7 @@ def create_job():
                 "message": "곧 Topaz 처리를 시작합니다…",
                 "grok_progress": None,
                 "xai_request_id": None,
+                "topaz_cloud_request_id": None,
                 "raw_mp4": str(dest),
                 "final_mp4": None,
                 "error": None,
@@ -987,6 +1229,9 @@ def create_job():
                 "topaz_ffmpeg": topaz_ffmpeg,
                 "topaz_extra": topaz_extra,
                 "use_topaz_preset": use_preset,
+                "topaz_cloud_key": topaz_cloud_key,
+                "topaz_cloud_model": topaz_cloud_model,
+                "topaz_cloud_scale": topaz_cloud_scale,
             },
             daemon=True,
         )
