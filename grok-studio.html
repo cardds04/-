@@ -1186,6 +1186,32 @@
         outline: 2px solid #059669;
         outline-offset: 2px;
       }
+      .wf-settings-details {
+        margin: 1rem 0 0.5rem;
+        border: 1px solid #bbf7d0;
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: #f0fdf4;
+      }
+      .wf-settings-summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 0.65rem 1rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #047857;
+        background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+        user-select: none;
+      }
+      .wf-settings-summary::-webkit-details-marker {
+        display: none;
+      }
+      .wf-settings-details .wf-settings-row {
+        margin: 0;
+        border: none;
+        border-radius: 0;
+        border-top: 1px solid #bbf7d0;
+      }
       .wf-settings-row {
         display: flex;
         flex-direction: column;
@@ -1241,6 +1267,28 @@
       .wf-item__body {
         display: grid;
         grid-template-columns: 1fr 1fr;
+      }
+      .wf-item__tuning-details {
+        border-bottom: 1px solid var(--line);
+      }
+      .wf-item__tuning-summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #047857;
+        background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+        user-select: none;
+      }
+      .wf-item__tuning-summary::-webkit-details-marker {
+        display: none;
+      }
+      .wf-item__tuning-details[open] .wf-item__tuning-summary {
+        box-shadow: inset 0 -1px 0 #bbf7d0;
+      }
+      .wf-item__tuning-details .wf-item__tuning {
+        border-bottom: none;
       }
       .wf-item__tuning {
         padding: 0.65rem 0.75rem 0.75rem;
@@ -1989,7 +2037,8 @@
           원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 Gemini가 보정된 이미지를 만듭니다.
           <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
-          프롬프트·페더·선명도·색조·불투명도는 <strong>설정 저장</strong>을 누르면 이 브라우저에만 보관되며, 다음에 페이지를 열면 자동으로 불러옵니다.
+          프롬프트와 일괄 보정값은 아래 <strong>메인</strong> 칸에서 저장할 수 있으며, 장마다 다르게 하려면 각 카드의
+          <strong>「개별 프롬프트·보정」</strong>을 펼치세요.
         </p>
 
         <label class="drop" id="wfDropzone" tabindex="0" aria-label="원본 사진 선택 또는 끌어다 놓기">
@@ -1998,20 +2047,59 @@
           <span class="drop__name" id="wfDropName"></span>
         </label>
 
+        <details class="wf-settings-details">
+          <summary class="wf-settings-summary">메인: 프롬프트·일괄 보정·실행 — 눌러 펼치기</summary>
         <div class="wf-settings-row">
           <div class="wf-settings-col">
-            <label class="label" for="wfPrompt">생성 프롬프트</label>
+            <label class="label" for="wfPrompt">생성 프롬프트 (일괄 기본)</label>
             <textarea
               id="wfPrompt"
               rows="3"
               style="width: 100%; resize: vertical"
             >창문 밖 풍경을 자연스럽게 보정해주세요. 실내와 외부의 밝기 차이로 인해 과노출된 창문 부분을 정상적인 노출로 수정하고, 하늘과 외부 풍경이 선명하게 보이도록 해주세요. 전체적인 실내 분위기는 그대로 유지해주세요.</textarea>
-            <p class="hint" style="font-size: 0.78rem; margin: 0.45rem 0 0">
-              페더·선명도·색조·불투명도는 <strong>각 사진 카드</strong>에서 따로 조절합니다. 「설정 저장」은 프롬프트와
-              <strong>첫 번째 카드</strong>의 보정 값을 다음 방문 시 새 카드 기본값으로 불러옵니다.
+            <div class="wf-main-tuning" style="margin-top: 0.75rem">
+              <div style="margin-bottom: 0.65rem">
+                <label class="label" for="wfFeather">페더 값 (일괄 기본)</label>
+                <div class="wf-range-row">
+                  <input type="range" id="wfFeather" min="0" max="300" value="40" />
+                  <span class="wf-range-val"><span id="wfFeatherVal">40</span> px</span>
+                </div>
+                <p class="hint" style="font-size: 0.78rem; margin: 0">선택 영역 경계의 부드러운 전환 범위</p>
+              </div>
+              <div style="margin-bottom: 0.65rem">
+                <label class="label" for="wfSharpen">선명도 강화 (일괄 기본)</label>
+                <div class="wf-range-row">
+                  <input type="range" id="wfSharpen" min="0" max="30" value="15" />
+                  <span class="wf-range-val"><span id="wfSharpenVal">1.5</span>×</span>
+                </div>
+                <p class="hint" style="font-size: 0.78rem; margin: 0">AI 업스케일 후 선명도 보정 강도</p>
+              </div>
+              <div style="margin-bottom: 0.65rem">
+                <label class="label" for="wfTintRg">색조 빨강 ↔ 초록 (일괄 기본)</label>
+                <div class="wf-range-row wf-range-row--tint">
+                  <span class="wf-range-tick" aria-hidden="true">빨강</span>
+                  <input type="range" id="wfTintRg" min="-40" max="40" value="0" step="1" />
+                  <span class="wf-range-tick" aria-hidden="true">초록</span>
+                </div>
+                <div class="wf-range-row" style="margin-top: 0.25rem">
+                  <span class="wf-range-val" style="flex: 1; text-align: center"><span id="wfTintRgVal">0</span></span>
+                </div>
+              </div>
+              <div>
+                <label class="label" for="wfAiOpacity">생성 영역 불투명도 (일괄 기본)</label>
+                <div class="wf-range-row">
+                  <input type="range" id="wfAiOpacity" min="0" max="100" value="100" step="1" />
+                  <span class="wf-range-val"><span id="wfAiOpacityVal">100</span>%</span>
+                </div>
+              </div>
+            </div>
+            <p class="hint" style="font-size: 0.78rem; margin: 0.5rem 0 0">
+              평소에는 여기서 정한 값으로 모든 사진이 동작합니다. 특정 장만 다르게 하려면 해당 카드에서
+              <strong>「개별 프롬프트·보정」</strong>을 펼치세요. <strong>일괄 설정 저장</strong>은 이 브라우저에 프롬프트와 위 보정값을
+              다음 방문 시 기본으로 불러옵니다.
             </p>
             <div class="wf-prefs-save-row" style="margin-top: 0.65rem">
-              <button type="button" class="btn--mini-save" id="wfSavePrefs">설정 저장</button>
+              <button type="button" class="btn--mini-save" id="wfSavePrefs">일괄 설정 저장</button>
               <span id="wfPrefsStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
             </div>
           </div>
@@ -2021,6 +2109,7 @@
             <button type="button" class="btn--ghost" id="wfClearAll">초기화</button>
           </div>
         </div>
+        </details>
 
         <div id="wfError" class="error" style="display: none; margin-bottom: 0.5rem"></div>
         <div id="wfGrid" class="wf-grid"></div>
@@ -4470,7 +4559,15 @@
         var wfFiles = document.getElementById('wfFiles');
         var wfDropName = document.getElementById('wfDropName');
         var wfPromptEl = document.getElementById('wfPrompt');
-        /* 새 카드 기본값 · 저장 시 첫 카드와 동기 (전역 슬라이더 없음) */
+        var wfFeatherEl = document.getElementById('wfFeather');
+        var wfFeatherValEl = document.getElementById('wfFeatherVal');
+        var wfSharpenEl = document.getElementById('wfSharpen');
+        var wfSharpenValEl = document.getElementById('wfSharpenVal');
+        var wfTintRgEl = document.getElementById('wfTintRg');
+        var wfTintRgValEl = document.getElementById('wfTintRgVal');
+        var wfAiOpacityEl = document.getElementById('wfAiOpacity');
+        var wfAiOpacityValEl = document.getElementById('wfAiOpacityVal');
+        /* 일괄 설정 저장 시 유지 · 로드 시 메인 슬라이더와 동기 */
         var wfDefaults = {
           feather: 40,
           sharpen: 15,
@@ -4490,7 +4587,69 @@
         var LS_WF_PREFS = 'grok_studio_window_fix_prefs_v1';
         var wfPrefsStatusTimer = null;
 
-        if (!wfDropzone || !wfGrid) return;
+        if (!wfDropzone || !wfGrid || !wfPromptEl || !wfFeatherEl || !wfSharpenEl) return;
+
+        function syncMainRangeDisplay() {
+          if (wfFeatherValEl && wfFeatherEl) wfFeatherValEl.textContent = wfFeatherEl.value;
+          if (wfSharpenValEl && wfSharpenEl) {
+            wfSharpenValEl.textContent = (parseInt(wfSharpenEl.value, 10) / 10).toFixed(1);
+          }
+          if (wfTintRgValEl && wfTintRgEl) wfTintRgValEl.textContent = wfTintRgEl.value;
+          if (wfAiOpacityValEl && wfAiOpacityEl) wfAiOpacityValEl.textContent = wfAiOpacityEl.value;
+        }
+
+        function applyMainSlidersFromDefaults() {
+          wfFeatherEl.value = String(wfDefaults.feather);
+          wfSharpenEl.value = String(wfDefaults.sharpen);
+          if (wfTintRgEl) wfTintRgEl.value = String(wfDefaults.tintRg);
+          if (wfAiOpacityEl) wfAiOpacityEl.value = String(wfDefaults.aiOpacity);
+          syncMainRangeDisplay();
+        }
+
+        function readMainTuning() {
+          var feather = Math.min(300, Math.max(0, parseInt(wfFeatherEl.value, 10) || 0));
+          var sharpenRaw = Math.min(30, Math.max(0, parseInt(wfSharpenEl.value, 10) || 0));
+          var tintRg = wfTintRgEl ? Math.min(40, Math.max(-40, parseInt(wfTintRgEl.value, 10) || 0)) : wfDefaults.tintRg;
+          var aiOpacity = wfAiOpacityEl
+            ? Math.min(100, Math.max(0, parseInt(wfAiOpacityEl.value, 10) || 0))
+            : wfDefaults.aiOpacity;
+          return {
+            feather: feather,
+            sharpenAmt: sharpenRaw / 10,
+            tintRg: tintRg,
+            aiOpacity: aiOpacity,
+          };
+        }
+
+        function snapshotCardTuningFromInputs(item) {
+          var feather = Math.min(300, Math.max(0, parseInt(item.featherEl.value, 10) || 0));
+          var sharpenRaw = Math.min(30, Math.max(0, parseInt(item.sharpenEl.value, 10) || 0));
+          var tintRg = Math.min(40, Math.max(-40, parseInt(item.tintRgEl.value, 10) || 0));
+          var aiOpacity = Math.min(100, Math.max(0, parseInt(item.aiOpacityEl.value, 10) || 0));
+          return {
+            feather: feather,
+            sharpenAmt: sharpenRaw / 10,
+            tintRg: tintRg,
+            aiOpacity: aiOpacity,
+          };
+        }
+
+        function syncCardTuningUIFromMain(item) {
+          if (!item.featherEl) return;
+          var m = readMainTuning();
+          item.featherEl.value = String(m.feather);
+          item.sharpenEl.value = String(Math.round(m.sharpenAmt * 10));
+          item.tintRgEl.value = String(m.tintRg);
+          item.aiOpacityEl.value = String(m.aiOpacity);
+          syncItemTuningLabels(item);
+        }
+
+        function effectivePromptForItem(item) {
+          var globalPrompt = String(wfPromptEl.value || '').trim();
+          if (!item.perPromptEl) return globalPrompt;
+          var local = String(item.perPromptEl.value || '').trim();
+          return local.length ? String(item.perPromptEl.value || '') : globalPrompt;
+        }
 
         function syncItemTuningLabels(item) {
           if (!item || !item.featherEl) return;
@@ -4518,12 +4677,9 @@
             if (!isNaN(t) && t >= -40 && t <= 40) wfDefaults.tintRg = t;
             var op = parseInt(o.aiOpacity, 10);
             if (!isNaN(op) && op >= 0 && op <= 100) wfDefaults.aiOpacity = op;
+            applyMainSlidersFromDefaults();
             wfItems.forEach(function (item) {
-              if (item.featherEl) item.featherEl.value = String(wfDefaults.feather);
-              if (item.sharpenEl) item.sharpenEl.value = String(wfDefaults.sharpen);
-              if (item.tintRgEl) item.tintRgEl.value = String(wfDefaults.tintRg);
-              if (item.aiOpacityEl) item.aiOpacityEl.value = String(wfDefaults.aiOpacity);
-              syncItemTuningLabels(item);
+              if (!item.tuningLocal) syncCardTuningUIFromMain(item);
               if (item.ctx) drawCanvas(item);
             });
             schedulePreviewRefreshAll();
@@ -4533,25 +4689,19 @@
         }
 
         function readItemTuning(item) {
-          var feather = Math.min(300, Math.max(0, parseInt(item.featherEl.value, 10) || 0));
-          var sharpenRaw = Math.min(30, Math.max(0, parseInt(item.sharpenEl.value, 10) || 0));
-          var tintRg = Math.min(40, Math.max(-40, parseInt(item.tintRgEl.value, 10) || 0));
-          var aiOpacity = Math.min(100, Math.max(0, parseInt(item.aiOpacityEl.value, 10) || 0));
-          return {
-            feather: feather,
-            sharpenAmt: sharpenRaw / 10,
-            tintRg: tintRg,
-            aiOpacity: aiOpacity,
-          };
+          if (item.tuningLocal) return item.tuningLocal;
+          return readMainTuning();
         }
 
         function attachItemTuningListeners(item) {
           function onFeather() {
+            item.tuningLocal = snapshotCardTuningFromInputs(item);
             syncItemTuningLabels(item);
             if (item.ctx) drawCanvas(item);
             schedulePreviewRefreshAll();
           }
           function onOther() {
+            item.tuningLocal = snapshotCardTuningFromInputs(item);
             syncItemTuningLabels(item);
             schedulePreviewRefreshAll();
           }
@@ -4562,8 +4712,63 @@
         }
 
         function buildItemTuningEl(item) {
+          var details = document.createElement('details');
+          details.className = 'wf-item__tuning-details';
+
+          var summary = document.createElement('summary');
+          summary.className = 'wf-item__tuning-summary';
+          summary.textContent = '개별 프롬프트·보정 — 눌러 펼치기';
+
           var tun = document.createElement('div');
           tun.className = 'wf-item__tuning';
+
+          function mkPerPrompt() {
+            var wrap = document.createElement('div');
+            wrap.style.marginBottom = '0.65rem';
+            var lab = document.createElement('label');
+            lab.className = 'label';
+            lab.textContent = '이 사진만 다른 프롬프트 (선택)';
+            var ta = document.createElement('textarea');
+            ta.rows = 2;
+            ta.style.width = '100%';
+            ta.style.resize = 'vertical';
+            ta.style.boxSizing = 'border-box';
+            ta.setAttribute('placeholder', '비워 두면 메인 프롬프트로 생성합니다');
+            item.perPromptEl = ta;
+            var hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.margin = '0.25rem 0 0';
+            hint.textContent =
+              '프롬프트만 바꿀 수 있습니다. 슬라이더를 움직이면 이 카드만 페더·선명도 등이 따로 저장됩니다.';
+            wrap.appendChild(lab);
+            wrap.appendChild(ta);
+            wrap.appendChild(hint);
+            tun.appendChild(wrap);
+          }
+
+          function mkResetRow() {
+            var row = document.createElement('div');
+            row.style.marginBottom = '0.65rem';
+            row.style.display = 'flex';
+            row.style.flexWrap = 'wrap';
+            row.style.gap = '0.5rem';
+            row.style.alignItems = 'center';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn--ghost';
+            btn.style.fontSize = '0.78rem';
+            btn.style.padding = '0.35rem 0.65rem';
+            btn.textContent = '메인과 동일하게';
+            btn.addEventListener('click', function () {
+              item.tuningLocal = null;
+              if (item.perPromptEl) item.perPromptEl.value = '';
+              syncCardTuningUIFromMain(item);
+              if (item.ctx) drawCanvas(item);
+              schedulePreviewRefreshAll();
+            });
+            row.appendChild(btn);
+            tun.appendChild(row);
+          }
 
           function mkFeather() {
             var wrap = document.createElement('div');
@@ -4715,13 +4920,24 @@
             tun.appendChild(wrap);
           }
 
+          mkPerPrompt();
+          mkResetRow();
           mkFeather();
           mkSharpen();
           mkTint();
           mkOpacity();
           attachItemTuningListeners(item);
           syncItemTuningLabels(item);
-          return tun;
+
+          details.appendChild(summary);
+          details.appendChild(tun);
+          details.addEventListener('toggle', function () {
+            if (details.open && !item.tuningLocal) syncCardTuningUIFromMain(item);
+            summary.textContent = details.open
+              ? '개별 프롬프트·보정 — 접기'
+              : '개별 프롬프트·보정 — 눌러 펼치기';
+          });
+          return details;
         }
 
         function showWfError(msg) {
@@ -4795,6 +5011,8 @@
             previewEverShown: false,
             previewRegenBtn: null,
             previewCompositeBtn: null,
+            tuningLocal: null,
+            perPromptEl: null,
           };
         }
 
@@ -4993,8 +5211,8 @@
             ctx.setLineDash([]);
 
             /* 페더 범위 표시 */
-            var featherPx = item.featherEl ? parseInt(item.featherEl.value, 10) || 0 : 0;
-            var f = featherPx * sc;
+            var tun = readItemTuning(item);
+            var f = tun.feather * sc;
             if (f > 0) {
               ctx.strokeStyle = 'rgba(34,197,94,0.4)';
               ctx.lineWidth = 1;
@@ -5102,8 +5320,11 @@
         /* ---- Gemini 이미지 생성 ---- */
         function generateForItem(item) {
           if (!item.origImg) { showWfError('이미지가 아직 로드되지 않았습니다.'); return; }
-          var prompt = (wfPromptEl.value || '').trim();
-          if (!prompt) { showWfError('프롬프트를 입력해 주세요.'); return; }
+          var prompt = effectivePromptForItem(item).trim();
+          if (!prompt) {
+            showWfError('프롬프트를 입력해 주세요. (메인 영역 또는 이 카드 개별 프롬프트)');
+            return;
+          }
 
           item.status = 'generating';
           item.el.className = 'wf-item wf-item--generating';
@@ -5487,6 +5708,30 @@
           if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
         });
 
+        wfFeatherEl.addEventListener('input', function () {
+          syncMainRangeDisplay();
+          wfItems.forEach(function (item) {
+            if (!item.tuningLocal && item.ctx) drawCanvas(item);
+          });
+          schedulePreviewRefreshAll();
+        });
+        wfSharpenEl.addEventListener('input', function () {
+          syncMainRangeDisplay();
+          schedulePreviewRefreshAll();
+        });
+        if (wfTintRgEl) {
+          wfTintRgEl.addEventListener('input', function () {
+            syncMainRangeDisplay();
+            schedulePreviewRefreshAll();
+          });
+        }
+        if (wfAiOpacityEl) {
+          wfAiOpacityEl.addEventListener('input', function () {
+            syncMainRangeDisplay();
+            schedulePreviewRefreshAll();
+          });
+        }
+
         wfGenAllBtn.addEventListener('click', function () {
           wfItems.forEach(function (item) {
             if (item.status !== 'generating') generateForItem(item);
@@ -5513,27 +5758,20 @@
         if (wfSavePrefsBtn) {
           wfSavePrefsBtn.addEventListener('click', function () {
             try {
-              var feather = wfDefaults.feather;
-              var sharpen = wfDefaults.sharpen;
-              var tintRg = wfDefaults.tintRg;
-              var aiOpacity = wfDefaults.aiOpacity;
-              if (wfItems.length && wfItems[0].featherEl) {
-                var t0 = readItemTuning(wfItems[0]);
-                feather = t0.feather;
-                sharpen = Math.min(30, Math.max(0, Math.round(t0.sharpenAmt * 10)));
-                tintRg = t0.tintRg;
-                aiOpacity = t0.aiOpacity;
-              }
-              wfDefaults.feather = feather;
-              wfDefaults.sharpen = sharpen;
-              wfDefaults.tintRg = tintRg;
-              wfDefaults.aiOpacity = aiOpacity;
+              var m = readMainTuning();
+              wfDefaults.feather = m.feather;
+              wfDefaults.sharpen = Math.min(30, Math.max(0, Math.round(m.sharpenAmt * 10)));
+              wfDefaults.tintRg = m.tintRg;
+              wfDefaults.aiOpacity = m.aiOpacity;
+              wfItems.forEach(function (item) {
+                if (!item.tuningLocal) syncCardTuningUIFromMain(item);
+              });
               var payload = {
                 prompt: String(wfPromptEl.value || ''),
-                feather: feather,
-                sharpen: sharpen,
-                tintRg: tintRg,
-                aiOpacity: aiOpacity,
+                feather: wfDefaults.feather,
+                sharpen: wfDefaults.sharpen,
+                tintRg: wfDefaults.tintRg,
+                aiOpacity: wfDefaults.aiOpacity,
               };
               localStorage.setItem(LS_WF_PREFS, JSON.stringify(payload));
               showWfError('');
@@ -5549,6 +5787,16 @@
             } catch (e) {
               showWfError('설정을 저장할 수 없습니다: ' + (e.message || String(e)));
             }
+          });
+        }
+
+        var wfSettingsDetailsEl = document.querySelector('#windowFixBlock .wf-settings-details');
+        var wfSettingsSummaryEl = document.querySelector('#windowFixBlock .wf-settings-summary');
+        if (wfSettingsDetailsEl && wfSettingsSummaryEl) {
+          wfSettingsDetailsEl.addEventListener('toggle', function () {
+            wfSettingsSummaryEl.textContent = wfSettingsDetailsEl.open
+              ? '메인: 프롬프트·일괄 보정·실행 — 접기'
+              : '메인: 프롬프트·일괄 보정·실행 — 눌러 펼치기';
           });
         }
 
