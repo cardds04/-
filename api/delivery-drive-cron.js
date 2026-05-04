@@ -17,6 +17,8 @@
  * 준비: Google Drive에서 PARENT 폴더를 해당 서비스계정 메일 주소와 공유(편집자).
  *
  * 배포 후: Supabase SQL 마이그레이션 실행 (shoot_delivery_drive_state 테이블).
+ *
+ * Vercel Hobby: 크론은 하루 1회까지만 허용되어 `0 15 * * *`(UTC) 로 등록됨 = 한국 시간 자정.
  */
 const { runDeliveryDriveJob } = require("../lib/delivery-drive-run.cjs");
 
