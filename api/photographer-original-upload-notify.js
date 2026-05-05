@@ -1,8 +1,8 @@
 /**
- * POST JSON { writerLoginId, writerPassword, scheduleIds: string[] }
- * → { ok: true, doneScheduleIds: string[], deliveryByScheduleId: Record<id, {...}> }
+ * POST JSON { writerLoginId, writerPassword, scheduleId }
+ * → 원본 업로드 완료 고객 안내 문자
  */
-const { listPhotographerShootPanel } = require("../lib/photographer-shoot-logic.cjs");
+const { notifyPhotographerOriginalUploadComplete } = require("../lib/photographer-shoot-logic.cjs");
 
 module.exports = async (req, res) => {
   if (req.method === "OPTIONS") {
@@ -23,18 +23,25 @@ module.exports = async (req, res) => {
         : JSON.parse(typeof req.body === "string" && req.body ? req.body : "{}");
     const writerLoginId = String(body.writerLoginId || "").trim();
     const writerPassword = String(body.writerPassword || "");
-    const scheduleIds = Array.isArray(body.scheduleIds) ? body.scheduleIds : [];
+    const scheduleId = String(body.scheduleId || "").trim();
 
-    const { doneScheduleIds, deliveryByScheduleId } = await listPhotographerShootPanel({
+    const out = await notifyPhotographerOriginalUploadComplete({
       writerLoginId,
       writerPassword,
-      scheduleIds,
+      scheduleId,
     });
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json({ ok: true, doneScheduleIds, deliveryByScheduleId });
+    if (!out.ok) {
+      const code = typeof out.code === "string" ? out.code : undefined;
+      const payload = code ? { ok: false, message: out.message || "실패", code } : { ok: false, message: out.message || "실패" };
+      res.status(out.status || 500).json(payload);
+      return;
+    }
+    res.status(200).json({ ok: true, ...out.data });
   } catch (error) {
-    console.error("[photographer-shoot-status]", error);
+    console.error("[photographer-original-upload-notify]", error);
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(500).json({ ok: false, message: error?.message || "서버 오류" });
   }
 };
