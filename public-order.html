@@ -356,26 +356,32 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 1.75em;
-        height: 1.75em;
+        min-height: 1.5em;
+        padding: 3px 9px;
         border-radius: 8px;
-        font-size: 1rem;
-        line-height: 1;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
         border: 1px solid rgba(22, 101, 52, 0.35);
         background: #fff;
+        white-space: nowrap;
       }
       .customer-del-ic--ok {
         background: #dcfce7;
         border-color: #86efac;
+        color: #14532d;
       }
       .customer-del-ic--wait {
-        opacity: 0.55;
-        filter: grayscale(0.2);
+        opacity: 0.72;
+        filter: grayscale(0.15);
         border-color: #cbd5e1;
         background: #f8fafc;
+        color: #475569;
       }
-      .customer-del-ic-sym {
-        font-size: 1.08rem;
+      .customer-del-ic-txt {
+        font-size: inherit;
+        font-weight: inherit;
       }
       .customer-del-sep {
         color: #15803d;
@@ -4479,9 +4485,9 @@
             ? "사진 납품 안내 문자 발송 완료 (관리 화면 「사진」과 동일)"
             : "사진 납품 안내 문자 발송 전 (관리 화면 「사진」과 동일)";
           const cls = pd ? "customer-del-ic customer-del-ic--ok" : "customer-del-ic customer-del-ic--wait";
-          const al = pd ? "사진 납품 완료" : "사진 납품 대기";
+          const label = pd ? "사진완료" : "사진미완료";
           parts.push(
-            `<span class="${cls}" role="img" aria-label="${escapeHtml(al)}" title="${escapeHtml(title)}"><span class="customer-del-ic-sym" aria-hidden="true">📷</span></span>`
+            `<span class="${cls}" title="${escapeHtml(title)}"><span class="customer-del-ic-txt">${escapeHtml(label)}</span></span>`
           );
         }
         if (nv) {
@@ -4489,9 +4495,9 @@
             ? "영상 납품 안내 문자 발송 완료 (관리 화면 「영상」과 동일)"
             : "영상 납품 안내 문자 발송 전 (관리 화면 「영상」과 동일)";
           const cls = vd ? "customer-del-ic customer-del-ic--ok" : "customer-del-ic customer-del-ic--wait";
-          const al = vd ? "영상 납품 완료" : "영상 납품 대기";
+          const label = vd ? "영상완료" : "영상미완료";
           parts.push(
-            `<span class="${cls}" role="img" aria-label="${escapeHtml(al)}" title="${escapeHtml(title)}"><span class="customer-del-ic-sym" aria-hidden="true">🎬</span></span>`
+            `<span class="${cls}" title="${escapeHtml(title)}"><span class="customer-del-ic-txt">${escapeHtml(label)}</span></span>`
           );
         }
         return `<span class="customer-del-strip">${parts.join("")}</span>`;
