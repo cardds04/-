@@ -112,6 +112,47 @@
         font-weight: 700;
         color: #166534;
         line-height: 1.35;
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        row-gap: 4px;
+      }
+      .customer-del-strip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        vertical-align: middle;
+      }
+      .customer-del-ic {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75em;
+        height: 1.75em;
+        border-radius: 8px;
+        font-size: 1rem;
+        line-height: 1;
+        border: 1px solid rgba(22, 101, 52, 0.35);
+        background: #fff;
+      }
+      .customer-del-ic--ok {
+        background: #dcfce7;
+        border-color: #86efac;
+      }
+      .customer-del-ic--wait {
+        opacity: 0.55;
+        filter: grayscale(0.2);
+        border-color: #cbd5e1;
+        background: #f8fafc;
+      }
+      .customer-del-ic-sym {
+        font-size: 1.08rem;
+      }
+      .customer-del-sep {
+        color: #166534;
+        font-weight: 800;
+        margin: 0 1px;
       }
       .status-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
       .small { font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; }
@@ -3239,47 +3280,101 @@
         return diffDays >= 4;
       }
 
+      function mergeCustomerSiteShootCompletionRows(rows) {
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const sid = String(row?.schedule_id || "")
+            .trim()
+            .toLowerCase();
+          if (!/^[0-9a-f-]{36}$/i.test(sid)) continue;
+          customerSiteShootCompletionMap.set(sid, {
+            done_at: row?.photographer_site_done_at || null,
+            thumb: row?.site_photo_thumbnail_url || "",
+            view: row?.site_photo_view_url || "",
+            work_url: row?.delivery_work_folder_url || "",
+            photo_notified_at: row?.photo_notified_at ?? null,
+            video_notified_at: row?.video_notified_at ?? null,
+          });
+        }
+      }
+
+      async function fetchCustomerSiteShootRpc(companyName, companyCode, scheduleIds) {
+        const uniq = [
+          ...new Set(
+            scheduleIds
+              .map((x) => String(x || "").trim().toLowerCase())
+              .filter((x) => /^[0-9a-f-]{36}$/i.test(x))
+          ),
+        ];
+        if (!uniq.length) return [];
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_CUSTOMER_SITE_SHOOT}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            p_company_name: companyName,
+            p_company_code: companyCode ?? "",
+            p_schedule_ids: uniq,
+          }),
+          cache: "no-store",
+        });
+        const rows = await res.json().catch(() => []);
+        if (!res.ok) {
+          console.warn("[customer-site-shoot]", rows);
+          return [];
+        }
+        return Array.isArray(rows) ? rows : [];
+      }
+
       async function refreshCustomerSiteShootCompletionMap(schedules) {
         customerSiteShootCompletionMap = new Map();
         if (!USE_SUPABASE_SYNC) return;
         const user = getCurrentSessionUser();
         if (!user || !schedules.length) return;
-        const ids = schedules
-          .map((r) => String(r?.customerScheduleId || "").trim())
-          .filter((x) => /^[0-9a-f-]{36}$/i.test(x));
-        if (!ids.length) return;
-        const companyName = String((schedules[0] && schedules[0].company) || user.company || "").trim();
-        const companyCode = String(getEffectiveUserCompanyCode(user) || "").trim();
-        try {
-          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_CUSTOMER_SITE_SHOOT}`, {
-            method: "POST",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              p_company_name: companyName,
-              p_company_code: companyCode,
-              p_schedule_ids: ids,
-            }),
-          });
-          const rows = await res.json().catch(() => []);
-          if (!res.ok) {
-            console.warn("[customer-site-shoot]", rows);
-            return;
+        const effCode = String(getEffectiveUserCompanyCode(user) || "").trim();
+        /** @type {Map<string, { companyName: string, companyCode: string }>} */
+        const idMeta = new Map();
+        for (const r of schedules) {
+          const id = String(r?.customerScheduleId || "")
+            .trim()
+            .toLowerCase();
+          if (!/^[0-9a-f-]{36}$/i.test(id)) continue;
+          const companyName = String(r?.company || user.company || "").trim();
+          const rowCode = String(r?.companyCode || r?.code || "").trim();
+          const companyCode = rowCode || effCode;
+          idMeta.set(id, { companyName, companyCode });
+        }
+        if (!idMeta.size) return;
+
+        const primaryGroups = new Map();
+        for (const [id, m] of idMeta) {
+          const gk = `${m.companyName}\x1f${m.companyCode}`;
+          if (!primaryGroups.has(gk)) {
+            primaryGroups.set(gk, { companyName: m.companyName, companyCode: m.companyCode, ids: [] });
           }
-          for (const row of Array.isArray(rows) ? rows : []) {
-            const sid = String(row?.schedule_id || "").trim();
-            if (!sid) continue;
-            customerSiteShootCompletionMap.set(sid, {
-              done_at: row?.photographer_site_done_at || null,
-              thumb: row?.site_photo_thumbnail_url || "",
-              view: row?.site_photo_view_url || "",
-              work_url: row?.delivery_work_folder_url || "",
-              photo_notified_at: row?.photo_notified_at ?? null,
-              video_notified_at: row?.video_notified_at ?? null,
-            });
+          primaryGroups.get(gk).ids.push(id);
+        }
+        try {
+          for (const g of primaryGroups.values()) {
+            const rows = await fetchCustomerSiteShootRpc(g.companyName, g.companyCode, g.ids);
+            mergeCustomerSiteShootCompletionRows(rows);
+          }
+          const missing = [...idMeta.keys()].filter((id) => !customerSiteShootCompletionMap.has(id));
+          if (missing.length) {
+            const byName = new Map();
+            for (const id of missing) {
+              const m = idMeta.get(id);
+              if (!m) continue;
+              const nk = m.companyName.toLowerCase();
+              if (!byName.has(nk)) byName.set(nk, { companyName: m.companyName, ids: [] });
+              byName.get(nk).ids.push(id);
+            }
+            for (const { companyName, ids } of byName.values()) {
+              const rows = await fetchCustomerSiteShootRpc(companyName, "", ids);
+              mergeCustomerSiteShootCompletionRows(rows);
+            }
           }
         } catch (error) {
           console.warn("[customer-site-shoot]", error);
@@ -3305,22 +3400,41 @@
         return Boolean(c && /영상/.test(c));
       }
 
-      /** 로컬 촬영구성 + RPC 납품 시각으로 문구 생성 */
-      function customerDeliveryStatusLabel(composition, info) {
+      /** 촬영구성·납품 문자 시각과 동일 기준으로 아이콘 표시(관리 대시보드 「사진」「영상」 배지와 같은 DB 필드). */
+      function customerDeliveryStatusStripHtml(composition, info) {
         const np = customerNeedsDeliveryPhotoPart(composition);
         const nv = customerNeedsDeliveryVideoPart(composition);
         if (!np && !nv) return "";
-        const pd = !!(info.photo_notified_at);
-        const vd = !!(info.video_notified_at);
-        if (np && nv)
-          return `${pd ? "사진완료" : "사진미완료"} ${vd ? "영상완료" : "영상미완료"}`;
-        if (np) return pd ? "사진완료" : "사진미완료";
-        return vd ? "영상완료" : "영상미완료";
+        const pd = !!(info && info.photo_notified_at);
+        const vd = !!(info && info.video_notified_at);
+        const parts = [];
+        if (np) {
+          const title = pd
+            ? "사진 납품 안내 문자 발송 완료 (관리 화면 「사진」과 동일)"
+            : "사진 납품 안내 문자 발송 전 (관리 화면 「사진」과 동일)";
+          const cls = pd ? "customer-del-ic customer-del-ic--ok" : "customer-del-ic customer-del-ic--wait";
+          const al = pd ? "사진 납품 완료" : "사진 납품 대기";
+          parts.push(
+            `<span class="${cls}" role="img" aria-label="${escapeHtml(al)}" title="${escapeHtml(title)}"><span class="customer-del-ic-sym" aria-hidden="true">📷</span></span>`
+          );
+        }
+        if (nv) {
+          const title = vd
+            ? "영상 납품 안내 문자 발송 완료 (관리 화면 「영상」과 동일)"
+            : "영상 납품 안내 문자 발송 전 (관리 화면 「영상」과 동일)";
+          const cls = vd ? "customer-del-ic customer-del-ic--ok" : "customer-del-ic customer-del-ic--wait";
+          const al = vd ? "영상 납품 완료" : "영상 납품 대기";
+          parts.push(
+            `<span class="${cls}" role="img" aria-label="${escapeHtml(al)}" title="${escapeHtml(title)}"><span class="customer-del-ic-sym" aria-hidden="true">🎬</span></span>`
+          );
+        }
+        return `<span class="customer-del-strip">${parts.join("")}</span>`;
       }
 
       function formatCustomerSiteShootBlock(item) {
-        const sid = normalize(item?.customerScheduleId);
-        if (!sid) return "";
+        const sidRaw = normalize(item?.customerScheduleId);
+        if (!sidRaw) return "";
+        const sid = String(sidRaw).trim().toLowerCase();
         const info = customerSiteShootCompletionMap.get(sid);
         const past = isPastSchedule(item.date);
         if (info && info.done_at) {
@@ -3336,13 +3450,13 @@
             info.view && !info.thumb
               ? `<div style="margin-top:6px;"><a href="${escapeHtml(info.view)}" target="_blank" rel="noopener noreferrer">현장 사진 보기</a></div>`
               : "";
-          const statusLabel = customerDeliveryStatusLabel(item?.composition || "", info);
+          const statusStrip = customerDeliveryStatusStripHtml(item?.composition || "", info);
           const dl = customerShootDeadlineMdPlus10(item?.date || "");
           const metaExtra =
-            statusLabel || dl
+            statusStrip || dl
               ? `<span class="customer-site-delivery-meta">${
-                  statusLabel ? escapeHtml(statusLabel) : ""
-                }${statusLabel && dl ? " · " : ""}${
+                  statusStrip || ""
+                }${statusStrip && dl ? '<span class="customer-del-sep" aria-hidden="true">·</span>' : ""}${
                   dl ? `최종납품기한 ${escapeHtml(dl)}` : ""
                 }</span>`
               : "";
