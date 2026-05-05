@@ -1800,6 +1800,7 @@
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabPayroll" data-tab="payroll" type="button">작가 급여</button>
+        <button id="tabCompanyDirectory" data-tab="companyDirectory" type="button">업체정보관리</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
         <button id="tabThefeelingEdit" data-tab="thefeelingEdit" type="button">더필링 편집신청</button>
@@ -2151,6 +2152,87 @@
             <div id="photographerPayrollConfigRows"></div>
             <div id="photographerPayrollMonthlySummaryAdmin" style="margin-top: 12px;"></div>
           </div>
+        </article>
+      </section>
+
+      <section id="companyDirectorySection" class="hidden">
+        <article class="card">
+          <div class="schedule-head">
+            <h2>업체정보관리</h2>
+            <div class="head-right" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+              <button id="companyDirectoryRefreshBtn" class="btn-sm" type="button">목록 새로고침</button>
+            </div>
+          </div>
+          <p class="helper" style="margin-bottom: 10px;">
+            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지).
+          </p>
+          <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <input
+              id="companyDirectorySearchInput"
+              class="small-select"
+              type="text"
+              placeholder="업체명·로그인ID·연락처·코드 검색"
+              style="min-width: 220px;"
+            />
+            <span id="companyDirectoryCountHint" class="hint"></span>
+          </div>
+          <div style="overflow-x: auto; margin-bottom: 14px;">
+            <table class="payment-table">
+              <thead>
+                <tr>
+                  <th>업체명</th>
+                  <th>로그인 아이디</th>
+                  <th>연락처</th>
+                  <th>코드</th>
+                  <th>사이트</th>
+                </tr>
+              </thead>
+              <tbody id="companyDirectoryTabListBody"></tbody>
+            </table>
+          </div>
+          <div class="company-edit-row">
+            <div><strong>선택 행 수정 / 신규 등록</strong></div>
+            <input id="companyDirectoryEditRowId" type="hidden" value="" />
+            <div class="company-account-line">
+              <span class="company-account-label">업체명</span>
+              <input id="companyDirectoryNameInput" class="inline-input" type="text" placeholder="업체명" autocomplete="organization" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">전화번호</span>
+              <input id="companyDirectoryPhoneInput" class="inline-input" type="tel" placeholder="연락처" autocomplete="tel" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">로그인 아이디</span>
+              <input
+                id="companyDirectoryLoginInput"
+                class="inline-input"
+                type="text"
+                placeholder="고객 로그인 아이디 (미입력 시 계정 미연결 행으로 저장)"
+                autocomplete="username"
+              />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">비밀번호</span>
+              <input id="companyDirectoryPasswordInput" class="inline-input" type="text" placeholder="변경 시에만 입력 (신규는 필수)" autocomplete="new-password" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">고유번호</span>
+              <input id="companyDirectoryCodeInput" class="inline-input" type="text" placeholder="AUTO-… 또는 직접 입력" />
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">사이트</span>
+              <select id="companyDirectorySiteSelect" class="inline-select" style="width: 100%; max-width: 100%;">
+                <option value="inlog">인로그</option>
+                <option value="shopick">쇼픽</option>
+                <option value="thefeeling">더필링</option>
+              </select>
+            </div>
+            <div class="actions" style="margin-top: 8px; justify-content: flex-start; flex-wrap: wrap; gap: 6px;">
+              <button id="companyDirectorySaveBtn" class="btn-sm primary" type="button">저장</button>
+              <button id="companyDirectoryNewBtn" class="btn-sm" type="button">신규 입력란 비우기</button>
+            </div>
+          </div>
+          <div id="companyDirectorySaveHint" class="hint" style="margin-top: 8px;"></div>
         </article>
       </section>
 
@@ -5841,6 +5923,7 @@
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabPayrollEl = document.getElementById("tabPayroll");
+      const tabCompanyDirectoryEl = document.getElementById("tabCompanyDirectory");
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
@@ -5849,6 +5932,21 @@
       const scheduleSectionEl = document.getElementById("scheduleSection");
       const paymentSectionEl = document.getElementById("paymentSection");
       const payrollSectionEl = document.getElementById("payrollSection");
+      const companyDirectorySectionEl = document.getElementById("companyDirectorySection");
+      const companyDirectoryRefreshBtnEl = document.getElementById("companyDirectoryRefreshBtn");
+      const companyDirectorySearchInputEl = document.getElementById("companyDirectorySearchInput");
+      const companyDirectoryCountHintEl = document.getElementById("companyDirectoryCountHint");
+      const companyDirectoryTabListBodyEl = document.getElementById("companyDirectoryTabListBody");
+      const companyDirectoryEditRowIdEl = document.getElementById("companyDirectoryEditRowId");
+      const companyDirectoryNameInputEl = document.getElementById("companyDirectoryNameInput");
+      const companyDirectoryPhoneInputEl = document.getElementById("companyDirectoryPhoneInput");
+      const companyDirectoryLoginInputEl = document.getElementById("companyDirectoryLoginInput");
+      const companyDirectoryPasswordInputEl = document.getElementById("companyDirectoryPasswordInput");
+      const companyDirectoryCodeInputEl = document.getElementById("companyDirectoryCodeInput");
+      const companyDirectorySiteSelectEl = document.getElementById("companyDirectorySiteSelect");
+      const companyDirectorySaveBtnEl = document.getElementById("companyDirectorySaveBtn");
+      const companyDirectoryNewBtnEl = document.getElementById("companyDirectoryNewBtn");
+      const companyDirectorySaveHintEl = document.getElementById("companyDirectorySaveHint");
       const couponSectionEl = document.getElementById("couponSection");
       const receiptLedgerSectionEl = document.getElementById("receiptLedgerSection");
       const thefeelingEditSectionEl = document.getElementById("thefeelingEditSection");
@@ -6153,6 +6251,8 @@
       let mergeCompanySourceIndex = -1;
       let mergeCompanySearchKeyword = "";
       let mergeCompanySelectedCompanyKey = "";
+      /** @type {Array<Record<string, unknown>>} */
+      let companyDirectoryAdminRows = [];
       let transferSourceKeyword = "";
       let transferTargetKeyword = "";
       let transferSourceCompanyKey = "";
@@ -6186,6 +6286,12 @@
       /** 날짜·시간·장소·작가명 등 공통 비교용 trim (CSV 매칭·급여 writer 매칭 등) */
       function normalize(value) {
         return String(value ?? "").trim();
+      }
+
+      /** 로컬 고객 스토리지에 남은 잘못된 키(행 UUID를 로그인 아이디로 착각한 값) 식별 */
+      function isUuidLike(value) {
+        const s = String(value || "").trim();
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
       }
 
       /**
@@ -8282,6 +8388,239 @@
         originalSetItem(STORAGE_CUSTOMERS, JSON.stringify(normalized));
         await mergeMissingCompaniesFromCompanyDirectory();
         return true;
+      }
+
+      function getCompanyDirectoryAdminSiteCellLabel(siteTypeRaw) {
+        const v = normalizeCustomerSiteTypeForStorage(siteTypeRaw);
+        if (v === "shopick") return "쇼픽";
+        if (v === "thefeeling") return "더필링";
+        return "인로그";
+      }
+
+      async function fetchCompanyDirectoryAdminFullRows() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
+        }
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,login_id,password,site_type,created_at,updated_at&order=updated_at.desc`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`company_directory 조회 실패 (${response.status}): ${errorText}`);
+        }
+        const json = await response.json();
+        return Array.isArray(json) ? json : [];
+      }
+
+      function clearCompanyDirectoryAdminForm() {
+        if (!companyDirectoryEditRowIdEl) return;
+        companyDirectoryEditRowIdEl.value = "";
+        if (companyDirectoryNameInputEl) companyDirectoryNameInputEl.value = "";
+        if (companyDirectoryPhoneInputEl) companyDirectoryPhoneInputEl.value = "";
+        if (companyDirectoryLoginInputEl) companyDirectoryLoginInputEl.value = "";
+        if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = "";
+        if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = "";
+        if (companyDirectorySiteSelectEl) companyDirectorySiteSelectEl.value = "inlog";
+      }
+
+      function fillCompanyDirectoryAdminFormFromRow(row) {
+        if (!companyDirectoryEditRowIdEl || !row) return;
+        companyDirectoryEditRowIdEl.value = String(row?.id ?? "").trim();
+        if (companyDirectoryNameInputEl) companyDirectoryNameInputEl.value = String(row?.name ?? "").trim();
+        const tel = String(row?.customer_phone ?? row?.phone ?? "").trim();
+        if (companyDirectoryPhoneInputEl) companyDirectoryPhoneInputEl.value = tel;
+        if (companyDirectoryLoginInputEl) companyDirectoryLoginInputEl.value = String(row?.login_id ?? "").trim();
+        if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = String(row?.password ?? "").trim();
+        if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = String(row?.code ?? "").trim();
+        if (companyDirectorySiteSelectEl) {
+          const st = normalizeCustomerSiteTypeForStorage(row?.site_type);
+          companyDirectorySiteSelectEl.value = st === "shopick" ? "shopick" : st === "thefeeling" ? "thefeeling" : "inlog";
+        }
+      }
+
+      function renderCompanyDirectoryAdminTable() {
+        if (!companyDirectoryTabListBodyEl) return;
+        const kwRaw = normalize(companyDirectorySearchInputEl?.value || "").toLowerCase();
+        const selectedId = normalize(companyDirectoryEditRowIdEl?.value || "");
+        let filtered = [...companyDirectoryAdminRows];
+        if (kwRaw) {
+          filtered = filtered.filter((r) => {
+            const blob = [
+              r?.name,
+              r?.login_id,
+              r?.phone,
+              r?.customer_phone,
+              r?.code
+            ]
+              .map((x) => normalize(String(x || "")).toLowerCase())
+              .join("|");
+            return blob.includes(kwRaw);
+          });
+        }
+        if (companyDirectoryCountHintEl) {
+          companyDirectoryCountHintEl.textContent =
+            filtered.length === companyDirectoryAdminRows.length
+              ? `전체 ${companyDirectoryAdminRows.length}건`
+              : `표시 ${filtered.length}건 / 전체 ${companyDirectoryAdminRows.length}건`;
+        }
+        companyDirectoryTabListBodyEl.innerHTML =
+          filtered.length > 0
+            ? filtered
+                .map((r) => {
+                  const rid = normalize(String(r?.id ?? ""));
+                  const nm = normalize(String(r?.name ?? ""));
+                  const lid = normalize(String(r?.login_id ?? ""));
+                  const tel = normalize(String(r?.customer_phone ?? r?.phone ?? ""));
+                  const code = normalize(String(r?.code ?? ""));
+                  const siteLabel = getCompanyDirectoryAdminSiteCellLabel(r?.site_type);
+                  const rowAttr = escapeHtml(rid);
+                  const rowBg = rid && selectedId && rid === selectedId ? ` style="background:#eef3ff"` : "";
+                  return `<tr${rowBg} role="button" tabindex="0" data-company-directory-row-id="${rowAttr}">
+<td>${escapeHtml(nm || "—")}</td>
+<td>${escapeHtml(lid || "—")}</td>
+<td>${escapeHtml(tel || "—")}</td>
+<td>${escapeHtml(code || "—")}</td>
+<td>${escapeHtml(siteLabel)}</td>
+</tr>`;
+                })
+                .join("")
+            : `<tr><td colspan="5" class="helper">등록된 행이 없습니다.</td></tr>`;
+      }
+
+      async function refreshCompanyDirectoryAdminTab() {
+        if (companyDirectorySaveHintEl) companyDirectorySaveHintEl.textContent = "";
+        try {
+          if (companyDirectoryRefreshBtnEl) companyDirectoryRefreshBtnEl.disabled = true;
+          companyDirectoryAdminRows = await fetchCompanyDirectoryAdminFullRows();
+          renderCompanyDirectoryAdminTable();
+          const curId = normalize(companyDirectoryEditRowIdEl?.value || "");
+          if (!curId) clearCompanyDirectoryAdminForm();
+          else {
+            const row = companyDirectoryAdminRows.find((r) => normalize(String(r?.id ?? "")) === curId);
+            if (row) fillCompanyDirectoryAdminFormFromRow(row);
+            else clearCompanyDirectoryAdminForm();
+          }
+        } catch (error) {
+          console.error("[업체정보관리] 목록 조회 실패", error);
+          alert(`목록 조회 실패: ${error?.message || error}`);
+        } finally {
+          if (companyDirectoryRefreshBtnEl) companyDirectoryRefreshBtnEl.disabled = false;
+        }
+      }
+
+      async function saveCompanyDirectoryAdminFormToSupabase() {
+        if (!companyDirectorySaveBtnEl) return;
+        if (!USE_SUPABASE_SYNC) {
+          alert("Supabase 동기화가 꺼져 있습니다.");
+          return;
+        }
+        const rowId = normalize(companyDirectoryEditRowIdEl?.value || "");
+        const nm = normalize(companyDirectoryNameInputEl?.value || "");
+        if (!nm) {
+          alert("업체명을 입력해주세요.");
+          return;
+        }
+        const telRaw = normalize(companyDirectoryPhoneInputEl?.value || "");
+        const loginTrim = normalize(companyDirectoryLoginInputEl?.value || "");
+        const passwordTrim = normalize(companyDirectoryPasswordInputEl?.value || "");
+        let codeTrim = normalize(companyDirectoryCodeInputEl?.value || "");
+        if (!codeTrim) codeTrim = `AUTO-${Date.now().toString(36).toUpperCase()}`;
+        const siteRaw = normalize(companyDirectorySiteSelectEl?.value || "");
+        const siteType = normalizeCustomerSiteTypeForStorage(siteRaw || "inlog");
+        const basePayload = {
+          name: nm,
+          phone: telRaw,
+          customer_phone: telRaw,
+          code: normalizeCompanyCode(codeTrim),
+          site_type: siteType,
+          login_id: loginTrim || null,
+          password: passwordTrim || ""
+        };
+        if (!rowId && loginTrim && !passwordTrim) {
+          alert("신규로 로그인 아이디를 넣었다면 비밀번호도 입력해주세요.");
+          return;
+        }
+        companyDirectorySaveBtnEl.disabled = true;
+        const tryPatch = async (body) =>
+          fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=eq.${encodeURIComponent(rowId)}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify(body)
+          });
+        try {
+          if (rowId) {
+            const patchBody = { ...basePayload };
+            if (!passwordTrim) delete patchBody.password;
+            let resp = await tryPatch(patchBody);
+            if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
+              const errText = await resp.text().catch(() => "");
+              const canRetry = String(errText).includes("site_type");
+              if (canRetry) {
+                const { site_type: _st, ...fb } = patchBody;
+                resp = await tryPatch(fb);
+              }
+            }
+            if (!resp.ok) {
+              const errText = await resp.text().catch(() => "");
+              throw new Error(errText || `수정 실패 (${resp.status})`);
+            }
+          } else {
+            let resp = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify([basePayload])
+            });
+            if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
+              const errText = await resp.text().catch(() => "");
+              if (String(errText).includes("site_type")) {
+                const { site_type: _st, ...fallbackPayload } = basePayload;
+                resp = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Prefer: "return=minimal",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                  },
+                  body: JSON.stringify([fallbackPayload])
+                });
+              } else {
+                throw new Error(errText || `등록 실패 (${resp.status})`);
+              }
+            }
+            if (!resp.ok) {
+              const errText = await resp.text().catch(() => "");
+              throw new Error(errText || `등록 실패 (${resp.status})`);
+            }
+          }
+          await pullCustomersFromSupabaseAndApply();
+          await pullAdminCompaniesFromSupabaseAndRefresh();
+          if (companyDirectorySaveHintEl) {
+            companyDirectorySaveHintEl.textContent = `${new Date().toLocaleTimeString("ko-KR")} 저장 완료 · 고객·업체 목록을 다시 받았습니다.`;
+          }
+          await refreshCompanyDirectoryAdminTab();
+        } catch (error) {
+          console.error("[업체정보관리] 저장 실패", error);
+          alert(`저장 실패: ${error?.message || error}`);
+        } finally {
+          companyDirectorySaveBtnEl.disabled = false;
+        }
       }
 
       function loadAdminCompaniesFromStorage() {
@@ -10616,10 +10955,12 @@
         const orderedIds = matchedUsers
           .map((user) => String(user?.id || "").trim())
           .filter(Boolean)
+          .filter((loginIdVal) => !isUuidLike(loginIdVal))
           .sort((a, b) => a.localeCompare(b, "ko"));
+        if (!orderedIds.length) return { text: "", isMasterCompany, total: 0 };
         const firstId = orderedIds[0] || "";
         if (!firstId) return { text: "", isMasterCompany, total: 0 };
-        const total = matchedUsers.length;
+        const total = orderedIds.length;
         const text = total === 1 ? firstId : `${firstId} 외 ${Math.max(0, total - 1)}`;
         return { text, isMasterCompany, total };
       }
@@ -12006,29 +12347,39 @@
                   return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
                 })
             : [];
-        const usersForAccount =
-          matchedUsers.length > 0 ? matchedUsers : codeOnlyFallbackUsers;
+        const candidatePool = [...(matchedUsers.length > 0 ? matchedUsers : codeOnlyFallbackUsers)];
+        candidatePool.sort((a, b) => {
+          const aUuid = isUuidLike(a?.id);
+          const bUuid = isUuidLike(b?.id);
+          if (aUuid !== bUuid) return aUuid ? 1 : -1;
+          return 0;
+        });
+        const usersForAccount = candidatePool;
         const orderedMatchedUsers = [
-          ...usersForAccount
-            .sort((a, b) => {
-              const aId = String(a?.id || "").trim();
-              const bId = String(b?.id || "").trim();
-              const aLogin = latestLoginAtById.get(aId) || 0;
-              const bLogin = latestLoginAtById.get(bId) || 0;
-              if (aLogin !== bLogin) return bLogin - aLogin;
-              return aId.localeCompare(bId, "ko");
-            })
+          ...usersForAccount.sort((a, b) => {
+            const aId = String(a?.id || "").trim();
+            const bId = String(b?.id || "").trim();
+            const aLogin = latestLoginAtById.get(aId) || 0;
+            const bLogin = latestLoginAtById.get(bId) || 0;
+            if (aLogin !== bLogin) return bLogin - aLogin;
+            return aId.localeCompare(bId, "ko");
+          })
         ];
         const matchedUser =
+          orderedMatchedUsers.find(
+            (user) => !isUuidLike(user?.id) && normalizeCompanyCode(user?.companyCode) === companyDefaultCode
+          ) ||
           orderedMatchedUsers.find((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode) ||
+          orderedMatchedUsers.find((user) => !isUuidLike(user?.id)) ||
           orderedMatchedUsers[0] ||
           null;
-        const accountId = String(matchedUser?.id || "").trim();
+        const accountStorageKey = String(matchedUser?.id || "").trim();
+        const accountIdDisplay = matchedUser ? (isUuidLike(accountStorageKey) ? "" : accountStorageKey) : "";
         const accountPassword = String(matchedUser?.password || "").trim();
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
         const accountSiteType = normalizeCustomerSiteTypeForStorage(matchedUser?.siteType);
         const accountLogs = matchedUser
-          ? loginLogs.filter((log) => String(log.customerId || "") === accountId)
+          ? loginLogs.filter((log) => String(log.customerId || "").trim() === accountStorageKey)
           : [];
         const accountTodayLoginCount = accountLogs.filter(
           (item) => String(item.at || "").slice(0, 10) === new Date().toISOString().slice(0, 10)
@@ -12115,7 +12466,7 @@
             </div>
             <div class="company-account-line">
               <span class="company-account-label">아이디</span>
-              <input class="inline-input company-account-id" type="text" placeholder="고객 로그인 아이디" value="${escapeHtml(accountId)}" autocomplete="username" />
+              <input class="inline-input company-account-id" type="text" placeholder="고객 로그인 아이디" value="${escapeHtml(accountIdDisplay)}" autocomplete="username" />
             </div>
             <div class="company-account-line">
               <span class="company-account-label">비밀번호</span>
@@ -12153,8 +12504,8 @@
               </div>
             </div>
             <div class="actions" style="margin-top: 0; justify-content: flex-start;">
-              <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">계정저장</button>
-              <button class="btn-sm" type="button" data-action="transferCompanyAccountId" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountId)}">아이디이전(통합)</button>
+              <button class="btn-sm primary" type="button" data-action="saveCompanyAccount" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountStorageKey)}">계정저장</button>
+              <button class="btn-sm" type="button" data-action="transferCompanyAccountId" data-company-name="${escapeHtml(companyName)}" data-account-id="${escapeHtml(accountStorageKey)}">아이디이전(통합)</button>
             </div>
             <div style="font-size: 0.86rem; color: #5f6c88;">
               로그인기록: 총 ${accountLogs.length}회 / 오늘 ${accountTodayLoginCount}회${accountLastLogin ? ` / 최근로그인 ${escapeHtml(String(accountLastLogin).slice(0, 16).replace("T", " "))}` : ""}
@@ -16078,6 +16429,7 @@
         const isThefeelingEdit = tab === "thefeelingEdit";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
+        const isCompanyDirectory = tab === "companyDirectory";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabPayrollEl?.classList.toggle("active", isPayroll);
@@ -16086,6 +16438,7 @@
         tabThefeelingEditEl?.classList.toggle("active", isThefeelingEdit);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
+        tabCompanyDirectoryEl?.classList.toggle("active", isCompanyDirectory);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         payrollSectionEl?.classList.toggle("hidden", !isPayroll);
@@ -16094,6 +16447,7 @@
         thefeelingEditSectionEl?.classList.toggle("hidden", !isThefeelingEdit);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
+        companyDirectorySectionEl?.classList.toggle("hidden", !isCompanyDirectory);
         if (isPayment) renderPaymentList();
         if (isPayroll) renderPhotographerPayrollAdmin();
         if (isCoupon) renderCouponPassList();
@@ -16107,12 +16461,38 @@
         }
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
         if (isGrokTool) loadGrokWebToolBaseToInput();
+        if (isCompanyDirectory) void refreshCompanyDirectoryAdminTab();
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabPayrollEl?.addEventListener("click", () => switchMainTab("payroll"));
+      tabCompanyDirectoryEl?.addEventListener("click", () => switchMainTab("companyDirectory"));
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
+      companyDirectoryRefreshBtnEl?.addEventListener("click", () => {
+        void refreshCompanyDirectoryAdminTab();
+      });
+      companyDirectorySaveBtnEl?.addEventListener("click", () => {
+        void saveCompanyDirectoryAdminFormToSupabase();
+      });
+      companyDirectoryNewBtnEl?.addEventListener("click", () => {
+        clearCompanyDirectoryAdminForm();
+        renderCompanyDirectoryAdminTable();
+      });
+      companyDirectorySearchInputEl?.addEventListener("input", () => {
+        renderCompanyDirectoryAdminTable();
+      });
+      companyDirectoryTabListBodyEl?.addEventListener("click", (event) => {
+        const tr = event.target.closest("tr[data-company-directory-row-id]");
+        if (!tr) return;
+        const sel = normalize(tr.getAttribute("data-company-directory-row-id") || "");
+        if (!sel) return;
+        const row = companyDirectoryAdminRows.find((r) => normalize(String(r?.id ?? "")) === sel);
+        if (row) {
+          fillCompanyDirectoryAdminFormFromRow(row);
+          renderCompanyDirectoryAdminTable();
+        }
+      });
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
