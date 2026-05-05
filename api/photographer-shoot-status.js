@@ -1,6 +1,6 @@
 /**
  * POST JSON { writerLoginId, writerPassword, scheduleIds: string[] }
- * → { ok: true, doneScheduleIds: string[] }  (현장 촬영 완료 처리된 스케줄 id만)
+ * → { ok: true, doneScheduleIds: string[] }  (작가 현장 확인완료 처리된 스케줄 id만)
  */
 const { listPhotographerShootDone } = require("../lib/photographer-shoot-logic.cjs");
 

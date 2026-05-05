@@ -14395,7 +14395,7 @@
           alert("스케줄 ID가 유효하지 않습니다.");
           return;
         }
-        const pw = prompt("관리자 현장 촬영 완료 비밀번호를 입력하세요.");
+        const pw = prompt("관리자 작가 현장 확인완료 비밀번호를 입력하세요.");
         if (pw === null) return;
         try {
           const res = await fetch("/api/admin-shoot-site-complete", {
@@ -14408,7 +14408,7 @@
             alert(data.message || "처리에 실패했습니다.");
             return;
           }
-          alert("현장 촬영 완료로 처리되었습니다. (Drive 업체 폴더 생성·갱신이 반영되었습니다.)");
+          alert("작가 현장 확인완료로 처리되었습니다. (Drive 업체 폴더 생성·갱신이 반영되었습니다.)");
           kickDashDeliveryRpcRefresh(true);
         } catch (error) {
           console.error("[admin-shoot-site]", error);
@@ -14741,7 +14741,7 @@
           const badgeParts = [];
           if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid));
           if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid));
-          badgeParts.push(dashDeliverySiteFieldBadge(siteOk, siteOk ? "현장 촬영 완료" : "현장 촬영 대기"));
+          badgeParts.push(dashDeliverySiteFieldBadge(siteOk, siteOk ? "작가 현장 확인완료" : "작가 현장 확인 대기"));
           const strip = `<span class="dash-del-badges">${badgeParts.join("")}</span>`;
           const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
 
@@ -14799,7 +14799,7 @@
               html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line">
                 <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.photographer_site_done_at))))} 현장</span>
                 <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
-                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 현장 촬영 완료</span>
+                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 작가 현장 확인완료</span>
               </div>`,
             });
         }
@@ -14813,7 +14813,7 @@
               .join("")
           : logCutoffMs > 0 && events.length
             ? '<div class="helper" style="margin:0;font-size:0.76rem;">비우기 이후 새 납품·현장 기록만 표시됩니다.</div>'
-            : '<div class="helper" style="margin:0;font-size:0.76rem;">아직 납품·현장 촬영 완료 기록이 없습니다.</div>';
+            : '<div class="helper" style="margin:0;font-size:0.76rem;">아직 납품·작가 현장 확인완료 기록이 없습니다.</div>';
 
         const processSevenDays = getDashboardProcessSevenDays(todayKey);
         /** 날짜키 → 카운트(사진·영상 각각 1건) */

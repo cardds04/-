@@ -1,6 +1,6 @@
 /**
  * POST JSON: { scheduleId, adminPassword }
- * POST multipart: fields scheduleId, adminPassword, file photo (선택) — 관리자 현장 촬영 완료 + Drive 폴더
+ * POST multipart: fields scheduleId, adminPassword, file photo (선택) — 관리자 작가 현장 확인완료 + Drive 폴더
  *
  * 비밀번호: 환경변수 ADMIN_SHOOT_SITE_PASSWORD (미설정 시 기본 "6315" — index.html 관리자 패턴과 동일)
  */

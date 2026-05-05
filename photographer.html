@@ -52,6 +52,8 @@
       .copy-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
       .status-card { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; }
       .shoot-complete-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+      .shoot-complete-row.shoot-complete-before { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .shoot-complete-hint { font-size: 12px; color: #64748b; line-height: 1.45; max-width: 100%; }
       .shoot-preview { max-height: 76px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
       .shoot-done-badge { font-size: 12px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 10px; border-radius: 6px; }
       .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; }
@@ -2371,8 +2373,9 @@
               } else if (shootDone) {
                 shootBlock = '<div class="shoot-complete-row"><span class="shoot-done-badge">현장 확인 완료</span></div>';
               } else {
-                shootBlock = `<div class="shoot-complete-row" data-schedule-id="${scheduleId}">
-                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인</button>
+                shootBlock = `<div class="shoot-complete-row shoot-complete-before" data-schedule-id="${scheduleId}">
+                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인전</button>
+                  <span class="shoot-complete-hint">현장도착시 이버튼을눌러주세요</span>
                 </div>`;
               }
             }
