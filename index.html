@@ -12202,7 +12202,7 @@
           )
             .then(() => {
               if (modalDirectoryFetchToken !== companyOrderModalDirectorySyncSeq) return;
-              if (companyOrderHistoryModalEl.classList.contains("hidden")) return;
+              if (!companyOrderHistoryModalEl || companyOrderHistoryModalEl.classList.contains("hidden")) return;
               if (String(companyOrderHistoryTitleEl.textContent || "").trim() !== expectedTitle) return;
               hydrateFromCustomerPageStorage();
               renderCompanyOrderHistory(companyName, { skipRemoteAccountRefresh: true });
@@ -12210,6 +12210,8 @@
             .catch((e) => console.warn("[업체주문모달] 계정 동기화 실패", e));
         }
       }
+
+      function closeCompanyMergeModal() {
         mergeCompanySourceIndex = -1;
         mergeCompanySearchKeyword = "";
         mergeCompanySelectedCompanyKey = "";
@@ -16852,10 +16854,10 @@
         renderList();
         openScheduleDetailModal();
       });
-      companyOrderHistoryCloseBtnEl.addEventListener("click", () => {
-        companyOrderHistoryModalEl.classList.add("hidden");
+      companyOrderHistoryCloseBtnEl?.addEventListener("click", () => {
+        companyOrderHistoryModalEl?.classList.add("hidden");
       });
-      companyOrderHistoryModalEl.addEventListener("click", (event) => {
+      companyOrderHistoryModalEl?.addEventListener("click", (event) => {
         if (event.target === companyOrderHistoryModalEl) {
           companyOrderHistoryModalEl.classList.add("hidden");
         }
@@ -18217,7 +18219,7 @@
         const index = Number(itemEl.dataset.companyIndex);
         if (Number.isNaN(index) || !companies[index]) return;
         renderCompanyOrderHistory(companies[index].name);
-        companyOrderHistoryModalEl.classList.remove("hidden");
+        companyOrderHistoryModalEl?.classList.remove("hidden");
       });
 
       if (addPhotographerBtn) {
@@ -19513,7 +19515,7 @@
         }
         if (event.key === STORAGE_MASTER_ACCOUNT_MAP) {
           renderCompanies();
-          if (!companyOrderHistoryModalEl.classList.contains("hidden")) {
+          if (companyOrderHistoryModalEl && !companyOrderHistoryModalEl.classList.contains("hidden")) {
             const modalTitle = String(companyOrderHistoryTitleEl.textContent || "").replace(/\s*주문 기록$/, "");
             if (modalTitle) renderCompanyOrderHistory(modalTitle);
           }
