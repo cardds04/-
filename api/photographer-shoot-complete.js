@@ -1,7 +1,7 @@
 /**
  * POST multipart/form-data
  * fields: scheduleId, writerLoginId, writerPassword,
- * optional file field "photo" (현장 확인 이미지), optional omitSiteImage=1 (이미지 없이 촬영완료만 저장)
+ * optional file field "photo" (현장 확인 이미지), optional omitSiteImage=1 (이미지 없이 현장확인만 저장)
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
     res.status(503).json({
       ok: false,
       message:
-        "촬영완료 서버 설정이 아직 연결되지 않았습니다. Vercel(또는 배포 환경) → Environment Variables 에 Supabase의 SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY(서비스 롤, project settings → API)를 등록한 뒤 재배포해 주세요.",
+        "현장확인 기능 서버 설정이 아직 연결되지 않았습니다. Vercel(또는 배포 환경) → Environment Variables 에 Supabase의 SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY(서비스 롤, project settings → API)를 등록한 뒤 재배포해 주세요.",
     });
     return;
   }

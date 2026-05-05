@@ -1,5 +1,8 @@
 -- 관리 화면(anon 키)에서 Drive 납품 진행 상태만 안전하게 읽기 위한 RPC
-create or replace function public.shoot_delivery_progress_list()
+-- 이미 컬럼이 더 많은 시그니처(후속 마이그레이션)가 있으면 REPLACE 만으로는 OUT 타입 변경 불가 → 선행 DROP
+drop function if exists public.shoot_delivery_progress_list();
+
+create function public.shoot_delivery_progress_list()
 returns table (
   schedule_id text,
   company_name text,

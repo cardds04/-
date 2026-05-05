@@ -1,41 +1,47 @@
 -- customers ↔ companies 단일 기준 연결: FK 추가
 -- 적용 전: tools/supabase_backup_tables.py 로 백업 권장
 --
--- Supabase SQL Editor 에서 한 번에 실행
+-- 일부 원격 프로젝트에는 public.customers 가 없음(처음부터 company_directory 만 사용).
+-- 해당 환경에서는 이 마이그레이션 전체를 건너뜁니다.
 
-alter table public.customers
-  add column if not exists company_id uuid references public.companies (id) on delete set null;
+DO $$
+BEGIN
+  IF to_regclass('public.customers') IS NULL OR to_regclass('public.companies') IS NULL THEN
+    RETURN;
+  END IF;
 
-create index if not exists idx_customers_company_id on public.customers (company_id);
+  ALTER TABLE public.customers
+    ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies (id) ON DELETE SET NULL;
 
-comment on column public.customers.company_id is 'public.companies.id — 업체 표시명/연락처의 단일 출처';
+  CREATE INDEX IF NOT EXISTS idx_customers_company_id ON public.customers (company_id);
 
--- 기존 행 백필: company_name + company_code 로 companies 와 매칭 (이름 우선, 코드 보조)
-update public.customers c
-set company_id = co.id
-from public.companies co
-where c.company_id is null
-  and lower(trim(c.company_name)) = lower(trim(co.name));
+  COMMENT ON COLUMN public.customers.company_id IS 'public.companies.id — 업체 표시명/연락처의 단일 출처';
 
-update public.customers c
-set company_id = co.id
-from public.companies co
-where c.company_id is null
-  and nullif(trim(c.company_code), '') is not null
-  and lower(trim(c.company_code)) = lower(trim(co.code));
+  UPDATE public.customers c
+  SET company_id = co.id
+  FROM public.companies co
+  WHERE c.company_id IS NULL
+    AND lower(trim(c.company_name)) = lower(trim(co.name));
 
--- 선택: 읽기용 뷰 (관리자 대시보드에서 조인 조회 시)
-create or replace view public.company_directory as
-select
-  co.id as company_row_id,
-  co.name as company_name,
-  co.phone as company_phone,
-  co.code as company_code,
-  co.updated_at as company_updated_at,
-  cu.login_id,
-  cu.phone as customer_phone,
-  cu.site_type
-from public.companies co
-left join public.customers cu on cu.company_id = co.id;
+  UPDATE public.customers c
+  SET company_id = co.id
+  FROM public.companies co
+  WHERE c.company_id IS NULL
+    AND nullif(trim(c.company_code), '') IS NOT NULL
+    AND lower(trim(c.company_code)) = lower(trim(co.code));
 
-comment on view public.company_directory is 'companies 기준 + 연결된 고객 계정(있으면)';
+  CREATE OR REPLACE VIEW public.company_directory AS
+  SELECT
+    co.id AS company_row_id,
+    co.name AS company_name,
+    co.phone AS company_phone,
+    co.code AS company_code,
+    co.updated_at AS company_updated_at,
+    cu.login_id,
+    cu.phone AS customer_phone,
+    cu.site_type
+  FROM public.companies co
+  LEFT JOIN public.customers cu ON cu.company_id = co.id;
+
+  COMMENT ON VIEW public.company_directory IS 'companies 기준 + 연결된 고객 계정(있으면)';
+END $$;

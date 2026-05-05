@@ -2350,7 +2350,7 @@
             tomorrow.setDate(tomorrow.getDate() + 1);
             const isToday = sameDate(now, target);
             const isTomorrow = sameDate(tomorrow, target);
-            const statusLabel = target.getTime() < now.getTime() ? "촬영완료" : isToday ? "오늘촬영" : isTomorrow ? "내일촬영" : "촬영예정";
+            const statusLabel = target.getTime() < now.getTime() ? "지난일정" : isToday ? "오늘촬영" : isTomorrow ? "내일촬영" : "촬영예정";
             const statusClass = isToday ? "status-label-today" : isTomorrow ? "status-label-tomorrow" : "";
             const fullAddress = String(item.place ?? "").trim() || "-";
             // 업체 전화번호: 등록된 게 있을 때만 한 줄 추가 (없으면 줄을 아예 표시하지 않음).
@@ -2367,12 +2367,12 @@
             if (USE_SUPABASE_SYNC) {
               if (!hasServerId) {
                 shootBlock =
-                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장 완료·Drive 폴더 생성은 스케줄이 서버와 동기화된 뒤 사용할 수 있습니다.</div>';
+                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인·Drive 폴더 생성은 스케줄이 서버와 동기화된 뒤 사용할 수 있습니다.</div>';
               } else if (shootDone) {
-                shootBlock = '<div class="shoot-complete-row"><span class="shoot-done-badge">현장 촬영 완료</span></div>';
+                shootBlock = '<div class="shoot-complete-row"><span class="shoot-done-badge">현장 확인 완료</span></div>';
               } else {
                 shootBlock = `<div class="shoot-complete-row" data-schedule-id="${scheduleId}">
-                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">촬영완료</button>
+                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인</button>
                 </div>`;
               }
             }
@@ -2426,20 +2426,31 @@
             const res = await fetch("/api/photographer-shoot-complete", { method: "POST", body: fd });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
-              alert(data.message || "촬영 완료 처리에 실패했습니다.");
+              alert(data.message || "현장 확인 처리에 실패했습니다.");
               shootDoneBtn.disabled = false;
               return;
             }
             photographerShootDoneIds.add(sid);
             renderScheduleList();
+            const sms = data.customer_site_notice_sms;
+            let smsNote = "";
+            if (sms === "sent") {
+              smsNote = "\n\n고객에게 현장 확인 안내 문자가 발송되었습니다.";
+            } else if (sms === "skipped_no_phone") {
+              smsNote =
+                "\n\n※ 고객 번호가 없어 안내 문자를 보내지 못했습니다. 업체 디렉터리(customer_phone)·납품 연락처를 확인해 주세요.";
+            } else if (sms === "send_failed") {
+              smsNote =
+                "\n\n※ 고객 안내 문자 발송에 실패했습니다. 번호 형식 또는 솔라피 설정(SOLAPI_* 환경 변수)을 확인해 주세요.";
+            }
             alert(
-              data.omit_site_confirmation
-                ? "촬영 완료 처리되었습니다.\n업체 Drive 폴더가 준비되었습니다."
+              (data.omit_site_confirmation
+                ? "현장 확인 처리되었습니다.\n업체 Drive 폴더가 준비되었습니다."
                 : data.site_photo_storage_url
-                  ? "촬영 완료 처리되었습니다.\n현장 이미지는 저장소에 저장되었고 업체 폴더 정보가 준비되었습니다."
+                  ? "현장 확인 처리되었습니다.\n현장 이미지는 저장소에 저장되었고 업체 폴더 정보가 준비되었습니다."
                   : data.drive_upload_skipped
-                    ? "촬영 완료로 저장되었습니다.\n폴더는 생성되었고, 파일 업로드는 정책상 막혀 저장되지 않았을 수 있습니다. 공유 드라이브 등 설정이 필요할 수 있습니다."
-                    : "촬영 완료 처리되었습니다. Google Drive 폴더가 준비되었습니다."
+                    ? "현장 확인으로 저장되었습니다.\n폴더는 생성되었고, 파일 업로드는 정책상 막혀 저장되지 않았을 수 있습니다. 공유 드라이브 등 설정이 필요할 수 있습니다."
+                    : "현장 확인 처리되었습니다. Google Drive 폴더가 준비되었습니다.") + smsNote
             );
           } catch (err) {
             console.error(err);
