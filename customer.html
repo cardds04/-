@@ -1521,8 +1521,15 @@
           console.warn("[SUBMISSION_RECEIPT] remote insert skipped", errorText);
         }
       }
+      /** 테이블 pull 시 originalSetItem만 쓰면 scoped 키가 프록시 메모리에 안 들어가 읽기가 깨짐 */
       function writeStorageArraySilently(key, items) {
-        originalSetItem(key, JSON.stringify(items));
+        try {
+          localStorage.setItem(key, JSON.stringify(items));
+        } catch (error) {
+          try {
+            originalSetItem(key, JSON.stringify(items));
+          } catch (_) {}
+        }
       }
       function getTableSyncClient() {
         if (!USE_SUPABASE_SYNC) return null;

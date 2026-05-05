@@ -1269,8 +1269,15 @@
       function writeStorageArray(key, items) {
         localStorage.setItem(key, JSON.stringify(items));
       }
+      /** 테이블 pull 결과를 반드시 프록시 메모리에도 반영해야 함(originalSetItem만 쓰면 읽기가 []로 깨짐). */
       function writeStorageArraySilently(key, items) {
-        originalSetItem(key, JSON.stringify(items));
+        try {
+          localStorage.setItem(key, JSON.stringify(items));
+        } catch (error) {
+          try {
+            originalSetItem(key, JSON.stringify(items));
+          } catch (_) {}
+        }
       }
       function getWriterTableSyncClient() {
         if (!USE_SUPABASE_SYNC) return null;
@@ -2807,14 +2814,27 @@
         await handleWriterSignup();
       });
 
-      loginFormEl.addEventListener("submit", (event) => {
+      loginFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const id = normalize(document.getElementById("loginId").value);
         const password = normalize(document.getElementById("loginPassword").value);
-        const users = readStorageArray(STORAGE_WRITERS);
-        const matched = users.find((user) => user.id === id && user.password === password);
+        let users = readStorageArray(STORAGE_WRITERS);
+        let matched = users.find((user) => user.id === id && user.password === password);
+        if (!matched && USE_SUPABASE_SYNC && users.length === 0) {
+          try {
+            await pullTablesToWriterStorage();
+            users = readStorageArray(STORAGE_WRITERS);
+            matched = users.find((user) => user.id === id && user.password === password);
+          } catch (e) {
+            console.warn("[login] pullTablesToWriterStorage", e);
+          }
+        }
         if (!matched) {
-          alert("아이디 또는 비밀번호가 올바르지 않습니다.");
+          alert(
+            users.length === 0 && USE_SUPABASE_SYNC
+              ? "작가 정보를 불러오지 못했습니다. 잠시 후 다시 시도하거나 새로고침 후 로그인해 주세요."
+              : "아이디 또는 비밀번호가 올바르지 않습니다."
+          );
           return;
         }
         localStorage.setItem(STORAGE_WRITER_SESSION, matched.id);
