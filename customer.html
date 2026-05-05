@@ -546,10 +546,32 @@
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_SESSION = `scheduleSiteCustomerSession_${CUSTOMER_PAGE_STORAGE_TAG}`;
       const STORAGE_CUSTOMER_REMEMBERED_LOGIN = `scheduleSiteCustomerRememberedLogin_${CUSTOMER_PAGE_STORAGE_TAG}`;
+      /** 이 브라우저에서 성공 로그인 시에만 채워지며 Supabase KV/스냅샷에는 절대 포함하지 않음 */
+      const STORAGE_CUSTOMER_DEVICE_LOGIN_SECRET = `scheduleSiteCustomerDeviceLoginSecret_${CUSTOMER_PAGE_STORAGE_TAG}`;
+      function sanitizeCustomerRecordsStripPasswords(items) {
+        if (!Array.isArray(items)) return [];
+        return items.map((row) => {
+          const o = row && typeof row === "object" ? { ...row } : {};
+          o.password = "";
+          return o;
+        });
+      }
+      /** KV/스냅샷 등 공유 상태로 들어오는 고객 목록에서 비밀번호 제거 */
+      function stripScheduleSiteCustomersInboundValue(raw) {
+        if (raw === null || raw === undefined) return JSON.stringify([]);
+        try {
+          const arr =
+            typeof raw === "string" ? JSON.parse(String(raw || "[]")) : Array.isArray(raw) ? raw : JSON.parse(JSON.stringify(raw));
+          return JSON.stringify(sanitizeCustomerRecordsStripPasswords(Array.isArray(arr) ? arr : []));
+        } catch (_) {
+          return JSON.stringify([]);
+        }
+      }
       // 고객·작가 로그인 세션은 Supabase KV에 절대 올리지 않음 (타인 계정 전파 방지)
       const PRIVATE_LOCAL_KEYS = new Set([
         STORAGE_SESSION,
         STORAGE_CUSTOMER_REMEMBERED_LOGIN,
+        STORAGE_CUSTOMER_DEVICE_LOGIN_SECRET,
         "scheduleSiteWriterSession",
         "scheduleSiteWriterRememberedLogin"
       ]);
@@ -681,7 +703,9 @@
             if (!this.isScopedKey(k)) return;
             // 세션/인증 키는 서버에서 절대 적용하지 않음 (다른 유저 세션 전파 방지)
             if (PRIVATE_LOCAL_KEYS.has(String(k))) return;
-            this.memoryStore.set(String(k), this.normalizeKvValue(v));
+            let storedVal = this.normalizeKvValue(v);
+            if (String(k) === STORAGE_CUSTOMERS) storedVal = stripScheduleSiteCustomersInboundValue(v);
+            this.memoryStore.set(String(k), storedVal);
           });
           try {
             this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
@@ -718,7 +742,9 @@
               Object.entries(parsedSnapshot).forEach(([key, value]) => {
                 if (!this.isScopedKey(key)) return;
                 if (PRIVATE_LOCAL_KEYS.has(String(key))) return;
-                this.memoryStore.set(String(key), String(value ?? ""));
+                let memVal = String(value ?? "");
+                if (String(key) === STORAGE_CUSTOMERS) memVal = stripScheduleSiteCustomersInboundValue(memVal);
+                this.memoryStore.set(String(key), memVal);
               });
             }
           } catch (error) {}
@@ -791,11 +817,55 @@
             scheduleSiteClientKvState.nativeSetItem(STORAGE_SESSION, String(legId));
             const r = scheduleSiteClientKvState.nativeGetItem(legacyR);
             if (r && !scheduleSiteClientKvState.nativeGetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN)) {
-              scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, r);
+              try {
+                const parsed = JSON.parse(String(r));
+                const rid = String(parsed?.id || "").trim();
+                if (rid)
+                  scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: rid }));
+              } catch (_) {}
             }
           }
         } catch (_) {}
       })();
+
+      function readDeviceCustomerLoginSecrets() {
+        try {
+          const raw = scheduleSiteClientKvState.nativeGetItem(STORAGE_CUSTOMER_DEVICE_LOGIN_SECRET);
+          if (!raw) return {};
+          const p = JSON.parse(raw);
+          if (!p || typeof p !== "object" || Array.isArray(p)) return {};
+          /** @type {Record<string,string>} */
+          const out = {};
+          Object.entries(p).forEach(([k, val]) => {
+            const nk = String(k || "").trim();
+            if (!nk || val === undefined || val === null) return;
+            out[nk] = String(val);
+          });
+          return out;
+        } catch (_) {
+          return {};
+        }
+      }
+      function writeDeviceCustomerLoginSecrets(obj) {
+        try {
+          scheduleSiteClientKvState.nativeSetItem(STORAGE_CUSTOMER_DEVICE_LOGIN_SECRET, JSON.stringify(obj || {}));
+        } catch (_) {}
+      }
+      function setDeviceCustomerLoginSecret(loginId, plainPassword) {
+        const id = String(loginId || "").trim();
+        const pw = String(plainPassword || "").trim();
+        if (!id || !pw) return;
+        const all = readDeviceCustomerLoginSecrets();
+        all[id] = pw;
+        writeDeviceCustomerLoginSecrets(all);
+      }
+      function forgetDeviceCustomerLoginSecret(loginId) {
+        const id = String(loginId || "").trim();
+        if (!id) return;
+        const all = readDeviceCustomerLoginSecrets();
+        delete all[id];
+        writeDeviceCustomerLoginSecrets(all);
+      }
 
       const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
@@ -914,12 +984,17 @@
         "scheduleSiteDailyLimits",
         "scheduleSiteEmergencyLimitAdditionsV1"
       ]);
+      /** 고객 화면은 계정 KV를 보내지 않음(타 계정 크리덴셜 덮어쓰기·유출 방지). 관리자 index 가 단일 저장소 */
+      const CUSTOMER_NEVER_PUSH_TO_KV_KEYS = new Set([STORAGE_CUSTOMERS]);
       async function pushScheduleSiteClientKvToSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
         // 관리자 전용 키 및 세션/인증 키를 제외하고 push
         const kv = Object.fromEntries(
-          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => !ADMIN_ONLY_KV_KEYS.has(k) && !PRIVATE_LOCAL_KEYS.has(k))
+          [...scheduleSiteClientKvState.memoryStore.entries()].filter(
+            ([k]) =>
+              !ADMIN_ONLY_KV_KEYS.has(k) && !PRIVATE_LOCAL_KEYS.has(k) && !CUSTOMER_NEVER_PUSH_TO_KV_KEYS.has(k)
+          )
         );
         if (!Object.keys(kv).length) return;
         scheduleSiteClientKvPushInFlight = true;
@@ -1523,7 +1598,9 @@
       }
 
       function writeStorageArray(key, items) {
-        localStorage.setItem(key, JSON.stringify(items));
+        let out = items;
+        if (key === STORAGE_CUSTOMERS && Array.isArray(items)) out = sanitizeCustomerRecordsStripPasswords(items);
+        localStorage.setItem(key, JSON.stringify(out));
       }
       function saveActivityBackupSnapshot(reason = "customer_mutation") {
         const entries = readStorageArray(STORAGE_AUTO_BACKUP_ENTRIES);
@@ -1591,10 +1668,18 @@
       /** 테이블 pull 시 originalSetItem만 쓰면 scoped 키가 프록시 메모리에 안 들어가 읽기가 깨짐 */
       function writeStorageArraySilently(key, items) {
         try {
-          localStorage.setItem(key, JSON.stringify(items));
+          const payload =
+            key === STORAGE_CUSTOMERS && Array.isArray(items)
+              ? sanitizeCustomerRecordsStripPasswords(items)
+              : items;
+          localStorage.setItem(key, JSON.stringify(payload));
         } catch (error) {
           try {
-            originalSetItem(key, JSON.stringify(items));
+            const payload =
+              key === STORAGE_CUSTOMERS && Array.isArray(items)
+                ? sanitizeCustomerRecordsStripPasswords(items)
+                : items;
+            originalSetItem(key, JSON.stringify(payload));
           } catch (_) {}
         }
       }
@@ -1765,7 +1850,7 @@
         const customers = (Array.isArray(customersRows) ? customersRows : [])
           .map((row) => ({
             id: String(row?.login_id || "").trim(),
-            password: String(row?.password || "").trim(),
+            password: "",
             company: String(row?.company_name || row?.name || "").trim(),
             companyCode: String(row?.code || row?.company_code || "").trim(),
             phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
@@ -1909,17 +1994,27 @@
       async function syncCustomersTableFromStorage() {
         if (!USE_SUPABASE_SYNC) return;
         markDbMutationActivity("customer_account_mutation");
+        const sessionUser = getCurrentSessionUser();
+        const sessionUserId = normalize(String(sessionUser?.id ?? ""));
+        if (!sessionUserId) return;
+
+        const secrets = readDeviceCustomerLoginSecrets();
+        const secretPw = normalize(String(secrets[sessionUserId] ?? ""));
+        if (!secretPw) return;
+
         const rows = readStorageArray(STORAGE_CUSTOMERS)
+          .filter((item) => normalize(String(item?.id ?? "")) === sessionUserId)
           .map((item) => ({
-            login_id: String(item?.id || "").trim(),
-            password: String(item?.password || "").trim(),
-            name: String(item?.company || "").trim(),
-            code: String(item?.companyCode || "").trim(),
-            phone: String(item?.phone || "").trim(),
-            customer_phone: String(item?.phone || "").trim(),
+            login_id: normalize(String(item?.id ?? "")),
+            password: secretPw,
+            name: normalize(String(item?.company ?? "")),
+            code: normalize(String(item?.companyCode ?? "")),
+            phone: normalize(String(item?.phone ?? "")),
+            customer_phone: normalize(String(item?.phone ?? "")),
             site_type: normalizeCustomerSiteType(item?.siteType)
           }))
           .filter((item) => item.login_id);
+        if (!rows.length) return;
         let response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?on_conflict=login_id`, {
           method: "POST",
           headers: {
@@ -2295,6 +2390,60 @@
       function normalize(text) {
         return String(text || "").trim();
       }
+      function directoryRowToCustomerLocalStub(row) {
+        const id = normalize(String(row?.login_id ?? ""));
+        if (!id) return null;
+        return {
+          id,
+          password: "",
+          company: normalize(String(row?.company_name ?? row?.name ?? "")),
+          companyCode: normalize(String(row?.code ?? row?.company_code ?? "")),
+          phone: normalize(String(row?.customer_phone ?? row?.phone ?? "")),
+          createdAt: normalize(String(row?.created_at ?? "")),
+          siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
+        };
+      }
+      function tryOfflineCustomerCredentialMatch(id, pw) {
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const secrets = readDeviceCustomerLoginSecrets();
+        const hitSite = users.find(
+          (user) =>
+            normalize(String(user?.id ?? "")) === id &&
+            normalizeCustomerSiteType(user?.siteType) === requiredCustomerSiteType &&
+            (secrets[id] === pw || normalize(String(user?.password ?? "")) === pw)
+        );
+        if (hitSite) return { ok: true, stub: sanitizeCustomerRecordsStripPasswords([hitSite])[0] };
+        const hitOther = users.find(
+          (user) =>
+            normalize(String(user?.id ?? "")) === id && (secrets[id] === pw || normalize(String(user?.password ?? "")) === pw)
+        );
+        if (hitOther) return { ok: false, reason: "wrong_site" };
+        return { ok: false, reason: "bad_creds" };
+      }
+      async function verifyCustomerCredentialsForCustomerPage(loginIdRaw, passwordRaw) {
+        const id = normalize(loginIdRaw);
+        const pw = normalize(passwordRaw);
+        if (!id || !pw) return { ok: false, reason: "bad_creds" };
+        if (!USE_SUPABASE_SYNC) return tryOfflineCustomerCredentialMatch(id, pw);
+        try {
+          const encoded = encodeURIComponent(id);
+          const rows = await fetchJsonRows(
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id`
+          );
+          const list = Array.isArray(rows) ? rows : [];
+          const pwdMatches = list.filter((row) => normalize(String(row?.password ?? "")) === pw);
+          if (!pwdMatches.length) return tryOfflineCustomerCredentialMatch(id, pw);
+          const siteOkRow = pwdMatches.find(
+            (row) => normalizeCustomerSiteType(row?.site_type || row?.siteType) === requiredCustomerSiteType
+          );
+          if (!siteOkRow) return { ok: false, reason: "wrong_site" };
+          const stub = directoryRowToCustomerLocalStub(siteOkRow);
+          return stub ? { ok: true, stub } : { ok: false, reason: "bad_creds" };
+        } catch (_) {
+          return tryOfflineCustomerCredentialMatch(id, pw);
+        }
+      }
+
       function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, (ch) => {
           if (ch === "&") return "&amp;";
@@ -2540,28 +2689,15 @@
           const parsed = JSON.parse(raw);
           if (!parsed || typeof parsed !== "object") return null;
           const id = normalize(parsed.id);
-          const password = normalize(parsed.password);
-          if (!id || !password) return null;
-          return { id, password };
+          if (!id) return null;
+          return { id };
         } catch (error) {
           return null;
         }
       }
 
       function tryAutoLoginFromRemembered() {
-        if (skipAutoLoginOnce) return false;
-        const remembered = loadRememberedLogin();
-        if (!remembered) return false;
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        const matched = users.find(
-          (user) =>
-            user.id === remembered.id &&
-            user.password === remembered.password &&
-            normalizeCustomerSiteType(user?.siteType) === requiredCustomerSiteType
-        );
-        if (!matched) return false;
-        localStorage.setItem(STORAGE_SESSION, matched.id);
-        return true;
+        return false;
       }
 
       function getCompanyKey(text, companyCode = "") {
@@ -3014,12 +3150,6 @@
 
       function renderAuthState() {
         let user = getCurrentSessionUser();
-        if (!user) {
-          const autoLoggedIn = tryAutoLoginFromRemembered();
-          if (autoLoggedIn) {
-            user = getCurrentSessionUser();
-          }
-        }
         const isLoggedIn = Boolean(user);
         authBlockEl.classList.toggle("hidden", isLoggedIn);
         scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
@@ -3030,10 +3160,7 @@
           renderMyInfo(null);
           switchAuthTab("login");
           const remembered = loadRememberedLogin();
-          if (remembered) {
-            document.getElementById("loginId").value = remembered.id;
-            document.getElementById("loginPassword").value = remembered.password;
-          }
+          if (remembered?.id && document.getElementById("loginId")) document.getElementById("loginId").value = remembered.id;
         }
         if (isLoggedIn) {
           const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
@@ -3798,40 +3925,50 @@
         orderHistoryDetailListEl.innerHTML = detailRows || '<div class="history-item">상세 내역이 없습니다.</div>';
       }
 
-      loginFormEl.addEventListener("submit", (event) => {
+      function upsertCustomerStubInLocalList(stub) {
+        if (!stub?.id) return;
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const cleaned = sanitizeCustomerRecordsStripPasswords([stub])[0];
+        const key = normalize(String(cleaned.id));
+        const ix = users.findIndex((u) => normalize(String(u?.id ?? "")) === key);
+        if (ix >= 0) users[ix] = { ...users[ix], ...cleaned };
+        else users.unshift(cleaned);
+        writeStorageArray(STORAGE_CUSTOMERS, users);
+      }
+
+      loginFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         const id = normalize(document.getElementById("loginId").value);
         const password = normalize(document.getElementById("loginPassword").value);
-        const users = readStorageArray(STORAGE_CUSTOMERS);
-        const matchedByCredential = users.find((user) => user.id === id && user.password === password);
-        const matched = users.find(
-          (user) =>
-            user.id === id &&
-            user.password === password &&
-            normalizeCustomerSiteType(user?.siteType) === requiredCustomerSiteType
-        );
-        if (!matched) {
-          if (matchedByCredential) {
+        const result = await verifyCustomerCredentialsForCustomerPage(id, password);
+        if (!result.ok) {
+          if (result.reason === "wrong_site") {
             alert("접근불가한아이디입니다. 관리자에게 문의하세요");
             return;
           }
           alert("아이디 또는 비밀번호가 올바르지 않습니다.");
           return;
         }
-        localStorage.setItem(STORAGE_SESSION, matched.id);
-        localStorage.setItem(
-          STORAGE_CUSTOMER_REMEMBERED_LOGIN,
-          JSON.stringify({ id: matched.id, password: matched.password })
-        );
-        recordCustomerLogin(matched);
+        upsertCustomerStubInLocalList(result.stub);
+        setDeviceCustomerLoginSecret(result.stub.id, password);
+        localStorage.setItem(STORAGE_SESSION, result.stub.id);
+        localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: result.stub.id }));
+        recordCustomerLogin(result.stub);
         loginFormEl.reset();
         currentCustomerTab = "register";
         renderAuthState();
       });
 
       logoutBtnEl.addEventListener("click", () => {
+        const prev = getCurrentSessionUser();
         skipAutoLoginOnce = true;
+        if (prev?.id) forgetDeviceCustomerLoginSecret(String(prev.id));
         localStorage.removeItem(STORAGE_SESSION);
+        localStorage.removeItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN);
+        try {
+          scheduleSiteClientKvState.nativeRemoveItem("scheduleSiteCustomerSession");
+          scheduleSiteClientKvState.nativeRemoveItem("scheduleSiteCustomerRememberedLogin");
+        } catch (_) {}
         editingScheduleId = null;
         currentCustomerTab = "register";
         myInfoOpen = false;
@@ -3885,7 +4022,7 @@
         }
         const effectiveCode = getEffectiveUserCompanyCode(users[userIndex]);
         const fixedCompanyName = resolveRegisteredCompanyNameForUser(users[userIndex], effectiveCode) || normalize(users[userIndex]?.company);
-        users[userIndex].password = nextPassword;
+        users[userIndex].password = "";
         users[userIndex].company = fixedCompanyName;
         users[userIndex].phone = nextPhone;
         if (effectiveCode && !normalize(users[userIndex].companyCode)) {
@@ -3893,13 +4030,8 @@
         }
         writeStorageArray(STORAGE_CUSTOMERS, users);
         ensureCompanyStored(fixedCompanyName, nextPhone, effectiveCode);
-        const remembered = loadRememberedLogin();
-        if (remembered && remembered.id === String(user?.id || "")) {
-          localStorage.setItem(
-            STORAGE_CUSTOMER_REMEMBERED_LOGIN,
-            JSON.stringify({ id: remembered.id, password: nextPassword })
-          );
-        }
+        setDeviceCustomerLoginSecret(String(user?.id || ""), nextPassword);
+        localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: String(user?.id || "") }));
         try {
           await syncCustomersTableFromStorage();
           await syncCompaniesTableFromStorage();
