@@ -3286,20 +3286,30 @@
         return diffDays >= 4;
       }
 
+      function normalizeCustomerSiteShootRpcRows(payload) {
+        if (payload == null) return [];
+        if (Array.isArray(payload)) return payload;
+        if (typeof payload === "object" && /^[0-9a-f-]{36}$/i.test(String(payload.schedule_id || "").trim())) return [payload];
+        return [];
+      }
+
       function mergeCustomerSiteShootCompletionRows(rows) {
-        for (const row of Array.isArray(rows) ? rows : []) {
+        const list = normalizeCustomerSiteShootRpcRows(rows);
+        for (const row of list) {
           const sid = String(row?.schedule_id || "")
             .trim()
             .toLowerCase();
           if (!/^[0-9a-f-]{36}$/i.test(sid)) continue;
-          customerSiteShootCompletionMap.set(sid, {
-            done_at: row?.photographer_site_done_at || null,
-            thumb: row?.site_photo_thumbnail_url || "",
-            view: row?.site_photo_view_url || "",
-            work_url: row?.delivery_work_folder_url || "",
-            photo_notified_at: row?.photo_notified_at ?? null,
-            video_notified_at: row?.video_notified_at ?? null,
-          });
+          const prev = customerSiteShootCompletionMap.get(sid);
+          const next = {
+            done_at: row?.photographer_site_done_at ?? prev?.done_at ?? null,
+            thumb: String(row?.site_photo_thumbnail_url || "").trim() || prev?.thumb || "",
+            view: String(row?.site_photo_view_url || "").trim() || prev?.view || "",
+            work_url: String(row?.delivery_work_folder_url || "").trim() || prev?.work_url || "",
+            photo_notified_at: row?.photo_notified_at ?? prev?.photo_notified_at ?? null,
+            video_notified_at: row?.video_notified_at ?? prev?.video_notified_at ?? null,
+          };
+          customerSiteShootCompletionMap.set(sid, next);
         }
       }
 
@@ -3326,12 +3336,12 @@
           }),
           cache: "no-store",
         });
-        const rows = await res.json().catch(() => []);
+        const rowsRaw = await res.json().catch(() => []);
         if (!res.ok) {
-          console.warn("[customer-site-shoot]", rows);
+          console.warn("[customer-site-shoot]", rowsRaw);
           return [];
         }
-        return Array.isArray(rows) ? rows : [];
+        return normalizeCustomerSiteShootRpcRows(rowsRaw);
       }
 
       async function refreshCustomerSiteShootCompletionMap(schedules) {

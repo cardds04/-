@@ -1,0 +1,64 @@
+-- 고객 내등록현황 RPC: 스케줄–납품상태 조인 안정화 + 업체 코드 불일치 시에도 동일 업체명 스케줄이 결과에 포함되도록 완화
+-- (메인 보드와 동일한 shoot_delivery_drive_state 행을 읽도록)
+
+drop function if exists public.customer_site_shoot_completion(text, text, text[]);
+
+create function public.customer_site_shoot_completion(
+  p_company_name text,
+  p_company_code text,
+  p_schedule_ids text[]
+)
+returns table (
+  schedule_id text,
+  photographer_site_done_at timestamptz,
+  site_photo_thumbnail_url text,
+  site_photo_view_url text,
+  delivery_work_folder_url text,
+  photo_notified_at timestamptz,
+  video_notified_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    trim(s.id::text),
+    st.photographer_site_done_at,
+    case
+      when st.photographer_site_signature_url is not null and length(trim(st.photographer_site_signature_url)) > 0
+      then trim(st.photographer_site_signature_url)
+      when st.photographer_site_file_id is not null and length(trim(st.photographer_site_file_id)) > 0
+      then 'https://drive.google.com/thumbnail?id=' || trim(st.photographer_site_file_id) || '&sz=w800'
+      else null
+    end,
+    case
+      when st.photographer_site_signature_url is not null and length(trim(st.photographer_site_signature_url)) > 0
+      then trim(st.photographer_site_signature_url)
+      when st.photographer_site_file_id is not null and length(trim(st.photographer_site_file_id)) > 0
+      then 'https://drive.google.com/file/d/' || trim(st.photographer_site_file_id) || '/view?usp=sharing'
+      else null
+    end,
+    case
+      when st.company_share_link is not null and length(trim(st.company_share_link)) > 0
+      then trim(st.company_share_link)
+      when st.company_folder_id is not null and length(trim(st.company_folder_id)) > 0
+      then 'https://drive.google.com/drive/folders/' || trim(st.company_folder_id)
+      else null
+    end,
+    st.photo_notified_at,
+    st.video_notified_at
+  from public.schedules s
+  left join public.shoot_delivery_drive_state st
+    on lower(trim(st.schedule_id)) = lower(trim(s.id::text))
+  where p_schedule_ids is not null
+    and cardinality(p_schedule_ids) > 0
+    and s.id::text = any(p_schedule_ids)
+    and lower(trim(s.company_name)) = lower(trim(coalesce(p_company_name, '')));
+$$;
+
+revoke all on function public.customer_site_shoot_completion(text, text, text[]) from public;
+grant execute on function public.customer_site_shoot_completion(text, text, text[]) to anon;
+grant execute on function public.customer_site_shoot_completion(text, text, text[]) to authenticated;
+
+comment on function public.customer_site_shoot_completion(text, text, text[]) is '고객 스케줄: 현장·확인 이미지 URL, 작업폴더 링크, 납품 문자 시각 — 스케줄 id+업체명 일치로 조회(code 불일치 무시, 대시보드와 동일 state 행)';
