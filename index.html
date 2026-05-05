@@ -46,6 +46,28 @@
         font-size: clamp(14px, 1.3vw, 21px);
       }
 
+      /** 배포 반영 시간 — 관리 페이지 상단 확인용 */
+      .admin-deploy-meta {
+        margin-top: 8px;
+        text-align: center;
+        font-size: clamp(12px, 1.05vw, 14px);
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .admin-deploy-meta .deploy-push-ok {
+        color: #15803d;
+        font-weight: 800;
+        margin-right: 4px;
+      }
+      .admin-deploy-meta code {
+        background: var(--badge);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 0.92em;
+        color: #314160;
+      }
+
       .top-tabs {
         margin: 26px 6px 12px;
         display: flex;
@@ -1802,6 +1824,7 @@
   <body>
     <main class="wrap">
       <h1>촬영스케줄 관리자페이지</h1>
+      <div id="adminDeployMetaBadge" class="admin-deploy-meta" aria-live="polite">배포·업데이트 시각 불러오는 중…</div>
       <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
 
       <div class="top-tabs">
@@ -4669,6 +4692,49 @@
         const s = String(date.getSeconds()).padStart(2, "0");
         return `${h}:${m}:${s}`;
       }
+
+      function formatDeployMetaKstReadable(isoUtc) {
+        const s = String(isoUtc || "").trim();
+        if (!s) return "";
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) return "";
+        return new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false
+        }).format(d);
+      }
+
+      /** Vercel serverless 시작 시각(≈ 새 배포 반영)·Git 커밋 표시 — 푸시 후 반영 확인용 */
+      async function refreshAdminDeployMetaBadge() {
+        const el = document.getElementById("adminDeployMetaBadge");
+        if (!el) return;
+        try {
+          const fetchFn =
+            typeof window.__scheduleSiteNativeFetch === "function" ? window.__scheduleSiteNativeFetch : fetch;
+          const res = await fetchFn(`/api/site-release-meta?t=${Date.now()}`, { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || !data.ok) {
+            const msg = escapeHtml(data && data.message ? data.message : `HTTP ${res.status}`);
+            el.innerHTML = `<span style="color:#b45309">배포 정보를 불러오지 못했습니다 (${msg}). <code>Vercel</code> 또는 <code>vercel dev</code> 에서 접속해야 합니다.</span>`;
+            return;
+          }
+          const iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
+          const dt = escapeHtml(formatDeployMetaKstReadable(iso) || iso.slice(0, 19));
+          const shortSha = escapeHtml(String(data.gitCommitShaShort || "").trim());
+          const shaLine = shortSha ? ` · 빌드 <code>${shortSha}</code>` : "";
+          el.innerHTML = `<span class="deploy-push-ok">푸시 완료</span> 업데이트시간(KST): <strong>${dt}</strong>${shaLine}`;
+        } catch (err) {
+          const m = escapeHtml(err && err.message ? err.message : String(err));
+          el.innerHTML = `<span style="color:#b45309">배포 정보 오류 (${m}).</span>`;
+        }
+      }
+
       function setSyncStatus(text, tone = "info", options = {}) {
         const now = Date.now();
         const force = Boolean(options && options.force);
@@ -6051,6 +6117,7 @@
       startCouponPassesRealtimeSubscription();
       startDayoffRequestsRealtimeSubscription();
       window.addEventListener("focus", () => {
+        void refreshAdminDeployMetaBadge();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullWritersFromSupabaseAndRefresh();
         void pullPaymentsFromSupabaseAndApply();
@@ -6061,6 +6128,7 @@
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
+          void refreshAdminDeployMetaBadge();
           void pullAdminCompaniesFromSupabaseAndRefresh();
           void pullWritersFromSupabaseAndRefresh();
           void pullPaymentsFromSupabaseAndApply();
@@ -6070,6 +6138,8 @@
           void pullSharedLimitConfigAndApply();
         }
       });
+
+      void refreshAdminDeployMetaBadge();
 
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
