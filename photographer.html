@@ -2364,6 +2364,30 @@
         }
       }
 
+      const SHOOT_DELIVERY_DRIVE_LINK_ROWS = [
+        { key: "photo_edit_folder_web_link", label: "사진편집완료" },
+        { key: "photo_original_folder_web_link", label: "사진원본파일" },
+        { key: "video_edit_folder_web_link", label: "영상편집완료" },
+        { key: "video_original_folder_web_link", label: "영상원본파일" },
+      ];
+
+      function shootDriveDeliverySubfoldersHtml(d) {
+        if (!d || typeof d !== "object") return "";
+        const parts = [];
+        for (const { key, label } of SHOOT_DELIVERY_DRIVE_LINK_ROWS) {
+          const url = normalize(d[key]);
+          if (!url) continue;
+          const safeHref = url.replace(/"/g, "&quot;");
+          parts.push(
+            `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-weight:600;text-decoration:underline;">${label}</a>`
+          );
+        }
+        if (!parts.length) return "";
+        return `<div style="flex-basis:100%;width:100%;font-size:11px;line-height:1.55;color:#475569;margin-top:4px;">Drive 하위폴더 · ${parts.join(
+          " · "
+        )}</div>`;
+      }
+
       function renderScheduleList() {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
@@ -2437,7 +2461,8 @@
                 const origBtnAttrs = origNotified
                   ? ""
                   : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}</div>`;
+                const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
+                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${subfoldersHtml}</div>`;
               } else {
                 shootBlock = `<div class="shoot-complete-row shoot-complete-before" data-schedule-id="${scheduleId}">
                   <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인전</button>
@@ -2522,27 +2547,24 @@
             }
             photographerShootStatusGen += 1;
             photographerShootDoneIds.add(sid);
-            if (
-              normalize(data.shoot_folder_web_link) ||
-              normalize(data.company_folder_web_link)
-            ) {
-              const prevEntry = photographerShootDeliveryById[sid] || {};
-              photographerShootDeliveryById = {
-                ...photographerShootDeliveryById,
-                [sid]: {
-                  shoot_folder_web_link:
-                    normalize(data.shoot_folder_web_link) ||
-                    normalize(prevEntry.shoot_folder_web_link) ||
-                    "",
-                  company_folder_web_link:
-                    normalize(data.company_folder_web_link) ||
-                    normalize(prevEntry.company_folder_web_link) ||
-                    "",
-                  photographer_original_upload_notified_at:
-                    normalize(prevEntry.photographer_original_upload_notified_at) || null,
-                },
-              };
+            const prevEntry = photographerShootDeliveryById[sid] || {};
+            const mergedDeliveryRow = {
+              ...prevEntry,
+              shoot_folder_web_link:
+                normalize(data.shoot_folder_web_link) || normalize(prevEntry.shoot_folder_web_link) || "",
+              company_folder_web_link:
+                normalize(data.company_folder_web_link) || normalize(prevEntry.company_folder_web_link) || "",
+              photographer_original_upload_notified_at:
+                normalize(prevEntry.photographer_original_upload_notified_at) || null,
+            };
+            for (const row of SHOOT_DELIVERY_DRIVE_LINK_ROWS) {
+              const k = row.key;
+              mergedDeliveryRow[k] = normalize(data[k]) || normalize(prevEntry[k]) || "";
             }
+            photographerShootDeliveryById = {
+              ...photographerShootDeliveryById,
+              [sid]: mergedDeliveryRow,
+            };
             renderScheduleList();
             void refreshPhotographerShootStatus();
             const sms = data.customer_site_notice_sms;
