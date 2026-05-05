@@ -1293,7 +1293,9 @@
         const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
           fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
           fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
-          fetchWriterJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone&order=updated_at.desc`),
+          fetchWriterJsonRows(
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone,customer_phone,code&order=updated_at.desc`
+          ),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
         const writers = (Array.isArray(writersRows) ? writersRows : [])
@@ -1333,8 +1335,20 @@
             partialPaid: normalize(row?.status) === "partial"
           }))
           .filter((row) => row.date && row.company);
+        function directoryPhoneForWriterView(a, b) {
+          for (const v of [a, b]) {
+            const s = normalize(v);
+            if (!s || /^empty$/i.test(s)) continue;
+            return s;
+          }
+          return "";
+        }
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
-          .map((row) => ({ name: normalize(row?.name), phone: normalize(row?.phone) }))
+          .map((row) => ({
+            name: normalize(row?.name),
+            phone: directoryPhoneForWriterView(row?.phone, row?.customer_phone),
+            companyCode: normalize(row?.code)
+          }))
           .filter((row) => row.name);
         const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
           id: normalize(row?.id),
@@ -1663,14 +1677,31 @@
         return baseDate + parseScheduleTimeToMinutes(item?.time) * 60000;
       }
 
+      function stripParenSegmentsForCompanyMatch(name) {
+        return normalize(name)
+          .toLowerCase()
+          .replace(/\([^)]*\)/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
       function getCompanyPhoneForItem(item) {
         const directPhone = normalize(item?.customerPhone);
         if (directPhone) return directPhone;
-        const companyName = normalize(item?.company).toLowerCase();
+        const companyName = normalize(item?.company);
         if (!companyName) return "-";
-        const matched = readStorageArray(STORAGE_COMPANIES).find(
-          (company) => normalize(company?.name).toLowerCase() === companyName
-        );
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const nameLc = companyName.toLowerCase();
+        let matched = companies.find((company) => normalize(company?.name).toLowerCase() === nameLc);
+        const code = normalize(item?.companyCode);
+        if (!matched && code) {
+          matched = companies.find((company) => normalize(company?.companyCode) === code);
+        }
+        if (!matched) {
+          const sk = stripParenSegmentsForCompanyMatch(companyName);
+          if (sk) {
+            matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
+          }
+        }
         return normalize(matched?.phone) || "-";
       }
 
