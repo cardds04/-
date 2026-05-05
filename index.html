@@ -2167,6 +2167,12 @@
             Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지).
           </p>
           <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <select id="companyDirectorySiteFilterSelect" class="small-select" style="min-width: 130px;" aria-label="사이트별 보기">
+              <option value="">전체 사이트</option>
+              <option value="inlog">인로그만</option>
+              <option value="shopick">쇼픽만</option>
+              <option value="thefeeling">더필링만</option>
+            </select>
             <input
               id="companyDirectorySearchInput"
               class="small-select"
@@ -5946,6 +5952,7 @@
       const companyDirectorySectionEl = document.getElementById("companyDirectorySection");
       const companyDirectoryRefreshBtnEl = document.getElementById("companyDirectoryRefreshBtn");
       const companyDirectorySearchInputEl = document.getElementById("companyDirectorySearchInput");
+      const companyDirectorySiteFilterSelectEl = document.getElementById("companyDirectorySiteFilterSelect");
       const companyDirectoryCountHintEl = document.getElementById("companyDirectoryCountHint");
       const companyDirectoryTabListBodyEl = document.getElementById("companyDirectoryTabListBody");
       const companyDirectoryEditRowIdEl = document.getElementById("companyDirectoryEditRowId");
@@ -8742,9 +8749,15 @@
       function renderCompanyDirectoryAdminTable() {
         if (!companyDirectoryTabListBodyEl) return;
         const kwRaw = normalize(companyDirectorySearchInputEl?.value || "").toLowerCase();
+        const siteFilter = normalize(companyDirectorySiteFilterSelectEl?.value || "");
         const selectedId = normalize(companyDirectoryEditRowIdEl?.value || "");
-        const inlineId = normalize(companyDirectoryInlineEditRowId || "");
+        let inlineId = normalize(companyDirectoryInlineEditRowId || "");
         let filtered = [...companyDirectoryAdminRows];
+        if (siteFilter === "inlog" || siteFilter === "shopick" || siteFilter === "thefeeling") {
+          filtered = filtered.filter(
+            (r) => normalizeCustomerSiteTypeForStorage(r?.site_type) === siteFilter
+          );
+        }
         if (kwRaw) {
           filtered = filtered.filter((r) => {
             const compHint = String(getCompanyDirectoryCompositionCellLabel(r) || "").toLowerCase();
@@ -8761,6 +8774,10 @@
               .join("|");
             return blob.includes(kwRaw);
           });
+        }
+        if (inlineId && !filtered.some((r) => normalize(String(r?.id ?? "")) === inlineId)) {
+          companyDirectoryInlineEditRowId = "";
+          inlineId = "";
         }
         if (companyDirectoryCountHintEl) {
           companyDirectoryCountHintEl.textContent =
@@ -16792,6 +16809,9 @@
         renderCompanyDirectoryAdminTable();
       });
       companyDirectorySearchInputEl?.addEventListener("input", () => {
+        renderCompanyDirectoryAdminTable();
+      });
+      companyDirectorySiteFilterSelectEl?.addEventListener("change", () => {
         renderCompanyDirectoryAdminTable();
       });
       companyDirectoryTabListBodyEl?.addEventListener("click", (event) => {
