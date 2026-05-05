@@ -1238,6 +1238,8 @@
       /** 현장 확인 완료 건별 Drive 정보 (목록 상태 API 및 완료 응답으로 갱신) */
       let photographerShootDeliveryById = Object.create(null);
       let lastPhotographerShootStatusKey = "";
+      /** 늦게 도착한 /api/photographer-shoot-status 응답이 방금 완료 처리한 목록 상태를 덮어쓰지 않도록 */
+      let photographerShootStatusGen = 0;
       const ALWAYS_SHOW_AUTH_FORMS = false;
       var writerTablePullTimer = null;
       var writerTablePullRunning = false;
@@ -1450,6 +1452,12 @@
 
       function normalize(text) {
         return String(text || "").trim();
+      }
+
+      /** 스케줄 UUID — Set/HTML 비교 안정화(대소문자 혼합 방지) */
+      function canonScheduleUuid(raw) {
+        const s = normalize(raw);
+        return /^[0-9a-f-]{36}$/i.test(s) ? s.toLowerCase() : "";
       }
 
       function normalizePayrollPersonName(name) {
@@ -2307,11 +2315,12 @@
         }
         const rows = getMySchedules();
         const scheduleIds = rows
-          .map((r) => String(r?.customerScheduleId || "").trim())
-          .filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+          .map((r) => canonScheduleUuid(r?.customerScheduleId))
+          .filter(Boolean);
         if (!scheduleIds.length) {
           return;
         }
+        const startedAtGen = photographerShootStatusGen;
         try {
           const res = await fetch("/api/photographer-shoot-status", {
             method: "POST",
@@ -2323,8 +2332,9 @@
             })
           });
           const data = await res.json().catch(() => ({}));
+          if (startedAtGen !== photographerShootStatusGen) return;
           if (res.ok && data.ok && Array.isArray(data.doneScheduleIds)) {
-            const next = new Set(data.doneScheduleIds.map((x) => String(x)));
+            const next = new Set(data.doneScheduleIds.map((x) => canonScheduleUuid(x)).filter(Boolean));
             let diff = next.size !== photographerShootDoneIds.size;
             if (!diff) {
               for (const id of next) {
@@ -2337,11 +2347,15 @@
             photographerShootDoneIds = next;
             if (data.deliveryByScheduleId && typeof data.deliveryByScheduleId === "object") {
               const prev = photographerShootDeliveryById;
+              const mergedDelivery = { ...photographerShootDeliveryById };
               for (const k of Object.keys(data.deliveryByScheduleId)) {
+                const ck = canonScheduleUuid(k);
+                if (!ck) continue;
                 const v = data.deliveryByScheduleId[k];
-                if (v && typeof v === "object" && prev[k] !== v) diff = true;
+                if (v && typeof v === "object" && prev[ck] !== v) diff = true;
+                mergedDelivery[ck] = v;
               }
-              photographerShootDeliveryById = { ...photographerShootDeliveryById, ...data.deliveryByScheduleId };
+              photographerShootDeliveryById = mergedDelivery;
             }
             if (diff) renderScheduleList();
           }
@@ -2403,8 +2417,8 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
-            const scheduleId = normalize(item.customerScheduleId);
-            const hasServerId = /^[0-9a-f-]{36}$/i.test(scheduleId);
+            const scheduleId = canonScheduleUuid(item.customerScheduleId);
+            const hasServerId = Boolean(scheduleId);
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
@@ -2453,8 +2467,8 @@
           .join("");
 
         const statusKey = rows
-          .map((r) => String(r?.customerScheduleId || "").trim())
-          .filter((x) => /^[0-9a-f-]{36}$/i.test(x))
+          .map((r) => canonScheduleUuid(r?.customerScheduleId))
+          .filter(Boolean)
           .sort()
           .join("|");
         if (statusKey !== lastPhotographerShootStatusKey) {
@@ -2465,8 +2479,12 @@
       scheduleListEl.addEventListener("click", async (event) => {
         const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
         if (shootDoneBtn) {
-          const sid = String(shootDoneBtn.dataset.scheduleId || "");
+          const sid = canonScheduleUuid(shootDoneBtn.dataset.scheduleId || "");
           const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
           if (!writer || !USE_SUPABASE_SYNC) {
             alert("로그인 및 서버 동기화가 필요합니다.");
             return;
@@ -2483,11 +2501,26 @@
             fd.append("omitSiteImage", "1");
             const res = await fetch("/api/photographer-shoot-complete", { method: "POST", body: fd });
             const data = await res.json().catch(() => ({}));
+            const alreadyCompleted =
+              res.status === 409 ||
+              String(data.message || "")
+                .trim()
+                .includes("이미 현장 확인");
             if (!res.ok || !data.ok) {
+              if (alreadyCompleted && sid) {
+                photographerShootStatusGen += 1;
+                photographerShootDoneIds.add(sid);
+                renderScheduleList();
+                void refreshPhotographerShootStatus();
+                shootDoneBtn.disabled = false;
+                alert(data.message || "이미 현장 확인 처리된 건입니다. 목록이 갱신되었습니다.");
+                return;
+              }
               alert(data.message || "현장 확인 처리에 실패했습니다.");
               shootDoneBtn.disabled = false;
               return;
             }
+            photographerShootStatusGen += 1;
             photographerShootDoneIds.add(sid);
             if (
               normalize(data.shoot_folder_web_link) ||
@@ -2511,6 +2544,7 @@
               };
             }
             renderScheduleList();
+            void refreshPhotographerShootStatus();
             const sms = data.customer_site_notice_sms;
             let smsNote = "";
             if (sms === "sent") {
@@ -2540,8 +2574,12 @@
         }
         const originalBtn = event.target.closest("button[data-action='originalUploadNotify']");
         if (originalBtn) {
-          const sid = String(originalBtn.dataset.scheduleId || "");
+          const sid = canonScheduleUuid(originalBtn.dataset.scheduleId || "");
           const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
           if (!writer || !USE_SUPABASE_SYNC) {
             alert("로그인 및 서버 동기화가 필요합니다.");
             return;
