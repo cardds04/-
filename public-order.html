@@ -323,12 +323,23 @@
       }
       .customer-site-work-link {
         margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+        row-gap: 4px;
       }
       .customer-site-work-link a {
         font-weight: 800;
         color: #15803d;
         text-decoration: underline;
         word-break: break-all;
+      }
+      .customer-site-delivery-meta {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #15803d;
+        line-height: 1.35;
       }
       .status-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
       .small { font-size: 0.78rem; padding: 6px 14px; border-radius: 10px; width: auto; }
@@ -4334,11 +4345,43 @@
               thumb: row?.site_photo_thumbnail_url || "",
               view: row?.site_photo_view_url || "",
               work_url: row?.delivery_work_folder_url || "",
+              photo_notified_at: row?.photo_notified_at ?? null,
+              video_notified_at: row?.video_notified_at ?? null,
             });
           }
         } catch (error) {
           console.warn("[customer-site-shoot]", error);
         }
+      }
+
+      function customerShootDeadlineMdPlus10(dateKey) {
+        const m = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return "";
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        if (Number.isNaN(d.getTime())) return "";
+        d.setDate(d.getDate() + 10);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+
+      function customerNeedsDeliveryPhotoPart(compRaw) {
+        const c = String(compRaw || "").trim();
+        return Boolean(c && /사진|블로그/.test(c));
+      }
+      function customerNeedsDeliveryVideoPart(compRaw) {
+        const c = String(compRaw || "").trim();
+        return Boolean(c && /영상/.test(c));
+      }
+
+      function customerDeliveryStatusLabel(composition, info) {
+        const np = customerNeedsDeliveryPhotoPart(composition);
+        const nv = customerNeedsDeliveryVideoPart(composition);
+        if (!np && !nv) return "";
+        const pd = !!(info.photo_notified_at);
+        const vd = !!(info.video_notified_at);
+        if (np && nv)
+          return `${pd ? "사진완료" : "사진미완료"} ${vd ? "영상완료" : "영상미완료"}`;
+        if (np) return pd ? "사진완료" : "사진미완료";
+        return vd ? "영상완료" : "영상미완료";
       }
 
       function formatCustomerSiteShootBlock(item) {
@@ -4359,12 +4402,25 @@
             info.view && !info.thumb
               ? `<div style="margin-top:6px;"><a href="${escapeHtml(info.view)}" target="_blank" rel="noopener noreferrer">현장 사진 보기</a></div>`
               : "";
+          const statusLabel = customerDeliveryStatusLabel(item?.composition || "", info);
+          const dl = customerShootDeadlineMdPlus10(item?.date || "");
+          const metaExtra =
+            statusLabel || dl
+              ? `<span class="customer-site-delivery-meta">${
+                  statusLabel ? escapeHtml(statusLabel) : ""
+                }${statusLabel && dl ? " · " : ""}${
+                  dl ? `최종납품기한 ${escapeHtml(dl)}` : ""
+                }</span>`
+              : "";
+          const hasWork =
+            info.work_url && String(info.work_url).trim().replace(/^https?:\/\//i, "").length > 0;
           const workRow =
-            info.work_url &&
-            String(info.work_url).trim().replace(/^https?:\/\//i, "").length > 0
-              ? `<div class="customer-site-work-link"><span class="helper" style="font-weight:800;margin-right:6px;color:#15803d;">작업링크</span><a href="${escapeHtml(
-                  String(info.work_url).trim()
-                )}" target="_blank" rel="noopener noreferrer">납품 폴더 열기 ↗</a></div>`
+            hasWork || metaExtra
+              ? `<div class="customer-site-work-link"><span class="helper" style="font-weight:800;margin-right:2px;color:#15803d;">작업링크</span>${
+                  hasWork
+                    ? `<a href="${escapeHtml(String(info.work_url).trim())}" target="_blank" rel="noopener noreferrer">납품 폴더 열기 ↗</a>`
+                    : ""
+                }${metaExtra}</div>`
               : "";
           return `<div class="customer-site-shoot-block customer-site-shoot-done">
                   <div class="customer-site-shoot-title">현장 촬영 완료${
