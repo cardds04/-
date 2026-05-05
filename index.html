@@ -3694,7 +3694,9 @@
           });
         }
       }
-      const CLIENT_KV_FETCH_TIMEOUT_MS = 5000;
+      /** 느린망·Supabase 부하 시 5초는 자주 초과되어 경고만 반복되므로 여유 두고, 실패 시 1회 재시도 */
+      const CLIENT_KV_FETCH_TIMEOUT_MS = 16000;
+      const CLIENT_KV_FETCH_RETRY_DELAY_MS = 900;
       const CLIENT_KV_PUSH_TIMEOUT_MS = 25000;
       const INLOG_SUPABASE_REFRESH_THROTTLE_MS = 6000;
       let scheduleSiteClientKvPushInFlight = false;
@@ -3807,69 +3809,90 @@
         }
         return ok;
       }
+      /** 동시 호출 시 fetch·initialPullDone 레이스·중복 로그 방지 */
+      let scheduleSiteClientKvPullSingleton = null;
       async function pullScheduleSiteClientKvFromSupabase() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE) {
           scheduleSiteClientKvState.initialPullDone = true;
           return false;
         }
-        let didHydrate = false;
-        const ac = new AbortController();
-        const tid = setTimeout(() => ac.abort(), CLIENT_KV_FETCH_TIMEOUT_MS);
-        try {
-          const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=kv,updated_at&limit=1`,
-            {
-              method: "GET",
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              cache: "no-store",
-              signal: ac.signal
+        if (scheduleSiteClientKvPullSingleton) return scheduleSiteClientKvPullSingleton;
+        scheduleSiteClientKvPullSingleton = (async () => {
+          let didHydrate = false;
+          try {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              if (attempt > 0) {
+                await new Promise((r) => setTimeout(r, CLIENT_KV_FETCH_RETRY_DELAY_MS));
+              }
+              const ac = new AbortController();
+              const tid = setTimeout(() => ac.abort(), CLIENT_KV_FETCH_TIMEOUT_MS);
+              try {
+                const response = await fetch(
+                  `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(
+                    SUPABASE_CLIENT_KV_ROW_ID
+                  )}&select=kv,updated_at&limit=1`,
+                  {
+                    method: "GET",
+                    headers: {
+                      apikey: SUPABASE_ANON_KEY,
+                      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    cache: "no-store",
+                    signal: ac.signal
+                  }
+                );
+                if (!response.ok) {
+                  const errBody = await response.text();
+                  console.error("[CLIENT_KV] GET 실패", response.status, errBody);
+                  return false;
+                }
+                const rows = await response.json();
+                if (!Array.isArray(rows) || rows.length === 0) {
+                  return false;
+                }
+                const row = rows[0];
+                const serverAt = String(row?.updated_at || "").trim();
+                const kv = row?.kv;
+                const serverKeyCount = kv && typeof kv === "object" ? Object.keys(kv).length : 0;
+                const shouldApply = serverKeyCount > 0;
+                if (shouldApply) {
+                  scheduleSiteClientKvState.hydrateFromServerKv(kv);
+                  scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
+                  try {
+                    scheduleSiteClientKvState.nativeSetItem(
+                      scheduleSiteClientKvState.snapshotStorageKey,
+                      JSON.stringify(Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()))
+                    );
+                  } catch (_) {}
+                  didHydrate = true;
+                }
+                return didHydrate;
+              } catch (error) {
+                const aborted = error && error.name === "AbortError";
+                if (!aborted) {
+                  console.warn("[CLIENT_KV] Supabase 복원 실패", error);
+                  return false;
+                }
+                if (attempt >= 1) {
+                  console.warn(
+                    "[CLIENT_KV] 복원 요청 시간 초과(재시도 후)·로컬 캐시로 계속합니다. 네트워크 또는 Supabase 응답이 느릴 때 나올 수 있습니다."
+                  );
+                  return false;
+                }
+              } finally {
+                clearTimeout(tid);
+              }
             }
-          );
-          if (!response.ok) {
-            const errBody = await response.text();
-            console.error("[CLIENT_KV] GET 실패", response.status, errBody);
             return false;
+          } finally {
+            scheduleSiteClientKvState.initialPullDone = true;
+            scheduleSiteClientKvPullSingleton = null;
+            if (scheduleSiteClientKvState.pendingKvPushAfterInitialPull) {
+              scheduleSiteClientKvState.queueSupabaseKvPush();
+            }
           }
-          const rows = await response.json();
-          if (!Array.isArray(rows) || rows.length === 0) {
-            return false;
-          }
-          const row = rows[0];
-          const serverAt = String(row?.updated_at || "").trim();
-          const kv = row?.kv;
-          const serverKeyCount = kv && typeof kv === "object" ? Object.keys(kv).length : 0;
-          const shouldApply = serverKeyCount > 0;
-          if (shouldApply) {
-            // 서버값으로 memoryStore 업데이트
-            scheduleSiteClientKvState.hydrateFromServerKv(kv);
-            scheduleSiteClientKvState.setNativeLastScopedWriteAt(serverAt || new Date().toISOString());
-            // 로컬 스냅샷을 서버값으로 즉시 덮어씀 — 구 스냅샷이 push 경로로 서버를 덮지 못하게
-            try {
-              scheduleSiteClientKvState.nativeSetItem(
-                scheduleSiteClientKvState.snapshotStorageKey,
-                JSON.stringify(Object.fromEntries(scheduleSiteClientKvState.memoryStore.entries()))
-              );
-            } catch (_) {}
-            didHydrate = true;
-          }
-          return didHydrate;
-        } catch (error) {
-          if (error && error.name === "AbortError") {
-            console.warn("[CLIENT_KV] 복원 요청 시간 초과 — 화면은 계속 표시됩니다.");
-          } else {
-            console.warn("[CLIENT_KV] Supabase 복원 실패", error);
-          }
-          return false;
-        } finally {
-          clearTimeout(tid);
-          scheduleSiteClientKvState.initialPullDone = true;
-          if (scheduleSiteClientKvState.pendingKvPushAfterInitialPull) {
-            scheduleSiteClientKvState.queueSupabaseKvPush();
-          }
-        }
+        })();
+        return scheduleSiteClientKvPullSingleton;
       }
       /** 주기 poll 없음: 창 포커스·탭 복귀·다른 탭 스냅샷 변경 시에만 서버 기준 동기화(편집 중 제외) */
       const CLIENT_KV_SOFT_PULL_DEBOUNCE_MS = 450;
