@@ -1129,11 +1129,19 @@
         margin-bottom: 10px;
         font-size: 0.82rem;
       }
+      .today-new-companies .today-new-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
       .today-new-companies .today-new-title {
         font-weight: 800;
         color: #15803d;
-        margin-bottom: 4px;
+        margin-bottom: 0;
         font-size: 0.85rem;
+        flex: 1;
       }
       .today-new-companies .today-new-item {
         color: #166534;
@@ -4498,6 +4506,8 @@
       let companyRealtimeTimer = null;
       // 세션 내 오늘 신규업체 최대값 유지 (pull 순서 차이로 인한 깜빡임 방지)
       let sessionTodayNewNamesMax = [];
+      /** 비우기 클릭 시 해당 yyyy-mm-dd 당일은 목록 미표시(새로고침 시 다시 표시 가능) */
+      let todayNewCompaniesDismissYmd = "";
       let companySyncPromise = null;
       let companySyncQueued = false;
       let writerRealtimeTimer = null;
@@ -12636,17 +12646,25 @@
         const todayStr = new Date().toISOString().slice(0, 10);
         const todayNewCustomers = customerUsers.filter((u) => String(u?.createdAt || "").slice(0, 10) === todayStr);
         const todayNewNamesFresh = [...new Set(todayNewCustomers.map((u) => String(u?.company || "").trim()).filter(Boolean))];
-        // 세션 내 최대값 유지: Supabase pull 순서 차이로 인한 일시적 감소(깜빡임) 방지
-        if (todayNewNamesFresh.length >= sessionTodayNewNamesMax.length) {
-          sessionTodayNewNamesMax = todayNewNamesFresh;
+        let todayNewNames;
+        if (todayNewCompaniesDismissYmd === todayStr) {
+          todayNewNames = [];
+        } else {
+          // 세션 내 최대값 유지: Supabase pull 순서 차이로 인한 일시적 감소(깜빡임) 방지
+          if (todayNewNamesFresh.length >= sessionTodayNewNamesMax.length) {
+            sessionTodayNewNamesMax = todayNewNamesFresh;
+          }
+          todayNewNames = sessionTodayNewNamesMax;
         }
-        const todayNewNames = sessionTodayNewNamesMax;
         const todayBox = document.getElementById("todayNewCompaniesBox");
         if (todayBox) {
           if (todayNewNames.length > 0) {
             todayBox.innerHTML = `
               <div class="today-new-companies">
-                <div class="today-new-title">🆕 오늘 신규 업체 ${todayNewNames.length}개</div>
+                <div class="today-new-title-row">
+                  <span class="today-new-title">🆕 오늘 신규 업체 ${todayNewNames.length}개</span>
+                  <button type="button" class="btn-sm" data-action="clearTodayNewCompanies">비우기</button>
+                </div>
                 ${todayNewNames.map((n) => `<div class="today-new-item">· ${escapeHtml(n)}</div>`).join("")}
               </div>`;
           } else {
@@ -18536,6 +18554,14 @@
       });
 
       companySearchInputEl.addEventListener("input", renderCompanies);
+      document.getElementById("todayNewCompaniesBox")?.addEventListener("click", (event) => {
+        const clearBtn = event.target.closest("button[data-action='clearTodayNewCompanies']");
+        if (!clearBtn) return;
+        event.preventDefault();
+        todayNewCompaniesDismissYmd = new Date().toISOString().slice(0, 10);
+        sessionTodayNewNamesMax = [];
+        renderCompanies();
+      });
       // 업체 목록 사이트 구분 필터: 전체 / 인로그 / 쇼픽 / 더필링 — 하나만 활성
       document.querySelectorAll(".company-site-filter-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
