@@ -1,13 +1,8 @@
 /**
- * POST JSON: { scheduleId, adminPassword, kind: "photo" | "video", customerPhone? }
- * 선택 customerPhone 으로 shoot_delivery_drive_state.customer_phone 업데이트 후 발송(유효한 로컬번호일 때).
+ * POST JSON: { scheduleId, kind: "photo" | "video", customerPhone? }
+ * 15일 대시보드에서 납품 안내 문자 수동 발송 (비밀번호 없음).
  */
 const { sendDashboardDeliverySms } = require("../lib/delivery-drive-run.cjs");
-
-function adminPasswordOk(pw) {
-  const expected = String(process.env.ADMIN_SHOOT_SITE_PASSWORD || "6315").trim();
-  return String(pw || "") === expected;
-}
 
 module.exports = async (req, res) => {
   if (req.method === "OPTIONS") {
@@ -25,13 +20,7 @@ module.exports = async (req, res) => {
   try {
     const body = typeof req.body === "object" && req.body !== null ? req.body : {};
     const scheduleId = String(body.scheduleId || "").trim();
-    const adminPassword = String(body.adminPassword || "");
     const kind = String(body.kind || "").trim().toLowerCase();
-
-    if (!adminPasswordOk(adminPassword)) {
-      res.status(401).json({ ok: false, message: "관리자 비밀번호가 올바르지 않습니다." });
-      return;
-    }
 
     const kindNorm = kind === "video" ? "video" : kind === "photo" ? "photo" : "";
     if (!kindNorm) {

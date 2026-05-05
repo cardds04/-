@@ -14445,7 +14445,7 @@
       }
 
       function dashSmsIdleTitle(label) {
-        return `${label}: 첫 클릭 시 「문자」로 바뀝니다. 3초 안에 문자를 한 번 더 누르면 발송을 진행합니다.`;
+        return `${label}: 첫 클릭 시 「문자」로 바뀝니다. 3초 안에 한 번 더 누르면 바로 발송됩니다.`;
       }
 
       function revertDashSmsBadgeToIdle(btn) {
@@ -14473,7 +14473,6 @@
         const sid = String(btn?.dataset?.scheduleId || "").trim();
         const kindRaw = String(btn?.dataset?.notifyKind || "").trim();
         const kind = kindRaw === "video" ? "video" : "photo";
-        const labelKo = kind === "photo" ? "사진" : "영상";
 
         if (!/^[0-9a-f-]{36}$/i.test(sid)) {
           alert("스케줄 UUID가 필요합니다.");
@@ -14490,27 +14489,11 @@
 
         clearDashSmsArm(dashSmsBadgeKey(btn));
 
-        if (
-          !confirm(
-            `${labelKo} 납품 안내 문자를 고객 번호로 보낼까요?\n(전화번호가 없으면 입력 창이 이어서 열립니다.)`
-          )
-        ) {
-          revertDashSmsBadgeToIdle(btn);
-          return;
-        }
-
-        const pw = prompt("관리자 비밀번호를 입력하세요. (현장 촬영 완료와 동일)");
-        if (pw === null) {
-          revertDashSmsBadgeToIdle(btn);
-          return;
-        }
-
         let pendingPhoneArg = "";
 
         const postSms = async (customerPhoneTrimmed) => {
           const payload = {
             scheduleId: sid,
-            adminPassword: String(pw),
             kind,
           };
           const ph = String(customerPhoneTrimmed || "").trim();
@@ -14528,7 +14511,6 @@
         for (;;) {
           const { res, body } = await postSms(pendingPhoneArg || "");
           if (res.ok && body.ok) {
-            alert(`${labelKo} 납품 안내 문자를 발송했습니다.`);
             kickDashDeliveryRpcRefresh(true);
             return;
           }
@@ -14673,7 +14655,7 @@
         if (rangeHintEl) {
           rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
             windowEnd
-          )} · 오늘 포함 과거 15일 · 납품 안내 문자: 「사진」/「영상」클릭 → 「문자」표시 후 3초 안에 다시 클릭해 발송 · 현장은 작가 앱·관리자 시각 (크론 보조)`;
+          )} · 오늘 포함 과거 15일 · 납품 문자: 「사진」/「영상」→「문자」 후 3초 안 재클릭 시 즉시 발송 · 현장은 작가 앱·관리자 시각 (크론 보조)`;
         }
 
         const waitingFirstRpc = dashDeliveryRpcInFlight && !dashDeliveryRpcEverLoaded;
