@@ -2650,6 +2650,60 @@
         return uniqueNames[0] || fallbackName;
       }
 
+      /** company_directory 에서 업체명으로 code 보강 시 사용 */
+      function inferCompanyCodeFromCompaniesTable(companyName) {
+        const lc = normalize(companyName || "").toLowerCase();
+        if (!lc) return "";
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const hitByName = companies.find((c) => normalize(c?.name || "").toLowerCase() === lc);
+        return normalize(hitByName?.companyCode || hitByName?.code);
+      }
+
+      function stripLooseCompanyNameForCompare(raw) {
+        return normalize(raw || "")
+          .replace(/\([^)]*\)/g, "")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+      }
+
+      /**
+       * Supabase 고객(code O) 과 관리 원본 일정(code 비어있음·표기 차이 등) 간 매칭.
+       */
+      function adminScheduleRowBelongsToCustomerUser(row, user) {
+        const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
+        const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
+        const userCodeNorm = normalize(effectiveCompanyCode);
+
+        let rowCodeNorm = normalize(row?.companyCode);
+        if (!rowCodeNorm && userCodeNorm) {
+          rowCodeNorm = inferCompanyCodeFromCompaniesTable(row?.company);
+        }
+
+        if (userCodeNorm && rowCodeNorm && rowCodeNorm.toLowerCase() === userCodeNorm.toLowerCase()) {
+          return true;
+        }
+
+        const targetCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
+        const targetCompanyNameKey = getCompanyKey(user.company, "");
+        const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
+        const rowNameOnlyKey = getCompanyKey(row?.company, "");
+
+        if (rowCompanyKey === targetCompanyKey || rowNameOnlyKey === targetCompanyKey) return true;
+        if (rowCompanyKey === targetCompanyNameKey || rowNameOnlyKey === targetCompanyNameKey) return true;
+
+        const rComp = normalize(row?.company);
+        if (
+          rComp &&
+          resolvedCompanyName &&
+          stripLooseCompanyNameForCompare(resolvedCompanyName) === stripLooseCompanyNameForCompare(rComp)
+        )
+          return true;
+        if (rComp && user?.company && stripLooseCompanyNameForCompare(user.company) === stripLooseCompanyNameForCompare(rComp))
+          return true;
+
+        return false;
+      }
+
       function buildStableAdminScheduleId(row, companyKeyOverride = "") {
         const date = normalize(row?.date) || "nodate";
         const time = normalize(row?.time) || "notime";
@@ -2863,15 +2917,8 @@
         const effectiveCompanyCode = getEffectiveUserCompanyCode(user);
         const resolvedCompanyName = resolveRegisteredCompanyNameForUser(user, effectiveCompanyCode);
         const targetCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
-        const targetCompanyNameKey = getCompanyKey(user.company, "");
         const schedules = readStorageArray(STORAGE_SCHEDULES);
-        const adminCompanyRows = adminRows.filter((row) => {
-          const rowCode = normalize(row?.companyCode);
-          if (effectiveCompanyCode && rowCode) {
-            return rowCode.toLowerCase() === effectiveCompanyCode.toLowerCase();
-          }
-          return getCompanyKey(row?.company, row?.companyCode) === targetCompanyKey || getCompanyKey(row?.company, "") === targetCompanyNameKey;
-        });
+        const adminCompanyRows = adminRows.filter((row) => adminScheduleRowBelongsToCustomerUser(row, user));
         const buildRowKey = (row) =>
           [
             normalize(row?.date),
@@ -2890,7 +2937,7 @@
         // 관리자 원본 기준으로 해당 업체의 잔존(고아) 스케줄 정리
         for (let i = schedules.length - 1; i >= 0; i -= 1) {
           const row = schedules[i];
-          if (getCompanyKey(row?.company, row?.companyCode) !== targetCompanyKey) continue;
+          if (!adminScheduleRowBelongsToCustomerUser(row, user)) continue;
           const scheduleId = normalize(row?.customerScheduleId);
           const fallbackKey = buildRowKey(row);
           const existsInAdmin =
@@ -2909,8 +2956,8 @@
           const fallbackMatch = (item) =>
             String(item?.date || "").trim() === String(row?.date || "").trim() &&
             String(item?.time || "").trim() === String(row?.time || "").trim() &&
-            getCompanyKey(item?.company, item?.companyCode) === targetCompanyKey &&
-            normalize(item?.place) === normalize(row?.place);
+            normalize(item?.place) === normalize(row?.place) &&
+            adminScheduleRowBelongsToCustomerUser(item, user);
           const index = scheduleId
             ? schedules.findIndex((item) => String(item?.customerScheduleId || "").trim() === scheduleId)
             : schedules.findIndex(fallbackMatch);
@@ -3200,13 +3247,7 @@
         const userCompanyKey = getCompanyKey(user.company, effectiveCompanyCode);
         const userCompanyNameKey = getCompanyKey(user.company, "");
         const adminRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
-        const adminCompanyRows = adminRows.filter((row) => {
-          const rowCompanyCode = normalize(row?.companyCode);
-          if (effectiveCompanyCode && rowCompanyCode) {
-            return rowCompanyCode.toLowerCase() === effectiveCompanyCode.toLowerCase();
-          }
-          return getCompanyKey(row?.company, row?.companyCode) === userCompanyKey || getCompanyKey(row?.company, "") === userCompanyNameKey;
-        });
+        const adminCompanyRows = adminRows.filter((row) => adminScheduleRowBelongsToCustomerUser(row, user));
         const adminIdSet = new Set(
           adminCompanyRows
             .map((row) => normalize(row?.customerScheduleId))
@@ -3218,6 +3259,7 @@
           const rowCompanyKey = getCompanyKey(row?.company, row?.companyCode);
           const rowCompanyCode = normalize(row?.companyCode);
           if (rowCustomerId && rowCustomerId === userId) return true;
+          if (adminScheduleRowBelongsToCustomerUser(row, user)) return true;
           if (effectiveCompanyCode && rowCompanyCode && rowCompanyCode.toLowerCase() === effectiveCompanyCode.toLowerCase()) return true;
           if (!effectiveCompanyCode && getCompanyKey(row?.company, "") === userCompanyNameKey) return true;
           return userCompanyKey && rowCompanyKey && rowCompanyKey === userCompanyKey;

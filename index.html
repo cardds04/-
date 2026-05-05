@@ -11897,6 +11897,7 @@
           const prev = latestLoginAtById.get(customerId) || 0;
           if (atTs > prev) latestLoginAtById.set(customerId, atTs);
         });
+        const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
         const matchedUsers = customerUsers
           .filter((user) => isSameTargetCompany(user?.company, user?.companyCode))
           .map((user) => ({
@@ -11908,9 +11909,24 @@
             const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
             return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
           });
-        const companyDefaultCode = normalizeCompanyCode(targetCompany?.code || targetCompany?.companyCode);
+        const codeOnlyFallbackUsers =
+          !matchedUsers.length && companyDefaultCode
+            ? customerUsers
+                .filter((user) => normalizeCompanyCode(user?.companyCode) === companyDefaultCode)
+                .map((user) => ({
+                  ...user,
+                  __createdAt: new Date(String(user?.createdAt || "9999-12-31T23:59:59")).getTime()
+                }))
+                .sort((a, b) => {
+                  const at = Number.isFinite(a.__createdAt) ? a.__createdAt : Number.MAX_SAFE_INTEGER;
+                  const bt = Number.isFinite(b.__createdAt) ? b.__createdAt : Number.MAX_SAFE_INTEGER;
+                  return at - bt || String(a?.id || "").localeCompare(String(b?.id || ""), "ko");
+                })
+            : [];
+        const usersForAccount =
+          matchedUsers.length > 0 ? matchedUsers : codeOnlyFallbackUsers;
         const orderedMatchedUsers = [
-          ...matchedUsers
+          ...usersForAccount
             .sort((a, b) => {
               const aId = String(a?.id || "").trim();
               const bId = String(b?.id || "").trim();
