@@ -291,6 +291,36 @@
       .payment-summary-grid .status-card::before { display: none; }
       .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-weight: 700; font-size: 0.95rem; }
       .status-meta { font-size: 0.88rem; line-height: 1.65; color: var(--muted); }
+      .customer-site-shoot-block {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        font-size: 0.88rem;
+      }
+      .customer-site-shoot-pending {
+        background: #f8fafc;
+        border-color: #e2e8f0;
+      }
+      .customer-site-shoot-done .customer-site-shoot-title {
+        color: #15803d;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .customer-site-shoot-thumb {
+        max-width: 100%;
+        max-height: 220px;
+        border-radius: 8px;
+        display: block;
+        margin-top: 6px;
+        object-fit: cover;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      .customer-site-shoot-imglink {
+        display: inline-block;
+        max-width: 100%;
+      }
       .status-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
       .small { font-size: 0.78rem; padding: 6px 14px; border-radius: 10px; width: auto; }
       .payment-state-badge {
@@ -1197,6 +1227,7 @@
       const SUPABASE_CLIENT_KV_TABLE = "schedule_site_client_kv";
       const SUPABASE_CLIENT_KV_ROW_ID = "scoped_local_v1";
       const SUPABASE_COMPANY_DIRECTORY_TABLE = "company_directory";
+      const SUPABASE_RPC_CUSTOMER_SITE_SHOOT = "customer_site_shoot_completion";
       const STORAGE_SYNC_KEYS = [
         "scheduleSiteCustomerCompanies",
         "scheduleSiteCustomerSchedules",
@@ -2178,6 +2209,7 @@
       /** Short grace missed Supabase upsert when customer has no adminSchedules mirror; 30 min buffer. */
       const CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS = 30 * 60 * 1000;
       let editingScheduleId = null;
+      let customerSiteShootCompletionMap = new Map();
       let currentCustomerTab = "register";
       let skipAutoLoginOnce = false;
       let customerScheduleSubmitting = false;
@@ -4248,8 +4280,84 @@
         return diffDays >= 4;
       }
 
-      function renderStatusList() {
+      async function refreshCustomerSiteShootCompletionMap(schedules) {
+        customerSiteShootCompletionMap = new Map();
+        if (!USE_SUPABASE_SYNC) return;
+        const user = getCurrentSessionUser();
+        if (!user || !schedules.length) return;
+        const ids = schedules
+          .map((r) => String(r?.customerScheduleId || "").trim())
+          .filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+        if (!ids.length) return;
+        const companyName = String((schedules[0] && schedules[0].company) || user.company || "").trim();
+        const companyCode = String(getEffectiveUserCompanyCode(user) || "").trim();
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_CUSTOMER_SITE_SHOOT}`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              p_company_name: companyName,
+              p_company_code: companyCode,
+              p_schedule_ids: ids,
+            }),
+          });
+          const rows = await res.json().catch(() => []);
+          if (!res.ok) {
+            console.warn("[customer-site-shoot]", rows);
+            return;
+          }
+          for (const row of Array.isArray(rows) ? rows : []) {
+            const sid = String(row?.schedule_id || "").trim();
+            if (!sid) continue;
+            customerSiteShootCompletionMap.set(sid, {
+              done_at: row?.photographer_site_done_at || null,
+              thumb: row?.site_photo_thumbnail_url || "",
+              view: row?.site_photo_view_url || "",
+            });
+          }
+        } catch (error) {
+          console.warn("[customer-site-shoot]", error);
+        }
+      }
+
+      function formatCustomerSiteShootBlock(item) {
+        const sid = normalize(item?.customerScheduleId);
+        if (!sid) return "";
+        const info = customerSiteShootCompletionMap.get(sid);
+        const past = isPastSchedule(item.date);
+        if (info && info.done_at) {
+          const d = new Date(info.done_at);
+          const ok = !Number.isNaN(d.getTime());
+          const dateStr = ok
+            ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+            : "";
+          const thumb =
+            info.thumb &&
+            `<a href="${escapeHtml(info.view)}" target="_blank" rel="noopener noreferrer" class="customer-site-shoot-imglink"><img src="${escapeHtml(info.thumb)}" alt="현장 확인" class="customer-site-shoot-thumb" loading="lazy" /></a>`;
+          const linkOnly =
+            info.view && !info.thumb
+              ? `<div style="margin-top:6px;"><a href="${escapeHtml(info.view)}" target="_blank" rel="noopener noreferrer">현장 사진 보기</a></div>`
+              : "";
+          return `<div class="customer-site-shoot-block customer-site-shoot-done">
+                  <div class="customer-site-shoot-title">현장 촬영 완료${
+                    dateStr ? ` <span class="helper" style="font-weight:500;">(${escapeHtml(dateStr)})</span>` : ""
+                  }</div>
+                  ${thumb || linkOnly}
+                </div>`;
+        }
+        if (past) {
+          return `<div class="customer-site-shoot-block customer-site-shoot-pending"><span class="helper">현장 확인 사진은 작가가 촬영 완료 처리 후 여기에 표시됩니다.</span></div>`;
+        }
+        return `<div class="customer-site-shoot-block"><span class="helper">촬영일 이후 작가가 현장을 완료하면 확인 사진이 표시됩니다.</span></div>`;
+      }
+
+      async function renderStatusList() {
         const schedules = getUserSchedules();
+        await refreshCustomerSiteShootCompletionMap(schedules);
 
         if (schedules.length === 0) {
           statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
@@ -4363,6 +4471,7 @@
                   촬영구성: ${item.composition || "-"}<br />
                   메모: ${item.memo || "-"}${item.adminTimeUpdated ? '<br /><span class="danger">관리자에 의해 시간수정됨</span>' : ""}
                 </div>
+                ${formatCustomerSiteShootBlock(item)}
                 <div class="status-actions">
                   <button class="btn outline small" type="button" data-action="startEdit" data-id="${item.customerScheduleId}">일정변경</button>
                   <button class="btn outline small" type="button" data-action="deleteRow" data-id="${item.customerScheduleId}">일정취소</button>
