@@ -2171,7 +2171,7 @@
               id="companyDirectorySearchInput"
               class="small-select"
               type="text"
-              placeholder="업체명·로그인ID·연락처·코드 검색"
+              placeholder="업체명·아이디·비번·연락처·촬영구성 검색"
               style="min-width: 220px;"
             />
             <span id="companyDirectoryCountHint" class="hint"></span>
@@ -2182,9 +2182,10 @@
                 <tr>
                   <th>업체명</th>
                   <th>로그인 아이디</th>
+                  <th>비번</th>
                   <th>연락처</th>
-                  <th>코드</th>
                   <th>사이트</th>
+                  <th>촬영구성</th>
                 </tr>
               </thead>
               <tbody id="companyDirectoryTabListBody"></tbody>
@@ -2226,6 +2227,15 @@
                 <option value="shopick">쇼픽</option>
                 <option value="thefeeling">더필링</option>
               </select>
+            </div>
+            <div class="company-account-line">
+              <span class="company-account-label">촬영구성</span>
+              <select id="companyDirectoryCompositionSelect" class="inline-select" style="width: 100%; max-width: 100%;">
+                <option value="사진만">사진만</option>
+                <option value="사진영상 둘다">사진영상 둘다</option>
+              </select>
+              <span class="hint" style="font-size: 0.78rem; margin-top: 4px; display: block;"
+                >쇼픽은 사진/영상 토글과 연동되고, 그 외는 스케줄 경향 표시 및 로컬에 저장됩니다.</span>
             </div>
             <div class="actions" style="margin-top: 8px; justify-content: flex-start; flex-wrap: wrap; gap: 6px;">
               <button id="companyDirectorySaveBtn" class="btn-sm primary" type="button">저장</button>
@@ -5944,6 +5954,7 @@
       const companyDirectoryPasswordInputEl = document.getElementById("companyDirectoryPasswordInput");
       const companyDirectoryCodeInputEl = document.getElementById("companyDirectoryCodeInput");
       const companyDirectorySiteSelectEl = document.getElementById("companyDirectorySiteSelect");
+      const companyDirectoryCompositionSelectEl = document.getElementById("companyDirectoryCompositionSelect");
       const companyDirectorySaveBtnEl = document.getElementById("companyDirectorySaveBtn");
       const companyDirectoryNewBtnEl = document.getElementById("companyDirectoryNewBtn");
       const companyDirectorySaveHintEl = document.getElementById("companyDirectorySaveHint");
@@ -7951,6 +7962,7 @@
               phone: String(item?.phone || "").trim() || "-",
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim(),
+              defaultComposition: String(item?.defaultComposition || "").trim(),
               siteType
             };
             if (
@@ -8158,9 +8170,12 @@
         const localCompanies = readStorageArray(STORAGE_ADMIN_COMPANIES);
         const localMemoMap = new Map();
         const localShopickMap = new Map();
+        const localDefaultCompositionMap = new Map();
         localCompanies.forEach((c) => {
           const key = normalizeCompanyName(c?.name).toLowerCase();
           if (key && c?.defaultMemo) localMemoMap.set(key, String(c.defaultMemo));
+          const dcLocal = String(c?.defaultComposition || "").trim();
+          if (key && dcLocal) localDefaultCompositionMap.set(key, dcLocal);
           if (
             key &&
             (normalizeCompanySiteTypeField(c?.siteType) === "shopick" ||
@@ -8177,6 +8192,9 @@
           const key = normalizeCompanyName(c.name).toLowerCase();
           if (!c.defaultMemo && localMemoMap.has(key)) {
             c.defaultMemo = localMemoMap.get(key);
+          }
+          if (!c.defaultComposition && localDefaultCompositionMap.has(key)) {
+            c.defaultComposition = localDefaultCompositionMap.get(key);
           }
           if (localShopickMap.has(key)) {
             const f = localShopickMap.get(key);
@@ -8397,6 +8415,126 @@
         return "인로그";
       }
 
+      function findAdminCompanyRowForDirectoryRow(dirRow) {
+        const code = normalizeCompanyCode(dirRow?.code ?? "");
+        const nameLower = normalizeCompanyName(dirRow?.name ?? "").toLowerCase();
+        const byCode = code && companies.find((c) => normalizeCompanyCode(c?.code) === code);
+        if (byCode) return byCode;
+        if (nameLower) return companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nameLower) || null;
+        return null;
+      }
+
+      function shopickFlagsToBaselineCompositionLabel(flags) {
+        const f = normalizeShopickServiceFlags(flags.photo, flags.video, flags.blog);
+        if (f.blog) return formatShopickCompositionLabel(f);
+        if (f.photo && f.video) return "사진영상 둘다";
+        if (f.photo && !f.video) return "사진만";
+        if (!f.photo && f.video) return "영상";
+        return formatShopickCompositionLabel(f);
+      }
+
+      function getLatestScheduleCompositionHintForDirectoryRow(dirRow) {
+        const name = normalizeCompanyName(dirRow?.name ?? "");
+        const code = normalizeCompanyCode(dirRow?.code ?? "");
+        const nameLower = name.toLowerCase();
+        let best = "";
+        let bestSort = "";
+        const consider = (sch) => {
+          if (!sch) return;
+          const sn = normalizeCompanyName(sch?.company || "").toLowerCase();
+          const sc = normalizeCompanyCode(sch?.companyCode || sch?.code || "");
+          const matchCode = code && sc && normalizeCompanyCode(sc) === code;
+          const matchName = nameLower && sn === nameLower;
+          if (!matchCode && !matchName) return;
+          if (code && matchName && sc && normalizeCompanyCode(sc) !== code) return;
+          const dk = String(sch?.date || "").trim();
+          const tk = String(sch?.time || "00:00").trim();
+          const sortKey = `${dk}T${tk}`;
+          if (sortKey >= bestSort || !best) {
+            bestSort = sortKey;
+            best = String(sch?.composition || "").trim();
+          }
+        };
+        try {
+          data.forEach(consider);
+        } catch (_) {}
+        return best;
+      }
+
+      function getCompanyDirectoryCompositionCellLabel(dirRow) {
+        const m = findAdminCompanyRowForDirectoryRow(dirRow);
+        const dirSite = normalizeCustomerSiteTypeForStorage(dirRow?.site_type);
+        const effSite = normalizeCompanySiteTypeField(m?.siteType) || dirSite;
+
+        if (effSite === "shopick" && m) {
+          const f = getShopickServiceFlagsFromCompanyRow(m);
+          return shopickFlagsToBaselineCompositionLabel(f);
+        }
+        const dc = String(m?.defaultComposition || "").trim();
+        if (dc) return dc;
+
+        const hint = getLatestScheduleCompositionHintForDirectoryRow(dirRow);
+        if (hint) {
+          if (/사진/.test(hint) && /영상/.test(hint)) return "사진영상 둘다";
+          if (hint === "사진만") return "사진만";
+          if (hint.includes("사진") && !hint.includes("영상")) return "사진만";
+          return hint.length > 28 ? `${hint.slice(0, 26)}…` : hint;
+        }
+        return "사진만";
+      }
+
+      function presetCompanyDirectoryCompositionSelect(dirRow) {
+        if (!companyDirectoryCompositionSelectEl) return;
+        const label = getCompanyDirectoryCompositionCellLabel(dirRow);
+        if (label === "사진영상 둘다") {
+          companyDirectoryCompositionSelectEl.value = "사진영상 둘다";
+          return;
+        }
+        if (label === "사진만") {
+          companyDirectoryCompositionSelectEl.value = "사진만";
+          return;
+        }
+        companyDirectoryCompositionSelectEl.value =
+          label.includes("영상") && label.includes("사진") ? "사진영상 둘다" : "사진만";
+      }
+
+      function applyCompanyDirectorySavedComposition({ name, code, site, composition }) {
+        const nm = normalizeCompanyName(name || "");
+        const cod = normalizeCompanyCode(code || "");
+        const comp = String(composition || "").trim() || "사진만";
+        const siteSt = normalizeCustomerSiteTypeForStorage(site);
+        if (!nm) return;
+
+        let idx = -1;
+        if (cod) idx = companies.findIndex((c) => normalizeCompanyCode(c?.code) === cod);
+        if (idx < 0) idx = companies.findIndex((c) => normalizeCompanyName(c?.name).toLowerCase() === nm.toLowerCase());
+        if (idx < 0) return;
+
+        if (siteSt === "shopick") {
+          if (comp === "사진영상 둘다") {
+            companies[idx].shopickPhoto = true;
+            companies[idx].shopickVideo = true;
+            companies[idx].shopickBlog = false;
+          } else {
+            companies[idx].shopickPhoto = true;
+            companies[idx].shopickVideo = false;
+            companies[idx].shopickBlog = false;
+          }
+          companies[idx].siteType = "shopick";
+          delete companies[idx].defaultComposition;
+        } else {
+          companies[idx].defaultComposition = comp;
+          if (siteSt) {
+            const stField = normalizeCompanySiteTypeField(siteSt);
+            if (stField) companies[idx].siteType = stField;
+          }
+        }
+        saveAdminCompaniesToStorage();
+        try {
+          renderCompanies();
+        } catch (_) {}
+      }
+
       async function fetchCompanyDirectoryAdminFullRows() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
@@ -8427,6 +8565,7 @@
         if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = "";
         if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = "";
         if (companyDirectorySiteSelectEl) companyDirectorySiteSelectEl.value = "inlog";
+        if (companyDirectoryCompositionSelectEl) companyDirectoryCompositionSelectEl.value = "사진만";
       }
 
       function fillCompanyDirectoryAdminFormFromRow(row) {
@@ -8442,6 +8581,7 @@
           const st = normalizeCustomerSiteTypeForStorage(row?.site_type);
           companyDirectorySiteSelectEl.value = st === "shopick" ? "shopick" : st === "thefeeling" ? "thefeeling" : "inlog";
         }
+        presetCompanyDirectoryCompositionSelect(row);
       }
 
       function renderCompanyDirectoryAdminTable() {
@@ -8451,12 +8591,15 @@
         let filtered = [...companyDirectoryAdminRows];
         if (kwRaw) {
           filtered = filtered.filter((r) => {
+            const compHint = String(getCompanyDirectoryCompositionCellLabel(r) || "").toLowerCase();
             const blob = [
               r?.name,
               r?.login_id,
+              r?.password,
               r?.phone,
               r?.customer_phone,
-              r?.code
+              r?.code,
+              compHint
             ]
               .map((x) => normalize(String(x || "")).toLowerCase())
               .join("|");
@@ -8476,21 +8619,23 @@
                   const rid = normalize(String(r?.id ?? ""));
                   const nm = normalize(String(r?.name ?? ""));
                   const lid = normalize(String(r?.login_id ?? ""));
+                  const pwd = normalize(String(r?.password ?? ""));
                   const tel = normalize(String(r?.customer_phone ?? r?.phone ?? ""));
-                  const code = normalize(String(r?.code ?? ""));
                   const siteLabel = getCompanyDirectoryAdminSiteCellLabel(r?.site_type);
+                  const compLabel = getCompanyDirectoryCompositionCellLabel(r);
                   const rowAttr = escapeHtml(rid);
                   const rowBg = rid && selectedId && rid === selectedId ? ` style="background:#eef3ff"` : "";
                   return `<tr${rowBg} role="button" tabindex="0" data-company-directory-row-id="${rowAttr}">
 <td>${escapeHtml(nm || "—")}</td>
 <td>${escapeHtml(lid || "—")}</td>
+<td>${escapeHtml(pwd || "—")}</td>
 <td>${escapeHtml(tel || "—")}</td>
-<td>${escapeHtml(code || "—")}</td>
 <td>${escapeHtml(siteLabel)}</td>
+<td>${escapeHtml(compLabel || "—")}</td>
 </tr>`;
                 })
                 .join("")
-            : `<tr><td colspan="5" class="helper">등록된 행이 없습니다.</td></tr>`;
+            : `<tr><td colspan="6" class="helper">등록된 행이 없습니다.</td></tr>`;
       }
 
       async function refreshCompanyDirectoryAdminTab() {
@@ -8546,6 +8691,12 @@
           alert("신규로 로그인 아이디를 넣었다면 비밀번호도 입력해주세요.");
           return;
         }
+        const compositionSnap = {
+          name: nm,
+          code: normalizeCompanyCode(codeTrim),
+          site: siteRaw,
+          composition: normalize(companyDirectoryCompositionSelectEl?.value || "") || "사진만"
+        };
         companyDirectorySaveBtnEl.disabled = true;
         const tryPatch = async (body) =>
           fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=eq.${encodeURIComponent(rowId)}`, {
@@ -8611,6 +8762,7 @@
           }
           await pullCustomersFromSupabaseAndApply();
           await pullAdminCompaniesFromSupabaseAndRefresh();
+          applyCompanyDirectorySavedComposition(compositionSnap);
           if (companyDirectorySaveHintEl) {
             companyDirectorySaveHintEl.textContent = `${new Date().toLocaleTimeString("ko-KR")} 저장 완료 · 고객·업체 목록을 다시 받았습니다.`;
           }
@@ -8642,6 +8794,8 @@
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim()
             };
+            const dc = String(item?.defaultComposition || "").trim();
+            if (dc) row.defaultComposition = dc;
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (st) row.siteType = st;
             if (dbId) row.dbId = dbId;
@@ -8660,6 +8814,8 @@
           } else if (dbId) {
             const cur = uniqueMap.get(key);
             if (cur && !cur.dbId) cur.dbId = dbId;
+            const dc2 = String(item?.defaultComposition || "").trim();
+            if (cur && dc2) cur.defaultComposition = dc2;
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (cur && st && !cur.siteType) cur.siteType = st;
             const curSt = normalizeCompanySiteTypeField(cur?.siteType);
