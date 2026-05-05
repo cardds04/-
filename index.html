@@ -2694,8 +2694,11 @@
       const STORAGE_ADMIN_DASHBOARD_COMPLETED = "scheduleSiteAdminDashboardCompletedV1";
       const STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY = "scheduleSiteAdminDashboardCompletedHistoryV1";
       const STORAGE_DASH_DELIVERY_LOG_CLEAR_CUTOFF_MS = "scheduleSiteDashDeliveryLogClearCutoffMsV1";
-      /** 메인 보드 「오늘 신규 업체」비우기 — 당일(UTC 날짜 키)만 숨김, 새로고침 후에도 유지 */
+      /** 메인 보드 「오늘 신규 업체」비우기 — KST 당일 yyyy-mm-dd 에 맞춰 숨김 */
       const STORAGE_TODAY_NEW_COMPANIES_DISMISS_YMD = "scheduleSiteTodayNewCompaniesDismissYmdV1";
+      /** `scheduleSite` 프록시/스냅샷/KV 레이스를 피하려 평문 로컬 키로도 같은 값을 저장(읽기는 bypass 우선) */
+      const NATIVE_BYPASS_DASH_DELIVERY_LOG_CLEAR_MS = "__scheduleDashNativeDeliveryClearMsV1";
+      const NATIVE_BYPASS_TODAY_NEW_COMPANIES_DISMISS_YMD = "__scheduleDashNativeTodayNewDismissYmdV1";
       /** 대시보드에서 촬영일 기준 이 날짜 이하면 현장 아이콘을 완료(초록)로 표시 */
       const DASH_SITE_TREATED_DONE_THROUGH_YMD = "2026-05-04";
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
@@ -2980,13 +2983,48 @@
         }
       };
       scheduleSiteClientKvState.installProxy();
+      function dashNativeBypassRead(key) {
+        const k = String(key || "").trim();
+        if (!k) return "";
+        try {
+          if (scheduleSiteClientKvState && typeof scheduleSiteClientKvState.nativeGetItem === "function") {
+            return String(scheduleSiteClientKvState.nativeGetItem(k) || "").trim();
+          }
+        } catch (_) {}
+        try {
+          return String(window.localStorage.getItem(k) || "").trim();
+        } catch (_) {
+          return "";
+        }
+      }
+      function dashNativeBypassWrite(key, value) {
+        const k = String(key || "").trim();
+        const v = String(value ?? "");
+        if (!k) return;
+        try {
+          if (scheduleSiteClientKvState && typeof scheduleSiteClientKvState.nativeSetItem === "function") {
+            scheduleSiteClientKvState.nativeSetItem(k, v);
+            return;
+          }
+        } catch (_) {}
+        try {
+          window.localStorage.setItem(k, v);
+        } catch (_) {}
+      }
       function getDismissedTodayNewCompaniesYmd() {
-        return String(localStorage.getItem(STORAGE_TODAY_NEW_COMPANIES_DISMISS_YMD) || "").trim();
+        let y = dashNativeBypassRead(NATIVE_BYPASS_TODAY_NEW_COMPANIES_DISMISS_YMD);
+        if (!y) {
+          y = String(localStorage.getItem(STORAGE_TODAY_NEW_COMPANIES_DISMISS_YMD) || "").trim();
+          if (y) dashNativeBypassWrite(NATIVE_BYPASS_TODAY_NEW_COMPANIES_DISMISS_YMD, y);
+        }
+        return y;
       }
       /** 오늘 신규 업체 비우기 — 스냅샷 즉시 저장·KV 반영으로 새로고침 후에도 유지 */
       function persistTodayNewCompaniesDismissClick(ymd) {
-        const y = String(ymd || "").trim();
+        let y = String(ymd || "").trim();
+        if (!y) y = dashTodayYmdKst();
         if (!y) return;
+        dashNativeBypassWrite(NATIVE_BYPASS_TODAY_NEW_COMPANIES_DISMISS_YMD, y);
         localStorage.setItem(STORAGE_TODAY_NEW_COMPANIES_DISMISS_YMD, y);
         try {
           if (SUPABASE_ONLY_MODE && typeof scheduleSiteClientKvState.flushSnapshotNow === "function") {
@@ -4535,7 +4573,7 @@
       let companyRealtimeTimer = null;
       // 세션 내 오늘 신규업체 최대값 유지 (pull 순서 차이로 인한 깜빡임 방지)
       let sessionTodayNewNamesMax = [];
-      /** 비우기 상태는 STORAGE_TODAY_NEW_COMPANIES_DISMISS_YMD + 스냅샷 즉시 저장으로 새로고침 후 유지 */
+      /** 비우기: native bypass + scoped + 스냅샷 flush(+ KV push) — 프록시/KV 레이스에도 새로고침 유지 */
       let companySyncPromise = null;
       let companySyncQueued = false;
       let writerRealtimeTimer = null;
@@ -12670,9 +12708,11 @@
           return `<span class="site-badge inlog">인</span>`;
         }
 
-        // 오늘의 신규업체 (오늘 가입한 고객 계정 기준)
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const todayNewCustomers = customerUsers.filter((u) => String(u?.createdAt || "").slice(0, 10) === todayStr);
+        // 오늘의 신규업체 (오늘 가입한 고객 계정 기준, 날짜는 KST 와 동일 규칙)
+        const todayStr = dashTodayYmdKst();
+        const todayNewCustomers = customerUsers.filter(
+          (u) => isoUtcToKstYmd(String(u?.createdAt || "").trim()) === todayStr
+        );
         const todayNewNamesFresh = [...new Set(todayNewCustomers.map((u) => String(u?.company || "").trim()).filter(Boolean))];
         let todayNewNames;
         if (getDismissedTodayNewCompaniesYmd() === todayStr) {
@@ -15354,6 +15394,11 @@
         return y && m && day ? `${y}-${m}-${day}` : "";
       }
 
+      /** 현재 시각 기준 한국(Asia/Seoul) 달력일 YYYY-MM-DD — 오늘 신규업체·비우기 일치용 */
+      function dashTodayYmdKst() {
+        return isoUtcToKstYmd(new Date().toISOString());
+      }
+
       function dashDeliveryNeedsPhotoComposition(comp) {
         const c = String(comp || "").trim();
         return Boolean(c && /사진|블로그/.test(c));
@@ -15562,12 +15607,21 @@
       }
 
       function getDashDeliveryLogClearCutoffMs() {
-        const v = Number(localStorage.getItem(STORAGE_DASH_DELIVERY_LOG_CLEAR_CUTOFF_MS) || 0);
+        let raw = dashNativeBypassRead(NATIVE_BYPASS_DASH_DELIVERY_LOG_CLEAR_MS);
+        let v = Number(raw || 0);
+        if (!(Number.isFinite(v) && v > 0)) {
+          v = Number(localStorage.getItem(STORAGE_DASH_DELIVERY_LOG_CLEAR_CUTOFF_MS) || 0);
+          if (Number.isFinite(v) && v > 0) {
+            dashNativeBypassWrite(NATIVE_BYPASS_DASH_DELIVERY_LOG_CLEAR_MS, String(v));
+          }
+        }
         return Number.isFinite(v) && v > 0 ? v : 0;
       }
 
       function clearDashDeliveryLogDisplay() {
-        localStorage.setItem(STORAGE_DASH_DELIVERY_LOG_CLEAR_CUTOFF_MS, String(Date.now()));
+        const ms = String(Date.now());
+        dashNativeBypassWrite(NATIVE_BYPASS_DASH_DELIVERY_LOG_CLEAR_MS, ms);
+        localStorage.setItem(STORAGE_DASH_DELIVERY_LOG_CLEAR_CUTOFF_MS, ms);
         try {
           if (SUPABASE_ONLY_MODE && scheduleSiteClientKvState && typeof scheduleSiteClientKvState.flushSnapshotNow === "function") {
             scheduleSiteClientKvState.flushSnapshotNow();
@@ -18594,7 +18648,7 @@
         const clearBtn = event.target.closest("button[data-action='clearTodayNewCompanies']");
         if (!clearBtn) return;
         event.preventDefault();
-        persistTodayNewCompaniesDismissClick(new Date().toISOString().slice(0, 10));
+        persistTodayNewCompaniesDismissClick();
         sessionTodayNewNamesMax = [];
         renderCompanies();
       });
