@@ -5918,6 +5918,82 @@
       const companyOrderHistorySummaryEl = document.getElementById("companyOrderHistorySummary");
       const companyOrderHistoryDetailEl = document.getElementById("companyOrderHistoryDetail");
       const companyOrderHistoryCloseBtnEl = document.getElementById("companyOrderHistoryCloseBtn");
+      let companyOrderModalDirectorySyncSeq = 0;
+
+      async function mergeCompanyDirectoryRowsIntoCustomersStorageIncremental(rawRows) {
+        const normalized = normalizeCustomerRows(Array.isArray(rawRows) ? rawRows : []);
+        if (!normalized.length) return;
+        const existing = readStorageArray(STORAGE_CUSTOMERS);
+        const byLogin = new Map();
+        existing.forEach((row) => {
+          const k = String(row?.id || "").trim().toLowerCase();
+          if (k) byLogin.set(k, { ...row });
+        });
+        normalized.forEach((row) => {
+          const k = String(row?.id || "").trim().toLowerCase();
+          if (!k) return;
+          const prev = byLogin.get(k) || {};
+          byLogin.set(k, { ...prev, ...row });
+        });
+        originalSetItem(STORAGE_CUSTOMERS, JSON.stringify([...byLogin.values()]));
+      }
+
+      async function fetchCompanyDirectoryForModalAndMergeCustomers(companyCode, companyName) {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+        const code = normalizeCompanyCode(companyCode);
+        const name = normalizeCompanyName(companyName);
+        const hdr = {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        };
+        const select =
+          "login_id,password,name,code,phone,customer_phone,site_type,created_at,id";
+        const acc = [];
+        const pkSeen = new Set();
+
+        function rememberRow(row) {
+          const pk =
+            String(row?.id ?? "")
+              .trim()
+              .toLowerCase() ||
+            `lid:${String(row?.login_id || "")
+              .trim()
+              .toLowerCase()}`;
+          if (!pk || pk === "lid:") return;
+          if (pkSeen.has(pk)) return;
+          pkSeen.add(pk);
+          acc.push(row);
+        }
+
+        async function fetchByField(fieldName, fieldValue) {
+          if (!fieldValue) return;
+          const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=${encodeURIComponent(
+            select
+          )}&${fieldName}=eq.${encodeURIComponent(fieldValue)}`;
+          try {
+            const response = await fetch(url, {
+              method: "GET",
+              headers: hdr,
+              cache: "no-store"
+            });
+            if (!response.ok) return;
+            const json = await response.json();
+            if (!Array.isArray(json)) return;
+            json.forEach(rememberRow);
+          } catch (error) {
+            console.warn("[회사모달] company_directory 조회 실패", fieldName, error);
+          }
+        }
+
+        await fetchByField("code", code);
+        await fetchByField("name", name);
+        if (acc.length) await mergeCompanyDirectoryRowsIntoCustomersStorageIncremental(acc);
+        try {
+          await mergeMissingCompaniesFromCompanyDirectory();
+        } catch (_) {}
+        return acc;
+      }
+
       const writerHistoryModalEl = document.getElementById("writerHistoryModal");
       const writerHistoryTitleEl = document.getElementById("writerHistoryTitle");
       const writerHistorySummaryEl = document.getElementById("writerHistorySummary");
@@ -11876,7 +11952,13 @@
         });
       }
 
-      function renderCompanyOrderHistory(companyName) {
+      function renderCompanyOrderHistory(companyName, options = {}) {
+        const skipRemoteAccountRefresh = options?.skipRemoteAccountRefresh === true;
+        let modalDirectoryFetchToken = 0;
+        if (!skipRemoteAccountRefresh) {
+          companyOrderModalDirectorySyncSeq += 1;
+          modalDirectoryFetchToken = companyOrderModalDirectorySyncSeq;
+        }
         hydrateFromCustomerPageStorage();
         const targetCompany = companies.find((item) => normalizeCompanyName(item?.name).toLowerCase() === normalizeCompanyName(companyName).toLowerCase());
         const targetGroupKey = getCompanyGroupKey(companyName, targetCompany?.code);
@@ -12111,9 +12193,23 @@
               )
               .join("")
           : '<div class="company-item">해당 업체의 주문 기록이 없습니다.</div>';
-      }
 
-      function closeCompanyMergeModal() {
+        if (!skipRemoteAccountRefresh && USE_SUPABASE_SYNC && targetCompany) {
+          const expectedTitle = `${companyName} 주문 기록`;
+          void fetchCompanyDirectoryForModalAndMergeCustomers(
+            normalizeCompanyCode(targetCompany?.code),
+            companyName
+          )
+            .then(() => {
+              if (modalDirectoryFetchToken !== companyOrderModalDirectorySyncSeq) return;
+              if (companyOrderHistoryModalEl.classList.contains("hidden")) return;
+              if (String(companyOrderHistoryTitleEl.textContent || "").trim() !== expectedTitle) return;
+              hydrateFromCustomerPageStorage();
+              renderCompanyOrderHistory(companyName, { skipRemoteAccountRefresh: true });
+            })
+            .catch((e) => console.warn("[업체주문모달] 계정 동기화 실패", e));
+        }
+      }
         mergeCompanySourceIndex = -1;
         mergeCompanySearchKeyword = "";
         mergeCompanySelectedCompanyKey = "";
