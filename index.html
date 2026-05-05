@@ -480,13 +480,25 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 22px;
+        box-sizing: border-box;
+        min-width: 22px;
         height: 22px;
-        border-radius: 50%;
-        font-size: 0.65rem;
+        padding: 0 6px;
+        width: auto;
+        border-radius: 999px;
+        font-size: 0.6rem;
         font-weight: 900;
         line-height: 1;
         flex-shrink: 0;
+      }
+      button.dash-del-icon.dash-del-icon--btn {
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        border-style: solid;
+      }
+      button.dash-del-icon.dash-del-icon--btn:active {
+        transform: scale(0.97);
       }
       .dash-del-icon--ok {
         background: #dcfce7;
@@ -14401,6 +14413,36 @@
         }
       }
 
+      async function handleDashboardDeliveryNotify(scheduleId, notifyKind) {
+        const sid = String(scheduleId || "").trim();
+        const nk = notifyKind === "video" ? "video" : "photo";
+        const labelKo = nk === "photo" ? "사진" : "영상";
+        if (!/^[0-9a-f-]{36}$/i.test(sid)) {
+          alert("스케줄 UUID가 필요합니다.");
+          return;
+        }
+        if (!confirm(`${labelKo} 납품 완료 안내 문자를 고객 번호로 보낼까요?`)) return;
+        const pw = prompt("관리자 비밀번호를 입력하세요. (현장 촬영 완료와 동일)");
+        if (pw === null) return;
+        try {
+          const res = await fetch("/api/dashboard-delivery-notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scheduleId: sid, adminPassword: String(pw), kind: nk }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            alert(data.message || "문자 발송에 실패했습니다.");
+            return;
+          }
+          alert(`${labelKo} 납품 안내 문자를 발송했습니다.`);
+          kickDashDeliveryRpcRefresh(true);
+        } catch (error) {
+          console.error("[dashboard-delivery-notify]", error);
+          alert("요청 중 오류가 발생했습니다.");
+        }
+      }
+
       function kickDashDeliveryRpcRefresh(force) {
         if (!USE_SUPABASE_SYNC) return;
         if (dashDeliveryRpcInFlight) return;
@@ -14463,9 +14505,25 @@
         } catch (_) {}
       }
 
-      function dashDeliveryStatusIcon(letter, done, title) {
+      /**
+       * 사진·영상 납품: 완료 전이면 클릭으로 솔라피 안내 문자. 라벨은 짧게 "사진" / "영상".
+       */
+      function dashDeliverySmsBadge(notifyKind, label, done, scheduleId) {
         const cls = done ? "dash-del-icon dash-del-icon--ok" : "dash-del-icon dash-del-icon--wait";
-        return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(letter)}</span>`;
+        const sid = String(scheduleId || "").trim();
+        if (!done && /^[0-9a-f-]{36}$/i.test(sid)) {
+          const title = `${label}: 클릭하면 고객에게 납품 안내 문자가 발송됩니다 (관리자 비밀번호 필요).`;
+          return `<button type="button" class="${cls} dash-del-icon--btn" title="${escapeHtml(title)}" data-action="dashboardDeliveryNotify" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}">${escapeHtml(label)}</button>`;
+        }
+        const spanTitle = done
+          ? `${label} 납품 안내 문자 발송 완료`
+          : `${label} 납품 대기 (목록 행의 스케줄 UUID가 연결되어 있어야 문자를 보낼 수 있습니다)`;
+        return `<span class="${cls}" title="${escapeHtml(spanTitle)}">${escapeHtml(label)}</span>`;
+      }
+
+      function dashDeliverySiteFieldBadge(done, titleNote) {
+        const cls = done ? "dash-del-icon dash-del-icon--ok" : "dash-del-icon dash-del-icon--wait";
+        return `<span class="${cls}" title="${escapeHtml(titleNote)}">현</span>`;
       }
 
       function dashSiteDoneForDashboardRow(tr, shootDateStr) {
@@ -14500,7 +14558,7 @@
         if (rangeHintEl) {
           rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
             windowEnd
-          )} · 오늘 포함 과거 15일 · 납품은 Drive 업로드 + 문자 / 현장은 작가 앱·관리자 처리 시각`;
+          )} · 오늘 포함 과거 15일 · 납품 안내 문자는 「사진」「영상」을 클릭해 발송 / 현장은 작가 앱·관리자 처리 시각 (자동 크론은 보조)`;
         }
 
         const waitingFirstRpc = dashDeliveryRpcInFlight && !dashDeliveryRpcEverLoaded;
@@ -14581,14 +14639,14 @@
           const pDone = !!(tr && tr.photo_notified_at);
           const vDone = !!(tr && tr.video_notified_at);
           const siteOk = dashSiteDoneForDashboardRow(tr, dateStr);
+          const sid = String(item?.customerScheduleId || "").trim();
           const badgeParts = [];
-          if (np) badgeParts.push(dashDeliveryStatusIcon("사", pDone, pDone ? "사진 납품 완료" : "사진 납품 대기"));
-          if (nv) badgeParts.push(dashDeliveryStatusIcon("영", vDone, vDone ? "영상 납품 완료" : "영상 납품 대기"));
-          badgeParts.push(dashDeliveryStatusIcon("현", siteOk, siteOk ? "현장 촬영 완료" : "현장 촬영 대기"));
+          if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid));
+          if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid));
+          badgeParts.push(dashDeliverySiteFieldBadge(siteOk, siteOk ? "현장 촬영 완료" : "현장 촬영 대기"));
           const strip = `<span class="dash-del-badges">${badgeParts.join("")}</span>`;
           const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
 
-          const sid = String(item?.customerScheduleId || "").trim();
           const showSiteCompleteBtn = /^[0-9a-f-]{36}$/i.test(sid) && !siteOk;
           const adminSiteBtn = showSiteCompleteBtn
             ? `<button type="button" class="btn-sm dashboard-revert-btn" data-action="adminMarkSiteShootComplete" data-schedule-id="${escapeHtml(
@@ -15640,6 +15698,14 @@
         const adminSiteBtn = event.target.closest("button[data-action='adminMarkSiteShootComplete']");
         if (adminSiteBtn) {
           void handleAdminMarkSiteShootComplete(adminSiteBtn.dataset.scheduleId);
+          return;
+        }
+        const deliveryNotifyBtn = event.target.closest("button[data-action='dashboardDeliveryNotify']");
+        if (deliveryNotifyBtn) {
+          void handleDashboardDeliveryNotify(
+            deliveryNotifyBtn.dataset.scheduleId,
+            deliveryNotifyBtn.dataset.notifyKind
+          );
           return;
         }
         const deliveryDayBtn = event.target.closest("button[data-action='deliveryDayDetailClick']");
