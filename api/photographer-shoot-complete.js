@@ -1,8 +1,7 @@
 /**
  * POST multipart/form-data
- * fields: scheduleId, writerLoginId, writerPassword, file field "photo"
- *
- * 현장 확인 이미지 1장(사진 또는 PNG 서명) 업로드 + 해당 스케줄 업체 Drive 폴더 트리 생성(없을 때) + 완료 시각 저장.
+ * fields: scheduleId, writerLoginId, writerPassword,
+ * optional file field "photo" (현장 확인 이미지), optional omitSiteImage=1 (이미지 없이 촬영완료만 저장)
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
@@ -79,9 +78,11 @@ module.exports = async (req, res) => {
     const writerLoginId = String(fields.writerLoginId || "").trim();
     const writerPassword = String(fields.writerPassword || "");
 
+    const omitRequested = /^(1|true|yes)$/i.test(String(fields.omitSiteImage || "").trim());
     const photo = files[0];
-    if (!photo?.buffer?.length) {
-      res.status(400).json({ ok: false, message: "현장 확인용 이미지(photo) 파일이 필요합니다." });
+    const hasPhoto = Boolean(photo?.buffer?.length);
+    if (!omitRequested && !hasPhoto) {
+      res.status(400).json({ ok: false, message: "현장 확인용 이미지(photo) 파일이 필요합니다. (이미지 없이 완료하려면 omitSiteImage=1)" });
       return;
     }
 
@@ -89,8 +90,9 @@ module.exports = async (req, res) => {
       writerLoginId,
       writerPassword,
       scheduleId,
-      fileBuffer: photo.buffer,
-      mimeType: photo.mimeType || "image/jpeg",
+      fileBuffer: hasPhoto ? photo.buffer : null,
+      mimeType: hasPhoto ? photo.mimeType || "image/jpeg" : "",
+      omitSiteConfirmationImage: !hasPhoto,
     });
 
     if (!out.ok) {

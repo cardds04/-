@@ -52,22 +52,8 @@
       .copy-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
       .status-card { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; }
       .shoot-complete-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
-      .shoot-signature-wrap { flex: 1 1 220px; min-width: 0; }
-      .shoot-signature-hint { font-size: 11px; color: var(--muted); margin: 0 0 6px; line-height: 1.35; }
-      .shoot-signature-canvas {
-        width: 100%;
-        height: 140px;
-        display: block;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fff;
-        touch-action: none;
-        cursor: crosshair;
-      }
-      .shoot-signature-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
       .shoot-preview { max-height: 76px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
       .shoot-done-badge { font-size: 12px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 10px; border-radius: 6px; }
-      button.shoot-complete-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
       .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; }
       .status-label-today { color: var(--red); }
       .status-label-tomorrow { color: #1c9b4a; }
@@ -1248,9 +1234,6 @@
       /** 서버에 현장 완료 처리된 schedule UUID */
       let photographerShootDoneIds = new Set();
       let lastPhotographerShootStatusKey = "";
-      const pendingShootPhotoByScheduleId = new Map();
-      /** 서명 캔버스에 한 획 이상 그려졌는지(촬영완료 버튼 활성화용) */
-      const shootSignatureHasInkByScheduleId = new Map();
       const ALWAYS_SHOW_AUTH_FORMS = false;
       var writerTablePullTimer = null;
       var writerTablePullRunning = false;
@@ -1756,21 +1739,6 @@
           return false;
         }
       }
-      function normalizeNavigationAddress(placeText) {
-        const raw = normalize(placeText).replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
-        if (!raw) return "-";
-        const stopRegex =
-          /(아파트|오피스텔|빌라|맨션|타운하우스|휴먼시아|래미안|푸르지오|자이|힐스테이트|아이파크|더샵|건영)/;
-        const unitRegex = /^(\d+동|\d+호|\d{1,4}-\d{1,4})$/;
-        const tokens = raw.split(" ").map((token) => token.trim()).filter(Boolean);
-        const kept = [];
-        for (const token of tokens) {
-          if (stopRegex.test(token) || unitRegex.test(token)) break;
-          kept.push(token);
-        }
-        return normalize(kept.join(" ")) || raw;
-      }
-
       function sameDate(a, b) {
         return `${a.getFullYear()}-${pad2(a.getMonth() + 1)}-${pad2(a.getDate())}` === `${b.getFullYear()}-${pad2(b.getMonth() + 1)}-${pad2(b.getDate())}`;
       }
@@ -2110,8 +2078,6 @@
           updateRememberLoginButtonText();
           photographerShootDoneIds = new Set();
           lastPhotographerShootStatusKey = "";
-          pendingShootPhotoByScheduleId.clear();
-          shootSignatureHasInkByScheduleId.clear();
         }
 
         if (!isLoggedIn) return;
@@ -2341,109 +2307,6 @@
         }
       }
 
-      /**
-       * 현장 확인용 서명 캔버스 (이미지 파일 피커 대신 PNG 업로드).
-       */
-      function initShootSignaturePads() {
-        scheduleListEl.querySelectorAll("canvas.shoot-signature-canvas").forEach((canvas) => {
-          const sid = String(canvas.dataset.scheduleId || "");
-          if (!sid) return;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
-          let cssW = 300;
-          const cssH = 140;
-
-          function syncLayoutAndClear() {
-            const rect = canvas.getBoundingClientRect();
-            cssW = Math.max(240, rect.width || canvas.parentElement?.getBoundingClientRect().width || 300);
-            canvas.style.width = "100%";
-            canvas.style.height = cssH + "px";
-            canvas.style.touchAction = "none";
-            canvas.width = Math.floor(cssW * dpr);
-            canvas.height = Math.floor(cssH * dpr);
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.scale(dpr, dpr);
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, cssW, cssH);
-            ctx.strokeStyle = "#111827";
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
-            shootSignatureHasInkByScheduleId.set(sid, false);
-            pendingShootPhotoByScheduleId.delete(sid);
-            const btn = scheduleListEl.querySelector(`button.shoot-complete-btn[data-schedule-id="${sid}"]`);
-            if (btn) btn.disabled = true;
-          }
-
-          function toLocal(e) {
-            const rect = canvas.getBoundingClientRect();
-            const cw = cssW;
-            const ch = cssH;
-            const x = ((e.clientX ?? 0) - rect.left) * (cw / Math.max(rect.width, 1));
-            const y = ((e.clientY ?? 0) - rect.top) * (ch / Math.max(rect.height, 1));
-            return { x, y };
-          }
-
-          syncLayoutAndClear();
-          requestAnimationFrame(() => {
-            syncLayoutAndClear();
-          });
-
-          let drawing = false;
-          let last = null;
-
-          canvas.addEventListener("pointerdown", (e) => {
-            if (e.button != null && e.button !== 0) return;
-            e.preventDefault();
-            drawing = true;
-            last = toLocal(e);
-            try {
-              canvas.setPointerCapture(e.pointerId);
-            } catch (_) {}
-            ctx.fillStyle = "#111827";
-            ctx.beginPath();
-            ctx.arc(last.x, last.y, 1.25, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = "#111827";
-            shootSignatureHasInkByScheduleId.set(sid, true);
-            const btnOk = scheduleListEl.querySelector(`button.shoot-complete-btn[data-schedule-id="${sid}"]`);
-            if (btnOk) btnOk.disabled = false;
-          });
-
-          canvas.addEventListener("pointermove", (e) => {
-            if (!drawing || !last) return;
-            e.preventDefault();
-            const p = toLocal(e);
-            ctx.beginPath();
-            ctx.moveTo(last.x, last.y);
-            ctx.lineTo(p.x, p.y);
-            ctx.stroke();
-            last = p;
-            shootSignatureHasInkByScheduleId.set(sid, true);
-            const btn = scheduleListEl.querySelector(`button.shoot-complete-btn[data-schedule-id="${sid}"]`);
-            if (btn) btn.disabled = false;
-          });
-
-          const endStroke = (e) => {
-            if (!drawing) return;
-            drawing = false;
-            last = null;
-            try {
-              if (e?.pointerId != null) canvas.releasePointerCapture(e.pointerId);
-            } catch (_) {}
-          };
-          canvas.addEventListener("pointerup", endStroke);
-          canvas.addEventListener("pointercancel", endStroke);
-          canvas.addEventListener("lostpointercapture", () => {
-            drawing = false;
-            last = null;
-          });
-        });
-      }
-
       function renderScheduleList() {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
@@ -2489,7 +2352,7 @@
             const isTomorrow = sameDate(tomorrow, target);
             const statusLabel = target.getTime() < now.getTime() ? "촬영완료" : isToday ? "오늘촬영" : isTomorrow ? "내일촬영" : "촬영예정";
             const statusClass = isToday ? "status-label-today" : isTomorrow ? "status-label-tomorrow" : "";
-            const navAddress = normalizeNavigationAddress(item.place || "-");
+            const fullAddress = String(item.place ?? "").trim() || "-";
             // 업체 전화번호: 등록된 게 있을 때만 한 줄 추가 (없으면 줄을 아예 표시하지 않음).
             // 모바일에서 바로 통화할 수 있도록 tel: 링크로 감싸고, 옆에 작은 복사 버튼도 둔다.
             const companyPhone = getCompanyPhoneForItem(item);
@@ -2509,14 +2372,7 @@
                 shootBlock = '<div class="shoot-complete-row"><span class="shoot-done-badge">현장 촬영 완료</span></div>';
               } else {
                 shootBlock = `<div class="shoot-complete-row" data-schedule-id="${scheduleId}">
-                  <div class="shoot-signature-wrap">
-                    <p class="shoot-signature-hint">현장 확인용 <strong>서명</strong> (손가락·펜). 서명 후 <strong>촬영완료</strong>를 누르세요. 사진 파일 없이 진행되어 용량·파일선택 문제를 줄입니다.</p>
-                    <canvas class="shoot-signature-canvas" width="600" height="280" data-schedule-id="${scheduleId}" aria-label="현장 서명"></canvas>
-                    <div class="shoot-signature-actions">
-                      <button type="button" class="btn outline small" data-action="clearShootSignature" data-schedule-id="${scheduleId}">서명 지우기</button>
-                      <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" disabled>촬영완료</button>
-                    </div>
-                  </div>
+                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">촬영완료</button>
                 </div>`;
               }
             }
@@ -2528,7 +2384,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(navAddress)}">주소복사</button><br />
+                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
@@ -2550,50 +2406,11 @@
           lastPhotographerShootStatusKey = statusKey;
           void refreshPhotographerShootStatus();
         }
-        initShootSignaturePads();
       }
       scheduleListEl.addEventListener("click", async (event) => {
-        const clearSigBtn = event.target.closest("button[data-action='clearShootSignature']");
-        if (clearSigBtn) {
-          const sid = String(clearSigBtn.dataset.scheduleId || "");
-          const canvas = scheduleListEl.querySelector(`canvas.shoot-signature-canvas[data-schedule-id="${sid}"]`);
-          if (canvas) {
-            const ctx = canvas.getContext("2d");
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            const rect = canvas.getBoundingClientRect();
-            const cssW = Math.max(240, rect.width || 300);
-            const cssH = 140;
-            canvas.width = Math.floor(cssW * dpr);
-            canvas.height = Math.floor(cssH * dpr);
-            if (ctx) {
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              ctx.scale(dpr, dpr);
-              ctx.fillStyle = "#ffffff";
-              ctx.fillRect(0, 0, cssW, cssH);
-              ctx.strokeStyle = "#111827";
-              ctx.lineWidth = 2.5;
-              ctx.lineCap = "round";
-              ctx.lineJoin = "round";
-            }
-          }
-          shootSignatureHasInkByScheduleId.set(sid, false);
-          pendingShootPhotoByScheduleId.delete(sid);
-          const btn = scheduleListEl.querySelector(`button.shoot-complete-btn[data-schedule-id="${sid}"]`);
-          if (btn) btn.disabled = true;
-          return;
-        }
         const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
         if (shootDoneBtn) {
           const sid = String(shootDoneBtn.dataset.scheduleId || "");
-          if (!shootSignatureHasInkByScheduleId.get(sid)) {
-            alert("먼저 흰 칸에 서명해 주세요.");
-            return;
-          }
-          const canvas = scheduleListEl.querySelector(`canvas.shoot-signature-canvas[data-schedule-id="${sid}"]`);
-          if (!canvas) {
-            alert("서명 영역을 찾을 수 없습니다.");
-            return;
-          }
           const writer = getCurrentWriter();
           if (!writer || !USE_SUPABASE_SYNC) {
             alert("로그인 및 서버 동기화가 필요합니다.");
@@ -2601,24 +2418,11 @@
           }
           shootDoneBtn.disabled = true;
           try {
-            const file = await new Promise((resolve, reject) => {
-              canvas.toBlob(
-                (blob) => {
-                  if (blob && blob.size > 0) {
-                    resolve(new File([blob], "site-signature.png", { type: "image/png" }));
-                  } else {
-                    reject(new Error("empty"));
-                  }
-                },
-                "image/png",
-                0.92
-              );
-            });
             const fd = new FormData();
             fd.append("scheduleId", sid);
             fd.append("writerLoginId", writer.id);
             fd.append("writerPassword", writer.password);
-            fd.append("photo", file, "site-signature.png");
+            fd.append("omitSiteImage", "1");
             const res = await fetch("/api/photographer-shoot-complete", { method: "POST", body: fd });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
@@ -2626,24 +2430,20 @@
               shootDoneBtn.disabled = false;
               return;
             }
-            pendingShootPhotoByScheduleId.delete(sid);
-            shootSignatureHasInkByScheduleId.delete(sid);
             photographerShootDoneIds.add(sid);
             renderScheduleList();
             alert(
-              data.site_photo_storage_url
-                ? "촬영 완료 처리되었습니다.\n서명 이미지는 안전하게 저장소에 저장되었고 업체 폴더 정보가 준비되었습니다."
-                : data.drive_upload_skipped
-                  ? "촬영 완료로 저장되었습니다.\n폴더는 생성되었고, 서명 파일 업로드는 정책상 막혀 저장되지 않았을 수 있습니다. 공유 드라이브 등 설정이 필요할 수 있습니다."
-                  : "촬영 완료 처리되었습니다. Google Drive 폴더가 준비되었습니다."
+              data.omit_site_confirmation
+                ? "촬영 완료 처리되었습니다.\n업체 Drive 폴더가 준비되었습니다."
+                : data.site_photo_storage_url
+                  ? "촬영 완료 처리되었습니다.\n현장 이미지는 저장소에 저장되었고 업체 폴더 정보가 준비되었습니다."
+                  : data.drive_upload_skipped
+                    ? "촬영 완료로 저장되었습니다.\n폴더는 생성되었고, 파일 업로드는 정책상 막혀 저장되지 않았을 수 있습니다. 공유 드라이브 등 설정이 필요할 수 있습니다."
+                    : "촬영 완료 처리되었습니다. Google Drive 폴더가 준비되었습니다."
             );
           } catch (err) {
             console.error(err);
-            alert(
-              err?.message === "empty"
-                ? "서명 이미지를 만들지 못했습니다. 다시 서명해 주세요."
-                : "요청 중 오류가 발생했습니다."
-            );
+            alert("요청 중 오류가 발생했습니다.");
             shootDoneBtn.disabled = false;
           }
           return;
