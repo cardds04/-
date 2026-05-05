@@ -51,6 +51,10 @@
       .status-list { display: grid; gap: 8px; margin-top: 8px; }
       .copy-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
       .status-card { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; }
+      .shoot-complete-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .shoot-preview { max-height: 76px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
+      .shoot-done-badge { font-size: 12px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 10px; border-radius: 6px; }
+      button.shoot-complete-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
       .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; }
       .status-label-today { color: var(--red); }
       .status-label-tomorrow { color: #1c9b4a; }
@@ -1228,6 +1232,10 @@
       let latestModeLabel = "일별";
       let rememberLoginEnabled = false;
       let skipAutoLoginOnce = false;
+      /** 서버에 현장 완료 처리된 schedule UUID */
+      let photographerShootDoneIds = new Set();
+      let lastPhotographerShootStatusKey = "";
+      const pendingShootPhotoByScheduleId = new Map();
       const ALWAYS_SHOW_AUTH_FORMS = false;
       var writerTablePullTimer = null;
       var writerTablePullRunning = false;
@@ -2078,6 +2086,9 @@
             rememberLoginEnabled = false;
           }
           updateRememberLoginButtonText();
+          photographerShootDoneIds = new Set();
+          lastPhotographerShootStatusKey = "";
+          pendingShootPhotoByScheduleId.clear();
         }
 
         if (!isLoggedIn) return;
@@ -2265,6 +2276,48 @@
         }
       }
 
+      async function refreshPhotographerShootStatus() {
+        const w = getCurrentWriter();
+        if (!w || !USE_SUPABASE_SYNC) {
+          return;
+        }
+        const rows = getMySchedules();
+        const scheduleIds = rows
+          .map((r) => String(r?.customerScheduleId || "").trim())
+          .filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+        if (!scheduleIds.length) {
+          return;
+        }
+        try {
+          const res = await fetch("/api/photographer-shoot-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              writerLoginId: w.id,
+              writerPassword: w.password,
+              scheduleIds
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok && Array.isArray(data.doneScheduleIds)) {
+            const next = new Set(data.doneScheduleIds.map((x) => String(x)));
+            let diff = next.size !== photographerShootDoneIds.size;
+            if (!diff) {
+              for (const id of next) {
+                if (!photographerShootDoneIds.has(id)) {
+                  diff = true;
+                  break;
+                }
+              }
+            }
+            photographerShootDoneIds = next;
+            if (diff) renderScheduleList();
+          }
+        } catch (error) {
+          console.warn("[photographer-shoot-status]", error);
+        }
+      }
+
       function renderScheduleList() {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
@@ -2318,6 +2371,25 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
+            const scheduleId = normalize(item.customerScheduleId);
+            const hasServerId = /^[0-9a-f-]{36}$/i.test(scheduleId);
+            const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
+            let shootBlock = "";
+            if (USE_SUPABASE_SYNC) {
+              if (!hasServerId) {
+                shootBlock =
+                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장 완료·Drive 폴더 생성은 스케줄이 서버와 동기화된 뒤 사용할 수 있습니다.</div>';
+              } else if (shootDone) {
+                shootBlock = '<div class="shoot-complete-row"><span class="shoot-done-badge">현장 촬영 완료</span></div>';
+              } else {
+                shootBlock = `<div class="shoot-complete-row" data-schedule-id="${scheduleId}">
+                  <input type="file" class="shoot-file-input" accept="image/*" capture="environment" tabindex="-1" aria-label="현장 사진" data-schedule-id="${scheduleId}" />
+                  <button type="button" class="btn outline small" data-action="pickShootPhoto" data-schedule-id="${scheduleId}">장소 사진 첨부</button>
+                  <img class="shoot-preview hidden" alt="현장 미리보기" data-schedule-id="${scheduleId}" />
+                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" disabled>촬영완료</button>
+                </div>`;
+              }
+            }
             return `
               <article class="status-card">
                 <div class="status-head">
@@ -2333,12 +2405,68 @@
                   촬영구성: ${item.composition || "-"}<br />
                   메모: ${item.memo || "-"}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
                 </div>
+                ${shootBlock}
               </article>
             `;
           })
           .join("");
+
+        const statusKey = rows
+          .map((r) => String(r?.customerScheduleId || "").trim())
+          .filter((x) => /^[0-9a-f-]{36}$/i.test(x))
+          .sort()
+          .join("|");
+        if (statusKey !== lastPhotographerShootStatusKey) {
+          lastPhotographerShootStatusKey = statusKey;
+          void refreshPhotographerShootStatus();
+        }
       }
       scheduleListEl.addEventListener("click", async (event) => {
+        const pickBtn = event.target.closest("button[data-action='pickShootPhoto']");
+        if (pickBtn) {
+          const sid = String(pickBtn.dataset.scheduleId || "");
+          const inp = scheduleListEl.querySelector(`input.shoot-file-input[data-schedule-id="${sid}"]`);
+          if (inp) inp.click();
+          return;
+        }
+        const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
+        if (shootDoneBtn) {
+          const sid = String(shootDoneBtn.dataset.scheduleId || "");
+          const file = pendingShootPhotoByScheduleId.get(sid);
+          if (!file) {
+            alert("먼저 현장 사진을 첨부해 주세요.");
+            return;
+          }
+          const writer = getCurrentWriter();
+          if (!writer || !USE_SUPABASE_SYNC) {
+            alert("로그인 및 서버 동기화가 필요합니다.");
+            return;
+          }
+          shootDoneBtn.disabled = true;
+          try {
+            const fd = new FormData();
+            fd.append("scheduleId", sid);
+            fd.append("writerLoginId", writer.id);
+            fd.append("writerPassword", writer.password);
+            fd.append("photo", file, file.name || "photo.jpg");
+            const res = await fetch("/api/photographer-shoot-complete", { method: "POST", body: fd });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              alert(data.message || "촬영 완료 처리에 실패했습니다.");
+              shootDoneBtn.disabled = false;
+              return;
+            }
+            pendingShootPhotoByScheduleId.delete(sid);
+            photographerShootDoneIds.add(sid);
+            renderScheduleList();
+            alert("촬영 완료 처리되었습니다. Google Drive 폴더가 준비되었습니다.");
+          } catch (err) {
+            console.error(err);
+            alert("요청 중 오류가 발생했습니다.");
+            shootDoneBtn.disabled = false;
+          }
+          return;
+        }
         const navBtn = event.target.closest("button[data-action='copyNavAddress'][data-nav-address]");
         if (navBtn) {
           const copied = await copyTextSmart(decodeURIComponent(String(navBtn.dataset.navAddress || "")));
@@ -2357,6 +2485,38 @@
           } else {
             alert("번호 복사에 실패했습니다. 다시 시도해주세요.");
           }
+        }
+      });
+
+      scheduleListEl.addEventListener("change", (event) => {
+        const inp = event.target.closest(".shoot-file-input");
+        if (!inp) return;
+        const sid = String(inp.dataset.scheduleId || "");
+        const row = inp.closest(".shoot-complete-row");
+        const btn = row?.querySelector(`button.shoot-complete-btn[data-schedule-id="${sid}"]`);
+        const prev = row?.querySelector(`img.shoot-preview[data-schedule-id="${sid}"]`);
+        const file = inp.files && inp.files[0];
+        if (!file) {
+          pendingShootPhotoByScheduleId.delete(sid);
+          if (btn) btn.disabled = true;
+          if (prev) {
+            prev.classList.add("hidden");
+            prev.removeAttribute("src");
+          }
+          return;
+        }
+        if (!file.type.startsWith("image/")) {
+          alert("이미지 파일만 첨부할 수 있습니다.");
+          inp.value = "";
+          pendingShootPhotoByScheduleId.delete(sid);
+          if (btn) btn.disabled = true;
+          return;
+        }
+        pendingShootPhotoByScheduleId.set(sid, file);
+        if (btn) btn.disabled = false;
+        if (prev) {
+          prev.classList.remove("hidden");
+          prev.src = URL.createObjectURL(file);
         }
       });
 

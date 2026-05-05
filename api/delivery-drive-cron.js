@@ -14,6 +14,9 @@
  *   DELIVERY_DRIVE_LINK_PERMISSION — anyone | private (기본 anyone, 고객용 링크 열람)
  *   DELIVERY_BACKFILL_SHOOT_FROM — 선택 YYYY-MM-DD, DELIVERY_BACKFILL_SHOOT_TO 와 함께 쓰면
  *                                   해당 촬영일 구간은 「다음날」 조건 없이 폴더 생성(일회성 백필).
+ *   DELIVERY_AUTO_NEXT_DAY_FOLDERS — 기본 끔. `1` 이면 촬영 다음날 Cron 이 자동으로
+ *                                   Drive 폴더 트리를 생성(기존 동작). 끄면 작가 페이지
+ *                                   「촬영완료」로만 폴더 생성(백필 ENV 는 예외).
  *   CRON_SECRET 또는 DELIVERY_DRIVE_CRON_SECRET — 설정 시 Bearer 토큰과 일치해야 호출 허용
  *
  * 준비: Google Drive에서 PARENT 폴더를 해당 서비스계정 메일 주소와 공유(편집자).
