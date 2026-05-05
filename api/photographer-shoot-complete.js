@@ -6,6 +6,7 @@
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
+const { friendlyDriveQuotaMessage } = require("../lib/google-drive-delivery.cjs");
 
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
@@ -57,6 +58,21 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim();
+  const serviceRole = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!supabaseUrl || !serviceRole) {
+    console.error(
+      "[photographer-shoot-complete] 서버 환경 변수 누락: SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY"
+    );
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.status(503).json({
+      ok: false,
+      message:
+        "촬영완료 서버 설정이 아직 연결되지 않았습니다. Vercel(또는 배포 환경) → Environment Variables 에 Supabase의 SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY(서비스 롤, project settings → API)를 등록한 뒤 재배포해 주세요.",
+    });
+    return;
+  }
+
   try {
     const { fields, files } = await parseMultipart(req);
     const scheduleId = String(fields.scheduleId || "").trim();
@@ -89,7 +105,15 @@ module.exports = async (req, res) => {
       res.status(400).json({ ok: false, message: "파일 크기는 12MB 이하여야 합니다." });
       return;
     }
+    const driveHelp = typeof friendlyDriveQuotaMessage === "function" ? friendlyDriveQuotaMessage(error) : null;
+    if (driveHelp) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      console.error("[photographer-shoot-complete] Drive quota / shared drive 설정", error);
+      res.status(400).json({ ok: false, message: driveHelp });
+      return;
+    }
     console.error("[photographer-shoot-complete]", error);
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(500).json({ ok: false, message: error?.message || "서버 오류" });
   }
 };

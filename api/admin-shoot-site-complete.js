@@ -6,6 +6,7 @@
  */
 const busboy = require("busboy");
 const { completeShootSiteAsAdmin } = require("../lib/photographer-shoot-logic.cjs");
+const { friendlyDriveQuotaMessage } = require("../lib/google-drive-delivery.cjs");
 
 function adminPasswordOk(pw) {
   const expected = String(process.env.ADMIN_SHOOT_SITE_PASSWORD || "6315").trim();
@@ -105,6 +106,13 @@ module.exports = async (req, res) => {
   } catch (error) {
     if (String(error?.message || "") === "file_too_large") {
       res.status(400).json({ ok: false, message: "파일 크기는 12MB 이하여야 합니다." });
+      return;
+    }
+    const driveHelp = typeof friendlyDriveQuotaMessage === "function" ? friendlyDriveQuotaMessage(error) : null;
+    if (driveHelp) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      console.error("[admin-shoot-site-complete] Drive quota / shared drive 설정", error);
+      res.status(400).json({ ok: false, message: driveHelp });
       return;
     }
     console.error("[admin-shoot-site-complete]", error);
