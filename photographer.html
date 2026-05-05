@@ -2352,8 +2352,9 @@
                 const ck = canonScheduleUuid(k);
                 if (!ck) continue;
                 const v = data.deliveryByScheduleId[k];
-                if (v && typeof v === "object" && prev[ck] !== v) diff = true;
-                mergedDelivery[ck] = v;
+                const mergedOne = mergePhotographerShootDelivery(prev[ck], v);
+                if (mergedOne && typeof mergedOne === "object" && prev[ck] !== mergedOne) diff = true;
+                mergedDelivery[ck] = mergedOne;
               }
               photographerShootDeliveryById = mergedDelivery;
             }
@@ -2386,6 +2387,29 @@
         return `<div style="flex-basis:100%;width:100%;font-size:11px;line-height:1.55;color:#475569;margin-top:4px;">Drive 하위폴더 · ${parts.join(
           " · "
         )}</div>`;
+      }
+
+      function mergePhotographerShootDelivery(prev, incoming) {
+        if (!incoming || typeof incoming !== "object") {
+          return prev && typeof prev === "object" ? { ...prev } : {};
+        }
+        const base = prev && typeof prev === "object" ? { ...prev } : {};
+        const out = { ...base, ...incoming };
+        const linkKeys = [
+          "shoot_folder_web_link",
+          "company_folder_web_link",
+          ...SHOOT_DELIVERY_DRIVE_LINK_ROWS.map((r) => r.key),
+        ];
+        for (const key of linkKeys) {
+          const a = normalize(base[key]);
+          const b = normalize(incoming[key]);
+          if (b) out[key] = incoming[key];
+          else if (a) out[key] = base[key];
+        }
+        const pn = normalize(incoming.photographer_original_upload_notified_at);
+        const po = normalize(base.photographer_original_upload_notified_at);
+        out.photographer_original_upload_notified_at = pn || po || null;
+        return out;
       }
 
       function renderScheduleList() {
@@ -2452,6 +2476,12 @@
               } else if (shootDone) {
                 const d = photographerShootDeliveryById[scheduleId];
                 const shootLink = normalize(d?.shoot_folder_web_link);
+                const hasAnyDriveLink =
+                  Boolean(shootLink) ||
+                  SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
+                const driveMissingHint = !hasAnyDriveLink
+                  ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크를 불러오지 못했습니다. 새로고침 후 다시 확인하거나 서버 배포와 DB 마이그레이션 적용 상태를 확인해 주세요.</span>`
+                  : "";
                 const origNotified =
                   typeof d?.photographer_original_upload_notified_at === "string" &&
                   normalize(d?.photographer_original_upload_notified_at);
@@ -2462,7 +2492,7 @@
                   ? ""
                   : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${subfoldersHtml}</div>`;
+                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${driveMissingHint}${subfoldersHtml}</div>`;
               } else {
                 shootBlock = `<div class="shoot-complete-row shoot-complete-before" data-schedule-id="${scheduleId}">
                   <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인전</button>
