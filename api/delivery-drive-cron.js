@@ -1,6 +1,6 @@
 /**
  * Vercel Cron: 촬영 다음날(한국 시간)부터 Drive 폴더 생성, 사진·영상 폴더에 파일이 들어오면
- * 솔라피로 업체(customer_phone)에 완료 안내 문자(LMS).
+ * 솔라피로 업체(customer_phone)에 짧은 완료 안내 문자(SMS: 브랜드명 + 사진/영상편집완료 + 고객 페이지 URL).
  *
  * 환경변수 (Vercel):
  *   SUPABASE_URL

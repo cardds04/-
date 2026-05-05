@@ -93,6 +93,15 @@
         display: inline-block;
         max-width: 100%;
       }
+      .customer-site-work-link {
+        margin-top: 8px;
+      }
+      .customer-site-work-link a {
+        font-weight: 800;
+        color: #166534;
+        text-decoration: underline;
+        word-break: break-all;
+      }
       .status-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
       .small { font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; }
       .payment-state-badge {
@@ -3256,6 +3265,7 @@
               done_at: row?.photographer_site_done_at || null,
               thumb: row?.site_photo_thumbnail_url || "",
               view: row?.site_photo_view_url || "",
+              work_url: row?.delivery_work_folder_url || "",
             });
           }
         } catch (error) {
@@ -3281,10 +3291,18 @@
             info.view && !info.thumb
               ? `<div style="margin-top:6px;"><a href="${escapeHtml(info.view)}" target="_blank" rel="noopener noreferrer">현장 사진 보기</a></div>`
               : "";
+          const workRow =
+            info.work_url &&
+            String(info.work_url).trim().replace(/^https?:\/\//i, "").length > 0
+              ? `<div class="customer-site-work-link"><span class="helper" style="font-weight:800;margin-right:6px;color:#15803d;">작업링크</span><a href="${escapeHtml(
+                  String(info.work_url).trim()
+                )}" target="_blank" rel="noopener noreferrer">납품 폴더 열기 ↗</a></div>`
+              : "";
           return `<div class="customer-site-shoot-block customer-site-shoot-done">
                   <div class="customer-site-shoot-title">현장 촬영 완료${
                     dateStr ? ` <span class="helper" style="font-weight:500;">(${escapeHtml(dateStr)})</span>` : ""
                   }</div>
+                  ${workRow}
                   ${thumb || linkOnly}
                 </div>`;
         }
