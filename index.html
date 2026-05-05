@@ -2635,6 +2635,9 @@
       let dashDeliveryRpcInFlight = false;
       let dashDeliveryRpcLastFetchedAt = 0;
       let dashDeliveryRpcEverLoaded = false;
+      /** 사진→「문자」 2단계 발송 후 3초 내 미진행 시 배지 원복 */
+      const DASH_SMS_ARM_MS = 3000;
+      const dashSmsArmTimers = new Map();
       const SUPABASE_PUSH_ENABLED = USE_SUPABASE_SYNC && APP_MODE !== "dev";
       const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
@@ -14413,33 +14416,141 @@
         }
       }
 
-      async function handleDashboardDeliveryNotify(scheduleId, notifyKind) {
-        const sid = String(scheduleId || "").trim();
-        const nk = notifyKind === "video" ? "video" : "photo";
-        const labelKo = nk === "photo" ? "사진" : "영상";
+      function dashKoMobileDigits(input) {
+        return String(input || "").replace(/[^\d]/g, "");
+      }
+
+      function isDashKoMobileValidDigits(digits) {
+        return /^01[016789]\d{7,8}$/.test(String(digits || ""));
+      }
+
+      function normalizeDashKoMobileInput(input) {
+        const d = dashKoMobileDigits(input);
+        if (d.startsWith("82") && d.length >= 11) return `0${d.slice(2)}`;
+        return d;
+      }
+
+      function dashSmsBadgeKey(btn) {
+        const sid = String(btn?.dataset?.scheduleId || "").trim();
+        const kind = String(btn?.dataset?.notifyKind || "").trim();
+        return `${sid}|${kind}`;
+      }
+
+      function clearDashSmsArm(key) {
+        const t = dashSmsArmTimers.get(key);
+        if (t != null) {
+          clearTimeout(t);
+          dashSmsArmTimers.delete(key);
+        }
+      }
+
+      function dashSmsIdleTitle(label) {
+        return `${label}: 첫 클릭 시 「문자」로 바뀝니다. 3초 안에 문자를 한 번 더 누르면 발송을 진행합니다.`;
+      }
+
+      function revertDashSmsBadgeToIdle(btn) {
+        if (!btn?.isConnected) return;
+        const key = dashSmsBadgeKey(btn);
+        clearDashSmsArm(key);
+        btn.dataset.dashPhase = "idle";
+        const label = btn.dataset.dashLabel || "";
+        btn.textContent = label;
+        btn.title = dashSmsIdleTitle(label);
+      }
+
+      function armDashSmsTimeout(btn) {
+        const key = dashSmsBadgeKey(btn);
+        clearDashSmsArm(key);
+        const tid = setTimeout(() => {
+          if (!btn?.isConnected) return;
+          if ((btn.dataset.dashPhase || "").toLowerCase() !== "armed") return;
+          revertDashSmsBadgeToIdle(btn);
+        }, DASH_SMS_ARM_MS);
+        dashSmsArmTimers.set(key, tid);
+      }
+
+      async function dashSmsBadgeTwoStep(btn) {
+        const sid = String(btn?.dataset?.scheduleId || "").trim();
+        const kindRaw = String(btn?.dataset?.notifyKind || "").trim();
+        const kind = kindRaw === "video" ? "video" : "photo";
+        const labelKo = kind === "photo" ? "사진" : "영상";
+
         if (!/^[0-9a-f-]{36}$/i.test(sid)) {
           alert("스케줄 UUID가 필요합니다.");
           return;
         }
-        if (!confirm(`${labelKo} 납품 완료 안내 문자를 고객 번호로 보낼까요?`)) return;
+
+        if ((btn.dataset.dashPhase || "").toLowerCase() === "idle") {
+          btn.dataset.dashPhase = "armed";
+          btn.textContent = "문자";
+          btn.title = "발송 진행 확인 중 · 3초 안에 한 번 더 클릭하세요.";
+          armDashSmsTimeout(btn);
+          return;
+        }
+
+        clearDashSmsArm(dashSmsBadgeKey(btn));
+
+        if (
+          !confirm(
+            `${labelKo} 납품 안내 문자를 고객 번호로 보낼까요?\n(전화번호가 없으면 입력 창이 이어서 열립니다.)`
+          )
+        ) {
+          revertDashSmsBadgeToIdle(btn);
+          return;
+        }
+
         const pw = prompt("관리자 비밀번호를 입력하세요. (현장 촬영 완료와 동일)");
-        if (pw === null) return;
-        try {
-          const res = await fetch("/api/dashboard-delivery-notify", {
+        if (pw === null) {
+          revertDashSmsBadgeToIdle(btn);
+          return;
+        }
+
+        let pendingPhoneArg = "";
+
+        const postSms = async (customerPhoneTrimmed) => {
+          const payload = {
+            scheduleId: sid,
+            adminPassword: String(pw),
+            kind,
+          };
+          const ph = String(customerPhoneTrimmed || "").trim();
+          if (ph) payload.customerPhone = ph;
+          return fetch("/api/dashboard-delivery-notify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ scheduleId: sid, adminPassword: String(pw), kind: nk }),
+            body: JSON.stringify(payload),
+          }).then(async (res) => {
+            const body = await res.json().catch(() => ({}));
+            return { res, body };
           });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.ok) {
-            alert(data.message || "문자 발송에 실패했습니다.");
+        };
+
+        for (;;) {
+          const { res, body } = await postSms(pendingPhoneArg || "");
+          if (res.ok && body.ok) {
+            alert(`${labelKo} 납품 안내 문자를 발송했습니다.`);
+            kickDashDeliveryRpcRefresh(true);
             return;
           }
-          alert(`${labelKo} 납품 안내 문자를 발송했습니다.`);
-          kickDashDeliveryRpcRefresh(true);
-        } catch (error) {
-          console.error("[dashboard-delivery-notify]", error);
-          alert("요청 중 오류가 발생했습니다.");
+          if ((body.code || "") === "needs_phone") {
+            const inp = prompt(
+              `${String(body.message || "").trim()}\n\n휴대폰 번호를 입력해 주세요. (예: 01012345678)\n번호를 저장한 뒤 문자를 발송합니다. · 취소하면 여기까지 중단`
+            );
+            if (inp === null) {
+              revertDashSmsBadgeToIdle(btn);
+              return;
+            }
+            const n = normalizeDashKoMobileInput(inp);
+            if (!isDashKoMobileValidDigits(n)) {
+              alert("유효한 휴대폰 번호가 아닙니다. 숫자 10~11자리 형식입니다.");
+              continue;
+            }
+            pendingPhoneArg = n;
+            continue;
+          }
+          alert(body.message || "문자 발송에 실패했습니다.");
+          revertDashSmsBadgeToIdle(btn);
+          return;
         }
       }
 
@@ -14506,14 +14617,18 @@
       }
 
       /**
-       * 사진·영상 납품: 완료 전이면 클릭으로 솔라피 안내 문자. 라벨은 짧게 "사진" / "영상".
+       * 사진·영상 납품: 두 번 클릭으로 발송(첫 클릭 → 「문자」 표시 후 3초 내 재클릭).
        */
       function dashDeliverySmsBadge(notifyKind, label, done, scheduleId) {
         const cls = done ? "dash-del-icon dash-del-icon--ok" : "dash-del-icon dash-del-icon--wait";
         const sid = String(scheduleId || "").trim();
+        const idleTit = dashSmsIdleTitle(label);
         if (!done && /^[0-9a-f-]{36}$/i.test(sid)) {
-          const title = `${label}: 클릭하면 고객에게 납품 안내 문자가 발송됩니다 (관리자 비밀번호 필요).`;
-          return `<button type="button" class="${cls} dash-del-icon--btn" title="${escapeHtml(title)}" data-action="dashboardDeliveryNotify" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}">${escapeHtml(label)}</button>`;
+          return `<button type="button" class="${cls} dash-del-icon--btn" title="${escapeHtml(
+            idleTit
+          )}" data-action="dashSmsTwostep" data-dash-phase="idle" data-dash-label="${escapeHtml(
+            label
+          )}" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}">${escapeHtml(label)}</button>`;
         }
         const spanTitle = done
           ? `${label} 납품 안내 문자 발송 완료`
@@ -14558,7 +14673,7 @@
         if (rangeHintEl) {
           rangeHintEl.textContent = `표시 구간: ${formatYmdToMdSlash(windowStart)} ~ ${formatYmdToMdSlash(
             windowEnd
-          )} · 오늘 포함 과거 15일 · 납품 안내 문자는 「사진」「영상」을 클릭해 발송 / 현장은 작가 앱·관리자 처리 시각 (자동 크론은 보조)`;
+          )} · 오늘 포함 과거 15일 · 납품 안내 문자: 「사진」/「영상」클릭 → 「문자」표시 후 3초 안에 다시 클릭해 발송 · 현장은 작가 앱·관리자 시각 (크론 보조)`;
         }
 
         const waitingFirstRpc = dashDeliveryRpcInFlight && !dashDeliveryRpcEverLoaded;
@@ -15700,12 +15815,9 @@
           void handleAdminMarkSiteShootComplete(adminSiteBtn.dataset.scheduleId);
           return;
         }
-        const deliveryNotifyBtn = event.target.closest("button[data-action='dashboardDeliveryNotify']");
-        if (deliveryNotifyBtn) {
-          void handleDashboardDeliveryNotify(
-            deliveryNotifyBtn.dataset.scheduleId,
-            deliveryNotifyBtn.dataset.notifyKind
-          );
+        const dashTwostepBtn = event.target.closest("button[data-action='dashSmsTwostep']");
+        if (dashTwostepBtn) {
+          void dashSmsBadgeTwoStep(dashTwostepBtn);
           return;
         }
         const deliveryDayBtn = event.target.closest("button[data-action='deliveryDayDetailClick']");

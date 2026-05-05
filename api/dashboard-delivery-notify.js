@@ -1,7 +1,6 @@
 /**
- * POST JSON: { scheduleId, adminPassword, kind: "photo" | "video" }
- * 15일 스케줄 대시보드에서 사진·영상 납품 안내 문자를 수동 발송하고 shoot_delivery_drive_state 에 시각 반영.
- * 비밀번호: ADMIN_SHOOT_SITE_PASSWORD (관리자 현장 완료 API 와 동일)
+ * POST JSON: { scheduleId, adminPassword, kind: "photo" | "video", customerPhone? }
+ * 선택 customerPhone 으로 shoot_delivery_drive_state.customer_phone 업데이트 후 발송(유효한 로컬번호일 때).
  */
 const { sendDashboardDeliverySms } = require("../lib/delivery-drive-run.cjs");
 
@@ -40,12 +39,17 @@ module.exports = async (req, res) => {
       return;
     }
 
+    const customerPhone = typeof body.customerPhone === "string" ? String(body.customerPhone).trim() : "";
+
     const out = await sendDashboardDeliverySms({
       scheduleId,
       kind: kindNorm,
+      ...(customerPhone ? { customerPhoneOverride: customerPhone } : {}),
     });
     if (!out.ok) {
-      res.status(out.status || 500).json({ ok: false, message: out.message || "처리 실패" });
+      const payload = { ok: false, message: out.message || "처리 실패" };
+      if (out.code) payload.code = out.code;
+      res.status(out.status || 500).json(payload);
       return;
     }
 
