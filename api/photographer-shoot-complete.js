@@ -2,7 +2,7 @@
  * POST multipart/form-data
  * fields: scheduleId, writerLoginId, writerPassword, file field "photo"
  *
- * 현장 사진 1장 업로드 + 해당 스케줄 업체 Drive 폴더 트리 생성(없을 때) + 완료 시각 저장.
+ * 현장 확인 이미지 1장(사진 또는 PNG 서명) 업로드 + 해당 스케줄 업체 Drive 폴더 트리 생성(없을 때) + 완료 시각 저장.
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
 
     const photo = files[0];
     if (!photo?.buffer?.length) {
-      res.status(400).json({ ok: false, message: "현장 사진(photo) 파일이 필요합니다." });
+      res.status(400).json({ ok: false, message: "현장 확인용 이미지(photo) 파일이 필요합니다." });
       return;
     }
 
