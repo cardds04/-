@@ -15564,6 +15564,37 @@
         }
       }
 
+      async function handleDashboardEnsureShootFolders(scheduleId) {
+        const sid = String(scheduleId || "").trim();
+        if (!/^[0-9a-f-]{36}$/i.test(sid)) {
+          alert("스케줄 ID가 유효하지 않습니다.");
+          return;
+        }
+        const pw = prompt("관리자 비밀번호를 입력하세요. (현장 Drive 폴더 생성)");
+        if (pw === null) return;
+        try {
+          const res = await fetch("/api/admin-ensure-shoot-folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scheduleId: sid, adminPassword: String(pw) }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            alert(data.message || "폴더를 만들지 못했습니다.");
+            return;
+          }
+          if (data.alreadyExists) {
+            alert("이미 해당 현장 폴더가 생성되어 있습니다.");
+            return;
+          }
+          alert("현장 폴더가 생성되었습니다.");
+          kickDashDeliveryRpcRefresh(true);
+        } catch (error) {
+          console.error("[admin-ensure-shoot-folders]", error);
+          alert("요청 중 오류가 발생했습니다.");
+        }
+      }
+
       function dashKoMobileDigits(input) {
         return String(input || "").replace(/[^\d]/g, "");
       }
@@ -15957,6 +15988,12 @@
           const deliveryFolderBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
             company
           )}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(Google Drive)">납품폴더</button>`;
+          const schedIdForFolders = String(item?.customerScheduleId || "").trim();
+          const folderCreateBtn = /^[0-9a-f-]{36}$/i.test(schedIdForFolders)
+            ? `<button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardEnsureShootFolders" data-schedule-id="${escapeHtml(
+                schedIdForFolders
+              )}" title="이 일정 촬영 현장 Drive 폴더 생성">폴더생성</button>`
+            : "";
 
           return `<div class="schedule-dashboard-row-line">
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
@@ -15967,6 +16004,7 @@
                   ${adminSiteBtn}
                   ${detailBtn}
                   ${deliveryFolderBtn}
+                  ${folderCreateBtn}
                 </div>`;
         }
 
@@ -17012,6 +17050,11 @@
             }
             window.open(u, "_blank", "noopener,noreferrer");
           })();
+          return;
+        }
+        const ensureShootFoldersBtn = event.target.closest("button[data-action='dashboardEnsureShootFolders']");
+        if (ensureShootFoldersBtn) {
+          void handleDashboardEnsureShootFolders(ensureShootFoldersBtn.dataset.scheduleId);
           return;
         }
         const adminSiteBtn = event.target.closest("button[data-action='adminMarkSiteShootComplete']");
