@@ -1943,6 +1943,25 @@
         return normalize(matched?.phone) || "-";
       }
 
+      function getCompanyDriveFolderLinkForItem(item) {
+        const companyName = normalize(item?.company);
+        if (!companyName) return "";
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const nameLc = companyName.toLowerCase();
+        let matched = companies.find((company) => normalize(company?.name).toLowerCase() === nameLc);
+        const code = normalize(item?.companyCode);
+        if (!matched && code) {
+          matched = companies.find((company) => normalize(company?.companyCode) === code);
+        }
+        if (!matched) {
+          const sk = stripParenSegmentsForCompanyMatch(companyName);
+          if (sk) {
+            matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
+          }
+        }
+        return normalize(matched?.driveCompanyFolderLink) || "";
+      }
+
       function escapeTextForHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;")
@@ -2816,6 +2835,10 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
+            const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
+            const companyDriveLine = companyDriveLink
+              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
+              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">아직 표시할 주소가 없습니다. 새로고침(F5) 후 다시 확인하거나, 신규 업체라면 잠시 후 다시 열어 주세요. 계속 비어 있으면 관리자에게 문의해 주세요.</span><br />`;
             const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
@@ -2866,7 +2889,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
+                  ${companyDriveLine}${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
