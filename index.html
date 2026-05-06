@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="schedule-site-admin-index" content="fly-sendfile-no-cache-v1" />
     <title>촬영 스케줄 관리</title>
     <style>
       :root {
@@ -44,6 +45,28 @@
         text-align: center;
         color: #2c3242;
         font-size: clamp(14px, 1.3vw, 21px);
+      }
+
+      /** 순수 HTML 점검줄 — 스크립트·API 없어도 보임 (브라우저 확장 프로그램이 deploy/banner 숨김 방지용) */
+      .schedule-admin-build-strip-html {
+        box-sizing: border-box;
+        max-width: min(920px, 96vw);
+        margin: 10px auto 0;
+        padding: 10px 14px;
+        text-align: center;
+        font-size: clamp(13px, 1.35vw, 15px);
+        font-weight: 800;
+        line-height: 1.45;
+        color: #9a3412;
+        background: #fffbeb;
+        border: 2px dashed #ea580c;
+        border-radius: 12px;
+      }
+      .schedule-admin-build-strip-html code {
+        font-size: 0.88em;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 2px 6px;
+        border-radius: 6px;
       }
 
       /** 배포 반영 시간 — 제목 바로 아래 눈에 띄게 */
@@ -1835,8 +1858,12 @@
   <body>
     <main class="wrap">
       <h1>촬영스케줄 관리자페이지</h1>
+      <p class="schedule-admin-build-strip-html">
+        <strong>[배포 점검]</strong> 이 주황 박스와 아래 초록 박스가 안 보이면 옛 페이지(브라우저 캐시·다른 주소)입니다. 시크릿 창 또는
+        <kbd>Ctrl</kbd>+<kbd>F5</kbd> 로 새로고침하세요. 소스 헤더 <code>&lt;meta name="schedule-site-admin-index"&gt;</code> 값 확인.
+      </p>
       <!-- 제목 바로 아래 녹색 박스 = 현재 접속 서버 빌드/배포 반영 확인용 (스크립트 전에도 보입니다) -->
-      <div id="adminDeployMetaBadge" class="deploy-release-banner" role="status" aria-live="polite">
+      <div id="adminDeployMetaBadge" class="deploy-release-banner schedule-deploy-meta-root" role="status" aria-live="polite">
         <strong class="push-ok">푸시·배포 확인</strong> · 업데이트 시간을 불러오는 중…
       </div>
       <script>
@@ -1887,7 +1914,7 @@
                     : "HTTP " + res.status;
                 setHtml(
                   el,
-                  '<div><strong class="push-ok">서버(API) 확인 실패</strong> — <code>Vercel</code> 같은 호스트에서 페이지를 여는지 확인하세요.</div><div style="margin-top:6px;">' +
+                  '<div><strong class="push-ok">서버(API) 확인 실패</strong> — Fly 는 <code>server.js</code>에 연결해야 합니다. 페이지 주소와 <code>/api/site-release-meta</code> JSON 을 확인하세요.</div><div style="margin-top:6px;">' +
                     escLite(msg) +
                     "</div>" +
                     lmLine

@@ -177,6 +177,29 @@ app.post("/api/phase2", proxyStyleTransferApi);
 app.post("/api/chat", proxyStyleTransferApi);
 app.post("/api/raw-preview", proxyStyleTransferApi);
 
+/** 관리 페이지 루트 — CDN·브라우저가 index.html 을 길게 캐시하는 경우 방지 (static 보다 우선) */
+function setScheduleAdminHtmlNoCacheHeaders(res) {
+  const sha = String(process.env.SCHEDULE_SITE_IMAGE_GIT_SHA || "").trim().slice(0, 12);
+  if (sha) res.setHeader("X-Schedule-Site-Image-Sha", sha);
+  res.setHeader(
+    "Cache-Control",
+    "private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+}
+
+app.get("/", (req, res, next) => {
+  setScheduleAdminHtmlNoCacheHeaders(res);
+  res.sendFile(path.join(__dirname, "index.html"), next);
+});
+
+app.get("/index.html", (req, res, next) => {
+  setScheduleAdminHtmlNoCacheHeaders(res);
+  res.sendFile(path.join(__dirname, "index.html"), next);
+});
+
 app.use(
   express.static(__dirname, {
     setHeaders(res, filePath) {
