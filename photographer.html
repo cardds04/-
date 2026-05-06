@@ -2905,10 +2905,13 @@
             if (!res.ok || !data.ok) {
               if (alreadyCompleted && sid) {
                 photographerShootStatusGen += 1;
-                photographerShootDoneIds.add(sid);
-                rememberWriterShootSiteLocal(writer.id, sid, null, photographerShootDeliveryById[sid] || {});
+                try {
+                  await refreshPhotographerShootStatus();
+                } catch (_) {}
+                if (!photographerShootDoneIds.has(sid)) {
+                  photographerShootDoneIds.add(sid);
+                }
                 renderScheduleList();
-                void refreshPhotographerShootStatus();
                 shootDoneBtn.disabled = false;
                 alert(data.message || "이미 현장 확인 처리된 건입니다. 목록이 갱신되었습니다.");
                 return;
