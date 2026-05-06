@@ -1323,7 +1323,8 @@
       let photographerShootDoneIds = new Set();
       /** 현장 확인 완료 건별 Drive 정보 (목록 상태 API 및 완료 응답으로 갱신) */
       let photographerShootDeliveryById = Object.create(null);
-      let lastPhotographerShootStatusKey = "";
+      /** 목록을 다시 그릴 때마다 짧게 디바운스하여 서버 현장확인 상태 재조회(PC·모바일 탭 불일치 방지) */
+      let photographerShootStatusDebounceTimer = null;
       /** 늦게 도착한 /api/photographer-shoot-status 응답이 방금 완료 처리한 목록 상태를 덮어쓰지 않도록 */
       let photographerShootStatusGen = 0;
       const ALWAYS_SHOW_AUTH_FORMS = false;
@@ -2205,8 +2206,11 @@
             rememberLoginEnabled = false;
           }
           updateRememberLoginButtonText();
+          if (photographerShootStatusDebounceTimer) {
+            clearTimeout(photographerShootStatusDebounceTimer);
+            photographerShootStatusDebounceTimer = null;
+          }
           photographerShootDoneIds = new Set();
-          lastPhotographerShootStatusKey = "";
         }
 
         if (!isLoggedIn) return;
@@ -2607,14 +2611,13 @@
           })
           .join("");
 
-        const statusKey = rows
-          .map((r) => canonScheduleUuid(r?.customerScheduleId))
-          .filter(Boolean)
-          .sort()
-          .join("|");
-        if (statusKey !== lastPhotographerShootStatusKey) {
-          lastPhotographerShootStatusKey = statusKey;
-          void refreshPhotographerShootStatus();
+        const wForStatus = getCurrentWriter();
+        if (wForStatus && USE_SUPABASE_SYNC) {
+          if (photographerShootStatusDebounceTimer) clearTimeout(photographerShootStatusDebounceTimer);
+          photographerShootStatusDebounceTimer = setTimeout(() => {
+            photographerShootStatusDebounceTimer = null;
+            void refreshPhotographerShootStatus();
+          }, 180);
         }
       }
       scheduleListEl.addEventListener("click", async (event) => {
