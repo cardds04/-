@@ -1559,6 +1559,11 @@
         return /^[0-9a-f-]{36}$/i.test(s) ? s.toLowerCase() : "";
       }
 
+      /** 행에서 스케줄 UUID (미러 행 등 customerScheduleId 누락 시 writerMirrorId 보조) */
+      function canonScheduleUuidFromRow(row) {
+        return canonScheduleUuid(row?.customerScheduleId || row?.writerMirrorId);
+      }
+
       function loadWriterShootSiteLocalAll() {
         try {
           const raw = localStorage.getItem(STORAGE_WRITER_SHOOT_SITE_LOCAL);
@@ -2301,6 +2306,7 @@
         welcomeTextEl.textContent = `${writer.name} 작가님 (${writer.id})`;
         buildFilterOptions();
         dayOffDateEl.value = `${new Date().getFullYear()}-${pad2(new Date().getMonth() + 1)}-${pad2(new Date().getDate())}`;
+        hydratePhotographerShootFromLocal(writer);
         switchFilterMode("day");
         renderUpcomingList();
         renderMyDayoffRequests();
@@ -2488,11 +2494,12 @@
         }
         const rows = getMySchedules();
         const scheduleIds = rows
-          .map((r) => canonScheduleUuid(r?.customerScheduleId))
+          .map((r) => canonScheduleUuidFromRow(r))
           .filter(Boolean);
         if (!scheduleIds.length) {
           return;
         }
+        mergeWriterShootLocalIntoGlobals(w, scheduleIds);
         const startedAtGen = photographerShootStatusGen;
         try {
           const res = await fetch("/api/photographer-shoot-status", {
@@ -2615,9 +2622,12 @@
         return out;
       }
 
-      /** shoot-status API 실패 시에도 이 브라우저에서 완료한 건은 로컬 스냅샷으로 복구 */
-      function applyShootStatusLocalFallback(writer, scheduleIds) {
-        if (!writer || !Array.isArray(scheduleIds) || !scheduleIds.length) return;
+      /**
+       * 동기: 서버 응답 전·첫 렌더 전에 로컬에 저장된 현장확인 상태를 메모리로 올림 (새로고침 직후 깜빡임·누락 방지)
+       * @returns 상태가 바뀌었으면 true
+       */
+      function mergeWriterShootLocalIntoGlobals(writer, scheduleIds) {
+        if (!writer || !USE_SUPABASE_SYNC || !Array.isArray(scheduleIds) || !scheduleIds.length) return false;
         const localBucket = readWriterShootSiteLocalFor(writer.id);
         const now = Date.now();
         const ttlOk = (entry) => {
@@ -2657,10 +2667,24 @@
             }
           }
         }
-        if (!diff) return;
+        if (!diff) return false;
         photographerShootDoneIds = next;
         photographerShootDeliveryById = mergedDelivery;
-        renderScheduleList();
+        return true;
+      }
+
+      function hydratePhotographerShootFromLocal(writer) {
+        if (!writer || !USE_SUPABASE_SYNC) return;
+        const scheduleIds = getMySchedules()
+          .map((r) => canonScheduleUuidFromRow(r))
+          .filter(Boolean);
+        mergeWriterShootLocalIntoGlobals(writer, scheduleIds);
+      }
+
+      /** shoot-status API 실패 시에도 이 브라우저에서 완료한 건은 로컬 스냅샷으로 복구 */
+      function applyShootStatusLocalFallback(writer, scheduleIds) {
+        if (!writer || !USE_SUPABASE_SYNC || !Array.isArray(scheduleIds) || !scheduleIds.length) return;
+        if (mergeWriterShootLocalIntoGlobals(writer, scheduleIds)) renderScheduleList();
       }
 
       function renderScheduleList() {
@@ -2716,7 +2740,7 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
-            const scheduleId = canonScheduleUuid(item.customerScheduleId);
+            const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
