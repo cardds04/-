@@ -1,4 +1,7 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+# Fly.io 에 GitHub Actions 로 배포
+# 장애 시: 레포 Secrets → FLY_API_TOKEN 이 유효한지(Fly 만료 가능), Actions 로그 빨간 단계 확인
+#
+# 참고 https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
 name: Fly Deploy
 on:
@@ -9,10 +12,30 @@ jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-group
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --build-arg GIT_SHA="${{ github.sha }}" --build-arg IMAGE_BUILT_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      # @master 대신 버전 고정 — flyctl 업데이트로 CI가 예고 없이 깨지는 경우 방지
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      - name: Fly 토큰·로그인 확인
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "::error::GitHub 레포지토리 Settings → Secrets and variables → Actions 에서 FLY_API_TOKEN 이 설정돼 있는지 확인하세요. (비었거나 삭제된 경우 모든 Fly Deploy 가 실패합니다)"
+            exit 1
+          fi
+          flyctl auth whoami
+
+      - name: Fly 에 배포
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euxo pipefail
+          IMAGE_BUILT_AT_ISO="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          flyctl deploy --remote-only \
+            --build-arg "GIT_SHA=${{ github.sha }}" \
+            --build-arg "IMAGE_BUILT_AT_ISO=${IMAGE_BUILT_AT_ISO}"
