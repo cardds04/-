@@ -1,9 +1,11 @@
 /**
- * POST JSON { adminPassword, directoryId?: string(uuid), all?: boolean }
+ * POST JSON { adminPassword, directoryId?: string(uuid), all?: boolean, provider?: "google"|"naver"|"naverworks" }
  * 관리자 비밀번호 확인 후 업체 폴더 프로비저닝(이미 있으면 스킵).
+ * provider 기본 google. naver 는 네이버웍스(맥·create_folder.py 환경이 있는 서버에서만 권장).
  */
 const {
   provisionCompanyDirectoryFolder,
+  provisionNaverWorksCompanyDirectoryFolder,
   fetchCompanyDirectoryRowsForProvision,
 } = require("../lib/company-drive-provision.cjs");
 const { getDriveClient } = require("../lib/google-drive-delivery.cjs");
@@ -72,9 +74,17 @@ module.exports = async (req, res) => {
 
   const wantsAll = /^(1|true|yes)$/i.test(String(body?.all ?? "").trim());
   const directoryId = String(body?.directoryId || "").trim();
+  const provider = String(body?.provider ?? "google").trim().toLowerCase();
+  const wantsNaver = provider === "naver" || provider === "naverworks";
 
   try {
-    const drive = getDriveClient();
+    let drive = null;
+    if (!wantsNaver) {
+      drive = getDriveClient();
+    }
+    /** select=* : 아직 naver 컬럼 마이그레이션이 없어도 목록 조회 400 방지 */
+    const selectCols = "*";
+
     /** @type {Array<object>} */
     let rows = [];
     if (wantsAll) {
@@ -82,7 +92,7 @@ module.exports = async (req, res) => {
     } else if (directoryId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(directoryId)) {
       rows = await fetchCompanyDirectoryRowsForProvision(
         headers,
-        `company_directory?id=eq.${encodeURIComponent(directoryId)}&select=id,name,code,google_drive_company_folder_id,google_drive_company_share_link`
+        `company_directory?id=eq.${encodeURIComponent(directoryId)}&select=${selectCols}`
       );
     } else {
       res.status(400).json({ ok: false, message: "directoryId(UUID) 또는 all=true 가 필요합니다." });
@@ -92,16 +102,22 @@ module.exports = async (req, res) => {
     const results = [];
     for (const row of rows) {
       try {
-        const out = await provisionCompanyDirectoryFolder({
-          supabaseHeaders: headers,
-          directoryRow: row,
-          drive,
-        });
+        const out = wantsNaver
+          ? await provisionNaverWorksCompanyDirectoryFolder({
+              supabaseHeaders: headers,
+              directoryRow: row,
+            })
+          : await provisionCompanyDirectoryFolder({
+              supabaseHeaders: headers,
+              directoryRow: row,
+              drive,
+            });
         results.push({
           directoryId: out.directoryId,
           name: row?.name || "",
           created: out.createdFolder,
           shareLink: out.shareLink,
+          provider: wantsNaver ? "naver" : "google",
         });
       } catch (e) {
         results.push({

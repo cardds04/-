@@ -20,6 +20,9 @@ COPY tools/darktable-gemini-batch/requirements.txt ./tools/darktable-gemini-batc
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r tools/darktable-gemini-batch/requirements.txt
 
+COPY requirements-naverworks.txt ./requirements-naverworks.txt
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements-naverworks.txt
+
 COPY . .
 
 ARG GIT_SHA=unknown

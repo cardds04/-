@@ -1435,7 +1435,7 @@
           fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
           fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link&order=updated_at.desc`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1486,9 +1486,16 @@
         }
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
           .map((row) => {
-            const fid = normalize(row?.google_drive_company_folder_id);
-            const cached = normalize(row?.google_drive_company_share_link);
-            const driveCompanyFolderLink = cached || (fid ? `https://drive.google.com/drive/folders/${fid}` : "");
+            const nf = normalize(row?.naver_works_company_folder_id);
+            const naverCached = normalize(row?.naver_works_company_share_link);
+            const googleFid = normalize(row?.google_drive_company_folder_id);
+            const googleCached = normalize(row?.google_drive_company_share_link);
+            const googleLink =
+              googleCached || (googleFid ? `https://drive.google.com/drive/folders/${googleFid}` : "");
+            let driveCompanyFolderLink = "";
+            if (naverCached) driveCompanyFolderLink = naverCached;
+            else if (nf) driveCompanyFolderLink = "";
+            else driveCompanyFolderLink = googleLink;
             return {
               name: normalize(row?.name),
               phone: directoryPhoneForWriterView(row?.phone, row?.customer_phone),
@@ -2887,9 +2894,17 @@
             const provisionDriveBtn = showProvisionDriveBtn
               ? ` <button type="button" class="btn outline small" data-action="provisionCompanyDelivery" data-schedule-id="${scheduleId}" style="margin-left:6px;vertical-align:middle;">납품폴더 생성</button>`
               : "";
+            let deliveryLinkKind = "";
+            if (companyDriveLink) {
+              if (/^https:\/\/drive\.google\.com/i.test(companyDriveLink)) {
+                deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(Google)</span>`;
+              } else if (/^https?:\/\//i.test(companyDriveLink)) {
+                deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(네이버웍스)</span>`;
+              }
+            }
             const companyDriveLine = companyDriveLink
-              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
-              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">아직 표시할 주소가 없습니다. 아래 버튼으로 생성하거나 잠시 후 새로고침(F5)해 주세요.</span>${provisionDriveBtn}<br />`;
+              ? `업체 납품 폴더: <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a>${deliveryLinkKind}<br />`
+              : `업체 납품 폴더: <span style="color:#b45309;font-size:12px;">아직 표시할 공유 주소가 없습니다. 「납품폴더 생성」(또는 관리 일괄 생성) 또는 잠시 후 새로고침(F5)해 주세요.</span>${provisionDriveBtn}<br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
@@ -2916,8 +2931,9 @@
                 const origIconBtn = origNotified
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="원본 업로드 안내 완료" aria-label="원본업로드 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`
                   : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="originalUploadNotify" data-schedule-id="${scheduleId}" title="원본 업로드 완료 고객 문자" aria-label="원본업로드"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
+                const naverWorksFolderBtn = `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="naverWorksCreateDriveFolder" data-schedule-id="${scheduleId}" title="네이버웍스: 업체 폴더(DB) 또는 NAVER_WORKS_DRIVE_PARENT_FILE_ID 아래 촬영일 폴더 생성" aria-label="네이버웍스 폴더"><span class="shoot-icon-btn__glyph" aria-hidden="true">NW</span><span class="shoot-icon-btn__label">네이버웍스</span></button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}"><div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${subfoldersHtml}</div></div>`;
+                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}"><div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}${naverWorksFolderBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${subfoldersHtml}</div></div>`;
               }
             }
             return `
@@ -2964,7 +2980,11 @@
             alert("로그인 및 서버 동기화가 필요합니다.");
             return;
           }
-          if (!confirm("이 업체의 납품용 Google Drive 폴더를 만들까요?\n(업체 계정이 없으면 아이디·비번 1234 로 자동 등록될 수 있습니다.)")) {
+          if (
+            !confirm(
+              "이 업체의 납품 폴더를 준비할까요?\n서버에 NAVER_WORKS_DRIVE_PARENT_FILE_ID 가 있으면 네이버웍스(포토영상 등) 업체 폴더를 만들고,\n그렇지 않으면 Google Drive 로 만듭니다.\n(업체 계정이 없으면 아이디·비번 1234 로 자동 등록될 수 있습니다.)"
+            )
+          ) {
             return;
           }
           provisionCompanyDeliveryBtn.disabled = true;
@@ -3056,6 +3076,56 @@
             alert("요청 중 오류가 발생했습니다.");
           }
           ensureDriveFoldersBtn.disabled = false;
+          return;
+        }
+
+        const naverWorksFolderBtnClick = event.target.closest("button[data-action='naverWorksCreateDriveFolder']");
+        if (naverWorksFolderBtnClick) {
+          const sid = canonScheduleUuid(naverWorksFolderBtnClick.dataset.scheduleId || "");
+          const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
+          if (!writer || !USE_SUPABASE_SYNC) {
+            alert("로그인 및 서버 동기화가 필요합니다.");
+            return;
+          }
+          if (
+            !confirm(
+              "네이버웍스 Drive 에 촬영일 폴더를 만들까요?\n(서버에 CLIENT_ID 등·부모 폴더 ID·Python 패키지가 준비되어 있어야 합니다.)"
+            )
+          ) {
+            return;
+          }
+          naverWorksFolderBtnClick.disabled = true;
+          try {
+            const res = await fetch("/api/photographer-naverworks-folder", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                writerLoginId: writer.id,
+                writerPassword: writer.password,
+                scheduleId: sid,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              alert(data.message || "네이버웍스 폴더 생성에 실패했습니다.");
+              naverWorksFolderBtnClick.disabled = false;
+              return;
+            }
+            const fid = String(data.fileId || "").trim();
+            alert(
+              `네이버웍스 폴더를 생성했습니다.\n폴더 이름: ${String(data.folderName || "").trim() || "-"}${
+                fid ? `\nfileId: ${fid}` : ""
+              }`
+            );
+          } catch (err) {
+            console.error(err);
+            alert("요청 중 오류가 발생했습니다.");
+          }
+          naverWorksFolderBtnClick.disabled = false;
           return;
         }
 

@@ -10,6 +10,10 @@
  *
  *   특정 업체명만 (정확히 company_directory.name 과 일치):
  *     npm run delivery:provision-company-all -- "디자인연담" "아란디자인"
+ *
+ *   네이버웍스(포토영상 등 공용, create_folder.py + .env NAVER_WORKS_*):
+ *     npm run delivery:provision-company-all-naver
+ *     npm run delivery:provision-company-all-naver -- -- "업체A" "업체B"
  */
 const fs = require("fs");
 const path = require("path");
@@ -50,8 +54,13 @@ function loadRootEnvDotfile() {
 
 loadRootEnvDotfile();
 
+const argv = process.argv.slice(2).filter((a) => a !== "--");
+const USE_NAVER = argv.includes("--naver") || argv.includes("--naverworks");
+const cliNames = argv.filter((a) => a !== "--naver" && a !== "--naverworks");
+
 const {
   provisionCompanyDirectoryFolder,
+  provisionNaverWorksCompanyDirectoryFolder,
   fetchCompanyDirectoryRowsForProvision,
 } = require("../lib/company-drive-provision.cjs");
 const { getDriveClient } = require("../lib/google-drive-delivery.cjs");
@@ -96,8 +105,8 @@ function getHs() {
   };
 }
 
-const ROW_SELECT =
-  "id,name,code,google_drive_company_folder_id,google_drive_company_share_link";
+/** 나열 select 는 미적용 마이그레이션 컬럼 때문에 400 되므로 전체 컬럼 */
+const ROW_SELECT = "*";
 
 /**
  * @param {{ url: string, headers: Record<string, string> }} headers
@@ -130,13 +139,16 @@ async function fetchDirectoryRowsByCompanyNames(headers, names) {
 (async () => {
   const h = getHs();
   let drive;
-  try {
-    drive = getDriveClient();
-  } catch (e) {
-    console.error("Drive 클라이언트 초기화 실패:", e?.message || e);
-    process.exit(1);
+  if (!USE_NAVER) {
+    try {
+      drive = getDriveClient();
+    } catch (e) {
+      console.error("Drive 클라이언트 초기화 실패:", e?.message || e);
+      process.exit(1);
+    }
+  } else {
+    console.error("[모드] 네이버웍스 업체 폴더 — Google Drive 클라이언트 생략");
   }
-  const cliNames = process.argv.slice(2).filter((a) => a !== "--");
   let rows;
   if (cliNames.length) {
     console.error(`지정 업체 ${cliNames.length}개만 프로비저닝…`);
@@ -160,11 +172,16 @@ async function fetchDirectoryRowsByCompanyNames(headers, names) {
   for (const row of rows) {
     const label = row?.name || row?.id || "?";
     try {
-      const out = await provisionCompanyDirectoryFolder({
-        supabaseHeaders: h,
-        directoryRow: row,
-        drive,
-      });
+      const out = USE_NAVER
+        ? await provisionNaverWorksCompanyDirectoryFolder({
+            supabaseHeaders: h,
+            directoryRow: row,
+          })
+        : await provisionCompanyDirectoryFolder({
+            supabaseHeaders: h,
+            directoryRow: row,
+            drive,
+          });
       if (out.createdFolder) {
         console.error(`[+생성] ${label}`);
         created++;
