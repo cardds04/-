@@ -1452,6 +1452,7 @@
         writeStorageArraySilently(STORAGE_WRITERS, writers);
         writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, schedules.map((row) => ({
           writerMirrorId: row.writerMirrorId,
+          customerScheduleId: row.customerScheduleId,
           date: row.date,
           time: row.time,
           name: row.name,
@@ -1478,6 +1479,14 @@
           writerTablePullRunning = true;
           try {
             await pullTablesToWriterStorage();
+            if (photographerShootStatusDebounceTimer) {
+              clearTimeout(photographerShootStatusDebounceTimer);
+              photographerShootStatusDebounceTimer = null;
+            }
+            try {
+              const wpull = getCurrentWriter();
+              if (wpull && USE_SUPABASE_SYNC) await refreshPhotographerShootStatus();
+            } catch (_) {}
             renderAuthState();
           } catch (error) {
             console.error("[TABLE][photographer] pull 실패", error);
