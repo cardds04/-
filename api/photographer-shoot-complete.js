@@ -5,7 +5,7 @@
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
-const { friendlyDriveQuotaMessage } = require("../lib/google-drive-delivery.cjs");
+const { friendlyDriveQuotaMessage, friendlyDriveFolderCreateDeniedMessage } = require("../lib/google-drive-delivery.cjs");
 
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
@@ -105,6 +105,15 @@ module.exports = async (req, res) => {
   } catch (error) {
     if (String(error?.message || "") === "file_too_large") {
       res.status(400).json({ ok: false, message: "파일 크기는 12MB 이하여야 합니다." });
+      return;
+    }
+    const driveDeny =
+      typeof friendlyDriveFolderCreateDeniedMessage === "function"
+        ? friendlyDriveFolderCreateDeniedMessage(error)
+        : null;
+    if (driveDeny) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.status(403).json({ ok: false, message: driveDeny });
       return;
     }
     const driveHelp = typeof friendlyDriveQuotaMessage === "function" ? friendlyDriveQuotaMessage(error) : null;

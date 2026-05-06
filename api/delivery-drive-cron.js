@@ -11,6 +11,8 @@
  *   SOLAPI_*                      — 솔라피 (solapi-send 와 동일)
  *   GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON  — 서비스계정 전체 JSON 문자열
  *   GOOGLE_DRIVE_PARENT_FOLDER_ID      — 업체별 최상위를 만들 최상단 부모 폴더 ID
+ *   DELIVERY_DRIVE_ALLOW_NEW_FOLDERS  — `1` 일 때만 Drive **새 폴더** 생성(ensureFolder·작가 현장확인·Cron Job).
+ *                                      미설정 시 생성 안 함(자동 폴더 난립 방지).
  *   DELIVERY_MIN_SHOOT_DATE       — 선택, 기본 2026-04-28 (이 날짜 이상 스케줄만 처리)
  *   DELIVERY_FOLDER_MAX_LAG_DAYS — 선택, 촬영일로부터 폴더 생성 최대 후퇴 일수 (기본 120)
  *   DELIVERY_DRIVE_LINK_PERMISSION — anyone | private (기본 anyone, 고객용 링크 열람)

@@ -6,7 +6,7 @@
  *   export SUPABASE_SERVICE_ROLE_KEY=...
  *   export GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
  *   export GOOGLE_DRIVE_PARENT_FOLDER_ID=...
- *   export DELIVERY_SKIP_SMS=1    # 테스트 시 권장
+ *   export DELIVERY_DRIVE_ALLOW_NEW_FOLDERS=1   # 새 폴더 생성 허용(미설정이면 생성 단계 오류 가능)
  *   node tools/run-delivery-drive-once.cjs
  */
 const { runDeliveryDriveJob } = require("../lib/delivery-drive-run.cjs");
