@@ -1390,7 +1390,7 @@
           fetchWriterJsonRows("writers?select=name,login_id,password,phone,car_number,created_at&order=updated_at.desc"),
           fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone,customer_phone,code&order=updated_at.desc`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,phone,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link&order=updated_at.desc`
           ),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1440,11 +1440,17 @@
           return "";
         }
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
-          .map((row) => ({
-            name: normalize(row?.name),
-            phone: directoryPhoneForWriterView(row?.phone, row?.customer_phone),
-            companyCode: normalize(row?.code)
-          }))
+          .map((row) => {
+            const fid = normalize(row?.google_drive_company_folder_id);
+            const cached = normalize(row?.google_drive_company_share_link);
+            const driveCompanyFolderLink = cached || (fid ? `https://drive.google.com/drive/folders/${fid}` : "");
+            return {
+              name: normalize(row?.name),
+              phone: directoryPhoneForWriterView(row?.phone, row?.customer_phone),
+              companyCode: normalize(row?.code),
+              driveCompanyFolderLink
+            };
+          })
           .filter((row) => row.name);
         const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
           id: normalize(row?.id),
@@ -1935,6 +1941,32 @@
           }
         }
         return normalize(matched?.phone) || "-";
+      }
+
+      function getCompanyDriveFolderLinkForItem(item) {
+        const companyName = normalize(item?.company);
+        if (!companyName) return "";
+        const companies = readStorageArray(STORAGE_COMPANIES);
+        const nameLc = companyName.toLowerCase();
+        let matched = companies.find((company) => normalize(company?.name).toLowerCase() === nameLc);
+        const code = normalize(item?.companyCode);
+        if (!matched && code) {
+          matched = companies.find((company) => normalize(company?.companyCode) === code);
+        }
+        if (!matched) {
+          const sk = stripParenSegmentsForCompanyMatch(companyName);
+          if (sk) {
+            matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
+          }
+        }
+        return normalize(matched?.driveCompanyFolderLink) || "";
+      }
+
+      function escapeTextForHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
       }
 
       async function copyVisibleSchedules() {
@@ -2803,6 +2835,10 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
+            const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
+            const companyDriveLine = companyDriveLink
+              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
+              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">미등록·동기화 전 — npm/provision 또는 신규 가입 시 생성</span><br />`;
             const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
@@ -2812,12 +2848,16 @@
                 shootBlock =
                   '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인·Drive 폴더 생성은 스케줄이 서버와 동기화된 뒤 사용할 수 있습니다.</div>';
               } else if (shootDone) {
-                const d = photographerShootDeliveryById[scheduleId];
+                const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
-                const companyFolderLink = normalize(d?.company_folder_web_link);
+                let companyFolderLink = normalize(d?.company_folder_web_link);
+                if (!companyFolderLink && normalize(d?.company_share_link)) {
+                  companyFolderLink = normalize(d.company_share_link);
+                }
+                const mergedCompanyLink = companyFolderLink || companyDriveLink;
                 const hasAnyDriveLink =
                   Boolean(shootLink) ||
-                  Boolean(companyFolderLink) ||
+                  Boolean(mergedCompanyLink) ||
                   SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
                 const driveMissingHint = !hasAnyDriveLink
                   ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크를 불러오지 못했습니다. 새로고침 후 다시 확인하거나 서버 배포와 DB 마이그레이션 적용 상태를 확인해 주세요.</span>`
@@ -2827,14 +2867,22 @@
                   normalize(d?.photographer_original_upload_notified_at);
                 const linkHtml = shootLink
                   ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
-                  : companyFolderLink
-                    ? `<a href="${companyFolderLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">업체 납품 폴더(Drive)</a><span style="margin-left:6px;font-size:11px;color:#64748b;align-self:center;">촬영일 폴더·원본·편집 하위폴더로 이동하세요.</span>`
+                  : mergedCompanyLink
+                    ? `<a href="${mergedCompanyLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">업체 납품 폴더(Drive)</a><span style="margin-left:6px;font-size:11px;color:#64748b;align-self:center;">촬영일·원본·편집 폴더는 이 안에서 찾아 주세요.</span>`
                     : "";
+                const folderUrlToShow = shootLink || mergedCompanyLink || "";
+                const folderUrlLine = folderUrlToShow
+                  ? `<div style="flex-basis:100%;margin-top:8px;padding:8px 10px;background:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0;">
+                      <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;">폴더 주소</div>
+                      <div style="font-size:11px;color:#0f172a;word-break:break-all;line-height:1.45;user-select:all;">${escapeTextForHtml(folderUrlToShow)}</div>
+                      <button type="button" class="btn outline small" style="margin-top:6px" data-action="copyText" data-copy-text="${encodeURIComponent(folderUrlToShow)}">주소 복사</button>
+                    </div>`
+                  : "";
                 const origBtnAttrs = origNotified
                   ? ""
                   : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${driveMissingHint}${subfoldersHtml}</div>`;
+                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${folderUrlLine}${driveMissingHint}${subfoldersHtml}</div>`;
               } else {
                 shootBlock = `<div class="shoot-complete-row shoot-complete-before" data-schedule-id="${scheduleId}">
                   <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인전</button>
@@ -2850,7 +2898,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
+                  ${companyDriveLine}${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />

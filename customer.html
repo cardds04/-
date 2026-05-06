@@ -1759,17 +1759,19 @@
         const fetchCustomersRowsForPull = async () => {
           try {
             return await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id&login_id=not.is.null&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link&login_id=not.is.null&order=created_at.desc`
             );
           } catch (error) {
             const all = await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link&order=created_at.desc`
             );
             return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
         };
         const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
-          fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code&order=updated_at.desc`),
+          fetchJsonRows(
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code,google_drive_company_folder_id,google_drive_company_share_link&order=updated_at.desc`
+          ),
           fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
           fetchPaymentsRowsForPull(),
@@ -1835,11 +1837,17 @@
           }
         });
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
-          .map((row) => ({
-            name: String(row?.name || "").trim(),
-            phone: String(row?.phone || "").trim(),
-            companyCode: String(row?.code || "").trim()
-          }))
+          .map((row) => {
+            const fid = normalize(String(row?.google_drive_company_folder_id ?? ""));
+            const cached = normalize(String(row?.google_drive_company_share_link ?? ""));
+            const driveCompanyFolderLink = cached || (fid ? `https://drive.google.com/drive/folders/${fid}` : "");
+            return {
+              name: String(row?.name || "").trim(),
+              phone: String(row?.phone || "").trim(),
+              companyCode: String(row?.code || "").trim(),
+              driveCompanyFolderLink
+            };
+          })
           .filter((row) => row.name);
         const companyCodeByName = new Map(
           companies
@@ -1848,15 +1856,21 @@
         );
         const writerPhoneCar = buildWriterPhoneCarLookup();
         const customers = (Array.isArray(customersRows) ? customersRows : [])
-          .map((row) => ({
-            id: String(row?.login_id || "").trim(),
-            password: "",
-            company: String(row?.company_name || row?.name || "").trim(),
-            companyCode: String(row?.code || row?.company_code || "").trim(),
-            phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
-            createdAt: String(row?.created_at || "").trim(),
-            siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
-          }))
+          .map((row) => {
+            const gid = normalize(String(row?.google_drive_company_folder_id ?? ""));
+            const gcached = normalize(String(row?.google_drive_company_share_link ?? ""));
+            const companyDriveFolderUrl = gcached || (gid ? `https://drive.google.com/drive/folders/${gid}` : "");
+            return {
+              id: String(row?.login_id || "").trim(),
+              password: "",
+              company: String(row?.company_name || row?.name || "").trim(),
+              companyCode: String(row?.code || row?.company_code || "").trim(),
+              phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
+              createdAt: String(row?.created_at || "").trim(),
+              siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType),
+              companyDriveFolderUrl
+            };
+          })
           .filter((row) => row.id);
         // source="deleted" 항목은 관리자가 소프트 삭제한 것 → 로컬에서도 제거
         const deletedServerIds = new Set(
@@ -2393,6 +2407,9 @@
       function directoryRowToCustomerLocalStub(row) {
         const id = normalize(String(row?.login_id ?? ""));
         if (!id) return null;
+        const gid = normalize(String(row?.google_drive_company_folder_id ?? ""));
+        const gcached = normalize(String(row?.google_drive_company_share_link ?? ""));
+        const companyDriveFolderUrl = gcached || (gid ? `https://drive.google.com/drive/folders/${gid}` : "");
         return {
           id,
           password: "",
@@ -2400,7 +2417,8 @@
           companyCode: normalize(String(row?.code ?? row?.company_code ?? "")),
           phone: normalize(String(row?.customer_phone ?? row?.phone ?? "")),
           createdAt: normalize(String(row?.created_at ?? "")),
-          siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
+          siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType),
+          companyDriveFolderUrl
         };
       }
       function tryOfflineCustomerCredentialMatch(id, pw) {
@@ -2428,7 +2446,7 @@
         try {
           const encoded = encodeURIComponent(id);
           const rows = await fetchJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link`
           );
           const list = Array.isArray(rows) ? rows : [];
           const pwdMatches = list.filter((row) => normalize(String(row?.password ?? "")) === pw);
@@ -3681,8 +3699,17 @@
         const schedules = getUserSchedules();
         await refreshCustomerSiteShootCompletionMap(schedules);
 
+        const sessionUserForDrive = getCurrentSessionUser();
+        const customerDriveFolderUrl = normalize(sessionUserForDrive?.companyDriveFolderUrl || "");
+        const customerDriveBanner =
+          `<div class="status-card" style="margin-bottom:12px;border-left:4px solid #2563eb;background:#eef4ff;"><div style="font-weight:800;margin-bottom:4px;color:#1e3a5f;">업체 납품 폴더(Google Drive)</div>` +
+          (customerDriveFolderUrl
+            ? `<div><a href="${escapeHtml(customerDriveFolderUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:700;">폴더 열기 ↗</a></div>`
+            : `<div style="font-size:13px;color:#92400e;">아직 폴더가 연결되지 않았거나 동기화 전입니다. 잠시 후 새로고침하거나 로그아웃 후 다시 로그인해 보세요.</div>`) +
+          `</div>`;
+
         if (schedules.length === 0) {
-          statusListEl.innerHTML = '<div class="status-card">표시할 일정이 없습니다.</div>';
+          statusListEl.innerHTML = customerDriveBanner + '<div class="status-card">표시할 일정이 없습니다.</div>';
           return;
         }
         const renderScheduleCard = (item) => {
@@ -3828,7 +3855,7 @@
         const pastMarkup = pastSchedules.length
           ? pastSchedules.map((item) => renderScheduleCard(item)).join("")
           : '<div class="status-card">과거기록이 없습니다.</div>';
-        statusListEl.innerHTML = `
+        statusListEl.innerHTML = `${customerDriveBanner}
           <div class="status-card" style="font-weight:700;">촬영예정 / 오늘촬영</div>
           ${upcomingMarkup}
           <div class="status-card" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
