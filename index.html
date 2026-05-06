@@ -654,6 +654,28 @@
         padding-right: 2px;
       }
 
+      .dashboard-pending-row-delete {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        margin: 0 4px 0 0;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        border-radius: 6px;
+        font-size: 1rem;
+        line-height: 1;
+        font-weight: 700;
+        color: #94a3b8;
+        cursor: pointer;
+      }
+
+      .dashboard-pending-row-delete:hover {
+        border-color: #f87171;
+        color: #b91c1c;
+        background: #fef2f2;
+      }
+
       .dashboard-revert-btn {
         border: 1px solid var(--line);
         background: #fff;
@@ -15995,7 +16017,10 @@
               )}" title="이 일정 촬영 현장 Drive 폴더 생성">폴더생성</button>`
             : "";
 
+          const rowDeleteBtn = `<button type="button" class="dashboard-pending-row-delete" data-action="dashboardDeleteSchedule" data-data-index="${dataIndex}" title="이 일정 삭제" aria-label="일정 삭제">×</button>`;
+
           return `<div class="schedule-dashboard-row-line">
+                  ${rowDeleteBtn}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
                   <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
@@ -17031,6 +17056,14 @@
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
+        const dashDeleteBtn = event.target.closest("button[data-action='dashboardDeleteSchedule']");
+        if (dashDeleteBtn) {
+          const idx = Number(dashDeleteBtn.dataset.dataIndex);
+          if (Number.isFinite(idx) && idx >= 0 && idx < data.length) {
+            deleteSchedule(idx);
+          }
+          return;
+        }
         const openDashRow = event.target.closest("button[data-action='openScheduleCardByIndex']");
         if (openDashRow) {
           openScheduleRowFromDashboard(openDashRow.dataset.dataIndex);
