@@ -47,59 +47,14 @@
         font-size: clamp(14px, 1.3vw, 21px);
       }
 
-      /** 순수 HTML 점검줄 — 스크립트·API 없어도 보임 (브라우저 확장 프로그램이 deploy/banner 숨김 방지용) */
-      .schedule-admin-build-strip-html {
-        box-sizing: border-box;
-        max-width: min(920px, 96vw);
+      /** 배포 반영 — 한 줄 (Vercel 빌드 시 토큰 치환) */
+      .admin-update-stamp-line {
         margin: 10px auto 0;
-        padding: 10px 14px;
+        padding: 0 8px;
         text-align: center;
-        font-size: clamp(13px, 1.35vw, 15px);
-        font-weight: 800;
-        line-height: 1.45;
-        color: #9a3412;
-        background: #fffbeb;
-        border: 2px dashed #ea580c;
-        border-radius: 12px;
-      }
-      .schedule-admin-build-strip-html code {
-        font-size: 0.88em;
-        background: rgba(255, 255, 255, 0.9);
-        padding: 2px 6px;
-        border-radius: 6px;
-      }
-
-      /** 배포 반영 시간 — 제목 바로 아래 눈에 띄게 */
-      .deploy-release-banner {
-        box-sizing: border-box;
-        max-width: min(820px, 96vw);
-        margin: 12px auto 0;
-        padding: 12px 16px;
-        text-align: center;
-        font-size: clamp(13px, 1.35vw, 16px);
-        line-height: 1.55;
-        color: #0f172a;
-        background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
-        border: 2px solid #34d399;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(16, 185, 129, 0.2);
-      }
-      .deploy-release-banner strong.push-ok {
-        color: #047857;
-        font-weight: 900;
-      }
-      .deploy-release-banner .deploy-sub {
-        margin-top: 6px;
-        font-size: 0.9em;
-        color: #5b677d;
-      }
-      .deploy-release-banner code {
-        background: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(52, 211, 153, 0.6);
-        border-radius: 8px;
-        padding: 2px 8px;
-        font-size: 0.88em;
-        color: #0f4762;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
       }
 
       .top-tabs {
@@ -1858,99 +1813,80 @@
   <body>
     <main class="wrap">
       <h1>촬영스케줄 관리자페이지</h1>
-      <!-- VERCEL_ADMIN_UPDATE_STAMP_SLOT -->
-      <p class="schedule-admin-build-strip-html">
-        <strong>[배포 점검]</strong> 이 주황 박스와 아래 초록 박스가 안 보이면 옛 페이지(브라우저 캐시·다른 주소)입니다. 시크릿 창 또는
-        <kbd>Ctrl</kbd>+<kbd>F5</kbd> 로 새로고침하세요. 소스 헤더 <code>&lt;meta name="schedule-site-admin-index"&gt;</code> 값 확인.
+      <p id="adminUpdateStampLine" class="admin-update-stamp-line" aria-live="polite">
+        <span id="adminUpdateStampInner">__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__</span>
       </p>
-      <!-- 제목 바로 아래 녹색 박스 = 현재 접속 서버 빌드/배포 반영 확인용 (스크립트 전에도 보입니다) -->
-      <div id="adminDeployMetaBadge" class="deploy-release-banner schedule-deploy-meta-root" role="status" aria-live="polite">
-        <strong class="push-ok">푸시·배포 확인</strong> · 업데이트 시간을 불러오는 중…
-      </div>
       <script>
         (function () {
-          function kstFmtFromMs(ms) {
+          var TOKEN = "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__";
+          function compactKst(ms) {
             try {
               var d = new Date(Number(ms));
               if (Number.isNaN(d.getTime())) return "";
-              return new Intl.DateTimeFormat("ko-KR", {
+              var parts = new Intl.DateTimeFormat("en-GB", {
                 timeZone: "Asia/Seoul",
-                year: "numeric",
                 month: "2-digit",
                 day: "2-digit",
                 hour: "2-digit",
                 minute: "2-digit",
-                second: "2-digit",
                 hour12: false,
-              }).format(d);
+              }).formatToParts(d);
+              var mv = parts.find(function (p) {
+                return p.type === "month";
+              });
+              var dv = parts.find(function (p) {
+                return p.type === "day";
+              });
+              var hv = parts.find(function (p) {
+                return p.type === "hour";
+              });
+              var minv = parts.find(function (p) {
+                return p.type === "minute";
+              });
+              var pad = function (v) {
+                return String(v == null ? "" : v).padStart(2, "0");
+              };
+              return pad(mv && mv.value) + pad(dv && dv.value) + " " + pad(hv && hv.value) + ":" + pad(minv && minv.value);
             } catch (_) {
               return "";
             }
           }
-          function escLite(s) {
-            return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+          function setStampLine(innerText) {
+            var inner = document.getElementById("adminUpdateStampInner");
+            if (inner && innerText) inner.textContent = innerText;
           }
-          function setHtml(el, inner) {
-            if (el) el.innerHTML = inner;
-          }
-          async function fetchDeployMeta() {
-            var el = document.getElementById("adminDeployMetaBadge");
-            if (!el) return null;
-            var lmMs = Date.parse(document.lastModified);
-            var lmLine =
-              lmMs && !Number.isNaN(lmMs)
-                ? '<span class="deploy-sub">파일 수정 시각 참고(KST): ' + escLite(kstFmtFromMs(lmMs)) + "</span>"
-                : "";
+          (function syncFromLastModified() {
+            var inner = document.getElementById("adminUpdateStampInner");
+            if (!inner || inner.textContent.trim() !== TOKEN) return;
+            var lm = Date.parse(document.lastModified);
+            if (lm && !Number.isNaN(lm)) {
+              var s = compactKst(lm);
+              if (s) setStampLine("업데이트시각:" + s);
+            }
+          })();
+          async function refreshDeployMeta() {
+            var inner = document.getElementById("adminUpdateStampInner");
+            if (!inner) return;
+            if (inner.textContent.trim() !== TOKEN) return;
             try {
               var res = await fetch("/api/site-release-meta?t=" + Date.now(), { cache: "no-store" });
               var data = await res.json().catch(function () {
                 return {};
               });
               if (!res.ok || !data.ok) {
-                var msg =
-                  data &&
-                  typeof data.message === "string" &&
-                  data.message
-                    ? escLite(data.message)
-                    : "HTTP " + res.status;
-                setHtml(
-                  el,
-                  '<div><strong class="push-ok">서버(API) 확인 실패</strong> — Fly 는 <code>server.js</code>에 연결해야 합니다. 페이지 주소와 <code>/api/site-release-meta</code> JSON 을 확인하세요.</div><div style="margin-top:6px;">' +
-                    escLite(msg) +
-                    "</div>" +
-                    lmLine
-                );
-                return null;
+                if (inner.textContent.trim() === TOKEN) setStampLine("업데이트시각:—");
+                return;
               }
               var iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
-              var ts = iso ? kstFmtFromMs(Date.parse(iso)) : "";
-              if (!ts && iso.slice(0, 10).length >= 10) ts = iso.slice(0, 19).replace("T", " ");
-              var sha = String(data.gitCommitShaShort || "").trim();
-              var shaPart = sha
-                ? '<span class="deploy-sub">커밋 <code>' + escLite(sha) + '</code></span>'
-                : '<span class="deploy-sub">(Git SHA 없음 — 로컬 또는 구 환경)</span>';
-              setHtml(
-                el,
-                "<div><strong class=\"push-ok\">푸시 완료</strong> · 업데이트시간(KST): <strong>" +
-                  escLite(ts || iso || "-") +
-                  "</strong></div>" +
-                  shaPart +
-                  lmLine
-              );
-              return data;
-            } catch (err) {
-              setHtml(
-                el,
-                "<div><strong class=\"push-ok\">배포 배너</strong> 네트워크 오류: " +
-                  escLite(err && err.message ? err.message : String(err)) +
-                  "</div>" +
-                  lmLine
-              );
-              return null;
+              var at = iso ? Date.parse(iso) : NaN;
+              var s = at && !Number.isNaN(at) ? compactKst(at) : "";
+              setStampLine("업데이트시각:" + (s || "—"));
+            } catch (_) {
+              if (inner.textContent.trim() === TOKEN) setStampLine("업데이트시각:—");
             }
           }
-          window.scheduleSiteRefreshDeployMeta = fetchDeployMeta;
-          void fetchDeployMeta();
+          window.scheduleSiteRefreshDeployMeta = refreshDeployMeta;
+          void refreshDeployMeta();
         })();
       </script>
       <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
