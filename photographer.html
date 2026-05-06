@@ -63,6 +63,51 @@
       .shoot-complete-row.shoot-complete-before { flex-direction: column; align-items: flex-start; gap: 6px; }
       .shoot-complete-hint { font-size: 12px; color: #64748b; line-height: 1.45; max-width: 100%; }
       .shoot-preview { max-height: 76px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
+      .shoot-actions-icons { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+      .shoot-icon-btn {
+        min-width: 58px;
+        min-height: 54px;
+        padding: 6px 8px;
+        border-radius: 12px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        font: inherit;
+        box-sizing: border-box;
+        transition: background 0.15s, border-color 0.15s, filter 0.12s;
+      }
+      .shoot-icon-btn--pending {
+        background: #fef9c3;
+        border: 2px solid #eab308;
+        color: #713f12;
+        cursor: pointer;
+      }
+      .shoot-icon-btn--pending:hover {
+        filter: brightness(0.97);
+      }
+      .shoot-icon-btn--done {
+        background: #dcfce7;
+        border: 2px solid #22c55e;
+        color: #166534;
+        cursor: default;
+      }
+      .shoot-icon-btn--done:disabled {
+        opacity: 1;
+      }
+      .shoot-icon-btn__glyph {
+        font-size: 1.2rem;
+        line-height: 1;
+      }
+      .shoot-icon-btn__label {
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        text-align: center;
+        max-width: 58px;
+      }
       .shoot-done-badge { font-size: 12px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 10px; border-radius: 6px; }
       .status-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; }
       .status-label-today { color: var(--red); }
@@ -2860,14 +2905,16 @@
                   typeof d?.photographer_original_upload_notified_at === "string" &&
                   normalize(d?.photographer_original_upload_notified_at);
                 const linkHtml = shootLink
-                  ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
+                  ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:4px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
                   : "";
-                const ensureFoldersBtn = `<button type="button" class="btn small outline" style="margin-left:2px" data-action="ensureDriveFolders" data-schedule-id="${scheduleId}">폴더만들기</button>`;
-                const origBtnAttrs = origNotified
-                  ? ""
-                  : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
+                const siteIconBtn = `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="현장확인 완료" aria-label="현장확인 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`;
+                const folderBtnClass = hasAnyDriveLink ? "shoot-icon-btn shoot-icon-btn--done" : "shoot-icon-btn shoot-icon-btn--pending";
+                const folderIconBtn = `<button type="button" class="${folderBtnClass}" data-action="ensureDriveFolders" data-schedule-id="${scheduleId}" title="Drive에 촬영일·하위 폴더 만들기" aria-label="폴더만들기"><span class="shoot-icon-btn__glyph" aria-hidden="true">📁</span><span class="shoot-icon-btn__label">폴더만들기</span></button>`;
+                const origIconBtn = origNotified
+                  ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="원본 업로드 안내 완료" aria-label="원본업로드 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`
+                  : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="originalUploadNotify" data-schedule-id="${scheduleId}" title="원본 업로드 완료 고객 문자" aria-label="원본업로드"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${ensureFoldersBtn}${linkHtml}${origBtnAttrs}${driveMissingHint}${subfoldersHtml}</div>`;
+                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${driveMissingHint}${subfoldersHtml}</div>`;
               } else {
                 shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}">
                   <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
@@ -2875,7 +2922,7 @@
                     <button type="button" class="btn outline small" data-action="preOriginalSms" data-schedule-id="${scheduleId}">원본파일업로드전</button>
                   </div>
                   <div class="shoot-complete-row shoot-complete-before">
-                    <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장 확인 완료</button>
+                    <button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" title="현장 도착·촬영 완료 처리" aria-label="현장확인"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>
                     <span class="shoot-complete-hint">현장도착 시 버튼을 눌러 주세요</span>
                   </div>
                 </div>`;
@@ -2889,12 +2936,13 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  ${companyDriveLine}${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
+                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
                   촬영구성: ${item.composition || "-"}<br />
-                  메모: ${item.memo || "-"}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}
+                  메모: ${item.memo || "-"}${(() => { const dm = getAdminCompanyDefaultMemo(item.company); return dm ? `<br /><span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${dm}` : ""; })()}<br />
+                  ${companyDriveLine}
                 </div>
                 ${shootBlock}
               </article>
