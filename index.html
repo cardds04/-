@@ -2861,6 +2861,8 @@
       /** 사진→「문자」 2단계 발송 후 3초 내 미진행 시 배지 원복 */
       const DASH_SMS_ARM_MS = 3000;
       const dashSmsArmTimers = new Map();
+      /** 동일 스케줄·종류 문자 API 동시 호출 방지 (중복 클릭) */
+      const dashSmsPostFlightKeys = new Set();
       const SUPABASE_PUSH_ENABLED = USE_SUPABASE_SYNC && APP_MODE !== "dev";
       const ENABLE_APP_STATE_SYNC = false;
       const SUPABASE_STATE_TABLE = "app_state";
@@ -15690,6 +15692,11 @@
 
         clearDashSmsArm(dashSmsBadgeKey(btn));
 
+        const flightKey = `${sid.toLowerCase()}|${kind}`;
+        if (dashSmsPostFlightKeys.has(flightKey)) {
+          return;
+        }
+
         let pendingPhoneArg = "";
 
         const postSms = async (customerPhoneTrimmed) => {
@@ -15709,32 +15716,54 @@
           });
         };
 
-        for (;;) {
-          const { res, body } = await postSms(pendingPhoneArg || "");
-          if (res.ok && body.ok) {
-            kickDashDeliveryRpcRefresh(true);
-            alert("문자발송완료");
-            return;
-          }
-          if ((body.code || "") === "needs_phone") {
-            const inp = prompt(
-              `${String(body.message || "").trim()}\n\n휴대폰 번호를 입력해 주세요. (예: 01012345678)\n번호를 저장한 뒤 문자를 발송합니다. · 취소하면 여기까지 중단`
-            );
-            if (inp === null) {
+        const prevLbl = btn.textContent;
+        dashSmsPostFlightKeys.add(flightKey);
+        btn.disabled = true;
+        btn.textContent = "발송중";
+        let sendSucceeded = false;
+        try {
+          for (;;) {
+            const { res, body } = await postSms(pendingPhoneArg || "");
+            if (res.ok && body.ok) {
+              sendSucceeded = true;
+              kickDashDeliveryRpcRefresh(true);
+              alert("문자발송완료");
+              return;
+            }
+            if (res.status === 409 || String(body.message || "").includes("이미")) {
+              kickDashDeliveryRpcRefresh(true);
+              alert(body.message || "이미 발송된 건입니다.");
               revertDashSmsBadgeToIdle(btn);
               return;
             }
-            const n = normalizeDashKoMobileInput(inp);
-            if (!isDashKoMobileValidDigits(n)) {
-              alert("유효한 휴대폰 번호가 아닙니다. 숫자 10~11자리 형식입니다.");
+            if ((body.code || "") === "needs_phone") {
+              const inp = prompt(
+                `${String(body.message || "").trim()}\n\n휴대폰 번호를 입력해 주세요. (예: 01012345678)\n번호를 저장한 뒤 문자를 발송합니다. · 취소하면 여기까지 중단`
+              );
+              if (inp === null) {
+                revertDashSmsBadgeToIdle(btn);
+                return;
+              }
+              const n = normalizeDashKoMobileInput(inp);
+              if (!isDashKoMobileValidDigits(n)) {
+                alert("유효한 휴대폰 번호가 아닙니다. 숫자 10~11자리 형식입니다.");
+                continue;
+              }
+              pendingPhoneArg = n;
               continue;
             }
-            pendingPhoneArg = n;
-            continue;
+            alert(body.message || "문자 발송에 실패했습니다.");
+            revertDashSmsBadgeToIdle(btn);
+            return;
           }
-          alert(body.message || "문자 발송에 실패했습니다.");
-          revertDashSmsBadgeToIdle(btn);
-          return;
+        } finally {
+          dashSmsPostFlightKeys.delete(flightKey);
+          if (btn.isConnected) {
+            btn.disabled = false;
+            if (!sendSucceeded && (btn.dataset.dashPhase || "").toLowerCase() === "armed") {
+              btn.textContent = prevLbl;
+            }
+          }
         }
       }
 
