@@ -46,26 +46,37 @@
         font-size: clamp(14px, 1.3vw, 21px);
       }
 
-      /** 배포 반영 시간 — 관리 페이지 상단 확인용 */
-      .admin-deploy-meta {
-        margin-top: 8px;
+      /** 배포 반영 시간 — 제목 바로 아래 눈에 띄게 */
+      .deploy-release-banner {
+        box-sizing: border-box;
+        max-width: min(820px, 96vw);
+        margin: 12px auto 0;
+        padding: 12px 16px;
         text-align: center;
-        font-size: clamp(12px, 1.05vw, 14px);
-        color: var(--muted);
-        line-height: 1.5;
+        font-size: clamp(13px, 1.35vw, 16px);
+        line-height: 1.55;
+        color: #0f172a;
+        background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+        border: 2px solid #34d399;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(16, 185, 129, 0.2);
       }
-      .admin-deploy-meta .deploy-push-ok {
-        color: #15803d;
-        font-weight: 800;
-        margin-right: 4px;
+      .deploy-release-banner strong.push-ok {
+        color: #047857;
+        font-weight: 900;
       }
-      .admin-deploy-meta code {
-        background: var(--badge);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 1px 6px;
-        font-size: 0.92em;
-        color: #314160;
+      .deploy-release-banner .deploy-sub {
+        margin-top: 6px;
+        font-size: 0.9em;
+        color: #5b677d;
+      }
+      .deploy-release-banner code {
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(52, 211, 153, 0.6);
+        border-radius: 8px;
+        padding: 2px 8px;
+        font-size: 0.88em;
+        color: #0f4762;
       }
 
       .top-tabs {
@@ -1824,7 +1835,96 @@
   <body>
     <main class="wrap">
       <h1>촬영스케줄 관리자페이지</h1>
-      <div id="adminDeployMetaBadge" class="admin-deploy-meta" aria-live="polite">배포·업데이트 시각 불러오는 중…</div>
+      <!-- 제목 바로 아래 녹색 박스 = 현재 접속 서버 빌드/배포 반영 확인용 (스크립트 전에도 보입니다) -->
+      <div id="adminDeployMetaBadge" class="deploy-release-banner" role="status" aria-live="polite">
+        <strong class="push-ok">푸시·배포 확인</strong> · 업데이트 시간을 불러오는 중…
+      </div>
+      <script>
+        (function () {
+          function kstFmtFromMs(ms) {
+            try {
+              var d = new Date(Number(ms));
+              if (Number.isNaN(d.getTime())) return "";
+              return new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              }).format(d);
+            } catch (_) {
+              return "";
+            }
+          }
+          function escLite(s) {
+            return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+          }
+          function setHtml(el, inner) {
+            if (el) el.innerHTML = inner;
+          }
+          async function fetchDeployMeta() {
+            var el = document.getElementById("adminDeployMetaBadge");
+            if (!el) return null;
+            var lmMs = Date.parse(document.lastModified);
+            var lmLine =
+              lmMs && !Number.isNaN(lmMs)
+                ? '<span class="deploy-sub">파일 수정 시각 참고(KST): ' + escLite(kstFmtFromMs(lmMs)) + "</span>"
+                : "";
+            try {
+              var res = await fetch("/api/site-release-meta?t=" + Date.now(), { cache: "no-store" });
+              var data = await res.json().catch(function () {
+                return {};
+              });
+              if (!res.ok || !data.ok) {
+                var msg =
+                  data &&
+                  typeof data.message === "string" &&
+                  data.message
+                    ? escLite(data.message)
+                    : "HTTP " + res.status;
+                setHtml(
+                  el,
+                  '<div><strong class="push-ok">서버(API) 확인 실패</strong> — <code>Vercel</code> 같은 호스트에서 페이지를 여는지 확인하세요.</div><div style="margin-top:6px;">' +
+                    escLite(msg) +
+                    "</div>" +
+                    lmLine
+                );
+                return null;
+              }
+              var iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
+              var ts = iso ? kstFmtFromMs(Date.parse(iso)) : "";
+              if (!ts && iso.slice(0, 10).length >= 10) ts = iso.slice(0, 19).replace("T", " ");
+              var sha = String(data.gitCommitShaShort || "").trim();
+              var shaPart = sha
+                ? '<span class="deploy-sub">커밋 <code>' + escLite(sha) + '</code></span>'
+                : '<span class="deploy-sub">(Git SHA 없음 — 로컬 또는 구 환경)</span>';
+              setHtml(
+                el,
+                "<div><strong class=\"push-ok\">푸시 완료</strong> · 업데이트시간(KST): <strong>" +
+                  escLite(ts || iso || "-") +
+                  "</strong></div>" +
+                  shaPart +
+                  lmLine
+              );
+              return data;
+            } catch (err) {
+              setHtml(
+                el,
+                "<div><strong class=\"push-ok\">배포 배너</strong> 네트워크 오류: " +
+                  escLite(err && err.message ? err.message : String(err)) +
+                  "</div>" +
+                  lmLine
+              );
+              return null;
+            }
+          }
+          window.scheduleSiteRefreshDeployMeta = fetchDeployMeta;
+          void fetchDeployMeta();
+        })();
+      </script>
       <p class="subtitle">촬영과 일정과 입금 내역을 한 화면에서 쉽고 편리하게 관리하세요.</p>
 
       <div class="top-tabs">
@@ -4693,48 +4793,6 @@
         return `${h}:${m}:${s}`;
       }
 
-      function formatDeployMetaKstReadable(isoUtc) {
-        const s = String(isoUtc || "").trim();
-        if (!s) return "";
-        const d = new Date(s);
-        if (Number.isNaN(d.getTime())) return "";
-        return new Intl.DateTimeFormat("ko-KR", {
-          timeZone: "Asia/Seoul",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false
-        }).format(d);
-      }
-
-      /** Vercel serverless 시작 시각(≈ 새 배포 반영)·Git 커밋 표시 — 푸시 후 반영 확인용 */
-      async function refreshAdminDeployMetaBadge() {
-        const el = document.getElementById("adminDeployMetaBadge");
-        if (!el) return;
-        try {
-          const fetchFn =
-            typeof window.__scheduleSiteNativeFetch === "function" ? window.__scheduleSiteNativeFetch : fetch;
-          const res = await fetchFn(`/api/site-release-meta?t=${Date.now()}`, { cache: "no-store" });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data || !data.ok) {
-            const msg = escapeHtml(data && data.message ? data.message : `HTTP ${res.status}`);
-            el.innerHTML = `<span style="color:#b45309">배포 정보를 불러오지 못했습니다 (${msg}). <code>Vercel</code> 또는 <code>vercel dev</code> 에서 접속해야 합니다.</span>`;
-            return;
-          }
-          const iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
-          const dt = escapeHtml(formatDeployMetaKstReadable(iso) || iso.slice(0, 19));
-          const shortSha = escapeHtml(String(data.gitCommitShaShort || "").trim());
-          const shaLine = shortSha ? ` · 빌드 <code>${shortSha}</code>` : "";
-          el.innerHTML = `<span class="deploy-push-ok">푸시 완료</span> 업데이트시간(KST): <strong>${dt}</strong>${shaLine}`;
-        } catch (err) {
-          const m = escapeHtml(err && err.message ? err.message : String(err));
-          el.innerHTML = `<span style="color:#b45309">배포 정보 오류 (${m}).</span>`;
-        }
-      }
-
       function setSyncStatus(text, tone = "info", options = {}) {
         const now = Date.now();
         const force = Boolean(options && options.force);
@@ -6117,7 +6175,7 @@
       startCouponPassesRealtimeSubscription();
       startDayoffRequestsRealtimeSubscription();
       window.addEventListener("focus", () => {
-        void refreshAdminDeployMetaBadge();
+        if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
         void pullAdminCompaniesFromSupabaseAndRefresh();
         void pullWritersFromSupabaseAndRefresh();
         void pullPaymentsFromSupabaseAndApply();
@@ -6128,7 +6186,7 @@
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-          void refreshAdminDeployMetaBadge();
+          if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
           void pullAdminCompaniesFromSupabaseAndRefresh();
           void pullWritersFromSupabaseAndRefresh();
           void pullPaymentsFromSupabaseAndApply();
@@ -6139,7 +6197,7 @@
         }
       });
 
-      void refreshAdminDeployMetaBadge();
+      if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
 
       const tabScheduleEl = document.getElementById("tabSchedule");
       const tabPaymentEl = document.getElementById("tabPayment");
