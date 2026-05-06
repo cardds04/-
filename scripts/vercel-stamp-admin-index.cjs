@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Vercel 빌드 시에만: `index.html`의 `__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__` 토큰을
- * `업데이트시각:0506 10:03` 형식(KST 한 줄)으로 치환합니다.
+ * Vercel 빌드 시에만: 페이지별 `<span id="…">__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__</span>`
+ * 를 `업데이트시각:0506 10:03` 형식(KST 한 줄)으로 치환합니다.
+ * (스크립트 안의 `STAMP_PENDING` 문자열은 치환하지 않습니다.)
  */
 const fs = require("fs");
 const path = require("path");
@@ -11,8 +12,7 @@ if (!process.env.VERCEL && !process.env.FORCE_VERCEL_STAMP) {
   process.exit(0);
 }
 
-const indexPath = path.join(__dirname, "..", "index.html");
-let html = fs.readFileSync(indexPath, "utf8");
+const root = path.join(__dirname, "..");
 
 function esc(s) {
   return String(s ?? "")
@@ -42,15 +42,31 @@ function kstCompactMMddHm(isoUtc) {
 }
 
 const builtIso = new Date().toISOString();
-const stampText = `업데이트시각:${kstCompactMMddHm(builtIso)}`;
+const stampTextRaw = `업데이트시각:${kstCompactMMddHm(builtIso)}`;
+const stampedInner = esc(stampTextRaw);
 
-const TOKEN = "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__";
+const FILES = [
+  ["index.html", "adminUpdateStampInner"],
+  ["photographer.html", "writerUpdateStampInner"],
+];
 
-if (!html.includes(TOKEN)) {
-  console.warn("[vercel-stamp] 레이블 토큰 없음, 스킵");
-  process.exit(0);
+let any = false;
+for (const [rel, spanId] of FILES) {
+  const fp = path.join(root, rel);
+  let html = fs.readFileSync(fp, "utf8");
+  const re = new RegExp(
+    `<span id="${spanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}">\\s*__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__\\s*</span>`
+  );
+  if (!re.test(html)) {
+    console.warn("[vercel-stamp] 슬롯 없음 → 스킵:", rel);
+    continue;
+  }
+  html = html.replace(re, `<span id="${spanId}">${stampedInner}</span>`);
+  fs.writeFileSync(fp, html, "utf8");
+  any = true;
+  console.log("[vercel-stamp] 적용됨", rel, stampTextRaw);
 }
 
-html = html.replace(TOKEN, esc(stampText));
-fs.writeFileSync(indexPath, html, "utf8");
-console.log("[vercel-stamp] 적용됨", stampText);
+if (!any) {
+  console.warn("[vercel-stamp] 처리된 HTML 없음");
+}

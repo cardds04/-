@@ -1818,7 +1818,7 @@
       </p>
       <script>
         (function () {
-          var TOKEN = "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__";
+          var STAMP_PENDING = "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__";
           function compactKst(ms) {
             try {
               var d = new Date(Number(ms));
@@ -1857,7 +1857,7 @@
           }
           (function syncFromLastModified() {
             var inner = document.getElementById("adminUpdateStampInner");
-            if (!inner || inner.textContent.trim() !== TOKEN) return;
+            if (!inner || inner.textContent.trim() !== STAMP_PENDING) return;
             var lm = Date.parse(document.lastModified);
             if (lm && !Number.isNaN(lm)) {
               var s = compactKst(lm);
@@ -1867,14 +1867,14 @@
           async function refreshDeployMeta() {
             var inner = document.getElementById("adminUpdateStampInner");
             if (!inner) return;
-            if (inner.textContent.trim() !== TOKEN) return;
+            if (inner.textContent.trim() !== STAMP_PENDING) return;
             try {
               var res = await fetch("/api/site-release-meta?t=" + Date.now(), { cache: "no-store" });
               var data = await res.json().catch(function () {
                 return {};
               });
               if (!res.ok || !data.ok) {
-                if (inner.textContent.trim() === TOKEN) setStampLine("업데이트시각:—");
+                if (inner.textContent.trim() === STAMP_PENDING) setStampLine("업데이트시각:—");
                 return;
               }
               var iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
@@ -1882,7 +1882,7 @@
               var s = at && !Number.isNaN(at) ? compactKst(at) : "";
               setStampLine("업데이트시각:" + (s || "—"));
             } catch (_) {
-              if (inner.textContent.trim() === TOKEN) setStampLine("업데이트시각:—");
+              if (inner.textContent.trim() === STAMP_PENDING) setStampLine("업데이트시각:—");
             }
           }
           window.scheduleSiteRefreshDeployMeta = refreshDeployMeta;
@@ -4767,7 +4767,7 @@
           syncStatusBadgeEl.style.position = "fixed";
           syncStatusBadgeEl.style.right = "14px";
           syncStatusBadgeEl.style.bottom = "14px";
-          syncStatusBadgeEl.style.zIndex = "99999";
+          syncStatusBadgeEl.style.zIndex = "2147483000";
           syncStatusBadgeEl.style.padding = "8px 10px";
           syncStatusBadgeEl.style.borderRadius = "10px";
           syncStatusBadgeEl.style.fontSize = "12px";

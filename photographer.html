@@ -47,6 +47,14 @@
       .small { font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; }
       .top-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
       .hint { margin: -2px 0 4px; font-size: 0.84rem; color: var(--muted); }
+      /** 고정 업데이트 시각 줄(Vercel 빌드 시 span 안 플레이스홀더 치환) */
+      .deploy-stamp-line {
+        margin: 4px 0 12px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+      }
       .filter-wrap { border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; padding: 10px; margin: 10px 0; }
       .status-list { display: grid; gap: 8px; margin-top: 8px; }
       .copy-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
@@ -156,6 +164,82 @@
     <main class="wrap">
       <div class="card">
         <h1>작가용 스케줄 페이지</h1>
+        <p class="deploy-stamp-line" aria-live="polite">
+          <span id="writerUpdateStampInner">__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__</span>
+        </p>
+        <script>
+          (function () {
+            var STAMP_PENDING = "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__";
+            function compactKst(ms) {
+              try {
+                var d = new Date(Number(ms));
+                if (Number.isNaN(d.getTime())) return "";
+                var parts = new Intl.DateTimeFormat("en-GB", {
+                  timeZone: "Asia/Seoul",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                }).formatToParts(d);
+                var mv = parts.find(function (p) {
+                  return p.type === "month";
+                });
+                var dv = parts.find(function (p) {
+                  return p.type === "day";
+                });
+                var hv = parts.find(function (p) {
+                  return p.type === "hour";
+                });
+                var minv = parts.find(function (p) {
+                  return p.type === "minute";
+                });
+                var pad = function (v) {
+                  return String(v == null ? "" : v).padStart(2, "0");
+                };
+                return pad(mv && mv.value) + pad(dv && dv.value) + " " + pad(hv && hv.value) + ":" + pad(minv && minv.value);
+              } catch (_) {
+                return "";
+              }
+            }
+            function setStampLine(innerText) {
+              var inner = document.getElementById("writerUpdateStampInner");
+              if (inner && innerText) inner.textContent = innerText;
+            }
+            (function syncFromLastModified() {
+              var inner = document.getElementById("writerUpdateStampInner");
+              if (!inner || inner.textContent.trim() !== STAMP_PENDING) return;
+              var lm = Date.parse(document.lastModified);
+              if (lm && !Number.isNaN(lm)) {
+                var s = compactKst(lm);
+                if (s) setStampLine("업데이트시각:" + s);
+              }
+            })();
+            async function refreshDeployMeta() {
+              var inner = document.getElementById("writerUpdateStampInner");
+              if (!inner) return;
+              if (inner.textContent.trim() !== STAMP_PENDING) return;
+              try {
+                var res = await fetch("/api/site-release-meta?t=" + Date.now(), { cache: "no-store" });
+                var data = await res.json().catch(function () {
+                  return {};
+                });
+                if (!res.ok || !data.ok) {
+                  if (inner.textContent.trim() === STAMP_PENDING) setStampLine("업데이트시각:—");
+                  return;
+                }
+                var iso = String(data.serverRevisionStartedAtIsoUtc || "").trim();
+                var at = iso ? Date.parse(iso) : NaN;
+                var s = at && !Number.isNaN(at) ? compactKst(at) : "";
+                setStampLine("업데이트시각:" + (s || "—"));
+              } catch (_) {
+                if (inner.textContent.trim() === STAMP_PENDING) setStampLine("업데이트시각:—");
+              }
+            }
+            window.scheduleSiteRefreshDeployMeta = refreshDeployMeta;
+            void refreshDeployMeta();
+          })();
+        </script>
         <p class="sub">회원가입 후 로그인하면 내 스케줄과 촬영 기록을 확인할 수 있습니다.</p>
 
         <div id="authBlock">
@@ -823,7 +907,7 @@
           syncStatusBadgeEl.style.position = "fixed";
           syncStatusBadgeEl.style.right = "14px";
           syncStatusBadgeEl.style.bottom = "14px";
-          syncStatusBadgeEl.style.zIndex = "99999";
+          syncStatusBadgeEl.style.zIndex = "2147483000";
           syncStatusBadgeEl.style.padding = "8px 10px";
           syncStatusBadgeEl.style.borderRadius = "10px";
           syncStatusBadgeEl.style.fontSize = "12px";
@@ -1175,11 +1259,13 @@
         } catch (_) {}
       }
       window.addEventListener("focus", () => {
+        if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
         queueWriterTablePull();
         refreshPayrollConfigFromServerOnFocus();
       });
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
+          if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
           queueWriterTablePull();
           refreshPayrollConfigFromServerOnFocus();
         }
