@@ -676,6 +676,28 @@
         background: #fef2f2;
       }
 
+      .dashboard-pending-row-done {
+        flex-shrink: 0;
+        min-width: 38px;
+        height: 22px;
+        padding: 0 6px;
+        margin: 0 4px 0 0;
+        border: 1px solid #bbf7d0;
+        background: #f0fdf4;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        line-height: 1;
+        font-weight: 800;
+        color: #15803d;
+        cursor: pointer;
+      }
+
+      .dashboard-pending-row-done:hover {
+        border-color: #22c55e;
+        color: #14532d;
+        background: #dcfce7;
+      }
+
       .dashboard-revert-btn {
         border: 1px solid var(--line);
         background: #fff;
@@ -2832,6 +2854,8 @@
       const INLOG_HOME_STORAGE_BUCKET = "inlog_home";
       const INLOG_HOME_STORAGE_MAX_BYTES = 8 * 1024 * 1024;
       const DASHBOARD_TARGET_WRITERS = ["박보윤", "김진영"];
+      /** Supabase 납품 대기 줄에서 「완료」 클릭 시 로컬 숨김용(문자·작가 처리 로그 없음) */
+      const DASHBOARD_DELIVERY_MANUAL_DONE_WRITER = "납품대기완료";
       const SUBMISSION_RECEIPT_TABLE = "customer_submission_receipts";
       const STORAGE_SCHEDULE_RESET_DONE = "scheduleSiteResetDoneV1";
       const STORAGE_TEST_SEED_Q1_2026_DONE = "scheduleSiteTestSeedQ12026Done";
@@ -15966,6 +15990,9 @@
           })
           .sort((a, b) => compareScheduleDateTime(a, b));
 
+        migrateDashboardCompletedKeysToCanonical();
+        const deliveryManualDoneKeys = new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
+
         function rowForSchedule(item) {
           const sid = String(item?.customerScheduleId || "").trim();
           if (!sid) return null;
@@ -15990,7 +16017,7 @@
           const oweSite = /^[0-9a-f-]{36}$/i.test(sid) && !dashSiteDoneForDashboardRow(tr, dateStr);
           if (!np && !nv) return oweSite;
           return oweDelivery || oweSite;
-        });
+        }).filter((item) => !deliveryManualDoneKeys.has(getDashboardScheduleKey(item)));
 
         function renderPendingRow(item) {
           const dataIndex = data.indexOf(item);
@@ -16046,10 +16073,10 @@
               )}" title="이 일정 촬영 현장 Drive 폴더 생성">폴더생성</button>`
             : "";
 
-          const rowDeleteBtn = `<button type="button" class="dashboard-pending-row-delete" data-action="dashboardDeleteSchedule" data-data-index="${dataIndex}" title="이 일정 삭제" aria-label="일정 삭제">×</button>`;
+          const rowDoneBtn = `<button type="button" class="dashboard-pending-row-done" data-action="dashboardMarkDeliveryPendingDone" data-data-index="${dataIndex}" title="대기 목록에서 제거(스케줄 삭제·납품 문자 없음)" aria-label="납품 대기 완료">완료</button>`;
 
           return `<div class="schedule-dashboard-row-line">
-                  ${rowDeleteBtn}
+                  ${rowDoneBtn}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
                   <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
@@ -17085,12 +17112,23 @@
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
-        const dashDeleteBtn = event.target.closest("button[data-action='dashboardDeleteSchedule']");
-        if (dashDeleteBtn) {
-          const idx = Number(dashDeleteBtn.dataset.dataIndex);
-          if (Number.isFinite(idx) && idx >= 0 && idx < data.length) {
-            deleteSchedule(idx);
+        const dashDeliveryDoneBtn = event.target.closest("button[data-action='dashboardMarkDeliveryPendingDone']");
+        if (dashDeliveryDoneBtn) {
+          const idx = Number(dashDeliveryDoneBtn.dataset.dataIndex);
+          if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+          const item = data[idx];
+          const sk = getDashboardScheduleKey(item);
+          const entries = readDashboardCompletedEntries();
+          if (entries.some((e) => e.scheduleKey === sk)) {
+            renderList();
+            return;
           }
+          const now = new Date();
+          const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          const processedAt = getDashboardProcessedDateYmd() || todayKey;
+          entries.push({ scheduleKey: sk, processedAt, writer: DASHBOARD_DELIVERY_MANUAL_DONE_WRITER });
+          writeDashboardCompletedEntries(entries);
+          renderList();
           return;
         }
         const openDashRow = event.target.closest("button[data-action='openScheduleCardByIndex']");
