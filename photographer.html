@@ -2814,8 +2814,10 @@
               } else if (shootDone) {
                 const d = photographerShootDeliveryById[scheduleId];
                 const shootLink = normalize(d?.shoot_folder_web_link);
+                const companyFolderLink = normalize(d?.company_folder_web_link);
                 const hasAnyDriveLink =
                   Boolean(shootLink) ||
+                  Boolean(companyFolderLink) ||
                   SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
                 const driveMissingHint = !hasAnyDriveLink
                   ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크를 불러오지 못했습니다. 새로고침 후 다시 확인하거나 서버 배포와 DB 마이그레이션 적용 상태를 확인해 주세요.</span>`
@@ -2825,7 +2827,9 @@
                   normalize(d?.photographer_original_upload_notified_at);
                 const linkHtml = shootLink
                   ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
-                  : "";
+                  : companyFolderLink
+                    ? `<a href="${companyFolderLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">업체 납품 폴더(Drive)</a><span style="margin-left:6px;font-size:11px;color:#64748b;align-self:center;">촬영일 폴더·원본·편집 하위폴더로 이동하세요.</span>`
+                    : "";
                 const origBtnAttrs = origNotified
                   ? ""
                   : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
