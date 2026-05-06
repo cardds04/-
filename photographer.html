@@ -2487,15 +2487,33 @@
         }
       }
 
+      /** 목록 행 UUID + 로컬에만 남아 있는 완료 캐시 UUID (행 병합 일시 누락 시에도 상태 API에 포함) */
+      function scheduleIdsForPhotographerShootWriter(writer) {
+        if (!writer) return [];
+        const fromRows = getMySchedules()
+          .map((r) => canonScheduleUuidFromRow(r))
+          .filter(Boolean);
+        const lb = readWriterShootSiteLocalFor(writer.id);
+        const now = Date.now();
+        const ttlOk = (entry) => {
+          const t = entry && typeof entry === "object" ? Number(entry.savedAt) || 0 : 0;
+          return t && now - t <= WRITER_SHOOT_SITE_LOCAL_TTL_MS;
+        };
+        const extras = [];
+        for (const k of Object.keys(lb)) {
+          const cu = canonScheduleUuid(k);
+          if (!cu || !ttlOk(lb[k])) continue;
+          extras.push(cu);
+        }
+        return [...new Set([...fromRows, ...extras])];
+      }
+
       async function refreshPhotographerShootStatus() {
         const w = getCurrentWriter();
         if (!w || !USE_SUPABASE_SYNC) {
           return;
         }
-        const rows = getMySchedules();
-        const scheduleIds = rows
-          .map((r) => canonScheduleUuidFromRow(r))
-          .filter(Boolean);
+        const scheduleIds = scheduleIdsForPhotographerShootWriter(w);
         if (!scheduleIds.length) {
           return;
         }
@@ -2675,9 +2693,7 @@
 
       function hydratePhotographerShootFromLocal(writer) {
         if (!writer || !USE_SUPABASE_SYNC) return;
-        const scheduleIds = getMySchedules()
-          .map((r) => canonScheduleUuidFromRow(r))
-          .filter(Boolean);
+        const scheduleIds = scheduleIdsForPhotographerShootWriter(writer);
         mergeWriterShootLocalIntoGlobals(writer, scheduleIds);
       }
 
