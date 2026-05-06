@@ -2880,12 +2880,16 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
-            const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
-            const companyDriveLine = companyDriveLink
-              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
-              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">아직 표시할 주소가 없습니다. 새로고침(F5) 후 다시 확인하거나, 신규 업체라면 잠시 후 다시 열어 주세요. 계속 비어 있으면 관리자에게 문의해 주세요.</span><br />`;
             const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
+            const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
+            const showProvisionDriveBtn = USE_SUPABASE_SYNC && hasServerId && !companyDriveLink;
+            const provisionDriveBtn = showProvisionDriveBtn
+              ? ` <button type="button" class="btn outline small" data-action="provisionCompanyDelivery" data-schedule-id="${scheduleId}" style="margin-left:6px;vertical-align:middle;">납품폴더 생성</button>`
+              : "";
+            const companyDriveLine = companyDriveLink
+              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
+              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">아직 표시할 주소가 없습니다. 아래 버튼으로 생성하거나 잠시 후 새로고침(F5)해 주세요.</span>${provisionDriveBtn}<br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
@@ -2916,13 +2920,7 @@
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="원본 업로드 안내 완료" aria-label="원본업로드 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`
                   : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="originalUploadNotify" data-schedule-id="${scheduleId}" title="원본 업로드 완료 고객 문자" aria-label="원본업로드"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                const preSmsRow = !shootDone
-                  ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
-                    <button type="button" class="btn outline small" data-action="preSiteSms" data-schedule-id="${scheduleId}">현장확인전</button>
-                    <button type="button" class="btn outline small" data-action="preOriginalSms" data-schedule-id="${scheduleId}">원본파일업로드전</button>
-                  </div>`
-                  : "";
-                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}">${preSmsRow}<div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${driveMissingHint}${subfoldersHtml}</div></div>`;
+                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}"><div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${driveMissingHint}${subfoldersHtml}</div></div>`;
               }
             }
             return `
@@ -2957,9 +2955,9 @@
         }
       }
       scheduleListEl.addEventListener("click", async (event) => {
-        const preSiteSmsBtn = event.target.closest("button[data-action='preSiteSms']");
-        if (preSiteSmsBtn) {
-          const sid = canonScheduleUuid(preSiteSmsBtn.dataset.scheduleId || "");
+        const provisionCompanyDeliveryBtn = event.target.closest("button[data-action='provisionCompanyDelivery']");
+        if (provisionCompanyDeliveryBtn) {
+          const sid = canonScheduleUuid(provisionCompanyDeliveryBtn.dataset.scheduleId || "");
           const writer = getCurrentWriter();
           if (!sid) {
             alert("스케줄 식별자가 올바르지 않습니다.");
@@ -2969,69 +2967,38 @@
             alert("로그인 및 서버 동기화가 필요합니다.");
             return;
           }
-          preSiteSmsBtn.disabled = true;
+          if (!confirm("이 업체의 납품용 Google Drive 폴더를 만들까요?\n(업체 계정이 없으면 아이디·비번 1234 로 자동 등록될 수 있습니다.)")) {
+            return;
+          }
+          provisionCompanyDeliveryBtn.disabled = true;
           try {
-            const res = await fetch("/api/photographer-customer-pre-sms", {
+            const res = await fetch("/api/photographer-company-delivery-provision", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 writerLoginId: writer.id,
                 writerPassword: writer.password,
                 scheduleId: sid,
-                kind: "pre_site",
               }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
-              alert(data.message || "문자 발송에 실패했습니다.");
-              preSiteSmsBtn.disabled = false;
+              alert(data.message || "납품 폴더를 만들지 못했습니다.");
+              provisionCompanyDeliveryBtn.disabled = false;
               return;
             }
-            alert("현장 확인 전 안내 문자를 보냈습니다.");
+            try {
+              await pullTablesToWriterStorage();
+            } catch (_) {}
+            renderScheduleList();
+            let msg = "납품 폴더가 준비되었습니다.";
+            if (data.loginId) msg += `\n업체 로그인 아이디: ${data.loginId} (비밀번호가 새로 정해진 경우 1234 입니다.)`;
+            alert(msg);
           } catch (err) {
             console.error(err);
             alert("요청 중 오류가 발생했습니다.");
           }
-          preSiteSmsBtn.disabled = false;
-          return;
-        }
-
-        const preOriginalSmsBtn = event.target.closest("button[data-action='preOriginalSms']");
-        if (preOriginalSmsBtn) {
-          const sid = canonScheduleUuid(preOriginalSmsBtn.dataset.scheduleId || "");
-          const writer = getCurrentWriter();
-          if (!sid) {
-            alert("스케줄 식별자가 올바르지 않습니다.");
-            return;
-          }
-          if (!writer || !USE_SUPABASE_SYNC) {
-            alert("로그인 및 서버 동기화가 필요합니다.");
-            return;
-          }
-          preOriginalSmsBtn.disabled = true;
-          try {
-            const res = await fetch("/api/photographer-customer-pre-sms", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                writerLoginId: writer.id,
-                writerPassword: writer.password,
-                scheduleId: sid,
-                kind: "pre_original",
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) {
-              alert(data.message || "문자 발송에 실패했습니다.");
-              preOriginalSmsBtn.disabled = false;
-              return;
-            }
-            alert("원본 업로드 전 안내 문자를 보냈습니다.\n(문구에 해당 업체 납품 폴더 주소가 포함됩니다.)");
-          } catch (err) {
-            console.error(err);
-            alert("요청 중 오류가 발생했습니다.");
-          }
-          preOriginalSmsBtn.disabled = false;
+          provisionCompanyDeliveryBtn.disabled = false;
           return;
         }
 
