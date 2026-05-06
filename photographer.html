@@ -352,6 +352,9 @@
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG = "scheduleSitePhotographerPayrollConfigV1";
       const STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY = "scheduleSitePhotographerPayrollMonthlyV1";
+      /** 새로고침 후에도 현장확인 UI 유지(서버 상태 API 지연·실패 대비), 서버 확인 시 제거 */
+      const STORAGE_WRITER_SHOOT_SITE_LOCAL = "scheduleSiteWriterShootSiteLocalV1";
+      const WRITER_SHOOT_SITE_LOCAL_TTL_MS = 72 * 60 * 60 * 1000;
       const SHOOT_PAY_WON = 50000;
       const PAYROLL_LINE_CATEGORY_LABELS = {
         toll: "톨비",
@@ -1556,6 +1559,77 @@
         return /^[0-9a-f-]{36}$/i.test(s) ? s.toLowerCase() : "";
       }
 
+      function loadWriterShootSiteLocalAll() {
+        try {
+          const raw = localStorage.getItem(STORAGE_WRITER_SHOOT_SITE_LOCAL);
+          const o = raw ? JSON.parse(raw) : {};
+          return o && typeof o === "object" ? o : {};
+        } catch (_) {
+          return {};
+        }
+      }
+      function saveWriterShootSiteLocalAll(all) {
+        try {
+          localStorage.setItem(STORAGE_WRITER_SHOOT_SITE_LOCAL, JSON.stringify(all && typeof all === "object" ? all : {}));
+        } catch (_) {}
+      }
+      function pruneExpiredWriterShootSiteLocal(all) {
+        const now = Date.now();
+        for (const wid of Object.keys(all)) {
+          const bucket = all[wid];
+          if (!bucket || typeof bucket !== "object") {
+            delete all[wid];
+            continue;
+          }
+          for (const sid of Object.keys(bucket)) {
+            const e = bucket[sid];
+            const t = e && typeof e === "object" ? Number(e.savedAt) || 0 : 0;
+            if (!t || now - t > WRITER_SHOOT_SITE_LOCAL_TTL_MS) delete bucket[sid];
+          }
+          if (!Object.keys(bucket).length) delete all[wid];
+        }
+      }
+      function readWriterShootSiteLocalFor(loginId) {
+        const wid = normalize(loginId);
+        if (!wid) return {};
+        const all = loadWriterShootSiteLocalAll();
+        pruneExpiredWriterShootSiteLocal(all);
+        saveWriterShootSiteLocalAll(all);
+        const b = all[wid];
+        return b && typeof b === "object" ? b : {};
+      }
+      function rememberWriterShootSiteLocal(loginId, scheduleId, photographerSiteDoneAt, deliverySnap) {
+        const wid = normalize(loginId);
+        const sid = canonScheduleUuid(scheduleId);
+        if (!wid || !sid) return;
+        const all = loadWriterShootSiteLocalAll();
+        if (!all[wid]) all[wid] = {};
+        all[wid][sid] = {
+          savedAt: Date.now(),
+          photographer_site_done_at: String(photographerSiteDoneAt || "").trim() || new Date().toISOString(),
+          delivery: deliverySnap && typeof deliverySnap === "object" ? deliverySnap : {},
+        };
+        pruneExpiredWriterShootSiteLocal(all);
+        saveWriterShootSiteLocalAll(all);
+      }
+      function dropWriterShootSiteLocalEntries(loginId, serverDoneCanonSet) {
+        const wid = normalize(loginId);
+        if (!wid || !(serverDoneCanonSet instanceof Set) || !serverDoneCanonSet.size) return;
+        const all = loadWriterShootSiteLocalAll();
+        const bucket = all[wid];
+        if (!bucket || typeof bucket !== "object") return;
+        let touched = false;
+        for (const id of serverDoneCanonSet) {
+          const u = canonScheduleUuid(id);
+          if (u && bucket[u]) {
+            delete bucket[u];
+            touched = true;
+          }
+        }
+        if (!Object.keys(bucket).length) delete all[wid];
+        if (touched) saveWriterShootSiteLocalAll(all);
+      }
+
       function normalizePayrollPersonName(name) {
         let s = String(name ?? "");
         try {
@@ -2432,8 +2506,20 @@
           });
           const data = await res.json().catch(() => ({}));
           if (startedAtGen !== photographerShootStatusGen) return;
+          const localBucket = readWriterShootSiteLocalFor(w.id);
+          const now = Date.now();
+          const ttlOk = (entry) => {
+            const t = entry && typeof entry === "object" ? Number(entry.savedAt) || 0 : 0;
+            return t && now - t <= WRITER_SHOOT_SITE_LOCAL_TTL_MS;
+          };
           if (res.ok && data.ok && Array.isArray(data.doneScheduleIds)) {
-            const next = new Set(data.doneScheduleIds.map((x) => canonScheduleUuid(x)).filter(Boolean));
+            const serverDone = new Set(data.doneScheduleIds.map((x) => canonScheduleUuid(x)).filter(Boolean));
+            const next = new Set(serverDone);
+            for (const sid of scheduleIds) {
+              const loc = localBucket[sid];
+              if (!loc || !ttlOk(loc)) continue;
+              if (!serverDone.has(sid)) next.add(sid);
+            }
             let diff = next.size !== photographerShootDoneIds.size;
             if (!diff) {
               for (const id of next) {
@@ -2443,24 +2529,42 @@
                 }
               }
             }
-            photographerShootDoneIds = next;
+            const mergedDelivery = { ...photographerShootDeliveryById };
             if (data.deliveryByScheduleId && typeof data.deliveryByScheduleId === "object") {
-              const prev = photographerShootDeliveryById;
-              const mergedDelivery = { ...photographerShootDeliveryById };
               for (const k of Object.keys(data.deliveryByScheduleId)) {
                 const ck = canonScheduleUuid(k);
                 if (!ck) continue;
                 const v = data.deliveryByScheduleId[k];
-                const mergedOne = mergePhotographerShootDelivery(prev[ck], v);
-                if (mergedOne && typeof mergedOne === "object" && prev[ck] !== mergedOne) diff = true;
-                mergedDelivery[ck] = mergedOne;
+                mergedDelivery[ck] = mergePhotographerShootDelivery(mergedDelivery[ck], v);
               }
-              photographerShootDeliveryById = mergedDelivery;
             }
+            for (const sid of scheduleIds) {
+              if (!next.has(sid)) continue;
+              const locDel = localBucket[sid]?.delivery;
+              if (locDel && typeof locDel === "object" && Object.keys(locDel).length) {
+                mergedDelivery[sid] = mergePhotographerShootDelivery(mergedDelivery[sid], locDel);
+              }
+            }
+            if (!diff) {
+              for (const sid of scheduleIds) {
+                if (
+                  JSON.stringify(photographerShootDeliveryById[sid] || {}) !== JSON.stringify(mergedDelivery[sid] || {})
+                ) {
+                  diff = true;
+                  break;
+                }
+              }
+            }
+            photographerShootDoneIds = next;
+            photographerShootDeliveryById = mergedDelivery;
+            dropWriterShootSiteLocalEntries(w.id, serverDone);
             if (diff) renderScheduleList();
+            return;
           }
+          applyShootStatusLocalFallback(w, scheduleIds);
         } catch (error) {
           console.warn("[photographer-shoot-status]", error);
+          if (startedAtGen === photographerShootStatusGen) applyShootStatusLocalFallback(w, scheduleIds);
         }
       }
 
@@ -2509,6 +2613,54 @@
         const po = normalize(base.photographer_original_upload_notified_at);
         out.photographer_original_upload_notified_at = pn || po || null;
         return out;
+      }
+
+      /** shoot-status API 실패 시에도 이 브라우저에서 완료한 건은 로컬 스냅샷으로 복구 */
+      function applyShootStatusLocalFallback(writer, scheduleIds) {
+        if (!writer || !Array.isArray(scheduleIds) || !scheduleIds.length) return;
+        const localBucket = readWriterShootSiteLocalFor(writer.id);
+        const now = Date.now();
+        const ttlOk = (entry) => {
+          const t = entry && typeof entry === "object" ? Number(entry.savedAt) || 0 : 0;
+          return t && now - t <= WRITER_SHOOT_SITE_LOCAL_TTL_MS;
+        };
+        const next = new Set(photographerShootDoneIds);
+        for (const sid of scheduleIds) {
+          const loc = localBucket[sid];
+          if (!loc || !ttlOk(loc)) continue;
+          next.add(sid);
+        }
+        const mergedDelivery = { ...photographerShootDeliveryById };
+        for (const sid of scheduleIds) {
+          if (!next.has(sid)) continue;
+          const locDel = localBucket[sid]?.delivery;
+          if (locDel && typeof locDel === "object" && Object.keys(locDel).length) {
+            mergedDelivery[sid] = mergePhotographerShootDelivery(mergedDelivery[sid], locDel);
+          }
+        }
+        let diff = next.size !== photographerShootDoneIds.size;
+        if (!diff) {
+          for (const id of next) {
+            if (!photographerShootDoneIds.has(id)) {
+              diff = true;
+              break;
+            }
+          }
+        }
+        if (!diff) {
+          for (const sid of scheduleIds) {
+            if (
+              JSON.stringify(photographerShootDeliveryById[sid] || {}) !== JSON.stringify(mergedDelivery[sid] || {})
+            ) {
+              diff = true;
+              break;
+            }
+          }
+        }
+        if (!diff) return;
+        photographerShootDoneIds = next;
+        photographerShootDeliveryById = mergedDelivery;
+        renderScheduleList();
       }
 
       function renderScheduleList() {
@@ -2663,6 +2815,7 @@
               if (alreadyCompleted && sid) {
                 photographerShootStatusGen += 1;
                 photographerShootDoneIds.add(sid);
+                rememberWriterShootSiteLocal(writer.id, sid, null, photographerShootDeliveryById[sid] || {});
                 renderScheduleList();
                 void refreshPhotographerShootStatus();
                 shootDoneBtn.disabled = false;
@@ -2693,6 +2846,7 @@
               ...photographerShootDeliveryById,
               [sid]: mergedDeliveryRow,
             };
+            rememberWriterShootSiteLocal(writer.id, sid, data.photographer_site_done_at, mergedDeliveryRow);
             renderScheduleList();
             void refreshPhotographerShootStatus();
             const sms = data.customer_site_notice_sms;
