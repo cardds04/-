@@ -15910,7 +15910,7 @@
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`
         };
-        const select = "google_drive_company_share_link,google_drive_company_folder_id";
+        const select = "naver_works_company_share_link,naver_works_company_folder_id";
         const fetchRows = async (qs) => {
           try {
             const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=${encodeURIComponent(select)}&${qs}`;
@@ -15926,12 +15926,8 @@
         if (!rows.length) rows = await fetchRows(`name=eq.${encodeURIComponent(name)}`);
         if (!rows.length) return "";
         for (const row of rows) {
-          const share = String(row?.google_drive_company_share_link || "").trim();
-          if (share) return share;
-        }
-        for (const row of rows) {
-          const fid = String(row?.google_drive_company_folder_id || "").trim();
-          if (fid) return `https://drive.google.com/drive/folders/${fid}`;
+          const nShare = String(row?.naver_works_company_share_link || "").trim();
+          if (nShare) return nShare;
         }
         return "";
       }

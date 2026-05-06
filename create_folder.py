@@ -843,6 +843,52 @@ def extract_file_id(body: dict[str, Any]) -> str:
     return str(body.get("fileId") or body.get("id") or body.get("file_id") or "").strip()
 
 
+def find_existing_folder_id_in_list_response(resp: Any, folder_name: str) -> str:
+    """목록 조회 응답에서 동일 이름 폴더 fileId 검색(API 응답 형태 차이 허용)."""
+    want = (folder_name or "").strip()
+    if not want:
+        return ""
+    if not isinstance(resp, dict):
+        return ""
+
+    cand_lists: list[list[Any]] = []
+
+    def push_list(v: Any) -> None:
+        if isinstance(v, list):
+            cand_lists.append(v)
+
+    push_list(resp.get("files"))
+    push_list(resp.get("elements"))
+    push_list(resp.get("items"))
+    push_list(resp.get("childFiles"))
+    push_list(resp.get("folders"))
+    inner = resp.get("response")
+    if isinstance(inner, dict):
+        push_list(inner.get("files"))
+        push_list(inner.get("elements"))
+        push_list(inner.get("items"))
+
+    page = resp.get("fileListPage")
+    if isinstance(page, dict):
+        push_list(page.get("files"))
+        push_list(page.get("elements"))
+
+    for arr in cand_lists:
+        for it in arr:
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("fileName") or it.get("name") or it.get("displayName") or "").strip()
+            if name != want:
+                continue
+            typ = str(it.get("fileType") or it.get("type") or it.get("mimeType") or "").lower()
+            if typ and "folder" not in typ and typ not in ("directory", "dir", "fold"):
+                continue
+            found = extract_file_id(it)
+            if found:
+                return found
+    return ""
+
+
 def resolve_drive_user_for_link() -> str:
     """링크 생성 경로 `/users/{userId}/...` 에 쓸 ID. 서비스 계정은 보통 `me` 사용 불가."""
     u = _e("NAVER_WORKS_DRIVE_OWNER_USER_ID") or _e("NAVER_WORKS_DRIVE_USER_ID_FOR_LINK")
@@ -936,6 +982,11 @@ def main() -> int:
         action="store_true",
         help="폴더만 만들고 링크 API는 호출하지 않음",
     )
+    parser.add_argument(
+        "--reuse-if-exists",
+        action="store_true",
+        help="부모 아래 같은 이름 폴더가 있으면 새로 만들지 않고 해당 fileId 를 사용합니다.",
+    )
     args = parser.parse_args()
 
     parent_default = _e("NAVER_WORKS_DRIVE_PARENT_FILE_ID") or _e("NAVER_WORKS_PARENT_FILE_ID")
@@ -989,7 +1040,24 @@ def main() -> int:
         if not parent_file_id and not _e("NAVER_WORKS_DRIVE_CREATE_FOLDER_URL"):
             raise ValueError("--parent-file-id 또는 .env 의 NAVER_WORKS_DRIVE_PARENT_FILE_ID 가 필요합니다.")
 
-        ok, folder_body, _status = post_create_folder(token, folder_name, parent_file_id)
+        ok = False
+        folder_body: dict[str, Any] = {}
+        _status = 0
+        if args.reuse_if_exists:
+            ok_l, list_wrap, _st_l = get_drive_folder_children(token, parent_file_id)
+            existing_id = ""
+            if ok_l and isinstance(list_wrap, dict):
+                lr = list_wrap.get("response")
+                existing_id = find_existing_folder_id_in_list_response(lr if isinstance(lr, dict) else {}, folder_name)
+            if existing_id:
+                ok = True
+                folder_body = {"fileId": existing_id, "reuseExisting": True}
+                result["listChildrenForReuse"] = {"ok": ok_l, "wrap": list_wrap if isinstance(list_wrap, dict) else {}}
+            else:
+                ok, folder_body, _status = post_create_folder(token, folder_name, parent_file_id)
+        else:
+            ok, folder_body, _status = post_create_folder(token, folder_name, parent_file_id)
+
         result["createFolderHttp"] = {"ok": ok, "body": folder_body}
         if not ok:
             result["message"] = folder_body.get("message") or "폴더 생성 실패"
