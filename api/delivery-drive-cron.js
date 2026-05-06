@@ -1,6 +1,8 @@
 /**
- * Vercel Cron: 촬영 다음날(한국 시간)부터 Drive 폴더 생성, 사진·영상 폴더에 파일이 들어오면
- * 솔라피로 업체(customer_phone)에 납품 완료 안내 문자(브랜드·업체명·촬영일·단지명·편집 완료 문구 + 업체 Drive 폴더 링크).
+ * Drive 납품 배치: 폴더 트리(조건부)·폴더 업로드 감지 후 솔라피 납품 안내 문자 등.
+ *
+ * 레포 정책: Vercel 일일 Cron 은 두지 않습니다. 이 라우트는 호출돼도
+ * DELIVERY_DRIVE_CRON_ENABLED=1 일 때만 Job 이 실행되며, 기본은 건너뜁니다.
  *
  * 환경변수 (Vercel):
  *   SUPABASE_URL
@@ -14,9 +16,11 @@
  *   DELIVERY_DRIVE_LINK_PERMISSION — anyone | private (기본 anyone, 고객용 링크 열람)
  *   DELIVERY_BACKFILL_SHOOT_FROM — 선택 YYYY-MM-DD, DELIVERY_BACKFILL_SHOOT_TO 와 함께 쓰면
  *                                   해당 촬영일 구간은 「다음날」 조건 없이 폴더 생성(일회성 백필).
- *   DELIVERY_AUTO_NEXT_DAY_FOLDERS — 기본 끔. `1` 이면 촬영 다음날 Cron 이 자동으로
- *                                   Drive 폴더 트리를 생성(기존 동작). 끄면 작가 페이지
- *                                   「촬영완료」로만 폴더 생성(백필 ENV 는 예외).
+ *   DELIVERY_AUTO_NEXT_DAY_FOLDERS — DELIVERY_DRIVE_CRON_ENABLED=1 일 때만 의미 있음.
+ *                                   `1` 이면 촬영 다음날부터 Job 이 Drive 폴더 트리를 만들 수 있음(기본 끔).
+ *   DELIVERY_DRIVE_CRON_ENABLED — `1` 일 때만 이 API 호출 시 runDeliveryDriveJob 실행 (기본 no-op).
+ *                                 다시 예약 실행하려면 외부 스케줄러(Cron)·GitHub Actions 등으로 호출하고
+ *                                 동시에 이 값을 1 로 설정.
  *   원본폴더 만료 정리 (사진원본파일·영상원본파일 직속 파일만, 편집완료 폴더는 제외):
  *   DELIVERY_ORIGINAL_PURGE_ENABLED — `1` 일 때만 일일 크론 끝에 실행 (기본 끔, 실수 삭제 방지).
  *   DELIVERY_ORIGINAL_RETENTION_DAYS — 기본 60 (Drive createdTime). 고객 문자「30일 이내 권장」과 별개(운영 버퍼).
@@ -26,8 +30,6 @@
  * 준비: Google Drive에서 PARENT 폴더를 해당 서비스계정 메일 주소와 공유(편집자).
  *
  * 배포 후: Supabase SQL 마이그레이션 실행 (shoot_delivery_drive_state 테이블).
- *
- * Vercel Hobby: 크론은 하루 1회까지만 허용되어 `0 15 * * *`(UTC) 로 등록됨 = 한국 시간 자정.
  */
 const { runDeliveryDriveJob } = require("../lib/delivery-drive-run.cjs");
 
@@ -65,6 +67,16 @@ module.exports = async (req, res) => {
 
   if (!isAuthorizedCron(req)) {
     res.status(401).json({ ok: false, message: "Unauthorized" });
+    return;
+  }
+
+  if (!/^(1|true|yes)$/i.test(String(process.env.DELIVERY_DRIVE_CRON_ENABLED || "").trim())) {
+    res.status(200).json({
+      ok: true,
+      skipped: true,
+      message:
+        "DELIVERY_DRIVE_CRON_ENABLED 가 1(true)이 아니어서 Drive 크론 Job 을 실행하지 않았습니다. (자동 폴더 생성·납품 문자 루프 중지 상태)",
+    });
     return;
   }
 
