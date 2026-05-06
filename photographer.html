@@ -1943,25 +1943,6 @@
         return normalize(matched?.phone) || "-";
       }
 
-      function getCompanyDriveFolderLinkForItem(item) {
-        const companyName = normalize(item?.company);
-        if (!companyName) return "";
-        const companies = readStorageArray(STORAGE_COMPANIES);
-        const nameLc = companyName.toLowerCase();
-        let matched = companies.find((company) => normalize(company?.name).toLowerCase() === nameLc);
-        const code = normalize(item?.companyCode);
-        if (!matched && code) {
-          matched = companies.find((company) => normalize(company?.companyCode) === code);
-        }
-        if (!matched) {
-          const sk = stripParenSegmentsForCompanyMatch(companyName);
-          if (sk) {
-            matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
-          }
-        }
-        return normalize(matched?.driveCompanyFolderLink) || "";
-      }
-
       function escapeTextForHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;")
@@ -2835,10 +2816,6 @@
             const companyPhoneLine = hasCompanyPhone
               ? `업체연락처: <a href="tel:${encodeURIComponent(companyPhone)}" style="color:#1d4ed8;font-weight:700;text-decoration:none">${companyPhone}</a><button class="btn outline small inline-copy-btn" type="button" data-action="copyText" data-copy-text="${encodeURIComponent(companyPhone)}" style="margin-left:6px">번호복사</button><br />`
               : "";
-            const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
-            const companyDriveLine = companyDriveLink
-              ? `업체 납품 폴더(Drive): <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a><br />`
-              : `업체 납품 폴더(Drive): <span style="color:#b45309;font-size:12px;">미등록·동기화 전 — npm/provision 또는 신규 가입 시 생성</span><br />`;
             const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
@@ -2850,43 +2827,34 @@
               } else if (shootDone) {
                 const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
-                let companyFolderLink = normalize(d?.company_folder_web_link);
-                if (!companyFolderLink && normalize(d?.company_share_link)) {
-                  companyFolderLink = normalize(d.company_share_link);
-                }
-                const mergedCompanyLink = companyFolderLink || companyDriveLink;
                 const hasAnyDriveLink =
                   Boolean(shootLink) ||
-                  Boolean(mergedCompanyLink) ||
                   SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
                 const driveMissingHint = !hasAnyDriveLink
-                  ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크를 불러오지 못했습니다. 새로고침 후 다시 확인하거나 서버 배포와 DB 마이그레이션 적용 상태를 확인해 주세요.</span>`
+                  ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크가 없습니다. 아래 「폴더만들기」를 누르거나 새로고침해 보세요.</span>`
                   : "";
                 const origNotified =
                   typeof d?.photographer_original_upload_notified_at === "string" &&
                   normalize(d?.photographer_original_upload_notified_at);
                 const linkHtml = shootLink
                   ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
-                  : mergedCompanyLink
-                    ? `<a href="${mergedCompanyLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:6px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">업체 납품 폴더(Drive)</a><span style="margin-left:6px;font-size:11px;color:#64748b;align-self:center;">촬영일·원본·편집 폴더는 이 안에서 찾아 주세요.</span>`
-                    : "";
-                const folderUrlToShow = shootLink || mergedCompanyLink || "";
-                const folderUrlLine = folderUrlToShow
-                  ? `<div style="flex-basis:100%;margin-top:8px;padding:8px 10px;background:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0;">
-                      <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:4px;">폴더 주소</div>
-                      <div style="font-size:11px;color:#0f172a;word-break:break-all;line-height:1.45;user-select:all;">${escapeTextForHtml(folderUrlToShow)}</div>
-                      <button type="button" class="btn outline small" style="margin-top:6px" data-action="copyText" data-copy-text="${encodeURIComponent(folderUrlToShow)}">주소 복사</button>
-                    </div>`
                   : "";
+                const ensureFoldersBtn = `<button type="button" class="btn small outline" style="margin-left:2px" data-action="ensureDriveFolders" data-schedule-id="${scheduleId}">폴더만들기</button>`;
                 const origBtnAttrs = origNotified
                   ? ""
                   : ` <button type="button" class="btn small outline" style="margin-left:6px" data-action="originalUploadNotify" data-schedule-id="${scheduleId}">원본파일업로드완료</button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${linkHtml}${origBtnAttrs}${folderUrlLine}${driveMissingHint}${subfoldersHtml}</div>`;
+                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-wrap:wrap;gap:6px;display:flex;"><span class="shoot-done-badge">현장 확인 완료</span>${ensureFoldersBtn}${linkHtml}${origBtnAttrs}${driveMissingHint}${subfoldersHtml}</div>`;
               } else {
-                shootBlock = `<div class="shoot-complete-row shoot-complete-before" data-schedule-id="${scheduleId}">
-                  <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장확인전</button>
-                  <span class="shoot-complete-hint">현장도착시 이버튼을눌러주세요</span>
+                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}">
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
+                    <button type="button" class="btn outline small" data-action="preSiteSms" data-schedule-id="${scheduleId}">현장확인전</button>
+                    <button type="button" class="btn outline small" data-action="preOriginalSms" data-schedule-id="${scheduleId}">원본파일업로드전</button>
+                  </div>
+                  <div class="shoot-complete-row shoot-complete-before">
+                    <button type="button" class="btn small shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}">현장 확인 완료</button>
+                    <span class="shoot-complete-hint">현장도착 시 버튼을 눌러 주세요</span>
+                  </div>
                 </div>`;
               }
             }
@@ -2898,7 +2866,7 @@
                 </div>
                 <div class="status-meta">
                   업체: ${item.company || "-"}<br />
-                  ${companyDriveLine}${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
+                  ${companyPhoneLine}장소: ${item.place || "-"}<button class="btn outline small inline-copy-btn" type="button" data-action="copyNavAddress" data-row-index="${rowIndex}" data-nav-address="${encodeURIComponent(fullAddress)}">주소복사</button><br />
                   공동현관 비번: ${item.jointCode || "-"}<br />
                   세대 비번: ${item.doorCode || "-"}<br />
                   평수: ${item.pyeong || "-"}<br />
@@ -2921,6 +2889,144 @@
         }
       }
       scheduleListEl.addEventListener("click", async (event) => {
+        const preSiteSmsBtn = event.target.closest("button[data-action='preSiteSms']");
+        if (preSiteSmsBtn) {
+          const sid = canonScheduleUuid(preSiteSmsBtn.dataset.scheduleId || "");
+          const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
+          if (!writer || !USE_SUPABASE_SYNC) {
+            alert("로그인 및 서버 동기화가 필요합니다.");
+            return;
+          }
+          preSiteSmsBtn.disabled = true;
+          try {
+            const res = await fetch("/api/photographer-customer-pre-sms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                writerLoginId: writer.id,
+                writerPassword: writer.password,
+                scheduleId: sid,
+                kind: "pre_site",
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              alert(data.message || "문자 발송에 실패했습니다.");
+              preSiteSmsBtn.disabled = false;
+              return;
+            }
+            alert("현장 확인 전 안내 문자를 보냈습니다.");
+          } catch (err) {
+            console.error(err);
+            alert("요청 중 오류가 발생했습니다.");
+          }
+          preSiteSmsBtn.disabled = false;
+          return;
+        }
+
+        const preOriginalSmsBtn = event.target.closest("button[data-action='preOriginalSms']");
+        if (preOriginalSmsBtn) {
+          const sid = canonScheduleUuid(preOriginalSmsBtn.dataset.scheduleId || "");
+          const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
+          if (!writer || !USE_SUPABASE_SYNC) {
+            alert("로그인 및 서버 동기화가 필요합니다.");
+            return;
+          }
+          preOriginalSmsBtn.disabled = true;
+          try {
+            const res = await fetch("/api/photographer-customer-pre-sms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                writerLoginId: writer.id,
+                writerPassword: writer.password,
+                scheduleId: sid,
+                kind: "pre_original",
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              alert(data.message || "문자 발송에 실패했습니다.");
+              preOriginalSmsBtn.disabled = false;
+              return;
+            }
+            alert("원본 업로드 전 안내 문자를 보냈습니다.\n(문구에 해당 업체 납품 폴더 주소가 포함됩니다.)");
+          } catch (err) {
+            console.error(err);
+            alert("요청 중 오류가 발생했습니다.");
+          }
+          preOriginalSmsBtn.disabled = false;
+          return;
+        }
+
+        const ensureDriveFoldersBtn = event.target.closest("button[data-action='ensureDriveFolders']");
+        if (ensureDriveFoldersBtn) {
+          const sid = canonScheduleUuid(ensureDriveFoldersBtn.dataset.scheduleId || "");
+          const writer = getCurrentWriter();
+          if (!sid) {
+            alert("스케줄 식별자가 올바르지 않습니다.");
+            return;
+          }
+          if (!writer || !USE_SUPABASE_SYNC) {
+            alert("로그인 및 서버 동기화가 필요합니다.");
+            return;
+          }
+          if (!confirm("Google Drive에 업체·촬영일 폴더와 사진(·영상) 하위 폴더를 만들까요?")) {
+            return;
+          }
+          ensureDriveFoldersBtn.disabled = true;
+          try {
+            const res = await fetch("/api/photographer-ensure-folders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                writerLoginId: writer.id,
+                writerPassword: writer.password,
+                scheduleId: sid,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              alert(data.message || "폴더 생성에 실패했습니다.");
+              ensureDriveFoldersBtn.disabled = false;
+              return;
+            }
+            const prevEntry = photographerShootDeliveryById[sid] || {};
+            const mergedDeliveryRow = { ...prevEntry };
+            mergedDeliveryRow.shoot_folder_web_link =
+              normalize(data.shoot_folder_web_link) || normalize(prevEntry.shoot_folder_web_link) || "";
+            mergedDeliveryRow.company_folder_web_link =
+              normalize(data.company_folder_web_link) || normalize(prevEntry.company_folder_web_link) || "";
+            for (const row of SHOOT_DELIVERY_DRIVE_LINK_ROWS) {
+              const k = row.key;
+              mergedDeliveryRow[k] = normalize(data[k]) || normalize(prevEntry[k]) || "";
+            }
+            photographerShootDeliveryById = {
+              ...photographerShootDeliveryById,
+              [sid]: mergedDeliveryRow,
+            };
+            const localDoc = loadShootSiteLocalMergedDoc();
+            const prevDoneAt = localDoc?.[writer.id]?.[sid]?.photographer_site_done_at;
+            rememberWriterShootSiteLocal(writer.id, sid, prevDoneAt, mergedDeliveryRow);
+            renderScheduleList();
+            void refreshPhotographerShootStatus();
+            alert("폴더가 준비되었습니다. 아래 링크가 갱신되었습니다.");
+          } catch (err) {
+            console.error(err);
+            alert("요청 중 오류가 발생했습니다.");
+          }
+          ensureDriveFoldersBtn.disabled = false;
+          return;
+        }
+
         const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
         if (shootDoneBtn) {
           const sid = canonScheduleUuid(shootDoneBtn.dataset.scheduleId || "");
