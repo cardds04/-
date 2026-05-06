@@ -1,9 +1,9 @@
 /**
  * POST JSON { loginId, password }
- * 본인 company_directory 행 확인 후 업체 Drive 루트 폴더가 없으면 생성·DB 저장.
+ * 본인 company_directory 행 확인 후 네이버웍스 업체 루트 폴더가 없으면 생성·DB 저장.
  */
 const {
-  provisionCompanyDirectoryFolder,
+  provisionNaverWorksCompanyDirectoryFolder,
   fetchCompanyDirectoryRowsForProvision,
 } = require("../lib/company-drive-provision.cjs");
 
@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
   try {
     const rows = await fetchCompanyDirectoryRowsForProvision(
       headers,
-      `company_directory?login_id=eq.${encodeURIComponent(loginId)}&select=id,name,code,login_id,password,google_drive_company_folder_id,google_drive_company_share_link`
+      `company_directory?login_id=eq.${encodeURIComponent(loginId)}&select=id,name,code,login_id,password,naver_works_company_folder_id,naver_works_company_share_link`
     );
     const row =
       rows.find((r) => normalizePlain(r?.login_id) === loginId && String(r?.password ?? "") === password) || null;
@@ -83,7 +83,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const out = await provisionCompanyDirectoryFolder({
+    const out = await provisionNaverWorksCompanyDirectoryFolder({
       supabaseHeaders: headers,
       directoryRow: row,
     });
@@ -92,6 +92,7 @@ module.exports = async (req, res) => {
       folderId: out.folderId,
       shareLink: out.shareLink,
       created: out.createdFolder,
+      provider: "naver",
     });
   } catch (e) {
     console.error("[company-drive-provision-customer]", e);
