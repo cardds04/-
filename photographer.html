@@ -354,6 +354,8 @@
       const STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY = "scheduleSitePhotographerPayrollMonthlyV1";
       /** 새로고침 후에도 현장확인 UI 유지(서버 상태 API 지연·실패 대비), 서버 확인 시 제거 */
       const STORAGE_WRITER_SHOOT_SITE_LOCAL = "scheduleSiteWriterShootSiteLocalV1";
+      /** localStorage 쓰기 실패·모바일 WebView 등 대비: 새로고침 직후 동일 탭에서만 복구 */
+      const STORAGE_SESSION_WRITER_SHOOT_SITE_LOCAL = "scheduleSiteWriterShootSiteSessionMirrorV1";
       const WRITER_SHOOT_SITE_LOCAL_TTL_MS = 72 * 60 * 60 * 1000;
       const SHOOT_PAY_WON = 50000;
       const PAYROLL_LINE_CATEGORY_LABELS = {
@@ -1564,19 +1566,55 @@
         return canonScheduleUuid(row?.customerScheduleId || row?.writerMirrorId);
       }
 
-      function loadWriterShootSiteLocalAll() {
+      function mergeShootSiteLocalDocsSymmetric(a, b) {
+        const out = {};
+        const wa = a && typeof a === "object" ? a : {};
+        const wb = b && typeof b === "object" ? b : {};
+        for (const wid of new Set([...Object.keys(wa), ...Object.keys(wb)])) {
+          const ba = wa[wid] && typeof wa[wid] === "object" ? wa[wid] : {};
+          const bb = wb[wid] && typeof wb[wid] === "object" ? wb[wid] : {};
+          const merged = {};
+          for (const sid of new Set([...Object.keys(ba), ...Object.keys(bb)])) {
+            const ea = ba[sid];
+            const eb = bb[sid];
+            const aOk = ea && typeof ea === "object";
+            const bOk = eb && typeof eb === "object";
+            if (!aOk && !bOk) continue;
+            if (!aOk) {
+              merged[sid] = { ...eb };
+              continue;
+            }
+            if (!bOk) {
+              merged[sid] = { ...ea };
+              continue;
+            }
+            const ta = Number(ea.savedAt) || 0;
+            const tb = Number(eb.savedAt) || 0;
+            const layered = tb >= ta ? { ...ea, ...eb } : { ...eb, ...ea };
+            merged[sid] = { ...layered, savedAt: Math.max(ta, tb) || layered.savedAt };
+          }
+          if (Object.keys(merged).length) out[wid] = merged;
+        }
+        return out;
+      }
+      function loadShootSiteLocalMergedDoc() {
+        let lsDoc = {};
         try {
           const raw = localStorage.getItem(STORAGE_WRITER_SHOOT_SITE_LOCAL);
           const o = raw ? JSON.parse(raw) : {};
-          return o && typeof o === "object" ? o : {};
+          lsDoc = o && typeof o === "object" ? o : {};
         } catch (_) {
-          return {};
+          lsDoc = {};
         }
-      }
-      function saveWriterShootSiteLocalAll(all) {
+        let ssDoc = {};
         try {
-          localStorage.setItem(STORAGE_WRITER_SHOOT_SITE_LOCAL, JSON.stringify(all && typeof all === "object" ? all : {}));
-        } catch (_) {}
+          const raw = sessionStorage.getItem(STORAGE_SESSION_WRITER_SHOOT_SITE_LOCAL);
+          const o = raw ? JSON.parse(raw) : {};
+          ssDoc = o && typeof o === "object" ? o : {};
+        } catch (_) {
+          ssDoc = {};
+        }
+        return mergeShootSiteLocalDocsSymmetric(lsDoc, ssDoc);
       }
       function pruneExpiredWriterShootSiteLocal(all) {
         const now = Date.now();
@@ -1594,12 +1632,22 @@
           if (!Object.keys(bucket).length) delete all[wid];
         }
       }
+      function persistShootSiteLocalDoc(doc) {
+        pruneExpiredWriterShootSiteLocal(doc);
+        const payload = JSON.stringify(doc && typeof doc === "object" ? doc : {});
+        try {
+          localStorage.setItem(STORAGE_WRITER_SHOOT_SITE_LOCAL, payload);
+        } catch (_) {}
+        try {
+          sessionStorage.setItem(STORAGE_SESSION_WRITER_SHOOT_SITE_LOCAL, payload);
+        } catch (_) {}
+      }
       function readWriterShootSiteLocalFor(loginId) {
         const wid = normalize(loginId);
         if (!wid) return {};
-        const all = loadWriterShootSiteLocalAll();
+        const all = loadShootSiteLocalMergedDoc();
         pruneExpiredWriterShootSiteLocal(all);
-        saveWriterShootSiteLocalAll(all);
+        persistShootSiteLocalDoc(all);
         const b = all[wid];
         return b && typeof b === "object" ? b : {};
       }
@@ -1607,20 +1655,19 @@
         const wid = normalize(loginId);
         const sid = canonScheduleUuid(scheduleId);
         if (!wid || !sid) return;
-        const all = loadWriterShootSiteLocalAll();
+        const all = loadShootSiteLocalMergedDoc();
         if (!all[wid]) all[wid] = {};
         all[wid][sid] = {
           savedAt: Date.now(),
           photographer_site_done_at: String(photographerSiteDoneAt || "").trim() || new Date().toISOString(),
           delivery: deliverySnap && typeof deliverySnap === "object" ? deliverySnap : {},
         };
-        pruneExpiredWriterShootSiteLocal(all);
-        saveWriterShootSiteLocalAll(all);
+        persistShootSiteLocalDoc(all);
       }
       function dropWriterShootSiteLocalEntries(loginId, serverDoneCanonSet) {
         const wid = normalize(loginId);
         if (!wid || !(serverDoneCanonSet instanceof Set) || !serverDoneCanonSet.size) return;
-        const all = loadWriterShootSiteLocalAll();
+        const all = loadShootSiteLocalMergedDoc();
         const bucket = all[wid];
         if (!bucket || typeof bucket !== "object") return;
         let touched = false;
@@ -1632,7 +1679,7 @@
           }
         }
         if (!Object.keys(bucket).length) delete all[wid];
-        if (touched) saveWriterShootSiteLocalAll(all);
+        if (touched) persistShootSiteLocalDoc(all);
       }
 
       function normalizePayrollPersonName(name) {
