@@ -19,7 +19,7 @@
  *                                   「촬영완료」로만 폴더 생성(백필 ENV 는 예외).
  *   원본폴더 만료 정리 (사진원본파일·영상원본파일 직속 파일만, 편집완료 폴더는 제외):
  *   DELIVERY_ORIGINAL_PURGE_ENABLED — `1` 일 때만 일일 크론 끝에 실행 (기본 끔, 실수 삭제 방지).
- *   DELIVERY_ORIGINAL_RETENTION_DAYS — 기본 60 (Google Drive 파일 createdTime 기준).
+ *   DELIVERY_ORIGINAL_RETENTION_DAYS — 기본 60 (Drive createdTime). 고객 문자「30일 이내 권장」과 별개(운영 버퍼).
  *   DELIVERY_ORIGINAL_PURGE_HARD_DELETE — `1` 이면 휴지통이 아닌 영구 삭제(복구 불가). 기본은 휴지통 이동.
  *   CRON_SECRET 또는 DELIVERY_DRIVE_CRON_SECRET — 설정 시 Bearer 토큰과 일치해야 호출 허용
  *
