@@ -15795,6 +15795,41 @@
         return /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= DASH_SITE_TREATED_DONE_THROUGH_YMD;
       }
 
+      async function fetchCompanyDeliveryFolderUrlFromDirectory(companyName, companyCode) {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return "";
+        const name = normalizeCompanyName(companyName);
+        const code = normalizeCompanyCode(companyCode);
+        if (!name || name === "-") return "";
+        const hdr = {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        };
+        const select = "google_drive_company_share_link,google_drive_company_folder_id";
+        const fetchRows = async (qs) => {
+          try {
+            const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=${encodeURIComponent(select)}&${qs}`;
+            const res = await fetch(url, { method: "GET", headers: hdr, cache: "no-store" });
+            if (!res.ok) return [];
+            const json = await res.json();
+            return Array.isArray(json) ? json : [];
+          } catch {
+            return [];
+          }
+        };
+        let rows = code ? await fetchRows(`code=eq.${encodeURIComponent(code)}`) : [];
+        if (!rows.length) rows = await fetchRows(`name=eq.${encodeURIComponent(name)}`);
+        if (!rows.length) return "";
+        for (const row of rows) {
+          const share = String(row?.google_drive_company_share_link || "").trim();
+          if (share) return share;
+        }
+        for (const row of rows) {
+          const fid = String(row?.google_drive_company_folder_id || "").trim();
+          if (fid) return `https://drive.google.com/drive/folders/${fid}`;
+        }
+        return "";
+      }
+
       function renderScheduleDashboardFromDeliveryRpc(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
         const completedRoot = document.getElementById("scheduleDashboardCompletedList");
@@ -15918,6 +15953,10 @@
             : "";
 
           const detailBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openScheduleCardByIndex" data-data-index="${dataIndex}" title="목록으로 이동">상세</button>`;
+          const codeForDelivery = normalizeCompanyCode(item?.companyCode || item?.code || "");
+          const deliveryFolderBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
+            company
+          )}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(Google Drive)">납품폴더</button>`;
 
           return `<div class="schedule-dashboard-row-line">
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
@@ -15927,6 +15966,7 @@
                   ${strip}
                   ${adminSiteBtn}
                   ${detailBtn}
+                  ${deliveryFolderBtn}
                 </div>`;
         }
 
@@ -16956,6 +16996,22 @@
         const openDashRow = event.target.closest("button[data-action='openScheduleCardByIndex']");
         if (openDashRow) {
           openScheduleRowFromDashboard(openDashRow.dataset.dataIndex);
+          return;
+        }
+        const deliveryFolderBtn = event.target.closest("button[data-action='openCompanyDeliveryFolder']");
+        if (deliveryFolderBtn) {
+          const comp = String(deliveryFolderBtn.dataset.company || "").trim();
+          const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
+          void (async () => {
+            const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
+            if (!u) {
+              alert(
+                "납품 폴더 링크를 찾을 수 없습니다. 업체 디렉터리에 Google Drive 폴더가 연결되어 있는지 확인하거나, 작가 화면에서 납품 폴더를 먼저 생성해 주세요."
+              );
+              return;
+            }
+            window.open(u, "_blank", "noopener,noreferrer");
+          })();
           return;
         }
         const adminSiteBtn = event.target.closest("button[data-action='adminMarkSiteShootComplete']");
