@@ -22,6 +22,11 @@ RUN python3 -m venv /opt/venv \
 
 COPY . .
 
+ARG GIT_SHA=unknown
+ENV SCHEDULE_SITE_IMAGE_GIT_SHA=${GIT_SHA}
+ARG IMAGE_BUILT_AT_ISO=
+ENV SCHEDULE_SITE_IMAGE_BUILT_AT_ISO=${IMAGE_BUILT_AT_ISO}
+
 RUN chmod +x /app/docker-entrypoint.sh
 
 ENV NODE_ENV=production

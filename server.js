@@ -125,6 +125,12 @@ app.post("/api/solapi-send", async (req, res) => {
   }
 });
 
+/** 배포 버전 확인 — Fly(Express)·Vercel(serverless) 공용 핸들러 */
+const handleSiteReleaseMeta = require("./api/site-release-meta.js");
+app.all("/api/site-release-meta", (req, res, next) => {
+  Promise.resolve(handleSiteReleaseMeta(req, res)).catch(next);
+});
+
 /** Topaz Photo AI 2x 업스케일 — 로컬 전용 */
 app.post("/api/topaz-upscale", async (req, res) => {
   try {
@@ -171,7 +177,23 @@ app.post("/api/phase2", proxyStyleTransferApi);
 app.post("/api/chat", proxyStyleTransferApi);
 app.post("/api/raw-preview", proxyStyleTransferApi);
 
-app.use(express.static(__dirname));
+app.use(
+  express.static(__dirname, {
+    setHeaders(res, filePath) {
+      try {
+        if (/\.html?$/i.test(filePath)) {
+          const sha = String(process.env.SCHEDULE_SITE_IMAGE_GIT_SHA || "").trim().slice(0, 12);
+          if (sha) res.setHeader("X-Schedule-Site-Image-Sha", sha);
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
+      } catch (_) {
+        //
+      }
+    },
+  })
+);
 
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(PORT, HOST, () => {

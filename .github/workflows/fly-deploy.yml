@@ -13,6 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --build-arg GIT_SHA="${{ github.sha }}" --build-arg IMAGE_BUILT_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
