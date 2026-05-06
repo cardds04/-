@@ -96,17 +96,6 @@
       .shoot-icon-btn--done:disabled {
         opacity: 1;
       }
-      .shoot-icon-btn.shoot-icon-btn--locked:disabled {
-        background: #fef9c3;
-        border: 2px solid #eab308;
-        color: #713f12;
-        opacity: 0.68;
-        cursor: not-allowed;
-        filter: grayscale(0.06);
-      }
-      .shoot-icon-btn.shoot-icon-btn--locked:disabled:hover {
-        filter: grayscale(0.06);
-      }
       .shoot-icon-btn__glyph {
         font-size: 1.2rem;
         line-height: 1;
@@ -2903,14 +2892,14 @@
               if (!hasServerId) {
                 shootBlock =
                   '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인·Drive 폴더 생성은 스케줄이 서버와 동기화된 뒤 사용할 수 있습니다.</div>';
-              } else if (shootDone) {
+              } else {
                 const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
                 const hasAnyDriveLink =
                   Boolean(shootLink) ||
                   SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
                 const driveMissingHint = !hasAnyDriveLink
-                  ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크가 없습니다. 아래 「폴더만들기」를 누르거나 새로고침해 보세요.</span>`
+                  ? `<span style="flex-basis:100%;font-size:11px;color:#b45309;line-height:1.45;margin-top:2px;">Drive 링크가 없습니다. 「폴더만들기」를 누르거나 새로고침해 보세요.</span>`
                   : "";
                 const origNotified =
                   typeof d?.photographer_original_upload_notified_at === "string" &&
@@ -2918,28 +2907,22 @@
                 const linkHtml = shootLink
                   ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:4px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
                   : "";
-                const siteIconBtn = `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="현장확인 완료" aria-label="현장확인 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`;
+                const siteIconBtn = shootDone
+                  ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="현장확인 완료" aria-label="현장확인 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`
+                  : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" title="현장 도착·촬영 완료 처리" aria-label="현장확인"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`;
                 const folderBtnClass = hasAnyDriveLink ? "shoot-icon-btn shoot-icon-btn--done" : "shoot-icon-btn shoot-icon-btn--pending";
                 const folderIconBtn = `<button type="button" class="${folderBtnClass}" data-action="ensureDriveFolders" data-schedule-id="${scheduleId}" title="Drive에 촬영일·하위 폴더 만들기" aria-label="폴더만들기"><span class="shoot-icon-btn__glyph" aria-hidden="true">📁</span><span class="shoot-icon-btn__label">폴더만들기</span></button>`;
                 const origIconBtn = origNotified
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="원본 업로드 안내 완료" aria-label="원본업로드 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`
                   : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="originalUploadNotify" data-schedule-id="${scheduleId}" title="원본 업로드 완료 고객 문자" aria-label="원본업로드"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${driveMissingHint}${subfoldersHtml}</div>`;
-              } else {
-                const folderLocked = `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-icon-btn--locked" disabled title="먼저 「현장확인」을 누른 뒤 사용하세요" aria-label="폴더만들기 (현장확인 후)"><span class="shoot-icon-btn__glyph" aria-hidden="true">📁</span><span class="shoot-icon-btn__label">폴더만들기</span></button>`;
-                const origLocked = `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-icon-btn--locked" disabled title="먼저 「현장확인」을 누른 뒤 사용하세요" aria-label="원본업로드 (현장확인 후)"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
-                const sitePendingBtn = `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" title="현장 도착·촬영 완료 처리" aria-label="현장확인"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`;
-                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}">
-                  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">
+                const preSmsRow = !shootDone
+                  ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
                     <button type="button" class="btn outline small" data-action="preSiteSms" data-schedule-id="${scheduleId}">현장확인전</button>
                     <button type="button" class="btn outline small" data-action="preOriginalSms" data-schedule-id="${scheduleId}">원본파일업로드전</button>
-                  </div>
-                  <div class="shoot-complete-row shoot-complete-before" style="border-top:none;padding-top:4px;margin-top:0;">
-                    <div class="shoot-actions-icons">${sitePendingBtn}${folderLocked}${origLocked}</div>
-                    <span class="shoot-complete-hint">폴더만들기·원본업로드는 현장확인 후에 눌러 주세요.</span>
-                  </div>
-                </div>`;
+                  </div>`
+                  : "";
+                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}">${preSmsRow}<div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${driveMissingHint}${subfoldersHtml}</div></div>`;
               }
             }
             return `
