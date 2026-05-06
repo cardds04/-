@@ -17,6 +17,10 @@
  *   DELIVERY_AUTO_NEXT_DAY_FOLDERS — 기본 끔. `1` 이면 촬영 다음날 Cron 이 자동으로
  *                                   Drive 폴더 트리를 생성(기존 동작). 끄면 작가 페이지
  *                                   「촬영완료」로만 폴더 생성(백필 ENV 는 예외).
+ *   원본폴더 만료 정리 (사진원본파일·영상원본파일 직속 파일만, 편집완료 폴더는 제외):
+ *   DELIVERY_ORIGINAL_PURGE_ENABLED — `1` 일 때만 일일 크론 끝에 실행 (기본 끔, 실수 삭제 방지).
+ *   DELIVERY_ORIGINAL_RETENTION_DAYS — 기본 60 (Google Drive 파일 createdTime 기준).
+ *   DELIVERY_ORIGINAL_PURGE_HARD_DELETE — `1` 이면 휴지통이 아닌 영구 삭제(복구 불가). 기본은 휴지통 이동.
  *   CRON_SECRET 또는 DELIVERY_DRIVE_CRON_SECRET — 설정 시 Bearer 토큰과 일치해야 호출 허용
  *
  * 준비: Google Drive에서 PARENT 폴더를 해당 서비스계정 메일 주소와 공유(편집자).
