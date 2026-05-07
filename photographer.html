@@ -3315,7 +3315,8 @@
               },
             };
             renderScheduleList();
-            if (normalize(data.customer_original_upload_notice_sms) === "sent") {
+            const smsStat = normalize(data.customer_original_upload_notice_sms);
+            if (smsStat === "sent") {
               if (data.sms_deferred_quiet_hours) {
                 alert(
                   "고객 원본 업로드 안내 문자를 한국시간 오전 10시에 예약 발송하도록 등록했습니다.\n(밤 10시~오전 8시에는 방해를 줄이기 위한 예약입니다.)"
@@ -3323,6 +3324,14 @@
               } else {
                 alert("고객에게 원본 업로드 안내 문자를 보냈습니다.");
               }
+            } else if (smsStat === "skipped_no_phone") {
+              alert(
+                "원본 업로드 완료로 표시했습니다.\n※ 고객 번호가 없어 안내 문자는 보내지 못했습니다. 업체 디렉터리(customer_phone)를 확인해 주세요."
+              );
+            } else if (smsStat === "send_failed") {
+              alert(
+                "원본 업로드 완료로 표시했습니다.\n※ 안내 문자는 솔라피 오류 등으로 발송되지 않았을 수 있습니다. 필요 시 고객에게 직접 안내해 주세요."
+              );
             } else {
               alert("처리되었습니다.");
             }
