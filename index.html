@@ -457,7 +457,7 @@
       }
       .schedule-dashboard-row--split {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
         gap: 10px;
         align-items: stretch;
       }
@@ -15989,6 +15989,20 @@
         return "";
       }
 
+      /** 아파트(동·호)가 아닐 때: 번지·층 생략하고 ○○구○○동 만 (예: 마포구 망원동 479-24 → 마포구망원동) */
+      function guDongLabelForShootFolderName(rawPlace) {
+        let s = String(rawPlace || "").replace(/\s+/g, " ").trim();
+        if (!s) return "";
+        try {
+          if (typeof s.normalize === "function") s = s.normalize("NFKC");
+        } catch (_) {}
+        let m = s.match(/([가-힣]+구)\s+([가-힣0-9]*동)(?=\s|$|[,，、]|\d)/u);
+        if (m) return (m[1] + m[2]).replace(/\s+/g, "");
+        const compact = s.replace(/\s+/g, "");
+        m = compact.match(/([가-힣]+구)([가-힣0-9]*동)/u);
+        return m ? m[1] + m[2] : "";
+      }
+
       /** 작가 화면과 동일 규칙: MMDD + 단지명 요약 (납품 Drive에 수동 생성할 폴더명) */
       function buildShootFolderNameForDashboard(dateYmd, rawPlace) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
@@ -16004,6 +16018,8 @@
           aptName = aptName.replace(/\s*\uC544\uD30C\uD2B8\s*$/i, "").trim() || "\uB2E8\uC9C0";
           return mmdd + aptName.replace(/[\/\\:*?"<>|]/g, "");
         }
+        const guDong = guDongLabelForShootFolderName(s);
+        if (guDong) return mmdd + guDong.replace(/[\/\\:*?"<>|]/g, "");
         const collapsed = s.replace(/\s+/g, "").slice(0, 30);
         return mmdd + (collapsed || "\uC7A5\uC18C");
       }

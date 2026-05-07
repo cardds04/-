@@ -1748,6 +1748,19 @@
         return s.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
       }
 
+      function guDongLabelForShootFolderName(rawPlace) {
+        let s = String(rawPlace || "").replace(/\s+/g, " ").trim();
+        if (!s) return "";
+        try {
+          if (typeof s.normalize === "function") s = s.normalize("NFKC");
+        } catch (_) {}
+        let m = s.match(/([가-힣]+구)\s+([가-힣0-9]*동)(?=\s|$|[,，、]|\d)/u);
+        if (m) return (m[1] + m[2]).replace(/\s+/g, "");
+        const compact = s.replace(/\s+/g, "");
+        m = compact.match(/([가-힣]+구)([가-힣0-9]*동)/u);
+        return m ? m[1] + m[2] : "";
+      }
+
       function buildShootFolderNameJS(dateYmd, rawPlace) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
@@ -1762,6 +1775,8 @@
           aptName = aptName.replace(/\s*\uC544\uD30C\uD2B8\s*$/i, "").trim() || "\uB2E8\uC9C0";
           return mmdd + aptName.replace(/[\/\\:*?"<>|]/g, "");
         }
+        const guDong = guDongLabelForShootFolderName(s);
+        if (guDong) return mmdd + guDong.replace(/[\/\\:*?"<>|]/g, "");
         const collapsed = s.replace(/\s+/g, "").slice(0, 30);
         return mmdd + (collapsed || "\uC7A5\uC18C");
       }
