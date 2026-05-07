@@ -459,10 +459,8 @@
         display: grid;
         grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
         gap: 10px;
-        align-items: stretch;
-        /** 남는 세로 공간 활용 — 짧은 max-height 때문에 아래 빈 영역만 보이던 문제 완화 */
-        min-height: max(320px, min(920px, calc(100vh - 292px)));
-        min-height: max(320px, min(920px, calc(100svh - 292px)));
+        /** stretch면 오른쪽 열이 길 때 왼쪽(15일) 카드만 아래가 비어 보임 → start로 카드 높이는 내용만큼만 */
+        align-items: start;
       }
       .schedule-dashboard-col {
         border: 1px solid var(--line);
@@ -473,10 +471,6 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
-      }
-      /** 그리드 칸 안에서 목록 영역까지 늘리려면 카드 세로 최소값 제약 완화 */
-      .schedule-dashboard-row--split > .schedule-dashboard-col {
-        min-height: 0;
       }
       .schedule-dashboard-col--summary {
         min-height: 120px;
@@ -538,8 +532,7 @@
       }
 
       .schedule-dashboard-list {
-        flex: 1 1 auto;
-        min-height: 0;
+        max-height: 330px;
         overflow: auto;
         font-size: 0.82rem;
         line-height: 1.45;
@@ -648,8 +641,8 @@
       }
 
       .schedule-dashboard-completed-list {
-        flex: 1 1 auto;
-        min-height: 0;
+        min-height: 180px;
+        max-height: 480px;
         overflow: auto;
       }
 
