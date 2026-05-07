@@ -3240,7 +3240,12 @@
             const sms = data.customer_site_notice_sms;
             let smsNote = "";
             if (sms === "sent") {
-              smsNote = "\n\n고객에게 현장 확인 안내 문자가 발송되었습니다.";
+              if (data.sms_deferred_quiet_hours) {
+                smsNote =
+                  "\n\n고객 현장 안내 문자는 밤 10시~오전 8시 구간을 피해 한국시간 오전 10시에 예약 발송됩니다.";
+              } else {
+                smsNote = "\n\n고객에게 현장 확인 안내 문자가 발송되었습니다.";
+              }
             } else if (sms === "skipped_no_phone") {
               smsNote =
                 "\n\n※ 고객 번호가 없어 안내 문자를 보내지 못했습니다. 업체 디렉터리(customer_phone)·납품 연락처를 확인해 주세요.";
@@ -3311,7 +3316,13 @@
             };
             renderScheduleList();
             if (normalize(data.customer_original_upload_notice_sms) === "sent") {
-              alert("고객에게 원본 업로드 안내 문자를 보냈습니다.");
+              if (data.sms_deferred_quiet_hours) {
+                alert(
+                  "고객 원본 업로드 안내 문자를 한국시간 오전 10시에 예약 발송하도록 등록했습니다.\n(밤 10시~오전 8시에는 방해를 줄이기 위한 예약입니다.)"
+                );
+              } else {
+                alert("고객에게 원본 업로드 안내 문자를 보냈습니다.");
+              }
             } else {
               alert("처리되었습니다.");
             }

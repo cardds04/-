@@ -15810,7 +15810,13 @@
             if (res.ok && body.ok) {
               sendSucceeded = true;
               kickDashDeliveryRpcRefresh(true);
-              alert("문자발송완료");
+              if (body.sms_deferred_quiet_hours) {
+                alert(
+                  "야간 발송 제한으로 문자가 한국시간 오전 10시에 예약 등록되었습니다.\n(솔라피 예약 발송 — 실제 수신은 해당 시각 무렵입니다.)"
+                );
+              } else {
+                alert("문자발송완료");
+              }
               return;
             }
             if (res.status === 409 || String(body.message || "").includes("이미")) {

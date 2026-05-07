@@ -40,7 +40,13 @@ module.exports = async (req, res) => {
       res.status(out.status || 500).json({ ok: false, message: out.message || "실패" });
       return;
     }
-    res.status(200).json({ ok: true, notice_sms: out.notice_sms, kind: out.kind });
+    res.status(200).json({
+      ok: true,
+      notice_sms: out.notice_sms,
+      kind: out.kind,
+      sms_deferred_quiet_hours: !!out.sms_deferred_quiet_hours,
+      sms_scheduled_iso: out.sms_scheduled_iso || null,
+    });
   } catch (error) {
     console.error("[photographer-customer-pre-sms]", error);
     res.setHeader("Access-Control-Allow-Origin", "*");

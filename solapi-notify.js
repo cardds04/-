@@ -459,7 +459,7 @@
     const subject = `[${siteLabel}] 촬영 접수 확인`;
 
     try {
-      await postSolapiSend({ to: toPhone, text, subject });
+      const sendBody = await postSolapiSend({ to: toPhone, text, subject });
       if (phoneJustEntered && onPhoneSaved) {
         try {
           await onPhoneSaved(toPhone);
@@ -467,7 +467,11 @@
           console.warn("[SolapiNotify] phone save failed", saveErr);
         }
       }
-      showToast(`알림 문자가 발송되었습니다. (${toPhone})`);
+      if (sendBody && sendBody.smsDeferredToQuietHoursMorning) {
+        showToast(`야간 시간대에는 오전 10시 예약 발송으로 등록되었습니다. (${toPhone})`);
+      } else {
+        showToast(`알림 문자가 발송되었습니다. (${toPhone})`);
+      }
       return { ok: true, skipped: false };
     } catch (error) {
       console.error("[SolapiNotify] send failed", error);
