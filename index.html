@@ -16046,6 +16046,35 @@
         return mmdd + tail;
       }
 
+      async function dashboardClipboardCopyShootFolderEncoded(encodedAttr) {
+        let text = "";
+        try {
+          text = encodedAttr ? decodeURIComponent(encodedAttr) : "";
+        } catch {
+          text = "";
+        }
+        text = String(text || "").trim();
+        if (!text) return { ok: false, reason: "empty" };
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          return { ok: true, text };
+        } catch {
+          return { ok: false, reason: "error" };
+        }
+      }
+
       function renderScheduleDashboardFromDeliveryRpc(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
         const completedRoot = document.getElementById("scheduleDashboardCompletedList");
@@ -16173,10 +16202,14 @@
 
           const detailBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openScheduleCardByIndex" data-data-index="${dataIndex}" title="목록으로 이동">상세</button>`;
           const codeForDelivery = normalizeCompanyCode(item?.companyCode || item?.code || "");
+          const shootFolderSuggestName = buildShootFolderNameForDashboard(dateStr, item?.place);
           const deliveryFolderBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
             company
-          )}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(네이버웍스) 열기">납품폴더</button>`;
-          const shootFolderSuggestName = buildShootFolderNameForDashboard(dateStr, item?.place);
+          )}" data-company-code="${escapeHtml(
+            codeForDelivery
+          )}" data-folder-name="${encodeURIComponent(
+            shootFolderSuggestName
+          )}" title="만들 폴더명 복사 후 업체 납품 폴더(네이버웍스) 열기">납품폴더</button>`;
           const folderNameCopyBtn = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap" title="납품 Drive에 새 폴더 만들 때 이름">만들폴더명 ${escapeHtml(
             shootFolderSuggestName
           )}</span><button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardCopyShootFolderName" data-folder-name="${encodeURIComponent(
@@ -17250,50 +17283,40 @@
         if (deliveryFolderBtn) {
           const comp = String(deliveryFolderBtn.dataset.company || "").trim();
           const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
+          const encodedFolder = deliveryFolderBtn.getAttribute("data-folder-name") || "";
           void (async () => {
+            let copyFailed = false;
+            const encTrim = encodedFolder.trim();
+            if (encTrim) {
+              const cr = await dashboardClipboardCopyShootFolderEncoded(encTrim);
+              if (!cr.ok && cr.reason === "error") copyFailed = true;
+            }
             const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
             if (!u) {
               alert(
-                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 네이버웍스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
+                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 네이버웍스 폴더 주소를 저장한 뒤 다시 시도해 주세요." +
+                  (copyFailed ? "\n※ 폴더 이름 자동 복사에 실패했습니다. 필요하면 「복사」를 눌러 주세요." : "")
               );
               return;
             }
             window.open(u, "_blank", "noopener,noreferrer");
+            if (copyFailed) {
+              alert("납품 폴더를 새 탭에서 열었습니다. 폴더 이름 자동 복사에 실패했으면 「복사」 버튼을 이용해 주세요.");
+            }
           })();
           return;
         }
         const copyShootFolderBtn = event.target.closest("button[data-action='dashboardCopyShootFolderName']");
         if (copyShootFolderBtn) {
           const encoded = copyShootFolderBtn.getAttribute("data-folder-name") || "";
-          let text = "";
-          try {
-            text = encoded ? decodeURIComponent(encoded) : "";
-          } catch {
-            text = "";
-          }
-          if (!String(text).trim()) {
-            alert("복사할 폴더 이름을 찾을 수 없습니다.");
-            return;
-          }
           void (async () => {
-            try {
-              if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(text);
-              } else {
-                const textarea = document.createElement("textarea");
-                textarea.value = text;
-                textarea.style.position = "fixed";
-                textarea.style.left = "-9999px";
-                document.body.appendChild(textarea);
-                textarea.focus();
-                textarea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textarea);
-              }
-              alert(`「${text}」를 복사했습니다.\n「납품폴더」로 드라이브를 연 뒤 새 폴더 이름에 붙여넣으세요.`);
-            } catch {
-              alert("복사에 실패했습니다.");
+            const r = await dashboardClipboardCopyShootFolderEncoded(encoded.trim());
+            if (!r.ok) {
+              if (r.reason === "empty") alert("복사할 폴더 이름을 찾을 수 없습니다.");
+              else alert("복사에 실패했습니다.");
+              return;
             }
+            alert(`「${r.text}」를 복사했습니다.\n「납품폴더」로 드라이브를 연 뒤 새 폴더 이름에 붙여넣으세요.`);
           })();
           return;
         }
