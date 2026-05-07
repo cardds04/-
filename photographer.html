@@ -1748,6 +1748,34 @@
         return s.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
       }
 
+      const SHOOT_FOLDER_NAME_SUFFIX_MAX = 15;
+
+      function clampShootFolderSuffix(token) {
+        const t = String(token || "")
+          .replace(/[\/\\:*?"<>|]/g, "")
+          .trim();
+        if (!t) return "";
+        return t.slice(0, SHOOT_FOLDER_NAME_SUFFIX_MAX);
+      }
+
+      /** N동 N호(또는 영문동 N호) 앞 = 단지명. '아파트'가 있으면 그 앞까지가 단지명(예: 청솔우성 아파트 → 청솔우성). */
+      function apartmentFolderSuffixFromPlace(rawPlace) {
+        let s = String(rawPlace || "").replace(/\s+/g, " ").trim();
+        if (!s) return "";
+        try {
+          if (typeof s.normalize === "function") s = s.normalize("NFKC");
+        } catch (_) {}
+        const dongHo = s.match(/(\d{1,4}동\s*\d+\s*호|[a-zA-Z]동\s*\d+\s*호)\s*$/iu);
+        if (!dongHo) return "";
+        let head = s.slice(0, dongHo.index).trim();
+        const aptPos = head.search(/\uC544\uD30C\uD2B8/u);
+        if (aptPos !== -1) head = head.slice(0, aptPos).trim();
+        head = head.replace(/\s*\uC544\uD30C\uD2B8\s*$/iu, "").trim();
+        const parts = head.split(/\s+/).filter(Boolean);
+        const name = parts.length ? parts[parts.length - 1] : "";
+        return name.replace(/[\/\\:*?"<>|]/g, "").trim();
+      }
+
       function guDongLabelForShootFolderName(rawPlace) {
         let s = String(rawPlace || "").replace(/\s+/g, " ").trim();
         if (!s) return "";
@@ -1765,20 +1793,15 @@
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
-        if (!s) return mmdd + "\uC7A5\uC18C\uBBF8\uC815";
-        const aptM = s.match(/(\d{1,4}\uB3D9\s*\d+\s*\uD638|[a-zA-Z]\uB3D9\s*\d+\s*\uD638)\s*$/u);
-        if (aptM) {
-          const prefix = s.slice(0, aptM.index).trim();
-          const parts = prefix.split(/\s+/).filter(Boolean);
-          let aptName = parts[parts.length - 1] || "\uB2E8\uC9C0";
-          if (/^\uC544\uD30C\uD2B8$/i.test(aptName) && parts.length >= 2) aptName = parts[parts.length - 2];
-          aptName = aptName.replace(/\s*\uC544\uD30C\uD2B8\s*$/i, "").trim() || "\uB2E8\uC9C0";
-          return mmdd + aptName.replace(/[\/\\:*?"<>|]/g, "");
-        }
+        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
+        if (!s) return mmdd + unknown;
+        const aptPart = apartmentFolderSuffixFromPlace(s);
+        if (aptPart) return mmdd + clampShootFolderSuffix(aptPart);
         const guDong = guDongLabelForShootFolderName(s);
-        if (guDong) return mmdd + guDong.replace(/[\/\\:*?"<>|]/g, "");
-        const collapsed = s.replace(/\s+/g, "").slice(0, 30);
-        return mmdd + (collapsed || "\uC7A5\uC18C");
+        if (guDong) return mmdd + clampShootFolderSuffix(guDong.replace(/[\/\\:*?"<>|]/g, ""));
+        const collapsed = s.replace(/\s+/g, "");
+        const tail = clampShootFolderSuffix(collapsed) || unknown;
+        return mmdd + tail;
       }
       function payrollNameKeysForStorage(displayName) {
         const canon = normalizePayrollPersonName(displayName).toLowerCase();
