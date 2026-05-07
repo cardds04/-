@@ -459,8 +459,12 @@
         display: grid;
         grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
         gap: 10px;
-        /** stretch면 오른쪽 열이 길 때 왼쪽(15일) 카드만 아래가 비어 보임 → start로 카드 높이는 내용만큼만 */
-        align-items: start;
+        /** 두 카드 바닥 맞춤 + 내부 목록이 같은 스크롤 높이를 쓰도록 stretch */
+        align-items: stretch;
+      }
+      .schedule-dashboard-row--split > .schedule-dashboard-col {
+        min-height: 0;
+        align-self: stretch;
       }
       .schedule-dashboard-col {
         border: 1px solid var(--line);
@@ -531,8 +535,11 @@
         letter-spacing: -0.02em;
       }
 
+      /** 330px 의 1.5배 = 495 — 납품 로그와 동일 flex로 열 높이에 맞춤 */
       .schedule-dashboard-list {
-        max-height: 330px;
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: 495px;
         overflow: auto;
         font-size: 0.82rem;
         line-height: 1.45;
@@ -641,8 +648,9 @@
       }
 
       .schedule-dashboard-completed-list {
-        min-height: 180px;
-        max-height: 480px;
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: 495px;
         overflow: auto;
       }
 
@@ -15691,6 +15699,7 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.ok) {
+            if (res.status === 409) kickDashDeliveryRpcRefresh(true);
             alert(data.message || "처리에 실패했습니다.");
             return;
           }
@@ -16188,10 +16197,48 @@
         migrateDashboardCompletedKeysToCanonical();
         const deliveryManualDoneKeys = new Set(readDashboardCompletedEntries().map((e) => e.scheduleKey));
 
+        function dashDeliveryFallbackKeyFromItem(it) {
+          const d = String(it?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return "";
+          const name = normalizeCompanyName(it?.company) || "";
+          if (!name || name === "-") return "";
+          const code = normalizeCompanyCode(it?.companyCode || it?.code || "");
+          return `${name}\u0000${code}\u0000${d}`;
+        }
+        function dashDeliveryFallbackKeyFromRpcRow(row) {
+          const d = String(row?.shoot_date_key || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return "";
+          const name = normalizeCompanyName(row?.company_name) || "";
+          if (!name) return "";
+          const code = normalizeCompanyCode(row?.company_code || "");
+          return `${name}\u0000${code}\u0000${d}`;
+        }
+        const rpcRowsByComposite = new Map();
+        for (const r of map.values()) {
+          const fk = dashDeliveryFallbackKeyFromRpcRow(r);
+          if (!fk) continue;
+          rpcRowsByComposite.set(fk, r);
+        }
+
+        function dashOrigNotifiedOk(tr) {
+          if (!tr || typeof tr !== "object") return false;
+          const raw = tr.photographer_original_upload_notified_at ?? tr.photographerOriginalUploadNotifiedAt;
+          return raw != null && String(raw).trim() !== "";
+        }
+
         function rowForSchedule(item) {
-          const sid = dashCanonScheduleRpcId(item?.customerScheduleId);
-          if (!sid) return null;
-          return map.get(sid) || null;
+          const uuid = String(item?.customerScheduleId || "").trim();
+          if (/^[0-9a-f-]{36}$/i.test(uuid)) {
+            const hit = map.get(uuid.toLowerCase());
+            if (hit) return hit;
+          }
+          const fb = dashDeliveryFallbackKeyFromItem(item);
+          if (fb) {
+            const tr = rpcRowsByComposite.get(fb);
+            if (tr) return tr;
+          }
+          const sidLegacy = dashCanonScheduleRpcId(item?.customerScheduleId);
+          return sidLegacy ? map.get(sidLegacy) || null : null;
         }
 
         function compositionForItemRaw(item) {
@@ -16242,7 +16289,7 @@
           const vDone = !!(tr && tr.video_notified_at);
           const siteOk = dashSiteDoneForDashboardRow(tr, dateStr);
           const sid = dashCanonScheduleRpcId(item?.customerScheduleId);
-          const origOk = !!(tr && tr.photographer_original_upload_notified_at);
+          const origOk = dashOrigNotifiedOk(tr);
           const badgeParts = [];
           if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid));
           if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid));
