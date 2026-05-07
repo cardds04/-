@@ -2303,7 +2303,7 @@
             </div>
           </div>
           <p class="helper" style="margin-bottom: 10px;">
-            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지).
+            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지). 네이버웍스 납품 루트는 신규 업체 「폴더열기」로 메인 Drive에 들어가 직접 폴더를 만든 뒤 「폴더 연결」에 주소를 붙여 저장하세요 (기등록 업체는 「폴더열기」만으로 열립니다).
           </p>
           <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
             <select id="companyDirectorySiteFilterSelect" class="small-select" style="min-width: 130px;" aria-label="사이트별 보기">
@@ -9048,7 +9048,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,login_id,password,site_type,created_at,updated_at&order=updated_at.desc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,login_id,password,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.desc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {
@@ -9076,6 +9076,91 @@
           throw error;
         } finally {
           window.clearTimeout(tid);
+        }
+      }
+
+      const NAVER_WORKS_MY_DRIVE_ROOT_URL = "https://drive.worksmobile.com/drive/web/my?resourceKey=root";
+
+      function companyDirectoryAdminRowById(ridRaw) {
+        const want = normalize(String(ridRaw || ""));
+        return companyDirectoryAdminRows.find((r) => normalize(String(r?.id ?? "")) === want) || null;
+      }
+
+      function openCompanyDirectoryNaverWorksFolder(rowId) {
+        const row = companyDirectoryAdminRowById(rowId);
+        const link = String(row?.naver_works_company_share_link || "").trim();
+        const url = /^https?:\/\//i.test(link) ? link : NAVER_WORKS_MY_DRIVE_ROOT_URL;
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+
+      async function connectCompanyDirectoryNaverWorksFolder(rowIdRaw) {
+        const row = companyDirectoryAdminRowById(rowIdRaw);
+        if (!row) {
+          alert("행을 찾을 수 없습니다. 목록 새로고침 후 다시 시도해 주세요.");
+          return;
+        }
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          alert("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
+          return;
+        }
+        const rid = normalize(String(row?.id ?? ""));
+        if (!rid) {
+          alert("업체 행 ID 가 없습니다.");
+          return;
+        }
+        const raw = prompt(
+          "네이버웍스에서 만든 이 업체 납품 폴더 주소(URL)를 붙여넣으세요. (등록 후 메인보드·작가 「납품 폴더 열기」와 동일하게 동작합니다.)",
+          String(row?.naver_works_company_share_link || "").trim()
+        );
+        if (raw === null) return;
+        const shareCandidate = String(raw).trim();
+        if (!shareCandidate) {
+          alert("주소가 비어 있습니다.");
+          return;
+        }
+        let u;
+        try {
+          u = new URL(shareCandidate.indexOf("://") >= 0 ? shareCandidate : `https://${shareCandidate}`);
+        } catch {
+          alert("올바른 URL 형식인지 확인해 주세요.");
+          return;
+        }
+        if (u.protocol !== "http:" && u.protocol !== "https:") {
+          alert("http 또는 https 주소만 등록할 수 있습니다.");
+          return;
+        }
+        const resourceKey = u.searchParams.get("resourceKey");
+        const patchBody = { naver_works_company_share_link: u.toString() };
+        if (resourceKey && resourceKey !== "root") patchBody.naver_works_company_folder_id = resourceKey;
+        try {
+          const resp = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=eq.${encodeURIComponent(rid)}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify(patchBody)
+            }
+          );
+          if (!resp.ok) {
+            const errText = await resp.text().catch(() => "");
+            throw new Error(errText || `수정 실패 (${resp.status})`);
+          }
+          await pullCustomersFromSupabaseAndApply();
+          await pullAdminCompaniesFromSupabaseAndRefresh();
+          await refreshCompanyDirectoryAdminTab();
+          if (companyDirectorySaveHintEl) {
+            companyDirectorySaveHintEl.textContent = `${new Date().toLocaleTimeString(
+              "ko-KR"
+            )} 납품 폴더 주소를 저장했습니다.`;
+          }
+        } catch (e) {
+          console.error("[업체정보관리] 폴더 연결 실패", e);
+          alert(e?.message || String(e));
         }
       }
 
@@ -9184,10 +9269,13 @@
 <td><input type="text" class="inline-input" data-dir-field="phone" value="${escapeHtml(tel)}" style="width:100%;min-width:90px;box-sizing:border-box" /></td>
 <td><select class="inline-select" data-dir-field="site" style="width:100%;max-width:120px"><option value="inlog"${siteVal === "inlog" ? " selected" : ""}>인로그</option><option value="shopick"${siteVal === "shopick" ? " selected" : ""}>쇼픽</option><option value="thefeeling"${siteVal === "thefeeling" ? " selected" : ""}>더필링</option></select></td>
 <td><select class="inline-select" data-dir-field="composition" style="width:100%;max-width:140px"><option value="사진만"${compPreset === "사진만" ? " selected" : ""}>사진만</option><option value="사진영상 둘다"${compPreset === "사진영상 둘다" ? " selected" : ""}>사진영상 둘다</option></select></td>
-<td style="white-space:nowrap"><button type="button" class="btn-sm primary" data-cda-act="inline-save" data-cda-id="${rowAttr}">저장</button> <button type="button" class="btn-sm" data-cda-act="inline-cancel" data-cda-id="${rowAttr}">취소</button> <button type="button" class="btn-sm" data-cda-act="inline-delete" data-cda-id="${rowAttr}">삭제</button></td>
+<td style="white-space:nowrap;font-size:11px"><button type="button" class="btn-sm primary" data-cda-act="inline-save" data-cda-id="${rowAttr}">저장</button> <button type="button" class="btn-sm" data-cda-act="inline-cancel" data-cda-id="${rowAttr}">취소</button> <button type="button" class="btn-sm" data-cda-act="inline-delete" data-cda-id="${rowAttr}">삭제</button><br /><button type="button" class="btn-sm" style="margin-top:4px" data-cda-act="open-nw-folder" data-cda-id="${rowAttr}">폴더열기</button> <button type="button" class="btn-sm primary" style="margin-top:4px" data-cda-act="connect-nw-folder" data-cda-id="${rowAttr}">폴더 연결</button></td>
 </tr>`;
                     }
 
+                    const naverHint = String(r?.naver_works_company_share_link || "").trim()
+                      ? "등록됨"
+                      : "미등록";
                     return `<tr${rowBg} data-cda-pick="${rowAttr}" title="클릭하여 바로 수정" style="cursor:pointer">
 <td>${escapeHtml(nm || "—")}</td>
 <td>${escapeHtml(lid || "—")}</td>
@@ -9195,7 +9283,7 @@
 <td>${escapeHtml(tel || "—")}</td>
 <td>${escapeHtml(siteLabel)}</td>
 <td>${escapeHtml(compLabel || "—")}</td>
-<td class="helper">—</td>
+<td style="white-space:nowrap;font-size:11px;line-height:1.35"><span class="helper" title="네이버웍스 납품 폴더 URL">${escapeHtml(naverHint)}</span><br /><button type="button" class="btn-sm" data-cda-act="open-nw-folder" data-cda-id="${rowAttr}">폴더열기</button> <button type="button" class="btn-sm primary" data-cda-act="connect-nw-folder" data-cda-id="${rowAttr}">폴더 연결</button></td>
 </tr>`;
                   } catch (_) {
                     const fallbackId = escapeHtml(normalize(String(r?.id ?? "error")));
@@ -15612,37 +15700,6 @@
         }
       }
 
-      async function handleDashboardEnsureShootFolders(scheduleId) {
-        const sid = String(scheduleId || "").trim();
-        if (!/^[0-9a-f-]{36}$/i.test(sid)) {
-          alert("스케줄 ID가 유효하지 않습니다.");
-          return;
-        }
-        const pw = prompt("관리자 비밀번호를 입력하세요. (현장 Drive 폴더 생성)");
-        if (pw === null) return;
-        try {
-          const res = await fetch("/api/admin-ensure-shoot-folders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ scheduleId: sid, adminPassword: String(pw) }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.ok) {
-            alert(data.message || "폴더를 만들지 못했습니다.");
-            return;
-          }
-          if (data.alreadyExists) {
-            alert("이미 해당 현장 폴더가 생성되어 있습니다.");
-            return;
-          }
-          alert("현장 폴더가 생성되었습니다.");
-          kickDashDeliveryRpcRefresh(true);
-        } catch (error) {
-          console.error("[admin-ensure-shoot-folders]", error);
-          alert("요청 중 오류가 발생했습니다.");
-        }
-      }
-
       function dashKoMobileDigits(input) {
         return String(input || "").replace(/[^\d]/g, "");
       }
@@ -15932,6 +15989,25 @@
         return "";
       }
 
+      /** 작가 화면과 동일 규칙: MMDD + 단지명 요약 (납품 Drive에 수동 생성할 폴더명) */
+      function buildShootFolderNameForDashboard(dateYmd, rawPlace) {
+        const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
+        const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
+        const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
+        if (!s) return mmdd + "\uC7A5\uC18C\uBBF8\uC815";
+        const aptM = s.match(/(\d{1,4}\uB3D9\s*\d+\s*\uD638|[a-zA-Z]\uB3D9\s*\d+\s*\uD638)\s*$/u);
+        if (aptM) {
+          const prefix = s.slice(0, aptM.index).trim();
+          const parts = prefix.split(/\s+/).filter(Boolean);
+          let aptName = parts[parts.length - 1] || "\uB2E8\uC9C0";
+          if (/^\uC544\uD30C\uD2B8$/i.test(aptName) && parts.length >= 2) aptName = parts[parts.length - 2];
+          aptName = aptName.replace(/\s*\uC544\uD30C\uD2B8\s*$/i, "").trim() || "\uB2E8\uC9C0";
+          return mmdd + aptName.replace(/[\/\\:*?"<>|]/g, "");
+        }
+        const collapsed = s.replace(/\s+/g, "").slice(0, 30);
+        return mmdd + (collapsed || "\uC7A5\uC18C");
+      }
+
       function renderScheduleDashboardFromDeliveryRpc(activeRows, todayKey) {
         const listRoot = document.getElementById("scheduleDashboardList");
         const completedRoot = document.getElementById("scheduleDashboardCompletedList");
@@ -16061,13 +16137,13 @@
           const codeForDelivery = normalizeCompanyCode(item?.companyCode || item?.code || "");
           const deliveryFolderBtn = `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
             company
-          )}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(Google Drive)">납품폴더</button>`;
-          const schedIdForFolders = String(item?.customerScheduleId || "").trim();
-          const folderCreateBtn = /^[0-9a-f-]{36}$/i.test(schedIdForFolders)
-            ? `<button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardEnsureShootFolders" data-schedule-id="${escapeHtml(
-                schedIdForFolders
-              )}" title="이 일정 촬영 현장 Drive 폴더 생성">폴더생성</button>`
-            : "";
+          )}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(네이버웍스) 열기">납품폴더</button>`;
+          const shootFolderSuggestName = buildShootFolderNameForDashboard(dateStr, item?.place);
+          const folderNameCopyBtn = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap" title="납품 Drive에 새 폴더 만들 때 이름">만들폴더명 ${escapeHtml(
+            shootFolderSuggestName
+          )}</span><button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardCopyShootFolderName" data-folder-name="${encodeURIComponent(
+            shootFolderSuggestName
+          )}" title="촬영일 폴더 이름 클립보드 복사">복사</button>`;
 
           const rowDoneBtn = `<button type="button" class="dashboard-pending-row-done" data-action="dashboardMarkDeliveryPendingDone" data-data-index="${dataIndex}" title="대기 목록에서 제거(스케줄 삭제·납품 문자 없음)" aria-label="납품 대기 완료">완료</button>`;
 
@@ -16081,7 +16157,7 @@
                   ${adminSiteBtn}
                   ${detailBtn}
                   ${deliveryFolderBtn}
-                  ${folderCreateBtn}
+                  ${folderNameCopyBtn}
                 </div>`;
         }
 
@@ -17140,7 +17216,7 @@
             const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
             if (!u) {
               alert(
-                "납품 폴더 링크를 찾을 수 없습니다. 업체 디렉터리에 Google Drive 폴더가 연결되어 있는지 확인하거나, 작가 화면에서 납품 폴더를 먼저 생성해 주세요."
+                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 네이버웍스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
               );
               return;
             }
@@ -17148,9 +17224,39 @@
           })();
           return;
         }
-        const ensureShootFoldersBtn = event.target.closest("button[data-action='dashboardEnsureShootFolders']");
-        if (ensureShootFoldersBtn) {
-          void handleDashboardEnsureShootFolders(ensureShootFoldersBtn.dataset.scheduleId);
+        const copyShootFolderBtn = event.target.closest("button[data-action='dashboardCopyShootFolderName']");
+        if (copyShootFolderBtn) {
+          const encoded = copyShootFolderBtn.getAttribute("data-folder-name") || "";
+          let text = "";
+          try {
+            text = encoded ? decodeURIComponent(encoded) : "";
+          } catch {
+            text = "";
+          }
+          if (!String(text).trim()) {
+            alert("복사할 폴더 이름을 찾을 수 없습니다.");
+            return;
+          }
+          void (async () => {
+            try {
+              if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+              } else {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                textarea.style.position = "fixed";
+                textarea.style.left = "-9999px";
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+              }
+              alert(`「${text}」를 복사했습니다.\n「납품폴더」로 드라이브를 연 뒤 새 폴더 이름에 붙여넣으세요.`);
+            } catch {
+              alert("복사에 실패했습니다.");
+            }
+          })();
           return;
         }
         const adminSiteBtn = event.target.closest("button[data-action='adminMarkSiteShootComplete']");
@@ -17397,6 +17503,14 @@
           }
           if (act === "inline-delete") {
             void deleteCompanyDirectoryRow(rid);
+            return;
+          }
+          if (act === "open-nw-folder") {
+            openCompanyDirectoryNaverWorksFolder(rid);
+            return;
+          }
+          if (act === "connect-nw-folder") {
+            void connectCompanyDirectoryNaverWorksFolder(rid);
             return;
           }
           return;

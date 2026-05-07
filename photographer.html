@@ -2908,10 +2908,6 @@
             const scheduleId = canonScheduleUuidFromRow(item);
             const hasServerId = Boolean(scheduleId);
             const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
-            const showProvisionDriveBtn = USE_SUPABASE_SYNC && hasServerId && !companyDriveLink;
-            const provisionDriveBtn = showProvisionDriveBtn
-              ? ` <button type="button" class="btn outline small" data-action="provisionCompanyDelivery" data-schedule-id="${scheduleId}" style="margin-left:6px;vertical-align:middle;">납품폴더 생성</button>`
-              : "";
             let deliveryLinkKind = "";
             if (companyDriveLink) {
               if (/^https:\/\/drive\.google\.com/i.test(companyDriveLink)) {
@@ -2924,19 +2920,16 @@
             const folderNameHint = `<span style="font-size:12px;color:#374151;">만들 폴더명: <strong style="color:#1d4ed8;">${shootFolderSuggestName}</strong></span><button type="button" class="btn outline small inline-copy-btn" data-action="copyText" data-copy-text="${encodeURIComponent(shootFolderSuggestName)}" style="margin-left:6px;font-size:11px;padding:1px 7px;">복사</button><br />`;
             const companyDriveLine = companyDriveLink
               ? `${folderNameHint}업체 납품 폴더: <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a>${deliveryLinkKind}<br />`
-              : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">아직 표시할 공유 주소가 없습니다. 「납품폴더 생성」(또는 관리 일괄 생성) 또는 잠시 후 새로고침(F5)해 주세요.</span>${provisionDriveBtn}<br />`;
+              : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">아직 표시할 공유 주소가 없습니다. 관리자 「업체정보관리」에서 해당 업체 「폴더 연결」로 네이버웍스 폴더 주소를 등록한 뒤 새로고침(F5)해 주세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
               if (!hasServerId) {
                 shootBlock =
-                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. Drive 폴더는 「폴더만들기」(스케줄이 서버와 동기화된 뒤).</div>';
+                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. 촬영일 폴더는 「업체 납품 폴더 열기」 후 위 「만들 폴더명」을 복사해 납품 Drive에서 직접 만드세요.</div>';
               } else {
                 const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
-                const hasAnyDriveLink =
-                  Boolean(shootLink) ||
-                  SHOOT_DELIVERY_DRIVE_LINK_ROWS.some((r) => normalize(d?.[r.key]));
                 const origNotified =
                   typeof d?.photographer_original_upload_notified_at === "string" &&
                   normalize(d?.photographer_original_upload_notified_at);
@@ -2946,14 +2939,11 @@
                 const siteIconBtn = shootDone
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="현장확인 완료" aria-label="현장확인 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`
                   : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending shoot-complete-btn" data-action="completeShoot" data-schedule-id="${scheduleId}" title="현장 도착·촬영 완료 처리" aria-label="현장확인"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`;
-                const folderBtnClass = hasAnyDriveLink ? "shoot-icon-btn shoot-icon-btn--done" : "shoot-icon-btn shoot-icon-btn--pending";
-                const folderIconBtn = `<button type="button" class="${folderBtnClass}" data-action="ensureDriveFolders" data-schedule-id="${scheduleId}" title="Drive에 촬영일·하위 폴더 만들기" aria-label="폴더만들기"><span class="shoot-icon-btn__glyph" aria-hidden="true">📁</span><span class="shoot-icon-btn__label">폴더만들기</span></button>`;
                 const origIconBtn = origNotified
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="원본 업로드 안내 완료" aria-label="원본업로드 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`
                   : `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="originalUploadNotify" data-schedule-id="${scheduleId}" title="원본 업로드 완료 고객 문자" aria-label="원본업로드"><span class="shoot-icon-btn__glyph" aria-hidden="true">⬆</span><span class="shoot-icon-btn__label">원본업로드</span></button>`;
-                const naverWorksFolderBtn = `<button type="button" class="shoot-icon-btn shoot-icon-btn--pending" data-action="naverWorksCreateDriveFolder" data-schedule-id="${scheduleId}" title="네이버웍스: 업체 폴더(DB) 또는 NAVER_WORKS_DRIVE_PARENT_FILE_ID 아래 촬영일 폴더 생성" aria-label="네이버웍스 폴더"><span class="shoot-icon-btn__glyph" aria-hidden="true">NW</span><span class="shoot-icon-btn__label">네이버웍스</span></button>`;
                 const subfoldersHtml = shootDriveDeliverySubfoldersHtml(d);
-                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}"><div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${folderIconBtn}${origIconBtn}${naverWorksFolderBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${subfoldersHtml}</div></div>`;
+                shootBlock = `<div class="shoot-pre-actions-wrap" data-schedule-id="${scheduleId}"><div class="shoot-complete-row" style="align-items:flex-start;flex-direction:column;gap:8px;"><div class="shoot-actions-icons">${siteIconBtn}${origIconBtn}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${linkHtml}</div>${subfoldersHtml}</div></div>`;
               }
             }
             return `
@@ -2988,167 +2978,6 @@
         }
       }
       scheduleListEl.addEventListener("click", async (event) => {
-        const provisionCompanyDeliveryBtn = event.target.closest("button[data-action='provisionCompanyDelivery']");
-        if (provisionCompanyDeliveryBtn) {
-          const sid = canonScheduleUuid(provisionCompanyDeliveryBtn.dataset.scheduleId || "");
-          const writer = getCurrentWriter();
-          if (!sid) {
-            alert("스케줄 식별자가 올바르지 않습니다.");
-            return;
-          }
-          if (!writer || !USE_SUPABASE_SYNC) {
-            alert("로그인 및 서버 동기화가 필요합니다.");
-            return;
-          }
-          if (
-            !confirm(
-              "이 업체의 납품 폴더를 준비할까요?\n서버에 NAVER_WORKS_DRIVE_PARENT_FILE_ID 가 있으면 네이버웍스(포토영상 등) 업체 폴더를 만들고,\n그렇지 않으면 Google Drive 로 만듭니다.\n(업체 계정이 없으면 아이디·비번 1234 로 자동 등록될 수 있습니다.)"
-            )
-          ) {
-            return;
-          }
-          provisionCompanyDeliveryBtn.disabled = true;
-          try {
-            const res = await fetch("/api/photographer-company-delivery-provision", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                writerLoginId: writer.id,
-                writerPassword: writer.password,
-                scheduleId: sid,
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) {
-              alert(data.message || "납품 폴더를 만들지 못했습니다.");
-              provisionCompanyDeliveryBtn.disabled = false;
-              return;
-            }
-            try {
-              await pullTablesToWriterStorage();
-            } catch (_) {}
-            renderScheduleList();
-            let msg = "납품 폴더가 준비되었습니다.";
-            if (data.loginId) msg += `\n업체 로그인 아이디: ${data.loginId} (비밀번호가 새로 정해진 경우 1234 입니다.)`;
-            alert(msg);
-          } catch (err) {
-            console.error(err);
-            alert("요청 중 오류가 발생했습니다.");
-          }
-          provisionCompanyDeliveryBtn.disabled = false;
-          return;
-        }
-
-        const ensureDriveFoldersBtn = event.target.closest("button[data-action='ensureDriveFolders']");
-        if (ensureDriveFoldersBtn) {
-          const sid = canonScheduleUuid(ensureDriveFoldersBtn.dataset.scheduleId || "");
-          const writer = getCurrentWriter();
-          if (!sid) {
-            alert("스케줄 식별자가 올바르지 않습니다.");
-            return;
-          }
-          if (!writer || !USE_SUPABASE_SYNC) {
-            alert("로그인 및 서버 동기화가 필요합니다.");
-            return;
-          }
-          if (!confirm("Google Drive에 업체·촬영일 폴더와 사진(·영상) 하위 폴더를 만들까요?")) {
-            return;
-          }
-          ensureDriveFoldersBtn.disabled = true;
-          try {
-            const res = await fetch("/api/photographer-ensure-folders", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                writerLoginId: writer.id,
-                writerPassword: writer.password,
-                scheduleId: sid,
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) {
-              alert(data.message || "폴더 생성에 실패했습니다.");
-              ensureDriveFoldersBtn.disabled = false;
-              return;
-            }
-            const prevEntry = photographerShootDeliveryById[sid] || {};
-            const mergedDeliveryRow = { ...prevEntry };
-            mergedDeliveryRow.shoot_folder_web_link =
-              normalize(data.shoot_folder_web_link) || normalize(prevEntry.shoot_folder_web_link) || "";
-            mergedDeliveryRow.company_folder_web_link =
-              normalize(data.company_folder_web_link) || normalize(prevEntry.company_folder_web_link) || "";
-            for (const row of SHOOT_DELIVERY_DRIVE_LINK_ROWS) {
-              const k = row.key;
-              mergedDeliveryRow[k] = normalize(data[k]) || normalize(prevEntry[k]) || "";
-            }
-            photographerShootDeliveryById = {
-              ...photographerShootDeliveryById,
-              [sid]: mergedDeliveryRow,
-            };
-            const localDoc = loadShootSiteLocalMergedDoc();
-            const prevDoneAt = localDoc?.[writer.id]?.[sid]?.photographer_site_done_at;
-            rememberWriterShootSiteLocal(writer.id, sid, prevDoneAt, mergedDeliveryRow);
-            renderScheduleList();
-            void refreshPhotographerShootStatus();
-            alert("폴더가 준비되었습니다. 아래 링크가 갱신되었습니다.");
-          } catch (err) {
-            console.error(err);
-            alert("요청 중 오류가 발생했습니다.");
-          }
-          ensureDriveFoldersBtn.disabled = false;
-          return;
-        }
-
-        const naverWorksFolderBtnClick = event.target.closest("button[data-action='naverWorksCreateDriveFolder']");
-        if (naverWorksFolderBtnClick) {
-          const sid = canonScheduleUuid(naverWorksFolderBtnClick.dataset.scheduleId || "");
-          const writer = getCurrentWriter();
-          if (!sid) {
-            alert("스케줄 식별자가 올바르지 않습니다.");
-            return;
-          }
-          if (!writer || !USE_SUPABASE_SYNC) {
-            alert("로그인 및 서버 동기화가 필요합니다.");
-            return;
-          }
-          if (
-            !confirm(
-              "네이버웍스 Drive 에 촬영일 폴더를 만들까요?\n(서버에 CLIENT_ID 등·부모 폴더 ID·Python 패키지가 준비되어 있어야 합니다.)"
-            )
-          ) {
-            return;
-          }
-          naverWorksFolderBtnClick.disabled = true;
-          try {
-            const res = await fetch("/api/photographer-naverworks-folder", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                writerLoginId: writer.id,
-                writerPassword: writer.password,
-                scheduleId: sid,
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) {
-              alert(data.message || "네이버웍스 폴더 생성에 실패했습니다.");
-              naverWorksFolderBtnClick.disabled = false;
-              return;
-            }
-            const fid = String(data.fileId || "").trim();
-            alert(
-              `네이버웍스 폴더를 생성했습니다.\n폴더 이름: ${String(data.folderName || "").trim() || "-"}${
-                fid ? `\nfileId: ${fid}` : ""
-              }`
-            );
-          } catch (err) {
-            console.error(err);
-            alert("요청 중 오류가 발생했습니다.");
-          }
-          naverWorksFolderBtnClick.disabled = false;
-          return;
-        }
-
         const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
         if (shootDoneBtn) {
           const sid = canonScheduleUuid(shootDoneBtn.dataset.scheduleId || "");
