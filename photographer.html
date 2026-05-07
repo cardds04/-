@@ -401,6 +401,8 @@
       const STORAGE_WRITER_SHOOT_SITE_LOCAL = "scheduleSiteWriterShootSiteLocalV1";
       /** localStorage 쓰기 실패·모바일 WebView 등 대비: 새로고침 직후 동일 탭에서만 복구 */
       const STORAGE_SESSION_WRITER_SHOOT_SITE_LOCAL = "scheduleSiteWriterShootSiteSessionMirrorV1";
+      /** 작가 일정 조회 연·월·일 선택 (스케줄 동기화 후에도 유지) */
+      const STORAGE_PHOTOGRAPHER_SCHEDULE_VIEW_V1 = "scheduleSitePhotographerScheduleViewV1";
       const WRITER_SHOOT_SITE_LOCAL_TTL_MS = 72 * 60 * 60 * 1000;
       const SHOOT_PAY_WON = 50000;
       const PAYROLL_LINE_CATEGORY_LABELS = {
@@ -1789,19 +1791,32 @@
         return m ? m[1] + m[2] : "";
       }
 
-      function buildShootFolderNameJS(dateYmd, rawPlace) {
+      function buildShootFolderNameJS(dateYmd, rawPlace, daySlotIndex) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
         const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
-        if (!s) return mmdd + unknown;
-        const aptPart = apartmentFolderSuffixFromPlace(s);
-        if (aptPart) return mmdd + clampShootFolderSuffix(aptPart);
-        const guDong = guDongLabelForShootFolderName(s);
-        if (guDong) return mmdd + clampShootFolderSuffix(guDong.replace(/[\/\\:*?"<>|]/g, ""));
-        const collapsed = s.replace(/\s+/g, "");
-        const tail = clampShootFolderSuffix(collapsed) || unknown;
-        return mmdd + tail;
+        let base;
+        if (!s) {
+          base = mmdd + unknown;
+        } else {
+          const aptPart = apartmentFolderSuffixFromPlace(s);
+          if (aptPart) {
+            base = mmdd + clampShootFolderSuffix(aptPart);
+          } else {
+            const guDong = guDongLabelForShootFolderName(s);
+            if (guDong) {
+              base = mmdd + clampShootFolderSuffix(guDong.replace(/[\/\\:*?"<>|]/g, ""));
+            } else {
+              const collapsed = s.replace(/\s+/g, "");
+              const tail = clampShootFolderSuffix(collapsed) || unknown;
+              base = mmdd + tail;
+            }
+          }
+        }
+        const slot = Number(daySlotIndex);
+        if (Number.isFinite(slot) && slot >= 1) return `${base}${slot}`;
+        return base;
       }
       function payrollNameKeysForStorage(displayName) {
         const canon = normalizePayrollPersonName(displayName).toLowerCase();
@@ -2248,6 +2263,83 @@
         refreshDayOptions(currentDay);
       }
 
+      function persistPhotographerScheduleFilterIfLoggedIn() {
+        const writer = getCurrentWriter();
+        if (!writer?.id || !filterYearEl || !filterMonthEl || !filterDayEl) return;
+        if (scheduleBlockEl?.classList.contains("hidden")) return;
+        const fy = Number(filterYearEl.value);
+        const fm = Number(filterMonthEl.value);
+        const fd = String(filterDayEl.value ?? "").trim();
+        if (!Number.isFinite(fy) || !Number.isFinite(fm) || fm < 1 || fm > 12 || !fd) return;
+        try {
+          localStorage.setItem(
+            STORAGE_PHOTOGRAPHER_SCHEDULE_VIEW_V1,
+            JSON.stringify({
+              wid: String(writer.id).trim(),
+              fy,
+              fm,
+              fd,
+              updatedAt: new Date().toISOString(),
+            })
+          );
+        } catch (_) {}
+      }
+
+      function applyPhotographerScheduleFilterPrefs(writer) {
+        const wid = String(writer?.id || "").trim();
+        if (!wid || !filterYearEl || !filterMonthEl || !filterDayEl) return;
+        let prefs = null;
+        try {
+          const raw = localStorage.getItem(STORAGE_PHOTOGRAPHER_SCHEDULE_VIEW_V1);
+          prefs = raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          prefs = null;
+        }
+        if (!prefs || typeof prefs !== "object" || String(prefs.wid || "").trim() !== wid) return;
+        const yNum = Number(prefs.fy);
+        const mNum = Number(prefs.fm);
+        const fd = String(prefs.fd ?? "").trim();
+        if (!Number.isFinite(yNum) || !Number.isFinite(mNum)) return;
+        const yearOk = [...filterYearEl.options].some((o) => String(o.value) === String(yNum));
+        if (!yearOk) return;
+        filterYearEl.value = String(yNum);
+        const clampM = Math.min(Math.max(Math.floor(mNum), 1), 12);
+        filterMonthEl.value = String(clampM);
+        if (fd.toLowerCase() === "all") {
+          refreshDayOptions("all");
+        } else {
+          const dn = Number(fd);
+          if (Number.isFinite(dn) && dn >= 1) refreshDayOptions(dn);
+          else refreshDayOptions(1);
+        }
+      }
+
+      /** renderAuthState 등으로 필터가 바뀐 뒤 이전 세션의 quickDayPreset 과 실제 선택 날짜가 어긋나지 않게 함 */
+      function syncQuickDayPresetFromCurrentFilter() {
+        if (!filterYearEl || !filterMonthEl || !filterDayEl) return;
+        if (String(filterDayEl.value).trim().toLowerCase() === "all") {
+          quickDayPreset = "";
+          return;
+        }
+        const y = Number(filterYearEl.value);
+        const m = Number(filterMonthEl.value);
+        const d = Number(filterDayEl.value);
+        if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return;
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        if (y === now.getFullYear() && m === now.getMonth() + 1 && d === now.getDate()) {
+          quickDayPreset = "today";
+          return;
+        }
+        const tmr = new Date(now);
+        tmr.setDate(tmr.getDate() + 1);
+        if (y === tmr.getFullYear() && m === tmr.getMonth() + 1 && d === tmr.getDate()) {
+          quickDayPreset = "tomorrow";
+          return;
+        }
+        quickDayPreset = "";
+      }
+
       function refreshDayOptions(preferredDay) {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
@@ -2281,6 +2373,7 @@
         filterMonthEl.closest(".row").classList.remove("hidden");
         filterDayEl.closest(".row").classList.remove("hidden");
         refreshDayOptions(target.getDate());
+        persistPhotographerScheduleFilterIfLoggedIn();
         renderScheduleList();
       }
       function moveToRelativeMonth(offsetMonths) {
@@ -2296,6 +2389,7 @@
         filterMonthEl.closest(".row").classList.remove("hidden");
         filterDayEl.closest(".row").classList.remove("hidden");
         refreshDayOptions("all");
+        persistPhotographerScheduleFilterIfLoggedIn();
         renderScheduleList();
       }
 
@@ -2492,9 +2586,15 @@
 
         welcomeTextEl.textContent = `${writer.name} 작가님 (${writer.id})`;
         buildFilterOptions();
+        filterMode = "day";
+        filterMonthEl.closest(".row")?.classList.remove("hidden");
+        filterDayEl.closest(".row")?.classList.remove("hidden");
+        applyPhotographerScheduleFilterPrefs(writer);
+        syncQuickDayPresetFromCurrentFilter();
+        updateFilterTabState();
         dayOffDateEl.value = `${new Date().getFullYear()}-${pad2(new Date().getMonth() + 1)}-${pad2(new Date().getDate())}`;
         hydratePhotographerShootFromLocal(writer);
-        switchFilterMode("day");
+        renderScheduleList();
         renderUpcomingList();
         renderMyDayoffRequests();
         renderMonthlyShotCount();
@@ -2924,6 +3024,25 @@
           return;
         }
 
+        /** 같은 촬영일 기준 시간순 1번·2번·3번… (만들 폴더명 끝에 붙임) */
+        const shootFolderDaySlotByItem = new WeakMap();
+        const rowsByDate = new Map();
+        for (const item of rows) {
+          const d = String(item?.date || "").trim();
+          if (!rowsByDate.has(d)) rowsByDate.set(d, []);
+          rowsByDate.get(d).push(item);
+        }
+        for (const list of rowsByDate.values()) {
+          const sorted = list.slice().sort((a, b) => {
+            const dt = toTimeValue(a) - toTimeValue(b);
+            if (dt !== 0) return dt;
+            const byPlace = normalize(a?.place || "").localeCompare(normalize(b?.place || ""), "ko");
+            if (byPlace !== 0) return byPlace;
+            return normalize(a?.company || "").localeCompare(normalize(b?.company || ""), "ko");
+          });
+          sorted.forEach((it, i) => shootFolderDaySlotByItem.set(it, i + 1));
+        }
+
         scheduleListEl.innerHTML = rows
           .map((item, rowIndex) => {
             const now = new Date();
@@ -2954,7 +3073,8 @@
                 deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(네이버웍스)</span>`;
               }
             }
-            const shootFolderSuggestName = buildShootFolderNameJS(item.date, item.place);
+            const daySlot = shootFolderDaySlotByItem.get(item) || 1;
+            const shootFolderSuggestName = buildShootFolderNameJS(item.date, item.place, daySlot);
             const folderNameHint = `<span style="font-size:12px;color:#374151;">만들 폴더명: <strong style="color:#1d4ed8;">${shootFolderSuggestName}</strong></span><button type="button" class="btn outline small inline-copy-btn" data-action="copyText" data-copy-text="${encodeURIComponent(shootFolderSuggestName)}" style="margin-left:6px;font-size:11px;padding:1px 7px;">복사</button><br />`;
             const companyDriveLine = companyDriveLink
               ? `${folderNameHint}업체 납품 폴더: <a href="#" data-action="openDeliveryFolderAndCopyFolderName" data-delivery-url="${encodeURIComponent(
@@ -3445,17 +3565,20 @@
         quickDayPreset = "";
         updateFilterTabState();
         refreshDayOptions(filterDayEl.value);
+        persistPhotographerScheduleFilterIfLoggedIn();
         renderScheduleList();
       });
       filterMonthEl.addEventListener("change", () => {
         quickDayPreset = "";
         updateFilterTabState();
         refreshDayOptions(filterDayEl.value);
+        persistPhotographerScheduleFilterIfLoggedIn();
         renderScheduleList();
       });
       filterDayEl.addEventListener("change", () => {
         quickDayPreset = "";
         updateFilterTabState();
+        persistPhotographerScheduleFilterIfLoggedIn();
         renderScheduleList();
       });
 
