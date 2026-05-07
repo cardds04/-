@@ -558,6 +558,14 @@
         border-bottom: 0;
       }
 
+      .schedule-dashboard-row-num {
+        flex-shrink: 0;
+        min-width: 1.6em;
+        font-size: 0.76rem;
+        font-weight: 800;
+        color: var(--muted);
+      }
+
       .schedule-dashboard-date-co {
         color: #2a3550;
         font-weight: 700;
@@ -16261,7 +16269,7 @@
           return oweDelivery || oweSite;
         }).filter((item) => !deliveryManualDoneKeys.has(getDashboardScheduleKey(item)));
 
-        function renderPendingRow(item) {
+        function renderPendingRow(item, rowNum) {
           const dataIndex = data.indexOf(item);
           if (dataIndex < 0) return "";
           const dateStr = String(item?.date || "").trim();
@@ -16331,7 +16339,11 @@
 
           const rowDoneBtn = `<button type="button" class="dashboard-pending-row-done" data-action="dashboardMarkDeliveryPendingDone" data-data-index="${dataIndex}" title="대기 목록에서 제거(스케줄 삭제·납품 문자 없음)" aria-label="납품 대기 완료">완료</button>`;
 
+          const n = typeof rowNum === "number" && rowNum >= 1 ? rowNum : 0;
+          const numLbl = n ? `<span class="schedule-dashboard-row-num">${escapeHtml(String(n))}.</span>` : "";
+
           return `<div class="schedule-dashboard-row-line">
+                  ${numLbl}
                   ${rowDoneBtn}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
@@ -16346,7 +16358,7 @@
         }
 
         listRoot.innerHTML = pendingItems.length
-          ? pendingItems.map((item) => renderPendingRow(item)).filter(Boolean).join("")
+          ? pendingItems.map((item, idx) => renderPendingRow(item, idx + 1)).filter(Boolean).join("")
           : '<div class="helper" style="margin:0;font-size:0.8rem;">남은 사진·영상 납품·현장 처리가 없습니다. (마감 7일 구간 표시 중)</div>';
 
         /** 활동 로그: 사진/영상 납품 시각 순 */
@@ -16897,7 +16909,7 @@
         const log = readWriterProcessLog();
         const processSevenDays = getDashboardProcessSevenDays(todayKey);
 
-        function renderDashboardScheduleRow(item, completed) {
+        function renderDashboardScheduleRow(item, completed, pendingRowNum) {
           const dataIndex = data.indexOf(item);
           if (dataIndex < 0) return "";
           const dateStr = String(item?.date || "").trim();
@@ -16939,7 +16951,11 @@
           const passedBlock = completed
             ? ""
             : `<span class="${passedClass}">(${escapeHtml(passedLabel)})</span>`;
+          const prNum = typeof pendingRowNum === "number" && pendingRowNum >= 1 ? pendingRowNum : 0;
+          const pendingNumLbl =
+            !completed && prNum ? `<span class="schedule-dashboard-row-num">${escapeHtml(String(prNum))}.</span>` : "";
           return `<div class="schedule-dashboard-row-line">
+                  ${pendingNumLbl}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   ${passedBlock}
                   ${nameCell}
@@ -16967,7 +16983,10 @@
         const doneItems = Array.from(doneItemSet.values()).sort((a, b) => compareScheduleDateTime(a, b));
 
         listRoot.innerHTML = pendingItems.length
-          ? pendingItems.map((item) => renderDashboardScheduleRow(item, false)).filter(Boolean).join("")
+          ? pendingItems
+              .map((item, idx) => renderDashboardScheduleRow(item, false, idx + 1))
+              .filter(Boolean)
+              .join("")
           : '<div class="helper" style="margin:0;font-size:0.8rem;">진행 중인 스케줄이 없습니다.</div>';
 
         completedRoot.innerHTML = doneItems.length
