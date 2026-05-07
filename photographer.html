@@ -2957,7 +2957,9 @@
             const shootFolderSuggestName = buildShootFolderNameJS(item.date, item.place);
             const folderNameHint = `<span style="font-size:12px;color:#374151;">만들 폴더명: <strong style="color:#1d4ed8;">${shootFolderSuggestName}</strong></span><button type="button" class="btn outline small inline-copy-btn" data-action="copyText" data-copy-text="${encodeURIComponent(shootFolderSuggestName)}" style="margin-left:6px;font-size:11px;padding:1px 7px;">복사</button><br />`;
             const companyDriveLine = companyDriveLink
-              ? `${folderNameHint}업체 납품 폴더: <a href="${companyDriveLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:600;">열기 ↗</a>${deliveryLinkKind}<br />`
+              ? `${folderNameHint}업체 납품 폴더: <a href="#" data-action="openDeliveryFolderAndCopyFolderName" data-delivery-url="${encodeURIComponent(
+                  companyDriveLink
+                )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" title="만들 폴더명 복사 후 납품 폴더 열기" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
               : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">아직 표시할 공유 주소가 없습니다. 관리자 「업체정보관리」에서 해당 업체 「폴더 연결」로 네이버웍스 폴더 주소를 등록한 뒤 새로고침(F5)해 주세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
@@ -3016,6 +3018,35 @@
         }
       }
       scheduleListEl.addEventListener("click", async (event) => {
+        const deliveryFolderOpenLink = event.target.closest("a[data-action='openDeliveryFolderAndCopyFolderName']");
+        if (deliveryFolderOpenLink) {
+          event.preventDefault();
+          let url = "";
+          try {
+            url = decodeURIComponent(String(deliveryFolderOpenLink.getAttribute("data-delivery-url") || ""));
+          } catch (_) {
+            url = "";
+          }
+          url = normalize(url);
+          if (!url) return;
+          let folderName = "";
+          try {
+            folderName = decodeURIComponent(String(deliveryFolderOpenLink.getAttribute("data-copy-folder-name") || ""));
+          } catch (_) {
+            folderName = "";
+          }
+          folderName = String(folderName || "").trim();
+          void (async () => {
+            if (folderName) {
+              const ok = await copyTextSmart(folderName);
+              if (!ok) {
+                alert("폴더 이름 자동 복사에 실패했습니다. 드라이브만 엽니다. 위 「만들 폴더명」 옆 복사를 눌러 주세요.");
+              }
+            }
+            window.open(url, "_blank", "noopener,noreferrer");
+          })();
+          return;
+        }
         const shootDoneBtn = event.target.closest("button[data-action='completeShoot']");
         if (shootDoneBtn) {
           const sid = canonScheduleUuid(shootDoneBtn.dataset.scheduleId || "");

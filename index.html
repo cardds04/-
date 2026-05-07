@@ -2303,7 +2303,7 @@
             </div>
           </div>
           <p class="helper" style="margin-bottom: 10px;">
-            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지). 네이버웍스 납품 루트는 신규 업체 「폴더열기」로 메인 Drive에 들어가 직접 폴더를 만든 뒤 「폴더 연결」에 주소를 붙여 저장하세요 (기등록 업체는 「폴더열기」만으로 열립니다).
+            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지). 신규 업체(미등록)는 「폴더열기」 시 공용 납품 상위 폴더(네이버웍스)가 열리니 거기에서 업체 폴더를 만든 뒤 「폴더 연결」에 주소를 붙여 저장하세요. 기등록 업체는 「폴더열기」만으로 해당 납품 폴더가 열립니다.
           </p>
           <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
             <select id="companyDirectorySiteFilterSelect" class="small-select" style="min-width: 130px;" aria-label="사이트별 보기">
@@ -9079,7 +9079,9 @@
         }
       }
 
-      const NAVER_WORKS_MY_DRIVE_ROOT_URL = "https://drive.worksmobile.com/drive/web/my?resourceKey=root";
+      /** 납품 폴더 미등록(신규) 업체 「폴더열기」 시 열릴 네이버웍스 공용 상위 폴더 */
+      const NAVER_WORKS_NEW_COMPANY_DRIVE_OPEN_URL =
+        "https://drive.worksmobile.com/drive/web/my?resourceKey=MTAwMDAxNTA2NTQ2OTI3fDM0NzI2MTI1NTA3Nzc1NTkwNDl8RHww&resourceLocation=24101";
 
       function companyDirectoryAdminRowById(ridRaw) {
         const want = normalize(String(ridRaw || ""));
@@ -9089,7 +9091,7 @@
       function openCompanyDirectoryNaverWorksFolder(rowId) {
         const row = companyDirectoryAdminRowById(rowId);
         const link = String(row?.naver_works_company_share_link || "").trim();
-        const url = /^https?:\/\//i.test(link) ? link : NAVER_WORKS_MY_DRIVE_ROOT_URL;
+        const url = /^https?:\/\//i.test(link) ? link : NAVER_WORKS_NEW_COMPANY_DRIVE_OPEN_URL;
         window.open(url, "_blank", "noopener,noreferrer");
       }
 
