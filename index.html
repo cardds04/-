@@ -9281,7 +9281,7 @@
                       const siteVal = st === "shopick" ? "shopick" : st === "thefeeling" ? "thefeeling" : "inlog";
                       const compPreset = inferCompositionPresetForRow(r, hintIx);
                       return `<tr${rowBg} data-cda-inline="1" data-cda-row-id="${rowAttr}">
-<td><input type="hidden" data-dir-field="code" value="${escapeHtml(code)}" /><input type="text" class="inline-input" data-dir-field="name" value="${escapeHtml(nm)}" style="width:100%;min-width:80px;box-sizing:border-box" /></td>
+<td><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="hidden" data-dir-field="code" value="${escapeHtml(code)}" /><input type="text" class="inline-input" data-dir-field="name" value="${escapeHtml(nm)}" style="flex:1;min-width:72px;box-sizing:border-box" /><button type="button" class="btn-sm" data-cda-act="copy-inline-name" data-cda-id="${rowAttr}">복사</button></div></td>
 <td><input type="text" class="inline-input" data-dir-field="login_id" value="${escapeHtml(lid)}" style="width:100%;min-width:72px;box-sizing:border-box" autocomplete="username" /></td>
 <td><input type="text" class="inline-input" data-dir-field="password" value="" placeholder="변경 시만" style="width:100%;min-width:60px;box-sizing:border-box" autocomplete="new-password" /></td>
 <td><input type="text" class="inline-input" data-dir-field="phone" value="${escapeHtml(tel)}" style="width:100%;min-width:90px;box-sizing:border-box" /></td>
@@ -9295,7 +9295,7 @@
                       ? "등록됨"
                       : "미등록";
                     return `<tr${rowBg} data-cda-pick="${rowAttr}" title="클릭하여 바로 수정" style="cursor:pointer">
-<td>${escapeHtml(nm || "—")}</td>
+<td style="white-space:nowrap"><span style="vertical-align:middle">${escapeHtml(nm || "—")}</span> <button type="button" class="btn-sm" data-cda-act="copy-company-name" data-cda-id="${rowAttr}">복사</button></td>
 <td>${escapeHtml(lid || "—")}</td>
 <td>${escapeHtml(pwd || "—")}</td>
 <td>${escapeHtml(tel || "—")}</td>
@@ -9310,6 +9310,32 @@
                 })
                 .join("")
             : `<tr><td colspan="7" class="helper">등록된 행이 없습니다.</td></tr>`;
+      }
+
+      async function copyTextToClipboardWithUi(text) {
+        const t = normalize(String(text || ""));
+        if (!t) {
+          alert("복사할 업체명이 없습니다.");
+          return;
+        }
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(t);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = t;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          alert("업체명을 복사했습니다.");
+        } catch (_) {
+          alert("복사에 실패했습니다. 다시 시도해주세요.");
+        }
       }
 
       async function refreshCompanyDirectoryAdminTab() {
@@ -17718,6 +17744,17 @@
           }
           if (act === "connect-nw-folder") {
             void connectCompanyDirectoryNaverWorksFolder(rid);
+            return;
+          }
+          if (act === "copy-company-name") {
+            const row = companyDirectoryAdminRows.find((r) => normalize(String(r?.id ?? "")) === rid);
+            void copyTextToClipboardWithUi(String(row?.name ?? ""));
+            return;
+          }
+          if (act === "copy-inline-name") {
+            const tr = btn.closest("tr[data-cda-inline='1']");
+            const input = tr?.querySelector('[data-dir-field="name"]');
+            void copyTextToClipboardWithUi(input?.value ?? "");
             return;
           }
           return;
