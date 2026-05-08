@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -18,14 +19,23 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 try:
-    from macro_core import run_play, run_record
+    from macro_core import _double_escape_register_press, run_play, run_record
 except ImportError:
     sys.path.insert(0, str(SCRIPT_DIR))
-    from macro_core import run_play, run_record
+    from macro_core import _double_escape_register_press, run_play, run_record
 
 
 def main() -> None:
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        print(
+            "Tkinter 창을 만들 수 없습니다. (macOS: python.org 정식 설치 또는 `brew install python-tk` 등)\n",
+            e,
+            file=sys.stderr,
+        )
+        traceback.print_exc()
+        sys.exit(1)
     root.title("매크로 — 녹화 / 재생")
     root.geometry("620x620")
     root.minsize(520, 480)
@@ -50,6 +60,7 @@ def main() -> None:
     dry_var = tk.BooleanVar(value=False)
     countdown_var = tk.IntVar(value=5)
     speed_var = tk.StringVar(value="1")
+    repeat_var = tk.IntVar(value=1)
 
     outer = tk.Frame(root, bg=bg, padx=20, pady=16)
     outer.pack(fill=tk.BOTH, expand=True)
@@ -184,6 +195,9 @@ def main() -> None:
         set_status("상태 · 대기 중")
 
     def start_record() -> None:
+        if playing["flag"]:
+            messagebox.showinfo("알림", "재생 중에는 녹화를 시작할 수 없습니다.")
+            return
         if recording["flag"]:
             return
         out_path = Path(path_var.get().strip()).expanduser()
@@ -193,7 +207,11 @@ def main() -> None:
         recording["flag"] = True
         stop_rec_ev.clear()
         toggle_rec_controls(True)
-        set_status("녹화 중 · 마우스/키 입력이 저장됩니다 (중지 또는 Esc)")
+        set_status(
+            "녹화 중 · 종료는 Esc 두 번 또는 버튼·⌘+Enter"
+            if sys.platform == "darwin"
+            else "녹화 중 · 종료는 Esc 두 번 또는 버튼·Ctrl+Enter"
+        )
         moves = moves_var.get()
 
         def worker() -> None:
@@ -216,6 +234,14 @@ def main() -> None:
     btn_rec_start.pack(side=tk.LEFT, padx=(0, 8))
     btn_rec_stop = style_big_btn(btns_row, " 녹화 중지 ", danger, stop_record)
     btn_rec_stop.pack(side=tk.LEFT)
+    rec_hotkey_hint = (
+        "단축키: ⌘ + Enter 로 녹화 시작 · 같은 키로 중지"
+        if sys.platform == "darwin"
+        else "단축키: Ctrl + Enter 로 녹화 시작 · 같은 키로 중지"
+    )
+    tk.Label(card_f, text=rec_hotkey_hint, font=("Helvetica Neue", 11), fg=text_muted, bg=card).pack(
+        anchor=tk.W, pady=(6, 0)
+    )
 
     tk.Button(
         card_f,
@@ -268,6 +294,27 @@ def main() -> None:
     )
     speed_combo.grid(row=0, column=3, sticky=tk.W, padx=(8, 0), pady=2)
 
+    tk.Label(play_opts, text="반복 횟수", bg=card, fg=text_muted, font=("Helvetica Neue", 11)).grid(
+        row=1, column=0, sticky=tk.W, pady=(8, 2)
+    )
+    sp_repeat = tk.Spinbox(
+        play_opts,
+        from_=1,
+        to=9999,
+        increment=1,
+        textvariable=repeat_var,
+        width=8,
+        font=("Menlo", 11),
+    )
+    sp_repeat.grid(row=1, column=1, sticky=tk.W, padx=(8, 16), pady=(8, 2))
+    tk.Label(
+        play_opts,
+        text="연속 재생 (매 회차마다 기록된 간격 그대로 반복)",
+        bg=card,
+        fg=text_muted,
+        font=("Helvetica Neue", 10),
+    ).grid(row=1, column=2, sticky=tk.W, pady=(8, 2), columnspan=2)
+
     play_row = tk.Frame(card_f, bg=card, pady=8)
     play_row.pack(fill=tk.X)
 
@@ -293,6 +340,11 @@ def main() -> None:
             spd = 1.0
         spd = max(0.05, spd)
         cd = float(int(countdown_var.get() or 0))
+        try:
+            reps = int(repeat_var.get() or 1)
+        except (ValueError, tk.TclError):
+            reps = 1
+        reps = max(1, min(100000, reps))
         dry = dry_var.get()
         set_status("재생 중… (중단 버튼으로 멈춤)")
 
@@ -303,6 +355,7 @@ def main() -> None:
                     spd,
                     dry_run=dry,
                     countdown_secs=cd,
+                    repeat_count=reps,
                     cancel_event=cancel_play_ev,
                     on_log=ui_log_append,
                 )
@@ -336,8 +389,42 @@ def main() -> None:
     log_w.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
 
     def intro_log() -> None:
-        ui_log_append("실행 방법: 저장 파일을 정한 뒤 「녹화 시작」→ 동작 후 「녹화 중지」 또는 Esc.")
-        ui_log_append("재생 전 마우스를 안전한 곳에 두고, 필요하면 대기(초)를 3 이상 두세요.")
+        hk = "⌘ + Enter" if sys.platform == "darwin" else "Ctrl + Enter"
+        ui_log_append(
+            f"실행 방법: 저장 경로 확인 후 「녹화 시작」 또는 {hk} 로 시작 → 종료는 Esc 두 번 또는 같은 단축키·「녹화 중지」."
+        )
+        ui_log_append("재생 중 멈추려면 Esc 두 번 또는 「재생 중단」. 창이 앞에 있을 때에도 Esc 두 번이 동작합니다.")
+        ui_log_append("재생 전 마우스를 안전한 곳에 두고, 필요하면 대기(초)를 3 이상 두세요. 여러 번 재생하려면 반복 횟수를 설정하세요.")
+
+    def toggle_record_hotkey(_event=None) -> str:
+        if playing["flag"] and not recording["flag"]:
+            return "break"
+        if recording["flag"]:
+            stop_record()
+        else:
+            start_record()
+        return "break"
+
+    esc_ui_dbl = {"t0": 0.0, "n": 0}
+
+    def on_escape_twice_stop_work(_event=None):
+        if not recording["flag"] and not playing["flag"]:
+            esc_ui_dbl["n"] = 0
+            return
+        if _double_escape_register_press(esc_ui_dbl, time.perf_counter()):
+            esc_ui_dbl["n"] = 0
+            ui_log_append("[단축키] Esc 두 번 — 녹화/재생 중지")
+            stop_record()
+            cancel_play_ev.set()
+        return "break"
+
+    root.bind_all("<Escape>", on_escape_twice_stop_work)
+
+    if sys.platform == "darwin":
+        root.bind_all("<Command-Return>", toggle_record_hotkey)
+        root.bind_all("<Command-KP_Enter>", toggle_record_hotkey)
+    else:
+        root.bind_all("<Control-Return>", toggle_record_hotkey)
 
     root.after(200, intro_log)
 
@@ -347,4 +434,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        traceback.print_exc()
+        print(f"[macro_app] 오류: {exc}", file=sys.stderr)
+        sys.exit(1)

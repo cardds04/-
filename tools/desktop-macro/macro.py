@@ -23,10 +23,17 @@ def main() -> None:
     p_play.add_argument("--speed", type=float, default=1.0)
     p_play.add_argument("--dry-run", action="store_true")
     p_play.add_argument("--no-wait", action="store_true", help="대기 시간 없이 바로 재생")
+    p_play.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="동일 매크로를 N번 연속 재생 (기본 1)",
+    )
 
     args = parser.parse_args()
     if args.cmd == "record":
-        print("[macro] 녹화 시작 — Esc 또는 Ctrl+C 종료 후 저장", flush=True)
+        print("[macro] 녹화 시작 — Esc 두 번 또는 Ctrl+C 로 종료 후 저장", flush=True)
         try:
             n = run_record(args.output, args.moves)
             print(f"[macro] 저장 완료: {n}개 이벤트 → {args.output}", flush=True)
@@ -39,11 +46,13 @@ def main() -> None:
         print(f"파일 없음: {args.input}", file=sys.stderr)
         sys.exit(1)
     cd = 0 if args.no_wait else 5
+    reps = max(1, min(100000, int(args.repeat or 1)))
     run_play(
         args.input,
         args.speed,
         dry_run=args.dry_run,
         countdown_secs=cd,
+        repeat_count=reps,
         on_log=print,
     )
 
