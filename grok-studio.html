@@ -2156,6 +2156,13 @@
             <span class="drop__name" id="splitGridFileNames"></span>
           </label>
         </section>
+        <div class="row" style="display:flex; align-items:center; gap:8px; margin: 8px 0;">
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="splitGridUpscale" />
+            <span>AI 2배 업스케일 (브라우저 로컬 · 무료)</span>
+          </label>
+          <span class="hint" style="font-size:11px; opacity:0.7;">첫 사용 시 모델 ~6MB 다운로드, 이후 캐시</span>
+        </div>
         <div class="wf-settings-actions">
           <button type="button" class="btn--wf-main" id="splitGridGo" disabled>4분할 후 갤러리에 추가</button>
           <button type="button" class="btn--ghost" id="splitGridClear">선택 초기화</button>
@@ -6091,21 +6098,197 @@
             return i > 0 ? n.substring(0, i) : n;
           }
 
-          async function splitOne(file, idxBase) {
+          // 흰 프레임/분할선 감지 — 픽셀값이 거의 순백에 가까운 행/열의 비율을 측정
+          function isWhitePx(d, i) {
+            // 거의 순백 + 채도 매우 낮음 (벽지/조명 하이라이트와 구분)
+            var r = d[i], g = d[i + 1], b = d[i + 2];
+            if (r < 240 || g < 240 || b < 240) return false;
+            var mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+            var mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+            return (mx - mn) <= 8;
+          }
+          function rowWhiteness(data, W, H) {
+            var out = new Float32Array(H);
+            for (var y = 0; y < H; y++) {
+              var c = 0, base = y * W * 4;
+              for (var x = 0; x < W; x++) {
+                if (isWhitePx(data, base + x * 4)) c++;
+              }
+              out[y] = c / W;
+            }
+            return out;
+          }
+          function colWhiteness(data, W, H) {
+            var out = new Float32Array(W);
+            for (var x = 0; x < W; x++) {
+              var c = 0;
+              for (var y = 0; y < H; y++) {
+                if (isWhitePx(data, (y * W + x) * 4)) c++;
+              }
+              out[x] = c / H;
+            }
+            return out;
+          }
+          function firstNonWhiteFromEdge(map, start, end, step, T) {
+            var i = start;
+            while (i !== end && map[i] >= T) i += step;
+            return i;
+          }
+          // [lo..hi] 구간 안에서 가장 긴 연속 white run 의 [start, end] 반환 (없으면 null)
+          function longestWhiteRun(map, lo, hi, T) {
+            var bestS = -1, bestE = -1, bestLen = 0;
+            var i = lo;
+            while (i <= hi) {
+              if (map[i] >= T) {
+                var j = i;
+                while (j <= hi && map[j] >= T) j++;
+                var len = j - i;
+                if (len > bestLen) { bestLen = len; bestS = i; bestE = j - 1; }
+                i = j;
+              } else {
+                i++;
+              }
+            }
+            if (bestLen === 0) return null;
+            return [bestS, bestE];
+          }
+
+          function detect2x2Tiles(imgEl) {
+            var W = imgEl.naturalWidth || imgEl.width;
+            var H = imgEl.naturalHeight || imgEl.height;
+            if (!W || !H) return null;
+            // 분석 비용 절감 — 긴 변 1024 로 다운샘플 후 검출, 결과는 원본 비율로 환원
+            var maxAnalyzeLen = 1024;
+            var scale = Math.min(1, maxAnalyzeLen / Math.max(W, H));
+            var aW = Math.max(8, Math.round(W * scale));
+            var aH = Math.max(8, Math.round(H * scale));
+            var ac = document.createElement('canvas');
+            ac.width = aW; ac.height = aH;
+            var actx = ac.getContext('2d', { willReadFrequently: true });
+            actx.drawImage(imgEl, 0, 0, aW, aH);
+            var imgData;
+            try {
+              imgData = actx.getImageData(0, 0, aW, aH);
+            } catch (e) {
+              return null; // CORS-tainted (보통 file:// 입력은 OK)
+            }
+            var d = imgData.data;
+            var rowMap = rowWhiteness(d, aW, aH);
+            var colMap = colWhiteness(d, aW, aH);
+            var T = 0.95;
+
+            // 외곽 흰 프레임 제거
+            var top = firstNonWhiteFromEdge(rowMap, 0, aH, +1, T);
+            var bottom = firstNonWhiteFromEdge(rowMap, aH - 1, -1, -1, T);
+            var left = firstNonWhiteFromEdge(colMap, 0, aW, +1, T);
+            var right = firstNonWhiteFromEdge(colMap, aW - 1, -1, -1, T);
+            if (top >= bottom - 4 || left >= right - 4) return null;
+
+            // 내부 흰 분할선 — bbox 의 가운데 60% 안에서 가장 긴 연속 white run 을 찾음
+            var ih = bottom - top, iw = right - left;
+            var yLo = top + Math.floor(ih * 0.2), yHi = top + Math.floor(ih * 0.8);
+            var xLo = left + Math.floor(iw * 0.2), xHi = left + Math.floor(iw * 0.8);
+            var hGap = longestWhiteRun(rowMap, yLo, yHi, T);
+            var vGap = longestWhiteRun(colMap, xLo, xHi, T);
+
+            // 검출 결과를 원본 좌표로 환원
+            function toOrigX(v) { return Math.max(0, Math.min(W, Math.round(v / scale))); }
+            function toOrigY(v) { return Math.max(0, Math.min(H, Math.round(v / scale))); }
+
+            var L = toOrigX(left), R = toOrigX(right + 1);  // right+1 → exclusive
+            var Tt = toOrigY(top), B = toOrigY(bottom + 1);
+
+            var midX1, midX2, midY1, midY2;
+            if (vGap) {
+              midX1 = toOrigX(vGap[0]);          // 좌측 사진 끝 (gap 시작 = exclusive end)
+              midX2 = toOrigX(vGap[1] + 1);      // 우측 사진 시작
+            } else {
+              var mX = Math.floor((L + R) / 2);
+              midX1 = mX; midX2 = mX;
+            }
+            if (hGap) {
+              midY1 = toOrigY(hGap[0]);
+              midY2 = toOrigY(hGap[1] + 1);
+            } else {
+              var mY = Math.floor((Tt + B) / 2);
+              midY1 = mY; midY2 = mY;
+            }
+
+            var detected = !!(hGap && vGap);
+            return {
+              detected: detected,
+              tiles: [
+                { x: L,     y: Tt,    w: midX1 - L,     h: midY1 - Tt,    label: 1 },
+                { x: midX2, y: Tt,    w: R - midX2,     h: midY1 - Tt,    label: 2 },
+                { x: L,     y: midY2, w: midX1 - L,     h: B - midY2,     label: 3 },
+                { x: midX2, y: midY2, w: R - midX2,     h: B - midY2,     label: 4 },
+              ],
+            };
+          }
+
+          // UpscalerJS 동적 로드 — 첫 사용 시 한 번만 (esm.sh 가 TFJS 포함 번들링)
+          var _upscalerReady = null;
+          function ensureUpscaler() {
+            if (_upscalerReady) return _upscalerReady;
+            _upscalerReady = (async function () {
+              setStatus('AI 모델 로드 중… (최초 1회 ~6MB)');
+              var loaded = await Promise.all([
+                import('https://esm.sh/upscaler@1.0.0-beta.19'),
+                import('https://esm.sh/@upscalerjs/esrgan-slim@1.0.0-beta.19/2x'),
+              ]);
+              var UpscalerMod = loaded[0], modelMod = loaded[1];
+              var Upscaler = UpscalerMod.default || UpscalerMod;
+              var model = modelMod.default || modelMod;
+              return new Upscaler({ model: model });
+            })().catch(function (e) {
+              _upscalerReady = null; // 실패하면 다음 호출 때 재시도
+              throw e;
+            });
+            return _upscalerReady;
+          }
+
+          async function upscaleCanvas2x(srcCanvas) {
+            var upscaler = await ensureUpscaler();
+            var dataUrl = await upscaler.upscale(srcCanvas);  // 기본 'src' (data URL)
+            // dataUrl → 새 캔버스로 그려서 반환
+            return await new Promise(function (resolve, reject) {
+              var img = new Image();
+              img.onload = function () {
+                var oc = document.createElement('canvas');
+                oc.width = img.naturalWidth || img.width;
+                oc.height = img.naturalHeight || img.height;
+                oc.getContext('2d').drawImage(img, 0, 0);
+                resolve(oc);
+              };
+              img.onerror = function () { reject(new Error('업스케일 결과 로드 실패')); };
+              img.src = dataUrl;
+            });
+          }
+
+          async function splitOne(file, opts) {
+            opts = opts || {};
             var img = await loadImageBitmap(file);
             var W = img.naturalWidth || img.width;
             var H = img.naturalHeight || img.height;
             if (!W || !H) throw new Error('이미지 크기를 읽을 수 없음');
-            var halfW = Math.floor(W / 2);
-            var halfH = Math.floor(H / 2);
-            // 홀수 픽셀 — 우/하단 타일은 나머지 1픽셀까지 포함하도록 분할
-            var tiles = [
-              { x: 0,        y: 0,        w: halfW,         h: halfH,         label: 1 }, // top-left
-              { x: halfW,    y: 0,        w: W - halfW,     h: halfH,         label: 2 }, // top-right
-              { x: 0,        y: halfH,    w: halfW,         h: H - halfH,     label: 3 }, // bottom-left
-              { x: halfW,    y: halfH,    w: W - halfW,     h: H - halfH,     label: 4 }, // bottom-right
-            ];
-            var out = outputMimeFor(file);
+
+            var det = detect2x2Tiles(img);
+            var tiles;
+            if (det && det.tiles && det.tiles.every(function (t) { return t.w > 4 && t.h > 4; })) {
+              tiles = det.tiles;
+            } else {
+              var halfW = Math.floor(W / 2), halfH = Math.floor(H / 2);
+              tiles = [
+                { x: 0,     y: 0,     w: halfW,     h: halfH,     label: 1 },
+                { x: halfW, y: 0,     w: W - halfW, h: halfH,     label: 2 },
+                { x: 0,     y: halfH, w: halfW,     h: H - halfH, label: 3 },
+                { x: halfW, y: halfH, w: W - halfW, h: H - halfH, label: 4 },
+              ];
+            }
+            // 업스케일 사용 시: 출력 mime 은 png 강제 (jpeg 재압축 손실 회피)
+            var out = opts.upscale
+              ? { mime: 'image/png', ext: 'png', quality: undefined }
+              : outputMimeFor(file);
             var stem = stemOf(file.name);
             var canvas = document.createElement('canvas');
             var ctx = canvas.getContext('2d');
@@ -6115,8 +6298,15 @@
               canvas.height = t.h;
               ctx.clearRect(0, 0, t.w, t.h);
               ctx.drawImage(img, t.x, t.y, t.w, t.h, 0, 0, t.w, t.h);
-              var blob = await canvasToBlob(canvas, out.mime, out.quality);
-              var name = stem + '_' + t.label + '.' + out.ext;
+
+              var finalCanvas = canvas;
+              if (opts.upscale) {
+                if (opts.onTileProgress) opts.onTileProgress(i + 1, tiles.length);
+                finalCanvas = await upscaleCanvas2x(canvas);
+              }
+              var blob = await canvasToBlob(finalCanvas, out.mime, out.quality);
+              var suffix = opts.upscale ? ('_' + t.label + '_2x') : ('_' + t.label);
+              var name = stem + suffix + '.' + out.ext;
               if (typeof window.__wfAddToGallery === 'function') {
                 window.__wfAddToGallery(blob, name);
               }
@@ -6126,20 +6316,39 @@
           btnGo.addEventListener('click', async function () {
             if (!pickedFiles.length) return;
             btnGo.disabled = true;
+            var upChk = document.getElementById('splitGridUpscale');
+            var doUpscale = !!(upChk && upChk.checked);
             var n = pickedFiles.length;
-            setStatus('처리 중… 0/' + n);
+
+            // 업스케일 ON 일 때 모델을 미리 로드해서 첫 타일 처리 전에 실패 여부 확인
+            if (doUpscale) {
+              try {
+                await ensureUpscaler();
+              } catch (err) {
+                setStatus('AI 모델 로드 실패 — 일반 분할만 진행: ' + (err.message || err), true);
+                doUpscale = false;
+              }
+            }
+
             var done = 0, failed = 0;
             for (var i = 0; i < pickedFiles.length; i++) {
+              var imgIdx = i + 1;
+              var fname = pickedFiles[i] && pickedFiles[i].name || '';
               try {
-                await splitOne(pickedFiles[i], i);
+                await splitOne(pickedFiles[i], {
+                  upscale: doUpscale,
+                  onTileProgress: function (tIdx, tTotal) {
+                    setStatus('이미지 ' + imgIdx + '/' + n + ' · 업스케일 ' + tIdx + '/' + tTotal + ' (' + fname + ')');
+                  },
+                });
                 done++;
               } catch (err) {
                 failed++;
-                console.error('split failed:', pickedFiles[i] && pickedFiles[i].name, err);
+                console.error('split failed:', fname, err);
               }
-              setStatus('처리 중… ' + (done + failed) + '/' + n);
+              if (!doUpscale) setStatus('처리 중… ' + (done + failed) + '/' + n);
             }
-            var msg = '완료 — ' + (done * 4) + '장 갤러리에 추가';
+            var msg = '완료 — ' + (done * 4) + '장 갤러리에 추가' + (doUpscale ? ' (2배 업스케일)' : '');
             if (failed) msg += ' (실패 ' + failed + '장)';
             setStatus(msg, !!failed);
             clearFiles();
