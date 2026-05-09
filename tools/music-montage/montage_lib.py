@@ -25,7 +25,7 @@ VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
 AUDIO_EXTS = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg"}
 
 # 합본 overlay scale=-2:H 의 H (출력 높이보다 크면 잘리지 않게 상한)
-MONTAGE_LOGO_HEIGHT_PX = 600
+MONTAGE_LOGO_HEIGHT_PX = 1200
 # 로고 알파 페이드 인·아웃 목표 길이(초); 구간이 짧으면 mux_final_output 안에서 줄임
 MONTAGE_LOGO_FADE_SEC = 1.0
 
@@ -206,6 +206,54 @@ def _grade_map_lookup(by: dict[str, object] | None, vp: Path) -> object | None:
     except OSError:
         pass
     return None
+
+
+def _ffmpeg_quote_filter_arg(s: str) -> str:
+    """ffmpeg filter argument(single-quote 안)에 들어가는 문자열을 escape."""
+    return s.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def montage_lut3d_vf(lut_path: Path | str | None) -> str | None:
+    """클립별 .cube LUT 적용 vf. 파일이 없으면 None."""
+    if not lut_path:
+        return None
+    p = Path(lut_path).expanduser()
+    try:
+        p = p.resolve()
+    except OSError:
+        return None
+    if not p.is_file():
+        return None
+    return f"lut3d=file='{_ffmpeg_quote_filter_arg(str(p))}'"
+
+
+def find_clip_luts(
+    videos: list[Path],
+    lut_dir: Path | None = None,
+) -> dict[str, Path]:
+    """클립과 같은 stem 의 .cube 파일을 찾아 매핑.
+    우선순위: lut_dir/<stem>.cube → 클립 폴더의 <stem>.cube.
+    매칭된 비디오는 vp.resolve() 문자열 → Path 로 반환.
+    """
+    out: dict[str, Path] = {}
+    for vp in videos:
+        try:
+            vr = vp.resolve()
+        except OSError:
+            continue
+        cands: list[Path] = []
+        if lut_dir is not None:
+            cands.append(Path(lut_dir).expanduser() / f"{vp.stem}.cube")
+        cands.append(vp.with_suffix(".cube"))
+        cands.append(vp.with_suffix(".CUBE"))
+        for c in cands:
+            try:
+                if c.is_file():
+                    out[str(vr)] = c.resolve()
+                    break
+            except OSError:
+                continue
+    return out
 
 
 def montage_colortemperature_vf(kelvin: float) -> str | None:
@@ -1446,6 +1494,7 @@ def run_montage(
     auto_ct_kelvin: float = MONTAGE_CT_NEUTRAL_K,
     auto_ct_kelvin_by_clip: dict[str, float] | None = None,
     manual_clip_grade_by_clip: dict[str, dict] | None = None,
+    clip_lut_path_by_clip: dict[str, Path | str] | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
     msg = check_ffmpeg()
@@ -1615,6 +1664,9 @@ def run_montage(
         grade_on = bool(auto_exposure_grade)
         wb_on = bool(auto_wb_grade)
         ct_on = bool(auto_ct_grade)
+        lut_on = bool(clip_lut_path_by_clip)
+        if lut_on:
+            log(f"클립별 LUT 적용: {len(clip_lut_path_by_clip)}개 매칭됨")
         ct_default_k = clamp_color_temperature_k(float(auto_ct_kelvin))
         sm_wb = clamp_auto_wb_strength(auto_wb_strength)
         grade_lo, grade_hi = clamp_auto_exposure_mode_thresholds(
@@ -1760,14 +1812,27 @@ def run_montage(
                 return sm_wb
             return clamp_auto_wb_strength(float(v))
 
+        def _lut_for(vp: Path) -> Path | None:
+            v = _grade_map_lookup(clip_lut_path_by_clip or {}, vp)
+            if v is None:
+                return None
+            try:
+                return Path(str(v)).expanduser()
+            except OSError:
+                return None
+
         def _clip_grade_vf(vp: Path, trim_eff: float, avail: float) -> str | None:
             wbs = _wb_strength_for(vp) if wb_on else 0.0
             ctk = _ct_k_for(vp)
             ct_eff = _ct_enabled_for(vp)
             spot = _spot_mul_for(vp)
             man_v = _manual_vf_for(vp)
+            lut_path = _lut_for(vp)
+            lut_v = montage_lut3d_vf(lut_path) if lut_path is not None else None
+            if lut_path is not None and lut_v is None:
+                log(f"  ⚠ LUT 파일을 못 찾음: {lut_path} ({vp.name})")
             use_log = log if (
-                grade_on or wb_on or ct_eff or spot is not None or man_v
+                grade_on or wb_on or ct_eff or spot is not None or man_v or lut_v
             ) else None
             auto = montage_auto_grade_vf_prefix(
                 vp,
@@ -1784,7 +1849,9 @@ def run_montage(
                 wb_spot_mul=spot,
                 log=use_log,
             )
-            parts = [x for x in (auto, man_v) if x]
+            if lut_v and use_log:
+                use_log(f"  LUT 적용 {vp.name}: {lut_path.name if lut_path else ''}")
+            parts = [x for x in (lut_v, auto, man_v) if x]
             return ",".join(parts) if parts else None
 
         per_clip_ct_spot = spot_grade_on
@@ -1846,6 +1913,7 @@ def run_montage(
                     or spot_grade_on
                     or manual_grade_on
                     or per_clip_ct_spot
+                    or lut_on
                 ):
                     vpt = (
                         _clip_grade_vf(triple[0], trims[0], avails[0]),
@@ -1881,6 +1949,7 @@ def run_montage(
                         or spot_grade_on
                         or manual_grade_on
                         or per_clip_ct_spot
+                        or lut_on
                     )
                     else None
                 )

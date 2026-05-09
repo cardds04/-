@@ -8,7 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from montage_lib import montage_output_filename_stem_from_preset, run_montage
+from montage_lib import (
+    find_clip_luts,
+    montage_output_filename_stem_from_preset,
+    resolve_videos,
+    run_montage,
+)
 
 
 def main() -> None:
@@ -87,6 +92,18 @@ def main() -> None:
         help="FFmpeg grayworld 자동 화이트밸런스(클립마다)",
     )
     parser.add_argument(
+        "--use-clip-luts",
+        action="store_true",
+        dest="use_clip_luts",
+        help="클립과 같은 stem 의 .cube 파일이 있으면 자동으로 lut3d 로 적용 (다빈치 등에서 익스포트한 LUT)",
+    )
+    parser.add_argument(
+        "--lut-dir",
+        type=Path,
+        default=None,
+        help="--use-clip-luts 와 함께. .cube 파일들이 모인 별도 폴더(없으면 클립과 같은 폴더에서 찾음)",
+    )
+    parser.add_argument(
         "--auto-wb-strength",
         type=float,
         default=100.0,
@@ -99,6 +116,20 @@ def main() -> None:
     out_tag = montage_output_filename_stem_from_preset(
         {"layout": args.layout, "w": args.width, "h": args.height, "label": ""}
     )
+
+    lut_map: dict[str, Path | str] | None = None
+    if args.use_clip_luts:
+        videos = resolve_videos(args.videos.resolve(), None)
+        lut_map_paths = find_clip_luts(videos, lut_dir=args.lut_dir)
+        if not lut_map_paths:
+            print(
+                "[montage] --use-clip-luts: 매칭되는 .cube 가 없습니다. "
+                "클립과 같은 폴더에 <클립명>.cube 를 두거나 --lut-dir 로 폴더를 지정하세요.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"[montage] LUT {len(lut_map_paths)}개 매칭됨")
+        lut_map = {k: v for k, v in lut_map_paths.items()}
 
     try:
         run_montage(
@@ -120,6 +151,7 @@ def main() -> None:
             logo_path=args.logo.resolve() if args.logo else None,
             auto_wb_grade=bool(args.auto_wb),
             auto_wb_strength=max(0.0, min(1.0, float(args.auto_wb_strength) / 100.0)),
+            clip_lut_path_by_clip=lut_map,
             log=print,
         )
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as e:
