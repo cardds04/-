@@ -8264,10 +8264,15 @@
         return (Array.isArray(rows) ? rows : [])
           .map((item) => {
             const siteType = normalizeCompanySiteTypeField(item?.site_type ?? item?.siteType);
+            // 업체정보관리 탭과 동일하게 customer_phone 우선, fallback phone.
+            // 일부 업체는 phone="-" 이고 실제 번호가 customer_phone 에 저장돼 있음.
+            const phoneRaw = String(item?.customer_phone || item?.customerPhone || "").trim()
+              || String(item?.phone || "").trim();
             const row = {
               dbId: String(item?.dbId ?? item?.id ?? "").trim(),
               name: normalizeCompanyName(item?.name),
-              phone: String(item?.phone || "").trim() || "-",
+              phone: phoneRaw || "-",
+              customer_phone: String(item?.customer_phone || item?.customerPhone || "").trim(),
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim(),
               defaultComposition: String(item?.defaultComposition || "").trim(),
@@ -8300,8 +8305,11 @@
 
       async function fetchCompaniesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
+        // customer_phone 도 포함 — 업체정보관리 탭과 동일하게 customer_phone 우선,
+        // fallback phone 순으로 normalizeCompanyRows 에서 합쳐 사용. 일부 업체는
+        // phone 컬럼이 "-" 이고 실제 번호는 customer_phone 에 저장돼 있어 누락 방지.
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code,site_type,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,site_type,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -16427,6 +16435,7 @@
           const fullFolderTitle = escapeHtml(String(shootFolderSuggestName || ""));
           // 회사 catalog (companies, Supabase company_directory 동기화) 의 phone 우선 조회
           // → 업체정보관리 탭에 phone 등록되어 있으면 즉시 "연락처 있음"
+          // customer_phone 우선, fallback phone — 업체정보관리 탭(line 9294)과 동일 우선순위
           const companyCatalogPhone = (() => {
             const cn = String(item?.company || "").trim();
             if (!cn) return "";
@@ -16434,7 +16443,10 @@
             const matched = (companies || []).find(
               (c) => normalizeCompanyName(c?.name).toLowerCase() === target
             );
-            return String(matched?.phone || "").trim();
+            if (!matched) return "";
+            const cust = String(matched?.customer_phone || "").trim();
+            const main = String(matched?.phone || "").trim();
+            return cust || (main && main !== "-" ? main : "");
           })();
           const phonesMerged = normalizeDashKoMobileInput(
             String(
