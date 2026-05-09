@@ -12,6 +12,7 @@
 
   const SLIDER_KEYS = [
     "temp", "tint",
+    "bright", "gamma", "rolloff",
     "expo", "contrast", "hi", "sh", "wh", "bl",
     "sat", "vib", "tex", "clr", "dh",
   ];
@@ -29,6 +30,7 @@
   const DEFAULT_HSL = HSL_CHANNELS.reduce((m, ch) => (m[ch] = {...DEFAULT_HSL_CELL}, m), {});
   const DEFAULT_GRADE = {
     temp: 6500, tint: 0,
+    bright: 0, gamma: 0, rolloff: 0,
     expo: 0, contrast: 0, hi: 0, sh: 0, wh: 0, bl: 0,
     sat: 0, vib: 0, tex: 0, clr: 0, dh: 0,
     hsl: DEFAULT_HSL,
@@ -232,6 +234,37 @@
       const y0 = ys[s], y1 = ys[s + 1];
       const t = (x - x0) / Math.max(1e-9, (x1 - x0));
       out[i] = y0 + (y1 - y0) * t;
+    }
+
+    // ── 추가 톤 (밝기/감마/롤오프) — 기존 5-point 커브 출력에 후처리 ──
+    // bright  : -100..+100 → ±0.25 additive (전체 균일 리프트)
+    // gamma   : -100..+100 → exponent 1/2^(g/100). +100 = 미드톤 ↑, -100 = 미드톤 ↓
+    // rolloff : -100..+100. >0 = 하이라이트 부드럽게 압축, <0 = 약간 강조
+    const br = ((g.bright || 0) / 100) * 0.25;
+    const gm = (g.gamma || 0) / 100;
+    const ro = (g.rolloff || 0) / 100;
+    const gammaExp = Math.pow(2, -gm);  // y^gammaExp; gm>0 → exp<1 → midtones up
+    const applyExtra = (br !== 0 || gm !== 0 || ro !== 0);
+    if (applyExtra) {
+      for (let i = 0; i < N; i++) {
+        let y = out[i];
+        // gamma
+        if (gm !== 0) y = Math.pow(Math.max(0, Math.min(1, y)), gammaExp);
+        // rolloff (knee at 0.5)
+        if (ro !== 0 && y > 0.5) {
+          const t = (y - 0.5) / 0.5;          // 0..1 in upper half
+          if (ro > 0) {
+            const k = ro * 0.5;                // 압축 강도
+            y = 0.5 + 0.5 * (t / (1 + k * t));
+          } else {
+            const k = -ro * 0.4;               // 확장 강도 (하이라이트 더 빨리 1.0 도달)
+            y = 0.5 + 0.5 * (t * (1 + k * (1 - t)));
+          }
+        }
+        // bright (additive)
+        if (br !== 0) y = y + br;
+        out[i] = Math.max(0, Math.min(1, y));
+      }
     }
     return out.map(v => v.toFixed(4)).join(" ");
   }
@@ -471,11 +504,133 @@
     updateGlGrade(DEFAULT_GRADE);
     _gl.ready = true;
 
+    let _histTickCounter = 0;
     function tick() {
       drawGl();
+      // 히스토그램은 ~6fps 로 갱신 (매 10번째 프레임). readPixels GPU 동기화가 비싸서.
+      if ((++_histTickCounter % 10) === 0) updateHistogram();
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 히스토그램 — WebGL 캔버스에서 픽셀을 읽어 RGB 분포를 그림
+  const _hist = {
+    canvas: null, ctx: null, buf: null, lastW: 0, lastH: 0,
+  };
+  function initHistogram() {
+    const c = document.getElementById("histogram");
+    if (!c) return;
+    _hist.canvas = c;
+    _hist.ctx = c.getContext("2d");
+    drawHistogramEmpty();
+  }
+  function drawHistogramEmpty() {
+    const ctx = _hist.ctx; if (!ctx) return;
+    const W = _hist.canvas.width, H = _hist.canvas.height;
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const x = Math.round((i / 4) * W) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+  }
+  function updateHistogram() {
+    if (!_gl.ready || !_gl.ctx || !_hist.ctx) return;
+    const v = _gl.video;
+    if (!v || v.readyState < 2 || v.videoWidth === 0) { drawHistogramEmpty(); return; }
+    const gl = _gl.ctx;
+    const srcW = _gl.canvas.width, srcH = _gl.canvas.height;
+    if (srcW < 4 || srcH < 4) { drawHistogramEmpty(); return; }
+    // 16분의 1로 다운샘플링 — 256x144 정도면 통계상 충분, readPixels 비용도 감소
+    const step = 4;
+    const sampleW = Math.max(1, Math.floor(srcW / step));
+    const sampleH = Math.max(1, Math.floor(srcH / step));
+    // 전체 prev frame 을 읽고 step 마다 샘플 (gl.readPixels 는 부분 영역도 가능하지만,
+    // 일정 간격 샘플을 위해 step 으로 인덱스 점프)
+    if (!_hist.buf || _hist.lastW !== srcW || _hist.lastH !== srcH) {
+      _hist.buf = new Uint8Array(srcW * srcH * 4);
+      _hist.lastW = srcW; _hist.lastH = srcH;
+    }
+    try {
+      gl.readPixels(0, 0, srcW, srcH, gl.RGBA, gl.UNSIGNED_BYTE, _hist.buf);
+    } catch (_) {
+      drawHistogramEmpty();
+      return;
+    }
+    const px = _hist.buf;
+    const histR = new Uint32Array(256);
+    const histG = new Uint32Array(256);
+    const histB = new Uint32Array(256);
+    // step 픽셀 간격으로 샘플
+    const rowStride = srcW * 4 * step;
+    for (let y = 0; y < srcH; y += step) {
+      let i = y * srcW * 4;
+      for (let x = 0; x < srcW; x += step, i += 4 * step) {
+        const a = px[i + 3];
+        if (a === 0) continue;     // letterbox 검정 영역은 a 가 0 이 아닐 수도, 그냥 포함
+        histR[px[i]]++;
+        histG[px[i + 1]]++;
+        histB[px[i + 2]]++;
+      }
+      void rowStride;
+    }
+    drawHistogram(histR, histG, histB);
+  }
+  function drawHistogram(hR, hG, hB) {
+    const ctx = _hist.ctx; if (!ctx) return;
+    const W = _hist.canvas.width, H = _hist.canvas.height;
+    // 최댓값 결정 (95퍼센타일 정도로 잘라서 스파이크에 흔들리지 않게)
+    let maxV = 1;
+    for (let i = 1; i < 255; i++) {
+      if (hR[i] > maxV) maxV = hR[i];
+      if (hG[i] > maxV) maxV = hG[i];
+      if (hB[i] > maxV) maxV = hB[i];
+    }
+    // 양 끝 (0, 255) 의 클리핑 카운트는 시각적 노이즈가 되니 무시
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(0, 0, W, H);
+    // 격자 (1/4, 1/2, 3/4)
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const x = Math.round((i / 4) * W) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    // RGB 합성 — additive blending 으로 겹치는 영역이 흰색으로 보이게
+    ctx.globalCompositeOperation = "lighter";
+    function plot(hist, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 255) * W;
+        const v = Math.min(1, hist[i] / maxV);
+        const y = H - v * (H - 2);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    plot(hR, "rgba(255, 60, 60, 0.7)");
+    plot(hG, "rgba(60, 220, 100, 0.7)");
+    plot(hB, "rgba(80, 140, 255, 0.7)");
+    ctx.globalCompositeOperation = "source-over";
+    // 클리핑 표시 — 0/255 빈에 큰 값이 있으면 양 끝에 빨간/흰 점
+    const clipL = (hR[0] + hG[0] + hB[0]) / Math.max(1, maxV * 3);
+    const clipR = (hR[255] + hG[255] + hB[255]) / Math.max(1, maxV * 3);
+    if (clipL > 0.05) {
+      ctx.fillStyle = "rgba(255, 80, 80, 0.85)";
+      ctx.fillRect(0, 0, 3, H);
+    }
+    if (clipR > 0.05) {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillRect(W - 3, 0, 3, H);
+    }
   }
 
   function updateGlGrade(g) {
@@ -1684,6 +1839,20 @@
     $("#btnPickFiles").addEventListener("click", () => pick("/api/pick_files", "파일 고르는 중…"));
     $("#btnAddFiles").addEventListener("click", () => pick("/api/add_files", "추가하는 중…"));
     $("#btnPickMusic").addEventListener("click", () => pick("/api/pick_music_folder", "음악 폴더 여는 중…"));
+    $("#btnOpenMusicFolder").addEventListener("click", async () => {
+      try {
+        const r = await fetch("/api/open_music_folder", { method: "POST" });
+        const j = await r.json();
+        if (!r.ok || j.error) {
+          alert(j.error || "폴더 열기 실패");
+          return;
+        }
+        // Finder 가 열렸으니 유저가 곡을 추가/삭제 후 페이지 새로고침하면 자동 반영
+        setBusyShort("Finder 에서 폴더 열림 — 곡 추가/삭제 후 새로고침");
+      } catch (e) {
+        alert("폴더 열기 실패: " + e);
+      }
+    });
     $("#btnShuffleMusic").addEventListener("click", async () => {
       try { await flushAllSaves(); } catch (_) {}
       setBusy("랜덤 곡 선택 중…");
@@ -2069,6 +2238,7 @@
   // ─────────────────────────────────────────────────────────
   async function init() {
     initGlPlayer();
+    initHistogram();
     bindAllSliders();
     bindPlayer();
     bindKeys();

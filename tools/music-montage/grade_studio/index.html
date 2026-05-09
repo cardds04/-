@@ -40,8 +40,9 @@
       <button type="button" id="btnPickFiles" class="btn" title="개별 영상 파일을 골라 불러오기 (다중 선택 가능)">📄 파일 고르기</button>
       <button type="button" id="btnAddFiles" class="btn btn-ghost" title="현재 목록에 영상 추가">＋ 추가</button>
       <span class="topbar-sep"></span>
-      <button type="button" id="btnPickMusic" class="btn" title="음악 폴더 선택 — 안의 곡들이 순서대로 사용됨">🎵 음악 폴더</button>
+      <button type="button" id="btnOpenMusicFolder" class="btn" title="관리 음악 폴더를 Finder 에서 열기 — 여기에 곡을 끌어다 넣고 빼면 즉시 반영됨">📁 음악 폴더 열기</button>
       <button type="button" id="btnShuffleMusic" class="btn btn-ghost" title="다음에 사용할 곡을 랜덤으로 점프 (그 뒤로는 21·22… 순차)">🎲 다른 노래</button>
+      <button type="button" id="btnPickMusic" class="btn btn-ghost" title="임시로 다른 폴더 가리키기 — 재시작하면 관리 폴더로 복귀">🎵 임시폴더</button>
       <span id="musicLabel" class="folder-label" title=""></span>
       <button type="button" id="btnPickLogo" class="btn" title="로고 이미지 선택 (영상 2~7초 사이 페이드인/아웃)">🖼 로고</button>
       <span id="logoLabel" class="folder-label" title=""></span>
@@ -130,6 +131,13 @@
       </div>
       <div class="panel-body" id="panelBody">
 
+        <div class="hist-box" title="현재 보정값이 적용된 미리보기의 RGB 분포 — 좌측 어두움, 우측 밝음">
+          <canvas id="histogram" width="256" height="80"></canvas>
+          <div class="hist-labels">
+            <span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span>
+          </div>
+        </div>
+
         <div class="group-title">화이트밸런스</div>
         <div class="slider-row" data-key="temp">
           <label>색온도</label>
@@ -139,6 +147,26 @@
         </div>
         <div class="slider-row" data-key="tint">
           <label>색조</label>
+          <input type="range" min="-100" max="100" step="1" value="0" />
+          <input type="number" min="-100" max="100" step="1" value="0" />
+          <span class="unit"></span>
+        </div>
+
+        <div class="group-title">추가 보정</div>
+        <div class="slider-row" data-key="bright">
+          <label>밝기</label>
+          <input type="range" min="-100" max="100" step="1" value="0" />
+          <input type="number" min="-100" max="100" step="1" value="0" />
+          <span class="unit"></span>
+        </div>
+        <div class="slider-row" data-key="gamma">
+          <label>감마</label>
+          <input type="range" min="-100" max="100" step="1" value="0" />
+          <input type="number" min="-100" max="100" step="1" value="0" />
+          <span class="unit"></span>
+        </div>
+        <div class="slider-row" data-key="rolloff">
+          <label>롤오프</label>
           <input type="range" min="-100" max="100" step="1" value="0" />
           <input type="number" min="-100" max="100" step="1" value="0" />
           <span class="unit"></span>

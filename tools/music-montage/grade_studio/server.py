@@ -58,6 +58,9 @@ DEFAULT_HSL = {ch: {"h": 0, "s": 0, "l": 0} for ch in HSL_CHANNELS}
 DEFAULT_GRADE: dict = {
     "temp": 6500,
     "tint": 0,
+    "bright": 0,
+    "gamma": 0,
+    "rolloff": 0,
     "expo": 0,
     "contrast": 0,
     "hi": 0,
@@ -79,9 +82,51 @@ PRESET_FILE = CACHE_ROOT / "preset_slot.json"
 
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
 
-# 사용자 기본 음악 폴더 — 서버 시작 시 자동으로 이걸 로드. 화면에서 다른 폴더 고르면
-# 그 세션 동안만 적용되고, 다음 재시작 시 이 폴더로 복귀.
-DEFAULT_MUSIC_FOLDER = Path("/Volumes/ssd/ssd데스크탑/영어노래")
+# 강제 음악 폴더 — 페이지 새로고침할 때마다 무조건 이 경로로 복귀.
+# 임시 picker 로 다른 폴더를 가리키더라도 다음 /api/state 호출 시점에 덮어씀.
+FORCED_MUSIC_FOLDER = Path("/Volumes/ssd/ssd데스크탑/영어노래")
+
+# 자동 로고 매칭 — 비디오 폴더 열 때 이 폴더에서 폴더명에 맞는 로고를 자동 선택.
+LOGO_AUTO_FOLDER = Path("/Volumes/ssd/ssd데스크탑/잡다/데스크탑/로고")
+IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def find_matching_logo(video_folder_name: str) -> Path | None:
+    """비디오 폴더 이름의 prefix 와 부분일치하는 로고를 LOGO_AUTO_FOLDER 에서 찾기.
+
+    매칭 규칙:
+      - 폴더명 길이부터 시작해 한 글자씩 줄여가며 prefix 찾음
+      - 어떤 prefix 가 로고 stem 의 substring 이면 매치
+      - 후보 여러 개면 stem 가장 짧은 거 선택 (예: '공감대' < '공감대 흰색' < '공감대고화질')
+    예:
+      폴더 '공감대디자인' → '공감대디자인'·'공감대디자'·'공감대디'·'공감대' 순서로 시도
+      → '공감대' 가 '공감대.png' 의 stem 에 포함됨 → 매치
+    """
+    if not LOGO_AUTO_FOLDER.is_dir():
+        return None
+    name_raw = (video_folder_name or "").strip()
+    name = unicodedata.normalize("NFC", name_raw)
+    if len(name) < 2:
+        return None
+    try:
+        logos = [
+            p for p in LOGO_AUTO_FOLDER.iterdir()
+            if p.is_file() and p.suffix.lower() in IMG_EXTS and not p.name.startswith(".")
+        ]
+    except OSError:
+        return None
+    if not logos:
+        return None
+    # 로고 stem 도 NFC 정규화한 사본을 미리 계산
+    logo_stems = [(unicodedata.normalize("NFC", p.stem), p) for p in logos]
+
+    for length in range(len(name), 1, -1):
+        prefix = name[:length]
+        matches = [p for stem, p in logo_stems if prefix in stem]
+        if matches:
+            matches.sort(key=lambda p: (len(unicodedata.normalize("NFC", p.stem)), p.name))
+            return matches[0]
+    return None
 
 
 def list_audio(folder: Path) -> list[Path]:
@@ -174,12 +219,35 @@ def _build_tone_curve_lut(g: dict, n: int = 33) -> list[float]:
         y0, y1 = ys[s], ys[s + 1]
         t = (x - x0) / max(1e-9, (x1 - x0))
         out.append(y0 + (y1 - y0) * t)
+
+    # ── 추가 톤 (밝기/감마/롤오프) — app.js buildToneCurveLut 와 동일 ──
+    br = (float(g.get("bright", 0) or 0) / 100.0) * 0.25
+    gm = float(g.get("gamma", 0) or 0) / 100.0
+    ro = float(g.get("rolloff", 0) or 0) / 100.0
+    gamma_exp = 2.0 ** (-gm)
+    if br != 0 or gm != 0 or ro != 0:
+        for i in range(n):
+            y = out[i]
+            if gm != 0:
+                y = max(0.0, min(1.0, y)) ** gamma_exp
+            if ro != 0 and y > 0.5:
+                t = (y - 0.5) / 0.5
+                if ro > 0:
+                    k = ro * 0.5
+                    y = 0.5 + 0.5 * (t / (1.0 + k * t))
+                else:
+                    k = -ro * 0.4
+                    y = 0.5 + 0.5 * (t * (1.0 + k * (1.0 - t)))
+            if br != 0:
+                y = y + br
+            out[i] = max(0.0, min(1.0, y))
     return out
 
 
 def _grade_signature(g: dict) -> str:
     """LUT 파일 캐시 키 — 같은 grade 면 같은 LUT 재사용."""
-    keys = ("temp", "tint", "expo", "contrast", "hi", "sh", "wh", "bl",
+    keys = ("temp", "tint", "bright", "gamma", "rolloff",
+            "expo", "contrast", "hi", "sh", "wh", "bl",
             "sat", "vib", "dh")
     parts = []
     for k in keys:
@@ -205,7 +273,8 @@ def _is_identity_grade(g: dict) -> bool:
     """color/tone 슬라이더가 모두 default 면 LUT 불필요."""
     try:
         if abs(float(g.get("temp", 6500) or 6500) - 6500.0) > 0.5: return False
-        for k in ("tint","expo","contrast","hi","sh","wh","bl","sat","vib","dh"):
+        for k in ("tint","bright","gamma","rolloff",
+                  "expo","contrast","hi","sh","wh","bl","sat","vib","dh"):
             if abs(float(g.get(k, 0) or 0)) > 0.5: return False
         # HSL 모두 0 인지 검사
         hsl_in = g.get("hsl") or {}
@@ -1499,7 +1568,8 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 return self._json({"error": f"randomize 실패: {e}"}, 500)
 
         if p == "/api/pick_music_folder":
-            picked = osascript_pick_folder("음악 폴더를 선택하세요")
+            # 임시로 다른 폴더를 가리키고 싶을 때만 사용. 다음 재시작 시 관리 폴더로 복귀.
+            picked = osascript_pick_folder("음악 폴더를 선택하세요 (임시)")
             if picked is None:
                 return self._json({"cancelled": True})
             files = list_audio(picked)
@@ -1512,6 +1582,22 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 "music_count": len(files),
                 "music_names": [f.name for f in files[:50]],
             })
+
+        if p == "/api/open_music_folder":
+            with self.server.state_lock:
+                mf = self.server.music_folder
+            if mf and Path(mf).is_dir():
+                subprocess.Popen(["open", str(mf)])
+                return self._json({"ok": True, "folder": str(mf)})
+            return self._json({"error": "no music folder"}, 404)
+
+        if p == "/api/reset_music_folder":
+            # FORCED 폴더로 복귀
+            files = list_audio(FORCED_MUSIC_FOLDER) if FORCED_MUSIC_FOLDER.is_dir() else []
+            with self.server.state_lock:
+                self.server.music_folder = FORCED_MUSIC_FOLDER
+                self.server.music_files = files
+            return self._json({"ok": True, "music_folder": str(FORCED_MUSIC_FOLDER), "music_count": len(files)})
 
         if p == "/api/reveal":
             target = body.get("path") or ""
@@ -1697,12 +1783,18 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             picked = osascript_pick_folder()
             if picked is None:
                 return self._json({"cancelled": True})
+            auto_logo = find_matching_logo(picked.name)
             with self.server.state_lock:
                 self.server.folder = picked
                 self.server.videos = list_videos(picked)
                 vids = list(self.server.videos)
+                if auto_logo is not None:
+                    self.server.logo_path = auto_logo
             queue_prebuild_videos(vids)        # 전체 클립 백그라운드 미리 빌드
-            return self._json({"ok": True, "folder": str(picked), "count": len(vids)})
+            return self._json({
+                "ok": True, "folder": str(picked), "count": len(vids),
+                "auto_logo": str(auto_logo) if auto_logo else "",
+            })
 
         if p == "/api/pick_files":
             picked = osascript_pick_files()
@@ -1714,8 +1806,15 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 self.server.folder = folder
                 self.server.videos = list(picked)
                 vids = list(self.server.videos)
+            auto_logo = find_matching_logo(folder.name)
+            if auto_logo is not None:
+                with self.server.state_lock:
+                    self.server.logo_path = auto_logo
             queue_prebuild_videos(vids)
-            return self._json({"ok": True, "folder": str(folder), "count": len(vids)})
+            return self._json({
+                "ok": True, "folder": str(folder), "count": len(vids),
+                "auto_logo": str(auto_logo) if auto_logo else "",
+            })
 
         if p == "/api/add_files":
             picked = osascript_pick_files()
@@ -1882,11 +1981,18 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
         return out
 
     def _state_payload(self) -> dict:
+        # 매 요청마다 음악 폴더를 FORCED 경로로 강제 복귀 + 다시 스캔.
+        # 임시로 picker 로 바꿨어도 새로고침 한 번이면 SSD 영어노래로 돌아옴.
+        music_folder = FORCED_MUSIC_FOLDER
+        if music_folder.is_dir():
+            music_files = list_audio(music_folder)
+        else:
+            music_files = []
         with self.server.state_lock:
             folder = self.server.folder
             videos = list(self.server.videos)
-            music_folder = self.server.music_folder
-            music_files = list(self.server.music_files)
+            self.server.music_folder = music_folder
+            self.server.music_files = music_files
             logo_path = self.server.logo_path
         logo_block = {"path": str(logo_path) if logo_path else "", "name": (Path(logo_path).name if logo_path else "")}
 
@@ -2001,15 +2107,13 @@ def main() -> None:
     server = ThreadingHTTPServer((args.host, args.port), GradeStudioHandler)
     server.folder = folder           # type: ignore[attr-defined]
     server.videos = videos           # type: ignore[attr-defined]
-    # 기본 음악 폴더 자동 로드 (있으면)
-    if DEFAULT_MUSIC_FOLDER.is_dir():
-        server.music_folder = DEFAULT_MUSIC_FOLDER   # type: ignore[attr-defined]
-        server.music_files = list_audio(DEFAULT_MUSIC_FOLDER)  # type: ignore[attr-defined]
-        print(f"[grade_studio] 기본 음악 폴더: {DEFAULT_MUSIC_FOLDER} ({len(server.music_files)}곡)")
+    # 음악 폴더 — FORCED 경로 강제. 새로고침마다 _state_payload 가 다시 강제함.
+    server.music_folder = FORCED_MUSIC_FOLDER                    # type: ignore[attr-defined]
+    server.music_files = list_audio(FORCED_MUSIC_FOLDER) if FORCED_MUSIC_FOLDER.is_dir() else []  # type: ignore[attr-defined]
+    if FORCED_MUSIC_FOLDER.is_dir():
+        print(f"[grade_studio] 음악 폴더 (강제): {FORCED_MUSIC_FOLDER} ({len(server.music_files)}곡)")
     else:
-        server.music_folder = None       # type: ignore[attr-defined]
-        server.music_files = []          # type: ignore[attr-defined]
-        print(f"[grade_studio] 기본 음악 폴더 없음 — 화면에서 선택 필요: {DEFAULT_MUSIC_FOLDER}")
+        print(f"[grade_studio] 음악 폴더 (강제, 미마운트): {FORCED_MUSIC_FOLDER} — SSD 연결되면 새로고침 시 자동 인식")
     server.logo_path = None          # type: ignore[attr-defined]
     server.state_lock = threading.Lock()  # type: ignore[attr-defined]
 

@@ -2138,6 +2138,31 @@
         <div id="wfGrid" class="wf-grid"></div>
       </section>
 
+      <section class="workflow-block workflow-block--split-grid">
+        <h2 class="workflow-title">
+          2×2 그리드 사진 분할 <span class="workflow-note">(브라우저 · API 키 불필요)</span>
+        </h2>
+        <p class="hint workflow-lead">
+          2×2 격자로 합쳐진 이미지를 올리면 <strong>각 4개의 사진</strong>으로 잘라서 오른쪽 출력 갤러리에 추가합니다.
+          여러 장을 한꺼번에 드롭해도 각각 4장씩 분할됩니다. 결과는 갤러리에서 개별 다운로드하거나 ZIP으로 받을 수 있어요.
+        </p>
+        <section class="step">
+          <h3 class="step__h">2×2 사진 (여러 장 가능)</h3>
+          <label class="drop" id="splitGridDropzone" tabindex="0">
+            <input type="file" id="splitGridFiles" accept="image/*" multiple hidden />
+            <span class="drop__hint"
+              >눌러서 선택·끌어다 놓기 · 이 영역에 포커스 후 붙여넣기(⌘V / Ctrl+V)</span
+            >
+            <span class="drop__name" id="splitGridFileNames"></span>
+          </label>
+        </section>
+        <div class="wf-settings-actions">
+          <button type="button" class="btn--wf-main" id="splitGridGo" disabled>4분할 후 갤러리에 추가</button>
+          <button type="button" class="btn--ghost" id="splitGridClear">선택 초기화</button>
+          <span id="splitGridStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+
       <footer class="foot">
         <p>
           API: <code>/api/grok-xai</code> (이미지), <code>/api/gemini-image</code> (Gemini 이미지),
@@ -5948,6 +5973,178 @@
         }
 
         loadWfPrefsFromStorage();
+
+        // ─────────────────────────────────────────────────────────
+        // 2×2 그리드 사진 분할 → 갤러리 추가
+        (function () {
+          var dz = document.getElementById('splitGridDropzone');
+          var fileInput = document.getElementById('splitGridFiles');
+          var nameLbl = document.getElementById('splitGridFileNames');
+          var btnGo = document.getElementById('splitGridGo');
+          var btnClear = document.getElementById('splitGridClear');
+          var statusEl = document.getElementById('splitGridStatus');
+          if (!dz || !fileInput || !btnGo) return;
+
+          var pickedFiles = [];
+
+          function setStatus(msg, isErr) {
+            if (!statusEl) return;
+            statusEl.textContent = msg || '';
+            statusEl.style.color = isErr ? '#d33' : '';
+          }
+          function refreshUi() {
+            if (!pickedFiles.length) {
+              if (nameLbl) nameLbl.textContent = '';
+              btnGo.disabled = true;
+              return;
+            }
+            btnGo.disabled = false;
+            if (nameLbl) {
+              if (pickedFiles.length === 1) nameLbl.textContent = pickedFiles[0].name;
+              else nameLbl.textContent = pickedFiles[0].name + ' 외 ' + (pickedFiles.length - 1) + '장';
+            }
+          }
+          function addFiles(files) {
+            if (!files) return;
+            var arr = Array.prototype.slice.call(files);
+            arr.forEach(function (f) {
+              if (f && f.type && f.type.indexOf('image/') === 0) pickedFiles.push(f);
+            });
+            refreshUi();
+            setStatus(pickedFiles.length + '장 대기');
+          }
+          function clearFiles() {
+            pickedFiles = [];
+            try { fileInput.value = ''; } catch (_) {}
+            refreshUi();
+            setStatus('');
+          }
+
+          dz.addEventListener('click', function () { fileInput.click(); });
+          dz.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+          });
+          fileInput.addEventListener('change', function () { addFiles(fileInput.files); });
+          dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('drag-over'); });
+          dz.addEventListener('dragleave', function () { dz.classList.remove('drag-over'); });
+          dz.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dz.classList.remove('drag-over');
+            if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+          });
+          dz.addEventListener('paste', function (e) {
+            var items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            var files = [];
+            for (var i = 0; i < items.length; i++) {
+              if (items[i].kind === 'file') {
+                var f = items[i].getAsFile();
+                if (f) files.push(f);
+              }
+            }
+            if (files.length) {
+              e.preventDefault();
+              addFiles(files);
+            }
+          });
+          if (btnClear) btnClear.addEventListener('click', clearFiles);
+
+          function loadImageBitmap(file) {
+            return new Promise(function (resolve, reject) {
+              var url = URL.createObjectURL(file);
+              var img = new Image();
+              img.onload = function () {
+                URL.revokeObjectURL(url);
+                resolve(img);
+              };
+              img.onerror = function (err) {
+                URL.revokeObjectURL(url);
+                reject(err || new Error('이미지 로드 실패'));
+              };
+              img.src = url;
+            });
+          }
+
+          function canvasToBlob(canvas, mime, quality) {
+            return new Promise(function (resolve, reject) {
+              canvas.toBlob(function (b) {
+                if (b) resolve(b); else reject(new Error('blob 생성 실패'));
+              }, mime, quality);
+            });
+          }
+
+          // 출력 mime — 입력이 jpeg 면 jpeg(품질 0.95), 그 외엔 png 로 무손실
+          function outputMimeFor(file) {
+            var t = (file.type || '').toLowerCase();
+            if (t.indexOf('jpeg') >= 0 || t === 'image/jpg' || /\.jpe?g$/i.test(file.name)) {
+              return { mime: 'image/jpeg', ext: 'jpg', quality: 0.95 };
+            }
+            if (t.indexOf('webp') >= 0 || /\.webp$/i.test(file.name)) {
+              return { mime: 'image/webp', ext: 'webp', quality: 0.95 };
+            }
+            return { mime: 'image/png', ext: 'png', quality: undefined };
+          }
+
+          function stemOf(name) {
+            var n = name || 'image';
+            var i = n.lastIndexOf('.');
+            return i > 0 ? n.substring(0, i) : n;
+          }
+
+          async function splitOne(file, idxBase) {
+            var img = await loadImageBitmap(file);
+            var W = img.naturalWidth || img.width;
+            var H = img.naturalHeight || img.height;
+            if (!W || !H) throw new Error('이미지 크기를 읽을 수 없음');
+            var halfW = Math.floor(W / 2);
+            var halfH = Math.floor(H / 2);
+            // 홀수 픽셀 — 우/하단 타일은 나머지 1픽셀까지 포함하도록 분할
+            var tiles = [
+              { x: 0,        y: 0,        w: halfW,         h: halfH,         label: 1 }, // top-left
+              { x: halfW,    y: 0,        w: W - halfW,     h: halfH,         label: 2 }, // top-right
+              { x: 0,        y: halfH,    w: halfW,         h: H - halfH,     label: 3 }, // bottom-left
+              { x: halfW,    y: halfH,    w: W - halfW,     h: H - halfH,     label: 4 }, // bottom-right
+            ];
+            var out = outputMimeFor(file);
+            var stem = stemOf(file.name);
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            for (var i = 0; i < tiles.length; i++) {
+              var t = tiles[i];
+              canvas.width = t.w;
+              canvas.height = t.h;
+              ctx.clearRect(0, 0, t.w, t.h);
+              ctx.drawImage(img, t.x, t.y, t.w, t.h, 0, 0, t.w, t.h);
+              var blob = await canvasToBlob(canvas, out.mime, out.quality);
+              var name = stem + '_' + t.label + '.' + out.ext;
+              if (typeof window.__wfAddToGallery === 'function') {
+                window.__wfAddToGallery(blob, name);
+              }
+            }
+          }
+
+          btnGo.addEventListener('click', async function () {
+            if (!pickedFiles.length) return;
+            btnGo.disabled = true;
+            var n = pickedFiles.length;
+            setStatus('처리 중… 0/' + n);
+            var done = 0, failed = 0;
+            for (var i = 0; i < pickedFiles.length; i++) {
+              try {
+                await splitOne(pickedFiles[i], i);
+                done++;
+              } catch (err) {
+                failed++;
+                console.error('split failed:', pickedFiles[i] && pickedFiles[i].name, err);
+              }
+              setStatus('처리 중… ' + (done + failed) + '/' + n);
+            }
+            var msg = '완료 — ' + (done * 4) + '장 갤러리에 추가';
+            if (failed) msg += ' (실패 ' + failed + '장)';
+            setStatus(msg, !!failed);
+            clearFiles();
+          });
+        })();
       })();
     </script>
   </body>

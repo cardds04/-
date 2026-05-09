@@ -770,17 +770,36 @@ BGM_ORDER_STATE_FILE = BGM_ORDER_STATE_DIR / "bgm_folder_order.json"
 
 
 def _bgm_pool_signature(files: list[Path]) -> str:
-    """같은 폴더라도 곡 목록이 바뀌면 순서 카운터를 리셋하기 위한 지문."""
+    """같은 폴더라도 곡 목록이 바뀌면 순서 카운터를 리셋하기 위한 지문.
+    macOS NFC/NFD 한글 차이로 sig 가 갈라지지 않도록 NFC 로 정규화.
+    """
     h = hashlib.sha256()
     for p in files:
-        h.update(str(p.resolve()).lower().encode())
+        s = unicodedata.normalize("NFC", str(p.resolve())).lower()
+        h.update(s.encode())
     return h.hexdigest()[:24]
 
 
 def _load_bgm_order_state() -> dict:
     try:
         if BGM_ORDER_STATE_FILE.is_file():
-            return json.loads(BGM_ORDER_STATE_FILE.read_text(encoding="utf-8"))
+            data = json.loads(BGM_ORDER_STATE_FILE.read_text(encoding="utf-8"))
+            # 마이그레이션: 같은 시각적 키가 NFC/NFD 두 형태로 저장됐으면 NFC 로 통일하고
+            # next 값이 더 큰 (더 최근에 진행된) 항목을 채택.
+            folders = data.get("folders") if isinstance(data, dict) else None
+            if isinstance(folders, dict):
+                merged: dict = {}
+                for k, v in folders.items():
+                    if not isinstance(v, dict):
+                        continue
+                    nk = unicodedata.normalize("NFC", k)
+                    cur = merged.get(nk)
+                    cur_next = int(cur.get("next", 0) or 0) if isinstance(cur, dict) else -1
+                    new_next = int(v.get("next", 0) or 0)
+                    if cur is None or new_next >= cur_next:
+                        merged[nk] = v
+                data["folders"] = merged
+            return data
     except (OSError, json.JSONDecodeError, TypeError):
         pass
     return {"version": 1, "folders": {}}
@@ -794,10 +813,12 @@ def _save_bgm_order_state(data: dict) -> None:
 
 
 def _bgm_state_folder_key(folder: Path) -> str:
+    """폴더 키 — macOS NFC/NFD 차이로 같은 폴더가 다른 키로 저장되지 않도록 NFC 정규화."""
     try:
-        return str(folder.resolve())
+        s = str(folder.resolve())
     except OSError:
-        return str(folder)
+        s = str(folder)
+    return unicodedata.normalize("NFC", s)
 
 
 def read_next_bgm_track_index(state_folder: Path, n: int, sig: str) -> int:
