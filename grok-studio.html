@@ -2140,14 +2140,14 @@
 
       <section class="workflow-block workflow-block--split-grid">
         <h2 class="workflow-title">
-          2×2 그리드 사진 분할 <span class="workflow-note">(브라우저 · API 키 불필요)</span>
+          2×2 그리드 → 4분할 + AI 4× 업스케일 + 3:2 크롭 <span class="workflow-note">(브라우저 로컬 · API 키 불필요)</span>
         </h2>
         <p class="hint workflow-lead">
-          2×2 격자로 합쳐진 이미지를 올리면 <strong>각 4개의 사진</strong>으로 잘라서 오른쪽 출력 갤러리에 추가합니다.
-          여러 장을 한꺼번에 드롭해도 각각 4장씩 분할됩니다. 결과는 갤러리에서 개별 다운로드하거나 ZIP으로 받을 수 있어요.
+          2K 격자 이미지를 올리면 <strong>흰 프레임 자동 감지 → 4분할 → ESRGAN 4× 업스케일 → 3:2 비율로 가운데 크롭</strong>까지
+          한 번에 처리해서 오른쪽 출력 갤러리에 4장씩 쌓아줍니다. 첫 사용 시 AI 모델 ~5MB 자동 다운로드, 이후 캐시.
         </p>
         <section class="step">
-          <h3 class="step__h">2×2 사진 (여러 장 가능)</h3>
+          <h3 class="step__h">2K 2×2 사진 (여러 장 가능)</h3>
           <label class="drop" id="splitGridDropzone" tabindex="0">
             <input type="file" id="splitGridFiles" accept="image/*" multiple hidden />
             <span class="drop__hint"
@@ -2156,15 +2156,8 @@
             <span class="drop__name" id="splitGridFileNames"></span>
           </label>
         </section>
-        <div class="row" style="display:flex; align-items:center; gap:8px; margin: 8px 0;">
-          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-            <input type="checkbox" id="splitGridUpscale" />
-            <span>AI 2배 업스케일 (브라우저 로컬 · 무료)</span>
-          </label>
-          <span class="hint" style="font-size:11px; opacity:0.7;">첫 사용 시 모델 ~6MB 다운로드, 이후 캐시</span>
-        </div>
         <div class="wf-settings-actions">
-          <button type="button" class="btn--wf-main" id="splitGridGo" disabled>4분할 후 갤러리에 추가</button>
+          <button type="button" class="btn--wf-main" id="splitGridGo" disabled>분할 + 4× 업스케일 + 3:2 크롭</button>
           <button type="button" class="btn--ghost" id="splitGridClear">선택 초기화</button>
           <span id="splitGridStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
         </div>
@@ -6226,29 +6219,57 @@
             };
           }
 
-          // UpscalerJS 동적 로드 — 첫 사용 시 한 번만 (esm.sh 가 TFJS 포함 번들링)
-          var _upscalerReady = null;
-          function ensureUpscaler() {
-            if (_upscalerReady) return _upscalerReady;
-            _upscalerReady = (async function () {
-              setStatus('AI 모델 로드 중… (최초 1회 ~6MB)');
+          // UpscalerJS 동적 로드 — 배율별로 캐시 (모델 한 번만 다운로드)
+          var _upscalerCache = {};   // { '2': Upscaler, '4': Upscaler, ... }
+          function modelUrlForScale(scale) {
+            var s = String(scale);
+            return 'https://esm.sh/@upscalerjs/esrgan-slim@1.0.0/' + s + 'x';
+          }
+          function ensureUpscaler(scale) {
+            var key = String(scale);
+            if (_upscalerCache[key]) return _upscalerCache[key];
+            _upscalerCache[key] = (async function () {
+              setStatus(key + 'x AI 모델 로드 중… (최초 1회 ~5MB)');
               var loaded = await Promise.all([
-                import('https://esm.sh/upscaler@1.0.0-beta.19'),
-                import('https://esm.sh/@upscalerjs/esrgan-slim@1.0.0-beta.19/2x'),
+                import('https://esm.sh/upscaler@1.0.0'),
+                import(modelUrlForScale(scale)),
               ]);
               var UpscalerMod = loaded[0], modelMod = loaded[1];
               var Upscaler = UpscalerMod.default || UpscalerMod;
               var model = modelMod.default || modelMod;
               return new Upscaler({ model: model });
             })().catch(function (e) {
-              _upscalerReady = null; // 실패하면 다음 호출 때 재시도
+              delete _upscalerCache[key]; // 실패하면 다음 호출 때 재시도
               throw e;
             });
-            return _upscalerReady;
+            return _upscalerCache[key];
           }
 
-          async function upscaleCanvas2x(srcCanvas) {
-            var upscaler = await ensureUpscaler();
+          // 가운데 기준 3:2 크롭 (가로 사진은 3:2, 세로 사진은 2:3 자동)
+          function cropTo3by2(srcCanvas) {
+            var W = srcCanvas.width, H = srcCanvas.height;
+            var landscape = W >= H;
+            var target = landscape ? (3 / 2) : (2 / 3);
+            var ratio = W / H;
+            var cropW, cropH;
+            if (ratio > target) {
+              cropH = H;
+              cropW = Math.round(H * target);
+            } else {
+              cropW = W;
+              cropH = Math.round(W / target);
+            }
+            var ox = Math.round((W - cropW) / 2);
+            var oy = Math.round((H - cropH) / 2);
+            var oc = document.createElement('canvas');
+            oc.width = cropW;
+            oc.height = cropH;
+            oc.getContext('2d').drawImage(srcCanvas, ox, oy, cropW, cropH, 0, 0, cropW, cropH);
+            return oc;
+          }
+
+          async function upscaleCanvas(srcCanvas, scale) {
+            var upscaler = await ensureUpscaler(scale);
             var dataUrl = await upscaler.upscale(srcCanvas);  // 기본 'src' (data URL)
             // dataUrl → 새 캔버스로 그려서 반환
             return await new Promise(function (resolve, reject) {
@@ -6285,10 +6306,8 @@
                 { x: halfW, y: halfH, w: W - halfW, h: H - halfH, label: 4 },
               ];
             }
-            // 업스케일 사용 시: 출력 mime 은 png 강제 (jpeg 재압축 손실 회피)
-            var out = opts.upscale
-              ? { mime: 'image/png', ext: 'png', quality: undefined }
-              : outputMimeFor(file);
+            // 업스케일·크롭 후 PNG 출력 (jpeg 재압축 손실 회피)
+            var out = { mime: 'image/png', ext: 'png', quality: undefined };
             var stem = stemOf(file.name);
             var canvas = document.createElement('canvas');
             var ctx = canvas.getContext('2d');
@@ -6299,14 +6318,12 @@
               ctx.clearRect(0, 0, t.w, t.h);
               ctx.drawImage(img, t.x, t.y, t.w, t.h, 0, 0, t.w, t.h);
 
-              var finalCanvas = canvas;
-              if (opts.upscale) {
-                if (opts.onTileProgress) opts.onTileProgress(i + 1, tiles.length);
-                finalCanvas = await upscaleCanvas2x(canvas);
-              }
-              var blob = await canvasToBlob(finalCanvas, out.mime, out.quality);
-              var suffix = opts.upscale ? ('_' + t.label + '_2x') : ('_' + t.label);
-              var name = stem + suffix + '.' + out.ext;
+              if (opts.onTileProgress) opts.onTileProgress(i + 1, tiles.length);
+              var upscaled = await upscaleCanvas(canvas, 4);
+              var cropped = cropTo3by2(upscaled);
+
+              var blob = await canvasToBlob(cropped, out.mime, out.quality);
+              var name = stem + '_' + t.label + '.' + out.ext;
               if (typeof window.__wfAddToGallery === 'function') {
                 window.__wfAddToGallery(blob, name);
               }
@@ -6316,18 +6333,15 @@
           btnGo.addEventListener('click', async function () {
             if (!pickedFiles.length) return;
             btnGo.disabled = true;
-            var upChk = document.getElementById('splitGridUpscale');
-            var doUpscale = !!(upChk && upChk.checked);
             var n = pickedFiles.length;
 
-            // 업스케일 ON 일 때 모델을 미리 로드해서 첫 타일 처리 전에 실패 여부 확인
-            if (doUpscale) {
-              try {
-                await ensureUpscaler();
-              } catch (err) {
-                setStatus('AI 모델 로드 실패 — 일반 분할만 진행: ' + (err.message || err), true);
-                doUpscale = false;
-              }
+            // 4× 모델 미리 로드 (실패 시 즉시 알림 후 중단)
+            try {
+              await ensureUpscaler(4);
+            } catch (err) {
+              setStatus('AI 모델 로드 실패 — 인터넷 연결 후 다시 시도: ' + (err.message || err), true);
+              btnGo.disabled = false;
+              return;
             }
 
             var done = 0, failed = 0;
@@ -6336,9 +6350,8 @@
               var fname = pickedFiles[i] && pickedFiles[i].name || '';
               try {
                 await splitOne(pickedFiles[i], {
-                  upscale: doUpscale,
                   onTileProgress: function (tIdx, tTotal) {
-                    setStatus('이미지 ' + imgIdx + '/' + n + ' · 업스케일 ' + tIdx + '/' + tTotal + ' (' + fname + ')');
+                    setStatus('이미지 ' + imgIdx + '/' + n + ' · 4× 업스케일 ' + tIdx + '/' + tTotal + ' · 3:2 크롭 (' + fname + ')');
                   },
                 });
                 done++;
@@ -6346,9 +6359,8 @@
                 failed++;
                 console.error('split failed:', fname, err);
               }
-              if (!doUpscale) setStatus('처리 중… ' + (done + failed) + '/' + n);
             }
-            var msg = '완료 — ' + (done * 4) + '장 갤러리에 추가' + (doUpscale ? ' (2배 업스케일)' : '');
+            var msg = '완료 — ' + (done * 4) + '장 갤러리에 추가 (4× 업스케일 + 3:2 크롭)';
             if (failed) msg += ' (실패 ' + failed + '장)';
             setStatus(msg, !!failed);
             clearFiles();
