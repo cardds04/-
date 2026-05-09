@@ -6203,6 +6203,10 @@
       startSchedulesRealtimeSubscription();
       startCouponPassesRealtimeSubscription();
       startDayoffRequestsRealtimeSubscription();
+      // 페이지 최초 로드 — localStorage stale 캐시로 그려진 배지("연락처 없음" 등)가
+      // Supabase fresh 데이터로 즉시 덮어 씌워지도록 background pull. focus 핸들러와 동일.
+      void pullAdminCompaniesFromSupabaseAndRefresh();
+      void pullWritersFromSupabaseAndRefresh();
       window.addEventListener("focus", () => {
         if (typeof window.scheduleSiteRefreshDeployMeta === "function") void window.scheduleSiteRefreshDeployMeta();
         void pullAdminCompaniesFromSupabaseAndRefresh();
@@ -16421,13 +16425,27 @@
           )}" title="만들 폴더명 복사 후 업체 납품 폴더(네이버웍스) 열기">폴더</button>`;
           const folderShortDisplay = escapeHtml(String(shootFolderSuggestName || "").slice(0, 6));
           const fullFolderTitle = escapeHtml(String(shootFolderSuggestName || ""));
+          // 회사 catalog (companies, Supabase company_directory 동기화) 의 phone 우선 조회
+          // → 업체정보관리 탭에 phone 등록되어 있으면 즉시 "연락처 있음"
+          const companyCatalogPhone = (() => {
+            const cn = String(item?.company || "").trim();
+            if (!cn) return "";
+            const target = normalizeCompanyName(cn).toLowerCase();
+            const matched = (companies || []).find(
+              (c) => normalizeCompanyName(c?.name).toLowerCase() === target
+            );
+            return String(matched?.phone || "").trim();
+          })();
           const phonesMerged = normalizeDashKoMobileInput(
-            String(item?.customerPhone || item?.phone || tr?.customer_phone || "").trim()
+            String(
+              companyCatalogPhone ||
+              item?.customerPhone || item?.phone || tr?.customer_phone || ""
+            ).trim()
           );
           const hasCustContact = isDashKoMobileValidDigits(phonesMerged);
           const contactStatusSpan = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap;font-weight:700;${
             hasCustContact ? "color:#15803d;" : "color:#b45309;"
-          }" title="스케줄·납품에 등록된 고객 연락처(휴대폰) 기준">${escapeHtml(hasCustContact ? "연락처 있음" : "연락처 없음")}</span>`;
+          }" title="업체정보관리 또는 스케줄에 등록된 연락처 기준">${escapeHtml(hasCustContact ? "연락처 있음" : "연락처 없음")}</span>`;
           const folderNameCopyBtn = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap" title="전체 폴더명: ${fullFolderTitle}">${folderShortDisplay}</span>${contactStatusSpan}<button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardCopyShootFolderName" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
           )}" title="촬영일 폴더 이름 전체 클립보드 복사">복사</button>`;
