@@ -6270,7 +6270,12 @@
 
           async function upscaleCanvas(srcCanvas, scale) {
             var upscaler = await ensureUpscaler(scale);
-            var dataUrl = await upscaler.upscale(srcCanvas);  // 기본 'src' (data URL)
+            // patch 단위 처리 — WebGL 최대 텍스처(16384x16384) 한계 회피.
+            // patchSize 256 + padding 4 → 4×시 출력 패치 1024x1024, GPU 메모리도 적게 씀.
+            var dataUrl = await upscaler.upscale(srcCanvas, {
+              patchSize: 256,
+              padding: 4,
+            });
             // dataUrl → 새 캔버스로 그려서 반환
             return await new Promise(function (resolve, reject) {
               var img = new Image();
