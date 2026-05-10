@@ -1319,8 +1319,8 @@
         background: #111;
         overflow: hidden;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        align-items: stretch;
+        justify-content: stretch;
         width: 100%;
         height: clamp(220px, 42vh, 560px);
         min-height: clamp(220px, 42vh, 560px);
@@ -1330,10 +1330,10 @@
         display: block;
         touch-action: none;
         cursor: crosshair;
-        max-width: 100%;
-        max-height: 100%;
-        width: auto;
-        height: auto;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
         box-sizing: border-box;
         user-select: none;
       }
@@ -4828,6 +4828,57 @@
           ctx.restore();
         }
 
+        /** cover 변환 기준 원본 픽셀 칸 안에서 5×5 격자 (번호는 전체 원본 좌표). */
+        function drawWfGrid5OverlayForCover(ctx, item) {
+          if (!item.origImg || !(item.wfCoverScale > 0)) return;
+          var nw = item.origImg.naturalWidth;
+          var nh = item.origImg.naturalHeight;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, item.canvas.width, item.canvas.height);
+          ctx.clip();
+          ctx.translate(item.wfCoverOffX, item.wfCoverOffY);
+          ctx.scale(item.wfCoverScale, item.wfCoverScale);
+          drawWfGrid5Overlay(ctx, nw, nh);
+          ctx.restore();
+        }
+
+        function wfCanvasToNaturalPx(item, cx, cy) {
+          return {
+            x: (cx - item.wfCoverOffX) / item.wfCoverScale,
+            y: (cy - item.wfCoverOffY) / item.wfCoverScale,
+          };
+        }
+
+        function wfNaturalSelectionFromCanvasRect(item, cminX, cminY, cmaxX, cmaxY) {
+          var nw = item.origImg.naturalWidth;
+          var nh = item.origImg.naturalHeight;
+          var corners = [
+            wfCanvasToNaturalPx(item, cminX, cminY),
+            wfCanvasToNaturalPx(item, cmaxX, cminY),
+            wfCanvasToNaturalPx(item, cminX, cmaxY),
+            wfCanvasToNaturalPx(item, cmaxX, cmaxY),
+          ];
+          var xmin = nw;
+          var ymin = nh;
+          var xmax = 0;
+          var ymax = 0;
+          var k, px, py;
+          for (k = 0; k < 4; k++) {
+            px = corners[k].x;
+            py = corners[k].y;
+            if (px < xmin) xmin = px;
+            if (px > xmax) xmax = px;
+            if (py < ymin) ymin = py;
+            if (py > ymax) ymax = py;
+          }
+          var ix = Math.max(0, Math.round(xmin));
+          var iy = Math.max(0, Math.round(ymin));
+          var ix2 = Math.min(nw, Math.round(xmax));
+          var iy2 = Math.min(nh, Math.round(ymax));
+          return { x: ix, y: iy, w: Math.max(0, ix2 - ix), h: Math.max(0, iy2 - iy) };
+        }
+
         function syncItemTuningLabels(item) {
           if (!item || !item.featherEl) return;
           if (item.featherValEl) item.featherValEl.textContent = item.featherEl.value;
@@ -5172,7 +5223,9 @@
             el: null,
             canvas: null,
             ctx: null,
-            displayScale: 1,
+            wfCoverScale: 1,
+            wfCoverOffX: 0,
+            wfCoverOffY: 0,
             footerEl: null,
             genBtn: null,
             regenBtn: null,
@@ -5344,22 +5397,26 @@
             var rw = wrap.clientWidth;
             var rh = wrap.clientHeight;
             if (rw >= 48 && rh >= 48) {
-              DISPLAY_W = rw - 4;
-              DISPLAY_H = rh - 4;
+              DISPLAY_W = rw;
+              DISPLAY_H = rh;
             }
           }
           var MAX_BITMAP = 3200;
           var nw = img.naturalWidth;
           var nh = img.naturalHeight;
-          var scale = Math.min(DISPLAY_W / nw, DISPLAY_H / nh);
-          scale = Math.min(scale, MAX_BITMAP / Math.max(nw, nh));
-          var dw = Math.max(1, Math.round(nw * scale));
-          var dh = Math.max(1, Math.round(nh * scale));
-          item.canvas.width = dw;
-          item.canvas.height = dh;
+          var cw = Math.round(Math.max(1, DISPLAY_W));
+          var ch = Math.round(Math.max(1, DISPLAY_H));
+          var scaleCover = Math.max(cw / nw, ch / nh);
+          scaleCover = Math.min(scaleCover, MAX_BITMAP / Math.max(nw, nh));
+          var drawnW = nw * scaleCover;
+          var drawnH = nh * scaleCover;
+          item.wfCoverScale = scaleCover;
+          item.wfCoverOffX = (cw - drawnW) / 2;
+          item.wfCoverOffY = (ch - drawnH) / 2;
+          item.canvas.width = cw;
+          item.canvas.height = ch;
           item.canvas.style.width = '';
           item.canvas.style.height = '';
-          item.displayScale = scale;
           item.ctx = item.canvas.getContext('2d');
           drawCanvas(item);
           if (!item._wfSelBound) {
@@ -5374,13 +5431,22 @@
           var ctx = item.ctx;
           if (!item.origImg || !ctx) return;
           var cw = item.canvas.width, ch = item.canvas.height;
+          var nw = item.origImg.naturalWidth;
+          var nh = item.origImg.naturalHeight;
+          var sc = item.wfCoverScale;
+          var ox = item.wfCoverOffX;
+          var oy = item.wfCoverOffY;
+          var drawnW = nw * sc;
+          var drawnH = nh * sc;
           ctx.clearRect(0, 0, cw, ch);
-          ctx.drawImage(item.origImg, 0, 0, cw, ch);
+          ctx.drawImage(item.origImg, 0, 0, nw, nh, ox, oy, drawnW, drawnH);
 
           if (item.selection) {
             var s = item.selection;
-            var sc = item.displayScale;
-            var sx = s.x * sc, sy = s.y * sc, sw = s.w * sc, sh = s.h * sc;
+            var sx = Math.round(s.x * sc + ox);
+            var sy = Math.round(s.y * sc + oy);
+            var sw = Math.max(1, Math.round(s.w * sc));
+            var sh = Math.max(1, Math.round(s.h * sc));
 
             /* 선택 영역 외부 어둡게 */
             ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -5408,7 +5474,7 @@
           }
 
           if (wfGrid5OverlayEl && wfGrid5OverlayEl.checked) {
-            drawWfGrid5Overlay(ctx, cw, ch);
+            drawWfGrid5OverlayForCover(ctx, item);
           }
         }
 
@@ -5432,17 +5498,11 @@
           canvas.addEventListener('pointermove', function (e) {
             if (!dragging || e.pointerId !== activePid || !dragStart) return;
             var pos = getCanvasPos(canvas, e);
-            var cx = Math.min(dragStart.x, pos.x);
-            var cy = Math.min(dragStart.y, pos.y);
-            var cw = Math.abs(pos.x - dragStart.x);
-            var ch = Math.abs(pos.y - dragStart.y);
-            var sc = item.displayScale;
-            item.selection = {
-              x: Math.max(0, Math.round(cx / sc)),
-              y: Math.max(0, Math.round(cy / sc)),
-              w: Math.round(cw / sc),
-              h: Math.round(ch / sc),
-            };
+            var cxl = Math.min(dragStart.x, pos.x);
+            var cyl = Math.min(dragStart.y, pos.y);
+            var cxr = Math.max(dragStart.x, pos.x);
+            var cyr = Math.max(dragStart.y, pos.y);
+            item.selection = wfNaturalSelectionFromCanvasRect(item, cxl, cyl, cxr, cyr);
             drawCanvas(item);
           });
 
