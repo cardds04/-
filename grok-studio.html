@@ -1319,23 +1319,24 @@
         background: #111;
         overflow: hidden;
         display: flex;
-        align-items: stretch;
-        justify-content: stretch;
+        align-items: center;
+        justify-content: center;
         width: 100%;
-        height: clamp(220px, 42vh, 560px);
-        min-height: clamp(220px, 42vh, 560px);
         box-sizing: border-box;
       }
       .wf-item__canvas {
         display: block;
         touch-action: none;
         cursor: crosshair;
-        width: 100%;
-        height: 100%;
-        max-width: none;
-        max-height: none;
+        max-width: 100%;
+        max-height: min(52vh, 520px);
+        width: auto;
+        height: auto;
         box-sizing: border-box;
         user-select: none;
+        border-radius: 8px;
+        border: 1px solid rgba(231, 229, 228, 0.35);
+        box-shadow: 0 2px 8px rgba(28, 25, 23, 0.12);
       }
       .wf-item__ai {
         display: flex;
@@ -4828,21 +4829,6 @@
           ctx.restore();
         }
 
-        /** cover 변환 기준 원본 픽셀 칸 안에서 5×5 격자 (번호는 전체 원본 좌표). */
-        function drawWfGrid5OverlayForCover(ctx, item) {
-          if (!item.origImg || !(item.wfCoverScale > 0)) return;
-          var nw = item.origImg.naturalWidth;
-          var nh = item.origImg.naturalHeight;
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(0, 0, item.canvas.width, item.canvas.height);
-          ctx.clip();
-          ctx.translate(item.wfCoverOffX, item.wfCoverOffY);
-          ctx.scale(item.wfCoverScale, item.wfCoverScale);
-          drawWfGrid5Overlay(ctx, nw, nh);
-          ctx.restore();
-        }
-
         function wfCanvasToNaturalPx(item, cx, cy) {
           return {
             x: (cx - item.wfCoverOffX) / item.wfCoverScale,
@@ -5391,30 +5377,22 @@
           var img = item.origImg;
           if (!img || !img.naturalWidth) return;
           var wrap = item.origWrap;
-          var DISPLAY_W = 300;
-          var DISPLAY_H = 220;
-          if (wrap) {
-            var rw = wrap.clientWidth;
-            var rh = wrap.clientHeight;
-            if (rw >= 48 && rh >= 48) {
-              DISPLAY_W = rw;
-              DISPLAY_H = rh;
-            }
-          }
-          var MAX_BITMAP = 3200;
+          var maxW = 300;
+          if (wrap && wrap.clientWidth >= 48) maxW = wrap.clientWidth;
+          /* .wf-item__preview-img 과 동일: max-height: min(52vh, 520px); 원본보다 크게 확대하지 않음 */
+          var maxH = Math.min(Math.round(window.innerHeight * 0.52), 520);
           var nw = img.naturalWidth;
           var nh = img.naturalHeight;
-          var cw = Math.round(Math.max(1, DISPLAY_W));
-          var ch = Math.round(Math.max(1, DISPLAY_H));
-          var scaleCover = Math.max(cw / nw, ch / nh);
-          scaleCover = Math.min(scaleCover, MAX_BITMAP / Math.max(nw, nh));
-          var drawnW = nw * scaleCover;
-          var drawnH = nh * scaleCover;
-          item.wfCoverScale = scaleCover;
-          item.wfCoverOffX = (cw - drawnW) / 2;
-          item.wfCoverOffY = (ch - drawnH) / 2;
-          item.canvas.width = cw;
-          item.canvas.height = ch;
+          var MAX_BITMAP = 3200;
+          var scale = Math.min(maxW / nw, maxH / nh, 1);
+          scale = Math.min(scale, MAX_BITMAP / Math.max(nw, nh));
+          var dw = Math.max(1, Math.round(nw * scale));
+          var dh = Math.max(1, Math.round(nh * scale));
+          item.wfCoverScale = scale;
+          item.wfCoverOffX = 0;
+          item.wfCoverOffY = 0;
+          item.canvas.width = dw;
+          item.canvas.height = dh;
           item.canvas.style.width = '';
           item.canvas.style.height = '';
           item.ctx = item.canvas.getContext('2d');
@@ -5430,21 +5408,18 @@
         function drawCanvas(item) {
           var ctx = item.ctx;
           if (!item.origImg || !ctx) return;
-          var cw = item.canvas.width, ch = item.canvas.height;
+          var cw = item.canvas.width;
+          var ch = item.canvas.height;
           var nw = item.origImg.naturalWidth;
           var nh = item.origImg.naturalHeight;
           var sc = item.wfCoverScale;
-          var ox = item.wfCoverOffX;
-          var oy = item.wfCoverOffY;
-          var drawnW = nw * sc;
-          var drawnH = nh * sc;
           ctx.clearRect(0, 0, cw, ch);
-          ctx.drawImage(item.origImg, 0, 0, nw, nh, ox, oy, drawnW, drawnH);
+          ctx.drawImage(item.origImg, 0, 0, nw, nh, 0, 0, cw, ch);
 
           if (item.selection) {
             var s = item.selection;
-            var sx = Math.round(s.x * sc + ox);
-            var sy = Math.round(s.y * sc + oy);
+            var sx = Math.round(s.x * sc);
+            var sy = Math.round(s.y * sc);
             var sw = Math.max(1, Math.round(s.w * sc));
             var sh = Math.max(1, Math.round(s.h * sc));
 
@@ -5474,7 +5449,7 @@
           }
 
           if (wfGrid5OverlayEl && wfGrid5OverlayEl.checked) {
-            drawWfGrid5OverlayForCover(ctx, item);
+            drawWfGrid5Overlay(ctx, cw, ch);
           }
         }
 
