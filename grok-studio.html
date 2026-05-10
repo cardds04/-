@@ -1279,7 +1279,7 @@
       .wf-item--error .wf-item__header { background: #fee2e2; }
       .wf-item__body {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
       }
       .wf-item__tuning-details {
         border-bottom: 1px solid var(--line);
@@ -1315,20 +1315,26 @@
         font-size: 0.72rem;
       }
       .wf-item__orig {
-        border-right: 1px solid var(--line);
         border-bottom: none;
         background: #111;
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 140px;
+        width: 100%;
+        height: clamp(220px, 42vh, 560px);
+        min-height: clamp(220px, 42vh, 560px);
+        box-sizing: border-box;
       }
       .wf-item__canvas {
         display: block;
         touch-action: none;
         cursor: crosshair;
         max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        box-sizing: border-box;
         user-select: none;
       }
       .wf-item__ai {
@@ -1337,8 +1343,10 @@
         align-items: center;
         justify-content: center;
         gap: 0.45rem;
-        padding: 0.6rem 0.5rem;
-        min-height: 140px;
+        padding: 0.65rem 0.5rem;
+        min-height: 120px;
+        border-top: 1px solid var(--line);
+        background: #fff;
       }
       .wf-item__ai-placeholder {
         font-size: 0.8rem;
@@ -1348,7 +1356,7 @@
       }
       .wf-item__ai-img {
         max-width: 100%;
-        max-height: 130px;
+        max-height: min(200px, 28vh);
         object-fit: contain;
         border-radius: 4px;
         display: none;
@@ -2128,7 +2136,6 @@
           </div>
           <div class="wf-settings-actions">
             <button type="button" class="btn--wf-main" id="wfGenAll">모두 생성</button>
-            <button type="button" class="btn--wf-out" id="wfCompositeAll">모두 합성 출력</button>
             <button type="button" class="btn--ghost" id="wfClearAll">초기화</button>
           </div>
         </div>
@@ -4623,7 +4630,6 @@
           aiOpacity: 100,
         };
         var wfGenAllBtn = document.getElementById('wfGenAll');
-        var wfCompositeAllBtn = document.getElementById('wfCompositeAll');
         var wfClearAllBtn = document.getElementById('wfClearAll');
         var wfGrid = document.getElementById('wfGrid');
         var wfErrorEl = document.getElementById('wfError');
@@ -4633,10 +4639,22 @@
 
         var PREVIEW_MAX_EDGE = 2048;
         var wfPreviewDebounce = null;
+        var wfOrigResizeTimer = null;
         var LS_WF_PREFS = 'grok_studio_window_fix_prefs_v1';
         var wfPrefsStatusTimer = null;
 
         if (!wfDropzone || !wfGrid || !wfPromptEl || !wfFeatherEl || !wfSharpenEl) return;
+
+        function scheduleWfOrigResize() {
+          if (wfOrigResizeTimer) clearTimeout(wfOrigResizeTimer);
+          wfOrigResizeTimer = setTimeout(function () {
+            wfOrigResizeTimer = null;
+            wfItems.forEach(function (it) {
+              if (it.origImg) initCanvas(it);
+            });
+          }, 150);
+        }
+        window.addEventListener('resize', scheduleWfOrigResize);
 
         function syncMainRangeDisplay() {
           if (wfFeatherValEl && wfFeatherEl) wfFeatherValEl.textContent = wfFeatherEl.value;
@@ -5108,9 +5126,6 @@
 
         function syncWfItemPreviewActions(item) {
           if (!item) return;
-          if (item.previewCompositeBtn && item.compositeBtn) {
-            item.previewCompositeBtn.disabled = item.compositeBtn.disabled;
-          }
           if (item.previewRegenBtn && item.regenBtn) {
             item.previewRegenBtn.disabled = item.regenBtn.disabled || !item.aiImg;
           }
@@ -5161,7 +5176,7 @@
             footerEl: null,
             genBtn: null,
             regenBtn: null,
-            compositeBtn: null,
+            origWrap: null,
             aiImgEl: null,
             placeholder: null,
             previewImgEl: null,
@@ -5224,15 +5239,8 @@
           regenBtn.className = 'btn--wf-regen';
           regenBtn.textContent = '재생성';
 
-          var compositeBtn = document.createElement('button');
-          compositeBtn.type = 'button';
-          compositeBtn.className = 'btn--wf-composite';
-          compositeBtn.textContent = '합성 출력';
-          compositeBtn.disabled = true;
-
           btnRow.appendChild(genBtn);
           btnRow.appendChild(regenBtn);
-          btnRow.appendChild(compositeBtn);
 
           aiWrap.appendChild(ph);
           aiWrap.appendChild(aiImg);
@@ -5300,11 +5308,11 @@
 
           item.el = div;
           item.canvas = canvas;
+          item.origWrap = origWrap;
           item.placeholder = ph;
           item.aiImgEl = aiImg;
           item.genBtn = genBtn;
           item.regenBtn = regenBtn;
-          item.compositeBtn = compositeBtn;
           item.footerEl = footer;
           item.previewImgEl = previewImg;
           item.previewBtn = previewBtn;
@@ -5314,7 +5322,6 @@
 
           genBtn.addEventListener('click', function () { generateForItem(item); });
           regenBtn.addEventListener('click', function () { generateForItem(item); });
-          compositeBtn.addEventListener('click', function () { compositeItem(item); });
           previewRegenBtn.addEventListener('click', function () { generateForItem(item); });
           previewCompositeBtn.addEventListener('click', function () { compositeItem(item); });
           previewBtn.addEventListener('click', function () {
@@ -5329,18 +5336,36 @@
         /* ---- 캔버스 초기화 ---- */
         function initCanvas(item) {
           var img = item.origImg;
-          var DISPLAY_W = 300, DISPLAY_H = 220;
-          var scale = Math.min(DISPLAY_W / img.naturalWidth, DISPLAY_H / img.naturalHeight, 1);
-          var dw = Math.max(1, Math.round(img.naturalWidth * scale));
-          var dh = Math.max(1, Math.round(img.naturalHeight * scale));
+          if (!img || !img.naturalWidth) return;
+          var wrap = item.origWrap;
+          var DISPLAY_W = 300;
+          var DISPLAY_H = 220;
+          if (wrap) {
+            var rw = wrap.clientWidth;
+            var rh = wrap.clientHeight;
+            if (rw >= 48 && rh >= 48) {
+              DISPLAY_W = rw - 4;
+              DISPLAY_H = rh - 4;
+            }
+          }
+          var MAX_BITMAP = 3200;
+          var nw = img.naturalWidth;
+          var nh = img.naturalHeight;
+          var scale = Math.min(DISPLAY_W / nw, DISPLAY_H / nh);
+          scale = Math.min(scale, MAX_BITMAP / Math.max(nw, nh));
+          var dw = Math.max(1, Math.round(nw * scale));
+          var dh = Math.max(1, Math.round(nh * scale));
           item.canvas.width = dw;
           item.canvas.height = dh;
-          item.canvas.style.width = dw + 'px';
-          item.canvas.style.height = dh + 'px';
+          item.canvas.style.width = '';
+          item.canvas.style.height = '';
           item.displayScale = scale;
           item.ctx = item.canvas.getContext('2d');
           drawCanvas(item);
-          setupSelection(item);
+          if (!item._wfSelBound) {
+            setupSelection(item);
+            item._wfSelBound = true;
+          }
           item.footerEl.textContent = '창문 영역을 드래그로 선택하세요.';
           syncWfItemPreviewActions(item);
         }
@@ -5430,7 +5455,7 @@
             if (item.selection && item.selection.w > 5 && item.selection.h > 5) {
               item.footerEl.textContent =
                 '선택: ' + item.selection.w + '×' + item.selection.h + 'px — 생성 버튼을 누르세요.';
-              if (item.status === 'done') item.compositeBtn.disabled = false;
+              if (item.status === 'done') item.previewCompositeBtn.disabled = false;
               if (item.previewBtn) item.previewBtn.disabled = !item.aiImg;
               if (item.aiImg) refreshCompositePreview(item);
               syncWfItemPreviewActions(item);
@@ -5438,7 +5463,7 @@
               item.selection = null;
               drawCanvas(item);
               item.footerEl.textContent = '너무 작습니다. 다시 드래그하세요.';
-              item.compositeBtn.disabled = true;
+              item.previewCompositeBtn.disabled = true;
               if (item.previewBtn) item.previewBtn.disabled = true;
               clearItemCompositePreview(item);
               syncWfItemPreviewActions(item);
@@ -5473,6 +5498,11 @@
             loadImage(item.origObjectUrl).then(function (img) {
               item.origImg = img;
               initCanvas(item);
+              requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                  if (item.origImg) initCanvas(item);
+                });
+              });
             }).catch(function () {
               item.footerEl.textContent = '이미지 로드 실패';
             });
@@ -5495,7 +5525,7 @@
           item.footerEl.textContent = '생성 중… (20~40초 소요될 수 있습니다)';
           item.genBtn.disabled = true;
           item.regenBtn.disabled = true;
-          item.compositeBtn.disabled = true;
+          item.previewCompositeBtn.disabled = true;
           if (item.previewBtn) item.previewBtn.disabled = true;
 
           syncWfItemPreviewActions(item);
@@ -5529,7 +5559,7 @@
               item.genBtn.style.display = 'none';
               var selTxt = item.selection ? '' : ' (영역을 드래그로 선택해야 합성 가능)';
               item.footerEl.textContent = '생성 완료.' + selTxt;
-              item.compositeBtn.disabled = !item.selection;
+              item.previewCompositeBtn.disabled = !item.selection;
               if (item.previewBtn) item.previewBtn.disabled = !item.selection;
               if (item.selection && item.aiImg) refreshCompositePreview(item);
               syncWfItemPreviewActions(item);
@@ -5639,7 +5669,7 @@
           if (!item.origImg || !item.aiImg) { showWfError('원본 또는 AI 이미지가 없습니다.'); return; }
           if (!item.selection) { showWfError('창문 영역을 먼저 드래그로 선택해 주세요.'); return; }
 
-          item.compositeBtn.disabled = true;
+          item.previewCompositeBtn.disabled = true;
           item.regenBtn.disabled = true;
           item.footerEl.textContent = '합성 중…';
           syncWfItemPreviewActions(item);
@@ -5650,7 +5680,7 @@
               resultCanvas.toBlob(function (blob) {
                 if (!blob) {
                   item.footerEl.textContent = '오류: JPEG 변환 실패';
-                  item.compositeBtn.disabled = false;
+                  item.previewCompositeBtn.disabled = false;
                   item.regenBtn.disabled = false;
                   syncWfItemPreviewActions(item);
                   return;
@@ -5667,13 +5697,13 @@
                   setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
                   item.footerEl.textContent = '완료! 다운로드 됐습니다.';
                 }
-                item.compositeBtn.disabled = false;
+                item.previewCompositeBtn.disabled = false;
                 item.regenBtn.disabled = false;
                 syncWfItemPreviewActions(item);
               }, 'image/jpeg', 0.93);
             } catch (err) {
               item.footerEl.textContent = '합성 오류: ' + (err.message || String(err));
-              item.compositeBtn.disabled = false;
+              item.previewCompositeBtn.disabled = false;
               item.regenBtn.disabled = false;
               syncWfItemPreviewActions(item);
             }
@@ -5906,12 +5936,6 @@
         wfGenAllBtn.addEventListener('click', function () {
           wfItems.forEach(function (item) {
             if (item.status !== 'generating') generateForItem(item);
-          });
-        });
-
-        wfCompositeAllBtn.addEventListener('click', function () {
-          wfItems.forEach(function (item) {
-            if (item.status === 'done' && item.aiImg && item.selection) compositeItem(item);
           });
         });
 
