@@ -2347,7 +2347,7 @@
                   <th>연락처</th>
                   <th>사이트</th>
                   <th>촬영구성</th>
-                  <th>폴더연결 주소</th>
+                  <th id="companyDirectoryFolderSortHeader" style="cursor:pointer;user-select:none;white-space:nowrap" title="클릭하여 정렬 (오름차순 → 내림차순 → 정렬 해제)">폴더연결 주소 <span id="companyDirectoryFolderSortIndicator" style="font-size:0.85em;color:#6b7a99">⇅</span></th>
                   <th>관리</th>
                 </tr>
               </thead>
@@ -6572,6 +6572,8 @@
       /** 업체정보관리 탭 목록 Supabase 재조회 중 */
       let companyDirectoryListLoading = false;
       let companyDirectoryRefreshInFlightPromise = null;
+      /** 업체정보관리: 폴더연결 주소 정렬 상태 "", "asc", "desc" */
+      let companyDirectoryFolderSort = "";
       let transferSourceKeyword = "";
       let transferTargetKeyword = "";
       let transferSourceCompanyKey = "";
@@ -9283,6 +9285,23 @@
         if (inlineId && !filtered.some((r) => normalize(String(r?.id ?? "")) === inlineId)) {
           companyDirectoryInlineEditRowId = "";
           inlineId = "";
+        }
+        if (companyDirectoryFolderSort === "asc" || companyDirectoryFolderSort === "desc") {
+          const dir = companyDirectoryFolderSort === "asc" ? 1 : -1;
+          filtered.sort((a, b) => {
+            const ua = String(a?.naver_works_company_share_link || "").trim();
+            const ub = String(b?.naver_works_company_share_link || "").trim();
+            if (!ua && !ub) return 0;
+            if (!ua) return 1;
+            if (!ub) return -1;
+            return ua.localeCompare(ub, "ko") * dir;
+          });
+        }
+        const folderSortIndicatorEl = document.getElementById("companyDirectoryFolderSortIndicator");
+        if (folderSortIndicatorEl) {
+          folderSortIndicatorEl.textContent =
+            companyDirectoryFolderSort === "asc" ? "▲" : companyDirectoryFolderSort === "desc" ? "▼" : "⇅";
+          folderSortIndicatorEl.style.color = companyDirectoryFolderSort ? "#1f6feb" : "#6b7a99";
         }
         if (companyDirectoryCountHintEl) {
           companyDirectoryCountHintEl.textContent =
@@ -17840,6 +17859,11 @@
         renderCompanyDirectoryAdminTable();
       });
       companyDirectorySiteFilterSelectEl?.addEventListener("change", () => {
+        renderCompanyDirectoryAdminTable();
+      });
+      document.getElementById("companyDirectoryFolderSortHeader")?.addEventListener("click", () => {
+        companyDirectoryFolderSort =
+          companyDirectoryFolderSort === "" ? "asc" : companyDirectoryFolderSort === "asc" ? "desc" : "";
         renderCompanyDirectoryAdminTable();
       });
       companyDirectoryTabListBodyEl?.addEventListener("click", (event) => {
