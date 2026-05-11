@@ -1956,6 +1956,7 @@
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
         <button id="tabPayroll" data-tab="payroll" type="button">작가 급여</button>
         <button id="tabCompanyDirectory" data-tab="companyDirectory" type="button">업체정보관리</button>
+        <button id="tabBlogCompanies" data-tab="blogCompanies" type="button">블로그 업체</button>
         <button id="tabCoupon" data-tab="coupon" type="button">회차권 등록</button>
         <button id="tabReceiptLedger" data-tab="receiptLedger" type="button">접수기록</button>
         <button id="tabThefeelingEdit" data-tab="thefeelingEdit" type="button">더필링 편집신청</button>
@@ -2406,6 +2407,102 @@
             </div>
           </div>
           <div id="companyDirectorySaveHint" class="hint" style="margin-top: 8px;"></div>
+        </article>
+      </section>
+
+      <section id="blogCompaniesSection" class="hidden">
+        <article class="card" style="margin-bottom: 14px;">
+          <div class="schedule-head">
+            <h2>블로그 작성 필요</h2>
+            <div class="head-right" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+              <span id="blogTaskCountBadge" style="font-weight:700;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:4px 10px;border-radius:999px;font-size:0.9rem">미발송 0건</span>
+              <button id="blogTaskRefreshBtn" class="btn-sm" type="button">새로고침</button>
+            </div>
+          </div>
+          <p class="helper" style="margin-bottom: 10px;">
+            <strong>블로그 업체</strong>로 지정된 회사의 스케줄 중 <strong>촬영일이 2026-04-16 이후 ~ 오늘</strong>인 건만 자동으로 여기 모입니다. 사진/영상 워크플로우와는 무관하게 단독으로 관리됩니다. [발송] 클릭 시 확인창 후 LMS 발송 → 발송완료 상태로 전환, [되돌리기] 가능.
+          </p>
+          <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <select id="blogTaskFilterSelect" class="small-select" style="min-width: 140px;" aria-label="상태 필터">
+              <option value="pending">미발송만</option>
+              <option value="sent">발송완료만</option>
+              <option value="all">전체</option>
+            </select>
+            <input
+              id="blogTaskSearchInput"
+              class="small-select"
+              type="text"
+              placeholder="업체명·연락처 검색"
+              style="min-width: 220px;"
+            />
+            <span id="blogTaskCountHint" class="hint"></span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="payment-table">
+              <thead>
+                <tr>
+                  <th style="width:90px">촬영일</th>
+                  <th>업체명</th>
+                  <th>연락처</th>
+                  <th style="width:220px;text-align:center">상태</th>
+                  <th style="width:160px;text-align:center">액션</th>
+                </tr>
+              </thead>
+              <tbody id="blogTaskListBody"></tbody>
+            </table>
+          </div>
+          <div id="blogTaskHint" class="hint" style="margin-top: 8px;"></div>
+        </article>
+
+        <article class="card">
+          <div class="schedule-head">
+            <h2>블로그 업체 등록</h2>
+            <div class="head-right" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+              <button id="blogCompaniesRefreshBtn" class="btn-sm" type="button">목록 새로고침</button>
+            </div>
+          </div>
+          <p class="helper" style="margin-bottom: 10px;">
+            업체 옆 체크박스를 켜면 「블로그 업체」로 등록됩니다. 이 업체의 촬영일 ≥ 2026-04-16 인 모든 스케줄이 위 「블로그 작성 필요」 표에 자동으로 나타납니다. <strong>대부분의 블로그 업체는 쇼픽 소속</strong>이라 기본 필터가 「쇼픽」으로 설정돼 있습니다.
+          </p>
+          <div class="company-site-filter-row" style="margin-bottom: 6px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn-sm company-site-filter-btn blog-company-site-filter-btn" data-blog-site-filter="all">전체</button>
+            <button type="button" class="btn-sm company-site-filter-btn blog-company-site-filter-btn filter-inlog" data-blog-site-filter="inlog">
+              <span class="site-badge inlog">인</span>인로그
+            </button>
+            <button type="button" class="btn-sm company-site-filter-btn blog-company-site-filter-btn filter-shopick active" data-blog-site-filter="shopick">
+              <span class="site-badge shopick">쇼</span>쇼픽
+            </button>
+            <button type="button" class="btn-sm company-site-filter-btn blog-company-site-filter-btn filter-thefeeling" data-blog-site-filter="thefeeling">
+              <span class="site-badge thefeeling">필</span>더필링
+            </button>
+          </div>
+          <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <select id="blogCompaniesFilterSelect" class="small-select" style="min-width: 130px;" aria-label="보기 필터">
+              <option value="all">전체 업체</option>
+              <option value="onlyBlog">블로그 업체만</option>
+              <option value="onlyNonBlog">미지정만</option>
+            </select>
+            <input
+              id="blogCompaniesSearchInput"
+              class="small-select"
+              type="text"
+              placeholder="업체명 검색"
+              style="min-width: 220px;"
+            />
+            <span id="blogCompaniesCountHint" class="hint"></span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="payment-table">
+              <thead>
+                <tr>
+                  <th>업체명</th>
+                  <th style="width:200px;text-align:center">블로그 업체</th>
+                </tr>
+              </thead>
+              <tbody id="blogCompaniesTabListBody"></tbody>
+            </table>
+          </div>
+          <div id="blogCompaniesSaveHint" class="hint" style="margin-top: 8px;"></div>
         </article>
       </section>
 
@@ -2916,6 +3013,8 @@
       const SUPABASE_DASHBOARD_STATE_ID = "global";
       const SHARED_LIMIT_CONFIG_FIELD = "shared_limit_config_v1";
       const SHARED_MASTER_ACCOUNT_MAP_FIELD = "shared_master_account_map_v1";
+      const STORAGE_BLOG_SEND_LOG = "scheduleSiteBlogSendLog";
+      const STORAGE_BLOG_VENDOR_LIST = "scheduleSiteBlogVendorList";
       const STORAGE_SYNC_KEYS = [
         STORAGE_CUSTOMER_COMPANIES,
         STORAGE_CUSTOMER_SCHEDULES,
@@ -2935,7 +3034,9 @@
         STORAGE_THEFEELING_EDIT_REQUESTS,
         STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE,
         STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG,
-        STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
+        STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY,
+        STORAGE_BLOG_SEND_LOG,
+        STORAGE_BLOG_VENDOR_LIST
       ];
       const STORAGE_SYNC_DEFAULTS = {
         [STORAGE_CUSTOMER_COMPANIES]: "[]",
@@ -2956,7 +3057,9 @@
         [STORAGE_THEFEELING_EDIT_REQUESTS]: "[]",
         [STORAGE_THEFEELING_EDIT_REQUESTS_ARCHIVE]: "[]",
         [STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG]: "{}",
-        [STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY]: "[]"
+        [STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY]: "[]",
+        [STORAGE_BLOG_SEND_LOG]: "{}",
+        [STORAGE_BLOG_VENDOR_LIST]: "[]"
       };
       const SUPABASE_ONLY_MODE = true;
       /** Storage 업로드 등 fetch 래퍼와 무관하게 브라우저 원본 fetch 보관 */
@@ -6236,6 +6339,7 @@
       const tabPaymentEl = document.getElementById("tabPayment");
       const tabPayrollEl = document.getElementById("tabPayroll");
       const tabCompanyDirectoryEl = document.getElementById("tabCompanyDirectory");
+      const tabBlogCompaniesEl = document.getElementById("tabBlogCompanies");
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
@@ -6245,6 +6349,20 @@
       const paymentSectionEl = document.getElementById("paymentSection");
       const payrollSectionEl = document.getElementById("payrollSection");
       const companyDirectorySectionEl = document.getElementById("companyDirectorySection");
+      const blogCompaniesSectionEl = document.getElementById("blogCompaniesSection");
+      const blogCompaniesRefreshBtnEl = document.getElementById("blogCompaniesRefreshBtn");
+      const blogCompaniesSearchInputEl = document.getElementById("blogCompaniesSearchInput");
+      const blogCompaniesFilterSelectEl = document.getElementById("blogCompaniesFilterSelect");
+      const blogCompaniesCountHintEl = document.getElementById("blogCompaniesCountHint");
+      const blogCompaniesTabListBodyEl = document.getElementById("blogCompaniesTabListBody");
+      const blogCompaniesSaveHintEl = document.getElementById("blogCompaniesSaveHint");
+      const blogTaskCountBadgeEl = document.getElementById("blogTaskCountBadge");
+      const blogTaskRefreshBtnEl = document.getElementById("blogTaskRefreshBtn");
+      const blogTaskFilterSelectEl = document.getElementById("blogTaskFilterSelect");
+      const blogTaskSearchInputEl = document.getElementById("blogTaskSearchInput");
+      const blogTaskCountHintEl = document.getElementById("blogTaskCountHint");
+      const blogTaskListBodyEl = document.getElementById("blogTaskListBody");
+      const blogTaskHintEl = document.getElementById("blogTaskHint");
       const companyDirectoryRefreshBtnEl = document.getElementById("companyDirectoryRefreshBtn");
       const companyDirectorySearchInputEl = document.getElementById("companyDirectorySearchInput");
       const companyDirectorySiteFilterSelectEl = document.getElementById("companyDirectorySiteFilterSelect");
@@ -8291,6 +8409,7 @@
               row.shopickVideo = f.video;
               row.shopickBlog = f.blog;
             }
+            if (item?.isBlogVendor === true) row.isBlogVendor = true;
             return row;
           })
           .filter((item) => item.name);
@@ -8489,6 +8608,7 @@
         const localMemoMap = new Map();
         const localShopickMap = new Map();
         const localDefaultCompositionMap = new Map();
+        const localBlogVendorSet = new Set();
         localCompanies.forEach((c) => {
           const key = normalizeCompanyName(c?.name).toLowerCase();
           if (key && c?.defaultMemo) localMemoMap.set(key, String(c.defaultMemo));
@@ -8504,6 +8624,7 @@
             const f = getShopickServiceFlagsFromCompanyRow(c);
             localShopickMap.set(key, f);
           }
+          if (key && c?.isBlogVendor === true) localBlogVendorSet.add(key);
         });
         const customerUsersForSite = readStorageArray(STORAGE_CUSTOMERS);
         normalized.forEach((c) => {
@@ -8520,6 +8641,16 @@
             c.shopickVideo = f.video;
             c.shopickBlog = f.blog;
           }
+          if (localBlogVendorSet.has(key)) {
+            c.isBlogVendor = true;
+          }
+          // SoT: 동기화된 scheduleSiteBlogVendorList 우선 적용
+          try {
+            const syncedBlogSet = readBlogVendorNameSet();
+            if (syncedBlogSet.has(key)) {
+              c.isBlogVendor = true;
+            }
+          } catch (_) {}
           if (!c.siteType) {
             const gk = getCompanyGroupKey(c.name, c.code);
             const matched = gk ? customerUsersForSite.filter((u) => getCompanyGroupKey(u?.company, u?.companyCode) === gk) : [];
@@ -9363,6 +9494,342 @@
             : `<tr><td colspan="8" class="helper">등록된 행이 없습니다.</td></tr>`;
       }
 
+      /** 블로그 업체 탭: SoT = scheduleSiteBlogVendorList (KV 동기화).
+       *  렌더링·필터·카운트 모두 readBlogVendorNameSet() 직접 조회 — companies[i].isBlogVendor 무시. */
+      let blogCompaniesSiteFilter = "shopick"; // 99% 쇼픽이라 기본값
+      const BLOG_SITE_LABEL = { inlog: "인", shopick: "쇼", thefeeling: "필" };
+      function renderBlogCompaniesTable() {
+        if (!blogCompaniesTabListBodyEl) return;
+        const blogSet = readBlogVendorNameSet(); // SoT
+        const kw = normalize(blogCompaniesSearchInputEl?.value || "").toLowerCase();
+        const mode = String(blogCompaniesFilterSelectEl?.value || "all");
+        const siteFilter = String(blogCompaniesSiteFilter || "all");
+        const rows = [...companies].sort((a, b) =>
+          String(a?.name || "").localeCompare(String(b?.name || ""), "ko")
+        );
+        let filtered = rows;
+        if (siteFilter === "inlog" || siteFilter === "shopick" || siteFilter === "thefeeling") {
+          filtered = filtered.filter(
+            (r) => normalizeCompanySiteTypeField(r?.siteType) === siteFilter
+          );
+        }
+        if (mode === "onlyBlog") {
+          filtered = filtered.filter((r) =>
+            blogSet.has(normalizeCompanyName(r?.name || "").toLowerCase())
+          );
+        } else if (mode === "onlyNonBlog") {
+          filtered = filtered.filter(
+            (r) => !blogSet.has(normalizeCompanyName(r?.name || "").toLowerCase())
+          );
+        }
+        if (kw) {
+          filtered = filtered.filter((r) => {
+            const blob = [r?.name, r?.phone].map((x) => String(x || "").toLowerCase()).join("|");
+            return blob.includes(kw);
+          });
+        }
+        const totalBlog = blogSet.size;
+        if (blogCompaniesCountHintEl) {
+          blogCompaniesCountHintEl.textContent =
+            `전체 ${rows.length}건 · 블로그 업체 ${totalBlog}건` +
+            (filtered.length !== rows.length ? ` · 표시 ${filtered.length}건` : "");
+        }
+        blogCompaniesTabListBodyEl.innerHTML = filtered.length
+          ? filtered
+              .map((r) => {
+                const nm = String(r?.name || "");
+                const lowerKey = normalizeCompanyName(nm).toLowerCase();
+                const on = blogSet.has(lowerKey);
+                const nmAttr = escapeHtml(nm);
+                const st = normalizeCompanySiteTypeField(r?.siteType);
+                const stLabel = BLOG_SITE_LABEL[st] || "";
+                const badge = st && stLabel
+                  ? `<span class="site-badge ${escapeHtml(st)}">${escapeHtml(stLabel)}</span>`
+                  : "";
+                return `<tr>
+<td><span style="display:inline-flex;align-items:center">${badge}<strong>${escapeHtml(nm)}</strong></span></td>
+<td style="text-align:center"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:700">
+  <input type="checkbox" data-act="toggle-blog-vendor" data-name="${nmAttr}" ${on ? "checked" : ""} style="width:18px;height:18px;cursor:pointer" />
+  <span style="color:${on ? "#15803d" : "#6b7a99"}">${on ? "블로그 업체" : "미지정"}</span>
+</label></td>
+</tr>`;
+              })
+              .join("")
+          : `<tr><td colspan="2" class="helper">표시할 업체가 없습니다.</td></tr>`;
+      }
+
+      /** 토글: scheduleSiteBlogVendorList(=SoT)만 업데이트.
+       *  companies[i].isBlogVendor 같은 파생 필드는 쓰지 않음. 렌더링은 항상 SoT 직접 조회. */
+      function toggleBlogVendorByName(name, on) {
+        const target = normalize(String(name || ""));
+        if (!target) return;
+        const lowerKey = target.toLowerCase();
+        const co = companies.find(
+          (c) => normalizeCompanyName(c?.name || "").toLowerCase() === lowerKey
+        );
+        const set = readBlogVendorNameSet();
+        if (on) set.add(lowerKey);
+        else set.delete(lowerKey);
+        writeBlogVendorNameSet(set);
+        if (blogCompaniesSaveHintEl) {
+          const displayName = co?.name || target;
+          blogCompaniesSaveHintEl.textContent = `「${displayName}」 ${on ? "블로그 업체로 등록" : "블로그 업체 해제"} 완료 · 저장됨 (모든 관리자 공유)`;
+          blogCompaniesSaveHintEl.style.color = on ? "#15803d" : "#6b7a99";
+        }
+        renderBlogCompaniesTable();
+        renderBlogTaskList();
+      }
+
+      /** 블로그 작성 필요 목록: data(스케줄 전체)에서
+       *   촬영일 ≥ BLOG_SEND_MIN_DATE && ≤ 오늘 && company.isBlogVendor === true
+       *   조건을 만족하는 스케줄을 모아 표시. 발송 상태는 readBlogSendLog 에서 조회. */
+      function getTodayYmdKst() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      }
+      function collectBlogTaskRows() {
+        const todayYmd = getTodayYmdKst();
+        const blogVendorNameSet = readBlogVendorNameSet(); // SoT
+        if (blogVendorNameSet.size === 0) return [];
+        const sendLog = readBlogSendLog();
+        const list = [];
+        (Array.isArray(data) ? data : []).forEach((item) => {
+          const d = String(item?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+          if (d < BLOG_SEND_MIN_DATE) return;
+          if (d > todayYmd) return; // 미래 촬영은 아직 블로그 대상 아님
+          const cname = normalizeCompanyName(item?.company || "").toLowerCase();
+          if (!cname || !blogVendorNameSet.has(cname)) return;
+          const sk = getDashboardScheduleKey(item);
+          const sentAt = String(sendLog?.[sk]?.sentAt || "");
+          list.push({ item, sk, date: d, sentAt });
+        });
+        // 미발송 우선(오래된 촬영일부터), 그 다음 발송완료(최근 발송 먼저)
+        list.sort((a, b) => {
+          if (!a.sentAt && b.sentAt) return -1;
+          if (a.sentAt && !b.sentAt) return 1;
+          if (!a.sentAt && !b.sentAt) return a.date.localeCompare(b.date);
+          return String(b.sentAt).localeCompare(String(a.sentAt));
+        });
+        return list;
+      }
+      function renderBlogTaskList() {
+        if (!blogTaskListBodyEl) return;
+        const all = collectBlogTaskRows();
+        const total = all.length;
+        const pending = all.filter((r) => !r.sentAt).length;
+        const sent = total - pending;
+        if (blogTaskCountBadgeEl) {
+          blogTaskCountBadgeEl.textContent = pending > 0 ? `미발송 ${pending}건` : "미발송 0건 ✓";
+          blogTaskCountBadgeEl.style.background = pending > 0 ? "#fff7ed" : "#ecfdf5";
+          blogTaskCountBadgeEl.style.borderColor = pending > 0 ? "#fed7aa" : "#a7f3d0";
+          blogTaskCountBadgeEl.style.color = pending > 0 ? "#9a3412" : "#065f46";
+        }
+        const mode = String(blogTaskFilterSelectEl?.value || "pending");
+        const kw = normalize(blogTaskSearchInputEl?.value || "").toLowerCase();
+        let filtered = all;
+        if (mode === "pending") filtered = filtered.filter((r) => !r.sentAt);
+        else if (mode === "sent") filtered = filtered.filter((r) => !!r.sentAt);
+        if (kw) {
+          filtered = filtered.filter((r) => {
+            const blob = [
+              r.item?.company,
+              r.item?.phone,
+              getAdminCompanyByName(r.item?.company)?.phone
+            ]
+              .map((x) => String(x || "").toLowerCase())
+              .join("|");
+            return blob.includes(kw);
+          });
+        }
+        if (blogTaskCountHintEl) {
+          blogTaskCountHintEl.textContent =
+            `전체 ${total}건 · 미발송 ${pending}건 · 발송완료 ${sent}건` +
+            (filtered.length !== total ? ` · 표시 ${filtered.length}건` : "");
+        }
+        blogTaskListBodyEl.innerHTML = filtered.length
+          ? filtered
+              .map((row) => {
+                const item = row.item;
+                const cname = String(item?.company || "");
+                const adminCo = getAdminCompanyByName(cname);
+                const phone =
+                  String(item?.phone || "").trim() || String(adminCo?.phone || "").trim() || "-";
+                const dateLbl = formatYmdToMdSlash(row.date);
+                const isSent = !!row.sentAt;
+                const skAttr = escapeHtml(row.sk);
+                const statusCell = isSent
+                  ? `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;font-weight:700;font-size:0.85rem">📝 발송완료 ${escapeHtml(formatBlogSentAtLabel(row.sentAt))}</span>`
+                  : `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-weight:700;font-size:0.85rem">미발송</span>`;
+                const actionCell = isSent
+                  ? `<button type="button" class="btn-sm" data-blog-act="revert" data-sk="${skAttr}">되돌리기</button>`
+                  : `<button type="button" class="btn-sm primary" data-blog-act="send" data-sk="${skAttr}">📝 발송</button>`;
+                return `<tr>
+<td style="white-space:nowrap;font-weight:700">${escapeHtml(dateLbl)}</td>
+<td><strong>${escapeHtml(cname || "-")}</strong></td>
+<td>${escapeHtml(phone)}</td>
+<td style="text-align:center">${statusCell}</td>
+<td style="text-align:center">${actionCell}</td>
+</tr>`;
+              })
+              .join("")
+          : `<tr><td colspan="5" class="helper" style="text-align:center;padding:18px">${
+              total === 0
+                ? "블로그 업체로 등록된 회사가 없거나, 2026-04-16 이후 ~ 오늘 사이 촬영 스케줄이 없습니다."
+                : "해당 조건의 항목이 없습니다."
+            }</td></tr>`;
+      }
+      function findBlogTaskRowBySk(sk) {
+        return collectBlogTaskRows().find((r) => r.sk === sk) || null;
+      }
+
+      /* ===== 블로그 업체 지정 리스트 (KV 동기화 SoT) =====
+         scheduleSiteAdminCompanies 행은 Supabase company_directory 로 push 되지만 isBlogVendor 컬럼이 없어
+         별도 키 scheduleSiteBlogVendorList = [normalizedLowerName, ...] 로 동기화한다.
+         companies[i].isBlogVendor 는 이 리스트에서 파생되는 표시용 플래그. */
+      function readBlogVendorNameSet() {
+        try {
+          const raw = localStorage.getItem(STORAGE_BLOG_VENDOR_LIST);
+          if (!raw) return new Set();
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr)) return new Set();
+          return new Set(arr.map((s) => String(s || "").toLowerCase()).filter(Boolean));
+        } catch {
+          return new Set();
+        }
+      }
+      function writeBlogVendorNameSet(setOrArr) {
+        try {
+          const arr = Array.from(setOrArr instanceof Set ? setOrArr : new Set(setOrArr || []))
+            .map((s) => String(s || "").toLowerCase())
+            .filter(Boolean);
+          localStorage.setItem(STORAGE_BLOG_VENDOR_LIST, JSON.stringify(arr));
+          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        } catch (_) {}
+      }
+      /** companies 배열의 isBlogVendor 를 동기화된 리스트로부터 복원 */
+      function applyBlogVendorListToCompanies() {
+        const set = readBlogVendorNameSet();
+        companies.forEach((c) => {
+          const key = normalizeCompanyName(c?.name || "").toLowerCase();
+          c.isBlogVendor = !!key && set.has(key);
+        });
+      }
+
+      /* ===== 블로그 알림 발송 로그: scheduleSiteBlogSendLog 키로 KV 동기화 =====
+         { [scheduleKey]: { sentAt: ISO } } — 모든 관리자가 동일 상태 공유 */
+      const BLOG_SEND_MIN_DATE = "2026-04-16";
+      const BLOG_SMS_TEMPLATE = "안녕하세요, 고객님. 요청하신 블로그 포스팅 초안 작성이 완료되어 현재 임시 저장 상태입니다.\n\nAI를 활용하여 90% 정도 완성된 상태이나, 더욱 완벽한 발행을 위해 고객님의 최종 검수가 필요합니다. 혹시 수정이 필요한 문구나 내용이 있는지 확인 부탁드리며, 검수 후 직접 발행해 주시면 감사하겠습니다.\n\n정성을 다해 작성했으나 세밀한 부분까지 꼭 한 번 살펴봐 주세요!";
+
+      function readBlogSendLog() {
+        try {
+          const raw = localStorage.getItem(STORAGE_BLOG_SEND_LOG);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+      function writeBlogSendLog(map) {
+        try {
+          localStorage.setItem(STORAGE_BLOG_SEND_LOG, JSON.stringify(map || {}));
+          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        } catch (_) {}
+      }
+      function getBlogSentAtForKey(scheduleKey) {
+        const m = readBlogSendLog();
+        return String(m?.[scheduleKey]?.sentAt || "");
+      }
+      function markBlogSentForKey(scheduleKey, sentAtIso) {
+        const m = readBlogSendLog();
+        m[scheduleKey] = { sentAt: sentAtIso || new Date().toISOString() };
+        writeBlogSendLog(m);
+      }
+      function unmarkBlogSentForKey(scheduleKey) {
+        const m = readBlogSendLog();
+        delete m[scheduleKey];
+        writeBlogSendLog(m);
+      }
+      function getAdminCompanyByName(name) {
+        const target = normalizeCompanyName(name || "").toLowerCase();
+        if (!target) return null;
+        return companies.find((c) => normalizeCompanyName(c?.name || "").toLowerCase() === target) || null;
+      }
+      function isCompanyBlogVendorByName(name) {
+        const key = normalizeCompanyName(name || "").toLowerCase();
+        if (!key) return false;
+        return readBlogVendorNameSet().has(key);
+      }
+      /** "2026-05-11T03:24:00.000Z" → "5/11 12:24" (KST) */
+      function formatBlogSentAtLabel(isoStr) {
+        if (!isoStr) return "";
+        try {
+          const d = new Date(isoStr);
+          if (Number.isNaN(d.getTime())) return "";
+          const m = d.getMonth() + 1;
+          const day = d.getDate();
+          const hh = String(d.getHours()).padStart(2, "0");
+          const mm = String(d.getMinutes()).padStart(2, "0");
+          return `${m}/${day} ${hh}:${mm}`;
+        } catch {
+          return "";
+        }
+      }
+      function onlyDigitsForPhone(raw) {
+        return String(raw || "").replace(/[^\d]/g, "");
+      }
+      /** 스케줄 카드의 블로그 알림 발송 — 확인창 → Solapi LMS → 발송완료 저장 */
+      async function handleBlogSmsSendForSchedule(scheduleKey, item) {
+        const company = String(item?.company || "").trim() || "(업체명 없음)";
+        const phoneSource =
+          String(item?.phone || "").trim() ||
+          String(getAdminCompanyByName(item?.company)?.phone || "").trim();
+        const cleanPhone = onlyDigitsForPhone(phoneSource);
+        if (!/^01[016789]\d{7,8}$/.test(cleanPhone)) {
+          alert(
+            `「${company}」 연락처 형식이 올바르지 않습니다.\n현재 값: ${phoneSource || "(없음)"}\n업체정보관리에서 010xxxxxxxx 형식으로 수정 후 다시 시도해 주세요.`
+          );
+          return false;
+        }
+        const ok = confirm(
+          `「${company}」 (${cleanPhone}) 에게 블로그 작성 알림 문자를 발송할까요?\n\n────── 미리보기 ──────\n${BLOG_SMS_TEMPLATE}`
+        );
+        if (!ok) return false;
+        try {
+          const response = await fetch("/api/solapi-send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: cleanPhone,
+              text: BLOG_SMS_TEMPLATE,
+              subject: "블로그 포스팅 검수 안내",
+              type: "LMS"
+            })
+          });
+          const body = await response.json().catch(() => null);
+          if (!response.ok || !body || body.ok === false) {
+            const msg = (body && body.message) || `발송 실패 (${response.status})`;
+            alert(`문자 발송 실패: ${msg}`);
+            return false;
+          }
+          markBlogSentForKey(scheduleKey, new Date().toISOString());
+          renderBlogTaskList();
+          return true;
+        } catch (e) {
+          alert(`문자 발송 오류: ${e?.message || e}`);
+          return false;
+        }
+      }
+      function handleBlogSmsRevertForSchedule(scheduleKey, item) {
+        const company = String(item?.company || "").trim() || "(업체명 없음)";
+        if (!confirm(`「${company}」 블로그 발송완료 표시를 되돌릴까요? (이미 발송된 문자는 회수되지 않습니다.)`))
+          return false;
+        unmarkBlogSentForKey(scheduleKey);
+        renderBlogTaskList();
+        return true;
+      }
+
       async function copyTextToClipboardWithUi(text) {
         const t = normalize(String(text || ""));
         if (!t) {
@@ -9541,6 +10008,7 @@
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (st) row.siteType = st;
             if (dbId) row.dbId = dbId;
+            if (item?.isBlogVendor === true) row.isBlogVendor = true;
             const shopickData =
               st === "shopick" ||
               item.shopickPhoto !== undefined ||
@@ -9560,6 +10028,7 @@
             if (cur && dc2) cur.defaultComposition = dc2;
             const st = normalizeCompanySiteTypeField(item?.siteType);
             if (cur && st && !cur.siteType) cur.siteType = st;
+            if (cur && item?.isBlogVendor === true) cur.isBlogVendor = true;
             const curSt = normalizeCompanySiteTypeField(cur?.siteType);
             if (
               cur &&
@@ -17805,6 +18274,7 @@
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         const isCompanyDirectory = tab === "companyDirectory";
+        const isBlogCompanies = tab === "blogCompanies";
         tabScheduleEl.classList.toggle("active", isSchedule);
         tabPaymentEl.classList.toggle("active", isPayment);
         tabPayrollEl?.classList.toggle("active", isPayroll);
@@ -17814,6 +18284,7 @@
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
         tabCompanyDirectoryEl?.classList.toggle("active", isCompanyDirectory);
+        tabBlogCompaniesEl?.classList.toggle("active", isBlogCompanies);
         scheduleSectionEl.classList.toggle("hidden", !isSchedule);
         paymentSectionEl.classList.toggle("hidden", !isPayment);
         payrollSectionEl?.classList.toggle("hidden", !isPayroll);
@@ -17823,6 +18294,7 @@
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         companyDirectorySectionEl?.classList.toggle("hidden", !isCompanyDirectory);
+        blogCompaniesSectionEl?.classList.toggle("hidden", !isBlogCompanies);
         if (isPayment) renderPaymentList();
         if (isPayroll) renderPhotographerPayrollAdmin();
         if (isCoupon) renderCouponPassList();
@@ -17837,12 +18309,72 @@
         if (!isSchedule) scheduleDetailModalEl?.classList.add("hidden");
         if (isGrokTool) loadGrokWebToolBaseToInput();
         if (isCompanyDirectory) void refreshCompanyDirectoryAdminTab();
+        if (isBlogCompanies) {
+          renderBlogCompaniesTable();
+          renderBlogTaskList();
+        }
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
       tabPaymentEl.addEventListener("click", () => switchMainTab("payment"));
       tabPayrollEl?.addEventListener("click", () => switchMainTab("payroll"));
       tabCompanyDirectoryEl?.addEventListener("click", () => switchMainTab("companyDirectory"));
+      tabBlogCompaniesEl?.addEventListener("click", () => switchMainTab("blogCompanies"));
+      blogCompaniesRefreshBtnEl?.addEventListener("click", () => {
+        loadAdminCompaniesFromStorage();
+        renderBlogCompaniesTable();
+        renderBlogTaskList();
+      });
+      blogCompaniesSearchInputEl?.addEventListener("input", () => renderBlogCompaniesTable());
+      blogCompaniesFilterSelectEl?.addEventListener("change", () => renderBlogCompaniesTable());
+      document
+        .querySelectorAll(".blog-company-site-filter-btn")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const val = String(btn.getAttribute("data-blog-site-filter") || "all");
+            blogCompaniesSiteFilter = val;
+            document
+              .querySelectorAll(".blog-company-site-filter-btn")
+              .forEach((b) => b.classList.toggle("active", b === btn));
+            renderBlogCompaniesTable();
+          });
+        });
+      blogCompaniesTabListBodyEl?.addEventListener("change", (event) => {
+        const el = event.target;
+        if (!el || el.getAttribute?.("data-act") !== "toggle-blog-vendor") return;
+        const name = el.getAttribute("data-name") || "";
+        toggleBlogVendorByName(name, !!el.checked);
+      });
+      blogTaskRefreshBtnEl?.addEventListener("click", () => {
+        try { loadAdminSchedulesFromStorage?.(); } catch (_) {}
+        renderBlogTaskList();
+      });
+      blogTaskFilterSelectEl?.addEventListener("change", () => renderBlogTaskList());
+      blogTaskSearchInputEl?.addEventListener("input", () => renderBlogTaskList());
+      blogTaskListBodyEl?.addEventListener("click", (event) => {
+        const btn = event.target?.closest?.("button[data-blog-act]");
+        if (!btn) return;
+        const act = btn.getAttribute("data-blog-act") || "";
+        const sk = btn.getAttribute("data-sk") || "";
+        if (!sk) return;
+        const row = findBlogTaskRowBySk(sk);
+        if (!row) {
+          alert("해당 스케줄을 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
+          renderBlogTaskList();
+          return;
+        }
+        if (act === "send") {
+          btn.disabled = true;
+          void handleBlogSmsSendForSchedule(sk, row.item).finally(() => {
+            btn.disabled = false;
+          });
+          return;
+        }
+        if (act === "revert") {
+          handleBlogSmsRevertForSchedule(sk, row.item);
+          return;
+        }
+      });
       tabCouponEl.addEventListener("click", () => switchMainTab("coupon"));
       companyDirectoryRefreshBtnEl?.addEventListener("click", () => {
         void refreshCompanyDirectoryAdminTab();
