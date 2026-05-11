@@ -9704,7 +9704,11 @@
             .map((s) => String(s || "").toLowerCase())
             .filter(Boolean);
           localStorage.setItem(STORAGE_BLOG_VENDOR_LIST, JSON.stringify(arr));
-          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+          // client_kv 테이블로 즉시 push (모든 관리자 공유)
+          try {
+            scheduleSiteClientKvState?.flushSnapshotNow?.();
+            scheduleSiteClientKvState?.queueSupabaseKvPush?.();
+          } catch (_) {}
         } catch (_) {}
       }
       /** companies 배열의 isBlogVendor 를 동기화된 리스트로부터 복원 */
@@ -9734,7 +9738,11 @@
       function writeBlogSendLog(map) {
         try {
           localStorage.setItem(STORAGE_BLOG_SEND_LOG, JSON.stringify(map || {}));
-          if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+          // client_kv 테이블로 즉시 push (모든 관리자 공유)
+          try {
+            scheduleSiteClientKvState?.flushSnapshotNow?.();
+            scheduleSiteClientKvState?.queueSupabaseKvPush?.();
+          } catch (_) {}
         } catch (_) {}
       }
       function getBlogSentAtForKey(scheduleKey) {
