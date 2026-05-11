@@ -9663,7 +9663,10 @@
                   : `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-weight:700;font-size:0.85rem">미발송</span>`;
                 const actionCell = isSent
                   ? `<button type="button" class="btn-sm" data-blog-act="revert" data-sk="${skAttr}">되돌리기</button>`
-                  : `<button type="button" class="btn-sm primary" data-blog-act="send" data-sk="${skAttr}">📝 발송</button>`;
+                  : `<span style="display:inline-flex;gap:6px;justify-content:center;flex-wrap:wrap">
+<button type="button" class="btn-sm primary" data-blog-act="send" data-sk="${skAttr}" title="확인창 후 LMS 발송">📝 발송</button>
+<button type="button" class="btn-sm" style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-weight:700" data-blog-act="markDoneNoSms" data-sk="${skAttr}" title="문자 없이 완료 처리만">완료</button>
+</span>`;
                 return `<tr>
 <td style="white-space:nowrap;font-weight:700">${escapeHtml(dateLbl)}</td>
 <td><strong>${escapeHtml(cname || "-")}</strong></td>
@@ -18376,6 +18379,13 @@
           void handleBlogSmsSendForSchedule(sk, row.item).finally(() => {
             btn.disabled = false;
           });
+          return;
+        }
+        if (act === "markDoneNoSms") {
+          const company = String(row.item?.company || "").trim() || "(업체명 없음)";
+          if (!confirm(`「${company}」 — 문자 없이 발송완료로 표시할까요?\n(이미 다른 방법으로 처리됐거나 발송 불필요한 경우용. 되돌리기 가능.)`)) return;
+          markBlogSentForKey(sk, new Date().toISOString());
+          renderBlogTaskList();
           return;
         }
         if (act === "revert") {
