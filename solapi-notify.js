@@ -1,11 +1,17 @@
 /**
- * 촬영 스케줄 접수 시 솔라피(SOLAPI) SMS 알림.
+ * 촬영 스케줄 접수 시 솔라피(SOLAPI) 문자 알림.
  *
- *  - 인로그 / 쇼픽 / 더필링 3개 사이트에서 공통으로 로드.
- *  - 접수 확인 모달에서 "확인" 누른 직후 호출됨.
- *  - 수신번호: user.phone (없으면 모달로 즉석 입력 → user.phone 에 저장 + 콜백으로 영속화)
- *  - 본문은 "[사이트명] / 날짜 / 단지명·동호수 / 안내문구" 형태로 미입금 요약과 비슷한 톤.
- *  - 발송 결과는 alert 가 아니라 콘솔 + 작은 스낵바 토스트 로 표시 (등록 성공 alert 와 충돌 방지).
+ *  - 인로그 / 쇼픽 / 더필링: customer.html · public-order.html 에서 공통 로드.
+ *  - 시점: 고객이 예약 확인 모달에서 「확인 — 예약 접수」를 누르고, 서버(Supabase) 저장까지 성공한 뒤
+ *          sendScheduleSubmitNotice() 가 호출될 때.
+ *
+ *  발송 구분:
+ *    ① 관리자(01028692443): 단문 SMS 1통(본문 4줄, 바이트 한도로 주소만 축약). 고객 번호 유무와 관계없이 시도.
+ *    ② 고객(user.phone): 본문은 인로그·더필링(결제·계좌·입금 유의) / 쇼픽(해당 생략, 촬영본 전송일만 동일 +10일).
+ *       촬영본 전송예정일 = 촬영일 + 10일. 솔라피가 길이에 따라 SMS/LMS 자동.
+ *       연락처 없으면 모달에서 입력·발송하거나 「건너뛰기」 시 고객 쪽만 생략.
+ *
+ *  참고: 새벽·야간(한국시 22시~익일 8시)은 솔라피 예약 발송(당일/익일 오전 10시)으로 잡힐 수 있음(lib/solapi-logic.cjs).
  *
  *  외부에 노출되는 API (window.SolapiNotify):
  *    sendScheduleSubmitNotice({
@@ -144,6 +150,10 @@
     return `${n.toLocaleString("ko-KR")}원`;
   }
 
+  /**
+   * 고객 수신 문자 — 인로그·더필링은 전체, 쇼픽은 결제·계좌·하단 입금 유의문구 생략.
+   * 촬영본 전송예정일 = 촬영일(schedule.date) + 10일.
+   */
   function buildSmsText({ siteLabel, schedule, company }) {
     const label = String(siteLabel || "").trim();
     const isShopick = label === "쇼픽";
@@ -162,20 +172,17 @@
     }
     lines.push(`장소 : ${placeLabel}`);
     if (composition) lines.push(`구성 : ${composition}`);
-    // 쇼픽은 금액/계좌/입금 안내를 모두 생략 — 결제는 별도 흐름이므로 문자 본문 단순화
-    if (!isShopick) {
-      if (amountLabel) {
-        lines.push(`결제예정 : ${amountLabel}`);
-        const baseAmount = Number(schedule?.paymentAmount);
-        if (Number.isFinite(baseAmount) && baseAmount > 0) {
-          // 세금계산서 발행 시 부가세 10% 포함 금액
-          const taxIncluded = Math.round(baseAmount * 1.1);
-          lines.push(`(세금계산서 발행시 ${taxIncluded.toLocaleString("ko-KR")}원)`);
-        }
+    if (!isShopick && amountLabel) {
+      lines.push(`결제예정 : ${amountLabel}`);
+      const baseAmount = Number(schedule?.paymentAmount);
+      if (Number.isFinite(baseAmount) && baseAmount > 0) {
+        const taxIncluded = Math.round(baseAmount * 1.1);
+        lines.push(`(세금계산서 발행시 ${taxIncluded.toLocaleString("ko-KR")}원)`);
       }
+    }
+    if (!isShopick) {
       lines.push(ACCOUNT_LINE);
     }
-    // 촬영본 전송예정일 = 촬영일 + 10일 — 인로그/쇼픽/더필링 공통
     const deliveryIso = isoDatePlusDays(schedule?.date, 10);
     if (deliveryIso) {
       const deliveryLabel = formatShortDateLabel(deliveryIso);
@@ -220,8 +227,13 @@
   }
 
   /**
-   * 관리자 확인용 단문(SMS) 본문 — 업체명 / 주소 / 촬영형태만.
-   * 솔라피 SMS 한도(90 bytes) 안에 들어가도록 주소를 우선 절단.
+   * 관리자(01028692443) 확인용 단문(SMS) — 인로그/쇼픽/더필링 공통.
+   * 솔라피 단문 한도(EUC-KR 약 90바이트)에 맞춰 주소 줄만 우선 절단.
+   * 예)
+   *   [업체명]
+   *   촬영일: 5/15(금)
+   *   주소: …
+   *   촬영: 사진만
    */
   function buildAdminShortSmsText({ company, schedule }) {
     const companyLabel = String(company || "").trim() || "(업체명없음)";
@@ -233,20 +245,20 @@
     const compLine = `촬영: ${composition}`;
     const fixedBytes =
       estimateEucKrBytes(header) +
-      1 + // \n
+      1 +
       estimateEucKrBytes(dateLine) +
-      1 + // \n
+      1 +
       estimateEucKrBytes("주소: ") +
-      1 + // \n
+      1 +
       estimateEucKrBytes(compLine);
-    const SMS_LIMIT = 88; // 90 bytes 한도에 약간 여유
+    const SMS_LIMIT = 88;
     const placeBudget = Math.max(10, SMS_LIMIT - fixedBytes);
     const placeShort = truncateToBytes(placeRaw, placeBudget);
     return `${header}\n${dateLine}\n주소: ${placeShort}\n${compLine}`;
   }
 
   /**
-   * 관리자(고정번호)에게 확인용 단문 SMS 별도 발송. 실패해도 사용자 흐름엔 영향 없음.
+   * 관리자(고정번호)에게 단문 SMS. 실패해도 사용자 흐름엔 영향 없음.
    */
   async function sendAdminShortNotice({ company, schedule }) {
     try {

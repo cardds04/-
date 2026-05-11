@@ -31,7 +31,6 @@ const SKIP_TOP_FILE = new Set([
   "docker-entrypoint.sh",
   "fly.toml",
   "sync-config.js",
-  "solapi-notify.js",
   "package.json",
   "package-lock.json",
   "vercel.json",
