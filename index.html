@@ -16998,7 +16998,21 @@
                   : "원본 업로드 안내 완료 표시를 지웁니다";
           return `<button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardRevertDeliveryLog" data-schedule-id="${escapeHtml(
             sid
-          )}" data-revert-kind="${escapeHtml(kind)}" title="${escapeHtml(title)}">되돌리기</button>`;
+          )}" data-revert-kind="${escapeHtml(kind)}" title="${escapeHtml(title)}" aria-label="되돌리기">↩</button>`;
+        }
+        /** 활동 로그 — 업체 납품 폴더 열기 버튼 */
+        function dashDeliveryLogFolderHtml(scheduleRow) {
+          const company = normalizeCompanyName(scheduleRow?.company_name) || "";
+          if (!company || company === "-") return "";
+          const code = normalizeCompanyCode(scheduleRow?.code || scheduleRow?.companyCode || "");
+          const place = String(scheduleRow?.place || "").trim();
+          const dateStr = String(scheduleRow?.shoot_date_key || "").trim();
+          const shootFolderSuggestName = buildShootFolderNameForDashboard(dateStr, place);
+          return `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
+            company
+          )}" data-company-code="${escapeHtml(code)}" data-folder-name="${encodeURIComponent(
+            shootFolderSuggestName
+          )}" title="업체 납품 폴더(네이버웍스) 열기">폴더</button>`;
         }
         const eventsRaw = [];
         for (const [mapScheduleKey, r] of map.entries()) {
@@ -17011,8 +17025,8 @@
               html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;box-sizing:border-box;">
                 <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.photo_notified_at))))} 납품</span>
                 <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
-                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 사진 완료</span>
-                <span style="margin-left:auto;flex-shrink:0;">${dashDeliveryLogRevertHtml(r, "photo", mapScheduleKey)}</span>
+                <span class="helper" style="margin-left:6px;">${escapeHtml(sdLabel)} · 사진</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;gap:4px;">${dashDeliveryLogFolderHtml(r)}${dashDeliveryLogRevertHtml(r, "photo", mapScheduleKey)}</span>
               </div>`,
             });
           if (r.video_notified_at)
@@ -17021,8 +17035,8 @@
               html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;box-sizing:border-box;">
                 <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.video_notified_at))))} 납품</span>
                 <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
-                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 영상 완료</span>
-                <span style="margin-left:auto;flex-shrink:0;">${dashDeliveryLogRevertHtml(r, "video", mapScheduleKey)}</span>
+                <span class="helper" style="margin-left:6px;">${escapeHtml(sdLabel)} · 영상</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;gap:4px;">${dashDeliveryLogFolderHtml(r)}${dashDeliveryLogRevertHtml(r, "video", mapScheduleKey)}</span>
               </div>`,
             });
           if (r.photographer_site_done_at)
@@ -17031,8 +17045,8 @@
               html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;box-sizing:border-box;">
                 <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.photographer_site_done_at))))} 현장</span>
                 <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
-                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 작가 현장 확인완료</span>
-                <span style="margin-left:auto;flex-shrink:0;">${dashDeliveryLogRevertHtml(r, "site", mapScheduleKey)}</span>
+                <span class="helper" style="margin-left:6px;">${escapeHtml(sdLabel)} · 현장</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;gap:4px;">${dashDeliveryLogFolderHtml(r)}${dashDeliveryLogRevertHtml(r, "site", mapScheduleKey)}</span>
               </div>`,
             });
           if (r.photographer_original_upload_notified_at)
@@ -17041,8 +17055,8 @@
               html: `<div class="schedule-dashboard-row-line schedule-delivery-log-line" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;box-sizing:border-box;">
                 <span class="schedule-dashboard-processed-at">${escapeHtml(formatYmdToMdSlash(isoUtcToKstYmd(String(r.photographer_original_upload_notified_at))))} 원본</span>
                 <span class="schedule-dashboard-company" style="margin-left:6px;">${escapeHtml(comp)}</span>
-                <span class="helper" style="margin-left:6px;">촬영일 ${escapeHtml(sdLabel)} · 작가 원본 업로드 안내 문자 발송</span>
-                <span style="margin-left:auto;flex-shrink:0;">${dashDeliveryLogRevertHtml(r, "original", mapScheduleKey)}</span>
+                <span class="helper" style="margin-left:6px;">${escapeHtml(sdLabel)} · 원본</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;gap:4px;">${dashDeliveryLogFolderHtml(r)}${dashDeliveryLogRevertHtml(r, "original", mapScheduleKey)}</span>
               </div>`,
             });
         }
