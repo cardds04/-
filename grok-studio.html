@@ -1251,6 +1251,14 @@
         width: 100%;
         padding-top: 0;
       }
+      .wf-toolbar {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.65rem;
+        align-items: center;
+        margin: 0.65rem 0 0.35rem;
+      }
       .wf-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -2060,7 +2068,7 @@
           <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
           프롬프트와 일괄 보정값은 아래 <strong>메인</strong> 칸에서 저장할 수 있으며, 장마다 다르게 하려면 각 카드의
-          <strong>「개별 프롬프트·보정」</strong>을 펼치세요.
+          <strong>「개별 프롬프트·보정」</strong>을 펼치세요. <strong>모두 생성</strong>·<strong>일괄 합성 출력</strong>·<strong>초기화</strong>는 원본 업로드 칸 바로 아래에서 바로 누를 수 있습니다.
         </p>
 
         <label class="drop" id="wfDropzone" tabindex="0" aria-label="원본 사진 선택 또는 끌어다 놓기">
@@ -2069,8 +2077,14 @@
           <span class="drop__name" id="wfDropName"></span>
         </label>
 
+        <div class="wf-toolbar" role="group" aria-label="창문 보정 일괄 실행">
+          <button type="button" class="btn--wf-main" id="wfGenAll">모두 생성</button>
+          <button type="button" class="btn--wf-main" id="wfCompositeAll">일괄 합성 출력</button>
+          <button type="button" class="btn--ghost" id="wfClearAll">초기화</button>
+        </div>
+
         <details class="wf-settings-details">
-          <summary class="wf-settings-summary">메인: 프롬프트·일괄 보정·실행 — 눌러 펼치기</summary>
+          <summary class="wf-settings-summary">메인: 프롬프트·일괄 보정 — 눌러 펼치기</summary>
         <div class="wf-settings-row">
           <div class="wf-settings-col">
             <label class="label" for="wfPrompt">생성 프롬프트 (일괄 기본)</label>
@@ -2134,10 +2148,6 @@
               <button type="button" class="btn--mini-save" id="wfSavePrefs">일괄 설정 저장</button>
               <span id="wfPrefsStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
             </div>
-          </div>
-          <div class="wf-settings-actions">
-            <button type="button" class="btn--wf-main" id="wfGenAll">모두 생성</button>
-            <button type="button" class="btn--ghost" id="wfClearAll">초기화</button>
           </div>
         </div>
         </details>
@@ -4631,6 +4641,7 @@
           aiOpacity: 100,
         };
         var wfGenAllBtn = document.getElementById('wfGenAll');
+        var wfCompositeAllBtn = document.getElementById('wfCompositeAll');
         var wfClearAllBtn = document.getElementById('wfClearAll');
         var wfGrid = document.getElementById('wfGrid');
         var wfErrorEl = document.getElementById('wfError');
@@ -5968,22 +5979,44 @@
           });
         }
 
-        wfGenAllBtn.addEventListener('click', function () {
-          wfItems.forEach(function (item) {
-            if (item.status !== 'generating') generateForItem(item);
+        if (wfGenAllBtn) {
+          wfGenAllBtn.addEventListener('click', function () {
+            wfItems.forEach(function (item) {
+              if (item.status !== 'generating') generateForItem(item);
+            });
           });
-        });
+        }
 
-        wfClearAllBtn.addEventListener('click', function () {
-          wfItems.forEach(function (item) {
-            if (item.origObjectUrl) URL.revokeObjectURL(item.origObjectUrl);
-            clearItemCompositePreview(item);
+        if (wfCompositeAllBtn) {
+          wfCompositeAllBtn.addEventListener('click', function () {
+            var ready = wfItems.filter(function (item) {
+              return item.origImg && item.aiImg && item.selection;
+            });
+            if (!ready.length) {
+              showWfError(
+                '일괄 합성: 원본·AI 결과·창문 선택 영역이 모두 있는 카드가 없습니다. 먼저 영역을 지정하고 생성을 완료하세요.',
+              );
+              return;
+            }
+            showWfError('');
+            ready.forEach(function (item) {
+              compositeItem(item);
+            });
           });
-          wfItems = [];
-          wfGrid.innerHTML = '';
-          wfDropName.textContent = '';
-          showWfError('');
-        });
+        }
+
+        if (wfClearAllBtn) {
+          wfClearAllBtn.addEventListener('click', function () {
+            wfItems.forEach(function (item) {
+              if (item.origObjectUrl) URL.revokeObjectURL(item.origObjectUrl);
+              clearItemCompositePreview(item);
+            });
+            wfItems = [];
+            wfGrid.innerHTML = '';
+            wfDropName.textContent = '';
+            showWfError('');
+          });
+        }
 
         if (wfSavePrefsBtn) {
           wfSavePrefsBtn.addEventListener('click', function () {
@@ -6026,8 +6059,8 @@
         if (wfSettingsDetailsEl && wfSettingsSummaryEl) {
           wfSettingsDetailsEl.addEventListener('toggle', function () {
             wfSettingsSummaryEl.textContent = wfSettingsDetailsEl.open
-              ? '메인: 프롬프트·일괄 보정·실행 — 접기'
-              : '메인: 프롬프트·일괄 보정·실행 — 눌러 펼치기';
+              ? '메인: 프롬프트·일괄 보정 — 접기'
+              : '메인: 프롬프트·일괄 보정 — 눌러 펼치기';
           });
         }
 
