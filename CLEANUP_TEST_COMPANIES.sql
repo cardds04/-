@@ -1,5 +1,41 @@
 -- ============================================================
--- 테스트 업체 데이터 정리 스크립트
+-- 테스트 업체 데이터 정리 스크립트 (정규식 기반 — 새로 생긴 것도 자동 매칭)
+-- ============================================================
+-- 한 번에 모든 테스트 패턴 삭제. 매번 이름 추가할 필요 없음.
+-- 추후 다시 생기면 이 스크립트만 다시 돌리면 됨.
+
+-- ───────────────────────────────────────────────
+-- ★ PREVIEW (정규식) ★ : 어떤 행이 지워질지 미리 확인
+-- ───────────────────────────────────────────────
+
+-- 1) schedules 에서 삭제 대상 미리보기
+select id, company_name, code, writer_name, date_key
+from public.schedules
+where
+  company_name ~ '^(QA업체\d*|E2E_COMPANY_\d+|테스트업체\d*|테스트\d*|test\d*|1234)$'
+order by company_name, date_key;
+
+-- 2) company_directory 에서 삭제 대상 미리보기
+select id, name, login_id, code, phone, customer_phone
+from public.company_directory
+where
+  name ~ '^(QA업체\d*|E2E_COMPANY_\d+|테스트업체\d*|테스트\d*|test\d*|1234)$'
+order by name;
+
+-- ───────────────────────────────────────────────
+-- ★ DELETE (정규식) ★ : PREVIEW 통과 후 주석 풀고 실행
+-- ───────────────────────────────────────────────
+
+-- begin;
+-- delete from public.schedules
+-- where company_name ~ '^(QA업체\d*|E2E_COMPANY_\d+|테스트업체\d*|테스트\d*|test\d*|1234)$';
+-- delete from public.company_directory
+-- where name ~ '^(QA업체\d*|E2E_COMPANY_\d+|테스트업체\d*|테스트\d*|test\d*|1234)$';
+-- commit;
+
+
+-- ============================================================
+-- 이전 명시 리스트 방식 (참고용 — 위 정규식이 더 편리)
 -- ============================================================
 -- 사용법:
 --   1) Supabase SQL Editor 에서 먼저 ★PREVIEW★ 섹션만 실행해서 지울 행이 맞는지 확인
