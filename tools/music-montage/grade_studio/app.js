@@ -1660,6 +1660,9 @@
       if (!ids.has(c.id)) return;
       // copy slider keys (skip trim — keep per-clip trim)
       SLIDER_KEYS.forEach(k => { c.grade[k] = Number(state.presetSlot[k] ?? DEFAULT_GRADE[k]); });
+      // HSL 색조/채도/밝기 (8채널 × {h,s,l}) 도 함께 복사 — cloneGrade 가 깊은 복제 처리
+      const presetHsl = cloneGrade(state.presetSlot).hsl;
+      c.grade.hsl = presetHsl;
       markClipGraded(c);
       // 디바운스 timer 도 cancel — 같은 클립이 곧이어 batch 로 저장될 거라 timer 발사 불필요
       const t = _saveTimers.get(c.id);

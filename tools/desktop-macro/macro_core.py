@@ -107,6 +107,38 @@ def _execute_record_listen_impl(
 
     esc_dbl_state = {"t0": 0.0, "n": 0}
 
+    # Alt+Q/W/E/R 는 앱 제어 단축키 — 녹화에 들어가지 않도록 필터.
+    # 또한 알트+키 콤보를 위해 녹화 시작 시점에 이미 눌린 상태인 키의
+    # release(고아 release)도 같이 걸러야 한다.
+    alt_state = {"down": False}
+    pressed_sigs: set[tuple] = set()
+    filtered_sigs: set[tuple] = set()
+    MAC_QWER_VK = {12, 13, 14, 15}  # macOS Q/W/E/R virtual key codes
+    QWER_CHARS = {"q", "w", "e", "r"}
+
+    def key_signature(key) -> tuple:
+        vk = getattr(key, "vk", None)
+        if vk is not None:
+            return ("vk", int(vk))
+        ch = getattr(key, "char", None)
+        if ch:
+            return ("ch", ch.lower())
+        name = getattr(key, "name", None)
+        return ("nm", name)
+
+    def is_alt_struct(js: dict) -> bool:
+        if js.get("kind") != "named":
+            return False
+        n = js.get("name") or ""
+        return n.startswith("alt")
+
+    def is_qwer(key) -> bool:
+        vk = getattr(key, "vk", None)
+        if vk is not None and vk in MAC_QWER_VK:
+            return True
+        ch = (getattr(key, "char", None) or "").lower()
+        return ch in QWER_CHARS
+
     def on_click(x: int, y: int, button: Button, pressed: bool):
         events.append(
             {
@@ -132,10 +164,31 @@ def _execute_record_listen_impl(
                 esc_stop["stop"] = True
                 return False
             return None
+        if is_alt_struct(js):
+            alt_state["down"] = True
+            # alt 자체는 기록 (정상 modifier 사용을 위해)
+            pressed_sigs.add(key_signature(key))
+            events.append({"t_ms": rel_ms(), "type": "key_press", "key": js})
+            return
+        if alt_state["down"] and is_qwer(key):
+            filtered_sigs.add(key_signature(key))
+            return
+        pressed_sigs.add(key_signature(key))
         events.append({"t_ms": rel_ms(), "type": "key_press", "key": js})
 
     def on_release(key):
-        events.append({"t_ms": rel_ms(), "type": "key_release", "key": serialize_key_obj(key)})
+        js = serialize_key_obj(key)
+        if is_alt_struct(js):
+            alt_state["down"] = False
+        sig = key_signature(key)
+        # 녹화 시작 전부터 눌려있던 키의 release(고아) 는 무시.
+        if sig in filtered_sigs:
+            filtered_sigs.discard(sig)
+            return
+        if sig not in pressed_sigs:
+            return
+        pressed_sigs.discard(sig)
+        events.append({"t_ms": rel_ms(), "type": "key_release", "key": js})
 
     if record_moves:
         m_listener = mouse.Listener(on_click=on_click, on_scroll=on_scroll, on_move=on_move)
@@ -152,6 +205,33 @@ def _execute_record_listen_impl(
     finally:
         kb_listener.stop()
         m_listener.stop()
+
+    # 종료 시점에 release 가 없는 press 는 제거 (제어 단축키 잔여 정리).
+    if pressed_sigs:
+        unbalanced = set(pressed_sigs)
+
+        def ev_key_sig(ev: dict) -> tuple:
+            k = ev.get("key") or {}
+            kind = k.get("kind")
+            if kind == "vk":
+                vk = k.get("vk")
+                return ("vk", int(vk)) if vk is not None else ("?", None)
+            if kind == "char":
+                return ("ch", (k.get("char") or "").lower())
+            if kind == "named":
+                return ("nm", k.get("name"))
+            return ("?", None)
+
+        cleaned: list[dict] = []
+        for ev in events:
+            if ev.get("type") == "key_press" and ev_key_sig(ev) in unbalanced:
+                continue
+            cleaned.append(ev)
+        events = cleaned
+
+    # 마우스·키보드 리스너가 별도 스레드라 같은 시각에 발생한 이벤트가
+    # 파일 순서 ≠ 시간 순서 가 될 수 있다. t_ms 로 안정 정렬.
+    events.sort(key=lambda e: int(e.get("t_ms", 0)))
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -310,6 +390,8 @@ def _execute_play_impl(
 
     try:
         events = load_events(inp)
+        # 안전망: 혹시 파일이 t_ms 순이 아니면 정렬.
+        events = sorted(events, key=lambda e: int(e.get("t_ms", 0)))
         log(f"[재생] 진행 중 Esc 키를 {DOUBLE_ESCAPE_WINDOW_SEC:g}초 안에 두 번 누르면 즉시 중지합니다.")
         repeats = max(1, min(100000, int(repeat_count)))
         mc = mouse.Controller()
@@ -318,34 +400,46 @@ def _execute_play_impl(
 
         def apply_one(ev: dict) -> None:
             t = ev.get("type")
+            t_ms = int(ev.get("t_ms", 0))
             if t == "mouse_click":
                 x, y = int(ev["x"]), int(ev["y"])
-                btn = str_to_button(ev.get("button", "left"))
+                btn_name = ev.get("button", "left")
+                btn = str_to_button(btn_name)
                 mc.position = (x, y)
-                if dry_run:
-                    return
-                if ev.get("pressed"):
-                    mc.press(btn)
-                else:
-                    mc.release(btn)
+                # macOS 에서 CGWarp 직후 클릭이 일부 앱에서 흡수되는 경우가 있어
+                # 워프가 안정될 때까지 약간(8ms) 기다린다.
+                time.sleep(0.008)
+                pressed = bool(ev.get("pressed"))
+                if not dry_run:
+                    if pressed:
+                        mc.press(btn)
+                    else:
+                        mc.release(btn)
+                log(
+                    f"  · t={t_ms:>6}ms  click {btn_name} ({x},{y}) "
+                    f"{'press' if pressed else 'release'}"
+                )
             elif t == "mouse_move":
                 if not dry_run:
                     mc.position = (int(ev["x"]), int(ev["y"]))
             elif t == "scroll":
                 if not dry_run:
                     mc.scroll(float(ev.get("dx", 0)), float(ev.get("dy", 0)))
+                log(f"  · t={t_ms:>6}ms  scroll dx={ev.get('dx')} dy={ev.get('dy')}")
             elif t == "key_press":
                 kk = deserialize_key(ev.get("key") or {})
                 if kk is None:
                     return
                 if not dry_run:
                     kc.press(kk)
+                log(f"  · t={t_ms:>6}ms  key_press   {ev.get('key')}")
             elif t == "key_release":
                 kk = deserialize_key(ev.get("key") or {})
                 if kk is None:
                     return
                 if not dry_run:
                     kc.release(kk)
+                log(f"  · t={t_ms:>6}ms  key_release {ev.get('key')}")
 
         if countdown_secs > 0:
             log(f"[재생] {int(countdown_secs)}초 뒤 시작합니다.")

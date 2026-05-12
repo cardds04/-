@@ -1,0 +1,29 @@
+#!/bin/bash
+# 매크로 앱 런처 — .venv 의 파이썬으로 macro_app.py 실행.
+set -e
+
+PROJECT_DIR="/Users/happykimsfamily/schedule-site/tools/desktop-macro"
+PY="$PROJECT_DIR/.venv/bin/python"
+SCRIPT="$PROJECT_DIR/macro_app.py"
+LOGDIR="$HOME/Library/Logs/매크로"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/run.log"
+
+{
+  echo "----- $(date '+%Y-%m-%d %H:%M:%S') -----"
+  echo "PY=$PY"
+  echo "SCRIPT=$SCRIPT"
+} >> "$LOG" 2>&1
+
+if [ ! -x "$PY" ]; then
+  /usr/bin/osascript -e "display alert \"매크로 실행 오류\" message \"가상환경 파이썬을 찾을 수 없습니다:\n$PY\""
+  exit 1
+fi
+
+if [ ! -f "$SCRIPT" ]; then
+  /usr/bin/osascript -e "display alert \"매크로 실행 오류\" message \"스크립트가 없습니다:\n$SCRIPT\""
+  exit 1
+fi
+
+cd "$PROJECT_DIR"
+exec "$PY" "$SCRIPT" >> "$LOG" 2>&1
