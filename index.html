@@ -4270,6 +4270,16 @@
           clientKvSoftPullTimer = null;
           if (inlogEditorDirty) return;
           if (scheduleSiteClientKvPushInFlight) return;
+          // 디바운스된 push 가 아직 안 날아갔으면 pull 로 로컬을 덮어쓰지 말 것.
+          // (블로그 발송/완료 직후 focus·visibilitychange 가 일으킨 pull 이 7번째 항목을
+          // 서버의 6항목으로 되돌리던 버그 해결)
+          if (
+            scheduleSiteClientKvState.supabasePushTimer ||
+            scheduleSiteClientKvState.pendingKvPushAfterInitialPull
+          ) {
+            clientKvSoftPullTimer = setTimeout(scheduleSoftPullClientKvFromSupabase, 3000);
+            return;
+          }
           void (async () => {
             const changed = await pullScheduleSiteClientKvFromSupabase();
             if (!changed) return;
@@ -9706,10 +9716,10 @@
             .map((s) => String(s || "").toLowerCase())
             .filter(Boolean);
           localStorage.setItem(STORAGE_BLOG_VENDOR_LIST, JSON.stringify(arr));
-          // client_kv 테이블로 즉시 push (모든 관리자 공유)
+          // client_kv 테이블로 즉시 push (모든 관리자 공유) — 디바운스 대신 즉시 푸시.
           try {
             scheduleSiteClientKvState?.flushSnapshotNow?.();
-            scheduleSiteClientKvState?.queueSupabaseKvPush?.();
+            requestClientKvPushWhenReady?.(false);
           } catch (_) {}
         } catch (_) {}
       }
@@ -9741,9 +9751,11 @@
         try {
           localStorage.setItem(STORAGE_BLOG_SEND_LOG, JSON.stringify(map || {}));
           // client_kv 테이블로 즉시 push (모든 관리자 공유)
+          // 디바운스(2.5s) 대신 즉시 push — 그 사이 focus/visibility 가 일으킨 pull 이
+          // 로컬 변경을 서버 구버전으로 되돌리던 동기화 누락 방지.
           try {
             scheduleSiteClientKvState?.flushSnapshotNow?.();
-            scheduleSiteClientKvState?.queueSupabaseKvPush?.();
+            requestClientKvPushWhenReady?.(false);
           } catch (_) {}
         } catch (_) {}
       }
