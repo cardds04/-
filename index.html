@@ -13157,12 +13157,13 @@ ${folderBtn}
           const mm = String(m).padStart(2, "0");
           monthOpts.push(`<option value="${mm}" ${m === month ? "selected" : ""}>${m}</option>`);
         }
+        // flex:1 이 selects 를 ~500px 까지 stretch 하던 문제 해결 — inline style 로 폭 고정.
         return `
-          <div class="filter-row" style="margin-bottom:10px; flex-wrap:wrap; align-items:center; gap:8px;">
+          <div id="payrollAdminMonthSelectorRow" class="filter-row" style="margin-bottom:10px; flex-wrap:wrap; align-items:center; gap:8px;">
             <span class="hint" style="font-weight:700;">조회 월</span>
-            <select id="payrollAdminYearSelect" class="small-select" aria-label="급여 조회 연도">${yearOpts.join("")}</select>
+            <select id="payrollAdminYearSelect" class="small-select" aria-label="급여 조회 연도" style="flex:0 0 auto;width:96px;min-width:96px;">${yearOpts.join("")}</select>
             <span>년</span>
-            <select id="payrollAdminMonthSelect" class="small-select" aria-label="급여 조회 월">${monthOpts.join("")}</select>
+            <select id="payrollAdminMonthSelect" class="small-select" aria-label="급여 조회 월" style="flex:0 0 auto;width:80px;min-width:80px;">${monthOpts.join("")}</select>
             <span>월</span>
             <button type="button" class="btn-sm primary" id="payrollAdminMonthApplyBtn">적용</button>
           </div>`;
@@ -13269,14 +13270,40 @@ ${folderBtn}
             )}원</strong></td></tr>`;
           })
           .join("");
-        summaryEl.innerHTML = `
-          ${buildPayrollAdminMonthSelectorHtml(monthKey)}
-          <div style="font-weight:700; margin-bottom:6px;">${monthKey} 작가별 급여 요약</div>
-          <div style="overflow:auto;">
+        const headingHtml = `<div class="payroll-admin-summary-heading" style="font-weight:700; margin-bottom:6px;">${monthKey} 작가별 급여 요약</div>`;
+        const tableHtml = `<div class="payroll-admin-summary-table" style="overflow:auto;">
             <table class="payment-table" style="font-size:0.85rem;"><thead><tr>
               <th>작가</th><th>완료촬영</th><th>기본급</th><th>유류</th><th>추가요금</th><th>세전</th><th>형태</th><th>최종표시</th>
             </tr></thead><tbody>${summaryLines}</tbody></table>
           </div>`;
+        // 사용자가 연/월 select 를 열어둔 채로 다른 브라우저의 soft pull 이 발생하면
+        // innerHTML 통째 교체로 드롭다운이 닫혀버려 "월 선택 불가" 버그가 생긴다.
+        // 첫 렌더에만 selector 를 만들고, 이후엔 selector DOM 은 그대로 두고
+        // value 와 요약 표만 부분 업데이트.
+        const existingSelector = document.getElementById("payrollAdminMonthSelectorRow");
+        const existingYearSel = document.getElementById("payrollAdminYearSelect");
+        const existingMonthSel = document.getElementById("payrollAdminMonthSelect");
+        if (existingSelector && existingYearSel && existingMonthSel && summaryEl.contains(existingSelector)) {
+          // 부분 업데이트 경로: select DOM 을 새로 만들지 않음
+          const [yStr, mStr] = monthKey.split("-");
+          const activeId = document.activeElement?.id || "";
+          if (activeId !== "payrollAdminYearSelect" && existingYearSel.value !== yStr) {
+            existingYearSel.value = yStr;
+          }
+          if (activeId !== "payrollAdminMonthSelect" && existingMonthSel.value !== mStr) {
+            existingMonthSel.value = mStr;
+          }
+          const existingHeading = summaryEl.querySelector(".payroll-admin-summary-heading");
+          const existingTable = summaryEl.querySelector(".payroll-admin-summary-table");
+          if (existingHeading) existingHeading.textContent = `${monthKey} 작가별 급여 요약`;
+          if (existingTable) {
+            existingTable.outerHTML = tableHtml;
+          } else {
+            existingSelector.insertAdjacentHTML("afterend", `${headingHtml}${tableHtml}`);
+          }
+        } else {
+          summaryEl.innerHTML = `${buildPayrollAdminMonthSelectorHtml(monthKey)}${headingHtml}${tableHtml}`;
+        }
       }
 
       function renderPhotographers() {
