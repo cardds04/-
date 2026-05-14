@@ -321,7 +321,13 @@
           </div>
 
           <div id="payrollPanel" class="payroll-panel hidden">
-            <h3>이번달 급여</h3>
+            <h3 id="payrollPanelTitle">이번달 급여</h3>
+            <div class="payroll-month-nav" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              <button id="payrollPrevMonthBtn" type="button" class="btn outline small">◀ 이전달</button>
+              <strong id="payrollMonthLabel" style="min-width:90px;text-align:center;">—</strong>
+              <button id="payrollNextMonthBtn" type="button" class="btn outline small">다음달 ▶</button>
+              <button id="payrollCurrentMonthBtn" type="button" class="btn outline small">이번달</button>
+            </div>
             <div id="payrollSummary" class="payroll-summary"></div>
             <div id="payrollLinesList"></div>
             <div class="payroll-add">
@@ -1360,6 +1366,24 @@
       const payrollMemoInputEl = document.getElementById("payrollMemoInput");
       const payrollFileInputEl = document.getElementById("payrollFileInput");
       const payrollAddBtnEl = document.getElementById("payrollAddBtn");
+      const payrollPanelTitleEl = document.getElementById("payrollPanelTitle");
+      const payrollMonthLabelEl = document.getElementById("payrollMonthLabel");
+      const payrollPrevMonthBtnEl = document.getElementById("payrollPrevMonthBtn");
+      const payrollNextMonthBtnEl = document.getElementById("payrollNextMonthBtn");
+      const payrollCurrentMonthBtnEl = document.getElementById("payrollCurrentMonthBtn");
+      /** 현재 화면에 표시 중인 급여 조회 월. 기본값 = 이번달. */
+      let payrollViewMonthKey = (function(){ const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`; })();
+      function shiftPayrollViewMonth(delta){
+        const [y,m] = payrollViewMonthKey.split('-').map((s)=>parseInt(s,10));
+        const d = new Date(y, (m-1)+delta, 1);
+        payrollViewMonthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        renderPhotographerPayroll();
+      }
+      function resetPayrollViewToCurrentMonth(){
+        const t = new Date();
+        payrollViewMonthKey = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+        renderPhotographerPayroll();
+      }
       const historyModalEl = document.getElementById("historyModal");
       const historyCloseBtnEl = document.getElementById("historyCloseBtn");
       const historySummaryEl = document.getElementById("historySummary");
@@ -2475,7 +2499,21 @@
         const writer = getCurrentWriter();
         if (!writer || !payrollPanelEl || !payrollSummaryEl || !payrollLinesListEl) return;
         payrollPanelEl.classList.remove("hidden");
-        const monthKey = getCurrentMonthKey();
+        const monthKey = payrollViewMonthKey || getCurrentMonthKey();
+        const currentMonthKey = getCurrentMonthKey();
+        const isCurrentMonth = monthKey === currentMonthKey;
+        // 헤더·라벨 동기화
+        if (payrollPanelTitleEl) {
+          payrollPanelTitleEl.textContent = isCurrentMonth ? "이번달 급여" : `${monthKey} 급여`;
+        }
+        if (payrollMonthLabelEl) {
+          const [yLbl, mLbl] = monthKey.split("-");
+          payrollMonthLabelEl.textContent = `${yLbl}년 ${parseInt(mLbl,10)}월`;
+        }
+        if (payrollCurrentMonthBtnEl) {
+          payrollCurrentMonthBtnEl.disabled = isCurrentMonth;
+          payrollCurrentMonthBtnEl.style.opacity = isCurrentMonth ? "0.5" : "1";
+        }
         const rows = getMySchedules();
         const monthDone = getMonthDoneRowsForPayroll(rows, monthKey);
         const shootCount = monthDone.length;
@@ -3613,6 +3651,10 @@
         if (event.target === historyModalEl) historyModalEl.classList.add("hidden");
       });
 
+      payrollPrevMonthBtnEl?.addEventListener("click", () => shiftPayrollViewMonth(-1));
+      payrollNextMonthBtnEl?.addEventListener("click", () => shiftPayrollViewMonth(1));
+      payrollCurrentMonthBtnEl?.addEventListener("click", () => resetPayrollViewToCurrentMonth());
+
       payrollAddBtnEl?.addEventListener("click", async () => {
         const writer = getCurrentWriter();
         if (!writer || !payrollCategorySelectEl || !payrollAmountInputEl) return;
@@ -3621,7 +3663,7 @@
           alert("금액을 입력해 주세요.");
           return;
         }
-        const monthKey = getCurrentMonthKey();
+        const monthKey = payrollViewMonthKey || getCurrentMonthKey();
         const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
         const lines = Array.isArray(rec.lines) ? rec.lines.slice() : [];
         let attachmentDataUrl = "";
@@ -3658,7 +3700,7 @@
         if (!btn || !btn.dataset.lineId) return;
         const writer = getCurrentWriter();
         if (!writer) return;
-        const monthKey = getCurrentMonthKey();
+        const monthKey = payrollViewMonthKey || getCurrentMonthKey();
         const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
         const lines = (Array.isArray(rec.lines) ? rec.lines : []).filter((ln) => ln.id !== btn.dataset.lineId);
         rec.lines = lines;
