@@ -4307,46 +4307,50 @@
       async function pushScheduleSiteClientKvToSupabase(includeInlogData = false) {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
         if (scheduleSiteClientKvPushInFlight) return false;
-        const EXCLUDED_KEYS = new Set([
-          STORAGE_ADMIN_DASHBOARD_COMPLETED,
-          STORAGE_ADMIN_WRITER_PROCESS_LOG,
-          STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
-        ]);
-        const kvFilteredLocal = Object.fromEntries(
-          [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
-            if (EXCLUDED_KEYS.has(k)) return false;
-            // 저장 버튼(includeInlogData=true)이 아닌 경우 인로그 키는 로컬에서 제외 →
-            // 서버 최신 인로그 데이터가 항상 보존된다.
-            if (!includeInlogData && INLOG_DATA_KEYS.has(k)) return false;
-            return true;
-          })
-        );
-        // 행위(로컬 변경) 전에 서버가 먼저 갱신됐을 수 있으므로 push 직전 최신 서버 상태를 pull해 병합
-        const serverRow = await fetchClientKvRowFromSupabase();
-        // 서버 조회 실패 시 push 중단 — serverKvRaw가 {} 이면 인로그 키가 누락된 채로 전체 kv를 덮어써
-        // 기존 인로그 데이터가 사라지는 버그가 있었음. null 반환 = 네트워크 오류 → 안전하게 중단.
-        if (!serverRow) {
-          console.warn("[CLIENT_KV] 서버 행 조회 실패 — 인로그 데이터 보호를 위해 push 중단");
-          return false;
-        }
-        const serverKvRaw = serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
-        const serverKvFiltered = Object.fromEntries(
-          Object.entries(serverKvRaw).filter(
-            ([k]) =>
-              String(k || "").startsWith("scheduleSite") &&
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
-              k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-              k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
-          )
-        );
-        // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
-        // 서버의 인로그 데이터가 그대로 유지된다.
-        const kvFiltered = { ...serverKvFiltered, ...kvFilteredLocal };
-        if (!Object.keys(kvFiltered).length) return false;
+        // 진입 즉시 in-flight 로 표시 — 그 사이 soft pull 이 들어오면 즉시 지연됨.
+        // (예전엔 POST 직전에 set 했는데, 그 사이 fetch GET 단계에서 soft pull 이 끼어들어
+        //  local memoryStore 를 서버 구버전으로 덮어쓰던 race 가 있었음.)
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
-        const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
+        let pushTid = null;
         try {
+          const EXCLUDED_KEYS = new Set([
+            STORAGE_ADMIN_DASHBOARD_COMPLETED,
+            STORAGE_ADMIN_WRITER_PROCESS_LOG,
+            STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+          ]);
+          const kvFilteredLocal = Object.fromEntries(
+            [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
+              if (EXCLUDED_KEYS.has(k)) return false;
+              // 저장 버튼(includeInlogData=true)이 아닌 경우 인로그 키는 로컬에서 제외 →
+              // 서버 최신 인로그 데이터가 항상 보존된다.
+              if (!includeInlogData && INLOG_DATA_KEYS.has(k)) return false;
+              return true;
+            })
+          );
+          // 행위(로컬 변경) 전에 서버가 먼저 갱신됐을 수 있으므로 push 직전 최신 서버 상태를 pull해 병합
+          const serverRow = await fetchClientKvRowFromSupabase();
+          // 서버 조회 실패 시 push 중단 — serverKvRaw가 {} 이면 인로그 키가 누락된 채로 전체 kv를 덮어써
+          // 기존 인로그 데이터가 사라지는 버그가 있었음. null 반환 = 네트워크 오류 → 안전하게 중단.
+          if (!serverRow) {
+            console.warn("[CLIENT_KV] 서버 행 조회 실패 — 인로그 데이터 보호를 위해 push 중단");
+            return false;
+          }
+          const serverKvRaw = serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
+          const serverKvFiltered = Object.fromEntries(
+            Object.entries(serverKvRaw).filter(
+              ([k]) =>
+                String(k || "").startsWith("scheduleSite") &&
+                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
+                k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
+                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+            )
+          );
+          // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
+          // 서버의 인로그 데이터가 그대로 유지된다.
+          const kvFiltered = { ...serverKvFiltered, ...kvFilteredLocal };
+          if (!Object.keys(kvFiltered).length) return false;
+          pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
             method: "POST",
             headers: {
@@ -4380,7 +4384,7 @@
           }
           return false;
         } finally {
-          clearTimeout(pushTid);
+          if (pushTid !== null) clearTimeout(pushTid);
           scheduleSiteClientKvPushInFlight = false;
         }
       }
