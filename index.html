@@ -18092,18 +18092,21 @@ ${folderBtn}
                                     <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}<br />
-                                    <details class="schedule-extra-detail">
-                                      <summary>상세보기</summary>
-                                      업체: ${escapeHtml(item.company || "-")}<br />
-                                      장소(전체): ${formatPlaceForDisplay(item.place)}<br />
-                                      연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
-                                      평수: ${escapeHtml(item.pyeong || "-")}<br />
-                                      비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
-                                      메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
-                                      ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
-                                      구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
-                                      쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
-                                    </details>
+                                    <div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;">
+                                      <details class="schedule-extra-detail" style="margin-top:0;flex:1;min-width:0;">
+                                        <summary>상세보기</summary>
+                                        업체: ${escapeHtml(item.company || "-")}<br />
+                                        장소(전체): ${formatPlaceForDisplay(item.place)}<br />
+                                        연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
+                                        평수: ${escapeHtml(item.pyeong || "-")}<br />
+                                        비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
+                                        메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                                        ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
+                                        구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
+                                        쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                                      </details>
+                                      <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(네이버웍스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
+                                    </div>
                                     <div class="quick-writer-row">
                                       ${["작가미정", ...photographers]
                                         .slice(0, 8)
