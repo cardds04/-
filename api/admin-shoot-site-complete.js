@@ -66,11 +66,13 @@ module.exports = async (req, res) => {
     let adminPassword = "";
     let fileBuffer = null;
     let mimeType = "";
+    let skipFolderProvisioning = false;
 
     if (ctype.includes("multipart/form-data")) {
       const { fields, files } = await parseMultipart(req);
       scheduleId = String(fields.scheduleId || "").trim();
       adminPassword = String(fields.adminPassword || "");
+      skipFolderProvisioning = String(fields.skipFolderProvisioning || "") === "true";
       const photo = files[0];
       if (photo?.buffer?.length) {
         fileBuffer = photo.buffer;
@@ -83,6 +85,7 @@ module.exports = async (req, res) => {
           : JSON.parse(typeof req.body === "string" && req.body ? req.body : "{}");
       scheduleId = String(body.scheduleId || "").trim();
       adminPassword = String(body.adminPassword || "");
+      skipFolderProvisioning = body.skipFolderProvisioning === true;
     }
 
     if (!adminPasswordOk(adminPassword)) {
@@ -94,6 +97,7 @@ module.exports = async (req, res) => {
       scheduleId,
       fileBuffer,
       mimeType,
+      skipFolderProvisioning,
     });
 
     if (!out.ok) {

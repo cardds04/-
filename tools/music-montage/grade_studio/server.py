@@ -86,46 +86,109 @@ AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
 # 임시 picker 로 다른 폴더를 가리키더라도 다음 /api/state 호출 시점에 덮어씀.
 FORCED_MUSIC_FOLDER = Path("/Volumes/ssd/ssd데스크탑/영어노래")
 
-# 자동 로고 매칭 — 비디오 폴더 열 때 이 폴더에서 폴더명에 맞는 로고를 자동 선택.
-LOGO_AUTO_FOLDER = Path("/Volumes/ssd/ssd데스크탑/잡다/데스크탑/로고")
+# 업체별 로고 이력 — 사용자가 로고를 한 번 고르면 (폴더명 → 로고경로) 매핑이 저장되고,
+# 같은 업체의 폴더를 다시 열면 그 로고가 자동으로 따라온다.
+# 매칭 규칙:
+#   1) 폴더명을 NFC 정규화하고 흔한 suffix(영상/촬영/사진 등)를 떼어 "업체명" 도출
+#   2) 저장된 키 중 (정확 일치) → (현재 폴더명을 prefix 로 갖는 가장 긴 키) 순으로 매치
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+BUSINESS_LOGOS_FILE = CACHE_ROOT / "business_logos.json"
+BUSINESS_SUFFIX_TOKENS = (
+    "촬영영상", "편집본", "원본본", "영상폴더",
+    "영상", "촬영", "사진", "원본", "편집", "컷",
+)
 
 
-def find_matching_logo(video_folder_name: str) -> Path | None:
-    """비디오 폴더 이름의 prefix 와 부분일치하는 로고를 LOGO_AUTO_FOLDER 에서 찾기.
+def _nfc_strip(s: str) -> str:
+    return unicodedata.normalize("NFC", (s or "").strip())
 
-    매칭 규칙:
-      - 폴더명 길이부터 시작해 한 글자씩 줄여가며 prefix 찾음
-      - 어떤 prefix 가 로고 stem 의 substring 이면 매치
-      - 후보 여러 개면 stem 가장 짧은 거 선택 (예: '공감대' < '공감대 흰색' < '공감대고화질')
-    예:
-      폴더 '공감대디자인' → '공감대디자인'·'공감대디자'·'공감대디'·'공감대' 순서로 시도
-      → '공감대' 가 '공감대.png' 의 stem 에 포함됨 → 매치
-    """
-    if not LOGO_AUTO_FOLDER.is_dir():
-        return None
-    name_raw = (video_folder_name or "").strip()
-    name = unicodedata.normalize("NFC", name_raw)
-    if len(name) < 2:
-        return None
+
+def _strip_business_suffix(name: str) -> str:
+    """폴더명에서 후행 공백·구분자·일반 suffix 를 반복적으로 떼어 업체명만 추출."""
+    s = _nfc_strip(name)
+    changed = True
+    while changed and s:
+        changed = False
+        s2 = s.rstrip(" _-.·")
+        if s2 != s:
+            s = s2
+            changed = True
+            continue
+        for tok in BUSINESS_SUFFIX_TOKENS:
+            if s.endswith(tok) and (len(s) - len(tok)) >= 2:
+                s = s[: -len(tok)]
+                changed = True
+                break
+    return s
+
+
+def load_business_logos() -> dict:
+    """{ nfc-normalized business name : absolute logo path } 반환."""
+    if not BUSINESS_LOGOS_FILE.is_file():
+        return {}
     try:
-        logos = [
-            p for p in LOGO_AUTO_FOLDER.iterdir()
-            if p.is_file() and p.suffix.lower() in IMG_EXTS and not p.name.startswith(".")
-        ]
-    except OSError:
-        return None
-    if not logos:
-        return None
-    # 로고 stem 도 NFC 정규화한 사본을 미리 계산
-    logo_stems = [(unicodedata.normalize("NFC", p.stem), p) for p in logos]
+        d = json.loads(BUSINESS_LOGOS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    items = d.get("items") if isinstance(d, dict) else None
+    if not isinstance(items, list):
+        return {}
+    out: dict = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        nm = _nfc_strip(it.get("name") or "")
+        lp = (it.get("logo") or "").strip()
+        if nm and lp:
+            out[nm] = lp
+    return out
 
-    for length in range(len(name), 1, -1):
-        prefix = name[:length]
-        matches = [p for stem, p in logo_stems if prefix in stem]
-        if matches:
-            matches.sort(key=lambda p: (len(unicodedata.normalize("NFC", p.stem)), p.name))
-            return matches[0]
+
+def save_business_logo(name: str, logo_path: str) -> None:
+    nm = _nfc_strip(name)
+    lp = (logo_path or "").strip()
+    if not nm or not lp:
+        return
+    items = []
+    if BUSINESS_LOGOS_FILE.is_file():
+        try:
+            d = json.loads(BUSINESS_LOGOS_FILE.read_text(encoding="utf-8"))
+            if isinstance(d, dict) and isinstance(d.get("items"), list):
+                items = [it for it in d["items"] if isinstance(it, dict) and _nfc_strip(it.get("name") or "") != nm]
+        except (OSError, json.JSONDecodeError):
+            items = []
+    items.append({"name": nm, "logo": lp, "saved_at": int(time.time())})
+    BUSINESS_LOGOS_FILE.write_text(
+        json.dumps({"version": 1, "items": items}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def find_business_logo(folder_name: str) -> Path | None:
+    """폴더명으로 업체 로고 이력에서 매치되는 경로 찾기 (정확 일치 > 가장 긴 prefix 매치)."""
+    name = _nfc_strip(folder_name)
+    if not name:
+        return None
+    mapping = load_business_logos()
+    if not mapping:
+        return None
+    # 1) 폴더명 그대로 정확 일치
+    if name in mapping:
+        p = Path(mapping[name])
+        return p if p.is_file() else None
+    # 2) 폴더명에서 suffix 떼어낸 형태로 정확 일치
+    base = _strip_business_suffix(name)
+    if base and base != name and base in mapping:
+        p = Path(mapping[base])
+        return p if p.is_file() else None
+    # 3) 저장된 키 K 가 name 의 prefix → 가장 긴 K 선택
+    candidates = [k for k in mapping.keys() if name.startswith(k) and len(k) >= 2]
+    if candidates:
+        candidates.sort(key=len, reverse=True)
+        for k in candidates:
+            p = Path(mapping[k])
+            if p.is_file():
+                return p
     return None
 
 
@@ -1525,7 +1588,19 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 return self._json({"cancelled": True})
             with self.server.state_lock:
                 self.server.logo_path = picked
-            return self._json({"ok": True, "logo": str(picked)})
+                cur_folder = self.server.folder
+            # 폴더가 열려있을 때만 (업체명 ↔ 로고) 매핑을 저장.
+            # 매핑은 흔한 suffix (영상/촬영/사진 등) 를 떼어낸 업체명으로 저장됨 → 추후 prefix 매치도 함께 동작.
+            saved_as = ""
+            if cur_folder is not None:
+                base = _strip_business_suffix(cur_folder.name) or _nfc_strip(cur_folder.name)
+                if base:
+                    try:
+                        save_business_logo(base, str(picked))
+                        saved_as = base
+                    except OSError as exc:
+                        print(f"[grade_studio] 업체 로고 저장 실패: {exc}")
+            return self._json({"ok": True, "logo": str(picked), "saved_as": saved_as})
 
         if p == "/api/clear_logo":
             with self.server.state_lock:
@@ -1783,13 +1858,13 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             picked = osascript_pick_folder()
             if picked is None:
                 return self._json({"cancelled": True})
-            auto_logo = find_matching_logo(picked.name)
+            auto_logo = find_business_logo(picked.name)
             with self.server.state_lock:
                 self.server.folder = picked
                 self.server.videos = list_videos(picked)
                 vids = list(self.server.videos)
-                if auto_logo is not None:
-                    self.server.logo_path = auto_logo
+                # 새 폴더로 바꿀 때 기존 로고를 비우고, 이력 매칭이 있을 때만 채움
+                self.server.logo_path = auto_logo if auto_logo is not None else None
             queue_prebuild_videos(vids)        # 전체 클립 백그라운드 미리 빌드
             return self._json({
                 "ok": True, "folder": str(picked), "count": len(vids),
@@ -1806,10 +1881,9 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 self.server.folder = folder
                 self.server.videos = list(picked)
                 vids = list(self.server.videos)
-            auto_logo = find_matching_logo(folder.name)
-            if auto_logo is not None:
-                with self.server.state_lock:
-                    self.server.logo_path = auto_logo
+            auto_logo = find_business_logo(folder.name)
+            with self.server.state_lock:
+                self.server.logo_path = auto_logo if auto_logo is not None else None
             queue_prebuild_videos(vids)
             return self._json({
                 "ok": True, "folder": str(folder), "count": len(vids),

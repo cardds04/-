@@ -16399,14 +16399,21 @@ ${folderBtn}
           const res = await fetch("/api/admin-shoot-site-complete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ scheduleId: sid, adminPassword: String(pw) }),
+            // skipFolderProvisioning=true: 전체스케줄 대시보드의 「촬영완료」 버튼은
+            // Naver Works 폴더 자동 생성·문자 발송 없이 photographer_site_done_at 만 기록.
+            // (폴더는 「폴더」 버튼·작가 페이지 등에서 별도 생성)
+            body: JSON.stringify({
+              scheduleId: sid,
+              adminPassword: String(pw),
+              skipFolderProvisioning: true
+            }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.ok) {
             alert(data.message || "처리에 실패했습니다.");
             return;
           }
-          alert("작가 현장 확인완료로 처리되었습니다. (Drive 업체 폴더 생성·갱신이 반영되었습니다.)");
+          alert("작가 현장 확인완료로 처리되었습니다. (폴더 생성·문자 발송 없음)");
           kickDashDeliveryRpcRefresh(true);
         } catch (error) {
           console.error("[admin-shoot-site]", error);

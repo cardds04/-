@@ -1698,6 +1698,114 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 🌈 그라데이션 보간
+  //   현재 선택된 클립들을 anchor 로 사용 (짝수개 필요).
+  //   anchor 들을 타임라인 순서대로 페어(1-2, 3-4, ...)로 묶고,
+  //   각 페어 사이의 클립들에 슬라이더 값을 선형 보간하여 적용.
+  //   HSL / 트림 / disabled 는 보간하지 않음 (값 그대로 유지).
+  async function applyGradientInterpolation() {
+    const status = $("#saveStatus");
+    const setStatus = (msg, cls) => {
+      status.textContent = msg;
+      status.className = "status-pill" + (cls ? " " + cls : "");
+    };
+
+    const anchorIds = Array.from(state.selectedIds || []);
+    if (anchorIds.length < 2) {
+      setStatus("anchor 2개 이상 선택 필요", "err");
+      setTimeout(() => { if (status.textContent.includes("anchor")) setStatus(""); }, 2500);
+      return;
+    }
+    if (anchorIds.length % 2 !== 0) {
+      setStatus(`anchor ${anchorIds.length}개 (짝수여야 함)`, "err");
+      setTimeout(() => { if (status.textContent.includes("anchor")) setStatus(""); }, 2500);
+      return;
+    }
+
+    // anchor 들을 state.clips(타임라인) 순서로 정렬
+    const idxOf = new Map(state.clips.map((c, i) => [c.id, i]));
+    const anchors = anchorIds
+      .filter(id => idxOf.has(id))
+      .sort((a, b) => idxOf.get(a) - idxOf.get(b));
+
+    // 페어 생성 (1-2, 3-4, ...)
+    const pairs = [];
+    for (let i = 0; i < anchors.length; i += 2) {
+      const s = anchors[i], e = anchors[i + 1];
+      const sIdx = idxOf.get(s), eIdx = idxOf.get(e);
+      if (sIdx != null && eIdx != null && sIdx < eIdx) {
+        pairs.push({ sId: s, eId: e, sIdx, eIdx });
+      }
+    }
+    if (!pairs.length) {
+      setStatus("페어를 만들 수 없음 (anchor 사이에 클립 필요)", "err");
+      setTimeout(() => { if (status.textContent.includes("페어")) setStatus(""); }, 2500);
+      return;
+    }
+
+    // 보간 대상 클립 수집 + 히스토리 저장
+    const touchedIds = [];
+    for (const p of pairs) {
+      for (let i = p.sIdx + 1; i < p.eIdx; i++) {
+        touchedIds.push(state.clips[i].id);
+      }
+    }
+    if (!touchedIds.length) {
+      setStatus("보간 대상 없음 (anchor 사이가 모두 비어있음)", "err");
+      setTimeout(() => { if (status.textContent.includes("보간")) setStatus(""); }, 2500);
+      return;
+    }
+    pushHistoryBatch(touchedIds);
+
+    // 보간 적용
+    const items = [];
+    for (const p of pairs) {
+      const sc = state.clips[p.sIdx];
+      const ec = state.clips[p.eIdx];
+      const span = p.eIdx - p.sIdx;
+      for (let i = p.sIdx + 1; i < p.eIdx; i++) {
+        const middle = state.clips[i];
+        const t = (i - p.sIdx) / span;
+        SLIDER_KEYS.forEach(k => {
+          const a = Number(sc.grade[k] ?? DEFAULT_GRADE[k]);
+          const b = Number(ec.grade[k] ?? DEFAULT_GRADE[k]);
+          const v = a + t * (b - a);
+          // temp 는 step 50, 정수. 나머지는 정수.
+          middle.grade[k] = k === "temp" ? Math.round(v / 50) * 50 : Math.round(v);
+        });
+        markClipGraded(middle);
+        // 디바운스 저장 timer 캔슬 — 곧 batch 저장됨
+        const tmr = _saveTimers.get(middle.id);
+        if (tmr) { clearTimeout(tmr); _saveTimers.delete(middle.id); }
+        items.push({ id: middle.id, grade: middle.grade });
+      }
+    }
+
+    // 활성 클립이 보간 대상이면 패널/필터 갱신
+    const ac = currentClip();
+    if (ac && touchedIds.includes(ac.id)) {
+      writeGradeToPanel(ac.grade);
+      applyMatrixToFilter(ac.grade);
+    }
+
+    setStatus(`${items.length}개 보간 적용 중…`);
+    try {
+      const r = await fetch("/api/save_bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || "fail");
+      setStatus(`🌈 ${pairs.length}페어 / ${items.length}장 보간 완료`, "ok");
+    } catch (err) {
+      setStatus("일괄 저장 실패", "err");
+      console.error(err);
+    }
+    setTimeout(() => { if (status.textContent.includes("보간")) setStatus(""); }, 2500);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // Delete = toggle `disabled` (always; affects both normal and tri builds)
   // 3컷 전용 비활성은 위 가로 패널의 cell 클릭으로 별도 처리(`disabled_tri`).
   function deleteSelected() {
@@ -1778,6 +1886,9 @@
       } else if (e.altKey && (e.key === "d" || e.key === "D")) {
         e.preventDefault();
         selectClip(state.activeId + 1);
+      } else if (e.altKey && (e.code === "KeyW" || e.key === "w" || e.key === "W") && !isText) {
+        e.preventDefault();
+        _eye.armed ? disarmEyedropper() : armEyedropper();
       } else if ((e.key === "a" || e.key === "A") && !isText && !e.altKey) {
         e.preventDefault();
         state.abShowOriginal = !state.abShowOriginal;
@@ -1807,6 +1918,7 @@
     });
     $("#btnPresetSave").addEventListener("click", () => savePresetFromActive());
     $("#btnPresetApply").addEventListener("click", () => applyPresetToSelected());
+    $("#btnGradient").addEventListener("click", () => applyGradientInterpolation());
     $("#btnTrimIn").addEventListener("click", () => setTrimIn());
     $("#btnTrimOut").addEventListener("click", () => setTrimOut());
     $("#btnTrimClear").addEventListener("click", () => clearTrim());
@@ -2239,12 +2351,127 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 스포이드 — 미리보기에서 회색/흰색이어야 할 지점을 클릭 → 원본 픽셀에서
+  // 색온도(temp) / 색조(tint) 자동 계산. WB 단계는 per-channel scale 이므로
+  // tr == tb 가 자동 소거됨 → R/B 비율로 temp 풀이 → 잔여 G 캐스트로 tint 풀이.
+  const _eye = { armed: false, hintEl: null, _onClick: null, _onKey: null };
+  function _sampleVideoRgb(cx, cy) {
+    const v = $("#player");
+    if (!v || v.readyState < 2 || !v.videoWidth) return null;
+    const r = 3;                    // 7x7 평균
+    const w = r * 2 + 1, h = r * 2 + 1;
+    const x0 = Math.max(0, Math.min(v.videoWidth  - w, Math.round(cx) - r));
+    const y0 = Math.max(0, Math.min(v.videoHeight - h, Math.round(cy) - r));
+    const off = document.createElement("canvas");
+    off.width = w; off.height = h;
+    const ctx = off.getContext("2d", { willReadFrequently: true });
+    try {
+      ctx.drawImage(v, x0, y0, w, h, 0, 0, w, h);
+      const d = ctx.getImageData(0, 0, w, h).data;
+      let R = 0, G = 0, B = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) { R += d[i]; G += d[i + 1]; B += d[i + 2]; n++; }
+      return [R / n / 255, G / n / 255, B / n / 255];
+    } catch (e) {
+      console.warn("[eyedropper] sample failed", e);
+      return null;
+    }
+  }
+  function _solveWb(R, G, B) {
+    // 채도 너무 낮은(=이미 회색) 경우 그대로 둠
+    const eps = 1e-3;
+    if (R < eps || G < eps || B < eps) return null;
+    // 1) R*(1+0.45w) == B*(1-0.45w)  →  w = (B-R) / (0.45*(R+B))
+    let w = (B - R) / (0.45 * (R + B));
+    w = Math.max(-0.538, Math.min(0.538, w));  // → temp ∈ [3000, 10000]
+    let temp = Math.round((6500 * (1 + w)) / 50) * 50;
+    temp = Math.max(3000, Math.min(10000, temp));
+    const wFinal = (temp - 6500) / 6500;
+    // 2) 온도 보정 후: R' = R*(1+0.45w), G' = G*(1+0.05w)
+    //    R'*(1-0.10v) == G'*(1+0.18v)  →  v = (R'-G') / (0.18*G' + 0.10*R')
+    const Rp = R * (1 + 0.45 * wFinal);
+    const Gp = G * (1 + 0.05 * wFinal);
+    const denom = 0.18 * Gp + 0.10 * Rp;
+    let v = Math.abs(denom) < 1e-6 ? 0 : (Rp - Gp) / denom;
+    let tint = Math.round(-v * 100);
+    tint = Math.max(-100, Math.min(100, tint));
+    return { temp, tint };
+  }
+  function _applyEyedropAt(clientX, clientY) {
+    const c = currentClip();
+    if (!c) { setBusyShort("클립 없음"); return; }
+    const canvas = $("#playerCanvas");
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
+    const cx = (clientX - rect.left) / rect.width  * canvas.width;
+    const cy = (clientY - rect.top)  / rect.height * canvas.height;
+    const rgb = _sampleVideoRgb(cx, cy);
+    if (!rgb) { setBusyShort("샘플 실패"); return; }
+    const sol = _solveWb(rgb[0], rgb[1], rgb[2]);
+    if (!sol) { setBusyShort("픽셀이 너무 어둠"); return; }
+    pushHistorySingle(c.id);
+    c.grade.temp = sol.temp;
+    c.grade.tint = sol.tint;
+    writeGradeToPanel(c.grade);
+    applyMatrixToFilter(c.grade);
+    markClipGraded(c);
+    scheduleSave(c);
+    setBusyShort(`스포이드 → ${sol.temp}K / 색조 ${sol.tint > 0 ? "+" : ""}${sol.tint}`);
+  }
+  function armEyedropper() {
+    if (_eye.armed) return;
+    if (!currentClip()) { setBusyShort("클립 없음"); return; }
+    _eye.armed = true;
+    const btn = $("#btnEyedropper");
+    if (btn) btn.classList.add("armed");
+    const frame = $("#playerFrame");
+    if (frame) frame.classList.add("eyedrop-armed");
+    if (!_eye.hintEl && frame) {
+      const hint = document.createElement("div");
+      hint.className = "eyedrop-hint";
+      hint.textContent = "🧪 회색/흰색이어야 할 지점을 클릭 (Alt+W 또는 Esc 취소)";
+      frame.appendChild(hint);
+      _eye.hintEl = hint;
+    }
+    _eye._onClick = (e) => {
+      if (e.target.id !== "playerCanvas") return;
+      e.preventDefault(); e.stopPropagation();
+      _applyEyedropAt(e.clientX, e.clientY);
+      disarmEyedropper();
+    };
+    _eye._onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); disarmEyedropper(); } };
+    document.addEventListener("click", _eye._onClick, true);
+    document.addEventListener("keydown", _eye._onKey, true);
+  }
+  function disarmEyedropper() {
+    if (!_eye.armed) return;
+    _eye.armed = false;
+    const btn = $("#btnEyedropper");
+    if (btn) btn.classList.remove("armed");
+    const frame = $("#playerFrame");
+    if (frame) frame.classList.remove("eyedrop-armed");
+    if (_eye.hintEl) { _eye.hintEl.remove(); _eye.hintEl = null; }
+    if (_eye._onClick) document.removeEventListener("click", _eye._onClick, true);
+    if (_eye._onKey)   document.removeEventListener("keydown", _eye._onKey, true);
+    _eye._onClick = null; _eye._onKey = null;
+  }
+  function bindEyedropper() {
+    const btn = $("#btnEyedropper");
+    if (!btn) return;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      _eye.armed ? disarmEyedropper() : armEyedropper();
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
   async function init() {
     initGlPlayer();
     initHistogram();
     bindAllSliders();
     bindPlayer();
     bindKeys();
+    bindEyedropper();
     await loadPresetSlot();
     await loadSnapshots();
     await reloadState();
