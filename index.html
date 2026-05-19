@@ -2320,7 +2320,7 @@
             </div>
           </div>
           <p class="helper" style="margin-bottom: 10px;">
-            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지). 신규 업체(미등록)는 「폴더열기」 시 공용 납품 상위 폴더(네이버웍스)가 열리니 거기에서 업체 폴더를 만든 뒤 표의 <strong>폴더연결 주소</strong> 칸에 URL을 붙여 「저장」하세요. 기등록 업체는 「폴더열기」만으로 해당 납품 폴더가 열립니다.
+            Supabase <code>company_directory</code> 테이블을 직접 조회·수정합니다. 저장 후 스케줄 목록 업체 카드 및 고객 로그인 정보가 서버 데이터와 동기화됩니다. 비밀번호는 <strong>변경할 때만</strong> 입력하세요 (비우면 유지). 신규 업체(미등록)는 「폴더열기」 시 공용 납품 상위 폴더(마이박스)가 열리니 거기에서 업체 폴더를 만든 뒤 표의 <strong>폴더연결 주소</strong> 칸에 URL을 붙여 「저장」하세요. 기등록 업체는 「폴더열기」만으로 해당 납품 폴더가 열립니다.
           </p>
           <div class="filter-row" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
             <select id="companyDirectorySiteFilterSelect" class="small-select" style="min-width: 130px;" aria-label="사이트별 보기">
@@ -9275,7 +9275,7 @@
         }
       }
 
-      /** 납품 폴더 미등록(신규) 업체 「폴더열기」 시 열릴 네이버웍스 공용 상위 폴더 */
+      /** 납품 폴더 미등록(신규) 업체 「폴더열기」 시 열릴 마이박스 공용 상위 폴더 */
       const NAVER_WORKS_NEW_COMPANY_DRIVE_OPEN_URL = "https://naver.me/GCJa9KWp";
 
       function companyDirectoryAdminRowById(ridRaw) {
@@ -9487,7 +9487,7 @@
 <td><input type="text" class="inline-input" data-dir-field="phone" value="${escapeHtml(tel)}" style="width:100%;min-width:90px;box-sizing:border-box" /></td>
 <td><select class="inline-select" data-dir-field="site" style="width:100%;max-width:120px"><option value="inlog"${siteVal === "inlog" ? " selected" : ""}>인로그</option><option value="shopick"${siteVal === "shopick" ? " selected" : ""}>쇼픽</option><option value="thefeeling"${siteVal === "thefeeling" ? " selected" : ""}>더필링</option></select></td>
 <td><select class="inline-select" data-dir-field="composition" style="width:100%;max-width:140px"><option value="사진만"${compPreset === "사진만" ? " selected" : ""}>사진만</option><option value="사진영상 둘다"${compPreset === "사진영상 둘다" ? " selected" : ""}>사진영상 둘다</option></select></td>
-<td><input type="text" class="inline-input" data-dir-field="naver_share" value="${escapeHtml(naverLink)}" placeholder="네이버웍스 폴더 URL" style="width:100%;min-width:130px;box-sizing:border-box;font-size:12px" /></td>
+<td><input type="text" class="inline-input" data-dir-field="naver_share" value="${escapeHtml(naverLink)}" placeholder="마이박스 폴더 URL" style="width:100%;min-width:130px;box-sizing:border-box;font-size:12px" /></td>
 <td style="white-space:nowrap;font-size:11px"><button type="button" class="btn-sm primary" data-cda-act="inline-save" data-cda-id="${rowAttr}">저장</button> <button type="button" class="btn-sm" data-cda-act="inline-cancel" data-cda-id="${rowAttr}">취소</button> <button type="button" class="btn-sm" data-cda-act="inline-delete" data-cda-id="${rowAttr}">삭제</button><br /><button type="button" class="btn-sm" style="margin-top:4px" data-cda-act="open-nw-folder" data-cda-id="${rowAttr}">폴더열기</button></td>
 </tr>`;
                     }
@@ -9699,7 +9699,7 @@
                   ? `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;font-weight:700;font-size:0.85rem">📝 발송완료 ${escapeHtml(formatBlogSentAtLabel(row.sentAt))}</span>`
                   : `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-weight:700;font-size:0.85rem">미발송</span>`;
                 const codeForDelivery = normalizeCompanyCode(item?.companyCode || item?.code || "");
-                const folderBtn = `<button type="button" class="btn-sm" data-blog-act="openFolder" data-company="${escapeHtml(cname)}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(네이버웍스) 열기">📁 폴더</button>`;
+                const folderBtn = `<button type="button" class="btn-sm" data-blog-act="openFolder" data-company="${escapeHtml(cname)}" data-company-code="${escapeHtml(codeForDelivery)}" title="업체 납품 폴더(마이박스) 열기">📁 폴더</button>`;
                 const actionCell = isSent
                   ? `<div style="display:inline-flex;gap:6px;justify-content:center;align-items:center;flex-wrap:nowrap">
 <button type="button" class="btn-sm" data-blog-act="revert" data-sk="${skAttr}">되돌리기</button>
@@ -17045,7 +17045,7 @@ ${folderBtn}
             codeForDelivery
           )}" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
-          )}" title="만들 폴더명 복사 후 업체 납품 폴더(네이버웍스) 열기">폴더</button>`;
+          )}" title="만들 폴더명 복사 후 업체 납품 폴더(마이박스) 열기">폴더</button>`;
           const folderShortDisplay = escapeHtml(String(shootFolderSuggestName || "").slice(0, 6));
           const fullFolderTitle = escapeHtml(String(shootFolderSuggestName || ""));
           // 회사 catalog (companies, Supabase company_directory 동기화) 의 phone 우선 조회
@@ -17129,7 +17129,7 @@ ${folderBtn}
             company
           )}" data-company-code="${escapeHtml(code)}" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
-          )}" title="업체 납품 폴더(네이버웍스) 열기">폴더</button>`;
+          )}" title="업체 납품 폴더(마이박스) 열기">폴더</button>`;
         }
         const eventsRaw = [];
         for (const [mapScheduleKey, r] of map.entries()) {
@@ -18105,7 +18105,7 @@ ${folderBtn}
                                         구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                         쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                                       </details>
-                                      <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(네이버웍스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
+                                      <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(마이박스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
                                     </div>
                                     <div class="quick-writer-row">
                                       ${["작가미정", ...photographers]
@@ -18211,7 +18211,7 @@ ${folderBtn}
             const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
             if (!u) {
               alert(
-                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 네이버웍스 폴더 주소를 저장한 뒤 다시 시도해 주세요." +
+                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요." +
                   (copyFailed ? "\n※ 폴더 이름 자동 복사에 실패했습니다. 필요하면 「복사」를 눌러 주세요." : "")
               );
               return;
@@ -18512,7 +18512,7 @@ ${folderBtn}
               const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
               if (!u) {
                 alert(
-                  `「${comp}」 의 납품 폴더 링크를 찾을 수 없습니다.\n「업체정보관리」에서 「폴더 연결」로 네이버웍스 폴더 주소를 저장한 뒤 다시 시도해 주세요.`
+                  `「${comp}」 의 납품 폴더 링크를 찾을 수 없습니다.\n「업체정보관리」에서 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요.`
                 );
                 return;
               }
