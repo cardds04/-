@@ -16773,7 +16773,11 @@ ${folderBtn}
             if (res.ok && body.ok) {
               sendSucceeded = true;
               kickDashDeliveryRpcRefresh(true);
-              if (body.sms_deferred_quiet_hours) {
+              if (body.sms_waiting_other_kind) {
+                // 사진·영상 둘 다 필요한 업체의 첫 항목 완료 — 문자는 보내지 않고 다음 항목 대기.
+                const remaining = String(body.kind || "") === "photo" ? "영상" : "사진";
+                alert(`완료 처리됨. 「${remaining}」 도 완료되면 그때 「촬영본 편집완료」 문자 1통 발송됩니다.`);
+              } else if (body.sms_deferred_quiet_hours) {
                 alert(
                   "야간 발송 제한으로 문자가 한국시간 오전 10시에 예약 등록되었습니다.\n(솔라피 예약 발송 — 실제 수신은 해당 시각 무렵입니다.)"
                 );
