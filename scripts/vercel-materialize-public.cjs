@@ -30,7 +30,11 @@ const SKIP_TOP_FILE = new Set([
   "Dockerfile",
   "docker-entrypoint.sh",
   "fly.toml",
-  "sync-config.js",
+  // sync-config.js 는 브라우저에서 fetch 하는 환경별 설정 파일.
+  // public 에 포함시켜야 한다 — 빠지면 /sync-config.js 404 → HTML 응답을
+  // 브라우저가 JS 로 파싱 시도하다가 SyntaxError 가 나면서 페이지가 일부
+  // 깨졌었음. (Supabase URL 등은 index.html 안 fallback 이 있어 데이터는
+  // 로드되지만, 다른 부수효과 위험 — 안전하게 포함)
   "package.json",
   "package-lock.json",
   "vercel.json",

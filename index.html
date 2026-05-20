@@ -4286,10 +4286,18 @@
           }
           void (async () => {
             const changed = await pullScheduleSiteClientKvFromSupabase();
-            if (!changed) return;
             // pull 완료 후 dirty 재확인 — pull이 진행되는 동안 업로드가 시작됐을 경우
             // 구버전 서버 데이터로 에디터를 덮어쓰지 않도록 차단
             if (inlogEditorDirty) return;
+            // changed=false 라도 JS 배열이 stale(첫 pull 실패 등) 일 수 있으므로 동기화.
+            // 작가/회사 목록이 비어 보이던 버그 — memoryStore 는 채워졌는데 JS 배열은 비어
+            // 있는 상태에서 soft pull 만 재실행되던 케이스 해결.
+            try { if (typeof loadPhotographerProfilesFromStorage === "function") loadPhotographerProfilesFromStorage(); } catch (_) {}
+            try { if (typeof loadAdminCompaniesFromStorage === "function") loadAdminCompaniesFromStorage(); } catch (_) {}
+            try { if (typeof renderPhotographers === "function") renderPhotographers(); } catch (_) {}
+            try { if (typeof renderCompanies === "function") renderCompanies(); } catch (_) {}
+            try { if (typeof renderList === "function") renderList(); } catch (_) {}
+            if (!changed) return;
             const inlogVisible = Boolean(inlogPhotoSectionEl && !inlogPhotoSectionEl.classList.contains("hidden"));
             if (inlogVisible && typeof hydrateInlogPhotoEditorFromStorage === "function") {
               hydrateInlogPhotoEditorFromStorage();
@@ -4304,9 +4312,19 @@
       // includeInlogData=false(기본): 인로그 photo/cinema/home 키를 로컬 memoryStore에서 제외해
       // 배경 push가 저장 버튼 이외 경로로 서버의 인로그 데이터를 덮어쓰지 않도록 한다.
       // includeInlogData=true: 저장 버튼에서만 사용 — 인로그 키 포함 전체 push.
+      // push 진행 중 추가 변경(예: 블로그 발송/완료 연속 클릭)이 들어오면 끝난 직후 자동으로 재push.
+      // (예전엔 inFlight 중에 들어온 변경이 trailing push 없이 무시돼서, push 완료 후 다음 pull
+      //  이 서버의 stale 데이터로 local 을 덮어쓰면서 일부 변경이 사라지던 버그가 있었음.)
+      let scheduleSiteClientKvPushFollowupPending = false;
+      let scheduleSiteClientKvPushFollowupIncludeInlog = false;
       async function pushScheduleSiteClientKvToSupabase(includeInlogData = false) {
         if (!SUPABASE_PUSH_ENABLED || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return false;
-        if (scheduleSiteClientKvPushInFlight) return false;
+        if (scheduleSiteClientKvPushInFlight) {
+          // 진행 중인 push 가 끝난 직후 다시 push — 그 사이 들어온 변경이 서버에 안 가는 문제 방지.
+          scheduleSiteClientKvPushFollowupPending = true;
+          if (includeInlogData) scheduleSiteClientKvPushFollowupIncludeInlog = true;
+          return false;
+        }
         // 진입 즉시 in-flight 로 표시 — 그 사이 soft pull 이 들어오면 즉시 지연됨.
         // (예전엔 POST 직전에 set 했는데, 그 사이 fetch GET 단계에서 soft pull 이 끼어들어
         //  local memoryStore 를 서버 구버전으로 덮어쓰던 race 가 있었음.)
@@ -4386,6 +4404,14 @@
         } finally {
           if (pushTid !== null) clearTimeout(pushTid);
           scheduleSiteClientKvPushInFlight = false;
+          // 이 push 가 진행되는 동안 들어온 추가 변경이 있으면 자동으로 한 번 더 push.
+          if (scheduleSiteClientKvPushFollowupPending) {
+            const followupIncludeInlog = scheduleSiteClientKvPushFollowupIncludeInlog;
+            scheduleSiteClientKvPushFollowupPending = false;
+            scheduleSiteClientKvPushFollowupIncludeInlog = false;
+            // 짧은 딜레이 — 같은 tick 안에서 set 된 추가 변경이 안정화되도록.
+            setTimeout(() => { void pushScheduleSiteClientKvToSupabase(followupIncludeInlog); }, 50);
+          }
         }
       }
       window.__scheduleSitePushClientKv = pushScheduleSiteClientKvToSupabase;
@@ -21975,7 +22001,9 @@ ${folderBtn}
         renderList();
         switchMainTab("schedule");
         clientKvPullDone.then((didHydrate) => {
-          if (!didHydrate) return;
+          // didHydrate=false 라도 (첫 pull 실패·서버 빈 응답·snapshot 만 있을 때) JS 배열은
+          // memoryStore 와 일치시켜야 한다. 예전엔 여기서 early-return 해서, pull 이 한 번
+          // 실패하면 작가/회사/스케줄 배열이 영구 빈 상태로 남고 페이지가 텅 비어 보이던 버그.
           loadAdminCompaniesFromStorage();
           // USE_SUPABASE_SYNC 모드에서는 schedules 테이블 pull이 data를 덮어쓰므로
           // 서버 KV에 남아있는 구버전 scheduleSiteAdminSchedules로 data를 덮어쓰지 않도록 skip
