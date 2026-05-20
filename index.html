@@ -16728,15 +16728,21 @@ ${folderBtn}
           return;
         }
 
-        if ((btn.dataset.dashPhase || "").toLowerCase() === "idle") {
-          btn.dataset.dashPhase = "armed";
-          btn.textContent = "문자";
-          btn.title = "발송 진행 확인 중 · 3초 안에 한 번 더 클릭하세요.";
-          armDashSmsTimeout(btn);
-          return;
-        }
-
+        // 단일 클릭 → confirm 1번 → 진행 (예전 2단계 클릭 방식 제거).
         clearDashSmsArm(dashSmsBadgeKey(btn));
+        const label = kind === "video" ? "영상" : "사진";
+        const bothNeeded = String(btn?.dataset?.bothNeeded || "") === "1";
+        const otherDone = String(btn?.dataset?.otherDone || "") === "1";
+        const otherLabel = kind === "video" ? "사진" : "영상";
+        let confirmMsg;
+        if (!bothNeeded) {
+          confirmMsg = `「${label}」 납품 완료 + 「촬영본 편집완료」 문자 발송할까요?`;
+        } else if (otherDone) {
+          confirmMsg = `「${label}」 까지 완료 — 사진·영상 모두 끝남.\n「촬영본 편집완료」 문자 1통 발송할까요?`;
+        } else {
+          confirmMsg = `「${label}」 만 먼저 완료 처리할까요?\n(아직 「${otherLabel}」 미완 — 문자는 「${otherLabel}」 까지 끝나는 시점에 1통 발송됩니다.)`;
+        }
+        if (!confirm(confirmMsg)) return;
 
         const flightKey = `${sid.toLowerCase()}|${kind}`;
         if (dashSmsPostFlightKeys.has(flightKey)) {
@@ -16903,18 +16909,23 @@ ${folderBtn}
       }
 
       /**
-       * 사진·영상 납품: 두 번 클릭으로 발송(첫 클릭 → 「문자」 표시 후 3초 내 재클릭).
+       * 사진·영상 납품: 한 번 클릭 → 확인 다이얼로그 → 진행.
+       * (예전엔 「문자」 텍스트로 armed 상태를 두고 3초 안에 재클릭하는 방식 — UX 가
+       *  불편해서 confirm 한 번으로 통일.)
+       *
+       * @param {boolean} bothNeeded — 사진·영상 둘 다 필요한 업체인가
+       * @param {boolean} otherDone — 반대편 항목이 이미 완료됐는가
        */
-      function dashDeliverySmsBadge(notifyKind, label, done, scheduleId) {
+      function dashDeliverySmsBadge(notifyKind, label, done, scheduleId, bothNeeded, otherDone) {
         const cls = done ? "dash-del-icon dash-del-icon--ok" : "dash-del-icon dash-del-icon--wait";
         const sid = String(scheduleId || "").trim();
-        const idleTit = dashSmsIdleTitle(label);
+        const idleTit = `${label} 납품 완료 처리 — 클릭하면 확인 다이얼로그가 뜹니다.`;
         if (!done && /^[0-9a-f-]{36}$/i.test(sid)) {
           return `<button type="button" class="${cls} dash-del-icon--btn" title="${escapeHtml(
             idleTit
-          )}" data-action="dashSmsTwostep" data-dash-phase="idle" data-dash-label="${escapeHtml(
+          )}" data-action="dashSmsTwostep" data-dash-label="${escapeHtml(
             label
-          )}" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}">${escapeHtml(label)}</button>`;
+          )}" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}" data-both-needed="${bothNeeded ? "1" : "0"}" data-other-done="${otherDone ? "1" : "0"}">${escapeHtml(label)}</button>`;
         }
         const spanTitle = done
           ? `${label} 납품 안내 문자 발송 완료`
@@ -17232,8 +17243,10 @@ ${folderBtn}
           const siteOk = dashSiteDoneForDashboardRow(tr, dateStr);
           const sid = dashCanonScheduleRpcId(item?.customerScheduleId);
           const badgeParts = [];
-          if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid));
-          if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid));
+          // bothNeeded 정보를 confirm 다이얼로그에서 사용하도록 button data-* 에 실어준다.
+          const bothNeededHint = np && nv;
+          if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid, bothNeededHint, vDone));
+          if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid, bothNeededHint, pDone));
           badgeParts.push(dashDeliverySiteFieldBadge(siteOk, siteOk ? "작가 현장 확인완료" : "작가 현장 확인 대기"));
           const strip = `<span class="dash-del-badges">${badgeParts.join("")}</span>`;
           const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
