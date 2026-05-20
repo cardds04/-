@@ -3122,7 +3122,8 @@
               k === STORAGE_ADMIN_WRITER_PROCESS_LOG ||
               k === STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY ||
               k === STORAGE_ADMIN_SCHEDULES || // schedules 테이블로 관리 — 서버 KV 복원 금지
-              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
+              k === STORAGE_PENDING_DELETE_SCHEDULE_IDS || // 삭제 대기 IDs — 서버 KV 덮어쓰기 금지
+              k === STORAGE_BLOG_SEND_LOG // blog_send_log 전용 테이블로 관리 — 서버 KV 복원 금지
             )
               return;
             /** 신규업체 「비우기」: 서버 빈값이 로컬 날짜를 지우면 목록이 부활함 — 빈값은 무시하고, 양쪽 날짜면 최신(cal) 문자열 채택 */
@@ -4335,7 +4336,8 @@
           const EXCLUDED_KEYS = new Set([
             STORAGE_ADMIN_DASHBOARD_COMPLETED,
             STORAGE_ADMIN_WRITER_PROCESS_LOG,
-            STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+            STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY,
+            STORAGE_BLOG_SEND_LOG // 전용 테이블 blog_send_log 로 관리 — client_kv push 금지
           ]);
           const kvFilteredLocal = Object.fromEntries(
             [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -4361,7 +4363,8 @@
                 String(k || "").startsWith("scheduleSite") &&
                 k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
                 k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY
+                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY &&
+                k !== STORAGE_BLOG_SEND_LOG // 전용 테이블 이전 후 client_kv 잔존 데이터 무시
             )
           );
           // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
@@ -8456,7 +8459,10 @@
             if (item?.isBlogVendor === true) row.isBlogVendor = true;
             return row;
           })
-          .filter((item) => item.name);
+          // 테스트 패턴 이름은 어떤 경로(서버 pull / client_kv 동기화 / 다른 브라우저
+          // 스냅샷)로 들어와도 즉시 걸러서, 로컬 companies 배열에 절대 들어가지 않도록
+          // 한다. 이 배열이 sync 시 INSERT 소스라 들어가는 순간 부활함.
+          .filter((item) => item.name && !isClientTestPatternCompanyName(item.name));
       }
       function buildAutoCompanyCode(name) {
         const text = normalizeCompanyName(name);
@@ -8466,6 +8472,23 @@
         }
         const digest = (hash || Date.now()).toString(36).toUpperCase();
         return `AUTO-${digest}`;
+      }
+
+      /** 자동 생성된 테스트 패턴 업체명만 차단 — 실제 업체명과 충돌 안 나게 좁게.
+       *  lib/photographer-shoot-logic.cjs 의 TEST_COMPANY_NAME_PATTERNS 와 동기화 유지.
+       *  잘못된 매칭이 의심되면 패턴을 살펴보고 빼면 됨. */
+      const CLIENT_TEST_COMPANY_NAME_PATTERNS = [
+        /^QA업체\d*$/i,
+        /^E2E_COMPANY_\d+$/i,
+        /^테스트업체\d*$/i,
+        /^테스트\d*$/i,
+        /^test\d*$/i,
+        /^1234$/
+      ];
+      function isClientTestPatternCompanyName(name) {
+        const s = String(name || "").trim();
+        if (!s) return false;
+        return CLIENT_TEST_COMPANY_NAME_PATTERNS.some((re) => re.test(s));
       }
 
       async function fetchCompaniesFromSupabase() {
@@ -8498,13 +8521,22 @@
           label: "업체",
           lastPullStorageKey: STORAGE_LAST_COMPANY_PULL_AT
         });
-        const nextRows = normalizeCompanyRows(snapshotRows);
+        // 테스트 패턴 업체명은 sync 전에 제거 — 다른 브라우저의 stale 로컬 캐시가 INSERT
+        // 로 부활시키는 것 차단. 동시에 이름이 같은 로컬 항목들도 정리.
+        const allLocalRows = normalizeCompanyRows(snapshotRows);
+        const nextRows = allLocalRows.filter((r) => !isClientTestPatternCompanyName(r?.name));
         const remoteRows = await fetchCompaniesFromSupabase();
         const remoteByName = new Map();
         const duplicateRemoteIds = [];
+        // 서버에 이미 들어 있는 테스트 패턴 업체는 자동 삭제 대상으로 분류.
+        const remoteTestPatternIds = [];
         (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
           const key = normalizeCompanyName(row?.name).toLowerCase();
           if (!key) return;
+          if (isClientTestPatternCompanyName(row?.name)) {
+            remoteTestPatternIds.push(row.id);
+            return;
+          }
           if (remoteByName.has(key)) {
             duplicateRemoteIds.push(row.id);
             return;
@@ -8551,6 +8583,10 @@
           }
         });
         duplicateRemoteIds.forEach((id) => {
+          if (!deleteIds.includes(id)) deleteIds.push(id);
+        });
+        // 서버에 잔존하는 테스트 패턴 업체 — 매 sync 시 자동 삭제.
+        remoteTestPatternIds.forEach((id) => {
           if (!deleteIds.includes(id)) deleteIds.push(id);
         });
 
@@ -9794,10 +9830,17 @@ ${folderBtn}
         });
       }
 
-      /* ===== 블로그 알림 발송 로그: scheduleSiteBlogSendLog 키로 KV 동기화 =====
-         { [scheduleKey]: { sentAt: ISO } } — 모든 관리자가 동일 상태 공유 */
+      /* ===== 블로그 알림 발송 로그: 전용 테이블 blog_send_log 직접 read/write =====
+         각 스케줄을 독립 row (schedule_key PK, sent_at) 로 분리. UPSERT/DELETE 가
+         atomic 해서 다중 브라우저 동시 수정에도 머지 충돌 없음.
+         예전엔 client_kv 의 scheduleSiteBlogSendLog 키 안에 JSON 통째로 저장돼서,
+         outer key 단위 머지가 inner entry 들을 통째 덮어 쓰며 한쪽 변경이 사라지던
+         race 가 있었음.
+         로컬 캐시(scheduleSiteBlogSendLog, BLOG_SEND_LOG_CACHE) 는 즉각적인 UI 응답
+         용으로만 사용 — 진실은 Supabase 테이블. */
       const BLOG_SEND_MIN_DATE = "2026-04-16";
       const BLOG_SMS_TEMPLATE = "안녕하세요, 고객님. 요청하신 블로그 포스팅 초안 작성이 완료되어 현재 임시 저장 상태입니다.\n\nAI를 활용하여 90% 정도 완성된 상태이나, 더욱 완벽한 발행을 위해 고객님의 최종 검수가 필요합니다. 혹시 수정이 필요한 문구나 내용이 있는지 확인 부탁드리며, 검수 후 직접 발행해 주시면 감사하겠습니다.\n\n정성을 다해 작성했으나 세밀한 부분까지 꼭 한 번 살펴봐 주세요!";
+      const SUPABASE_BLOG_SEND_LOG_TABLE = "blog_send_log";
 
       function readBlogSendLog() {
         try {
@@ -9809,31 +9852,140 @@ ${folderBtn}
           return {};
         }
       }
-      function writeBlogSendLog(map) {
+      /** 로컬 캐시만 갱신 — Supabase 와의 동기화는 markBlogSentForKey/unmarkBlogSentForKey
+       *  가 직접 처리한다. flushSnapshotNow 로 다른 탭 storage 이벤트만 전파. */
+      function writeBlogSendLogCache(map) {
         try {
           localStorage.setItem(STORAGE_BLOG_SEND_LOG, JSON.stringify(map || {}));
-          // client_kv 테이블로 즉시 push (모든 관리자 공유)
-          // 디바운스(2.5s) 대신 즉시 push — 그 사이 focus/visibility 가 일으킨 pull 이
-          // 로컬 변경을 서버 구버전으로 되돌리던 동기화 누락 방지.
-          try {
-            scheduleSiteClientKvState?.flushSnapshotNow?.();
-            requestClientKvPushWhenReady?.(false);
-          } catch (_) {}
+          try { scheduleSiteClientKvState?.flushSnapshotNow?.(); } catch (_) {}
         } catch (_) {}
       }
       function getBlogSentAtForKey(scheduleKey) {
         const m = readBlogSendLog();
         return String(m?.[scheduleKey]?.sentAt || "");
       }
-      function markBlogSentForKey(scheduleKey, sentAtIso) {
-        const m = readBlogSendLog();
-        m[scheduleKey] = { sentAt: sentAtIso || new Date().toISOString() };
-        writeBlogSendLog(m);
+
+      /** Supabase blog_send_log 테이블 전체 SELECT → 로컬 캐시 동기화. */
+      async function pullBlogSendLogFromSupabaseAndApply() {
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_BLOG_SEND_LOG_TABLE}?select=schedule_key,sent_at`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              cache: "no-store"
+            }
+          );
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.warn("[blog_send_log] pull 실패", res.status, txt);
+            return false;
+          }
+          const rows = await res.json();
+          const map = {};
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const sk = String(row?.schedule_key || "").trim();
+            const at = String(row?.sent_at || "").trim();
+            if (sk && at) map[sk] = { sentAt: at };
+          });
+          writeBlogSendLogCache(map);
+          return true;
+        } catch (e) {
+          console.warn("[blog_send_log] pull 예외", e);
+          return false;
+        }
       }
-      function unmarkBlogSentForKey(scheduleKey) {
-        const m = readBlogSendLog();
-        delete m[scheduleKey];
-        writeBlogSendLog(m);
+
+      /** 단일 스케줄 mark — UPSERT. 로컬 캐시 즉시 반영 후 서버 호출. 실패하면 캐시 롤백. */
+      async function markBlogSentForKey(scheduleKey, sentAtIso) {
+        const sk = String(scheduleKey || "").trim();
+        if (!sk) return false;
+        const at = sentAtIso || new Date().toISOString();
+        // 1) 캐시 즉시 갱신 (UI 반응성)
+        const prev = readBlogSendLog();
+        const prevEntry = prev[sk] || null;
+        const optimistic = { ...prev, [sk]: { sentAt: at } };
+        writeBlogSendLogCache(optimistic);
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return true;
+        // 2) Supabase UPSERT
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_BLOG_SEND_LOG_TABLE}?on_conflict=schedule_key`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "resolution=merge-duplicates,return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify([{ schedule_key: sk, sent_at: at }])
+            }
+          );
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.error("[blog_send_log] upsert 실패", res.status, txt);
+            // 캐시 롤백
+            const rolled = { ...readBlogSendLog() };
+            if (prevEntry) rolled[sk] = prevEntry; else delete rolled[sk];
+            writeBlogSendLogCache(rolled);
+            alert(`발송완료 표시 저장 실패: ${txt || res.status}`);
+            return false;
+          }
+          return true;
+        } catch (e) {
+          console.error("[blog_send_log] upsert 예외", e);
+          const rolled = { ...readBlogSendLog() };
+          if (prevEntry) rolled[sk] = prevEntry; else delete rolled[sk];
+          writeBlogSendLogCache(rolled);
+          alert(`발송완료 표시 저장 실패: ${e?.message || e}`);
+          return false;
+        }
+      }
+
+      /** 단일 스케줄 unmark — DELETE. 로컬 캐시 즉시 반영 후 서버 호출. 실패하면 롤백. */
+      async function unmarkBlogSentForKey(scheduleKey) {
+        const sk = String(scheduleKey || "").trim();
+        if (!sk) return false;
+        const prev = readBlogSendLog();
+        const prevEntry = prev[sk] || null;
+        if (!prevEntry) return true;
+        const optimistic = { ...prev };
+        delete optimistic[sk];
+        writeBlogSendLogCache(optimistic);
+        if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return true;
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_BLOG_SEND_LOG_TABLE}?schedule_key=eq.${encodeURIComponent(sk)}`,
+            {
+              method: "DELETE",
+              headers: {
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              }
+            }
+          );
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.error("[blog_send_log] delete 실패", res.status, txt);
+            const rolled = { ...readBlogSendLog(), [sk]: prevEntry };
+            writeBlogSendLogCache(rolled);
+            alert(`되돌리기 실패: ${txt || res.status}`);
+            return false;
+          }
+          return true;
+        } catch (e) {
+          console.error("[blog_send_log] delete 예외", e);
+          const rolled = { ...readBlogSendLog(), [sk]: prevEntry };
+          writeBlogSendLogCache(rolled);
+          alert(`되돌리기 실패: ${e?.message || e}`);
+          return false;
+        }
       }
 
       /* ===== 블로그 사진편집 수동 완료 표시 (KV 동기화) =====
@@ -9934,7 +10086,7 @@ ${folderBtn}
             alert(`문자 발송 실패: ${msg}`);
             return false;
           }
-          markBlogSentForKey(scheduleKey, new Date().toISOString());
+          await markBlogSentForKey(scheduleKey, new Date().toISOString());
           renderBlogTaskList();
           return true;
         } catch (e) {
@@ -9942,11 +10094,11 @@ ${folderBtn}
           return false;
         }
       }
-      function handleBlogSmsRevertForSchedule(scheduleKey, item) {
+      async function handleBlogSmsRevertForSchedule(scheduleKey, item) {
         const company = String(item?.company || "").trim() || "(업체명 없음)";
         if (!confirm(`「${company}」 블로그 발송완료 표시를 되돌릴까요? (이미 발송된 문자는 회수되지 않습니다.)`))
           return false;
-        unmarkBlogSentForKey(scheduleKey);
+        await unmarkBlogSentForKey(scheduleKey);
         renderBlogTaskList();
         return true;
       }
@@ -9986,7 +10138,30 @@ ${folderBtn}
           const prevRows = companyDirectoryAdminRows.slice();
           try {
             if (companyDirectoryRefreshBtnEl) companyDirectoryRefreshBtnEl.disabled = true;
-            companyDirectoryAdminRows = await fetchCompanyDirectoryAdminFullRows();
+            const fetchedRows = await fetchCompanyDirectoryAdminFullRows();
+            // 잔존 테스트 패턴 업체는 자동 삭제 (실패해도 표에서는 숨김).
+            const testRows = (Array.isArray(fetchedRows) ? fetchedRows : []).filter((r) =>
+              isClientTestPatternCompanyName(r?.name)
+            );
+            if (testRows.length) {
+              const ids = testRows.map((r) => r.id).filter(Boolean);
+              if (ids.length) {
+                void fetch(
+                  `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=in.(${ids.join(",")})`,
+                  {
+                    method: "DELETE",
+                    headers: {
+                      Prefer: "return=minimal",
+                      apikey: SUPABASE_ANON_KEY,
+                      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                  }
+                ).catch((e) => console.warn("[테스트업체 자동 삭제] 실패", e));
+              }
+            }
+            companyDirectoryAdminRows = (Array.isArray(fetchedRows) ? fetchedRows : []).filter(
+              (r) => !isClientTestPatternCompanyName(r?.name)
+            );
             const inlineId = normalize(companyDirectoryInlineEditRowId || "");
             if (
               inlineId &&
@@ -10070,6 +10245,10 @@ ${folderBtn}
         const nm = normalize(companyDirectoryNameInputEl?.value || "");
         if (!nm) {
           alert("업체명을 입력해주세요.");
+          return;
+        }
+        if (isClientTestPatternCompanyName(nm)) {
+          alert(`「${nm}」 은 자동 테스트 패턴 이름이라 등록되지 않습니다. 운영용 이름으로 바꿔 주세요.`);
           return;
         }
         const telRaw = normalize(companyDirectoryPhoneInputEl?.value || "");
@@ -18567,8 +18746,11 @@ ${folderBtn}
         if (act === "markDoneNoSms") {
           const company = String(row.item?.company || "").trim() || "(업체명 없음)";
           if (!confirm(`「${company}」 — 문자 없이 발송완료로 표시할까요?\n(이미 다른 방법으로 처리됐거나 발송 불필요한 경우용. 되돌리기 가능.)`)) return;
-          markBlogSentForKey(sk, new Date().toISOString());
-          renderBlogTaskList();
+          btn.disabled = true;
+          void markBlogSentForKey(sk, new Date().toISOString()).finally(() => {
+            btn.disabled = false;
+            renderBlogTaskList();
+          });
           return;
         }
         if (act === "revert") {
@@ -21981,6 +22163,9 @@ ${folderBtn}
         void pullSubmissionReceiptsFromSupabaseAndApply();
         void pullSharedLimitConfigAndApply();
         void pullSharedMasterAccountMapAndApply();
+        void pullBlogSendLogFromSupabaseAndApply().then(() => {
+          try { if (typeof renderBlogTaskList === "function") renderBlogTaskList(); } catch (_) {}
+        });
         hydrateFromCustomerPageStorage();
         bootstrapMasterAccountsForExistingCompanies();
         bootstrapMasterAccountsFromCurrentCustomersV2();
@@ -22033,15 +22218,24 @@ ${folderBtn}
       }
       void bootstrapAdminPageData().catch((e) => console.error("[BOOT]", e));
 
+      // blog_send_log 는 다중 브라우저 동기화가 잦은 키라 focus·visibility 시 매번 pull.
+      function refreshBlogSendLogOnFocus() {
+        void pullBlogSendLogFromSupabaseAndApply().then(() => {
+          try { if (typeof renderBlogTaskList === "function") renderBlogTaskList(); } catch (_) {}
+        });
+      }
       window.addEventListener("focus", () => {
         scheduleSoftPullClientKvFromSupabase();
+        refreshBlogSendLogOnFocus();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
         scheduleSoftPullClientKvFromSupabase();
+        refreshBlogSendLogOnFocus();
       });
       window.addEventListener("online", () => {
         scheduleSoftPullClientKvFromSupabase();
+        refreshBlogSendLogOnFocus();
       });
 
       window.addEventListener("storage", (event) => {
