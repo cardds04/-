@@ -304,6 +304,21 @@ body.edit-mode .section { height: calc(100vh - 32px - env(safe-area-inset-top));
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; border-radius: inherit; display: block;
 }
+/* 구도 카드의 사진은 원본 비율 그대로 표시 (자르지 않음) */
+.card-image.has-img {
+  aspect-ratio: auto !important;
+  max-width: none !important;
+  background: transparent;
+  display: block;
+  height: auto;
+}
+.card-image.has-img .user-img {
+  position: static;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  inset: auto;
+}
 .delete-img-btn {
   position: absolute; top: 8px; left: 8px;
   background: rgba(255,59,48,0.95); color: white; padding: 5px 10px;
@@ -784,69 +799,114 @@ const app = document.getElementById('app');
 
 /* ====================================================================
    편집 모드 — URL에 ?edit 붙이면 활성화
+   사진 저장은 IndexedDB 사용 (원본 사이즈 그대로, 용량 제한 없음)
    ==================================================================== */
 const editMode = new URLSearchParams(location.search).has('edit');
-const STORAGE_KEY = 'photo-manual-images';
-
 if (editMode) document.body.classList.add('edit-mode');
 
-function getStoredImages() {
-  // 편집 모드에서는 localStorage(라이브 편집)를 우선
-  if (editMode) {
-    try {
-      const ls = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (ls) return ls;
-    } catch {}
+// ----- IndexedDB 래퍼 -----
+const DB_NAME = 'photo-manual-db';
+const STORE = 'images';
+let _dbPromise = null;
+function getDB() {
+  if (!_dbPromise) {
+    _dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(STORE)) {
+          req.result.createObjectStore(STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
   }
-  // 인라인 데이터 (내보낸 HTML에 baked-in된 사진들)
+  return _dbPromise;
+}
+async function dbAllImages() {
+  try {
+    const db = await getDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const store = tx.objectStore(STORE);
+      const out = {};
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const c = e.target.result;
+        if (c) { out[c.key] = c.value; c.continue(); }
+        else resolve(out);
+      };
+      req.onerror = () => resolve({});
+    });
+  } catch { return {}; }
+}
+async function dbPut(key, value) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbDel(key) {
+  const db = await getDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => resolve();
+  });
+}
+async function dbClearAll() {
+  const db = await getDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+  });
+}
+
+// ----- 메모리 캐시 (렌더링 시 동기 접근용) -----
+let imageCache = {};
+
+async function loadImageCache() {
+  // 1) 인라인 JSON 먼저 로드 (내보낸 HTML에 박힌 사진 — 일반 작가가 볼 때)
   try {
     const inline = document.getElementById('storedImages');
     if (inline) {
       const parsed = JSON.parse(inline.textContent || '{}');
-      // 편집 모드인데 localStorage가 비어있으면 인라인 데이터를 localStorage로 복사
-      if (editMode && Object.keys(parsed).length && !localStorage.getItem(STORAGE_KEY)) {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch {}
-      }
-      return parsed;
+      Object.assign(imageCache, parsed);
     }
   } catch {}
-  return {};
-}
-
-function setStoredImage(slotId, dataUrl) {
-  const imgs = getStoredImages();
-  if (dataUrl) imgs[slotId] = dataUrl;
-  else delete imgs[slotId];
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(imgs));
-  } catch (e) {
-    alert('저장 공간 부족 — 더 작은 사진을 쓰거나 일부를 삭제해주세요.');
+  // 2) 편집 모드라면 IndexedDB의 작업중 데이터로 덮어쓰기 (편집자가 볼 때)
+  if (editMode) {
+    const fromDB = await dbAllImages();
+    Object.assign(imageCache, fromDB);
+    // 기존 localStorage에 있던 데이터 마이그레이션
+    try {
+      const legacy = JSON.parse(localStorage.getItem('photo-manual-images') || 'null');
+      if (legacy) {
+        for (const [k, v] of Object.entries(legacy)) {
+          if (!imageCache[k]) {
+            imageCache[k] = v;
+            await dbPut(k, v);
+          }
+        }
+        localStorage.removeItem('photo-manual-images');
+      }
+    } catch {}
   }
 }
 
 function getImageForSlot(slotId, fallback) {
-  const stored = getStoredImages();
-  return stored[slotId] || fallback || null;
+  return imageCache[slotId] || fallback || null;
 }
 
-async function resizeImage(file, maxWidth = 1600, quality = 0.85) {
+// 원본 그대로 — 리사이즈/압축 없음
+async function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
+    reader.onload = (e) => resolve(e.target.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -854,12 +914,13 @@ async function resizeImage(file, maxWidth = 1600, quality = 0.85) {
 
 async function handleFileForSlot(file, slotId) {
   if (!file || !file.type.startsWith('image/')) {
-    alert('이미지 파일만 업로드 가능합니다');
+    alert('이미지 파일만 업로드 가능합니다 (JPG, PNG 등)');
     return;
   }
   try {
-    const dataUrl = await resizeImage(file);
-    setStoredImage(slotId, dataUrl);
+    const dataUrl = await fileToDataUrl(file);
+    imageCache[slotId] = dataUrl;
+    await dbPut(slotId, dataUrl);
     if (state.view !== 'menu') renderSection();
     else renderMenu();
   } catch (err) {
@@ -867,30 +928,37 @@ async function handleFileForSlot(file, slotId) {
   }
 }
 
-function deleteSlotImage(slotId) {
+async function deleteSlotImage(slotId) {
   if (!confirm('이 사진을 삭제할까요?')) return;
-  setStoredImage(slotId, null);
+  delete imageCache[slotId];
+  await dbDel(slotId);
   if (state.view !== 'menu') renderSection();
   else renderMenu();
 }
 
-function clearAllImages() {
+async function clearAllImages() {
   if (!confirm('저장된 모든 사진을 삭제할까요? 되돌릴 수 없습니다.')) return;
-  localStorage.removeItem(STORAGE_KEY);
+  imageCache = {};
+  await dbClearAll();
   if (state.view !== 'menu') renderSection();
   else renderMenu();
 }
 
 function exportManual() {
-  const stored = getStoredImages();
+  const stored = { ...imageCache };
   const count = Object.keys(stored).length;
   if (count === 0) {
     if (!confirm('저장된 사진이 하나도 없습니다. 그래도 내보낼까요?')) return;
   }
+  const sizeBytes = JSON.stringify(stored).length;
+  const sizeMB = (sizeBytes / 1024 / 1024).toFixed(1);
+  if (sizeBytes > 80 * 1024 * 1024) {
+    if (!confirm(`내보낼 파일이 약 ${sizeMB}MB로 큽니다. 모바일에서 로딩이 느릴 수 있습니다. 그래도 진행할까요?`)) return;
+  }
+
   const docClone = document.documentElement.cloneNode(true);
   const scriptEl = docClone.querySelector('#storedImages');
   if (scriptEl) scriptEl.textContent = JSON.stringify(stored);
-  // 편집 모드 배너 제거
   const banner = docClone.querySelector('.edit-banner');
   if (banner) banner.remove();
   const html = '<!DOCTYPE html>\n' + docClone.outerHTML;
@@ -904,7 +972,7 @@ function exportManual() {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   setTimeout(() => {
-    alert(`✅ 내보내기 완료!\n사진 ${count}장이 포함되었습니다.\n\n다운로드된 photo-manual.html 파일로 서버의 기존 파일을 덮어쓰면 모든 작가에게 반영됩니다.`);
+    alert(`✅ 내보내기 완료!\n사진 ${count}장 · 약 ${sizeMB}MB\n\n다운로드된 photo-manual.html로 서버의 기존 파일을 덮어쓰세요.`);
   }, 200);
 }
 
@@ -1305,9 +1373,12 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') backToMenu();
 });
 
-// Init
-renderEditBanner();
-renderMenu();
+// Init — IndexedDB에서 사진 로드 후 렌더링
+(async () => {
+  await loadImageCache();
+  renderEditBanner();
+  renderMenu();
+})();
 </script>
 </body>
 </html>
