@@ -341,11 +341,33 @@ body.edit-mode .section { height: calc(100vh - 32px - env(safe-area-inset-top));
 .edit-controls button.primary { background: #007aff; color: white; border-color: #007aff; }
 .edit-controls button.danger { background: #ff3b30; color: white; border-color: #ff3b30; }
 .edit-controls .ec-info { font-size: 12px; color: #6b4f00; margin-top: 8px; line-height: 1.5; }
+
+/* 편집 가능한 설명문 (편집 모드 전용) */
+body.edit-mode .card-desc-edit {
+  border: 2px dashed #ffb84d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 248, 225, 0.5);
+  outline: none;
+  cursor: text;
+  min-height: 1.5em;
+  transition: border-color 0.15s, background 0.15s;
+}
+body.edit-mode .card-desc-edit:hover { background: rgba(255, 248, 225, 0.85); }
+body.edit-mode .card-desc-edit:focus {
+  border-color: #007aff;
+  background: white;
+}
+body.edit-mode .card-desc-hint {
+  font-size: 11px; color: #c08400; margin-top: 6px;
+}
 </style>
 </head>
 <body>
 <!-- 매뉴얼에 저장된 사진 데이터 (편집 모드에서 내보내면 이 안에 base64로 채워집니다) -->
 <script id="storedImages" type="application/json">{}</script>
+<!-- 매뉴얼에 저장된 설명문(수정본) 데이터 -->
+<script id="storedDescs" type="application/json">{}</script>
 
 <div id="app"></div>
 <div id="lightbox" class="lightbox" onclick="closeLightbox()">
@@ -807,15 +829,16 @@ if (editMode) document.body.classList.add('edit-mode');
 // ----- IndexedDB 래퍼 -----
 const DB_NAME = 'photo-manual-db';
 const STORE = 'images';
+const DESC_STORE = 'descs';
 let _dbPromise = null;
 function getDB() {
   if (!_dbPromise) {
     _dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, 2);
       req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(STORE)) {
-          req.result.createObjectStore(STORE);
-        }
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+        if (!db.objectStoreNames.contains(DESC_STORE)) db.createObjectStore(DESC_STORE);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -866,22 +889,68 @@ async function dbClearAll() {
   });
 }
 
+// ----- descs 스토어 (설명문 수정본) -----
+async function dbAllDescs() {
+  try {
+    const db = await getDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(DESC_STORE, 'readonly');
+      const out = {};
+      const req = tx.objectStore(DESC_STORE).openCursor();
+      req.onsuccess = (e) => {
+        const c = e.target.result;
+        if (c) { out[c.key] = c.value; c.continue(); }
+        else resolve(out);
+      };
+      req.onerror = () => resolve({});
+    });
+  } catch { return {}; }
+}
+async function dbPutDesc(key, value) {
+  const db = await getDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(DESC_STORE, 'readwrite');
+    tx.objectStore(DESC_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+  });
+}
+async function dbDelDesc(key) {
+  const db = await getDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(DESC_STORE, 'readwrite');
+    tx.objectStore(DESC_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+  });
+}
+
 // ----- 메모리 캐시 (렌더링 시 동기 접근용) -----
 let imageCache = {};
+let descCache = {};
+
+function getDescForSlot(slotId, fallback) {
+  return descCache[slotId] !== undefined ? descCache[slotId] : fallback;
+}
+async function saveDesc(slotId, text) {
+  const trimmed = (text || '').replace(/\s+$/g, '');
+  descCache[slotId] = trimmed;
+  await dbPutDesc(slotId, trimmed);
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 async function loadImageCache() {
-  // 1) 인라인 JSON 먼저 로드 (내보낸 HTML에 박힌 사진 — 일반 작가가 볼 때)
+  // 1) 인라인 JSON 먼저 로드 (내보낸 HTML에 박힌 사진/설명 — 일반 작가가 볼 때)
   try {
     const inline = document.getElementById('storedImages');
-    if (inline) {
-      const parsed = JSON.parse(inline.textContent || '{}');
-      Object.assign(imageCache, parsed);
-    }
+    if (inline) Object.assign(imageCache, JSON.parse(inline.textContent || '{}'));
+    const descInline = document.getElementById('storedDescs');
+    if (descInline) Object.assign(descCache, JSON.parse(descInline.textContent || '{}'));
   } catch {}
   // 2) 편집 모드라면 IndexedDB의 작업중 데이터로 덮어쓰기 (편집자가 볼 때)
   if (editMode) {
-    const fromDB = await dbAllImages();
-    Object.assign(imageCache, fromDB);
+    Object.assign(imageCache, await dbAllImages());
+    Object.assign(descCache, await dbAllDescs());
     // 기존 localStorage에 있던 데이터 마이그레이션
     try {
       const legacy = JSON.parse(localStorage.getItem('photo-manual-images') || 'null');
@@ -959,6 +1028,8 @@ function exportManual() {
   const docClone = document.documentElement.cloneNode(true);
   const scriptEl = docClone.querySelector('#storedImages');
   if (scriptEl) scriptEl.textContent = JSON.stringify(stored);
+  const descEl = docClone.querySelector('#storedDescs');
+  if (descEl) descEl.textContent = JSON.stringify(descCache);
   const banner = docClone.querySelector('.edit-banner');
   if (banner) banner.remove();
   const html = '<!DOCTYPE html>\n' + docClone.outerHTML;
@@ -1010,6 +1081,18 @@ function attachEditHandlers() {
         deleteSlotImage(slotId);
       });
     }
+  });
+  // 설명문 편집 핸들러
+  document.querySelectorAll('[data-desc-slot]').forEach(p => {
+    p.addEventListener('blur', async () => {
+      const slotId = p.dataset.descSlot;
+      const text = p.innerText.replace(/ /g, ' ').trim();
+      await saveDesc(slotId, text);
+    });
+    p.addEventListener('keydown', (e) => {
+      // Esc로 편집 종료
+      if (e.key === 'Escape') { e.preventDefault(); p.blur(); }
+    });
   });
 }
 
@@ -1070,7 +1153,7 @@ function renderMenu() {
       if (!s) continue;
       const count = s.isGallery
         ? s.galleryGroups.reduce((a,g) => a + g.shots.length, 0)
-        : s.cards.length;
+        : getVisibleCards(s).length;
       html += `
         <button class="menu-item" onclick="openSection('${s.id}')">
           <div class="menu-icon">${s.icon}</div>
@@ -1108,16 +1191,18 @@ function backToMenu() {
   window.scrollTo(0, 0);
 }
 
-function renderCardContent(card, sectionId, cardIndex) {
+function renderCardContent(card, sectionId, origIndex, displayIndex) {
   const orientClass = card.orientation === 'vertical' ? 'vertical' : '';
   const orientLabel = card.orientation === 'vertical' ? '세로' : '가로';
   const isComposition = card.desc !== undefined;
   if (isComposition) {
-    const slotId = `${sectionId}-${cardIndex}`;
+    const slotId = `${sectionId}-${origIndex}`;
     const imgSrc = getImageForSlot(slotId, card.image);
     const hasImg = !!imgSrc;
+    const desc = getDescForSlot(slotId, card.desc);
+    const displayNum = displayIndex + 1;
     const imgHtml = hasImg
-      ? `<img class="user-img" src="${imgSrc}" alt="${card.title}">`
+      ? `<img class="user-img" src="${imgSrc}" alt="">`
       : `<div class="placeholder"><div class="placeholder-icon">📷</div>${editMode ? '사진을 끌어다 놓거나 클릭' : '사진 자리'}</div>`;
     const editUI = editMode ? `
       <label class="upload-zone">
@@ -1127,16 +1212,20 @@ function renderCardContent(card, sectionId, cardIndex) {
       </label>
       ${hasImg ? `<button class="delete-img-btn" type="button">🗑 삭제</button>` : ''}
     ` : '';
+    const descAttrs = editMode
+      ? `class="card-desc-edit" contenteditable="true" data-desc-slot="${slotId}" spellcheck="false"`
+      : '';
+    const editHint = editMode ? `<div class="card-desc-hint">✏️ 클릭해서 설명문 수정 — 다른 곳을 누르면 자동 저장</div>` : '';
     return `
       <div class="card-inner">
-        <div class="card-eyebrow">구도 ${cardIndex + 1}</div>
-        <div class="card-title">${card.title}</div>
+        <div class="card-eyebrow">구도 ${displayNum}</div>
+        <div class="card-title">${displayNum}.</div>
         <div class="card-image ${orientClass} ${hasImg ? 'has-img' : ''}" data-slot="${slotId}">
           ${imgHtml}
           <div class="orient-tag">${orientLabel}</div>
           ${editUI}
         </div>
-        <div class="card-body"><p>${card.desc}</p></div>
+        <div class="card-body"><p ${descAttrs}>${escapeHtml(desc)}</p>${editHint}</div>
       </div>
     `;
   }
@@ -1149,21 +1238,55 @@ function renderCardContent(card, sectionId, cardIndex) {
   `;
 }
 
+function getVisibleCards(s) {
+  // 빈 구도 카드는 숨김 (편집 모드에서는 모두 보여줘서 추가 가능)
+  return s.cards
+    .map((c, origIndex) => ({ card: c, origIndex }))
+    .filter(({card, origIndex}) => {
+      if (card.desc === undefined) return true; // info/세팅 카드는 항상 표시
+      if (editMode) return true; // 편집 모드: 빈 슬롯도 보여줌
+      const slotId = `${s.id}-${origIndex}`;
+      return !!getImageForSlot(slotId, card.image);
+    });
+}
+
 function renderSection() {
   const s = findSection(state.view);
   if (!s) { backToMenu(); return; }
+  if (s.isGallery) { renderGallery(s); return; }
 
-  if (s.isGallery) {
-    renderGallery(s);
+  const visible = getVisibleCards(s);
+
+  if (visible.length === 0) {
+    app.innerHTML = `
+      <div class="section">
+        <div class="section-header">
+          <button class="back-btn" onclick="backToMenu()">‹ 메뉴</button>
+          <div class="section-title">${s.title}</div>
+          <div class="page-indicator"></div>
+        </div>
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px; text-align:center; color:#888;">
+          <div>
+            <div style="font-size:48px; margin-bottom:12px;">📷</div>
+            <div>등록된 사진이 없습니다</div>
+          </div>
+        </div>
+      </div>
+    `;
     return;
   }
 
-  const total = s.cards.length;
-  const dotsHtml = s.cards.map((_, i) =>
+  const total = visible.length;
+  if (state.cardIndex >= total) state.cardIndex = total - 1;
+  if (state.cardIndex < 0) state.cardIndex = 0;
+
+  const dotsHtml = visible.map((_, i) =>
     `<span class="dot ${i === state.cardIndex ? 'active' : ''}" onclick="goTo(${i})"></span>`
   ).join('');
 
-  const cardsHtml = s.cards.map((c, i) => `<div class="card">${renderCardContent(c, s.id, i)}</div>`).join('');
+  const cardsHtml = visible.map(({card, origIndex}, di) =>
+    `<div class="card">${renderCardContent(card, s.id, origIndex, di)}</div>`
+  ).join('');
 
   app.innerHTML = `
     <div class="section">
@@ -1260,10 +1383,15 @@ function openLightboxFromImg(imgEl, label) {
   openLightbox(imgEl.src, label);
 }
 
-function next() {
+function getCurrentTotal() {
   const s = findSection(state.view);
-  if (!s || s.isGallery) return;
-  if (state.cardIndex < s.cards.length - 1) {
+  if (!s || s.isGallery) return 0;
+  return getVisibleCards(s).length;
+}
+
+function next() {
+  const total = getCurrentTotal();
+  if (state.cardIndex < total - 1) {
     state.cardIndex++;
     updateTrack();
   }
@@ -1282,8 +1410,7 @@ function goTo(i) {
 }
 
 function updateTrack() {
-  const s = findSection(state.view);
-  const total = s.cards.length;
+  const total = getCurrentTotal();
   const track = document.getElementById('cards-track');
   if (track) {
     track.classList.remove('no-transition');
@@ -1330,8 +1457,7 @@ function attachSwipe() {
     }
     if (horizontal) {
       currentX = dx;
-      const s = findSection(state.view);
-      const total = s.cards.length;
+      const total = getCurrentTotal();
       let offset = -state.cardIndex * 100 + (dx / container.offsetWidth) * 100;
       // Resistance at edges
       if (state.cardIndex === 0 && dx > 0) offset = -state.cardIndex * 100 + (dx / container.offsetWidth) * 30;
