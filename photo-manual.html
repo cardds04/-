@@ -259,9 +259,79 @@ body {
 @media (min-width: 600px) {
   .gallery { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ============ EDIT MODE ============ */
+.edit-banner {
+  position: fixed; top: 0; left: 0; right: 0;
+  background: #ff9500; color: white; text-align: center;
+  font-size: 12px; padding: 6px 12px; z-index: 200;
+  font-weight: 600;
+  padding-top: calc(6px + env(safe-area-inset-top));
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.edit-banner button {
+  background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5);
+  color: white; padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; cursor: pointer; font-family: inherit; font-weight: 600;
+}
+body.edit-mode { padding-top: calc(env(safe-area-inset-top) + 32px); }
+body.edit-mode .section-header { padding-top: 12px; }
+body.edit-mode .section { height: calc(100vh - 32px - env(safe-area-inset-top)); height: calc(100dvh - 32px - env(safe-area-inset-top)); }
+.upload-zone {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 6px;
+  cursor: pointer; color: #007aff; font-weight: 600;
+  background: rgba(255,255,255,0.85);
+  border: 2px dashed #007aff; border-radius: inherit;
+  font-size: 13px; padding: 10px; text-align: center;
+  transition: background 0.15s;
+}
+.upload-zone .upload-icon { font-size: 26px; }
+.upload-zone input[type="file"] { display: none; }
+.upload-zone:hover { background: rgba(255,255,255,0.95); }
+.card-image.has-img .upload-zone, .gallery-item.has-img .upload-zone {
+  background: rgba(255,255,255,0.0); border-color: transparent;
+  color: transparent;
+}
+.card-image.has-img:hover .upload-zone, .gallery-item.has-img:hover .upload-zone {
+  background: rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.6); color: white;
+}
+.card-image.drag-over .upload-zone, .gallery-item.drag-over .upload-zone {
+  background: #e3f2fd !important; border-color: #1565c0 !important; color: #0d47a1 !important;
+}
+.user-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: inherit; display: block;
+}
+.delete-img-btn {
+  position: absolute; top: 8px; left: 8px;
+  background: rgba(255,59,48,0.95); color: white; padding: 5px 10px;
+  border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;
+  border: none; z-index: 5; font-family: inherit;
+}
+.gallery-item .delete-img-btn { top: 6px; left: 6px; padding: 3px 7px; font-size: 10px; }
+
+.edit-controls {
+  margin: 20px 0 10px; padding: 16px;
+  background: #fff7e6; border: 1px solid #ffd380; border-radius: 12px;
+}
+.edit-controls h4 { margin: 0 0 10px; font-size: 14px; }
+.edit-controls .ec-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.edit-controls button {
+  background: white; border: 1px solid #ddd; padding: 10px 14px;
+  border-radius: 8px; font-size: 13px; cursor: pointer;
+  font-family: inherit; font-weight: 600;
+}
+.edit-controls button.primary { background: #007aff; color: white; border-color: #007aff; }
+.edit-controls button.danger { background: #ff3b30; color: white; border-color: #ff3b30; }
+.edit-controls .ec-info { font-size: 12px; color: #6b4f00; margin-top: 8px; line-height: 1.5; }
 </style>
 </head>
 <body>
+<!-- 매뉴얼에 저장된 사진 데이터 (편집 모드에서 내보내면 이 안에 base64로 채워집니다) -->
+<script id="storedImages" type="application/json">{}</script>
+
 <div id="app"></div>
 <div id="lightbox" class="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="event.stopPropagation();closeLightbox()">✕</button>
@@ -279,18 +349,18 @@ body {
 const SVG_8POINT = `
 <svg viewBox="0 0 340 290" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <marker id="arrB" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <marker id="arrB" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse">
       <polygon points="0 0, 8 3, 0 6" fill="#007aff"/>
     </marker>
-    <marker id="arrG" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse">
       <polygon points="0 0, 8 3, 0 6" fill="#34c759"/>
     </marker>
   </defs>
   <rect x="50" y="40" width="240" height="200" fill="#fafafa" stroke="#1a1a1a" stroke-width="2.5" rx="4"/>
-  <line x1="60" y1="50" x2="280" y2="230" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrB)"/>
-  <line x1="280" y1="50" x2="60" y2="230" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrB)"/>
-  <line x1="170" y1="50" x2="170" y2="230" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrG)"/>
-  <line x1="60" y1="140" x2="280" y2="140" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrG)"/>
+  <line x1="68" y1="58" x2="272" y2="222" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.6" marker-start="url(#arrB)" marker-end="url(#arrB)"/>
+  <line x1="272" y1="58" x2="68" y2="222" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.6" marker-start="url(#arrB)" marker-end="url(#arrB)"/>
+  <line x1="170" y1="58" x2="170" y2="222" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.6" marker-start="url(#arrG)" marker-end="url(#arrG)"/>
+  <line x1="68" y1="140" x2="272" y2="140" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.6" marker-start="url(#arrG)" marker-end="url(#arrG)"/>
   <circle cx="50" cy="40" r="13" fill="#007aff"/>
   <circle cx="290" cy="40" r="13" fill="#007aff"/>
   <circle cx="50" cy="240" r="13" fill="#007aff"/>
@@ -340,10 +410,11 @@ const sections = [
           <ul class="spec-list">
             <li><span class="spec-label">ISO</span><span class="spec-value">100 (고정)</span></li>
             <li><span class="spec-label">화이트밸런스</span><span class="spec-value">5000K (고정)</span></li>
-            <li><span class="spec-label">조리개</span><span class="spec-value">자동 (조리개 우선)</span></li>
+            <li><span class="spec-label">조리개 — 전체샷</span><span class="spec-value">f11</span></li>
+            <li><span class="spec-label">조리개 — 줌(디테일)샷</span><span class="spec-value">f4.0</span></li>
             <li><span class="spec-label">파일 포맷</span><span class="spec-value">RAW · 최고화질</span></li>
             <li><span class="spec-label">측광</span><span class="spec-value">평가 / 매트릭스</span></li>
-            <li><span class="spec-label">셔터</span><span class="spec-value">2초 셀프타이머 또는 리모컨</span></li>
+            <li><span class="spec-label">셔터</span><span class="spec-value">리모컨 (필수)</span></li>
           </ul>
           <div class="tip"><strong>화이트밸런스를 5000K로 고정</strong>하는 이유 — 자동(AWB)으로 두면 매물마다, 컷마다 색이 달라져서 후보정 시 톤 통일이 어렵습니다.</div>
         `
@@ -362,7 +433,7 @@ const sections = [
             <li>창문이 프레임에 들어가는 컷은 <strong>±2EV 3컷 브라케팅</strong></li>
             <li>후반에 HDR 합성 또는 창문 영역 합성</li>
           </ul>
-          <div class="note">셔터를 손으로 누르면 미세하게 흔들립니다. 반드시 셀프타이머 2초 또는 리모컨 셔터를 사용하세요.</div>
+          <div class="note">셔터를 손으로 누르면 미세하게 흔들립니다. 반드시 <strong>리모컨 셔터</strong>를 사용하세요.</div>
         `
       }
     ]
@@ -408,7 +479,7 @@ const sections = [
         <ul class="check-list">
           <li>카메라 바디 + 광각 렌즈</li>
           <li>삼각대 (수평계 포함)</li>
-          <li>리모컨 셔터 또는 셀프타이머 확인</li>
+          <li>리모컨 셔터 (필수)</li>
           <li>여분 배터리 2개 이상</li>
           <li>메모리 카드 (여분 포함, 포맷된 상태)</li>
         </ul>
@@ -497,9 +568,9 @@ const sections = [
             <li>삼각대 다리가 프레임에 들어오지 않는지</li>
             <li>카메라 가방 등 짐이 바닥에 보이지 않는지</li>
             <li>수평/수직 한 번 더 확인</li>
-            <li>셀프타이머/리모컨 설정 확인</li>
+            <li>리모컨 작동 확인</li>
           </ul>
-          <div class="tip">거울 앞 촬영은 본인이 사각지대에 들어가도록 측면에 자리잡고, 리모컨이나 2초 타이머로 셔터.</div>
+          <div class="tip">거울 앞 촬영은 본인이 사각지대에 들어가도록 측면에 자리잡고, 리모컨으로 셔터.</div>
         `
       }
     ]
@@ -711,6 +782,182 @@ const state = {
 
 const app = document.getElementById('app');
 
+/* ====================================================================
+   편집 모드 — URL에 ?edit 붙이면 활성화
+   ==================================================================== */
+const editMode = new URLSearchParams(location.search).has('edit');
+const STORAGE_KEY = 'photo-manual-images';
+
+if (editMode) document.body.classList.add('edit-mode');
+
+function getStoredImages() {
+  // 편집 모드에서는 localStorage(라이브 편집)를 우선
+  if (editMode) {
+    try {
+      const ls = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (ls) return ls;
+    } catch {}
+  }
+  // 인라인 데이터 (내보낸 HTML에 baked-in된 사진들)
+  try {
+    const inline = document.getElementById('storedImages');
+    if (inline) {
+      const parsed = JSON.parse(inline.textContent || '{}');
+      // 편집 모드인데 localStorage가 비어있으면 인라인 데이터를 localStorage로 복사
+      if (editMode && Object.keys(parsed).length && !localStorage.getItem(STORAGE_KEY)) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch {}
+      }
+      return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+function setStoredImage(slotId, dataUrl) {
+  const imgs = getStoredImages();
+  if (dataUrl) imgs[slotId] = dataUrl;
+  else delete imgs[slotId];
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(imgs));
+  } catch (e) {
+    alert('저장 공간 부족 — 더 작은 사진을 쓰거나 일부를 삭제해주세요.');
+  }
+}
+
+function getImageForSlot(slotId, fallback) {
+  const stored = getStoredImages();
+  return stored[slotId] || fallback || null;
+}
+
+async function resizeImage(file, maxWidth = 1600, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFileForSlot(file, slotId) {
+  if (!file || !file.type.startsWith('image/')) {
+    alert('이미지 파일만 업로드 가능합니다');
+    return;
+  }
+  try {
+    const dataUrl = await resizeImage(file);
+    setStoredImage(slotId, dataUrl);
+    if (state.view !== 'menu') renderSection();
+    else renderMenu();
+  } catch (err) {
+    alert('이미지 처리 실패: ' + (err.message || err));
+  }
+}
+
+function deleteSlotImage(slotId) {
+  if (!confirm('이 사진을 삭제할까요?')) return;
+  setStoredImage(slotId, null);
+  if (state.view !== 'menu') renderSection();
+  else renderMenu();
+}
+
+function clearAllImages() {
+  if (!confirm('저장된 모든 사진을 삭제할까요? 되돌릴 수 없습니다.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  if (state.view !== 'menu') renderSection();
+  else renderMenu();
+}
+
+function exportManual() {
+  const stored = getStoredImages();
+  const count = Object.keys(stored).length;
+  if (count === 0) {
+    if (!confirm('저장된 사진이 하나도 없습니다. 그래도 내보낼까요?')) return;
+  }
+  const docClone = document.documentElement.cloneNode(true);
+  const scriptEl = docClone.querySelector('#storedImages');
+  if (scriptEl) scriptEl.textContent = JSON.stringify(stored);
+  // 편집 모드 배너 제거
+  const banner = docClone.querySelector('.edit-banner');
+  if (banner) banner.remove();
+  const html = '<!DOCTYPE html>\n' + docClone.outerHTML;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'photo-manual.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => {
+    alert(`✅ 내보내기 완료!\n사진 ${count}장이 포함되었습니다.\n\n다운로드된 photo-manual.html 파일로 서버의 기존 파일을 덮어쓰면 모든 작가에게 반영됩니다.`);
+  }, 200);
+}
+
+function toggleEditMode() {
+  const url = new URL(location.href);
+  if (editMode) url.searchParams.delete('edit');
+  else url.searchParams.set('edit', '1');
+  location.href = url.toString();
+}
+
+function attachEditHandlers() {
+  if (!editMode) return;
+  document.querySelectorAll('[data-slot]').forEach(slot => {
+    const slotId = slot.dataset.slot;
+    const input = slot.querySelector('input[type="file"]');
+    if (input) {
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) await handleFileForSlot(file, slotId);
+        e.target.value = '';
+      });
+    }
+    slot.addEventListener('dragover', (e) => { e.preventDefault(); slot.classList.add('drag-over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+    slot.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      slot.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) await handleFileForSlot(file, slotId);
+    });
+    const delBtn = slot.querySelector('.delete-img-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        deleteSlotImage(slotId);
+      });
+    }
+  });
+}
+
+function renderEditBanner() {
+  if (!editMode) return;
+  if (document.querySelector('.edit-banner')) return;
+  const banner = document.createElement('div');
+  banner.className = 'edit-banner';
+  banner.innerHTML = `
+    <span>✏️ 편집 모드</span>
+    <button onclick="exportManual()">📥 내보내기</button>
+    <button onclick="toggleEditMode()">끄기</button>
+  `;
+  document.body.appendChild(banner);
+}
+
 const menuGroups = [
   { label: '시작', items: ['intro'] },
   { label: '세팅', items: ['camera', 'tripod', 'essentials'] },
@@ -722,6 +969,8 @@ const menuGroups = [
 function findSection(id) { return sections.find(s => s.id === id); }
 
 function renderMenu() {
+  const stored = getStoredImages();
+  const storedCount = Object.keys(stored).length;
   let html = `
     <div class="menu">
       <div class="menu-header">
@@ -729,6 +978,24 @@ function renderMenu() {
         <div class="menu-subtitle">신입 작가용 · 스마트폰에서 보기</div>
       </div>
   `;
+  if (editMode) {
+    html += `
+      <div class="edit-controls">
+        <h4>✏️ 편집 모드 — 사진 채우기</h4>
+        <div class="ec-btns">
+          <button class="primary" onclick="exportManual()">📥 완료 — 매뉴얼 내보내기 (${storedCount}장 저장됨)</button>
+          <button class="danger" onclick="clearAllImages()">전체 사진 삭제</button>
+          <button onclick="toggleEditMode()">편집 모드 끄기</button>
+        </div>
+        <div class="ec-info">
+          ① 각 메뉴(거실/주방/현관/욕실/방/예시사진 등)로 들어가서<br>
+          ② 사진 자리에 파일을 끌어다 놓거나 클릭해서 업로드<br>
+          ③ 다 끝나면 <strong>📥 내보내기</strong> 클릭 → 다운로드된 photo-manual.html로 서버 파일 덮어쓰기<br>
+          <em style="color:#946700;">진행 중인 사진은 브라우저에 자동 저장됩니다 (브라우저를 닫아도 유지).</em>
+        </div>
+      </div>
+    `;
+  }
   for (const group of menuGroups) {
     html += `<div class="menu-section-label">${group.label}</div><div class="menu-list">`;
     for (const id of group.items) {
@@ -750,6 +1017,13 @@ function renderMenu() {
     }
     html += `</div>`;
   }
+  if (!editMode) {
+    html += `
+      <div style="margin-top:32px; padding:14px; text-align:center; color:#aaa; font-size:12px;">
+        <button onclick="toggleEditMode()" style="background:none; border:1px solid #ddd; padding:8px 16px; border-radius:8px; font-size:12px; color:#888; cursor:pointer; font-family:inherit;">✏️ 사진 편집 모드 켜기 (관리자용)</button>
+      </div>
+    `;
+  }
   html += `</div>`;
   app.innerHTML = html;
 }
@@ -767,21 +1041,33 @@ function backToMenu() {
   window.scrollTo(0, 0);
 }
 
-function renderCardContent(card) {
+function renderCardContent(card, sectionId, cardIndex) {
   const orientClass = card.orientation === 'vertical' ? 'vertical' : '';
   const orientLabel = card.orientation === 'vertical' ? '세로' : '가로';
   const isComposition = card.desc !== undefined;
   if (isComposition) {
-    const img = card.image
-      ? `<img src="${card.image}" alt="${card.title}">`
-      : `<div class="placeholder"><div class="placeholder-icon">📷</div>사진 자리 (HTML 편집해서 추가)</div>`;
+    const slotId = `${sectionId}-${cardIndex}`;
+    const imgSrc = getImageForSlot(slotId, card.image);
+    const hasImg = !!imgSrc;
+    const imgHtml = hasImg
+      ? `<img class="user-img" src="${imgSrc}" alt="${card.title}">`
+      : `<div class="placeholder"><div class="placeholder-icon">📷</div>${editMode ? '사진을 끌어다 놓거나 클릭' : '사진 자리'}</div>`;
+    const editUI = editMode ? `
+      <label class="upload-zone">
+        <input type="file" accept="image/*">
+        <div class="upload-icon">📤</div>
+        <div>${hasImg ? '사진 변경' : '사진 추가 (클릭 또는 드래그)'}</div>
+      </label>
+      ${hasImg ? `<button class="delete-img-btn" type="button">🗑 삭제</button>` : ''}
+    ` : '';
     return `
       <div class="card-inner">
-        <div class="card-eyebrow">구도 ${state.cardIndex + 1}</div>
+        <div class="card-eyebrow">구도 ${cardIndex + 1}</div>
         <div class="card-title">${card.title}</div>
-        <div class="card-image ${orientClass}">
-          ${img}
+        <div class="card-image ${orientClass} ${hasImg ? 'has-img' : ''}" data-slot="${slotId}">
+          ${imgHtml}
           <div class="orient-tag">${orientLabel}</div>
+          ${editUI}
         </div>
         <div class="card-body"><p>${card.desc}</p></div>
       </div>
@@ -810,7 +1096,7 @@ function renderSection() {
     `<span class="dot ${i === state.cardIndex ? 'active' : ''}" onclick="goTo(${i})"></span>`
   ).join('');
 
-  const cardsHtml = s.cards.map(c => `<div class="card">${renderCardContent(c)}</div>`).join('');
+  const cardsHtml = s.cards.map((c, i) => `<div class="card">${renderCardContent(c, s.id, i)}</div>`).join('');
 
   app.innerHTML = `
     <div class="section">
@@ -832,21 +1118,38 @@ function renderSection() {
     </div>
   `;
   attachSwipe();
+  attachEditHandlers();
 }
 
 function renderGallery(s) {
   let groupsHtml = '';
-  for (const g of s.galleryGroups) {
-    const itemsHtml = g.shots.map((shot, i) => {
+  for (let gi = 0; gi < s.galleryGroups.length; gi++) {
+    const g = s.galleryGroups[gi];
+    const itemsHtml = g.shots.map((shot, si) => {
+      const slotId = `${s.id}-g-${gi}-${si}`;
+      const imgSrc = getImageForSlot(slotId, shot.image);
+      const hasImg = !!imgSrc;
       const orientClass = shot.orientation === 'vertical' ? 'vertical' : '';
-      const content = shot.image
-        ? `<img src="${shot.image}" alt="${shot.label}" onclick="openLightbox('${shot.image}', '${shot.label.replace(/'/g, "\\'")}')">`
+      const labelEscaped = shot.label.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const content = hasImg
+        ? (editMode
+            ? `<img class="user-img" src="${imgSrc}" alt="${shot.label}">`
+            : `<img class="user-img" src="${imgSrc}" alt="${shot.label}" onclick="openLightboxFromImg(this, '${labelEscaped}')">`)
         : `<div class="placeholder">📷</div>`;
+      const editUI = editMode ? `
+        <label class="upload-zone">
+          <input type="file" accept="image/*">
+          <div class="upload-icon">📤</div>
+          <div style="font-size:11px;">${hasImg ? '변경' : '추가'}</div>
+        </label>
+        ${hasImg ? `<button class="delete-img-btn" type="button">🗑</button>` : ''}
+      ` : '';
       return `
-        <div class="gallery-item ${orientClass}">
-          <div class="gal-num">${i + 1}</div>
+        <div class="gallery-item ${orientClass} ${hasImg ? 'has-img' : ''}" data-slot="${slotId}">
+          <div class="gal-num">${si + 1}</div>
           ${content}
           <div class="gal-label">${shot.label}</div>
+          ${editUI}
         </div>
       `;
     }).join('');
@@ -857,6 +1160,16 @@ function renderGallery(s) {
       </div>
     `;
   }
+  const editControls = editMode ? `
+    <div class="edit-controls">
+      <h4>✏️ 편집 모드 — 예시 사진 채우기</h4>
+      <div class="ec-btns">
+        <button class="primary" onclick="exportManual()">📥 완료 — 매뉴얼 내보내기</button>
+        <button class="danger" onclick="clearAllImages()">전체 사진 삭제</button>
+      </div>
+      <div class="ec-info">각 자리를 클릭하거나 사진 파일을 끌어다 놓으세요. 다 채운 뒤 <strong>내보내기</strong>를 누르면 사진이 모두 들어간 HTML 파일이 다운로드됩니다. 그 파일로 서버의 photo-manual.html을 덮어쓰면 모든 작가에게 적용됩니다.</div>
+    </div>
+  ` : '';
   app.innerHTML = `
     <div class="section">
       <div class="section-header">
@@ -866,14 +1179,18 @@ function renderGallery(s) {
       </div>
       <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
         <div class="gallery-wrap">
-          <div class="tip" style="margin-bottom:16px;">
-            아래는 자리 잡힌 예시 갤러리입니다. HTML 파일을 열어 각 항목의 <code>image</code> 필드에 실제 사진 URL이나 경로를 넣으면 표시됩니다.
-          </div>
+          ${editControls}
+          ${!editMode ? '<div class="tip" style="margin-bottom:16px;">아래는 공간별 예시 사진입니다. 사진을 탭하면 크게 볼 수 있습니다.</div>' : ''}
           ${groupsHtml}
         </div>
       </div>
     </div>
   `;
+  attachEditHandlers();
+}
+
+function openLightboxFromImg(imgEl, label) {
+  openLightbox(imgEl.src, label);
 }
 
 function next() {
@@ -989,6 +1306,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Init
+renderEditBanner();
 renderMenu();
 </script>
 </body>
