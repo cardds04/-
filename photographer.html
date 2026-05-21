@@ -315,7 +315,7 @@
             <strong id="welcomeText"></strong>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
               <span id="monthlyShotCount" class="btn outline small" style="display:inline-flex; align-items:center;">이번달 촬영횟수 0회</span>
-              <button id="photoManualBtn" class="btn outline small" type="button" title="촬영 매뉴얼 열기">📷 촬영매뉴얼</button>
+              <a id="photoManualBtn" class="btn outline small" href="./photo-manual.html" target="_blank" rel="noopener" title="촬영 매뉴얼 열기" style="display:inline-flex; align-items:center; text-decoration:none;">📷 촬영매뉴얼</a>
               <button id="historyBtn" class="btn outline small" type="button">기록보기</button>
               <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
             </div>
@@ -388,19 +388,6 @@
       </div>
     </div>
 
-    <!-- 촬영 매뉴얼 모달 -->
-    <div id="photoManualModal" class="history-modal hidden" style="padding:0;">
-      <div style="position:relative; width:100vw; height:100vh; background:#f5f5f7; display:flex; flex-direction:column;">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#fff; border-bottom:1px solid var(--line); flex-shrink:0;">
-          <strong style="font-size:1rem;">📷 인테리어 촬영 매뉴얼</strong>
-          <div style="display:flex; gap:6px;">
-            <a id="photoManualOpenNewTab" class="btn outline small" href="./photo-manual.html" target="_blank" rel="noopener" title="새 탭에서 열기">새 탭</a>
-            <button id="photoManualCloseBtn" class="btn outline small" type="button">닫기</button>
-          </div>
-        </div>
-        <iframe id="photoManualFrame" src="" style="border:0; flex:1; width:100%; height:100%;" title="촬영 매뉴얼"></iframe>
-      </div>
-    </div>
 
     <script src="./sync-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3666,28 +3653,6 @@
         if (event.target === historyModalEl) historyModalEl.classList.add("hidden");
       });
 
-      // 촬영 매뉴얼 모달
-      (function setupPhotoManual() {
-        const btn = document.getElementById("photoManualBtn");
-        const modal = document.getElementById("photoManualModal");
-        const closeBtn = document.getElementById("photoManualCloseBtn");
-        const frame = document.getElementById("photoManualFrame");
-        if (!btn || !modal || !frame) return;
-        btn.addEventListener("click", () => {
-          // iframe src를 지연 로드 (모달 열 때만 로드해서 페이지 부담 줄임)
-          if (!frame.src) frame.src = "./photo-manual.html";
-          modal.classList.remove("hidden");
-          document.body.style.overflow = "hidden";
-        });
-        const closeManual = () => {
-          modal.classList.add("hidden");
-          document.body.style.overflow = "";
-        };
-        closeBtn?.addEventListener("click", closeManual);
-        document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape" && !modal.classList.contains("hidden")) closeManual();
-        });
-      })();
 
       payrollPrevMonthBtnEl?.addEventListener("click", () => shiftPayrollViewMonth(-1));
       payrollNextMonthBtnEl?.addEventListener("click", () => shiftPayrollViewMonth(1));
