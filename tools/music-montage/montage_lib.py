@@ -1084,12 +1084,15 @@ def build_segment(
     vf_prefix: str | None = None,
     trim_start_sec: float = 0.0,
 ) -> None:
-    """vf_prefix: scale 전에 붙이는 vf. trim_start_sec>0 이면 원본 앞부분 건너뜀(-ss, 초 단위)."""
+    """vf_prefix: scale 전에 붙이는 vf. trim_start_sec>0 이면 원본 앞부분 건너뜀(-ss, 초 단위).
+    fps=30,settb=1/15360 으로 통일 — 입력 fps 가 다른 클립을 섞어도 concat -c copy 에서
+    PTS 가 어그러지지 않게 함 (예: 24fps 일반 + 48fps topaz-slowmo)."""
     pre = f"{vf_prefix}," if vf_prefix else ""
     vf = (
         pre
         + f"scale={width}:{height}:force_original_aspect_ratio=increase:force_divisible_by=2,"
-        + f"crop={width}:{height}:(iw-ow)/2:(ih-oh)/2,setsar=1,format=yuv420p"
+        + f"crop={width}:{height}:(iw-ow)/2:(ih-oh)/2,setsar=1,format=yuv420p,"
+        + "fps=30,settb=1/15360"
     )
     cmd: list[str] = [
         "ffmpeg",
@@ -1131,9 +1134,12 @@ TRI_STACK_CELL_H = 640
 def _cell_scale_crop_vf(pre: str, cw: int, ch: int) -> str:
     cw2 = max(2, cw - (cw % 2))
     ch2 = max(2, ch - (ch % 2))
+    # fps=30,settb=1/15360 으로 강제 통일 — 입력 fps/timebase 가 달라도 vstack 결과 timebase 가
+    # 일정해지고 후속 concat -c copy 가 안정적으로 동작.
     return (
         f"{pre}scale={cw2}:{ch2}:force_original_aspect_ratio=increase:force_divisible_by=2,"
-        f"crop={cw2}:{ch2}:(iw-ow)/2:(ih-oh)/2,setsar=1,format=yuv420p"
+        f"crop={cw2}:{ch2}:(iw-ow)/2:(ih-oh)/2,setsar=1,format=yuv420p,"
+        f"fps=30,settb=1/15360"
     )
 
 
@@ -1214,6 +1220,141 @@ def concat_segments(seg_paths: list[Path], out_path: Path) -> None:
     )
 
 
+# xfade 가 지원하는 전환 종류 중 우리가 노출하는 것들
+XFADE_ALLOWED = {
+    "fade", "fadeblack", "fadewhite",
+    "dissolve",
+    "wipeleft", "wiperight", "wipeup", "wipedown",
+    "slideleft", "slideright", "slideup", "slidedown",
+    "horzopen", "horzclose", "vertopen", "vertclose",
+    "smoothleft", "smoothright", "smoothup", "smoothdown",
+    "circleopen", "circleclose",
+}
+
+
+def _norm_transitions(
+    seg_durs: list[float], transitions: list[dict] | None
+) -> list[tuple[str, float]]:
+    """클립별 전환을 (type, duration) 으로 표준화 + 양쪽 클립 길이 한계로 클램프.
+    반환 길이는 항상 len(seg_durs) - 1. type='none' 또는 dur≈0 이면 그냥 컷."""
+    n = len(seg_durs)
+    out: list[tuple[str, float]] = []
+    src = transitions or []
+    for i in range(max(0, n - 1)):
+        t = src[i] if i < len(src) else {}
+        ttype = "none"
+        tdur = 0.0
+        if isinstance(t, dict):
+            ttype = str(t.get("type") or "none").strip().lower()
+            try:
+                tdur = float(t.get("dur") or 0)
+            except (TypeError, ValueError):
+                tdur = 0.0
+        if ttype not in XFADE_ALLOWED:
+            ttype = "none"
+        # 양쪽 클립 길이의 짧은 쪽 - 0.05s 보다 길 수 없음
+        cap = max(0.0, min(seg_durs[i], seg_durs[i + 1]) - 0.05)
+        if ttype == "none" or tdur <= 0.05 or cap <= 0.05:
+            out.append(("none", 0.0))
+        else:
+            out.append((ttype, min(tdur, cap)))
+    return out
+
+
+def transitions_have_any(transitions: list[dict] | None) -> bool:
+    if not transitions:
+        return False
+    for t in transitions:
+        if not isinstance(t, dict):
+            continue
+        ttype = str(t.get("type") or "none").strip().lower()
+        try:
+            tdur = float(t.get("dur") or 0)
+        except (TypeError, ValueError):
+            tdur = 0.0
+        if ttype != "none" and ttype in XFADE_ALLOWED and tdur > 0.05:
+            return True
+    return False
+
+
+def concat_segments_with_xfade(
+    seg_paths: list[Path],
+    transitions: list[dict],
+    out_path: Path,
+    fps: int = 30,
+    log: Callable[[str], None] | None = None,
+) -> None:
+    """클립 사이에 xfade 전환을 끼워 합본. transitions[i] 가 seg[i] → seg[i+1] 의 전환.
+    전환 dict 형식: {"type": <xfade name>, "dur": <seconds>}. type='none' 이면 그냥 컷."""
+    _log = log or (lambda _s: None)
+    n = len(seg_paths)
+    if n == 0:
+        raise ValueError("seg_paths is empty")
+    if n == 1:
+        # 단일 세그먼트 → 재인코딩 없이 그대로 복사
+        run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-i", str(seg_paths[0]), "-c", "copy", str(out_path)])
+        return
+    seg_durs: list[float] = []
+    for p in seg_paths:
+        try:
+            seg_durs.append(float(ffprobe_duration(p)))
+        except (OSError, ValueError, RuntimeError) as exc:
+            _log(f"경고: 세그먼트 길이 측정 실패 ({p.name}: {exc}) → 4.0s 가정")
+            seg_durs.append(4.0)
+    norm = _norm_transitions(seg_durs, transitions)
+    used = [(t, d) for t, d in norm if t != "none" and d > 0]
+    if not used:
+        _log("xfade 합본: 실제 적용할 전환이 없어 빠른 concat 으로 폴백")
+        concat_segments(seg_paths, out_path)
+        return
+
+    parts: list[str] = []
+    for i in range(n):
+        parts.append(
+            f"[{i}:v]fps={fps},format=yuv420p,setpts=PTS-STARTPTS,settb=AVTB[v{i}]"
+        )
+    cur_label = "v0"
+    cur_dur = seg_durs[0]
+    for i in range(n - 1):
+        ttype, tdur = norm[i]
+        nxt = f"v{i + 1}"
+        new_label = f"m{i + 1}"
+        if ttype == "none" or tdur <= 0:
+            # 단순 이어붙이기 (concat 필터)
+            parts.append(f"[{cur_label}][{nxt}]concat=n=2:v=1:a=0[{new_label}]")
+            cur_dur += seg_durs[i + 1]
+        else:
+            offset = max(0.0, cur_dur - tdur)
+            parts.append(
+                f"[{cur_label}][{nxt}]xfade=transition={ttype}"
+                f":duration={tdur:.4f}:offset={offset:.4f}[{new_label}]"
+            )
+            cur_dur += seg_durs[i + 1] - tdur
+        cur_label = new_label
+
+    fc = ";".join(parts)
+    _log(
+        f"xfade 합본: {n}개 클립, 전환 적용 {sum(1 for t,d in norm if t!='none')}개, "
+        f"예상 길이 {cur_dur:.2f}s"
+    )
+    cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+    ]
+    for p in seg_paths:
+        cmd.extend(["-i", str(p)])
+    cmd.extend([
+        "-filter_complex", fc,
+        "-map", f"[{cur_label}]",
+        "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-r", str(fps),
+        str(out_path),
+    ])
+    run(cmd)
+
+
 def _letterbox_h_expression(duration: float, open_sec: float, close_sec: float) -> tuple[str, float, float]:
     """구 레터박스용 scale 식 + (실제 open/close 초). 합본에서는 식은 쓰지 않고 open/close만 검은 페이드 길이 클램프에 사용."""
     o_in = float(open_sec)
@@ -1270,11 +1411,13 @@ def mux_final_output(
     letterbox_close_sec: float = 2.0,
     tail_black_sec: float = 2.0,
     logo_path: Path | None = None,
+    logo_scale_pct: float = 100.0,
     log: Callable[[str], None] | None = None,
 ) -> None:
     """
     합본 영상: 선택 시 맨 앞·끝을 검은 화면으로 페이드(구 레터박스 슬롯) → tail → 선택 로고 → 오디오.
     content_duration D = 몽타주 본문 길이(검은 tail 제외). 최종 영상 길이 D + tail_black_sec.
+    logo_scale_pct: 100 = 기본 크기, 50 = 절반, 150 = 1.5배. 최종 출력 높이는 항상 짝수.
     """
     _log = log or (lambda _s: None)
     d = max(float(content_duration), 0.01)
@@ -1330,7 +1473,13 @@ def mux_final_output(
     logo = Path(logo_path).resolve() if logo_path else None
     use_logo = logo is not None and logo.is_file()
     v_final = v_base
-    _logo_h = min(MONTAGE_LOGO_HEIGHT_PX, max(120, hv - 40))
+    _logo_h_base = min(MONTAGE_LOGO_HEIGHT_PX, max(120, hv - 40))
+    _scale = max(10.0, min(150.0, float(logo_scale_pct))) / 100.0
+    _logo_h = max(16, int(round(_logo_h_base * _scale)))
+    if _logo_h % 2 == 1:
+        _logo_h -= 1
+    if use_logo and abs(_scale - 1.0) > 1e-6:
+        _log(f"로고 크기 조정: {int(_scale * 100)}% → 높이 {_logo_h}px (기본 {_logo_h_base}px)")
 
     if use_logo:
         t_open_lo = 3.0
@@ -1516,6 +1665,8 @@ def run_montage(
     auto_ct_kelvin_by_clip: dict[str, float] | None = None,
     manual_clip_grade_by_clip: dict[str, dict] | None = None,
     clip_lut_path_by_clip: dict[str, Path | str] | None = None,
+    clip_transitions: list[dict] | None = None,
+    logo_scale_pct: float = 100.0,
     log: Callable[[str], None] = print,
 ) -> Path:
     msg = check_ffmpeg()
@@ -1978,7 +2129,16 @@ def run_montage(
                 segs.append(seg)
 
         vconcat = tmp / "video_only.mp4"
-        concat_segments(segs, vconcat)
+        use_xfade = (
+            layout_norm != "tri_stack"
+            and clip_transitions
+            and transitions_have_any(clip_transitions)
+        )
+        if use_xfade:
+            log("클립 전환(xfade) 적용 — 합본 단계 재인코딩 발생합니다.")
+            concat_segments_with_xfade(segs, list(clip_transitions or []), vconcat, log=log)
+        else:
+            concat_segments(segs, vconcat)
         vlen = ffprobe_duration(vconcat)
         af = max(0.0, float(audio_fade_out_sec))
         lo_raw = max(0.0, float(letterbox_open_sec))
@@ -2020,6 +2180,7 @@ def run_montage(
             letterbox_close_sec=lc,
             tail_black_sec=tb,
             logo_path=logo_resolved,
+            logo_scale_pct=float(logo_scale_pct),
             log=log,
         )
         persist_bgm_track_position(

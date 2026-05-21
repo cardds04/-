@@ -77,6 +77,17 @@ DEFAULT_GRADE: dict = {
     "trim_out": 0.0,
     "disabled": 0,        # 0/1 — 일반(시네마/fullframe) 빌드에서 제외
     "disabled_tri": 0,    # 0/1 — 3컷 빌드에서 제외 (별개 플래그)
+    # 다음 클립으로 넘어가는 전환 (마지막 클립은 무시).
+    "xtype": "none",      # none/fade/dissolve/wipeleft/wiperight/horzopen/vertopen/slideleft/slideright
+    "xdur": 0.5,          # 전환 길이(초)
+}
+
+# 클립 전환에 허용되는 type (xfade 가 지원하는 것만)
+ALLOWED_XTYPES = {
+    "none", "fade", "dissolve",
+    "wipeleft", "wiperight",
+    "horzopen", "vertopen",
+    "slideleft", "slideright",
 }
 PRESET_FILE = CACHE_ROOT / "preset_slot.json"
 
@@ -802,16 +813,26 @@ def _run_one_build(job: dict) -> None:
 
     # 클립별 trim_in/trim_out 적용 — ffmpeg 로 미리 잘라 임시 파일 생성, video_files 갱신.
     # LUT 매핑 키도 잘린 파일 path 로 옮김.
+    # 동시에 각 클립의 전환(xtype/xdur) 도 추출 — 클립 순서 그대로 (montage_lib 가 마지막은 무시).
     grades = job.get("grades") or {}
     trimmed_videos: list[Path] = []
+    clip_transitions: list[dict] = []
     trim_count = 0
     for v in job["videos"]:
         try:
             vp = Path(v).resolve()
         except OSError:
             trimmed_videos.append(Path(v))
+            clip_transitions.append({"type": "none", "dur": 0.0})
             continue
         g = grades.get(_nfc(str(vp))) or grades.get(str(vp)) or {}
+        # 전환 — 마지막 클립의 값은 montage_lib 에서 무시되므로 그대로 수집
+        xt = str(g.get("xtype") or "none").strip().lower()
+        try:
+            xd = float(g.get("xdur", 0.5) or 0)
+        except (TypeError, ValueError):
+            xd = 0.5
+        clip_transitions.append({"type": xt, "dur": xd})
         ti = float(g.get("trim_in", 0) or 0)
         to = float(g.get("trim_out", 0) or 0)
         if ti > 1e-3 or to > 1e-3:
@@ -879,6 +900,8 @@ def _run_one_build(job: dict) -> None:
             manual_clip_grade_by_clip=manual_by,
             auto_ct_kelvin_by_clip=ct_by,
             clip_lut_path_by_clip=lut_by,
+            clip_transitions=(clip_transitions if not is_tri else None),
+            logo_scale_pct=float(job.get("logo_scale_pct") or 100.0),
             log=_log_build,
         )
         # 후처리:
@@ -1292,6 +1315,7 @@ def list_snapshots() -> list[dict]:
             "video_folder": d.get("video_folder", ""),
             "cinema_on": bool(d.get("cinema_on", d.get("cinema", True))),
             "tri_on": bool(d.get("tri_on", False)),
+            "full_on": bool(d.get("full_on", False)),
             "outputs": d.get("outputs") or {},
             "expected_tags": d.get("expected_tags") or [],
         })
@@ -1306,6 +1330,7 @@ def save_snapshot(
     *,
     cinema: bool = True,
     tri: bool = False,
+    full: bool = False,
     label: str | None = None,
     status: str = "saved",
     expected_tags: list[str] | None = None,
@@ -1325,6 +1350,7 @@ def save_snapshot(
         "cinema": bool(cinema),
         "cinema_on": bool(cinema),
         "tri_on": bool(tri),
+        "full_on": bool(full),
         "grades": grades or {},
         "build_status": status,
         "build_output": None,                             # legacy, kept for backward compat
@@ -1699,8 +1725,16 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             sess = load_session(folder) if folder is not None else {"grades": {}}
             grades = sess.get("grades") or {}
 
-            cinema_on = bool(body.get("cinema", True))
+            # 세 종류 출력은 독립적 — 체크된 것만 빌드. 셋 다 끄면 에러.
+            full_on = bool(body.get("full", False))
+            cinema_on = bool(body.get("cinema", False))
             tri_on = bool(body.get("tri_stack", False))
+            # 로고 크기 (10~150%, 100 = 기본)
+            try:
+                logo_scale_pct = float(body.get("logo_scale_pct", 100) or 100)
+            except (TypeError, ValueError):
+                logo_scale_pct = 100.0
+            logo_scale_pct = max(10.0, min(150.0, logo_scale_pct))
 
             # 분리된 필터 규칙:
             #   시네마/일반 빌드: disabled=1 만 제외
@@ -1723,17 +1757,19 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             FILENAME_BY_TAG = {
                 "cine": "시네마(고객선물용)",
                 "tri":  "3컷분할(릴스용)",
-                "full": f"grade_studio_full_{ts}",
+                "full": "가로(1920x1080)",
             }
 
             # 1) 어떤 작업을 큐할지 미리 계산 (expected_tags 결정용)
             plan: list[dict] = []
-            if not cinema_on and not tri_on:
+            if not full_on and not cinema_on and not tri_on:
+                return self._json({"error": "만들 영상 종류를 하나 이상 선택하세요 (📺 가로 / 시네마 / 🎞 3컷)"}, 400)
+            if full_on:
                 active = _build_active("disabled")
                 if active:
                     plan.append({"layout": "fullframe", "width": 1920, "height": 1080, "tag": "full", "active": active})
                 else:
-                    errors.append("일반 활성 클립 없음")
+                    errors.append("가로 — 활성 클립 없음")
             if cinema_on:
                 active = _build_active("disabled")
                 if active:
@@ -1755,7 +1791,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             # 2) 한 번에 한 snapshot 만들고 plan 의 모든 작업이 같은 snapshot_id 사용
             snap = save_snapshot(
                 folder, videos, music_folder, grades,
-                cinema=cinema_on, tri=tri_on, status="building",
+                cinema=cinema_on, tri=tri_on, full=full_on, status="building",
                 expected_tags=[p["tag"] for p in plan],
             )
 
@@ -1774,6 +1810,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                     "height": p["height"],
                     "layout": p["layout"],
                     "logo_path": logo_path,
+                    "logo_scale_pct": logo_scale_pct,
                     "snapshot_id": snap["id"],
                     "tag": p["tag"],
                 })
@@ -1802,8 +1839,13 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             sess = load_session(folder) if folder is not None else {"grades": {}}
             grades = sess.get("grades") or {}
             cinema = bool(body.get("cinema", True))
+            tri = bool(body.get("tri", False))
+            full = bool(body.get("full", False))
             label = (body.get("label") or "").strip() or None
-            snap = save_snapshot(folder, videos, music_folder, grades, cinema=cinema, label=label, status="saved")
+            snap = save_snapshot(
+                folder, videos, music_folder, grades,
+                cinema=cinema, tri=tri, full=full, label=label, status="saved",
+            )
             return self._json({"ok": True, "snapshot": snap})
 
         if p == "/api/snapshot/load":
@@ -1846,6 +1888,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 "missing": len((snap.get("video_files") or [])) - len(video_files),
                 "cinema": bool(snap.get("cinema_on", snap.get("cinema", True))),
                 "tri": bool(snap.get("tri_on", False)),
+                "full": bool(snap.get("full_on", False)),
                 "outputs": snap.get("outputs") or {},
             })
 
@@ -2040,6 +2083,17 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                             cell[sk] = 0
                     hsl_out[ch] = cell
                 out["hsl"] = hsl_out
+                continue
+            if k == "xtype":
+                xt = str(g.get("xtype") or "none").strip().lower()
+                out["xtype"] = xt if xt in ALLOWED_XTYPES else "none"
+                continue
+            if k == "xdur":
+                try:
+                    xd = float(g.get("xdur", default) or 0)
+                except (TypeError, ValueError):
+                    xd = float(default)
+                out["xdur"] = max(0.0, min(2.0, xd))
                 continue
             v = g.get(k, default)
             try:

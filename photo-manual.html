@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="촬영 매뉴얼">
+<meta name="theme-color" content="#1a1a1a">
+<title>인테리어 사진 촬영 매뉴얼</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overscroll-behavior: none; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: #f5f5f7;
+  color: #1a1a1a;
+  overflow-x: hidden;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#app { min-height: 100vh; min-height: 100dvh; }
+
+/* ============ MENU SCREEN ============ */
+.menu { padding: 28px 20px 60px; max-width: 600px; margin: 0 auto; }
+.menu-header { padding: 28px 4px 36px; }
+.menu-title { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 8px; }
+.menu-subtitle { font-size: 15px; color: #666; }
+.menu-section-label {
+  font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 24px 4px 10px;
+}
+.menu-list { display: flex; flex-direction: column; gap: 10px; }
+.menu-item {
+  background: white; border-radius: 14px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px;
+  cursor: pointer; border: none; width: 100%; text-align: left;
+  font-family: inherit; transition: transform 0.12s, background 0.12s;
+}
+.menu-item:active { transform: scale(0.97); background: #eee; }
+.menu-icon {
+  font-size: 22px; width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f0f0f0; border-radius: 10px; flex-shrink: 0;
+}
+.menu-content { flex: 1; min-width: 0; }
+.menu-name { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+.menu-desc { font-size: 13px; color: #888; }
+.menu-arrow { color: #c0c0c0; font-size: 20px; font-weight: 300; }
+
+/* ============ SECTION SCREEN ============ */
+.section { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.section-header {
+  display: flex; align-items: center; padding: 12px 12px;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 0.5px solid #ddd;
+  position: sticky; top: 0; z-index: 10;
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+.back-btn {
+  background: none; border: none; font-size: 17px; padding: 4px 10px;
+  cursor: pointer; color: #1a1a1a; font-family: inherit;
+  display: flex; align-items: center; gap: 2px;
+}
+.section-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; }
+.page-indicator {
+  font-size: 13px; color: #888; min-width: 56px; text-align: right;
+  padding-right: 8px; font-variant-numeric: tabular-nums;
+}
+.cards-container { flex: 1; overflow: hidden; position: relative; }
+.cards-track {
+  display: flex; height: 100%;
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+.cards-track.no-transition { transition: none; }
+.card {
+  min-width: 100%; height: 100%; overflow-y: auto;
+  padding: 24px 20px 110px;
+  -webkit-overflow-scrolling: touch;
+}
+.card-inner { max-width: 600px; margin: 0 auto; }
+.card-eyebrow {
+  font-size: 12px; font-weight: 600; color: #007aff;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.card-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; line-height: 1.25; }
+.card-subtitle { font-size: 15px; color: #888; margin-bottom: 22px; }
+.card-body { font-size: 15.5px; color: #2a2a2a; line-height: 1.7; }
+.card-body p { margin-bottom: 14px; }
+.card-body strong { color: #1a1a1a; font-weight: 600; }
+.card-body h3 {
+  font-size: 17px; font-weight: 700; margin-top: 20px; margin-bottom: 8px;
+}
+
+.card-image {
+  background: #e8e8ea; border-radius: 14px; margin-bottom: 18px;
+  aspect-ratio: 4/3;
+  display: flex; align-items: center; justify-content: center;
+  color: #999; font-size: 13px; overflow: hidden; position: relative;
+}
+.card-image.vertical { aspect-ratio: 3/4; max-width: 320px; margin-left: auto; margin-right: auto; }
+.card-image img { width: 100%; height: 100%; object-fit: cover; }
+.card-image .placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #b0b0b0; font-size: 12px; }
+.card-image .placeholder-icon { font-size: 32px; opacity: 0.5; }
+.orient-tag {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(0,0,0,0.65); color: white; font-size: 11px;
+  padding: 4px 8px; border-radius: 6px; font-weight: 500;
+}
+
+.spec-list { list-style: none; margin: 8px 0 16px; background: white; border-radius: 12px; padding: 4px 16px; }
+.spec-list li {
+  padding: 14px 0; border-bottom: 0.5px solid #ececec;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.spec-list li:last-child { border-bottom: none; }
+.spec-label { color: #555; font-size: 14px; }
+.spec-value { font-weight: 600; font-size: 15px; text-align: right; color: #1a1a1a; }
+
+.check-list { list-style: none; margin: 8px 0; }
+.check-list li {
+  padding: 9px 0 9px 30px; position: relative; font-size: 15px; line-height: 1.5;
+}
+.check-list li::before {
+  content: '✓'; position: absolute; left: 4px; top: 9px;
+  color: #007aff; font-weight: 700; font-size: 16px;
+}
+
+.warn-list { list-style: none; margin: 8px 0; }
+.warn-list li {
+  padding: 9px 0 9px 30px; position: relative; font-size: 15px;
+}
+.warn-list li::before {
+  content: '✕'; position: absolute; left: 6px; top: 9px;
+  color: #ff3b30; font-weight: 700;
+}
+
+.note {
+  background: #fff8e1; border-left: 3px solid #f5a623;
+  padding: 12px 14px; border-radius: 6px; margin: 16px 0;
+  font-size: 14px; color: #6b4f00; line-height: 1.55;
+}
+.tip {
+  background: #e3f2fd; border-left: 3px solid #2196f3;
+  padding: 12px 14px; border-radius: 6px; margin: 16px 0;
+  font-size: 14px; color: #0d47a1; line-height: 1.55;
+}
+.danger {
+  background: #ffebee; border-left: 3px solid #f44336;
+  padding: 12px 14px; border-radius: 6px; margin: 16px 0;
+  font-size: 14px; color: #b71c1c; line-height: 1.55;
+}
+
+/* Diagram */
+.diagram-wrap {
+  background: white; border-radius: 14px; padding: 18px;
+  margin: 8px 0 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.diagram-wrap svg { width: 100%; height: auto; display: block; }
+.diagram-legend {
+  display: flex; gap: 16px; justify-content: center;
+  margin-top: 12px; font-size: 13px; color: #555;
+}
+.diagram-legend span { display: flex; align-items: center; gap: 6px; }
+.dot-blue, .dot-green {
+  width: 12px; height: 12px; border-radius: 50%;
+}
+.dot-blue { background: #007aff; }
+.dot-green { background: #34c759; }
+
+/* ============ BOTTOM NAV ============ */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid #ddd;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+  display: flex; justify-content: space-between; align-items: center;
+  z-index: 10; gap: 10px;
+}
+.nav-btn {
+  background: #f0f0f0; border: none; padding: 11px 16px;
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: inherit; color: #1a1a1a;
+  min-width: 72px; transition: transform 0.1s;
+}
+.nav-btn:active { transform: scale(0.96); }
+.nav-btn:disabled { opacity: 0.3; }
+.nav-btn.primary { background: #1a1a1a; color: white; }
+.dots {
+  display: flex; gap: 5px; flex: 1; justify-content: center;
+  overflow-x: auto; padding: 0 10px; scrollbar-width: none;
+}
+.dots::-webkit-scrollbar { display: none; }
+.dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #d0d0d0; cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.dot.active { background: #1a1a1a; transform: scale(1.5); }
+
+/* ============ GALLERY (예시사진) ============ */
+.gallery-wrap { padding: 16px; max-width: 700px; margin: 0 auto; }
+.gallery-section { margin-bottom: 28px; }
+.gallery-section-title {
+  font-size: 17px; font-weight: 700; padding: 6px 4px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.gallery-section-title .count {
+  font-size: 12px; color: #888; font-weight: 500;
+  background: #ececec; padding: 2px 8px; border-radius: 10px;
+}
+.gallery {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+}
+.gallery-item {
+  aspect-ratio: 4/3; background: #e8e8ea; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #aaa; font-size: 12px; overflow: hidden; cursor: pointer;
+  position: relative;
+}
+.gallery-item.vertical { aspect-ratio: 3/4; }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-item .gal-label {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  color: white; font-size: 11px; padding: 14px 8px 6px;
+  text-align: center; font-weight: 500;
+}
+.gallery-item .gal-num {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(0,0,0,0.6); color: white; font-size: 10px;
+  padding: 2px 6px; border-radius: 4px; font-weight: 600;
+}
+
+/* Lightbox */
+.lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+  z-index: 100; display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.lightbox.active { display: flex; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lightbox-close {
+  position: absolute; top: calc(16px + env(safe-area-inset-top)); right: 16px;
+  background: rgba(255,255,255,0.15); color: white;
+  border: none; width: 40px; height: 40px; border-radius: 50%;
+  font-size: 22px; cursor: pointer; font-family: inherit;
+}
+.lightbox-caption {
+  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 20px; right: 20px; color: white; text-align: center; font-size: 14px;
+}
+
+@media (min-width: 600px) {
+  .gallery { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="event.stopPropagation();closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="">
+  <div id="lightbox-caption" class="lightbox-caption"></div>
+</div>
+
+<script>
+/* ====================================================================
+   데이터 — 이 부분을 수정해서 카드 내용, 사진 등을 바꿀 수 있습니다.
+   각 카드의 image 필드에 사진 URL 또는 상대 경로를 넣으면 됩니다.
+   예: image: 'photos/living-1.jpg'
+   ==================================================================== */
+
+const SVG_8POINT = `
+<svg viewBox="0 0 340 290" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrB" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#007aff"/>
+    </marker>
+    <marker id="arrG" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#34c759"/>
+    </marker>
+  </defs>
+  <rect x="50" y="40" width="240" height="200" fill="#fafafa" stroke="#1a1a1a" stroke-width="2.5" rx="4"/>
+  <line x1="60" y1="50" x2="280" y2="230" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrB)"/>
+  <line x1="280" y1="50" x2="60" y2="230" stroke="#007aff" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrB)"/>
+  <line x1="170" y1="50" x2="170" y2="230" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrG)"/>
+  <line x1="60" y1="140" x2="280" y2="140" stroke="#34c759" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55" marker-end="url(#arrG)"/>
+  <circle cx="50" cy="40" r="13" fill="#007aff"/>
+  <circle cx="290" cy="40" r="13" fill="#007aff"/>
+  <circle cx="50" cy="240" r="13" fill="#007aff"/>
+  <circle cx="290" cy="240" r="13" fill="#007aff"/>
+  <circle cx="170" cy="40" r="13" fill="#34c759"/>
+  <circle cx="170" cy="240" r="13" fill="#34c759"/>
+  <circle cx="50" cy="140" r="13" fill="#34c759"/>
+  <circle cx="290" cy="140" r="13" fill="#34c759"/>
+  <text x="50" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="white">1</text>
+  <text x="170" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="white">2</text>
+  <text x="290" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="white">3</text>
+  <text x="290" y="144" text-anchor="middle" font-size="13" font-weight="700" fill="white">4</text>
+  <text x="290" y="244" text-anchor="middle" font-size="13" font-weight="700" fill="white">5</text>
+  <text x="170" y="244" text-anchor="middle" font-size="13" font-weight="700" fill="white">6</text>
+  <text x="50" y="244" text-anchor="middle" font-size="13" font-weight="700" fill="white">7</text>
+  <text x="50" y="144" text-anchor="middle" font-size="13" font-weight="700" fill="white">8</text>
+  <text x="170" y="275" text-anchor="middle" font-size="11" fill="#666">공간을 위에서 본 모습 · 점선 = 카메라가 바라보는 방향</text>
+</svg>`;
+
+const sections = [
+  {
+    id: 'intro', title: '인트로', desc: '시작하기 전에', icon: '👋',
+    cards: [{
+      title: '인테리어 촬영 매뉴얼',
+      subtitle: '신입 작가를 위한 가이드',
+      body: `
+        <p>안녕하세요. 이 매뉴얼은 인테리어 촬영 현장에서 <strong>바로 적용</strong>할 수 있도록 만든 가이드입니다.</p>
+        <p>카메라 세팅부터 현장 정리, 그리고 공간별 촬영 구도까지 순서대로 정리되어 있습니다. 모든 매물에서 <strong>일관된 결과</strong>를 낼 수 있도록 처음부터 차근차근 익혀주세요.</p>
+        <h3>이렇게 사용하세요</h3>
+        <ul class="check-list">
+          <li>상단 메뉴에서 원하는 항목을 선택</li>
+          <li>좌우로 스와이프하거나 하단 '다음' 버튼으로 카드 넘김</li>
+          <li>홈 화면에 추가하면 앱처럼 사용 가능</li>
+        </ul>
+        <div class="tip">현장에서 막힐 때마다 꺼내 보세요. 처음 몇 번의 출장에서 이 매뉴얼대로만 찍어도 70% 이상의 컷이 일관성 있게 나옵니다.</div>
+      `
+    }]
+  },
+
+  {
+    id: 'camera', title: '카메라 세팅', desc: 'ISO · 화이트밸런스 · 파일 포맷', icon: '📷',
+    cards: [
+      {
+        title: '카메라 기본 세팅',
+        subtitle: '모든 매물에서 동일하게',
+        body: `
+          <ul class="spec-list">
+            <li><span class="spec-label">ISO</span><span class="spec-value">100 (고정)</span></li>
+            <li><span class="spec-label">화이트밸런스</span><span class="spec-value">5000K (고정)</span></li>
+            <li><span class="spec-label">조리개</span><span class="spec-value">자동 (조리개 우선)</span></li>
+            <li><span class="spec-label">파일 포맷</span><span class="spec-value">RAW · 최고화질</span></li>
+            <li><span class="spec-label">측광</span><span class="spec-value">평가 / 매트릭스</span></li>
+            <li><span class="spec-label">셔터</span><span class="spec-value">2초 셀프타이머 또는 리모컨</span></li>
+          </ul>
+          <div class="tip"><strong>화이트밸런스를 5000K로 고정</strong>하는 이유 — 자동(AWB)으로 두면 매물마다, 컷마다 색이 달라져서 후보정 시 톤 통일이 어렵습니다.</div>
+        `
+      },
+      {
+        title: '렌즈와 보조 장비',
+        body: `
+          <h3>렌즈</h3>
+          <ul class="check-list">
+            <li>풀프레임: 16~24mm 광각</li>
+            <li>크롭바디(APS-C): 10~18mm</li>
+            <li>어안렌즈 사용 금지 — 왜곡이 심해 후보정 어려움</li>
+          </ul>
+          <h3>창문 노출 처리</h3>
+          <ul class="check-list">
+            <li>창문이 프레임에 들어가는 컷은 <strong>±2EV 3컷 브라케팅</strong></li>
+            <li>후반에 HDR 합성 또는 창문 영역 합성</li>
+          </ul>
+          <div class="note">셔터를 손으로 누르면 미세하게 흔들립니다. 반드시 셀프타이머 2초 또는 리모컨 셔터를 사용하세요.</div>
+        `
+      }
+    ]
+  },
+
+  {
+    id: 'tripod', title: '삼각대 세팅', desc: '높이와 수평', icon: '🦿',
+    cards: [
+      {
+        title: '삼각대 높이',
+        subtitle: '한 집 안에서는 동일하게',
+        body: `
+          <ul class="spec-list">
+            <li><span class="spec-label">기준 높이</span><span class="spec-value">가슴 높이</span></li>
+            <li><span class="spec-label">일반 가정</span><span class="spec-value">1.2 ~ 1.3 m</span></li>
+            <li><span class="spec-label">천장 기준</span><span class="spec-value">약 2.5 m 천장의 중간</span></li>
+          </ul>
+          <p>천장이 평균(약 2.5m)이라면 그 절반 정도, 즉 작가의 가슴 높이가 가장 자연스럽습니다. <strong>한 집 안에서는 모든 컷의 높이를 동일하게</strong> 유지해 주세요.</p>
+        `
+      },
+      {
+        title: '수평 맞추기',
+        body: `
+          <ul class="check-list">
+            <li>삼각대 자체의 수평계로 다리 길이 조정</li>
+            <li>카메라/볼헤드의 수평계로 좌우 수평 확인</li>
+            <li>틸트(상하 기울기)는 <strong>0도</strong> — 정면을 보도록</li>
+            <li>벽, 문틀, 창틀의 수직선이 사진에서도 수직으로 보여야 함</li>
+          </ul>
+          <div class="danger"><strong>수직선이 기울면 후보정 시간 5배.</strong> 셔터 누르기 전에 반드시 한 번 더 수평 체크.</div>
+        `
+      }
+    ]
+  },
+
+  {
+    id: 'essentials', title: '필수 아이템', desc: '출장 전 체크리스트', icon: '🎒',
+    cards: [{
+      title: '출장 가방 체크리스트',
+      subtitle: '하나라도 빠지면 현장에서 곤란',
+      body: `
+        <h3>장비</h3>
+        <ul class="check-list">
+          <li>카메라 바디 + 광각 렌즈</li>
+          <li>삼각대 (수평계 포함)</li>
+          <li>리모컨 셔터 또는 셀프타이머 확인</li>
+          <li>여분 배터리 2개 이상</li>
+          <li>메모리 카드 (여분 포함, 포맷된 상태)</li>
+        </ul>
+        <h3>관리 용품</h3>
+        <ul class="check-list">
+          <li>렌즈 클리너 + 마이크로파이버 천</li>
+          <li>블로워 (먼지 제거)</li>
+          <li>휴대용 수평계 (선택)</li>
+        </ul>
+        <h3>기타</h3>
+        <ul class="check-list">
+          <li>충전 케이블</li>
+          <li>현장 메모용 펜/노트 또는 스마트폰</li>
+          <li>이 매뉴얼이 띄워진 스마트폰 📱</li>
+        </ul>
+      `
+    }]
+  },
+
+  {
+    id: 'prep', title: '사전 정리 체크리스트', desc: '촬영 전 현장 세팅', icon: '🧹',
+    cards: [
+      {
+        title: '현장 정리 원칙',
+        subtitle: '작가가 직접 간단히 정리',
+        body: `
+          <h3>정리할 것</h3>
+          <ul class="check-list">
+            <li>소화기</li>
+            <li>잡다한 도구 / 청소도구</li>
+            <li>쓰레기, 빈 박스</li>
+            <li>바닥에 놓인 가벼운 물건</li>
+          </ul>
+          <h3>건드리지 말 것</h3>
+          <ul class="warn-list">
+            <li>너무 무거운 가구 / 가전</li>
+            <li>정리하기 어려울 정도로 많은 짐</li>
+            <li>거주자의 사적인 물건 (앨범, 서류 등)</li>
+          </ul>
+          <div class="tip">감당 안 되는 양이면 <strong>패스</strong>하고 촬영하세요. 후반 작업에서 <strong>AI로 모두 제거 가능</strong>합니다.</div>
+        `
+      },
+      {
+        title: '창문과 방문',
+        body: `
+          <ul class="check-list">
+            <li>처음에는 <strong>모든 창문 닫기</strong></li>
+            <li>처음에는 <strong>모든 방문 닫기</strong></li>
+            <li>촬영하는 방의 문만 열고, 다른 방문은 닫힌 상태 유지</li>
+            <li>커튼/블라인드는 같은 방식으로 통일 (모두 열거나, 모두 닫거나)</li>
+          </ul>
+          <div class="note">문이 열려 있어 다른 방이 보이면 산만해집니다. 한 방씩 정리해서 촬영하세요.</div>
+        `
+      },
+      {
+        title: '욕실 체크',
+        body: `
+          <ul class="check-list">
+            <li>변기 뚜껑 내리기</li>
+            <li>샤워기 수전: <strong>물 나오는 쪽이 앞으로</strong> 향하게 정렬</li>
+            <li>거울장 문이 잘 닫혀 있는지 확인</li>
+            <li>욕실용품, 화장지는 <strong>장 안에 수납</strong></li>
+            <li>치약, 칫솔, 비누 등 노출된 생활용품 모두 정리</li>
+          </ul>
+          <div class="danger">수전이 옆이나 뒤로 돌아가 있으면 사진이 어색합니다. 셔터 누르기 직전에 다시 한 번 확인.</div>
+          <div class="tip">물건이 너무 많아 다 못 치우면 <strong>패스</strong> — AI로 제거됩니다.</div>
+        `
+      },
+      {
+        title: '조명',
+        body: `
+          <ul class="check-list">
+            <li>집안 <strong>모든 조명 켜기</strong></li>
+            <li>욕실 조명, 주방 후드 조명까지 모두</li>
+            <li>화장대 조명, 간접등도 포함</li>
+          </ul>
+          <div class="note">색온도가 너무 차이 나는 백열등(주황빛)이 한두 개 있다면 그것만 꺼서 톤을 맞춰 주세요. 전체 톤이 통일되어야 후보정이 쉽습니다.</div>
+        `
+      },
+      {
+        title: '마지막 점검',
+        subtitle: '셔터 누르기 직전',
+        body: `
+          <ul class="check-list">
+            <li>거울/유리에 작가 본인이 비치지 않는 위치인지</li>
+            <li>삼각대 다리가 프레임에 들어오지 않는지</li>
+            <li>카메라 가방 등 짐이 바닥에 보이지 않는지</li>
+            <li>수평/수직 한 번 더 확인</li>
+            <li>셀프타이머/리모컨 설정 확인</li>
+          </ul>
+          <div class="tip">거울 앞 촬영은 본인이 사각지대에 들어가도록 측면에 자리잡고, 리모컨이나 2초 타이머로 셔터.</div>
+        `
+      }
+    ]
+  },
+
+  {
+    id: 'method', title: '8지점 기본 촬영법', desc: '한 공간에서 8개 컷', icon: '🎯',
+    cards: [
+      {
+        title: '8지점 촬영법',
+        subtitle: '모든 공간의 기본',
+        body: `
+          <p>공간이 <strong>네모낳다고 생각</strong>하면 4개의 꼭지점과 4개의 변 중앙, 총 <strong>8개의 지점</strong>이 있습니다. 각 지점에서 반대편 중앙(또는 반대편 꼭지점)을 바라보며 촬영하는 것이 기본입니다.</p>
+          <div class="diagram-wrap">
+            ${SVG_8POINT}
+            <div class="diagram-legend">
+              <span><span class="dot-blue"></span>꼭지점 4지점</span>
+              <span><span class="dot-green"></span>중앙 4지점</span>
+            </div>
+          </div>
+        `
+      },
+      {
+        title: '꼭지점 4컷 (1, 3, 5, 7번)',
+        subtitle: '대각선 깊이감',
+        body: `
+          <p>각 <strong>꼭지점에서 대각선 반대편 꼭지점</strong> 방향으로 촬영합니다. 공간의 <strong>깊이감</strong>이 가장 잘 드러나는 컷입니다.</p>
+          <ul class="check-list">
+            <li>1번 → 5번 방향</li>
+            <li>3번 → 7번 방향</li>
+            <li>5번 → 1번 방향</li>
+            <li>7번 → 3번 방향</li>
+          </ul>
+          <div class="tip">꼭지점에서 너무 벽에 붙으면 광각 왜곡이 심해집니다. 벽에서 한 발 떨어진 위치에서 촬영.</div>
+        `
+      },
+      {
+        title: '중앙 4컷 (2, 4, 6, 8번)',
+        subtitle: '균형과 정렬',
+        body: `
+          <p>각 변의 <strong>중앙에서 반대편 변의 중앙</strong>을 정면으로 바라봅니다. 공간의 <strong>균형감과 정렬</strong>을 보여주는 컷입니다.</p>
+          <ul class="check-list">
+            <li>2번 → 6번 (정면)</li>
+            <li>4번 → 8번 (정면)</li>
+            <li>6번 → 2번 (정면)</li>
+            <li>8번 → 4번 (정면)</li>
+          </ul>
+          <div class="note">정면 컷은 수직선이 어긋나면 바로 티가 납니다. 수평/수직 더 꼼꼼히 체크.</div>
+        `
+      },
+      {
+        title: '촬영 순서',
+        subtitle: '시계 방향',
+        body: `
+          <h3>공간 이동 순서</h3>
+          <p>현관 → 거실 → 주방 → 욕실 → 안방 → 작은방 순서로 <strong>시계 방향</strong>으로 이동.</p>
+          <h3>한 공간 내 촬영 순서</h3>
+          <p>한 공간 안에서도 1번 지점부터 <strong>시계 방향</strong>으로 8지점을 돌며 촬영. 같은 순서로 매번 찍으면 누락이 없고 후반 정리가 쉽습니다.</p>
+        `
+      },
+      {
+        title: '가로 vs 세로',
+        body: `
+          <ul class="spec-list">
+            <li><span class="spec-label">거실 · 주방 · 방</span><span class="spec-value">가로</span></li>
+            <li><span class="spec-label">현관 · 욕실</span><span class="spec-value">세로</span></li>
+          </ul>
+          <p>현관과 욕실은 <strong>좁고 긴 공간</strong>이라 세로로 찍어야 위아래 정보(천장~바닥)가 자연스럽게 들어옵니다.</p>
+          <div class="tip">세로 컷도 8지점 원칙은 동일. 단, 좁은 공간은 4컷(꼭지점 위주) 정도로 충분합니다.</div>
+        `
+      }
+    ]
+  },
+
+  {
+    id: 'living', title: '거실 구도', desc: '가로 · 10컷', icon: '🛋️',
+    cards: [
+      {title:'1. 주방에서 거실창 정중앙', orientation:'horizontal', desc:'주방 카운터 앞에 서서 거실 창문을 정중앙으로. 공간이 가장 넓어 보이는 컷.'},
+      {title:'2. 주방에서 거실창 사선', orientation:'horizontal', desc:'같은 위치에서 살짝 옆으로 이동, TV벽 끝까지 보이도록 사선 구도.'},
+      {title:'3. 거실 좌측 꼭지점 → 우측 대각선', orientation:'horizontal', desc:'거실의 좌측 모서리에서 대각선으로 반대편을 잡는다. 깊이감 최대.'},
+      {title:'4. 거실 우측 꼭지점 → 좌측 대각선', orientation:'horizontal', desc:'반대 모서리에서 같은 방식으로. 좌우 양쪽 컷이 한 쌍.'},
+      {title:'5. TV벽 중앙 → 베란다 정면', orientation:'horizontal', desc:'TV벽 중앙에서 반대편 베란다/창 방향을 정면으로. 수직선 정렬 중요.'},
+      {title:'6. 베란다 창 앞 → 거실 안쪽', orientation:'horizontal', desc:'창문을 등지고 거실 전체를 잡는 컷. TV벽이 정면.'},
+      {title:'7. 소파 뒤 중앙 → 베란다 정면', orientation:'horizontal', desc:'소파 뒤에 서서 베란다 방향. 소파가 전경으로 살짝 들어오게.'},
+      {title:'8. 소파 옆 꼭지점 사선', orientation:'horizontal', desc:'소파 옆 모서리에서 대각선으로. 거실-주방 연결감 강조.'},
+      {title:'9. 거실-주방 사이 사선 와이드', orientation:'horizontal', desc:'두 공간의 경계 지점에서 한 컷에 양쪽이 들어오게.'},
+      {title:'10. 디테일 컷 (조명/가구)', orientation:'horizontal', desc:'펜던트 조명, 거실장, 특이한 가구 등 포인트 디테일 1~2컷.'}
+    ]
+  },
+
+  {
+    id: 'kitchen', title: '주방 구도', desc: '가로 · 6컷', icon: '🍳',
+    cards: [
+      {title:'1. 주방 입구 → 싱크대 정면', orientation:'horizontal', desc:'주방 입구에 서서 싱크대 방향을 정면으로. 주방의 첫인상 컷.'},
+      {title:'2. 주방 입구 사선', orientation:'horizontal', desc:'같은 위치에서 사선으로 한 컷. 싱크대와 가전이 모두 보이게.'},
+      {title:'3. 싱크대 끝 → 반대편 끝 정면', orientation:'horizontal', desc:'싱크대 한쪽 끝에 서서 반대편 끝까지. 주방 길이감을 보여줌.'},
+      {title:'4. 식탁 의자 뒤 → 주방 전체', orientation:'horizontal', desc:'식탁이 있다면 식탁 의자 뒤에서 주방 전체 와이드.'},
+      {title:'5. 후드 아래 꼭지점 대각선', orientation:'horizontal', desc:'레인지/후드 아래 모서리에서 대각선으로. 작업 동선 강조.'},
+      {title:'6. 냉장고 옆 → 싱크대 방향', orientation:'horizontal', desc:'냉장고 옆 모서리에서 주방 안쪽으로. 디테일 마무리 컷.'}
+    ]
+  },
+
+  {
+    id: 'entrance', title: '현관 구도', desc: '세로 · 3컷', icon: '🚪',
+    cards: [
+      {title:'1. 신발 벗는 위치 → 안쪽 정면', orientation:'vertical', desc:'신발 벗는 자리에 서서 집 안쪽을 정면으로. 세로로 잡아 천장과 바닥이 함께.'},
+      {title:'2. 안쪽 → 현관문 정면', orientation:'vertical', desc:'집 안쪽에서 현관문을 정면으로. 신발장이 함께 보이게.'},
+      {title:'3. 현관 사선 디테일', orientation:'vertical', desc:'사선으로 한 컷. 신발장 손잡이, 중문 등 디테일이 살아나도록.'}
+    ]
+  },
+
+  {
+    id: 'bathroom', title: '욕실 구도', desc: '세로 · 4컷', icon: '🚿',
+    cards: [
+      {title:'1. 욕실 문 앞 → 세면대 정면', orientation:'vertical', desc:'문 앞에서 세면대를 정면으로. 욕실의 첫 컷.'},
+      {title:'2. 욕실 안쪽 끝 → 출입문 방향', orientation:'vertical', desc:'욕실 가장 안쪽에서 출입문을 향해. 욕실 전체 깊이감.'},
+      {title:'3. 샤워부스 안 → 세면대 방향', orientation:'vertical', desc:'샤워 공간 안에서 세면대 쪽으로. 수전과 거울이 함께.'},
+      {title:'4. 변기 옆 → 욕조/샤워 방향', orientation:'vertical', desc:'변기 옆 위치에서 욕조나 샤워 부스 쪽으로. 변기 뚜껑 닫혔는지 재확인.'}
+    ]
+  },
+
+  {
+    id: 'master', title: '안방 구도', desc: '가로 · 8컷', icon: '🛏️',
+    cards: [
+      {title:'1. 침대 머리 반대편 꼭지점 → 침대 대각선', orientation:'horizontal', desc:'침대 발치 쪽 모서리에서 침대 머리 방향으로 대각선. 안방의 메인 컷.'},
+      {title:'2. 침대 옆 꼭지점 → 대각선', orientation:'horizontal', desc:'침대 옆 반대편 모서리에서 대각선으로.'},
+      {title:'3. 출입문 앞 → 침대 정면', orientation:'horizontal', desc:'안방 문 앞에 서서 침대를 정면으로.'},
+      {title:'4. 창가 → 출입문 방향', orientation:'horizontal', desc:'창문 앞에서 출입문 방향으로. 안방 전체 와이드.'},
+      {title:'5. 옷장 앞 → 반대편 정면', orientation:'horizontal', desc:'옷장이나 화장대 앞에서 반대편을 정면으로.'},
+      {title:'6. 침대 발치 → 창문 방향', orientation:'horizontal', desc:'침대 발치 중앙에서 창문 방향. 침대가 전경으로 들어옴.'},
+      {title:'7. 안방 사선 와이드', orientation:'horizontal', desc:'남은 모서리에서 사선 와이드로 한 컷.'},
+      {title:'8. 침대 헤드/조명 디테일', orientation:'horizontal', desc:'침대 헤드, 조명, 협탁 등 디테일 한 컷.'}
+    ]
+  },
+
+  {
+    id: 'room', title: '작은방 구도', desc: '가로 · 6컷 (방마다 반복)', icon: '🚪',
+    cards: [
+      {title:'1. 출입문 정면', orientation:'horizontal', desc:'문 앞에서 방 안쪽을 정면으로. 작은방의 기본 컷.'},
+      {title:'2. 창가 → 출입문 방향', orientation:'horizontal', desc:'창문 앞에서 문 방향. 방 전체가 잡힘.'},
+      {title:'3. 꼭지점 → 대각선 (1)', orientation:'horizontal', desc:'한쪽 모서리에서 대각선으로 깊이감.'},
+      {title:'4. 꼭지점 → 대각선 (2)', orientation:'horizontal', desc:'반대편 모서리에서 같은 방식으로.'},
+      {title:'5. 측면 중앙 사선', orientation:'horizontal', desc:'측면 벽 중앙에서 살짝 사선으로.'},
+      {title:'6. 디테일 컷', orientation:'horizontal', desc:'책상, 옷장, 창문 풍경 등 방의 특징을 보여주는 디테일.'}
+    ]
+  },
+
+  {
+    id: 'balcony', title: '베란다 구도', desc: '2~3컷', icon: '🪟',
+    cards: [
+      {title:'1. 거실 쪽 → 베란다 끝 정면', orientation:'horizontal', desc:'거실에서 베란다를 정면으로. 베란다 깊이감.'},
+      {title:'2. 베란다 끝 → 거실 방향', orientation:'horizontal', desc:'베란다 안에서 거실을 향해. 채광과 시원함 강조.'},
+      {title:'3. 베란다 창밖 풍경', orientation:'horizontal', desc:'창문 너머 뷰가 좋다면 한 컷. 매물의 뷰 어필.'}
+    ]
+  },
+
+  {
+    id: 'examples', title: '예시 사진', desc: '실제 좋은 컷 모음', icon: '🖼️',
+    isGallery: true,
+    galleryGroups: [
+      {
+        name: '거실 예시', shots: [
+          {label:'주방 → 거실창 정중앙', orientation:'horizontal', image:null},
+          {label:'대각선 와이드', orientation:'horizontal', image:null},
+          {label:'TV벽 정면', orientation:'horizontal', image:null},
+          {label:'소파 뒤 → 베란다', orientation:'horizontal', image:null}
+        ]
+      },
+      {
+        name: '주방 예시', shots: [
+          {label:'주방 입구 정면', orientation:'horizontal', image:null},
+          {label:'싱크대 길이감', orientation:'horizontal', image:null},
+          {label:'사선 와이드', orientation:'horizontal', image:null}
+        ]
+      },
+      {
+        name: '현관 예시', shots: [
+          {label:'신발장 앞 정면 (세로)', orientation:'vertical', image:null},
+          {label:'안쪽 → 현관문 (세로)', orientation:'vertical', image:null}
+        ]
+      },
+      {
+        name: '욕실 예시', shots: [
+          {label:'문 앞 → 세면대 (세로)', orientation:'vertical', image:null},
+          {label:'안쪽 → 출입문 (세로)', orientation:'vertical', image:null},
+          {label:'샤워부스 안 (세로)', orientation:'vertical', image:null}
+        ]
+      },
+      {
+        name: '방 예시', shots: [
+          {label:'침대 대각선 메인', orientation:'horizontal', image:null},
+          {label:'문 앞 → 침대 정면', orientation:'horizontal', image:null},
+          {label:'창가 → 출입문', orientation:'horizontal', image:null},
+          {label:'디테일 (조명/헤드)', orientation:'horizontal', image:null}
+        ]
+      }
+    ]
+  }
+];
+
+/* ====================================================================
+   UI 로직
+   ==================================================================== */
+
+const state = {
+  view: 'menu',   // 'menu' or section.id
+  cardIndex: 0
+};
+
+const app = document.getElementById('app');
+
+const menuGroups = [
+  { label: '시작', items: ['intro'] },
+  { label: '세팅', items: ['camera', 'tripod', 'essentials'] },
+  { label: '현장', items: ['prep', 'method'] },
+  { label: '공간별 구도', items: ['living', 'kitchen', 'entrance', 'bathroom', 'master', 'room', 'balcony'] },
+  { label: '참고', items: ['examples'] }
+];
+
+function findSection(id) { return sections.find(s => s.id === id); }
+
+function renderMenu() {
+  let html = `
+    <div class="menu">
+      <div class="menu-header">
+        <div class="menu-title">인테리어 촬영 매뉴얼</div>
+        <div class="menu-subtitle">신입 작가용 · 스마트폰에서 보기</div>
+      </div>
+  `;
+  for (const group of menuGroups) {
+    html += `<div class="menu-section-label">${group.label}</div><div class="menu-list">`;
+    for (const id of group.items) {
+      const s = findSection(id);
+      if (!s) continue;
+      const count = s.isGallery
+        ? s.galleryGroups.reduce((a,g) => a + g.shots.length, 0)
+        : s.cards.length;
+      html += `
+        <button class="menu-item" onclick="openSection('${s.id}')">
+          <div class="menu-icon">${s.icon}</div>
+          <div class="menu-content">
+            <div class="menu-name">${s.title}</div>
+            <div class="menu-desc">${s.desc} · ${count}${s.isGallery ? '컷' : '장'}</div>
+          </div>
+          <div class="menu-arrow">›</div>
+        </button>
+      `;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  app.innerHTML = html;
+}
+
+function openSection(id) {
+  state.view = id;
+  state.cardIndex = 0;
+  renderSection();
+}
+
+function backToMenu() {
+  state.view = 'menu';
+  state.cardIndex = 0;
+  renderMenu();
+  window.scrollTo(0, 0);
+}
+
+function renderCardContent(card) {
+  const orientClass = card.orientation === 'vertical' ? 'vertical' : '';
+  const orientLabel = card.orientation === 'vertical' ? '세로' : '가로';
+  const isComposition = card.desc !== undefined;
+  if (isComposition) {
+    const img = card.image
+      ? `<img src="${card.image}" alt="${card.title}">`
+      : `<div class="placeholder"><div class="placeholder-icon">📷</div>사진 자리 (HTML 편집해서 추가)</div>`;
+    return `
+      <div class="card-inner">
+        <div class="card-eyebrow">구도 ${state.cardIndex + 1}</div>
+        <div class="card-title">${card.title}</div>
+        <div class="card-image ${orientClass}">
+          ${img}
+          <div class="orient-tag">${orientLabel}</div>
+        </div>
+        <div class="card-body"><p>${card.desc}</p></div>
+      </div>
+    `;
+  }
+  return `
+    <div class="card-inner">
+      <div class="card-title">${card.title}</div>
+      ${card.subtitle ? `<div class="card-subtitle">${card.subtitle}</div>` : ''}
+      <div class="card-body">${card.body || ''}</div>
+    </div>
+  `;
+}
+
+function renderSection() {
+  const s = findSection(state.view);
+  if (!s) { backToMenu(); return; }
+
+  if (s.isGallery) {
+    renderGallery(s);
+    return;
+  }
+
+  const total = s.cards.length;
+  const dotsHtml = s.cards.map((_, i) =>
+    `<span class="dot ${i === state.cardIndex ? 'active' : ''}" onclick="goTo(${i})"></span>`
+  ).join('');
+
+  const cardsHtml = s.cards.map(c => `<div class="card">${renderCardContent(c)}</div>`).join('');
+
+  app.innerHTML = `
+    <div class="section">
+      <div class="section-header">
+        <button class="back-btn" onclick="backToMenu()">‹ 메뉴</button>
+        <div class="section-title">${s.title}</div>
+        <div class="page-indicator">${state.cardIndex + 1} / ${total}</div>
+      </div>
+      <div class="cards-container" id="cards-container">
+        <div class="cards-track" id="cards-track" style="transform: translateX(-${state.cardIndex * 100}%)">
+          ${cardsHtml}
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <button class="nav-btn" id="prev-btn" onclick="prev()" ${state.cardIndex === 0 ? 'disabled' : ''}>이전</button>
+        <div class="dots">${dotsHtml}</div>
+        <button class="nav-btn primary" id="next-btn" onclick="next()" ${state.cardIndex === total - 1 ? 'disabled' : ''}>다음</button>
+      </div>
+    </div>
+  `;
+  attachSwipe();
+}
+
+function renderGallery(s) {
+  let groupsHtml = '';
+  for (const g of s.galleryGroups) {
+    const itemsHtml = g.shots.map((shot, i) => {
+      const orientClass = shot.orientation === 'vertical' ? 'vertical' : '';
+      const content = shot.image
+        ? `<img src="${shot.image}" alt="${shot.label}" onclick="openLightbox('${shot.image}', '${shot.label.replace(/'/g, "\\'")}')">`
+        : `<div class="placeholder">📷</div>`;
+      return `
+        <div class="gallery-item ${orientClass}">
+          <div class="gal-num">${i + 1}</div>
+          ${content}
+          <div class="gal-label">${shot.label}</div>
+        </div>
+      `;
+    }).join('');
+    groupsHtml += `
+      <div class="gallery-section">
+        <div class="gallery-section-title">${g.name} <span class="count">${g.shots.length}컷</span></div>
+        <div class="gallery">${itemsHtml}</div>
+      </div>
+    `;
+  }
+  app.innerHTML = `
+    <div class="section">
+      <div class="section-header">
+        <button class="back-btn" onclick="backToMenu()">‹ 메뉴</button>
+        <div class="section-title">${s.title}</div>
+        <div class="page-indicator"></div>
+      </div>
+      <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+        <div class="gallery-wrap">
+          <div class="tip" style="margin-bottom:16px;">
+            아래는 자리 잡힌 예시 갤러리입니다. HTML 파일을 열어 각 항목의 <code>image</code> 필드에 실제 사진 URL이나 경로를 넣으면 표시됩니다.
+          </div>
+          ${groupsHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function next() {
+  const s = findSection(state.view);
+  if (!s || s.isGallery) return;
+  if (state.cardIndex < s.cards.length - 1) {
+    state.cardIndex++;
+    updateTrack();
+  }
+}
+
+function prev() {
+  if (state.cardIndex > 0) {
+    state.cardIndex--;
+    updateTrack();
+  }
+}
+
+function goTo(i) {
+  state.cardIndex = i;
+  updateTrack();
+}
+
+function updateTrack() {
+  const s = findSection(state.view);
+  const total = s.cards.length;
+  const track = document.getElementById('cards-track');
+  if (track) {
+    track.classList.remove('no-transition');
+    track.style.transform = `translateX(-${state.cardIndex * 100}%)`;
+  }
+  // Update header indicator
+  const ind = document.querySelector('.page-indicator');
+  if (ind) ind.textContent = `${state.cardIndex + 1} / ${total}`;
+  // Update dots
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === state.cardIndex);
+  });
+  // Update buttons
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  if (prevBtn) prevBtn.disabled = state.cardIndex === 0;
+  if (nextBtn) nextBtn.disabled = state.cardIndex === total - 1;
+}
+
+/* Touch swipe */
+function attachSwipe() {
+  const container = document.getElementById('cards-container');
+  const track = document.getElementById('cards-track');
+  if (!container || !track) return;
+  let startX = 0, startY = 0, currentX = 0, dragging = false, decided = false, horizontal = false;
+  const threshold = 50;
+
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = 0; dragging = true; decided = false; horizontal = false;
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        horizontal = Math.abs(dx) > Math.abs(dy);
+        decided = true;
+      }
+    }
+    if (horizontal) {
+      currentX = dx;
+      const s = findSection(state.view);
+      const total = s.cards.length;
+      let offset = -state.cardIndex * 100 + (dx / container.offsetWidth) * 100;
+      // Resistance at edges
+      if (state.cardIndex === 0 && dx > 0) offset = -state.cardIndex * 100 + (dx / container.offsetWidth) * 30;
+      if (state.cardIndex === total - 1 && dx < 0) offset = -state.cardIndex * 100 + (dx / container.offsetWidth) * 30;
+      track.classList.add('no-transition');
+      track.style.transform = `translateX(${offset}%)`;
+    }
+  }, { passive: true });
+
+  container.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    track.classList.remove('no-transition');
+    if (horizontal) {
+      if (currentX < -threshold) next();
+      else if (currentX > threshold) prev();
+      else updateTrack();
+    }
+  });
+}
+
+/* Lightbox */
+function openLightbox(src, caption) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-caption').textContent = caption || '';
+  lb.classList.add('active');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('active');
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', (e) => {
+  if (state.view === 'menu') return;
+  if (e.key === 'ArrowRight') next();
+  else if (e.key === 'ArrowLeft') prev();
+  else if (e.key === 'Escape') backToMenu();
+});
+
+// Init
+renderMenu();
+</script>
+</body>
+</html>

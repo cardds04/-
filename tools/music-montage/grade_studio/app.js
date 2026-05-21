@@ -36,7 +36,22 @@
     hsl: DEFAULT_HSL,
     trim_in: 0, trim_out: 0,
     disabled: 0, disabled_tri: 0,
+    // 다음 클립으로 넘어갈 때 적용할 전환 — 마지막 클립은 무시됨.
+    xtype: "none", xdur: 0.5,
   };
+  // 사용자에게 노출하는 전환 종류 (ffmpeg xfade 매핑)
+  const XTYPES = [
+    { id: "none",       label: "없음",      icon: "✕" },
+    { id: "fade",       label: "페이드",    icon: "◐" },
+    { id: "dissolve",   label: "디졸브",    icon: "▒" },
+    { id: "wipeleft",   label: "쓸기 ←",    icon: "⇠" },
+    { id: "wiperight",  label: "쓸기 →",    icon: "⇢" },
+    { id: "horzopen",   label: "가로 열기", icon: "↔" },
+    { id: "vertopen",   label: "세로 열기", icon: "↕" },
+    { id: "slideleft",  label: "슬라이드 ←", icon: "⇇" },
+    { id: "slideright", label: "슬라이드 →", icon: "⇉" },
+  ];
+  const XTYPE_IDS = new Set(XTYPES.map(x => x.id));
   function isTriMode() {
     const c = document.getElementById("chkTri");
     return c ? !!c.checked : false;
@@ -70,7 +85,12 @@
 
   function snapshotGrade(g) {
     const out = {};
-    for (const k of Object.keys(DEFAULT_GRADE)) out[k] = Number(g[k] ?? DEFAULT_GRADE[k]);
+    for (const k of Object.keys(DEFAULT_GRADE)) {
+      const def = DEFAULT_GRADE[k];
+      const v = (g && g[k] !== undefined) ? g[k] : def;
+      if (typeof def === "string") out[k] = String(v ?? def);
+      else out[k] = Number(v ?? def);
+    }
     return out;
   }
   function pushHistorySingle(clipId) {
@@ -704,6 +724,7 @@
     if (SLIDER_KEYS.some(k => Number(g[k]) !== Number(DEFAULT_GRADE[k]))) return true;
     if (TRIM_KEYS.some(k => Number(g[k] || 0) > 1e-3)) return true;
     if (isHslDirty(g)) return true;
+    if (isTransitionDirty(g)) return true;
     return false;
   }
   function isHslDirty(g) {
@@ -784,6 +805,8 @@
     });
     // HSL 슬라이더 — 활성 채널 기준
     syncHslPanelFromGrade(g);
+    // 전환 패널
+    syncTransitionPanel(g);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -942,6 +965,85 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 클립 전환 패널 — xtype chips + xdur 슬라이더 (xdur 는 slider-row 이므로 bindSliderRow 가 처리)
+  function isTransitionDirty(g) {
+    const t = (g && g.xtype) ? String(g.xtype) : "none";
+    return t !== "none";
+  }
+  function renderXtypeChips() {
+    const root = $("#xtypeChips");
+    if (!root) return;
+    root.innerHTML = "";
+    XTYPES.forEach(x => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "xtype-chip";
+      btn.dataset.xtype = x.id;
+      btn.title = x.label;
+      const ic = document.createElement("span");
+      ic.className = "xt-icon";
+      ic.textContent = x.icon;
+      const lb = document.createElement("span");
+      lb.textContent = x.label;
+      btn.appendChild(ic);
+      btn.appendChild(lb);
+      btn.addEventListener("click", () => {
+        const c = currentClip();
+        if (!c) return;
+        pushHistorySingle(c.id);
+        c.grade.xtype = x.id;
+        if (x.id !== "none" && (!c.grade.xdur || c.grade.xdur < 0.05)) {
+          c.grade.xdur = Number(DEFAULT_GRADE.xdur);
+        }
+        syncTransitionPanel(c.grade);
+        markClipGraded(c);
+        scheduleSave(c);
+        renderStrip();    // 우측 모서리 배지 갱신
+      });
+      root.appendChild(btn);
+    });
+  }
+  function syncTransitionPanel(g) {
+    const cur = (g && XTYPE_IDS.has(String(g.xtype))) ? String(g.xtype) : "none";
+    $$("#xtypeChips .xtype-chip").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.xtype === cur);
+    });
+    // xdur 행은 xtype=none 일 때 어둡게
+    const xdurRow = document.querySelector('.slider-row[data-key="xdur"]');
+    if (xdurRow) xdurRow.classList.toggle("inactive", cur === "none");
+  }
+  function applyTransitionToAll() {
+    const c = currentClip();
+    if (!c) return;
+    const xt = String(c.grade.xtype || "none");
+    const xd = Number(c.grade.xdur || DEFAULT_GRADE.xdur);
+    const ids = state.clips.map(cc => cc.id);
+    if (!ids.length) return;
+    pushHistoryBatch(ids);
+    state.clips.forEach(cc => {
+      cc.grade.xtype = xt;
+      cc.grade.xdur = xd;
+      markClipGraded(cc);
+      const t = _saveTimers.get(cc.id);
+      if (t) { clearTimeout(t); _saveTimers.delete(cc.id); }
+    });
+    // bulk save
+    fetch("/api/save_bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: state.clips.map(cc => ({ id: cc.id, grade: cc.grade })) }),
+    }).then(() => setBusyShort(`전환 ${XTYPES.find(x => x.id === xt)?.label || xt} 전체 적용`))
+      .catch(() => setBusyShort("전체 적용 실패"));
+    syncTransitionPanel(c.grade);
+    renderStrip();
+  }
+  function bindTransitionPanel() {
+    renderXtypeChips();
+    const btn = $("#btnXApplyAll");
+    if (btn) btn.addEventListener("click", applyTransitionToAll);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // Save (debounced, per-clip — 각 클립마다 독립된 타이머)
   const _saveTimers = new Map();      // clipId -> timeout id
   const _pendingSaves = new Set();    // 진행 중인 doSave Promise 들
@@ -1062,6 +1164,17 @@
       const dot = document.createElement("span");
       dot.className = "graded-dot";
       el.appendChild(dot);
+      // 전환 표시 — 우측 모서리에 작은 배지 (마지막 클립이거나 type=none 이면 숨김)
+      const xt = (c.grade && c.grade.xtype) ? String(c.grade.xtype) : "none";
+      const isLast = state.clips.indexOf(c) === state.clips.length - 1;
+      if (xt !== "none" && !isLast) {
+        const meta = XTYPES.find(x => x.id === xt);
+        const badge = document.createElement("span");
+        badge.className = "strip-x-badge";
+        badge.textContent = meta ? meta.icon : "→";
+        badge.title = `→ 다음 클립 (${meta ? meta.label : xt}, ${Number(c.grade.xdur || 0).toFixed(2)}s)`;
+        wrap.appendChild(badge);
+      }
       el.title = c.name;
       el.addEventListener("click", (e) => {
         selectClip(c.id, { toggle: modKey(e), range: e.shiftKey });
@@ -2019,6 +2132,16 @@
       applyCinemaVisual(on);
     });
 
+    // 가로형(fullframe) — 1920×1080 일반 비율. 기본값 OFF (시네마와 둘 다 켜면 두 종류가 같이 빌드됨)
+    const chkFull = $("#chkFull");
+    if (chkFull) {
+      const initFull = localStorage.getItem("gs_full") === "1";
+      chkFull.checked = initFull;
+      chkFull.addEventListener("change", () => {
+        localStorage.setItem("gs_full", chkFull.checked ? "1" : "0");
+      });
+    }
+
     const chkTri = $("#chkTri");
     const initTri = localStorage.getItem("gs_tri") === "1";
     chkTri.checked = initTri;
@@ -2029,6 +2152,51 @@
       // re-render disabled/group view since key + colors change with mode
       repaintAll();
     });
+  }
+  function isFullOn() {
+    const c = document.getElementById("chkFull");
+    return c ? !!c.checked : false;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 로고 크기 — localStorage 에 보관, 빌드 시 서버로 전달
+  function getLogoScalePct() {
+    const raw = Number(localStorage.getItem("gs_logo_scale") || 100);
+    if (!isFinite(raw)) return 100;
+    return Math.max(10, Math.min(150, Math.round(raw)));
+  }
+  function setLogoScalePct(pct) {
+    const v = Math.max(10, Math.min(150, Math.round(Number(pct) || 100)));
+    localStorage.setItem("gs_logo_scale", String(v));
+    return v;
+  }
+  function applyLogoSizeFromInput() {
+    // 미리보기 overlay 의 CSS scale 을 % 에 맞춰 (기본 2배 × pct/100)
+    const pct = getLogoScalePct();
+    document.documentElement.style.setProperty("--logo-preview-scale", String(2 * pct / 100));
+    const inp = document.getElementById("logoSize");
+    if (inp && Number(inp.value) !== pct) inp.value = String(pct);
+  }
+  function bindLogoSize() {
+    const inp = document.getElementById("logoSize");
+    if (!inp) return;
+    inp.value = String(getLogoScalePct());
+    const onChange = () => {
+      const v = setLogoScalePct(inp.value);
+      inp.value = String(v);
+      applyLogoSizeFromInput();
+    };
+    inp.addEventListener("input", onChange);
+    inp.addEventListener("change", onChange);
+    inp.addEventListener("wheel", (e) => {
+      if (document.activeElement !== inp) return;
+      e.preventDefault();
+      const step = Number(inp.step) || 5;
+      const dir = e.deltaY > 0 ? -1 : 1;
+      inp.value = String(Math.max(10, Math.min(150, Number(inp.value) + dir * step)));
+      onChange();
+    }, { passive: false });
+    applyLogoSizeFromInput();
   }
 
   function applyCinemaVisual(on) {
@@ -2043,14 +2211,19 @@
 
   // ─────────────────────────────────────────────────────────
   async function startBuild() {
+    const full = isFullOn();
     const cinema = isCinemaOn();
     const tri = isTriMode();
+    if (!full && !cinema && !tri) {
+      alert("만들 영상 종류를 하나 이상 선택하세요 (📺 가로 / 시네마 / 🎞 3컷)");
+      return;
+    }
     // 변경한 보정값이 빌드에 누락되지 않도록 디바운스된 저장을 모두 즉시 반영
     await flushAllSaves();
     const r = await fetch("/api/build", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cinema, tri_stack: tri }),
+      body: JSON.stringify({ full, cinema, tri_stack: tri, logo_scale_pct: getLogoScalePct() }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) {
@@ -2129,7 +2302,7 @@
       const r = await fetch("/api/snapshot/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cinema: isCinemaOn() }),
+        body: JSON.stringify({ full: isFullOn(), cinema: isCinemaOn(), tri: isTriMode() }),
       });
       const j = await r.json();
       if (!r.ok || !j.ok) {
@@ -2157,7 +2330,11 @@
         setBusy("");
         return;
       }
-      // Apply cinema + tri toggles from snapshot
+      // Apply full + cinema + tri toggles from snapshot
+      if (typeof j.full === "boolean") {
+        const f = document.getElementById("chkFull");
+        if (f) { f.checked = j.full; localStorage.setItem("gs_full", j.full ? "1" : "0"); }
+      }
       if (typeof j.cinema === "boolean") {
         const c = document.getElementById("chkCinema");
         if (c) { c.checked = j.cinema; localStorage.setItem("gs_cinema", j.cinema ? "1" : "0"); applyCinemaVisual(j.cinema); }
@@ -2295,11 +2472,13 @@
       const lLab = $("#logoLabel");
       const lClr = $("#btnClearLogo");
       const lImg = $("#logoOverlay");
+      const lSize = $("#logoSizeWrap");
       if (lLab) {
         if (lg.path) {
           lLab.textContent = `🖼 ${lg.name || "로고"}`;
           lLab.title = lg.path;
           if (lClr) lClr.hidden = false;
+          if (lSize) lSize.hidden = false;
           if (lImg) {
             lImg.hidden = false;
             lImg.src = `/api/logo?t=${Date.now()}`;
@@ -2308,9 +2487,11 @@
           lLab.textContent = "(로고 미선택)";
           lLab.title = "";
           if (lClr) lClr.hidden = true;
+          if (lSize) lSize.hidden = true;
           if (lImg) { lImg.hidden = true; lImg.removeAttribute("src"); }
         }
       }
+      applyLogoSizeFromInput();
     } catch (err) {
       showOverlay("서버 연결 실패");
       console.error(err);
@@ -2472,6 +2653,8 @@
     bindPlayer();
     bindKeys();
     bindEyedropper();
+    bindTransitionPanel();
+    bindLogoSize();
     await loadPresetSlot();
     await loadSnapshots();
     await reloadState();
