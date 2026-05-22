@@ -18422,6 +18422,45 @@ ${folderBtn}
         listEl.innerHTML = listMarkup;
         if (scheduleDetailListEl) scheduleDetailListEl.innerHTML = listMarkup;
 
+        // 인라인 편집 폼의 input/select 값들이 background re-render 로 reset 되는 문제 방지.
+        // change 시 즉시 data[index] 의 해당 필드를 업데이트 → 다음 render 가 user 선택값을
+        // 그대로 selected 로 표시. (저장 안 누르고 취소해도 화면 표시 reset 은 됨.)
+        function bindInlineEditPersist(root) {
+          if (!root) return;
+          root.querySelectorAll("[data-schedule-card='true']").forEach((card) => {
+            const idx = Number(card.dataset.index);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= data.length) return;
+            const item = data[idx];
+            if (!item) return;
+            const bindSelect = (cls, onChange) => {
+              const el = card.querySelector(cls);
+              if (!el || el.dataset.persistBound === "1") return;
+              el.dataset.persistBound = "1";
+              el.addEventListener("change", () => onChange(el.value));
+            };
+            const bindInput = bindSelect;
+            // 시간 편집 / 전체 편집 공통 - hour/minute select
+            const updateTime = () => {
+              const h = card.querySelector(".edit-hour")?.value;
+              const m = card.querySelector(".edit-minute")?.value;
+              if (h && m) item.time = `${h}:${m}`;
+            };
+            bindSelect(".edit-hour", updateTime);
+            bindSelect(".edit-minute", updateTime);
+            bindInput(".edit-date-only", (v) => { item.date = String(v || "").trim(); });
+            bindInput(".edit-company", (v) => { item.company = String(v || "").trim(); });
+            bindInput(".edit-place", (v) => { item.place = String(v || "").trim(); });
+            bindSelect(".edit-pyeong", (v) => { item.pyeong = String(v || "").trim(); });
+            bindInput(".edit-jointCode", (v) => { item.jointCode = String(v || "").trim(); });
+            bindInput(".edit-doorCode", (v) => { item.doorCode = String(v || "").trim(); });
+            bindInput(".edit-memo", (v) => { item.memo = String(v || "").trim(); });
+            bindSelect(".edit-composition", (v) => { item.composition = String(v || "").trim(); });
+            bindSelect(".edit-name", (v) => { item.name = String(v || "").trim(); });
+          });
+        }
+        bindInlineEditPersist(listEl);
+        bindInlineEditPersist(scheduleDetailListEl);
+
         renderPaymentList();
       }
 
