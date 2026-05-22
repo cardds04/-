@@ -2064,8 +2064,9 @@
           <span class="workflow-note">(브라우저 선택 · 5개 모델 중 택1 · 원본 해상도 JPEG 합성)</span>
         </h2>
         <p class="hint" style="margin-top: 0">
-          원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 선택한 AI 모델이 보정된 이미지를 만듭니다.
-          <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
+          원본 사진을 올리고 마우스로 드래그해 <strong>창문 영역을 먼저 선택</strong>한 뒤 <strong>생성</strong>을 누르면, 선택한 영역 + 주변 15% 여백만 AI에 전송돼 보정 이미지를 받습니다.
+          (전체를 보낼 때보다 창문 디테일이 훨씬 또렷하고 속도도 빨라집니다.)
+          <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
           프롬프트와 일괄 보정값은 아래 <strong>메인</strong> 칸에서 저장할 수 있으며, 장마다 다르게 하려면 각 카드의
           <strong>「개별 프롬프트·보정」</strong>을 펼치세요. <strong>모두 생성</strong>·<strong>일괄 합성 출력</strong>·<strong>초기화</strong>는 원본 업로드 칸 바로 아래에서 바로 누를 수 있습니다.
@@ -5278,6 +5279,51 @@
           return c.toDataURL('image/jpeg', 0.88);
         }
 
+        /* 선택 영역 + 주변 여백(기본 15%)만 잘라서 다운스케일하여 API 전송용 데이터URL 반환. */
+        function cropForApi(img, sel, paddingPct, maxPx) {
+          var pp = (paddingPct == null) ? 0.15 : paddingPct;
+          maxPx = maxPx || 2048;
+          var iw = img.naturalWidth, ih = img.naturalHeight;
+          var padX = Math.round(sel.w * pp);
+          var padY = Math.round(sel.h * pp);
+          var cx = Math.max(0, sel.x - padX);
+          var cy = Math.max(0, sel.y - padY);
+          var cx2 = Math.min(iw, sel.x + sel.w + padX);
+          var cy2 = Math.min(ih, sel.y + sel.h + padY);
+          var cw = Math.max(1, cx2 - cx);
+          var ch = Math.max(1, cy2 - cy);
+          var bounds = { x: cx, y: cy, w: cw, h: ch };
+          var scale = Math.min(maxPx / Math.max(cw, ch), 1);
+          var dw = Math.max(1, Math.round(cw * scale));
+          var dh = Math.max(1, Math.round(ch * scale));
+          var c = document.createElement('canvas');
+          c.width = dw; c.height = dh;
+          var cctx = c.getContext('2d');
+          cctx.imageSmoothingEnabled = true;
+          cctx.imageSmoothingQuality = 'high';
+          cctx.drawImage(img, cx, cy, cw, ch, 0, 0, dw, dh);
+          return { dataUrl: c.toDataURL('image/jpeg', 0.9), bounds: bounds };
+        }
+
+        /* 잘라서 받은 AI 결과를 원본 크기 캔버스의 cropBounds 위치에 다시 그려서 Image 반환.
+           나머지 영역은 원본 그대로(투명 아님) → 합성 시 영향 없음(마스크가 선택영역만 통과). */
+        function embedAiCropIntoFullImage(origImg, aiCropImg, cropBounds) {
+          var iw = origImg.naturalWidth, ih = origImg.naturalHeight;
+          var c = document.createElement('canvas');
+          c.width = iw; c.height = ih;
+          var cctx = c.getContext('2d');
+          cctx.drawImage(origImg, 0, 0, iw, ih);
+          cctx.imageSmoothingEnabled = true;
+          cctx.imageSmoothingQuality = 'high';
+          cctx.drawImage(aiCropImg, cropBounds.x, cropBounds.y, cropBounds.w, cropBounds.h);
+          return new Promise(function (resolve, reject) {
+            var img = new Image();
+            img.onload = function () { resolve(img); };
+            img.onerror = function () { reject(new Error('합성 이미지 생성 실패')); };
+            img.src = c.toDataURL('image/jpeg', 0.95);
+          });
+        }
+
         /* ---- 아이템 생성 ---- */
         function createItem(file) {
           wfItemSeq++;
@@ -5289,6 +5335,7 @@
             selection: null,   /* {x, y, w, h} 원본 픽셀 좌표 */
             aiDataUrl: null,
             aiImg: null,
+            aiCropBounds: null,
             status: 'idle',    /* idle | generating | done | error */
             el: null,
             canvas: null,
@@ -5638,6 +5685,10 @@
             showWfError('프롬프트를 입력해 주세요. (메인 영역 또는 이 카드 개별 프롬프트)');
             return;
           }
+          if (!item.selection) {
+            showWfError('먼저 원본 이미지에서 창문 영역을 드래그로 선택해 주세요. (선택한 영역만 AI에 전송됩니다)');
+            return;
+          }
 
           var selModel = getSelectedWfModel();
           var useGeminiDirect = (selModel === 'nano-banana-2-gemini');
@@ -5658,7 +5709,7 @@
             'flux-pro-ultra': 'Flux 1.1 Pro Ultra',
             'recraft-v3': 'Recraft v3',
           })[selModel] || selModel;
-          item.footerEl.textContent = modelLabel + ' 생성 중… (20~120초 소요될 수 있습니다)';
+          item.footerEl.textContent = modelLabel + ' 생성 중… (선택영역 + 주변 15% 만 전송)';
           item.genBtn.disabled = true;
           item.regenBtn.disabled = true;
           item.previewCompositeBtn.disabled = true;
@@ -5666,7 +5717,10 @@
 
           syncWfItemPreviewActions(item);
 
-          var refDataUrl = downscaleForApi(item.origImg, 2048);
+          var cropResult = cropForApi(item.origImg, item.selection, 0.15, 2048);
+          var refDataUrl = cropResult.dataUrl;
+          var cropBounds = cropResult.bounds;
+          item.aiCropBounds = cropBounds;
           var promptForApi = augmentPromptWithGrid5(prompt);
 
           var endpoint, body;
@@ -5699,20 +5753,24 @@
             .then(function (o) {
               if (!o.ok || !o.j.ok) throw new Error(o.j.error || o.j.message || 'API 오류');
               var mime = o.j.mime_type || 'image/png';
-              item.aiDataUrl = 'data:' + mime + ';base64,' + o.j.b64_json;
-              return loadImage(item.aiDataUrl);
+              var cropDataUrl = 'data:' + mime + ';base64,' + o.j.b64_json;
+              return loadImage(cropDataUrl).then(function (cropImg) {
+                return embedAiCropIntoFullImage(item.origImg, cropImg, cropBounds).then(function (fullImg) {
+                  return { fullImg: fullImg, fullDataUrl: fullImg.src, cropDataUrl: cropDataUrl };
+                });
+              });
             })
-            .then(function (aiImg) {
-              item.aiImg = aiImg;
-              item.aiImgEl.src = item.aiDataUrl;
+            .then(function (out) {
+              item.aiImg = out.fullImg;
+              item.aiDataUrl = out.fullDataUrl;
+              item.aiImgEl.src = out.cropDataUrl;
               item.aiImgEl.style.display = '';
               item.placeholder.style.display = 'none';
               item.status = 'done';
               item.el.className = 'wf-item wf-item--done';
               item.regenBtn.style.display = '';
               item.genBtn.style.display = 'none';
-              var selTxt = item.selection ? '' : ' (영역을 드래그로 선택해야 합성 가능)';
-              item.footerEl.textContent = '생성 완료.' + selTxt;
+              item.footerEl.textContent = '생성 완료. (선택영역만 AI 생성됨)';
               item.previewCompositeBtn.disabled = !item.selection;
               if (item.previewBtn) item.previewBtn.disabled = !item.selection;
               if (item.selection && item.aiImg) refreshCompositePreview(item);
