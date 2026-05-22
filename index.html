@@ -6696,6 +6696,7 @@
       // 마지막 render 가 반영한 편집 인덱스/이름들 — 자동 백그라운드 render 가 인풋 폼을
       // 통째 재생성하는 문제 방지용. 편집 상태가 바뀌었을 때만 render 통과.
       let lastRenderedEditingIndex = null;
+      let lastRenderedEditingDateIndex = null;
       let lastRenderedEditingCompanyIndex = null;
       let lastRenderedEditingPaymentIndex = null;
       let quickPhotographerPickerIndex = null;
@@ -18124,15 +18125,19 @@ ${folderBtn}
 
       function renderList() {
         // 인라인 편집 중이면 background re-render 차단 — 사용자가 입력하던 값이
-        // 통째 재생성되며 사라지던 문제 방지.
-        // 단, 편집 상태가 바뀐 직후엔 반드시 render 해야 폼이 그려짐(수정 버튼 동작).
-        if (
-          editingIndex !== null && editingIndex !== undefined &&
-          editingIndex === lastRenderedEditingIndex
-        ) {
+        // 통째 재생성되며 사라지던 문제 방지. editingIndex(전체 편집), editingDateIndex
+        // (시간만 편집) 둘 다 보호. 편집 상태가 바뀐 직후엔 반드시 render 해야 폼이 그려짐.
+        const editingInProgress =
+          (editingIndex !== null && editingIndex !== undefined) ||
+          (editingDateIndex !== null && editingDateIndex !== undefined);
+        const editingUnchanged =
+          editingIndex === lastRenderedEditingIndex &&
+          editingDateIndex === lastRenderedEditingDateIndex;
+        if (editingInProgress && editingUnchanged) {
           return;
         }
         lastRenderedEditingIndex = editingIndex;
+        lastRenderedEditingDateIndex = editingDateIndex;
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
