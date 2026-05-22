@@ -115,6 +115,30 @@ function normalizeResolutionTag(s) {
   return null;
 }
 
+/** 해상도(1k/2k/4k) + 비율(1:1/4:3/3:4/16:9/9:16/3:2/2:3)을 fal.ai 가
+ *  요구하는 image_size: { width, height } 객체로 변환. 32의 배수 보장. */
+function buildFalImageSize(aspectRatio, resolutionTag) {
+  const ar = String(aspectRatio || "").trim().toLowerCase();
+  const res = String(resolutionTag || "").trim().toLowerCase();
+  let base;
+  if (res === "1k" || res === "1024") base = 1024;
+  else if (res === "4k" || res === "4096") base = 4096;
+  else base = 2048; // 기본 2K
+  const round32 = (n) => Math.max(32, Math.round(n / 32) * 32);
+  let w, h;
+  switch (ar) {
+    case "1:1": w = base; h = base; break;
+    case "4:3": w = base; h = round32((base * 3) / 4); break;
+    case "3:4": w = round32((base * 3) / 4); h = base; break;
+    case "16:9": w = base; h = round32((base * 9) / 16); break;
+    case "9:16": w = round32((base * 9) / 16); h = base; break;
+    case "3:2": w = base; h = round32((base * 2) / 3); break;
+    case "2:3": w = round32((base * 2) / 3); h = base; break;
+    default: w = base; h = round32((base * 3) / 4); break; // 기본 landscape 4:3
+  }
+  return { width: w, height: h };
+}
+
 function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey, resolutionTag) {
   const ar = aspectRatio && aspectRatio.toLowerCase() !== "auto" ? aspectRatio : null;
   const resTag = normalizeResolutionTag(resolutionTag);
@@ -147,6 +171,7 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey, re
       };
     case "flux-2-pro":
       // FLUX.2 pro 편집(img2img) — refUrls 가 있을 때 /edit 경로.
+      // aspect_ratio 가 아니라 image_size{ width, height } 를 명시해야 함.
       return {
         path: refUrls.length ? "fal-ai/flux-2-pro/edit" : "fal-ai/flux-2-pro",
         input: {
@@ -154,7 +179,7 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey, re
           num_images: 1,
           output_format: "jpeg",
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
-          ...(ar ? { aspect_ratio: ar } : {}),
+          image_size: buildFalImageSize(ar, resolutionTag),
         },
       };
     case "recraft-v3":
@@ -387,11 +412,22 @@ module.exports = async (req, res) => {
     }
 
     const imgs = Array.isArray(body.images) ? body.images.filter((x) => typeof x === "string") : [];
+    const preHttpsUrls = Array.isArray(body.image_urls)
+      ? body.image_urls
+          .filter((x) => typeof x === "string" && /^https:\/\//i.test(x.trim()))
+          .map((x) => x.trim())
+      : [];
 
     let refUrls = [];
-    for (const uri of imgs.slice(0, 4)) {
-      const url = await uploadDataUriToFal(uri, apiKey);
-      refUrls.push(url);
+    if (preHttpsUrls.length) {
+      // 이미지 만들기 섹션이 Supabase Storage URL을 넘기는 경우 — fal.ai 가 직접 가져갈 수 있으니 그대로 사용
+      refUrls = preHttpsUrls.slice(0, 4);
+    } else {
+      // 창문 보정 등 데이터 URI 업로드 경로 — fal storage 로 업로드
+      for (const uri of imgs.slice(0, 4)) {
+        const url = await uploadDataUriToFal(uri, apiKey);
+        refUrls.push(url);
+      }
     }
 
     const aspect = String(body.aspect_ratio || "").trim();
