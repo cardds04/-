@@ -4800,6 +4800,10 @@
       const onHoldPayments = [];
       const refundPayments = [];
       const couponPasses = {};
+      // 사용자가 명시적으로 편집한 회차권 key set. saveCouponPassesToSupabase 가
+      // 이 set 에 들어있는 key 만 server 로 push — localStorage 의 stale 값이 다른
+      // 회사들을 server 에서 통째 덮어쓰는 사고 방지.
+      const couponPassesDirtyKeys = new Set();
 
       function buildCurrentStateSnapshot() {
         const state = {};
@@ -5448,10 +5452,20 @@
         });
         const nextMap = normalizeCouponPassesMap(nextMapInput);
         const schemaMode = await detectCouponPassesSchemaMode();
-        const nextEntries = Object.entries(nextMap);
+        // ✨ 사용자가 명시적으로 편집한 key (couponPassesDirtyKeys) 만 push.
+        // localStorage 의 stale 값이 server 의 fresh 값을 다른 회사들에서도 통째 덮어쓰는
+        // multi-browser race 의 근본 차단. dirty 가 비어 있으면 push 자체를 건너뜀.
+        if (couponPassesDirtyKeys.size === 0) {
+          return;
+        }
+        const dirtyKeysSnapshot = new Set(couponPassesDirtyKeys);
+        const nextEntries = Object.entries(nextMap).filter(([k]) => dirtyKeysSnapshot.has(k));
+        if (nextEntries.length === 0) {
+          // dirty 로 표시됐는데 nextMap 에 없는 케이스(이미 클리어됨) — skip
+          return;
+        }
         // 개별 row 별로 upsert — 한 row 실패가 batch 전체를 무효화하던 버그 해결.
-        // (예: coupon_passes_company_id_fkey 가 신규 업체 INSERT 를 막아도 다른 row 들은 정상 저장.)
-        // UUID 모양 key 는 회사명이 아니므로 skip — pull 시 매핑 못 찾아 UUID 그대로 박힌 잔존 entry.
+        // UUID 모양 key 는 회사명이 아니므로 skip.
         const UUID_LIKE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         let nameToIdForCoupon = null;
         if (schemaMode === "company_id") {
@@ -5459,6 +5473,7 @@
           nameToIdForCoupon = nameToId;
         }
         const failures = [];
+        const successfulKeys = new Set();
         for (const [companyName, remaining] of nextEntries) {
           if (!companyName || UUID_LIKE_RE.test(companyName)) continue;
           const remainingClamped = Math.max(0, Math.floor(Number(remaining) || 0));
@@ -5498,14 +5513,17 @@
               const errText = await resp.text().catch(() => "");
               failures.push({ companyName, status: resp.status, error: errText });
               console.warn(`[COUPON][index] ${companyName} upsert 실패 (${resp.status}): ${errText}`);
+            } else {
+              successfulKeys.add(companyName);
             }
           } catch (e) {
             failures.push({ companyName, status: 0, error: String(e?.message || e) });
             console.warn(`[COUPON][index] ${companyName} upsert 예외:`, e);
           }
         }
+        // push 성공한 key 는 dirty 에서 제거 — 다음 sync 시 다시 push 안 함.
+        successfulKeys.forEach((k) => couponPassesDirtyKeys.delete(k));
         // 자동 삭제 로직 제거 — 부분 로컬 ↔ 전체 서버 차이로 멀쩡한 회사가 통째 삭제되는 사고 방지.
-        // 회사 회차권 row 삭제는 별도 명시적 함수가 필요할 때 추가하면 됨.
         if (failures.length > 0) {
           console.warn(`[COUPON][index] ${failures.length}건 upsert 실패 — 성공한 항목만 서버 반영됨`, failures);
         }
@@ -12712,6 +12730,8 @@ ${folderBtn}
         const legacy = normalizeCompanyName(companyName);
         const val = Math.max(0, Number(remaining) || 0);
         couponPasses[primary] = val;
+        // 사용자가 명시적으로 편집한 key 만 server 로 push 하도록 dirty 표시.
+        couponPassesDirtyKeys.add(primary);
         if (legacy !== primary) delete couponPasses[legacy];
         stripCouponAliasKeysForPrimary(primary, id.companyCode);
         persistCouponPassesToDevice();
