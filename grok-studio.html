@@ -1621,7 +1621,7 @@
         <div class="card__workflow">
           <section class="workflow-block workflow-block--grok-image">
             <h2 class="workflow-title">
-              AI 이미지 <span class="workflow-note">(Grok Imagine · Gemini 나노바나나1·나노바나나2)</span>
+              AI 이미지 <span class="workflow-note">(Grok Imagine · Gemini · FLUX)</span>
             </h2>
             <section class="step">
               <h3 class="step__h">엔진</h3>
@@ -1638,6 +1638,14 @@
                   <label class="pan-direction__opt">
                     <input type="radio" name="imageProvider" value="gemini" checked />
                     <span>Gemini 나노바나나2 <span class="hint" style="font-size:0.78rem">(1K/2K/4K · ~94~211원/장)</span></span>
+                  </label>
+                  <label class="pan-direction__opt">
+                    <input type="radio" name="imageProvider" value="flux-kontext-pro" />
+                    <span>FLUX Kontext pro <span class="hint" style="font-size:0.78rem">(편집 특화 · ~56원/장 · fal.ai)</span></span>
+                  </label>
+                  <label class="pan-direction__opt">
+                    <input type="radio" name="imageProvider" value="flux-2-pro" />
+                    <span>FLUX.2 pro <span class="hint" style="font-size:0.78rem">(정밀·고해상도 · 2K ~105원/장 · fal.ai)</span></span>
                   </label>
                 </div>
                 <div class="grok-image-engine-row__api">
@@ -2602,9 +2610,16 @@
           var base = grokImageAspectBase ? grokImageAspectBase.value : "orig";
           if (base !== "orig") return getComputedImageAspectRatio();
           if (!refFile) {
+            // FLUX·Kontext는 참조 없이도 비율 미지정 허용. xai/gemini는 기존대로 에러.
+            if (prov === "flux-kontext-pro" || prov === "flux-2-pro") return "auto";
             throw new Error("원본 비율은 참조 이미지 1이 필요합니다.");
           }
           if (prov === "xai") return "auto";
+          if (prov === "flux-kontext-pro" || prov === "flux-2-pro") {
+            // FLUX 모델도 Gemini와 같은 비율 매핑 사용 가능
+            var dimF = await getImageFileNaturalSize(refFile);
+            return nearestGeminiAspectRatio(dimF.w, dimF.h);
+          }
           var dim = await getImageFileNaturalSize(refFile);
           return nearestGeminiAspectRatio(dim.w, dim.h);
         }
@@ -2625,7 +2640,13 @@
             if (opt4k) opt4k.disabled = true;
             if (opt2k) opt2k.disabled = true;
             grokImageResolution.value = "1k";
+          } else if (prov === "flux-kontext-pro") {
+            // Kontext pro 는 별도 해상도 옵션 없음 (4K 의미 없음)
+            if (opt4k) opt4k.disabled = true;
+            if (opt2k) opt2k.disabled = false;
+            if (grokImageResolution.value === "4k") grokImageResolution.value = "2k";
           } else {
+            // gemini(나노바나나2), flux-2-pro 등 — 모두 활성
             if (opt4k) opt4k.disabled = false;
             if (opt2k) opt2k.disabled = false;
           }
@@ -3194,7 +3215,34 @@
           }
         }
 
+        var IMAGE_GEN_FAL_MODELS = { "flux-kontext-pro": true, "flux-2-pro": true };
+        function getSharedFalKey() {
+          try { return (localStorage.getItem("grok_studio_window_fix_fal_key_v1") || "").trim(); }
+          catch (e) { return ""; }
+        }
+
         async function runOneImageGenJob(job) {
+          if (IMAGE_GEN_FAL_MODELS[job.prov]) {
+            var fbody = {
+              model: job.prov,
+              prompt: job.prompt,
+              resolution: job.resolution,
+            };
+            if (job.aspect_ratio && job.aspect_ratio !== "auto") fbody.aspect_ratio = job.aspect_ratio;
+            if (job.fal_api_key) fbody.fal_api_key = job.fal_api_key;
+            if (job.image_urls && job.image_urls.length) fbody.image_urls = job.image_urls;
+            if (job.images && job.images.length) fbody.images = job.images;
+            var rf = await fetch("/api/fal-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(fbody),
+            });
+            var jf = await rf.json().catch(function () { return {}; });
+            if (!rf.ok || jf.ok === false) throw new Error(jf.error || jf.message || "요청 실패 " + rf.status);
+            var blobF = await blobFromImageResult(jf);
+            await appendGeneratedToGallery(blobF, jf.mime_type || "image/png");
+            return;
+          }
           if (job.prov === "xai") {
             var body = {
               action: "image",
@@ -3271,6 +3319,11 @@
             var resolution = grokImageResolution ? grokImageResolution.value : "2k";
             var xk = grokImageXaiKeyEl && grokImageXaiKeyEl.value ? grokImageXaiKeyEl.value.trim() : "";
             var gk = geminiApiKeyEl && geminiApiKeyEl.value ? geminiApiKeyEl.value.trim() : "";
+            var fk = getSharedFalKey();
+            if (IMAGE_GEN_FAL_MODELS[prov] && !fk) {
+              setError("fal.ai API 키가 필요합니다. 페이지 아래 '창문 보정 합성' 섹션의 모델 선택 패널에서 fal.ai 키를 입력·저장해 주세요. (이미지 만들기 섹션과 키 공유)");
+              return;
+            }
 
             /* ── 배치 모드: 참조 1에 여러 장이 있을 때 순차 처리 ── */
             if (ref1BatchFiles.length > 1) {
@@ -3365,6 +3418,7 @@
               image_urls: image_urls.length ? image_urls : undefined,
               xai_api_key: xk || undefined,
               gemini_api_key: gk || undefined,
+              fal_api_key: fk || undefined,
             };
             launchImageGenJob(job);
           });
