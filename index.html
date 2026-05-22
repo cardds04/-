@@ -8556,13 +8556,10 @@
           const remote = remoteByName.get(key);
           const resolvedCode = normalizeCompanyCode(row?.code) || normalizeCompanyCode(remote?.code) || buildAutoCompanyCode(row?.name);
           if (!remote) {
-            const st = normalizeCompanySiteTypeField(row?.siteType);
-            insertRows.push({
-              name: row.name,
-              phone: row.phone === "-" ? "" : row.phone,
-              code: resolvedCode,
-              site_type: st || "inlog"
-            });
+            // ⚠️ 자동 INSERT 비활성화 — 신규 회사는 「업체정보관리」 의 명시적 저장 form
+            // (saveCompanyDirectoryAdminFormToSupabase) 로만 등록. background sync 가
+            // login_id 없는 sparse row 를 만들어 기존 row 와 충돌하거나 사용자 로그인 정보가
+            // 사라지던 사고 방지.
             return;
           }
           const samePhone = String(remote.phone || "").trim() === String(row.phone === "-" ? "" : row.phone).trim();
@@ -8577,17 +8574,15 @@
           }
         });
 
+        // ⚠️ 자동 삭제 비활성화 — local 에 임시로 빠진 회사(pull 미완료 등) 가 server 에서
+        // 통째 삭제되고, 곧이어 auto-insert 가 login_id 없는 sparse row 로 재생성되며 사용자
+        // 로그인 정보가 사라지던 사고 다수 발생. 회사 삭제는 「업체정보관리」 의 명시적
+        // [삭제] 버튼(deleteCompanyDirectoryRow) 으로만 처리.
         const deleteIds = [];
-        (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
-          const key = normalizeCompanyName(row?.name).toLowerCase();
-          if (!key || !localNameSet.has(key)) {
-            deleteIds.push(row.id);
-          }
-        });
+        // duplicateRemoteIds / remoteTestPatternIds 만 정리 — 이건 명백히 잘못된 잔존 행이므로 안전.
         duplicateRemoteIds.forEach((id) => {
           if (!deleteIds.includes(id)) deleteIds.push(id);
         });
-        // 서버에 잔존하는 테스트 패턴 업체 — 매 sync 시 자동 삭제.
         remoteTestPatternIds.forEach((id) => {
           if (!deleteIds.includes(id)) deleteIds.push(id);
         });
@@ -10267,6 +10262,34 @@ ${folderBtn}
         }
         companyDirectorySaveBtnEl.disabled = true;
         try {
+          // login_id 중복 사전 검증 — 입력한 login_id 가 다른 회사에 이미 쓰이고 있으면
+          // server PostgreSQL 의 unique constraint 가 throw 하는데, 그 전에 friendly 메시지로 안내.
+          if (loginTrim) {
+            const dupResp = await fetch(
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encodeURIComponent(loginTrim)}&select=id,name&limit=2`,
+              {
+                headers: {
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                cache: "no-store"
+              }
+            );
+            if (dupResp.ok) {
+              const dupRows = await dupResp.json();
+              const others = (Array.isArray(dupRows) ? dupRows : []).filter(
+                (r) => normalize(String(r?.id || "")) !== rowId
+              );
+              if (others.length > 0) {
+                alert(
+                  `「${loginTrim}」 아이디는 이미 「${others[0]?.name || "(이름 없음)"}」 업체가 사용 중입니다.\n` +
+                    `다른 아이디로 변경해 주세요.`
+                );
+                companyDirectorySaveBtnEl.disabled = false;
+                return;
+              }
+            }
+          }
           await persistCompanyDirectoryToSupabase({
             rowId,
             nm,
@@ -10280,7 +10303,16 @@ ${folderBtn}
           });
         } catch (error) {
           console.error("[업체정보관리] 저장 실패", error);
-          alert(`저장 실패: ${error?.message || error}`);
+          // login_id 충돌 메시지를 사용자 친화적으로
+          const msg = String(error?.message || error || "");
+          if (/login_id_unique|duplicate key/i.test(msg)) {
+            alert(
+              `「${loginTrim || "(빈 값)"}」 아이디는 이미 다른 업체가 사용 중입니다.\n` +
+                `다른 아이디로 변경해 주세요.`
+            );
+          } else {
+            alert(`저장 실패: ${msg}`);
+          }
         } finally {
           companyDirectorySaveBtnEl.disabled = false;
         }
