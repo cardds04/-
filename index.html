@@ -13817,6 +13817,10 @@ ${folderBtn}
       }
 
       function renderCompanies() {
+        // 회사 인라인 편집 중이면 re-render skip — 입력값 보호.
+        if (editingCompanyIndex !== null && editingCompanyIndex !== undefined) {
+          return;
+        }
         const uniqueCompanyNames = [...new Set(companies.map((company) => normalizeCompanyName(company?.name)).filter(Boolean))];
         if (companyAutocompleteListEl) {
           companyAutocompleteListEl.innerHTML = uniqueCompanyNames
@@ -15414,6 +15418,10 @@ ${folderBtn}
       }
 
       function renderPaymentList() {
+        // 입금 인라인 편집 중이면 re-render skip — 입력값 보호.
+        if (editingPaymentIndex !== null && editingPaymentIndex !== undefined) {
+          return;
+        }
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
@@ -18082,6 +18090,13 @@ ${folderBtn}
       }
 
       function renderList() {
+        // 인라인 편집 중이면 re-render 차단 — 사용자가 입력하던 날짜/메모/평수 등이
+        // 자주 발생하는 background pull/storage event 로 인해 폼이 통째 재생성되며
+        // 입력값이 사라지던 문제 방지. (저장/취소 버튼 누르면 editingIndex 가 null 로
+        // 바뀌고 그때 다시 정상 render 가 일어남.)
+        if (editingIndex !== null && editingIndex !== undefined) {
+          return;
+        }
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
