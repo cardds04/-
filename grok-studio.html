@@ -1621,7 +1621,7 @@
         <div class="card__workflow">
           <section class="workflow-block workflow-block--grok-image">
             <h2 class="workflow-title">
-              AI 이미지 <span class="workflow-note">(Grok Imagine 또는 Gemini 나노바나나2)</span>
+              AI 이미지 <span class="workflow-note">(Grok Imagine · Gemini 나노바나나1·나노바나나2)</span>
             </h2>
             <section class="step">
               <h3 class="step__h">엔진</h3>
@@ -1632,8 +1632,12 @@
                     <span>Grok Imagine (xAI)</span>
                   </label>
                   <label class="pan-direction__opt">
+                    <input type="radio" name="imageProvider" value="gemini-1" />
+                    <span>Gemini 나노바나나1 <span class="hint" style="font-size:0.78rem">(1K 고정 · ~55원/장)</span></span>
+                  </label>
+                  <label class="pan-direction__opt">
                     <input type="radio" name="imageProvider" value="gemini" checked />
-                    <span>Gemini 나노바나나2</span>
+                    <span>Gemini 나노바나나2 <span class="hint" style="font-size:0.78rem">(1K/2K/4K · ~94~211원/장)</span></span>
                   </label>
                 </div>
                 <div class="grok-image-engine-row__api">
@@ -2601,13 +2605,21 @@
           if (!grokImageResolution) return;
           var provEl = document.querySelector('input[name="imageProvider"]:checked');
           var prov = provEl ? provEl.value : "gemini";
+          var opt2k = grokImageResolution.querySelector('option[value="2k"]');
           var opt4k = grokImageResolution.querySelector('option[value="4k"]');
-          if (!opt4k) return;
           if (prov === "xai") {
-            opt4k.disabled = true;
+            // Grok Imagine은 4K 미지원
+            if (opt4k) opt4k.disabled = true;
+            if (opt2k) opt2k.disabled = false;
             if (grokImageResolution.value === "4k") grokImageResolution.value = "2k";
+          } else if (prov === "gemini-1") {
+            // 나노바나나1은 1K 고정 (Gemini 2.5 Flash Image)
+            if (opt4k) opt4k.disabled = true;
+            if (opt2k) opt2k.disabled = true;
+            grokImageResolution.value = "1k";
           } else {
-            opt4k.disabled = false;
+            if (opt4k) opt4k.disabled = false;
+            if (opt2k) opt2k.disabled = false;
           }
         }
 
@@ -3202,6 +3214,7 @@
               aspect_ratio: job.aspect_ratio,
               resolution: job.resolution,
             };
+            if (job.prov === "gemini-1") gbody.model_id = "gemini-2.5-flash-image";
             if (job.gemini_api_key) gbody.gemini_api_key = job.gemini_api_key;
             if (job.image_urls && job.image_urls.length) gbody.image_urls = job.image_urls;
             if (job.images && job.images.length) gbody.images = job.images;
