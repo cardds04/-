@@ -5299,9 +5299,12 @@
       }
       function normalizeCouponPassesMap(raw) {
         if (!raw || typeof raw !== "object") return {};
+        // UUID 모양의 key 는 회사명이 아니므로 제거. pull 시 idToName 매핑 실패로
+        // UUID 가 그대로 박힌 잔존 entry 들을 정리한다.
+        const UUID_LIKE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const entries = Object.entries(raw)
           .map(([companyName, remaining]) => [normalizeCompanyName(companyName), Math.max(0, Math.floor(Number(remaining) || 0))])
-          .filter(([companyName]) => Boolean(companyName))
+          .filter(([companyName]) => Boolean(companyName) && !UUID_LIKE_RE.test(companyName))
           .sort((a, b) => a[0].localeCompare(b[0], "ko"));
         return Object.fromEntries(entries);
       }
@@ -5445,107 +5448,66 @@
         });
         const nextMap = normalizeCouponPassesMap(nextMapInput);
         const schemaMode = await detectCouponPassesSchemaMode();
-        const remoteRows = await fetchCouponPassRowsFromSupabase();
-        const remoteCompanySet = new Set(remoteRows.map((row) => normalizeCompanyName(row?.companyName)).filter(Boolean));
         const nextEntries = Object.entries(nextMap);
-        if (nextEntries.length > 0) {
-          let upsertRows = [];
-          let onConflictKey = "company_name";
-          let nameToIdForCoupon = null;
+        // 개별 row 별로 upsert — 한 row 실패가 batch 전체를 무효화하던 버그 해결.
+        // (예: coupon_passes_company_id_fkey 가 신규 업체 INSERT 를 막아도 다른 row 들은 정상 저장.)
+        // UUID 모양 key 는 회사명이 아니므로 skip — pull 시 매핑 못 찾아 UUID 그대로 박힌 잔존 entry.
+        const UUID_LIKE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        let nameToIdForCoupon = null;
+        if (schemaMode === "company_id") {
+          const { nameToId } = await fetchCompanyIdNameMapFromSupabase();
+          nameToIdForCoupon = nameToId;
+        }
+        const failures = [];
+        for (const [companyName, remaining] of nextEntries) {
+          if (!companyName || UUID_LIKE_RE.test(companyName)) continue;
+          const remainingClamped = Math.max(0, Math.floor(Number(remaining) || 0));
+          let row;
+          let onConflictKey;
           if (schemaMode === "company_id") {
-            const { nameToId } = await fetchCompanyIdNameMapFromSupabase();
-            nameToIdForCoupon = nameToId;
-            upsertRows = nextEntries
-              .map(([companyName, remaining]) => {
-                const companyId = nameToId.get(String(companyName || "").toLowerCase());
-                if (!companyId) return null;
-                return {
-                  company_id: companyId,
-                  remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
-                };
-              })
-              .filter(Boolean);
-            onConflictKey = "company_id";
+            const companyId = nameToIdForCoupon
+              ? nameToIdForCoupon.get(String(companyName).toLowerCase())
+              : null;
+            if (!companyId) {
+              // company_id 스키마인데 directory 에서 매칭 못 찾음 — company_name 폴백 (스키마에 따라 실패할 수 있음)
+              row = { company_name: companyName, remaining_count: remainingClamped };
+              onConflictKey = "company_name";
+            } else {
+              row = { company_id: companyId, remaining_count: remainingClamped };
+              onConflictKey = "company_id";
+            }
           } else {
-            upsertRows = nextEntries.map(([companyName, remaining]) => ({
-              company_name: companyName,
-              remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
-            }));
+            row = { company_name: companyName, remaining_count: remainingClamped };
+            onConflictKey = "company_name";
           }
-          if (upsertRows.length > 0) {
-            const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=${onConflictKey}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Prefer: "resolution=merge-duplicates,return=minimal",
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              body: JSON.stringify(upsertRows)
-            });
-            if (!upsertResponse.ok) {
-              const errorText = await upsertResponse.text();
-              throw new Error(`coupon_passes upsert 실패 (${upsertResponse.status}): ${errorText}`);
-            }
-          }
-          if (schemaMode === "company_id" && nameToIdForCoupon) {
-            const nameFallbackRows = nextEntries
-              .filter(([companyName]) => !nameToIdForCoupon.get(String(companyName || "").toLowerCase()))
-              .map(([companyName, remaining]) => ({
-                company_name: companyName,
-                remaining_count: Math.max(0, Math.floor(Number(remaining) || 0))
-              }));
-            if (nameFallbackRows.length > 0) {
-              try {
-                const fb = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=company_name`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Prefer: "resolution=merge-duplicates,return=minimal",
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                  },
-                  body: JSON.stringify(nameFallbackRows)
-                });
-                if (!fb.ok) {
-                  console.error("[COUPON][index] company_name 보조 upsert 실패", await fb.text());
-                }
-              } catch (error) {
-                console.error("[COUPON][index] company_name 보조 upsert 예외", error);
+          try {
+            const resp = await fetch(
+              `${SUPABASE_URL}/rest/v1/coupon_passes?on_conflict=${onConflictKey}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Prefer: "resolution=merge-duplicates,return=minimal",
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify([row])
               }
+            );
+            if (!resp.ok) {
+              const errText = await resp.text().catch(() => "");
+              failures.push({ companyName, status: resp.status, error: errText });
+              console.warn(`[COUPON][index] ${companyName} upsert 실패 (${resp.status}): ${errText}`);
             }
+          } catch (e) {
+            failures.push({ companyName, status: 0, error: String(e?.message || e) });
+            console.warn(`[COUPON][index] ${companyName} upsert 예외:`, e);
           }
         }
-        const nextCompanySet = new Set(nextEntries.map(([companyName]) => companyName));
-        // 안전장치: 로컬이 서버 대비 너무 적으면 (e.g. 부팅 중 sparse 로컬 → 다수 삭제) 자동 삭제 차단.
-        // 로컬 nextCompanySet 이 remoteCompanySet 의 50% 미만이면 의도하지 않은 대량 삭제로 간주.
-        const deleteCandidates = [...remoteCompanySet].filter((companyName) => !nextCompanySet.has(companyName));
-        const aboutToDeleteAll = remoteCompanySet.size > 0 && nextCompanySet.size * 2 < remoteCompanySet.size;
-        const deleteTargets = aboutToDeleteAll ? [] : deleteCandidates;
-        if (aboutToDeleteAll) {
-          console.warn(
-            `[COUPON][index] 로컬 ${nextCompanySet.size}건 vs 서버 ${remoteCompanySet.size}건 — 대량 삭제 가드로 자동 삭제 차단`
-          );
-        }
-        for (const companyName of deleteTargets) {
-          const remote = remoteRows.find((row) => normalizeCompanyName(row?.companyName) === companyName);
-          if (!remote) continue;
-          const query =
-            schemaMode === "company_id"
-              ? `company_id=eq.${encodeURIComponent(String(remote.companyId || ""))}`
-              : `company_name=eq.${encodeURIComponent(companyName)}`;
-          const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/coupon_passes?${query}`, {
-            method: "DELETE",
-            headers: {
-              Prefer: "return=minimal",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            }
-          });
-          if (!deleteResponse.ok) {
-            const errorText = await deleteResponse.text();
-            throw new Error(`coupon_passes 삭제 실패 (${deleteResponse.status}): ${errorText}`);
-          }
+        // 자동 삭제 로직 제거 — 부분 로컬 ↔ 전체 서버 차이로 멀쩡한 회사가 통째 삭제되는 사고 방지.
+        // 회사 회차권 row 삭제는 별도 명시적 함수가 필요할 때 추가하면 됨.
+        if (failures.length > 0) {
+          console.warn(`[COUPON][index] ${failures.length}건 upsert 실패 — 성공한 항목만 서버 반영됨`, failures);
         }
       }
       function queueCouponPassesSync() {
