@@ -5545,12 +5545,11 @@
           updateLastPullTime(STORAGE_LAST_COUPON_PULL_AT, remoteRows, "updatedAt");
           const localNorm = normalizeCouponPassesMap(couponPasses);
           const remoteNorm = normalizeCouponPassesMap(remoteMap);
-          // local wins: 사용자가 직접 편집한 값을 절대 stale remote 로 덮어쓰지 않음.
-          // - 같은 key 가 양쪽에 있으면 local 값 채택 (증가/감소 모두 사용자 의도 우선)
-          // - remote 에만 있는 key 는 추가 (다른 브라우저에서 새로 등록한 회사 반영)
-          // 5초 cooldown 이 동일 브라우저 내 race 를 막고, local-wins 가 push 실패 시
-          // 사용자가 본 값을 유지. 다른 브라우저의 변경은 다음 사용자 액션에서 push 시 last-writer-wins.
-          const merged = { ...remoteNorm, ...localNorm };
+          // remote wins (canonical 원천 = Supabase). 사용자 편집 보호는 cooldown 으로 처리.
+          // - 같은 key 양쪽에: remote 값 채택 (localStorage stale 캐시 덮어쓰기)
+          // - local 에만 있는 key: 보존 (canonical merge 가 아직 처리 못 한 unmapped 항목)
+          // 부팅 직후 localStorage 의 옛 값이 신선한 server 값을 이기던 버그 해결.
+          const merged = { ...localNorm, ...remoteNorm };
           const mergedSig = JSON.stringify(merged);
           const localSig = JSON.stringify(localNorm);
           if (mergedSig === localSig) return false;
