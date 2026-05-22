@@ -5559,7 +5559,8 @@
           })
           .finally(() => {
             couponPassesSyncPromise = null;
-            couponPassesSyncCooldownUntil = Date.now() + 800;
+            // push 직후 5초 — in-flight pull 이 stale 데이터로 덮어쓰지 못하도록 충분히 길게.
+            couponPassesSyncCooldownUntil = Date.now() + 5000;
           });
       }
       function syncCouponPassesStorageAndRemote() {
@@ -5567,7 +5568,9 @@
         const signature = getCouponPassesSignature();
         if (signature === lastCouponPassesSignature) return;
         lastCouponPassesSignature = signature;
-        couponPassesSyncCooldownUntil = Math.max(couponPassesSyncCooldownUntil, Date.now() + 400);
+        // 사용자 변경 직후 5초 cooldown — 그 사이 in-flight pull 의 second guard 가
+        // cooldown 만료 후 stale remote 를 적용하던 race 방지.
+        couponPassesSyncCooldownUntil = Math.max(couponPassesSyncCooldownUntil, Date.now() + 5000);
         queueCouponPassesSync();
       }
       async function pullCouponPassesFromSupabaseAndApply() {
@@ -5580,7 +5583,17 @@
           updateLastPullTime(STORAGE_LAST_COUPON_PULL_AT, remoteRows, "updatedAt");
           const localNorm = normalizeCouponPassesMap(couponPasses);
           const remoteNorm = normalizeCouponPassesMap(remoteMap);
-          const merged = { ...localNorm, ...remoteNorm };
+          // 안전 merge: 로컬이 가진 값을 절대 덮어쓰지 않음 — 같은 key 가 양쪽에 있으면
+          // 더 큰 값을 채택(서버는 사용량 감산만, 로컬은 등록 증가만 한다는 운영 가정).
+          // 다른 브라우저가 정상 사용한 분(감산)은 sync 후 다시 반영되므로 일시적 차이만 발생.
+          const merged = { ...remoteNorm };
+          Object.entries(localNorm).forEach(([k, v]) => {
+            if (Object.prototype.hasOwnProperty.call(merged, k)) {
+              merged[k] = Math.max(Number(merged[k]) || 0, Number(v) || 0);
+            } else {
+              merged[k] = v;
+            }
+          });
           const mergedSig = JSON.stringify(merged);
           const localSig = JSON.stringify(localNorm);
           if (mergedSig === localSig) return false;
