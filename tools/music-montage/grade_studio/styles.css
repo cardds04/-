@@ -1,4 +1,110 @@
 /* grade_studio — Lightroom-style dark theme */
+/* ── 탭 nav (영상 / 사진) ─────────────────────────────────────────── */
+.tab-nav {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.tab-nav .tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--text-dim);
+  padding: 6px 16px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  font-weight: 500;
+}
+.tab-nav .tab-btn:hover { color: var(--text); background: var(--panel-hi); }
+.tab-nav .tab-btn.active {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border-hi);
+  border-bottom-color: var(--panel);
+  margin-bottom: -1px;
+}
+
+/* 모드별 가시성 — data-mode 속성 기반 */
+body.mode-photo [data-mode="video"],
+body.mode-video [data-mode="photo"] { display: none !important; }
+/* 영상 전용이지만 data-mode 가 없는 topbar 요소들 */
+body.mode-photo #btnPickFiles,
+body.mode-photo #btnAddFiles,
+body.mode-photo #snapshotRail,
+body.mode-photo #btnOpenMusicFolder,
+body.mode-photo #btnShuffleMusic,
+body.mode-photo #btnPickMusic,
+body.mode-photo #musicLabel,
+body.mode-photo #btnPickLogo,
+body.mode-photo #logoLabel,
+body.mode-photo #logoSizeWrap,
+body.mode-photo #btnClearLogo,
+body.mode-photo .cinema-toggle,
+body.mode-photo #btnSnapshotSave,
+body.mode-photo #btnBuild,
+body.mode-photo #saveStatus,
+body.mode-photo .topbar-right > .topbar-sep,
+body.mode-photo #folderLabel,
+body.mode-photo #selectionBadge { display: none !important; }
+/* 영상에서는 photoSource <img> 항상 비표시 (WebGL 텍스처 소스로만 사용) */
+#photoSource { display: none !important; }
+
+/* ── 사진 드래그앤드롭 영역 ───────────────────────────────────────── */
+.photo-drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px dashed var(--border-hi);
+  z-index: 7;
+  pointer-events: auto;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.photo-drop[hidden] { display: none; }
+.photo-drop.dragover {
+  background: rgba(255, 122, 61, 0.18);
+  border-color: var(--accent);
+}
+.photo-drop-inner {
+  text-align: center;
+  color: var(--text-mid);
+  padding: 24px 32px;
+  pointer-events: none;
+}
+.photo-drop-icon { font-size: 42px; margin-bottom: 12px; opacity: 0.7; }
+.photo-drop-msg { font-size: 13px; line-height: 1.6; }
+
+/* 사진 컨트롤 바 (player-bar 의 photo 변형) */
+.player-bar.photo-bar { gap: 8px; }
+.player-bar.photo-bar .photo-qual {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-mid);
+}
+.player-bar.photo-bar .photo-qual input[type=number] {
+  width: 56px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.player-bar.photo-bar .photo-qual .unit { font-size: 9px; color: var(--text-dim); }
+
+/* 사진 export 진행 모달은 build-modal 재활용 */
+
+
 :root {
   --bg: #111114;
   --bg-2: #16161a;

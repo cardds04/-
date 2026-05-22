@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>grade_studio</title>
-  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
 </head>
-<body>
+<body class="mode-video">
   <!-- SVG filter chain applied to <video> for live preview
        1) colorMatrix : WB(temp/tint), exposure base, saturation+vibrance, contrast+dehaze base
        2) componentTransfer : tone curve (highlights/shadows/whites/blacks)
@@ -27,15 +27,25 @@
     </defs>
   </svg>
 
+  <nav class="tab-nav">
+    <button type="button" class="tab-btn active" data-tab="video" title="영상 보정·몽타주 빌드">🎬 영상</button>
+    <button type="button" class="tab-btn" data-tab="photo" title="RAW/JPG 사진 보정·JPG 내보내기">📷 사진</button>
+  </nav>
+
   <header class="topbar">
     <div class="brand">
       <span class="logo">●</span>
       <span class="title">grade studio</span>
       <span id="folderLabel" class="folder-label" title=""></span>
       <span id="selectionBadge" class="selection-badge" hidden></span>
+      <span id="photoFolderLabel" class="folder-label" title="" data-mode="photo"></span>
     </div>
     <div class="topbar-right">
-      <button type="button" id="btnPickFolder" class="btn" title="폴더 안의 모든 영상 불러오기">📁 폴더 열기</button>
+      <button type="button" id="btnPickFolder" class="btn" data-mode="video" title="폴더 안의 모든 영상 불러오기">📁 폴더 열기</button>
+      <button type="button" id="btnPickPhotoFolder" class="btn" data-mode="photo" title="사진 폴더 (RAW/JPG/PNG) 불러오기">📁 사진 폴더</button>
+      <button type="button" id="btnPickPhotoFiles" class="btn" data-mode="photo" title="사진 파일 선택 (RAW/JPG/PNG)">📄 파일 고르기</button>
+      <button type="button" id="btnAddPhotoFiles" class="btn btn-ghost" data-mode="photo" title="현재 목록에 사진 추가">＋ 추가</button>
+      <button type="button" id="btnClearPhotos" class="btn btn-ghost" data-mode="photo" title="사진 목록 비우기">목록비우기</button>
       <div id="snapshotRail" class="snapshot-rail" title="저장된 작업"></div>
       <button type="button" id="btnPickFiles" class="btn" title="개별 영상 파일을 골라 불러오기 (다중 선택 가능)">📄 파일 고르기</button>
       <button type="button" id="btnAddFiles" class="btn btn-ghost" title="현재 목록에 영상 추가">＋ 추가</button>
@@ -100,16 +110,25 @@
       <div class="player-wrap">
         <div class="player-frame" id="playerFrame">
           <video id="player" preload="metadata" playsinline></video>
+          <!-- 사진 탭 텍스처 소스 — 화면엔 안 보이고 WebGL 셰이더가 읽음 -->
+          <img id="photoSource" alt="" style="display:none" />
           <canvas id="playerCanvas" class="player-canvas"></canvas>
           <div id="letterboxTop" class="letterbox letterbox-top"></div>
           <div id="letterboxBot" class="letterbox letterbox-bot"></div>
           <img id="logoOverlay" class="logo-overlay" alt="" hidden />
+          <!-- 사진 탭 드래그앤드롭 안내 -->
+          <div id="photoDrop" class="photo-drop" data-mode="photo" hidden>
+            <div class="photo-drop-inner">
+              <div class="photo-drop-icon">📷</div>
+              <div class="photo-drop-msg">RAW · JPG · PNG 를 여기에 드래그하거나 상단 📁 사진 폴더로 불러오세요</div>
+            </div>
+          </div>
           <div id="playerOverlay" class="player-overlay">
             <div class="overlay-msg" id="overlayMsg">불러오는 중…</div>
           </div>
           <div class="ab-badge" id="abBadge" hidden>원본</div>
         </div>
-        <div class="player-bar">
+        <div class="player-bar" data-mode="video">
           <button type="button" id="btnPlay" class="ctl" title="재생/일시정지 (Space)">▶</button>
           <span class="time" id="timeNow">0:00</span>
           <div class="seek-wrap">
@@ -122,10 +141,29 @@
           <button type="button" id="btnTrimClear" class="ctl" title="트림 해제">✕</button>
           <button type="button" id="btnAB" class="ctl ctl-ab" title="원본 ↔ 보정 토글 (A)">A↔B</button>
         </div>
+        <!-- 사진 모드 — 회전·반전·내보내기 -->
+        <div class="player-bar photo-bar" data-mode="photo">
+          <button type="button" id="btnPhotoRotL" class="ctl" title="반시계방향 90°">↺</button>
+          <button type="button" id="btnPhotoRotR" class="ctl" title="시계방향 90°">↻</button>
+          <button type="button" id="btnPhotoFlipH" class="ctl" title="좌우 반전">⇋</button>
+          <button type="button" id="btnPhotoFlipV" class="ctl" title="상하 반전">⇅</button>
+          <button type="button" id="btnPhotoAB" class="ctl ctl-ab" title="원본 ↔ 보정 토글 (A)">A↔B</button>
+          <span class="spacer" style="flex:1"></span>
+          <label class="photo-qual" title="JPG 품질 (50~100, 95 기본)">
+            <span>JPG</span>
+            <input type="number" id="photoQuality" min="50" max="100" step="1" value="95" />
+          </label>
+          <label class="photo-qual" title="긴 변 픽셀 (0 = 원본 크기)">
+            <span>긴변</span>
+            <input type="number" id="photoLongSide" min="0" max="12000" step="100" value="0" />
+            <span class="unit">px</span>
+          </label>
+          <button type="button" id="btnPhotoExport" class="btn btn-primary" title="현재 선택 사진 JPG 내보내기 (선택 없으면 전체)">📤 JPG 내보내기</button>
+        </div>
       </div>
 
       <!-- horizontal clip strip (timeline-like) -->
-      <div class="strip" id="strip"></div>
+      <div class="strip" id="strip" data-mode="video"></div>
     </section>
 
     <!-- RIGHT: sliders -->
@@ -278,11 +316,11 @@
           </div>
         </div>
 
-        <div class="group-title">
+        <div class="group-title" data-mode="video">
           <span>전환 → 다음 클립</span>
           <button type="button" id="btnXApplyAll" class="eyedrop-btn" title="현재 클립의 전환 설정을 모든 클립에 일괄 적용">📋 전체적용</button>
         </div>
-        <div id="transitionPanel" class="transition-panel">
+        <div id="transitionPanel" class="transition-panel" data-mode="video">
           <div class="xtype-chips" id="xtypeChips"></div>
           <div class="slider-row" data-key="xdur">
             <label>전환 길이</label>
@@ -301,6 +339,6 @@
     </aside>
   </main>
 
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

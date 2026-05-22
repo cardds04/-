@@ -2061,15 +2061,57 @@
       <section class="window-fix-block" id="windowFixBlock" aria-label="창문 보정 합성">
         <h2 class="workflow-title">
           창문 보정 합성
-          <span class="workflow-note">(브라우저 선택 · Gemini 나노바나나2 생성 · 원본 해상도 JPEG 합성)</span>
+          <span class="workflow-note">(브라우저 선택 · 5개 모델 중 택1 · 원본 해상도 JPEG 합성)</span>
         </h2>
         <p class="hint" style="margin-top: 0">
-          원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 Gemini가 보정된 이미지를 만듭니다.
+          원본 사진을 올리면 미리보기가 표시됩니다. 마우스로 드래그해 창문 영역을 선택하고 <strong>생성</strong>을 누르면 선택한 AI 모델이 보정된 이미지를 만듭니다.
           <strong>합성 미리보기</strong>로 원본과 AI 결과가 마스크 합성된 모습을 확인한 뒤, 결과가 마음에 들면 <strong>합성 출력</strong>을 눌러 원본 해상도 JPEG를 위쪽 출력 갤러리에 추가합니다.
           마음에 안 들면 <strong>재생성</strong>으로 다시 만들 수 있습니다. 최대 10장 동시 작업 가능.
           프롬프트와 일괄 보정값은 아래 <strong>메인</strong> 칸에서 저장할 수 있으며, 장마다 다르게 하려면 각 카드의
           <strong>「개별 프롬프트·보정」</strong>을 펼치세요. <strong>모두 생성</strong>·<strong>일괄 합성 출력</strong>·<strong>초기화</strong>는 원본 업로드 칸 바로 아래에서 바로 누를 수 있습니다.
         </p>
+
+        <fieldset class="wf-model-picker" id="wfModelPicker" style="border:1px solid var(--line); border-radius:8px; padding:0.65rem 0.85rem; margin:0.5rem 0 0.65rem; background:#fafaf9;">
+          <legend style="font-weight:600; padding:0 0.4rem; font-size:0.9rem">생성 모델 선택</legend>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center">
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-2-gemini" checked />
+              <span><strong>나노바나나2</strong> <span class="hint" style="font-size:0.78rem">(Gemini 직접·기본)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="gpt-image" />
+              <span><strong>GPT-Image</strong> <span class="hint" style="font-size:0.78rem">(ChatGPT 최신·fal.ai)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="imagen-4-ultra" />
+              <span><strong>Imagen 4 Ultra</strong> <span class="hint" style="font-size:0.78rem">(fal.ai)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="flux-pro-ultra" />
+              <span><strong>Flux 1.1 Pro Ultra</strong> <span class="hint" style="font-size:0.78rem">(fal.ai)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="recraft-v3" />
+              <span><strong>Recraft v3</strong> <span class="hint" style="font-size:0.78rem">(fal.ai)</span></span>
+            </label>
+          </div>
+          <div style="margin-top:0.55rem; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center">
+            <label class="label" for="wf-fal-api-key" style="margin:0; font-size:0.85rem">fal.ai API 키</label>
+            <input
+              type="password"
+              id="wf-fal-api-key"
+              autocomplete="off"
+              placeholder="선택 · 비우면 서버 FAL_KEY"
+              style="flex:1; min-width:200px; padding:0.3rem 0.5rem; font-size:0.85rem"
+            />
+            <button type="button" class="btn--mini-save" id="btnSaveFalKey">저장</button>
+            <span id="wfFalKeyStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
+          </div>
+          <p class="hint" style="font-size:0.78rem; margin:0.4rem 0 0">
+            나노바나나2는 위의 <code>GEMINI_API_KEY</code>를 그대로 씁니다. 나머지 4개 모델은 <strong>fal.ai</strong> 통합 API를 통해 호출되므로 fal.ai 키가 필요합니다.
+            (<a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a> 에서 발급)
+          </p>
+        </fieldset>
 
         <label class="drop" id="wfDropzone" tabindex="0" aria-label="원본 사진 선택 또는 끌어다 놓기">
           <input type="file" id="wfFiles" accept="image/*" multiple hidden />
@@ -2183,7 +2225,8 @@
 
       <footer class="foot">
         <p>
-          API: <code>/api/grok-xai</code> (이미지), <code>/api/gemini-image</code> (Gemini 이미지),
+          API: <code>/api/grok-xai</code> (Grok 이미지), <code>/api/gemini-image</code> (Gemini 나노바나나2),
+          <code>/api/fal-image</code> (fal.ai 통합 — GPT-Image · Imagen 4 Ultra · Flux 1.1 Pro Ultra · Recraft v3),
           <code>/api/gemini-caption</code> (피드 분위기 문장).
         </p>
       </footer>
@@ -5183,6 +5226,19 @@
           return (localStorage.getItem('grok_web_image_block_gemini_key_v1') || '').trim();
         }
 
+        var LS_WF_FAL_KEY = 'grok_studio_window_fix_fal_key_v1';
+        var LS_WF_MODEL = 'grok_studio_window_fix_model_v1';
+        function getFalKey() {
+          return (localStorage.getItem(LS_WF_FAL_KEY) || '').trim();
+        }
+        function getSelectedWfModel() {
+          var nodes = document.querySelectorAll('input[name="wfModel"]');
+          for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].checked) return nodes[i].value || 'nano-banana-2-gemini';
+          }
+          return 'nano-banana-2-gemini';
+        }
+
         function loadImage(src) {
           return new Promise(function (resolve, reject) {
             var img = new Image();
@@ -5557,7 +5613,7 @@
           wfDropName.textContent = wfItems.length + '장 추가됨';
         }
 
-        /* ---- Gemini 이미지 생성 ---- */
+        /* ---- AI 이미지 생성 (모델 분기) ---- */
         function generateForItem(item) {
           if (!item.origImg) { showWfError('이미지가 아직 로드되지 않았습니다.'); return; }
           var prompt = effectivePromptForItem(item).trim();
@@ -5566,9 +5622,26 @@
             return;
           }
 
+          var selModel = getSelectedWfModel();
+          var useGeminiDirect = (selModel === 'nano-banana-2-gemini');
+          if (!useGeminiDirect) {
+            var fk = getFalKey();
+            if (!fk) {
+              showWfError('fal.ai API 키가 필요합니다. 모델 선택 패널에서 키를 입력·저장해 주세요. (나노바나나2(Gemini)는 키 없이도 가능)');
+              return;
+            }
+          }
+
           item.status = 'generating';
           item.el.className = 'wf-item wf-item--generating';
-          item.footerEl.textContent = '생성 중… (20~40초 소요될 수 있습니다)';
+          var modelLabel = ({
+            'nano-banana-2-gemini': '나노바나나2(Gemini)',
+            'gpt-image': 'GPT-Image',
+            'imagen-4-ultra': 'Imagen 4 Ultra',
+            'flux-pro-ultra': 'Flux 1.1 Pro Ultra',
+            'recraft-v3': 'Recraft v3',
+          })[selModel] || selModel;
+          item.footerEl.textContent = modelLabel + ' 생성 중… (20~120초 소요될 수 있습니다)';
           item.genBtn.disabled = true;
           item.regenBtn.disabled = true;
           item.previewCompositeBtn.disabled = true;
@@ -5578,11 +5651,25 @@
 
           var refDataUrl = downscaleForApi(item.origImg, 2048);
           var promptForApi = augmentPromptWithGrid5(prompt);
-          var body = { prompt: promptForApi, resolution: '2k', images: [refDataUrl] };
-          var key = getGeminiKey();
-          if (key) body.gemini_api_key = key;
 
-          fetch('/api/gemini-image', {
+          var endpoint, body;
+          if (useGeminiDirect) {
+            endpoint = '/api/gemini-image';
+            body = { prompt: promptForApi, resolution: '2k', images: [refDataUrl] };
+            var gk = getGeminiKey();
+            if (gk) body.gemini_api_key = gk;
+          } else {
+            endpoint = '/api/fal-image';
+            body = {
+              model: selModel,
+              prompt: promptForApi,
+              images: [refDataUrl],
+            };
+            var fk2 = getFalKey();
+            if (fk2) body.fal_api_key = fk2;
+          }
+
+          fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -6065,6 +6152,56 @@
         }
 
         loadWfPrefsFromStorage();
+
+        /* ---- fal.ai 키 / 모델 선택 저장·복원 ---- */
+        (function initFalKeyAndModel() {
+          var falKeyEl = document.getElementById('wf-fal-api-key');
+          var btnSaveFalKey = document.getElementById('btnSaveFalKey');
+          var falStatusEl = document.getElementById('wfFalKeyStatus');
+          var falStatusTimer = null;
+          if (falKeyEl) {
+            try {
+              var saved = localStorage.getItem(LS_WF_FAL_KEY);
+              if (saved) falKeyEl.value = saved;
+            } catch (e) {}
+          }
+          if (btnSaveFalKey && falKeyEl) {
+            btnSaveFalKey.addEventListener('click', function () {
+              try {
+                var v = String(falKeyEl.value || '').trim();
+                if (v) localStorage.setItem(LS_WF_FAL_KEY, v);
+                else localStorage.removeItem(LS_WF_FAL_KEY);
+                if (falStatusEl) {
+                  falStatusEl.textContent = v ? '저장되었습니다.' : '키를 비웠습니다.';
+                  if (falStatusTimer) clearTimeout(falStatusTimer);
+                  falStatusTimer = setTimeout(function () { if (falStatusEl) falStatusEl.textContent = ''; }, 3000);
+                }
+              } catch (e) {
+                if (falStatusEl) falStatusEl.textContent = '저장 실패: ' + (e.message || String(e));
+              }
+            });
+          }
+
+          var modelRadios = document.querySelectorAll('input[name="wfModel"]');
+          try {
+            var savedModel = localStorage.getItem(LS_WF_MODEL);
+            if (savedModel) {
+              for (var i = 0; i < modelRadios.length; i++) {
+                if (modelRadios[i].value === savedModel) {
+                  modelRadios[i].checked = true;
+                  break;
+                }
+              }
+            }
+          } catch (e) {}
+          modelRadios.forEach(function (rb) {
+            rb.addEventListener('change', function () {
+              if (rb.checked) {
+                try { localStorage.setItem(LS_WF_MODEL, rb.value); } catch (e) {}
+              }
+            });
+          });
+        })();
 
         // ─────────────────────────────────────────────────────────
         // 2×2 그리드 사진 분할 → 갤러리 추가

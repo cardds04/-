@@ -40,7 +40,12 @@ SESSION_DIR = CACHE_ROOT / "sessions"
 SNAPSHOT_DIR = CACHE_ROOT / "snapshots"
 LUT_DIR = CACHE_ROOT / "luts"
 TRIM_DIR = CACHE_ROOT / "trims"
-for d in (PROXY_DIR, THUMB_DIR, SESSION_DIR, SNAPSHOT_DIR, LUT_DIR, TRIM_DIR):
+# 사진 탭 캐시: 디코드된 썸네일·미리보기 JPG, 드래그앤드롭 임시 저장
+PHOTO_THUMB_DIR = CACHE_ROOT / "photo_thumbs"
+PHOTO_PREVIEW_DIR = CACHE_ROOT / "photo_previews"
+PHOTO_DROP_DIR = CACHE_ROOT / "photo_drops"
+for d in (PROXY_DIR, THUMB_DIR, SESSION_DIR, SNAPSHOT_DIR, LUT_DIR, TRIM_DIR,
+          PHOTO_THUMB_DIR, PHOTO_PREVIEW_DIR, PHOTO_DROP_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 PROXY_HEIGHT = 720
@@ -1203,6 +1208,56 @@ def osascript_pick_files(prompt: str = "추가할 영상 파일을 선택하세�
     return paths
 
 
+def osascript_pick_photos(prompt: str = "사진 파일을 선택하세요") -> list[Path]:
+    """RAW + JPG/PNG 다중 선택. lazy import — photo_lib 의 PHOTO_EXTS 사용."""
+    if sys.platform != "darwin":
+        return []
+    # of type 절을 빼고 모든 파일 선택 허용 (RAW UTI 가 카메라마다 달라 일관성 낮음)
+    script = (
+        'set theFiles to choose file with prompt "' + prompt + '" '
+        'with multiple selections allowed\n'
+        'set theList to ""\n'
+        'repeat with f in theFiles\n'
+        '  set theList to theList & POSIX path of f & "\\n"\n'
+        'end repeat\n'
+        'return theList'
+    )
+    try:
+        cp = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+    if cp.returncode != 0:
+        return []
+    from grade_studio import photo_lib  # lazy
+    paths: list[Path] = []
+    for line in (cp.stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        p = Path(line).expanduser().resolve()
+        if p.is_file() and photo_lib.is_photo(p):
+            paths.append(p)
+    return paths
+
+
+def osascript_pick_save_folder(prompt: str = "JPG 내보낼 폴더를 선택하세요") -> Path | None:
+    """폴더 선택 다이얼로그 (저장용). 새 폴더도 만들 수 있음."""
+    if sys.platform != "darwin":
+        return None
+    script = f'POSIX path of (choose folder with prompt "{prompt}")'
+    try:
+        cp = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    if cp.returncode != 0:
+        return None
+    line = (cp.stdout or "").strip()
+    if not line:
+        return None
+    p = Path(line).expanduser().resolve()
+    return p if p.is_dir() else None
+
+
 def session_file(folder: Path) -> Path:
     return SESSION_DIR / f"{_folder_key(folder)}.json"
 
@@ -1596,12 +1651,67 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 return
             return serve_file(self, proxy_path(v), "video/mp4")
 
+        # ── 📷 사진 탭 endpoints ────────────────────────────────────────
+        if p == "/api/photo/state":
+            with self.server.state_lock:
+                folder = self.server.photo_folder
+                files = list(self.server.photo_files)
+                grades = dict(self.server.photo_grades)
+            return self._json({
+                "folder": str(folder) if folder else "",
+                "photos": [self._photo_brief(i, fp, grades) for i, fp in enumerate(files)],
+            })
+
+        if p == "/api/photo/thumb":
+            i = self._photo_idx(qs)
+            with self.server.state_lock:
+                files = list(self.server.photo_files)
+            if i is None or i < 0 or i >= len(files):
+                self.send_error(404)
+                return
+            from grade_studio import photo_lib   # lazy
+            src = files[i]
+            tp = photo_lib.thumb_cache_path(src, PHOTO_THUMB_DIR)
+            try:
+                if not tp.is_file():
+                    photo_lib.make_thumbnail(src, tp)
+            except Exception as exc:  # noqa: BLE001 — RAW 디코드 라이브러리 예외 광범위
+                print(f"[grade_studio] 썸네일 실패 ({src.name}): {exc}")
+                self.send_error(500)
+                return
+            return serve_file(self, tp, "image/jpeg")
+
+        if p == "/api/photo/preview":
+            i = self._photo_idx(qs)
+            with self.server.state_lock:
+                files = list(self.server.photo_files)
+            if i is None or i < 0 or i >= len(files):
+                self.send_error(404)
+                return
+            from grade_studio import photo_lib   # lazy
+            src = files[i]
+            pp = photo_lib.preview_cache_path(src, PHOTO_PREVIEW_DIR)
+            try:
+                if not pp.is_file():
+                    photo_lib.make_preview(src, pp)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[grade_studio] 미리보기 실패 ({src.name}): {exc}")
+                self.send_error(500)
+                return
+            return serve_file(self, pp, "image/jpeg")
+
         self.send_error(404)
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         p = parsed.path
+        qs = parse_qs(parsed.query or "")
         length = int(self.headers.get("Content-Length") or "0")
+
+        # 사진 업로드 (드래그앤드롭) — body 가 raw 파일 바이트라 JSON 파싱 건너뜀
+        if p == "/api/photo/upload":
+            return self._handle_photo_upload(qs, length)
+
         body_raw = self.rfile.read(length) if length else b""
         try:
             body = json.loads(body_raw.decode("utf-8")) if body_raw else {}
@@ -1710,6 +1820,97 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             except OSError:
                 pass
             return self._json({"error": "not found"}, 404)
+
+        # ── 📷 사진 탭 POST endpoints ─────────────────────────────────────
+        if p == "/api/photo/pick_folder":
+            picked = osascript_pick_folder("사진 폴더를 선택하세요")
+            if picked is None:
+                return self._json({"cancelled": True})
+            from grade_studio import photo_lib
+            files = photo_lib.list_photos(picked)
+            with self.server.state_lock:
+                self.server.photo_folder = picked
+                self.server.photo_files = list(files)
+                self.server.photo_grades = {}
+            return self._json({"ok": True, "folder": str(picked), "count": len(files)})
+
+        if p == "/api/photo/pick_files":
+            picked = osascript_pick_photos("사진 파일을 선택하세요")
+            if not picked:
+                return self._json({"cancelled": True})
+            with self.server.state_lock:
+                parents = {pp.parent for pp in picked}
+                folder = picked[0].parent if len(parents) == 1 else (self.server.photo_folder or picked[0].parent)
+                self.server.photo_folder = folder
+                self.server.photo_files = list(picked)
+                self.server.photo_grades = {}
+            return self._json({"ok": True, "folder": str(folder), "count": len(picked)})
+
+        if p == "/api/photo/add_files":
+            picked = osascript_pick_photos("추가할 사진 파일을 선택하세요")
+            if not picked:
+                return self._json({"cancelled": True})
+            with self.server.state_lock:
+                existing = {str(v.resolve()) for v in self.server.photo_files}
+                added = 0
+                for v in picked:
+                    if str(v.resolve()) not in existing:
+                        self.server.photo_files.append(v)
+                        added += 1
+                count = len(self.server.photo_files)
+            return self._json({"ok": True, "count": count, "added": added})
+
+        if p == "/api/photo/remove":
+            ids = body.get("ids") or []
+            try:
+                ids_set = {int(x) for x in ids}
+            except (TypeError, ValueError):
+                return self._json({"error": "bad ids"}, 400)
+            with self.server.state_lock:
+                self.server.photo_files = [v for i, v in enumerate(self.server.photo_files) if i not in ids_set]
+                count = len(self.server.photo_files)
+            return self._json({"ok": True, "count": count})
+
+        if p == "/api/photo/clear":
+            with self.server.state_lock:
+                self.server.photo_folder = None
+                self.server.photo_files = []
+                self.server.photo_grades = {}
+            return self._json({"ok": True})
+
+        if p == "/api/photo/save_grade":
+            try:
+                idx = int(body.get("id"))
+            except (TypeError, ValueError):
+                return self._json({"error": "bad id"}, 400)
+            grade = body.get("grade") or {}
+            sg = self._sanitize_grade(grade)
+            with self.server.state_lock:
+                if 0 <= idx < len(self.server.photo_files):
+                    key = str(self.server.photo_files[idx].resolve())
+                    self.server.photo_grades[key] = sg
+                else:
+                    return self._json({"error": "id out of range"}, 400)
+            return self._json({"ok": True})
+
+        if p == "/api/photo/save_grade_bulk":
+            items = body.get("items") or []
+            if not isinstance(items, list):
+                return self._json({"error": "bad items"}, 400)
+            with self.server.state_lock:
+                files = list(self.server.photo_files)
+                for it in items:
+                    try:
+                        idx = int(it.get("id"))
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= idx < len(files):
+                        key = str(files[idx].resolve())
+                        self.server.photo_grades[key] = self._sanitize_grade(it.get("grade") or {})
+            return self._json({"ok": True})
+
+        if p == "/api/photo/export":
+            return self._handle_photo_export(body)
 
         if p == "/api/build":
             with self.server.state_lock:
@@ -2061,6 +2262,18 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             return None
         return i
 
+    def _photo_idx(self, qs: dict[str, list[str]]) -> int | None:
+        """사진용 인덱스 파싱 — videos 가 아닌 photo_files 로 범위 검증."""
+        try:
+            i = int(qs.get("id", ["-1"])[0])
+        except (TypeError, ValueError):
+            return None
+        with self.server.state_lock:
+            n = len(self.server.photo_files)
+        if i < 0 or i >= n:
+            return None
+        return i
+
     def _video_at(self, i: int) -> Path | None:
         with self.server.state_lock:
             if 0 <= i < len(self.server.videos):
@@ -2107,6 +2320,114 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
         if out.get("trim_in", 0.0) < 0: out["trim_in"] = 0.0
         if out.get("trim_out", 0.0) < 0: out["trim_out"] = 0.0
         return out
+
+    # ── 📷 사진 탭 helpers ─────────────────────────────────────────────
+    def _photo_brief(self, idx: int, fp: Path, grades: dict) -> dict:
+        from grade_studio import photo_lib
+        key = str(fp.resolve())
+        g = grades.get(key) or {}
+        return {
+            "id": idx,
+            "name": fp.name,
+            "path": str(fp),
+            "is_raw": photo_lib.is_raw(fp),
+            "grade": g,                # 저장된 보정 (없으면 빈 dict — 프론트가 DEFAULT 사용)
+        }
+
+    def _handle_photo_upload(self, qs: dict, length: int) -> None:
+        """드래그앤드롭 — body 는 raw 파일 바이트. ?name=<filename> 로 원본 파일명 전달."""
+        name = (qs.get("name") or [""])[0]
+        if not name:
+            return self._json({"error": "missing name"}, 400)
+        # path traversal 방어
+        safe = Path(name).name
+        if not safe or safe.startswith("."):
+            return self._json({"error": "bad name"}, 400)
+        from grade_studio import photo_lib
+        if not photo_lib.is_photo(Path(safe)):
+            return self._json({"error": "unsupported file"}, 400)
+        if length <= 0 or length > 500 * 1024 * 1024:    # 500MB 상한
+            return self._json({"error": "size out of range"}, 400)
+        data = self.rfile.read(length)
+        # 충돌 방지 — 같은 이름 있으면 _1, _2 …
+        out = photo_lib.find_unique_name(PHOTO_DROP_DIR, Path(safe).stem, Path(safe).suffix.lower())
+        try:
+            out.write_bytes(data)
+        except OSError as exc:
+            return self._json({"error": f"save failed: {exc}"}, 500)
+        with self.server.state_lock:
+            existing = {str(v.resolve()) for v in self.server.photo_files}
+            if str(out.resolve()) not in existing:
+                self.server.photo_files.append(out)
+            count = len(self.server.photo_files)
+            if self.server.photo_folder is None:
+                self.server.photo_folder = PHOTO_DROP_DIR
+        return self._json({"ok": True, "id": count - 1, "name": out.name, "count": count})
+
+    def _handle_photo_export(self, body: dict) -> None:
+        """선택된 사진들에 보정을 적용해서 JPG 로 내보냄.
+        body: {ids: [int], folder: "/...", quality: int, long_side_px: int|None, rotate: int, flip_h: bool, flip_v: bool, ask_folder: bool}
+        folder 빈 문자열이거나 ask_folder=true 면 osascript 폴더 선택 다이얼로그 띄움."""
+        ids = body.get("ids") or []
+        quality = int(body.get("quality") or 95)
+        long_side = body.get("long_side_px")
+        if long_side is not None:
+            try:
+                long_side = int(long_side)
+                if long_side <= 0:
+                    long_side = None
+            except (TypeError, ValueError):
+                long_side = None
+        rotate = int(body.get("rotate") or 0) % 360
+        flip_h = bool(body.get("flip_h"))
+        flip_v = bool(body.get("flip_v"))
+        ask = bool(body.get("ask_folder", True))
+        folder_raw = (body.get("folder") or "").strip()
+
+        out_folder: Path | None = None
+        if folder_raw:
+            out_folder = Path(folder_raw).expanduser()
+        if out_folder is None or not out_folder.is_dir() or ask:
+            picked = osascript_pick_save_folder("JPG 내보낼 폴더를 선택하세요")
+            if picked is None:
+                return self._json({"cancelled": True})
+            out_folder = picked
+
+        with self.server.state_lock:
+            files = list(self.server.photo_files)
+            grades = dict(self.server.photo_grades)
+
+        if not ids:
+            ids = list(range(len(files)))
+        try:
+            ids = [int(i) for i in ids if 0 <= int(i) < len(files)]
+        except (TypeError, ValueError):
+            return self._json({"error": "bad ids"}, 400)
+        if not ids:
+            return self._json({"error": "내보낼 사진이 없습니다"}, 400)
+
+        from grade_studio import photo_lib
+        results = []
+        errors = []
+        for i in ids:
+            src = files[i]
+            grade = grades.get(str(src.resolve())) or {}
+            lut = get_or_make_lut(grade) if grade else None
+            out_path = photo_lib.find_unique_name(out_folder, src.stem, ".jpg")
+            try:
+                photo_lib.export_jpg_with_lut(
+                    src, out_path,
+                    lut_path=lut,
+                    quality=quality,
+                    long_side_px=long_side,
+                    rotate_deg=rotate,
+                    flip_h=flip_h,
+                    flip_v=flip_v,
+                )
+                results.append({"id": i, "name": src.name, "out": str(out_path)})
+            except Exception as exc:  # noqa: BLE001
+                errors.append({"id": i, "name": src.name, "error": str(exc)})
+        return self._json({"ok": True, "folder": str(out_folder), "exported": results, "errors": errors})
 
     def _state_payload(self) -> dict:
         # 매 요청마다 음악 폴더를 FORCED 경로로 강제 복귀 + 다시 스캔.
@@ -2243,6 +2564,10 @@ def main() -> None:
     else:
         print(f"[grade_studio] 음악 폴더 (강제, 미마운트): {FORCED_MUSIC_FOLDER} — SSD 연결되면 새로고침 시 자동 인식")
     server.logo_path = None          # type: ignore[attr-defined]
+    # 사진 편집(📷) 탭 상태
+    server.photo_folder = None       # type: ignore[attr-defined]
+    server.photo_files = []          # type: ignore[attr-defined]  list[Path]
+    server.photo_grades = {}         # type: ignore[attr-defined]  dict[str(path) → grade dict]
     server.state_lock = threading.Lock()  # type: ignore[attr-defined]
 
     url = f"http://{args.host}:{args.port}/"

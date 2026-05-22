@@ -68,8 +68,9 @@
   const SAVE_DEBOUNCE_MS = 350;
 
   const state = {
+    mode: "video",      // "video" | "photo"
     folder: "",
-    clips: [],          // [{id, name, stem, grade, proxy}]
+    clips: [],          // [{id, name, stem, grade, proxy}] — 영상 모드 클립 또는 사진 모드 사진
     activeId: -1,
     selectedIds: new Set(),
     lastClickedId: -1,  // for shift-range selection
@@ -79,7 +80,12 @@
     history: [],        // undo stack: items {batch:[{clipId, before}]}
     _lastPushAt: 0,
     _lastPushKey: "",
+    // 모드 전환 시 다른 모드의 상태를 보관해두는 백업
+    _videoBackup: null,
+    _photoBackup: null,
+    photoFolder: "",
   };
+  function isPhotoMode() { return state.mode === "photo"; }
   const HIST_MAX = 100;
   const PUSH_DEBOUNCE_MS = 220;
 
@@ -695,26 +701,35 @@
   function drawGl() {
     if (!_gl.ready) return;
     const gl = _gl.ctx;
-    const v = _gl.video;
     const cv = _gl.canvas;
-    if (!v || v.readyState < 2 || v.videoWidth === 0) return;
-    // 캔버스 internal resolution 을 video 해상도에 맞춤 (화면 표시 크기는 CSS 가 결정)
-    if (cv.width !== v.videoWidth || cv.height !== v.videoHeight) {
-      cv.width = v.videoWidth;
-      cv.height = v.videoHeight;
-      cv.style.aspectRatio = `${v.videoWidth} / ${v.videoHeight}`;
+    // 사진 모드면 <img id="photoSource">, 영상 모드면 <video id="player"> 가 텍스처 소스
+    let src, srcW, srcH;
+    if (isPhotoMode()) {
+      const img = document.getElementById("photoSource");
+      if (!img || !img.complete || !img.naturalWidth) return;
+      src = img; srcW = img.naturalWidth; srcH = img.naturalHeight;
+    } else {
+      const v = _gl.video;
+      if (!v || v.readyState < 2 || v.videoWidth === 0) return;
+      src = v; srcW = v.videoWidth; srcH = v.videoHeight;
+    }
+    // 캔버스 internal resolution 을 소스 해상도에 맞춤
+    if (cv.width !== srcW || cv.height !== srcH) {
+      cv.width = srcW;
+      cv.height = srcH;
+      cv.style.aspectRatio = `${srcW} / ${srcH}`;
       gl.viewport(0, 0, cv.width, cv.height);
     }
     gl.useProgram(_gl.program);
     gl.bindTexture(gl.TEXTURE_2D, _gl.tex);
     try {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
     } catch (e) {
       return;
     }
     gl.uniform1i(_gl.loc.uOrig, _gl.showOriginal ? 1 : 0);
-    // 시네마 모드면 위/아래 115/1080 = 10.648% 를 letterbox 로 덮음
-    const cine = document.body.classList.contains("cinema-mode") ? (115.0 / 1080.0) : 0.0;
+    // 사진 모드는 시네마 레터박스 없음
+    const cine = (!isPhotoMode() && document.body.classList.contains("cinema-mode")) ? (115.0 / 1080.0) : 0.0;
     gl.uniform1f(_gl.loc.uLetterbox, cine);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -1076,21 +1091,29 @@
   }
   async function doSave(clip) {
     const status = $("#saveStatus");
-    status.textContent = "저장 중…";
-    status.className = "status-pill";
+    const isPhoto = isPhotoMode();
+    if (status && !isPhoto) {
+      status.textContent = "저장 중…";
+      status.className = "status-pill";
+    }
     try {
-      const r = await fetch("/api/save", {
+      const url = isPhoto ? "/api/photo/save_grade" : "/api/save";
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: clip.id, grade: clip.grade }),
       });
       if (!r.ok) throw new Error("save fail " + r.status);
-      status.textContent = "저장됨";
-      status.className = "status-pill ok";
-      setTimeout(() => { if (status.textContent === "저장됨") status.textContent = ""; }, 1500);
+      if (status && !isPhoto) {
+        status.textContent = "저장됨";
+        status.className = "status-pill ok";
+        setTimeout(() => { if (status.textContent === "저장됨") status.textContent = ""; }, 1500);
+      }
     } catch (err) {
-      status.textContent = "저장 실패";
-      status.className = "status-pill err";
+      if (status) {
+        status.textContent = "저장 실패";
+        status.className = "status-pill err";
+      }
       console.error(err);
     }
   }
@@ -1112,10 +1135,12 @@
           <div class="sub"><span class="proxy-status">…</span><span class="group-dot"></span></div>
         </div>`;
       const img = el.querySelector("img");
-      img.src = `/api/thumb?id=${c.id}`;
+      img.src = isPhotoMode() ? `/api/photo/thumb?id=${c.id}` : `/api/thumb?id=${c.id}`;
       img.loading = "lazy";
       el.querySelector(".name").textContent = c.name;
-      el.querySelector(".proxy-status").textContent = proxyLabel(c.proxy);
+      el.querySelector(".proxy-status").textContent = isPhotoMode()
+        ? (c.is_raw ? "RAW" : "이미지")
+        : proxyLabel(c.proxy);
       el.addEventListener("click", (e) => {
         selectClip(c.id, { toggle: modKey(e), range: e.shiftKey });
       });
@@ -1128,6 +1153,7 @@
   function renderStrip() {
     const root = $("#strip");
     root.innerHTML = "";
+    if (isPhotoMode()) return;   // 사진 모드는 strip 미사용
     state.clips.forEach(c => {
       const wrap = document.createElement("div");
       wrap.className = "strip-thumb-wrap";
@@ -1563,6 +1589,24 @@
     writeGradeToPanel(c.grade);
     applyMatrixToFilter(c.grade);
     updateTrimVisual(c.grade);
+
+    if (isPhotoMode()) {
+      // 📷 사진 모드 — preview JPG 를 <img id="photoSource"> 에 로드, WebGL 텍스처 소스로 사용
+      const v = $("#player");
+      try { v.pause(); } catch (_) {}
+      v.removeAttribute("src"); v.load();
+      const img = $("#photoSource");
+      showOverlay("디코드 중…");
+      img.onload = () => {
+        if (state.activeId !== id) return;
+        showOverlay("");
+      };
+      img.onerror = () => showOverlay("이미지 로드 실패");
+      img.src = `/api/photo/preview?id=${id}&t=${Date.now()}`;
+      const item = $(`#clipList .clip-item[data-id="${id}"]`);
+      if (item) item.scrollIntoView({ block: "nearest" });
+      return;
+    }
 
     // 1) 즉시 video 비우기 — 이전 클립이 재생 중인 상태로 남지 않게
     const v = $("#player");
@@ -2646,6 +2690,289 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 📷 사진 탭 — 모드 전환 · 사진 로드 · 드래그앤드롭 · 내보내기
+  function snapshotModeState() {
+    return {
+      folder: state.folder,
+      photoFolder: state.photoFolder,
+      clips: state.clips,
+      activeId: state.activeId,
+      selectedIds: new Set(state.selectedIds),
+      lastClickedId: state.lastClickedId,
+    };
+  }
+  function restoreModeState(s) {
+    if (!s) return;
+    state.folder = s.folder || "";
+    state.photoFolder = s.photoFolder || "";
+    state.clips = s.clips || [];
+    state.activeId = (typeof s.activeId === "number") ? s.activeId : -1;
+    state.selectedIds = s.selectedIds || new Set();
+    state.lastClickedId = (typeof s.lastClickedId === "number") ? s.lastClickedId : -1;
+  }
+  async function switchMode(newMode) {
+    if (newMode === state.mode) return;
+    // 보류 중인 저장 모두 flush (현재 모드 기준 endpoint 로)
+    try { await flushAllSaves(); } catch (_) {}
+    // 현재 모드 상태 백업
+    if (state.mode === "video") state._videoBackup = snapshotModeState();
+    else state._photoBackup = snapshotModeState();
+    // 모드 전환
+    state.mode = newMode;
+    document.body.classList.toggle("mode-photo", newMode === "photo");
+    document.body.classList.toggle("mode-video", newMode === "video");
+    // 탭 활성화 표시
+    document.querySelectorAll(".tab-nav .tab-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.tab === newMode);
+    });
+    // 영상 인 경우 player 일시정지
+    if (newMode === "photo") {
+      const v = $("#player"); try { v.pause(); } catch (_) {}
+    }
+    // 다른 모드의 백업 복원 (없으면 빈 상태)
+    if (newMode === "video") {
+      restoreModeState(state._videoBackup);
+      await reloadState();
+    } else {
+      restoreModeState(state._photoBackup);
+      await reloadPhotoState();
+    }
+  }
+  function bindTabNav() {
+    document.querySelectorAll(".tab-nav .tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => switchMode(btn.dataset.tab));
+    });
+    // 초기 mode 클래스 설정
+    document.body.classList.add("mode-video");
+  }
+
+  // 사진 상태 재로딩 (서버 /api/photo/state)
+  async function reloadPhotoState() {
+    try {
+      const r = await fetch("/api/photo/state");
+      const j = await r.json();
+      state.photoFolder = j.folder || "";
+      const photos = (j.photos || []).map(p => {
+        const base = freshDefaultGrade();
+        const saved = p.grade || {};
+        // saved 의 값으로 base 덮어쓰기 (hsl 은 깊은 merge)
+        for (const k of Object.keys(DEFAULT_GRADE)) {
+          if (k === "hsl") continue;
+          if (saved[k] !== undefined) base[k] = saved[k];
+        }
+        if (saved.hsl) {
+          for (const ch of HSL_CHANNELS) {
+            const cell = saved.hsl[ch] || {};
+            base.hsl[ch] = {
+              h: Number(cell.h || 0), s: Number(cell.s || 0), l: Number(cell.l || 0),
+            };
+          }
+        }
+        return {
+          id: p.id, name: p.name, path: p.path, is_raw: !!p.is_raw,
+          proxy: "ready",
+          grade: base,
+        };
+      });
+      state.clips = photos;
+      const pLab = document.getElementById("photoFolderLabel");
+      if (pLab) {
+        if (j.folder) { pLab.textContent = `📁 ${j.folder.split("/").pop() || j.folder}`; pLab.title = j.folder; pLab.hidden = false; }
+        else { pLab.textContent = ""; pLab.hidden = true; }
+      }
+      // 드롭존 표시 토글
+      const drop = document.getElementById("photoDrop");
+      if (drop) drop.hidden = photos.length > 0;
+    } catch (err) {
+      console.error("photo state load failed", err);
+    }
+    renderClipList();
+    renderStrip();
+    if (state.clips.length) {
+      const id = (prevActiveValid()) ? state.activeId : 0;
+      await selectClip(id);
+    } else {
+      $("#panelTitle").textContent = "보정";
+      writeGradeToPanel(DEFAULT_GRADE);
+      applyMatrixToFilter(DEFAULT_GRADE);
+      showOverlay("");
+    }
+  }
+  function prevActiveValid() {
+    return state.activeId >= 0 && state.activeId < state.clips.length;
+  }
+
+  async function photoPickFolder() {
+    setBusyShort("폴더 여는 중…");
+    try {
+      const r = await fetch("/api/photo/pick_folder", { method: "POST" });
+      const j = await r.json();
+      if (j.cancelled) return;
+      if (!r.ok || !j.ok) { alert(j.error || "폴더 열기 실패"); return; }
+      await reloadPhotoState();
+      setBusyShort(`사진 ${j.count}장 불러옴`);
+    } catch (e) { console.error(e); }
+  }
+  async function photoPickFiles() {
+    try {
+      const r = await fetch("/api/photo/pick_files", { method: "POST" });
+      const j = await r.json();
+      if (j.cancelled) return;
+      if (!r.ok || !j.ok) { alert(j.error || "파일 선택 실패"); return; }
+      await reloadPhotoState();
+      setBusyShort(`사진 ${j.count}장 불러옴`);
+    } catch (e) { console.error(e); }
+  }
+  async function photoAddFiles() {
+    try {
+      const r = await fetch("/api/photo/add_files", { method: "POST" });
+      const j = await r.json();
+      if (j.cancelled) return;
+      if (!r.ok || !j.ok) { alert(j.error || "파일 추가 실패"); return; }
+      await reloadPhotoState();
+      setBusyShort(`사진 ${j.added}장 추가됨 (총 ${j.count})`);
+    } catch (e) { console.error(e); }
+  }
+  async function photoClear() {
+    if (!confirm("사진 목록을 모두 비울까요? (원본 파일은 그대로)")) return;
+    await fetch("/api/photo/clear", { method: "POST" });
+    await reloadPhotoState();
+  }
+
+  // 드래그앤드롭으로 파일 업로드 — File 객체를 raw bytes 로 POST
+  async function uploadPhotoFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setBusyShort(`업로드 중 0/${files.length}…`);
+    let uploaded = 0;
+    for (const f of files) {
+      // 확장자 빠른 검사 — 서버가 다시 검증
+      const ext = f.name.split(".").pop().toLowerCase();
+      if (!ext) continue;
+      try {
+        const r = await fetch(`/api/photo/upload?name=${encodeURIComponent(f.name)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: f,
+        });
+        if (r.ok) uploaded++;
+        else console.warn("upload failed for", f.name, await r.text());
+      } catch (e) { console.error("upload error", f.name, e); }
+      setBusyShort(`업로드 중 ${uploaded}/${files.length}…`);
+    }
+    setBusyShort(`업로드 완료 ${uploaded}/${files.length}`);
+    await reloadPhotoState();
+  }
+  function bindPhotoDragDrop() {
+    const frame = document.getElementById("playerFrame");
+    const drop = document.getElementById("photoDrop");
+    if (!frame) return;
+    const showOn = (e) => {
+      // dataTransfer 가 파일을 포함할 때만 활성화
+      const hasFiles = Array.from(e.dataTransfer?.types || []).includes("Files");
+      if (!hasFiles) return false;
+      if (!isPhotoMode()) return false;
+      e.preventDefault();
+      if (drop) {
+        drop.hidden = false;
+        drop.classList.add("dragover");
+      }
+      return true;
+    };
+    const hideOver = () => { if (drop) drop.classList.remove("dragover"); };
+    frame.addEventListener("dragenter", showOn);
+    frame.addEventListener("dragover", showOn);
+    frame.addEventListener("dragleave", (e) => {
+      // 자식으로 이동한 dragleave 무시
+      if (e.relatedTarget && frame.contains(e.relatedTarget)) return;
+      hideOver();
+      if (drop && state.clips.length > 0) drop.hidden = true;
+    });
+    frame.addEventListener("drop", async (e) => {
+      if (!Array.from(e.dataTransfer?.types || []).includes("Files")) return;
+      if (!isPhotoMode()) return;
+      e.preventDefault();
+      hideOver();
+      await uploadPhotoFiles(e.dataTransfer.files);
+    });
+    // 윈도우 전체 드롭은 브라우저가 파일을 열려고 함 — 막아둠
+    window.addEventListener("dragover", (e) => { if (isPhotoMode()) e.preventDefault(); });
+    window.addEventListener("drop", (e) => { if (isPhotoMode()) e.preventDefault(); });
+  }
+
+  // 회전/뒤집기 — 단순 미리보기 변환 (export 시 서버가 동일하게 적용)
+  const _photoTransform = { rotate: 0, flipH: false, flipV: false };
+  function applyPhotoTransformToCanvas() {
+    const cv = $("#playerCanvas");
+    if (!cv) return;
+    const r = _photoTransform.rotate % 360;
+    const sx = _photoTransform.flipH ? -1 : 1;
+    const sy = _photoTransform.flipV ? -1 : 1;
+    cv.style.transform = `rotate(${r}deg) scale(${sx}, ${sy})`;
+  }
+  function resetPhotoTransform() {
+    _photoTransform.rotate = 0;
+    _photoTransform.flipH = false;
+    _photoTransform.flipV = false;
+    applyPhotoTransformToCanvas();
+  }
+  function bindPhotoTopbarButtons() {
+    const btn = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+    btn("#btnPickPhotoFolder", photoPickFolder);
+    btn("#btnPickPhotoFiles", photoPickFiles);
+    btn("#btnAddPhotoFiles", photoAddFiles);
+    btn("#btnClearPhotos", photoClear);
+    btn("#btnPhotoRotL", () => { _photoTransform.rotate = (_photoTransform.rotate - 90 + 360) % 360; applyPhotoTransformToCanvas(); });
+    btn("#btnPhotoRotR", () => { _photoTransform.rotate = (_photoTransform.rotate + 90) % 360; applyPhotoTransformToCanvas(); });
+    btn("#btnPhotoFlipH", () => { _photoTransform.flipH = !_photoTransform.flipH; applyPhotoTransformToCanvas(); });
+    btn("#btnPhotoFlipV", () => { _photoTransform.flipV = !_photoTransform.flipV; applyPhotoTransformToCanvas(); });
+    // 사진 모드 AB 토글
+    const ab = $("#btnPhotoAB");
+    if (ab) {
+      ab.addEventListener("mousedown", () => { state.abShowOriginal = true; setOriginalView(true); });
+      ab.addEventListener("mouseup",   () => { state.abShowOriginal = false; setOriginalView(false); });
+      ab.addEventListener("mouseleave",() => { if (state.abShowOriginal) { state.abShowOriginal = false; setOriginalView(false); } });
+    }
+    // 내보내기
+    const exp = $("#btnPhotoExport");
+    if (exp) exp.addEventListener("click", photoExport);
+  }
+  async function photoExport() {
+    if (!state.clips.length) { alert("내보낼 사진이 없습니다"); return; }
+    await flushAllSaves();
+    const ids = state.selectedIds.size ? Array.from(state.selectedIds) : state.clips.map(c => c.id);
+    const quality = Math.max(50, Math.min(100, Number($("#photoQuality")?.value || 95)));
+    const longSide = Math.max(0, Math.min(12000, Number($("#photoLongSide")?.value || 0)));
+    const body = {
+      ids,
+      quality,
+      long_side_px: longSide || null,
+      rotate: _photoTransform.rotate,
+      flip_h: _photoTransform.flipH,
+      flip_v: _photoTransform.flipV,
+      ask_folder: true,
+    };
+    setBusyShort(`내보내는 중 (${ids.length}장)…`);
+    try {
+      const r = await fetch("/api/photo/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (j.cancelled) { setBusyShort(""); return; }
+      if (!r.ok || !j.ok) { alert(j.error || "내보내기 실패"); setBusyShort(""); return; }
+      const ok = (j.exported || []).length;
+      const err = (j.errors || []).length;
+      setBusyShort(`내보냄 ${ok}장${err ? ` (오류 ${err}장)` : ""} → ${j.folder.split("/").pop()}`);
+      if (err) console.warn("export errors:", j.errors);
+    } catch (e) {
+      console.error(e);
+      setBusyShort("내보내기 실패");
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   async function init() {
     initGlPlayer();
     initHistogram();
@@ -2655,6 +2982,9 @@
     bindEyedropper();
     bindTransitionPanel();
     bindLogoSize();
+    bindTabNav();
+    bindPhotoTopbarButtons();
+    bindPhotoDragDrop();
     await loadPresetSlot();
     await loadSnapshots();
     await reloadState();
