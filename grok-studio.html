@@ -2154,10 +2154,28 @@
             <button type="button" class="btn--mini-save" id="btnSaveOpenaiKey">저장</button>
             <span id="wfOpenaiKeyStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
           </div>
+          <div style="font-size:0.78rem; color:#374151; margin-bottom:0.3rem; padding-top:0.4rem; border-top:1px dashed #e5e7eb">
+            <strong>출력 해상도</strong> <span class="hint" style="font-weight:400">(나노바나나1·Recraft·GPT-Image는 모델 자체 한도에 따라 무시될 수 있음)</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center">
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfResolution" value="1k" />
+              <span><strong>1K</strong> <span class="hint" style="font-size:0.78rem">(1024px · 가장 저렴)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfResolution" value="2k" checked />
+              <span><strong>2K</strong> <span class="hint" style="font-size:0.78rem">(2048px · 기본 · 가성비)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfResolution" value="4k" />
+              <span><strong>4K</strong> <span class="hint" style="font-size:0.78rem">(4096px · 디테일 최고)</span></span>
+            </label>
+          </div>
           <p class="hint" style="font-size:0.78rem; margin:0.4rem 0 0">
-            나노바나나2는 위의 <code>GEMINI_API_KEY</code>를 그대로 씁니다. 나머지 4개 모델은 <strong>fal.ai</strong> 통합 API를 통해 호출되므로 fal.ai 키가 필요합니다.
+            나노바나나1은 항상 1K(~1024px)로만 출력됩니다(모델 한도). 나노바나나2·Pro·Imagen 4 Ultra는 1K/2K/4K 모두 적용. <br>
+            Gemini 키는 위의 <code>GEMINI_API_KEY</code>를 그대로 씁니다. fal.ai 모델들은 <strong>fal.ai</strong> 키가 필요
             (<a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a> 에서 발급).
-            <strong>GPT-Image</strong>는 OpenAI 키를 같이 넣으면 BYOK 경로로 본인 OpenAI 잔액에서 차감(저렴), 비우면 fal.ai 풀에서 차감(비쌈)됩니다.
+            <strong>GPT-Image</strong>는 OpenAI 키를 같이 넣으면 BYOK 경로로 본인 OpenAI 잔액에서 차감(저렴), 비우면 fal.ai 풀에서 차감(비쌈).
           </p>
         </fieldset>
 
@@ -5291,6 +5309,15 @@
           return 'nano-banana-2-gemini';
         }
 
+        var LS_WF_RESOLUTION = 'grok_studio_window_fix_resolution_v1';
+        function getSelectedWfResolution() {
+          var nodes = document.querySelectorAll('input[name="wfResolution"]');
+          for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].checked) return nodes[i].value || '2k';
+          }
+          return '2k';
+        }
+
         function loadImage(src) {
           return new Promise(function (resolve, reject) {
             var img = new Image();
@@ -5778,12 +5805,13 @@
           item.aiCropBounds = cropBounds;
           var promptForApi = augmentPromptWithGrid5(prompt);
 
+          var selRes = getSelectedWfResolution();
           var endpoint, body;
           if (useGeminiDirect) {
             endpoint = '/api/gemini-image';
             body = {
               prompt: promptForApi,
-              resolution: '2k',
+              resolution: selRes,
               images: [refDataUrl],
               model_id: GEMINI_DIRECT_MAP[selModel],
             };
@@ -5795,6 +5823,7 @@
               model: FAL_MODEL_MAP[selModel] || selModel,
               prompt: promptForApi,
               images: [refDataUrl],
+              resolution: selRes,
             };
             var fk2 = getFalKey();
             if (fk2) body.fal_api_key = fk2;
@@ -6364,6 +6393,26 @@
             rb.addEventListener('change', function () {
               if (rb.checked) {
                 try { localStorage.setItem(LS_WF_MODEL, rb.value); } catch (e) {}
+              }
+            });
+          });
+
+          var resRadios = document.querySelectorAll('input[name="wfResolution"]');
+          try {
+            var savedRes = localStorage.getItem(LS_WF_RESOLUTION);
+            if (savedRes) {
+              for (var j = 0; j < resRadios.length; j++) {
+                if (resRadios[j].value === savedRes) {
+                  resRadios[j].checked = true;
+                  break;
+                }
+              }
+            }
+          } catch (e) {}
+          resRadios.forEach(function (rb) {
+            rb.addEventListener('change', function () {
+              if (rb.checked) {
+                try { localStorage.setItem(LS_WF_RESOLUTION, rb.value); } catch (e) {}
               }
             });
           });

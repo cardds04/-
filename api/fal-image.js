@@ -107,8 +107,17 @@ async function uploadDataUriToFal(dataUri, apiKey) {
   return fileUrl;
 }
 
-function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
+function normalizeResolutionTag(s) {
+  const v = String(s || "").trim().toLowerCase();
+  if (v === "1k" || v === "1024") return "1K";
+  if (v === "2k" || v === "2048") return "2K";
+  if (v === "4k" || v === "4096") return "4K";
+  return null;
+}
+
+function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey, resolutionTag) {
   const ar = aspectRatio && aspectRatio.toLowerCase() !== "auto" ? aspectRatio : null;
+  const resTag = normalizeResolutionTag(resolutionTag);
 
   switch (modelKey) {
     case "flux-pro-ultra":
@@ -152,6 +161,7 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
           num_images: 1,
           output_format: "jpeg",
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+          ...(resTag ? { output_resolution: resTag } : {}),
         },
       };
     case "nano-banana-2":
@@ -164,6 +174,7 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
           num_images: 1,
           output_format: "jpeg",
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+          ...(resTag ? { output_resolution: resTag } : {}),
         },
       };
     case "nano-banana-pro":
@@ -176,6 +187,7 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
           num_images: 1,
           output_format: "jpeg",
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+          ...(resTag ? { output_resolution: resTag } : {}),
         },
       };
     case "gpt-image": {
@@ -358,7 +370,8 @@ module.exports = async (req, res) => {
     const aspect = String(body.aspect_ratio || "").trim();
     const openaiKey =
       typeof body.openai_api_key === "string" ? body.openai_api_key.trim() : "";
-    const { path, input } = buildModelRequest(modelKey, prompt, refUrls, aspect, openaiKey);
+    const resolution = String(body.resolution || "").trim();
+    const { path, input } = buildModelRequest(modelKey, prompt, refUrls, aspect, openaiKey, resolution);
 
     const result = await submitAndWait(path, input, apiKey);
     const imgUrl = extractImageUrl(result);
