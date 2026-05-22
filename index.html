@@ -5517,7 +5517,16 @@
           }
         }
         const nextCompanySet = new Set(nextEntries.map(([companyName]) => companyName));
-        const deleteTargets = [...remoteCompanySet].filter((companyName) => !nextCompanySet.has(companyName));
+        // 안전장치: 로컬이 서버 대비 너무 적으면 (e.g. 부팅 중 sparse 로컬 → 다수 삭제) 자동 삭제 차단.
+        // 로컬 nextCompanySet 이 remoteCompanySet 의 50% 미만이면 의도하지 않은 대량 삭제로 간주.
+        const deleteCandidates = [...remoteCompanySet].filter((companyName) => !nextCompanySet.has(companyName));
+        const aboutToDeleteAll = remoteCompanySet.size > 0 && nextCompanySet.size * 2 < remoteCompanySet.size;
+        const deleteTargets = aboutToDeleteAll ? [] : deleteCandidates;
+        if (aboutToDeleteAll) {
+          console.warn(
+            `[COUPON][index] 로컬 ${nextCompanySet.size}건 vs 서버 ${remoteCompanySet.size}건 — 대량 삭제 가드로 자동 삭제 차단`
+          );
+        }
         for (const companyName of deleteTargets) {
           const remote = remoteRows.find((row) => normalizeCompanyName(row?.companyName) === companyName);
           if (!remote) continue;
@@ -12642,7 +12651,10 @@ ${folderBtn}
         });
       }
 
-      /** 회차권 맵: 같은 고유번호(또는 canonical 동일)로 묶어 표기명별 중복 키를 하나로 합침 */
+      /** 회차권 맵: 같은 고유번호(또는 canonical 동일)로 묶어 표기명별 중복 키를 하나로 합침.
+       *  ⚠ 부팅 중 companies 배열이 아직 비어 있거나 부분 로딩된 시점에 이 merge 가 돌면,
+       *  canonical 매핑을 못 찾는 항목이 그냥 버려져서 회차권이 사라지는 버그가 있었음.
+       *  → 매핑 못 찾는 항목은 원본 key 로 그대로 보존하도록 변경. */
       function mergeCouponPassesByCanonicalIdentity() {
         if (Object.keys(couponPasses).length === 0) return false;
         const mergeCtx = {
@@ -12650,11 +12662,17 @@ ${folderBtn}
           customers: readStorageArray(STORAGE_CUSTOMERS)
         };
         const byGk = new Map();
+        const unmappedEntries = []; // 매핑 못 찾은 항목 — 그대로 보존
         Object.entries(couponPasses).forEach(([key, val]) => {
           const id = resolveCanonicalCompanyIdentity(key, "", mergeCtx);
           const gk = getCompanyGroupKey(id.company, id.companyCode);
-          if (!gk) return;
           const amt = Math.max(0, Number(val) || 0);
+          if (!gk) {
+            // canonical group 매핑 못 찾음 — 원본 key 로 보존하고 다음 merge 라운드에서 다시 시도.
+            const fallbackKey = normalizeCompanyName(key);
+            if (fallbackKey) unmappedEntries.push([fallbackKey, amt]);
+            return;
+          }
           const prev = byGk.get(gk) || { total: 0, primaryName: normalizeCompanyName(id.company) };
           prev.total += amt;
           prev.primaryName = normalizeCompanyName(id.company) || prev.primaryName;
@@ -12663,6 +12681,10 @@ ${folderBtn}
         const next = {};
         byGk.forEach(({ total, primaryName }) => {
           if (primaryName) next[primaryName] = total;
+        });
+        // 매핑 못 찾은 항목 추가 — 단, byGk 결과와 같은 key 가 이미 있으면 (canonical 이 동일 키) 건너뜀.
+        unmappedEntries.forEach(([k, v]) => {
+          if (!Object.prototype.hasOwnProperty.call(next, k)) next[k] = v;
         });
         if (Object.keys(next).length === 0) return false;
         const sigNew = JSON.stringify(normalizeCouponPassesMap(next));
