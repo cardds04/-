@@ -132,6 +132,31 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey, re
           ...(refUrls[0] ? { image_url: refUrls[0], image_prompt_strength: 0.45 } : {}),
         },
       };
+    case "flux-kontext-pro":
+      // 이미지 편집 전용 모델. 참조 이미지가 있을 때만 동작.
+      return {
+        path: "fal-ai/flux-pro/kontext",
+        input: {
+          prompt,
+          num_images: 1,
+          output_format: "jpeg",
+          safety_tolerance: "6",
+          ...(refUrls[0] ? { image_url: refUrls[0] } : {}),
+          ...(ar ? { aspect_ratio: ar } : {}),
+        },
+      };
+    case "flux-2-pro":
+      // FLUX.2 pro 편집(img2img) — refUrls 가 있을 때 /edit 경로.
+      return {
+        path: refUrls.length ? "fal-ai/flux-2-pro/edit" : "fal-ai/flux-2-pro",
+        input: {
+          prompt,
+          num_images: 1,
+          output_format: "jpeg",
+          ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+          ...(ar ? { aspect_ratio: ar } : {}),
+        },
+      };
     case "recraft-v3":
       return {
         path: "fal-ai/recraft-v3",
@@ -344,6 +369,8 @@ module.exports = async (req, res) => {
     const modelKey = String(body.model || "").trim();
     const SUPPORTED = [
       "flux-pro-ultra",
+      "flux-kontext-pro",
+      "flux-2-pro",
       "recraft-v3",
       "imagen-4-ultra",
       "nano-banana-1",
