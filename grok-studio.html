@@ -2107,9 +2107,22 @@
             <button type="button" class="btn--mini-save" id="btnSaveFalKey">저장</button>
             <span id="wfFalKeyStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
           </div>
+          <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center">
+            <label class="label" for="wf-openai-api-key" style="margin:0; font-size:0.85rem">OpenAI API 키 <span class="hint" style="font-weight:400">(GPT-Image용 · 선택)</span></label>
+            <input
+              type="password"
+              id="wf-openai-api-key"
+              autocomplete="off"
+              placeholder="sk-... · 비우면 fal.ai 풀 사용(더 비쌈)"
+              style="flex:1; min-width:200px; padding:0.3rem 0.5rem; font-size:0.85rem"
+            />
+            <button type="button" class="btn--mini-save" id="btnSaveOpenaiKey">저장</button>
+            <span id="wfOpenaiKeyStatus" class="wf-prefs-status" role="status" aria-live="polite"></span>
+          </div>
           <p class="hint" style="font-size:0.78rem; margin:0.4rem 0 0">
             나노바나나2는 위의 <code>GEMINI_API_KEY</code>를 그대로 씁니다. 나머지 4개 모델은 <strong>fal.ai</strong> 통합 API를 통해 호출되므로 fal.ai 키가 필요합니다.
-            (<a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a> 에서 발급)
+            (<a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a> 에서 발급).
+            <strong>GPT-Image</strong>는 OpenAI 키를 같이 넣으면 BYOK 경로로 본인 OpenAI 잔액에서 차감(저렴), 비우면 fal.ai 풀에서 차감(비쌈)됩니다.
           </p>
         </fieldset>
 
@@ -5227,9 +5240,13 @@
         }
 
         var LS_WF_FAL_KEY = 'grok_studio_window_fix_fal_key_v1';
+        var LS_WF_OPENAI_KEY = 'grok_studio_window_fix_openai_key_v1';
         var LS_WF_MODEL = 'grok_studio_window_fix_model_v1';
         function getFalKey() {
           return (localStorage.getItem(LS_WF_FAL_KEY) || '').trim();
+        }
+        function getOpenaiKey() {
+          return (localStorage.getItem(LS_WF_OPENAI_KEY) || '').trim();
         }
         function getSelectedWfModel() {
           var nodes = document.querySelectorAll('input[name="wfModel"]');
@@ -5667,6 +5684,10 @@
             };
             var fk2 = getFalKey();
             if (fk2) body.fal_api_key = fk2;
+            if (selModel === 'gpt-image') {
+              var ok = getOpenaiKey();
+              if (ok) body.openai_api_key = ok;
+            }
           }
 
           fetch(endpoint, {
@@ -6178,6 +6199,33 @@
                 }
               } catch (e) {
                 if (falStatusEl) falStatusEl.textContent = '저장 실패: ' + (e.message || String(e));
+              }
+            });
+          }
+
+          var openaiKeyEl = document.getElementById('wf-openai-api-key');
+          var btnSaveOpenaiKey = document.getElementById('btnSaveOpenaiKey');
+          var openaiStatusEl = document.getElementById('wfOpenaiKeyStatus');
+          var openaiStatusTimer = null;
+          if (openaiKeyEl) {
+            try {
+              var savedOk = localStorage.getItem(LS_WF_OPENAI_KEY);
+              if (savedOk) openaiKeyEl.value = savedOk;
+            } catch (e) {}
+          }
+          if (btnSaveOpenaiKey && openaiKeyEl) {
+            btnSaveOpenaiKey.addEventListener('click', function () {
+              try {
+                var v = String(openaiKeyEl.value || '').trim();
+                if (v) localStorage.setItem(LS_WF_OPENAI_KEY, v);
+                else localStorage.removeItem(LS_WF_OPENAI_KEY);
+                if (openaiStatusEl) {
+                  openaiStatusEl.textContent = v ? '저장되었습니다.' : '키를 비웠습니다.';
+                  if (openaiStatusTimer) clearTimeout(openaiStatusTimer);
+                  openaiStatusTimer = setTimeout(function () { if (openaiStatusEl) openaiStatusEl.textContent = ''; }, 3000);
+                }
+              } catch (e) {
+                if (openaiStatusEl) openaiStatusEl.textContent = '저장 실패: ' + (e.message || String(e));
               }
             });
           }

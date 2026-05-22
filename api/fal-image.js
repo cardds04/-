@@ -107,7 +107,7 @@ async function uploadDataUriToFal(dataUri, apiKey) {
   return fileUrl;
 }
 
-function buildModelRequest(modelKey, prompt, refUrls, aspectRatio) {
+function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
   const ar = aspectRatio && aspectRatio.toLowerCase() !== "auto" ? aspectRatio : null;
 
   switch (modelKey) {
@@ -154,18 +154,23 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio) {
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
         },
       };
-    case "gpt-image":
+    case "gpt-image": {
+      // OpenAI 키가 있으면 BYOK 경로(더 저렴), 없으면 fal.ai 풀 경로 사용.
+      const useByok = !!(openaiKey && openaiKey.length > 0);
+      const base = refUrls.length
+        ? "fal-ai/gpt-image-1/edit-image"
+        : "fal-ai/gpt-image-1/text-to-image";
       return {
-        path: refUrls.length
-          ? "fal-ai/gpt-image-1/edit-image/byok"
-          : "fal-ai/gpt-image-1/text-to-image/byok",
+        path: useByok ? `${base}/byok` : base,
         input: {
           prompt,
           ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
           quality: "high",
           output_format: "jpeg",
+          ...(useByok ? { openai_api_key: openaiKey } : {}),
         },
       };
+    }
     default:
       throw new Error("지원하지 않는 model입니다: " + modelKey);
   }
@@ -319,7 +324,9 @@ module.exports = async (req, res) => {
     }
 
     const aspect = String(body.aspect_ratio || "").trim();
-    const { path, input } = buildModelRequest(modelKey, prompt, refUrls, aspect);
+    const openaiKey =
+      typeof body.openai_api_key === "string" ? body.openai_api_key.trim() : "";
+    const { path, input } = buildModelRequest(modelKey, prompt, refUrls, aspect, openaiKey);
 
     const result = await submitAndWait(path, input, apiKey);
     const imgUrl = extractImageUrl(result);
