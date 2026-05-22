@@ -129,8 +129,8 @@ module.exports = async (req, res) => {
     }
 
     // 사용자가 본문에서 model_id 를 지정하면 허용 목록 안에서 사용. 없으면 환경변수 또는 기본값.
+    // 폐기된 preview ID는 빠짐 (gemini-2.5-flash-image-preview 는 2026-01-15 종료)
     const ALLOWED_GEMINI_IMAGE_MODELS = new Set([
-      "gemini-2.5-flash-image-preview",
       "gemini-2.5-flash-image",
       "gemini-3.1-flash-image-preview",
       "gemini-3-pro-image-preview",
