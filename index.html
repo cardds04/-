@@ -6675,6 +6675,11 @@
       let editingPhotographerName = null;
       let editingIndex = null;
       let editingDateIndex = null;
+      // 마지막 render 가 반영한 편집 인덱스/이름들 — 자동 백그라운드 render 가 인풋 폼을
+      // 통째 재생성하는 문제 방지용. 편집 상태가 바뀌었을 때만 render 통과.
+      let lastRenderedEditingIndex = null;
+      let lastRenderedEditingCompanyIndex = null;
+      let lastRenderedEditingPaymentIndex = null;
       let quickPhotographerPickerIndex = null;
       let currentPaymentFilter = "unpaid";
       let paymentCompanyKeyword = "";
@@ -13817,10 +13822,14 @@ ${folderBtn}
       }
 
       function renderCompanies() {
-        // 회사 인라인 편집 중이면 re-render skip — 입력값 보호.
-        if (editingCompanyIndex !== null && editingCompanyIndex !== undefined) {
+        // 인라인 편집 중이면 background re-render 차단. 편집 상태가 바뀐 직후엔 통과.
+        if (
+          editingCompanyIndex !== null && editingCompanyIndex !== undefined &&
+          editingCompanyIndex === lastRenderedEditingCompanyIndex
+        ) {
           return;
         }
+        lastRenderedEditingCompanyIndex = editingCompanyIndex;
         const uniqueCompanyNames = [...new Set(companies.map((company) => normalizeCompanyName(company?.name)).filter(Boolean))];
         if (companyAutocompleteListEl) {
           companyAutocompleteListEl.innerHTML = uniqueCompanyNames
@@ -15418,10 +15427,14 @@ ${folderBtn}
       }
 
       function renderPaymentList() {
-        // 입금 인라인 편집 중이면 re-render skip — 입력값 보호.
-        if (editingPaymentIndex !== null && editingPaymentIndex !== undefined) {
+        // 인라인 편집 중이면 background re-render 차단. 편집 상태가 바뀐 직후엔 통과.
+        if (
+          editingPaymentIndex !== null && editingPaymentIndex !== undefined &&
+          editingPaymentIndex === lastRenderedEditingPaymentIndex
+        ) {
           return;
         }
+        lastRenderedEditingPaymentIndex = editingPaymentIndex;
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
@@ -18090,13 +18103,16 @@ ${folderBtn}
       }
 
       function renderList() {
-        // 인라인 편집 중이면 re-render 차단 — 사용자가 입력하던 날짜/메모/평수 등이
-        // 자주 발생하는 background pull/storage event 로 인해 폼이 통째 재생성되며
-        // 입력값이 사라지던 문제 방지. (저장/취소 버튼 누르면 editingIndex 가 null 로
-        // 바뀌고 그때 다시 정상 render 가 일어남.)
-        if (editingIndex !== null && editingIndex !== undefined) {
+        // 인라인 편집 중이면 background re-render 차단 — 사용자가 입력하던 값이
+        // 통째 재생성되며 사라지던 문제 방지.
+        // 단, 편집 상태가 바뀐 직후엔 반드시 render 해야 폼이 그려짐(수정 버튼 동작).
+        if (
+          editingIndex !== null && editingIndex !== undefined &&
+          editingIndex === lastRenderedEditingIndex
+        ) {
           return;
         }
+        lastRenderedEditingIndex = editingIndex;
         if (syncScheduleRowsCompanyFromAdminCatalog()) {
           persistSchedulesAfterCompanyCatalogSync();
         }
