@@ -2074,11 +2074,45 @@
 
         <fieldset class="wf-model-picker" id="wfModelPicker" style="border:1px solid var(--line); border-radius:8px; padding:0.65rem 0.85rem; margin:0.5rem 0 0.65rem; background:#fafaf9;">
           <legend style="font-weight:600; padding:0 0.4rem; font-size:0.9rem">생성 모델 선택</legend>
-          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center">
+          <div style="font-size:0.78rem; color:#6b7280; margin-bottom:0.3rem">
+            <strong>Gemini (Google 직접 · 키 1개로 동작)</strong>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center; margin-bottom:0.5rem">
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-1-gemini" />
+              <span><strong>나노바나나1</strong> <span class="hint" style="font-size:0.78rem">(Gemini 2.5 Flash Image · 가장 저렴 ~55원/장)</span></span>
+            </label>
             <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
               <input type="radio" name="wfModel" value="nano-banana-2-gemini" checked />
-              <span><strong>나노바나나2</strong> <span class="hint" style="font-size:0.78rem">(Gemini 직접·기본)</span></span>
+              <span><strong>나노바나나2</strong> <span class="hint" style="font-size:0.78rem">(Gemini 3.1 Flash Image · 기본 · 2K ~141원/장)</span></span>
             </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-pro-gemini" />
+              <span><strong>나노바나나 Pro</strong> <span class="hint" style="font-size:0.78rem">(Gemini 3 Pro Image · 최고급 · 2K ~188원/장)</span></span>
+            </label>
+          </div>
+          <div style="font-size:0.78rem; color:#6b7280; margin-bottom:0.3rem; padding-top:0.4rem; border-top:1px dashed #e5e7eb">
+            <strong>Gemini · fal.ai 경유</strong> <span class="hint" style="font-weight:400">(같은 모델 · 가격 비교용 · fal.ai 키 필요)</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center; margin-bottom:0.5rem">
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-1-fal" />
+              <span><strong>나노바나나1</strong> <span class="hint" style="font-size:0.78rem">(fal.ai · ~55원/장 · Google과 동일)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-2-fal" />
+              <span><strong>나노바나나2</strong> <span class="hint" style="font-size:0.78rem">(fal.ai · 2K ~168원/장)</span></span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
+              <input type="radio" name="wfModel" value="nano-banana-pro-fal" />
+              <span><strong>나노바나나 Pro</strong> <span class="hint" style="font-size:0.78rem">(fal.ai · ~210원/장)</span></span>
+            </label>
+          </div>
+
+          <div style="font-size:0.78rem; color:#6b7280; margin-bottom:0.3rem; padding-top:0.4rem; border-top:1px dashed #e5e7eb">
+            <strong>외부 모델 (fal.ai 키 필요)</strong>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; align-items:center">
             <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer">
               <input type="radio" name="wfModel" value="gpt-image" />
               <span><strong>GPT-Image</strong> <span class="hint" style="font-size:0.78rem">(ChatGPT 최신·fal.ai)</span></span>
@@ -5691,11 +5725,27 @@
           }
 
           var selModel = getSelectedWfModel();
-          var useGeminiDirect = (selModel === 'nano-banana-2-gemini');
+          // Google 직접 라우팅 매핑: 라디오 value → Gemini 모델 ID
+          var GEMINI_DIRECT_MAP = {
+            'nano-banana-1-gemini': 'gemini-2.5-flash-image-preview',
+            'nano-banana-2-gemini': 'gemini-3.1-flash-image-preview',
+            'nano-banana-pro-gemini': 'gemini-3-pro-image-preview',
+          };
+          // fal.ai 경유 라우팅 매핑: 라디오 value → fal-image.js의 model 값
+          var FAL_MODEL_MAP = {
+            'nano-banana-1-fal': 'nano-banana-1',
+            'nano-banana-2-fal': 'nano-banana-2',
+            'nano-banana-pro-fal': 'nano-banana-pro',
+            'gpt-image': 'gpt-image',
+            'imagen-4-ultra': 'imagen-4-ultra',
+            'flux-pro-ultra': 'flux-pro-ultra',
+            'recraft-v3': 'recraft-v3',
+          };
+          var useGeminiDirect = !!GEMINI_DIRECT_MAP[selModel];
           if (!useGeminiDirect) {
             var fk = getFalKey();
             if (!fk) {
-              showWfError('fal.ai API 키가 필요합니다. 모델 선택 패널에서 키를 입력·저장해 주세요. (나노바나나2(Gemini)는 키 없이도 가능)');
+              showWfError('fal.ai API 키가 필요합니다. 모델 선택 패널에서 키를 입력·저장해 주세요. (Gemini 직접 옵션은 fal.ai 키 없이도 가능)');
               return;
             }
           }
@@ -5703,7 +5753,12 @@
           item.status = 'generating';
           item.el.className = 'wf-item wf-item--generating';
           var modelLabel = ({
-            'nano-banana-2-gemini': '나노바나나2(Gemini)',
+            'nano-banana-1-gemini': '나노바나나1 (Google 직접)',
+            'nano-banana-2-gemini': '나노바나나2 (Google 직접)',
+            'nano-banana-pro-gemini': '나노바나나 Pro (Google 직접)',
+            'nano-banana-1-fal': '나노바나나1 (fal.ai)',
+            'nano-banana-2-fal': '나노바나나2 (fal.ai)',
+            'nano-banana-pro-fal': '나노바나나 Pro (fal.ai)',
             'gpt-image': 'GPT-Image',
             'imagen-4-ultra': 'Imagen 4 Ultra',
             'flux-pro-ultra': 'Flux 1.1 Pro Ultra',
@@ -5726,13 +5781,18 @@
           var endpoint, body;
           if (useGeminiDirect) {
             endpoint = '/api/gemini-image';
-            body = { prompt: promptForApi, resolution: '2k', images: [refDataUrl] };
+            body = {
+              prompt: promptForApi,
+              resolution: '2k',
+              images: [refDataUrl],
+              model_id: GEMINI_DIRECT_MAP[selModel],
+            };
             var gk = getGeminiKey();
             if (gk) body.gemini_api_key = gk;
           } else {
             endpoint = '/api/fal-image';
             body = {
-              model: selModel,
+              model: FAL_MODEL_MAP[selModel] || selModel,
               prompt: promptForApi,
               images: [refDataUrl],
             };

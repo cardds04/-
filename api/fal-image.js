@@ -142,11 +142,35 @@ function buildModelRequest(modelKey, prompt, refUrls, aspectRatio, openaiKey) {
           output_format: "jpeg",
         },
       };
+    case "nano-banana-1":
+      return {
+        path: refUrls.length
+          ? "fal-ai/gemini-25-flash-image/edit"
+          : "fal-ai/gemini-25-flash-image",
+        input: {
+          prompt,
+          num_images: 1,
+          output_format: "jpeg",
+          ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+        },
+      };
     case "nano-banana-2":
       return {
         path: refUrls.length
-          ? "fal-ai/gemini-3-pro-image/edit"
-          : "fal-ai/gemini-3-pro-image",
+          ? "fal-ai/nano-banana-2/edit"
+          : "fal-ai/nano-banana-2",
+        input: {
+          prompt,
+          num_images: 1,
+          output_format: "jpeg",
+          ...(refUrls.length ? { image_urls: refUrls.slice(0, 4) } : {}),
+        },
+      };
+    case "nano-banana-pro":
+      return {
+        path: refUrls.length
+          ? "fal-ai/gemini-3-pro-image-preview/edit"
+          : "fal-ai/gemini-3-pro-image-preview",
         input: {
           prompt,
           num_images: 1,
@@ -306,7 +330,15 @@ module.exports = async (req, res) => {
     }
 
     const modelKey = String(body.model || "").trim();
-    const SUPPORTED = ["flux-pro-ultra", "recraft-v3", "imagen-4-ultra", "nano-banana-2", "gpt-image"];
+    const SUPPORTED = [
+      "flux-pro-ultra",
+      "recraft-v3",
+      "imagen-4-ultra",
+      "nano-banana-1",
+      "nano-banana-2",
+      "nano-banana-pro",
+      "gpt-image",
+    ];
     if (!SUPPORTED.includes(modelKey)) {
       res.status(400).json({
         ok: false,

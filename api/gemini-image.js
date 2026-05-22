@@ -128,8 +128,19 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // 사용자가 본문에서 model_id 를 지정하면 허용 목록 안에서 사용. 없으면 환경변수 또는 기본값.
+    const ALLOWED_GEMINI_IMAGE_MODELS = new Set([
+      "gemini-2.5-flash-image-preview",
+      "gemini-2.5-flash-image",
+      "gemini-3.1-flash-image-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-3.0-pro-image-preview",
+    ]);
+    const requestedModel = typeof body.model_id === "string" ? body.model_id.trim() : "";
     const model =
-      (process.env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
+      (requestedModel && ALLOWED_GEMINI_IMAGE_MODELS.has(requestedModel))
+        ? requestedModel
+        : ((process.env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     const parts = [{ text: prompt }];
