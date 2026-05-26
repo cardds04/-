@@ -8546,6 +8546,11 @@
           remoteByName.set(key, row);
         });
 
+        // ⚠️ 자동 UPDATE/INSERT 모두 비활성화 — 회사 정보의 모든 쓰기는 「업체정보관리」 의
+        // 명시적 저장 form (persistCompanyDirectoryToSupabase) 으로만 처리. background sync 가
+        // 매 호출마다 모든 회사를 일제히 PATCH 하면서 stale local 데이터로 server 의 정상
+        // 데이터를 덮어쓰고(이음새↔이음디자인 swap 사고), 페이지 로딩까지 느리게 만들던 문제 차단.
+        // 신규 회사 등록·이름/전화/code 변경 모두 저장 form 으로 안내.
         const insertRows = [];
         const updateRows = [];
         const localNameSet = new Set();
@@ -8553,25 +8558,7 @@
           const key = normalizeCompanyName(row?.name).toLowerCase();
           if (!key) return;
           localNameSet.add(key);
-          const remote = remoteByName.get(key);
-          const resolvedCode = normalizeCompanyCode(row?.code) || normalizeCompanyCode(remote?.code) || buildAutoCompanyCode(row?.name);
-          if (!remote) {
-            // ⚠️ 자동 INSERT 비활성화 — 신규 회사는 「업체정보관리」 의 명시적 저장 form
-            // (saveCompanyDirectoryAdminFormToSupabase) 로만 등록. background sync 가
-            // login_id 없는 sparse row 를 만들어 기존 row 와 충돌하거나 사용자 로그인 정보가
-            // 사라지던 사고 방지.
-            return;
-          }
-          const samePhone = String(remote.phone || "").trim() === String(row.phone === "-" ? "" : row.phone).trim();
-          const sameCode = String(remote.code || "").trim() === String(resolvedCode || "").trim();
-          if (!samePhone || !sameCode || String(remote.name || "").trim() !== row.name) {
-            updateRows.push({
-              id: remote.id,
-              name: row.name,
-              phone: row.phone === "-" ? "" : row.phone,
-              code: resolvedCode
-            });
-          }
+          // 자동 UPDATE 도 안 함 — 차이가 있어도 form save 가 다음에 그 행을 PATCH 할 때 따라옴.
         });
 
         // ⚠️ 자동 삭제 비활성화 — local 에 임시로 빠진 회사(pull 미완료 등) 가 server 에서
@@ -8644,9 +8631,17 @@
         }
       }
 
+      /** 짧은 시간 내 중복 호출 방지 — 한 사용자 액션당 한 번만 sync 처리. */
+      let companySyncLastRunAt = 0;
+      const COMPANY_SYNC_THROTTLE_MS = 30000; // 30초 throttle
       function queueAdminCompaniesSync() {
         if (!USE_SUPABASE_SYNC) return;
         markDbMutationActivity("company_mutation");
+        // 자동 UPDATE/INSERT 비활성 상태에선 의미 없는 GET → DELETE-cleanup 만 함.
+        // 30초 안에 다시 호출되면 skip.
+        if (Date.now() - companySyncLastRunAt < COMPANY_SYNC_THROTTLE_MS) {
+          return;
+        }
         companySyncQueued = true;
         if (companySyncPromise) return;
         companySyncPromise = (async () => {
@@ -8662,6 +8657,7 @@
             } catch (_) {}
             await syncAdminCompaniesToSupabase(companies);
           }
+          companySyncLastRunAt = Date.now();
           setSyncStatus(`업체 서버 반영 ${formatSyncTime()}`, "ok");
         })()
           .catch((error) => {
@@ -10403,7 +10399,8 @@ ${folderBtn}
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(rows));
         // defaultMemo 등 로컬 변경이 원격 상태에 의해 덮어쓰이지 않도록 pending 표시
         if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
-        queueAdminCompaniesSync();
+        // ⚠️ queueAdminCompaniesSync 제거 — localStorage 로드 직후 sync 를 발화할 필요 없음.
+        // 자동 UPDATE/INSERT 가 비활성화돼 이 호출은 이제 무의미한 network 부하만 만듦.
       }
 
       function loadAdminSchedulesFromStorage() {
