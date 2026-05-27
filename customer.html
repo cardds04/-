@@ -1861,7 +1861,7 @@
               password: "",
               company: String(row?.company_name || row?.name || "").trim(),
               companyCode: String(row?.code || row?.company_code || "").trim(),
-              phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
+              phone: String(row?.customer_phone ?? "").trim(),
               createdAt: String(row?.created_at || "").trim(),
               siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType),
               companyDriveFolderUrl
@@ -2019,7 +2019,6 @@
             password: secretPw,
             name: normalize(String(item?.company ?? "")),
             code: normalize(String(item?.companyCode ?? "")),
-            phone: normalize(String(item?.phone ?? "")),
             customer_phone: normalize(String(item?.phone ?? "")),
             site_type: normalizeCustomerSiteType(item?.siteType)
           }))
@@ -2072,11 +2071,12 @@
         if (!rows.length) return;
         const existing = await fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name`);
         const existingSet = new Set((Array.isArray(existing) ? existing : []).map((row) => String(row?.name || "").trim().toLowerCase()).filter(Boolean));
+        // 단일 컬럼 통일: customer_phone 만 INSERT.
         const insertRows = rows
           .filter((row) => !existingSet.has(row.name.toLowerCase()))
           .map((row) => ({
             name: row.name,
-            phone: row.phone,
+            customer_phone: row.phone,
             code: row.code || `AUTO-${Date.now().toString(36).toUpperCase()}`
           }));
         if (!insertRows.length) return;
@@ -2417,7 +2417,7 @@
           password: "",
           company: normalize(String(row?.company_name ?? row?.name ?? "")),
           companyCode: normalize(String(row?.code ?? row?.company_code ?? "")),
-          phone: normalize(String(row?.customer_phone ?? row?.phone ?? "")),
+          phone: normalize(String(row?.customer_phone ?? "")),
           createdAt: normalize(String(row?.created_at ?? "")),
           siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType),
           companyDriveFolderUrl

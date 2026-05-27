@@ -8433,10 +8433,8 @@
         return (Array.isArray(rows) ? rows : [])
           .map((item) => {
             const siteType = normalizeCompanySiteTypeField(item?.site_type ?? item?.siteType);
-            // 업체정보관리 탭과 동일하게 customer_phone 우선, fallback phone.
-            // 일부 업체는 phone="-" 이고 실제 번호가 customer_phone 에 저장돼 있음.
-            const phoneRaw = String(item?.customer_phone || item?.customerPhone || "").trim()
-              || String(item?.phone || "").trim();
+            // 단일 컬럼 통일: customer_phone 만 사용. phone 컬럼 fallback 제거.
+            const phoneRaw = String(item?.customer_phone || item?.customerPhone || "").trim();
             const row = {
               dbId: String(item?.dbId ?? item?.id ?? "").trim(),
               name: normalizeCompanyName(item?.name),
@@ -8782,7 +8780,7 @@
             companyCode: normalizeCompanyCode(row?.code || row?.companyCode),
             /** DB 행 pk (업체 디렉터리 id). 로그인 아이디와 혼동되면 안 됨 */
             companyId: String(row?.company_id || row?.companyId || row?.id || "").trim(),
-            phone: String(row?.customer_phone ?? row?.phone ?? "").trim(),
+            phone: String(row?.customer_phone ?? "").trim(),
             createdAt: String(row?.created_at || row?.createdAt || "").trim(),
             siteType: normalizeCustomerSiteType(row?.site_type || row?.siteType)
           }))
@@ -9107,9 +9105,9 @@
         const siteType = normalizeCustomerSiteTypeForStorage(siteRaw || "inlog");
         const normalizedCodeUsed = normalizeCompanyCode(codeTrim);
         const compositionSnapPreset = normalize(String(compositionPreset || "").trim()) || "사진만";
+        // 단일 컬럼 통일: customer_phone 만 사용. 기존 phone 컬럼은 더 이상 쓰지 않음.
         const basePayload = {
           name: nm,
-          phone: telRaw,
           customer_phone: telRaw,
           code: normalizedCodeUsed,
           site_type: siteType,
@@ -9434,7 +9432,8 @@
         if (!companyDirectoryEditRowIdEl || !row) return;
         companyDirectoryEditRowIdEl.value = String(row?.id ?? "").trim();
         if (companyDirectoryNameInputEl) companyDirectoryNameInputEl.value = String(row?.name ?? "").trim();
-        const tel = String(row?.customer_phone ?? row?.phone ?? "").trim();
+        // 단일 컬럼 통일: customer_phone 만 읽음.
+        const tel = String(row?.customer_phone ?? "").trim();
         if (companyDirectoryPhoneInputEl) companyDirectoryPhoneInputEl.value = tel;
         if (companyDirectoryLoginInputEl) companyDirectoryLoginInputEl.value = String(row?.login_id ?? "").trim();
         if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = String(row?.password ?? "").trim();
@@ -9521,7 +9520,8 @@
                     const nm = normalize(String(r?.name ?? ""));
                     const lid = normalize(String(r?.login_id ?? ""));
                     const pwd = normalize(String(r?.password ?? ""));
-                    const tel = normalize(String(r?.customer_phone ?? r?.phone ?? ""));
+                    // 단일 컬럼 통일: customer_phone 만 읽음.
+                    const tel = normalize(String(r?.customer_phone ?? ""));
                     const code = normalize(String(r?.code ?? ""));
                     const naverLink = String(r?.naver_works_company_share_link || "").trim();
                     const siteLabel = getCompanyDirectoryAdminSiteCellLabel(r?.site_type);
@@ -17362,9 +17362,8 @@ ${folderBtn}
               (c) => normalizeCompanyName(c?.name).toLowerCase() === target
             );
             if (!matched) return "";
-            const cust = String(matched?.customer_phone || "").trim();
-            const main = String(matched?.phone || "").trim();
-            return cust || (main && main !== "-" ? main : "");
+            // 단일 컬럼 통일: customer_phone 만 사용.
+            return String(matched?.customer_phone || "").trim();
           })();
           // catalog phone 이 invalid 형식(예: "12345", "----") 이면 schedule 의 customerPhone
           // 으로 fallback. 예전엔 잘못된 catalog phone 이 truthy 라서 || fallback 이 동작하지
