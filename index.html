@@ -15829,6 +15829,10 @@ ${folderBtn}
               }</td>
               <td>
                 ${
+                  source === "active" && !isEditing
+                    ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button> `
+                    : ""
+                }${
                   source === "hold"
                     ? `<button class="btn-sm" type="button" data-action="cancelHoldSchedule" data-index="${index}">스케줄취소</button>
                        <button class="btn-sm primary" type="button" data-action="revertHoldToActive" data-index="${index}">되돌리기</button>`
@@ -19317,6 +19321,13 @@ ${folderBtn}
 
         if (action === "editPaymentRow") {
           editPaymentFromTable(index);
+          return;
+        }
+        if (action === "openScheduleFromPayment") {
+          // 입금관리 행 → 해당 촬영일·업체 스케줄 모달 열기 (스케줄 관리 탭의 일정 상세).
+          if (typeof openScheduleRowFromDashboard === "function") {
+            openScheduleRowFromDashboard(index);
+          }
           return;
         }
         if (action === "setPayerBusinessName") {
