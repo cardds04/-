@@ -5746,6 +5746,7 @@
                 // 환경이 많아, 그것을 그대로 incoming 으로 쓰면 직전 company_directory pull 로
                 // 채워진 customer_phone 이 사라지고 화면에 "-" 로 보이는 깜빡임 버그가 났음.
                 const localPhoneMap = new Map();
+                const localFolderUrlMap = new Map();
                 local.forEach((c) => {
                   const nk = normalizeCompanyName(c?.name).toLowerCase();
                   if (!nk) return;
@@ -5757,6 +5758,12 @@
                   const localP = String(c?.phone || "").trim();
                   const candidate = localCp || (localP && localP !== "-" ? localP : "");
                   if (candidate) localPhoneMap.set(nk, candidate);
+                  // 폴더 URL 도 로컬에서 보존 — 옛 snapshot 에 share_link 가 없는 경우 wipe 방지.
+                  const localShare = String(c?.naver_works_company_share_link || "").trim();
+                  const localFid = String(c?.naver_works_company_folder_id || "").trim();
+                  if (localShare || localFid) {
+                    localFolderUrlMap.set(nk, { share: localShare, fid: localFid });
+                  }
                   if (
                     normalizeCompanySiteTypeField(c?.siteType) === "shopick" ||
                     c.shopickPhoto !== undefined ||
@@ -5792,6 +5799,14 @@
                     c.shopickPhoto = f.photo;
                     c.shopickVideo = f.video;
                     c.shopickBlog = f.blog;
+                  }
+                  // 폴더 URL 도 incoming 에 없을 때만 로컬에서 복원.
+                  const incomingShare = String(c?.naver_works_company_share_link || "").trim();
+                  const incomingFid = String(c?.naver_works_company_folder_id || "").trim();
+                  if (!incomingShare && !incomingFid && localFolderUrlMap.has(k)) {
+                    const u = localFolderUrlMap.get(k);
+                    if (u.share) c.naver_works_company_share_link = u.share;
+                    if (u.fid) c.naver_works_company_folder_id = u.fid;
                   }
                 });
                 return JSON.stringify(incoming);
@@ -8469,7 +8484,14 @@
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim(),
               defaultComposition: String(item?.defaultComposition || "").trim(),
-              siteType
+              siteType,
+              // 「폴더」 클릭 즉시 열기용 — 폴더 URL 을 in-memory 캐시에 보관.
+              naver_works_company_share_link: String(
+                item?.naver_works_company_share_link || ""
+              ).trim(),
+              naver_works_company_folder_id: String(
+                item?.naver_works_company_folder_id || ""
+              ).trim()
             };
             if (
               siteType === "shopick" ||
@@ -8522,8 +8544,10 @@
         // customer_phone 도 포함 — 업체정보관리 탭과 동일하게 customer_phone 우선,
         // fallback phone 순으로 normalizeCompanyRows 에서 합쳐 사용. 일부 업체는
         // phone 컬럼이 "-" 이고 실제 번호는 customer_phone 에 저장돼 있어 누락 방지.
+        // naver_works_company_share_link 도 함께 받아서 「폴더」 버튼 클릭 시 즉시 열도록
+        // 로컬 캐시에 저장한다 (per-click 네트워크 fetch 제거 → 다중 클릭 시 창 여러 개 뜨던 문제 해결).
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -10369,6 +10393,11 @@ ${folderBtn}
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim()
             };
+            // 폴더 URL — 「폴더」 즉시 열기 위해 localStorage 에도 보존.
+            const naverShare = String(item?.naver_works_company_share_link || "").trim();
+            const naverFid = String(item?.naver_works_company_folder_id || "").trim();
+            if (naverShare) row.naver_works_company_share_link = naverShare;
+            if (naverFid) row.naver_works_company_folder_id = naverFid;
             const dc = String(item?.defaultComposition || "").trim();
             if (dc) row.defaultComposition = dc;
             const st = normalizeCompanySiteTypeField(item?.siteType);
@@ -17134,6 +17163,34 @@ ${folderBtn}
         return /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= DASH_SITE_TREATED_DONE_THROUGH_YMD;
       }
 
+      /** 「폴더」 버튼 즉시 열기 위해 in-memory companies 캐시에서 폴더 URL 조회.
+       *  per-click 네트워크 fetch 가 없어 다중 클릭으로 창이 여러 개 뜨던 회귀를 차단한다. */
+      function getCompanyDeliveryFolderUrlFromLocal(companyName, companyCode) {
+        const name = normalizeCompanyName(companyName);
+        const code = normalizeCompanyCode(companyCode);
+        if ((!name || name === "-") && !code) return "";
+        const targetName = name.toLowerCase();
+        const targetCode = code.toLowerCase();
+        // 1순위: 같은 code 로 매칭 (이름 표기 불일치도 흡수).
+        let matched = targetCode
+          ? (companies || []).find(
+              (c) => normalizeCompanyCode(c?.code).toLowerCase() === targetCode
+            )
+          : null;
+        // 2순위: 이름 매칭.
+        if (!matched && targetName) {
+          matched = (companies || []).find(
+            (c) => normalizeCompanyName(c?.name).toLowerCase() === targetName
+          );
+        }
+        if (!matched) return "";
+        const share = String(matched?.naver_works_company_share_link || "").trim();
+        if (share) return share;
+        const fid = String(matched?.naver_works_company_folder_id || "").trim();
+        if (fid) return `https://drive.worksmobile.com/m/folder/${fid}`;
+        return "";
+      }
+
       async function fetchCompanyDeliveryFolderUrlFromDirectory(companyName, companyCode) {
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return "";
         const name = normalizeCompanyName(companyName);
@@ -17165,11 +17222,18 @@ ${folderBtn}
         return "";
       }
 
-      const SHOOT_FOLDER_NAME_SUFFIX_MAX = 15;
+      // 폴더명 정책: 「MMDD + 한글 위주 6글자 이하 suffix」.
+      // 옛 규칙(15자, 숫자 포함) 은 가독성 떨어지는 폴더명(예: "06011271", "0601미사강변효성해링턴플레이스엔에이")
+      // 을 양산해 사용자 클레임. 이제는 ① 날짜 이외의 숫자 전면 금지 ② suffix 6글자 컷.
+      const SHOOT_FOLDER_NAME_SUFFIX_MAX = 6;
 
       function clampShootFolderSuffix(token) {
+        // 날짜를 제외한 모든 숫자 제거 (mmdd 는 호출 측에서 별도로 붙임).
+        // 파일/폴더에서 금지되는 특수문자도 제거.
         const t = String(token || "")
           .replace(/[\/\\:*?"<>|]/g, "")
+          .replace(/[\d]/g, "")
+          .replace(/\s+/g, "")
           .trim();
         if (!t) return "";
         return t.slice(0, SHOOT_FOLDER_NAME_SUFFIX_MAX);
@@ -17206,20 +17270,27 @@ ${folderBtn}
         return m ? m[1] + m[2] : "";
       }
 
-      /** 작가 화면과 동일 규칙: MMDD + 단지·주소 요약(이름 부분 최대 15자) */
+      /** 폴더명 규칙: MMDD + 단지·주소 요약(한글 6자 이하, 날짜 외 숫자·특수문자 제거).
+       *  옛 15자/숫자포함 규칙은 "06011271", "0601미사강변효성해링턴플레이스엔에이" 같은
+       *  지저분한 폴더명을 양산해 사용자 불만이 있었음. */
       function buildShootFolderNameForDashboard(dateYmd, rawPlace) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
-        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
+        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815"); // \uC7A5\uC18C\uBBF8\uC815
         if (!s) return mmdd + unknown;
+        // 1\uC21C\uC704: \uC544\uD30C\uD2B8 \uB2E8\uC9C0\uBA85. clampShootFolderSuffix \uAC00 \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790 \uC81C\uAC70 \uD6C4 6\uC790 \uCEF7.
+        // \uD6C4\uBCF4\uAC00 \uC22B\uC790\uB9CC \uC788\uB358 \uACBD\uC6B0 ""\uAC00 \uB418\uC5B4 \uB2E4\uC74C \uD6C4\uBCF4\uB85C fallback.
         const aptPart = apartmentFolderSuffixFromPlace(s);
-        if (aptPart) return mmdd + clampShootFolderSuffix(aptPart);
+        const aptClamped = aptPart ? clampShootFolderSuffix(aptPart) : "";
+        if (aptClamped) return mmdd + aptClamped;
+        // 2\uC21C\uC704: \uAD6C\u00B7\uB3D9 \uB77C\uBCA8 (\uC608: \uB9C8\uD3EC\uAD6C\uB9DD\uC6D0\uB3D9)
         const guDong = guDongLabelForShootFolderName(s);
-        if (guDong) return mmdd + clampShootFolderSuffix(guDong.replace(/[\/\\:*?"<>|]/g, ""));
-        const collapsed = s.replace(/\s+/g, "");
-        const tail = clampShootFolderSuffix(collapsed) || unknown;
-        return mmdd + tail;
+        const guDongClamped = guDong ? clampShootFolderSuffix(guDong) : "";
+        if (guDongClamped) return mmdd + guDongClamped;
+        // 3\uC21C\uC704: \uC8FC\uC18C \uC804\uCCB4\uC5D0\uC11C \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790 \uC81C\uAC70 \uD6C4 \uC55E 6\uC790
+        const tail = clampShootFolderSuffix(s);
+        return mmdd + (tail || unknown);
       }
 
       async function dashboardClipboardCopyShootFolderEncoded(encodedAttr) {
@@ -18783,26 +18854,24 @@ ${folderBtn}
         if (deliveryFolderBtn) {
           const comp = String(deliveryFolderBtn.dataset.company || "").trim();
           const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
-          const encodedFolder = deliveryFolderBtn.getAttribute("data-folder-name") || "";
+          // 즉시 열기: 1순위 로컬 companies 캐시 (in-memory, 0ms). 폴더 생성은 작가가 하므로
+          // 클립보드 복사 단계는 제거해 클릭 반응 지연을 없앤다. 다중 클릭으로 창이
+          // 여러 개 열리던 회귀도 자연스럽게 해결.
+          const cached = getCompanyDeliveryFolderUrlFromLocal(comp, code);
+          if (cached) {
+            window.open(cached, "_blank", "noopener,noreferrer");
+            return;
+          }
+          // 캐시 미스 — 최초 1회만 supabase 조회 후 열기.
           void (async () => {
-            let copyFailed = false;
-            const encTrim = encodedFolder.trim();
-            if (encTrim) {
-              const cr = await dashboardClipboardCopyShootFolderEncoded(encTrim);
-              if (!cr.ok && cr.reason === "error") copyFailed = true;
-            }
             const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
             if (!u) {
               alert(
-                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요." +
-                  (copyFailed ? "\n※ 폴더 이름 자동 복사에 실패했습니다. 필요하면 「복사」를 눌러 주세요." : "")
+                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
               );
               return;
             }
             window.open(u, "_blank", "noopener,noreferrer");
-            if (copyFailed) {
-              alert("납품 폴더를 새 탭에서 열었습니다. 폴더 이름 자동 복사에 실패했으면 「복사」 버튼을 이용해 주세요.");
-            }
           })();
           return;
         }
@@ -19087,6 +19156,12 @@ ${folderBtn}
           const code = String(btn.getAttribute("data-company-code") || "").trim();
           if (!comp) {
             alert("업체명을 확인할 수 없습니다.");
+            return;
+          }
+          // 즉시 열기 — 로컬 캐시 우선.
+          const cached = getCompanyDeliveryFolderUrlFromLocal(comp, code);
+          if (cached) {
+            window.open(cached, "_blank", "noopener,noreferrer");
             return;
           }
           btn.disabled = true;
@@ -20049,6 +20124,7 @@ ${folderBtn}
       });
       // 모달 안 카드의 「📁」 폴더 버튼 클릭 — scheduleSectionEl 의 동일 핸들러가 잡지 못해서
       // 별도로 처리. (모달은 scheduleSectionEl 외부 최상위에 위치)
+      // 즉시 열기: 로컬 companies 캐시 우선, 클립보드 복사 단계 제거.
       scheduleDetailModalEl?.addEventListener("click", (event) => {
         const deliveryFolderBtn = event.target.closest("button[data-action='openCompanyDeliveryFolder']");
         if (!deliveryFolderBtn) return;
@@ -20056,19 +20132,16 @@ ${folderBtn}
         event.stopPropagation();
         const comp = String(deliveryFolderBtn.dataset.company || "").trim();
         const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
-        const encodedFolder = deliveryFolderBtn.getAttribute("data-folder-name") || "";
+        const cached = getCompanyDeliveryFolderUrlFromLocal(comp, code);
+        if (cached) {
+          window.open(cached, "_blank", "noopener,noreferrer");
+          return;
+        }
         void (async () => {
-          let copyFailed = false;
-          const encTrim = encodedFolder.trim();
-          if (encTrim) {
-            const cr = await dashboardClipboardCopyShootFolderEncoded(encTrim);
-            if (!cr.ok && cr.reason === "error") copyFailed = true;
-          }
           const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
           if (!u) {
             alert(
-              "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요." +
-                (copyFailed ? "\n※ 폴더 이름 자동 복사에 실패했습니다." : "")
+              "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
             );
             return;
           }
