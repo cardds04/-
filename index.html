@@ -18463,8 +18463,35 @@ ${folderBtn}
               .join("")}
           </div>
         `;
+        // re-render 전에 <details> 가 열려있던 스케줄 id 들을 capture — innerHTML 교체로 사라지는
+        // 열림 상태 보존. 새 markup 적용 후 동일 id 의 <details> 를 다시 열어준다.
+        function captureOpenDetailScheduleIds(root) {
+          const ids = new Set();
+          if (!root) return ids;
+          root.querySelectorAll("[data-schedule-card='true']").forEach((card) => {
+            const sid = String(card.dataset.scheduleId || "").trim();
+            const details = card.querySelector("details.schedule-extra-detail");
+            if (sid && details && details.open) ids.add(sid);
+          });
+          return ids;
+        }
+        function restoreOpenDetailsByScheduleIds(root, openIds) {
+          if (!root || !openIds || openIds.size === 0) return;
+          root.querySelectorAll("[data-schedule-card='true']").forEach((card) => {
+            const sid = String(card.dataset.scheduleId || "").trim();
+            if (!sid || !openIds.has(sid)) return;
+            const details = card.querySelector("details.schedule-extra-detail");
+            if (details) details.open = true;
+          });
+        }
+        const prevOpenListIds = captureOpenDetailScheduleIds(listEl);
+        const prevOpenModalIds = captureOpenDetailScheduleIds(scheduleDetailListEl);
+
         listEl.innerHTML = listMarkup;
         if (scheduleDetailListEl) scheduleDetailListEl.innerHTML = listMarkup;
+
+        restoreOpenDetailsByScheduleIds(listEl, prevOpenListIds);
+        restoreOpenDetailsByScheduleIds(scheduleDetailListEl, prevOpenModalIds);
 
         // 인라인 편집 폼의 input/select 값들이 background re-render 로 reset 되는 문제 방지.
         // change 시 즉시 data[index] 의 해당 필드를 업데이트 → 다음 render 가 user 선택값을
