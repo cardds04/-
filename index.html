@@ -17581,6 +17581,39 @@ ${folderBtn}
           })
           .join("")}</div>`;
 
+        // 직전에 열려 있던 deliveryDayDetailPanel 이 있으면, 재렌더 결과 HTML 안에
+        // 이미 「열린 상태 + 내용」으로 직접 박아 넣는다. 그래야 background re-render 시
+        // hidden→visible 토글로 인한 깜빡임이 없어진다. (setTimeout click 우회법 폐기)
+        let initialDayDetailHtml = "";
+        let initialDayDetailHidden = true;
+        try {
+          const key = String(dashboardDayDetailOpenKey || "").trim();
+          if (key && key.startsWith("delivery|")) {
+            const day = key.slice("delivery|".length);
+            if (day && dayEntries[day]) {
+              const rows = Array.isArray(dayEntries[day]) ? dayEntries[day] : [];
+              if (rows.length) {
+                const lis = rows
+                  .map(
+                    (e) =>
+                      `<li>${escapeHtml(String(e.scheduleDateFmt || "-"))} · ${escapeHtml(String(e.company || "-"))} · ${escapeHtml(
+                        String(e.tag || "")
+                      )}</li>`
+                  )
+                  .join("");
+                initialDayDetailHtml = `<div class="writer-day-detail-head">${escapeHtml(
+                  formatYmdToMdSlash(day)
+                )} · 납품 이벤트</div><ul class="writer-day-detail-list">${lis}</ul>`;
+              } else {
+                initialDayDetailHtml = `<div class="writer-day-detail-head">${escapeHtml(
+                  formatYmdToMdSlash(day)
+                )} · 납품 이벤트</div><div class="helper" style="margin:0;">기록이 없습니다.</div>`;
+              }
+              initialDayDetailHidden = false;
+            }
+          }
+        } catch (_) {}
+
         todayWrap.innerHTML = `
           <div class="writer-today-block delivery-week-summary-block">
             <h4 style="margin:0 0 6px;font-size:0.95rem;">Drive 납품</h4>
@@ -17591,7 +17624,7 @@ ${folderBtn}
               <div class="writer-week-summary-title">최근 7일 일별 납품 (칸 클릭 시 상세)</div>
               ${weekGrid}
             </div>
-            <div id="deliveryDayDetailPanel" class="writer-day-detail-panel hidden"></div>
+            <div id="deliveryDayDetailPanel" class="writer-day-detail-panel${initialDayDetailHidden ? " hidden" : ""}">${initialDayDetailHtml}</div>
           </div>`;
 
         /** 클릭 시 상세가 붙도록 dataset 스냅샷 */
@@ -17600,8 +17633,10 @@ ${folderBtn}
           if (block) block.__deliveryDayEntries = dayEntries;
         } catch (_) {}
 
-        // 직전에 열려 있던 일별 상세 패널 복원 — background re-render 로 닫혀 보이던 문제 해결.
-        restoreDashboardDayDetailIfOpen();
+        // 위에서 inline 으로 박지 못한 경우(예: 작가별 패널) 만 restore 사용.
+        if (initialDayDetailHidden) {
+          restoreDashboardDayDetailIfOpen();
+        }
       }
 
       function getDashboardScheduleKey(item) {
@@ -18125,6 +18160,13 @@ ${folderBtn}
           ? doneItems.map((item) => renderDashboardScheduleRow(item, true)).filter(Boolean).join("")
           : '<div class="helper" style="margin:0;font-size:0.76rem;">완료된 작업이 없습니다.</div>';
 
+        // 직전에 열려 있던 작가별 일별 상세 패널 — re-render 결과 HTML 안에 inline 으로
+        // 박아 깜빡임 방지. dashboardDayDetailOpenKey 가 "<writer>|YYYY-MM-DD" 형태면 그 패널을
+        // 이미 열린 상태 + 내용 으로 렌더링한다.
+        const openKey = String(dashboardDayDetailOpenKey || "").trim();
+        const sepIdxOpen = openKey.indexOf("|");
+        const openHead = sepIdxOpen > 0 ? openKey.slice(0, sepIdxOpen) : "";
+        const openDay = sepIdxOpen > 0 ? openKey.slice(sepIdxOpen + 1) : "";
         const todayHtml = DASHBOARD_TARGET_WRITERS.map((writer) => {
           const blockId = writer === "박보윤" ? "dashboardWriterBlockPby" : "dashboardWriterBlockKjy";
           const detailPanelId = writer === "박보윤" ? "writerDayDetailPanelPby" : "writerDayDetailPanelKjy";
@@ -18140,13 +18182,35 @@ ${folderBtn}
               </button>`;
             })
             .join("")}</div>`;
+          // 이 작가가 열려 있던 패널의 주인이면 inline 으로 내용을 박는다.
+          let initialHtml = "";
+          let initialHidden = true;
+          if (openHead === writer && openDay) {
+            const entries = log.filter((r) => r.writer === writer && r.processedDay === openDay);
+            if (entries.length === 0) {
+              initialHtml = `<div class="writer-day-detail-head">${escapeHtml(
+                formatYmdToMdSlash(openDay)
+              )} · 처리 업체</div><div class="helper" style="margin:0;">기록이 없습니다.</div>`;
+            } else {
+              const lis = entries
+                .map(
+                  (e) =>
+                    `<li>${escapeHtml(formatYmdToMdSlash(e.scheduleDate))} · ${escapeHtml(e.company || "-")}</li>`
+                )
+                .join("");
+              initialHtml = `<div class="writer-day-detail-head">${escapeHtml(
+                formatYmdToMdSlash(openDay)
+              )} · 처리 업체</div><ul class="writer-day-detail-list">${lis}</ul>`;
+            }
+            initialHidden = false;
+          }
           return `<div id="${blockId}" class="writer-today-block" data-writer-block="${escapeHtml(writer)}">
             <h4>${escapeHtml(writer)}</h4>
             <div class="writer-week-summary" style="margin-top:0;border-top:0;padding-top:0;">
               <div class="writer-week-summary-title">최근 7일 일별 처리 (칸 클릭 시 업체명)</div>
               ${weekGrid}
             </div>
-            <div id="${detailPanelId}" class="writer-day-detail-panel hidden"></div>
+            <div id="${detailPanelId}" class="writer-day-detail-panel${initialHidden ? " hidden" : ""}">${initialHtml}</div>
           </div>`;
         }).join("");
 
@@ -18157,7 +18221,9 @@ ${folderBtn}
       }
 
       /** dashboardDayDetailOpenKey 가 set 돼 있으면 re-render 후 그 패널을 다시 연다.
-       *  background re-render 가 todayWrap.innerHTML 을 교체하며 패널을 자동 닫아버리던 문제 해결. */
+       *  background re-render 가 todayWrap.innerHTML 을 교체하며 패널을 자동 닫아버리던 문제 해결.
+       *  ⚠ 호출 시점에 패널이 이미 열려있으면(렌더가 inline 으로 박아둔 경우) 다시 click 을
+       *  보내면 토글-닫힘 이 발생해 깜빡이는 회귀가 생긴다. → 패널 hidden 일 때만 click. */
       function restoreDashboardDayDetailIfOpen() {
         const key = String(dashboardDayDetailOpenKey || "").trim();
         if (!key) return;
@@ -18170,6 +18236,19 @@ ${folderBtn}
         // 동일한 click 이벤트를 발생시켜 핸들러가 panel 을 다시 그리도록.
         // (핸들러는 openKey 가 동일하고 panel 이 hidden 이면 열기 동작을 함)
         setTimeout(() => {
+          // 어떤 panel 을 대상으로 하는지에 따라 hidden 여부 먼저 확인 — 이미 열려 있으면 skip.
+          let targetPanel = null;
+          if (head === "delivery") {
+            targetPanel = document.getElementById("deliveryDayDetailPanel");
+          } else if (head === "박보윤") {
+            targetPanel = document.getElementById("writerDayDetailPanelPby");
+          } else {
+            targetPanel = document.getElementById("writerDayDetailPanelKjy");
+          }
+          if (targetPanel && !targetPanel.classList.contains("hidden")) {
+            // 렌더가 이미 inline 으로 열어둠 — 추가 click 은 토글로 닫혀 깜빡인다.
+            return;
+          }
           let btn = null;
           if (head === "delivery") {
             btn = document.querySelector(`button[data-action="deliveryDayDetailClick"][data-day="${day}"]`);
