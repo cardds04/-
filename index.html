@@ -17368,6 +17368,9 @@ ${folderBtn}
           // catalog phone 이 invalid 형식(예: "12345", "----") 이면 schedule 의 customerPhone
           // 으로 fallback. 예전엔 잘못된 catalog phone 이 truthy 라서 || fallback 이 동작하지
           // 않았고 → 스케줄에 정상 폰이 있는데도 "연락처 없음" 으로 표시되던 버그.
+          // 또한 "연락처 있음/없음" 배지는 단순 정보 표시이므로 휴대폰(010·011·016~019)
+          // 뿐 아니라 일반 전화(02·031·070 등) 도 "연락처 있음" 으로 인정한다.
+          // 휴대폰 형식이 아니어서 SMS 자동 발송 대상은 안 되더라도 연락처는 존재함.
           const candidates = [
             companyCatalogPhone,
             item?.customerPhone,
@@ -17376,9 +17379,14 @@ ${folderBtn}
           ];
           let phonesMerged = "";
           for (const candidate of candidates) {
-            const normalized = normalizeDashKoMobileInput(String(candidate || "").trim());
-            if (isDashKoMobileValidDigits(normalized)) {
-              phonesMerged = normalized;
+            const raw = String(candidate || "").trim();
+            if (!raw) continue;
+            // "-", "----", "—" 같은 placeholder 는 거름 (숫자 0개)
+            const digitsOnly = raw.replace(/[^\d]/g, "");
+            if (digitsOnly.length >= 8) {
+              // 휴대폰이면 normalize 후 보관, 아니면 raw 유지
+              const mobileNormalized = normalizeDashKoMobileInput(raw);
+              phonesMerged = isDashKoMobileValidDigits(mobileNormalized) ? mobileNormalized : raw;
               break;
             }
           }
