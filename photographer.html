@@ -2075,7 +2075,10 @@
           .trim();
       }
       function getCompanyPhoneForItem(item) {
-        // placeholder("-", "----", "EMPTY") 무효 처리
+        // 단일 컬럼 통일 원칙: 화면 표시는 「업체정보관리」 customer_phone 단일 출처.
+        // 스케줄 행에 묻어 있는 customerPhone 은 과거 시점 스냅샷이라 최신 번호와
+        // 다를 수 있다 — fallback 으로 쓰면 STORAGE_COMPANIES 로딩 시점에 따라
+        // 옛 번호 ↔ 신 번호 사이로 화면이 바뀌어 보이는 race 가 생긴다.
         const isUsablePhone = (raw) => {
           const s = normalize(raw);
           if (!s) return false;
@@ -2084,8 +2087,6 @@
           if (!/\d/.test(s)) return false;
           return true;
         };
-        const directPhone = normalize(item?.customerPhone);
-        if (isUsablePhone(directPhone)) return directPhone;
         const companyName = normalize(item?.company);
         if (!companyName) return "-";
         const companies = readStorageArray(STORAGE_COMPANIES);
@@ -2101,11 +2102,9 @@
             matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
           }
         }
-        // 단일 컬럼 통일: customer_phone 우선, fallback phone.
+        // 단일 출처: customer_phone 만. 옛 phone 필드는 의도적으로 fallback 사용 안 함.
         const cp = normalize(matched?.customer_phone || matched?.customerPhone);
         if (isUsablePhone(cp)) return cp;
-        const p = normalize(matched?.phone);
-        if (isUsablePhone(p)) return p;
         return "-";
       }
 

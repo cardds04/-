@@ -12627,24 +12627,26 @@ ${folderBtn}
       }
 
       function getCompanyPhoneForDisplay(companyName, item) {
-        // placeholder("-", "----", "—", "EMPTY") 와 빈 값은 무효로 본다.
+        // 단일 컬럼 통일 원칙: 화면 표시는 「업체정보관리」 customer_phone 단일 출처.
+        // 스케줄 행에 박혀 있는 customerPhone/phone 은 과거 시점 스냅샷이라 최신 번호와
+        // 다를 수 있고 (예: 한샘다온디자인이 customer_phone 변경 전 신청한 스케줄에
+        // 묻어 있는 옛 번호), 그것을 fallback 으로 쓰면 companies 배열 로딩 타이밍에
+        // 따라 화면이 옛 번호 ↔ 신 번호로 바뀌어 보이는 race 가 생긴다.
+        // → companies(업체정보) 에서 못 찾으면 "-" 로 표시한다.
         const isUsablePhone = (raw) => {
           const s = String(raw || "").trim();
           if (!s) return false;
           if (/^[-—–_\s]+$/.test(s)) return false;
           if (/^empty$/i.test(s)) return false;
-          // 숫자가 한 글자도 없으면 무효 (이름·텍스트 잘못 들어간 경우)
           if (!/\d/.test(s)) return false;
           return true;
         };
         const pickPhoneFromCompanyRow = (row) => {
           if (!row) return "";
-          // 단일 컬럼 통일: customer_phone 우선. 옛날 phone 필드는 placeholder("-") 가 많아
-          // 두 번째 후보. 둘 다 유효해야 표시.
           const cp = String(row?.customer_phone || row?.customerPhone || "").trim();
           if (isUsablePhone(cp)) return cp;
-          const p = String(row?.phone || "").trim();
-          if (isUsablePhone(p)) return p;
+          // ⚠ 옛 phone 필드는 의도적으로 fallback 으로 쓰지 않는다.
+          // customer_phone 만 단일 출처. (구 phone 컬럼 잔재 무시)
           return "";
         };
         const target = normalizeCompanyName(companyName).toLowerCase();
@@ -12663,9 +12665,7 @@ ${folderBtn}
         }
         const fromCompany = pickPhoneFromCompanyRow(matched);
         if (fromCompany) return fromCompany;
-        // 마지막 fallback: 스케줄 자체에 customerPhone 이 있으면 사용
-        const sched = String(item?.customerPhone || item?.phone || "").trim();
-        if (isUsablePhone(sched)) return sched;
+        // 단일 컬럼 통일: 업체정보에서 못 찾으면 "-". 스케줄에 묻어 있는 옛 번호는 무시.
         return "-";
       }
 
