@@ -2073,8 +2073,17 @@
           .trim();
       }
       function getCompanyPhoneForItem(item) {
+        // placeholder("-", "----", "EMPTY") 무효 처리
+        const isUsablePhone = (raw) => {
+          const s = normalize(raw);
+          if (!s) return false;
+          if (/^[-—–_\s]+$/.test(s)) return false;
+          if (/^empty$/i.test(s)) return false;
+          if (!/\d/.test(s)) return false;
+          return true;
+        };
         const directPhone = normalize(item?.customerPhone);
-        if (directPhone) return directPhone;
+        if (isUsablePhone(directPhone)) return directPhone;
         const companyName = normalize(item?.company);
         if (!companyName) return "-";
         const companies = readStorageArray(STORAGE_COMPANIES);
@@ -2090,7 +2099,12 @@
             matched = companies.find((company) => stripParenSegmentsForCompanyMatch(company?.name) === sk);
           }
         }
-        return normalize(matched?.phone) || "-";
+        // 단일 컬럼 통일: customer_phone 우선, fallback phone.
+        const cp = normalize(matched?.customer_phone || matched?.customerPhone);
+        if (isUsablePhone(cp)) return cp;
+        const p = normalize(matched?.phone);
+        if (isUsablePhone(p)) return p;
+        return "-";
       }
 
       function getCompanyDriveFolderLinkForItem(item) {
