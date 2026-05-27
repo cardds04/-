@@ -8733,7 +8733,7 @@
         companies.splice(0, companies.length, ...normalized);
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(normalized));
         renderCompanies();
-        renderList();
+        renderList(); // renderList 내부에서 renderScheduleDashboard 도 호출됨
         renderCustomerStatsDashboard();
         return true;
       }
@@ -17556,6 +17556,9 @@ ${folderBtn}
           const block = todayWrap.querySelector(".delivery-week-summary-block");
           if (block) block.__deliveryDayEntries = dayEntries;
         } catch (_) {}
+
+        // 직전에 열려 있던 일별 상세 패널 복원 — background re-render 로 닫혀 보이던 문제 해결.
+        restoreDashboardDayDetailIfOpen();
       }
 
       function getDashboardScheduleKey(item) {
@@ -18105,6 +18108,35 @@ ${folderBtn}
         }).join("");
 
         todayWrap.innerHTML = todayHtml;
+
+        // 직전에 열려 있던 작가 일별 상세 패널 복원.
+        restoreDashboardDayDetailIfOpen();
+      }
+
+      /** dashboardDayDetailOpenKey 가 set 돼 있으면 re-render 후 그 패널을 다시 연다.
+       *  background re-render 가 todayWrap.innerHTML 을 교체하며 패널을 자동 닫아버리던 문제 해결. */
+      function restoreDashboardDayDetailIfOpen() {
+        const key = String(dashboardDayDetailOpenKey || "").trim();
+        if (!key) return;
+        // openKey = "delivery|YYYY-MM-DD" 또는 "<writerName>|YYYY-MM-DD"
+        const sepIdx = key.indexOf("|");
+        if (sepIdx < 0) return;
+        const head = key.slice(0, sepIdx);
+        const day = key.slice(sepIdx + 1);
+        if (!day) return;
+        // 동일한 click 이벤트를 발생시켜 핸들러가 panel 을 다시 그리도록.
+        // (핸들러는 openKey 가 동일하고 panel 이 hidden 이면 열기 동작을 함)
+        setTimeout(() => {
+          let btn = null;
+          if (head === "delivery") {
+            btn = document.querySelector(`button[data-action="deliveryDayDetailClick"][data-day="${day}"]`);
+          } else {
+            btn = document.querySelector(
+              `button[data-action="writerDayDetailClick"][data-writer="${head}"][data-day="${day}"]`
+            );
+          }
+          if (btn) btn.click();
+        }, 0);
       }
 
       function setupScheduleFilters() {
