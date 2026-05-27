@@ -12882,11 +12882,23 @@ ${folderBtn}
         couponCountSelectEl.value = "1";
         if (paymentCouponCountSelectEl) paymentCouponCountSelectEl.value = "1";
       }
-      function registerCouponPass(companyNameRaw, selectedCountRaw) {
+      /** 회사가 server 에 있는데 local companies 가 아직 stale 인 경우 자동으로 pull 후 재확인.
+       *  로컬에 없다고 "등록된 업체만 ..." 알림이 잘못 뜨는 timing 이슈 방지. */
+      async function ensureCompanyIsRegisteredOrPull(companyName) {
+        if (isRegisteredCompanyName(companyName)) return true;
+        try {
+          if (typeof pullAdminCompaniesFromSupabaseAndRefresh === "function") {
+            await pullAdminCompaniesFromSupabaseAndRefresh();
+          }
+        } catch (_) {}
+        return isRegisteredCompanyName(companyName);
+      }
+      async function registerCouponPass(companyNameRaw, selectedCountRaw) {
         const companyName = normalizeCompanyName(companyNameRaw);
         const selectedCount = Number(selectedCountRaw || "1");
-        if (!isRegisteredCompanyName(companyName)) {
-          alert("등록된 업체만 회차권 등록할 수 있어요.");
+        const ok = await ensureCompanyIsRegisteredOrPull(companyName);
+        if (!ok) {
+          alert(`「${companyName}」 은 등록된 업체가 아니에요. 「업체정보관리」 탭에서 먼저 등록 후 다시 시도해주세요.`);
           return false;
         }
         const companyRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
@@ -12896,11 +12908,12 @@ ${folderBtn}
         renderPaymentList();
         return true;
       }
-      function updateCouponPass(companyNameRaw, remainingCountRaw) {
+      async function updateCouponPass(companyNameRaw, remainingCountRaw) {
         const companyName = normalizeCompanyName(companyNameRaw);
         const remainingCount = Number(remainingCountRaw);
-        if (!isRegisteredCompanyName(companyName)) {
-          alert("등록된 업체만 쿠폰 수정할 수 있어요.");
+        const ok = await ensureCompanyIsRegisteredOrPull(companyName);
+        if (!ok) {
+          alert(`「${companyName}」 은 등록된 업체가 아니에요. 「업체정보관리」 탭에서 먼저 등록 후 다시 시도해주세요.`);
           return false;
         }
         if (!Number.isFinite(remainingCount) || remainingCount < 0) {
@@ -20744,9 +20757,9 @@ ${folderBtn}
         }
       });
 
-      couponFormEl.addEventListener("submit", (event) => {
+      couponFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const success = registerCouponPass(couponCompanyInputEl.value, couponCountSelectEl.value);
+        const success = await registerCouponPass(couponCompanyInputEl.value, couponCountSelectEl.value);
         if (!success) return;
         couponFormEl.reset();
         couponCountSelectEl.value = "1";
@@ -20760,14 +20773,14 @@ ${folderBtn}
         if (couponCompanySearchInputEl) couponCompanySearchInputEl.value = "";
         renderCouponPassList();
       });
-      paymentCouponFormEl?.addEventListener("submit", (event) => {
+      paymentCouponFormEl?.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const success = registerCouponPass(paymentCouponCompanyInputEl?.value || "", paymentCouponCountSelectEl?.value || "1");
+        const success = await registerCouponPass(paymentCouponCompanyInputEl?.value || "", paymentCouponCountSelectEl?.value || "1");
         if (!success) return;
         paymentCouponFormEl.reset();
         if (paymentCouponCountSelectEl) paymentCouponCountSelectEl.value = "1";
       });
-      paymentCouponEditBtnEl?.addEventListener("click", () => {
+      paymentCouponEditBtnEl?.addEventListener("click", async () => {
         const companyName = normalizeCompanyName(paymentCouponCompanyInputEl?.value || "");
         if (!companyName) {
           alert("업체명을 먼저 입력해주세요.");
@@ -20777,12 +20790,12 @@ ${folderBtn}
         const currentRemaining = getCouponRemaining(companyName, normalizeCompanyCode(couponRow?.code));
         const nextRaw = prompt("변경할 남은 쿠폰 횟수를 입력해주세요.", String(currentRemaining));
         if (nextRaw === null) return;
-        const success = updateCouponPass(companyName, nextRaw);
+        const success = await updateCouponPass(companyName, nextRaw);
         if (!success) return;
         alert(`${companyName} 업체 쿠폰이 ${Math.floor(Number(nextRaw) || 0)}회로 수정되었습니다.`);
       });
 
-      couponListBodyEl.addEventListener("click", (event) => {
+      couponListBodyEl.addEventListener("click", async (event) => {
         const actionButton = event.target.closest("button[data-action]");
         if (!actionButton) return;
         const action = String(actionButton.dataset.action || "");
@@ -20802,7 +20815,7 @@ ${folderBtn}
           const rowEl = actionButton.closest("tr");
           const inputEl = rowEl?.querySelector(".coupon-remaining-input");
           const nextValue = inputEl?.value;
-          const success = updateCouponPass(companyName, nextValue);
+          const success = await updateCouponPass(companyName, nextValue);
           if (!success) return;
           editingCouponCompany = "";
           renderCouponPassList();
