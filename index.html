@@ -17270,25 +17270,94 @@ ${folderBtn}
         return m ? m[1] + m[2] : "";
       }
 
-      /** 폴더명 규칙: MMDD + 단지·주소 요약(한글 6자 이하, 날짜 외 숫자·특수문자 제거).
-       *  옛 15자/숫자포함 규칙은 "06011271", "0601미사강변효성해링턴플레이스엔에이" 같은
-       *  지저분한 폴더명을 양산해 사용자 불만이 있었음. */
+      /** 주소에서 「N동/N호」 패턴 검출 — 검출되면 그 토큰은 숫자 포함해 유지.
+       *  반환: { dong: "303동" or "", ho: "1802호" or "", markerPos: 시작 인덱스 or -1 } */
+      function detectDongHoFromPlace(s) {
+        const str = String(s || "");
+        const dongRe = /(?:\d{1,4}|[A-Za-z])\s*동/u;
+        const hoRe = /\d{1,5}\s*호/u;
+        const dongM = str.match(dongRe);
+        const hoM = str.match(hoRe);
+        const dong = dongM ? dongM[0].replace(/\s+/g, "") : "";
+        const ho = hoM ? hoM[0].replace(/\s+/g, "") : "";
+        let markerPos = -1;
+        if (dongM && hoM) markerPos = Math.min(dongM.index, hoM.index);
+        else if (dongM) markerPos = dongM.index;
+        else if (hoM) markerPos = hoM.index;
+        return { dong, ho, markerPos };
+      }
+
+      /** prefix(동·호 앞 문자열) 에서 아파트명 추출.
+       *  행정구역(시·구·읍·면), 도로명(로/길), 번지수, N단지/N차 제거 후 마지막 한글 토큰 채택. */
+      function extractAptNameFromPrefixForFolder(prefix) {
+        let p = String(prefix || "").replace(/\s+/g, " ").trim();
+        if (!p) return "";
+        p = p.replace(/\s*아파트\s*$/u, "").trim();
+        const stripRules = [
+          /^[가-힣]{2,}특별자치시\s*/u,
+          /^[가-힣]{2,}특별시\s*/u,
+          /^[가-힣]{2,}광역시\s*/u,
+          /^[가-힣]{2,}특별자치도\s*/u,
+          /^[가-힣]{2,}도\s+/u,
+          /^(?:서울|부산|대구|인천|광주|대전|울산|세종)\s+/u,
+          /^[가-힣]{2,}시(?=\s|[가-힣])\s*/u,
+          /^[가-힣]{2,}군\s*/u,
+          /^[가-힣]{2,}구\s*/u,
+          /^[가-힣]{2,}(?:읍|면)\s*/u,
+          /^[가-힣]{2,}동\s*\d+(?:-\d+)?\s*/u,
+          /^\d+(?:-\d+)?\s+/u,
+          /^[가-힣0-9\-]{2,}길\s*\d+(?:-\d+)?\s*/u,
+          /^[가-힣0-9\-]{2,}(?:로|대로)(?:\d+번길)?\s*\d+(?:-\d+)?\s*/u
+        ];
+        for (let g = 0; g < 40; g++) {
+          let hit = false;
+          for (const re of stripRules) {
+            const next = p.replace(re, "").trim();
+            if (next !== p) {
+              p = next;
+              hit = true;
+              break;
+            }
+          }
+          if (!hit) break;
+        }
+        p = p.replace(/\s*\d+\s*(?:단지|차)\s*/gu, " ").replace(/\s+/g, " ").trim();
+        const parts = p.split(/\s+/).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const tok = parts[i]
+            .replace(/[\/\\:*?"<>|]/g, "")
+            .replace(/[\d\-]/g, "")
+            .trim();
+          if (tok && /[가-힣A-Za-z]/.test(tok)) return tok;
+        }
+        return "";
+      }
+
+      /** 폴더명 규칙: MMDD + (아파트명6자 + 동 + 호) 또는 단지·주소 요약(한글 6자 이하).
+       *  「N동/N호」 패턴이 있으면 그것만은 숫자 포함해 유지하고 「아파트명+동+호」 형식으로 출력.
+       *  그 외의 숫자는 모두 제거, 한글 6자 컷. */
       function buildShootFolderNameForDashboard(dateYmd, rawPlace) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
-        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815"); // \uC7A5\uC18C\uBBF8\uC815
+        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
         if (!s) return mmdd + unknown;
-        // 1\uC21C\uC704: \uC544\uD30C\uD2B8 \uB2E8\uC9C0\uBA85. clampShootFolderSuffix \uAC00 \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790 \uC81C\uAC70 \uD6C4 6\uC790 \uCEF7.
-        // \uD6C4\uBCF4\uAC00 \uC22B\uC790\uB9CC \uC788\uB358 \uACBD\uC6B0 ""\uAC00 \uB418\uC5B4 \uB2E4\uC74C \uD6C4\uBCF4\uB85C fallback.
+        // 1\uC21C\uC704: \u300CN\uB3D9/N\uD638\u300D \uD328\uD134 \u2192 \uC544\uD30C\uD2B8\uBA85 + \uB3D9 + \uD638 (\uC0AC\uC6A9\uC790 \uADDC\uCE59: \uB3D9\u00B7\uD638\uC758 \uC22B\uC790\uB9CC\uC740 \uBCF4\uC874).
+        const dh = detectDongHoFromPlace(s);
+        if (dh.markerPos >= 0 && (dh.dong || dh.ho)) {
+          const aptRaw = extractAptNameFromPrefixForFolder(s.slice(0, dh.markerPos).trim());
+          const aptClamped = aptRaw ? aptRaw.slice(0, 6) : "";
+          return mmdd + aptClamped + dh.dong + dh.ho;
+        }
+        // 2\uC21C\uC704: \uC61B apartmentFolderSuffixFromPlace \uD638\uD658 (\uB3D9\u00B7\uD638\uAC00 \uB05D\uC5D0 \uBD99\uC5B4\uC788\uB294 \uD328\uD134).
         const aptPart = apartmentFolderSuffixFromPlace(s);
         const aptClamped = aptPart ? clampShootFolderSuffix(aptPart) : "";
         if (aptClamped) return mmdd + aptClamped;
-        // 2\uC21C\uC704: \uAD6C\u00B7\uB3D9 \uB77C\uBCA8 (\uC608: \uB9C8\uD3EC\uAD6C\uB9DD\uC6D0\uB3D9)
+        // 3\uC21C\uC704: \uAD6C\u00B7\uB3D9 \uB77C\uBCA8 (\uC608: \uB9C8\uD3EC\uAD6C\uB9DD\uC6D0\uB3D9)
         const guDong = guDongLabelForShootFolderName(s);
         const guDongClamped = guDong ? clampShootFolderSuffix(guDong) : "";
         if (guDongClamped) return mmdd + guDongClamped;
-        // 3\uC21C\uC704: \uC8FC\uC18C \uC804\uCCB4\uC5D0\uC11C \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790 \uC81C\uAC70 \uD6C4 \uC55E 6\uC790
+        // 4\uC21C\uC704: \uC8FC\uC18C \uC804\uCCB4\uC5D0\uC11C \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790 \uC81C\uAC70 \uD6C4 \uC55E 6\uC790
         const tail = clampShootFolderSuffix(s);
         return mmdd + (tail || unknown);
       }

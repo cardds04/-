@@ -1828,30 +1828,108 @@
         return m ? m[1] + m[2] : "";
       }
 
+      /** \uC8FC\uC18C\uC5D0\uC11C \u300CN\uB3D9/N\uD638\u300D \uD328\uD134 \uAC80\uCD9C \u2014 \uAC80\uCD9C\uB418\uBA74 \uADF8 \uD1A0\uD070\uC740 \uC22B\uC790 \uD3EC\uD568\uD574 \uC720\uC9C0.
+       *  \uBC18\uD658: { dong: "303\uB3D9" or "", ho: "1802\uD638" or "", markerPos: \uC2DC\uC791 \uC778\uB371\uC2A4 or -1 } */
+      function detectDongHoFromPlace(s) {
+        const str = String(s || "");
+        // \uC22B\uC790(1~4\uC790\uB9AC) \uB610\uB294 \uC601\uBB38 \uD55C \uAE00\uC790 + \uB3D9
+        const dongRe = /(?:\d{1,4}|[A-Za-z])\s*\uB3D9/u;
+        // \uC22B\uC790(1~5\uC790\uB9AC) + \uD638
+        const hoRe = /\d{1,5}\s*\uD638/u;
+        const dongM = str.match(dongRe);
+        const hoM = str.match(hoRe);
+        const dong = dongM ? dongM[0].replace(/\s+/g, "") : "";
+        const ho = hoM ? hoM[0].replace(/\s+/g, "") : "";
+        let markerPos = -1;
+        if (dongM && hoM) markerPos = Math.min(dongM.index, hoM.index);
+        else if (dongM) markerPos = dongM.index;
+        else if (hoM) markerPos = hoM.index;
+        return { dong, ho, markerPos };
+      }
+
+      /** prefix(\uB3D9\u00B7\uD638 \uC55E \uBB38\uC790\uC5F4) \uC5D0\uC11C \uC544\uD30C\uD2B8\uBA85 \uCD94\uCD9C.
+       *  - \uD589\uC815\uAD6C\uC5ED(\uC2DC\u00B7\uAD6C\u00B7\uB3D9\u00B7\uC74D\u00B7\uBA74), \uB3C4\uB85C\uBA85(\uB85C/\uAE38), \uBC88\uC9C0\uC218, N\uB2E8\uC9C0/N\uCC28 \uC81C\uAC70.
+       *  - \uB9C8\uC9C0\uB9C9 \uD55C\uAE00 \uD1A0\uD070\uC744 \uC544\uD30C\uD2B8\uBA85\uC73C\uB85C \uCC44\uD0DD. (\uC608: "\uC131\uBD81\uAD6C \uAE38\uC74C\uB85C13\uAE38 39 \uAE38\uC74C\uB274\uD0C0\uC6B4 3\uB2E8\uC9C0 " \u2192 "\uAE38\uC74C\uB274\uD0C0\uC6B4") */
+      function extractAptNameFromPrefixForFolder(prefix) {
+        let p = String(prefix || "").replace(/\s+/g, " ").trim();
+        if (!p) return "";
+        // \uB05D\uC758 "\uC544\uD30C\uD2B8" \uC81C\uAC70
+        p = p.replace(/\s*\uC544\uD30C\uD2B8\s*$/u, "").trim();
+        // \uD589\uC815/\uB3C4\uB85C\uBA85 prefix \uBC18\uBCF5 \uC81C\uAC70
+        const stripRules = [
+          /^[\uAC00-\uD7A3]{2,}\uD2B9\uBCC4\uC790\uCE58\uC2DC\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uD2B9\uBCC4\uC2DC\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uAD11\uC5ED\uC2DC\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uD2B9\uBCC4\uC790\uCE58\uB3C4\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uB3C4\s+/u,
+          /^(?:\uC11C\uC6B8|\uBD80\uC0B0|\uB300\uAD6C|\uC778\uCC9C|\uAD11\uC8FC|\uB300\uC804|\uC6B8\uC0B0|\uC138\uC885)\s+/u,
+          /^[\uAC00-\uD7A3]{2,}\uC2DC(?=\s|[\uAC00-\uD7A3])\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uAD70\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uAD6C\s*/u,
+          /^[\uAC00-\uD7A3]{2,}(?:\uC74D|\uBA74)\s*/u,
+          /^[\uAC00-\uD7A3]{2,}\uB3D9\s*\d+(?:-\d+)?\s*/u,
+          /^\d+(?:-\d+)?\s+/u,
+          /^[\uAC00-\uD7A30-9\-]{2,}\uAE38\s*\d+(?:-\d+)?\s*/u,
+          /^[\uAC00-\uD7A30-9\-]{2,}(?:\uB85C|\uB300\uB85C)(?:\d+\uBC88\uAE38)?\s*\d+(?:-\d+)?\s*/u
+        ];
+        for (let g = 0; g < 40; g++) {
+          let hit = false;
+          for (const re of stripRules) {
+            const next = p.replace(re, "").trim();
+            if (next !== p) {
+              p = next;
+              hit = true;
+              break;
+            }
+          }
+          if (!hit) break;
+        }
+        // "N\uB2E8\uC9C0"/"N\uCC28" \uC81C\uAC70
+        p = p.replace(/\s*\d+\s*(?:\uB2E8\uC9C0|\uCC28)\s*/gu, " ").replace(/\s+/g, " ").trim();
+        // \uD1A0\uD070 \uC911 \uD55C\uAE00\uC774 \uB4E4\uC5B4 \uC788\uB294 \uB9C8\uC9C0\uB9C9 \uD1A0\uD070\uC744 \uCC44\uD0DD (\uC22B\uC790\uB9CC/\uB300\uC2DC\uB9CC \uD1A0\uD070\uC740 skip)
+        const parts = p.split(/\s+/).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const tok = parts[i]
+            .replace(/[\/\\:*?"<>|]/g, "")
+            .replace(/[\d\-]/g, "")
+            .trim();
+          if (tok && /[\uAC00-\uD7A3A-Za-z]/.test(tok)) return tok;
+        }
+        return "";
+      }
+
       function buildShootFolderNameJS(dateYmd, rawPlace, daySlotIndex) {
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
-        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815"); // "\uC7A5\uC18C\uBBF8\uC815"
+        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
         let base;
         if (!s) {
           base = mmdd + unknown;
         } else {
-          // clampShootFolderSuffix \uAC00 \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790\uB97C \uBAA8\uB450 \uC81C\uAC70\uD558\uBBC0\uB85C
-          // \uD6C4\uBCF4\uAC00 \uC22B\uC790\uB9CC\uC774\uC5C8\uB358 \uACBD\uC6B0(\uC608: \uC544\uD30C\uD2B8\uBA85\uC774 "1271"\uC778 \uACBD\uC6B0) \uBE48 \uBB38\uC790\uC5F4\uC774 \uB418\uC5B4
-          // \uB2E4\uC74C \uD6C4\uBCF4\uB85C \uC790\uB3D9 fallback \uD55C\uB2E4. (\uC61B \uCF54\uB4DC\uB294 "06011271" \uAC19\uC740 \uB354\uB7EC\uC6B4 \uD3F4\uB354\uBA85\uC744 \uB9CC\uB4E4\uC5C8\uC74C)
-          const aptPart = apartmentFolderSuffixFromPlace(s);
-          const aptClamped = aptPart ? clampShootFolderSuffix(aptPart) : "";
-          if (aptClamped) {
-            base = mmdd + aptClamped;
+          // 1\uC21C\uC704: \u300CN\uB3D9/N\uD638\u300D \uD328\uD134 \uAC80\uCD9C \u2192 \uC544\uD30C\uD2B8\uBA85 + \uB3D9 + \uD638 \uD615\uC2DD.
+          const dh = detectDongHoFromPlace(s);
+          if (dh.markerPos >= 0 && (dh.dong || dh.ho)) {
+            const prefix = s.slice(0, dh.markerPos).trim();
+            const aptRaw = extractAptNameFromPrefixForFolder(prefix);
+            // \uC544\uD30C\uD2B8\uBA85\uC740 6\uC790 \uCEF7(\uC22B\uC790 \uC81C\uAC70\uB428). \uC5C6\uC5B4\uB3C4 \uB3D9\u00B7\uD638\uB9CC \uBD99\uC784.
+            const aptClamped = aptRaw ? aptRaw.slice(0, 6) : "";
+            base = mmdd + aptClamped + dh.dong + dh.ho;
           } else {
-            const guDong = guDongLabelForShootFolderName(s);
-            const guDongClamped = guDong ? clampShootFolderSuffix(guDong) : "";
-            if (guDongClamped) {
-              base = mmdd + guDongClamped;
+            // 2\uC21C\uC704: \uC61B apartmentFolderSuffixFromPlace (\uB3D9\u00B7\uD638 \uB05D\uC5D0 \uBD99\uC5B4\uC788\uB294 \uD328\uD134) \uD638\uD658.
+            const aptPart = apartmentFolderSuffixFromPlace(s);
+            const aptClamped = aptPart ? clampShootFolderSuffix(aptPart) : "";
+            if (aptClamped) {
+              base = mmdd + aptClamped;
             } else {
-              const tail = clampShootFolderSuffix(s);
-              base = mmdd + (tail || unknown);
+              const guDong = guDongLabelForShootFolderName(s);
+              const guDongClamped = guDong ? clampShootFolderSuffix(guDong) : "";
+              if (guDongClamped) {
+                base = mmdd + guDongClamped;
+              } else {
+                const tail = clampShootFolderSuffix(s);
+                base = mmdd + (tail || unknown);
+              }
             }
           }
         }
