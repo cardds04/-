@@ -10327,9 +10327,19 @@ ${folderBtn}
           const key = name.toLowerCase();
           const dbId = String(item?.dbId ?? "").trim();
           if (!uniqueMap.has(key)) {
+            // 단일 컬럼 통일: customer_phone 을 반드시 보존한다. 옛 코드는 phone 만 저장해
+            // 저장→로드 사이클을 거치면 customer_phone 이 사라져 화면에서 "-" 로 보이는
+            // 회귀 버그가 있었음.
+            const cpRaw = String(
+              item?.customer_phone || item?.customerPhone || ""
+            ).trim();
+            const phoneFallback = String(item?.phone || "").trim();
             const row = {
               name,
-              phone: String(item?.phone || "").trim() || "-",
+              // phone 필드는 옛 코드 호환용 alias — customer_phone 이 있으면 그것으로 통일,
+              // 없으면 옛 phone 값(또는 "-") 유지.
+              phone: cpRaw || phoneFallback || "-",
+              customer_phone: cpRaw,
               code: normalizeCompanyCode(item?.code),
               defaultMemo: String(item?.defaultMemo || "").trim()
             };
