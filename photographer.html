@@ -1779,11 +1779,19 @@
         return s.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
       }
 
-      const SHOOT_FOLDER_NAME_SUFFIX_MAX = 15;
+      // 폴더명 정책: 「MMDD + 한글 위주 6글자 이하 suffix」.
+      // 옛 규칙(15자, 숫자 포함) 은 가독성 떨어지는 폴더명(예: "06011271", "0601미사강변효성해링턴플레이스엔에이")
+      // 을 양산해 사용자 클레임. 이제 ① 날짜 이외의 숫자 전면 금지 ② suffix 6글자 컷.
+      // (daySlotIndex 는 끝에 위치 표시용으로 별도 추가 — 충돌 방지 목적이므로 유지.)
+      const SHOOT_FOLDER_NAME_SUFFIX_MAX = 6;
 
       function clampShootFolderSuffix(token) {
+        // 날짜를 제외한 모든 숫자 제거 (mmdd 는 호출 측에서 별도로 붙임).
+        // 파일/폴더에서 금지되는 특수문자도 제거.
         const t = String(token || "")
           .replace(/[\/\\:*?"<>|]/g, "")
+          .replace(/[\d]/g, "")
+          .replace(/\s+/g, "")
           .trim();
         if (!t) return "";
         return t.slice(0, SHOOT_FOLDER_NAME_SUFFIX_MAX);
@@ -1824,25 +1832,30 @@
         const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateYmd || ""));
         const mmdd = dm ? dm[2] + dm[3] : String(dateYmd || "").replace(/-/g, "").slice(4, 8);
         const s = String(rawPlace || "").replace(/\s+/g, " ").trim();
-        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815");
+        const unknown = clampShootFolderSuffix("\uC7A5\uC18C\uBBF8\uC815"); // "\uC7A5\uC18C\uBBF8\uC815"
         let base;
         if (!s) {
           base = mmdd + unknown;
         } else {
+          // clampShootFolderSuffix \uAC00 \uC22B\uC790\u00B7\uD2B9\uC218\uBB38\uC790\uB97C \uBAA8\uB450 \uC81C\uAC70\uD558\uBBC0\uB85C
+          // \uD6C4\uBCF4\uAC00 \uC22B\uC790\uB9CC\uC774\uC5C8\uB358 \uACBD\uC6B0(\uC608: \uC544\uD30C\uD2B8\uBA85\uC774 "1271"\uC778 \uACBD\uC6B0) \uBE48 \uBB38\uC790\uC5F4\uC774 \uB418\uC5B4
+          // \uB2E4\uC74C \uD6C4\uBCF4\uB85C \uC790\uB3D9 fallback \uD55C\uB2E4. (\uC61B \uCF54\uB4DC\uB294 "06011271" \uAC19\uC740 \uB354\uB7EC\uC6B4 \uD3F4\uB354\uBA85\uC744 \uB9CC\uB4E4\uC5C8\uC74C)
           const aptPart = apartmentFolderSuffixFromPlace(s);
-          if (aptPart) {
-            base = mmdd + clampShootFolderSuffix(aptPart);
+          const aptClamped = aptPart ? clampShootFolderSuffix(aptPart) : "";
+          if (aptClamped) {
+            base = mmdd + aptClamped;
           } else {
             const guDong = guDongLabelForShootFolderName(s);
-            if (guDong) {
-              base = mmdd + clampShootFolderSuffix(guDong.replace(/[\/\\:*?"<>|]/g, ""));
+            const guDongClamped = guDong ? clampShootFolderSuffix(guDong) : "";
+            if (guDongClamped) {
+              base = mmdd + guDongClamped;
             } else {
-              const collapsed = s.replace(/\s+/g, "");
-              const tail = clampShootFolderSuffix(collapsed) || unknown;
-              base = mmdd + tail;
+              const tail = clampShootFolderSuffix(s);
+              base = mmdd + (tail || unknown);
             }
           }
         }
+        // daySlotIndex \uB294 \uAC19\uC740 \uB0A0 \uC5EC\uB7EC \uCD2C\uC601 \uCDA9\uB3CC \uBC29\uC9C0\uC6A9 \uC704\uCE58 \uD45C\uC2DC \u2014 \uB0A0\uC9DC \uC678 \uC22B\uC790 \uAE08\uC9C0 \uC6D0\uCE59\uC758 \uC608\uC678.
         const slot = Number(daySlotIndex);
         if (Number.isFinite(slot) && slot >= 1) return `${base}${slot}`;
         return base;
