@@ -1524,10 +1524,12 @@
             if (naverCached) driveCompanyFolderLink = naverCached;
             else if (nf) driveCompanyFolderLink = "";
             else driveCompanyFolderLink = googleLink;
+            // 단일 컬럼 통일: customer_phone 이 단일 출처. phone 필드는 옛 화면 호환용 alias.
+            const cp = normalize(row?.customer_phone);
             return {
               name: normalize(row?.name),
-              // 단일 컬럼 통일: customer_phone 만 사용 (phone fallback 제거).
-              phone: directoryPhoneForWriterView(row?.customer_phone),
+              customer_phone: cp,
+              phone: directoryPhoneForWriterView(cp),
               companyCode: normalize(row?.code),
               driveCompanyFolderLink
             };
