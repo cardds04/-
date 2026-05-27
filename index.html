@@ -5741,12 +5741,22 @@
               if (Array.isArray(incoming) && Array.isArray(local)) {
                 const localMemoMap = new Map();
                 const localShopickMap = new Map();
+                // 단일 컬럼 통일: customer_phone 도 로컬에서 보존해야 함.
+                // 서버 client_kv snapshot 에는 옛 shape (customer_phone 없음) 의 행이 들어 있는
+                // 환경이 많아, 그것을 그대로 incoming 으로 쓰면 직전 company_directory pull 로
+                // 채워진 customer_phone 이 사라지고 화면에 "-" 로 보이는 깜빡임 버그가 났음.
+                const localPhoneMap = new Map();
                 local.forEach((c) => {
                   const nk = normalizeCompanyName(c?.name).toLowerCase();
                   if (!nk) return;
                   if (c?.defaultMemo) {
                     localMemoMap.set(nk, String(c.defaultMemo));
                   }
+                  const localCp = String(c?.customer_phone || c?.customerPhone || "").trim();
+                  // legacy phone 도 후보로 본다 — customer_phone 우선이지만 둘 다 동일한 값일 때가 많아 fallback.
+                  const localP = String(c?.phone || "").trim();
+                  const candidate = localCp || (localP && localP !== "-" ? localP : "");
+                  if (candidate) localPhoneMap.set(nk, candidate);
                   if (
                     normalizeCompanySiteTypeField(c?.siteType) === "shopick" ||
                     c.shopickPhoto !== undefined ||
@@ -5760,6 +5770,22 @@
                   const k = normalizeCompanyName(c?.name).toLowerCase();
                   if (!c.defaultMemo && localMemoMap.has(k)) {
                     c.defaultMemo = localMemoMap.get(k);
+                  }
+                  // incoming(서버 snapshot) 에 customer_phone 이 비어 있으면 로컬 값으로 보강.
+                  // company_directory pull 이 항상 정답이므로 그 결과를 잃지 않게 한다.
+                  const incomingCp = String(c?.customer_phone || c?.customerPhone || "").trim();
+                  const incomingP = String(c?.phone || "").trim();
+                  const hasIncomingPhone = incomingCp || (incomingP && incomingP !== "-");
+                  if (!hasIncomingPhone && localPhoneMap.has(k)) {
+                    const restored = localPhoneMap.get(k);
+                    c.customer_phone = restored;
+                    c.phone = restored;
+                  } else if (incomingCp && !incomingP) {
+                    // customer_phone 만 있고 phone 필드가 없으면 alias 로 함께 넣어준다.
+                    c.phone = incomingCp;
+                  } else if (!incomingCp && incomingP && incomingP !== "-") {
+                    // 옛 데이터: phone 만 있을 때 customer_phone 으로도 mirror.
+                    c.customer_phone = incomingP;
                   }
                   if (localShopickMap.has(k)) {
                     const f = localShopickMap.get(k);
