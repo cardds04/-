@@ -6520,7 +6520,7 @@
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`
         };
         const select =
-          "login_id,password,name,code,phone,customer_phone,site_type,created_at,id";
+          "login_id,password,name,code,customer_phone,site_type,created_at,id";
         const acc = [];
         const pkSeen = new Set();
 
@@ -8497,7 +8497,7 @@
         // fallback phone 순으로 normalizeCompanyRows 에서 합쳐 사용. 일부 업체는
         // phone 컬럼이 "-" 이고 실제 번호는 customer_phone 에 저장돼 있어 누락 방지.
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,site_type,updated_at&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -8794,7 +8794,7 @@
       }
       async function fetchCustomersFromSupabase() {
         if (!USE_SUPABASE_SYNC) return [];
-        const unifiedFiltered = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,updated_at&login_id=not.is.null&order=created_at.desc`;
+        const unifiedFiltered = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,updated_at&login_id=not.is.null&order=created_at.desc`;
         let response = await fetch(unifiedFiltered, {
           method: "GET",
           headers: {
@@ -8805,7 +8805,7 @@
         });
         if (!response.ok) {
           const errorText = await response.text();
-          const fallbackAll = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,updated_at&order=created_at.desc`;
+          const fallbackAll = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,updated_at&order=created_at.desc`;
           if (response.status === 400 || response.status === 404) {
             response = await fetch(fallbackAll, {
               method: "GET",
@@ -9297,7 +9297,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,customer_phone,code,login_id,password,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.asc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,password,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.asc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {

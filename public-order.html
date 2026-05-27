@@ -2577,18 +2577,18 @@
         const fetchCustomersRowsForPull = async () => {
           try {
             return await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
             );
           } catch (error) {
             const all = await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
             );
             return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
         };
         const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
           fetchJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,phone,code,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
           fetchCustomersRowsForPull(),
           fetchJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc"),
@@ -3265,7 +3265,7 @@
         try {
           const encoded = encodeURIComponent(id);
           const rows = await fetchJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,phone,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
           );
           const list = Array.isArray(rows) ? rows : [];
           const pwdMatches = list.filter((row) => normalize(String(row?.password ?? "")) === pw);
