@@ -12714,13 +12714,17 @@ ${folderBtn}
           // customer_phone 만 단일 출처. (구 phone 컬럼 잔재 무시)
           return "";
         };
-        const target = normalizeCompanyName(companyName).toLowerCase();
+        // 이름 매칭이 NFKC·제로폭 공백 차이로 실패하는 경우가 있어 정규화 강화.
+        const normTight = (v) => {
+          let s = String(v || "");
+          try { if (typeof s.normalize === "function") s = s.normalize("NFKC"); } catch (_) {}
+          return s.replace(/[​-‍﻿]/g, "").replace(/\s+/g, "").toLowerCase();
+        };
+        const target = normTight(companyName);
         const itemCodeNorm = normalizeCompanyCode(item?.companyCode || item?.code || "").toLowerCase();
         let matched = null;
         if (target) {
-          matched = (companies || []).find(
-            (c) => normalizeCompanyName(c?.name).toLowerCase() === target
-          );
+          matched = (companies || []).find((c) => normTight(c?.name) === target);
         }
         // 이름 매칭 실패 → 같은 고유번호(code) 로 재시도
         if (!matched && itemCodeNorm) {
@@ -17564,16 +17568,31 @@ ${folderBtn}
           const fullFolderTitle = escapeHtml(String(shootFolderSuggestName || ""));
           // 회사 catalog (companies, Supabase company_directory 동기화) 의 phone 우선 조회
           // → 업체정보관리 탭에 phone 등록되어 있으면 즉시 "연락처 있음"
-          // customer_phone 우선, fallback phone — 업체정보관리 탭(line 9294)과 동일 우선순위
+          // 이름 매칭 실패 시 (공백·NFKC·제로폭 문자 차이) 같은 고유번호(code) 로 재시도.
+          // 예: 디자인마노가 directory 에 정상 등록돼 있는데 스케줄 행의 company 문자열에
+          //     보이지 않는 차이가 있어 find() 가 못 찾아 "연락처 없음" 으로 표시되던 버그.
           const companyCatalogPhone = (() => {
             const cn = String(item?.company || "").trim();
-            if (!cn) return "";
-            const target = normalizeCompanyName(cn).toLowerCase();
-            const matched = (companies || []).find(
-              (c) => normalizeCompanyName(c?.name).toLowerCase() === target
-            );
+            const codeRaw = String(item?.companyCode || item?.code || "").trim();
+            if (!cn && !codeRaw) return "";
+            // NFKC + 제로폭 공백 제거로 미세 차이도 흡수.
+            const normTight = (v) => {
+              let s = String(v || "");
+              try { if (typeof s.normalize === "function") s = s.normalize("NFKC"); } catch (_) {}
+              return s.replace(/[​-‍﻿]/g, "").replace(/\s+/g, "").toLowerCase();
+            };
+            const targetName = normTight(cn);
+            const targetCode = normalizeCompanyCode(codeRaw).toLowerCase();
+            let matched = null;
+            if (targetName) {
+              matched = (companies || []).find((c) => normTight(c?.name) === targetName);
+            }
+            if (!matched && targetCode) {
+              matched = (companies || []).find(
+                (c) => normalizeCompanyCode(c?.code).toLowerCase() === targetCode
+              );
+            }
             if (!matched) return "";
-            // 단일 컬럼 통일: customer_phone 만 사용.
             return String(matched?.customer_phone || "").trim();
           })();
           // catalog phone 이 invalid 형식(예: "12345", "----") 이면 schedule 의 customerPhone
