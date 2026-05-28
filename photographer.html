@@ -541,6 +541,15 @@
           Object.entries(kvObj).forEach(([k, v]) => {
             if (!this.isScopedKey(k)) return;
             if (PRIVATE_LOCAL_KEYS.has(String(k))) return;
+            // dayoff_requests / schedules 는 dedicated 테이블이 권위 — 옛 client_kv snapshot 이
+            // 새로 들어온 휴무요청을 덮어 다시 사라져 보이는 버그가 있어 hydrate 에서 skip.
+            if (
+              String(k) === STORAGE_DAYOFF_REQUESTS ||
+              String(k) === STORAGE_ADMIN_SCHEDULES ||
+              String(k) === STORAGE_SCHEDULES
+            ) {
+              return;
+            }
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -2914,11 +2923,55 @@
         const today = new Date();
         const todayValue = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
         if (!dayOffDateEl.value) dayOffDateEl.value = todayValue;
-        if (typeof dayOffDateEl.showPicker === "function") {
-          dayOffDateEl.showPicker();
-        } else {
-          dayOffDateEl.click();
-        }
+        // ⚠ dayOffDate input 은 `.hidden` (display:none) 으로 가려져 있어 그대로
+        //    showPicker() 또는 click() 을 부르면 브라우저가 무시(InvalidStateError) 해서
+        //    버튼이 안 먹히는 것처럼 보였다. 임시로 화면 밖으로 보이게 했다가 picker 가
+        //    열리고 나면 다시 숨김. (offscreen + opacity=0 → 시각적으로 보이지 않음)
+        const restoreHidden = () => {
+          dayOffDateEl.classList.add("hidden");
+          dayOffDateEl.style.position = "";
+          dayOffDateEl.style.left = "";
+          dayOffDateEl.style.opacity = "";
+          dayOffDateEl.style.pointerEvents = "";
+        };
+        const tempReveal = () => {
+          dayOffDateEl.classList.remove("hidden");
+          dayOffDateEl.style.position = "fixed";
+          dayOffDateEl.style.left = "-9999px";
+          dayOffDateEl.style.opacity = "0";
+          dayOffDateEl.style.pointerEvents = "auto";
+        };
+        // picker 가 닫힐 때 자동 복원 (blur 또는 change 둘 다 안전망).
+        const onceCleanup = () => {
+          restoreHidden();
+          dayOffDateEl.removeEventListener("blur", onceCleanup);
+          // change 는 requestDayOffReduction 안에서 처리됨 — 추가 cleanup 만.
+        };
+        tempReveal();
+        dayOffDateEl.addEventListener("blur", onceCleanup, { once: true });
+        // 다음 paint 후 picker 열기 (display:none → display:block 직후 showPicker 부르면
+        // 일부 브라우저가 여전히 거부하는 케이스가 있어 한 프레임 양보).
+        requestAnimationFrame(() => {
+          try {
+            if (typeof dayOffDateEl.showPicker === "function") {
+              dayOffDateEl.showPicker();
+            } else {
+              dayOffDateEl.focus();
+              dayOffDateEl.click();
+            }
+          } catch (_) {
+            // showPicker 실패 fallback: prompt 로 날짜 직접 입력
+            restoreHidden();
+            const picked = prompt("휴무요청 날짜를 입력하세요. (예: 2026-06-15)", dayOffDateEl.value || todayValue);
+            const trimmed = String(picked || "").trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+              dayOffDateEl.value = trimmed;
+              requestDayOffReduction(trimmed);
+            } else if (picked !== null) {
+              alert("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.");
+            }
+          }
+        });
       }
 
       /** 목록 행 UUID + 로컬에만 남아 있는 완료 캐시 UUID (행 병합 일시 누락 시에도 상태 API에 포함) */
