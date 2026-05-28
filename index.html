@@ -10743,6 +10743,53 @@ ${folderBtn}
         return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
       }
 
+      /** 관리자가 등록된 휴무요청을 취소(삭제). 작가가 직접 취소하지 못하거나 잘못 등록한 경우 사용.
+       *  대시보드/달력 두 곳에 표시되는 휴무요청 목록의 「취소」 버튼이 모두 이 함수로 들어온다. */
+      async function cancelDayoffRequestByAdmin(requestId) {
+        const id = String(requestId || "").trim();
+        if (!id) return;
+        if (!USE_SUPABASE_SYNC) {
+          alert("Supabase 연결이 필요합니다.");
+          return;
+        }
+        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
+        const target = requests.find((r) => String(r?.id || "").trim() === id);
+        if (!target) {
+          alert("취소할 휴무요청을 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+          return;
+        }
+        const writerName = String(target?.writerName || "").trim() || "작가미상";
+        const dateKey = String(target?.date || "").trim() || "-";
+        const confirmed = confirm(`${dateKey} ${writerName} 작가의 휴무요청을 취소하시겠습니까?`);
+        if (!confirmed) return;
+        try {
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/dayoff_requests?id=eq.${encodeURIComponent(id)}`,
+            {
+              method: "DELETE",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "return=minimal"
+              }
+            }
+          );
+          if (!response.ok) {
+            const errorText = await response.text();
+            const hint =
+              response.status === 401 || response.status === 403
+                ? " (Supabase dayoff_requests 에 anon DELETE RLS 정책이 필요합니다.)"
+                : "";
+            throw new Error(`삭제 실패 (${response.status}): ${errorText}${hint}`);
+          }
+          await pullDayoffRequestsFromSupabaseAndApply();
+          alert(`${dateKey} ${writerName} 휴무요청이 취소되었습니다.`);
+        } catch (error) {
+          console.error("[DAYOFF][cancel] 실패", error);
+          alert(`휴무요청 취소 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+        }
+      }
+
       function renderOpenDayoffSummary() {
         const now = new Date();
         const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -10784,13 +10831,20 @@ ${folderBtn}
             const writerRows = Object.keys(byWriter)
               .sort((a, b) => a.localeCompare(b, "ko"))
               .map((writerName) => {
-                const dateList = byWriter[writerName]
-                  .map((item) => escapeHtml(String(item?.date || "-")))
-                  .sort((a, b) => a.localeCompare(b))
-                  .join(", ");
+                // 각 행에 작은 「취소」 버튼을 붙여 관리자가 잘못 등록되거나 작가가 취소
+                // 요청한 휴무를 바로 삭제할 수 있게 한다. id 가 없는 옛 데이터는 버튼 숨김.
+                const dateChips = byWriter[writerName]
+                  .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")))
+                  .map((item) => {
+                    const dateText = escapeHtml(String(item?.date || "-"));
+                    const id = String(item?.id || "").trim();
+                    if (!id) return `<span style="white-space:nowrap;">${dateText}</span>`;
+                    return `<span style="white-space:nowrap;">${dateText}<button type="button" class="btn-sm" data-action="adminCancelDayoffRequest" data-request-id="${escapeHtml(id)}" style="margin-left:4px;padding:0 6px;font-size:0.72rem;color:#b91c1c;border-color:#fca5a5;" title="이 휴무요청 취소">취소</button></span>`;
+                  })
+                  .join(" · ");
                 return `
                   <div class="customer-alert-row" style="align-items: flex-start;">
-                    <span><strong>${escapeHtml(writerName)}</strong>: ${dateList || "-"}</span>
+                    <span><strong>${escapeHtml(writerName)}</strong>: <span style="display:inline-flex;flex-wrap:wrap;gap:6px;">${dateChips || "-"}</span></span>
                   </div>
                 `;
               })
@@ -13057,16 +13111,22 @@ ${folderBtn}
             const [rawWriterName, rawWriterId] = key.split("||");
             const writerName = escapeHtml(rawWriterName);
             const writerId = escapeHtml(rawWriterId);
-            const dateList = writerItems
+            // 각 휴무요청에 「취소」 버튼을 붙여 관리자가 바로 삭제할 수 있게 한다.
+            const entryChips = writerItems
+              .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")))
               .map((item) => {
                 const date = escapeHtml(String(item?.date || "-"));
                 const requestedAt = escapeHtml(String(item?.requestedAt || "").slice(0, 16).replace("T", " "));
-                return `${date}${requestedAt ? ` (${requestedAt})` : ""}`;
+                const id = String(item?.id || "").trim();
+                const cancelBtn = id
+                  ? `<button type="button" class="btn-sm" data-action="adminCancelDayoffRequest" data-request-id="${escapeHtml(id)}" style="margin-left:4px;padding:0 6px;font-size:0.72rem;color:#b91c1c;border-color:#fca5a5;" title="이 휴무요청 취소">취소</button>`
+                  : "";
+                return `<span style="white-space:nowrap;">${date}${requestedAt ? ` (${requestedAt})` : ""}${cancelBtn}</span>`;
               })
-              .join(", ");
+              .join(" · ");
             return `
               <div class="customer-alert-row" style="align-items: flex-start;">
-                <span><strong>${writerName}</strong> (${writerId}) : ${dateList || "-"}</span>
+                <span><strong>${writerName}</strong> (${writerId}) : <span style="display:inline-flex;flex-wrap:wrap;gap:6px;">${entryChips || "-"}</span></span>
               </div>
             `;
           })
@@ -20092,6 +20152,14 @@ ${folderBtn}
       applyMonthLimitBtnEl.addEventListener("click", applyGlobalLimitConfig);
       assignDayoffBtnEl?.addEventListener("click", assignWriterDayoffByAdmin);
       emergencyAddLimitBtnEl?.addEventListener("click", addEmergencyLimitByAdmin);
+      // 휴무요청 「취소」 버튼 — 대시보드/달력 양쪽 목록에서 모두 위임 처리.
+      document.addEventListener("click", (event) => {
+        const btn = event.target?.closest?.("button[data-action='adminCancelDayoffRequest']");
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void cancelDayoffRequestByAdmin(btn.dataset.requestId || "");
+      });
       inlineCalendarPrevBtnEl?.addEventListener("click", () => {
         const selectedYear = Number(yearFilterEl.value) || currentYear;
         const selectedMonth = monthFilterEl.value === "all" ? new Date().getMonth() + 1 : Number(monthFilterEl.value) || 1;
