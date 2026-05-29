@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>grade_studio</title>
-  <link rel="stylesheet" href="/styles.css?v=7" />
+  <link rel="stylesheet" href="/styles.css?v=11" />
 </head>
 <body class="mode-video">
   <!-- SVG filter chain applied to <video> for live preview
@@ -177,6 +177,12 @@
           <button type="button" id="btnReset" class="btn btn-ghost" title="이 클립 초기화">초기화</button>
         </div>
       </div>
+      <!-- 이름 붙은 프리셋 칩 — 클릭으로 적용, ✕ 로 삭제, 더블클릭으로 이름변경 -->
+      <div id="namedPresetRail" class="named-preset-rail">
+        <button type="button" id="btnNamedPresetAdd" class="np-add" title="현재 값을 이름 붙여 저장 — 클릭 시 이름 입력">➕ 이름저장</button>
+        <div id="namedPresetChips" class="np-chips"></div>
+      </div>
+
       <div class="panel-body" id="panelBody">
 
         <div class="hist-box" title="현재 보정값이 적용된 미리보기의 RGB 분포 — 좌측 어두움, 우측 밝음">
@@ -204,8 +210,14 @@
         </div>
 
         <div class="group-title">추가 보정</div>
-        <div class="slider-row" data-key="bright">
+        <div class="slider-row" data-key="midbr" title="감마를 올린 만큼 어두운부분을 동시에 낮춰서 미드톤만 밝게 — 그림자 디테일 보존">
           <label>밝기</label>
+          <input type="range" min="-100" max="100" step="1" value="0" />
+          <input type="number" min="-100" max="100" step="1" value="0" />
+          <span class="unit"></span>
+        </div>
+        <div class="slider-row" data-key="bright">
+          <label>대비밝기</label>
           <input type="range" min="-100" max="100" step="1" value="0" />
           <input type="number" min="-100" max="100" step="1" value="0" />
           <span class="unit"></span>
@@ -339,6 +351,6 @@
     </aside>
   </main>
 
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=19"></script>
 </body>
 </html>

@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>AI 경영 멘토 · 나를 키워주는 자문단</title>
+  <style>
+    :root {
+      --bg-0: #07080c;
+      --bg-1: #0e1118;
+      --bg-2: #141826;
+      --line: #252a3a;
+      --text: #e7ecf3;
+      --text-dim: #8a93a6;
+      --accent: #7c5cff;
+
+      --growth: #f5b400;   /* 성장 전략가 */
+      --ops: #00c2b8;      /* 운영·시스템 */
+      --people: #4285f4;   /* 사람·조직 */
+      --finance: #ff7a59;  /* 재무 */
+      --chair: #7c5cff;    /* 의장 종합 */
+
+      --danger: #ff5c7a;
+      --ok: #3ddc97;
+      --radius: 14px;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+        "Noto Sans KR", "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 8% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+        radial-gradient(1000px 700px at 112% 6%, rgba(0, 194, 184, 0.16), transparent 60%),
+        radial-gradient(900px 600px at 50% 116%, rgba(245, 180, 0, 0.12), transparent 60%),
+        linear-gradient(180deg, var(--bg-0), var(--bg-1));
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+
+    .shell { max-width: 1180px; margin: 0 auto; padding: 24px 18px 40px; }
+
+    header.top {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 4px 4px 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand .logo {
+      width: 42px; height: 42px; border-radius: 12px;
+      background: conic-gradient(from 210deg, var(--growth), var(--ops), var(--people), var(--finance), var(--growth));
+      box-shadow: 0 8px 30px rgba(124, 92, 255, 0.35); position: relative;
+    }
+    .brand .logo::after { content: ""; position: absolute; inset: 4px; border-radius: 9px; background: var(--bg-0); }
+    .brand .logo::before { content: "🏛️"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 18px; z-index: 2; }
+    .brand h1 { margin: 0; font-size: 19px; }
+    .brand .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+    .btn {
+      appearance: none; border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03); color: var(--text);
+      padding: 9px 14px; border-radius: 10px; cursor: pointer;
+      font-size: 13px; transition: all .15s ease;
+    }
+    .btn:hover { background: rgba(255, 255, 255, 0.07); border-color: #3a4258; }
+    .btn.primary { background: linear-gradient(135deg, var(--people), var(--accent)); border-color: transparent; color: #fff; }
+    .btn.primary:hover { filter: brightness(1.1); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .layout { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+    @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 16px;
+    }
+    .card h2 {
+      margin: 0 0 12px; font-size: 12px; color: var(--text-dim);
+      font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+    }
+
+    /* 대화 영역 */
+    #stream { display: flex; flex-direction: column; gap: 16px; min-height: 240px; }
+    .empty {
+      color: var(--text-dim); text-align: center; padding: 40px 16px; font-size: 14px; line-height: 1.7;
+    }
+    .msg { display: flex; flex-direction: column; gap: 6px; }
+    .msg.user { align-items: flex-end; }
+    .bubble {
+      max-width: 86%; padding: 12px 14px; border-radius: 14px; line-height: 1.65;
+      font-size: 14.5px; white-space: pre-wrap; word-break: break-word;
+    }
+    .msg.user .bubble {
+      background: rgba(245,180,0,0.12); border: 1px solid rgba(245,180,0,0.35);
+    }
+    .msg.user .who { font-size: 11px; color: var(--text-dim); }
+
+    /* 멘토(의장) 종합 */
+    .mentor-block { width: 100%; }
+    .chair {
+      border: 1px solid rgba(124,92,255,0.4);
+      background: rgba(124,92,255,0.08);
+      border-radius: 14px; padding: 14px 16px;
+    }
+    .chair .who { font-size: 12px; font-weight: 700; color: var(--chair); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .chair .text { font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; }
+    .chair .ask {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(245,180,0,0.1); border: 1px solid rgba(245,180,0,0.4);
+      font-size: 14px; line-height: 1.6;
+    }
+    .chair .ask b { color: var(--growth); }
+
+    .stage-badge {
+      font-size: 12px; color: var(--text-dim); padding: 6px 10px;
+      border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,0.03);
+      white-space: nowrap;
+    }
+
+    .panel-toggle {
+      margin-top: 8px; font-size: 12.5px; color: var(--text-dim);
+      background: none; border: none; cursor: pointer; padding: 4px 0; text-decoration: underline;
+    }
+    .panel { display: none; margin-top: 10px; gap: 10px; flex-direction: column; }
+    .panel.open { display: flex; }
+    .advisor { border-left: 3px solid var(--line); padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.02); }
+    .advisor .name { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+    .advisor .take { font-size: 13.5px; line-height: 1.6; color: #d4dae6; white-space: pre-wrap; }
+    .advisor.growth { border-color: var(--growth); } .advisor.growth .name { color: var(--growth); }
+    .advisor.ops { border-color: var(--ops); } .advisor.ops .name { color: var(--ops); }
+    .advisor.people { border-color: var(--people); } .advisor.people .name { color: var(--people); }
+    .advisor.finance { border-color: var(--finance); } .advisor.finance .name { color: var(--finance); }
+
+    .new-assign {
+      margin-top: 10px; font-size: 12.5px; color: var(--ok);
+      border: 1px dashed rgba(61,220,151,0.4); border-radius: 8px; padding: 8px 12px; background: rgba(61,220,151,0.06);
+    }
+    .new-assign b { color: var(--ok); }
+
+    /* 입력창 */
+    .composer { margin-top: 16px; display: flex; gap: 10px; align-items: flex-end; }
+    .composer textarea {
+      flex: 1; resize: none; min-height: 52px; max-height: 200px;
+      background: var(--bg-2); border: 1px solid var(--line); color: var(--text);
+      border-radius: 12px; padding: 12px 14px; font: inherit; font-size: 14.5px; line-height: 1.5;
+    }
+    .composer textarea:focus { outline: none; border-color: var(--accent); }
+
+    /* 사이드바 */
+    .side { display: flex; flex-direction: column; gap: 18px; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 11.5px; color: var(--text-dim); margin-bottom: 4px; }
+    .field textarea {
+      width: 100%; resize: vertical; min-height: 44px;
+      background: var(--bg-2); border: 1px solid var(--line); color: var(--text);
+      border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 13px; line-height: 1.5;
+    }
+    .field textarea:focus { outline: none; border-color: var(--accent); }
+
+    .assignment {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.02);
+    }
+    .assignment .body { flex: 1; }
+    .assignment .title { font-size: 13.5px; font-weight: 600; }
+    .assignment .detail { font-size: 12px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
+    .assignment .due { font-size: 11px; color: var(--growth); margin-top: 4px; }
+    .assignment .check {
+      width: 22px; height: 22px; flex: 0 0 22px; border-radius: 6px;
+      border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--ok); font-size: 13px;
+    }
+    .assignment .check:hover { border-color: var(--ok); }
+
+    .muted { color: var(--text-dim); font-size: 12.5px; line-height: 1.6; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      background: #1b2030; border: 1px solid var(--line); color: var(--text);
+      padding: 11px 18px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow);
+      opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 50; max-width: 90vw;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.error { border-color: var(--danger); color: #ffd9e0; }
+
+    .typing { display: inline-flex; gap: 4px; align-items: center; }
+    .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--chair); animation: blink 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>AI 경영 멘토</h1>
+          <div class="sub">나를 단계적으로 대기업 대표로 키워주는 상사 · 멘토</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="stageBadge" class="stage-badge" style="display:none;"></span>
+        <button class="btn" id="nextBtn">다음 지시 받기</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- 메인: 대화 -->
+      <main>
+        <div class="card">
+          <h2>멘토의 지시 · 나의 보고</h2>
+          <div id="stream">
+            <div class="empty" id="emptyState">
+              멘토가 현황을 점검하고 첫 지시를 준비하고 있습니다…<br/>
+              <span class="muted">여기서는 멘토가 묻고 지시하면, 대표님은 답하고 보고하면 됩니다.</span>
+            </div>
+          </div>
+          <div class="composer">
+            <textarea id="input" placeholder="멘토의 질문에 답하거나, 과제를 어디까지 했는지 보고하세요. (Cmd+Enter 전송)"></textarea>
+            <button class="btn primary" id="sendBtn">보고 / 답변</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- 사이드바 -->
+      <aside class="side">
+        <div class="card">
+          <h2>내 사업 (멘토의 기억)</h2>
+          <div class="field"><label>사업</label><textarea id="p_business"></textarea></div>
+          <div class="field"><label>팀 / 인력</label><textarea id="p_team"></textarea></div>
+          <div class="field"><label>고객</label><textarea id="p_customers"></textarea></div>
+          <div class="field"><label>목표</label><textarea id="p_goals"></textarea></div>
+          <div class="field"><label>고민 / 한계</label><textarea id="p_challenges"></textarea></div>
+          <button class="btn" id="saveProfileBtn2" style="width:100%;margin-top:4px;">저장</button>
+        </div>
+
+        <div class="card">
+          <h2>진행 중 과제</h2>
+          <div id="assignments"><div class="muted">아직 멘토가 내준 과제가 없습니다.</div></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = "/api/mentor";
+    const $ = (id) => document.getElementById(id);
+    const stream = $("stream");
+
+    function toast(msg, isError) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.className = "toast show" + (isError ? " error" : "");
+      clearTimeout(t._t);
+      t._t = setTimeout(() => { t.className = "toast"; }, 3200);
+    }
+
+    async function api(payload) {
+      const r = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) throw new Error(data.error || ("요청 실패 (" + r.status + ")"));
+      return data;
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    const ADVISOR_CLASS = {
+      "성장 전략가": "growth",
+      "운영·시스템 전문가": "ops",
+      "사람·조직 전문가": "people",
+      "재무 전문가": "finance",
+    };
+    function advisorClass(role) {
+      if (ADVISOR_CLASS[role]) return ADVISOR_CLASS[role];
+      const r = String(role || "");
+      if (r.includes("성장") || r.includes("전략")) return "growth";
+      if (r.includes("운영") || r.includes("시스템")) return "ops";
+      if (r.includes("사람") || r.includes("조직")) return "people";
+      if (r.includes("재무") || r.includes("돈")) return "finance";
+      return "";
+    }
+
+    function clearEmpty() {
+      const e = $("emptyState");
+      if (e) e.remove();
+    }
+
+    function addUserMsg(text) {
+      clearEmpty();
+      const div = document.createElement("div");
+      div.className = "msg user";
+      div.innerHTML = '<div class="who">대표님</div><div class="bubble">' + esc(text) + "</div>";
+      stream.appendChild(div);
+      div.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
+    function addMentorMsg({ message, ask, council, newAssignments }) {
+      clearEmpty();
+      const wrap = document.createElement("div");
+      wrap.className = "msg mentor-block";
+
+      let chair = '<div class="chair"><div class="who">🏛️ 멘토 (상사)</div>'
+        + '<div class="text">' + esc(message) + "</div>";
+      if (ask && ask.trim()) {
+        chair += '<div class="ask"><b>❓ 대표님께 묻습니다:</b> ' + esc(ask) + "</div>";
+      }
+      chair += "</div>";
+      let html = chair;
+
+      if (Array.isArray(council) && council.length) {
+        html += '<button class="panel-toggle">이 지시의 근거 — 자문단 회의 보기 ▾</button>';
+        html += '<div class="panel">';
+        for (const a of council) {
+          html += '<div class="advisor ' + advisorClass(a.role) + '">'
+            + '<div class="name">' + esc(a.role || "위원") + "</div>"
+            + '<div class="take">' + esc(a.take || "") + "</div></div>";
+        }
+        html += "</div>";
+      }
+
+      if (Array.isArray(newAssignments) && newAssignments.length) {
+        html += '<div class="new-assign"><b>📌 이번 과제 (지시):</b><br/>'
+          + newAssignments.map((a) => "· " + esc(a.title)).join("<br/>") + "</div>";
+      }
+
+      wrap.innerHTML = html;
+      const toggle = wrap.querySelector(".panel-toggle");
+      if (toggle) {
+        toggle.addEventListener("click", () => {
+          const p = wrap.querySelector(".panel");
+          p.classList.toggle("open");
+          toggle.textContent = p.classList.contains("open")
+            ? "자문단 회의 접기 ▴" : "이 지시의 근거 — 자문단 회의 보기 ▾";
+        });
+      }
+      stream.appendChild(wrap);
+      wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function setStage(stage) {
+      const b = $("stageBadge");
+      if (stage && stage.trim()) { b.textContent = "📈 " + stage; b.style.display = ""; }
+      else b.style.display = "none";
+    }
+
+    function showTyping() {
+      clearEmpty();
+      const div = document.createElement("div");
+      div.className = "msg mentor-block";
+      div.id = "typingMsg";
+      div.innerHTML = '<div class="chair"><div class="who">🏛️ 자문단이 회의 중…</div>'
+        + '<div class="typing"><span></span><span></span><span></span></div></div>';
+      stream.appendChild(div);
+      div.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+    function removeTyping() { const t = $("typingMsg"); if (t) t.remove(); }
+
+    // ---- 과제 ----
+    function renderAssignments(list) {
+      const box = $("assignments");
+      if (!Array.isArray(list) || !list.length) {
+        box.innerHTML = '<div class="muted">아직 멘토가 내준 과제가 없습니다.</div>';
+        return;
+      }
+      box.innerHTML = "";
+      for (const a of list) {
+        const el = document.createElement("div");
+        el.className = "assignment";
+        el.innerHTML =
+          '<button class="check" title="완료">✓</button>'
+          + '<div class="body"><div class="title">' + esc(a.title) + "</div>"
+          + (a.detail ? '<div class="detail">' + esc(a.detail) + "</div>" : "")
+          + (a.due_date ? '<div class="due">기한 ' + esc(a.due_date) + "</div>" : "")
+          + "</div>";
+        el.querySelector(".check").addEventListener("click", async () => {
+          try {
+            await api({ action: "complete_assignment", id: a.id });
+            el.remove();
+            if (!$("assignments").children.length) renderAssignments([]);
+            toast("과제를 완료 처리했습니다.");
+          } catch (e) { toast(e.message, true); }
+        });
+        box.appendChild(el);
+      }
+    }
+
+    // ---- 프로필 ----
+    function fillProfile(p) {
+      p = p || {};
+      $("p_business").value = p.business || "";
+      $("p_team").value = p.team || "";
+      $("p_customers").value = p.customers || "";
+      $("p_goals").value = p.goals || "";
+      $("p_challenges").value = p.challenges || "";
+    }
+    async function saveProfile() {
+      try {
+        const profile = {
+          business: $("p_business").value.trim(),
+          team: $("p_team").value.trim(),
+          customers: $("p_customers").value.trim(),
+          goals: $("p_goals").value.trim(),
+          challenges: $("p_challenges").value.trim(),
+        };
+        const res = await api({ action: "update_profile", profile });
+        fillProfile(res.profile);
+        toast("사업 정보를 저장했습니다.");
+      } catch (e) { toast(e.message, true); }
+    }
+
+    // ---- 초기 로드 ----
+    async function loadState() {
+      try {
+        const res = await api({ action: "get_state" });
+        fillProfile(res.profile);
+        renderAssignments(res.assignments);
+        if (Array.isArray(res.messages) && res.messages.length) {
+          clearEmpty();
+          let lastStage = "";
+          for (const m of res.messages) {
+            if (m.role === "user") addUserMsg(m.content);
+            else {
+              const p = m.panel || {};
+              addMentorMsg({
+                message: p.message || m.content,
+                ask: p.ask || "",
+                council: p.council || p.panel || [],
+                newAssignments: [],
+              });
+              if (p.stage) lastStage = p.stage;
+            }
+          }
+          setStage(lastStage);
+        } else {
+          // 대화가 없으면 멘토가 먼저 말을 건다 (주도권은 멘토에게)
+          await runTurn(null);
+        }
+      } catch (e) {
+        toast("초기 로드 실패: " + e.message, true);
+      }
+    }
+
+    // 한 턴 진행. text 가 null 이면 멘토가 먼저 주도(킥오프/다음 지시).
+    async function runTurn(text) {
+      $("sendBtn").disabled = true;
+      $("nextBtn").disabled = true;
+      if (text) addUserMsg(text);
+      showTyping();
+      try {
+        const payload = { action: "chat" };
+        if (text) payload.message = text;
+        const res = await api(payload);
+        removeTyping();
+        addMentorMsg({
+          message: res.message,
+          ask: res.ask,
+          council: res.council,
+          newAssignments: res.new_assignments,
+        });
+        setStage(res.stage);
+        if (Array.isArray(res.new_assignments) && res.new_assignments.length) {
+          await loadAssignmentsOnly();
+        }
+      } catch (e) {
+        removeTyping();
+        toast(e.message, true);
+      } finally {
+        $("sendBtn").disabled = false;
+        $("nextBtn").disabled = false;
+        $("input").focus();
+      }
+    }
+
+    // ---- 보고/답변 ----
+    async function send() {
+      const input = $("input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      input.style.height = "auto";
+      await runTurn(text);
+    }
+
+    async function loadAssignmentsOnly() {
+      try {
+        const res = await api({ action: "get_state" });
+        renderAssignments(res.assignments);
+      } catch (_) {}
+    }
+
+    // 이벤트
+    $("sendBtn").addEventListener("click", send);
+    $("input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+    });
+    $("input").addEventListener("input", function () {
+      this.style.height = "auto";
+      this.style.height = Math.min(this.scrollHeight, 200) + "px";
+    });
+    $("nextBtn").addEventListener("click", () => runTurn(null));
+    $("saveProfileBtn2").addEventListener("click", saveProfile);
+
+    loadState();
+  </script>
+</body>
+</html>

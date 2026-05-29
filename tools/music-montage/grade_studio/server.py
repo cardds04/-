@@ -63,7 +63,8 @@ DEFAULT_HSL = {ch: {"h": 0, "s": 0, "l": 0} for ch in HSL_CHANNELS}
 DEFAULT_GRADE: dict = {
     "temp": 6500,
     "tint": 0,
-    "bright": 0,
+    "midbr": 0,           # 새 "밝기" — 감마 +midbr / 어두운부분 -midbr 동시 적용
+    "bright": 0,          # "대비밝기" — 전체 균일 리프트
     "gamma": 0,
     "rolloff": 0,
     "expo": 0,
@@ -95,12 +96,20 @@ ALLOWED_XTYPES = {
     "slideleft", "slideright",
 }
 PRESET_FILE = CACHE_ROOT / "preset_slot.json"
+# 이름 붙은 프리셋 — 여러 개 저장/이름변경/삭제 가능 (사전저장 슬롯과 별개)
+NAMED_PRESETS_FILE = CACHE_ROOT / "named_presets.json"
 
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
 
 # 강제 음악 폴더 — 페이지 새로고침할 때마다 무조건 이 경로로 복귀.
 # 임시 picker 로 다른 폴더를 가리키더라도 다음 /api/state 호출 시점에 덮어씀.
-FORCED_MUSIC_FOLDER = Path("/Volumes/ssd/ssd데스크탑/영어노래")
+FORCED_MUSIC_FOLDER = Path.home() / "Downloads" / "ssd데스크탑" / "가사있는노래"
+
+# 🖼 로고 파일 picker 의 기본 열림 위치 (없으면 macOS 기본)
+DEFAULT_LOGO_FOLDER = Path.home() / "Downloads" / "ssd데스크탑" / "로고"
+
+# 📁 영상 폴더 picker 의 기본 열림 위치 (없으면 macOS 기본)
+DEFAULT_VIDEO_FOLDER = Path.home() / "Downloads" / "영상편집중"
 
 # 업체별 로고 이력 — 사용자가 로고를 한 번 고르면 (폴더명 → 로고경로) 매핑이 저장되고,
 # 같은 업체의 폴더를 다시 열면 그 로고가 자동으로 따라온다.
@@ -273,8 +282,12 @@ def _build_color_matrix_py(g: dict) -> tuple[list[list[float]], float]:
 
 
 def _build_tone_curve_lut(g: dict, n: int = 33) -> list[float]:
-    bl = float(g.get("bl", 0) or 0) / 100.0
-    sh = float(g.get("sh", 0) or 0) / 100.0
+    # 대비밝기(bright) 만 자동 그림자 크러시 — 밝기(midbr) 는 그림자에 영향 X (app.js 와 동일).
+    midbr = float(g.get("midbr", 0) or 0)
+    bright_v = float(g.get("bright", 0) or 0)
+    br_pos = max(0.0, bright_v)
+    bl = (float(g.get("bl", 0) or 0) - br_pos * 0.5) / 100.0
+    sh = (float(g.get("sh", 0) or 0) - br_pos * 2.0) / 100.0
     hi = float(g.get("hi", 0) or 0) / 100.0
     wh = float(g.get("wh", 0) or 0) / 100.0
     xs = [0.00, 0.25, 0.50, 0.75, 1.00]
@@ -299,9 +312,11 @@ def _build_tone_curve_lut(g: dict, n: int = 33) -> list[float]:
         t = (x - x0) / max(1e-9, (x1 - x0))
         out.append(y0 + (y1 - y0) * t)
 
-    # ── 추가 톤 (밝기/감마/롤오프) — app.js buildToneCurveLut 와 동일 ──
+    # ── 추가 톤 (대비밝기/감마+midbr/롤오프) — app.js buildToneCurveLut 와 동일 ──
+    # 대비밝기(bright) → 전체 균일 +N (additive)
+    # 밝기(midbr)      → 미드톤 push (gamma 곱) — 그림자 영향 없음
     br = (float(g.get("bright", 0) or 0) / 100.0) * 0.25
-    gm = float(g.get("gamma", 0) or 0) / 100.0
+    gm = (float(g.get("gamma", 0) or 0) + midbr) / 100.0
     ro = float(g.get("rolloff", 0) or 0) / 100.0
     gamma_exp = 2.0 ** (-gm)
     if br != 0 or gm != 0 or ro != 0:
@@ -325,7 +340,7 @@ def _build_tone_curve_lut(g: dict, n: int = 33) -> list[float]:
 
 def _grade_signature(g: dict) -> str:
     """LUT 파일 캐시 키 — 같은 grade 면 같은 LUT 재사용."""
-    keys = ("temp", "tint", "bright", "gamma", "rolloff",
+    keys = ("temp", "tint", "midbr", "bright", "gamma", "rolloff",
             "expo", "contrast", "hi", "sh", "wh", "bl",
             "sat", "vib", "dh")
     parts = []
@@ -352,7 +367,7 @@ def _is_identity_grade(g: dict) -> bool:
     """color/tone 슬라이더가 모두 default 면 LUT 불필요."""
     try:
         if abs(float(g.get("temp", 6500) or 6500) - 6500.0) > 0.5: return False
-        for k in ("tint","bright","gamma","rolloff",
+        for k in ("tint","midbr","bright","gamma","rolloff",
                   "expo","contrast","hi","sh","wh","bl","sat","vib","dh"):
             if abs(float(g.get(k, 0) or 0)) > 0.5: return False
         # HSL 모두 0 인지 검사
@@ -1135,13 +1150,22 @@ def start_proxy_build(video: Path) -> str:
     return "building"
 
 
-def osascript_pick_folder(prompt: str = "영상 폴더를 선택하세요") -> Path | None:
-    """macOS Finder 폴더 선택 다이얼로그. 취소 시 None."""
+def osascript_pick_folder(
+    prompt: str = "영상 폴더를 선택하세요",
+    default_location: Path | None = None,
+) -> Path | None:
+    """macOS Finder 폴더 선택 다이얼로그. 취소 시 None.
+    default_location 이 실제 존재하면 그 위치에서 다이얼로그 시작."""
     if sys.platform != "darwin":
         return None
+    default_clause = ""
+    if default_location is not None and Path(default_location).is_dir():
+        esc = str(default_location).replace('"', '\\"')
+        default_clause = f' default location (POSIX file "{esc}")'
+    script = f'POSIX path of (choose folder with prompt "{prompt}"{default_clause})'
     try:
         cp = subprocess.run(
-            ["osascript", "-e", f'POSIX path of (choose folder with prompt "{prompt}")'],
+            ["osascript", "-e", script],
             capture_output=True, text=True, timeout=600,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -1157,9 +1181,17 @@ def osascript_pick_folder(prompt: str = "영상 폴더를 선택하세요") -> P
 def osascript_pick_image(prompt: str = "로고 이미지 파일을 선택하세요") -> Path | None:
     if sys.platform != "darwin":
         return None
+    # 기본 위치 = DEFAULT_LOGO_FOLDER (존재하면). AppleScript 의 `default location` 은
+    # POSIX file 객체를 받음 — 폴더가 없으면 macOS 가 마지막 위치 사용.
+    default_loc = ""
+    if DEFAULT_LOGO_FOLDER.is_dir():
+        # 따옴표 이스케이프 (폴더명에 쌍따옴표가 들어가는 경우 대비)
+        esc = str(DEFAULT_LOGO_FOLDER).replace('"', '\\"')
+        default_loc = f' default location (POSIX file "{esc}")'
     script = (
-        'POSIX path of (choose file with prompt "' + prompt + '" '
-        'of type {"public.image","png","jpg","jpeg","webp","PNG","JPG","JPEG","WEBP"})'
+        'POSIX path of (choose file with prompt "' + prompt + '"'
+        + default_loc +
+        ' of type {"public.image","png","jpg","jpeg","webp","PNG","JPG","JPEG","WEBP"})'
     )
     try:
         cp = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
@@ -1486,6 +1518,43 @@ def load_preset_slot() -> dict | None:
         return None
 
 
+def load_named_presets() -> list[dict]:
+    """이름 붙은 프리셋 목록. 각 항목: {id, name, grade, saved_at}."""
+    if not NAMED_PRESETS_FILE.is_file():
+        return []
+    try:
+        d = json.loads(NAMED_PRESETS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    items = d.get("presets") if isinstance(d, dict) else None
+    if not isinstance(items, list):
+        return []
+    out: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        nm = str(it.get("name") or "").strip()
+        if not nm:
+            continue
+        pid = str(it.get("id") or "")
+        if not pid:
+            pid = hashlib.sha1(f"{nm}|{time.time_ns()}".encode("utf-8")).hexdigest()[:12]
+        grade = it.get("grade") if isinstance(it.get("grade"), dict) else {}
+        out.append({"id": pid, "name": nm, "grade": grade, "saved_at": int(it.get("saved_at") or 0)})
+    return out
+
+
+def save_named_presets(items: list[dict]) -> None:
+    NAMED_PRESETS_FILE.write_text(
+        json.dumps({"version": 1, "presets": items}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _new_preset_id() -> str:
+    return hashlib.sha1(f"{time.time_ns()}|{os.getpid()}".encode("utf-8")).hexdigest()[:12]
+
+
 def save_preset_slot(grade: dict) -> None:
     PRESET_FILE.write_text(
         json.dumps({"grade": grade, "saved_at": int(time.time())}, ensure_ascii=False, indent=2),
@@ -1579,6 +1648,9 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
 
         if p == "/api/preset":
             return self._json({"grade": load_preset_slot()})
+
+        if p == "/api/named_presets":
+            return self._json({"presets": load_named_presets()})
 
         if p == "/api/snapshots":
             return self._json({"snapshots": list_snapshots()})
@@ -2099,7 +2171,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             return self._json({"ok": ok})
 
         if p == "/api/pick_folder":
-            picked = osascript_pick_folder()
+            picked = osascript_pick_folder(default_location=DEFAULT_VIDEO_FOLDER)
             if picked is None:
                 return self._json({"cancelled": True})
             auto_logo = find_business_logo(picked.name)
@@ -2154,6 +2226,80 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             sg = self._sanitize_grade(grade)
             save_preset_slot(sg)
             return self._json({"ok": True, "grade": sg})
+
+        if p == "/api/named_presets/save":
+            name = str(body.get("name") or "").strip()
+            if not name:
+                return self._json({"error": "이름이 비어있음"}, 400)
+            if len(name) > 40:
+                name = name[:40]
+            grade = body.get("grade") or {}
+            sg = self._sanitize_grade(grade)
+            pid = str(body.get("id") or "").strip()
+            items = load_named_presets()
+            now = int(time.time())
+            if pid:
+                # 기존 id 업데이트 (이름/grade 둘 다 가능)
+                found = False
+                for it in items:
+                    if it["id"] == pid:
+                        it["name"] = name
+                        it["grade"] = sg
+                        it["saved_at"] = now
+                        found = True
+                        break
+                if not found:
+                    pid = _new_preset_id()
+                    items.append({"id": pid, "name": name, "grade": sg, "saved_at": now})
+            else:
+                # 같은 이름이 이미 있으면 덮어쓰기, 없으면 새로 추가
+                replaced = False
+                for it in items:
+                    if it["name"] == name:
+                        it["grade"] = sg
+                        it["saved_at"] = now
+                        pid = it["id"]
+                        replaced = True
+                        break
+                if not replaced:
+                    pid = _new_preset_id()
+                    items.append({"id": pid, "name": name, "grade": sg, "saved_at": now})
+            try:
+                save_named_presets(items)
+            except OSError as exc:
+                return self._json({"error": f"저장 실패: {exc}"}, 500)
+            return self._json({"ok": True, "id": pid, "name": name, "grade": sg, "saved_at": now})
+
+        if p == "/api/named_presets/delete":
+            pid = str(body.get("id") or "").strip()
+            if not pid:
+                return self._json({"error": "bad id"}, 400)
+            items = [it for it in load_named_presets() if it["id"] != pid]
+            try:
+                save_named_presets(items)
+            except OSError as exc:
+                return self._json({"error": f"삭제 실패: {exc}"}, 500)
+            return self._json({"ok": True, "count": len(items)})
+
+        if p == "/api/named_presets/rename":
+            pid = str(body.get("id") or "").strip()
+            name = str(body.get("name") or "").strip()
+            if not pid or not name:
+                return self._json({"error": "bad id/name"}, 400)
+            if len(name) > 40:
+                name = name[:40]
+            items = load_named_presets()
+            for it in items:
+                if it["id"] == pid:
+                    it["name"] = name
+                    break
+            else:
+                return self._json({"error": "preset not found"}, 404)
+            try:
+                save_named_presets(items)
+            except OSError as exc:
+                return self._json({"error": f"이름변경 실패: {exc}"}, 500)
+            return self._json({"ok": True, "id": pid, "name": name})
 
         if p == "/api/remove_clips":
             ids = body.get("ids") or []

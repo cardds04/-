@@ -4,6 +4,24 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 
+// 로컬 개발용 .env 로더 (의존성 없음). 이미 설정된 환경변수는 덮어쓰지 않으므로
+// Vercel 처럼 환경변수가 주입되는 곳에서는 영향이 없다.
+(function loadDotEnv() {
+  try {
+    const envPath = path.join(__dirname, ".env");
+    if (!fs.existsSync(envPath)) return;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m) continue;
+      const key = m[1];
+      if (process.env[key] !== undefined) continue;
+      let val = m[2];
+      if (/^".*"$/.test(val) || /^'.*'$/.test(val)) val = val.slice(1, -1);
+      process.env[key] = val;
+    }
+  } catch (_) {}
+})();
+
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
 const DATA_DIR = path.join(__dirname, "data");
@@ -27,6 +45,7 @@ const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-gener
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
 const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
+const { handleMentorRequest } = require("./lib/mentor-logic.cjs");
 const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
 
 function readState() {
@@ -108,6 +127,18 @@ app.post("/api/ai-debate", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[ai-debate]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** AI 경영 멘토(Claude 4인 자문단 + 기억) — lib/mentor-logic.cjs (Vercel api/mentor.js 와 공유) */
+app.post("/api/mentor", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleMentorRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[mentor]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });

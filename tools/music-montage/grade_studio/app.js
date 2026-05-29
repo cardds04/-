@@ -12,7 +12,7 @@
 
   const SLIDER_KEYS = [
     "temp", "tint",
-    "bright", "gamma", "rolloff",
+    "midbr", "bright", "gamma", "rolloff",
     "expo", "contrast", "hi", "sh", "wh", "bl",
     "sat", "vib", "tex", "clr", "dh",
   ];
@@ -30,7 +30,7 @@
   const DEFAULT_HSL = HSL_CHANNELS.reduce((m, ch) => (m[ch] = {...DEFAULT_HSL_CELL}, m), {});
   const DEFAULT_GRADE = {
     temp: 6500, tint: 0,
-    bright: 0, gamma: 0, rolloff: 0,
+    midbr: 0, bright: 0, gamma: 0, rolloff: 0,
     expo: 0, contrast: 0, hi: 0, sh: 0, wh: 0, bl: 0,
     sat: 0, vib: 0, tex: 0, clr: 0, dh: 0,
     hsl: DEFAULT_HSL,
@@ -229,8 +229,12 @@
   // 5 control points at x = 0, .25, .5, .75, 1.0 with y offsets per slider.
   // Sampled to 33-point LUT, then formatted as SVG tableValues.
   function buildToneCurveLut(g) {
-    const bl = (g.bl || 0) / 100;   // -1..1
-    const sh = (g.sh || 0) / 100;
+    // 대비밝기(bright) 만 자동 그림자 크러시 — 밝기(midbr) 는 그림자에 영향 X.
+    //   bright +50 → sh anchor 자동 -100, bl anchor -25
+    //   bright < 0 은 자동 크러시 비활성
+    const brPos = Math.max(0, g.bright || 0);
+    const bl = ((g.bl || 0) - brPos * 0.5) / 100;
+    const sh = ((g.sh || 0) - brPos * 2.0) / 100;
     const hi = (g.hi || 0) / 100;
     const wh = (g.wh || 0) / 100;
 
@@ -266,8 +270,10 @@
     // bright  : -100..+100 → ±0.25 additive (전체 균일 리프트)
     // gamma   : -100..+100 → exponent 1/2^(g/100). +100 = 미드톤 ↑, -100 = 미드톤 ↓
     // rolloff : -100..+100. >0 = 하이라이트 부드럽게 압축, <0 = 약간 강조
+    // 대비밝기(bright) → 전체 균일 +N (additive)
+    // 밝기(midbr)      → 미드톤 push (gamma 곱) — 그림자에 부수효과 없이 미드만 올림
     const br = ((g.bright || 0) / 100) * 0.25;
-    const gm = (g.gamma || 0) / 100;
+    const gm = ((g.gamma || 0) + (g.midbr || 0)) / 100;
     const ro = (g.rolloff || 0) / 100;
     const gammaExp = Math.pow(2, -gm);  // y^gammaExp; gm>0 → exp<1 → midtones up
     const applyExtra = (br !== 0 || gm !== 0 || ro !== 0);
@@ -1776,6 +1782,148 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 이름 붙은 프리셋 (여러 개 저장 가능) — 패널 헤더 아래 칩 레일로 표시
+  state.namedPresets = [];   // [{id, name, grade, saved_at}]
+
+  async function loadNamedPresets() {
+    try {
+      const r = await fetch("/api/named_presets");
+      const j = await r.json();
+      state.namedPresets = Array.isArray(j.presets) ? j.presets : [];
+    } catch (_) { state.namedPresets = []; }
+    renderNamedPresetChips();
+  }
+  // 색온도 K 값을 대략적인 RGB 색상으로 — 칩 도트용 시각 단서
+  function _kelvinToHex(k) {
+    // 매우 단순한 근사: 3000=주황, 5500=흰, 10000=청
+    const t = Math.max(0, Math.min(1, (k - 3000) / 7000));
+    const r = Math.round(255 * (t < 0.5 ? 1 : 1 - (t - 0.5) * 0.9));
+    const g = Math.round(255 * (0.7 + 0.3 * (1 - Math.abs(t - 0.5) * 2)));
+    const b = Math.round(255 * t);
+    return `rgb(${r},${g},${b})`;
+  }
+  function renderNamedPresetChips() {
+    const root = $("#namedPresetChips");
+    if (!root) return;
+    root.innerHTML = "";
+    state.namedPresets.forEach(ps => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "np-chip";
+      chip.dataset.id = ps.id;
+      chip.title = `${ps.name} — 클릭: 선택 클립에 적용 / 더블클릭: 이름변경 / ✕: 삭제`;
+      const dot = document.createElement("span");
+      dot.className = "np-chip-dot";
+      dot.style.background = _kelvinToHex(Number(ps.grade?.temp || 6500));
+      const nm = document.createElement("span");
+      nm.className = "np-chip-name";
+      nm.textContent = ps.name;
+      const x = document.createElement("span");
+      x.className = "np-chip-x";
+      x.textContent = "✕";
+      x.title = "삭제";
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!confirm(`프리셋 "${ps.name}" 을 삭제할까요?`)) return;
+        deleteNamedPreset(ps.id);
+      });
+      chip.appendChild(dot);
+      chip.appendChild(nm);
+      chip.appendChild(x);
+      chip.addEventListener("click", () => applyNamedPresetToSelected(ps.id));
+      chip.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        const newName = prompt("새 이름:", ps.name);
+        if (newName && newName.trim() && newName.trim() !== ps.name) {
+          renameNamedPreset(ps.id, newName.trim());
+        }
+      });
+      root.appendChild(chip);
+    });
+  }
+  async function saveNewNamedPreset() {
+    const c = currentClip();
+    if (!c) { setBusyShort("클립/사진 선택 필요"); return; }
+    // 기본 이름 — 중복 안 되게 '프리셋 N'
+    const usedNames = new Set(state.namedPresets.map(p => p.name));
+    let defaultName = "";
+    for (let i = 1; i < 100; i++) {
+      const cand = `프리셋 ${i}`;
+      if (!usedNames.has(cand)) { defaultName = cand; break; }
+    }
+    const name = prompt("프리셋 이름:", defaultName);
+    if (!name || !name.trim()) return;
+    try {
+      const r = await fetch("/api/named_presets/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), grade: c.grade }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) { alert(j.error || "저장 실패"); return; }
+      await loadNamedPresets();
+      setBusyShort(`프리셋 "${name.trim()}" 저장됨`);
+    } catch (err) { console.error(err); setBusyShort("저장 실패"); }
+  }
+  async function deleteNamedPreset(id) {
+    try {
+      const r = await fetch("/api/named_presets/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!r.ok) { alert("삭제 실패"); return; }
+      await loadNamedPresets();
+    } catch (err) { console.error(err); }
+  }
+  async function renameNamedPreset(id, name) {
+    try {
+      const r = await fetch("/api/named_presets/rename", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name }),
+      });
+      if (!r.ok) { alert("이름변경 실패"); return; }
+      await loadNamedPresets();
+    } catch (err) { console.error(err); }
+  }
+  async function applyNamedPresetToSelected(id) {
+    const ps = state.namedPresets.find(p => p.id === id);
+    if (!ps) return;
+    const ids = state.selectedIds.size ? state.selectedIds : new Set([state.activeId]);
+    if (!ids.size || (ids.size === 1 && state.activeId < 0)) return;
+    pushHistoryBatch(Array.from(ids));
+    const items = [];
+    let n = 0;
+    state.clips.forEach(c => {
+      if (!ids.has(c.id)) return;
+      // SLIDER_KEYS (트림 제외) 만 복사
+      SLIDER_KEYS.forEach(k => { c.grade[k] = Number(ps.grade[k] ?? DEFAULT_GRADE[k]); });
+      const presetHsl = cloneGrade(ps.grade).hsl;
+      c.grade.hsl = presetHsl;
+      markClipGraded(c);
+      const t = _saveTimers.get(c.id);
+      if (t) { clearTimeout(t); _saveTimers.delete(c.id); }
+      items.push({ id: c.id, grade: c.grade });
+      n++;
+    });
+    const ac = currentClip();
+    if (ac) { writeGradeToPanel(ac.grade); applyMatrixToFilter(ac.grade); }
+    setBusyShort(`"${ps.name}" 적용 (${n}개)`);
+    // 일괄 저장 — 모드별 endpoint 분기 (사진 / 영상)
+    try {
+      const isPhoto = isPhotoMode();
+      const url = isPhoto ? "/api/photo/save_grade_bulk" : "/api/save_bulk";
+      await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+    } catch (err) { console.error("bulk save failed", err); }
+  }
+  function bindNamedPresetRail() {
+    const addBtn = $("#btnNamedPresetAdd");
+    if (addBtn) addBtn.addEventListener("click", saveNewNamedPreset);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // Preset slot
   async function loadPresetSlot() {
     try {
@@ -2432,19 +2580,23 @@
           });
         }
         loadSnapshots();
+        // 음악 순서 라벨 등 빌드 후 갱신되는 값을 즉시 반영
+        reloadState({ preserveActive: true }).catch(() => {});
         return;
       }
       if (typeof j.status === "string" && j.status.startsWith("error") && queueSize === 0) {
         $("#buildTitle").textContent = "❌ 실패";
         $("#buildFoot").textContent = j.status;
         loadSnapshots();
+        reloadState({ preserveActive: true }).catch(() => {});
         return;
       }
       // running 또는 다음 작업 대기 중 — 헤더 갱신
       $("#buildTitle").innerHTML = `<span class="spinner"></span><span>영상 만드는 중…${qInfo}</span>`;
       if (j.status === "done" || (typeof j.status === "string" && j.status.startsWith("error"))) {
-        // transitioning to next job
+        // transitioning to next job — 큐의 다음 작업으로 넘어가는 시점에도 음악 라벨 갱신
         loadSnapshots();
+        reloadState({ preserveActive: true }).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -2985,7 +3137,9 @@
     bindTabNav();
     bindPhotoTopbarButtons();
     bindPhotoDragDrop();
+    bindNamedPresetRail();
     await loadPresetSlot();
+    await loadNamedPresets();
     await loadSnapshots();
     await reloadState();
   }
