@@ -550,6 +550,29 @@
             ) {
               return;
             }
+            // PAYROLL_MONTHLY: per-record(writerId+monthKey) merge — 가장 최근 updatedAt 보존.
+            // 작가가 톨비/주차비 추가 직후 hydrate 가 옛 서버 값으로 덮어쓰던 race 해결.
+            if (String(k) === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) {
+              try {
+                const incomingArr = JSON.parse(this.normalizeKvValue(v) || "[]");
+                const localRaw = this.memoryStore.get(String(k));
+                const localArr = JSON.parse(localRaw || "[]");
+                if (Array.isArray(incomingArr) && Array.isArray(localArr)) {
+                  const merged = new Map();
+                  const keyOf = (r) => `${r?.writerId || ""}|${r?.monthKey || ""}`;
+                  const tsOf = (r) => new Date(r?.updatedAt || 0).getTime() || 0;
+                  // 우선 incoming 으로 채움 → local 이 더 최신이면 덮어씀.
+                  incomingArr.forEach((r) => merged.set(keyOf(r), r));
+                  localArr.forEach((r) => {
+                    const k2 = keyOf(r);
+                    const cur = merged.get(k2);
+                    if (!cur || tsOf(r) >= tsOf(cur)) merged.set(k2, r);
+                  });
+                  this.memoryStore.set(String(k), JSON.stringify([...merged.values()]));
+                  return;
+                }
+              } catch (_) {}
+            }
             this.memoryStore.set(String(k), this.normalizeKvValue(v));
           });
           try {
@@ -759,9 +782,10 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
         // 급여 설정은 관리자(index.html)가 권위 있는 소스. 사진기사 세션이 올리지 않음.
+        // 단, PAYROLL_MONTHLY 는 작가가 톨비·주차비 등 직접 추가하므로 push 허용.
+        // 관리자 권위 보존은 hydrate 의 per-record merge(updatedAt) 로 처리.
         const PHOTOGRAPHER_READONLY_KEYS = new Set([
-          STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG,
-          STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY
+          STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG
         ]);
         const localKv = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
@@ -3856,6 +3880,16 @@
         if (payrollMemoInputEl) payrollMemoInputEl.value = "";
         if (payrollFileInputEl) payrollFileInputEl.value = "";
         renderPhotographerPayroll();
+        // 추가 직후 즉시 서버 push — 2.5s debounce 동안 hydrate 가 옛 값으로 덮는 race 차단.
+        try {
+          if (scheduleSiteClientKvState.supabasePushTimer) {
+            clearTimeout(scheduleSiteClientKvState.supabasePushTimer);
+            scheduleSiteClientKvState.supabasePushTimer = null;
+          }
+          if (typeof window.__scheduleSitePushClientKv === "function") {
+            void window.__scheduleSitePushClientKv();
+          }
+        } catch (_) {}
       });
 
       payrollLinesListEl?.addEventListener("click", (event) => {
@@ -3869,6 +3903,16 @@
         rec.lines = lines;
         persistMonthlyPayrollRecord(rec);
         renderPhotographerPayroll();
+        // 삭제 직후 즉시 push — hydrate 가 옛 값으로 되살리지 않게 한다.
+        try {
+          if (scheduleSiteClientKvState.supabasePushTimer) {
+            clearTimeout(scheduleSiteClientKvState.supabasePushTimer);
+            scheduleSiteClientKvState.supabasePushTimer = null;
+          }
+          if (typeof window.__scheduleSitePushClientKv === "function") {
+            void window.__scheduleSitePushClientKv();
+          }
+        } catch (_) {}
       });
 
       window.addEventListener("storage", (event) => {
