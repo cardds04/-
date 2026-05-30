@@ -1774,22 +1774,28 @@
             return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
         };
+        // 본인 업체 일정·결제·익명점유를 서버에서 1회 조회(토큰). schedules·payments
+        // 양쪽이 이 결과를 공유하고, 실패 시 각자 레거시 anon 으로 폴백한다.
+        const scopedDataPromise = fetchScopedCustomerData();
         const [companiesRows, customersRows, schedulesRows, paymentsRows, dayoffRows] = await Promise.all([
           fetchJsonRows(
             `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
           fetchCustomersRowsForPull(),
           (async () => {
-            // 본인 업체 일정만 서버에서 전체 필드로 조회(+타 업체 익명 점유 캐시).
-            const scoped = await fetchScopedSchedulesAndOccupancy();
-            if (scoped) return scoped;
+            const scoped = await scopedDataPromise;
+            if (scoped && Array.isArray(scoped.schedules)) return scoped.schedules;
             // 폴백(토큰 없음/서버 장애): 레거시 anon 전체 조회. occupancy 캐시는 비워
             // getBookedCountForDate 가 STORAGE_ADMIN_SCHEDULES(전 업체) 기준으로 동작하게 한다.
             // (B-4 에서 anon 잠금 후에는 이 경로가 빈 배열을 받게 되므로, 그 전까지의 안전망)
             try { localStorage.removeItem(STORAGE_OCCUPANCY); } catch (_) {}
             return await fetchJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status,updated_at,created_at&order=updated_at.desc");
           })(),
-          fetchPaymentsRowsForPull(),
+          (async () => {
+            const scoped = await scopedDataPromise;
+            if (scoped && Array.isArray(scoped.payments)) return scoped.payments;
+            return await fetchPaymentsRowsForPull(); // 폴백: 레거시 anon 본인 업체 결제 조회
+          })(),
           fetchJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
         const normalizePaymentStatusFromPaymentsTable = (rawStatus) => {
@@ -2565,9 +2571,9 @@
       }
 
       /** 본인 업체 일정(전체 필드) + 타 업체 익명 점유 신호를 서버에서 조회.
-       *  성공 시 occupancy 를 로컬에 캐시하고 일정 행 배열을 반환.
+       *  성공 시 occupancy 를 로컬에 캐시하고 { schedules, payments, occupancy } 를 반환.
        *  토큰이 없거나 서버 실패 시 null 을 반환해 호출부가 레거시 anon 읽기로 폴백한다. */
-      async function fetchScopedSchedulesAndOccupancy() {
+      async function fetchScopedCustomerData() {
         if (!USE_SUPABASE_SYNC) return null;
         const token = await ensureCustomerSessionToken();
         if (!token) return null;
@@ -2585,10 +2591,19 @@
           }
           const occupancy = Array.isArray(data.occupancy) ? data.occupancy : [];
           writeStorageArraySilently(STORAGE_OCCUPANCY, occupancy);
-          return data.schedules;
+          return {
+            schedules: data.schedules,
+            payments: Array.isArray(data.payments) ? data.payments : [],
+            occupancy,
+          };
         } catch (_) {
           return null;
         }
+      }
+      /** 하위호환: 일정 배열만 필요한 호출부용 (없으면 null). */
+      async function fetchScopedSchedulesAndOccupancy() {
+        const scoped = await fetchScopedCustomerData();
+        return scoped ? scoped.schedules : null;
       }
 
       /** 본인 업체 행에만 쓰기를 허용하는 서버 엔드포인트 호출.

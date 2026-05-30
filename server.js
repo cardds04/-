@@ -52,6 +52,7 @@ const { handleCustomerDataRequest } = require("./lib/customer-data-logic.cjs");
 const { handleCustomerWriteRequest } = require("./lib/customer-write-logic.cjs");
 const { handleAdminAuthRequest } = require("./lib/admin-auth-logic.cjs");
 const { handleAdminDbRequest } = require("./lib/admin-db-logic.cjs");
+const { handlePublicOccupancyRequest } = require("./lib/public-occupancy-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -225,6 +226,22 @@ app.post("/api/admin-db", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[admin-db]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 공개 점유 신호 — lib/public-occupancy-logic.cjs (Vercel api/public-occupancy.js 와 공유)
+ *  로그인 전 달력 마감 판정용 익명 점유. 토큰 불필요, 민감 필드 없음. */
+app.all("/api/public-occupancy", async (req, res) => {
+  if (req.method !== "GET" && req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "GET 또는 POST만 지원합니다." });
+    return;
+  }
+  try {
+    const out = await handlePublicOccupancyRequest();
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[public-occupancy]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });
