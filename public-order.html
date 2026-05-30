@@ -2623,11 +2623,11 @@
         const fetchCustomersRowsForPull = async () => {
           try {
             return await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
             );
           } catch (error) {
             const all = await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
             );
             return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
@@ -2879,7 +2879,8 @@
           .filter((item) => normalize(String(item?.id ?? "")) === sessionUserId)
           .map((item) => ({
             login_id: normalize(String(item?.id ?? "")),
-            password: secretPw,
+            // password 는 서버(/api/customer-auth)가 해시로만 관리. anon 동기화로 평문을
+            // 다시 기록하지 않는다(merge-duplicates 라 컬럼을 누락하면 기존 값 유지).
             name: normalize(String(item?.company ?? "")),
             code: normalize(String(item?.companyCode ?? "")),
             customer_phone: normalize(String(item?.phone ?? "")),
@@ -3311,7 +3312,7 @@
         try {
           const encoded = encodeURIComponent(id);
           const rows = await fetchJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
           );
           const list = Array.isArray(rows) ? rows : [];
           const pwdMatches = list.filter((row) => normalize(String(row?.password ?? "")) === pw);
@@ -5315,6 +5316,23 @@
           alert("내 계정을 찾지 못했습니다. 다시 로그인해주세요.");
           return;
         }
+        const myLoginId = String(user?.id || "");
+        // 비밀번호는 서버에서만 해시로 교체(현재 비밀번호=기기 비밀로 본인 확인).
+        if (USE_SUPABASE_SYNC) {
+          const oldSecret = readDeviceCustomerLoginSecrets()[myLoginId] || "";
+          const pwRes = await customerAuthRequest("change_password", {
+            loginId: myLoginId,
+            oldPassword: oldSecret,
+            newPassword: nextPassword,
+          });
+          if (!pwRes.ok && pwRes.reason !== "not_found") {
+            if (pwRes.reason === "weak_password") { alert("비밀번호는 6자 이상이어야 합니다."); return; }
+            if (pwRes.reason === "wrong_password") { alert("현재 비밀번호 확인에 실패했습니다. 다시 로그인 후 시도해주세요."); return; }
+            alert("일시적인 오류로 비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            return;
+          }
+          // not_found(서버에 계정 없음=순수 로컬 계정)면 로컬만 갱신하고 계속
+        }
         const effectiveCode = getEffectiveUserCompanyCode(users[userIndex]);
         const fixedCompanyName = resolveRegisteredCompanyNameForUser(users[userIndex], effectiveCode) || normalize(users[userIndex]?.company);
         users[userIndex].password = "";
@@ -5325,7 +5343,7 @@
         }
         writeStorageArray(STORAGE_CUSTOMERS, users);
         ensureCompanyStored(fixedCompanyName, nextPhone, effectiveCode);
-        setDeviceCustomerLoginSecret(String(user?.id || ""), nextPassword);
+        setDeviceCustomerLoginSecret(myLoginId, nextPassword);
         localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: String(user?.id || "") }));
         try {
           await syncCustomersTableFromStorage();

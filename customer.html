@@ -1759,11 +1759,11 @@
         const fetchCustomersRowsForPull = async () => {
           try {
             return await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&login_id=not.is.null&order=created_at.desc`
             );
           } catch (error) {
             const all = await fetchJsonRows(
-              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
+              `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=created_at.desc`
             );
             return Array.isArray(all) ? all.filter((r) => String(r?.login_id || "").trim()) : [];
           }
@@ -2016,7 +2016,8 @@
           .filter((item) => normalize(String(item?.id ?? "")) === sessionUserId)
           .map((item) => ({
             login_id: normalize(String(item?.id ?? "")),
-            password: secretPw,
+            // password 는 서버(/api/customer-auth)가 해시로만 관리. anon 동기화로 평문을
+            // 다시 기록하지 않는다(merge-duplicates 라 컬럼을 누락하면 기존 값 유지).
             name: normalize(String(item?.company ?? "")),
             code: normalize(String(item?.companyCode ?? "")),
             customer_phone: normalize(String(item?.phone ?? "")),
@@ -2440,6 +2441,25 @@
         if (hitOther) return { ok: false, reason: "wrong_site" };
         return { ok: false, reason: "bad_creds" };
       }
+      // ── 서버 인증 (평문 비밀번호를 브라우저에서 다루지 않음) ──────────
+      // /api/customer-auth 가 service_role 로 비밀번호를 검증·저장하고
+      // password/password_hash 를 제거한 행만 돌려준다.
+      async function customerAuthRequest(action, payload) {
+        try {
+          const res = await fetch("/api/customer-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ action, ...(payload || {}) }),
+          });
+          const json = await res.json().catch(() => null);
+          if (json && typeof json === "object") return json;
+          return { ok: false, reason: "server_error" };
+        } catch (_) {
+          return { ok: false, reason: "network" };
+        }
+      }
+
       async function verifyCustomerCredentialsForCustomerPage(loginIdRaw, passwordRaw) {
         const id = normalize(loginIdRaw);
         const pw = normalize(passwordRaw);
@@ -2448,7 +2468,7 @@
         try {
           const encoded = encodeURIComponent(id);
           const rows = await fetchJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,password,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encoded}&select=login_id,name,code,customer_phone,site_type,created_at,id,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link`
           );
           const list = Array.isArray(rows) ? rows : [];
           const pwdMatches = list.filter((row) => normalize(String(row?.password ?? "")) === pw);
@@ -3969,6 +3989,33 @@
         event.preventDefault();
         const id = normalize(document.getElementById("loginId").value);
         const password = normalize(document.getElementById("loginPassword").value);
+        // 1. 서버(service_role)가 비밀번호 검증 — 평문/해시를 브라우저에서 다루지 않음.
+        if (USE_SUPABASE_SYNC) {
+          const auth = await customerAuthRequest("login", { loginId: id, password });
+          if (auth.ok && auth.user) {
+            if (normalizeCustomerSiteType(auth.user.site_type) !== requiredCustomerSiteType) {
+              alert("접근불가한아이디입니다. 관리자에게 문의하세요");
+              return;
+            }
+            const stub = directoryRowToCustomerLocalStub(auth.user);
+            if (!stub) { alert("아이디 또는 비밀번호가 올바르지 않습니다."); return; }
+            upsertCustomerStubInLocalList(stub);
+            setDeviceCustomerLoginSecret(stub.id, password);
+            localStorage.setItem(STORAGE_SESSION, stub.id);
+            localStorage.setItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN, JSON.stringify({ id: stub.id }));
+            recordCustomerLogin(stub);
+            loginFormEl.reset();
+            currentCustomerTab = "register";
+            renderAuthState();
+            return;
+          }
+          if (auth.reason === "wrong_password" || auth.reason === "not_found" || auth.reason === "bad_creds") {
+            alert("아이디 또는 비밀번호가 올바르지 않습니다.");
+            return;
+          }
+          // 그 외(network/server_error) → 아래 오프라인 로컬 매칭으로 폴백
+        }
+        // 2. 오프라인 또는 서버 장애 폴백 — 로컬 저장 자격으로만 매칭
         const result = await verifyCustomerCredentialsForCustomerPage(id, password);
         if (!result.ok) {
           if (result.reason === "wrong_site") {
@@ -4048,6 +4095,23 @@
         if (userIndex < 0) {
           alert("내 계정을 찾지 못했습니다. 다시 로그인해주세요.");
           return;
+        }
+        const myLoginId = String(user?.id || "");
+        // 비밀번호는 서버에서만 해시로 교체(현재 비밀번호=기기 비밀로 본인 확인).
+        if (USE_SUPABASE_SYNC) {
+          const oldSecret = readDeviceCustomerLoginSecrets()[myLoginId] || "";
+          const pwRes = await customerAuthRequest("change_password", {
+            loginId: myLoginId,
+            oldPassword: oldSecret,
+            newPassword: nextPassword,
+          });
+          if (!pwRes.ok && pwRes.reason !== "not_found") {
+            if (pwRes.reason === "weak_password") { alert("비밀번호는 6자 이상이어야 합니다."); return; }
+            if (pwRes.reason === "wrong_password") { alert("현재 비밀번호 확인에 실패했습니다. 다시 로그인 후 시도해주세요."); return; }
+            alert("일시적인 오류로 비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            return;
+          }
+          // not_found(서버에 계정 없음=순수 로컬 계정)면 로컬만 갱신하고 계속
         }
         const effectiveCode = getEffectiveUserCompanyCode(users[userIndex]);
         const fixedCompanyName = resolveRegisteredCompanyNameForUser(users[userIndex], effectiveCode) || normalize(users[userIndex]?.company);
