@@ -1566,6 +1566,44 @@
         }
         return await response.json();
       }
+      /** 작가 쓰기(휴무요청 생성/취소 등)를 서버 프록시(service_role)로 보낸다.
+       *  토큰이 있으면 /api/writer-db 로 POST/DELETE 포워드, 없거나 실패 시 레거시 anon 으로 폴백.
+       *  반환: { ok:boolean, status:number, errorText:string }. */
+      async function writerDbWrite(method, path, { body, prefer } = {}) {
+        if (USE_SUPABASE_SYNC) {
+          const token = await ensureWriterSessionToken();
+          if (token) {
+            try {
+              const res = await fetch("/api/writer-db", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify({ token, method, path, body: body != null ? body : "", prefer: prefer || "" }),
+              });
+              const data = await res.json().catch(() => null);
+              if (data && data.reason === "invalid_token") {
+                writeWriterSessionToken("");
+              } else if (res.ok && data && data.ok) {
+                const status = Number(data.status) || 0;
+                const okUpstream = status >= 200 && status < 300;
+                return { ok: okUpstream, status, errorText: okUpstream ? "" : String(data.body || "") };
+              }
+              // 그 외(권한/서버 문제)는 anon 폴백으로 진행
+            } catch (_) { /* anon 폴백 */ }
+          }
+        }
+        // 폴백(토큰 없음/서버 장애, B-7 잠금 전): 레거시 anon 쓰기.
+        const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+        if (prefer) headers.Prefer = prefer;
+        const init = { method, headers, cache: "no-store" };
+        if (body != null && body !== "") {
+          headers["Content-Type"] = "application/json";
+          init.body = body;
+        }
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, init);
+        const errorText = response.ok ? "" : await response.text().catch(() => "");
+        return { ok: response.ok, status: response.status, errorText };
+      }
       async function pullTablesToWriterStorage() {
         if (!USE_SUPABASE_SYNC) return;
         const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
@@ -1698,32 +1736,9 @@
           }
         }, 120);
       }
-      async function syncWritersTableFromStorage() {
-        if (!USE_SUPABASE_SYNC) return;
-        const rows = readStorageArray(STORAGE_WRITERS)
-          .map((item) => ({
-            name: normalize(item?.name),
-            login_id: normalize(item?.id),
-            password: normalize(item?.password),
-            phone: normalize(item?.phone),
-            car_number: normalize(item?.carNumber)
-          }))
-          .filter((row) => row.name && row.login_id);
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/writers?on_conflict=login_id`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            Prefer: "resolution=merge-duplicates,return=minimal"
-          },
-          body: JSON.stringify(rows)
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`writers 저장 실패 (${response.status}): ${errorText}`);
-        }
-      }
+      // (제거됨) syncWritersTableFromStorage: 호출되지 않는 죽은 코드였고,
+      //   anon 으로 writers 에 평문 비밀번호를 업서트하던 경로라 B-6 잠금과도 충돌.
+      //   작가 등록/저장은 /api/writer-auth(service_role)가 담당한다.
 
       function readStorageObject(key) {
         try {
@@ -2904,20 +2919,14 @@
           writer_name: String(writer.name || "").trim(),
           dayoff_date: dateKey
         };
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Prefer: "return=minimal",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify([row])
+        const result = await writerDbWrite("POST", "dayoff_requests", {
+          body: JSON.stringify([row]),
+          prefer: "return=minimal"
         });
-        if (!response.ok) {
-          const errorText = await response.text();
+        if (!result.ok) {
+          const errorText = result.errorText || "";
           let hint = "";
-          if (response.status === 401 || response.status === 403) {
+          if (result.status === 401 || result.status === 403) {
             hint =
               "\n\n(Supabase에서 dayoff_requests 에 anon INSERT 허용 RLS가 필요합니다. migrations/20260331150000_dayoff_requests_table_and_rls.sql 실행)";
           } else if (/22P02|invalid input syntax for type uuid/i.test(errorText)) {
@@ -2958,16 +2967,12 @@
           alert("휴무요청이 취소되었습니다.");
           return;
         }
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests?id=eq.${encodeURIComponent(targetId)}`, {
-          method: "DELETE",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          alert(`휴무요청 취소 실패: ${errorText}`);
+        const result = await writerDbWrite(
+          "DELETE",
+          `dayoff_requests?id=eq.${encodeURIComponent(targetId)}`
+        );
+        if (!result.ok) {
+          alert(`휴무요청 취소 실패: ${result.errorText || ""}`);
           return;
         }
         queueWriterTablePull();
@@ -3107,12 +3112,14 @@
         mergeWriterShootLocalIntoGlobals(w, scheduleIds);
         const startedAtGen = photographerShootStatusGen;
         try {
+          const shootToken = await ensureWriterSessionToken();
           const res = await fetch("/api/photographer-shoot-status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               writerLoginId: w.id,
               writerPassword: w.password,
+              writerToken: shootToken || "",
               scheduleIds
             })
           });
@@ -3484,10 +3491,12 @@
           }
           shootDoneBtn.disabled = true;
           try {
+            const completeToken = await ensureWriterSessionToken();
             const fd = new FormData();
             fd.append("scheduleId", sid);
             fd.append("writerLoginId", writer.id);
             fd.append("writerPassword", writer.password);
+            fd.append("writerToken", completeToken || "");
             fd.append("omitSiteImage", "1");
             const res = await fetch("/api/photographer-shoot-complete", { method: "POST", body: fd });
             const data = await res.json().catch(() => ({}));
@@ -3590,12 +3599,14 @@
           }
           originalBtn.disabled = true;
           try {
+            const notifyToken = await ensureWriterSessionToken();
             const res = await fetch("/api/photographer-original-upload-notify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 writerLoginId: writer.id,
                 writerPassword: writer.password,
+                writerToken: notifyToken || "",
                 scheduleId: sid,
               }),
             });
