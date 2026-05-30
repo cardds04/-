@@ -205,6 +205,7 @@
       </div>
       <div class="header-actions">
         <span id="stageBadge" class="stage-badge" style="display:none;"></span>
+        <button class="btn" id="exportBtn" title="지금까지의 대화·과제·프로필을 파일로 저장해 Claude Code에 전달하세요">대화 백업</button>
         <button class="btn" id="nextBtn">다음 지시 받기</button>
       </div>
     </header>
@@ -502,6 +503,36 @@
       } catch (_) {}
     }
 
+    // ---- 대화 백업 (Claude Code 에 건네줄 .md 파일로 저장) ----
+    async function exportBackup() {
+      const btn = $("exportBtn");
+      btn.disabled = true;
+      const prev = btn.textContent;
+      btn.textContent = "백업 만드는 중…";
+      try {
+        const res = await api({ action: "export" });
+        const md = res.markdown || "";
+        const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = res.filename || "멘토-대화백업.md";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // 클립보드에도 복사 시도 (모바일/지원 브라우저)
+        try { await navigator.clipboard.writeText(md); } catch (_) {}
+        const c = res.counts || {};
+        toast(`백업 완료: 대화 ${c.messages || 0}개 저장됨. 이 파일을 Claude Code에 건네주세요.`);
+      } catch (e) {
+        toast("백업 실패: " + e.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
+    }
+
     // 이벤트
     $("sendBtn").addEventListener("click", send);
     $("input").addEventListener("keydown", (e) => {
@@ -512,6 +543,7 @@
       this.style.height = Math.min(this.scrollHeight, 200) + "px";
     });
     $("nextBtn").addEventListener("click", () => runTurn(null));
+    $("exportBtn").addEventListener("click", exportBackup);
     $("saveProfileBtn2").addEventListener("click", saveProfile);
 
     loadState();
