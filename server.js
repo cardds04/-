@@ -50,6 +50,8 @@ const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
 const { handleCustomerAuthRequest } = require("./lib/customer-auth-logic.cjs");
 const { handleCustomerDataRequest } = require("./lib/customer-data-logic.cjs");
 const { handleCustomerWriteRequest } = require("./lib/customer-write-logic.cjs");
+const { handleAdminAuthRequest } = require("./lib/admin-auth-logic.cjs");
+const { handleAdminDbRequest } = require("./lib/admin-db-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -197,6 +199,32 @@ app.post("/api/customer-write", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[customer-write]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 관리자 로그인 — lib/admin-auth-logic.cjs (Vercel api/admin-auth.js 와 공유)
+ *  관리자 비밀번호를 검증해 { adm:1 } 세션 토큰 발급. */
+app.post("/api/admin-auth", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleAdminAuthRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[admin-auth]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 관리자 DB 프록시 — lib/admin-db-logic.cjs (Vercel api/admin-db.js 와 공유)
+ *  관리자 토큰으로 허용 테이블 읽기/쓰기를 service_role 로 포워드. */
+app.post("/api/admin-db", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleAdminDbRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[admin-db]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });

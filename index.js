@@ -136,6 +136,137 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+      // ── 관리자 세션 토큰 + DB 프록시 (B-3) ────────────────────────────────
+      // 관리자 비밀번호로 서버(/api/admin-auth)에서 { adm:1 } 토큰을 발급받아
+      // 저장하고, schedules/payments/writers 등 민감 테이블 접근을 service_role
+      // 프록시(/api/admin-db)로 우회시킨다. 토큰이 없으면 기존 anon 경로로
+      // 비파괴 폴백한다(B-4 anon 잠금 전까지 무중단). B-4 이후엔 토큰 필수.
+      const STORAGE_ADMIN_SESSION_TOKEN = "scheduleSiteAdminSessionToken";
+      const ADMIN_PROXY_TABLES = new Set([
+        "schedules",
+        "payments",
+        "writers",
+        "coupon_passes",
+        "dayoff_requests",
+        "coupon_usage_history",
+      ]);
+      function readAdminSessionToken() {
+        try {
+          return String(localStorage.getItem(STORAGE_ADMIN_SESSION_TOKEN) || "").trim();
+        } catch (_) {
+          return "";
+        }
+      }
+      function writeAdminSessionToken(token) {
+        try {
+          const t = String(token || "").trim();
+          if (t) localStorage.setItem(STORAGE_ADMIN_SESSION_TOKEN, t);
+          else localStorage.removeItem(STORAGE_ADMIN_SESSION_TOKEN);
+        } catch (_) {}
+      }
+      // 민감 테이블 경로를 admin-db 프록시로 포워드하고, 업스트림 상태/본문을
+      // 기존 fetch 응답처럼 Response 로 재구성해 돌려준다. 토큰 무효/프록시 실패/
+      // 네트워크 오류 시 nativeFallback() (=원래 anon fetch) 으로 폴백한다.
+      async function __adminProxyFetch(path, init, token, nativeFallback) {
+        const method = String((init && init.method) || "GET").toUpperCase();
+        const prefer =
+          (init && init.headers && (init.headers.Prefer || init.headers.prefer)) || "";
+        let body = "";
+        if (method !== "GET" && init && init.body != null) body = String(init.body);
+        try {
+          const res = await fetch("/api/admin-db", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ token, method, path, body, prefer }),
+          });
+          if (res.status === 401) {
+            writeAdminSessionToken(""); // 만료/위조 → 폴백
+            return nativeFallback();
+          }
+          const payload = await res.json().catch(() => null);
+          if (payload && payload.ok) {
+            const status = Number(payload.status) || 200;
+            const text = payload.body == null ? "" : String(payload.body);
+            // 204/205/304 는 본문이 null 이어야 Response 생성자가 throw 하지 않음.
+            const nullBody = status === 204 || status === 205 || status === 304;
+            return new Response(nullBody || !text ? null : text, {
+              status,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          return nativeFallback();
+        } catch (_) {
+          return nativeFallback();
+        }
+      }
+      // window.fetch 인터셉터: 관리자 토큰이 있고 대상이 허용 테이블일 때만 프록시로
+      // 우회한다. 그 외 모든 요청(다른 API, 다른 테이블, 토큰 없음)은 원본 그대로.
+      (function installAdminFetchInterceptor() {
+        if (typeof window === "undefined" || typeof window.fetch !== "function") return;
+        if (window.__adminFetchPatched) return;
+        const nativeFetch = window.fetch.bind(window);
+        window.__nativeFetch = nativeFetch;
+        const marker = "/rest/v1/";
+        window.fetch = function (input, init) {
+          try {
+            if (typeof input === "string" && input.indexOf(marker) >= 0) {
+              const token = readAdminSessionToken();
+              if (token) {
+                const path = input.slice(input.indexOf(marker) + marker.length).replace(/^\/+/, "");
+                const table = path.split(/[/?]/)[0].toLowerCase();
+                if (ADMIN_PROXY_TABLES.has(table)) {
+                  return __adminProxyFetch(path, init || {}, token, () => nativeFetch(input, init));
+                }
+              }
+            }
+          } catch (_) {}
+          return nativeFetch(input, init);
+        };
+        window.__adminFetchPatched = true;
+      })();
+      // 관리자 로그인: 비밀번호 → /api/admin-auth → 토큰 저장. 성공 시 토큰, 실패 시 "".
+      async function adminAuthLogin(adminPassword) {
+        try {
+          const res = await fetch("/api/admin-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ action: "login", adminPassword: String(adminPassword || "") }),
+          });
+          const data = await res.json().catch(() => null);
+          if (data && data.ok && data.token) {
+            writeAdminSessionToken(data.token);
+            return String(data.token);
+          }
+          return "";
+        } catch (_) {
+          return "";
+        }
+      }
+      // 토큰이 없으면 1회 비밀번호를 받아 발급. 취소 시 "" (anon 폴백으로 계속 동작).
+      let __ensureAdminTokenInFlight = null;
+      async function ensureAdminSessionToken(interactive) {
+        const existing = readAdminSessionToken();
+        if (existing) return existing;
+        if (!USE_SUPABASE_SYNC || !interactive) return "";
+        if (__ensureAdminTokenInFlight) return __ensureAdminTokenInFlight;
+        __ensureAdminTokenInFlight = (async () => {
+          try {
+            const pw = window.prompt("관리자 비밀번호를 입력하세요 (보안 로그인 — 30일 유지)") || "";
+            if (!pw.trim()) return "";
+            const token = await adminAuthLogin(pw);
+            if (!token) window.alert("관리자 비밀번호가 일치하지 않습니다.");
+            return token;
+          } catch (_) {
+            return "";
+          } finally {
+            __ensureAdminTokenInFlight = null;
+          }
+        })();
+        return __ensureAdminTokenInFlight;
+      }
       /** Drive 납품 자동화 — anon 이 읽을 수 있는 RPC 결과 캐시 */
       const SUPABASE_RPC_SHOOT_DELIVERY_PROGRESS = "shoot_delivery_progress_list";
       let dashDeliveryRpcMap = null;
@@ -19925,6 +20056,11 @@ ${folderBtn}
 
       // 자동 초기화 비활성화 (데이터 유실 방지)
       async function bootstrapAdminPageData() {
+        // B-3: 첫 민감 테이블 읽기 전에 관리자 토큰 확보(없으면 1회 로그인).
+        // 취소하면 토큰 "" → 기존 anon 경로로 계속 동작(B-4 잠금 전까지 무중단).
+        try {
+          await ensureAdminSessionToken(true);
+        } catch (_) {}
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
         // 대시보드 GET과 스케줄 GET을 순차(await)하지 않음 — 초기 체감 지연(합산 시간) 방지
         const dashboardBootstrapPromise =
