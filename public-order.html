@@ -808,8 +808,54 @@
         }
       }
       @media (max-width: 600px) {
+        /* 폼 그리드는 1열로 펼쳐 풀폭·큰 터치 타깃 유지 (760px 규칙과 동일) */
         .pair, .triple { grid-template-columns: 1fr; }
         .top-line { flex-direction: column; align-items: flex-start; }
+
+        /* ── 모바일 터치/입력 최적화 (lite 외 기본 더필링 모드 포함 전 모드 공통) ── */
+        /* 입력 글자 16px 미만이면 iOS가 포커스 시 자동 확대 → 최소 16px 고정 */
+        .row input,
+        .row select,
+        .row textarea,
+        .edit-request-textarea,
+        .edit-sheets-row input {
+          font-size: 16px;
+        }
+        /* 터치 타깃 최소 높이 (Apple/Google 권장 44~48px) */
+        .row {
+          min-height: 50px;
+          padding: 12px 6px 12px;
+        }
+        .row select {
+          min-height: 30px;
+        }
+        .btn {
+          min-height: 52px;
+          font-size: 1.05rem;
+          padding: 14px 16px;
+        }
+        .compose-btn {
+          min-height: 46px;
+          padding: 11px 14px;
+        }
+        .tf-confirm-ok {
+          min-height: 52px;
+          font-size: 1.05rem;
+        }
+
+        /* 긴 접수/편집 폼: 제출 버튼을 화면 하단에 고정해 스크롤 없이 누르기 */
+        #customerScheduleForm > .btn[type="submit"],
+        #editRequestForm > .btn[type="submit"] {
+          position: sticky;
+          bottom: 10px;
+          z-index: 20;
+          box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+        }
+        /* sticky 버튼이 마지막 입력을 가리지 않도록 폼 하단 여백 */
+        #customerScheduleForm,
+        #editRequestForm {
+          padding-bottom: 8px;
+        }
       }
 
       /* ── 임베드 모드: 부모(inlog.html, 화이트·아이보리) 와 시각 통일 ── */
@@ -1172,7 +1218,7 @@
                 <textarea id="editRequestMemo" class="edit-request-textarea" placeholder="상세 요청사항을 적어주세요." rows="5"></textarea>
               </div>
               <p class="hint tf-kakao-notice">
-                신청이 접수되면 <strong>관리자가 카카오톡으로 직접 연락</strong>드립니다. 남겨주신 연락처(가입 시 등록한 번호)로 소통이 진행됩니다.
+                신청이 접수되면 <strong>접수 확인 문자</strong>를 보내드리고, <strong>관리자가 확인 후 카카오톡으로 연락</strong>드립니다. 남겨주신 연락처(가입 시 등록한 번호)로 소통이 진행됩니다.
               </p>
               <div class="tf-edit-flow" aria-label="편집 진행 단계 안내">
                 <div class="tf-edit-flow__step"><span class="tf-edit-flow__ico" aria-hidden="true">📝</span>편집신청</div>
@@ -5895,7 +5941,24 @@
           editRequestFormEl.reset();
           editRequestTypeButtonsEl?.querySelectorAll("button[data-edit-type]").forEach((b) => b.classList.remove("active"));
           renderEditRequestMyList();
-          alert("편집 신청이 접수되었습니다. 관리자가 카카오톡으로 연락드립니다.");
+
+          // ── 솔라피 SMS 알림 (스케줄 접수와 동일하게: 관리자 통보 + 고객 확인) ──
+          // 관리자 통보가 핵심 — 없으면 편집신청이 누락될 수 있음. 실패해도 접수는 유효.
+          try {
+            const __siteLabel = isLiteCustomerMode ? "쇼픽" : "더필링";
+            await window.SolapiNotify?.sendEditRequestNotice({
+              siteLabel: __siteLabel,
+              company: scheduleCompanyName,
+              types,
+              sheetCount,
+              memo,
+              phone: user.phone,
+            });
+          } catch (smsError) {
+            console.warn("[SolapiNotify] 편집신청 알림 호출 실패", smsError);
+          }
+
+          alert("편집 신청이 접수되었습니다.\n확인 문자를 보내드렸으며, 관리자가 확인 후 카카오톡으로 연락드립니다.");
         } finally {
           editRequestSubmitting = false;
           if (editRequestSubmitBtnEl) {

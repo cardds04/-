@@ -269,6 +269,57 @@
     }
   }
 
+  /** types 배열 → "핸드폰사진수정, 기타" 형태 한 줄. */
+  function formatEditTypes(types) {
+    const list = Array.isArray(types) ? types : [];
+    const cleaned = list.map((t) => String(t || "").trim()).filter(Boolean);
+    return cleaned.length ? cleaned.join(", ") : "-";
+  }
+
+  /**
+   * 관리자(01028692443) 확인용 편집신청 단문 SMS.
+   * 한도(EUC-KR 약 88바이트) 안에서 헤더·유형·장수를 먼저 채우고,
+   * 남는 예산만큼 요청메모를 덧붙인다.
+   *   [업체명] 편집신청
+   *   유형: 핸드폰사진수정, 기타
+   *   장수: 12
+   *   메모: …
+   */
+  function buildEditRequestAdminSms({ company, types, sheetCount, memo }) {
+    const companyLabel = String(company || "").trim() || "(업체명없음)";
+    const typeLabel = formatEditTypes(types);
+    const countLabel = Number(sheetCount) > 0 ? `${Math.floor(Number(sheetCount))}` : "-";
+    const head = `[${companyLabel}] 편집신청`;
+    const typeLine = `유형: ${typeLabel}`;
+    const countLine = `장수: ${countLabel}`;
+    const base = `${head}\n${typeLine}\n${countLine}`;
+    const SMS_LIMIT = 88;
+    const memoRaw = String(memo || "").trim();
+    if (!memoRaw) return base;
+    const memoPrefix = "\n메모: ";
+    const usedBytes = estimateEucKrBytes(base) + estimateEucKrBytes(memoPrefix);
+    const memoBudget = SMS_LIMIT - usedBytes;
+    if (memoBudget < 6) return base; // 메모 넣을 여유 없으면 생략
+    return base + memoPrefix + truncateToBytes(memoRaw, memoBudget);
+  }
+
+  /**
+   * 고객 확인용 편집신청 SMS — 스케줄 접수 흐름과 톤 통일.
+   * 실제 후속 소통은 카카오톡(수동)이므로 그 점을 명시.
+   */
+  function buildEditRequestCustomerSms({ siteLabel, types, sheetCount }) {
+    const label = String(siteLabel || "").trim();
+    const typeLabel = formatEditTypes(types);
+    const countLabel = Number(sheetCount) > 0 ? `${Math.floor(Number(sheetCount))}장` : "-";
+    return [
+      `[${label}] 편집 신청 접수 완료`,
+      `유형 : ${typeLabel}`,
+      `장수 : ${countLabel}`,
+      "",
+      "관리자가 확인 후 카카오톡으로 연락드립니다.",
+    ].join("\n");
+  }
+
   /** 작은 토스트 (몇 초 후 사라짐) — alert 와 충돌 방지. */
   function showToast(message, type) {
     try {
@@ -495,8 +546,66 @@
     }
   }
 
+  /**
+   * 편집(보정) 신청 접수 알림.
+   *  ① 관리자(01028692443): 항상 단문 SMS — 신청 누락 방지(핵심).
+   *  ② 고객(phone): 연락처가 유효하면 확인 SMS. 없으면 고객 쪽만 조용히 생략.
+   * 스케줄 접수와 달리 번호 입력 모달은 띄우지 않음(편집신청은 로그인 계정 번호 사용).
+   * 알림 실패해도 신청 자체는 유효.
+   */
+  async function sendEditRequestNotice(opts) {
+    const siteLabel = String(opts?.siteLabel || "").trim();
+    const company = String(opts?.company || "").trim();
+    const types = opts?.types;
+    const sheetCount = opts?.sheetCount;
+    const memo = opts?.memo;
+    const toPhone = onlyDigits(opts?.phone);
+
+    // 관리자 통보 — 고객 문자 성공 여부와 무관하게 항상 시도.
+    try {
+      await postSolapiSend({
+        to: ADMIN_NOTIFY_PHONE,
+        text: buildEditRequestAdminSms({ company, types, sheetCount, memo }),
+        type: "SMS",
+      });
+    } catch (error) {
+      console.warn("[SolapiNotify] edit-request admin notify failed", error);
+    }
+
+    if (!isValidKoreanMobile(toPhone)) {
+      return { ok: true, customerSkipped: true, message: "no customer phone" };
+    }
+
+    try {
+      const text = buildEditRequestCustomerSms({ siteLabel, types, sheetCount });
+      const sendBody = await postSolapiSend({
+        to: toPhone,
+        text,
+        subject: `[${siteLabel}] 편집 신청 확인`,
+      });
+      if (sendBody && sendBody.smsDeferredToQuietHoursMorning) {
+        showToast(`야간 시간대라 오전 10시 예약 발송으로 등록되었습니다. (${toPhone})`);
+      } else {
+        showToast(`편집 신청 확인 문자가 발송되었습니다. (${toPhone})`);
+      }
+      return { ok: true, customerSkipped: false };
+    } catch (error) {
+      console.error("[SolapiNotify] edit-request customer notify failed", error);
+      // 고객 확인 문자 실패는 조용히 — 신청은 정상 접수됨.
+      return { ok: false, customerSkipped: false, message: error?.message || "send failed" };
+    }
+  }
+
   window.SolapiNotify = {
     sendScheduleSubmitNotice,
-    _internal: { buildSmsText, formatPlaceForSms, formatShortDateLabel, isValidKoreanMobile },
+    sendEditRequestNotice,
+    _internal: {
+      buildSmsText,
+      buildEditRequestAdminSms,
+      buildEditRequestCustomerSms,
+      formatPlaceForSms,
+      formatShortDateLabel,
+      isValidKoreanMobile,
+    },
   };
 })();
