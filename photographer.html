@@ -1610,7 +1610,7 @@
           fetchWriterJsonRows("writers?select=name,login_id,phone,car_number,created_at&order=updated_at.desc"),
           fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows(
-            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,customer_phone,code,google_drive_company_folder_id,google_drive_company_share_link,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
+            `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,customer_phone,code,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
@@ -1661,16 +1661,9 @@
         }
         const companies = (Array.isArray(companiesRows) ? companiesRows : [])
           .map((row) => {
-            const nf = normalize(row?.naver_works_company_folder_id);
-            const naverCached = normalize(row?.naver_works_company_share_link);
-            const googleFid = normalize(row?.google_drive_company_folder_id);
-            const googleCached = normalize(row?.google_drive_company_share_link);
-            const googleLink =
-              googleCached || (googleFid ? `https://drive.google.com/drive/folders/${googleFid}` : "");
-            let driveCompanyFolderLink = "";
-            if (naverCached) driveCompanyFolderLink = naverCached;
-            else if (nf) driveCompanyFolderLink = "";
-            else driveCompanyFolderLink = googleLink;
+            // 마이박스(네이버웍스) 공유 링크 전용. 구글 드라이브 폴백은 제거했다.
+            // 마이박스 폴더가 아직 없으면 빈 값 → UI 에서 "관리자에게 폴더 생성 요청" 안내가 뜬다.
+            const driveCompanyFolderLink = normalize(row?.naver_works_company_share_link);
             // 단일 컬럼 통일: customer_phone 이 단일 출처. phone 필드는 옛 화면 호환용 alias.
             const cp = normalize(row?.customer_phone);
             return {
@@ -3352,12 +3345,8 @@
             const hasServerId = Boolean(scheduleId);
             const companyDriveLink = normalize(getCompanyDriveFolderLinkForItem(item));
             let deliveryLinkKind = "";
-            if (companyDriveLink) {
-              if (/^https:\/\/drive\.google\.com/i.test(companyDriveLink)) {
-                deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(Google)</span>`;
-              } else if (/^https?:\/\//i.test(companyDriveLink)) {
-                deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(마이박스)</span>`;
-              }
+            if (companyDriveLink && /^https?:\/\//i.test(companyDriveLink)) {
+              deliveryLinkKind = ` <span style="font-size:11px;color:#64748b;">(마이박스)</span>`;
             }
             const daySlot = shootFolderDaySlotByItem.get(item) || 1;
             const shootFolderSuggestName = buildShootFolderNameJS(item.date, item.place, daySlot);
@@ -3366,13 +3355,13 @@
               ? `${folderNameHint}업체 납품 폴더: <a href="#" data-action="openDeliveryFolderAndCopyFolderName" data-delivery-url="${encodeURIComponent(
                   companyDriveLink
                 )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" title="만들 폴더명 복사 후 납품 폴더 열기" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
-              : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">아직 표시할 공유 주소가 없습니다. 관리자 「업체정보관리」에서 해당 업체 「폴더 연결」로 마이박스 폴더 주소를 등록한 뒤 새로고침(F5)해 주세요.</span><br />`;
+              : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">마이박스 납품 폴더가 아직 없습니다. 관리자에게 폴더 생성을 요청하세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
               if (!hasServerId) {
                 shootBlock =
-                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. 촬영일 폴더는 「업체 납품 폴더 열기」 후 위 「만들 폴더명」을 복사해 납품 Drive에서 직접 만드세요.</div>';
+                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. 촬영일 폴더는 「업체 납품 폴더 열기」 후 위 「만들 폴더명」을 복사해 마이박스에서 직접 만드세요.</div>';
               } else {
                 const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
@@ -3380,7 +3369,7 @@
                   typeof d?.photographer_original_upload_notified_at === "string" &&
                   normalize(d?.photographer_original_upload_notified_at);
                 const linkHtml = shootLink
-                  ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:4px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(Drive)</a>`
+                  ? `<a href="${shootLink.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer" style="margin-left:4px;font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline;">촬영 폴더(마이박스)</a>`
                   : "";
                 const siteIconBtn = shootDone
                   ? `<button type="button" class="shoot-icon-btn shoot-icon-btn--done" disabled title="현장확인 완료" aria-label="현장확인 완료"><span class="shoot-icon-btn__glyph" aria-hidden="true">✓</span><span class="shoot-icon-btn__label">현장확인</span></button>`
