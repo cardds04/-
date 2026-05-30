@@ -3999,47 +3999,8 @@
       goSignupLinkEl?.addEventListener("click", () => switchAuthTab("signup"));
       goLoginLinkEl?.addEventListener("click", () => switchAuthTab("login"));
 
-      // ── 공개 가입 계정 조회/등록 ──────────────────────────────
-      async function fetchPublicCustomer(username) {
-        if (!USE_SUPABASE_SYNC) return null;
-        try {
-          const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?login_id=eq.${encodeURIComponent(username)}&select=*&limit=1`,
-            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
-          );
-          if (!res.ok) return null;
-          const rows = await res.json();
-          return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-        } catch (_) { return null; }
-      }
-
-      async function insertPublicCustomer(data) {
-        // 단일 컬럼 통일: customer_phone 만 사용.
-        const payload = {
-          name: String(data.company_name || "").trim(),
-          login_id: String(data.username || "").trim(),
-          password: String(data.password || "").trim(),
-          customer_phone: String(data.phone || "").trim(),
-          site_type: "thefeeling",
-          code: `AUTO-${Date.now().toString(36).toUpperCase()}`
-        };
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Prefer: "return=representation",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify([payload])
-        });
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`가입 실패 (${res.status}): ${errText}`);
-        }
-        const rows = await res.json();
-        return Array.isArray(rows) ? rows[0] : rows;
-      }
+      // (제거됨) fetchPublicCustomer/insertPublicCustomer — anon 평문 경로였고 호출처 없음.
+      //          가입/조회는 모두 아래 customerAuthRequest(서버 service_role)로 일원화.
 
       // ── 서버 인증 (평문 비밀번호를 브라우저에서 다루지 않음) ──────────
       // /api/customer-auth 가 service_role 로 비밀번호를 검증·저장하고

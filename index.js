@@ -5992,7 +5992,7 @@
       }
       async function fetchCustomersFromSupabase() {
         if (!USE_SUPABASE_SYNC) return [];
-        const unifiedFiltered = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,updated_at&login_id=not.is.null&order=created_at.desc`;
+        const unifiedFiltered = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,updated_at&login_id=not.is.null&order=created_at.desc`;
         let response = await fetch(unifiedFiltered, {
           method: "GET",
           headers: {
@@ -6003,7 +6003,7 @@
         });
         if (!response.ok) {
           const errorText = await response.text();
-          const fallbackAll = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,password,name,code,customer_phone,site_type,created_at,id,updated_at&order=created_at.desc`;
+          const fallbackAll = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=login_id,name,code,customer_phone,site_type,created_at,id,updated_at&order=created_at.desc`;
           if (response.status === 400 || response.status === 404) {
             response = await fetch(fallbackAll, {
               method: "GET",
@@ -6036,6 +6036,38 @@
         return byName?.dbId ? String(byName.dbId).trim() : "";
       }
 
+      // 관리자가 입력한 ADMIN_SHOOT_SITE_PASSWORD 를 세션 동안 1회만 묻고 재사용.
+      // 고객 평문 비밀번호는 더 이상 anon 키로 DB 에 쓰지 않고, 이 서버 액션으로만 해시 저장한다.
+      let cachedAdminSetPasswordSecret = "";
+      async function adminSetCustomerPassword(loginId, newPassword) {
+        const lid = String(loginId || "").trim();
+        const pw = String(newPassword || "").trim();
+        if (!lid || !pw) return; // 새 비밀번호 입력이 없으면 기존 해시 유지 (no-op)
+        let adminPw = cachedAdminSetPasswordSecret;
+        if (!adminPw) {
+          adminPw = String(
+            prompt("관리자 비밀번호 — 고객 로그인 비밀번호를 설정합니다. (현장 확인과 동일 비밀번호)") || ""
+          ).trim();
+          if (!adminPw) throw new Error("관리자 비밀번호가 필요합니다.");
+        }
+        const res = await fetch("/api/customer-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "set_password", loginId: lid, newPassword: pw, adminPassword: adminPw })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          if (data && data.reason === "admin_auth") {
+            cachedAdminSetPasswordSecret = "";
+            throw new Error("관리자 비밀번호가 일치하지 않습니다.");
+          }
+          if (data && data.reason === "not_found") {
+            throw new Error("서버에서 해당 계정을 찾지 못해 비밀번호를 설정하지 못했습니다.");
+          }
+          throw new Error((data && data.message) || "비밀번호 설정에 실패했습니다.");
+        }
+        cachedAdminSetPasswordSecret = adminPw; // 성공 시 세션 동안 재사용
+      }
       async function saveSingleCustomerAccountToSupabase({ loginId, password, companyName, companyCode, phone, siteType }) {
         if (!USE_SUPABASE_SYNC) return false;
         const normalizedLoginId = String(loginId || "").trim();
@@ -6056,7 +6088,7 @@
           phone: companyPhoneResolved,
           code: normalizeCompanyCode(companyCode),
           login_id: normalizedLoginId,
-          password: String(password || "").trim(),
+          // password 는 anon 으로 쓰지 않음 — 저장 성공 후 서버 set_password 로 해시 저장
           site_type: normalizedSiteType,
           customer_phone: String(phone || "").trim()
         };
@@ -6115,6 +6147,8 @@
             throw new Error(`고객 계정 ${hasLoginRow || resolvedCompanyId ? "수정" : "등록"} 실패 (${saveResponse.status}): ${retryText}`);
           }
         }
+        // 계정 행 저장(POST/PATCH) 후, 비밀번호 입력이 있으면 서버에서 해시로 설정
+        await adminSetCustomerPassword(normalizedLoginId, password);
         return true;
       }
       async function pullCustomersFromSupabaseAndApply() {
@@ -6309,8 +6343,8 @@
           customer_phone: telRaw,
           code: normalizedCodeUsed,
           site_type: siteType,
-          login_id: loginTrim || null,
-          password: passwordTrim || ""
+          login_id: loginTrim || null
+          // password 는 anon 으로 쓰지 않음 — 저장 성공 후 서버 set_password 로 해시 저장
         };
         const tryPatch = async (body, idEq) =>
           fetch(
@@ -6334,7 +6368,6 @@
         };
         if (normalizedRowId) {
           const patchBody = { ...basePayload };
-          if (!normalize(String(passwordTrim || "").trim())) delete patchBody.password;
           if (naverShareRaw !== undefined) {
             const nwPatch = buildNaverWorksSharePatchBody(naverShareRaw);
             if (nwPatch === null) {
@@ -6394,6 +6427,8 @@
             throw new Error(errText || `등록 실패 (${resp.status})`);
           }
         }
+        // 행 저장 후, 비밀번호 입력이 있으면 서버에서 해시로 설정 (login_id 기준)
+        await adminSetCustomerPassword(loginTrim, passwordTrim);
         await pullCustomersFromSupabaseAndApply();
         await pullAdminCompaniesFromSupabaseAndRefresh();
         applyCompanyDirectorySavedComposition(compositionSnap);
@@ -6495,7 +6530,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,password,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.asc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.asc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {
@@ -6634,7 +6669,8 @@
         const tel = String(row?.customer_phone ?? "").trim();
         if (companyDirectoryPhoneInputEl) companyDirectoryPhoneInputEl.value = tel;
         if (companyDirectoryLoginInputEl) companyDirectoryLoginInputEl.value = String(row?.login_id ?? "").trim();
-        if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = String(row?.password ?? "").trim();
+        // 비밀번호는 해시 저장이라 불러올 수 없음 — 항상 빈칸(입력 시에만 재설정).
+        if (companyDirectoryPasswordInputEl) companyDirectoryPasswordInputEl.value = "";
         if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = String(row?.code ?? "").trim();
         if (companyDirectorySiteSelectEl) {
           const st = normalizeCustomerSiteTypeForStorage(row?.site_type);
@@ -11460,7 +11496,7 @@ ${folderBtn}
           null;
         const accountStorageKey = String(matchedUser?.id || "").trim();
         const accountIdDisplay = matchedUser ? (isUuidLike(accountStorageKey) ? "" : accountStorageKey) : "";
-        const accountPassword = String(matchedUser?.password || "").trim();
+        // 비밀번호는 더 이상 표시하지 않음(해시 저장·복구 불가). 입력 시 재설정만 가능.
         const accountCompanyCode = String(companyDefaultCode || matchedUser?.companyCode || "").trim();
         const accountSiteType = normalizeCustomerSiteTypeForStorage(matchedUser?.siteType);
         const accountLogs = matchedUser
@@ -11555,7 +11591,7 @@ ${folderBtn}
             </div>
             <div class="company-account-line">
               <span class="company-account-label">비밀번호</span>
-              <input class="inline-input company-account-password" type="text" placeholder="고객 로그인 비밀번호" value="${escapeHtml(accountPassword)}" autocomplete="new-password" />
+              <input class="inline-input company-account-password" type="text" placeholder="비밀번호 재설정 시에만 입력" value="" autocomplete="new-password" />
             </div>
             <div class="company-account-line">
               <span class="company-account-label">고유번호</span>
