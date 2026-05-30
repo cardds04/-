@@ -3046,37 +3046,39 @@
           dayOffDateEl.style.opacity = "0";
           dayOffDateEl.style.pointerEvents = "auto";
         };
-        // picker 가 닫힐 때 자동 복원 (blur 또는 change 둘 다 안전망).
+        // prompt 로 직접 날짜를 받는 안전망 (showPicker 미지원/실패 시).
+        const promptForDate = () => {
+          restoreHidden();
+          const picked = prompt("휴무요청 날짜를 입력하세요. (예: 2026-06-15)", dayOffDateEl.value || todayValue);
+          const trimmed = String(picked || "").trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            dayOffDateEl.value = trimmed;
+            requestDayOffReduction(trimmed);
+          } else if (picked !== null) {
+            alert("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.");
+          }
+        };
+        // picker 가 닫힐 때 자동 복원.
         const onceCleanup = () => {
           restoreHidden();
           dayOffDateEl.removeEventListener("blur", onceCleanup);
-          // change 는 requestDayOffReduction 안에서 처리됨 — 추가 cleanup 만.
         };
-        tempReveal();
-        dayOffDateEl.addEventListener("blur", onceCleanup, { once: true });
-        // 다음 paint 후 picker 열기 (display:none → display:block 직후 showPicker 부르면
-        // 일부 브라우저가 여전히 거부하는 케이스가 있어 한 프레임 양보).
-        requestAnimationFrame(() => {
+        // ⚠ showPicker() 는 "사용자 제스처(클릭)" 활성화가 살아있는 동안에만 동작한다.
+        //    requestAnimationFrame 으로 미루면 활성화가 사라져 브라우저가 조용히 무시하므로
+        //    (에러도 안 나서 fallback 도 안 탄다) → 클릭 핸들러 안에서 동기로 호출한다.
+        if (typeof dayOffDateEl.showPicker === "function") {
+          tempReveal();
+          dayOffDateEl.addEventListener("blur", onceCleanup, { once: true });
           try {
-            if (typeof dayOffDateEl.showPicker === "function") {
-              dayOffDateEl.showPicker();
-            } else {
-              dayOffDateEl.focus();
-              dayOffDateEl.click();
-            }
+            dayOffDateEl.showPicker();
           } catch (_) {
-            // showPicker 실패 fallback: prompt 로 날짜 직접 입력
-            restoreHidden();
-            const picked = prompt("휴무요청 날짜를 입력하세요. (예: 2026-06-15)", dayOffDateEl.value || todayValue);
-            const trimmed = String(picked || "").trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-              dayOffDateEl.value = trimmed;
-              requestDayOffReduction(trimmed);
-            } else if (picked !== null) {
-              alert("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.");
-            }
+            // 동기 호출도 실패하면(예: display 전환 직후 거부) prompt 로 대체.
+            promptForDate();
           }
-        });
+        } else {
+          // showPicker 미지원 브라우저 → 바로 prompt.
+          promptForDate();
+        }
       }
 
       /** 목록 행 UUID + 로컬에만 남아 있는 완료 캐시 UUID (행 병합 일시 누락 시에도 상태 API에 포함) */
