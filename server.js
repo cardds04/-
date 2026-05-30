@@ -49,6 +49,7 @@ const { handleMentorRequest } = require("./lib/mentor-logic.cjs");
 const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
 const { handleCustomerAuthRequest } = require("./lib/customer-auth-logic.cjs");
 const { handleCustomerDataRequest } = require("./lib/customer-data-logic.cjs");
+const { handleCustomerWriteRequest } = require("./lib/customer-write-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -182,6 +183,20 @@ app.post("/api/customer-data", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[customer-data]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 고객 포털 쓰기 — lib/customer-write-logic.cjs (Vercel api/customer-write.js 와 공유)
+ *  세션 토큰을 검증해 본인 업체 행에만 일정 UPSERT/소프트삭제/결제 보류를 허용.
+ *  환경변수: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / CUSTOMER_SESSION_SECRET(권장) */
+app.post("/api/customer-write", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleCustomerWriteRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[customer-write]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });
