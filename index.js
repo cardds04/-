@@ -14946,10 +14946,10 @@ ${folderBtn}
           // 이름 매칭 실패 시 (공백·NFKC·제로폭 문자 차이) 같은 고유번호(code) 로 재시도.
           // 예: 디자인마노가 directory 에 정상 등록돼 있는데 스케줄 행의 company 문자열에
           //     보이지 않는 차이가 있어 find() 가 못 찾아 "연락처 없음" 으로 표시되던 버그.
-          const companyCatalogPhone = (() => {
+          const companyCatalogMatch = (() => {
             const cn = String(item?.company || "").trim();
             const codeRaw = String(item?.companyCode || item?.code || "").trim();
-            if (!cn && !codeRaw) return "";
+            if (!cn && !codeRaw) return null;
             // NFKC + 제로폭 공백 제거로 미세 차이도 흡수.
             const normTight = (v) => {
               let s = String(v || "");
@@ -14967,8 +14967,14 @@ ${folderBtn}
                 (c) => normalizeCompanyCode(c?.code).toLowerCase() === targetCode
               );
             }
-            if (!matched) return "";
-            return String(matched?.customer_phone || "").trim();
+            return matched || null;
+          })();
+          const companyCatalogPhone = String(companyCatalogMatch?.customer_phone || "").trim();
+          // 업체 납품 폴더(마이박스) 존재 여부: company_directory 의 naver_works_company_share_link
+          // (마이박스 공유 링크) 가 유효한 http(s) URL 이면 폴더가 준비된 것으로 간주.
+          const hasCompanyFolder = (() => {
+            const link = String(companyCatalogMatch?.naver_works_company_share_link || "").trim();
+            return /^https?:\/\//i.test(link);
           })();
           // catalog phone 이 invalid 형식(예: "12345", "----") 이면 schedule 의 customerPhone
           // 으로 fallback. 예전엔 잘못된 catalog phone 이 truthy 라서 || fallback 이 동작하지
@@ -14996,9 +15002,14 @@ ${folderBtn}
             }
           }
           const hasCustContact = !!phonesMerged;
-          const contactStatusSpan = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap;font-weight:700;${
-            hasCustContact ? "color:#15803d;" : "color:#b45309;"
-          }" title="업체정보관리 또는 스케줄에 등록된 연락처 기준">${escapeHtml(hasCustContact ? "연락처 있음" : "연락처 없음")}</span>`;
+          // "연" = 연락처, "업" = 업체 납품 폴더. 작은 신호등 아이콘으로 상태 표시.
+          //  연: 연락처 있으면 초록불, 없으면 빨간불
+          //  업: 업체 폴더 있으면 파란불, 없으면 빨간불
+          const statusDot = (label, on, onColor, offColor, onTitle, offTitle) =>
+            `<span class="helper" style="display:inline-flex;align-items:center;gap:2px;margin:0 4px 0 0;font-size:11px;white-space:nowrap;font-weight:700;color:#475569;" title="${on ? onTitle : offTitle}"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${on ? onColor : offColor};box-shadow:0 0 0 1px rgba(0,0,0,0.08);"></span>${escapeHtml(label)}</span>`;
+          const contactStatusSpan =
+            statusDot("연", hasCustContact, "#16a34a", "#dc2626", "연락처 있음 (업체정보관리 또는 스케줄 기준)", "연락처 없음") +
+            statusDot("업", hasCompanyFolder, "#2563eb", "#dc2626", "업체 납품 폴더(마이박스) 있음", "업체 납품 폴더(마이박스) 없음");
           const folderNameCopyBtn = `<span class="helper" style="margin:0 4px 0 0;font-size:11px;white-space:nowrap" title="전체 폴더명: ${fullFolderTitle}">${folderShortDisplay}</span>${contactStatusSpan}<button type="button" class="btn-sm dashboard-revert-btn" data-action="dashboardCopyShootFolderName" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
           )}" title="촬영일 폴더 이름 전체 클립보드 복사">복사</button>`;
