@@ -47,6 +47,7 @@ const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
 const { handleMentorRequest } = require("./lib/mentor-logic.cjs");
 const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
+const { handleCustomerAuthRequest } = require("./lib/customer-auth-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -153,6 +154,20 @@ app.post("/api/solapi-send", async (req, res) => {
   } catch (error) {
     console.error("[solapi-send]", error);
     res.status(500).json({ ok: false, message: error?.message || "서버 오류" });
+  }
+});
+
+/** 고객 포털 로그인/회원가입 — lib/customer-auth-logic.cjs (Vercel api/customer-auth.js 와 공유)
+ *  평문 비밀번호를 브라우저에서 다루지 않도록 service_role 로 서버에서만 검증·저장.
+ *  환경변수: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY */
+app.post("/api/customer-auth", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleCustomerAuthRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[customer-auth]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });
 
