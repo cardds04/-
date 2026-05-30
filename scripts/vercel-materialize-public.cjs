@@ -45,7 +45,8 @@ const SKIP_TOP_FILE = new Set([
 
 function isSkipRootFile(name) {
   if (SKIP_TOP_FILE.has(name)) return true;
-  return name.endsWith(".sql");
+  // .sql(스키마)·.bak(로컬 백업) 은 실서비스에 올리지 않는다
+  return name.endsWith(".sql") || name.endsWith(".bak");
 }
 
 function rmRf(p) {
