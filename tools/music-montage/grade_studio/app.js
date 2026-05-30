@@ -13,7 +13,7 @@
   const SLIDER_KEYS = [
     "temp", "tint",
     "midbr", "bright", "gamma", "rolloff",
-    "expo", "contrast", "hi", "sh", "wh", "bl",
+    "expo", "contrast", "hi", "sh", "wh", "bl", "filmic",
     "sat", "vib", "tex", "clr", "dh",
   ];
   const TRIM_KEYS = ["trim_in", "trim_out"];
@@ -31,7 +31,7 @@
   const DEFAULT_GRADE = {
     temp: 6500, tint: 0,
     midbr: 0, bright: 0, gamma: 0, rolloff: 0,
-    expo: 0, contrast: 0, hi: 0, sh: 0, wh: 0, bl: 0,
+    expo: 0, contrast: 0, hi: 0, sh: 0, wh: 0, bl: 0, filmic: 0,
     sat: 0, vib: 0, tex: 0, clr: 0, dh: 0,
     hsl: DEFAULT_HSL,
     trim_in: 0, trim_out: 0,
@@ -375,8 +375,27 @@
       uniform float uHueCenters[8];
       uniform int uOrig;
       uniform float uLetterbox;   // 0.0 = none, 0.1065 = cinema (위/아래 각 10.65%)
+      uniform float uFilmic;      // 0.0 = 하드클립, 1.0 = 강한 sigmoid 하이라이트 압축
       in vec2 vUv;
       out vec4 outColor;
+
+      // darktable sigmoid 모듈 류 — 1.0 을 넘는 하이라이트를 부드럽게(점근적으로) 압축 +
+      // 아주 밝은 부분은 흰색으로 수렴(desaturation). 한 채널만 치솟아 색 밴드 생기는 것 방지.
+      vec3 softShoulder(vec3 col, float strength) {
+        if (strength < 0.001) return clamp(col, 0.0, 1.0);
+        float m = max(max(col.r, col.g), col.b);
+        if (m <= 1e-4) return clamp(col, 0.0, 1.0);
+        float knee = mix(0.90, 0.50, strength);   // 압축 시작점 (strength 클수록 일찍 시작)
+        if (m <= knee) return col;
+        float over = m - knee;
+        float range = max(1e-4, 1.0 - knee);
+        float mNew = knee + range * (over / (over + range));   // [knee, ∞) → [knee, 1)
+        vec3 scaled = col * (mNew / m);                         // 동일 비율 스케일 (hue 보존)
+        // highlight desaturation — 원래 밝기 m 이 1.0 을 넘는 만큼 neutral(흰색)로 수렴.
+        // extreme WB 로 한 채널만 1.0 을 크게 넘을 때 생기는 컬러 밴드(파란 LED 등) 제거.
+        float desat = clamp((m - 1.0) * 0.9, 0.0, 0.85);
+        return mix(scaled, vec3(mNew), desat);
+      }
 
       float toneSample(float v) {
         float x = clamp(v, 0.0, 1.0) * 32.0;
@@ -436,8 +455,10 @@
           outColor = vec4(col, 1.0);
           return;
         }
-        // 1) 4x5 매트릭스
+        // 1) 4x5 매트릭스 (노출/대비/WB) — 결과가 1.0 을 넘을 수 있음
         col = uMat * col + vec3(uOff);
+        // 1.5) sigmoid soft-shoulder — 톤커브 전에 하이라이트를 부드럽게 압축 (찢어짐 방지)
+        col = softShoulder(col, uFilmic);
         // 2) 톤커브 (per-channel, identical curve)
         col.r = toneSample(col.r);
         col.g = toneSample(col.g);
@@ -529,6 +550,7 @@
       uHueCenters: gl.getUniformLocation(prog, "uHueCenters[0]"),
       uOrig: gl.getUniformLocation(prog, "uOrig"),
       uLetterbox: gl.getUniformLocation(prog, "uLetterbox"),
+      uFilmic: gl.getUniformLocation(prog, "uFilmic"),
     };
     // hue centers (GLSL es 1.0 호환을 위해 한 번만 set)
     gl.uniform1fv(_gl.loc.uHueCenters, new Float32Array([0, 30, 60, 120, 180, 240, 285, 320]));
@@ -701,6 +723,8 @@
     gl.uniform1fv(_gl.loc.uHslS, hS);
     gl.uniform1fv(_gl.loc.uHslL, hL);
     gl.uniform1i(_gl.loc.uHslEnabled, hslOn);
+    // 필름(sigmoid 하이라이트 압축) 0..100 → 0..1
+    gl.uniform1f(_gl.loc.uFilmic, Math.max(0, Math.min(100, Number(g.filmic || 0))) / 100);
     _gl.grade = g;
   }
 
@@ -2003,6 +2027,108 @@
   }
 
   // ─────────────────────────────────────────────────────────
+  // 🪄 자동톤·자동노출 — 라이트룸 클래식 Auto Tone 알고리즘 (서버에서 히스토그램 분석)
+  //   영향 슬라이더: expo, contrast, hi, sh, wh, bl (라이트룸 Auto 가 만지는 그 6개)
+  //   WB(temp/tint)·외관·HSL·트림 등 다른 슬라이더는 건드리지 않음.
+  //   선택된 클립들 전체에 일괄 적용. 선택 없으면 현재 활성 클립 한 개.
+  async function applyAutoToneToSelected() {
+    const status = $("#saveStatus");
+    const setStatus = (msg, cls) => {
+      if (!status) return;
+      status.textContent = msg;
+      status.className = "status-pill " + (cls || "");
+    };
+    const ids = state.selectedIds.size ? Array.from(state.selectedIds) : [state.activeId];
+    const validIds = ids.filter(i => i >= 0 && i < state.clips.length);
+    if (!validIds.length) { setStatus("선택 없음", "err"); return; }
+    setStatus(`🪄 분석 중 ${validIds.length}개…`);
+    try {
+      const r = await fetch("/api/auto_grade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: validIds, photo: isPhotoMode() }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) { setStatus(j.error || "자동 적용 실패", "err"); return; }
+      const results = j.results || [];
+      if (!results.length) { setStatus("분석 결과 없음", "err"); return; }
+
+      pushHistoryBatch(validIds);
+      const items = [];
+      // 자동톤이 만지는 슬라이더만 덮어쓰기 — 나머지는 사용자 값 보존
+      const AUTO_KEYS = ["temp", "tint", "expo", "contrast", "rolloff",
+                         "hi", "sh", "midbr", "wh", "bl", "filmic", "dh"];
+      results.forEach(res => {
+        const c = state.clips.find(x => x.id === res.id);
+        if (!c) return;
+        const delta = res.delta || {};
+        AUTO_KEYS.forEach(k => {
+          if (delta[k] !== undefined) c.grade[k] = Number(delta[k]);
+        });
+        markClipGraded(c);
+        // 디바운스 timer cancel — 곧 batch save 가 처리
+        const t = _saveTimers.get(c.id);
+        if (t) { clearTimeout(t); _saveTimers.delete(c.id); }
+        items.push({ id: c.id, grade: c.grade });
+      });
+      const ac = currentClip();
+      if (ac) { writeGradeToPanel(ac.grade); applyMatrixToFilter(ac.grade); }
+
+      // 일괄 저장 — 영상/사진 모드별 endpoint 분기
+      const url = isPhotoMode() ? "/api/photo/save_grade_bulk" : "/api/save_bulk";
+      const r2 = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const j2 = await r2.json();
+      if (!r2.ok || !j2.ok) throw new Error(j2.error || "저장 실패");
+      const errN = (j.errors || []).length;
+      setStatus(`🪄 자동 적용 ${results.length}개${errN ? ` (실패 ${errN})` : ""}`, "ok");
+    } catch (err) {
+      console.error(err);
+      setStatus("자동 적용 실패", "err");
+    }
+    setTimeout(() => {
+      if (status && status.textContent.includes("자동")) status.textContent = "";
+    }, 1800);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 초기화 — 선택된 클립 전체를 기본값으로 (선택 없으면 활성 1개)
+  async function resetSelected() {
+    const ids = state.selectedIds.size ? Array.from(state.selectedIds) : [state.activeId];
+    const validIds = ids.filter(i => i >= 0 && i < state.clips.length);
+    if (!validIds.length) return;
+    pushHistoryBatch(validIds);
+    const items = [];
+    state.clips.forEach(c => {
+      if (!validIds.includes(c.id)) return;
+      c.grade = freshDefaultGrade();
+      markClipGraded(c);
+      updateTrimVisual(c.grade);
+      const t = _saveTimers.get(c.id);
+      if (t) { clearTimeout(t); _saveTimers.delete(c.id); }
+      items.push({ id: c.id, grade: c.grade });
+    });
+    const ac = currentClip();
+    if (ac) {
+      writeGradeToPanel(ac.grade);
+      applyMatrixToFilter(ac.grade);
+      updateTrimVisual(ac.grade);
+    }
+    // 일괄 저장 — 영상/사진 모드별 endpoint
+    try {
+      const url = isPhotoMode() ? "/api/photo/save_grade_bulk" : "/api/save_bulk";
+      await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+    } catch (err) { console.error("reset bulk save failed", err); }
+    if (!isPhotoMode()) renderStrip();   // 전환 배지 등 갱신
+    setBusyShort(`초기화 ${validIds.length}개`);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // 🌈 그라데이션 보간
   //   현재 선택된 클립들을 anchor 로 사용 (짝수개 필요).
   //   anchor 들을 타임라인 순서대로 페어(1-2, 3-4, ...)로 묶고,
@@ -2210,19 +2336,10 @@
       }
     });
     // Reset button
-    $("#btnReset").addEventListener("click", () => {
-      const c = currentClip();
-      if (!c) return;
-      pushHistorySingle(c.id);
-      c.grade = freshDefaultGrade();
-      writeGradeToPanel(c.grade);
-      applyMatrixToFilter(c.grade);
-      updateTrimVisual(c.grade);
-      markClipGraded(c);
-      scheduleSave(c);
-    });
+    $("#btnReset").addEventListener("click", () => resetSelected());
     $("#btnPresetSave").addEventListener("click", () => savePresetFromActive());
     $("#btnPresetApply").addEventListener("click", () => applyPresetToSelected());
+    $("#btnAutoTone").addEventListener("click", () => applyAutoToneToSelected());
     $("#btnGradient").addEventListener("click", () => applyGradientInterpolation());
     $("#btnTrimIn").addEventListener("click", () => setTrimIn());
     $("#btnTrimOut").addEventListener("click", () => setTrimOut());

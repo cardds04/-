@@ -73,6 +73,7 @@ DEFAULT_GRADE: dict = {
     "sh": 0,
     "wh": 0,
     "bl": 0,
+    "filmic": 0,          # sigmoid 하이라이트 압축 (0=하드클립, 100=강한 부드러움)
     "sat": 0,
     "vib": 0,
     "tex": 0,
@@ -341,7 +342,7 @@ def _build_tone_curve_lut(g: dict, n: int = 33) -> list[float]:
 def _grade_signature(g: dict) -> str:
     """LUT 파일 캐시 키 — 같은 grade 면 같은 LUT 재사용."""
     keys = ("temp", "tint", "midbr", "bright", "gamma", "rolloff",
-            "expo", "contrast", "hi", "sh", "wh", "bl",
+            "expo", "contrast", "hi", "sh", "wh", "bl", "filmic",
             "sat", "vib", "dh")
     parts = []
     for k in keys:
@@ -368,7 +369,7 @@ def _is_identity_grade(g: dict) -> bool:
     try:
         if abs(float(g.get("temp", 6500) or 6500) - 6500.0) > 0.5: return False
         for k in ("tint","midbr","bright","gamma","rolloff",
-                  "expo","contrast","hi","sh","wh","bl","sat","vib","dh"):
+                  "expo","contrast","hi","sh","wh","bl","filmic","sat","vib","dh"):
             if abs(float(g.get(k, 0) or 0)) > 0.5: return False
         # HSL 모두 0 인지 검사
         hsl_in = g.get("hsl") or {}
@@ -477,10 +478,39 @@ def _apply_tone_curve(v: float, tone_lut: list[float]) -> float:
     return tone_lut[i0] * (1 - t) + tone_lut[i1] * t
 
 
+def _soft_shoulder(rr: float, gg: float, bb: float, strength: float) -> tuple[float, float, float]:
+    """sigmoid soft-shoulder + highlight desaturation — app.js softShoulder 와 동일."""
+    if strength < 0.001:
+        return (
+            0.0 if rr < 0 else (1.0 if rr > 1 else rr),
+            0.0 if gg < 0 else (1.0 if gg > 1 else gg),
+            0.0 if bb < 0 else (1.0 if bb > 1 else bb),
+        )
+    m = max(rr, gg, bb)
+    if m <= 1e-4:
+        return (max(0.0, rr), max(0.0, gg), max(0.0, bb))
+    knee = 0.90 + (0.50 - 0.90) * strength
+    if m <= knee:
+        return (rr, gg, bb)
+    over = m - knee
+    rng = max(1e-4, 1.0 - knee)
+    m_new = knee + rng * (over / (over + rng))
+    scale = m_new / m
+    sr, sg, sb = rr * scale, gg * scale, bb * scale
+    # highlight desaturation — m 이 1.0 을 넘는 만큼 neutral(m_new)로 수렴 (컬러 밴드 제거)
+    desat = max(0.0, min(0.85, (m - 1.0) * 0.9))
+    if desat > 0.0:
+        sr = sr * (1.0 - desat) + m_new * desat
+        sg = sg * (1.0 - desat) + m_new * desat
+        sb = sb * (1.0 - desat) + m_new * desat
+    return (sr, sg, sb)
+
+
 def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
-    """프론트엔드 매트릭스+톤커브+HSL 그대로 → 33³ .cube 파일 작성."""
+    """프론트엔드 매트릭스+sigmoid+톤커브+HSL 그대로 → 33³ .cube 파일 작성."""
     m, off = _build_color_matrix_py(g)
     tone = _build_tone_curve_lut(g, n=33)
+    filmic = max(0.0, min(100.0, float(g.get("filmic", 0) or 0))) / 100.0
     hsl_settings = g.get("hsl") or {}
     hsl_active = any(
         abs(float((hsl_settings.get(ch) or {}).get(sk, 0) or 0)) > 0.5
@@ -502,6 +532,8 @@ def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
                 rr = m[0][0] * r + m[0][1] * gv + m[0][2] * b + off
                 gg = m[1][0] * r + m[1][1] * gv + m[1][2] * b + off
                 bb = m[2][0] * r + m[2][1] * gv + m[2][2] * b + off
+                # 1.5) sigmoid soft-shoulder (톤커브 전 — 하이라이트 부드럽게 압축)
+                rr, gg, bb = _soft_shoulder(rr, gg, bb, filmic)
                 # 2) tone curve (per channel, identical curve like feFuncR/G/B in preview)
                 rr = _apply_tone_curve(rr, tone)
                 gg = _apply_tone_curve(gg, tone)
@@ -520,6 +552,152 @@ def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
                 lines.append(f"{rr:.6f} {gg:.6f} {bb:.6f}")
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out_path
+
+
+def _compute_auto_tone(arr_rgb_u8) -> dict:
+    """Lightroom 클래식 Auto Tone — RGB uint8 (h,w,3) → 슬라이더 값 제안.
+
+    추가된 자동 WB (gray-world) 포함:
+      · temp     : 평균 R/B 비율이 1 이 되도록 색온도 보정 (warm 캐스트 자동 제거)
+      · tint     : 평균 G 가 avg(R,B) 와 같아지도록 보정 (green/magenta 캐스트 제거)
+      · expo     : 중앙값 → ~0.40, 단 상단이 이미 밝으면 상한 낮춤 (클리핑 방지)
+      · contrast : 동적 범위 < 0.7 이면 약간 boost
+      · hi       : p99.9 > 0.95 면 음수로 복구
+      · sh       : p0.1 < 0.08 이면 양수로 들어올림 (라이트룸과 비슷한 민감도)
+      · wh / bl  : 양 끝점을 0.97 / 0.03 에 맞춤 (bl 계수 더 강하게)
+    """
+    import math
+    import numpy as np
+    if arr_rgb_u8 is None or arr_rgb_u8.size == 0:
+        return {}
+    arr = arr_rgb_u8.astype(np.float32) / 255.0
+    lum = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+    # 큰 이미지는 다운샘플 (속도)
+    if lum.size > 200_000:
+        step = int(math.ceil(math.sqrt(lum.size / 200_000)))
+        lum_s = lum[::step, ::step]
+        arr_s = arr[::step, ::step]
+    else:
+        lum_s = lum
+        arr_s = arr
+
+    p0_1, p0_5, p50, p99, p99_5, p99_9 = (
+        float(np.percentile(lum_s, q)) for q in (0.1, 0.5, 50, 99, 99.5, 99.9)
+    )
+
+    def _clamp(v, lo, hi):
+        return int(round(max(lo, min(hi, v))))
+
+    # ── 자동 WB (Shades of Gray, Minkowski p-norm p=6)
+    #    gray-world(p=1) 는 강한 캐스트를 과보정 → p=6 은 밝은 픽셀(실제 흰 표면)에 가중치를
+    #    줘서 illuminant 추정이 더 정확하고 덜 극단적임. clamp 도 ±0.32 로 완화.
+    temp_val = 6500
+    tint_val = 0
+    mask = (lum_s > 0.05) & (lum_s < 0.95)
+    if int(mask.sum()) > 200:
+        p_norm = 6.0
+        Rm = arr_s[..., 0][mask].astype(np.float64)
+        Gm = arr_s[..., 1][mask].astype(np.float64)
+        Bm = arr_s[..., 2][mask].astype(np.float64)
+        R = float(np.mean(Rm ** p_norm) ** (1.0 / p_norm))
+        G = float(np.mean(Gm ** p_norm) ** (1.0 / p_norm))
+        B = float(np.mean(Bm ** p_norm) ** (1.0 / p_norm))
+        if R > 0.005 and B > 0.005:
+            # kr/kb = (1+0.45w)/(1-0.45w) = 1/ratio → w = (1-ratio)/(0.45*(1+ratio))
+            ratio = R / B
+            w = (1.0 - ratio) / (0.45 * (1.0 + ratio))
+            w = max(-0.32, min(0.32, w))    # ±0.40 → ±0.32 로 완화 (극단 방지)
+            temp_val = int(round((6500.0 + 6500.0 * w) / 50.0)) * 50
+            temp_val = max(3000, min(10000, temp_val))
+            R_corr = R * (1 + 0.45 * w)
+            B_corr = B * (1 - 0.45 * w)
+            avg_RB = (R_corr + B_corr) / 2.0
+            if G > 0.005:
+                v = (avg_RB / G - 1.0) / 0.18
+                tint_val = int(round(-v * 100.0))
+                tint_val = max(-30, min(30, tint_val))   # ±40 → ±30 완화
+
+    # ── 장면 분류 (#4) — median 과 동적범위로 장면 타입 판별 → 노출 타겟·보호 강도 조정
+    bright_ratio = float((lum_s > 0.85).mean())   # 밝은 영역 비율 (창문/광원)
+    dark_ratio = float((lum_s < 0.10).mean())     # 어두운 영역 비율
+    dyn_range = p99_5 - p0_5
+    if p50 < 0.22 and bright_ratio > 0.04:
+        scene = "mixed"      # 어두운 실내 + 밝은 창문/광원 — 가장 까다로움
+        target_med = 0.38    # 너무 올리면 창문 폭발 → 보수적
+    elif p50 < 0.22:
+        scene = "lowkey"     # 전체적으로 어두움 (광원 없음) — 과감히 올림
+        target_med = 0.44
+    elif p50 > 0.55:
+        scene = "highkey"    # 밝은 장면 — 거의 손대지 않음
+        target_med = 0.52
+    else:
+        scene = "normal"
+        target_med = 0.44
+
+    # ── Exposure — filmic 이 하이라이트를 부드럽게 잡아주므로 과감히 부스트.
+    p50_floor = max(p50, 0.10)
+    desired_ev = math.log2(target_med / p50_floor)
+    # mixed 장면은 노출 상한을 낮춰 창문 폭발 방지 (filmic + shadows 가 보충)
+    expo_cap = 90 if scene == "mixed" else 130
+    expo = _clamp(desired_ev * 100.0, -130, expo_cap)
+
+    expo_mul = 2.0 ** (expo / 100.0)
+    post_top = p99_9 * expo_mul       # 노출 후 최상단 추정
+    post_p99_5 = p99_5 * expo_mul
+
+    # ── Filmic (sigmoid) = 주력 하이라이트 컨트롤. post_top 이 1.0 을 넘는 만큼 강하게.
+    if post_top > 1.0:
+        filmic = _clamp((post_top - 1.0) * 80.0 + 50.0, 35, 95)
+    elif post_top > 0.88:
+        filmic = _clamp((post_top - 0.88) * 250.0, 0, 50)
+    else:
+        filmic = 0
+
+    # ── Highlights — filmic 이 주력이므로 마무리용으로 약하게만
+    hi = -_clamp((post_top - 1.05) * 150.0, 0, 40) if post_top > 1.05 else 0
+
+    # ── Whites — 아주 약하게
+    wh = _clamp((0.96 - post_p99_5) * 150.0, -15, 30)
+
+    # ── Rolloff — filmic 이 대체하므로 0
+    rolloff = 0
+
+    # ── 노출 부족분 (mixed 에서 캡 때문에 못 올린 만큼) → midbr 로 미드톤 보충
+    shortfall_ev = max(0.0, desired_ev - expo / 100.0)
+    midbr = _clamp(shortfall_ev * 28.0, 0, 35)
+
+    # ── Contrast — 플랫함 방지로 기본 punch + 동적범위 좁으면 추가
+    rng = max(0.0, p99_5 - p0_5)
+    contrast = _clamp((0.75 - rng) * 70.0 + 5.0, 0, 28)
+
+    # ── Shadows — 크러시된 그림자 들어올림 (mixed 는 실내 더 끌어올림)
+    sh = _clamp((0.08 - p0_1) * 700.0, 0, 45) if p0_1 < 0.08 else 0
+    if scene == "mixed":
+        sh = min(60, sh + _clamp(shortfall_ev * 25.0, 0, 25))
+
+    # ── Blacks — 깊이감 유지
+    bl = _clamp((0.03 - p0_5) * 280.0, -45, 30)
+
+    # ── (#3) 로컬 대비 느낌 — 뿌연(미드톤 대비 낮은) 장면에 약한 디헤이즈로 깊이감 부여.
+    #    dehaze 는 매트릭스에 반영되어 미리보기에도 보임 (clarity/texture 는 빌드 전용이라 제외).
+    dh = 0
+    if scene in ("mixed", "normal", "lowkey") and dyn_range < 0.55:
+        dh = _clamp((0.55 - dyn_range) * 55.0, 0, 18)
+
+    return {
+        "temp": temp_val,
+        "tint": tint_val,
+        "expo": expo,
+        "contrast": contrast,
+        "rolloff": rolloff,
+        "hi": hi,
+        "sh": sh,
+        "midbr": midbr,
+        "wh": wh,
+        "bl": bl,
+        "filmic": filmic,
+        "dh": dh,
+    }
 
 
 def get_or_make_lut(g: dict) -> Path | None:
@@ -2331,6 +2509,53 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 grades[_nfc(str(v.resolve()))] = self._sanitize_grade(grade)
                 save_session(folder, sess)
             return self._json({"ok": True})
+
+        if p == "/api/auto_grade":
+            # 🪄 자동톤·자동노출 — 영상 모드/사진 모드 모두 지원.
+            #   body: {"ids": [int], "photo": bool (선택)}
+            #   응답: {"results": [{"id": int, "delta": {expo, contrast, hi, sh, wh, bl}}]}
+            ids = body.get("ids") or []
+            is_photo = bool(body.get("photo"))
+            try:
+                ids = [int(x) for x in ids]
+            except (TypeError, ValueError):
+                return self._json({"error": "bad ids"}, 400)
+            try:
+                import numpy as np
+                from PIL import Image as _PILImage
+            except ImportError:
+                return self._json({"error": "numpy/PIL 미설치"}, 500)
+            results = []
+            errors = []
+            for i in ids:
+                try:
+                    if is_photo:
+                        from grade_studio import photo_lib
+                        with self.server.state_lock:
+                            pfs = list(self.server.photo_files)
+                        if i < 0 or i >= len(pfs):
+                            errors.append({"id": i, "error": "id out of range"})
+                            continue
+                        src = pfs[i]
+                        tp = photo_lib.thumb_cache_path(src, PHOTO_THUMB_DIR)
+                        if not tp.is_file():
+                            photo_lib.make_thumbnail(src, tp)
+                    else:
+                        v = self._video_at(i)
+                        if v is None:
+                            errors.append({"id": i, "error": "no video"})
+                            continue
+                        tp = ensure_thumb(v)
+                        if not tp or not Path(tp).is_file():
+                            errors.append({"id": i, "error": "thumb fail"})
+                            continue
+                    img = _PILImage.open(tp).convert("RGB")
+                    arr = np.array(img)
+                    delta = _compute_auto_tone(arr)
+                    results.append({"id": i, "delta": delta})
+                except Exception as exc:  # noqa: BLE001
+                    errors.append({"id": i, "error": str(exc)})
+            return self._json({"ok": True, "results": results, "errors": errors})
 
         if p == "/api/save_bulk":
             # body: {"items": [{"id": 0, "grade": {...}}, ...]}
