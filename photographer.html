@@ -395,6 +395,8 @@
       const STORAGE_WRITERS = "scheduleSiteWriters";
       const STORAGE_WRITER_SESSION = "scheduleSiteWriterSession";
       const STORAGE_WRITER_REMEMBERED_LOGIN = "scheduleSiteWriterRememberedLogin";
+      // 서버(/api/writer-auth)가 발급한 작가 세션 토큰 — writers/schedules 등 서버 조회(/api/writer-db)에 사용.
+      const STORAGE_WRITER_SESSION_TOKEN = "scheduleSiteWriterSessionToken";
       const STORAGE_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
@@ -487,6 +489,7 @@
       const PRIVATE_LOCAL_KEYS = new Set([
         STORAGE_WRITER_SESSION,
         STORAGE_WRITER_REMEMBERED_LOGIN,
+        STORAGE_WRITER_SESSION_TOKEN,
         "scheduleSiteCustomerSession",
         "scheduleSiteCustomerRememberedLogin",
         "scheduleSiteCustomerSession_inlog",
@@ -1475,7 +1478,80 @@
         });
         return writerTableSyncClient;
       }
+      // ── 작가 세션 토큰 (writers/schedules 서버 조회용) ──────────────────
+      function writeWriterSessionToken(token) {
+        try {
+          const t = normalize(token);
+          if (t) localStorage.setItem(STORAGE_WRITER_SESSION_TOKEN, t);
+          else localStorage.removeItem(STORAGE_WRITER_SESSION_TOKEN);
+        } catch (_) {}
+      }
+      function readWriterSessionToken() {
+        try { return normalize(localStorage.getItem(STORAGE_WRITER_SESSION_TOKEN)); }
+        catch (_) { return ""; }
+      }
+      /** 서버 작가 인증(로그인/회원가입). 반환: { ok, token?, reason?, message? } */
+      async function writerAuthRequest(action, payload) {
+        try {
+          const res = await fetch("/api/writer-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ action, ...(payload || {}) }),
+          });
+          const json = await res.json().catch(() => null);
+          if (json && typeof json === "object") return json;
+          return { ok: false, reason: "server_error" };
+        } catch (_) {
+          return { ok: false, reason: "network" };
+        }
+      }
+      /** 토큰이 없으면 "아이디/비번 저장" 기록으로 조용히 재로그인해 토큰을 받는다.
+       *  성공 시 토큰 문자열, 실패 시 "" (호출부는 레거시 anon 으로 폴백). */
+      let ensureWriterTokenInFlight = null;
+      async function ensureWriterSessionToken() {
+        if (!USE_SUPABASE_SYNC) return "";
+        const existing = readWriterSessionToken();
+        if (existing) return existing;
+        if (ensureWriterTokenInFlight) return ensureWriterTokenInFlight;
+        ensureWriterTokenInFlight = (async () => {
+          try {
+            const remembered = loadRememberedWriterLogin();
+            if (!remembered) return "";
+            const r = await writerAuthRequest("login", { loginId: remembered.id, password: remembered.password });
+            if (r && r.ok && r.token) { writeWriterSessionToken(r.token); return r.token; }
+            return "";
+          } catch (_) {
+            return "";
+          } finally {
+            ensureWriterTokenInFlight = null;
+          }
+        })();
+        return ensureWriterTokenInFlight;
+      }
+
       async function fetchWriterJsonRows(path) {
+        // 1순위: 작가 토큰이 있으면 서버 프록시(service_role)로 조회. B-6 에서 anon 잠가도 동작.
+        if (USE_SUPABASE_SYNC) {
+          const token = await ensureWriterSessionToken();
+          if (token) {
+            try {
+              const res = await fetch("/api/writer-db", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify({ token, method: "GET", path }),
+              });
+              const data = await res.json().catch(() => null);
+              if (res.ok && data && data.ok && Number(data.status) >= 200 && Number(data.status) < 300) {
+                try { return JSON.parse(data.body || "[]"); } catch (_) { return []; }
+              }
+              if (data && data.reason === "invalid_token") writeWriterSessionToken("");
+              // 그 외(권한/서버 문제)는 anon 폴백으로 진행
+            } catch (_) { /* anon 폴백 */ }
+          }
+        }
+        // 폴백(토큰 없음/서버 장애, B-6 잠금 전): 레거시 anon 조회.
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
           method: "GET",
           headers: {
@@ -3674,47 +3750,30 @@
 
         if (USE_SUPABASE_SYNC) {
           try {
-            const remoteWriters = await fetchWriterJsonRows("writers?select=login_id,name");
-            const remoteIdExists = (Array.isArray(remoteWriters) ? remoteWriters : []).some(
-              (row) => normalize(row?.login_id).toLowerCase() === id.toLowerCase()
-            );
-            if (remoteIdExists) {
-              alert("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
-              return;
-            }
-            const remoteNameExists = (Array.isArray(remoteWriters) ? remoteWriters : []).some(
-              (row) => normalize(row?.name).toLowerCase() === name.toLowerCase()
-            );
-            if (remoteNameExists) {
-              alert("이미 등록된 작가명입니다. 다른 작가명을 입력해주세요.");
-              return;
-            }
-
-            const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/writers`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              body: JSON.stringify([
-                {
-                  name,
-                  login_id: id,
-                  password,
-                  phone,
-                  car_number: carNumber,
-                  is_active: true
-                }
-              ])
+            // B-5: anon writers INSERT 대신 service_role 서버 엔드포인트로 가입한다.
+            // 서버가 login_id / name 중복을 검증하고, 성공 시 작가 세션 토큰을 발급한다.
+            const result = await writerAuthRequest("signup", {
+              name,
+              loginId: id,
+              password,
+              phone,
+              carNumber
             });
-            if (!insertResponse.ok) {
-              const errorText = await insertResponse.text();
-              throw new Error(`writers insert 실패: ${errorText}`);
+            if (!result || !result.ok) {
+              const reason = result && (result.reason || result.error || result.message);
+              if (reason === "duplicate_id") {
+                alert("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
+              } else if (reason === "duplicate_name") {
+                alert("이미 등록된 작가명입니다. 다른 작가명을 입력해주세요.");
+              } else {
+                alert(`작가 등록 실패: ${reason || "서버 저장 오류"}`);
+              }
+              return;
             }
+            if (result.token) writeWriterSessionToken(result.token);
             queueWriterTablePull();
           } catch (error) {
-            console.error("[TABLE][photographer] signup direct insert 실패", error);
+            console.error("[TABLE][photographer] signup 실패", error);
             alert(`작가 등록 실패: ${error && error.message ? error.message : "서버 저장 오류"}`);
             return;
           }
@@ -3744,6 +3803,16 @@
         event.preventDefault();
         const id = normalize(document.getElementById("loginId").value);
         const password = normalize(document.getElementById("loginPassword").value);
+        // B-5: 입력한 자격으로 먼저 작가 토큰을 발급받아 둔다.
+        // anon read 가 잠긴 뒤(B-6)에도 이 토큰이 있어야 pullTablesToWriterStorage 가 동작한다.
+        if (USE_SUPABASE_SYNC) {
+          try {
+            const auth = await writerAuthRequest("login", { loginId: id, password });
+            if (auth && auth.ok && auth.token) writeWriterSessionToken(auth.token);
+          } catch (e) {
+            console.warn("[login] writerAuthRequest", e);
+          }
+        }
         let users = readStorageArray(STORAGE_WRITERS);
         let matched = users.find((user) => user.id === id && user.password === password);
         if (!matched && USE_SUPABASE_SYNC && users.length === 0) {
@@ -3779,6 +3848,7 @@
       logoutBtnEl.addEventListener("click", () => {
         skipAutoLoginOnce = true;
         localStorage.removeItem(STORAGE_WRITER_SESSION);
+        writeWriterSessionToken("");
         renderAuthState();
       });
       saveLoginToggleBtnEl.addEventListener("click", () => {

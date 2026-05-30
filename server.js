@@ -53,6 +53,8 @@ const { handleCustomerWriteRequest } = require("./lib/customer-write-logic.cjs")
 const { handleAdminAuthRequest } = require("./lib/admin-auth-logic.cjs");
 const { handleAdminDbRequest } = require("./lib/admin-db-logic.cjs");
 const { handlePublicOccupancyRequest } = require("./lib/public-occupancy-logic.cjs");
+const { handleWriterAuthRequest } = require("./lib/writer-auth-logic.cjs");
+const { handleWriterDbRequest } = require("./lib/writer-db-logic.cjs");
 
 function readState() {
   const raw = fs.readFileSync(STATE_PATH, "utf8");
@@ -226,6 +228,32 @@ app.post("/api/admin-db", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[admin-db]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 작가 인증 — lib/writer-auth-logic.cjs (Vercel api/writer-auth.js 와 공유)
+ *  작가 로그인/회원가입을 service_role 로 검증·발급(토큰). */
+app.post("/api/writer-auth", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleWriterAuthRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[writer-auth]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 작가 DB 프록시(읽기 전용) — lib/writer-db-logic.cjs (Vercel api/writer-db.js 와 공유)
+ *  작가 토큰으로 허용 테이블 GET 을 service_role 로 포워드. */
+app.post("/api/writer-db", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleWriterDbRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[writer-db]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });
