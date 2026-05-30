@@ -3797,15 +3797,19 @@
         //   (브라우저엔 더 이상 다른 작가 비번이 없으므로 로컬 비번 비교는 하지 않는다.)
         //   anon read 가 잠긴 뒤(B-6)에도 이 토큰이 있어야 pullTablesToWriterStorage 가 동작한다.
         let serverAuthOk = false;
+        let serverAuthReason = "";
         if (USE_SUPABASE_SYNC) {
           try {
             const auth = await writerAuthRequest("login", { loginId: id, password });
             if (auth && auth.ok && auth.token) {
               writeWriterSessionToken(auth.token);
               serverAuthOk = true;
+            } else {
+              serverAuthReason = (auth && (auth.reason || auth.error)) || "unknown";
             }
           } catch (e) {
             console.warn("[login] writerAuthRequest", e);
+            serverAuthReason = "network";
           }
         }
         // 인증 성공이면 명단에서 id 로만 찾는다(이름 등 표시용). 인증 실패 시에만 레거시 로컬 비번 폴백.
@@ -3829,11 +3833,18 @@
             // 서버 인증은 됐는데 명단을 못 불러온 드문 경우 — 최소 정보로 진행.
             matched = { id, name: id };
           } else {
-            alert(
-              users.length === 0 && USE_SUPABASE_SYNC
-                ? "작가 정보를 불러오지 못했습니다. 잠시 후 다시 시도하거나 새로고침 후 로그인해 주세요."
-                : "아이디 또는 비밀번호가 올바르지 않습니다."
-            );
+            // 서버가 알려준 실제 사유에 맞춰 정확한 안내.
+            let msg;
+            if (serverAuthReason === "wrong_password" || serverAuthReason === "not_found" || serverAuthReason === "bad_creds") {
+              msg = "아이디 또는 비밀번호가 올바르지 않습니다.";
+            } else if (serverAuthReason === "network" || serverAuthReason === "server_error") {
+              msg = "서버 연결 문제로 로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+            } else if (users.length === 0 && USE_SUPABASE_SYNC) {
+              msg = "작가 정보를 불러오지 못했습니다. 잠시 후 다시 시도하거나 새로고침 후 로그인해 주세요.";
+            } else {
+              msg = "아이디 또는 비밀번호가 올바르지 않습니다.";
+            }
+            alert(msg);
             return;
           }
         }
