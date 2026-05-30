@@ -3,6 +3,7 @@
  * → { ok: true, doneScheduleIds: string[], deliveryByScheduleId: Record<id, {...}> }
  */
 const { listPhotographerShootPanel } = require("../lib/photographer-shoot-logic.cjs");
+const { resolveWriterCredsFromToken } = require("../lib/writer-auth-logic.cjs");
 
 module.exports = async (req, res) => {
   if (req.method === "OPTIONS") {
@@ -21,8 +22,17 @@ module.exports = async (req, res) => {
       typeof req.body === "object" && req.body !== null
         ? req.body
         : JSON.parse(typeof req.body === "string" && req.body ? req.body : "{}");
-    const writerLoginId = String(body.writerLoginId || "").trim();
-    const writerPassword = String(body.writerPassword || "");
+    let writerLoginId = String(body.writerLoginId || "").trim();
+    let writerPassword = String(body.writerPassword || "");
+    // 작가 토큰이 오면 비밀번호 없이도 인증(토큰 → service_role 자격 조회).
+    const writerToken = String(body.writerToken || "").trim();
+    if (writerToken && !writerPassword) {
+      const creds = await resolveWriterCredsFromToken(writerToken);
+      if (creds) {
+        writerLoginId = creds.loginId;
+        writerPassword = creds.password;
+      }
+    }
     const scheduleIds = Array.isArray(body.scheduleIds) ? body.scheduleIds : [];
 
     const { doneScheduleIds, deliveryByScheduleId } = await listPhotographerShootPanel({

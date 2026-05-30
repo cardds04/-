@@ -5,6 +5,7 @@
  */
 const busboy = require("busboy");
 const { completePhotographerShoot } = require("../lib/photographer-shoot-logic.cjs");
+const { resolveWriterCredsFromToken } = require("../lib/writer-auth-logic.cjs");
 const { friendlyDriveQuotaMessage, friendlyDriveFolderCreateDeniedMessage } = require("../lib/google-drive-delivery.cjs");
 
 function parseMultipart(req) {
@@ -75,8 +76,16 @@ module.exports = async (req, res) => {
   try {
     const { fields, files } = await parseMultipart(req);
     const scheduleId = String(fields.scheduleId || "").trim();
-    const writerLoginId = String(fields.writerLoginId || "").trim();
-    const writerPassword = String(fields.writerPassword || "");
+    let writerLoginId = String(fields.writerLoginId || "").trim();
+    let writerPassword = String(fields.writerPassword || "");
+    const writerToken = String(fields.writerToken || "").trim();
+    if (writerToken && !writerPassword) {
+      const creds = await resolveWriterCredsFromToken(writerToken);
+      if (creds) {
+        writerLoginId = creds.loginId;
+        writerPassword = creds.password;
+      }
+    }
 
     const omitRequested = /^(1|true|yes)$/i.test(String(fields.omitSiteImage || "").trim());
     const photo = files[0];

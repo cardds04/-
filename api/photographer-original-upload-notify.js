@@ -3,6 +3,7 @@
  * → 원본 업로드 완료 고객 안내 문자
  */
 const { notifyPhotographerOriginalUploadComplete } = require("../lib/photographer-shoot-logic.cjs");
+const { resolveWriterCredsFromToken } = require("../lib/writer-auth-logic.cjs");
 
 module.exports = async (req, res) => {
   if (req.method === "OPTIONS") {
@@ -21,8 +22,16 @@ module.exports = async (req, res) => {
       typeof req.body === "object" && req.body !== null
         ? req.body
         : JSON.parse(typeof req.body === "string" && req.body ? req.body : "{}");
-    const writerLoginId = String(body.writerLoginId || "").trim();
-    const writerPassword = String(body.writerPassword || "");
+    let writerLoginId = String(body.writerLoginId || "").trim();
+    let writerPassword = String(body.writerPassword || "");
+    const writerToken = String(body.writerToken || "").trim();
+    if (writerToken && !writerPassword) {
+      const creds = await resolveWriterCredsFromToken(writerToken);
+      if (creds) {
+        writerLoginId = creds.loginId;
+        writerPassword = creds.password;
+      }
+    }
     const scheduleId = String(body.scheduleId || "").trim();
 
     const out = await notifyPhotographerOriginalUploadComplete({
