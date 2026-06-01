@@ -13956,7 +13956,26 @@ ${folderBtn}
         const holdItem = onHoldPayments[index];
         if (!holdItem) return;
 
-        if (!confirm(`"${holdItem.company || holdItem.name}" 항목을 입금업체로 되돌리시겠습니까?`)) return;
+        // 되돌릴 촬영일을 입력받아 그 날짜로 스케줄 복귀시킨다.
+        // (보류는 보통 일정 연기/재조율이라 날짜를 새로 잡는 경우가 많음)
+        const curDate = String(holdItem.date || "").trim();
+        const defaultDate = /^\d{4}-\d{2}-\d{2}$/.test(curDate)
+          ? curDate
+          : (() => {
+              const t = new Date();
+              return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+            })();
+        const pickedRaw = prompt(
+          `"${holdItem.company || holdItem.name}" 항목을 다시 스케줄로 되돌립니다.\n` +
+            `촬영일을 입력하세요. (YYYY-MM-DD)\n현재 보류 전 날짜: ${curDate || "(없음)"}`,
+          defaultDate
+        );
+        if (pickedRaw === null) return; // 취소
+        const picked = String(pickedRaw).trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(picked)) {
+          alert("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식(예: 2026-06-15)으로 입력해주세요.");
+          return;
+        }
 
         // freshness guard 우회 — 조작 직전 pull 타임스탬프 갱신
         try {
@@ -13965,9 +13984,10 @@ ${folderBtn}
           localStorage.setItem(STORAGE_LAST_SCHEDULE_PULL_AT, nowIso);
         } catch (_) {}
 
-        // 보류 → 입금업체(active)로 복귀: paymentStatus 를 "입금완료" 로 유지
+        // 보류 → 입금업체(active)로 복귀: 선택한 날짜 적용, paymentStatus 는 "입금완료" 유지
         const restoredItem = {
           ...holdItem,
+          date: picked,
           paymentStatus: holdItem.paymentStatus || "입금완료",
           localUpdatedAt: new Date().toISOString()
         };
@@ -13979,6 +13999,7 @@ ${folderBtn}
         markScheduleRowDirty(restoredItem, "payment_mutation");
 
         // 서버 schedules 테이블의 source를 즉시 "active"로 PATCH — pull 복구 방지
+        // (date_key 변경은 아래 queueSchedulesSyncWithRetry 스냅샷 업서트로 반영됨)
         void directPatchScheduleSource(holdItem.customerScheduleId, "active");
 
         saveAdminSchedulesToStorage();
@@ -13988,6 +14009,8 @@ ${folderBtn}
         // 결제·스케줄 모두 즉시 서버 동기화 (재시도 로직 포함)
         queuePaymentsSync();
         queueSchedulesSyncWithRetry(true);
+
+        alert(`"${restoredItem.company || restoredItem.name}" 항목을 ${picked} 로 되돌렸습니다.`);
       }
 
       function toggleRefundStatus(index) {
@@ -19275,9 +19298,15 @@ ${folderBtn}
 
       function deleteSchedule(index) {
         if (index < 0 || index >= data.length) return;
-        const confirmed = confirm("삭제하시겠습니까?");
-        if (!confirmed) return;
         const deletedItem = data[index];
+        // 입금완료 건은 삭제 대신 「보류 업체」로 이관되므로 확인 문구를 다르게 안내.
+        const isPaidRow = String(deletedItem?.paymentStatus || "").trim() === "입금완료";
+        const confirmed = confirm(
+          isPaidRow
+            ? "입금완료된 건입니다. 스케줄에서 빼고 「보류 업체」로 이동할까요?\n(되돌리기·환불 후속처리가 가능합니다)"
+            : "삭제하시겠습니까?"
+        );
+        if (!confirmed) return;
         ensureScheduleUuid(deletedItem);
         const deletedScheduleId = String(deletedItem?.customerScheduleId || "").trim();
         const deletedDate = String(deletedItem?.date || "").trim();
@@ -19295,15 +19324,46 @@ ${folderBtn}
           return (sameDate && sameTime && samePlace && sameCompany) || (sameDate && sameTime && samePlace);
         };
         const shouldMoveToHoldAfterDelete = String(deletedItem?.paymentStatus || "").trim() === "입금완료";
+
+        // ── 입금완료 건은 「삭제」가 아니라 「보류 업체로 이관」 ──
+        // 서버 schedules row 를 DELETE 하거나 tombstone/pendingDelete 를 걸면 다음 pull 의
+        // 필터(source="deleted" / schedulePendingDeletionIds)에 걸려 보류 항목이 사라진다.
+        // (= 사용자가 본 "입금처리 후 스케줄 취소 시 보류로 안 가고 그냥 사라짐" 버그)
+        // → row 는 유지하고 source 만 "hold" 로 PATCH 한다. (이후 되돌리기/환불 후속처리 가능)
+        if (shouldMoveToHoldAfterDelete) {
+          data.splice(index, 1);
+          for (let i = onHoldPayments.length - 1; i >= 0; i -= 1) {
+            if (isSameDeletedSchedule(onHoldPayments[i])) onHoldPayments.splice(i, 1);
+          }
+          for (let i = refundPayments.length - 1; i >= 0; i -= 1) {
+            if (isSameDeletedSchedule(refundPayments[i])) refundPayments.splice(i, 1);
+          }
+          const heldItem = { ...deletedItem, paymentStatus: "입금완료", localUpdatedAt: new Date().toISOString() };
+          onHoldPayments.unshift(heldItem);
+          editingIndex = null;
+          editingDateIndex = null;
+          try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
+          // freshness guard 우회 — 조작 직후 pull 이 옛 상태로 되돌리지 않게
+          try {
+            const nowIso = new Date().toISOString();
+            localStorage.setItem(STORAGE_LAST_PAYMENT_PULL_AT, nowIso);
+            localStorage.setItem(STORAGE_LAST_SCHEDULE_PULL_AT, nowIso);
+          } catch (_) {}
+          markScheduleRowDirty(heldItem, "payment_mutation");
+          renderList();
+          renderPaymentList();
+          queueSchedulesSyncWithRetry(true);
+          queuePaymentsSyncWithRetry();
+          // 서버 schedules row 의 source 를 "hold" 로 PATCH (DELETE 하지 않음)
+          if (deletedScheduleId) void directPatchScheduleSource(deletedScheduleId, "hold");
+          return;
+        }
+
         appendCanceledScheduleRecord(deletedItem, "admin", "관리자삭제");
         data.splice(index, 1);
         for (let i = onHoldPayments.length - 1; i >= 0; i -= 1) {
           if (!isSameDeletedSchedule(onHoldPayments[i])) continue;
           onHoldPayments.splice(i, 1);
-        }
-        if (shouldMoveToHoldAfterDelete) {
-          // 입금완료 건은 스케줄이 삭제되어도 보류 업체에서 후속 처리 가능하도록 이관한다.
-          onHoldPayments.unshift({ ...deletedItem });
         }
         for (let i = refundPayments.length - 1; i >= 0; i -= 1) {
           if (isSameDeletedSchedule(refundPayments[i])) {
