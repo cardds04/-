@@ -4538,8 +4538,17 @@
           schedules.unshift(createdSchedule);
           writeStorageArray(STORAGE_SCHEDULES, schedules);
           try {
-            await syncCustomersTableFromStorage();
+            // ① 스케줄 저장이 핵심 — 토큰 기반 /api/customer-write(동일 출처) 우선 경로라
+            //    광고차단·확장프로그램이 *.supabase.co 를 막는 환경에서도 동작한다.
             await syncCustomerSchedulesTable({ ...user, company: scheduleCompanyName, companyCode: effectiveCompanyCode });
+            // ② 계정 정보 재동기화는 best-effort. 이미 로그인된 계정이라 필수 아님 +
+            //    supabase.co 직접 호출이라 차단 환경에서 throw 될 수 있음 → 실패해도 등록은 유지.
+            //    (예전엔 이 호출이 먼저 실행돼 throw 되면서 스케줄 저장 전에 등록이 통째로 취소됐음)
+            try {
+              await syncCustomersTableFromStorage();
+            } catch (acctErr) {
+              console.warn("[TABLE][customer] 계정 재동기화 실패(무시) — 스케줄은 정상 저장됨", acctErr);
+            }
             queueCustomerTablePull();
           } catch (error) {
             console.error("[TABLE][customer] schedule create sync 실패", error);
@@ -4549,7 +4558,13 @@
             writeStorageArray(STORAGE_SCHEDULES, rollbackRows);
             renderStatusList();
             renderPaymentSummary();
-            alert("서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.");
+            const reason = error && error.message ? String(error.message).slice(0, 180) : "알 수 없는 오류";
+            alert(
+              "서버 저장 실패로 등록이 취소되었습니다. 다시 시도해주세요.\n\n" +
+                "[원인] " + reason + "\n\n" +
+                "이 기기에서만 계속 실패하면, 광고차단·보안 확장프로그램(예: AdGuard, uBlock, Brave 실드)을 잠시 끄거나 " +
+                "다른 브라우저(또는 시크릿/비공개 창)로 다시 시도해 주세요."
+            );
             return;
           }
           const submissionReceipt = {
