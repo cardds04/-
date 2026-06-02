@@ -16571,7 +16571,9 @@ ${folderBtn}
         }
       }
 
-      function switchMainTab(tab) {
+      /** 탭/섹션 표시 토글만 수행(렌더 없음). 부팅 초반 paint 전에 호출해
+       *  "스케줄로 깜빡 → 저장된 탭" 플래시를 없애는 용도로도 쓴다. */
+      function applyAdminMainTabVisibility(tab) {
         const isSchedule = tab === "schedule";
         const isPayment = tab === "payment";
         const isPayroll = tab === "payroll";
@@ -16602,6 +16604,29 @@ ${folderBtn}
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         companyDirectorySectionEl?.classList.toggle("hidden", !isCompanyDirectory);
         blogCompaniesSectionEl?.classList.toggle("hidden", !isBlogCompanies);
+      }
+
+      /** 저장된 탭(sessionStorage)을 검증해 반환. 없거나 알 수 없으면 "schedule". */
+      function getRestoredAdminMainTab() {
+        try {
+          const saved = String(sessionStorage.getItem(SESSION_ADMIN_ACTIVE_TAB) || "").trim();
+          if (saved && ADMIN_MAIN_TAB_KEYS.includes(saved)) return saved;
+        } catch (_) {}
+        return "schedule";
+      }
+
+      function switchMainTab(tab) {
+        const isSchedule = tab === "schedule";
+        const isPayment = tab === "payment";
+        const isPayroll = tab === "payroll";
+        const isCoupon = tab === "coupon";
+        const isReceiptLedger = tab === "receiptLedger";
+        const isThefeelingEdit = tab === "thefeelingEdit";
+        const isInlogPhoto = tab === "inlogPhoto";
+        const isGrokTool = tab === "grokTool";
+        const isCompanyDirectory = tab === "companyDirectory";
+        const isBlogCompanies = tab === "blogCompanies";
+        applyAdminMainTabVisibility(tab);
         if (isPayment) renderPaymentList();
         if (isPayroll) renderPhotographerPayrollAdmin();
         if (isCoupon) renderCouponPassList();
@@ -20144,6 +20169,10 @@ ${folderBtn}
 
       // 자동 초기화 비활성화 (데이터 유실 방지)
       async function bootstrapAdminPageData() {
+        // 새로고침 플래시 방지: 첫 await(=첫 paint) 전에 저장된 탭의 표시 상태를 먼저 적용.
+        // 이렇게 하면 "스케줄로 잠깐 보였다가 저장된 탭으로 점프"하던 깜빡임이 사라진다.
+        // (렌더는 데이터 로드 후 아래 switchMainTab 에서 수행)
+        try { applyAdminMainTabVisibility(getRestoredAdminMainTab()); } catch (_) {}
         // B-3: 첫 민감 테이블 읽기 전에 관리자 토큰 확보(없으면 1회 로그인).
         // 취소하면 토큰 "" → 기존 anon 경로로 계속 동작(B-4 잠금 전까지 무중단).
         try {
@@ -20206,13 +20235,9 @@ ${folderBtn}
         setupCouponInputs();
         setupScheduleFilters();
         renderList();
-        // 새로고침 시 보던 탭 그대로 복원 (sessionStorage). 알 수 없는 값이면 schedule.
-        let restoredAdminTab = "schedule";
-        try {
-          const saved = String(sessionStorage.getItem(SESSION_ADMIN_ACTIVE_TAB) || "").trim();
-          if (saved && ADMIN_MAIN_TAB_KEYS.includes(saved)) restoredAdminTab = saved;
-        } catch (_) {}
-        switchMainTab(restoredAdminTab);
+        // 새로고침 시 보던 탭 그대로 복원 — 데이터·셋업 완료 후 실제 렌더까지 수행.
+        // (표시 토글은 위 bootstrap 초반에서 이미 선적용해 플래시 없음)
+        switchMainTab(getRestoredAdminMainTab());
         clientKvPullDone.then((didHydrate) => {
           // didHydrate=false 라도 (첫 pull 실패·서버 빈 응답·snapshot 만 있을 때) JS 배열은
           // memoryStore 와 일치시켜야 한다. 예전엔 여기서 early-return 해서, pull 이 한 번
