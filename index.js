@@ -93,6 +93,20 @@
       const NATIVE_BYPASS_TODAY_NEW_COMPANIES_DISMISS_YMD = "__scheduleDashNativeTodayNewDismissYmdV1";
       /** 동일 탭·KV 레이스 시에도 비우기 유지 (프록시 대상 아님) */
       const SESSION_TODAY_NEW_COMPANIES_DISMISS_YMD = "ssTodayNewCompaniesDismissYmdV1";
+      // 관리자 페이지에서 마지막으로 보던 메인 탭 — 새로고침 시 그대로 복원.
+      const SESSION_ADMIN_ACTIVE_TAB = "ssAdminActiveTabV1";
+      const ADMIN_MAIN_TAB_KEYS = [
+        "schedule",
+        "payment",
+        "payroll",
+        "companyDirectory",
+        "blogCompanies",
+        "coupon",
+        "receiptLedger",
+        "thefeelingEdit",
+        "inlogPhoto",
+        "grokTool"
+      ];
       /** 대시보드에서 촬영일 기준 이 날짜 이하면 현장 아이콘을 완료(초록)로 표시 */
       const DASH_SITE_TREATED_DONE_THROUGH_YMD = "2026-05-04";
       const STORAGE_INLOG_PHOTO_ALBUMS = "scheduleSiteInlogPhotoAlbumsV1";
@@ -16606,6 +16620,9 @@ ${folderBtn}
           renderBlogCompaniesTable();
           renderBlogTaskList();
         }
+        // 현재 탭을 기억 — 새로고침 시 보던 탭 그대로 복원. sessionStorage 라 기기 로컬·
+        // 동기화 오염 없음, 새로고침엔 유지되고 탭/창을 닫으면 초기화된다.
+        try { sessionStorage.setItem(SESSION_ADMIN_ACTIVE_TAB, String(tab || "schedule")); } catch (_) {}
       }
 
       tabScheduleEl.addEventListener("click", () => switchMainTab("schedule"));
@@ -20189,7 +20206,13 @@ ${folderBtn}
         setupCouponInputs();
         setupScheduleFilters();
         renderList();
-        switchMainTab("schedule");
+        // 새로고침 시 보던 탭 그대로 복원 (sessionStorage). 알 수 없는 값이면 schedule.
+        let restoredAdminTab = "schedule";
+        try {
+          const saved = String(sessionStorage.getItem(SESSION_ADMIN_ACTIVE_TAB) || "").trim();
+          if (saved && ADMIN_MAIN_TAB_KEYS.includes(saved)) restoredAdminTab = saved;
+        } catch (_) {}
+        switchMainTab(restoredAdminTab);
         clientKvPullDone.then((didHydrate) => {
           // didHydrate=false 라도 (첫 pull 실패·서버 빈 응답·snapshot 만 있을 때) JS 배열은
           // memoryStore 와 일치시켜야 한다. 예전엔 여기서 early-return 해서, pull 이 한 번
