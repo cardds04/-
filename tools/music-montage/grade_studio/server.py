@@ -65,6 +65,13 @@ HSL_CHANNEL_HUE = {
     "aqua": 180, "blue": 240, "purple": 285, "magenta": 320,
 }
 DEFAULT_HSL = {ch: {"h": 0, "s": 0, "l": 0} for ch in HSL_CHANNELS}
+# 컬러 그레이딩(스플릿 토닝) 영역
+CG_REGIONS = ("shadow", "mid", "high", "global")
+DEFAULT_CG = {
+    "shadow": {"h": 0, "s": 0, "l": 0}, "mid": {"h": 0, "s": 0, "l": 0},
+    "high": {"h": 0, "s": 0, "l": 0}, "global": {"h": 0, "s": 0, "l": 0},
+    "blend": 50, "balance": 0,
+}
 
 DEFAULT_GRADE: dict = {
     "temp": 6500,
@@ -86,6 +93,7 @@ DEFAULT_GRADE: dict = {
     "clr": 0,
     "dh": 0,
     "hsl": DEFAULT_HSL,    # 색상별 H/S/L 8채널
+    "cg": DEFAULT_CG,      # 컬러 그레이딩 (스플릿 토닝)
     "trim_in": 0.0,
     "trim_out": 0.0,
     "disabled": 0,        # 0/1 — 일반(시네마/fullframe) 빌드에서 제외
@@ -257,13 +265,14 @@ def _build_color_matrix_py(g: dict) -> tuple[list[list[float]], float]:
     expo = float(g.get("expo", 0) or 0)
     exp_factor = 2.0 ** (expo / 100.0)
 
+    # 대비는 매트릭스에서 제거 (per-pixel S-curve). 디헤이즈의 대비 성분만 약하게 유지. (app.js 와 동일)
     dh = float(g.get("dh", 0) or 0) / 100.0
-    c_input = (float(g.get("contrast", 0) or 0) + dh * 40.0) / 100.0
+    c_input = (dh * 30.0) / 100.0
     c = 1.0 + c_input
     c_off = (1.0 - c) * 0.5
 
-    vib = float(g.get("vib", 0) or 0) / 100.0
-    sat_input = (float(g.get("sat", 0) or 0) + vib * 60.0 + dh * 25.0) / 100.0
+    # 생동감 제거 (스마트 생동감으로 이동). 디헤이즈 채도 성분만 유지.
+    sat_input = (float(g.get("sat", 0) or 0) + dh * 25.0) / 100.0
     sat = 1.0 + sat_input
 
     kr, kg, kb = _kelvin_to_rgb_mul(float(g.get("temp", 6500) or 6500))
@@ -366,6 +375,20 @@ def _grade_signature(g: dict) -> str:
                 parts.append(f"hsl.{ch}.{sk}={float(cell.get(sk, 0) or 0):.4f}")
             except (TypeError, ValueError):
                 parts.append(f"hsl.{ch}.{sk}=0")
+    # 컬러그레이딩도 시그니처에 포함
+    cg_in = g.get("cg") or {}
+    for rg in CG_REGIONS:
+        cell = cg_in.get(rg) or {}
+        for sk in ("h", "s", "l"):
+            try:
+                parts.append(f"cg.{rg}.{sk}={float(cell.get(sk, 0) or 0):.4f}")
+            except (TypeError, ValueError):
+                parts.append(f"cg.{rg}.{sk}=0")
+    for bk in ("blend", "balance"):
+        try:
+            parts.append(f"cg.{bk}={float(cg_in.get(bk, 0) or 0):.4f}")
+        except (TypeError, ValueError):
+            parts.append(f"cg.{bk}=0")
     s = "|".join(parts)
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:16]
 
@@ -385,6 +408,12 @@ def _is_identity_grade(g: dict) -> bool:
             cell = hsl_in.get(ch) or {}
             for sk in ("h", "s", "l"):
                 if abs(float(cell.get(sk, 0) or 0)) > 0.5: return False
+        # 컬러그레이딩 — s/l 중 하나라도 켜졌으면 non-identity
+        cg_in = g.get("cg") or {}
+        for rg in CG_REGIONS:
+            cell = cg_in.get(rg) or {}
+            if abs(float(cell.get("s", 0) or 0)) > 0.5: return False
+            if abs(float(cell.get("l", 0) or 0)) > 0.5: return False
     except (TypeError, ValueError):
         return False
     return True
@@ -515,6 +544,107 @@ def _soft_shoulder(rr: float, gg: float, bb: float, strength: float) -> tuple[fl
     return (sr, sg, sb)
 
 
+def _s_curve_contrast(x: float, amt: float) -> float:
+    """라이트룸식 S-curve 대비 (app.js sCurveContrast 와 동일). amt -1..1."""
+    x = 0.0 if x < 0 else (1.0 if x > 1 else x)
+    if amt > 0.001:
+        s = x * x * (3.0 - 2.0 * x)
+        return x + (s - x) * amt
+    if amt < -0.001:
+        flat = 0.5 + (x - 0.5) * 0.55
+        return x + (flat - x) * (-amt)
+    return x
+
+
+def _smart_vibrance(r: float, g: float, b: float, amt: float) -> tuple[float, float, float]:
+    """스마트 생동감 (app.js smartVibrance 와 동일). 저채도 우선·따뜻한톤 보호."""
+    if abs(amt) < 0.001:
+        return (r, g, b)
+    mx = max(r, g, b)
+    mn = min(r, g, b)
+    sat_cur = (mx - mn) / mx if mx > 1e-4 else 0.0
+    w = (1.0 - sat_cur)
+    w = w * w
+    warm = max(0.0, min(1.0, (r - b) * 2.0))
+    protect = 1.0 + (0.45 - 1.0) * warm
+    boost = amt * w * protect
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    f = 1.0 + boost
+    rr = lum + (r - lum) * f
+    gg = lum + (g - lum) * f
+    bb = lum + (b - lum) * f
+    return (
+        0.0 if rr < 0 else (1.0 if rr > 1 else rr),
+        0.0 if gg < 0 else (1.0 if gg > 1 else gg),
+        0.0 if bb < 0 else (1.0 if bb > 1 else bb),
+    )
+
+
+def _cg_tint_vec(cell: dict) -> tuple[float, float, float, float, bool]:
+    """컬러그레이딩 영역 {h,s,l} → (r_off, g_off, b_off, dL, on). app.js cgTint 와 동일."""
+    if not isinstance(cell, dict):
+        return (0.0, 0.0, 0.0, 0.0, False)
+    s = max(0.0, min(100.0, float(cell.get("s", 0) or 0))) / 100.0
+    l = max(-100.0, min(100.0, float(cell.get("l", 0) or 0))) / 100.0
+    h = (float(cell.get("h", 0) or 0) % 360 + 360) % 360
+    on = (s > 0.001 or abs(l) > 0.001)
+    if s <= 0.001:
+        return (0.0, 0.0, 0.0, l * 0.25, on)
+    rgb = _hsl_to_rgb(h, 1.0, 0.5)
+    strength = 0.30
+    return ((rgb[0] - 0.5) * s * strength,
+            (rgb[1] - 0.5) * s * strength,
+            (rgb[2] - 0.5) * s * strength,
+            l * 0.25, on)
+
+
+def _color_grade(r: float, g: float, b: float, cgv: dict) -> tuple[float, float, float]:
+    """컬러 그레이딩 — 휘도 영역별 색조 틴트 (app.js colorGrade 와 동일).
+    cgv = {'sh':(r,g,b,dL), 'mid':..., 'hi':..., 'gl':..., 'blend':0..1, 'balance':-1..1}"""
+    L = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    blend = cgv["blend"]
+    bw = 0.12 + (0.40 - 0.12) * blend
+    Lb = max(0.0, min(1.0, L + cgv["balance"] * 0.18))
+    # smoothstep
+    def _ss(e0, e1, x):
+        if e1 <= e0:
+            return 0.0 if x < e0 else 1.0
+        t = max(0.0, min(1.0, (x - e0) / (e1 - e0)))
+        return t * t * (3.0 - 2.0 * t)
+    w_high = _ss(0.5 - bw, 1.0, Lb)
+    w_shadow = 1.0 - _ss(0.0, 0.5 + bw, Lb)
+    w_mid = max(0.0, 1.0 - w_high - w_shadow)
+    sh, mid, hi, gl = cgv["sh"], cgv["mid"], cgv["hi"], cgv["gl"]
+    tr = w_shadow * sh[0] + w_mid * mid[0] + w_high * hi[0] + gl[0]
+    tg = w_shadow * sh[1] + w_mid * mid[1] + w_high * hi[1] + gl[1]
+    tb = w_shadow * sh[2] + w_mid * mid[2] + w_high * hi[2] + gl[2]
+    dL = w_shadow * sh[3] + w_mid * mid[3] + w_high * hi[3] + gl[3]
+    rr, gg, bb = r + tr + dL, g + tg + dL, b + tb + dL
+    return (
+        0.0 if rr < 0 else (1.0 if rr > 1 else rr),
+        0.0 if gg < 0 else (1.0 if gg > 1 else gg),
+        0.0 if bb < 0 else (1.0 if bb > 1 else bb),
+    )
+
+
+def _prep_color_grade(g: dict):
+    """grade['cg'] → _color_grade 용 dict. 아무 영역도 안 켜졌으면 None (스킵)."""
+    cg = g.get("cg") if isinstance(g.get("cg"), dict) else None
+    if not cg:
+        return None
+    sh = _cg_tint_vec(cg.get("shadow"))
+    mid = _cg_tint_vec(cg.get("mid"))
+    hi = _cg_tint_vec(cg.get("high"))
+    gl = _cg_tint_vec(cg.get("global"))
+    if not (sh[4] or mid[4] or hi[4] or gl[4]):
+        return None
+    return {
+        "sh": sh[:4], "mid": mid[:4], "hi": hi[:4], "gl": gl[:4],
+        "blend": max(0.0, min(100.0, float(cg.get("blend", 50) or 0))) / 100.0,
+        "balance": max(-100.0, min(100.0, float(cg.get("balance", 0) or 0))) / 100.0,
+    }
+
+
 def _effective_filmic(g: dict) -> float:
     """라이트룸식 자동 하이라이트 롤오프 강도 (0~1). app.js effectiveFilmic 와 동일.
     노출/화이트/대비/대비밝기를 올리면 자동으로 sigmoid 롤오프가 걸려 찢어짐 방지."""
@@ -532,6 +662,9 @@ def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
     m, off = _build_color_matrix_py(g)
     tone = _build_tone_curve_lut(g, n=33)
     filmic = _effective_filmic(g)
+    contrast = max(-100.0, min(100.0, float(g.get("contrast", 0) or 0))) / 100.0
+    vibrance = max(-100.0, min(100.0, float(g.get("vib", 0) or 0))) / 100.0
+    cgv = _prep_color_grade(g)
     hsl_settings = g.get("hsl") or {}
     hsl_active = any(
         abs(float((hsl_settings.get(ch) or {}).get(sk, 0) or 0)) > 0.5
@@ -555,10 +688,20 @@ def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
                 bb = m[2][0] * r + m[2][1] * gv + m[2][2] * b + off
                 # 1.5) sigmoid soft-shoulder (톤커브 전 — 하이라이트 부드럽게 압축)
                 rr, gg, bb = _soft_shoulder(rr, gg, bb, filmic)
+                # 1.7) S-curve 대비 (라이트룸식)
+                if abs(contrast) > 0.001:
+                    rr = _s_curve_contrast(rr, contrast)
+                    gg = _s_curve_contrast(gg, contrast)
+                    bb = _s_curve_contrast(bb, contrast)
                 # 2) tone curve (per channel, identical curve like feFuncR/G/B in preview)
                 rr = _apply_tone_curve(rr, tone)
                 gg = _apply_tone_curve(gg, tone)
                 bb = _apply_tone_curve(bb, tone)
+                # 2.5) 스마트 생동감
+                rr, gg, bb = _smart_vibrance(rr, gg, bb, vibrance)
+                # 2.7) 컬러 그레이딩 (스플릿 토닝)
+                if cgv is not None:
+                    rr, gg, bb = _color_grade(rr, gg, bb, cgv)
                 # 3) HSL — RGB→HSL→shift→RGB (색상별 채널 가중치)
                 if hsl_active:
                     # clamp before HSL conversion (negative/over values break HSL math)
@@ -2945,6 +3088,31 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                             cell[sk] = 0
                     hsl_out[ch] = cell
                 out["hsl"] = hsl_out
+                continue
+            if k == "cg":
+                cg_in = g.get("cg") or {}
+                cg_out: dict = {}
+                for rg in CG_REGIONS:
+                    src = cg_in.get(rg) or {}
+                    cell = {}
+                    for sk in ("h", "s", "l"):
+                        try:
+                            if sk == "h":
+                                cell[sk] = int(max(0, min(360, round(float(src.get(sk, 0) or 0)))))
+                            else:
+                                cell[sk] = int(max(-100, min(100, round(float(src.get(sk, 0) or 0)))))
+                        except (TypeError, ValueError):
+                            cell[sk] = 0
+                    cg_out[rg] = cell
+                try:
+                    cg_out["blend"] = int(max(0, min(100, round(float(cg_in.get("blend", 50) or 0)))))
+                except (TypeError, ValueError):
+                    cg_out["blend"] = 50
+                try:
+                    cg_out["balance"] = int(max(-100, min(100, round(float(cg_in.get("balance", 0) or 0)))))
+                except (TypeError, ValueError):
+                    cg_out["balance"] = 0
+                out["cg"] = cg_out
                 continue
             if k == "xtype":
                 xt = str(g.get("xtype") or "none").strip().lower()

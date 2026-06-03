@@ -34,11 +34,37 @@
     expo: 0, contrast: 0, hi: 0, sh: 0, wh: 0, bl: 0, filmic: 0,
     sat: 0, vib: 0, tex: 0, clr: 0, dh: 0,
     hsl: DEFAULT_HSL,
+    // 컬러 그레이딩(스플릿 토닝) — 휘도 영역별 색조 틴트
+    cg: {
+      shadow: { h: 0, s: 0, l: 0 }, mid: { h: 0, s: 0, l: 0 },
+      high: { h: 0, s: 0, l: 0 }, global: { h: 0, s: 0, l: 0 },
+      blend: 50, balance: 0,
+    },
     trim_in: 0, trim_out: 0,
     disabled: 0, disabled_tri: 0,
     // 다음 클립으로 넘어갈 때 적용할 전환 — 마지막 클립은 무시됨.
     xtype: "none", xdur: 0.5,
   };
+  const CG_REGIONS = ["shadow", "mid", "high", "global"];
+  function freshCg() {
+    return {
+      shadow: { h: 0, s: 0, l: 0 }, mid: { h: 0, s: 0, l: 0 },
+      high: { h: 0, s: 0, l: 0 }, global: { h: 0, s: 0, l: 0 },
+      blend: 50, balance: 0,
+    };
+  }
+  function cloneCg(cg) {
+    const out = freshCg();
+    if (cg) {
+      CG_REGIONS.forEach(rg => {
+        const c = cg[rg] || {};
+        out[rg] = { h: Number(c.h || 0), s: Number(c.s || 0), l: Number(c.l || 0) };
+      });
+      out.blend = Number(cg.blend ?? 50);
+      out.balance = Number(cg.balance ?? 0);
+    }
+    return out;
+  }
   // 사용자에게 노출하는 전환 종류 (ffmpeg xfade 매핑)
   const XTYPES = [
     { id: "none",       label: "없음",      icon: "✕" },
@@ -94,9 +120,17 @@
     for (const k of Object.keys(DEFAULT_GRADE)) {
       const def = DEFAULT_GRADE[k];
       const v = (g && g[k] !== undefined) ? g[k] : def;
+      if (k === "hsl" || k === "cg") continue;   // 중첩 객체는 아래에서 깊은 복제
       if (typeof def === "string") out[k] = String(v ?? def);
       else out[k] = Number(v ?? def);
     }
+    // hsl / cg 깊은 복제 (undo 복원용)
+    out.hsl = {};
+    for (const ch of HSL_CHANNELS) {
+      const src = (g && g.hsl && g.hsl[ch]) || {};
+      out.hsl[ch] = { h: Number(src.h||0), s: Number(src.s||0), l: Number(src.l||0) };
+    }
+    out.cg = cloneCg(g && g.cg);
     return out;
   }
   function pushHistorySingle(clipId) {
@@ -179,15 +213,14 @@
     // expo: stops-ish, mapped via 2^(expo/100). slider [-200..+200] -> [-2..+2] stops
     const expFactor = Math.pow(2, (g.expo || 0) / 100);
 
-    // contrast (with dehaze additive): -100..+100 → ~0.5x..~2x around 0.5 luma
+    // 대비는 매트릭스에서 제거 (per-pixel S-curve 로 이동). 디헤이즈는 약한 대비 성분만 유지.
     const dh = (g.dh || 0) / 100;             // -1..1
-    const cInput = ((g.contrast || 0) + dh * 40) / 100;  // dehaze adds contrast
+    const cInput = (dh * 30) / 100;           // 디헤이즈의 대비 기여만 (선형, 약하게)
     const c = 1 + cInput;
     const cOff = (1 - c) * 0.5;
 
-    // saturation (sat + 60% of vibrance + 25% of dehaze): -100..+100 mapped → 0..2
-    const vib = (g.vib || 0) / 100;
-    const satInput = ((g.sat || 0) + vib * 60 + dh * 25) / 100;
+    // saturation (sat + 25% of dehaze): 생동감은 매트릭스에서 제거 (스마트 생동감으로 이동)
+    const satInput = ((g.sat || 0) + dh * 25) / 100;
     const sat = 1 + satInput;
 
     // wb
@@ -379,6 +412,18 @@
       uniform float uFilmic;      // 0.0 = 하드클립, 1.0 = 강한 sigmoid 하이라이트 압축
       uniform sampler3D uLut;     // 라이트룸 매칭 3D LUT (있을 때 슬라이더 대신 이걸 적용)
       uniform int uLutOn;         // 1 = uLut 적용
+      uniform float uContrast;    // S-curve 대비 (-1..1) — 라이트룸식, 클립 없음
+      uniform float uVibrance;    // 스마트 생동감 (-1..1) — 저채도 우선·피부톤 보호
+      uniform vec3 uCgShadow;     // 컬러그레이딩 그림자 틴트 (RGB offset)
+      uniform vec3 uCgMid;        // 중간톤 틴트
+      uniform vec3 uCgHigh;       // 하이라이트 틴트
+      uniform vec3 uCgGlobal;     // 전체 틴트
+      uniform float uCgShadowL;   // 그림자 밝기 조정
+      uniform float uCgMidL;
+      uniform float uCgHighL;
+      uniform float uCgBlend;     // 영역 겹침 (0..1, 0.5 기본)
+      uniform float uCgBalance;   // 그림자↔하이라이트 균형 (-1..1)
+      uniform int uCgOn;          // 1 = 컬러그레이딩 적용
       in vec2 vUv;
       out vec4 outColor;
 
@@ -399,6 +444,44 @@
         // extreme WB 로 한 채널만 1.0 을 크게 넘을 때 생기는 컬러 밴드(파란 LED 등) 제거.
         float desat = clamp((m - 1.0) * 0.9, 0.0, 0.85);
         return mix(scaled, vec3(mNew), desat);
+      }
+
+      // 라이트룸식 S-curve 대비 — smoothstep 기반, 0/1 에서 부드럽게 롤오프 (선형 대비의 하드클립 제거)
+      float sCurveContrast(float x, float amt) {
+        x = clamp(x, 0.0, 1.0);
+        if (amt > 0.001) {
+          float s = x * x * (3.0 - 2.0 * x);   // smoothstep S-curve (0.5 피벗)
+          return mix(x, s, amt);
+        } else if (amt < -0.001) {
+          float flat = 0.5 + (x - 0.5) * 0.55; // 대비 감소 — 0.5 쪽으로 평탄화
+          return mix(x, flat, -amt);
+        }
+        return x;
+      }
+      // 스마트 생동감 — 저채도일수록 강하게, 이미 채도 높거나 따뜻한(피부)톤은 보호
+      vec3 smartVibrance(vec3 col, float amt) {
+        if (abs(amt) < 0.001) return col;
+        float mx = max(max(col.r, col.g), col.b);
+        float mn = min(min(col.r, col.g), col.b);
+        float satCur = (mx > 1e-4) ? (mx - mn) / mx : 0.0;
+        float w = (1.0 - satCur); w = w * w;          // 저채도 우선 (제곱 falloff)
+        float warm = clamp((col.r - col.b) * 2.0, 0.0, 1.0);  // 따뜻한톤 정도
+        float protect = mix(1.0, 0.45, warm);          // 피부/따뜻한톤 45% 만 적용
+        float boost = amt * w * protect;
+        float L = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
+        return clamp(mix(vec3(L), col, 1.0 + boost), 0.0, 1.0);
+      }
+      // 컬러 그레이딩 — 휘도 영역별(그림자/중간/하이라이트) 색조 틴트 (스플릿 토닝)
+      vec3 colorGrade(vec3 col) {
+        float L = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
+        float bw = mix(0.12, 0.40, clamp(uCgBlend, 0.0, 1.0));   // 영역 전이 폭
+        float Lb = clamp(L + uCgBalance * 0.18, 0.0, 1.0);       // balance: 영역 경계 이동
+        float wHigh   = smoothstep(0.5 - bw, 1.0, Lb);
+        float wShadow = 1.0 - smoothstep(0.0, 0.5 + bw, Lb);
+        float wMid    = max(0.0, 1.0 - wHigh - wShadow);
+        vec3 tint = wShadow * uCgShadow + wMid * uCgMid + wHigh * uCgHigh + uCgGlobal;
+        float dL  = wShadow * uCgShadowL + wMid * uCgMidL + wHigh * uCgHighL;
+        return clamp(col + tint + vec3(dL), 0.0, 1.0);
       }
 
       float toneSample(float v) {
@@ -464,15 +547,25 @@
           outColor = vec4(texture(uLut, clamp(col, 0.0, 1.0)).rgb, 1.0);
           return;
         }
-        // 1) 4x5 매트릭스 (노출/대비/WB) — 결과가 1.0 을 넘을 수 있음
+        // 1) 4x5 매트릭스 (노출/WB/채도) — 결과가 1.0 을 넘을 수 있음
         col = uMat * col + vec3(uOff);
         // 1.5) sigmoid soft-shoulder — 톤커브 전에 하이라이트를 부드럽게 압축 (찢어짐 방지)
         col = softShoulder(col, uFilmic);
+        // 1.7) S-curve 대비 (라이트룸식, 매트릭스의 선형 대비 대체)
+        if (abs(uContrast) > 0.001) {
+          col.r = sCurveContrast(col.r, uContrast);
+          col.g = sCurveContrast(col.g, uContrast);
+          col.b = sCurveContrast(col.b, uContrast);
+        }
         // 2) 톤커브 (per-channel, identical curve)
         col.r = toneSample(col.r);
         col.g = toneSample(col.g);
         col.b = toneSample(col.b);
         col = clamp(col, 0.0, 1.0);
+        // 2.5) 스마트 생동감 (톤커브 후 — 라이트룸 순서)
+        col = smartVibrance(col, uVibrance);
+        // 2.7) 컬러 그레이딩 (스플릿 토닝)
+        if (uCgOn == 1) col = colorGrade(col);
         // 3) HSL (RGB→HSL→채널별 가중치 보정→RGB)
         if (uHslEnabled == 1) {
           vec3 hsl = rgb2hsl(col);
@@ -578,6 +671,18 @@
       uLetterbox: gl.getUniformLocation(prog, "uLetterbox"),
       uFilmic: gl.getUniformLocation(prog, "uFilmic"),
       uLutOn: gl.getUniformLocation(prog, "uLutOn"),
+      uContrast: gl.getUniformLocation(prog, "uContrast"),
+      uVibrance: gl.getUniformLocation(prog, "uVibrance"),
+      uCgShadow: gl.getUniformLocation(prog, "uCgShadow"),
+      uCgMid: gl.getUniformLocation(prog, "uCgMid"),
+      uCgHigh: gl.getUniformLocation(prog, "uCgHigh"),
+      uCgGlobal: gl.getUniformLocation(prog, "uCgGlobal"),
+      uCgShadowL: gl.getUniformLocation(prog, "uCgShadowL"),
+      uCgMidL: gl.getUniformLocation(prog, "uCgMidL"),
+      uCgHighL: gl.getUniformLocation(prog, "uCgHighL"),
+      uCgBlend: gl.getUniformLocation(prog, "uCgBlend"),
+      uCgBalance: gl.getUniformLocation(prog, "uCgBalance"),
+      uCgOn: gl.getUniformLocation(prog, "uCgOn"),
     };
     // hue centers (GLSL es 1.0 호환을 위해 한 번만 set)
     gl.uniform1fv(_gl.loc.uHueCenters, new Float32Array([0, 30, 60, 120, 180, 240, 285, 320]));
@@ -763,7 +868,61 @@
     // 자동으로 롤오프가 걸려 하이라이트가 찢어지지 않고 부드럽게 밝아짐.
     // (모든 슬라이더 0 이면 자동값도 0 → 원본 그대로 통과)
     gl.uniform1f(_gl.loc.uFilmic, effectiveFilmic(g) / 100);
+    // 대비(S-curve) · 생동감(스마트) — 매트릭스에서 빠져나와 per-pixel 비선형으로
+    gl.uniform1f(_gl.loc.uContrast, Math.max(-100, Math.min(100, Number(g.contrast || 0))) / 100);
+    gl.uniform1f(_gl.loc.uVibrance, Math.max(-100, Math.min(100, Number(g.vib || 0))) / 100);
+    // 컬러 그레이딩 틴트 벡터 계산
+    const cg = (g && g.cg) || {};
+    const tSh = cgTint(cg.shadow);
+    const tMid = cgTint(cg.mid);
+    const tHi = cgTint(cg.high);
+    const tGl = cgTint(cg.global);
+    const cgOn = (tSh.on || tMid.on || tHi.on || tGl.on) ? 1 : 0;
+    gl.uniform3f(_gl.loc.uCgShadow, tSh.r, tSh.g, tSh.b);
+    gl.uniform3f(_gl.loc.uCgMid, tMid.r, tMid.g, tMid.b);
+    gl.uniform3f(_gl.loc.uCgHigh, tHi.r, tHi.g, tHi.b);
+    gl.uniform3f(_gl.loc.uCgGlobal, tGl.r, tGl.g, tGl.b);
+    gl.uniform1f(_gl.loc.uCgShadowL, tSh.dL);
+    gl.uniform1f(_gl.loc.uCgMidL, tMid.dL);
+    gl.uniform1f(_gl.loc.uCgHighL, tHi.dL);
+    gl.uniform1f(_gl.loc.uCgBlend, (Number(cg.blend ?? 50)) / 100);
+    gl.uniform1f(_gl.loc.uCgBalance, (Number(cg.balance ?? 0)) / 100);
+    gl.uniform1i(_gl.loc.uCgOn, cgOn);
     _gl.grade = g;
+  }
+
+  // 컬러그레이딩 한 영역 {h,s,l} → 셰이더용 RGB 틴트 offset + 밝기조정 + on 플래그.
+  // h: 0~360, s: 0~100, l: -100~100. hue 의 풀채도 RGB 를 회색(0.5) 기준 offset 으로.
+  const CG_TINT_STRENGTH = 0.30;
+  function cgTint(cell) {
+    cell = cell || {};
+    const s = Math.max(0, Math.min(100, Number(cell.s || 0))) / 100;
+    const l = Math.max(-100, Math.min(100, Number(cell.l || 0))) / 100;
+    const h = ((Number(cell.h || 0)) % 360 + 360) % 360;
+    const on = (s > 0.001 || Math.abs(l) > 0.001);
+    if (s <= 0.001) return { r: 0, g: 0, b: 0, dL: l * 0.25, on };
+    const rgb = hslToRgb01(h, 1.0, 0.5);   // 풀채도 hue
+    return {
+      r: (rgb[0] - 0.5) * s * CG_TINT_STRENGTH,
+      g: (rgb[1] - 0.5) * s * CG_TINT_STRENGTH,
+      b: (rgb[2] - 0.5) * s * CG_TINT_STRENGTH,
+      dL: l * 0.25,
+      on,
+    };
+  }
+  function hslToRgb01(h, s, l) {
+    h = h / 360;
+    if (s === 0) return [l, l, l];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2 = (t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    return [hue2(h + 1/3), hue2(h), hue2(h - 1/3)];
   }
 
   // 라이트룸식 자동 하이라이트 롤오프 강도 (0~100).
@@ -857,7 +1016,17 @@
     if (SLIDER_KEYS.some(k => Number(g[k]) !== Number(DEFAULT_GRADE[k]))) return true;
     if (TRIM_KEYS.some(k => Number(g[k] || 0) > 1e-3)) return true;
     if (isHslDirty(g)) return true;
+    if (isCgDirty(g)) return true;
     if (isTransitionDirty(g)) return true;
+    return false;
+  }
+  function isCgDirty(g) {
+    const cg = g && g.cg ? g.cg : null;
+    if (!cg) return false;
+    for (const rg of CG_REGIONS) {
+      const cell = cg[rg] || {};
+      if (Number(cell.s || 0) !== 0 || Number(cell.l || 0) !== 0) return true;
+    }
     return false;
   }
   function isHslDirty(g) {
@@ -886,6 +1055,7 @@
   function freshDefaultGrade() {
     const g = { ...DEFAULT_GRADE };
     g.hsl = HSL_CHANNELS.reduce((m, ch) => (m[ch] = {h:0,s:0,l:0}, m), {});
+    g.cg = freshCg();
     return g;
   }
   function cloneGrade(g) {
@@ -895,6 +1065,7 @@
       const src = (g && g.hsl && g.hsl[ch]) || {};
       out.hsl[ch] = { h: Number(src.h||0), s: Number(src.s||0), l: Number(src.l||0) };
     }
+    out.cg = cloneCg(g && g.cg);
     return out;
   }
   function isMac() {
@@ -938,6 +1109,8 @@
     });
     // HSL 슬라이더 — 활성 채널 기준
     syncHslPanelFromGrade(g);
+    // 컬러 그레이딩 패널 — 활성 영역 기준
+    syncCgPanelFromGrade(g);
     // 전환 패널
     syncTransitionPanel(g);
   }
@@ -1036,6 +1209,146 @@
     num.addEventListener("dblclick", () => num.select());
   }
 
+  // ─────────────────────────────────────────────────────────
+  // 컬러 그레이딩 패널 (그림자/중간/하이라이트/전체 영역 + h/s/l + 블렌딩/밸런스)
+  let _cgActive = "shadow";
+  const CG_LABELS = { shadow: "그림자", mid: "중간톤", high: "하이라이트", global: "전체" };
+  function ensureCg(g) {
+    if (!g.cg) g.cg = freshCg();
+    CG_REGIONS.forEach(rg => { if (!g.cg[rg]) g.cg[rg] = { h:0, s:0, l:0 }; });
+    if (g.cg.blend === undefined) g.cg.blend = 50;
+    if (g.cg.balance === undefined) g.cg.balance = 0;
+    return g.cg;
+  }
+  function isCgRegionDirty(g, rg) {
+    const cell = (g && g.cg && g.cg[rg]) || {};
+    return Number(cell.s || 0) !== 0 || Number(cell.l || 0) !== 0;
+  }
+  // 칩 색 — 해당 영역의 현재 hue/sat 를 보여줌 (sat 0 이면 회색)
+  function cgChipColor(cell) {
+    cell = cell || {};
+    const s = Number(cell.s || 0);
+    if (s <= 0) return "#555";
+    const rgb = hslToRgb01(((Number(cell.h||0))%360+360)%360, 1.0, 0.5);
+    return `rgb(${Math.round(rgb[0]*255)},${Math.round(rgb[1]*255)},${Math.round(rgb[2]*255)})`;
+  }
+  function renderCgChips() {
+    const root = $("#cgChips");
+    if (!root) return;
+    root.innerHTML = "";
+    const c = currentClip();
+    CG_REGIONS.forEach(rg => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "hsl-chip cg-chip" + (rg === _cgActive ? " active" : "");
+      btn.title = CG_LABELS[rg];
+      btn.dataset.rg = rg;
+      const cell = c ? ((c.grade.cg||{})[rg]||{}) : {};
+      btn.style.background = cgChipColor(cell);
+      const lab = document.createElement("span");
+      lab.className = "cg-chip-label";
+      lab.textContent = CG_LABELS[rg];
+      btn.appendChild(lab);
+      btn.addEventListener("click", () => {
+        _cgActive = rg;
+        renderCgChips();
+        const cc = currentClip();
+        if (cc) syncCgPanelFromGrade(cc.grade);
+      });
+      if (c && isCgRegionDirty(c.grade, rg)) btn.classList.add("dirty");
+      root.appendChild(btn);
+    });
+  }
+  function syncCgPanelFromGrade(g) {
+    ensureCg(g);
+    const cell = g.cg[_cgActive] || { h:0, s:0, l:0 };
+    $$("#cgPanel .cg-row").forEach(row => {
+      const k = row.dataset.cg;   // h | s | l
+      const range = row.querySelector("input[type=range]");
+      const num = row.querySelector("input[type=number]");
+      const v = Number(cell[k] || 0);
+      range.value = String(v); num.value = String(v);
+      row.classList.toggle("dirty", v !== (k === "h" ? 0 : 0));
+    });
+    $$("#cgPanel .cg-global-row").forEach(row => {
+      const gk = row.dataset.cgg;  // blend | balance
+      const range = row.querySelector("input[type=range]");
+      const num = row.querySelector("input[type=number]");
+      const def = gk === "blend" ? 50 : 0;
+      const v = Number(g.cg[gk] ?? def);
+      range.value = String(v); num.value = String(v);
+      row.classList.toggle("dirty", v !== def);
+    });
+    $$("#cgChips .cg-chip").forEach(btn => {
+      const rg = btn.dataset.rg;
+      btn.classList.toggle("dirty", isCgRegionDirty(g, rg));
+      btn.classList.toggle("active", rg === _cgActive);
+      const cell2 = (g.cg||{})[rg]||{};
+      btn.style.background = cgChipColor(cell2);
+    });
+  }
+  function bindCgRow(row) {
+    const k = row.dataset.cg;   // h | s | l
+    const range = row.querySelector("input[type=range]");
+    const num = row.querySelector("input[type=number]");
+    const onChange = (raw) => {
+      let v = Math.max(Number(range.min), Math.min(Number(range.max), Number(raw)));
+      if (Number.isNaN(v)) v = 0;
+      range.value = String(v); num.value = String(v);
+      const c = currentClip();
+      if (c) {
+        ensureCg(c.grade);
+        c.grade.cg[_cgActive][k] = v;
+        applyMatrixToFilter(c.grade);
+        markClipGraded(c);
+        renderCgChips();
+        scheduleSave(c);
+      }
+    };
+    const _cap = () => { const c = currentClip(); if (c) pushHistorySingle(c.id); };
+    range.addEventListener("pointerdown", _cap);
+    num.addEventListener("focus", _cap);
+    range.addEventListener("input", () => onChange(range.value));
+    num.addEventListener("change", () => onChange(num.value));
+    num.addEventListener("input", () => onChange(num.value));
+    const wheelOn = (el) => el.addEventListener("wheel", (e) => {
+      if (document.activeElement !== el) return;
+      e.preventDefault(); _cap();
+      const step = Number(range.step) || 1;
+      const dir = e.deltaY > 0 ? -1 : 1;
+      onChange(Number(range.value) + dir * step * (e.shiftKey ? 10 : 1));
+    }, { passive: false });
+    wheelOn(range); wheelOn(num);
+    num.addEventListener("dblclick", () => num.select());
+  }
+  function bindCgGlobalRow(row) {
+    const gk = row.dataset.cgg;  // blend | balance
+    const range = row.querySelector("input[type=range]");
+    const num = row.querySelector("input[type=number]");
+    const def = gk === "blend" ? 50 : 0;
+    const onChange = (raw) => {
+      let v = Math.max(Number(range.min), Math.min(Number(range.max), Number(raw)));
+      if (Number.isNaN(v)) v = def;
+      range.value = String(v); num.value = String(v);
+      row.classList.toggle("dirty", v !== def);
+      const c = currentClip();
+      if (c) {
+        ensureCg(c.grade);
+        c.grade.cg[gk] = v;
+        applyMatrixToFilter(c.grade);
+        markClipGraded(c);
+        scheduleSave(c);
+      }
+    };
+    const _cap = () => { const c = currentClip(); if (c) pushHistorySingle(c.id); };
+    range.addEventListener("pointerdown", _cap);
+    num.addEventListener("focus", _cap);
+    range.addEventListener("input", () => onChange(range.value));
+    num.addEventListener("change", () => onChange(num.value));
+    num.addEventListener("input", () => onChange(num.value));
+    num.addEventListener("dblclick", () => num.select());
+  }
+
   function bindSliderRow(row) {
     const k = row.dataset.key;
     const range = row.querySelector("input[type=range]");
@@ -1089,12 +1402,15 @@
   }
 
   function bindAllSliders() {
-    // 일반 슬라이더 (data-key 가 있는 것만 — HSL row 는 data-hsl 로 분기)
+    // 일반 슬라이더 (data-key 가 있는 것만 — HSL/CG row 는 별도 분기)
     $$(".slider-row").forEach(row => {
       if (row.dataset.key) bindSliderRow(row);
       else if (row.dataset.hsl) bindHslRow(row);
+      else if (row.dataset.cg) bindCgRow(row);
+      else if (row.dataset.cgg) bindCgGlobalRow(row);
     });
     renderHslChips();
+    renderCgChips();
   }
 
   // ─────────────────────────────────────────────────────────
@@ -2009,8 +2325,9 @@
       if (!ids.has(c.id)) return;
       // SLIDER_KEYS (트림 제외) 만 복사
       SLIDER_KEYS.forEach(k => { c.grade[k] = Number(ps.grade[k] ?? DEFAULT_GRADE[k]); });
-      const presetHsl = cloneGrade(ps.grade).hsl;
-      c.grade.hsl = presetHsl;
+      const cl = cloneGrade(ps.grade);
+      c.grade.hsl = cl.hsl;
+      c.grade.cg = cl.cg;          // 컬러 그레이딩도 복사
       markClipGraded(c);
       const t = _saveTimers.get(c.id);
       if (t) { clearTimeout(t); _saveTimers.delete(c.id); }
@@ -2077,9 +2394,10 @@
       if (!ids.has(c.id)) return;
       // copy slider keys (skip trim — keep per-clip trim)
       SLIDER_KEYS.forEach(k => { c.grade[k] = Number(state.presetSlot[k] ?? DEFAULT_GRADE[k]); });
-      // HSL 색조/채도/밝기 (8채널 × {h,s,l}) 도 함께 복사 — cloneGrade 가 깊은 복제 처리
-      const presetHsl = cloneGrade(state.presetSlot).hsl;
-      c.grade.hsl = presetHsl;
+      // HSL·컬러그레이딩 도 함께 복사 — cloneGrade 가 깊은 복제 처리
+      const cl = cloneGrade(state.presetSlot);
+      c.grade.hsl = cl.hsl;
+      c.grade.cg = cl.cg;
       markClipGraded(c);
       // 디바운스 timer 도 cancel — 같은 클립이 곧이어 batch 로 저장될 거라 timer 발사 불필요
       const t = _saveTimers.get(c.id);
@@ -3265,9 +3583,9 @@
       const photos = (j.photos || []).map(p => {
         const base = freshDefaultGrade();
         const saved = p.grade || {};
-        // saved 의 값으로 base 덮어쓰기 (hsl 은 깊은 merge)
+        // saved 의 값으로 base 덮어쓰기 (hsl/cg 는 깊은 merge)
         for (const k of Object.keys(DEFAULT_GRADE)) {
-          if (k === "hsl") continue;
+          if (k === "hsl" || k === "cg") continue;
           if (saved[k] !== undefined) base[k] = saved[k];
         }
         if (saved.hsl) {
@@ -3278,6 +3596,7 @@
             };
           }
         }
+        if (saved.cg) base.cg = cloneCg(saved.cg);
         return {
           id: p.id, name: p.name, path: p.path, is_raw: !!p.is_raw,
           proxy: "ready",
