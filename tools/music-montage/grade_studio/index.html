@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>grade_studio</title>
-  <link rel="stylesheet" href="/styles.css?v=12" />
+  <link rel="stylesheet" href="/styles.css?v=14" />
+  <link rel="stylesheet" href="/studio.css?v=36" />
+  <link rel="stylesheet" href="/easyshorts.css?v=28" />
 </head>
 <body class="mode-video">
   <!-- SVG filter chain applied to <video> for live preview
@@ -29,7 +31,8 @@
 
   <nav class="tab-nav">
     <button type="button" class="tab-btn active" data-tab="video" title="영상 보정·몽타주 빌드">🎬 영상</button>
-    <button type="button" class="tab-btn" data-tab="photo" title="RAW/JPG 사진 보정·JPG 내보내기">📷 사진</button>
+    <button type="button" class="tab-btn" data-tab="studio" title="AI 대본·나레이션·영상 생성 + 타임라인 편집">🎬 스튜디오</button>
+    <button type="button" class="tab-btn" data-tab="easy" title="인스타 릴스 템플릿 방식 — 템플릿에 사진·영상만 넣으면 자동 완성">⚡ 이지숏폼</button>
   </nav>
 
   <header class="topbar">
@@ -46,7 +49,6 @@
       <button type="button" id="btnPickPhotoFiles" class="btn" data-mode="photo" title="사진 파일 선택 (RAW/JPG/PNG)">📄 파일 고르기</button>
       <button type="button" id="btnAddPhotoFiles" class="btn btn-ghost" data-mode="photo" title="현재 목록에 사진 추가">＋ 추가</button>
       <button type="button" id="btnClearPhotos" class="btn btn-ghost" data-mode="photo" title="사진 목록 비우기">목록비우기</button>
-      <div id="snapshotRail" class="snapshot-rail" title="저장된 작업"></div>
       <button type="button" id="btnPickFiles" class="btn" title="개별 영상 파일을 골라 불러오기 (다중 선택 가능)">📄 파일 고르기</button>
       <button type="button" id="btnAddFiles" class="btn btn-ghost" title="현재 목록에 영상 추가">＋ 추가</button>
       <span class="topbar-sep"></span>
@@ -62,6 +64,10 @@
         <span class="logo-size-unit">%</span>
       </span>
       <button type="button" id="btnClearLogo" class="btn btn-ghost" hidden title="로고 제거">✕</button>
+      <span class="topbar-sep"></span>
+      <button type="button" id="btnLrExtract" class="btn" data-mode="video" title="① 각 클립에서 대표 프레임 1장씩 추출 → 라이트룸에서 보정하세요">🎞 LR 프레임 추출</button>
+      <button type="button" id="btnLrApply" class="btn" data-mode="video" title="② 라이트룸에서 보정·내보낸 사진 폴더 선택 → 클립별 색 보정 LUT 자동 생성·적용">🎨 LR 결과 적용</button>
+      <button type="button" id="btnExportIndiv" class="btn" data-mode="video" title="각 클립에 LUT 를 적용해 음악 없이 개별 영상으로 내보내기 → 현재폴더/개별/ 폴더에 저장">📤 개별 내보내기</button>
       <span class="topbar-sep"></span>
       <label class="cinema-toggle" title="1920×1080 일반 가로 화면 (시네마 검은띠 없음)">
         <input type="checkbox" id="chkFull" />
@@ -96,13 +102,16 @@
   </div>
 
   <main class="workspace">
-    <!-- LEFT: clip rail -->
+    <!-- LEFT: 작업 기록(스냅샷) — 날짜별 리스트 -->
     <aside class="clip-rail">
       <div class="rail-head">
-        <span class="rail-title">클립</span>
-        <span id="clipCount" class="rail-count">0</span>
+        <span class="rail-title">작업 기록</span>
+        <span id="historyCount" class="rail-count">0</span>
       </div>
-      <div id="clipList" class="clip-list"></div>
+      <div id="historyList" class="history-list"></div>
+      <!-- 클립 리스트는 화면에선 숨기고(하단 스트립으로 대체) 선택 로직 유지를 위해 DOM 은 보존 -->
+      <div id="clipList" class="clip-list" hidden></div>
+      <span id="clipCount" class="rail-count" hidden>0</span>
     </aside>
 
     <!-- CENTER: player + clip strip below -->
@@ -358,6 +367,15 @@
     </aside>
   </main>
 
-  <script src="/app.js?v=26"></script>
+  <!-- AI 스튜디오 (사진 탭 자리) — studio.js 가 내부를 채움 -->
+  <section id="studioRoot"></section>
+
+  <!-- 이지숏폼 (인스타 릴스 템플릿 방식) — easyshorts.js 가 내부를 채움 -->
+  <section id="easyRoot"></section>
+
+  <script src="/app.js?v=35"></script>
+  <script src="/studio.js?v=41"></script>
+  <script src="/easymux.js?v=2"></script>
+  <script src="/easyshorts.js?v=53"></script>
 </body>
 </html>

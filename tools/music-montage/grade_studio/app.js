@@ -364,6 +364,7 @@
       }`;
     const fragSrc = `#version 300 es
       precision highp float;
+      precision highp sampler3D;
       uniform sampler2D uTex;
       uniform mat3 uMat;
       uniform float uOff;
@@ -376,6 +377,8 @@
       uniform int uOrig;
       uniform float uLetterbox;   // 0.0 = none, 0.1065 = cinema (위/아래 각 10.65%)
       uniform float uFilmic;      // 0.0 = 하드클립, 1.0 = 강한 sigmoid 하이라이트 압축
+      uniform sampler3D uLut;     // 라이트룸 매칭 3D LUT (있을 때 슬라이더 대신 이걸 적용)
+      uniform int uLutOn;         // 1 = uLut 적용
       in vec2 vUv;
       out vec4 outColor;
 
@@ -385,7 +388,8 @@
         if (strength < 0.001) return clamp(col, 0.0, 1.0);
         float m = max(max(col.r, col.g), col.b);
         if (m <= 1e-4) return clamp(col, 0.0, 1.0);
-        float knee = mix(0.90, 0.50, strength);   // 압축 시작점 (strength 클수록 일찍 시작)
+        // 무릎점을 높게(0.92~0.62) 유지 → 미드톤은 거의 안 건드리고 하이라이트만 부드럽게 롤오프
+        float knee = mix(0.92, 0.62, strength);
         if (m <= knee) return col;
         float over = m - knee;
         float range = max(1e-4, 1.0 - knee);
@@ -453,6 +457,11 @@
         vec3 col = texture(uTex, vUv).rgb;
         if (uOrig == 1) {
           outColor = vec4(col, 1.0);
+          return;
+        }
+        // 라이트룸 매칭 LUT — 슬라이더 파이프라인 전체를 대체 (빌드의 ffmpeg lut3d 와 동일)
+        if (uLutOn == 1) {
+          outColor = vec4(texture(uLut, clamp(col, 0.0, 1.0)).rgb, 1.0);
           return;
         }
         // 1) 4x5 매트릭스 (노출/대비/WB) — 결과가 1.0 을 넘을 수 있음
@@ -533,11 +542,28 @@
     gl.uniform1i(gl.getUniformLocation(prog, "uTex"), 0);
     gl.activeTexture(gl.TEXTURE0);
 
+    // 3D LUT 텍스처 (텍스처 유닛 1) — 라이트룸 매칭 LUT 미리보기용
+    const lutTex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, lutTex);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    // 1×1×1 더미로 텍스처를 완전 상태로 (실제 LUT 업로드 전 incomplete 경고 방지)
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB8, 1, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 128]));
+    gl.uniform1i(gl.getUniformLocation(prog, "uLut"), 1);
+    gl.activeTexture(gl.TEXTURE0);
+
     _gl.canvas = canvas;
     _gl.video = video;
     _gl.ctx = gl;
     _gl.program = prog;
     _gl.tex = tex;
+    _gl.lutTex = lutTex;
+    _gl.lutLoaded = "";     // 현재 업로드된 lut_file 경로 (중복 업로드 방지)
     _gl.vbo = vbo;
     _gl.loc = {
       uMat: gl.getUniformLocation(prog, "uMat"),
@@ -551,6 +577,7 @@
       uOrig: gl.getUniformLocation(prog, "uOrig"),
       uLetterbox: gl.getUniformLocation(prog, "uLetterbox"),
       uFilmic: gl.getUniformLocation(prog, "uFilmic"),
+      uLutOn: gl.getUniformLocation(prog, "uLutOn"),
     };
     // hue centers (GLSL es 1.0 호환을 위해 한 번만 set)
     gl.uniform1fv(_gl.loc.uHueCenters, new Float32Array([0, 30, 60, 120, 180, 240, 285, 320]));
@@ -694,6 +721,15 @@
     }
     const gl = _gl.ctx;
     gl.useProgram(_gl.program);
+    // 라이트룸 매칭 LUT — 있으면 슬라이더 대신 3D LUT 적용 (빌드와 동일)
+    const lf = (g && g.lut_file) ? String(g.lut_file) : "";
+    if (lf) {
+      if (_gl.lutLoaded === lf) gl.uniform1i(_gl.loc.uLutOn, 1);
+      else { gl.uniform1i(_gl.loc.uLutOn, 0); loadGlLut(state.activeId, lf); }
+    } else {
+      gl.uniform1i(_gl.loc.uLutOn, 0);
+      _gl.lutLoaded = "";
+    }
     // 매트릭스 (3x3) + offset
     const mFlat = buildColorMatrix(g);   // 4x5 array; rows = [a11..a13, 0, off]
     // 3x3 column-major for uniformMatrix3fv
@@ -723,9 +759,61 @@
     gl.uniform1fv(_gl.loc.uHslS, hS);
     gl.uniform1fv(_gl.loc.uHslL, hL);
     gl.uniform1i(_gl.loc.uHslEnabled, hslOn);
-    // 필름(sigmoid 하이라이트 압축) 0..100 → 0..1
-    gl.uniform1f(_gl.loc.uFilmic, Math.max(0, Math.min(100, Number(g.filmic || 0))) / 100);
+    // 필름(sigmoid 하이라이트 압축) — 라이트룸식: 노출/화이트/대비를 올리면
+    // 자동으로 롤오프가 걸려 하이라이트가 찢어지지 않고 부드럽게 밝아짐.
+    // (모든 슬라이더 0 이면 자동값도 0 → 원본 그대로 통과)
+    gl.uniform1f(_gl.loc.uFilmic, effectiveFilmic(g) / 100);
     _gl.grade = g;
+  }
+
+  // 라이트룸식 자동 하이라이트 롤오프 강도 (0~100).
+  // 사용자가 필름 슬라이더를 안 만져도 노출만 올리면 자동으로 부드럽게.
+  function effectiveFilmic(g) {
+    const expoPos = Math.max(0, Number(g.expo || 0));       // +노출 (주력)
+    const whPos   = Math.max(0, Number(g.wh || 0));         // +화이트
+    const conPos  = Math.max(0, Number(g.contrast || 0));   // +대비
+    const briPos  = Math.max(0, Number(g.bright || 0));     // +대비밝기
+    const auto = expoPos * 0.7 + whPos * 0.35 + conPos * 0.25 + briPos * 0.4;
+    const manual = Number(g.filmic || 0);
+    return Math.max(0, Math.min(100, Math.max(manual, auto)));
+  }
+
+  function parseCubeToBytes(txt) {
+    let size = 33; const vals = [];
+    for (const line of txt.split(/\r?\n/)) {
+      const s = line.trim();
+      if (!s || s[0] === "#") continue;
+      if (s.startsWith("LUT_3D_SIZE")) { size = parseInt(s.split(/\s+/)[1], 10) || 33; continue; }
+      if (s.startsWith("DOMAIN") || s.startsWith("TITLE") || s.startsWith("LUT_1D")) continue;
+      const p = s.split(/\s+/).map(Number);
+      if (p.length >= 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) vals.push(p[0], p[1], p[2]);
+    }
+    const n = size * size * size;
+    if (vals.length < n * 3) return null;
+    const bytes = new Uint8Array(n * 3);
+    for (let i = 0; i < n * 3; i++) bytes[i] = Math.max(0, Math.min(255, Math.round(vals[i] * 255)));
+    return { size, bytes };
+  }
+
+  async function loadGlLut(clipId, lf) {
+    try {
+      const r = await fetch(`/api/lr/cube?id=${clipId}`);
+      if (!r.ok) return;
+      const data = parseCubeToBytes(await r.text());
+      if (!data) return;
+      const gl = _gl.ctx;
+      gl.useProgram(_gl.program);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_3D, _gl.lutTex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB8, data.size, data.size, data.size, 0, gl.RGB, gl.UNSIGNED_BYTE, data.bytes);
+      gl.activeTexture(gl.TEXTURE0);
+      _gl.lutLoaded = lf;
+      const ac = currentClip();
+      if (ac && ac.grade && String(ac.grade.lut_file || "") === lf) {
+        gl.uniform1i(_gl.loc.uLutOn, 1);
+      }
+    } catch (e) { console.warn("LUT 로드 실패", e); }
   }
 
   function drawGl() {
@@ -2415,6 +2503,56 @@
       await fetch("/api/clear_logo", { method: "POST" });
       await reloadState({ preserveActive: true });
     });
+    $("#btnLrExtract").addEventListener("click", async () => {
+      try { await flushAllSaves(); } catch (_) {}
+      setBusy("클립 프레임 추출 중…");
+      try {
+        const r = await fetch("/api/lr/extract_frames", { method: "POST" });
+        const j = await r.json();
+        if (!r.ok || j.error) { setBusy(""); alert(j.error || "추출 실패"); return; }
+        setBusyShort(`프레임 ${j.count}/${j.total}장 추출 → Finder 열림. 라이트룸에서 보정 후 같은 이름으로 내보내세요.`);
+      } catch (e) { setBusy(""); alert("추출 실패: " + e); }
+    });
+    $("#btnLrApply").addEventListener("click", async () => {
+      try { await flushAllSaves(); } catch (_) {}
+      setBusy("라이트룸 결과 적용 중…");
+      try {
+        const r = await fetch("/api/lr/apply", { method: "POST" });
+        const j = await r.json();
+        if (j.cancelled) { setBusy(""); return; }
+        if (!r.ok || j.error) { setBusy(""); alert(j.error || "적용 실패"); return; }
+        await reloadState({ preserveActive: true });
+        let msg = `${j.count}개 클립에 LUT 적용됨`;
+        if (j.unmatched && j.unmatched.length) msg += ` · 매칭 안 됨 ${j.unmatched.length}`;
+        if (j.errors && j.errors.length) msg += ` · 오류 ${j.errors.length}`;
+        setBusyShort(msg);
+        if ((j.unmatched && j.unmatched.length) || (j.errors && j.errors.length)) console.warn("LR apply:", j);
+      } catch (e) { setBusy(""); alert("적용 실패: " + e); }
+    });
+    $("#btnExportIndiv").addEventListener("click", async () => {
+      try { await flushAllSaves(); } catch (_) {}
+      setBusy("개별 내보내기 시작…");
+      try {
+        const r = await fetch("/api/export_individual", { method: "POST" });
+        const j = await r.json();
+        if (!r.ok || j.error) { setBusy(""); alert(j.error || "내보내기 실패"); return; }
+        // 진행률 폴링
+        const poll = async () => {
+          try {
+            const s = await (await fetch("/api/export_individual/status")).json();
+            if (s.running) {
+              setBusy(`개별 내보내기 ${s.done}/${s.total} · ${s.current || ""}`);
+              setTimeout(poll, 1500);
+            } else {
+              const errN = (s.errors && s.errors.length) || 0;
+              setBusyShort(`개별 내보내기 완료 ${s.done - errN}/${s.total}${errN ? ` (실패 ${errN})` : ""} → 개별 폴더`);
+              if (errN) console.warn("개별 내보내기 실패:", s.errors);
+            }
+          } catch (e) { setBusy(""); }
+        };
+        poll();
+      } catch (e) { setBusy(""); alert("내보내기 실패: " + e); }
+    });
     $("#btnBuild").addEventListener("click", () => startBuild());
     $("#btnSnapshotSave").addEventListener("click", () => saveSnapshotNow());
     $("#btnBuildClose").addEventListener("click", () => $("#buildModal").hidden = true);
@@ -2552,8 +2690,88 @@
     try {
       const r = await fetch("/api/snapshots");
       const j = await r.json();
-      renderSnapshotChips(j.snapshots || []);
+      const snaps = j.snapshots || [];
+      renderSnapshotChips(snaps);   // 구 topbar 레일(있으면) — 없으면 무시
+      renderHistory(snaps);          // 좌측 날짜별 작업 기록
     } catch (_) {}
+  }
+  // 작업 기록 표시 라벨: 폴더명에서 날짜 접두는 유지하고 '원본영상/영상원본' 등 generic 접미만 제거
+  // 예: '0507점선면원본영상' → '0507점선면'
+  function histLabel(folder, fallback) {
+    let base = (folder || "").replace(/[\/\\]+$/, "").split(/[\/\\]/).pop() || "";
+    try { base = base.normalize("NFC"); } catch (_) {}
+    if (!base) return fallback || "untitled";
+    const m = base.match(/^[\d]+/);                 // 앞쪽 날짜/숫자 접두
+    const datePrefix = m ? m[0] : "";
+    let rest = base.slice(datePrefix.length).replace(/^[\s_\-.]+/, "");
+    const generic = ["원본영상", "영상원본", "원본", "영상", "촬영", "비디오", "동영상",
+                     "raw", "source", "video", "videos", "footage", "clips", "clip", "media"];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      rest = rest.replace(/[\s_\-.]+$/, "");
+      for (const g of generic) {
+        if (rest.toLowerCase().endsWith(g.toLowerCase())) {
+          rest = rest.slice(0, rest.length - g.length);
+          changed = true;
+        }
+      }
+    }
+    const out = (datePrefix + rest.trim()).trim();
+    return out || fallback || base;
+  }
+  function renderHistory(snaps) {
+    const root = document.getElementById("historyList");
+    if (!root) return;
+    root.innerHTML = "";
+    const cnt = document.getElementById("historyCount");
+    if (cnt) cnt.textContent = String(snaps.length);
+    // 최신순 정렬
+    const list = [...snaps].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    let lastDate = "";
+    for (const s of list) {
+      const d = new Date((s.created_at || 0) * 1000);
+      const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (dateKey !== lastDate) {
+        lastDate = dateKey;
+        const head = document.createElement("div");
+        head.className = "history-date";
+        head.textContent = d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
+        root.appendChild(head);
+      }
+      const cls = (s.build_status === "building") ? "building"
+        : (s.build_status === "done") ? "done"
+        : (typeof s.build_status === "string" && s.build_status.startsWith("error")) ? "error"
+        : "saved";
+      const dot = cls === "done" ? "✓" : cls === "error" ? "!" : cls === "building" ? "…" : "◆";
+      const time = d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+      const item = document.createElement("div");
+      item.className = `history-item ${cls}`;
+      item.dataset.id = s.id;
+      item.innerHTML = `
+        <span class="hist-dot">${dot}</span>
+        <span class="hist-body">
+          <span class="hist-label"></span>
+          <span class="hist-sub">${time} · 클립 ${s.video_count || 0}개${s.cinema_on ? " · 시네마" : ""}${s.tri_on ? " · 3컷" : ""}</span>
+        </span>
+        <span class="hist-x" title="삭제">×</span>`;
+      item.querySelector(".hist-label").textContent = histLabel(s.video_folder, s.label);
+      item.title = item.querySelector(".hist-label").textContent;
+      item.addEventListener("click", (e) => {
+        if (e.target && e.target.classList.contains("hist-x")) return;
+        loadSnapshotById(s.id);
+      });
+      item.querySelector(".hist-x").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`'${s.label || "untitled"}' 작업을 삭제할까요?`)) return;
+        await fetch("/api/snapshot/delete", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: s.id }),
+        });
+        await loadSnapshots();
+      });
+      root.appendChild(item);
+    }
   }
   function renderSnapshotChips(snaps) {
     const rail = document.getElementById("snapshotRail");
@@ -2680,6 +2898,14 @@
       $("#buildLog").scrollTop = $("#buildLog").scrollHeight;
       const queueSize = Number(j.queue_size || 0);
       const qInfo = queueSize > 0 ? ` · 대기 ${queueSize}` : "";
+      // 음악 다음곡 라벨 실시간 갱신 — BGM 이 진행되는 즉시 반영 (모달 상태 무관)
+      if (j.music_next_index) {
+        const mLab = document.getElementById("musicLabel");
+        if (mLab) {
+          const fn = (mLab.textContent.split(" · ")[0]) || "🎵";
+          mLab.textContent = `${fn} · 다음 ${j.music_next_index}/${j.music_count}`;
+        }
+      }
       // 큐가 비고 idle 이면 완전 종료
       if (j.status === "idle" && queueSize === 0) {
         $("#buildTitle").textContent = "✅ 완성";
@@ -2988,15 +3214,30 @@
     else state._photoBackup = snapshotModeState();
     // 모드 전환
     state.mode = newMode;
+    try { localStorage.setItem("gs_lastTab", newMode); } catch (_) {}
     document.body.classList.toggle("mode-photo", newMode === "photo");
     document.body.classList.toggle("mode-video", newMode === "video");
+    document.body.classList.toggle("mode-studio", newMode === "studio");
+    document.body.classList.toggle("mode-easy", newMode === "easy");
     // 탭 활성화 표시
     document.querySelectorAll(".tab-nav .tab-btn").forEach(b => {
       b.classList.toggle("active", b.dataset.tab === newMode);
     });
-    // 영상 인 경우 player 일시정지
-    if (newMode === "photo") {
-      const v = $("#player"); try { v.pause(); } catch (_) {}
+    // 영상 모드가 아니면 player 일시정지
+    if (newMode !== "video") {
+      const v = $("#player"); try { v && v.pause(); } catch (_) {}
+    }
+    // 다른 모드로 떠날 때 모듈 정지
+    if (newMode !== "easy" && window.EasyShorts) { try { window.EasyShorts.hide(); } catch (_) {} }
+    // AI 스튜디오 — 기존 grade 상태 로딩 없이 스튜디오 모듈만 표시
+    if (newMode === "studio") {
+      if (window.Studio) window.Studio.show();
+      return;
+    }
+    // 이지숏폼 — 템플릿 모듈만 표시
+    if (newMode === "easy") {
+      if (window.EasyShorts) window.EasyShorts.show();
+      return;
     }
     // 다른 모드의 백업 복원 (없으면 빈 상태)
     if (newMode === "video") {
@@ -3259,6 +3500,13 @@
     await loadNamedPresets();
     await loadSnapshots();
     await reloadState();
+    // 새로고침해도 마지막으로 보던 탭에서 다시 시작
+    try {
+      const last = localStorage.getItem("gs_lastTab");
+      if (last && last !== "video" && document.querySelector(`.tab-btn[data-tab="${last}"]`)) {
+        await switchMode(last);
+      }
+    } catch (_) {}
   }
 
   document.addEventListener("DOMContentLoaded", init);

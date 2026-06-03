@@ -33,6 +33,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv"}
 
+TTS_SAMPLE_DIR = ROOT_DIR / "tts_samples"   # 톤별 미리듣기 샘플 WAV
+TTS_SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
+
 CACHE_ROOT = Path.home() / ".music_montage_grade_studio"
 PROXY_DIR = CACHE_ROOT / "proxies"
 THUMB_DIR = CACHE_ROOT / "thumbs"
@@ -44,8 +47,11 @@ TRIM_DIR = CACHE_ROOT / "trims"
 PHOTO_THUMB_DIR = CACHE_ROOT / "photo_thumbs"
 PHOTO_PREVIEW_DIR = CACHE_ROOT / "photo_previews"
 PHOTO_DROP_DIR = CACHE_ROOT / "photo_drops"
+# 라이트룸 Before/After 매칭: 클립별 추출 원본프레임 / 피팅된 .cube LUT
+LR_FRAMES_DIR = CACHE_ROOT / "lr_frames"
+LR_CUBE_DIR = CACHE_ROOT / "lr_luts"
 for d in (PROXY_DIR, THUMB_DIR, SESSION_DIR, SNAPSHOT_DIR, LUT_DIR, TRIM_DIR,
-          PHOTO_THUMB_DIR, PHOTO_PREVIEW_DIR, PHOTO_DROP_DIR):
+          PHOTO_THUMB_DIR, PHOTO_PREVIEW_DIR, PHOTO_DROP_DIR, LR_FRAMES_DIR, LR_CUBE_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 PROXY_HEIGHT = 720
@@ -104,7 +110,7 @@ AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"}
 
 # 강제 음악 폴더 — 페이지 새로고침할 때마다 무조건 이 경로로 복귀.
 # 임시 picker 로 다른 폴더를 가리키더라도 다음 /api/state 호출 시점에 덮어씀.
-FORCED_MUSIC_FOLDER = Path.home() / "Downloads" / "ssd데스크탑" / "가사있는노래"
+FORCED_MUSIC_FOLDER = Path.home() / "Desktop" / "ssd데스크탑" / "가사있는노래"
 
 # 🖼 로고 파일 picker 의 기본 열림 위치 (없으면 macOS 기본)
 DEFAULT_LOGO_FOLDER = Path.home() / "Downloads" / "ssd데스크탑" / "로고"
@@ -366,6 +372,8 @@ def _grade_signature(g: dict) -> str:
 
 def _is_identity_grade(g: dict) -> bool:
     """color/tone 슬라이더가 모두 default 면 LUT 불필요."""
+    if (g or {}).get("lut_file"):
+        return False
     try:
         if abs(float(g.get("temp", 6500) or 6500) - 6500.0) > 0.5: return False
         for k in ("tint","midbr","bright","gamma","rolloff",
@@ -489,7 +497,8 @@ def _soft_shoulder(rr: float, gg: float, bb: float, strength: float) -> tuple[fl
     m = max(rr, gg, bb)
     if m <= 1e-4:
         return (max(0.0, rr), max(0.0, gg), max(0.0, bb))
-    knee = 0.90 + (0.50 - 0.90) * strength
+    # 무릎점 0.92~0.62 (app.js softShoulder 와 동일) — 미드톤 보존, 하이라이트만 롤오프
+    knee = 0.92 + (0.62 - 0.92) * strength
     if m <= knee:
         return (rr, gg, bb)
     over = m - knee
@@ -506,11 +515,23 @@ def _soft_shoulder(rr: float, gg: float, bb: float, strength: float) -> tuple[fl
     return (sr, sg, sb)
 
 
+def _effective_filmic(g: dict) -> float:
+    """라이트룸식 자동 하이라이트 롤오프 강도 (0~1). app.js effectiveFilmic 와 동일.
+    노출/화이트/대비/대비밝기를 올리면 자동으로 sigmoid 롤오프가 걸려 찢어짐 방지."""
+    expo_pos = max(0.0, float(g.get("expo", 0) or 0))
+    wh_pos = max(0.0, float(g.get("wh", 0) or 0))
+    con_pos = max(0.0, float(g.get("contrast", 0) or 0))
+    bri_pos = max(0.0, float(g.get("bright", 0) or 0))
+    auto = expo_pos * 0.7 + wh_pos * 0.35 + con_pos * 0.25 + bri_pos * 0.4
+    manual = float(g.get("filmic", 0) or 0)
+    return max(0.0, min(100.0, max(manual, auto))) / 100.0
+
+
 def write_grade_cube_lut(g: dict, out_path: Path, size: int = 33) -> Path:
     """프론트엔드 매트릭스+sigmoid+톤커브+HSL 그대로 → 33³ .cube 파일 작성."""
     m, off = _build_color_matrix_py(g)
     tone = _build_tone_curve_lut(g, n=33)
-    filmic = max(0.0, min(100.0, float(g.get("filmic", 0) or 0))) / 100.0
+    filmic = _effective_filmic(g)
     hsl_settings = g.get("hsl") or {}
     hsl_active = any(
         abs(float((hsl_settings.get(ch) or {}).get(sk, 0) or 0)) > 0.5
@@ -701,7 +722,15 @@ def _compute_auto_tone(arr_rgb_u8) -> dict:
 
 
 def get_or_make_lut(g: dict) -> Path | None:
-    """grade dict → 캐시된 LUT 경로 (identity 면 None). 같은 시그니처면 재사용."""
+    """grade dict → 캐시된 LUT 경로 (identity 면 None). 같은 시그니처면 재사용.
+
+    lut_file 이 지정돼 있으면(라이트룸 Before/After 매칭 LUT) 그 .cube 를 그대로 사용.
+    """
+    lf = (g or {}).get("lut_file")
+    if lf:
+        p = Path(lf)
+        if p.is_file():
+            return p
     if _is_identity_grade(g):
         return None
     sig = _grade_signature(g)
@@ -709,6 +738,49 @@ def get_or_make_lut(g: dict) -> Path | None:
     if not fp.is_file():
         write_grade_cube_lut(g, fp, size=33)
     return fp
+
+
+# ── 개별 내보내기 (각 클립에 LUT 적용, 음악·몽타주 없이 개별 파일로) ──────────
+_export_state: dict = {
+    "running": False, "total": 0, "done": 0, "current": "",
+    "dir": "", "errors": [], "finished": False,
+}
+_export_lock = threading.Lock()
+
+
+def _run_individual_export(items: list[tuple[Path, dict]], outdir: Path) -> None:
+    """items: [(video, grade)] → outdir 에 각 클립을 LUT 적용해 개별 mp4 로 인코딩."""
+    from montage_lib import montage_lut3d_vf
+    for vp, g in items:
+        with _export_lock:
+            _export_state["current"] = vp.name
+        out = outdir / f"{vp.stem}.mp4"
+        try:
+            lut = get_or_make_lut(g)
+        except (OSError, ValueError):
+            lut = None
+        cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(vp)]
+        vf = montage_lut3d_vf(lut) if lut is not None else None
+        if vf:
+            cmd += ["-vf", vf]
+        cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart", str(out)]
+        try:
+            subprocess.run(cmd, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            with _export_lock:
+                _export_state["errors"].append(vp.name)
+        with _export_lock:
+            _export_state["done"] += 1
+    with _export_lock:
+        _export_state["running"] = False
+        _export_state["finished"] = True
+        _export_state["current"] = ""
+    try:
+        subprocess.Popen(["open", str(outdir)])
+    except OSError:
+        pass
 
 
 def _ffprobe_duration(p: Path) -> float:
@@ -1775,7 +1847,7 @@ def serve_file(handler: BaseHTTPRequestHandler, path: Path, content_type: str | 
     handler.send_header("Content-Length", str(length))
     if status == 206:
         handler.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
     handler.end_headers()
     with open(path, "rb") as f:
         f.seek(start)
@@ -1820,9 +1892,56 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             return serve_file(self, ROOT_DIR / "styles.css", "text/css; charset=utf-8")
         if p == "/app.js":
             return serve_file(self, ROOT_DIR / "app.js", "application/javascript; charset=utf-8")
+        if p == "/studio.js":
+            return serve_file(self, ROOT_DIR / "studio.js", "application/javascript; charset=utf-8")
+        if p == "/studio.css":
+            return serve_file(self, ROOT_DIR / "studio.css", "text/css; charset=utf-8")
+        if p == "/easyshorts.js":
+            return serve_file(self, ROOT_DIR / "easyshorts.js", "application/javascript; charset=utf-8")
+        if p == "/easymux.js":
+            return serve_file(self, ROOT_DIR / "easymux.js", "application/javascript; charset=utf-8")
+        if p == "/easyshorts.css":
+            return serve_file(self, ROOT_DIR / "easyshorts.css", "text/css; charset=utf-8")
+        if p == "/tts_tones.json":
+            return serve_file(self, ROOT_DIR / "tts_tones.json", "application/json; charset=utf-8")
+        if p.startswith("/tts_samples/"):
+            fn = os.path.basename(p)
+            if fn.endswith(".wav") and "/" not in fn.replace("/tts_samples/", ""):
+                fp = TTS_SAMPLE_DIR / fn
+                if fp.is_file():
+                    return serve_file(self, fp, "audio/wav")
+            self.send_response(404); self.end_headers(); return
 
         if p == "/api/state":
             return self._json(self._state_payload())
+
+        if p == "/api/export_individual/status":
+            with _export_lock:
+                return self._json(dict(_export_state))
+
+        # 클립의 매칭 LUT(.cube) 텍스트 반환 — WebGL 미리보기에서 3D LUT 로 업로드
+        if p == "/api/lr/cube":
+            i = self._idx(qs)
+            with self.server.state_lock:
+                folder = self.server.folder
+            clip_path = self._video_at(i) if i is not None else None
+            if clip_path is None or folder is None:
+                return self._json({"error": "no clip/folder"}, 400)
+            sess = load_session(folder)
+            g = (sess.get("grades") or {}).get(_nfc(str(clip_path.resolve()))) or {}
+            lf = g.get("lut_file")
+            if not lf or not Path(lf).is_file():
+                return self._json({"error": "no lut"}, 404)
+            try:
+                data = Path(lf).read_bytes()
+            except OSError:
+                return self._json({"error": "read fail"}, 500)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
 
         if p == "/api/preset":
             return self._json({"grade": load_preset_slot()})
@@ -1843,7 +1962,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
 
         if p == "/api/build/status":
             with _build_lock:
-                return self._json({
+                payload = {
                     "status": _build_state["status"],
                     "output": _build_state["output"],
                     "started_at": _build_state["started_at"],
@@ -1851,7 +1970,22 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                     "log_total": len(_build_state["log"]),
                     "queue_size": _build_state.get("queue_size", 0),
                     "current_snapshot": _build_state.get("current_snapshot"),
-                })
+                }
+            # 음악 다음곡 정보를 실어 라벨이 빌드 중에도 실시간 갱신되게 (BGM 진행 즉시 반영)
+            try:
+                mf = FORCED_MUSIC_FOLDER
+                if mf.is_dir():
+                    files = list_audio(mf)
+                    if files:
+                        from montage_lib import _bgm_pool_signature, read_next_bgm_track_index
+                        sig = _bgm_pool_signature(files)
+                        ni = read_next_bgm_track_index(mf, len(files), sig)
+                        payload["music_next_index"] = ni + 1
+                        payload["music_next_name"] = files[ni].name
+                        payload["music_count"] = len(files)
+            except (ImportError, OSError, ValueError, IndexError):
+                pass
+            return self._json(payload)
 
         if p == "/api/thumb":
             i = self._idx(qs)
@@ -2052,6 +2186,150 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "folder": str(mf)})
             return self._json({"error": "no music folder"}, 404)
 
+        # ── 라이트룸 Before/After LUT 매칭 ──────────────────────────────
+        # ① 각 클립에서 대표 프레임 추출 → 사용자가 라이트룸에서 보정·내보냄
+        if p == "/api/lr/extract_frames":
+            from grade_studio import lut_match
+            with self.server.state_lock:
+                folder = self.server.folder
+                videos = list(self.server.videos)
+            if not videos:
+                return self._json({"error": "열린 영상이 없습니다"}, 400)
+            sess = load_session(folder) if folder is not None else {"grades": {}}
+            grades = sess.get("grades") or {}
+            key = folder.name if folder is not None else "frames"
+            odir = LR_FRAMES_DIR / key
+            odir.mkdir(parents=True, exist_ok=True)
+            done, failed = [], []
+            for vp in videos:
+                g = grades.get(str(vp)) or {}
+                ti = float(g.get("trim_in", 0) or 0)
+                to = float(g.get("trim_out", 0) or 0)
+                out = odir / f"{vp.stem}.jpg"
+                if lut_match.extract_repr_frame(vp, out, trim_in=ti, trim_out=to):
+                    done.append(vp.stem)
+                else:
+                    failed.append(vp.stem)
+            subprocess.Popen(["open", str(odir)])
+            return self._json({"ok": True, "folder": str(odir),
+                               "count": len(done), "total": len(videos), "failed": failed})
+
+        # ② 라이트룸에서 보정·내보낸 JPG 폴더 → 클립별 (원본→렌더) LUT 피팅·적용
+        if p == "/api/lr/apply":
+            import numpy as np
+            from grade_studio import lut_match
+            body_folder = (body.get("folder") or "").strip()
+            if body_folder:
+                picked = Path(body_folder).expanduser()
+                if not picked.is_dir():
+                    return self._json({"error": f"폴더 없음: {picked}"}, 400)
+            else:
+                picked = osascript_pick_folder(prompt="라이트룸에서 보정·내보낸 사진 폴더를 선택하세요")
+            if picked is None:
+                return self._json({"cancelled": True})
+            with self.server.state_lock:
+                folder = self.server.folder
+                videos = list(self.server.videos)
+            if folder is None:
+                return self._json({"error": "열린 영상 폴더가 없습니다"}, 400)
+            key = folder.name
+            odir = LR_FRAMES_DIR / key
+            by_stem = {vp.stem: vp for vp in videos}
+            sess = load_session(folder)
+            grades = sess.setdefault("grades", {})
+            applied, unmatched, errors = [], [], []
+            exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+            for rp in sorted(Path(picked).iterdir()):
+                if rp.name.startswith("._") or rp.suffix.lower() not in exts:
+                    continue
+                stem = rp.stem
+                clip = by_stem.get(stem)
+                if clip is None:
+                    unmatched.append(rp.name)
+                    continue
+                orig = odir / f"{stem}.jpg"
+                if not orig.is_file():
+                    g = grades.get(_nfc(str(clip.resolve()))) or {}
+                    lut_match.extract_repr_frame(
+                        clip, orig, trim_in=float(g.get("trim_in", 0) or 0),
+                        trim_out=float(g.get("trim_out", 0) or 0))
+                if not orig.is_file():
+                    errors.append(f"{stem}: 원본프레임 추출 실패")
+                    continue
+                cube = LR_CUBE_DIR / f"{key}_{stem}.cube"
+                try:
+                    lut_match.fit_lut_cube(orig, rp, cube)
+                except (OSError, ValueError, ArithmeticError, np.linalg.LinAlgError) as e:
+                    errors.append(f"{stem}: {e}")
+                    continue
+                gkey = _nfc(str(clip.resolve()))   # save_bulk/_state_payload 와 동일 정규 키
+                gd = dict(grades.get(gkey) or {})
+                gd["lut_file"] = str(cube)
+                grades[gkey] = gd
+                applied.append(stem)
+            save_session(folder, sess)
+            return self._json({"ok": True, "src": str(picked), "applied": applied,
+                               "count": len(applied), "unmatched": unmatched, "errors": errors})
+
+        # 개별 내보내기 — 각 클립에 LUT 적용, 음악 없이 <폴더>/개별/ 에 개별 파일로
+        if p == "/api/export_individual":
+            with self.server.state_lock:
+                folder = self.server.folder
+                videos = list(self.server.videos)
+            if folder is None or not videos:
+                return self._json({"error": "열린 영상이 없습니다"}, 400)
+            with _export_lock:
+                if _export_state["running"]:
+                    return self._json({"error": "이미 내보내는 중입니다", "status": dict(_export_state)}, 409)
+            sess = load_session(folder)
+            grades = sess.get("grades") or {}
+            items = [(vp, grades.get(_nfc(str(vp.resolve()))) or {}) for vp in videos]
+            outdir = folder / "개별"
+            try:
+                outdir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                return self._json({"error": f"폴더 생성 실패: {e}"}, 500)
+            with _export_lock:
+                _export_state.update({"running": True, "total": len(items), "done": 0,
+                                      "current": "", "dir": str(outdir), "errors": [], "finished": False})
+            threading.Thread(target=_run_individual_export, args=(items, outdir), daemon=True).start()
+            subprocess.Popen(["open", str(outdir)])
+            return self._json({"ok": True, "dir": str(outdir), "total": len(items)})
+
+        # 톤별 미리듣기 샘플 저장 (브라우저가 사용자 키로 생성한 WAV 를 캐시)
+        if p == "/api/tts_sample":
+            tid = str(body.get("id") or "").strip()
+            b64 = body.get("audioBase64") or ""
+            if not tid or not tid.isalnum() or not b64:
+                return self._json({"error": "bad params"}, 400)
+            import base64 as _b64
+            try:
+                data = _b64.b64decode(b64)
+            except (ValueError, TypeError):
+                return self._json({"error": "bad base64"}, 400)
+            (TTS_SAMPLE_DIR / f"tone_{tid}.wav").write_bytes(data)
+            return self._json({"ok": True, "url": f"/tts_samples/tone_{tid}.wav"})
+
+        # 매칭 LUT 제거 (특정 클립 또는 전체)
+        if p == "/api/lr/clear":
+            with self.server.state_lock:
+                folder = self.server.folder
+            if folder is None:
+                return self._json({"error": "폴더 없음"}, 400)
+            sess = load_session(folder)
+            grades = sess.get("grades") or {}
+            target = body.get("clip")  # None 이면 전체
+            cleared = 0
+            for k, g in list(grades.items()):
+                if not isinstance(g, dict) or not g.get("lut_file"):
+                    continue
+                if target is not None and k != target:
+                    continue
+                g.pop("lut_file", None)
+                cleared += 1
+            save_session(folder, sess)
+            return self._json({"ok": True, "cleared": cleared})
+
         if p == "/api/reset_music_folder":
             # FORCED 폴더로 복귀
             files = list_audio(FORCED_MUSIC_FOLDER) if FORCED_MUSIC_FOLDER.is_dir() else []
@@ -2206,7 +2484,7 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
             errors: list[str] = []
 
             FILENAME_BY_TAG = {
-                "cine": "시네마(고객선물용)",
+                "cine": "0시네마(고객선물용)",
                 "tri":  "3컷분할(릴스용)",
                 "full": "가로(1920x1080)",
             }
@@ -2690,6 +2968,10 @@ class GradeStudioHandler(BaseHTTPRequestHandler):
         # clamp trim to non-negative
         if out.get("trim_in", 0.0) < 0: out["trim_in"] = 0.0
         if out.get("trim_out", 0.0) < 0: out["trim_out"] = 0.0
+        # 라이트룸 매칭 LUT 경로는 DEFAULT_GRADE 에 없는 키라 보존이 필요 (없으면 저장 시 유실)
+        lf = g.get("lut_file")
+        if lf:
+            out["lut_file"] = str(lf)
         return out
 
     # ── 📷 사진 탭 helpers ─────────────────────────────────────────────
