@@ -5908,6 +5908,20 @@
             alert("수정 후 일정이 3일 이내가 되면 저장할 수 없습니다. 관리자에게 요청해주세요.");
             return;
           }
+          // 날짜를 다른 날로 옮기는 경우, 그 날짜가 마감(최대 예약건수 도달)이면 차단.
+          // (같은 날에서 시간·장소만 바꾸는 수정은 본인 건이 이미 포함돼 있으므로 체크하지 않음)
+          const movingToNewDate = normalize(editDate) !== normalize(item.date);
+          if (movingToNewDate) {
+            const editDailyLimit = getEffectiveDailyLimit(editDate);
+            const editBookedCount = getBookedCountForDate(editDate);
+            if (editBookedCount >= editDailyLimit) {
+              alert(
+                `${editDate} 은(는) 예약이 꽉 차서 옮길 수 없습니다 (최대 ${editDailyLimit}건).\n` +
+                  "다른 날짜를 선택하거나 관리자에게 문의해주세요."
+              );
+              return;
+            }
+          }
           item.date = editDate;
           item.time = `${cardEl.querySelector(".edit-hour")?.value || "09"}:${cardEl.querySelector(".edit-minute")?.value || "00"}`;
           item.place = normalize(cardEl.querySelector(".edit-place")?.value);

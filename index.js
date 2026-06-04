@@ -19273,8 +19273,19 @@ ${folderBtn}
           const countAtDate = getActiveScheduleCountByDate(nextDate, index);
           const dailyLimit = getEffectiveDailyLimit(nextDate);
           if (countAtDate >= dailyLimit) {
-            alert("예약이 꽉차서 등록이 어렵습니다. 관리자에게 문의해주세요.");
-            return;
+            // 마감된 날짜로 옮기는 경우 — 무조건 차단이 아니라 관리자 비밀번호로만 강제 허용.
+            // (초과예약 방지 + 꼭 필요할 때 관리자가 책임지고 override)
+            const pw = String(
+              prompt(
+                `${nextDate} 은(는) 예약이 꽉 찼습니다 (현재 ${countAtDate}건 / 최대 ${dailyLimit}건).\n` +
+                  "그래도 이 날짜로 옮기려면 관리자 비밀번호를 입력하세요."
+              ) || ""
+            ).trim();
+            if (pw !== ADMIN_OVERRIDE_PASSWORD) {
+              alert("비밀번호가 올바르지 않아 마감된 날짜로 옮길 수 없습니다.");
+              return;
+            }
+            // 비번 일치 → override 허용 (아래로 계속 진행)
           }
         }
 
