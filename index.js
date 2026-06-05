@@ -20157,7 +20157,11 @@ ${folderBtn}
         submitScheduleFromForm(false);
       });
 
-      /** 등록 업체의 기본 촬영구성을 반환(제출 가능한 값일 때만). 없으면 "". */
+      /** 등록 업체의 기본 촬영구성을 반환. 업체정보관리 표시와 동일한 우선순위:
+       *  쇼픽=서비스플래그 → 명시적 defaultComposition → (둘 다 없으면) 시스템 기본 "사진만".
+       *  빠른 업체등록으로 만든 인로그 업체는 defaultComposition 이 비어 있으므로,
+       *  마지막에 "사진만" 으로 폴백해 스케줄 등록이 막히지 않게 한다.
+       *  미등록 업체명이면 "". */
       function getRegisteredCompanyDefaultCompositionByName(rawName) {
         const target = normalizeCompanyName(rawName).toLowerCase();
         if (!target) return "";
@@ -20169,13 +20173,14 @@ ${folderBtn}
         if (normalizeCompanySiteTypeField(matched?.siteType) === "shopick") {
           try {
             const label = shopickFlagsToBaselineCompositionLabel(getShopickServiceFlagsFromCompanyRow(matched));
-            return ADMIN_SUBMITTABLE_COMPOSITIONS.has(label) ? label : "";
-          } catch (_) {
-            return "";
-          }
+            if (ADMIN_SUBMITTABLE_COMPOSITIONS.has(label)) return label;
+          } catch (_) {}
+          return "사진만";
         }
         const dc = String(matched?.defaultComposition || "").trim();
-        return ADMIN_SUBMITTABLE_COMPOSITIONS.has(dc) ? dc : "";
+        if (ADMIN_SUBMITTABLE_COMPOSITIONS.has(dc)) return dc;
+        // 명시적 기본구성 미등록 → 앱 전역 기본값 "사진만"
+        return "사진만";
       }
 
       /** 스케줄 등록 폼: 업체명이 등록 업체와 일치하면 그 업체의 촬영구성을 자동 선택.
