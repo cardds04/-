@@ -3102,6 +3102,17 @@
                     if (u.fid) c.naver_works_company_folder_id = u.fid;
                   }
                 });
+                // ⭐ union: 로컬에만 있는 업체(방금 company_directory pull 로 들어온 신규 업체 등)가
+                // 옛 client_kv 스냅샷(incoming)에 없다는 이유로 사라지지 않도록 보존한다.
+                // (= 새 업체 등록 직후 hydrate 가 옛 목록으로 덮어써 "등록된 업체만 등록 가능" 으로
+                //  막히던 버그. company_directory 가 업체 목록의 단일 진실이므로 로컬을 잃지 않는다)
+                const incomingKeys = new Set(
+                  incoming.map((c) => normalizeCompanyName(c?.name).toLowerCase()).filter(Boolean)
+                );
+                local.forEach((c) => {
+                  const k = normalizeCompanyName(c?.name).toLowerCase();
+                  if (k && !incomingKeys.has(k)) incoming.push(c);
+                });
                 return JSON.stringify(incoming);
               }
             } catch (_) {}
