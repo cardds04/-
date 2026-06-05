@@ -20050,13 +20050,22 @@ ${folderBtn}
         const pickedTimePreference = scheduleTimeUndecided
           ? "exact"
           : selectedTimePreference;
-        const pickedComposition = String(formEl.composition?.value || "").trim();
+        let pickedComposition = String(formEl.composition?.value || "").trim();
         const companyInputValue = document.getElementById("company").value || "";
         const normalizedCompany = normalizeCompanyName(companyInputValue);
 
         if (!isRegisteredCompanyName(normalizedCompany)) {
           alert("등록된 업체만 스케줄 등록할 수 있어요. 먼저 업체 등록에서 추가해주세요.");
           return;
+        }
+        // 촬영구성 미선택이면, 등록 업체의 기본 촬영구성으로 자동 보정 후 진행.
+        // (업체정보관리에 구성이 등록돼 있는데 폼에서만 "미선택"이라 막히던 문제 해결)
+        if (!pickedComposition || !ADMIN_SUBMITTABLE_COMPOSITIONS.has(pickedComposition)) {
+          const fallbackComp = getRegisteredCompanyDefaultCompositionByName(normalizedCompany);
+          if (fallbackComp) {
+            pickedComposition = fallbackComp;
+            if (formEl.composition) formEl.composition.value = fallbackComp;
+          }
         }
         if (!pickedComposition || !ADMIN_SUBMITTABLE_COMPOSITIONS.has(pickedComposition)) {
           alert("촬영 구성을 목록에서 선택해주세요.");
@@ -20147,6 +20156,45 @@ ${folderBtn}
         event.preventDefault();
         submitScheduleFromForm(false);
       });
+
+      /** 등록 업체의 기본 촬영구성을 반환(제출 가능한 값일 때만). 없으면 "". */
+      function getRegisteredCompanyDefaultCompositionByName(rawName) {
+        const target = normalizeCompanyName(rawName).toLowerCase();
+        if (!target) return "";
+        const matched = (companies || []).find(
+          (c) => normalizeCompanyName(c?.name).toLowerCase() === target
+        );
+        if (!matched) return "";
+        // 쇼픽 업체는 서비스 플래그(사진/영상/블로그)에서 구성 라벨 도출
+        if (normalizeCompanySiteTypeField(matched?.siteType) === "shopick") {
+          try {
+            const label = shopickFlagsToBaselineCompositionLabel(getShopickServiceFlagsFromCompanyRow(matched));
+            return ADMIN_SUBMITTABLE_COMPOSITIONS.has(label) ? label : "";
+          } catch (_) {
+            return "";
+          }
+        }
+        const dc = String(matched?.defaultComposition || "").trim();
+        return ADMIN_SUBMITTABLE_COMPOSITIONS.has(dc) ? dc : "";
+      }
+
+      /** 스케줄 등록 폼: 업체명이 등록 업체와 일치하면 그 업체의 촬영구성을 자동 선택.
+       *  force=true(업체 변경 시) 면 덮어쓰고, false 면 아직 미선택일 때만 채운다. */
+      function autofillScheduleCompositionFromCompany(force) {
+        const sel = formEl?.composition;
+        if (!sel) return;
+        const companyName = document.getElementById("company")?.value || "";
+        const dc = getRegisteredCompanyDefaultCompositionByName(companyName);
+        if (!dc) return;
+        const cur = String(sel.value || "").trim();
+        if (!force && cur) return; // 수동 선택값 보존
+        const hasOption = Array.from(sel.options).some((o) => o.value === dc);
+        if (hasOption) sel.value = dc;
+      }
+
+      const companyInputForScheduleEl = document.getElementById("company");
+      // 업체를 고르거나(datalist 선택) 업체명 입력을 마치면 그 업체의 기본 촬영구성을 자동 채움.
+      companyInputForScheduleEl?.addEventListener("change", () => autofillScheduleCompositionFromCompany(true));
       scheduleTimeUndecidedBtnEl?.addEventListener("click", () => {
         setScheduleTimeUndecided(!scheduleTimeUndecided);
       });
