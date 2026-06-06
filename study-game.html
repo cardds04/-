@@ -400,6 +400,56 @@
         box-shadow: 0 5px 14px rgba(251, 191, 36, 0.4);
       }
       .savings-banner b { font-size: 1.3rem; }
+
+      /* ---- 📖 단어 뜻 맞히기 4단계 카드 ---- */
+      .vstage-section { margin-bottom: 14px; }
+      .vstage-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .vstage-head h3 { margin: 0; font-size: 1.05rem; color: #4338ca; }
+      .vstage-head small { color: #6366f1; font-weight: 700; }
+      .vstage-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .vstage-card {
+        position: relative;
+        border: 2.5px solid #c7d2fe;
+        border-radius: 20px;
+        background: #fff;
+        padding: 16px 12px 14px;
+        cursor: pointer;
+        font-family: inherit;
+        text-align: center;
+        transition: transform 0.12s, box-shadow 0.12s;
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
+      }
+      .vstage-card:active { transform: scale(0.96); }
+      .vstage-card .vs-ico { font-size: 2.4rem; line-height: 1; }
+      .vstage-card h4 { margin: 6px 0 2px; font-size: 1.05rem; color: #312e81; }
+      .vstage-card p { margin: 0; font-size: 0.8rem; color: #6366f1; }
+      .vstage-card .vs-chip {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 0.76rem;
+        font-weight: 800;
+        padding: 3px 10px;
+        border-radius: 999px;
+      }
+      .vstage-card .vs-chip.ready { background: #dcfce7; color: #065f46; }
+      .vstage-card .vs-chip.locked { background: #fee2e2; color: #991b1b; }
+      .vstage-card.vs-1 { border-color: #6ee7b7; background: linear-gradient(135deg, #fff, #ecfdf5); }
+      .vstage-card.vs-2 { border-color: #93c5fd; background: linear-gradient(135deg, #fff, #eff6ff); }
+      .vstage-card.vs-3 { border-color: #c4b5fd; background: linear-gradient(135deg, #fff, #f5f3ff); }
+      .vstage-card.vs-4 { border-color: #f9a8d4; background: linear-gradient(135deg, #fff, #fdf2f8); }
+      .vstage-card.is-locked { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.4); }
+      .vstage-card.is-disabled { opacity: 0.5; cursor: not-allowed; }
       .games-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -1371,6 +1421,17 @@
       }
       .feedback.no {
         color: #dc2626;
+      }
+      .feedback .fb-money {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #fde68a, #fbbf24);
+        color: #78350f;
+        font-weight: 900;
+        font-size: 0.86rem;
+        box-shadow: 0 3px 8px rgba(251, 191, 36, 0.4);
       }
 
       .match-grid {
@@ -3032,14 +3093,39 @@
           <div class="units-row" id="unitsRow"></div>
         </section>
 
-        <div class="menu">
-          <button class="menu-card m-vocab" data-mode="vocab" id="card-vocab">
-            <span class="card-badge">💯 완주</span>
-            <div class="ico">📖</div>
-            <h3>단어 뜻 맞히기</h3>
-            <p>객관식 뜻풀이 퀴즈 · 언제든 다시 풀 수 있어요</p>
-          </button>
-        </div>
+        <!-- 📖 단어 뜻 맞히기 — 4단계 (단원별로 따로) -->
+        <section class="vstage-section" id="vstageSection">
+          <div class="vstage-head">
+            <h3>📖 단어 뜻 맞히기</h3>
+            <small id="vstageHint">단계를 골라요 · 단원마다 따로예요</small>
+          </div>
+          <div class="vstage-grid" id="vstageGrid">
+            <button class="vstage-card vs-1" data-stage="1" id="vstage-1">
+              <div class="vs-ico">📚</div>
+              <h4>1단계</h4>
+              <p>오늘 외울 단어 보기</p>
+              <span class="vs-chip" id="vschip-1"></span>
+            </button>
+            <button class="vstage-card vs-2" data-stage="2" id="vstage-2">
+              <div class="vs-ico">🔤</div>
+              <h4>2단계</h4>
+              <p>뜻 보고 → 영어 단어</p>
+              <span class="vs-chip" id="vschip-2"></span>
+            </button>
+            <button class="vstage-card vs-3" data-stage="3" id="vstage-3">
+              <div class="vs-ico">📖</div>
+              <h4>3단계</h4>
+              <p>영어 보고 → 뜻</p>
+              <span class="vs-chip" id="vschip-3"></span>
+            </button>
+            <button class="vstage-card vs-4" data-stage="4" id="vstage-4">
+              <div class="vs-ico">✏️</div>
+              <h4>4단계</h4>
+              <p>스펠링 빈칸 채우기</p>
+              <span class="vs-chip" id="vschip-4"></span>
+            </button>
+          </div>
+        </section>
 
         <!-- 💰 적립금 (단어 뜻 맞히기로 모은 돈) -->
         <section class="games-section" id="gamesSection">
@@ -3458,6 +3544,11 @@
       function renderBadges() {
         const wrap = document.getElementById("badgesWrap");
         if (!wrap) return;
+        // 🚫 "모든 단원 완주" 배너/완주 뱃지는 더 이상 표시하지 않음
+        wrap.innerHTML = "";
+        wrap.style.display = "none";
+        return;
+        // eslint-disable-next-line no-unreachable
         const p = getPerfects();
         const doneCount = MODE_KEYS.filter((k) => p[k]).length;
         wrap.innerHTML = "";
@@ -3756,6 +3847,7 @@
           savedWritings: Array.isArray(persisted.savedWritings) ? persisted.savedWritings : [],
           vocabReview: persisted.vocabReview || { stage: 0, nextAt: 0, history: [] },
           vocabPlayLog: Array.isArray(persisted.vocabPlayLog) ? persisted.vocabPlayLog : [],
+          vocabStagePlays: (persisted.vocabStagePlays && typeof persisted.vocabStagePlays === "object") ? persisted.vocabStagePlays : {},
         };
       }
 
@@ -3782,6 +3874,7 @@
         found.savedWritings = Array.isArray(found.savedWritings) ? found.savedWritings : [];
         found.vocabReview = found.vocabReview || { stage: 0, nextAt: 0, history: [] };
         found.vocabPlayLog = Array.isArray(found.vocabPlayLog) ? found.vocabPlayLog : [];
+        found.vocabStagePlays = (found.vocabStagePlays && typeof found.vocabStagePlays === "object") ? found.vocabStagePlays : {};
         return found;
       }
 
@@ -5150,67 +5243,35 @@
           }
         }
 
-        // 단어 뜻 맞히기: 단어가 있어야 하고, 하루 2번 제한(30분 쿨다운)에 걸리면 잠금
-        const lim = vocabLimitState();
-        const vocabLocked = !hasVocab || lim.locked;
-        let vocabLockText = "🔒 단어 없음";
-        if (hasVocab && lim.locked) {
-          vocabLockText = lim.reason === "daily"
-            ? "🌙 오늘 2번 다 했어요"
-            : "⏳ " + fmtRemainMin(lim.until - Date.now()) + " 뒤";
-        }
-        setLock(document.getElementById("card-vocab"), vocabLocked, vocabLockText);
-
-        // 단어뜻맞히기 카드: 칩 (남은 횟수 / 쿨다운 / 일일완료)
-        const vocabCard = document.getElementById("card-vocab");
-        if (vocabCard) {
-          let chip = vocabCard.querySelector(".review-chip");
-          if (!chip) {
-            chip = document.createElement("span");
-            chip.className = "review-chip";
-            vocabCard.appendChild(chip);
-          }
+        // 📖 단어 뜻 맞히기 4단계 카드 (단원·단계별 제한). 1단계는 제한 없음, 2·3·4단계는 2회/30분.
+        for (let stage = 1; stage <= 4; stage++) {
+          const card = document.getElementById("vstage-" + stage);
+          if (!card) continue;
+          const chip = document.getElementById("vschip-" + stage);
           if (!hasVocab) {
-            chip.style.display = "none";
-          } else if (lim.reason === "daily") {
-            chip.style.display = "";
-            chip.className = "review-chip locked";
-            chip.textContent = "🌙 오늘 2/2 완료 · 내일 또!";
-          } else if (lim.reason === "cooldown") {
-            chip.style.display = "";
-            chip.className = "review-chip locked";
-            chip.textContent = "⏳ " + fmtRemainMin(lim.until - Date.now()) + " 뒤에 다시 (오늘 " + lim.playedToday + "/2)";
-          } else {
-            chip.style.display = "";
-            chip.className = "review-chip ready";
-            chip.textContent = "🟢 오늘 " + lim.playedToday + "/2 · 풀면 문제당 10원! 💰";
+            card.classList.add("is-disabled");
+            card.classList.remove("is-locked");
+            if (chip) { chip.textContent = "🔒 단어 없음"; chip.className = "vs-chip locked"; }
+            continue;
           }
-        }
-
-        // 🎮 게임 카드 4종: 단어가 있고 클리어해야 열림 (테스트 모드면 항상 열림). 최고 수익 표시.
-        const gameLocked = !hasVocab || !cleared;
-        const bests = getGameBests();
-        ARCADE_GAMES.forEach((type) => {
-          const card = document.getElementById("game-" + type);
-          if (!card) return;
-          card.classList.toggle("is-locked", gameLocked);
-          let lk = card.querySelector(".g-lock");
-          if (gameLocked) {
-            if (!lk) { lk = document.createElement("span"); lk.className = "g-lock"; card.appendChild(lk); }
-            lk.textContent = !hasVocab ? "🔒" : "🔒 퀴즈 먼저";
-          } else if (lk) { lk.remove(); }
-          const bestEl = document.getElementById("best-" + type);
-          if (bestEl) {
-            const v = bests[type] || 0;
-            if (!gameLocked && v > 0) { bestEl.textContent = "🏆 최고 " + v + "원"; bestEl.classList.add("show"); }
-            else { bestEl.textContent = ""; bestEl.classList.remove("show"); }
+          card.classList.remove("is-disabled");
+          if (stage === 1) {
+            // 외울 단어 보기 — 제한 없음
+            card.classList.remove("is-locked");
+            if (chip) { chip.textContent = "📚 단어 " + VOCAB.length + "개"; chip.className = "vs-chip ready"; }
+            continue;
           }
-        });
-        const gamesHeadSmall = document.querySelector("#gamesSection .games-head small");
-        if (gamesHeadSmall) {
-          gamesHeadSmall.textContent = gameLocked
-            ? (!hasVocab ? "단어를 먼저 추가해 주세요" : "🔒 단어 뜻 맞히기를 풀면 열려요")
-            : "맞히면 돈이 쌓여요 💰 · 게임을 골라요";
+          const st = stageLimitState(stage);
+          card.classList.toggle("is-locked", st.locked);
+          if (chip) {
+            if (st.locked) {
+              chip.textContent = "⏳ " + fmtRemainMin(st.until - Date.now()) + " 뒤";
+              chip.className = "vs-chip locked";
+            } else {
+              chip.textContent = "🟢 " + st.recent + "/2 · 가능";
+              chip.className = "vs-chip ready";
+            }
+          }
         }
 
         renderSavings();
@@ -5223,44 +5284,34 @@
         return ARCADE_TEST_MODE || getVocabPlayLog().length > 0;
       }
 
-      /* ---------- 🔒 단어 뜻 맞히기 하루 2번 제한 (30분 쿨다운) ---------- */
-      // 아이별로 "게임 실행(세션 시작)" 시각을 기록. 하루 최대 2번, 한 번 풀면 30분 쉬어야 다음 가능.
-      const VOCAB_SESSIONS_KEY = "study_game_vocab_sessions_v1";
-      const VOCAB_DAILY_MAX = 2;
+      /* ---------- 🔒 단어 뜻 맞히기 단계 제한 (단원·단계별: 2회 후 30분 쿨다운) ---------- */
+      // 각 단원(unit)의 각 퀴즈 단계(2·3·4)마다 따로 적용. 최근 30분에 2번 풀었으면 잠기고,
+      // 가장 오래된 풀이가 30분을 넘어가면 다시 열림(영구 잠금 아님). 1단계(외울 단어)는 제한 없음.
       const VOCAB_COOLDOWN_MS = 30 * 60 * 1000; // 30분
-      function getVocabSessions() {
-        try {
-          const raw = localStorage.getItem(nsKey(VOCAB_SESSIONS_KEY));
-          const a = raw ? JSON.parse(raw) : [];
-          return Array.isArray(a) ? a.filter((t) => typeof t === "number") : [];
-        } catch (e) { return []; }
+      const VOCAB_STAGE_MAX = 2;                // 30분 안에 최대 2번
+      function getStagePlays(stage) {
+        const u = getActiveUnit();
+        const o = u.vocabStagePlays || {};
+        const a = o[stage];
+        return Array.isArray(a) ? a.filter((t) => typeof t === "number") : [];
       }
-      function recordVocabSession(ts) {
-        // 최근 3일치만 보관
-        const a = getVocabSessions().filter((t) => ts - t < 3 * 24 * 60 * 60 * 1000);
-        a.push(ts);
-        try {
-          localStorage.setItem(nsKey(VOCAB_SESSIONS_KEY), JSON.stringify(a));
-          window.studyGameSync && window.studyGameSync.markDirty();
-        } catch (e) {}
-      }
-      function startOfTodayMs() {
-        const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime();
-      }
-      // 지금 단어 뜻 맞히기를 시작할 수 있는지 / 막혀있다면 이유
-      function vocabLimitState() {
+      function recordStagePlay(stage) {
+        const u = getActiveUnit();
+        const o = Object.assign({}, u.vocabStagePlays || {});
         const now = Date.now();
-        const todays = getVocabSessions().filter((t) => t >= startOfTodayMs()).sort((a, b) => a - b);
-        if (todays.length >= VOCAB_DAILY_MAX) {
-          return { locked: true, reason: "daily", playedToday: todays.length };
+        const arr = (Array.isArray(o[stage]) ? o[stage] : []).filter((t) => now - t < 6 * 60 * 60 * 1000); // 6시간치만 보관
+        arr.push(now);
+        o[stage] = arr;
+        saveActiveUnitField("vocabStagePlays", o);
+      }
+      // 이 단계를 지금 시작할 수 있는지 / 막혀있으면 언제 풀리는지
+      function stageLimitState(stage) {
+        const now = Date.now();
+        const recent = getStagePlays(stage).filter((t) => now - t < VOCAB_COOLDOWN_MS).sort((a, b) => a - b);
+        if (recent.length >= VOCAB_STAGE_MAX) {
+          return { locked: true, until: recent[0] + VOCAB_COOLDOWN_MS, recent: recent.length };
         }
-        if (todays.length >= 1) {
-          const last = todays[todays.length - 1];
-          if (now - last < VOCAB_COOLDOWN_MS) {
-            return { locked: true, reason: "cooldown", until: last + VOCAB_COOLDOWN_MS, playedToday: todays.length };
-          }
-        }
-        return { locked: false, playedToday: todays.length };
+        return { locked: false, recent: recent.length };
       }
       function fmtRemainMin(ms) {
         const m = Math.max(0, Math.ceil(ms / 60000));
@@ -5421,7 +5472,14 @@
           $("progressChip").textContent = (state.idx + 1) + " / " + total;
         }
         $("scoreChip").textContent = "⭐ " + state.score;
-        $("streakChip").textContent = "🔥 " + state.streak;
+        // 단어 뜻 맞히기일 때는 🔥콤보 자리를 💰적립금 자리로 사용 (이번 판 + 전체)
+        if (state.mode === "vocab") {
+          const earned = state.vocabEarned || 0;
+          const sign = earned >= 0 ? "+" : "";
+          $("streakChip").textContent = "💰 " + sign + earned + "원 / 총 " + getSavings() + "원";
+        } else {
+          $("streakChip").textContent = "🔥 " + state.streak;
+        }
       }
       function next() {
         state.idx += 1;
@@ -5496,42 +5554,30 @@
             recordVocabPlay({ at: Date.now(), score: state.score, total: perfectMax, level: state.vocabLevel || 1 });
           }
 
-          // ---- 🎯 100점 통과 / 재시험 시스템 ----
-          // 100점(모두 정답)이면 다음 단계로. 아니면 틀린 단어 + 50% 추가 문제로 재시험(돈 없음).
-          const curLevel = state.vocabLevel || 1;
+          // ---- 🎯 100점 통과 / 재시험 시스템 (단계는 메뉴에서 따로 선택) ----
+          // 100점(모두 정답)이면 통과. 아니면 틀린 단어 + 50% 추가 문제로 재시험(돈 없음).
+          const curLevel = state.vocabLevel || 1; // 1=뜻→영어(2단계), 2=영어→뜻(3단계), 3=스펠링(4단계)
+          const stageNo = curLevel + 1;           // 화면에 보이는 단계 번호
           const wrongThisAttempt = Array.from(new Set(state.sessionWrongs || []));
           const isPerfect = wrongThisAttempt.length === 0 && state.score >= perfectMax;
 
           if (isPerfect) {
-            if (curLevel < 3) {
-              const nextLevel = curLevel + 1;
-              const nextName = { 2: "2단계 (영어 → 뜻)", 3: "3단계 (스펠링 빈칸)" }[nextLevel] || (nextLevel + "단계");
-              reviewRow.insertAdjacentHTML("beforeend",
-                '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! ' + curLevel + '단계 통과! 다음 단계로 가요</div>');
-              const btnNextLv = document.createElement("button");
-              btnNextLv.className = "btn btn-primary";
-              btnNextLv.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#6366f1,#4f46e5);box-shadow:0 5px 14px rgba(79,70,229,0.4)";
-              btnNextLv.textContent = "▶ 다음 단계로! " + nextName;
-              btnNextLv.addEventListener("click", () => startMode("vocab", { level: nextLevel }));
-              reviewRow.appendChild(btnNextLv);
-              setTimeout(() => playWin(), 200);
-            } else {
-              reviewRow.insertAdjacentHTML("beforeend",
-                '<div class="reward-banner" style="background:linear-gradient(135deg,#fde68a,#fbbf24);color:#7c2d12">🏆 100점! 3단계까지 모두 통과! 정말 잘했어요!</div>');
-              setTimeout(() => playWin(), 200);
-              setTimeout(() => playWin(), 600);
-            }
+            reviewRow.insertAdjacentHTML("beforeend",
+              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 통과!</b><br><small>메뉴에서 다른 단계도 풀어보세요 👍</small></div>');
+            setTimeout(() => playWin(), 200);
+            setTimeout(() => playWin(), 600);
           } else {
             // 100점 아님 → 재시험 (틀린 단어 전부 + 50% 추가, 돈 없음)
             reviewRow.insertAdjacentHTML("beforeend",
               '<div class="reward-banner" style="background:#fef3c7;color:#78350f;box-shadow:none">' +
               '😣 아쉽! 100점이 아니에요 (' + state.score + ' / ' + perfectMax + ').<br>' +
               '틀린 단어 <b>' + wrongThisAttempt.length + '개</b> + 추가 문제로 <b>재시험</b>해요.<br>' +
-              '<small>재시험은 돈이 오르지 않아요. 100점을 맞아야 다음 단계로 가요!</small></div>');
+              '<small>재시험은 돈이 오르지 않아요. 100점을 맞아야 통과예요!</small></div>');
             const btnRetake = document.createElement("button");
             btnRetake.className = "btn btn-primary";
             btnRetake.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 5px 14px rgba(239,68,68,0.4)";
-            btnRetake.textContent = "🔁 " + curLevel + "단계 재시험 (틀린 단어 다시!)";
+            btnRetake.textContent = "🔁 " + stageNo + "단계 재시험 (틀린 단어 다시!)";
+            // 재시험은 새 풀이로 치지 않음(제한 차감 없음) — startMode에 retake로만 전달
             btnRetake.addEventListener("click", () => startMode("vocab", { level: curLevel, retake: true, wrongWords: wrongThisAttempt }));
             reviewRow.appendChild(btnRetake);
           }
@@ -6048,18 +6094,20 @@
           const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
           if (!noMoney) { addSavings(pay); state.vocabEarned = (state.vocabEarned || 0) + pay; }
           const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
+          // 이 시점은 이미 addSavings(pay) 반영된 직후 → 그대로 보여줌
+          const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 · 전체 적립금 ' + getSavings() + '원</div>');
           tileEls.forEach((t) => (t.disabled = true));
           if (isCorrect) {
             state.score += 1; state.streak += 1; state.sessionRights.push(word);
             slots.forEach((s) => s.boxEl.classList.add("ok"));
             playCorrect();
-            fb.textContent = "정답! 🎉" + moneyTxt + "  " + word + " = " + item.meaning;
+            fb.innerHTML = "정답! 🎉" + moneyTxt + "  " + escapeHtml(word) + " = " + escapeHtml(item.meaning) + moneyLine;
             fb.className = "feedback ok pop";
           } else {
             state.streak = 0; state.sessionWrongs.push(word);
             slots.forEach((s) => { s.boxEl.textContent = word[s.pos]; s.boxEl.classList.remove("has"); s.boxEl.classList.add("bad"); });
             playWrong();
-            fb.textContent = "아쉬워요 😅" + moneyTxt + "  정답: " + word + " = " + item.meaning;
+            fb.innerHTML = "아쉬워요 😅" + moneyTxt + "  정답: " + escapeHtml(word) + " = " + escapeHtml(item.meaning) + moneyLine;
             fb.className = "feedback no shake";
           }
           updateHud();
@@ -6079,13 +6127,15 @@
         const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
         if (!noMoney) { addSavings(pay); state.vocabEarned = (state.vocabEarned || 0) + pay; }
         const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
+        // 이 시점은 이미 addSavings(pay) 반영된 직후
+        const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 · 전체 적립금 ' + getSavings() + '원</div>');
         if (isCorrect) {
           btn.classList.add("correct");
           state.score += 1;
           state.streak += 1;
           state.sessionRights.push(correctItem.word);
           playCorrect();
-          fb.textContent = "정답! 🎉" + moneyTxt + "  " + correctItem.word + " = " + correctItem.meaning;
+          fb.innerHTML = "정답! 🎉" + moneyTxt + "  " + escapeHtml(correctItem.word) + " = " + escapeHtml(correctItem.meaning) + moneyLine;
           fb.className = "feedback ok pop";
         } else {
           btn.classList.add("wrong");
@@ -6095,7 +6145,7 @@
           state.streak = 0;
           state.sessionWrongs.push(correctItem.word);
           playWrong();
-          fb.textContent = "아쉬워요 😅" + moneyTxt + "  정답: " + correctItem.word + " = " + correctItem.meaning;
+          fb.innerHTML = "아쉬워요 😅" + moneyTxt + "  정답: " + escapeHtml(correctItem.word) + " = " + escapeHtml(correctItem.meaning) + moneyLine;
           fb.className = "feedback no shake";
         }
         updateHud();
@@ -8420,46 +8470,29 @@
       const _unitsEditBtn = document.getElementById("unitsEditToggle");
       if (_unitsEditBtn) _unitsEditBtn.addEventListener("click", toggleUnitsEditMode);
 
-      document.querySelectorAll(".menu-card").forEach((btn) => {
+      // 📖 단어 뜻 맞히기 4단계 카드 클릭
+      document.querySelectorAll("#vstageGrid .vstage-card").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const mode = btn.dataset.mode;
+          const stage = parseInt(btn.dataset.stage, 10) || 1;
           const u = getActiveUnit();
-          if (btn.classList.contains("is-disabled")) {
-            // 단어 뜻 맞히기: 단어 없음 vs 하루 제한(쿨다운/2회 완료)을 구분해서 안내
-            if (mode === "vocab" && unitHasMode(u, "vocab")) {
-              const lim = vocabLimitState();
-              if (lim.reason === "daily") {
-                alert("🌙 오늘은 단어 뜻 맞히기를 2번 다 풀었어요!\n내일 또 만나요.");
-              } else if (lim.reason === "cooldown") {
-                alert("⏳ 30분 쉬는 시간이에요!\n" + fmtRemainMin(lim.until - Date.now()) + " 뒤에 다시 풀 수 있어요. (오늘 " + lim.playedToday + "/2)");
-              }
-              return;
-            }
-            const modeName = { vocab: "단어 뜻 맞히기" }[mode] || mode;
-            alert("'" + u.title + "' 단원에는 " + modeName + "에 쓸 단어가 없어요. \n다른 단원을 선택하거나 사진을 업로드해 주세요.");
+          if (!unitHasMode(u, "vocab")) {
+            alert("'" + u.title + "' 단원에는 단어가 없어요.\n다른 단원을 선택하거나 사진/직접입력으로 단어를 추가해 주세요.");
             return;
           }
-          // 단어 뜻 맞히기: 하루 제한 확인 → 단어 리스트 → 1단계부터 시작 (시작 시 세션 1회 기록)
-          if (mode === "vocab") {
-            const lim = vocabLimitState();
-            if (lim.locked) {
-              if (lim.reason === "daily") alert("🌙 오늘은 단어 뜻 맞히기를 2번 다 풀었어요!\n내일 또 만나요.");
-              else alert("⏳ 30분 쉬는 시간이에요!\n" + fmtRemainMin(lim.until - Date.now()) + " 뒤에 다시 풀 수 있어요.");
-              return;
-            }
-            openStudyListOverlay("vocab", {
-              onStart: () => { recordVocabSession(Date.now()); startMode("vocab", { level: 1 }); },
-              startLabel: "▶ 1단계부터 시작!",
-            });
+          if (stage === 1) {
+            // 1단계: 오늘 외울 단어 보기 (제한·돈 없음)
+            openStudyListOverlay("vocab");
             return;
           }
-          startMode(mode);
+          // 2·3·4단계: 단원·단계별 제한 확인 → 시작 (시작 시 1회 기록)
+          const st = stageLimitState(stage);
+          if (st.locked) {
+            alert("⏳ 이 단계는 잠시 쉬는 시간이에요!\n" + fmtRemainMin(st.until - Date.now()) + " 뒤에 다시 풀 수 있어요.\n(30분 안에 2번까지 가능 · 단원·단계마다 따로예요)");
+            return;
+          }
+          recordStagePlay(stage);
+          startMode("vocab", { level: stage - 1 }); // 2단계→level1, 3→2, 4→3
         });
-      });
-
-      // 🎮 게임 카드 4종 클릭 → 해당 게임 바로 플레이
-      document.querySelectorAll("#gamesGrid .game-card").forEach((btn) => {
-        btn.addEventListener("click", () => launchGame(btn.dataset.game));
       });
       $("btnBack").addEventListener("click", () => {
         try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
@@ -8481,7 +8514,7 @@
        */
       (function setupStudyGameSync() {
         const SYNC_TABLE = "study_game_state_kv";
-        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY, VOCAB_SESSIONS_KEY];
+        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY];
         const LOCAL_AT_KEY = "study_game_local_saved_at_v1";
         let pushTimer = null;
         let pulling = false;
