@@ -1818,7 +1818,7 @@
       <nav class="admin-nav admin-nav-in-header hidden" id="adminNav" aria-label="부모님 메뉴">
         <button type="button" class="on" data-admin-tab="kids">👧 아이 추가</button>
         <button type="button" data-admin-tab="templates">📝 투두 등록</button>
-        <button type="button" data-admin-tab="coupons">🎁 쿠폰 관리</button>
+        <button type="button" data-admin-tab="coupons">💰 용돈 지급</button>
         <button type="button" data-admin-tab="guide">📖 사용설명서</button>
       </nav>
     </header>
@@ -1977,7 +1977,7 @@
                 <strong>2. 위쪽 탭 메뉴</strong><br />
                 <strong>아이 추가</strong> — 아이 이름을 등록합니다.<br />
                 <strong>투두 등록</strong> — 「기본 투두 저장소」에 들어갈 항목을 만듭니다 (매주 반복할 때 재료로 씁니다).<br />
-                <strong>쿠폰 관리</strong> — 투두를 끝낼 때 쌓이는 스탬프로 받을 보상(쿠폰)을 만듭니다.<br />
+                <strong>💰 용돈 지급</strong> — 투두/칭찬을 끝낼 때마다 100원이 쌓여요(스터디게임 적립금도 합산). 아이에게 실제로 용돈을 주면 「지급 완료」를 눌러 기록해요.<br />
                 <strong>사용설명서</strong> — 지금 보고 있는 이 안내입니다.
               </p>
               <p class="side-panel-text">
@@ -1993,7 +1993,7 @@
                 <strong>5. 한눈에 정리</strong><br />
                 • <strong>기본 투두 + 요일</strong> = 매주 반복<br />
                 • <strong>특정날짜스케줄추가</strong> = 선택한 하루에만 나오는 일<br />
-                • <strong>👏 칭찬합니다</strong> (화면 맨아래) — 아이 선택 후 비밀번호를 입력하면 「오늘 할 일」에 칭찬 스티커가 생겨요. 아이가 스티커를 <strong>두 번 누르면</strong> 「오늘 한 일」로 내려가며 <strong>스탬프 +1</strong> 이에요. 완료된 스티커를 두 번 누르면 다시 오늘 할 일로 되돌리며 스탬프 -1.
+                • <strong>👏 칭찬합니다</strong> (화면 맨아래) — 아이 선택 후 비밀번호를 입력하면 「오늘 할 일」에 칭찬 스티커가 생겨요. 아이가 스티커를 <strong>두 번 누르면</strong> 「오늘 한 일」로 내려가며 <strong>+100원 💰</strong> 이에요. 완료된 스티커를 두 번 누르면 다시 오늘 할 일로 되돌리며 -100원.
               </p>
               <p class="side-panel-text">
                 <strong>6. 데이터</strong><br />
@@ -2055,21 +2055,15 @@
             </div>
             <div id="adminSideCoupons" class="admin-side-panel hidden">
               <div class="form-card side-form">
-                <h2>쿠폰 만들기</h2>
-                <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">투두 완료마다 스탬프 1개. 이름만 정해 주세요.</p>
+                <h2>💰 용돈 지급</h2>
+                <p style="font-size: 0.88rem; color: #64748b; margin-top: 0">
+                  투두/칭찬 완료 1건 = <b>100원</b>. 여기 금액은 <b>투두에서 번 돈 + 스터디게임 적립금</b>을 합한 거예요.
+                  아이에게 실제로 용돈을 주면 <b>‘지급 완료’</b>를 눌러 기록하세요. (받을 돈에서 빠져요)
+                </p>
                 <div id="coupErr"></div>
-                <form id="formCoupon">
-                  <input type="hidden" name="coupon_id" id="couponEditId" value="" />
-                  <label>쿠폰 이름</label>
-                  <input name="title" required maxlength="80" placeholder="예: 아이스크림 쿠폰" />
-                  <label>필요 스탬프</label>
-                  <input name="stamps_required" type="number" min="1" max="999" value="10" required />
-                  <button type="submit" id="btnCouponSubmit">쿠폰 저장</button>
-                  <button type="button" class="btn-muted" id="btnCouponCancelEdit" style="width: 100%; margin-top: 8px" hidden>수정 취소</button>
-                </form>
               </div>
               <div class="list-card side-list">
-                <h3 style="margin-top: 0">등록된 쿠폰 (수정·삭제·교환)</h3>
+                <h3 style="margin-top: 0">아이별 받을 용돈</h3>
                 <div id="couponList"></div>
               </div>
             </div>
@@ -2260,7 +2254,7 @@
         }
 
         function handleMainPraisePendingTap(card, armKey, pendingId) {
-          var hintNormal = "👆 두 번 눌러 오늘 한 일로 (스탬프 +1)";
+          var hintNormal = "👆 두 번 눌러 오늘 한 일로 (+100원 💰)";
           var hintArmed = "👆 한 번 더 눌러 완료";
           if (mainCardArm && mainCardArm.key === armKey) {
             clearTimeout(mainCardArm.timer);
@@ -2299,7 +2293,7 @@
         }
 
         function handleMainPraiseClaimTap(card, armKey, claimRow, kidId, dstr) {
-          var hintNormal = "↩ 두 번 눌러 되돌리기 (스탬프 -1)";
+          var hintNormal = "↩ 두 번 눌러 되돌리기 (-100원)";
           var hintArmed = "↩ 한 번 더 눌러 되돌리기";
           if (mainCardArm && mainCardArm.key === armKey) {
             clearTimeout(mainCardArm.timer);
@@ -2385,11 +2379,11 @@
           tag.className = "kid";
           tag.style.color = "#b45309";
           tag.style.fontSize = "0.72rem";
-          tag.textContent = "👏 부모님 칭찬 · 완료하면 스탬프 +1";
+          tag.textContent = "👏 부모님 칭찬 · 완료하면 +100원 💰";
           card.appendChild(tag);
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
-          hint.textContent = "👆 두 번 눌러 오늘 한 일로 (스탬프 +1)";
+          hint.textContent = "👆 두 번 눌러 오늘 한 일로 (+100원 💰)";
           card.appendChild(hint);
           card.addEventListener("click", function () {
             handleMainPraisePendingTap(card, armKey, row.id);
@@ -2418,11 +2412,11 @@
           tag.className = "kid";
           tag.style.color = "#047857";
           tag.style.fontSize = "0.72rem";
-          tag.textContent = "🎟 스탬프 +1 반영됨";
+          tag.textContent = "💰 +100원 반영됨";
           card.appendChild(tag);
           var hint = document.createElement("div");
           hint.className = "main-card-tap-hint";
-          hint.textContent = "↩ 두 번 눌러 되돌리기 (스탬프 -1)";
+          hint.textContent = "↩ 두 번 눌러 되돌리기 (-100원)";
           card.appendChild(hint);
           card.addEventListener("click", function () {
             handleMainPraiseClaimTap(card, armKey, claimRow, kid.id, dstr);
@@ -2844,6 +2838,20 @@
             state.wallets = w.data || [];
             state.coupons = c.data || [];
             state.completionsToday = compToday.data || [];
+            // 🎮 스터디게임 적립금 (아이별) — 투두 돈과 합산해서 보여주려고 불러옴
+            state.studyMoney = {};
+            try {
+              var sg = await supabase.from("study_game_state_kv").select("id,kv");
+              if (!sg.error && Array.isArray(sg.data)) {
+                sg.data.forEach(function (row) {
+                  var id = String(row.id || "");
+                  if (id.indexOf("kid:") !== 0) return;
+                  var kv = row.kv || {};
+                  var v = parseInt(kv["study_game_savings_v1"] || "0", 10) || 0;
+                  state.studyMoney[id.slice(4)] = v;
+                });
+              }
+            } catch (e) {}
             state.daySchedulesToday = [];
             state.daySchedulesSelected = [];
             state.dayScheduleCompletionsToday = [];
@@ -2989,6 +2997,19 @@
             });
         }
 
+        // ---- 💰 돈 계산 (투두 100원/완료 + 스터디게임 적립금, 지급액 차감) ----
+        function walletOf(kidId) {
+          return state.wallets.find(function (x) { return x.kid_id === kidId; });
+        }
+        function stampsOf(kidId) { var w = walletOf(kidId); return w ? (w.stamps || 0) : 0; }
+        function studyMoneyOf(kidId) { return (state.studyMoney && state.studyMoney[kidId]) || 0; }
+        function paidWonOf(kidId) { var w = walletOf(kidId); return (w && typeof w.paid_won === "number") ? w.paid_won : 0; }
+        // 투두/칭찬 완료 1건 = 100원
+        function todoWonOf(kidId) { return stampsOf(kidId) * 100; }
+        function earnedWonOf(kidId) { return todoWonOf(kidId) + studyMoneyOf(kidId); }
+        function owedWonOf(kidId) { return Math.max(0, earnedWonOf(kidId) - paidWonOf(kidId)); }
+        function wonText(n) { return Number(n || 0).toLocaleString("ko-KR") + "원"; }
+
         function updateStampBadge() {
           var wrap = $("stampBadge");
           var line1 = $("stampBadgeLine1");
@@ -2998,36 +3019,14 @@
             return;
           }
           wrap.classList.remove("hidden");
-          var w = state.wallets.find(function (x) {
-            return x.kid_id === state.selectedKidId;
-          });
-          var stamps = w ? w.stamps : 0;
-          var active = activeCouponsSorted();
-          var nKinds = active.length;
-          var nextC = null;
-          for (var i = 0; i < active.length; i++) {
-            if (stamps < active[i].stamps_required) {
-              nextC = active[i];
-              break;
-            }
-          }
-          if (nextC) {
-            line1.textContent = "🎟 " + stamps + "/" + nextC.stamps_required;
-            line2.textContent = "다음 보상: " + nextC.title + " · 쿠폰 " + nKinds + "종";
-            line2.classList.remove("hidden");
-          } else {
-            line1.textContent = "🎟 스탬프 " + stamps + "개";
-            if (nKinds > 0) {
-              var maxReq = active.reduce(function (m, c) {
-                return Math.max(m, c.stamps_required);
-              }, 0);
-              line2.textContent = "목표 달성 (최대 " + maxReq + "개짜리) · 쿠폰 " + nKinds + "종";
-              line2.classList.remove("hidden");
-            } else {
-              line2.textContent = "등록된 보상 쿠폰이 없어요";
-              line2.classList.remove("hidden");
-            }
-          }
+          var kid = state.selectedKidId;
+          var owed = owedWonOf(kid);
+          line1.textContent = "💰 " + wonText(owed);
+          var todo = todoWonOf(kid), study = studyMoneyOf(kid), paid = paidWonOf(kid);
+          var parts = ["투두 " + wonText(todo), "게임 " + wonText(study)];
+          if (paid > 0) parts.push("지급 " + wonText(paid));
+          line2.textContent = "받을 용돈 · " + parts.join(" · ");
+          line2.classList.remove("hidden");
         }
 
         function slotsForDay(d) {
@@ -3923,82 +3922,95 @@
           });
         }
 
+        // 관리자: 아이별 받을 용돈(번 돈 − 지급액) + 지급 기록 버튼
         function renderCouponList() {
           var el = $("couponList");
+          if (!el) return;
           el.innerHTML = "";
-          var activeList = state.coupons.filter(function (c) {
-            return c.active;
-          });
-          if (!activeList.length) {
-            el.innerHTML = '<p style="color:#64748b">쿠폰이 없어요.</p>';
+          var kids = state.kids || [];
+          if (!kids.length) {
+            el.innerHTML = '<p style="color:#64748b">등록된 아이가 없어요.</p>';
             return;
           }
-          var stamps = 0;
-          if (state.selectedKidId) {
-            var w0 = state.wallets.find(function (x) {
-              return x.kid_id === state.selectedKidId;
-            });
-            stamps = w0 ? w0.stamps : 0;
-          }
-          activeList.forEach(function (c) {
+          kids.forEach(function (kid) {
+            var earned = earnedWonOf(kid.id);
+            var todo = todoWonOf(kid.id);
+            var study = studyMoneyOf(kid.id);
+            var paid = paidWonOf(kid.id);
+            var owed = owedWonOf(kid.id);
             var div = document.createElement("div");
             div.className = "list-item";
             div.style.flexDirection = "column";
             div.style.alignItems = "stretch";
             div.style.gap = "8px";
-            var top = document.createElement("div");
-            top.innerHTML =
-              "<strong>" + escapeHtml(c.title) + "</strong><br><small style='color:#64748b'>필요 스탬프 " + c.stamps_required + "개</small>";
-            div.appendChild(top);
+            div.innerHTML =
+              "<div style='display:flex;justify-content:space-between;align-items:baseline'>" +
+              "<strong>" + escapeHtml(kid.name) + "</strong>" +
+              "<span style='font-size:1.15rem;font-weight:900;color:" + (owed > 0 ? "#b45309" : "#16a34a") + "'>받을 돈 " + wonText(owed) + "</span>" +
+              "</div>" +
+              "<small style='color:#64748b'>총 번 돈 " + wonText(earned) + " (투두 " + wonText(todo) + " + 게임 " + wonText(study) + ") · 지급함 " + wonText(paid) + "</small>";
             var row = document.createElement("div");
             row.className = "coupon-row-actions";
-            row.style.justifyContent = "space-between";
-            var left = document.createElement("div");
-            left.className = "coupon-row-actions";
-            var btnEd = document.createElement("button");
-            btnEd.type = "button";
-            btnEd.className = "btn-coupon-edit";
-            btnEd.textContent = "수정";
-            btnEd.addEventListener("click", function () {
-              $("formCoupon").querySelector("[name=title]").value = c.title;
-              $("formCoupon").querySelector("[name=stamps_required]").value = String(c.stamps_required);
-              $("couponEditId").value = c.id;
-              $("btnCouponSubmit").textContent = "수정 저장";
-              $("btnCouponCancelEdit").hidden = false;
-              $("coupErr").innerHTML = "";
-              setAdminTab("coupons");
+            row.style.justifyContent = "flex-end";
+            row.style.flexWrap = "wrap";
+            var btnPay = document.createElement("button");
+            btnPay.type = "button";
+            btnPay.textContent = "✅ 전액 지급 완료 (" + wonText(owed) + ")";
+            btnPay.disabled = owed <= 0;
+            btnPay.style.cssText = "padding:8px 12px;border-radius:10px;border:none;font-weight:800;cursor:" + (owed > 0 ? "pointer" : "not-allowed") + ";background:" + (owed > 0 ? "linear-gradient(90deg,#86efac,#22c55e)" : "#e2e8f0") + ";color:" + (owed > 0 ? "#064e3b" : "#94a3b8");
+            btnPay.addEventListener("click", function () {
+              if (owed <= 0) return;
+              if (!confirm(kid.name + " 에게 " + wonText(owed) + " 을(를) 실제로 줬나요?\n‘확인’을 누르면 지급한 걸로 기록돼요.")) return;
+              payKidMoney(kid.id, owed);
             });
-            var btnDel = document.createElement("button");
-            btnDel.type = "button";
-            btnDel.className = "btn-coupon-del";
-            btnDel.textContent = "삭제";
-            btnDel.addEventListener("click", function () {
-              if (!confirm("이 쿠폰을 삭제(비활성)할까요?")) return;
-              supabase.from("family_reward_coupons").update({ active: false }).eq("id", c.id).then(refresh);
+            var btnPart = document.createElement("button");
+            btnPart.type = "button";
+            btnPart.className = "btn-coupon-edit";
+            btnPart.textContent = "일부 지급";
+            btnPart.addEventListener("click", function () {
+              var raw = prompt(kid.name + " 에게 준 금액(원)을 적어주세요. (받을 돈 " + wonText(owed) + ")", String(owed));
+              if (raw == null) return;
+              var amt = parseInt(String(raw).replace(/[^0-9]/g, ""), 10) || 0;
+              if (amt <= 0) return;
+              payKidMoney(kid.id, amt);
             });
-            left.appendChild(btnEd);
-            left.appendChild(btnDel);
-            row.appendChild(left);
-            var can = state.selectedKidId && stamps >= c.stamps_required;
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = can ? "🎁 보상 받기" : "스탬프 부족";
-            btn.disabled = !can;
-            btn.style.padding = "8px 12px";
-            btn.style.borderRadius = "10px";
-            btn.style.border = "none";
-            btn.style.fontWeight = "800";
-            btn.style.cursor = can ? "pointer" : "not-allowed";
-            btn.style.background = can ? "linear-gradient(90deg,#86efac,#67e8f9)" : "#e2e8f0";
-            btn.addEventListener("click", function () {
-              if (!can) return;
-              if (!confirm("스탬프 " + c.stamps_required + "개 사용할까요?")) return;
-              redeemCoupon(c);
+            var btnReset = document.createElement("button");
+            btnReset.type = "button";
+            btnReset.className = "btn-coupon-del";
+            btnReset.textContent = "지급기록 초기화";
+            btnReset.addEventListener("click", function () {
+              if (!confirm(kid.name + " 의 지급 기록(지급함 " + wonText(paid) + ")을 0으로 되돌릴까요?")) return;
+              setKidPaid(kid.id, 0);
             });
-            row.appendChild(btn);
+            row.appendChild(btnPart);
+            row.appendChild(btnReset);
+            row.appendChild(btnPay);
             div.appendChild(row);
             el.appendChild(div);
           });
+        }
+
+        // 지급액을 amount 만큼 추가 (실제 지급 기록)
+        async function payKidMoney(kidId, amount) {
+          var newPaid = paidWonOf(kidId) + amount;
+          await setKidPaid(kidId, newPaid);
+          alert("💰 " + wonText(amount) + " 지급 기록 완료!");
+        }
+        async function setKidPaid(kidId, paidWon) {
+          try {
+            var res = await supabase.from("family_kid_wallet").upsert(
+              { kid_id: kidId, paid_won: Math.max(0, paidWon), updated_at: new Date().toISOString() },
+              { onConflict: "kid_id" },
+            );
+            if (res.error) {
+              alert("⚠️ 지급 기록 실패: " + (res.error.message || res.error) + "\n\nSupabase에서 supabase/migrations/20260607090000_family_money_paid.sql 을 실행했는지 확인해 주세요.");
+              return;
+            }
+          } catch (e) {
+            alert("⚠️ 지급 기록 실패: " + (e && e.message ? e.message : e));
+            return;
+          }
+          await refresh();
         }
 
         async function redeemCoupon(c) {
@@ -4024,10 +4036,9 @@
         }
 
         function clearCouponForm() {
-          $("formCoupon").reset();
-          $("couponEditId").value = "";
-          $("btnCouponSubmit").textContent = "쿠폰 저장";
-          $("btnCouponCancelEdit").hidden = true;
+          // 쿠폰 폼은 용돈 지급 화면으로 대체되어 더 이상 없음 (안전 가드)
+          var f = $("formCoupon");
+          if (f) f.reset();
         }
 
         function startOfMonday(d) {
@@ -4633,38 +4644,28 @@
           await refresh();
         });
 
-        $("formCoupon").addEventListener("submit", async function (e) {
-          e.preventDefault();
-          $("coupErr").innerHTML = "";
-          var fd = new FormData(e.target);
-          var editId = String(fd.get("coupon_id") || "").trim();
-          var title = String(fd.get("title") || "").trim();
-          var stampsReq = parseInt(String(fd.get("stamps_required") || "10"), 10);
-          var r;
-          if (editId) {
-            r = await supabase
-              .from("family_reward_coupons")
-              .update({ title: title, stamps_required: stampsReq })
-              .eq("id", editId);
-          } else {
-            r = await supabase.from("family_reward_coupons").insert({
-              title: title,
-              reward_text: "",
-              stamps_required: stampsReq,
-              active: true,
-            });
-          }
-          if (r.error) {
-            $("coupErr").innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>";
-            return;
-          }
-          clearCouponForm();
-          await refresh();
-        });
-
-        $("btnCouponCancelEdit").addEventListener("click", function () {
-          clearCouponForm();
-        });
+        // (쿠폰 만들기 폼은 '용돈 지급' 화면으로 대체됨 — 폼이 있을 때만 연결)
+        var _formCoupon = $("formCoupon");
+        if (_formCoupon) {
+          _formCoupon.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            var fd = new FormData(e.target);
+            var editId = String(fd.get("coupon_id") || "").trim();
+            var title = String(fd.get("title") || "").trim();
+            var stampsReq = parseInt(String(fd.get("stamps_required") || "10"), 10);
+            var r;
+            if (editId) {
+              r = await supabase.from("family_reward_coupons").update({ title: title, stamps_required: stampsReq }).eq("id", editId);
+            } else {
+              r = await supabase.from("family_reward_coupons").insert({ title: title, reward_text: "", stamps_required: stampsReq, active: true });
+            }
+            if (r.error) { var ce = $("coupErr"); if (ce) ce.innerHTML = '<div class="err">' + escapeHtml(r.error.message) + "</div>"; return; }
+            clearCouponForm();
+            await refresh();
+          });
+        }
+        var _btnCouponCancel = $("btnCouponCancelEdit");
+        if (_btnCouponCancel) _btnCouponCancel.addEventListener("click", function () { clearCouponForm(); });
 
         $("btnMainWeek").addEventListener("click", function () {
           openMainExploreWeek().catch(function (err) {
