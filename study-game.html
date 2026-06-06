@@ -401,6 +401,64 @@
       }
       .savings-banner b { font-size: 1.3rem; }
 
+      /* ---- 사이트 이동 버튼 ---- */
+      .cross-nav { margin-top: 10px; text-align: center; }
+      .cross-nav-btn {
+        display: inline-block;
+        padding: 10px 16px;
+        border-radius: 14px;
+        font-weight: 800;
+        text-decoration: none;
+        background: linear-gradient(135deg, #c4b5fd, #6366f1);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+      }
+      .cross-nav-btn.cn-study {
+        background: linear-gradient(135deg, #6ee7b7, #10b981);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+      }
+
+      /* ---- 🏆 명예의 전당 ---- */
+      .hof-section {
+        margin-top: 16px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #fff7ed, #fef3c7);
+        border-radius: 18px;
+        box-shadow: 0 5px 14px rgba(251, 191, 36, 0.2);
+      }
+      .hof-head h3 { margin: 0; font-size: 1.05rem; color: #9a3412; }
+      .hof-head small { color: #b45309; font-weight: 700; }
+      .hof-list { list-style: none; padding: 0; margin: 10px 0 6px; counter-reset: hof; }
+      .hof-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #fff;
+        border-radius: 12px;
+        margin-bottom: 6px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+      }
+      .hof-list li .hof-rank {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #fde68a;
+        color: #78350f;
+        font-weight: 900;
+      }
+      .hof-list li:nth-child(1) .hof-rank { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #fff; }
+      .hof-list li:nth-child(2) .hof-rank { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #fff; }
+      .hof-list li:nth-child(3) .hof-rank { background: linear-gradient(135deg, #fed7aa, #ea580c); color: #fff; }
+      .hof-list li .hof-name { flex: 1; font-weight: 800; color: #1e293b; }
+      .hof-list li .hof-money { font-weight: 900; color: #b45309; }
+      .hof-list li .hof-when { font-size: 0.72rem; color: #94a3b8; font-weight: 700; }
+      .hof-empty { color: #94a3b8; font-weight: 700; text-align: center; padding: 14px; }
+      .hof-foot { display: block; text-align: center; color: #94a3b8; font-weight: 700; }
+
       /* ---- 📖 단어 뜻 맞히기 4단계 카드 ---- */
       .vstage-section { margin-bottom: 14px; }
       .vstage-head {
@@ -3127,9 +3185,22 @@
           </div>
         </section>
 
-        <!-- 💰 적립금 (단어 뜻 맞히기로 모은 돈) -->
+        <!-- 💰 적립금 + 사이트 이동 -->
         <section class="games-section" id="gamesSection">
           <div class="savings-banner" id="savingsBanner"></div>
+          <div class="cross-nav">
+            <a class="cross-nav-btn cn-todo" href="family-todos.html">📝 우리가족 투두로 →</a>
+          </div>
+        </section>
+
+        <!-- 🏆 명예의 전당 (모든 친구 통합) -->
+        <section class="hof-section" id="hofSection">
+          <div class="hof-head">
+            <h3>🏆 명예의 전당</h3>
+            <small>그날의 적립금 신기록을 세우면 이름을 올릴 수 있어요</small>
+          </div>
+          <ol class="hof-list" id="hofList"></ol>
+          <small class="hof-foot" id="hofFoot">불러오는 중…</small>
         </section>
 
         <!-- 📅 단어 뜻 맞히기 시험 기록 -->
@@ -3848,6 +3919,7 @@
           vocabReview: persisted.vocabReview || { stage: 0, nextAt: 0, history: [] },
           vocabPlayLog: Array.isArray(persisted.vocabPlayLog) ? persisted.vocabPlayLog : [],
           vocabStagePlays: (persisted.vocabStagePlays && typeof persisted.vocabStagePlays === "object") ? persisted.vocabStagePlays : {},
+          vocabStagePayAt: (persisted.vocabStagePayAt && typeof persisted.vocabStagePayAt === "object") ? persisted.vocabStagePayAt : {},
         };
       }
 
@@ -3875,6 +3947,7 @@
         found.vocabReview = found.vocabReview || { stage: 0, nextAt: 0, history: [] };
         found.vocabPlayLog = Array.isArray(found.vocabPlayLog) ? found.vocabPlayLog : [];
         found.vocabStagePlays = (found.vocabStagePlays && typeof found.vocabStagePlays === "object") ? found.vocabStagePlays : {};
+        found.vocabStagePayAt = (found.vocabStagePayAt && typeof found.vocabStagePayAt === "object") ? found.vocabStagePayAt : {};
         return found;
       }
 
@@ -5243,7 +5316,7 @@
           }
         }
 
-        // 📖 단어 뜻 맞히기 4단계 카드 (단원·단계별 제한). 1단계는 제한 없음, 2·3·4단계는 2회/30분.
+        // 📖 단어 뜻 맞히기 4단계 카드 (잠금 없음, 적립금 30분 쿨다운만)
         for (let stage = 1; stage <= 4; stage++) {
           const card = document.getElementById("vstage-" + stage);
           if (!card) continue;
@@ -5254,28 +5327,26 @@
             if (chip) { chip.textContent = "🔒 단어 없음"; chip.className = "vs-chip locked"; }
             continue;
           }
-          card.classList.remove("is-disabled");
+          card.classList.remove("is-disabled", "is-locked");
           if (stage === 1) {
-            // 외울 단어 보기 — 제한 없음
-            card.classList.remove("is-locked");
             if (chip) { chip.textContent = "📚 단어 " + VOCAB.length + "개"; chip.className = "vs-chip ready"; }
             continue;
           }
-          const st = stageLimitState(stage);
-          card.classList.toggle("is-locked", st.locked);
+          const pc = payCooldownState(stage);
           if (chip) {
-            if (st.locked) {
-              chip.textContent = "⏳ " + fmtRemainMin(st.until - Date.now()) + " 뒤";
-              chip.className = "vs-chip locked";
-            } else {
-              chip.textContent = "🟢 " + st.recent + "/2 · 가능";
+            if (pc.payable) {
+              chip.textContent = "💰 적립금 가능!";
               chip.className = "vs-chip ready";
+            } else {
+              chip.textContent = "⏳ 적립금 " + fmtRemainMin(pc.until - Date.now()) + " 뒤";
+              chip.className = "vs-chip cooldown";
             }
           }
         }
 
         renderSavings();
         renderPlayLog();
+        if (typeof refreshHof === "function") refreshHof();
       }
 
       // 단어 뜻 맞히기를 한 번이라도 끝까지 풀었는가(= 단어 게임 잠금 해제 조건)
@@ -5284,34 +5355,26 @@
         return ARCADE_TEST_MODE || getVocabPlayLog().length > 0;
       }
 
-      /* ---------- 🔒 단어 뜻 맞히기 단계 제한 (단원·단계별: 2회 후 30분 쿨다운) ---------- */
-      // 각 단원(unit)의 각 퀴즈 단계(2·3·4)마다 따로 적용. 최근 30분에 2번 풀었으면 잠기고,
-      // 가장 오래된 풀이가 30분을 넘어가면 다시 열림(영구 잠금 아님). 1단계(외울 단어)는 제한 없음.
-      const VOCAB_COOLDOWN_MS = 30 * 60 * 1000; // 30분
-      const VOCAB_STAGE_MAX = 2;                // 30분 안에 최대 2번
-      function getStagePlays(stage) {
+      /* ---------- 💰 적립금 쿨다운 (단원·단계별 30분 1회) ---------- */
+      // 풀이 자체는 언제든 가능. 다만 한 번 돈을 받으면 30분간 그 단계에서 추가 적립 안 됨.
+      const PAY_COOLDOWN_MS = 30 * 60 * 1000;
+      function getStagePayAt(stage) {
         const u = getActiveUnit();
-        const o = u.vocabStagePlays || {};
-        const a = o[stage];
-        return Array.isArray(a) ? a.filter((t) => typeof t === "number") : [];
+        const o = u.vocabStagePayAt || {};
+        return Number(o[stage] || 0);
       }
-      function recordStagePlay(stage) {
+      function recordStagePayNow(stage) {
         const u = getActiveUnit();
-        const o = Object.assign({}, u.vocabStagePlays || {});
-        const now = Date.now();
-        const arr = (Array.isArray(o[stage]) ? o[stage] : []).filter((t) => now - t < 6 * 60 * 60 * 1000); // 6시간치만 보관
-        arr.push(now);
-        o[stage] = arr;
-        saveActiveUnitField("vocabStagePlays", o);
+        const o = Object.assign({}, u.vocabStagePayAt || {});
+        o[stage] = Date.now();
+        saveActiveUnitField("vocabStagePayAt", o);
       }
-      // 이 단계를 지금 시작할 수 있는지 / 막혀있으면 언제 풀리는지
-      function stageLimitState(stage) {
-        const now = Date.now();
-        const recent = getStagePlays(stage).filter((t) => now - t < VOCAB_COOLDOWN_MS).sort((a, b) => a - b);
-        if (recent.length >= VOCAB_STAGE_MAX) {
-          return { locked: true, until: recent[0] + VOCAB_COOLDOWN_MS, recent: recent.length };
-        }
-        return { locked: false, recent: recent.length };
+      // 이 단계에서 지금 돈을 받을 수 있는지 / 못 받으면 언제 풀리는지
+      function payCooldownState(stage) {
+        const last = getStagePayAt(stage);
+        const remain = (last + PAY_COOLDOWN_MS) - Date.now();
+        if (last && remain > 0) return { payable: false, until: last + PAY_COOLDOWN_MS };
+        return { payable: true };
       }
       function fmtRemainMin(ms) {
         const m = Math.max(0, Math.ceil(ms / 60000));
@@ -5411,7 +5474,8 @@
         state.vocabEarned = 0;
         // 재시험 여부 (재시험은 돈이 오르지 않음)
         state.vocabRetake = !!opts.retake;
-        state.vocabNoMoney = !!opts.retake;
+        // 돈 없음 조건: 재시험이거나, 적립금 쿨다운 중인 단계
+        state.vocabNoMoney = !!opts.retake || (mode === "vocab" && opts.payable === false);
         state.sessionWrongs = [];
         state.sessionRights = [];
         state.spellWrongs = [];
@@ -5422,12 +5486,11 @@
           let basePool = VOCAB.filter((v) => !disabled.has(v.word));
           if (basePool.length === 0) basePool = VOCAB; // 모두 제외된 경우 안전장치
           if (opts.retake && Array.isArray(opts.wrongWords)) {
-            // 🔁 재시험: 틀린 단어 전부 + 단계 전체의 50% 만큼 추가 문제 (틀린 단어는 반드시 포함)
+            // 🔁 재시험: 틀린 단어 전부 + 정확히 5개 추가 (틀린 단어는 반드시 포함)
             const wrongSet = new Set(opts.wrongWords);
             const wrongItems = VOCAB.filter((v) => wrongSet.has(v.word));
-            const halfCount = Math.max(1, Math.ceil(basePool.length * 0.5));
             const extrasPool = basePool.filter((v) => !wrongSet.has(v.word));
-            const extras = pickN(extrasPool, Math.min(halfCount, extrasPool.length));
+            const extras = pickN(extrasPool, Math.min(5, extrasPool.length));
             const merged = wrongItems.concat(extras);
             state.questions = shuffle(merged.length ? merged : basePool);
           } else {
@@ -5552,6 +5615,13 @@
           // 📅 시험 기록 남기기 (재시험·필터 제외, 단계별 첫 시도만 기록)
           if (!state.modeFilter && !state.vocabRetake) {
             recordVocabPlay({ at: Date.now(), score: state.score, total: perfectMax, level: state.vocabLevel || 1 });
+          }
+          // 💰 이번 판에서 돈을 받았으면 그 단계의 적립금 쿨다운 시작
+          if (!state.vocabNoMoney && state.vocabEarned) {
+            const stageNoForPay = (state.vocabLevel || 1) + 1; // level1→2단계, 2→3, 3→4
+            recordStagePayNow(stageNoForPay);
+            // 🏆 신기록이면 명예의 전당 등록 (살짝 늦춰 결과 화면 본 뒤 묻기)
+            setTimeout(() => { try { checkHallOfFame(); } catch (e) {} }, 1200);
           }
 
           // ---- 🎯 100점 통과 / 재시험 시스템 (단계는 메뉴에서 따로 선택) ----
@@ -5698,8 +5768,8 @@
           ? VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }))
           : SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }));
 
-        // vocab: 기본값으로 전체 가리기 ON 상태로 시작
-        let allHidden = isVocab;
+        // 단어 옆에 한글 뜻을 함께 보여줌 (기본값: 보이게)
+        let allHidden = false;
         btnHideAll.classList.toggle("is-on", allHidden);
         btnHideAll.textContent = allHidden ? "👁 전체 보이기" : "👁 전체 가리기";
 
@@ -7591,6 +7661,129 @@
         if (el) el.innerHTML = "🪙 적립금 <b>" + getSavings() + "원</b>";
       }
 
+      /* ---------- 🏆 명예의 전당 (모든 친구 통합) ---------- */
+      // Supabase 'study_game_hall_of_fame' 테이블을 공유 게시판으로 사용.
+      // 그날의 적립금이 명예의 전당 5위 안에 들 만큼 새 기록을 세우면 닉네임 입력 → 등록.
+      const HOF_TABLE = "study_game_hall_of_fame";
+      let _hofRows = [];     // 최근 캐시 (전체 또는 TOP)
+      let _hofTodayBest = 0; // 이 기기에서 오늘 마지막으로 명예의 전당 등록한 적립금 (중복 등록 방지)
+      const HOF_LAST_REG_KEY = "study_game_hof_last_reg_v1";
+      function getHofLastReg() {
+        try {
+          const raw = localStorage.getItem(nsKey(HOF_LAST_REG_KEY));
+          return raw ? JSON.parse(raw) : { date: "", amount: 0 };
+        } catch (e) { return { date: "", amount: 0 }; }
+      }
+      function setHofLastReg(date, amount) {
+        try { localStorage.setItem(nsKey(HOF_LAST_REG_KEY), JSON.stringify({ date: date, amount: amount })); } catch (e) {}
+      }
+      function todayKstISO() {
+        // KST 기준 yyyy-mm-dd
+        const d = new Date(Date.now() + 9 * 3600 * 1000);
+        return d.toISOString().slice(0, 10);
+      }
+
+      async function fetchHofTop(limit) {
+        if (!_supabase) return [];
+        try {
+          const res = await _supabase
+            .from(HOF_TABLE)
+            .select("nickname,savings_won,for_date,created_at")
+            .order("savings_won", { ascending: false })
+            .order("created_at", { ascending: true })
+            .limit(limit || 5);
+          if (res.error) { console.warn("[hof] fetch", res.error); return []; }
+          return res.data || [];
+        } catch (e) { console.warn("[hof] fetch", e); return []; }
+      }
+
+      function renderHof(rows) {
+        const list = document.getElementById("hofList");
+        const foot = document.getElementById("hofFoot");
+        if (!list) return;
+        list.innerHTML = "";
+        if (!rows || !rows.length) {
+          const li = document.createElement("li");
+          li.className = "hof-empty";
+          li.textContent = "아직 비어 있어요. 첫 기록의 주인공이 되어보세요! 🏅";
+          li.style.display = "list-item";
+          list.appendChild(li);
+        } else {
+          rows.forEach((r, i) => {
+            const li = document.createElement("li");
+            const rk = document.createElement("span");
+            rk.className = "hof-rank";
+            rk.textContent = i + 1;
+            const nm = document.createElement("span");
+            nm.className = "hof-name";
+            nm.textContent = r.nickname;
+            const wh = document.createElement("span");
+            wh.className = "hof-when";
+            wh.textContent = (r.for_date || "").slice(5).replace("-", "/");
+            const mn = document.createElement("span");
+            mn.className = "hof-money";
+            mn.textContent = (r.savings_won || 0).toLocaleString("ko-KR") + "원";
+            li.appendChild(rk); li.appendChild(nm); li.appendChild(wh); li.appendChild(mn);
+            list.appendChild(li);
+          });
+        }
+        if (foot) foot.textContent = "친구 모두의 통합 순위 · TOP 5";
+      }
+
+      async function refreshHof() {
+        const foot = document.getElementById("hofFoot");
+        if (foot) foot.textContent = "불러오는 중…";
+        const rows = await fetchHofTop(5);
+        _hofRows = rows;
+        renderHof(rows);
+      }
+
+      // 적립금이 신기록(현 TOP 최저 점수 초과)에 들면 닉네임 받아 등록
+      async function checkHallOfFame() {
+        if (!_supabase) return;
+        const cur = getSavings();
+        if (cur <= 0) return;
+        const last = getHofLastReg();
+        // 같은 날 이미 같거나 큰 금액으로 등록했으면 또 묻지 않음
+        if (last.date === todayKstISO() && last.amount >= cur) return;
+        // 현재 TOP 5 가져와 임계값 계산
+        const rows = await fetchHofTop(5);
+        let threshold = 0;
+        if (rows.length >= 5) {
+          // 5위 점수 초과해야 들어감
+          threshold = rows[rows.length - 1].savings_won;
+        } else {
+          // 5명 미만이면 무조건 들어감
+          threshold = -1;
+        }
+        if (cur <= threshold) return;
+        // 닉네임 입력 (선택된 아이 이름이 있으면 기본값으로 제안)
+        const defaultName = (typeof getSelectedKidName === "function" && getSelectedKidName()) || "이름 없음";
+        const nick = window.prompt(
+          "🏆 명예의 전당 신기록! (적립금 " + cur.toLocaleString("ko-KR") + "원)\n명예의 전당에 올릴 닉네임을 적어주세요:",
+          defaultName
+        );
+        if (nick === null) return; // 취소
+        const name = String(nick).trim().slice(0, 20);
+        if (!name) return;
+        try {
+          const ins = await _supabase.from(HOF_TABLE).insert({
+            nickname: name,
+            savings_won: cur,
+            for_date: todayKstISO(),
+          });
+          if (ins.error) {
+            alert("⚠ 명예의 전당 등록 실패: " + ins.error.message + "\n(Supabase에서 supabase/migrations/20260607150000_study_game_hall_of_fame.sql 을 실행했는지 확인해 주세요.)");
+            return;
+          }
+          setHofLastReg(todayKstISO(), cur);
+          await refreshHof();
+          alert("🎉 " + name + " 님, 명예의 전당에 올랐어요!");
+        } catch (e) {
+          alert("⚠ 명예의 전당 등록 실패: " + (e && e.message ? e.message : e));
+        }
+      }
+
       // 게임별 최고 수익(원) 저장 (아이별 네임스페이스)
       const ARCADE_BEST_KEY = "study_game_game_best_v1";
       function getGameBests() {
@@ -8470,7 +8663,7 @@
       const _unitsEditBtn = document.getElementById("unitsEditToggle");
       if (_unitsEditBtn) _unitsEditBtn.addEventListener("click", toggleUnitsEditMode);
 
-      // 📖 단어 뜻 맞히기 4단계 카드 클릭
+      // 📖 단어 뜻 맞히기 4단계 카드 클릭 (잠금 없음, 적립금만 30분 쿨다운)
       document.querySelectorAll("#vstageGrid .vstage-card").forEach((btn) => {
         btn.addEventListener("click", () => {
           const stage = parseInt(btn.dataset.stage, 10) || 1;
@@ -8480,18 +8673,16 @@
             return;
           }
           if (stage === 1) {
-            // 1단계: 오늘 외울 단어 보기 (제한·돈 없음)
             openStudyListOverlay("vocab");
             return;
           }
-          // 2·3·4단계: 단원·단계별 제한 확인 → 시작 (시작 시 1회 기록)
-          const st = stageLimitState(stage);
-          if (st.locked) {
-            alert("⏳ 이 단계는 잠시 쉬는 시간이에요!\n" + fmtRemainMin(st.until - Date.now()) + " 뒤에 다시 풀 수 있어요.\n(30분 안에 2번까지 가능 · 단원·단계마다 따로예요)");
-            return;
+          // 적립금 쿨다운 안내 (시작은 가능)
+          const pc = payCooldownState(stage);
+          if (!pc.payable) {
+            const go = confirm("⏳ 이 단계의 적립금은 " + fmtRemainMin(pc.until - Date.now()) + " 뒤에 다시 받을 수 있어요.\n\n지금 풀면 돈은 안 들어와요. 그래도 풀어볼까요? (재시험·점수기록은 됨)");
+            if (!go) return;
           }
-          recordStagePlay(stage);
-          startMode("vocab", { level: stage - 1 }); // 2단계→level1, 3→2, 4→3
+          startMode("vocab", { level: stage - 1, payable: pc.payable });
         });
       });
       $("btnBack").addEventListener("click", () => {
