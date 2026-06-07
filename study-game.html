@@ -2122,18 +2122,25 @@
         font-family: inherit;
       }
       .study-overlay .close-btn:hover { background: #e2e8f0; }
+      .study-overlay .close-row > div:last-child {
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+      }
       .study-overlay .btn-fill-meanings {
         border: none;
         background: linear-gradient(135deg, #c4b5fd, #6366f1);
         color: #fff;
         font-weight: 800;
         font-size: 0.78rem;
-        padding: 7px 11px;
+        padding: 8px 12px;
         border-radius: 10px;
         cursor: pointer;
-        margin-right: 6px;
+        white-space: nowrap;
+        line-height: 1.1;
       }
       .study-overlay .btn-fill-meanings:disabled { opacity: 0.7; cursor: wait; }
+      .study-overlay .btn-hideall { white-space: nowrap; }
       .study-overlay .study-item .sm:empty::before {
         content: "(뜻 없음 — 자동 채우기 가능)";
         color: #b91c1c;
@@ -4824,6 +4831,31 @@
           renderMenuDataInfo();
           renderUnitsRow();
           renderMenuCardsState();
+
+          // 🧒 단어 등록 직후, Gemini가 어려운 뜻들에 '아이용 쉬운 풀이'를 백그라운드로 자동 채움
+          (async () => {
+            try {
+              const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+              if (!apiKey) return;
+              const targets = newUnit.vocab.filter((v) => v.meaning && !v.kid_explain);
+              if (!targets.length) return;
+              const merged = {};
+              for (let i = 0; i < targets.length; i += 40) {
+                Object.assign(merged, await fetchKidExplainsFromGemini(targets.slice(i, i + 40)));
+              }
+              if (!Object.keys(merged).length) return;
+              // 저장 시점에 다른 변경과 충돌하지 않도록 최신 단원을 읽어 머지
+              const list = getUnits();
+              const idx = list.findIndex((u) => u.id === newUnit.id);
+              if (idx < 0) return;
+              list[idx].vocab = (list[idx].vocab || []).map((v) =>
+                merged[v.word] && !v.kid_explain ? { ...v, kid_explain: merged[v.word] } : v
+              );
+              saveUnits(list);
+              if (getActiveUnitId() === newUnit.id) { applyActiveUnit(); renderMenuCardsState(); }
+            } catch (e) { console.warn("[kid_explain auto]", e); }
+          })();
+
           return { ok: true, unit: newUnit, count: pairs.length, skipped: items.length - pairs.length };
         }
 
@@ -5570,17 +5602,30 @@
         state.spellWrongs = [];
         state.spellRights = [];
         if (mode === "vocab") {
-          // 비활성(아는 단어) 제외
+          // 한 퀴즈 안에서 같은 단어가 두 번 안 나오게 정규화: 단어(word) 기준 첫 등장만 남김
+          const uniqByWord = (arr) => {
+            const seen = new Set();
+            const out = [];
+            arr.forEach((v) => {
+              if (!v || typeof v.word !== "string") return;
+              const k = v.word.trim().toLowerCase();
+              if (!k || seen.has(k)) return;
+              seen.add(k);
+              out.push(v);
+            });
+            return out;
+          };
+          // 비활성(아는 단어) 제외 + 중복 제거
           const disabled = new Set(u.disabledWords || []);
-          let basePool = VOCAB.filter((v) => !disabled.has(v.word));
-          if (basePool.length === 0) basePool = VOCAB; // 모두 제외된 경우 안전장치
+          let basePool = uniqByWord(VOCAB.filter((v) => !disabled.has(v.word)));
+          if (basePool.length === 0) basePool = uniqByWord(VOCAB); // 모두 제외된 경우 안전장치
           if (opts.retake && Array.isArray(opts.wrongWords)) {
-            // 🔁 재시험: 틀린 단어 전부 + 정확히 5개 추가 (틀린 단어는 반드시 포함)
+            // 🔁 재시험: 틀린 단어 전부 + 정확히 5개 추가 (틀린 단어는 반드시 포함, 모두 중복 없이)
             const wrongSet = new Set(opts.wrongWords);
-            const wrongItems = VOCAB.filter((v) => wrongSet.has(v.word));
+            const wrongItems = uniqByWord(VOCAB.filter((v) => wrongSet.has(v.word)));
             const extrasPool = basePool.filter((v) => !wrongSet.has(v.word));
             const extras = pickN(extrasPool, Math.min(5, extrasPool.length));
-            const merged = wrongItems.concat(extras);
+            const merged = uniqByWord(wrongItems.concat(extras));
             state.questions = shuffle(merged.length ? merged : basePool);
           } else {
             let pool = basePool;
@@ -5595,7 +5640,7 @@
               const filtered = basePool.filter((v) => words.has(v.word));
               if (filtered.length > 0) pool = filtered;
             }
-            // 아는 단어 제외 후 남은 전체 단어를 모두 퀴즈로 출제 (10개 제한 없음)
+            // 풀에서 모두 출제 (이미 단어 중복 제거됨)
             const count = Math.max(1, pool.length);
             state.questions = pickN(pool, count);
           }
