@@ -11236,6 +11236,76 @@ ${folderBtn}
           alert("복사에 실패했습니다. 다시 시도해주세요.");
         }
       }
+
+      // 작가페이지 「내용전체복사」와 동일한 날짜·시간 라벨 포맷
+      function formatCopyDayLabelAdmin(dateText) {
+        const s = String(dateText || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s || "-";
+        return `${Number(s.slice(8, 10))}일`;
+      }
+      function formatCopyTimeLabelAdmin(timeText) {
+        const s = String(timeText || "").trim();
+        const m = s.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return s || "-";
+        const h = Number(m[1]);
+        const min = m[2];
+        if (min === "00") return `${h}시`;
+        if (min === "30") return `${h}시반`;
+        return `${h}시 ${Number(min)}분`;
+      }
+      /** 달력 일정 상세에서 특정 작가의 일정을, 작가페이지 「내용전체복사」와 동일한
+       *  여러 줄 형식으로 클립보드에 복사한다. 현재 화면에 표시 중인 일정(latestScheduleCopyRows)
+       *  중 그 작가 것만 추린다(= 보고 있는 날짜/필터 기준). */
+      async function copyWriterScheduleListAdmin(writerName) {
+        const target = String(writerName || "").trim() || "작가미정";
+        const rows = (Array.isArray(latestScheduleCopyRows) ? latestScheduleCopyRows : []).filter((item) => {
+          const w = String(item?.name || "작가미정").trim() || "작가미정";
+          return w === target;
+        });
+        if (!rows.length) {
+          alert(`${target}작가의 복사할 일정이 없습니다.`);
+          return;
+        }
+        const memoCtx = {
+          customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+          customers: readStorageArray(STORAGE_CUSTOMERS)
+        };
+        const lines = [`[${target}작가 일정]`, `총 ${rows.length}건`];
+        rows.forEach((item, idx) => {
+          lines.push(`${idx + 1}. ${formatCopyDayLabelAdmin(item.date)} ${formatCopyTimeLabelAdmin(item.time)}`);
+          lines.push(`업체: ${item.company || "-"}`);
+          lines.push(`업체연락처: ${getCompanyPhoneForDisplay(item.company, item) || "-"}`);
+          lines.push(`장소: ${item.place || "-"}`);
+          lines.push(`공동현관 비번: ${item.jointCode || "-"}`);
+          lines.push(`세대 비번: ${item.doorCode || "-"}`);
+          lines.push(`평수: ${item.pyeong || "-"}`);
+          lines.push(`촬영구성: ${item.composition || "-"}`);
+          lines.push(`메모: ${item.memo || "-"}`);
+          let dm = "";
+          try { dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCtx); } catch (_) {}
+          if (dm) lines.push(`기본요청사항: ${dm}`);
+          if (idx < rows.length - 1) lines.push("");
+        });
+        const text = lines.join("\n");
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+          }
+          alert(`${target}작가 일정 ${rows.length}건이 복사되었습니다.`);
+        } catch (error) {
+          alert("복사에 실패했습니다. 다시 시도해주세요.");
+        }
+      }
       /** 짧은 앞 토큰(금곡 등) 제거 후 마지막 단지명만, 또는 sk + 북한산시티처럼 영문+한글 합침 */
       function primaryAptNameTokenForSummary(prefix) {
         const t = String(prefix || "")
@@ -16130,7 +16200,7 @@ ${folderBtn}
               .map(
                 ([writer, schedules]) => `
                   <article class="writer-row">
-                    <div class="writer-name">${escapeHtml(writer)}작가</div>
+                    <div class="writer-name">${escapeHtml(writer)}작가<button type="button" class="btn-sm" data-action="copyWriterSchedule" data-writer="${escapeHtml(writer)}" title="이 작가 일정을 작가페이지 형식으로 복사" style="margin-left:8px;padding:1px 8px;font-size:0.72rem;font-weight:600;vertical-align:middle;">📋 스케줄 복사</button></div>
                     <div class="writer-places">
                       ${schedules
                         .slice()
@@ -19774,6 +19844,12 @@ ${folderBtn}
           : fallbackIndex;
         const index = resolvedIndex;
         const item = Number.isNaN(index) || index < 0 ? null : data[index];
+
+        // 작가 이름 옆 「스케줄 복사」 — index 불필요(작가명 기준).
+        if (action === "copyWriterSchedule") {
+          void copyWriterScheduleListAdmin(button.dataset.writer || "");
+          return;
+        }
 
         if (action === "quickComposition" && !Number.isNaN(index) && item) {
           item.composition = item.composition === "사진영상 둘다" ? "사진만" : "사진영상 둘다";
