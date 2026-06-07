@@ -2122,6 +2122,24 @@
         font-family: inherit;
       }
       .study-overlay .close-btn:hover { background: #e2e8f0; }
+      .study-overlay .btn-fill-meanings {
+        border: none;
+        background: linear-gradient(135deg, #c4b5fd, #6366f1);
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.78rem;
+        padding: 7px 11px;
+        border-radius: 10px;
+        cursor: pointer;
+        margin-right: 6px;
+      }
+      .study-overlay .btn-fill-meanings:disabled { opacity: 0.7; cursor: wait; }
+      .study-overlay .study-item .sm:empty::before {
+        content: "(뜻 없음 — 자동 채우기 가능)";
+        color: #b91c1c;
+        font-style: italic;
+        font-weight: 700;
+      }
       /* ---- 도움요청 챗 ---- */
       .help-overlay .sheet.help-sheet {
         max-width: 560px;
@@ -5650,29 +5668,44 @@
 
           if (isPerfect) {
             reviewRow.insertAdjacentHTML("beforeend",
-              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 통과!</b><br><small>메뉴에서 다른 단계도 풀어보세요 👍</small></div>');
+              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 통과!</b></div>');
+            // ▶ 다음 단계 버튼 (4단계까지 있으면)
+            if (stageNo < 4) {
+              const nextStageNo = stageNo + 1;
+              const nextLevel = curLevel + 1;
+              const nextName = { 3: "영어 → 뜻", 4: "스펠링 빈칸" }[nextStageNo] || "";
+              const btnNext = document.createElement("button");
+              btnNext.className = "btn btn-primary";
+              btnNext.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#6366f1,#4f46e5);box-shadow:0 5px 14px rgba(79,70,229,0.4)";
+              btnNext.textContent = "▶ " + nextStageNo + "단계 (" + nextName + ")로!";
+              btnNext.addEventListener("click", () => startMode("vocab", { level: nextLevel }));
+              reviewRow.appendChild(btnNext);
+            } else {
+              reviewRow.insertAdjacentHTML("beforeend",
+                '<div class="reward-banner" style="background:linear-gradient(135deg,#fde68a,#fbbf24);color:#7c2d12">🏆 4단계까지 모두 통과! 정말 잘했어요!</div>');
+            }
             setTimeout(() => playWin(), 200);
             setTimeout(() => playWin(), 600);
           } else {
-            // 100점 아님 → 재시험 (틀린 단어 전부 + 50% 추가, 돈 없음)
+            // 100점 아님 → 재시험 (틀린 단어 전부 + 5개 추가, 돈 없음)
             reviewRow.insertAdjacentHTML("beforeend",
               '<div class="reward-banner" style="background:#fef3c7;color:#78350f;box-shadow:none">' +
               '😣 아쉽! 100점이 아니에요 (' + state.score + ' / ' + perfectMax + ').<br>' +
-              '틀린 단어 <b>' + wrongThisAttempt.length + '개</b> + 추가 문제로 <b>재시험</b>해요.<br>' +
+              '틀린 단어 <b>' + wrongThisAttempt.length + '개</b> + 추가 5문제로 <b>재시험</b>해요.<br>' +
               '<small>재시험은 돈이 오르지 않아요. 100점을 맞아야 통과예요!</small></div>');
             const btnRetake = document.createElement("button");
             btnRetake.className = "btn btn-primary";
             btnRetake.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 5px 14px rgba(239,68,68,0.4)";
             btnRetake.textContent = "🔁 " + stageNo + "단계 재시험 (틀린 단어 다시!)";
-            // 재시험은 새 풀이로 치지 않음(제한 차감 없음) — startMode에 retake로만 전달
             btnRetake.addEventListener("click", () => startMode("vocab", { level: curLevel, retake: true, wrongWords: wrongThisAttempt }));
             reviewRow.appendChild(btnRetake);
           }
         }
-        // 단어 뜻 맞히기는 화면 아래 "다시 하기"를 숨김 (재시험/다음단계 버튼으로만 진행)
-        var _pa = $("btnPlayAgain");
-        var _paRow = _pa ? _pa.parentNode : null;
-        if (_paRow) _paRow.style.display = state.mode === "vocab" ? "none" : "";
+        // 단어 뜻 맞히기에서는 화면 아래 "🔁 다시 하기"만 숨기고 "🏠 메뉴로(나가기)"는 그대로 보이게
+        var _btnPa = $("btnPlayAgain");
+        if (_btnPa) _btnPa.style.display = state.mode === "vocab" ? "none" : "";
+        var _btnGo = $("btnGoMenu");
+        if (_btnGo) _btnGo.style.display = ""; // 항상 보이게
 
         // Spell: 세션을 localStorage에 병합 저장 (이후 오버레이에서 ○/× 유지)
         if (state.mode === "spell") {
@@ -5767,6 +5800,43 @@
         btnHideAll.className = "btn-hideall";
         btnHideAll.type = "button";
         rightControls.appendChild(btnHideAll);
+
+        // 🤖 비어있는 한글 뜻을 Gemini로 자동 채우기 (이미 만든 단원에도 적용)
+        let btnFillMeanings = null;
+        if (isVocab) {
+          const emptyWords = (VOCAB || []).filter((v) => !v.meaning || !String(v.meaning).trim()).map((v) => v.word);
+          if (emptyWords.length) {
+            btnFillMeanings = document.createElement("button");
+            btnFillMeanings.type = "button";
+            btnFillMeanings.className = "btn-fill-meanings";
+            btnFillMeanings.textContent = "🤖 뜻 자동 채우기 (" + emptyWords.length + ")";
+            btnFillMeanings.title = "뜻이 비어있는 단어들을 Gemini로 자동으로 채워요 (API 키 필요)";
+            btnFillMeanings.addEventListener("click", async () => {
+              const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+              if (!apiKey) { alert("⚠️ Gemini API 키가 없어요. 메뉴 ‘+ 새 단어장 만들기’를 열어 키를 먼저 입력해 주세요."); return; }
+              btnFillMeanings.disabled = true;
+              btnFillMeanings.textContent = "🤖 채우는 중…";
+              try {
+                const merged = {};
+                for (let i = 0; i < emptyWords.length; i += 50) {
+                  Object.assign(merged, await fetchKoreanMeaningsFromGemini(emptyWords.slice(i, i + 50)));
+                }
+                const u2 = getActiveUnit();
+                const newVocab = (u2.vocab || []).map((v) => (merged[v.word] && (!v.meaning || !String(v.meaning).trim())) ? { ...v, meaning: merged[v.word] } : v);
+                saveActiveUnitField("vocab", newVocab);
+                applyActiveUnit();
+                closeStudyOverlay();
+                alert("✅ " + Object.keys(merged).length + "개 단어의 뜻을 채웠어요!");
+                openStudyListOverlay("vocab");
+              } catch (e) {
+                alert("⚠️ 실패: " + (e && e.message ? e.message : e));
+                btnFillMeanings.disabled = false;
+                btnFillMeanings.textContent = "🤖 뜻 자동 채우기 (" + emptyWords.length + ")";
+              }
+            });
+            rightControls.appendChild(btnFillMeanings);
+          }
+        }
 
         const closeBtn = document.createElement("button");
         closeBtn.className = "close-btn";
