@@ -3918,6 +3918,77 @@
         throw lastErr || new Error("Gemini 호출 실패");
       }
 
+      // ---- 전역: 영어 단어 → 한국어 뜻 (자동 채우기) ----
+      async function fetchKoreanMeaningsFromGemini(words) {
+        if (!Array.isArray(words) || !words.length) return {};
+        const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요. 위 🔑 칸에 키를 입력해 주세요.");
+        const prompt =
+          "다음 영어 단어들의 한국어 뜻을 알려줘. 초등/중등 수준의 가장 흔한 핵심 뜻 1~2개만 짧게(쉼표로 구분, 최대 18자).\n" +
+          "응답은 반드시 JSON만 출력. 형식: {\"items\":[{\"word\":\"alter\",\"meaning\":\"바꾸다, 변경하다\"}, ...]} 추가 텍스트 없이.\n" +
+          "단어 목록:\n" + words.map((w) => "- " + w).join("\n");
+        const body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+        };
+        const data = await callGeminiAPI(apiKey, body);
+        let raw = "";
+        try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+        if (!raw) throw new Error("Gemini 응답이 비어 있어요. 잠시 후 다시 시도해 주세요.");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); }
+        catch (_) {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+        }
+        if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        const out = {};
+        parsed.items.forEach((it) => {
+          if (!it || typeof it !== "object") return;
+          const w = String(it.word || "").trim().toLowerCase();
+          const k = String(it.meaning || "").trim();
+          if (w && k) out[w] = k;
+        });
+        return out;
+      }
+
+      // 🧒 한글 뜻이 어려울 때 아이가 이해할 쉬운 풀이 생성 (예: "직유" → "‘처럼/같이’로 비교하는 말")
+      async function fetchKidExplainsFromGemini(pairs) {
+        if (!Array.isArray(pairs) || !pairs.length) return {};
+        const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
+        const prompt =
+          "아래 한국어 뜻 중 초등학생이 이해하기 어려운 단어(예: 직유, 은유, 동의어, 비유 등)는 더 쉬운 말로 풀어서 알려줘.\n" +
+          "이미 쉬운 뜻(예: '사과', '바꾸다')이면 explain 을 빈 문자열로 줘.\n" +
+          "explain 은 30자 이내로 아주 짧게, 이모지/예시 1개 정도 OK.\n" +
+          "응답은 반드시 JSON만: {\"items\":[{\"word\":\"simile\",\"explain\":\"‘처럼·같이’로 비교하는 말 (예: 별처럼 빛나다)\"}, ...]}.\n" +
+          "단어 목록:\n" +
+          pairs.map((p) => "- " + p.word + " : " + (p.meaning || "")).join("\n");
+        const body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
+        };
+        const data = await callGeminiAPI(apiKey, body);
+        let raw = "";
+        try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+        if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); }
+        catch (_) {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+        }
+        if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        const out = {};
+        parsed.items.forEach((it) => {
+          if (!it || typeof it !== "object") return;
+          const w = String(it.word || "").trim().toLowerCase();
+          const ex = String(it.explain || "").trim();
+          if (w && ex) out[w] = ex;
+        });
+        return out;
+      }
+
       const UNITS_KEY = "study_game_units_v2";
       const ACTIVE_UNIT_KEY = "study_game_active_unit_v2";
       const DEFAULT_PERSIST_KEY = "study_game_default_persist_v2";
@@ -5040,79 +5111,7 @@
         }
 
         // Gemini로 영어 단어 → 한국어 뜻 번역 (배치)
-        async function fetchKoreanMeaningsFromGemini(words) {
-          if (!Array.isArray(words) || !words.length) return {};
-          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
-          if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요. 위 🔑 칸에 키를 입력해 주세요.");
-          const prompt =
-            "다음 영어 단어들의 한국어 뜻을 알려줘. 초등/중등 수준의 가장 흔한 핵심 뜻 1~2개만 짧게(쉼표로 구분, 최대 18자).\n" +
-            "응답은 반드시 JSON만 출력. 형식: {\"items\":[{\"word\":\"alter\",\"meaning\":\"바꾸다, 변경하다\"}, ...]} 추가 텍스트 없이.\n" +
-            "단어 목록:\n" + words.map((w) => "- " + w).join("\n");
-          const body = {
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
-          };
-          const data = await callGeminiAPI(apiKey, body);
-          let raw = "";
-          try {
-            raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || "";
-          } catch (_) {}
-          if (!raw) throw new Error("Gemini 응답이 비어 있어요. 잠시 후 다시 시도해 주세요.");
-          let parsed = null;
-          try { parsed = JSON.parse(raw); }
-          catch (_) {
-            // 응답에 코드펜스 등이 섞이는 경우 정리 후 재시도
-            const cleaned = String(raw).replace(/```json|```/g, "").trim();
-            try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
-          }
-          if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
-          const out = {};
-          parsed.items.forEach((it) => {
-            if (!it || typeof it !== "object") return;
-            const w = String(it.word || "").trim().toLowerCase();
-            const k = String(it.meaning || "").trim();
-            if (w && k) out[w] = k;
-          });
-          return out;
-        }
-
-        // 🧒 한글 뜻이 어려울 때 아이가 이해할 쉬운 풀이 생성 (예: "직유" → "‘처럼/같이’로 비교하는 말")
-        async function fetchKidExplainsFromGemini(pairs) {
-          // pairs: [{word:"simile", meaning:"직유"}]
-          if (!Array.isArray(pairs) || !pairs.length) return {};
-          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
-          if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
-          const prompt =
-            "아래 한국어 뜻 중 초등학생이 이해하기 어려운 단어(예: 직유, 은유, 동의어, 비유 등)는 더 쉬운 말로 풀어서 알려줘.\n" +
-            "이미 쉬운 뜻(예: '사과', '바꾸다')이면 explain 을 빈 문자열로 줘.\n" +
-            "explain 은 30자 이내로 아주 짧게, 이모지/예시 1개 정도 OK.\n" +
-            "응답은 반드시 JSON만: {\"items\":[{\"word\":\"simile\",\"explain\":\"‘처럼·같이’로 비교하는 말 (예: 별처럼 빛나다)\"}, ...]}.\n" +
-            "단어 목록:\n" +
-            pairs.map((p) => "- " + p.word + " : " + (p.meaning || "")).join("\n");
-          const body = {
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
-          };
-          const data = await callGeminiAPI(apiKey, body);
-          let raw = "";
-          try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
-          if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
-          let parsed = null;
-          try { parsed = JSON.parse(raw); }
-          catch (_) {
-            const cleaned = String(raw).replace(/```json|```/g, "").trim();
-            try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
-          }
-          if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
-          const out = {};
-          parsed.items.forEach((it) => {
-            if (!it || typeof it !== "object") return;
-            const w = String(it.word || "").trim().toLowerCase();
-            const ex = String(it.explain || "").trim();
-            if (w && ex) out[w] = ex;
-          });
-          return out;
-        }
+        // (fetchKoreanMeaningsFromGemini · fetchKidExplainsFromGemini 는 전역 스코프로 이동했어요)
 
         const taInput = $("vocabTextInput");
         const btnApplyText = $("btnApplyTextVocab");
