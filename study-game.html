@@ -2140,6 +2140,22 @@
         font-style: italic;
         font-weight: 700;
       }
+      /* 한글 뜻 아래에 붙는 쉬운 풀이 */
+      .sm .sm-explain {
+        display: block;
+        margin-top: 2px;
+        color: #b45309;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      .kid-explain {
+        margin-top: 6px;
+        color: #b45309;
+        font-size: 0.82rem;
+        font-weight: 700;
+        line-height: 1.3;
+      }
       /* ---- 도움요청 챗 ---- */
       .help-overlay .sheet.help-sheet {
         max-width: 560px;
@@ -5028,6 +5044,44 @@
           return out;
         }
 
+        // 🧒 한글 뜻이 어려울 때 아이가 이해할 쉬운 풀이 생성 (예: "직유" → "‘처럼/같이’로 비교하는 말")
+        async function fetchKidExplainsFromGemini(pairs) {
+          // pairs: [{word:"simile", meaning:"직유"}]
+          if (!Array.isArray(pairs) || !pairs.length) return {};
+          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+          if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
+          const prompt =
+            "아래 한국어 뜻 중 초등학생이 이해하기 어려운 단어(예: 직유, 은유, 동의어, 비유 등)는 더 쉬운 말로 풀어서 알려줘.\n" +
+            "이미 쉬운 뜻(예: '사과', '바꾸다')이면 explain 을 빈 문자열로 줘.\n" +
+            "explain 은 30자 이내로 아주 짧게, 이모지/예시 1개 정도 OK.\n" +
+            "응답은 반드시 JSON만: {\"items\":[{\"word\":\"simile\",\"explain\":\"‘처럼·같이’로 비교하는 말 (예: 별처럼 빛나다)\"}, ...]}.\n" +
+            "단어 목록:\n" +
+            pairs.map((p) => "- " + p.word + " : " + (p.meaning || "")).join("\n");
+          const body = {
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
+          };
+          const data = await callGeminiAPI(apiKey, body);
+          let raw = "";
+          try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+          if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
+          let parsed = null;
+          try { parsed = JSON.parse(raw); }
+          catch (_) {
+            const cleaned = String(raw).replace(/```json|```/g, "").trim();
+            try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+          }
+          if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+          const out = {};
+          parsed.items.forEach((it) => {
+            if (!it || typeof it !== "object") return;
+            const w = String(it.word || "").trim().toLowerCase();
+            const ex = String(it.explain || "").trim();
+            if (w && ex) out[w] = ex;
+          });
+          return out;
+        }
+
         const taInput = $("vocabTextInput");
         const btnApplyText = $("btnApplyTextVocab");
         const textPreview = $("vocabTextPreview");
@@ -5836,6 +5890,40 @@
             });
             rightControls.appendChild(btnFillMeanings);
           }
+          // 🧒 어려운 뜻에 쉬운 풀이 채우기 (kid_explain)
+          const needExplain = (VOCAB || []).filter((v) => v.meaning && (!v.kid_explain || !String(v.kid_explain).trim()));
+          if (needExplain.length) {
+            const btnFillExplain = document.createElement("button");
+            btnFillExplain.type = "button";
+            btnFillExplain.className = "btn-fill-meanings";
+            btnFillExplain.style.background = "linear-gradient(135deg,#fbbf24,#f59e0b)";
+            btnFillExplain.textContent = "🧒 쉬운 풀이 채우기 (" + needExplain.length + ")";
+            btnFillExplain.title = "한국어 뜻이 어려운 단어에 쉬운 풀이를 작게 더해줘요 (예: 직유 → ‘처럼·같이’로 비교하는 말)";
+            btnFillExplain.addEventListener("click", async () => {
+              const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+              if (!apiKey) { alert("⚠️ Gemini API 키가 없어요. 메뉴 ‘+ 새 단어장 만들기’를 열어 키를 먼저 입력해 주세요."); return; }
+              btnFillExplain.disabled = true;
+              btnFillExplain.textContent = "🧒 풀이 만드는 중…";
+              try {
+                const merged = {};
+                for (let i = 0; i < needExplain.length; i += 40) {
+                  Object.assign(merged, await fetchKidExplainsFromGemini(needExplain.slice(i, i + 40)));
+                }
+                const u3 = getActiveUnit();
+                const newVocab = (u3.vocab || []).map((v) => merged[v.word] ? { ...v, kid_explain: merged[v.word] } : v);
+                saveActiveUnitField("vocab", newVocab);
+                applyActiveUnit();
+                closeStudyOverlay();
+                alert("✅ " + Object.keys(merged).length + "개 단어에 쉬운 풀이를 더했어요!");
+                openStudyListOverlay("vocab");
+              } catch (e) {
+                alert("⚠️ 실패: " + (e && e.message ? e.message : e));
+                btnFillExplain.disabled = false;
+                btnFillExplain.textContent = "🧒 쉬운 풀이 채우기 (" + needExplain.length + ")";
+              }
+            });
+            rightControls.appendChild(btnFillExplain);
+          }
         }
 
         const closeBtn = document.createElement("button");
@@ -5852,7 +5940,7 @@
         list.className = "study-list";
 
         const items = isVocab
-          ? VOCAB.map((v) => ({ word: v.word, meaning: v.meaning }))
+          ? VOCAB.map((v) => ({ word: v.word, meaning: v.meaning, kid_explain: v.kid_explain || "" }))
           : SPELL.map((w) => ({ word: w, meaning: SPELL_MEANINGS[w] || "" }));
 
         // 단어 옆에 한글 뜻을 함께 보여줌 (기본값: 보이게)
@@ -5889,7 +5977,11 @@
 
           const sm = document.createElement("span");
           sm.className = "sm";
-          sm.textContent = it.meaning;
+          if (it.kid_explain) {
+            sm.innerHTML = escapeHtml(it.meaning) + '<small class="sm-explain">' + escapeHtml(it.kid_explain) + '</small>';
+          } else {
+            sm.textContent = it.meaning;
+          }
           sm.title = "탭하면 가리기/보이기";
           if (allHidden) sm.classList.add("is-hidden");
           sm.addEventListener("click", (e) => {
@@ -6087,9 +6179,9 @@
         let promptSmall, promptBigHtml, choices, correctVal, showSpeak;
 
         if (level === 1) {
-          // 1단계: 한글 뜻 → 영어 단어 고르기
+          // 2단계(level=1): 한글 뜻 → 영어 단어 고르기
           promptSmall = "🔤 이 뜻의 <b>영어 단어</b>는?";
-          promptBigHtml = escapeHtml(item.meaning);
+          promptBigHtml = escapeHtml(item.meaning) + (item.kid_explain ? '<div class="kid-explain">' + escapeHtml(item.kid_explain) + '</div>' : '');
           choices = shuffle(buildWordChoices(item, totalChoices).slice(0, totalChoices));
           correctVal = item.word;
           showSpeak = false;
@@ -6188,7 +6280,7 @@
           '<div class="prompt-small">✏️ 빈칸에 <b>맞는 글자</b>를 넣어요 <span class="lv-badge lv3">3단계</span></div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button></div>' +
           '</div>' +
-          '<div class="sp-hint" style="text-align:center;margin:4px 0 12px">뜻: ' + escapeHtml(item.meaning) + '</div>' +
+          '<div class="sp-hint" style="text-align:center;margin:4px 0 12px">뜻: ' + escapeHtml(item.meaning) + (item.kid_explain ? '<div class="kid-explain">' + escapeHtml(item.kid_explain) + '</div>' : '') + '</div>' +
           '<div class="spell-boxes" id="spellBoxes"></div>' +
           '<div class="spell-tiles" id="spellTiles"></div>' +
           '<div class="feedback" id="feedback"></div>' +
