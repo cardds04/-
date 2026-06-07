@@ -525,6 +525,25 @@
       .vstage-card.vs-4 { border-color: #f9a8d4; background: linear-gradient(135deg, #fff, #fdf2f8); }
       .vstage-card.is-locked { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.4); }
       .vstage-card.is-disabled { opacity: 0.5; cursor: not-allowed; }
+      .vstage-card.is-cleared {
+        background: linear-gradient(135deg, #fff, #ecfdf5);
+        border-color: #34d399;
+        box-shadow: 0 6px 16px rgba(52, 211, 153, 0.28);
+      }
+      .vs-cleared {
+        position: absolute;
+        top: -8px;
+        right: -6px;
+        background: linear-gradient(135deg, #34d399, #059669);
+        color: #fff;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 900;
+        box-shadow: 0 3px 8px rgba(5, 150, 105, 0.45);
+      }
+      .vstage-card .vs-chip.done { background: #d1fae5; color: #065f46; }
+      .vstage-card .vs-chip.cooldown { background: #fef3c7; color: #92400e; }
       .games-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -4049,6 +4068,7 @@
           vocabPlayLog: Array.isArray(persisted.vocabPlayLog) ? persisted.vocabPlayLog : [],
           vocabStagePlays: (persisted.vocabStagePlays && typeof persisted.vocabStagePlays === "object") ? persisted.vocabStagePlays : {},
           vocabStagePayAt: (persisted.vocabStagePayAt && typeof persisted.vocabStagePayAt === "object") ? persisted.vocabStagePayAt : {},
+          vocabStageCleared: (persisted.vocabStageCleared && typeof persisted.vocabStageCleared === "object") ? persisted.vocabStageCleared : {},
         };
       }
 
@@ -4077,6 +4097,7 @@
         found.vocabPlayLog = Array.isArray(found.vocabPlayLog) ? found.vocabPlayLog : [];
         found.vocabStagePlays = (found.vocabStagePlays && typeof found.vocabStagePlays === "object") ? found.vocabStagePlays : {};
         found.vocabStagePayAt = (found.vocabStagePayAt && typeof found.vocabStagePayAt === "object") ? found.vocabStagePayAt : {};
+        found.vocabStageCleared = (found.vocabStageCleared && typeof found.vocabStageCleared === "object") ? found.vocabStageCleared : {};
         return found;
       }
 
@@ -5436,11 +5457,26 @@
           }
         }
 
-        // 📖 단어 뜻 맞히기 4단계 카드 (잠금 없음, 적립금 30분 쿨다운만)
+        // 📖 단어 뜻 맞히기 4단계 카드 (잠금 없음, 적립금 30분 쿨다운만, 클리어 뱃지)
         for (let stage = 1; stage <= 4; stage++) {
           const card = document.getElementById("vstage-" + stage);
           if (!card) continue;
           const chip = document.getElementById("vschip-" + stage);
+          // ✅ 클리어 뱃지 (모든 단계에서, 카드 우측 상단)
+          let clearedBadge = card.querySelector(".vs-cleared");
+          const cleared = stage > 1 && isStageCleared(stage);
+          if (cleared) {
+            if (!clearedBadge) {
+              clearedBadge = document.createElement("span");
+              clearedBadge.className = "vs-cleared";
+              clearedBadge.textContent = "✅ 클리어!";
+              card.appendChild(clearedBadge);
+            }
+            card.classList.add("is-cleared");
+          } else {
+            if (clearedBadge) clearedBadge.remove();
+            card.classList.remove("is-cleared");
+          }
           if (!hasVocab) {
             card.classList.add("is-disabled");
             card.classList.remove("is-locked");
@@ -5454,8 +5490,11 @@
           }
           const pc = payCooldownState(stage);
           if (chip) {
-            if (pc.payable) {
-              chip.textContent = "💰 적립금 가능!";
+            if (cleared) {
+              chip.textContent = "✅ 통과! 다시 풀어보기";
+              chip.className = "vs-chip done";
+            } else if (pc.payable) {
+              chip.textContent = "💰 클리어시 적립금!";
               chip.className = "vs-chip ready";
             } else {
               chip.textContent = "⏳ 적립금 " + fmtRemainMin(pc.until - Date.now()) + " 뒤";
@@ -5499,6 +5538,18 @@
       function fmtRemainMin(ms) {
         const m = Math.max(0, Math.ceil(ms / 60000));
         return m + "분";
+      }
+      // 단원·단계별 클리어 기록 (단계 100점 통과 시 영구 표시)
+      function isStageCleared(stage) {
+        const u = getActiveUnit();
+        const o = u.vocabStageCleared || {};
+        return !!o[stage];
+      }
+      function recordStageCleared(stage) {
+        const u = getActiveUnit();
+        const o = Object.assign({}, u.vocabStageCleared || {});
+        o[stage] = { at: Date.now() };
+        saveActiveUnitField("vocabStageCleared", o);
       }
 
       /* ---------- 단어 뜻 맞히기 시험 기록 (시간 잠금 없이 횟수만 기록) ---------- */
@@ -5668,11 +5719,11 @@
           $("progressChip").textContent = (state.idx + 1) + " / " + total;
         }
         $("scoreChip").textContent = "⭐ " + state.score;
-        // 단어 뜻 맞히기일 때는 🔥콤보 자리를 💰적립금 자리로 사용 (이번 판 + 전체)
+        // 단어 뜻 맞히기일 때는 🔥콤보 자리를 💰이번 판 금액 자리로 사용 (실적립은 클리어 시)
         if (state.mode === "vocab") {
           const earned = state.vocabEarned || 0;
           const sign = earned >= 0 ? "+" : "";
-          $("streakChip").textContent = "💰 " + sign + earned + "원 / 총 " + getSavings() + "원";
+          $("streakChip").textContent = "💰 " + sign + earned + "원";
         } else {
           $("streakChip").textContent = "🔥 " + state.streak;
         }
@@ -5765,8 +5816,20 @@
           const isPerfect = wrongThisAttempt.length === 0 && state.score >= perfectMax;
 
           if (isPerfect) {
+            // 💰 100점 클리어 → 이번 판에서 모은 돈을 실적립 (재시험·돈없음 판이면 0)
+            const willDeposit = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
+            if (willDeposit > 0) {
+              addSavings(willDeposit);
+              recordStagePayNow(stageNo); // 적립금 쿨다운 시작
+            }
+            // ✅ 클리어 영구 기록 (단원·단계)
+            recordStageCleared(stageNo);
+            // 안내 배너 (실적립 안내 포함)
+            const depositLine = willDeposit > 0
+              ? '<br>💰 적립금 <b>+' + willDeposit + '원</b> 추가 완료! (총 ' + getSavings() + '원)'
+              : (state.vocabRetake ? '<br><small>이번 판은 재시험이라 적립금 없이 통과 기록만 남았어요.</small>' : '');
             reviewRow.insertAdjacentHTML("beforeend",
-              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 통과!</b></div>');
+              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 클리어!</b>' + depositLine + '</div>');
             // ▶ 다음 단계 버튼 (4단계까지 있으면)
             if (stageNo < 4) {
               const nextStageNo = stageNo + 1;
@@ -5786,11 +5849,13 @@
             setTimeout(() => playWin(), 600);
           } else {
             // 100점 아님 → 재시험 (틀린 단어 전부 + 5개 추가, 돈 없음)
+            const pendingAmt = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
             reviewRow.insertAdjacentHTML("beforeend",
               '<div class="reward-banner" style="background:#fef3c7;color:#78350f;box-shadow:none">' +
               '😣 아쉽! 100점이 아니에요 (' + state.score + ' / ' + perfectMax + ').<br>' +
+              (pendingAmt > 0 ? '❌ <b>적립 실패</b>: 이번 판 ' + pendingAmt + '원은 적립되지 않았어요.<br>' : '') +
               '틀린 단어 <b>' + wrongThisAttempt.length + '개</b> + 추가 5문제로 <b>재시험</b>해요.<br>' +
-              '<small>재시험은 돈이 오르지 않아요. 100점을 맞아야 통과예요!</small></div>');
+              '<small>100점을 맞아야 단계 클리어 + 적립금이 들어와요!</small></div>');
             const btnRetake = document.createElement("button");
             btnRetake.className = "btn btn-primary";
             btnRetake.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 5px 14px rgba(239,68,68,0.4)";
@@ -6385,10 +6450,10 @@
           // 💰 맞으면 +10, 틀리면 -10 (재시험이면 돈 없음)
           const noMoney = !!state.vocabNoMoney;
           const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
-          if (!noMoney) { addSavings(pay); state.vocabEarned = (state.vocabEarned || 0) + pay; }
+          if (!noMoney) { state.vocabEarned = (state.vocabEarned || 0) + pay; }
           const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
-          // 이 시점은 이미 addSavings(pay) 반영된 직후 → 그대로 보여줌
-          const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 · 전체 적립금 ' + getSavings() + '원</div>');
+          // 실적립은 클리어 시점에 한꺼번에. 화면엔 "이번 판 누적 + 클리어 시 적립예정"만 표시.
+          const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 (단계 클리어해야 실적립)</div>');
           tileEls.forEach((t) => (t.disabled = true));
           if (isCorrect) {
             state.score += 1; state.streak += 1; state.sessionRights.push(word);
@@ -6420,8 +6485,7 @@
         const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
         if (!noMoney) { addSavings(pay); state.vocabEarned = (state.vocabEarned || 0) + pay; }
         const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
-        // 이 시점은 이미 addSavings(pay) 반영된 직후
-        const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 · 전체 적립금 ' + getSavings() + '원</div>');
+        const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned||0) + '원 (단계 클리어해야 실적립)</div>');
         if (isCorrect) {
           btn.classList.add("correct");
           state.score += 1;
@@ -8908,7 +8972,17 @@
           startMode("vocab", { level: stage - 1, payable: pc.payable });
         });
       });
+      // 단어 뜻 맞히기 중간에 나가려는 경우: 적립 실패 안내 + 확인
+      function confirmLeaveVocab() {
+        if (state.mode !== "vocab") return true;
+        const pending = state.vocabNoMoney ? 0 : Math.max(0, state.vocabEarned || 0);
+        const msg = pending > 0
+          ? "❌ 단계 클리어 전 나가면 이번 판 " + pending + "원은 적립되지 않아요.\n그래도 나갈까요?"
+          : "지금 나가면 이번 단계는 클리어로 인정되지 않아요. 나갈까요?";
+        return confirm(msg);
+      }
       $("btnBack").addEventListener("click", () => {
+        if (!confirmLeaveVocab()) return;
         try { if (typeof stopActiveRecog === "function") stopActiveRecog(); } catch (e) {}
         try { closeStudyOverlay(); } catch (e) {}
         try { const ov = document.querySelector(".help-overlay"); if (ov) ov.remove(); } catch (e) {}
