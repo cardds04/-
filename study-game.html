@@ -6346,7 +6346,12 @@
           btn.addEventListener("click", () => pickVocab(btn, val, correctVal, item));
           choicesEl.appendChild(btn);
         });
-        if (showSpeak) { const sb = $("btnSay"); if (sb) sb.addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget })); }
+        if (showSpeak) {
+          const sb = $("btnSay");
+          if (sb) sb.addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
+          // 🔊 화면에 단어가 뜨자마자 자동으로 발음 재생 (조금 늦춰 음성엔진이 준비된 뒤)
+          setTimeout(() => { try { speak(item.word, { btn: sb }); } catch (e) {} }, 350);
+        }
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
 
@@ -6400,6 +6405,9 @@
         const tilesEl = $("spellTiles");
         const slots = [];
         let resolved = false;
+
+        // 🔊 4단계 — 화면에 단어가 뜨면 자동으로 발음 들려주기 (글자 힌트)
+        setTimeout(() => { try { speak(word); } catch (e) {} }, 350);
 
         chars.forEach((c, i) => {
           const box = document.createElement("div");
