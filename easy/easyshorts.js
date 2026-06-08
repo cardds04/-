@@ -1614,11 +1614,17 @@
         const kind = s.lockedMedia.kind || "image";
         try {
           const b = await (await fetch(s.lockedMedia.url, { cache: "force-cache" })).blob();
-          fills[s.id] = { kind, name: "", dur: s.dur || 0, url: URL.createObjectURL(b), _file: b, _locked: true };
+          const url = URL.createObjectURL(b);
+          // ⚠ fill.dur 은 '원본 영상 전체 길이'여야 함(seek 상한). slot.dur(타임라인 길이)을 쓰면
+          //   컷팅으로 만든 고정 컷(in>0)에서 seek 가 slot.dur 에 캡돼 엉뚱한 프레임이 나온다.
+          let realDur = s.dur || 0;
+          if (kind === "video") { try { const md = await mediaDuration(url, true); if (md > 0) realDur = md; } catch (_) {} }
+          fills[s.id] = { kind, name: "", dur: realDur, url, _file: b, _locked: true };
           try { saveFillBlob(s.id, b); } catch (_) {}   // 세션 복원용
-
         } catch (_) {
-          fills[s.id] = { kind, name: "", dur: s.dur || 0, url: s.lockedMedia.url, _locked: true };
+          let realDur = s.dur || 0;
+          if (kind === "video") { try { const md = await mediaDuration(s.lockedMedia.url, true); if (md > 0) realDur = md; } catch (_) {} }
+          fills[s.id] = { kind, name: "", dur: realDur, url: s.lockedMedia.url, _locked: true };
         }
       }
     }
