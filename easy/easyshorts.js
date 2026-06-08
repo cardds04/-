@@ -1001,16 +1001,18 @@
         <div class="es-tplcat">
           ${E.templates.map((t) => {
             const asp = (t.aspect || "9:16");
-            return `<button type="button" class="es-tplcard" data-tid="${t.id}">
+            const hasPrev = Array.isArray(t.preview) && t.preview.length;
+            return `<div class="es-tplcard" data-tid="${t.id}">
               <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
                 ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
-                <span class="es-tplcard-play">▶</span>
+                <span class="es-tplcard-play">${hasPrev ? "▶" : "＋"}</span>
               </div>
               <div class="es-tplcard-meta">
                 <b class="es-tplcard-name">${esc(t.name || "템플릿")}</b>
                 <span class="es-tplcard-sub">${tplDesc(t)}</span>
+                <button type="button" class="es-tplcard-make">＋ 이 스타일로 만들기</button>
               </div>
-            </button>`;
+            </div>`;
           }).join("")}
         </div>
       </div>` : "";
@@ -1073,10 +1075,48 @@
     });
     prefetchAssets();   // 백그라운드 선로딩 → hover 즉시 재생
   }
-  // 템플릿 카드 클릭 → 이지숏폼 마법사 시작
+  // ── 카탈로그 카드 미리보기(슬라이드쇼+음악) 재생 ──
+  let _tplPrev = null;   // { card, audio, poster, timer }
+  function stopTplPreview() {
+    if (!_tplPrev) return;
+    try { clearTimeout(_tplPrev.timer); } catch (_) {}
+    if (_tplPrev.audio) { try { _tplPrev.audio.pause(); } catch (_) {} }
+    if (_tplPrev.card) {
+      _tplPrev.card.classList.remove("playing");
+      const im = _tplPrev.card.querySelector(".es-tplcard-thumb");
+      if (im && _tplPrev.poster != null) im.src = _tplPrev.poster;
+    }
+    _tplPrev = null;
+  }
+  function playTplPreview(card, t) {
+    stopTplPreview();
+    const imgs = (t && Array.isArray(t.preview) ? t.preview : []).filter((p) => p && p.url);
+    if (!imgs.length) { pickTemplate(t.id, "easy"); return; }   // 미리보기 없으면 바로 만들기
+    imgs.forEach((p) => { const x = new Image(); x.src = p.url; });   // 선로딩
+    const im = card.querySelector(".es-tplcard-thumb");
+    const poster = im ? im.getAttribute("src") : null;
+    let audio = null;
+    if (t.music) { try { audio = new Audio(t.music); audio.loop = true; audio.volume = 0.9; audio.play().catch(() => {}); } catch (_) {} }
+    card.classList.add("playing");
+    _tplPrev = { card, audio, poster, timer: null };
+    let i = 0;
+    const step = () => {
+      if (!_tplPrev || _tplPrev.card !== card) return;
+      const p = imgs[i % imgs.length];
+      if (im && p.url) im.src = p.url;
+      i++;
+      _tplPrev.timer = setTimeout(step, Math.max(700, (p.dur || 2) * 1000));
+    };
+    step();
+  }
+  // 템플릿 카드 — 사진영역 탭=미리보기 재생, '만들기'=마법사 시작
   function wireTplCards(body) {
     $$(".es-tplcard", body).forEach((card) => {
-      card.addEventListener("click", () => { const id = card.dataset.tid; if (id) pickTemplate(id, "easy"); });
+      const t = E.templates.find((x) => x.id === card.dataset.tid);
+      const asp = card.querySelector(".es-tplcard-asp");
+      if (asp) asp.addEventListener("click", () => { if (card.classList.contains("playing")) stopTplPreview(); else playTplPreview(card, t); });
+      const mk = card.querySelector(".es-tplcard-make");
+      if (mk) mk.addEventListener("click", (e) => { e.stopPropagation(); stopTplPreview(); if (card.dataset.tid) pickTemplate(card.dataset.tid, "easy"); });
     });
   }
   // 가운데(선택된) 영상 자동 재생(반복)

@@ -40,6 +40,9 @@ create policy "easy-music public read"
 -- 4-b) 미리보기 썸네일 컬럼 (내 영상 게시 시 대표 이미지)
 alter table public.easy_templates add column if not exists thumb text;
 
+-- 4-b2) 미리보기 슬라이드쇼 (사진 URL 목록 — 카드에서 영상처럼 재생)
+alter table public.easy_templates add column if not exists preview jsonb default '[]'::jsonb;
+
 -- 4-c) 서버 설정 저장소 (Kling 키 등 — Vercel env 우회용). service_role 만 접근.
 create table if not exists public.easy_config (
   k text primary key,
