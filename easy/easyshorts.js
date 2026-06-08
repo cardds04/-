@@ -1005,12 +1005,8 @@
             return `<div class="es-tplcard" data-tid="${t.id}">
               <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
                 ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
-                <span class="es-tplcard-play">${hasPrev ? "▶" : "＋"}</span>
-              </div>
-              <div class="es-tplcard-meta">
-                <b class="es-tplcard-name">${esc(t.name || "템플릿")}</b>
-                <span class="es-tplcard-sub">${tplDesc(t)}</span>
-                <button type="button" class="es-tplcard-make">＋ 이 스타일로 만들기</button>
+                <span class="es-tplcard-play">▶</span>
+                <button type="button" class="es-tplcard-go" title="이 스타일로 만들기" aria-label="이 스타일로 만들기">＋</button>
               </div>
             </div>`;
           }).join("")}
@@ -1123,14 +1119,22 @@
     };
     step();
   }
-  // 템플릿 카드 — 사진영역 탭=미리보기 재생, '만들기'=마법사 시작
+  // 템플릿 카드 — 마우스 올리면 자동재생, ＋버튼=마법사 시작
   function wireTplCards(body) {
     $$(".es-tplcard", body).forEach((card) => {
       const t = E.templates.find((x) => x.id === card.dataset.tid);
+      // 데스크탑: 올리면 재생 / 떼면 정지
+      card.addEventListener("mouseenter", () => { if (!card.classList.contains("playing")) playTplPreview(card, t); });
+      card.addEventListener("mouseleave", () => { stopTplPreview(); });
+      // 모바일/탭: 미리보기 영역 탭 → 재생/정지 토글
       const asp = card.querySelector(".es-tplcard-asp");
-      if (asp) asp.addEventListener("click", () => { if (card.classList.contains("playing")) stopTplPreview(); else playTplPreview(card, t); });
-      const mk = card.querySelector(".es-tplcard-make");
-      if (mk) mk.addEventListener("click", (e) => { e.stopPropagation(); stopTplPreview(); if (card.dataset.tid) pickTemplate(card.dataset.tid, "easy"); });
+      if (asp) asp.addEventListener("click", (e) => {
+        if (e.target.closest(".es-tplcard-go")) return;   // ＋버튼은 아래에서 처리
+        if (card.classList.contains("playing")) stopTplPreview(); else playTplPreview(card, t);
+      });
+      // ＋ 버튼 → 이 스타일로 만들기
+      const go = card.querySelector(".es-tplcard-go");
+      if (go) go.addEventListener("click", (e) => { e.stopPropagation(); stopTplPreview(); if (card.dataset.tid) pickTemplate(card.dataset.tid, "easy"); });
     });
   }
   // 가운데(선택된) 영상 자동 재생(반복)
