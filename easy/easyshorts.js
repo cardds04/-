@@ -1637,7 +1637,7 @@
     if (hasBA) { plan.push("ba-after", "ba-before"); if (hasVid) plan.push("ba-video"); }   // 비포애프터가 있을 때만
     if (plains.length) plan.push("plain");        // 일반컷이 있을 때만
     if (details.length) plan.push("detail");      // 디테일컷이 있을 때만
-    if (texts.length) plan.push("caption");       // 자막이 있을 때만
+    if (texts.some((tx) => !tx.locked)) plan.push("caption");   // 고정 안 된(수정 가능한) 자막이 있을 때만 — 전부 고정이면 단계 건너뜀
     plan.push("done");
     return plan;
   }
@@ -1770,9 +1770,9 @@
     } else if (cur === "caption") {
       const caps = E.using.texts;
       const capRows = caps.map((tx, i) => `
-            <label class="es-slotcap">
-              <span class="es-slotcap-num">${i + 1}번자리</span>
-              <input type="text" class="es-slotcap-in" data-idx="${i}" value="${esc(tx.text || "")}" placeholder="${i + 1}번 자막 내용을 적어주세요">
+            <label class="es-slotcap ${tx.locked ? "es-cap-locked" : ""}">
+              <span class="es-slotcap-num">${i + 1}번자리${tx.locked ? " 🔒" : ""}</span>
+              <input type="text" class="es-slotcap-in" data-idx="${i}" value="${esc(tx.text || "")}" placeholder="${i + 1}번 자막 내용을 적어주세요" ${tx.locked ? "disabled" : ""}>
             </label>`).join("");
       bodyHtml = `
         <div class="es-wiz-body">
