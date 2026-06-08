@@ -28,6 +28,15 @@ module.exports = async (req, res) => {
   if (req.method !== "POST") { res.status(405).json({ ok: false, error: "POST 만 허용됩니다." }); return; }
   try {
     const body = req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body) ? req.body : await readJsonBody(req);
+    if (body && body.debug === "envcheck") {
+      res.status(200).json({
+        ok: true,
+        hasAccessKey: !!process.env.KLING_ACCESS_KEY, hasAK: !!process.env.KLING_AK,
+        hasSecretKey: !!process.env.KLING_SECRET_KEY, hasSK: !!process.env.KLING_SK,
+        akLen: (process.env.KLING_ACCESS_KEY || "").length, skLen: (process.env.KLING_SECRET_KEY || "").length,
+      });
+      return;
+    }
     const out = await handleKlingVideoRequest(body);
     res.status(200).json(out);
   } catch (e) {
