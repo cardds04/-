@@ -1673,6 +1673,49 @@
     return plan;
   }
   const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "길이", "caption": "문구", "done": "완성" };
+  // 📐 트림 창 — 전체 영상 길이 트랙 위에서 고정폭(클립 길이) 창을 좌우로 끌어 위치 선택. 양 끝 손잡이로 길이 조절. (마우스·터치 공용 pointer 이벤트)
+  function setupTrimBar(row, slot, srcDur, vid) {
+    const win = row.querySelector(".es-trimbar-window");
+    const track = row.querySelector(".es-trimbar-track");
+    if (!win || !track || !(srcDur > 0)) return;
+    const lenEl = row.querySelector(".es-trim-len"), aEl = row.querySelector(".es-trim-a"), bEl = row.querySelector(".es-trim-b");
+    const MIN = 0.3;
+    const place = () => {
+      const inn = slot.in || 0, dur = Math.max(MIN, slot.dur || MIN);
+      win.style.left = (inn / srcDur) * 100 + "%";
+      win.style.width = (dur / srcDur) * 100 + "%";
+      if (lenEl) lenEl.textContent = dur.toFixed(1) + "초";
+      if (aEl) aEl.textContent = inn.toFixed(1) + "초";
+      if (bEl) bEl.textContent = (inn + dur).toFixed(1) + "초";
+    };
+    place();
+    let mode = null, startX = 0, in0 = 0, dur0 = 0, w = 1;
+    const onMove = (e) => {
+      if (!mode) return;
+      const dt = ((e.clientX - startX) / w) * srcDur;
+      if (mode === "move") {
+        slot.in = +clamp(in0 + dt, 0, Math.max(0, srcDur - dur0)).toFixed(2);
+        if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }
+      } else if (mode === "l") {
+        const end = in0 + dur0, ni = clamp(in0 + dt, 0, end - MIN);
+        slot.in = +ni.toFixed(2); slot.dur = +(end - ni).toFixed(2);
+        if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }
+      } else {   // r — 뒤 자르기(시작 고정, 길이 변경)
+        const end = clamp(in0 + dur0 + dt, in0 + MIN, srcDur);
+        slot.dur = +(end - in0).toFixed(2);
+        if (vid) { try { vid.currentTime = Math.max(0, end - 0.05); } catch (_) {} }
+      }
+      place(); e.preventDefault();
+    };
+    const onUp = () => { if (!mode) return; mode = null; document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp); scheduleSaveMeta(); };
+    win.addEventListener("pointerdown", (e) => {
+      w = track.getBoundingClientRect().width || 1;
+      startX = e.clientX; in0 = slot.in || 0; dur0 = Math.max(MIN, slot.dur || MIN);
+      mode = (e.target.classList && e.target.classList.contains("es-grip-l")) ? "l" : ((e.target.classList && e.target.classList.contains("es-grip-r")) ? "r" : "move");
+      document.addEventListener("pointermove", onMove); document.addEventListener("pointerup", onUp);
+      e.preventDefault(); e.stopPropagation();
+    });
+  }
   function renderEasy() {
     const body = $("#esBody"); if (!body) return;
     if (!E.using) { renderGallery(); return; }   // 작업 전이면 공유 템플릿 공간
@@ -1833,8 +1876,8 @@
           return `<div class="es-trim-row" data-id="${s.id}" data-kind="video" data-srcdur="${sd.toFixed(2)}">
             <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초)</span></div>
             <video class="es-trim-vid" src="${f.url}" muted playsinline preload="metadata"></video>
-            <label class="es-trim-ctl"><span>✂ 앞 자르기(시작)</span><input type="range" class="es-trim-in" min="0" max="${Math.max(0, sd - 0.3).toFixed(2)}" step="0.05" value="${inv.toFixed(2)}"></label>
-            <label class="es-trim-ctl"><span>⏱ 길이</span><input type="range" class="es-trim-dur" min="0.3" max="${Math.max(0.3, sd - inv).toFixed(2)}" step="0.05" value="${dv.toFixed(2)}"></label>
+            <div class="es-trimbar"><div class="es-trimbar-track"><div class="es-trimbar-scale"><span>0초</span><span>${sd.toFixed(1)}초</span></div><div class="es-trimbar-window"><span class="es-trimbar-grip es-grip-l" title="앞 자르기"></span><span class="es-trimbar-mid">↔ 끌어서 위치</span><span class="es-trimbar-grip es-grip-r" title="뒤 자르기"></span></div></div></div>
+            <div class="es-trim-range">선택 구간 <span class="es-trim-a">${inv.toFixed(1)}초</span> ~ <span class="es-trim-b">${(inv + dv).toFixed(1)}초</span></div>
           </div>`;
         }
         let dv = clamp(s.dur || 2, 0.5, 10); s.dur = +dv.toFixed(2);
@@ -1941,21 +1984,16 @@
       $$(".es-trim-row").forEach((row) => {
         const id = row.dataset.id; if (!id) return;
         const slot = E.using.template.slots.find((s) => s.id === id); if (!slot) return;
-        const lenEl = row.querySelector(".es-trim-len");
         const vid = row.querySelector(".es-trim-vid");
-        const inEl = row.querySelector(".es-trim-in");
-        const durEl = row.querySelector(".es-trim-dur");
         const srcDur = parseFloat(row.dataset.srcdur || "0");
-        const sync = () => { if (lenEl) lenEl.textContent = (slot.dur || 0).toFixed(1) + "초"; };
-        if (vid) vid.addEventListener("loadedmetadata", () => { try { vid.currentTime = slot.in || 0; } catch (_) {} });
-        if (inEl) inEl.addEventListener("input", () => {
-          slot.in = +parseFloat(inEl.value || "0").toFixed(2);
-          const maxDur = Math.max(0.3, srcDur - slot.in);
-          if (durEl) { durEl.max = maxDur.toFixed(2); if ((slot.dur || 0) > maxDur) { slot.dur = +maxDur.toFixed(2); durEl.value = slot.dur; } }
-          if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }   // 시작 프레임 미리보기
-          sync(); scheduleSaveMeta();
-        });
-        if (durEl) durEl.addEventListener("input", () => { slot.dur = +parseFloat(durEl.value || "0.3").toFixed(2); sync(); scheduleSaveMeta(); });
+        if (row.dataset.kind === "video" && srcDur > 0) {
+          if (vid) vid.addEventListener("loadedmetadata", () => { try { vid.currentTime = slot.in || 0; } catch (_) {} });
+          setupTrimBar(row, slot, srcDur, vid);
+        } else {
+          const lenEl = row.querySelector(".es-trim-len");
+          const durEl = row.querySelector(".es-trim-dur");
+          if (durEl) durEl.addEventListener("input", () => { slot.dur = +parseFloat(durEl.value || "0.5").toFixed(2); if (lenEl) lenEl.textContent = slot.dur.toFixed(1) + "초"; scheduleSaveMeta(); });
+        }
       });
     } else {   // done
       renderTexts();
