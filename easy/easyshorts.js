@@ -708,7 +708,8 @@
       const { imgs } = await preloadExportMedia();   // 릴스 오버레이는 로드하지 않음
       const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.preload = "auto";
       const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => console.warn("[video enc]", e) });
-      venc.configure(Object.assign({ codec: vcodec, width: W, height: H, bitrate: 10000000, framerate: FPS }, vcfgExtra));
+      const autoBitrate = Math.max(12000000, Math.round((W * H) / (1920 * 1080) * 24000000));   // 1080p ≈ 24Mbps (선명)
+      venc.configure(Object.assign({ codec: vcodec, width: W, height: H, bitrate: autoBitrate, framerate: FPS }, vcfgExtra));
       // 음악 인코딩
       let hasAudio = false;
       try { hasAudio = await encodeAudioInto(muxer, total, fmt === "mp4" ? "mp4a.40.2" : "opus"); } catch (e) { console.warn("[audio]", e); }
@@ -798,7 +799,7 @@
       }
       const stream = new MediaStream(tracks);
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8000000 });
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 20000000 });
       const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       const stopped = new Promise((r) => { rec.onstop = r; });
       const drawTexts = (t) => {
