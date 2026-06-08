@@ -34,6 +34,8 @@ module.exports = async (req, res) => {
         hasAccessKey: !!process.env.KLING_ACCESS_KEY, hasAK: !!process.env.KLING_AK,
         hasSecretKey: !!process.env.KLING_SECRET_KEY, hasSK: !!process.env.KLING_SK,
         akLen: (process.env.KLING_ACCESS_KEY || "").length, skLen: (process.env.KLING_SECRET_KEY || "").length,
+        _refHasSupabase: !!process.env.SUPABASE_URL, _refHasGemini: !!process.env.GEMINI_API_KEY,
+        _klingKeyNames: Object.keys(process.env).filter((k) => /KLING/i.test(k)),
       });
       return;
     }
