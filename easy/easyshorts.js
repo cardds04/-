@@ -142,7 +142,9 @@
     { k: "zoomInUp", label: "확대+위" },
     { k: "zoomInDown", label: "확대+아래" },
   ];
-  const FX_RANDOM_POOL = EFFECTS.filter((e) => e.k !== "none").map((e) => e.k);
+  // 확대+방향(확대+왼쪽/오른쪽/위/아래)은 움직임이 과해서 랜덤·자동에선 제외 (수동 선택은 그대로 가능)
+  const FX_RANDOM_EXCLUDE = ["zoomInLeft", "zoomInRight", "zoomInUp", "zoomInDown"];
+  const FX_RANDOM_POOL = EFFECTS.filter((e) => e.k !== "none" && FX_RANDOM_EXCLUDE.indexOf(e.k) < 0).map((e) => e.k);
   // 가장자리(검은 여백)가 어떤 p 에서도 안 보이도록 안전 범위. tx/ty 는 요소 너비/높이의 비율.
   function fxParams(fx, p) {
     p = clamp(p, 0, 1);
