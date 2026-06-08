@@ -2538,6 +2538,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     kling16pro: { label: "Kling 1.6 Pro (~₩650)",    fal: "fal-ai/kling-video/v1.6/pro/image-to-video" },
     veo:        { label: "Veo 3.1 Lite (Gemini키)",  fal: null },
   };
+  // 고객용 서버키 모드 게이트 키 (서버 EASY_GATE_KEY 와 일치해야 함). 키 노출 아님 — 드라이브바이 남용 방지용.
+  const AI_GATE = "6315";
   // Kling 공식 프록시(JWT 서명 + 태스크 폴링) — 기본 sc-pink, localStorage로 로컬서버 지정 가능
   function klingProxyUrl() {
     try { const ov = (localStorage.getItem("es_kling_proxy") || "").trim(); if (ov) return ov; } catch (_) {}
@@ -2555,7 +2557,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     // 1) 태스크 생성 (비포=시작, 원본=끝프레임 image_tail)
     if (onProgress) onProgress(0.05, "Kling 작업 생성");
     const created = await callProxy({
-      action: "create", access_key: ak, secret_key: sk,
+      action: "create", access_key: ak, secret_key: sk, gate: AI_GATE,
       image: beforeUri, image_tail: afterUri, prompt,
       model_name: "kling-v3", mode: "pro", duration: "3",   // 시작이미지가 화면비 결정 → aspect_ratio 생략
     });
@@ -2564,7 +2566,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     // 2) 폴링 (최대 ~7.5분)
     for (let i = 0; i < 90; i++) {
       await new Promise((res) => setTimeout(res, 5000));
-      const q = await callProxy({ action: "query", access_key: ak, secret_key: sk, task_id: taskId });
+      const q = await callProxy({ action: "query", access_key: ak, secret_key: sk, gate: AI_GATE, task_id: taskId });
       if (onProgress) onProgress(q.status === "processing" ? 0.5 : 0.2, "Kling " + (q.status || ""));
       if (q.status === "succeed" && q.video_url) {
         const vr = await fetch(q.video_url);
@@ -2578,7 +2580,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function curVidEngine() {
     let e = E.aiVidEngine; if (!e) { try { e = localStorage.getItem("es_ai_videngine") || ""; } catch (_) {} }
-    return VID_ENGINES[e] ? e : "pixverse";   // 기본: 가장 싼 Pixverse
+    return VID_ENGINES[e] ? e : "kling_official";   // 고객용 기본: Kling 공식(서버키)
   }
   function setVidEngine(e) { if (!VID_ENGINES[e]) return; E.aiVidEngine = e; try { localStorage.setItem("es_ai_videngine", e); } catch (_) {} }
   // 리듬 맞추기 빠르기 — 컷당 박자 수(작을수록 사진이 빨리 넘어감)
@@ -2646,7 +2648,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const engKey = curVidEngine(); const eng = VID_ENGINES[engKey];
     let gk = "", fk = "", kAk = "", kSk = "";
     try { gk = (localStorage.getItem("studio_gemini_key") || "").trim(); fk = (localStorage.getItem("studio_fal_key") || "").trim(); kAk = (localStorage.getItem("studio_kling_ak") || "").trim(); kSk = (localStorage.getItem("studio_kling_sk") || "").trim(); } catch (_) {}
-    if (eng.kling && (!kAk || !kSk)) throw new Error("Kling AccessKey·SecretKey가 필요해요 (스튜디오 탭)");
+    // Kling: 키가 없으면 서버(env) 키로 처리(고객용 서버키 모드 + 게이트). 관리자가 키를 넣어두면 그 키 사용.
     if (eng.fal && !fk) throw new Error("fal.ai 키가 필요해요 (스튜디오 탭)");
     if (!eng.fal && !eng.kling && !gk) throw new Error("Gemini 키가 필요해요 (스튜디오 탭)");
     const asp = ASPECTS[E.using.template.aspect] || ASPECTS["9:16"];

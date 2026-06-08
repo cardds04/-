@@ -37,5 +37,15 @@ create policy "easy-music public read"
   on storage.objects for select
   using (bucket_id = 'easy-music');
 
+-- 5) 고객 AI 영상 생성 하루 한도 카운터 (비용 폭주 방지)
+--    서버(service_role)만 접근. 정책 없음 → anon 불가.
+create table if not exists public.easy_ai_usage (
+  day        text primary key,        -- 'YYYY-MM-DD'
+  count      int not null default 0,
+  updated_at timestamptz default now()
+);
+alter table public.easy_ai_usage enable row level security;
+
 -- 끝. 이제 관리자 도구에서 '☁️ 온라인 게시' 하면 여기에 쌓이고,
 --     고객 사이트(/easy/)가 GET /api/easy-templates 로 실시간으로 받아갑니다.
+--     고객 AI 영상은 서버 Kling 키로 처리되고 하루 한도(EASY_AI_DAILY_LIMIT, 기본 30) 내에서 동작합니다.
