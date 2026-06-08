@@ -298,9 +298,23 @@
     const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt }));
     try { await idbSet("templates", meta); } catch (e) { console.warn("[easyshorts] saveTemplates", e); }
   }
+  // 온라인 공유 템플릿 — 항상 서버에서 최신 목록을 받아온다(실시간 공유).
+  // 실패 시(오프라인 등) 마지막으로 받아 캐시한 목록으로 폴백.
+  const TPL_API = "https://sc-pink.vercel.app/api/easy-templates";
   async function loadTemplates() {
-    try { const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : []; }
-    catch (_) { E.templates = []; }
+    try {
+      const r = await fetch(TPL_API, { cache: "no-store" });
+      const j = await r.json();
+      if (j && j.ok && Array.isArray(j.templates)) {
+        E.templates = j.templates;
+        try { await idbSet("templates", j.templates); } catch (_) {}   // 오프라인 폴백용 캐시
+        return;
+      }
+      throw new Error("bad response");
+    } catch (_) {
+      try { const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : []; }
+      catch (_2) { E.templates = []; }
+    }
   }
   async function musicBlobUrl(templateId) {
     try { const b = await idbGet("music_" + templateId); if (b instanceof Blob) return URL.createObjectURL(b); } catch (_) {}
@@ -1382,7 +1396,8 @@
   async function startUse(id) {
     const t = E.templates.find((x) => x.id === id);
     if (!t) return;
-    const musicUrl = t.music ? await musicBlobUrl(id) : null;
+    // 서버 템플릿이면 t.music 이 공개 URL → 그대로 사용. (옛 로컬 데이터면 IndexedDB blob)
+    const musicUrl = t.music ? (/^https?:/.test(t.music) ? t.music : await musicBlobUrl(id)) : null;
     await clearSession();   // 새 작업 시작 — 이전 세션 비움
     const baseTexts = Array.isArray(t.texts) ? JSON.parse(JSON.stringify(t.texts)) : [];   // 템플릿이 자막 자리를 정의했으면 가져옴
     E.using = { template: JSON.parse(JSON.stringify(t)), musicUrl, fills: {}, texts: baseTexts, selText: null, selTexts: [] };

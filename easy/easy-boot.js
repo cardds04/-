@@ -88,8 +88,8 @@
   // ── 비밀번호 통과 후 ────────────────────────────────────────────
   async function afterUnlock() {
     const gate = $("#easyGate"); if (gate) gate.hidden = true;
-    if (await hasTemplates()) launchApp();
-    else showSeed();
+    // 템플릿은 서버(/api/easy-templates)에서 실시간으로 받아옴 → 바로 시작.
+    launchApp();
   }
 
   // ── 게이트 ─────────────────────────────────────────────────────
