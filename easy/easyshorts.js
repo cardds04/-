@@ -1595,7 +1595,23 @@
     const musicUrl = t.music ? (/^https?:/.test(t.music) ? t.music : await musicBlobUrl(id)) : null;
     await clearSession();   // 새 작업 시작 — 이전 세션 비움
     const baseTexts = Array.isArray(t.texts) ? JSON.parse(JSON.stringify(t.texts)) : [];   // 템플릿이 자막 자리를 정의했으면 가져옴
-    E.using = { template: JSON.parse(JSON.stringify(t)), musicUrl, fills: {}, texts: baseTexts, selText: null, selTexts: [] };
+    // 고정(locked) 컷은 관리자 원본 미디어를 미리 채워둠 → 고객이 안 건드림
+    // 원격 미디어는 blob 으로 받아서(canvas taint 방지) 채움
+    const fills = {};
+    for (const s of (t.slots || [])) {
+      if (s.locked && s.lockedMedia && s.lockedMedia.url) {
+        const kind = s.lockedMedia.kind || "image";
+        try {
+          const b = await (await fetch(s.lockedMedia.url, { cache: "force-cache" })).blob();
+          fills[s.id] = { kind, name: "", dur: s.dur || 0, url: URL.createObjectURL(b), _file: b, _locked: true };
+          try { saveFillBlob(s.id, b); } catch (_) {}   // 세션 복원용
+
+        } catch (_) {
+          fills[s.id] = { kind, name: "", dur: s.dur || 0, url: s.lockedMedia.url, _locked: true };
+        }
+      }
+    }
+    E.using = { template: JSON.parse(JSON.stringify(t)), musicUrl, fills, texts: baseTexts, selText: null, selTexts: [] };
     E.playhead = 0;
     E.easyIdx = 0;
     E.using._baFlow = false;   // 일반 템플릿 — 보통 마법사(비포애프터 5단계 아님)
@@ -1627,12 +1643,13 @@
   function easyPlan() {
     if (!E.using) return ["done"];
     const slots = E.using.template.slots;
-    const afters = slots.filter((s) => slotRole(s) === "after");
-    const befores = slots.filter((s) => slotRole(s) === "before");
+    // 고정(locked) 컷은 원본 그대로 두고 고객이 안 채움 → 단계 계산에서 제외
+    const afters = slots.filter((s) => slotRole(s) === "after" && !s.locked);
+    const befores = slots.filter((s) => slotRole(s) === "before" && !s.locked);
     const hasBA = befores.length > 0 && afters.length > 0;
     const hasVid = hasBA && befores.some((b) => b.aiVid);
-    const plains = slots.filter((s) => slotRole(s) === "plain");
-    const details = slots.filter((s) => slotRole(s) === "detail");
+    const plains = slots.filter((s) => slotRole(s) === "plain" && !s.locked);
+    const details = slots.filter((s) => slotRole(s) === "detail" && !s.locked);
     const texts = E.using.texts || [];
     const plan = [];
     if (hasBA) { plan.push("ba-after", "ba-before"); if (hasVid) plan.push("ba-video"); }   // 비포애프터가 있을 때만
@@ -4123,6 +4140,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     list.innerHTML = t.slots.map((s, i) => {
       const start = acc; acc += (s.dur || 0);
       if (fn && !fn(s)) return "";   // 특정 역할 슬롯만 표시(마법사 비포/애프터 단계)
+      if (!E._detailEditor && s.locked) return "";   // 이지숏폼: 고정 컷은 숨김(원본 그대로 유지)
       const f = E.using.fills[s.id];
       const asp = ASPECTS[t.aspect] || ASPECTS["9:16"];
       let media = `<div class="es-fill-ph">＋<br>끌어다 놓기<br><span class="es-fill-ph-sub">(또는 클릭)</span></div>`;
