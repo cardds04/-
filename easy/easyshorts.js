@@ -1001,7 +1001,7 @@
         <div class="es-tplcat">
           ${E.templates.map((t) => {
             const asp = (t.aspect || "9:16");
-            const hasPrev = Array.isArray(t.preview) && t.preview.length;
+            const hasPrev = t.video || (Array.isArray(t.preview) && t.preview.length);
             return `<div class="es-tplcard" data-tid="${t.id}">
               <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
                 ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
@@ -1076,11 +1076,12 @@
     prefetchAssets();   // 백그라운드 선로딩 → hover 즉시 재생
   }
   // ── 카탈로그 카드 미리보기(슬라이드쇼+음악) 재생 ──
-  let _tplPrev = null;   // { card, audio, poster, timer }
+  let _tplPrev = null;   // { card, audio, video, poster, timer }
   function stopTplPreview() {
     if (!_tplPrev) return;
     try { clearTimeout(_tplPrev.timer); } catch (_) {}
     if (_tplPrev.audio) { try { _tplPrev.audio.pause(); } catch (_) {} }
+    if (_tplPrev.video) { try { _tplPrev.video.pause(); } catch (_) {} try { _tplPrev.video.remove(); } catch (_) {} }
     if (_tplPrev.card) {
       _tplPrev.card.classList.remove("playing");
       const im = _tplPrev.card.querySelector(".es-tplcard-thumb");
@@ -1090,6 +1091,19 @@
   }
   function playTplPreview(card, t) {
     stopTplPreview();
+    // 1) 실제 완성 영상이 있으면 그걸 재생
+    if (t && t.video) {
+      const asp = card.querySelector(".es-tplcard-asp");
+      const v = document.createElement("video");
+      v.className = "es-tplcard-vid"; v.src = t.video; v.loop = true; v.playsInline = true; v.preload = "auto";
+      if (asp) asp.appendChild(v);
+      card.classList.add("playing");
+      _tplPrev = { card, video: v };
+      v.muted = false;
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });   // 자동재생 막히면 음소거로 재시도
+      return;
+    }
+    // 2) 폴백 — 사진 슬라이드쇼
     const imgs = (t && Array.isArray(t.preview) ? t.preview : []).filter((p) => p && p.url);
     if (!imgs.length) { pickTemplate(t.id, "easy"); return; }   // 미리보기 없으면 바로 만들기
     imgs.forEach((p) => { const x = new Image(); x.src = p.url; });   // 선로딩
