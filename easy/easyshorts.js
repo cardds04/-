@@ -1019,8 +1019,8 @@
       body.innerHTML = `
         <div class="es-empty">
           <div class="es-empty-ico">⚡</div>
-          <div class="es-empty-title">아직 템플릿이 없어요</div>
-          <div class="es-empty-msg">관리자에게 템플릿 파일을 받아 불러오면<br>여기에 만들 수 있는 영상 스타일이 나타나요.</div>
+          <div class="es-empty-title">곧 새 템플릿이 올라와요</div>
+          <div class="es-empty-msg">아직 등록된 스타일이 없어요.<br>잠시 후 새로고침하면 나타납니다.</div>
         </div>`;
       return;
     }
