@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>이지숏폼 — 템플릿 내보내기</title>
+<style>
+  :root { --bg:#111114; --panel:#1c1c22; --border:#2e2e38; --text:#e8e8ec; --dim:#8a8a96; --accent:#ff7a3d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; padding:28px; line-height:1.6; }
+  .wrap { max-width:640px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { color:var(--dim); margin:0 0 22px; font-size:13px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:16px; }
+  label.opt { display:flex; align-items:center; gap:9px; font-size:14px; margin-bottom:10px; cursor:pointer; }
+  label.opt:last-child { margin-bottom:0; }
+  button { background:var(--accent); color:#1a1a1a; border:none; border-radius:10px; padding:13px 20px; font-size:15px; font-weight:700; cursor:pointer; width:100%; }
+  button:disabled { opacity:.5; cursor:default; }
+  .log { margin-top:16px; font-size:12.5px; color:var(--dim); white-space:pre-wrap; min-height:22px; }
+  .ok { color:#22c55e; }
+  .err { color:#ef4444; }
+  code { background:#000; padding:1px 6px; border-radius:5px; font-size:12px; }
+  ol { font-size:13px; color:var(--dim); padding-left:18px; }
+  ol li { margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚡ 이지숏폼 — 템플릿 내보내기</h1>
+  <p class="sub">지금 이 브라우저에 저장된 템플릿을 파일 하나로 꺼냅니다. 이 파일을 온라인 고객용 사이트에 한 번 올리면 템플릿이 그대로 옮겨집니다.</p>
+
+  <div class="card">
+    <label class="opt"><input type="checkbox" id="optTpl" checked /> 템플릿 + 템플릿 음악 <span style="color:var(--dim)">(기본)</span></label>
+    <label class="opt"><input type="checkbox" id="optKeys" checked /> API 키 (스튜디오에 입력한 Gemini/fal/Kling 키) — 온라인에서 AI 기능 쓰려면 포함</label>
+    <label class="opt"><input type="checkbox" id="optAll" /> 전부 (내 영상·작업중 세션까지 통째로 — 용량 큼)</label>
+  </div>
+
+  <button id="btnExport">📤 easy-seed.json 내보내기</button>
+  <div class="log" id="log"></div>
+
+  <div class="card" style="margin-top:22px;">
+    <strong style="font-size:14px;">다음 단계</strong>
+    <ol style="margin:10px 0 0;">
+      <li>위 버튼으로 <code>easy-seed.json</code> 다운로드</li>
+      <li>온라인 고객용 사이트 <code>/easy/</code> 접속 → 비밀번호 입력</li>
+      <li>처음 한 번 “템플릿 불러오기”에서 이 파일을 선택하면 끝</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+const DB_NAME = "easyShortsDB", STORE = "kv";
+function db(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,1); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE); }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbGet(k){ const d=await db(); return new Promise((res,rej)=>{ const t=d.transaction(STORE,"readonly"); const rq=t.objectStore(STORE).get(k); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+async function idbKeys(){ const d=await db(); return new Promise((res,rej)=>{ const t=d.transaction(STORE,"readonly"); const rq=t.objectStore(STORE).getAllKeys(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }); }
+function blobToB64(blob){ return new Promise((res)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]||""); fr.onerror=()=>res(""); fr.readAsDataURL(blob); }); }
+
+const logEl = document.getElementById("log");
+function log(msg, cls){ logEl.innerHTML += (cls?`<span class="${cls}">${msg}</span>`:msg) + "\n"; }
+
+document.getElementById("btnExport").addEventListener("click", async () => {
+  const btn = document.getElementById("btnExport"); btn.disabled = true; logEl.textContent = "";
+  const wantTpl = document.getElementById("optTpl").checked;
+  const wantKeys = document.getElementById("optKeys").checked;
+  const wantAll = document.getElementById("optAll").checked;
+  try {
+    const allKeys = await idbKeys();
+    let keys = [];
+    if (wantAll) keys = allKeys.slice();
+    else if (wantTpl) keys = allKeys.filter(k => k === "templates" || (typeof k === "string" && k.indexOf("music_") === 0));
+    log(`키 ${keys.length}개 추출 중…`);
+    const kv = {};
+    let blobCount = 0, bytes = 0;
+    for (const k of keys) {
+      const v = await idbGet(k);
+      if (v instanceof Blob) {
+        const b64 = await blobToB64(v);
+        kv[k] = { __blob: true, type: v.type || "application/octet-stream", b64 };
+        blobCount++; bytes += b64.length;
+      } else {
+        kv[k] = v;
+      }
+    }
+    // API 키 (localStorage)
+    const ls = {};
+    if (wantKeys) {
+      ["studio_gemini_key","studio_fal_key","studio_kling_ak","studio_kling_sk","studio_xai_key","es_kling_proxy"]
+        .forEach(k => { try { const v = localStorage.getItem(k); if (v) ls[k] = v; } catch(_){} });
+    }
+    const seed = { __easySeed: 1, exportedFrom: location.origin, kv, ls };
+    const json = JSON.stringify(seed);
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "easy-seed.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    const tplCount = Array.isArray(kv["templates"]) ? kv["templates"].length : 0;
+    log(`✓ 완료 — 템플릿 ${tplCount}개, 미디어 ${blobCount}개, 키 ${Object.keys(ls).length}개`, "ok");
+    log(`파일 크기 약 ${(json.length/1048576).toFixed(1)}MB · easy-seed.json 다운로드됨`, "ok");
+  } catch (e) {
+    log("✗ 오류: " + (e && e.message || e), "err");
+    log("이 페이지를 템플릿을 만든 그 주소(예: 127.0.0.1:8765)에서 열었는지 확인하세요.", "err");
+  } finally { btn.disabled = false; }
+});
+</script>
+</body>
+</html>
