@@ -1668,10 +1668,11 @@
     const t = E.using.template, asp = ASPECTS[t.aspect] || ASPECTS["9:16"];
     const total = t.slots.reduce((a, s) => a + (s.dur || 0), 0);
     const slots = t.slots;
-    const afterSlots = slots.filter((s) => slotRole(s) === "after");
-    const beforeSlots = slots.filter((s) => slotRole(s) === "before");
-    const detailSlots = slots.filter((s) => slotRole(s) === "detail");
-    const plainSlots = slots.filter((s) => slotRole(s) === "plain");
+    // 고정(locked) 컷은 이지숏폼에서 안 채움(원본 그대로) → 필요장수·채우기·카드에서 제외
+    const afterSlots = slots.filter((s) => slotRole(s) === "after" && !s.locked);
+    const beforeSlots = slots.filter((s) => slotRole(s) === "before" && !s.locked);
+    const detailSlots = slots.filter((s) => slotRole(s) === "detail" && !s.locked);
+    const plainSlots = slots.filter((s) => slotRole(s) === "plain" && !s.locked);
     const vresDone = slots.filter((s) => slotRole(s) === "vresult" && E.using.fills[s.id]);
     const BA_CREDIT_PER = 400;   // 영상 1개당 안내 크레딧(서비스화 시 실제 차감)
     const filledOf = (arr) => arr.filter((s) => E.using.fills[s.id]).length;
