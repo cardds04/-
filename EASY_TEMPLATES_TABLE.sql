@@ -40,6 +40,13 @@ create policy "easy-music public read"
 -- 4-b) 미리보기 썸네일 컬럼 (내 영상 게시 시 대표 이미지)
 alter table public.easy_templates add column if not exists thumb text;
 
+-- 4-c) 서버 설정 저장소 (Kling 키 등 — Vercel env 우회용). service_role 만 접근.
+create table if not exists public.easy_config (
+  k text primary key,
+  v text
+);
+alter table public.easy_config enable row level security;
+
 -- 5) 고객 AI 영상 생성 하루 한도 카운터 (비용 폭주 방지)
 --    서버(service_role)만 접근. 정책 없음 → anon 불가.
 create table if not exists public.easy_ai_usage (
