@@ -735,6 +735,7 @@
       await venc.flush(); venc.close();
       const blob = muxer.finalize();
       if (!blob || blob.size < 1000) throw new Error("빈 결과");
+      try { await saveMadeVideo(blob, (E.using.template.name || "내 영상"), ext); } catch (_) {}   // '만든영상'에 저장
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + "." + ext;
       document.body.appendChild(a); a.click(); a.remove();
@@ -853,6 +854,7 @@
       try { expVideo.pause(); } catch (_) {}
       await stopped;
       const blob = new Blob(chunks, { type: "video/webm" });
+      try { await saveMadeVideo(blob, (E.using.template.name || "내 영상"), "webm"); } catch (_) {}
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + ".webm";
       document.body.appendChild(a); a.click(); a.remove();
@@ -882,7 +884,97 @@
         </nav>
       </div>
       <div class="es-body" id="esBody"></div>
+      <nav class="es-bnav" id="esBnav">
+        ${CUST_TABS.map((t) => `<button type="button" class="es-bnav-btn" data-tab="${t.id}"><span class="es-bnav-ic">${t.ic}</span><span class="es-bnav-lb">${t.label}</span></button>`).join("")}
+      </nav>
     `;
+    $$(".es-bnav-btn", root).forEach((b) => b.addEventListener("click", () => selectCustTab(b.dataset.tab)));
+  }
+  // ── 고객용 하단 탭 메뉴 ──────────────────────────────────────────
+  const CUST_TABS = [
+    { id: "watch", ic: "🎬", label: "영상보기" },
+    { id: "liked", ic: "♡", label: "찜한영상" },
+    { id: "made", ic: "⬇", label: "만든영상" },
+    { id: "long", ic: "🎞", label: "롱폼" },
+    { id: "profile", ic: "👤", label: "프로필" },
+  ];
+  function updateBnav() {
+    const root = document.getElementById("easyRoot"); if (!root) return;
+    $$(".es-bnav-btn", root).forEach((b) => b.classList.toggle("active", b.dataset.tab === (E._custTab || "watch")));
+    document.body.classList.toggle("es-hasnav", E.view !== "use");   // 만드는 중(위저드)엔 숨김
+  }
+  function selectCustTab(tab) {
+    E._custTab = tab;
+    if (tab === "watch") { E._catalogFilter = null; E.using = null; setView("gallery"); }
+    else if (tab === "liked") { E._catalogFilter = "liked"; E.using = null; setView("gallery"); }
+    else if (tab === "made") { E.view = "made"; renderMadeVideos(); updateBnav(); }
+    else { E.view = "tab"; renderPlaceholderTab(tab); updateBnav(); }
+  }
+  // 찜(좋아요) 저장 — localStorage
+  function likedSet() { try { return new Set(JSON.parse(localStorage.getItem("easy_liked") || "[]")); } catch (_) { return new Set(); } }
+  function isLiked(id) { return likedSet().has(id); }
+  function toggleLiked(id) {
+    const s = likedSet(); if (s.has(id)) s.delete(id); else s.add(id);
+    try { localStorage.setItem("easy_liked", JSON.stringify(Array.from(s))); } catch (_) {}
+    return s.has(id);
+  }
+  function renderPlaceholderTab(tab) {
+    const body = $("#esBody"); if (!body) return;
+    const map = { long: { ic: "🎞", t: "롱폼 만들기", m: "긴 영상 만들기는 곧 추가됩니다." }, profile: { ic: "👤", t: "나의 프로필", m: "프로필 기능은 곧 추가됩니다." } };
+    const c = map[tab] || { ic: "🚧", t: "준비중", m: "곧 만나요." };
+    body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">${c.ic}</div><div class="es-empty-title">${c.t}</div><div class="es-empty-msg">${c.m}</div></div>`;
+  }
+  // ── 만든 영상(다운로드한 결과물)을 기기에 저장 ──────────────────────
+  function videoFirstFrame(blob) {
+    return new Promise((res) => {
+      const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.src = URL.createObjectURL(blob);
+      const done = (out) => { try { URL.revokeObjectURL(v.src); } catch (_) {} res(out); };
+      v.onloadeddata = () => { try { const w = 270, h = Math.round(w * ((v.videoHeight / v.videoWidth) || (16 / 9))); const cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d").drawImage(v, 0, 0, w, h); done(cv.toDataURL("image/jpeg", 0.7)); } catch (_) { done(null); } };
+      v.onerror = () => done(null);
+    });
+  }
+  async function saveMadeVideo(blob, name, ext) {
+    const id = uid();
+    await idbSet("made_" + id, blob);
+    let thumb = null; try { thumb = await videoFirstFrame(blob); } catch (_) {}
+    let list = []; try { list = (await idbGet("madeVideos")) || []; } catch (_) {}
+    list.unshift({ id, name: name || "내 영상", ext: ext || "mp4", type: blob.type, size: blob.size, thumb, at: Date.now() });
+    try { await idbSet("madeVideos", list.slice(0, 200)); } catch (_) {}
+  }
+  async function renderMadeVideos() {
+    const body = $("#esBody"); if (!body) return;
+    let list = []; try { list = (await idbGet("madeVideos")) || []; } catch (_) {}
+    if (!list.length) { body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">⬇</div><div class="es-empty-title">아직 만든 영상이 없어요</div><div class="es-empty-msg">영상을 만들고 <b>⬇ 다운로드</b>하면<br>여기에 자동으로 저장돼요.</div></div>`; return; }
+    body.innerHTML = `<div class="es-gallery"><div class="es-section-head">⬇ 만든 영상 <span class="es-hint">탭하면 재생 · ⬇ 다시저장 · ✕ 삭제</span></div>
+      <div class="es-tplcat">${list.map((m) => `<div class="es-tplcard es-madecard" data-id="${m.id}">
+        <div class="es-tplcard-asp es-asp-9_16">${m.thumb ? `<img class="es-tplcard-thumb" src="${m.thumb}">` : ""}<span class="es-tplcard-play">▶</span>
+        <button type="button" class="es-tplcard-go es-made-dl" title="다운로드">⬇</button>
+        <button type="button" class="es-tplcard-like es-made-del" title="삭제">✕</button></div></div>`).join("")}</div></div>`;
+    $$(".es-madecard", body).forEach((card) => {
+      const id = card.dataset.id;
+      const asp = card.querySelector(".es-tplcard-asp");
+      if (asp) asp.addEventListener("click", (e) => { if (e.target.closest(".es-made-dl") || e.target.closest(".es-made-del")) return; if (card.classList.contains("playing")) stopTplPreview(); else playMade(card, id); });
+      const dl = card.querySelector(".es-made-dl"); if (dl) dl.addEventListener("click", (e) => { e.stopPropagation(); downloadMade(id); });
+      const del = card.querySelector(".es-made-del"); if (del) del.addEventListener("click", async (e) => { e.stopPropagation(); if (confirm("이 영상을 삭제할까요?")) { await deleteMade(id); renderMadeVideos(); } });
+    });
+  }
+  async function playMade(card, id) {
+    stopTplPreview();
+    let b = null; try { b = await idbGet("made_" + id); } catch (_) {}
+    if (!(b instanceof Blob)) return;
+    const asp = card.querySelector(".es-tplcard-asp");
+    const v = document.createElement("video"); v.className = "es-tplcard-vid"; v.src = URL.createObjectURL(b); v.loop = true; v.playsInline = true;
+    if (asp) asp.appendChild(v); card.classList.add("playing");
+    _tplPrev = { card, video: v }; v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  }
+  async function downloadMade(id) {
+    let b = null, meta = null; try { b = await idbGet("made_" + id); const list = (await idbGet("madeVideos")) || []; meta = list.find((x) => x.id === id); } catch (_) {}
+    if (!(b instanceof Blob)) return;
+    const url = URL.createObjectURL(b); const a = document.createElement("a"); a.href = url; a.download = ((meta && meta.name) || "내영상") + "." + ((meta && meta.ext) || "mp4");
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
+  }
+  async function deleteMade(id) {
+    try { await idbDel("made_" + id); let list = (await idbGet("madeVideos")) || []; list = list.filter((x) => x.id !== id); await idbSet("madeVideos", list); } catch (_) {}
   }
 
   // 뷰 전환 ────────────────────────────────────────────────────────
@@ -893,6 +985,7 @@
     if (view === "gallery") renderGallery();
     else if (view === "builder") renderBuilder();
     else if (view === "use") { if (E.mode2 === "easy") renderEasy(); else renderUse(); }
+    try { updateBnav(); } catch (_) {}
   }
   // 모드 전환: 이지숏폼(쉽게) ↔ 디테일숏폼(작업장). E.using 은 공유 → 내용 그대로 이어짐
   function enterMode2(m) {
@@ -994,18 +1087,32 @@
   function renderGallery() {
     const body = $("#esBody"); if (!body) return;
 
+    // 찜 탭이면 좋아요한 것만
+    const liked = likedSet();
+    const onlyLiked = E._catalogFilter === "liked";
+    const list = onlyLiked ? E.templates.filter((t) => liked.has(t.id)) : E.templates;
+    const headHtml = onlyLiked
+      ? `<div class="es-section-head">♥ 찜한 영상 <span class="es-hint">하트를 누른 스타일이 여기 모여요</span></div>`
+      : `<div class="es-section-head">✨ 어떤 영상을 만들까요? <span class="es-hint">스타일을 고르면 사진만 넣으면 완성돼요</span></div>`;
+
+    // 찜 탭인데 비었으면 안내
+    if (onlyLiked && !list.length) {
+      body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">♡</div><div class="es-empty-title">아직 찜한 영상이 없어요</div><div class="es-empty-msg">영상보기에서 마음에 드는 카드의 ♡ 를 누르면<br>여기에 모여요.</div></div>`;
+      return;
+    }
+
     // ── 템플릿 카탈로그 — 고객 진입점: 스타일을 고르면 사진만 넣으면 됨 ──
-    const tplCatalog = E.templates.length ? `
+    const tplCatalog = list.length ? `
       <div class="es-gallery">
-        <div class="es-section-head">✨ 어떤 영상을 만들까요? <span class="es-hint">스타일을 고르면 사진만 넣으면 완성돼요</span></div>
+        ${headHtml}
         <div class="es-tplcat">
-          ${E.templates.map((t) => {
+          ${list.map((t) => {
             const asp = (t.aspect || "9:16");
-            const hasPrev = t.video || (Array.isArray(t.preview) && t.preview.length);
             return `<div class="es-tplcard" data-tid="${t.id}">
               <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
                 ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
                 <span class="es-tplcard-play">▶</span>
+                <button type="button" class="es-tplcard-like ${liked.has(t.id) ? "on" : ""}" title="찜하기" aria-label="찜하기">${liked.has(t.id) ? "♥" : "♡"}</button>
                 <button type="button" class="es-tplcard-go" title="이 스타일로 만들기" aria-label="이 스타일로 만들기">＋</button>
               </div>
             </div>`;
@@ -1024,7 +1131,7 @@
       return;
     }
 
-    if (!E.projects.length) {
+    if (onlyLiked || !E.projects.length) {
       body.innerHTML = tplCatalog;
       wireTplCards(body);
       return;
@@ -1129,12 +1236,20 @@
       // 모바일/탭: 미리보기 영역 탭 → 재생/정지 토글
       const asp = card.querySelector(".es-tplcard-asp");
       if (asp) asp.addEventListener("click", (e) => {
-        if (e.target.closest(".es-tplcard-go")) return;   // ＋버튼은 아래에서 처리
+        if (e.target.closest(".es-tplcard-go") || e.target.closest(".es-tplcard-like")) return;   // 버튼은 따로 처리
         if (card.classList.contains("playing")) stopTplPreview(); else playTplPreview(card, t);
       });
       // ＋ 버튼 → 이 스타일로 만들기
       const go = card.querySelector(".es-tplcard-go");
       if (go) go.addEventListener("click", (e) => { e.stopPropagation(); stopTplPreview(); if (card.dataset.tid) pickTemplate(card.dataset.tid, "easy"); });
+      // ♡ 찜 버튼 → 토글
+      const lk = card.querySelector(".es-tplcard-like");
+      if (lk) lk.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const on = toggleLiked(card.dataset.tid);
+        lk.classList.toggle("on", on); lk.textContent = on ? "♥" : "♡";
+        if (E._catalogFilter === "liked" && !on) { card.style.transition = "opacity .2s"; card.style.opacity = "0"; setTimeout(() => renderGallery(), 200); }   // 찜탭에서 해제 시 사라짐
+      });
     });
   }
   // 가운데(선택된) 영상 자동 재생(반복)
