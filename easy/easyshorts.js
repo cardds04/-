@@ -619,10 +619,33 @@
       setTimeout(ok, 400);   // 안전장치
     });
   }
+  // 🔊 관리자가 분리해 게시한 오디오(audioClips) — 런타임 blob 은 E.using.audioBlobs 에
+  function audioClipUrl(c) { const b = E.using && E.using.audioBlobs && E.using.audioBlobs[c.id]; return (b && b.url) || null; }
+  function updateAudioClips(time) {
+    if (!E.using) return;
+    const clips = (E.using.template && E.using.template.audioClips) || [];
+    E._audioEls = E._audioEls || {};
+    const ids = {}; clips.forEach((c) => (ids[c.id] = 1));
+    Object.keys(E._audioEls).forEach((id) => { if (!ids[id]) { try { E._audioEls[id].pause(); } catch (_) {} delete E._audioEls[id]; } });
+    for (const c of clips) {
+      let a = E._audioEls[c.id]; if (!a) { a = E._audioEls[c.id] = new Audio(); a.preload = "auto"; }
+      const url = audioClipUrl(c);
+      if (url && a._url !== url) { a.src = url; a._url = url; }
+      a.volume = clamp(c.vol != null ? c.vol : 1, 0, 1);
+      const inClip = time >= (c.start || 0) && time < (c.start || 0) + (c.dur || 0);
+      if (E.playing && inClip && url) {
+        const local = (c.in || 0) + (time - (c.start || 0));
+        if (a.paused) { try { a.currentTime = local; a.play().catch(() => {}); } catch (_) {} }
+        else if (Math.abs(a.currentTime - local) > 0.35) { try { a.currentTime = local; } catch (_) {} }
+      } else if (!a.paused) { try { a.pause(); } catch (_) {} }
+    }
+  }
+  function pauseAllAudioClips() { if (E._audioEls) Object.keys(E._audioEls).forEach((id) => { try { E._audioEls[id].pause(); } catch (_) {} }); }
   // 음악 → 48kHz Opus 청크로 인코딩해 먹서에 추가 (페이드아웃 포함)
   async function encodeAudioInto(muxer, total, codec) {
     const hasMusic = !!E.using.musicUrl, hasVoice = !!E.using.voiceUrl;
-    if ((!hasMusic && !hasVoice) || typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return false;
+    const audioClips = (E.using.template && E.using.template.audioClips) || [];   // 🔊 관리자 분리 오디오
+    if ((!hasMusic && !hasVoice && !audioClips.length) || typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return false;
     const SR = 48000, CH = 2;
     const fetchDecode = async (url) => {
       try {
@@ -635,7 +658,9 @@
     };
     const mBuf = hasMusic ? await fetchDecode(E.using.musicUrl) : null;
     const vBuf = hasVoice ? await fetchDecode(E.using.voiceUrl) : null;
-    if (!mBuf && !vBuf) return false;
+    const clipBufs = [];
+    for (const c of audioClips) { const u = audioClipUrl(c); if (!u) continue; const buf = await fetchDecode(u); if (buf) clipBufs.push({ c, buf }); }
+    if (!mBuf && !vBuf && !clipBufs.length) return false;
     const frames = Math.ceil(total * SR);
     const off = new OfflineAudioContext(CH, frames, SR);
     if (mBuf) {
@@ -656,6 +681,16 @@
       const vsrc = off.createBufferSource(); vsrc.buffer = vBuf;
       const vg = off.createGain(); vg.gain.setValueAtTime(1, 0);
       vsrc.connect(vg); vg.connect(off.destination); vsrc.start(0);   // 나레이션은 0초부터 한 번
+    }
+    // 🔊 분리 오디오 — start 위치에 in-오프셋만큼 잘라 배치(볼륨 반영)
+    for (const { c, buf } of clipBufs) {
+      const inOff = c.in || 0;
+      const playDur = Math.min(Math.max(0, c.dur || 0), Math.max(0, buf.duration - inOff));
+      if (playDur <= 0) continue;
+      const cs = off.createBufferSource(); cs.buffer = buf;
+      const cgn = off.createGain(); cgn.gain.setValueAtTime(clamp(c.vol != null ? c.vol : 1, 0, 1), 0);
+      cs.connect(cgn); cgn.connect(off.destination);
+      try { cs.start(c.start || 0, inOff, playDur); } catch (_) { try { cs.start(c.start || 0, inOff); } catch (__) {} }
     }
     const rendered = await off.startRendering();
     const ch0 = rendered.getChannelData(0);
@@ -1609,7 +1644,14 @@
     // 고정(locked) 컷은 관리자 원본 미디어를 미리 채워둠 → 고객이 안 건드림
     // 원격 미디어는 blob 으로 받아서(canvas taint 방지) 채움
     const fills = {};
+    const audioClips = [], audioBlobs = {};   // 🔊 관리자가 분리해 게시한 오디오(slot.pubAudio)
     for (const s of (t.slots || [])) {
+      if (s.pubAudio && s.pubAudio.url) {   // 게시된 분리 오디오 URL → blob 으로 받아 출력/미리보기에 사용
+        const c = { id: "pub_" + s.id, fromSlot: s.id, start: s.pubAudio.start || 0, dur: s.pubAudio.dur || 0, in: s.pubAudio.in || 0, vol: (s.pubAudio.vol != null ? s.pubAudio.vol : 1), srcDur: s.pubAudio.srcDur || 0 };
+        audioClips.push(c);
+        try { const b = await (await fetch(s.pubAudio.url, { cache: "force-cache" })).blob(); audioBlobs[c.id] = { url: URL.createObjectURL(b), _file: b, dur: c.srcDur }; }
+        catch (_) { audioBlobs[c.id] = { url: s.pubAudio.url, dur: c.srcDur }; }
+      }
       if (s.locked && s.lockedMedia && s.lockedMedia.url) {
         const kind = s.lockedMedia.kind || "image";
         try {
@@ -1628,7 +1670,8 @@
         }
       }
     }
-    E.using = { template: JSON.parse(JSON.stringify(t)), musicUrl, fills, texts: baseTexts, selText: null, selTexts: [] };
+    const tpl = JSON.parse(JSON.stringify(t)); tpl.audioClips = audioClips;   // 🔊 분리 오디오 메타를 템플릿에
+    E.using = { template: tpl, musicUrl, fills, audioBlobs, texts: baseTexts, selText: null, selTexts: [] };
     E.playhead = 0;
     E.easyIdx = 0;
     E.using._baFlow = false;   // 일반 템플릿 — 보통 마법사(비포애프터 5단계 아님)
@@ -4555,6 +4598,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const mus = $("#esMusic"); if (mus && E.using.musicUrl) { try { mus.currentTime = Math.min(E.playhead, mus.duration || E.playhead); } catch (_) {} }
     const voc = $("#esVoice"); if (voc && E.using.voiceUrl) { try { voc.currentTime = Math.min(E.playhead, voc.duration || E.playhead); } catch (_) {} }
     updateMusicVolume(E.playhead);
+    updateAudioClips(E.playhead);   // 🔊 분리 오디오 위치 동기(정지 중이면 멈춤)
     if (!E.playing) scheduleSaveMeta();   // 수동 이동 위치 저장(재생 중 매 프레임 저장은 피함)
   }
   function togglePlay() { E.playing ? stopPlay() : startPlay(); }
@@ -4580,6 +4624,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       applyFrame(t);
       updateTransport(t);
       updateMusicVolume(t);
+      updateAudioClips(t);   // 🔊 분리 오디오 동기 재생
       E._raf = requestAnimationFrame(loop);
     };
     E._raf = requestAnimationFrame(loop);
@@ -4591,6 +4636,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const vid = $("#esVideo"); if (vid) { try { vid.pause(); } catch (_) {} }
     const mus = $("#esMusic"); if (mus) { try { mus.pause(); } catch (_) {} }
     const voc = $("#esVoice"); if (voc) { try { voc.pause(); } catch (_) {} }
+    pauseAllAudioClips();               // 🔊 분리 오디오도 정지
     updateTextVisibility(E.playhead);   // 정지 후 모든 글자 다시 보이게(편집용)
     scheduleSaveMeta();                 // 멈춘 위치 저장
   }
