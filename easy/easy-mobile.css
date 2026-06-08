@@ -3,14 +3,18 @@
    (styles.css 를 들고오지 않으므로 토큰·기본 리셋을 여기서 정의)
    easyshorts.css 뒤에 로드되어 모바일 규칙이 이긴다.
    ─────────────────────────────────────────────────────────────── */
+/* ── High-Velocity Sport System (Stitch) — 딥블랙 + 옐로우 + 레드 ── */
 :root {
-  --bg: #111114; --bg-2: #16161a;
-  --panel: #1c1c22; --panel-2: #22222a; --panel-hi: #2a2a32;
-  --border: #2e2e38; --border-hi: #3c3c48;
-  --text: #e8e8ec; --text-mid: #b6b6c0; --text-dim: #7a7a86;
-  --accent: #ff7a3d; --accent-2: #ffa066;
-  --sel: #3a82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
-  --track: #2a2a32; --track-fill: #ff7a3d;
+  --bg: #131313; --bg-2: #0e0e0e;
+  --panel: #1b1b1b; --panel-2: #1f1f1f; --panel-hi: #2a2a2a;
+  --border: #2a2a2a; --border-hi: #353535;
+  --text: #e2e2e2; --text-mid: #d0c6ab; --text-dim: #999077;
+  --accent: #ffd700; --accent-2: #e9c400; --on-accent: #1a1400;
+  --red: #ff5540; --on-red: #2a0000;
+  --sel: #ffd700; --ok: #ffd700; --warn: #ffb4a8; --err: #ff5540;
+  --track: #2a2a2a; --track-fill: #ffd700;
+  --font-head: "Montserrat", -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-body: "Inter", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
 }
@@ -21,8 +25,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "SF Pro Text", "Pretendard", system-ui, "Segoe UI",
-               "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -206,3 +209,80 @@ body.es-locked #easyRoot { visibility: hidden; }
   .es-vgrid { grid-template-columns: repeat(2, 1fr) !important; }
   .es-grid { grid-template-columns: repeat(1, 1fr) !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   High-Velocity Sport System — 컴포넌트 리스킨 (Stitch DESIGN.md)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 헤드라인 = Montserrat, 굵게·대문자·타이트 */
+.es-section-head,
+.es-easy-head .es-easy-title,
+.es-wiz .es-wiz-title,
+.es-empty-title,
+.easy-gate-title {
+  font-family: var(--font-head) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em;
+}
+.es-section-head {
+  text-transform: uppercase; letter-spacing: 0.02em; font-size: 13px;
+  color: var(--text); display: flex; align-items: center; gap: 10px;
+}
+.es-section-head .es-hint { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-dim); }
+.es-section-head::before {   /* 레이싱 스트라이프 */
+  content: ""; width: 4px; height: 16px; background: var(--accent);
+  border-radius: 2px; box-shadow: 0 0 8px rgba(255,215,0,0.5);
+}
+
+/* 버튼 = 솔리드 옐로우 + 검정텍스트, hover 시 미세 skew(질주감) */
+.es-btn-primary, .es-tplcard-make, .easy-gate-btn {
+  background: var(--accent) !important; color: var(--on-accent) !important;
+  font-family: var(--font-head) !important; font-weight: 800 !important;
+  letter-spacing: 0.01em; border: none !important;
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+}
+.es-btn-primary:hover, .es-tplcard-make:hover, .easy-gate-btn:hover {
+  background: var(--accent-2) !important;
+  box-shadow: 0 0 16px rgba(255,215,0,0.45);
+  transform: skewX(-3deg);
+}
+.es-btn-primary:active, .es-tplcard-make:active, .easy-gate-btn:active { transform: skewX(-3deg) scale(0.98); }
+
+/* 카탈로그 카드 = 차콜 + 1px 보더, hover 글로우 + 좌측 레이싱 스트라이프 */
+.es-tplcard {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 0.5rem; overflow: hidden; position: relative;
+  transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.es-tplcard::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent); transform: scaleY(0); transform-origin: top;
+  transition: transform .2s ease; z-index: 3;
+}
+.es-tplcard:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 28px rgba(0,0,0,0.5), 0 0 18px rgba(255,215,0,0.18);
+}
+.es-tplcard:hover::before, .es-tplcard.playing::before { transform: scaleY(1); }
+.es-tplcard-name { font-family: var(--font-head); font-weight: 800; letter-spacing: -0.01em; }
+.es-tplcard-sub { color: var(--text-dim); font-weight: 500; }
+.es-tplcard-asp { background: linear-gradient(135deg, #1f1f1f, #0e0e0e); }
+.es-tplcard-play { background: var(--accent) !important; color: var(--on-accent) !important; box-shadow: 0 0 18px rgba(255,215,0,0.5); }
+
+/* 비밀번호 게이트 = 다크 + 옐로우 포인트 */
+.easy-gate { background: radial-gradient(120% 120% at 50% 0%, #1b1b1b 0%, #0a0a0a 70%); }
+.easy-gate-card { border-radius: 0.75rem; border-color: var(--border); }
+.easy-gate-logo { color: var(--accent); filter: drop-shadow(0 0 12px rgba(255,215,0,0.5)); }
+.easy-gate-title { letter-spacing: 0.02em; }
+/* 입력칸 = 하단 보더만, 포커스 시 옐로우 2px */
+.easy-gate-pw {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-bottom: 2px solid var(--border-hi); border-radius: 0.5rem;
+}
+.easy-gate-pw:focus { border-color: var(--border); border-bottom-color: var(--accent); }
+
+/* 마법사 큰 번호 동그라미·드롭존 = 옐로우 */
+.es-wiz-num, .es-fill-add, .es-wiz-photobtns .es-btn-primary { box-shadow: 0 0 18px rgba(255,215,0,0.25); }
+
+/* seed 화면도 톤 맞춤 */
+.easy-seed-title { font-family: var(--font-head); font-weight: 800; }
