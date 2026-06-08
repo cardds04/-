@@ -1673,45 +1673,38 @@
     return plan;
   }
   const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "길이", "caption": "문구", "done": "완성" };
-  // 📐 트림 창 — 전체 영상 길이 트랙 위에서 고정폭(클립 길이) 창을 좌우로 끌어 위치 선택. 양 끝 손잡이로 길이 조절. (마우스·터치 공용 pointer 이벤트)
-  function setupTrimBar(row, slot, srcDur, vid) {
+  // 📐 트림 창 — 전체 영상 길이 트랙 위에서 고정폭(정해진 길이) 창을 좌우로만 끌어 '시작 위치'만 변경.
+  // 길이는 절대 안 바뀜(음악·타이밍 싱크 유지). 끌면 첫 장면(vidA)·끝 장면(vidB) 둘 다 미리보기. (마우스·터치 공용)
+  function setupTrimBar(row, slot, srcDur, vidA, vidB) {
     const win = row.querySelector(".es-trimbar-window");
     const track = row.querySelector(".es-trimbar-track");
     if (!win || !track || !(srcDur > 0)) return;
-    const lenEl = row.querySelector(".es-trim-len"), aEl = row.querySelector(".es-trim-a"), bEl = row.querySelector(".es-trim-b");
-    const MIN = 0.3;
+    const aEl = row.querySelector(".es-trim-a"), bEl = row.querySelector(".es-trim-b");
+    const dur = Math.max(0.3, Math.min(slot.dur || 0.3, srcDur));   // 정해진 길이(고정)
+    const seekFrames = () => {
+      const inn = slot.in || 0;
+      if (vidA) { try { vidA.currentTime = inn; } catch (_) {} }
+      if (vidB) { try { vidB.currentTime = Math.max(0, Math.min(srcDur - 0.03, inn + dur - 0.05)); } catch (_) {} }
+    };
     const place = () => {
-      const inn = slot.in || 0, dur = Math.max(MIN, slot.dur || MIN);
+      const inn = slot.in || 0;
       win.style.left = (inn / srcDur) * 100 + "%";
       win.style.width = (dur / srcDur) * 100 + "%";
-      if (lenEl) lenEl.textContent = dur.toFixed(1) + "초";
       if (aEl) aEl.textContent = inn.toFixed(1) + "초";
       if (bEl) bEl.textContent = (inn + dur).toFixed(1) + "초";
     };
     place();
-    let mode = null, startX = 0, in0 = 0, dur0 = 0, w = 1;
+    let dragging = false, startX = 0, in0 = 0, w = 1;
     const onMove = (e) => {
-      if (!mode) return;
+      if (!dragging) return;
       const dt = ((e.clientX - startX) / w) * srcDur;
-      if (mode === "move") {
-        slot.in = +clamp(in0 + dt, 0, Math.max(0, srcDur - dur0)).toFixed(2);
-        if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }
-      } else if (mode === "l") {
-        const end = in0 + dur0, ni = clamp(in0 + dt, 0, end - MIN);
-        slot.in = +ni.toFixed(2); slot.dur = +(end - ni).toFixed(2);
-        if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }
-      } else {   // r — 뒤 자르기(시작 고정, 길이 변경)
-        const end = clamp(in0 + dur0 + dt, in0 + MIN, srcDur);
-        slot.dur = +(end - in0).toFixed(2);
-        if (vid) { try { vid.currentTime = Math.max(0, end - 0.05); } catch (_) {} }
-      }
-      place(); e.preventDefault();
+      slot.in = +clamp(in0 + dt, 0, Math.max(0, srcDur - dur)).toFixed(2);   // 위치만 이동(길이 고정)
+      place(); seekFrames(); e.preventDefault();
     };
-    const onUp = () => { if (!mode) return; mode = null; document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp); scheduleSaveMeta(); };
+    const onUp = () => { if (!dragging) return; dragging = false; document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp); scheduleSaveMeta(); };
     win.addEventListener("pointerdown", (e) => {
       w = track.getBoundingClientRect().width || 1;
-      startX = e.clientX; in0 = slot.in || 0; dur0 = Math.max(MIN, slot.dur || MIN);
-      mode = (e.target.classList && e.target.classList.contains("es-grip-l")) ? "l" : ((e.target.classList && e.target.classList.contains("es-grip-r")) ? "r" : "move");
+      startX = e.clientX; in0 = slot.in || 0; dragging = true;
       document.addEventListener("pointermove", onMove); document.addEventListener("pointerup", onUp);
       e.preventDefault(); e.stopPropagation();
     });
@@ -1867,31 +1860,26 @@
       const rows = trimSlots.map((s) => {
         const f = E.using.fills[s.id];
         const idx = slots.indexOf(s) + 1;
-        if (!f) return `<div class="es-trim-row"><div class="es-trim-head">${idx}번 컷</div><div class="es-trim-empty">먼저 이 컷을 채워주세요</div></div>`;
-        if (f.kind === "video") {
-          const sd = f.dur || 0;
-          let inv = Math.min(s.in || 0, Math.max(0, sd - 0.3)); if (inv < 0) inv = 0;
-          let dv = Math.min(s.dur || 0, Math.max(0.3, sd - inv)); if (!(dv >= 0.3)) dv = Math.min(0.3, sd || 0.3);
-          s.in = +inv.toFixed(2); s.dur = +dv.toFixed(2);   // 고객 영상 길이에 맞게 정규화
-          return `<div class="es-trim-row" data-id="${s.id}" data-kind="video" data-srcdur="${sd.toFixed(2)}">
-            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초)</span></div>
-            <video class="es-trim-vid" src="${f.url}" muted playsinline preload="metadata"></video>
-            <div class="es-trimbar"><div class="es-trimbar-track"><div class="es-trimbar-scale"><span>0초</span><span>${sd.toFixed(1)}초</span></div><div class="es-trimbar-window"><span class="es-trimbar-grip es-grip-l" title="앞 자르기"></span><span class="es-trimbar-mid">↔ 끌어서 위치</span><span class="es-trimbar-grip es-grip-r" title="뒤 자르기"></span></div></div></div>
+        if (!f || f.kind !== "video") return "";   // 영상만 조절(사진·미채움은 표시 안 함). 길이는 정해진 대로 고정
+        const sd = f.dur || 0;
+        const dv = Math.max(0.3, Math.min(s.dur || 0.3, sd || (s.dur || 0.3)));   // 정해진 길이(고정)
+        let inv = Math.min(s.in || 0, Math.max(0, sd - dv)); if (inv < 0) inv = 0;
+        s.in = +inv.toFixed(2); s.dur = +dv.toFixed(2);
+        return `<div class="es-trim-row" data-id="${s.id}" data-kind="video" data-srcdur="${sd.toFixed(2)}">
+            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초 중 선택)</span></div>
+            <div class="es-trim-frames">
+              <div class="es-trim-frame"><span class="es-trim-flabel">첫 장면</span><video class="es-trim-vid-a" src="${f.url}" muted playsinline preload="metadata"></video></div>
+              <div class="es-trim-frame"><span class="es-trim-flabel">끝 장면</span><video class="es-trim-vid-b" src="${f.url}" muted playsinline preload="metadata"></video></div>
+            </div>
+            <div class="es-trimbar"><div class="es-trimbar-track"><div class="es-trimbar-scale"><span>0초</span><span>${sd.toFixed(1)}초</span></div><div class="es-trimbar-window"><span class="es-trimbar-mid">↔ 끌어서 위치</span></div></div></div>
             <div class="es-trim-range">선택 구간 <span class="es-trim-a">${inv.toFixed(1)}초</span> ~ <span class="es-trim-b">${(inv + dv).toFixed(1)}초</span></div>
           </div>`;
-        }
-        let dv = clamp(s.dur || 2, 0.5, 10); s.dur = +dv.toFixed(2);
-        return `<div class="es-trim-row" data-id="${s.id}" data-kind="image">
-            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b></div>
-            <img class="es-trim-img" src="${f.url}" alt="">
-            <label class="es-trim-ctl"><span>⏱ 길이</span><input type="range" class="es-trim-dur" min="0.5" max="10" step="0.1" value="${dv.toFixed(2)}"></label>
-          </div>`;
-      }).join("");
+      }).filter(Boolean).join("");
       bodyHtml = `
         <div class="es-wiz-body es-wiz-photos">
-          <div class="es-wiz-title" style="font-size:22px">길이를 조절해 주세요</div>
-          <div class="es-wiz-note">각 컷의 길이를, 영상은 시작 위치(앞 자르기)도 조절할 수 있어요</div>
-          <div class="es-trim-list">${rows}</div>
+          <div class="es-wiz-title" style="font-size:22px">영상의 어느 구간을 쓸지 골라주세요</div>
+          <div class="es-wiz-note">길이는 정해진 대로예요. 창을 좌우로 끌어 <b>시작 위치만</b> 옮겨 보세요 (첫·끝 장면이 같이 보여요)</div>
+          <div class="es-trim-list">${rows || `<div class="es-trim-empty" style="text-align:center;padding:24px 0">조절할 영상 컷이 없어요 — 다음으로 넘어가세요</div>`}</div>
           <div class="es-wiz-photobtns">
             ${prevBtn}
             <button type="button" class="es-btn es-btn-primary es-wiz-bigbtn2" id="esWizNext">다음 ›</button>
@@ -1984,16 +1972,14 @@
       $$(".es-trim-row").forEach((row) => {
         const id = row.dataset.id; if (!id) return;
         const slot = E.using.template.slots.find((s) => s.id === id); if (!slot) return;
-        const vid = row.querySelector(".es-trim-vid");
         const srcDur = parseFloat(row.dataset.srcdur || "0");
-        if (row.dataset.kind === "video" && srcDur > 0) {
-          if (vid) vid.addEventListener("loadedmetadata", () => { try { vid.currentTime = slot.in || 0; } catch (_) {} });
-          setupTrimBar(row, slot, srcDur, vid);
-        } else {
-          const lenEl = row.querySelector(".es-trim-len");
-          const durEl = row.querySelector(".es-trim-dur");
-          if (durEl) durEl.addEventListener("input", () => { slot.dur = +parseFloat(durEl.value || "0.5").toFixed(2); if (lenEl) lenEl.textContent = slot.dur.toFixed(1) + "초"; scheduleSaveMeta(); });
-        }
+        if (row.dataset.kind !== "video" || !(srcDur > 0)) return;
+        const vidA = row.querySelector(".es-trim-vid-a"), vidB = row.querySelector(".es-trim-vid-b");
+        const dur = Math.max(0.3, slot.dur || 0.3);
+        const seekInit = () => { try { if (vidA) vidA.currentTime = slot.in || 0; if (vidB) vidB.currentTime = Math.max(0, Math.min(srcDur - 0.03, (slot.in || 0) + dur - 0.05)); } catch (_) {} };
+        if (vidA) vidA.addEventListener("loadedmetadata", seekInit);
+        if (vidB) vidB.addEventListener("loadedmetadata", seekInit);
+        setupTrimBar(row, slot, srcDur, vidA, vidB);
       });
     } else {   // done
       renderTexts();
