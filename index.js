@@ -3808,6 +3808,30 @@
       const clearPaymentMonthMemoBtnEl = document.getElementById("clearPaymentMonthMemoBtn");
       const paymentUnpaidCompanyCountTextEl = document.getElementById("paymentUnpaidCompanyCountText");
       const copyUnpaidSummaryBtnEl = document.getElementById("copyUnpaidSummaryBtn");
+      const paymentBulkApplyBarEl = document.getElementById("paymentBulkApplyBar");
+      const paymentBulkCountTextEl = document.getElementById("paymentBulkCountText");
+      const paymentBulkPayerEl = document.getElementById("paymentBulkPayer");
+      const paymentBulkMonthEl = document.getElementById("paymentBulkMonth");
+      const paymentBulkDayEl = document.getElementById("paymentBulkDay");
+      const paymentBulkAmountEl = document.getElementById("paymentBulkAmount");
+      const paymentBulkApplyBtnEl = document.getElementById("paymentBulkApplyBtn");
+      // 일괄 입력 월/일 셀렉트 채우기 — 첫 옵션은 "(날짜 미적용)" 이라 비워두면 날짜는 건드리지 않음.
+      (function initPaymentBulkDateSelects() {
+        if (paymentBulkMonthEl && !paymentBulkMonthEl.options.length) {
+          paymentBulkMonthEl.innerHTML =
+            '<option value="">(월)</option>' +
+            Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
+              .map((m) => `<option value="${m}">${Number(m)}월</option>`)
+              .join("");
+        }
+        if (paymentBulkDayEl && !paymentBulkDayEl.options.length) {
+          paymentBulkDayEl.innerHTML =
+            '<option value="">(일)</option>' +
+            Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"))
+              .map((d) => `<option value="${d}">${Number(d)}일</option>`)
+              .join("");
+        }
+      })();
       const paymentListBodyEl = document.getElementById("paymentListBody");
       const paymentSortRowEl = document.getElementById("paymentSortRow");
       const couponFormEl = document.getElementById("couponForm");
@@ -13275,6 +13299,9 @@ ${folderBtn}
           });
         latestUnpaidSummaryRows = isUnpaidTab ? visibleRows.map(({ item }) => item) : [];
         copyUnpaidSummaryBtnEl?.classList.toggle("hidden", !isUnpaidTab);
+        // 일괄 입력 바: 미입금 탭에서만 노출 + 검색된 건수 표시.
+        paymentBulkApplyBarEl?.classList.toggle("hidden", !isUnpaidTab);
+        if (paymentBulkCountTextEl) paymentBulkCountTextEl.textContent = String(latestUnpaidSummaryRows.length);
         if (paymentMonthTotalTextEl) {
           const monthTotalAmount = isPaidTab
             ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(item?.paymentAmount) || 0)), 0)
@@ -13535,6 +13562,80 @@ ${folderBtn}
         editingPaymentIndex = null;
         renderList();
         queuePaymentsSync();
+      }
+
+      /** 미입금 탭에서 검색·필터된 모든 건에 입금자명·날짜·금액을 일괄 적용.
+       *  입력한 칸만 적용하고, 입금자명+금액이 모두 채워진 건은 입금완료로 처리한다.
+       *  (미입금 건은 보통 예상금액이 이미 들어 있어, 입금자명만 일괄 입력해도 완료 처리됨) */
+      function applyBulkPaymentToUnpaidVisible() {
+        const items = Array.isArray(latestUnpaidSummaryRows) ? latestUnpaidSummaryRows.filter(Boolean) : [];
+        if (!items.length) {
+          alert("적용할 미입금 건이 없습니다. (미입금 업체 탭에서 검색·필터 후 사용해주세요)");
+          return;
+        }
+        const payer = String(paymentBulkPayerEl?.value || "").trim();
+        const month = String(paymentBulkMonthEl?.value || "").trim();
+        const day = String(paymentBulkDayEl?.value || "").trim();
+        const amount = String(paymentBulkAmountEl?.value || "").trim();
+        const applyDate = !!(month && day);
+        if (!payer && !applyDate && !amount) {
+          alert("입금자명·날짜·금액 중 최소 하나는 입력해주세요.");
+          return;
+        }
+        if (month && !day) { alert("입금날짜의 '일'도 선택해주세요."); return; }
+        if (!month && day) { alert("입금날짜의 '월'도 선택해주세요."); return; }
+        const dateStr = applyDate ? `${month}-${day}` : "";
+        const parts = [];
+        if (payer) parts.push(`입금자명 「${payer}」`);
+        if (applyDate) parts.push(`입금날짜 ${Number(month)}/${Number(day)}`);
+        if (amount) parts.push(`입금금액 ${amount}`);
+        if (
+          !confirm(
+            `검색된 ${items.length}건에 ${parts.join(" · ")} 을(를) 일괄 적용할까요?\n` +
+              "입금자명+금액이 모두 채워진 건은 입금완료로 처리됩니다."
+          )
+        ) {
+          return;
+        }
+        let completed = 0;
+        items.forEach((item) => {
+          if (!item) return;
+          item.paymentUndo = {
+            paymentPayer: item.paymentPayer || "",
+            paymentDate: item.paymentDate || "",
+            paymentAmount: item.paymentAmount || "",
+            paymentExtraAmount: item.paymentExtraAmount || "",
+            paymentExtraMemo: item.paymentExtraMemo || "",
+            paymentStatus: item.paymentStatus || "미입금",
+            couponUsed: Boolean(item.couponUsed),
+            partialPaid: Boolean(item.partialPaid)
+          };
+          if (payer) item.paymentPayer = payer;
+          if (applyDate) item.paymentDate = dateStr;
+          if (amount) {
+            item.paymentAmount = amount;
+            if (amount !== "쿠폰사용") item.couponUsed = false;
+          }
+          const finalPayer = String(item.paymentPayer || "").trim();
+          const finalAmount = String(item.paymentAmount || "").trim();
+          if (finalPayer && finalAmount) {
+            item.paymentStatus = "입금완료";
+            item.partialPaid = false;
+            completed += 1;
+          }
+          markScheduleRowDirty(item, "payment_mutation");
+        });
+        if (paymentBulkPayerEl) paymentBulkPayerEl.value = "";
+        if (paymentBulkAmountEl) paymentBulkAmountEl.value = "";
+        if (paymentBulkMonthEl) paymentBulkMonthEl.value = "";
+        if (paymentBulkDayEl) paymentBulkDayEl.value = "";
+        editingPaymentIndex = null;
+        renderList();
+        queuePaymentsSync();
+        alert(
+          `${items.length}건에 일괄 적용했습니다.` +
+            (completed ? `\n그 중 ${completed}건이 입금완료 처리되었습니다.` : "")
+        );
       }
 
       function undoPaymentFromTable(index) {
@@ -17595,6 +17696,16 @@ ${folderBtn}
       });
       copyScheduleBtnEl.addEventListener("click", copyCurrentScheduleList);
       copyUnpaidSummaryBtnEl?.addEventListener("click", copyUnpaidSummaryList);
+      paymentBulkApplyBtnEl?.addEventListener("click", applyBulkPaymentToUnpaidVisible);
+      // 입금금액·입금자명 칸에서 Enter 로도 일괄 적용
+      [paymentBulkPayerEl, paymentBulkAmountEl].forEach((el) =>
+        el?.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            applyBulkPaymentToUnpaidVisible();
+          }
+        })
+      );
       calendarCloseBtnEl.addEventListener("click", () => {
         calendarModalEl.classList.add("hidden");
       });
