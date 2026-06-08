@@ -1661,16 +1661,18 @@
     const hasVid = hasBA && befores.some((b) => b.aiVid);
     const plains = slots.filter((s) => slotRole(s) === "plain" && !s.locked);
     const details = slots.filter((s) => slotRole(s) === "detail" && !s.locked);
+    const trims = slots.filter((s) => s.easyTrim && !s.locked);   // 📐 이지조절 켠 컷
     const texts = E.using.texts || [];
     const plan = [];
     if (hasBA) { plan.push("ba-after", "ba-before"); if (hasVid) plan.push("ba-video"); }   // 비포애프터가 있을 때만
     if (plains.length) plan.push("plain");        // 일반컷이 있을 때만
     if (details.length) plan.push("detail");      // 디테일컷이 있을 때만
+    if (trims.length) plan.push("length");        // 📐 이지조절 켠 컷이 있으면 길이 단계
     if (texts.some((tx) => !tx.locked)) plan.push("caption");   // 고정 안 된(수정 가능한) 자막이 있을 때만 — 전부 고정이면 단계 건너뜀
     plan.push("done");
     return plan;
   }
-  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "caption": "문구", "done": "완성" };
+  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "길이", "caption": "문구", "done": "완성" };
   function renderEasy() {
     const body = $("#esBody"); if (!body) return;
     if (!E.using) { renderGallery(); return; }   // 작업 전이면 공유 템플릿 공간
@@ -1685,6 +1687,7 @@
     const detailSlots = slots.filter((s) => slotRole(s) === "detail" && !s.locked);
     const plainSlots = slots.filter((s) => slotRole(s) === "plain" && !s.locked);
     const vresDone = slots.filter((s) => slotRole(s) === "vresult" && E.using.fills[s.id]);
+    const trimSlots = slots.filter((s) => s.easyTrim && !s.locked);   // 📐 이지조절 켠 컷 — 길이 단계 대상
     const BA_CREDIT_PER = 400;   // 영상 1개당 안내 크레딧(서비스화 시 실제 차감)
     const filledOf = (arr) => arr.filter((s) => E.using.fills[s.id]).length;
     // 동적 플랜 — 템플릿에 들어있는 컷 타입에 맞춰 단계 구성
@@ -1817,6 +1820,40 @@
           <span class="es-use-head-sp"></span>
           <button type="button" class="es-btn es-btn-primary es-wiz-nav" id="esWizNext">다음 ›</button>
         </div>`;
+    } else if (cur === "length") {
+      const rows = trimSlots.map((s) => {
+        const f = E.using.fills[s.id];
+        const idx = slots.indexOf(s) + 1;
+        if (!f) return `<div class="es-trim-row"><div class="es-trim-head">${idx}번 컷</div><div class="es-trim-empty">먼저 이 컷을 채워주세요</div></div>`;
+        if (f.kind === "video") {
+          const sd = f.dur || 0;
+          let inv = Math.min(s.in || 0, Math.max(0, sd - 0.3)); if (inv < 0) inv = 0;
+          let dv = Math.min(s.dur || 0, Math.max(0.3, sd - inv)); if (!(dv >= 0.3)) dv = Math.min(0.3, sd || 0.3);
+          s.in = +inv.toFixed(2); s.dur = +dv.toFixed(2);   // 고객 영상 길이에 맞게 정규화
+          return `<div class="es-trim-row" data-id="${s.id}" data-kind="video" data-srcdur="${sd.toFixed(2)}">
+            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초)</span></div>
+            <video class="es-trim-vid" src="${f.url}" muted playsinline preload="metadata"></video>
+            <label class="es-trim-ctl"><span>✂ 앞 자르기(시작)</span><input type="range" class="es-trim-in" min="0" max="${Math.max(0, sd - 0.3).toFixed(2)}" step="0.05" value="${inv.toFixed(2)}"></label>
+            <label class="es-trim-ctl"><span>⏱ 길이</span><input type="range" class="es-trim-dur" min="0.3" max="${Math.max(0.3, sd - inv).toFixed(2)}" step="0.05" value="${dv.toFixed(2)}"></label>
+          </div>`;
+        }
+        let dv = clamp(s.dur || 2, 0.5, 10); s.dur = +dv.toFixed(2);
+        return `<div class="es-trim-row" data-id="${s.id}" data-kind="image">
+            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b></div>
+            <img class="es-trim-img" src="${f.url}" alt="">
+            <label class="es-trim-ctl"><span>⏱ 길이</span><input type="range" class="es-trim-dur" min="0.5" max="10" step="0.1" value="${dv.toFixed(2)}"></label>
+          </div>`;
+      }).join("");
+      bodyHtml = `
+        <div class="es-wiz-body es-wiz-photos">
+          <div class="es-wiz-title" style="font-size:22px">길이를 조절해 주세요</div>
+          <div class="es-wiz-note">각 컷의 길이를, 영상은 시작 위치(앞 자르기)도 조절할 수 있어요</div>
+          <div class="es-trim-list">${rows}</div>
+          <div class="es-wiz-photobtns">
+            ${prevBtn}
+            <button type="button" class="es-btn es-btn-primary es-wiz-bigbtn2" id="esWizNext">다음 ›</button>
+          </div>
+        </div>`;
     } else {   // done
       bodyHtml = `
         <div class="es-wiz-body es-wiz-done">
@@ -1900,6 +1937,26 @@
         inp.addEventListener("keydown", (e) => e.stopPropagation());
       });
       { const rb = $("#esAiReco"); if (rb) rb.addEventListener("click", aiRecommendCaptions); }
+    } else if (cur === "length") {
+      $$(".es-trim-row").forEach((row) => {
+        const id = row.dataset.id; if (!id) return;
+        const slot = E.using.template.slots.find((s) => s.id === id); if (!slot) return;
+        const lenEl = row.querySelector(".es-trim-len");
+        const vid = row.querySelector(".es-trim-vid");
+        const inEl = row.querySelector(".es-trim-in");
+        const durEl = row.querySelector(".es-trim-dur");
+        const srcDur = parseFloat(row.dataset.srcdur || "0");
+        const sync = () => { if (lenEl) lenEl.textContent = (slot.dur || 0).toFixed(1) + "초"; };
+        if (vid) vid.addEventListener("loadedmetadata", () => { try { vid.currentTime = slot.in || 0; } catch (_) {} });
+        if (inEl) inEl.addEventListener("input", () => {
+          slot.in = +parseFloat(inEl.value || "0").toFixed(2);
+          const maxDur = Math.max(0.3, srcDur - slot.in);
+          if (durEl) { durEl.max = maxDur.toFixed(2); if ((slot.dur || 0) > maxDur) { slot.dur = +maxDur.toFixed(2); durEl.value = slot.dur; } }
+          if (vid) { try { vid.currentTime = slot.in; } catch (_) {} }   // 시작 프레임 미리보기
+          sync(); scheduleSaveMeta();
+        });
+        if (durEl) durEl.addEventListener("input", () => { slot.dur = +parseFloat(durEl.value || "0.3").toFixed(2); sync(); scheduleSaveMeta(); });
+      });
     } else {   // done
       renderTexts();
       updateReelsOverlay();
