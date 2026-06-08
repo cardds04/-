@@ -592,6 +592,31 @@
         color: #6b7280;
       }
 
+      /* ---- 영어 / 한자 종류 탭 ---- */
+      .kind-tabs {
+        display: flex;
+        gap: 6px;
+        margin: 6px 0 4px;
+      }
+      .kind-tab {
+        flex: 1;
+        border: 2px solid #e5e7eb;
+        background: #fff;
+        color: #475569;
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.95rem;
+        padding: 9px 6px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      .kind-tab.active {
+        background: linear-gradient(135deg, #fde68a, #fbbf24);
+        border-color: #f59e0b;
+        color: #78350f;
+        box-shadow: 0 3px 8px rgba(251, 191, 36, 0.35);
+      }
+
       /* ---- 사진으로 / 직접 적기 탭 ---- */
       .mode-tabs {
         display: flex;
@@ -3188,6 +3213,12 @@
               <input type="text" id="vocabUnitTitleInput" placeholder="예: 6월 학교 단어 / Unit 5 어휘" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:0.92rem;box-sizing:border-box" />
             </label>
 
+            <!-- 종류: 영어 / 한자 -->
+            <div class="kind-tabs">
+              <button type="button" class="kind-tab active" id="kindTabEn">📖 영어 단어</button>
+              <button type="button" class="kind-tab" id="kindTabHanja">🀄 한자</button>
+            </div>
+
             <!-- 2) 사진으로 / 직접 적기 선택 -->
             <div class="mode-tabs">
               <button type="button" class="mode-tab active" id="modeTabPhoto">📷 사진으로</button>
@@ -3971,6 +4002,42 @@
         return out;
       }
 
+      // 한자 → 한국어 훈음/뜻 자동 채우기 (예: 山 → "메 산", 友情 → "벗 우, 뜻 정 (우정)")
+      async function fetchHanjaMeaningsFromGemini(chars) {
+        if (!Array.isArray(chars) || !chars.length) return {};
+        const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
+        const prompt =
+          "아래 한자(들)의 한국어 훈음을 짧게 알려줘.\n" +
+          "- 한 글자면 \"훈 음\" 형식 (예: 山 → \"메 산\", 學 → \"배울 학\").\n" +
+          "- 두 글자 이상이면 단어 전체의 한국어 뜻을 짧게 (예: 友情 → \"우정·친구 사이의 정\").\n" +
+          "응답은 반드시 JSON만: {\"items\":[{\"word\":\"山\",\"meaning\":\"메 산\"}, ...]}.\n" +
+          "한자 목록:\n" + chars.map((c) => "- " + c).join("\n");
+        const body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+        };
+        const data = await callGeminiAPI(apiKey, body);
+        let raw = "";
+        try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+        if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); }
+        catch (_) {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+        }
+        if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        const out = {};
+        parsed.items.forEach((it) => {
+          if (!it || typeof it !== "object") return;
+          const w = String(it.word || "").trim();
+          const k = String(it.meaning || "").trim();
+          if (w && k) out[w] = k;
+        });
+        return out;
+      }
+
       // 🧒 한글 뜻이 어려울 때 아이가 이해할 쉬운 풀이 생성 (예: "직유" → "‘처럼/같이’로 비교하는 말")
       async function fetchKidExplainsFromGemini(pairs) {
         if (!Array.isArray(pairs) || !pairs.length) return {};
@@ -4167,6 +4234,7 @@
       function buildUnitFromGemini(parsed, opts) {
         opts = opts || {};
         const onlyVocab = opts.mode === "vocab";
+        const kind = opts.kind === "hanja" ? "hanja" : "en"; // "en"=영어, "hanja"=한자
         const now = Date.now();
         const d = new Date(now);
         const dt = (d.getMonth() + 1) + "." + String(d.getDate()).padStart(2, "0");
@@ -4174,10 +4242,11 @@
 
         const unit = {
           id: id,
-          title: dt + (onlyVocab ? " 단어" : " 단원"),
-          icon: onlyVocab ? "📖" : "🆕",
+          title: dt + (kind === "hanja" ? " 한자" : (onlyVocab ? " 단어" : " 단원")),
+          icon: kind === "hanja" ? "🀄" : (onlyVocab ? "📖" : "🆕"),
           createdAt: now,
-          mode: onlyVocab ? "vocab" : "full",
+          mode: onlyVocab || kind === "hanja" ? "vocab" : "full",
+          kind: kind,
           vocab: [], spell: [], spell_meanings: {}, sentences: [], prompts: [],
           disabledWords: [], vocabRights: [], vocabWrongs: [], spellRights: [], spellWrongs: [],
           vocabReview: { stage: 0, nextAt: 0, history: [] },
@@ -4188,7 +4257,8 @@
           unit.vocab = parsed.vocab
             .filter((v) => v && typeof v.word === "string" && typeof v.meaning === "string")
             .map((v) => ({
-              word: String(v.word).trim().toLowerCase(),
+              // 한자는 lowercase 적용 X (영어 단어만 lowercase)
+              word: kind === "hanja" ? String(v.word).trim() : String(v.word).trim().toLowerCase(),
               meaning: String(v.meaning).trim(),
               en: typeof v.en === "string" ? String(v.en).trim() : "",
             }))
@@ -4592,9 +4662,27 @@
       async function callGeminiVision(apiKey, files, opts) {
         opts = opts || {};
         const onlyVocab = opts.mode === "vocab";
+        const isHanja = opts.kind === "hanja";
 
         const parts = [];
-        const promptLines = onlyVocab
+        const promptLines = isHanja ? [
+          "You are a kind Hanja (한자) study assistant helping a Korean elementary/middle school student.",
+          "The attached photo(s) contain Chinese characters (한자) the student should memorize.",
+          "Extract EVERY hanja character or hanja word from the image(s).",
+          "For EACH hanja, give the Korean reading (음/뜻):",
+          "- Format: \"훈(뜻) 음(독음)\" 예: 山 → \"메 산\", 學 → \"배울 학\", 友 → \"벗 우\".",
+          "- 한자가 두 글자 이상이면 단어 전체의 한국어 뜻을 짧게 적어. 예: 友情 → \"벗 우, 뜻 정 (우정·친구 사이의 정)\".",
+          "Return a single valid JSON object ONLY:",
+          "{",
+          '  "vocab": [ {"word":"한자(들)","meaning":"훈음 또는 한글 뜻"} ]',
+          "}",
+          "Rules:",
+          "- 'word' MUST be the Chinese character(s), NOT romanization or Korean.",
+          "- 'meaning' MUST be Korean. Every item MUST have non-empty meaning.",
+          "- Include all visible hanja. Do NOT skip duplicates inside one image — but each unique hanja only once.",
+          "- Do NOT include spell/sentences/prompts keys.",
+          "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
+        ] : (onlyVocab
           ? [
               "You are a kind English study assistant helping a Korean elementary/middle school student.",
               "The attached photo(s) are an English study sheet, vocabulary list, spelling list, or textbook page.",
@@ -4631,7 +4719,7 @@
               "- Meanings/explanations must be in simple Korean for an elementary student.",
               "- Do NOT invent content that is not in the images.",
               "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
-            ];
+            ]);
         parts.push({ text: promptLines.join("\n") });
 
         for (let i = 0; i < files.length; i++) {
@@ -4696,6 +4784,25 @@
         }
         modeTabPhoto && modeTabPhoto.addEventListener("click", () => setPanelMode("photo"));
         modeTabText && modeTabText.addEventListener("click", () => setPanelMode("text"));
+        // 종류 (영어/한자) 토글
+        let currentKind = "en";
+        const kindTabEn = $("kindTabEn");
+        const kindTabHanja = $("kindTabHanja");
+        function setPanelKind(k) {
+          currentKind = (k === "hanja") ? "hanja" : "en";
+          if (kindTabEn) kindTabEn.classList.toggle("active", currentKind === "en");
+          if (kindTabHanja) kindTabHanja.classList.toggle("active", currentKind === "hanja");
+          const taEl = $("vocabTextInput");
+          if (taEl) {
+            taEl.placeholder = currentKind === "hanja"
+              ? "한자 한 자에 줄 하나씩 적어요:\n山 메 산\n川 내 천\n友 벗 우\n\n뜻 없이 한자만 적어도 OK — Gemini가 한국어 훈음을 자동으로 채워줘요."
+              : "영어만 적어도 OK (뜻 자동 채움):\nalter\ncollapse\ncrisis\n\n영어 + 한국어 짝지어 적어도 OK:\nalter 바꾸다, 변경하다\ncollapse 무너지다";
+          }
+          const ex = $("btnExtractPhoto");
+          if (ex) ex.textContent = currentKind === "hanja" ? "🔍 사진에서 한자 추출" : "🔍 사진에서 단어 추출";
+        }
+        kindTabEn && kindTabEn.addEventListener("click", () => setPanelKind("en"));
+        kindTabHanja && kindTabHanja.addEventListener("click", () => setPanelKind("hanja"));
         const keyStatus = $("keyStatus");
         const btnToggleKey = $("btnToggleKey");
         const btnClearKey = $("btnClearKey");
@@ -4900,11 +5007,12 @@
         }
 
         // ---- 공통: {word, meaning}[] → 단어장 단원 생성 후 활성화 ----
-        function buildAndSaveVocabUnit(items, srcIcon) {
+        function buildAndSaveVocabUnit(items, srcIcon, kindOpt) {
+          const kind = kindOpt === "hanja" ? "hanja" : "en";
           const pairs = items.filter((p) => p.word && p.meaning);
           if (pairs.length < 2) return { ok: false, reason: "뜻이 있는 단어가 2개 이상 필요해요. 현재 " + pairs.length + "개." };
           const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "" })) };
-          const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab" });
+          const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab", kind: kind });
           const titleEl = $("vocabUnitTitleInput");
           const customTitle = String((titleEl && titleEl.value) || "").trim();
           if (customTitle) {
@@ -4925,6 +5033,8 @@
           renderMenuCardsState();
 
           // 🧒 단어 등록 직후, Gemini가 어려운 뜻들에 '아이용 쉬운 풀이'를 백그라운드로 자동 채움
+          // (한자 단원에는 적용하지 않음 — 한자는 훈음 자체가 뜻이라 풀이 자동 생성이 어울리지 않음)
+          if (kind === "hanja") return { ok: true, unit: newUnit, count: pairs.length, skipped: items.length - pairs.length };
           (async () => {
             try {
               const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
@@ -4974,13 +5084,15 @@
           status.className = "ai-status is-loading";
           status.textContent = "🤖 사진에서 단어를 읽고 있어요… (10~30초)";
           try {
-            const parsed = await callGeminiVision(key, files, { mode: "vocab" });
+            const parsed = await callGeminiVision(key, files, { mode: "vocab", kind: currentKind });
             // vocab 우선, 혹시 spell 로 와도 함께 수집
             let items = [];
             const seen = new Set();
             const pushItem = (w, m) => {
-              w = String(w || "").trim().toLowerCase();
-              if (!w || w.length < 2 || seen.has(w)) return;
+              const isH = currentKind === "hanja";
+              w = isH ? String(w || "").trim() : String(w || "").trim().toLowerCase();
+              const minLen = isH ? 1 : 2; // 한자는 한 글자도 OK
+              if (!w || w.length < minLen || seen.has(w)) return;
               seen.add(w);
               items.push({ word: w, meaning: String(m || "").trim() });
             };
@@ -5033,7 +5145,7 @@
             status.textContent = "⚠️ 먼저 ‘사진에서 단어 추출’을 눌러주세요.";
             return;
           }
-          const res = buildAndSaveVocabUnit(photoPendingItems, "📖");
+          const res = buildAndSaveVocabUnit(photoPendingItems, currentKind === "hanja" ? "🀄" : "📖", currentKind);
           if (!res.ok) {
             status.className = "ai-status is-error";
             status.textContent = "⚠️ " + res.reason;
@@ -5141,12 +5253,35 @@
 
         // 입력 텍스트로부터 (단어, 뜻) 짝과 뜻이 없는 단어들을 함께 계산
         function computeAllItems(input) {
+          if (currentKind === "hanja") return computeHanjaItems(input);
           const pairs = parseVocabText(input);
           const map = new Map();
           pairs.forEach((p) => map.set(p.word, p.meaning));
           const allWords = extractAllEnglishWords(input);
           const items = allWords.map((w) => ({ word: w, meaning: map.get(w) || "" }));
           return items;
+        }
+        // 한자 파서: 한 줄에 "한자 [공백] 뜻" 형식, 또는 한자만 적은 줄
+        function computeHanjaItems(input) {
+          const lines = String(input || "").split(/\r?\n/);
+          const HANJA_CHAR = /[㐀-鿿豈-﫿]/; // CJK Unified + Compatibility
+          const out = [];
+          const seen = new Set();
+          lines.forEach((raw) => {
+            const line = raw.trim();
+            if (!line) return;
+            // 첫 한자 토큰(연속된 한자만)
+            const m = line.match(/[㐀-鿿豈-﫿]+/);
+            if (!m) return;
+            const word = m[0];
+            if (seen.has(word)) return;
+            seen.add(word);
+            // 한자 토큰 이후의 한국어 부분을 뜻으로
+            const rest = line.slice(line.indexOf(word) + word.length).trim().replace(/^[-:·\.\s]+/, "");
+            const meaning = rest || "";
+            out.push({ word: word, meaning: meaning });
+          });
+          return out;
         }
 
         // 입력 즉시 미리보기 (단어 개수 + 목록)
@@ -5196,8 +5331,9 @@
               }
               try {
                 const merged = {};
+                const fetchFn = currentKind === "hanja" ? fetchHanjaMeaningsFromGemini : fetchKoreanMeaningsFromGemini;
                 for (let i = 0; i < missing.length; i += 50) {
-                  Object.assign(merged, await fetchKoreanMeaningsFromGemini(missing.slice(i, i + 50)));
+                  Object.assign(merged, await fetchFn(missing.slice(i, i + 50)));
                 }
                 updated = items.map((it) => ({ word: it.word, meaning: it.meaning || merged[it.word] || "" }));
                 renderVocabList(textPreview, updated, "");
@@ -5215,7 +5351,7 @@
               btnApplyText.textContent = originalLabel;
             }
 
-            const res = buildAndSaveVocabUnit(updated, "📖");
+            const res = buildAndSaveVocabUnit(updated, currentKind === "hanja" ? "🀄" : "📖", currentKind);
             if (!res.ok) {
               if (textStatus) {
                 textStatus.className = "ai-status is-error";
@@ -5458,9 +5594,33 @@
         }
 
         // 📖 단어 뜻 맞히기 4단계 카드 (잠금 없음, 적립금 30분 쿨다운만, 클리어 뱃지)
+        // 한자 단원이면 라벨도 한자 버전으로 동적 변경
+        const HJ = isHanjaUnit();
+        const sectionTitle = document.querySelector("#vstageSection .vstage-head h3");
+        if (sectionTitle) sectionTitle.textContent = HJ ? "🀄 한자 뜻 맞히기" : "📖 단어 뜻 맞히기";
+        const labels = HJ
+          ? [
+              { ico: "📚", title: "1단계", desc: "오늘 외울 한자 보기" },
+              { ico: "🀄", title: "2단계", desc: "뜻 보고 → 한자" },
+              { ico: "📖", title: "3단계", desc: "한자 보고 → 뜻" },
+              { ico: "✏️", title: "4단계", desc: "한자 그리기 (생략)" },
+            ]
+          : [
+              { ico: "📚", title: "1단계", desc: "오늘 외울 단어 보기" },
+              { ico: "🔤", title: "2단계", desc: "뜻 보고 → 영어 단어" },
+              { ico: "📖", title: "3단계", desc: "영어 보고 → 뜻" },
+              { ico: "✏️", title: "4단계", desc: "스펠링 빈칸 채우기" },
+            ];
         for (let stage = 1; stage <= 4; stage++) {
           const card = document.getElementById("vstage-" + stage);
           if (!card) continue;
+          const ico = card.querySelector(".vs-ico");
+          const ttl = card.querySelector("h4");
+          const dsc = card.querySelector("p");
+          const L = labels[stage - 1];
+          if (ico) ico.textContent = L.ico;
+          if (ttl) ttl.textContent = L.title;
+          if (dsc) dsc.textContent = L.desc;
           const chip = document.getElementById("vschip-" + stage);
           // ✅ 클리어 뱃지 (모든 단계에서, 카드 우측 상단)
           let clearedBadge = card.querySelector(".vs-cleared");
@@ -5540,6 +5700,10 @@
         return m + "분";
       }
       // 단원·단계별 클리어 기록 (단계 100점 통과 시 영구 표시)
+      function isHanjaUnit() {
+        const u = getActiveUnit();
+        return u && u.kind === "hanja";
+      }
       function isStageCleared(stage) {
         const u = getActiveUnit();
         const o = u.vocabStageCleared || {};
@@ -5658,7 +5822,8 @@
             const out = [];
             arr.forEach((v) => {
               if (!v || typeof v.word !== "string") return;
-              const k = v.word.trim().toLowerCase();
+              // 한자는 대소문자 의미가 없으므로 그대로, 영어는 lowercase 정규화
+              const k = isHanjaUnit() ? v.word.trim() : v.word.trim().toLowerCase();
               if (!k || seen.has(k)) return;
               seen.add(k);
               out.push(v);
@@ -6275,7 +6440,10 @@
       function buildWordChoices(item, total) {
         const set = new Set([item.word]);
         shuffle(VOCAB.filter((v) => v.word !== item.word)).forEach((v) => { if (set.size < total) set.add(v.word); });
-        if (set.size < total) shuffle(DEFAULTS.VOCAB).forEach((v) => { if (set.size < total && v.word !== item.word) set.add(v.word); });
+        // 영어 단원에서만 기본 단원 단어로 보충 (한자 단원엔 영어 섞이지 않게)
+        if (set.size < total && !isHanjaUnit()) {
+          shuffle(DEFAULTS.VOCAB).forEach((v) => { if (set.size < total && v.word !== item.word) set.add(v.word); });
+        }
         return Array.from(set);
       }
 
@@ -6295,12 +6463,13 @@
           correctVal = item.word;
           showSpeak = false;
         } else {
-          // 2단계(기본): 영어 단어 → 한글 뜻
-          promptSmall = "📖 이 단어의 뜻은?";
+          // 3단계(level=2): 영어/한자 → 한글 뜻
+          promptSmall = isHanjaUnit() ? "🀄 이 한자의 뜻은?" : "📖 이 단어의 뜻은?";
           promptBigHtml = escapeHtml(item.word);
           const insideOthers = shuffle(VOCAB.filter((v) => v.word !== item.word && v.meaning !== item.meaning)).slice(0, 3).map((v) => v.meaning);
           const inUnitMeanings = new Set(VOCAB.map((v) => v.meaning));
-          const outsidePool = buildOutsideMeaningPool().filter((m) => !inUnitMeanings.has(m) && m !== item.meaning);
+          // 한자 단원은 단원 안에서만 보기 — 영어 뜻이 섞이지 않게
+          const outsidePool = isHanjaUnit() ? [] : buildOutsideMeaningPool().filter((m) => !inUnitMeanings.has(m) && m !== item.meaning);
           const outsideOthers = shuffle(outsidePool).slice(0, 2);
           const meaningSet = new Set([item.meaning, ...insideOthers, ...outsideOthers]);
           const merged = [item.meaning, ...insideOthers, ...outsideOthers];
@@ -6310,7 +6479,7 @@
               if (!meaningSet.has(more[i])) { meaningSet.add(more[i]); merged.push(more[i]); }
             }
           }
-          if (merged.length < totalChoices) {
+          if (merged.length < totalChoices && !isHanjaUnit()) {
             const morePool = shuffle(buildOutsideMeaningPool().filter((m) => !meaningSet.has(m)));
             for (let i = 0; i < morePool.length && merged.length < totalChoices; i++) { meaningSet.add(morePool[i]); merged.push(morePool[i]); }
           }
@@ -6349,8 +6518,10 @@
         if (showSpeak) {
           const sb = $("btnSay");
           if (sb) sb.addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
-          // 🔊 화면에 단어가 뜨자마자 자동으로 발음 재생 (조금 늦춰 음성엔진이 준비된 뒤)
-          setTimeout(() => { try { speak(item.word, { btn: sb }); } catch (e) {} }, 350);
+          // 🔊 영어 단어일 때만 자동 발음 (한자는 발음 끔)
+          if (!isHanjaUnit()) {
+            setTimeout(() => { try { speak(item.word, { btn: sb }); } catch (e) {} }, 350);
+          }
         }
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
@@ -6406,8 +6577,10 @@
         const slots = [];
         let resolved = false;
 
-        // 🔊 4단계 — 화면에 단어가 뜨면 자동으로 발음 들려주기 (글자 힌트)
-        setTimeout(() => { try { speak(word); } catch (e) {} }, 350);
+        // 🔊 4단계 — 영어 단어일 때만 자동 발음 (한자는 발음 끔)
+        if (!isHanjaUnit()) {
+          setTimeout(() => { try { speak(word); } catch (e) {} }, 350);
+        }
 
         chars.forEach((c, i) => {
           const box = document.createElement("div");
@@ -8969,6 +9142,11 @@
           }
           if (stage === 1) {
             openStudyListOverlay("vocab");
+            return;
+          }
+          // 한자 단원은 4단계(스펠링 빈칸) 의미 없음 → 안내
+          if (stage === 4 && isHanjaUnit()) {
+            alert("🀄 한자 단원에는 4단계(스펠링)가 어울리지 않아요. 1·2·3단계로 공부해요!");
             return;
           }
           // 적립금 쿨다운 안내 (시작은 가능)
