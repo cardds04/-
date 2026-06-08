@@ -302,19 +302,30 @@
   // 실패 시(오프라인 등) 마지막으로 받아 캐시한 목록으로 폴백.
   const TPL_API = "https://sc-pink.vercel.app/api/easy-templates";
   async function loadTemplates() {
-    try {
-      const r = await fetch(TPL_API, { cache: "no-store" });
-      const j = await r.json();
-      if (j && j.ok && Array.isArray(j.templates)) {
-        E.templates = j.templates;
-        try { await idbSet("templates", j.templates); } catch (_) {}   // 오프라인 폴백용 캐시
-        return;
-      }
-      throw new Error("bad response");
-    } catch (_) {
-      try { const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : []; }
-      catch (_2) { E.templates = []; }
+    // 응답이 크면(썸네일 다수) 가끔 전송 중 잘리거나 제어문자가 섞여 JSON.parse 가 실패한다.
+    // 예전엔 곧장 옛 IndexedDB 캐시로 폴백 → 최근 게시(예: 컷 고정)가 고객에게 안 보였다.
+    // 이제: 파싱 실패면 캐시버스트로 최대 3번 재시도하고, 그래도 안 되면 그때만 캐시 사용.
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const bust = attempt ? (TPL_API.indexOf("?") >= 0 ? "&" : "?") + "cb=" + (Date.now ? Date.now() : +new Date()) + "_" + attempt : "";
+        const r = await fetch(TPL_API + bust, { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const txt = await r.text();
+        let j;
+        try { j = JSON.parse(txt); }
+        catch (e1) { j = JSON.parse(txt.replace(/[\u0000-\u001F]+/g, " ")); }   // 제어문자 정제 후 재시도
+        if (j && j.ok && Array.isArray(j.templates)) {
+          E.templates = j.templates;
+          try { await idbSet("templates", j.templates); } catch (_) {}   // 오프라인 폴백용 캐시
+          return;
+        }
+        throw new Error("bad response");
+      } catch (e) { lastErr = e; }
     }
+    console.warn("[easyshorts] loadTemplates 실패 — 옛 캐시 사용(최신 게시가 안 보일 수 있음):", lastErr);
+    try { const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : []; }
+    catch (_2) { E.templates = []; }
   }
   async function musicBlobUrl(templateId) {
     try { const b = await idbGet("music_" + templateId); if (b instanceof Blob) return URL.createObjectURL(b); } catch (_) {}
