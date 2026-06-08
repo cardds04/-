@@ -37,6 +37,9 @@ create policy "easy-music public read"
   on storage.objects for select
   using (bucket_id = 'easy-music');
 
+-- 4-b) 미리보기 썸네일 컬럼 (내 영상 게시 시 대표 이미지)
+alter table public.easy_templates add column if not exists thumb text;
+
 -- 5) 고객 AI 영상 생성 하루 한도 카운터 (비용 폭주 방지)
 --    서버(service_role)만 접근. 정책 없음 → anon 불가.
 create table if not exists public.easy_ai_usage (

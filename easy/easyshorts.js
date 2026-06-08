@@ -1003,6 +1003,7 @@
             const asp = (t.aspect || "9:16");
             return `<button type="button" class="es-tplcard" data-tid="${t.id}">
               <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
+                ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
                 <span class="es-tplcard-play">▶</span>
               </div>
               <div class="es-tplcard-meta">
