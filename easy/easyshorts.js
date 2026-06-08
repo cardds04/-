@@ -918,6 +918,19 @@
     try { localStorage.setItem("easy_liked", JSON.stringify(Array.from(s))); } catch (_) {}
     return s.has(id);
   }
+  // 빠르게 보기 — 1x → 2x → 4x
+  function curSpeed() {
+    if (!E._playSpeed) { let v = 1; try { v = parseFloat(localStorage.getItem("easy_pspeed")) || 1; } catch (_) {} E._playSpeed = (v === 2 || v === 4) ? v : 1; }
+    return E._playSpeed;
+  }
+  function setSpeed(v) {
+    E._playSpeed = v; try { localStorage.setItem("easy_pspeed", String(v)); } catch (_) {}
+    if (_tplPrev && _tplPrev.video) { try { _tplPrev.video.playbackRate = v; } catch (_) {} }   // 재생 중이면 즉시 반영
+    $$(".es-speed-btn").forEach((b) => { b.textContent = "⏩ " + v + "x"; b.classList.toggle("on", v > 1); });
+  }
+  function cycleSpeed() { const s = curSpeed(); setSpeed(s >= 4 ? 1 : (s >= 2 ? 4 : 2)); }
+  function speedBtnHtml() { const s = curSpeed(); return `<button type="button" class="es-speed-btn ${s > 1 ? "on" : ""}" title="빠르게 보기 (1x→2x→4x)">⏩ ${s}x</button>`; }
+  function wireSpeed(body) { $$(".es-speed-btn", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); cycleSpeed(); })); }
   function renderPlaceholderTab(tab) {
     const body = $("#esBody"); if (!body) return;
     const map = { long: { ic: "🎞", t: "롱폼 만들기", m: "긴 영상 만들기는 곧 추가됩니다." }, profile: { ic: "👤", t: "나의 프로필", m: "프로필 기능은 곧 추가됩니다." } };
@@ -945,11 +958,12 @@
     const body = $("#esBody"); if (!body) return;
     let list = []; try { list = (await idbGet("madeVideos")) || []; } catch (_) {}
     if (!list.length) { body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">⬇</div><div class="es-empty-title">아직 만든 영상이 없어요</div><div class="es-empty-msg">영상을 만들고 <b>⬇ 다운로드</b>하면<br>여기에 자동으로 저장돼요.</div></div>`; return; }
-    body.innerHTML = `<div class="es-gallery"><div class="es-section-head">⬇ 만든 영상 <span class="es-hint">탭하면 재생 · ⬇ 다시저장 · ✕ 삭제</span></div>
+    body.innerHTML = `<div class="es-gallery"><div class="es-section-head">⬇ 만든 영상 <span class="es-hint">탭하면 재생 · ⬇ 다시저장 · ✕ 삭제</span>${speedBtnHtml()}</div>
       <div class="es-tplcat">${list.map((m) => `<div class="es-tplcard es-madecard" data-id="${m.id}">
         <div class="es-tplcard-asp es-asp-9_16">${m.thumb ? `<img class="es-tplcard-thumb" src="${m.thumb}">` : ""}<span class="es-tplcard-play">▶</span>
         <button type="button" class="es-tplcard-go es-made-dl" title="다운로드">⬇</button>
         <button type="button" class="es-tplcard-like es-made-del" title="삭제">✕</button></div></div>`).join("")}</div></div>`;
+    wireSpeed(body);
     $$(".es-madecard", body).forEach((card) => {
       const id = card.dataset.id;
       const asp = card.querySelector(".es-tplcard-asp");
@@ -965,7 +979,10 @@
     const asp = card.querySelector(".es-tplcard-asp");
     const v = document.createElement("video"); v.className = "es-tplcard-vid"; v.src = URL.createObjectURL(b); v.loop = true; v.playsInline = true;
     if (asp) asp.appendChild(v); card.classList.add("playing");
-    _tplPrev = { card, video: v }; v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    _tplPrev = { card, video: v }; v.muted = false;
+    const applyRate = () => { try { v.playbackRate = curSpeed(); } catch (_) {} };
+    v.addEventListener("loadedmetadata", applyRate); applyRate();
+    v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
   }
   async function downloadMade(id) {
     let b = null, meta = null; try { b = await idbGet("made_" + id); const list = (await idbGet("madeVideos")) || []; meta = list.find((x) => x.id === id); } catch (_) {}
@@ -1092,8 +1109,8 @@
     const onlyLiked = E._catalogFilter === "liked";
     const list = onlyLiked ? E.templates.filter((t) => liked.has(t.id)) : E.templates;
     const headHtml = onlyLiked
-      ? `<div class="es-section-head">♥ 찜한 영상 <span class="es-hint">하트를 누른 스타일이 여기 모여요</span></div>`
-      : `<div class="es-section-head">✨ 어떤 영상을 만들까요? <span class="es-hint">스타일을 고르면 사진만 넣으면 완성돼요</span></div>`;
+      ? `<div class="es-section-head">♥ 찜한 영상 <span class="es-hint">하트를 누른 스타일이 여기 모여요</span>${speedBtnHtml()}</div>`
+      : `<div class="es-section-head">✨ 어떤 영상을 만들까요? <span class="es-hint">스타일을 고르면 사진만 넣으면 완성돼요</span>${speedBtnHtml()}</div>`;
 
     // 찜 탭인데 비었으면 안내
     if (onlyLiked && !list.length) {
@@ -1203,6 +1220,8 @@
       card.classList.add("playing");
       _tplPrev = { card, video: v };
       v.muted = false;
+      const applyRate = () => { try { v.playbackRate = curSpeed(); } catch (_) {} };
+      v.addEventListener("loadedmetadata", applyRate); applyRate();
       v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });   // 자동재생 막히면 음소거로 재시도
       return;
     }
@@ -1222,12 +1241,13 @@
       const p = imgs[i % imgs.length];
       if (im && p.url) im.src = p.url;
       i++;
-      _tplPrev.timer = setTimeout(step, Math.max(700, (p.dur || 2) * 1000));
+      _tplPrev.timer = setTimeout(step, Math.max(300, (p.dur || 2) * 1000 / curSpeed()));
     };
     step();
   }
   // 템플릿 카드 — 마우스 올리면 자동재생, ＋버튼=마법사 시작
   function wireTplCards(body) {
+    wireSpeed(body);
     $$(".es-tplcard", body).forEach((card) => {
       const t = E.templates.find((x) => x.id === card.dataset.tid);
       // 데스크탑: 올리면 재생 / 떼면 정지
