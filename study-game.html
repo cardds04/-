@@ -542,6 +542,16 @@
         font-weight: 900;
         box-shadow: 0 3px 8px rgba(5, 150, 105, 0.45);
       }
+      .vs-cleared.once {
+        background: linear-gradient(135deg, #fde68a, #f59e0b);
+        color: #78350f;
+        box-shadow: 0 3px 8px rgba(245, 158, 11, 0.45);
+      }
+      .vstage-card.is-once {
+        background: linear-gradient(135deg, #fff, #fffbeb);
+        border-color: #f59e0b;
+        box-shadow: 0 6px 16px rgba(245, 158, 11, 0.22);
+      }
       .vstage-card .vs-chip.done { background: #d1fae5; color: #065f46; }
       .vstage-card .vs-chip.cooldown { background: #fef3c7; color: #92400e; }
       .games-grid {
@@ -5622,21 +5632,35 @@
           if (ttl) ttl.textContent = L.title;
           if (dsc) dsc.textContent = L.desc;
           const chip = document.getElementById("vschip-" + stage);
-          // ✅ 클리어 뱃지 (모든 단계에서, 카드 우측 상단)
+
+          // 클리어 횟수 뱃지 (우측 상단)
           let clearedBadge = card.querySelector(".vs-cleared");
-          const cleared = stage > 1 && isStageCleared(stage);
-          if (cleared) {
+          const info = stage > 1 ? getStageInfo(stage) : { count: 0 };
+          if (info.count >= 2) {
             if (!clearedBadge) {
               clearedBadge = document.createElement("span");
               clearedBadge.className = "vs-cleared";
-              clearedBadge.textContent = "✅ 클리어!";
               card.appendChild(clearedBadge);
             }
+            clearedBadge.textContent = "🏆 2회 완료";
+            clearedBadge.classList.remove("once");
             card.classList.add("is-cleared");
+            card.classList.remove("is-once");
+          } else if (info.count === 1) {
+            if (!clearedBadge) {
+              clearedBadge = document.createElement("span");
+              clearedBadge.className = "vs-cleared";
+              card.appendChild(clearedBadge);
+            }
+            clearedBadge.textContent = "1회 클리어";
+            clearedBadge.classList.add("once");
+            card.classList.add("is-once");
+            card.classList.remove("is-cleared");
           } else {
             if (clearedBadge) clearedBadge.remove();
-            card.classList.remove("is-cleared");
+            card.classList.remove("is-cleared", "is-once");
           }
+
           if (!hasVocab) {
             card.classList.add("is-disabled");
             card.classList.remove("is-locked");
@@ -5648,17 +5672,30 @@
             if (chip) { chip.textContent = "📚 단어 " + VOCAB.length + "개"; chip.className = "vs-chip ready"; }
             continue;
           }
-          const pc = payCooldownState(stage);
+          // 칩 텍스트: 1회/2회/0회 상태에 따라
           if (chip) {
-            if (cleared) {
-              chip.textContent = "✅ 통과! 다시 풀어보기";
+            if (info.count >= 2) {
+              chip.textContent = "🏆 완료! 다시 풀어보기";
               chip.className = "vs-chip done";
-            } else if (pc.payable) {
+            } else if (info.count === 1) {
+              const passed = Date.now() - (info.firstAt || 0);
+              const gapLeft = STAGE_GAP_MS - passed;
+              const penLeft = STAGE_PENALTY_MS - passed;
+              if (gapLeft > 0) {
+                chip.textContent = "⏳ 2회 도전 " + fmtRemainMin(gapLeft) + " 뒤 (보류 " + (info.pendingPay || 0) + "원)";
+                chip.className = "vs-chip cooldown";
+              } else if (penLeft <= 0) {
+                // 곧 벌금 — checkAndApplyStagePenalty에서 처리됨
+                chip.textContent = "⚠ 벌금 -500원!";
+                chip.className = "vs-chip cooldown";
+              } else {
+                const hLeft = Math.ceil(penLeft / 3600000);
+                chip.textContent = "🟢 지금 2회 도전! (" + hLeft + "h 안에)";
+                chip.className = "vs-chip ready";
+              }
+            } else {
               chip.textContent = "💰 클리어시 적립금!";
               chip.className = "vs-chip ready";
-            } else {
-              chip.textContent = "⏳ 적립금 " + fmtRemainMin(pc.until - Date.now()) + " 뒤";
-              chip.className = "vs-chip cooldown";
             }
           }
         }
@@ -5666,6 +5703,8 @@
         renderSavings();
         renderPlayLog();
         if (typeof refreshHof === "function") refreshHof();
+        // ⚠️ 3일 경과한 1회 클리어가 있으면 벌금 자동 차감
+        try { checkAndApplyStagePenalty(); } catch (e) {}
       }
 
       // 단어 뜻 맞히기를 한 번이라도 끝까지 풀었는가(= 단어 게임 잠금 해제 조건)
@@ -5704,16 +5743,64 @@
         const u = getActiveUnit();
         return u && u.kind === "hanja";
       }
-      function isStageCleared(stage) {
+      // 단원·단계 클리어 정보:
+      // u.vocabStageCleared[stage] = { count: 1|2, firstAt, lastAt, pendingPay: 보류금원, penalized? }
+      const STAGE_GAP_MS = 6 * 60 * 60 * 1000;       // 1차 → 2차 최소 간격: 6시간
+      const STAGE_PENALTY_MS = 3 * 24 * 60 * 60 * 1000; // 1차 후 2차 안 하면 벌금: 3일
+      const STAGE_PENALTY_WON = 500;                  // 벌금 금액
+      function getStageInfo(stage) {
         const u = getActiveUnit();
         const o = u.vocabStageCleared || {};
-        return !!o[stage];
+        const e = o[stage];
+        if (!e || typeof e !== "object") return { count: 0 };
+        const cnt = typeof e.count === "number" ? e.count : (e.at ? 1 : 0);
+        return { count: cnt, firstAt: e.firstAt || e.at || 0, lastAt: e.lastAt || e.at || 0, pendingPay: e.pendingPay || 0 };
       }
-      function recordStageCleared(stage) {
+      function saveStageInfo(stage, info) {
         const u = getActiveUnit();
         const o = Object.assign({}, u.vocabStageCleared || {});
-        o[stage] = { at: Date.now() };
+        o[stage] = info;
         saveActiveUnitField("vocabStageCleared", o);
+      }
+      function clearStageInfo(stage) {
+        const u = getActiveUnit();
+        const o = Object.assign({}, u.vocabStageCleared || {});
+        delete o[stage];
+        saveActiveUnitField("vocabStageCleared", o);
+      }
+      function isStageCleared(stage) { return getStageInfo(stage).count >= 2; }
+      // 단원·단계별 1회 클리어 후 3일 경과 시 벌금 자동 적용. 글로벌 적립금에서 차감.
+      function checkAndApplyStagePenalty() {
+        if (!getActiveUnitId) return;
+        const u = getActiveUnit();
+        const o = u.vocabStageCleared || {};
+        const now = Date.now();
+        let totalPenalty = 0;
+        let penalizedStages = [];
+        Object.keys(o).forEach((k) => {
+          const e = o[k];
+          if (!e || typeof e !== "object") return;
+          const cnt = typeof e.count === "number" ? e.count : (e.at ? 1 : 0);
+          if (cnt === 1 && e.firstAt && now - e.firstAt >= STAGE_PENALTY_MS && !e.penalized) {
+            totalPenalty += STAGE_PENALTY_WON;
+            penalizedStages.push(k);
+          }
+        });
+        if (!totalPenalty) return;
+        // 적립금 차감 (음수 방지: 0 이하로는 안 내림)
+        const cur = getSavings();
+        const newSavings = Math.max(0, cur - totalPenalty);
+        try {
+          localStorage.setItem(nsKey(SAVINGS_KEY), String(newSavings));
+          window.studyGameSync && window.studyGameSync.markDirty();
+        } catch (e) {}
+        // 해당 단계 기록 무효화 (1회 클리어 사라짐 + penalized 표시 — 다시 1회부터 시작)
+        const newO = Object.assign({}, o);
+        penalizedStages.forEach((k) => { delete newO[k]; });
+        saveActiveUnitField("vocabStageCleared", newO);
+        try {
+          alert("⚠️ " + penalizedStages.join("·") + "단계를 3일 안에 2회 클리어 안 해서 -" + totalPenalty + "원 차감됐어요. 다시 1회부터 도전!");
+        } catch (e) {}
       }
 
       /* ---------- 단어 뜻 맞히기 시험 기록 (시간 잠금 없이 횟수만 기록) ---------- */
@@ -5981,20 +6068,44 @@
           const isPerfect = wrongThisAttempt.length === 0 && state.score >= perfectMax;
 
           if (isPerfect) {
-            // 💰 100점 클리어 → 이번 판에서 모은 돈을 실적립 (재시험·돈없음 판이면 0)
-            const willDeposit = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
-            if (willDeposit > 0) {
-              addSavings(willDeposit);
-              recordStagePayNow(stageNo); // 적립금 쿨다운 시작
+            // 💰 100점 통과 — 1회/2회 분리 시스템 + 6시간 간격 + 3일 벌금
+            const earned = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
+            const info = getStageInfo(stageNo);
+            const nowTs = Date.now();
+            let depositLine = "";
+            let titleLine = "";
+            if (info.count >= 2) {
+              // 이미 완료된 단계 — 다시 풀어도 적립 X
+              titleLine = "🏆 " + stageNo + "단계는 이미 2회 완료한 단계예요!";
+              depositLine = "<br><small>이미 완료된 단계라 추가 적립금은 없어요. 잘했어요!</small>";
+            } else if (info.count === 1) {
+              const passed = nowTs - (info.firstAt || 0);
+              if (passed < STAGE_GAP_MS) {
+                // 6시간 안 됐는데 또 클리어 → 진척 X, 안내만
+                const remainH = Math.ceil((STAGE_GAP_MS - passed) / 3600000);
+                titleLine = "🎉 100점! 잘했어요!";
+                depositLine = '<br>⏳ 2회 클리어는 첫 클리어로부터 <b>6시간 뒤</b>부터 가능해요. (약 ' + remainH + '시간 남음)<br><small>그때 다시 100점 맞으면 적립금이 들어와요!</small>';
+              } else {
+                // 6시간+ 지남 → 2회 완료! 보류금 + 이번 판 한꺼번에 적립
+                const totalDeposit = (info.pendingPay || 0) + earned;
+                if (totalDeposit > 0) {
+                  addSavings(totalDeposit);
+                  recordStagePayNow(stageNo);
+                }
+                saveStageInfo(stageNo, { count: 2, firstAt: info.firstAt, lastAt: nowTs, pendingPay: 0 });
+                titleLine = "🏆 " + stageNo + "단계 <b>2회 완료!</b> 진짜 잘했어요!";
+                depositLine = '<br>💰 적립금 <b>+' + totalDeposit + '원</b> 들어왔어요! (1차 보류 ' + (info.pendingPay || 0) + ' + 이번 판 ' + earned + ' / 총 ' + getSavings() + '원)';
+              }
+            } else {
+              // 첫 클리어 — 보류
+              saveStageInfo(stageNo, { count: 1, firstAt: nowTs, lastAt: nowTs, pendingPay: earned });
+              titleLine = "🎉 100점! <b>" + stageNo + "단계 1회 클리어!</b>";
+              depositLine = earned > 0
+                ? '<br>💰 이번 판 <b>' + earned + '원</b>은 보류 중이에요. <b>6시간 뒤 2회 클리어</b>까지 마쳐야 적립돼요!<br><small>⚠ 3일 안에 2회 안 하면 -500원!</small>'
+                : '<br>⏳ 6시간 뒤 2회 도전 가능. (3일 안에 2회 안 하면 -500원)';
             }
-            // ✅ 클리어 영구 기록 (단원·단계)
-            recordStageCleared(stageNo);
-            // 안내 배너 (실적립 안내 포함)
-            const depositLine = willDeposit > 0
-              ? '<br>💰 적립금 <b>+' + willDeposit + '원</b> 추가 완료! (총 ' + getSavings() + '원)'
-              : (state.vocabRetake ? '<br><small>이번 판은 재시험이라 적립금 없이 통과 기록만 남았어요.</small>' : '');
             reviewRow.insertAdjacentHTML("beforeend",
-              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">🎉 100점! <b>' + stageNo + '단계 클리어!</b>' + depositLine + '</div>');
+              '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">' + titleLine + depositLine + '</div>');
             // ▶ 다음 단계 버튼 (4단계까지 있으면)
             if (stageNo < 4) {
               const nextStageNo = stageNo + 1;
