@@ -941,6 +941,7 @@
   }
   // ── 고객용 하단 탭 메뉴 ──────────────────────────────────────────
   const CUST_TABS = [
+    { id: "reel", ic: "💡", label: "릴스제안" },
     { id: "watch", ic: "🎬", label: "영상보기" },
     { id: "liked", ic: "♡", label: "찜한영상" },
     { id: "made", ic: "⬇", label: "만든영상" },
@@ -954,7 +955,8 @@
   }
   function selectCustTab(tab) {
     E._custTab = tab;
-    if (tab === "watch") { E._catalogFilter = null; E.using = null; setView("gallery"); }
+    if (tab === "reel") { E.view = "reel"; E.using = null; renderReelSuggest(); updateBnav(); }
+    else if (tab === "watch") { E._catalogFilter = null; E.using = null; setView("gallery"); }
     else if (tab === "liked") { E._catalogFilter = "liked"; E.using = null; setView("gallery"); }
     else if (tab === "made") { E.view = "made"; renderMadeVideos(); updateBnav(); }
     else { E.view = "tab"; renderPlaceholderTab(tab); updateBnav(); }
@@ -986,6 +988,203 @@
     const c = map[tab] || { ic: "🚧", t: "준비중", m: "곧 만나요." };
     body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">${c.ic}</div><div class="es-empty-title">${c.t}</div><div class="es-empty-msg">${c.m}</div></div>`;
   }
+
+  // ── 💡 릴스 제안 제조기 (각인 기반 제안 5개 → 촬영 지시서) ──────────────
+  function reelEndpoint() {
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/reel-suggest";
+    return "https://sc-pink.vercel.app/api/reel-suggest";
+  }
+  function reelLoad() {
+    if (E._reel) return E._reel;
+    try { E._reel = JSON.parse(localStorage.getItem("easy_reel") || "null"); } catch (_) { E._reel = null; }
+    if (!E._reel || typeof E._reel !== "object") E._reel = { stage: "input", topic: "", proposals: null, picked: null, guide: null };
+    return E._reel;
+  }
+  function reelSave() { try { localStorage.setItem("easy_reel", JSON.stringify(E._reel || {})); } catch (_) {} }
+  function reelDots(v) {
+    v = Math.max(0, Math.min(5, Number(v) || 0));
+    let s = ""; for (let i = 1; i <= 5; i++) s += `<span class="es-reel-dot${i <= v ? " on" : ""}"></span>`;
+    return s;
+  }
+  function reelToast(m) {
+    let t = document.getElementById("esReelToast");
+    if (!t) { t = document.createElement("div"); t.id = "esReelToast"; t.className = "es-reel-toast"; document.body.appendChild(t); }
+    t.textContent = m; t.classList.add("show");
+    clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2000);
+  }
+  async function reelFetch(payload) {
+    const r = await fetch(reelEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || ("요청 실패 (" + r.status + ")"));
+    return j;
+  }
+  function reelLoading(title, sub) {
+    const body = $("#esBody"); if (!body) return;
+    body.innerHTML = `<div class="es-reel"><div class="es-reel-loading"><div class="es-reel-spin"></div><div class="es-reel-loadt">${esc(title || "불러오는 중…")}</div><div class="es-reel-loads">${esc(sub || "")}</div></div></div>`;
+  }
+  function reelError(e, retry) {
+    const body = $("#esBody"); if (!body) return;
+    body.innerHTML = `<div class="es-reel"><div class="es-reel-errbox"><div class="es-reel-erri">⚠️</div><div class="es-reel-errt">잠깐 막혔어요</div><div class="es-reel-errm">${esc((e && e.message) || "오류가 발생했어요.")}</div><button type="button" class="es-reel-cta" id="esReelRetry">다시 시도</button><button type="button" class="es-reel-ghost" id="esReelHome">주제부터 다시</button></div></div>`;
+    const r = $("#esReelRetry", body); if (r && retry) r.addEventListener("click", retry);
+    const h = $("#esReelHome", body); if (h) h.addEventListener("click", () => { const st = reelLoad(); st.stage = "input"; reelSave(); reelRenderInput(); });
+  }
+  function renderReelSuggest() {
+    const st = reelLoad();
+    if (st.stage === "guide" && st.guide) return reelRenderGuide();
+    if (st.stage === "proposals" && st.proposals && st.proposals.length) return reelRenderProposals();
+    return reelRenderInput();
+  }
+  function reelRenderInput() {
+    const body = $("#esBody"); if (!body) return;
+    const st = reelLoad();
+    const chips = ["세차장", "감성 카페", "1인 헬스 PT", "꽃집", "네일샵", "인테리어", "무인 아이스크림", "애견 미용"];
+    body.innerHTML = `
+      <div class="es-reel">
+        <div class="es-reel-hero">
+          <div class="es-reel-badge">💡 릴스 제안 제조기</div>
+          <h2 class="es-reel-h">무엇에 대한 릴스를<br>만들까요?</h2>
+          <p class="es-reel-sub">주제만 던지면 <b>‘각인’</b> 기반 릴스 제안 5개를 만들어 드려요.<br>하나 고르면 <b>그대로 따라 찍는 촬영 지시서</b>까지.</p>
+        </div>
+        <div class="es-reel-inputwrap">
+          <textarea id="esReelTopic" class="es-reel-input" rows="2" placeholder="예: 세차장 / 동네 베이커리 / 겨울 세차 꿀팁…" maxlength="200">${esc(st.topic || "")}</textarea>
+          <div class="es-reel-chips">${chips.map((c) => `<button type="button" class="es-reel-chip" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+          <button type="button" id="esReelGo" class="es-reel-cta">✨ 제안 5개 받기</button>
+          <div class="es-reel-tip">업종만 써도 되고, “겨울 세차 꿀팁”처럼 좁혀도 좋아요.</div>
+        </div>
+      </div>`;
+    const ta = $("#esReelTopic", body);
+    $$(".es-reel-chip", body).forEach((b) => b.addEventListener("click", () => { ta.value = b.dataset.c; ta.focus(); }));
+    $("#esReelGo", body).addEventListener("click", () => reelPropose(ta.value));
+    ta.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") reelPropose(ta.value); });
+  }
+  async function reelPropose(topic) {
+    topic = String(topic || "").trim();
+    if (!topic) { reelToast("주제를 입력해 주세요."); const ta = $("#esReelTopic"); if (ta) ta.focus(); return; }
+    const st = reelLoad(); st.topic = topic; reelSave();
+    reelLoading("제안 5개를 짜는 중…", "각인 합격선을 넘는 아이디어만 골라내고 있어요");
+    try {
+      const j = await reelFetch({ action: "propose", topic });
+      st.proposals = j.proposals; st.picked = null; st.guide = null; st.stage = "proposals"; reelSave();
+      reelRenderProposals();
+    } catch (e) { reelError(e, () => reelPropose(topic)); }
+  }
+  function reelRenderProposals() {
+    const body = $("#esBody"); if (!body) return;
+    const st = reelLoad(); const list = st.proposals || [];
+    const gc = { A: "a", B: "b", C: "c", D: "d" };
+    body.innerHTML = `
+      <div class="es-reel">
+        <div class="es-reel-bar">
+          <button type="button" class="es-reel-back" id="esReelBack">‹ 주제</button>
+          <div class="es-reel-bartitle">“${esc(st.topic)}” 제안</div>
+        </div>
+        <div class="es-reel-lead">마음에 드는 걸 고르면 <b>촬영 지시서</b>로 만들어 드려요. <span class="es-reel-leadk">각인 = ‘딱 봐도 내 거’인 정도</span></div>
+        <div class="es-reel-cards">
+          ${list.map((p, i) => `
+            <div class="es-reel-card" data-i="${i}">
+              <div class="es-reel-cardtop">
+                <span class="es-reel-g es-reel-g-${gc[p.group] || "a"}">${esc(p.group || "")} · ${esc(p.groupLabel || "")}</span>
+                <span class="es-reel-ct">${esc(p.content || "")}</span>
+              </div>
+              <div class="es-reel-title">${esc(p.title || "")}</div>
+              <div class="es-reel-hook">“${esc(p.hook || "")}”</div>
+              <div class="es-reel-meta">
+                <div class="es-reel-gauge"><span class="es-reel-gl">각인</span><span class="es-reel-dots">${reelDots(p.imprint)}</span></div>
+                <div class="es-reel-gauge"><span class="es-reel-gl">노력</span><span class="es-reel-dots eff">${reelDots(p.effort)}</span></div>
+              </div>
+              ${p.formats && p.formats.length ? `<div class="es-reel-fmts">${p.formats.map((f) => `<span class="es-reel-fmt">${esc(f)}</span>`).join("")}${p.metric ? `<span class="es-reel-metric">🎯 ${esc(p.metric)}</span>` : ""}</div>` : ""}
+              <div class="es-reel-why"><b>🔑 각인</b> ${esc(p.imprintWhy || "")}</div>
+              ${p.summary ? `<div class="es-reel-sum">${esc(p.summary)}</div>` : ""}
+              <button type="button" class="es-reel-pick" data-i="${i}">이걸로 지시서 만들기 →</button>
+            </div>`).join("")}
+        </div>
+        <button type="button" class="es-reel-ghost" id="esReelRegen">↻ 다른 제안 5개</button>
+      </div>`;
+    $("#esReelBack", body).addEventListener("click", () => { st.stage = "input"; reelSave(); reelRenderInput(); });
+    $("#esReelRegen", body).addEventListener("click", () => reelPropose(st.topic));
+    $$(".es-reel-pick", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); reelPick(+b.dataset.i); }));
+  }
+  async function reelPick(i) {
+    const st = reelLoad(); const p = (st.proposals || [])[i]; if (!p) return;
+    st.picked = p; reelSave();
+    reelLoading("촬영 지시서를 짜는 중…", "필요한 영상 개수와 각 장면 길이까지 계산하고 있어요");
+    try {
+      const j = await reelFetch({ action: "storyboard", topic: st.topic, proposal: p });
+      st.guide = j.guide; st.stage = "guide"; reelSave();
+      reelRenderGuide();
+    } catch (e) { reelError(e, () => reelPick(i)); }
+  }
+  function reelRenderGuide() {
+    const body = $("#esBody"); if (!body) return;
+    const st = reelLoad(); const g = st.guide; if (!g) { reelRenderInput(); return; }
+    const clips = g.clips || [];
+    body.innerHTML = `
+      <div class="es-reel">
+        <div class="es-reel-bar">
+          <button type="button" class="es-reel-back" id="esReelBack">‹ 제안</button>
+          <div class="es-reel-bartitle">촬영 지시서</div>
+          <button type="button" class="es-reel-copy" id="esReelCopy">📋 복사</button>
+        </div>
+        <div class="es-reel-guidehd">
+          <div class="es-reel-gtitle">${esc(g.title || (st.picked && st.picked.title) || "")}</div>
+          ${g.hook ? `<div class="es-reel-ghook">🎬 후킹 — “${esc(g.hook)}”</div>` : ""}
+          <div class="es-reel-stat"><span><b>${clips.length}</b>개 영상</span><span><b>${esc(String(g.totalSeconds || ""))}</b>초</span>${g.group || g.format ? `<span class="es-reel-statg">${esc(g.group || "")}${g.format ? " · " + esc(g.format) : ""}</span>` : ""}</div>
+        </div>
+        ${g.povSpine ? `<details class="es-reel-pov"><summary>🧬 이 영상의 ‘척추’ <em>촬영자만 알 것 · 영상엔 말하지 말 것</em></summary><div>${esc(g.povSpine)}</div></details>` : ""}
+        <div class="es-reel-steps">
+          ${clips.map((c, idx) => `
+            <div class="es-reel-step">
+              <div class="es-reel-stepn">${esc(String(c.n || idx + 1))}</div>
+              <div class="es-reel-stepbody">
+                <div class="es-reel-steptop"><span class="es-reel-role">${esc(c.role || "장면")}</span><span class="es-reel-dur">⏱ ${esc(String(c.minSec || 3))}초 이상</span></div>
+                ${c.label ? `<div class="es-reel-steplabel">${esc(c.label)}</div>` : ""}
+                <div class="es-reel-line"><span class="es-reel-k">🎥 촬영</span><span>${esc(c.footage || "")}</span></div>
+                ${c.subtitle ? `<div class="es-reel-line"><span class="es-reel-k">💬 자막</span><span class="es-reel-cap">“${esc(c.subtitle)}”</span></div>` : ""}
+                ${c.audio ? `<div class="es-reel-line"><span class="es-reel-k">🔊 소리</span><span>${esc(c.audio)}</span></div>` : ""}
+                ${c.tip ? `<div class="es-reel-line es-reel-tipln"><span class="es-reel-k">💡 팁</span><span>${esc(c.tip)}</span></div>` : ""}
+              </div>
+            </div>`).join("")}
+        </div>
+        ${g.cta ? `<div class="es-reel-ctabox"><span class="es-reel-k">📣 마지막 화면</span> ${esc(g.cta)}</div>` : ""}
+        ${Array.isArray(g.props) && g.props.length ? `<div class="es-reel-extra"><div class="es-reel-extrah">🧰 준비물</div><div class="es-reel-taglist">${g.props.map((x) => `<span>${esc(x)}</span>`).join("")}</div></div>` : ""}
+        ${Array.isArray(g.shootTips) && g.shootTips.length ? `<div class="es-reel-extra"><div class="es-reel-extrah">✅ 촬영·편집 팁</div><ul class="es-reel-tips">${g.shootTips.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+        <div class="es-reel-foot">
+          <button type="button" class="es-reel-ghost" id="esReelBack2">‹ 다른 제안 고르기</button>
+          <button type="button" class="es-reel-ghost" id="esReelNew">새 주제로</button>
+        </div>
+      </div>`;
+    const back = () => { st.stage = "proposals"; reelSave(); reelRenderProposals(); };
+    $("#esReelBack", body).addEventListener("click", back);
+    $("#esReelBack2", body).addEventListener("click", back);
+    $("#esReelNew", body).addEventListener("click", () => { st.stage = "input"; reelSave(); reelRenderInput(); });
+    $("#esReelCopy", body).addEventListener("click", () => reelCopyGuide(g, st.picked));
+  }
+  function reelCopyGuide(g) {
+    const L = [];
+    L.push(`🎬 ${g.title || ""}`);
+    if (g.hook) L.push(`후킹: ${g.hook}`);
+    if (g.povSpine) L.push(`(척추 — 영상엔 말하지 말 것: ${g.povSpine})`);
+    L.push(`총 ${(g.clips || []).length}개 영상 · ${g.totalSeconds || ""}초${g.format ? " · " + g.format : ""}`);
+    L.push("");
+    (g.clips || []).forEach((c, i) => {
+      L.push(`[${c.n || i + 1}] ${c.role || ""} — ${c.minSec || 3}초 이상`);
+      if (c.label) L.push(`· ${c.label}`);
+      if (c.footage) L.push(`🎥 ${c.footage}`);
+      if (c.subtitle) L.push(`💬 자막: ${c.subtitle}`);
+      if (c.audio) L.push(`🔊 ${c.audio}`);
+      if (c.tip) L.push(`💡 ${c.tip}`);
+      L.push("");
+    });
+    if (g.cta) L.push(`📣 마지막: ${g.cta}`);
+    if (Array.isArray(g.shootTips) && g.shootTips.length) { L.push(""); L.push("✅ 팁"); g.shootTips.forEach((t) => L.push(`- ${t}`)); }
+    const text = L.join("\n");
+    const done = () => reelToast("지시서를 복사했어요 📋");
+    try { navigator.clipboard.writeText(text).then(done, () => reelFallbackCopy(text, done)); } catch (_) { reelFallbackCopy(text, done); }
+  }
+  function reelFallbackCopy(text, done) {
+    try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); done && done(); } catch (_) {}
+  }
+
   // ── 만든 영상(다운로드한 결과물)을 기기에 저장 ──────────────────────
   function videoFirstFrame(blob) {
     return new Promise((res) => {
