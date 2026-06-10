@@ -940,9 +940,8 @@
     `;
     $$(".es-bnav-btn", root).forEach((b) => b.addEventListener("click", () => selectCustTab(b.dataset.tab)));
   }
-  // ── 고객용 하단 탭 메뉴 ──────────────────────────────────────────
+  // ── 고객용 하단 탭 메뉴 — 복잡한 도구 없이 '보고 따라 만들기'만 ──
   const CUST_TABS = [
-    { id: "reel", ic: "💡", label: "릴스제안" },
     { id: "watch", ic: "🎬", label: "영상보기" },
     { id: "liked", ic: "♡", label: "찜한영상" },
     { id: "made", ic: "⬇", label: "만든영상" },
@@ -953,12 +952,10 @@
     const root = document.getElementById("easyRoot"); if (!root) return;
     $$(".es-bnav-btn", root).forEach((b) => b.classList.toggle("active", b.dataset.tab === (E._custTab || "watch")));
     document.body.classList.toggle("es-hasnav", E.view !== "use");   // 만드는 중(위저드)엔 숨김
-    try { reelResumeChip(); } catch (_) {}   // 진행 중인 릴스 '이어하기' 칩 갱신
   }
   function selectCustTab(tab) {
     E._custTab = tab;
-    if (tab === "reel") { E.view = "reel"; E.using = null; renderReelSuggest(); updateBnav(); }
-    else if (tab === "watch") { E._catalogFilter = null; E.using = null; setView("gallery"); }
+    if (tab === "watch") { E._catalogFilter = null; E.using = null; setView("gallery"); }
     else if (tab === "liked") { E._catalogFilter = "liked"; E.using = null; setView("gallery"); }
     else if (tab === "made") { E.view = "made"; renderMadeVideos(); updateBnav(); }
     else { E.view = "tab"; renderPlaceholderTab(tab); updateBnav(); }
@@ -989,254 +986,6 @@
     const map = { long: { ic: "🎞", t: "롱폼 만들기", m: "긴 영상 만들기는 곧 추가됩니다." }, profile: { ic: "👤", t: "나의 프로필", m: "프로필 기능은 곧 추가됩니다." } };
     const c = map[tab] || { ic: "🚧", t: "준비중", m: "곧 만나요." };
     body.innerHTML = `<div class="es-empty"><div class="es-empty-ico">${c.ic}</div><div class="es-empty-title">${c.t}</div><div class="es-empty-msg">${c.m}</div></div>`;
-  }
-
-  // ── 💡 릴스 제안 제조기 (각인 기반 제안 5개 → 촬영 지시서) ──────────────
-  function reelEndpoint() {
-    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/reel-suggest";
-    return "https://sc-pink.vercel.app/api/reel-suggest";
-  }
-  function reelLoad() {
-    if (E._reel) return E._reel;
-    try { E._reel = JSON.parse(localStorage.getItem("easy_reel") || "null"); } catch (_) { E._reel = null; }
-    if (!E._reel || typeof E._reel !== "object") E._reel = { stage: "input", topic: "", proposals: null, picked: null, guide: null };
-    return E._reel;
-  }
-  function reelSave() { try { localStorage.setItem("easy_reel", JSON.stringify(E._reel || {})); } catch (_) {} try { reelResumeChip(); } catch (_) {} }
-  function reelDots(v) {
-    v = Math.max(0, Math.min(5, Number(v) || 0));
-    let s = ""; for (let i = 1; i <= 5; i++) s += `<span class="es-reel-dot${i <= v ? " on" : ""}"></span>`;
-    return s;
-  }
-  function reelToast(m) {
-    let t = document.getElementById("esReelToast");
-    if (!t) { t = document.createElement("div"); t.id = "esReelToast"; t.className = "es-reel-toast"; document.body.appendChild(t); }
-    t.textContent = m; t.classList.add("show");
-    clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2000);
-  }
-  async function reelFetch(payload) {
-    const r = await fetch(reelEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || ("요청 실패 (" + r.status + ")"));
-    return j;
-  }
-  function reelLoading(title, sub) {
-    const body = $("#esBody"); if (!body) return;
-    body.innerHTML = `<div class="es-reel"><div class="es-reel-loading"><div class="es-reel-spin"></div><div class="es-reel-loadt">${esc(title || "불러오는 중…")}</div><div class="es-reel-loads">${esc(sub || "")}</div></div></div>`;
-  }
-  function reelError(e, retry) {
-    const body = $("#esBody"); if (!body) return;
-    body.innerHTML = `<div class="es-reel"><div class="es-reel-errbox"><div class="es-reel-erri">⚠️</div><div class="es-reel-errt">잠깐 막혔어요</div><div class="es-reel-errm">${esc((e && e.message) || "오류가 발생했어요.")}</div><button type="button" class="es-reel-cta" id="esReelRetry">다시 시도</button><button type="button" class="es-reel-ghost" id="esReelHome">주제부터 다시</button></div></div>`;
-    const r = $("#esReelRetry", body); if (r && retry) r.addEventListener("click", retry);
-    const h = $("#esReelHome", body); if (h) h.addEventListener("click", () => { const st = reelLoad(); st.stage = "input"; reelSave(); reelRenderInput(); });
-  }
-  function renderReelSuggest() {
-    const st = reelLoad();
-    if (st.stage === "guide" && st.guide) return reelRenderGuide();
-    if (st.stage === "proposals" && st.proposals && st.proposals.length) return reelRenderProposals();
-    return reelRenderInput();
-  }
-  function reelRenderInput() {
-    const body = $("#esBody"); if (!body) return;
-    const st = reelLoad();
-    const chips = ["세차장", "감성 카페", "1인 헬스 PT", "꽃집", "네일샵", "인테리어", "무인 아이스크림", "애견 미용"];
-    body.innerHTML = `
-      <div class="es-reel">
-        <div class="es-reel-hero">
-          <div class="es-reel-badge">💡 릴스 제안 제조기</div>
-          <h2 class="es-reel-h">무엇에 대한 릴스를<br>만들까요?</h2>
-          <p class="es-reel-sub">주제만 던지면 <b>‘각인’</b> 기반 릴스 제안 5개를 만들어 드려요.<br>하나 고르면 <b>그대로 따라 찍는 촬영 지시서</b>까지.</p>
-        </div>
-        <div class="es-reel-inputwrap">
-          <textarea id="esReelTopic" class="es-reel-input" rows="2" placeholder="예: 세차장 / 동네 베이커리 / 겨울 세차 꿀팁…" maxlength="200">${esc(st.topic || "")}</textarea>
-          <div class="es-reel-chips">${chips.map((c) => `<button type="button" class="es-reel-chip" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-          <button type="button" id="esReelGo" class="es-reel-cta">✨ 제안 5개 받기</button>
-          <div class="es-reel-tip">업종만 써도 되고, “겨울 세차 꿀팁”처럼 좁혀도 좋아요.</div>
-        </div>
-      </div>`;
-    const ta = $("#esReelTopic", body);
-    $$(".es-reel-chip", body).forEach((b) => b.addEventListener("click", () => { ta.value = b.dataset.c; ta.focus(); }));
-    $("#esReelGo", body).addEventListener("click", () => reelPropose(ta.value));
-    ta.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") reelPropose(ta.value); });
-  }
-  async function reelPropose(topic) {
-    topic = String(topic || "").trim();
-    if (!topic) { reelToast("주제를 입력해 주세요."); const ta = $("#esReelTopic"); if (ta) ta.focus(); return; }
-    const st = reelLoad(); st.topic = topic; reelSave();
-    reelLoading("제안 5개를 짜는 중…", "각인 합격선을 넘는 아이디어만 골라내고 있어요");
-    try {
-      const j = await reelFetch({ action: "propose", topic });
-      st.proposals = j.proposals; st.picked = null; st.guide = null; st.stage = "proposals"; reelSave();
-      reelRenderProposals();
-    } catch (e) { reelError(e, () => reelPropose(topic)); }
-  }
-  function reelRenderProposals() {
-    const body = $("#esBody"); if (!body) return;
-    const st = reelLoad(); const list = st.proposals || [];
-    const gc = { A: "a", B: "b", C: "c", D: "d" };
-    body.innerHTML = `
-      <div class="es-reel">
-        <div class="es-reel-bar">
-          <button type="button" class="es-reel-back" id="esReelBack">‹ 주제</button>
-          <div class="es-reel-bartitle">“${esc(st.topic)}” 제안</div>
-        </div>
-        <div class="es-reel-lead">마음에 드는 걸 고르면 <b>촬영 지시서</b>로 만들어 드려요. <span class="es-reel-leadk">각인 = ‘딱 봐도 내 거’인 정도</span></div>
-        <div class="es-reel-cards">
-          ${list.map((p, i) => `
-            <div class="es-reel-card" data-i="${i}">
-              <div class="es-reel-cardtop">
-                <span class="es-reel-g es-reel-g-${gc[p.group] || "a"}">${esc(p.group || "")} · ${esc(p.groupLabel || "")}</span>
-                <span class="es-reel-ct">${esc(p.content || "")}</span>
-              </div>
-              <div class="es-reel-title">${esc(p.title || "")}</div>
-              <div class="es-reel-hook">“${esc(p.hook || "")}”</div>
-              <div class="es-reel-meta">
-                <div class="es-reel-gauge"><span class="es-reel-gl">각인</span><span class="es-reel-dots">${reelDots(p.imprint)}</span></div>
-                <div class="es-reel-gauge"><span class="es-reel-gl">노력</span><span class="es-reel-dots eff">${reelDots(p.effort)}</span></div>
-              </div>
-              ${p.formats && p.formats.length ? `<div class="es-reel-fmts">${p.formats.map((f) => `<span class="es-reel-fmt">${esc(f)}</span>`).join("")}${p.metric ? `<span class="es-reel-metric">🎯 ${esc(p.metric)}</span>` : ""}</div>` : ""}
-              <div class="es-reel-why"><b>🔑 각인</b> ${esc(p.imprintWhy || "")}</div>
-              ${p.summary ? `<div class="es-reel-sum">${esc(p.summary)}</div>` : ""}
-              <button type="button" class="es-reel-pick" data-i="${i}">이걸로 지시서 만들기 →</button>
-            </div>`).join("")}
-        </div>
-        <button type="button" class="es-reel-ghost" id="esReelRegen">↻ 다른 제안 5개</button>
-      </div>`;
-    $("#esReelBack", body).addEventListener("click", () => { st.stage = "input"; reelSave(); reelRenderInput(); });
-    $("#esReelRegen", body).addEventListener("click", () => reelPropose(st.topic));
-    $$(".es-reel-pick", body).forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); reelPick(+b.dataset.i); }));
-  }
-  async function reelPick(i) {
-    const st = reelLoad(); const p = (st.proposals || [])[i]; if (!p) return;
-    st.picked = p; reelSave();
-    reelLoading("촬영 지시서를 짜는 중…", "필요한 영상 개수와 각 장면 길이까지 계산하고 있어요");
-    try {
-      const j = await reelFetch({ action: "storyboard", topic: st.topic, proposal: p });
-      st.guide = j.guide; st.stage = "guide"; reelSave();
-      reelRenderGuide();
-    } catch (e) { reelError(e, () => reelPick(i)); }
-  }
-  function reelRenderGuide() {
-    const body = $("#esBody"); if (!body) return;
-    const st = reelLoad(); const g = st.guide; if (!g) { reelRenderInput(); return; }
-    const clips = g.clips || [];
-    body.innerHTML = `
-      <div class="es-reel">
-        <div class="es-reel-bar">
-          <button type="button" class="es-reel-back" id="esReelBack">‹ 제안</button>
-          <div class="es-reel-bartitle">촬영 지시서</div>
-          <button type="button" class="es-reel-copy" id="esReelCopy">📋 복사</button>
-        </div>
-        <div class="es-reel-guidehd">
-          <div class="es-reel-gtitle">${esc(g.title || (st.picked && st.picked.title) || "")}</div>
-          ${g.hook ? `<div class="es-reel-ghook">🎬 후킹 — “${esc(g.hook)}”</div>` : ""}
-          <div class="es-reel-stat"><span><b>${clips.length}</b>개 영상</span><span><b>${esc(String(g.totalSeconds || ""))}</b>초</span>${g.group || g.format ? `<span class="es-reel-statg">${esc(g.group || "")}${g.format ? " · " + esc(g.format) : ""}</span>` : ""}</div>
-        </div>
-        <button type="button" class="es-reel-cta es-reel-make" id="esReelMake">🎬 이 지시서로 영상 만들기</button>
-        ${g.povSpine ? `<details class="es-reel-pov"><summary>🧬 이 영상의 ‘척추’ <em>촬영자만 알 것 · 영상엔 말하지 말 것</em></summary><div>${esc(g.povSpine)}</div></details>` : ""}
-        <div class="es-reel-steps">
-          ${clips.map((c, idx) => `
-            <div class="es-reel-step">
-              <div class="es-reel-stepn">${esc(String(c.n || idx + 1))}</div>
-              <div class="es-reel-stepbody">
-                <div class="es-reel-steptop"><span class="es-reel-role">${esc(c.role || "장면")}</span><span class="es-reel-dur">⏱ ${esc(String(c.minSec || 3))}초 이상</span></div>
-                ${c.label ? `<div class="es-reel-steplabel">${esc(c.label)}</div>` : ""}
-                <div class="es-reel-line"><span class="es-reel-k">🎥 촬영</span><span>${esc(c.footage || "")}</span></div>
-                ${c.subtitle ? `<div class="es-reel-line"><span class="es-reel-k">💬 자막</span><span class="es-reel-cap">“${esc(c.subtitle)}”</span></div>` : ""}
-                ${c.audio ? `<div class="es-reel-line"><span class="es-reel-k">🔊 소리</span><span>${esc(c.audio)}</span></div>` : ""}
-                ${c.tip ? `<div class="es-reel-line es-reel-tipln"><span class="es-reel-k">💡 팁</span><span>${esc(c.tip)}</span></div>` : ""}
-              </div>
-            </div>`).join("")}
-        </div>
-        ${g.cta ? `<div class="es-reel-ctabox"><span class="es-reel-k">📣 마지막 화면</span> ${esc(g.cta)}</div>` : ""}
-        ${Array.isArray(g.props) && g.props.length ? `<div class="es-reel-extra"><div class="es-reel-extrah">🧰 준비물</div><div class="es-reel-taglist">${g.props.map((x) => `<span>${esc(x)}</span>`).join("")}</div></div>` : ""}
-        ${Array.isArray(g.shootTips) && g.shootTips.length ? `<div class="es-reel-extra"><div class="es-reel-extrah">✅ 촬영·편집 팁</div><ul class="es-reel-tips">${g.shootTips.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
-        <div class="es-reel-foot">
-          <button type="button" class="es-reel-ghost" id="esReelBack2">‹ 다른 제안 고르기</button>
-          <button type="button" class="es-reel-ghost" id="esReelNew">새 주제로</button>
-        </div>
-      </div>`;
-    const back = () => { st.stage = "proposals"; reelSave(); reelRenderProposals(); };
-    $("#esReelBack", body).addEventListener("click", back);
-    $("#esReelBack2", body).addEventListener("click", back);
-    $("#esReelNew", body).addEventListener("click", () => { st.stage = "input"; reelSave(); reelRenderInput(); });
-    $("#esReelCopy", body).addEventListener("click", () => reelCopyGuide(g, st.picked));
-    const mk = $("#esReelMake", body); if (mk) mk.addEventListener("click", () => reelToEditor(g));
-  }
-  function reelCopyGuide(g) {
-    const L = [];
-    L.push(`🎬 ${g.title || ""}`);
-    if (g.hook) L.push(`후킹: ${g.hook}`);
-    if (g.povSpine) L.push(`(척추 — 영상엔 말하지 말 것: ${g.povSpine})`);
-    L.push(`총 ${(g.clips || []).length}개 영상 · ${g.totalSeconds || ""}초${g.format ? " · " + g.format : ""}`);
-    L.push("");
-    (g.clips || []).forEach((c, i) => {
-      L.push(`[${c.n || i + 1}] ${c.role || ""} — ${c.minSec || 3}초 이상`);
-      if (c.label) L.push(`· ${c.label}`);
-      if (c.footage) L.push(`🎥 ${c.footage}`);
-      if (c.subtitle) L.push(`💬 자막: ${c.subtitle}`);
-      if (c.audio) L.push(`🔊 ${c.audio}`);
-      if (c.tip) L.push(`💡 ${c.tip}`);
-      L.push("");
-    });
-    if (g.cta) L.push(`📣 마지막: ${g.cta}`);
-    if (Array.isArray(g.shootTips) && g.shootTips.length) { L.push(""); L.push("✅ 팁"); g.shootTips.forEach((t) => L.push(`- ${t}`)); }
-    const text = L.join("\n");
-    const done = () => reelToast("지시서를 복사했어요 📋");
-    try { navigator.clipboard.writeText(text).then(done, () => reelFallbackCopy(text, done)); } catch (_) { reelFallbackCopy(text, done); }
-  }
-  function reelFallbackCopy(text, done) {
-    try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); done && done(); } catch (_) {}
-  }
-  // ── 지시서 → 이지숏폼 편집기로 (슬롯·길이·자막 자동 구성) ──────────────
-  function reelToEditor(guide) {
-    if (!guide || !Array.isArray(guide.clips) || !guide.clips.length) { reelToast("지시서가 없어요."); return; }
-    const clips = guide.clips;
-    // 슬롯: 클립 수 = 영상칸 수, 각 칸 길이 = 클립 분량(minSec), 트림(📐) 켬.
-    // label 은 번호만(역할에 '디테일' 들어가면 slotRole 이 오분류 → 역할/촬영지시는 _reel* 에 보관)
-    const slots = clips.map((c, i) => ({
-      id: uid(),
-      dur: clamp(Number(c.minSec) || 3, 1, 30),
-      label: (i + 1) + "번 컷",
-      easyTrim: true,
-      _reelRole: c.role || "",
-      _reelHint: c.footage || "",
-    }));
-    // 자막: 각 클립 subtitle → 누적 시작 위치에 하단 자막으로 자동 배치(수정 가능)
-    const texts = [];
-    let t = 0;
-    clips.forEach((c) => {
-      const d = clamp(Number(c.minSec) || 3, 1, 30);
-      const sub = String(c.subtitle || "").trim();
-      if (sub) texts.push({ id: uid(), text: sub, xPct: 50, yPct: 80, width: 86, size: 6, color: "#ffffff", bold: true, shadow: true, start: +t.toFixed(2), dur: +d.toFixed(2) });
-      t += d;
-    });
-    const tpl = { id: uid(), name: String(guide.title || "릴스 지시서").slice(0, 40), aspect: "9:16", slots, music: null, createdAt: Date.now(), _fromReel: true };
-    (async () => {
-      try { await clearSession(); } catch (_) {}
-      E.mode2 = "easy";
-      try { localStorage.setItem("es_mode2", "easy"); } catch (_) {}
-      E.using = { template: tpl, musicUrl: null, fills: {}, audioBlobs: {}, texts, selText: null, selTexts: [] };
-      E.playhead = 0;
-      E.easyIdx = 0;
-      E.using._baFlow = false;
-      setView("use");
-      try { scheduleSaveMeta(); } catch (_) {}
-    })();
-  }
-  // ── 🔖 이어하기 칩 — 진행 중인 릴스(제안/지시서)를 어디서든 한 번에 복귀 ──
-  function reelResumeChip() {
-    let st = null;
-    try { st = JSON.parse(localStorage.getItem("easy_reel") || "null"); } catch (_) {}
-    const has = st && st.topic && (st.stage === "proposals" || st.stage === "guide");
-    const show = has && E._custTab !== "reel" && E.view !== "use";
-    let chip = document.getElementById("esReelResume");
-    if (!show) { if (chip) chip.remove(); return; }
-    const label = st.stage === "guide" ? "지시서" : "제안 5개";
-    if (!chip) { chip = document.createElement("div"); chip.id = "esReelResume"; chip.className = "es-reel-resume"; document.body.appendChild(chip); }
-    chip.innerHTML = `<button type="button" class="es-reel-resume-main"><span class="es-reel-resume-ic">🔖</span><span class="es-reel-resume-tx"><b>이어하기</b><span>${esc(st.topic)} · ${label}</span></span></button><button type="button" class="es-reel-resume-x" title="지우기">✕</button>`;
-    const main = chip.querySelector(".es-reel-resume-main"); if (main) main.onclick = () => selectCustTab("reel");
-    const x = chip.querySelector(".es-reel-resume-x"); if (x) x.onclick = (e) => { e.stopPropagation(); try { localStorage.removeItem("easy_reel"); } catch (_) {} E._reel = null; reelResumeChip(); };
   }
 
   // ── 만든 영상(다운로드한 결과물)을 기기에 저장 ──────────────────────
@@ -1969,14 +1718,18 @@
     const texts = E.using.texts || [];
     const plan = [];
     if (hasBA) { plan.push("ba-after", "ba-before"); if (hasVid) plan.push("ba-video"); }   // 비포애프터가 있을 때만
-    if (plains.length) plan.push("plain");        // 일반컷이 있을 때만
+    if (plains.length && !plains.every((s) => s.easyTrim)) plan.push("plain");   // 일반컷 — 단, 전부 길이조절(easyTrim) 컷이면 '영상' 단계에서 넣기+조절 통합
     if (details.length) plan.push("detail");      // 디테일컷이 있을 때만
     if (trims.length) plan.push("length");        // 📐 이지조절 켠 컷이 있으면 길이 단계
-    if (texts.some((tx) => !tx.locked)) plan.push("caption");   // 고정 안 된(수정 가능한) 자막이 있을 때만 — 전부 고정이면 단계 건너뜀
+    // 자막은 길이 단계에서 각 컷 밑에 함께 편집 → 트림 구간에 안 걸리는 자막만 별도 문구 단계로
+    let _ta = 0; const _tranges = [];
+    for (const _s of slots) { const _ts = _ta; _ta += (_s.dur || 0); if (trims.indexOf(_s) >= 0) _tranges.push([_ts, _ta]); }
+    const _capInTrim = (t) => _tranges.some((r) => (t.start || 0) >= r[0] - 0.01 && (t.start || 0) < r[1] - 0.01);
+    if (texts.some((tx) => !tx.locked && !_capInTrim(tx))) plan.push("caption");
     plan.push("done");
     return plan;
   }
-  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "길이", "caption": "문구", "done": "완성" };
+  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "영상", "caption": "문구", "done": "완성" };
   // 📐 트림 창 — 전체 영상 길이 트랙 위에서 고정폭(정해진 길이) 창을 좌우로만 끌어 '시작 위치'만 변경.
   // 길이는 절대 안 바뀜(음악·타이밍 싱크 유지). 끌면 첫 장면(vidA)·끝 장면(vidB) 둘 다 미리보기. (마우스·터치 공용)
   function setupTrimBar(row, slot, srcDur, vidA, vidB) {
@@ -2161,29 +1914,46 @@
           <button type="button" class="es-btn es-btn-primary es-wiz-nav" id="esWizNext">다음 ›</button>
         </div>`;
     } else if (cur === "length") {
+      const _texts = E.using.texts || [];
+      const _tlStart = {}; { let _a = 0; for (const _s of slots) { _tlStart[_s.id] = _a; _a += (_s.dur || 0); } }
+      const _filled = trimSlots.filter((s) => { const f = E.using.fills[s.id]; return f && f.kind === "video"; }).length;
       const rows = trimSlots.map((s) => {
         const f = E.using.fills[s.id];
         const idx = slots.indexOf(s) + 1;
-        if (!f || f.kind !== "video") return "";   // 영상만 조절(사진·미채움은 표시 안 함). 길이는 정해진 대로 고정
+        if (!f || f.kind !== "video") return `<div class="es-trim-row es-trim-emptyrow"><div class="es-trim-head">${idx}번 컷 · <span class="es-trim-srcdur">비어있음</span></div><button type="button" class="es-btn es-btn-ghost es-trim-add" data-id="${s.id}">＋ 이 컷 영상 넣기</button></div>`;   // 빈 컷 → 여기서 넣기
         const sd = f.dur || 0;
         const dv = Math.max(0.3, Math.min(s.dur || 0.3, sd || (s.dur || 0.3)));   // 정해진 길이(고정)
         let inv = Math.min(s.in || 0, Math.max(0, sd - dv)); if (inv < 0) inv = 0;
         s.in = +inv.toFixed(2); s.dur = +dv.toFixed(2);
+        // 이 컷의 자막(타임라인상 이 슬롯 구간에서 시작하는 텍스트) — 길이와 함께 편집
+        const st0 = _tlStart[s.id] || 0, en0 = st0 + (s.dur || 0);
+        let capIdx = -1; for (let i = 0; i < _texts.length; i++) { const t = _texts[i]; if (!t.locked && (t.start || 0) >= st0 - 0.01 && (t.start || 0) < en0 - 0.01) { capIdx = i; break; } }
+        const capVal = capIdx >= 0 ? (_texts[capIdx].text || "") : "";
         return `<div class="es-trim-row" data-id="${s.id}" data-kind="video" data-srcdur="${sd.toFixed(2)}">
-            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초 중 선택)</span></div>
+            <div class="es-trim-head">${idx}번 컷 · <b class="es-trim-len">${dv.toFixed(1)}초</b> <span class="es-trim-srcdur">(원본 ${sd.toFixed(1)}초 중 선택)</span><button type="button" class="es-trim-replace" data-id="${s.id}">🔄 교체</button></div>
             <div class="es-trim-frames">
               <div class="es-trim-frame"><span class="es-trim-flabel">첫 장면</span><video class="es-trim-vid-a" src="${f.url}" muted playsinline preload="metadata"></video></div>
               <div class="es-trim-frame"><span class="es-trim-flabel">끝 장면</span><video class="es-trim-vid-b" src="${f.url}" muted playsinline preload="metadata"></video></div>
             </div>
             <div class="es-trimbar"><div class="es-trimbar-track"><div class="es-trimbar-scale"><span>0초</span><span>${sd.toFixed(1)}초</span></div><div class="es-trimbar-window"><span class="es-trimbar-mid">↔ 끌어서 위치</span></div></div></div>
             <div class="es-trim-range">선택 구간 <span class="es-trim-a">${inv.toFixed(1)}초</span> ~ <span class="es-trim-b">${(inv + dv).toFixed(1)}초</span></div>
+            <div class="es-trimcap"><span class="es-trimcap-ic">💬</span><input type="text" class="es-trimcap-in" data-idx="${capIdx}" data-slotid="${s.id}" data-start="${st0.toFixed(2)}" data-dur="${(s.dur || 0).toFixed(2)}" value="${esc(capVal)}" placeholder="이 컷 자막 (선택)"></div>
           </div>`;
       }).filter(Boolean).join("");
-      bodyHtml = `
+      bodyHtml = _filled === 0 ? `
+        <div class="es-wiz-body">
+          <div class="es-wiz-num">${E.easyIdx + 1}</div>
+          <div class="es-wiz-title">영상을 넣어주세요</div>
+          <div class="es-wiz-sub">넣으면 구간·자막을 바로 정할 수 있어요</div>
+          <div class="es-wiz-bigcount">총 <b>${trimSlots.length}</b>개 필요해요</div>
+          <button type="button" class="es-wiz-bigbtn es-wiz-drop" id="esWizAdd">📷 여기로 끌어다 놓거나 클릭<span class="es-wiz-drop-sub">영상 ${trimSlots.length}개 한 번에</span></button>
+          ${prevBtn ? `<div class="es-wiz-photobtns">${prevBtn}</div>` : ""}
+        </div>` : `
         <div class="es-wiz-body es-wiz-photos">
-          <div class="es-wiz-title" style="font-size:22px">영상의 어느 구간을 쓸지 골라주세요</div>
-          <div class="es-wiz-note">길이는 정해진 대로예요. 창을 좌우로 끌어 <b>시작 위치만</b> 옮겨 보세요 (첫·끝 장면이 같이 보여요)</div>
-          <div class="es-trim-list">${rows || `<div class="es-trim-empty" style="text-align:center;padding:24px 0">조절할 영상 컷이 없어요 — 다음으로 넘어가세요</div>`}</div>
+          <div class="es-wiz-title" style="font-size:22px">구간과 자막을 정해주세요</div>
+          <div class="es-wiz-note">창을 좌우로 끌어 <b>시작 위치</b>를 정하고, 각 영상 아래 <b>자막</b>도 같이 수정하세요</div>
+          <div class="es-trim-topbtns"><button type="button" class="es-btn es-btn-ghost es-trim-replaceall" id="esTrimReplaceAll">🔄 영상 전체 교체</button></div>
+          <div class="es-trim-list">${rows}</div>
           <div class="es-wiz-photobtns">
             ${prevBtn}
             <button type="button" class="es-btn es-btn-primary es-wiz-bigbtn2" id="esWizNext">다음 ›</button>
@@ -2297,6 +2067,45 @@
         if (vidB) vidB.addEventListener("loadedmetadata", seekInit);
         setupTrimBar(row, slot, srcDur, vidA, vidB);
       });
+      // 🔄 영상 교체 — 컷별
+      $$(".es-trim-replace").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.id;
+        const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*,video/*";
+        inp.addEventListener("change", () => { if (inp.files && inp.files[0]) replaceSlotVideo(id, inp.files[0]); });
+        inp.click();
+      }));
+      // 🔄 전체 교체
+      { const ra = $("#esTrimReplaceAll"); if (ra) ra.addEventListener("click", () => {
+        const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*,video/*"; inp.multiple = true;
+        inp.addEventListener("change", () => { if (inp.files && inp.files.length) replaceAllVideos(inp.files); });
+        inp.click();
+      }); }
+      // 💬 각 컷 자막 — 길이 단계에서 함께 편집(있으면 수정, 없으면 생성)
+      $$(".es-trimcap-in").forEach((inp) => {
+        inp.addEventListener("keydown", (e) => e.stopPropagation());
+        inp.addEventListener("input", () => {
+          const idx = parseInt(inp.dataset.idx, 10);
+          if (idx >= 0 && E.using.texts[idx]) { E.using.texts[idx].text = inp.value; }
+          else if (inp.value.trim()) {
+            const start = parseFloat(inp.dataset.start) || 0, dur = parseFloat(inp.dataset.dur) || 2.5;
+            E.using.texts.push({ id: uid(), text: inp.value, xPct: 50, yPct: 80, width: 86, size: 6, color: "#ffffff", bold: true, shadow: true, start: +start.toFixed(2), dur: +dur.toFixed(2) });
+            inp.dataset.idx = String(E.using.texts.length - 1);
+          }
+          scheduleSaveMeta();
+        });
+      });
+      // ＋ 영상 넣기 — 빈 상태 큰 버튼(전부 한번에) / 빈 컷 개별
+      { const add = $("#esWizAdd"); if (add) {
+        const pick = () => { const fp = document.createElement("input"); fp.type = "file"; fp.accept = "image/*,video/*"; fp.multiple = true; fp.addEventListener("change", () => { if (fp.files && fp.files.length) bulkFill(Array.from(fp.files)).then(() => renderEasy()); }); fp.click(); };
+        add.addEventListener("click", pick);
+        wireDrop(add, (files) => bulkFill(files).then(() => renderEasy()));
+      } }
+      $$(".es-trim-add").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.id;
+        const fp = document.createElement("input"); fp.type = "file"; fp.accept = "image/*,video/*";
+        fp.addEventListener("change", () => { if (fp.files && fp.files[0]) replaceSlotVideo(id, fp.files[0]); });
+        fp.click();
+      }));
     } else {   // done
       renderTexts();
       updateReelsOverlay();
@@ -2883,6 +2692,7 @@
   async function adminDeleteMusic(id) {
     try { await fetch(easyAudioEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", key: localStorage.getItem("easy_admin_key"), id }) }); } catch (_) {}
   }
+
   function trimMusicAtPlayhead(side) {
     if (!E.using || !E.using.musicUrl) return;
     const total = totalDur() || 1;
@@ -4918,6 +4728,41 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       saveFillBlob(id, file);
     }
     renderFillSlots(); preloadFills(); seek(E.playhead); scheduleSaveMeta();
+  }
+  // 🔄 길이(트림) 단계 영상 교체 — 컷별 하나씩
+  async function replaceSlotVideo(slotId, file) {
+    if (!E.using || !file) return;
+    if (!/^(image|video)\//.test(file.type)) { alert("사진 또는 영상 파일만 넣을 수 있어요."); return; }
+    const prev = E.using.fills[slotId]; if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
+    const isVideo = /^video\//.test(file.type);
+    const url = URL.createObjectURL(file);
+    const dur = isVideo ? await mediaDuration(url, true) : 0;
+    E.using.fills[slotId] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
+    const slot = E.using.template.slots.find((s) => s.id === slotId); if (slot) slot.in = 0;   // 새 영상 → 시작위치 초기화
+    try { saveFillBlob(slotId, file); } catch (_) {}
+    scheduleSaveMeta();
+    renderEasy();   // 길이 단계 다시 그려 새 영상 반영
+  }
+  // 🔄 전체 교체 — 채워진 슬롯들을 위→아래 순서로 새 파일들로 교체
+  async function replaceAllVideos(files) {
+    if (!E.using) return;
+    const media = Array.from(files).filter((f) => /^(image|video)\//.test(f.type));
+    if (!media.length) { alert("사진 또는 영상 파일만 넣을 수 있어요."); return; }
+    const slots = (E.using.template.slots || []).filter((s) => !s.locked);
+    let fi = 0;
+    for (const s of slots) {
+      if (fi >= media.length) break;
+      const file = media[fi++];
+      const prev = E.using.fills[s.id]; if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
+      const isVideo = /^video\//.test(file.type);
+      const url = URL.createObjectURL(file);
+      const dur = isVideo ? await mediaDuration(url, true) : 0;
+      E.using.fills[s.id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
+      s.in = 0;
+      try { saveFillBlob(s.id, file); } catch (_) {}
+    }
+    scheduleSaveMeta();
+    renderEasy();
   }
 
   // ── 미리보기 재생 엔진 (슬롯을 음악에 맞춰 순서대로 이어붙임) ────────
