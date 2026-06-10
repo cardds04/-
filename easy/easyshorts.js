@@ -1130,6 +1130,7 @@
           ${g.hook ? `<div class="es-reel-ghook">🎬 후킹 — “${esc(g.hook)}”</div>` : ""}
           <div class="es-reel-stat"><span><b>${clips.length}</b>개 영상</span><span><b>${esc(String(g.totalSeconds || ""))}</b>초</span>${g.group || g.format ? `<span class="es-reel-statg">${esc(g.group || "")}${g.format ? " · " + esc(g.format) : ""}</span>` : ""}</div>
         </div>
+        <button type="button" class="es-reel-cta es-reel-make" id="esReelMake">🎬 이 지시서로 영상 만들기</button>
         ${g.povSpine ? `<details class="es-reel-pov"><summary>🧬 이 영상의 ‘척추’ <em>촬영자만 알 것 · 영상엔 말하지 말 것</em></summary><div>${esc(g.povSpine)}</div></details>` : ""}
         <div class="es-reel-steps">
           ${clips.map((c, idx) => `
@@ -1158,6 +1159,7 @@
     $("#esReelBack2", body).addEventListener("click", back);
     $("#esReelNew", body).addEventListener("click", () => { st.stage = "input"; reelSave(); reelRenderInput(); });
     $("#esReelCopy", body).addEventListener("click", () => reelCopyGuide(g, st.picked));
+    const mk = $("#esReelMake", body); if (mk) mk.addEventListener("click", () => reelToEditor(g));
   }
   function reelCopyGuide(g) {
     const L = [];
@@ -1183,6 +1185,42 @@
   }
   function reelFallbackCopy(text, done) {
     try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); done && done(); } catch (_) {}
+  }
+  // ── 지시서 → 이지숏폼 편집기로 (슬롯·길이·자막 자동 구성) ──────────────
+  function reelToEditor(guide) {
+    if (!guide || !Array.isArray(guide.clips) || !guide.clips.length) { reelToast("지시서가 없어요."); return; }
+    const clips = guide.clips;
+    // 슬롯: 클립 수 = 영상칸 수, 각 칸 길이 = 클립 분량(minSec), 트림(📐) 켬.
+    // label 은 번호만(역할에 '디테일' 들어가면 slotRole 이 오분류 → 역할/촬영지시는 _reel* 에 보관)
+    const slots = clips.map((c, i) => ({
+      id: uid(),
+      dur: clamp(Number(c.minSec) || 3, 1, 30),
+      label: (i + 1) + "번 컷",
+      easyTrim: true,
+      _reelRole: c.role || "",
+      _reelHint: c.footage || "",
+    }));
+    // 자막: 각 클립 subtitle → 누적 시작 위치에 하단 자막으로 자동 배치(수정 가능)
+    const texts = [];
+    let t = 0;
+    clips.forEach((c) => {
+      const d = clamp(Number(c.minSec) || 3, 1, 30);
+      const sub = String(c.subtitle || "").trim();
+      if (sub) texts.push({ id: uid(), text: sub, xPct: 50, yPct: 80, width: 86, size: 6, color: "#ffffff", bold: true, shadow: true, start: +t.toFixed(2), dur: +d.toFixed(2) });
+      t += d;
+    });
+    const tpl = { id: uid(), name: String(guide.title || "릴스 지시서").slice(0, 40), aspect: "9:16", slots, music: null, createdAt: Date.now(), _fromReel: true };
+    (async () => {
+      try { await clearSession(); } catch (_) {}
+      E.mode2 = "easy";
+      try { localStorage.setItem("es_mode2", "easy"); } catch (_) {}
+      E.using = { template: tpl, musicUrl: null, fills: {}, audioBlobs: {}, texts, selText: null, selTexts: [] };
+      E.playhead = 0;
+      E.easyIdx = 0;
+      E.using._baFlow = false;
+      setView("use");
+      try { scheduleSaveMeta(); } catch (_) {}
+    })();
   }
 
   // ── 만든 영상(다운로드한 결과물)을 기기에 저장 ──────────────────────
