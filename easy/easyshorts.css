@@ -647,3 +647,60 @@ body.mode-easy #easyRoot {
 .es-reel-errbox .es-reel-cta, .es-reel-errbox .es-reel-ghost { max-width: 280px; margin-left: auto; margin-right: auto; }
 .es-reel-toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(10px); background: var(--text, #fff); color: var(--bg, #111); font-size: 13.5px; font-weight: 700; padding: 11px 18px; border-radius: 999px; opacity: 0; pointer-events: none; transition: 0.25s; z-index: 9999; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
 .es-reel-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 🔖 이어하기 칩 (진행 중인 릴스 복귀) */
+.es-reel-resume { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(72px + env(safe-area-inset-bottom, 0px)); z-index: 70; display: flex; align-items: stretch; background: var(--accent); color: var(--on-accent, #1a1a1a); border-radius: 999px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); overflow: hidden; max-width: calc(100vw - 28px); animation: esReelChipIn 0.25s ease; }
+@keyframes esReelChipIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.es-reel-resume-main { display: flex; align-items: center; gap: 9px; background: transparent; border: none; color: inherit; padding: 9px 8px 9px 15px; cursor: pointer; font: inherit; min-width: 0; }
+.es-reel-resume-ic { font-size: 18px; flex-shrink: 0; }
+.es-reel-resume-tx { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; min-width: 0; }
+.es-reel-resume-tx b { font-size: 13.5px; font-weight: 800; }
+.es-reel-resume-tx span { font-size: 11px; opacity: 0.82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+.es-reel-resume-x { background: rgba(0,0,0,0.12); border: none; color: inherit; padding: 0 14px; cursor: pointer; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.es-reel-resume-x:active { background: rgba(0,0,0,0.22); }
+
+/* 🎚 오디오 박스 (완성 단계 — 음악/원본 오디오/볼륨 우세) */
+.es-audiobox { width: 100%; max-width: 620px; margin: 6px auto 0; display: flex; flex-direction: column; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; box-sizing: border-box; }
+.es-audiobox-r { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.es-audio-pick { flex-shrink: 0; }
+.es-audio-name { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-audio-check { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--text); cursor: pointer; user-select: none; }
+.es-audio-check input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+.es-audio-bal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--border); }
+.es-audio-bal-l { font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
+.es-balbtn { background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.es-balbtn:hover { color: var(--text); }
+.es-balbtn.on { background: var(--accent); color: var(--on-accent, #1a1a1a); border-color: var(--accent); font-weight: 700; }
+
+/* 🎵 음악 라이브러리 picker (관리자 큐레이션 → 고객 선택) */
+.es-mp-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end; justify-content: center; animation: esMpFade 0.2s ease; }
+@keyframes esMpFade { from { opacity: 0; } to { opacity: 1; } }
+.es-mp-sheet { width: 100%; max-width: 560px; max-height: 86vh; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 18px 18px 0 0; padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+.es-mp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.es-mp-head b { font-size: 16px; color: var(--text); }
+.es-mp-x { background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); border-radius: 8px; width: 32px; height: 32px; font-size: 14px; cursor: pointer; flex-shrink: 0; }
+.es-mp-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.es-mp-tab { flex: 1; background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); border-radius: 10px; padding: 9px 0; font-size: 14px; font-weight: 600; cursor: pointer; }
+.es-mp-tab.on { background: var(--accent); color: var(--on-accent, #1a1a1a); border-color: var(--accent); font-weight: 700; }
+.es-mp-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+.es-mp-item { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.es-mp-item.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.es-mp-play { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 13px; cursor: pointer; }
+.es-mp-play.on { background: var(--accent); color: var(--on-accent, #1a1a1a); border-color: var(--accent); }
+.es-mp-name { flex: 1; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.es-mp-pick { flex-shrink: 0; background: transparent; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.es-mp-pick:active { background: var(--accent); color: var(--on-accent, #1a1a1a); }
+.es-mp-item.sel .es-mp-pick { background: var(--accent); color: var(--on-accent, #1a1a1a); }
+.es-mp-del { flex-shrink: 0; background: transparent; border: none; color: var(--text-dim); font-size: 14px; cursor: pointer; padding: 4px; }
+.es-mp-none .es-mp-name { color: var(--text-dim); }
+.es-mp-empty, .es-mp-loading { text-align: center; color: var(--text-dim); font-size: 13px; padding: 18px 0; }
+.es-mp-admin { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.es-mp-adminlink { background: transparent; border: none; color: var(--text-dim); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px; }
+.es-mp-adminbox { display: flex; flex-direction: column; gap: 8px; }
+.es-mp-adminhd { font-size: 13px; font-weight: 700; color: var(--text); }
+.es-mp-in, .es-mp-file { width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 14px; font-family: inherit; }
+.es-mp-temprow { display: flex; gap: 14px; }
+.es-mp-tempopt { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.es-mp-tempopt input { accent-color: var(--accent); }
+.es-mp-up { align-self: flex-start; }
+.es-mp-msg { font-size: 12.5px; color: var(--text-dim); }

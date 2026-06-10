@@ -671,7 +671,7 @@
       const g = off.createGain();
       const fade = Math.min(5, total);
       const mw = musicWin(total);   // 음악 인/아웃 범위
-      const duck = vBuf ? voiceDuckLevel() : 1;   // 나레이션 있으면 음악 줄임(덕킹)
+      const duck = (vBuf ? voiceDuckLevel() : 1) * musicBalanceVol();   // 나레이션 덕킹 + 🎚 원본 오디오 밸런스
       g.gain.setValueAtTime(mw.start > 0 ? 0.0001 : duck, 0);
       g.gain.setValueAtTime(duck, mw.start);
       g.gain.setValueAtTime(duck, Math.max(mw.start, mw.end - fade));
@@ -715,6 +715,7 @@
   const dlBtn = () => $("#esEasyGen") || $("#esDownload");   // 활성 다운로드 버튼(마법사/에디터 공용)
   async function exportVideo() {
     if (!E.using) return;
+    try { syncOrigAudio(); } catch (_) {}   // 🎚 원본 오디오 클립 최신화(출력에 믹스)
     await ensureCaptionFontsLoaded();   // 자막 폰트가 캔버스에서 안 깨지게 먼저 로드
     const { total } = slotTimes();
     if (total <= 0) { alert("내용이 없어요."); return; }
@@ -952,6 +953,7 @@
     const root = document.getElementById("easyRoot"); if (!root) return;
     $$(".es-bnav-btn", root).forEach((b) => b.classList.toggle("active", b.dataset.tab === (E._custTab || "watch")));
     document.body.classList.toggle("es-hasnav", E.view !== "use");   // 만드는 중(위저드)엔 숨김
+    try { reelResumeChip(); } catch (_) {}   // 진행 중인 릴스 '이어하기' 칩 갱신
   }
   function selectCustTab(tab) {
     E._custTab = tab;
@@ -1000,7 +1002,7 @@
     if (!E._reel || typeof E._reel !== "object") E._reel = { stage: "input", topic: "", proposals: null, picked: null, guide: null };
     return E._reel;
   }
-  function reelSave() { try { localStorage.setItem("easy_reel", JSON.stringify(E._reel || {})); } catch (_) {} }
+  function reelSave() { try { localStorage.setItem("easy_reel", JSON.stringify(E._reel || {})); } catch (_) {} try { reelResumeChip(); } catch (_) {} }
   function reelDots(v) {
     v = Math.max(0, Math.min(5, Number(v) || 0));
     let s = ""; for (let i = 1; i <= 5; i++) s += `<span class="es-reel-dot${i <= v ? " on" : ""}"></span>`;
@@ -1221,6 +1223,20 @@
       setView("use");
       try { scheduleSaveMeta(); } catch (_) {}
     })();
+  }
+  // ── 🔖 이어하기 칩 — 진행 중인 릴스(제안/지시서)를 어디서든 한 번에 복귀 ──
+  function reelResumeChip() {
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem("easy_reel") || "null"); } catch (_) {}
+    const has = st && st.topic && (st.stage === "proposals" || st.stage === "guide");
+    const show = has && E._custTab !== "reel" && E.view !== "use";
+    let chip = document.getElementById("esReelResume");
+    if (!show) { if (chip) chip.remove(); return; }
+    const label = st.stage === "guide" ? "지시서" : "제안 5개";
+    if (!chip) { chip = document.createElement("div"); chip.id = "esReelResume"; chip.className = "es-reel-resume"; document.body.appendChild(chip); }
+    chip.innerHTML = `<button type="button" class="es-reel-resume-main"><span class="es-reel-resume-ic">🔖</span><span class="es-reel-resume-tx"><b>이어하기</b><span>${esc(st.topic)} · ${label}</span></span></button><button type="button" class="es-reel-resume-x" title="지우기">✕</button>`;
+    const main = chip.querySelector(".es-reel-resume-main"); if (main) main.onclick = () => selectCustTab("reel");
+    const x = chip.querySelector(".es-reel-resume-x"); if (x) x.onclick = (e) => { e.stopPropagation(); try { localStorage.removeItem("easy_reel"); } catch (_) {} E._reel = null; reelResumeChip(); };
   }
 
   // ── 만든 영상(다운로드한 결과물)을 기기에 저장 ──────────────────────
@@ -2194,6 +2210,18 @@
           </div>
           <audio id="esMusic"></audio>
           <audio id="esVoice"></audio>
+          <div class="es-audiobox">
+            <div class="es-audiobox-r">
+              <button type="button" class="es-btn es-btn-ghost es-audio-pick" id="esEasyMusic">🎵 음악 고르기</button>
+              <span class="es-audio-name" id="esEasyMusicName">음악 없음</span>
+            </div>
+            <label class="es-audio-check"><input type="checkbox" id="esOrigAudio"> 🎙 원본 영상 소리도 같이 사용</label>
+            <div class="es-audio-bal" id="esAudioBal" hidden>
+              <span class="es-audio-bal-l">볼륨 우세</span>
+              <button type="button" class="es-balbtn" data-bal="orig">🎙 원본 크게</button>
+              <button type="button" class="es-balbtn" data-bal="music">🎵 음악 크게</button>
+            </div>
+          </div>
           <div class="es-wiz-genrow">
             <button type="button" class="es-btn es-btn-primary es-wiz-gen" id="esEasyGen">⬇ 영상 생성·다운로드</button>
             <button type="button" class="es-btn es-btn-ghost" id="esEasySave">💾 내 영상으로 저장</button>
@@ -2278,10 +2306,15 @@
       $("#esSeek").addEventListener("input", (e) => seek(parseFloat(e.target.value)));
       $("#esEasyGen").addEventListener("click", exportVideo);
       $("#esEasySave").addEventListener("click", saveCurrentProject);
+      // 🎚 오디오 박스 — 음악 선택 · 원본 오디오 · 볼륨 우세
+      { const mp = $("#esEasyMusic"); if (mp) mp.addEventListener("click", openMusicPicker); }
+      { const oa = $("#esOrigAudio"); if (oa) oa.addEventListener("change", (e) => { E.using.origAudio = e.target.checked; if (E.using.origAudio && !E.using.audioBalance) E.using.audioBalance = "orig"; syncOrigAudio(); refreshAudioBox(); try { seek(E.playhead); } catch (_) {} scheduleSaveMeta(); }); }
+      $$(".es-balbtn").forEach((b) => b.addEventListener("click", () => { E.using.audioBalance = b.dataset.bal; syncOrigAudio(); refreshAudioBox(); try { seek(E.playhead); } catch (_) {} scheduleSaveMeta(); }));
       $("#esReels").addEventListener("change", async (e) => { if (e.target.checked && !E.reelsUrl) { e.target.checked = false; $("#esReelsFile").click(); return; } E.reelsOn = e.target.checked; try { await idbSet("reelsOn", E.reelsOn); } catch (_) {} updateReelsOverlay(); });
       $("#esReelsPick").addEventListener("click", () => $("#esReelsFile").click());
       $("#esReelsFile").addEventListener("change", (e) => { if (e.target.files[0]) setReelsImage(e.target.files[0]); });
       preloadFills();
+      try { syncOrigAudio(); refreshAudioBox(); } catch (_) {}   // 🎚 오디오 박스 초기 상태
       seek(0);
     }
   }
@@ -2693,6 +2726,162 @@
     if (time < start || time >= end) return 0;          // 범위 밖 = 무음
     const fade = Math.min(5, total);
     return (total > 0 && time > end - fade) ? clamp((end - time) / fade, 0, 1) : 1;   // 끝 페이드아웃
+  }
+  // ── 🎚 원본 영상 오디오 + 음악 볼륨 밸런스 ──────────────────────────
+  function audioVols() {
+    const hasMusic = !!(E.using && E.using.musicUrl);
+    const useOrig = !!(E.using && E.using.origAudio);
+    if (!useOrig) return { origVol: 0, musicVol: 1 };              // 음악만
+    if (!hasMusic) return { origVol: 1, musicVol: 0 };             // 원본만
+    const bal = (E.using && E.using.audioBalance) || "orig";       // 둘 다 → 우세 선택
+    return bal === "music" ? { origVol: 0.45, musicVol: 1 } : { origVol: 1, musicVol: 0.35 };
+  }
+  function musicBalanceVol() { return audioVols().musicVol; }
+  // 원본 오디오 사용 시 — 채워진 영상 슬롯들로 audioClips 합성(미리보기 updateAudioClips·내보내기 encodeAudioInto 공용 경로 재사용)
+  function syncOrigAudio() {
+    if (!E.using || !E.using.template) return;
+    const tpl = E.using.template;
+    tpl.audioClips = (tpl.audioClips || []).filter((c) => !c._orig);   // 이전 원본클립 제거
+    E.using.audioBlobs = E.using.audioBlobs || {};
+    Object.keys(E.using.audioBlobs).forEach((id) => { if (/^orig_/.test(id)) delete E.using.audioBlobs[id]; });
+    if (!E.using.origAudio) return;
+    const { origVol } = audioVols();
+    let t = 0;
+    for (const s of (tpl.slots || [])) {
+      const sdur = s.dur || 0;
+      const f = (!s.locked) && E.using.fills && E.using.fills[s.id];   // 고정컷은 관리자 오디오(pubAudio) 영역 → 제외
+      if (f && f.kind === "video" && f.url) {
+        const id = "orig_" + s.id;
+        E.using.audioBlobs[id] = { url: f.url, dur: f.dur || sdur };
+        tpl.audioClips.push({ id, fromSlot: s.id, start: +t.toFixed(3), in: s.in || 0, dur: sdur, vol: origVol, srcDur: f.dur || sdur, _orig: true });
+      }
+      t += sdur;
+    }
+  }
+  function refreshAudioBox() {
+    if (!E.using) return;
+    const name = $("#esEasyMusicName");
+    if (name) name.textContent = (E.using.musicSel && E.using.musicSel.name) || (E.using.musicUrl ? "음악 있음" : "음악 없음");
+    const oa = $("#esOrigAudio"); if (oa) oa.checked = !!E.using.origAudio;
+    const bal = $("#esAudioBal");
+    if (bal) {
+      bal.hidden = !(E.using.origAudio && E.using.musicUrl);
+      const cur = E.using.audioBalance || "orig";
+      $$("#esAudioBal .es-balbtn").forEach((b) => b.classList.toggle("on", b.dataset.bal === cur));
+    }
+  }
+  // ── 🎵 음악 라이브러리 picker (관리자 큐레이션 → 고객 선택, 빠른/중간/느린) ──
+  function easyAudioEndpoint() {
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/easy-audio";
+    return "https://sc-pink.vercel.app/api/easy-audio";
+  }
+  const TEMPO_LABEL = { fast: "빠른", mid: "중간", slow: "느린" };
+  let _musicPreview = null;
+  function mpFileToB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(file); }); }
+  function stopMusicPreview() { if (_musicPreview) { try { _musicPreview.pause(); } catch (_) {} _musicPreview = null; } $$(".es-mp-play.on").forEach((b) => { b.classList.remove("on"); b.textContent = "▶"; }); }
+  function isAudioAdmin() { try { return !!localStorage.getItem("easy_admin_key"); } catch (_) { return false; } }
+  async function openMusicPicker() {
+    if (!E.using) return;
+    let ov = document.getElementById("esMusicPicker");
+    if (!ov) { ov = document.createElement("div"); ov.id = "esMusicPicker"; ov.className = "es-mp-overlay"; document.body.appendChild(ov); }
+    ov.innerHTML = `<div class="es-mp-sheet">
+        <div class="es-mp-head"><b>🎵 음악 고르기</b><button type="button" class="es-mp-x" id="esMpClose">✕</button></div>
+        <div class="es-mp-tabs">${["fast", "mid", "slow"].map((t, i) => `<button type="button" class="es-mp-tab${i === 0 ? " on" : ""}" data-t="${t}">${TEMPO_LABEL[t]}</button>`).join("")}</div>
+        <div class="es-mp-list" id="esMpList"><div class="es-mp-loading">불러오는 중…</div></div>
+        <div class="es-mp-admin" id="esMpAdmin"></div>
+      </div>`;
+    ov.querySelector("#esMpClose").onclick = () => { stopMusicPreview(); ov.remove(); };
+    ov.onclick = (e) => { if (e.target === ov) { stopMusicPreview(); ov.remove(); } };
+    let tracks = [];
+    try { const r = await fetch(easyAudioEndpoint(), { cache: "no-store" }); const j = await r.json(); tracks = (j && j.tracks) || []; } catch (_) {}
+    ov._tracks = tracks; ov._tempo = "fast";
+    ov.querySelectorAll(".es-mp-tab").forEach((tb) => tb.onclick = () => { ov.querySelectorAll(".es-mp-tab").forEach((x) => x.classList.toggle("on", x === tb)); renderMusicList(ov, tb.dataset.t); });
+    renderMusicList(ov, "fast");
+    renderMusicAdmin(ov);
+  }
+  function renderMusicList(ov, tempo) {
+    stopMusicPreview(); ov._tempo = tempo;
+    const list = ov.querySelector("#esMpList"); if (!list) return;
+    const tracks = (ov._tracks || []).filter((t) => t.tempo === tempo);
+    const selId = E.using && E.using.musicSel && E.using.musicSel.id;
+    const admin = isAudioAdmin();
+    let html = `<div class="es-mp-item es-mp-none${!selId ? " sel" : ""}" data-none="1"><span class="es-mp-name">🔇 음악 없음</span><button type="button" class="es-mp-pick">선택</button></div>`;
+    if (!tracks.length) html += `<div class="es-mp-empty">이 분류엔 음악이 아직 없어요${admin ? " — 아래에서 추가하세요" : ""}.</div>`;
+    html += tracks.map((t) => `<div class="es-mp-item${t.id === selId ? " sel" : ""}" data-id="${esc(t.id)}">
+        <button type="button" class="es-mp-play" data-url="${esc(t.url)}">▶</button>
+        <span class="es-mp-name">${esc(t.name)}</span>
+        <button type="button" class="es-mp-pick">선택</button>
+        ${admin ? `<button type="button" class="es-mp-del" title="삭제">🗑</button>` : ""}
+      </div>`).join("");
+    list.innerHTML = html;
+    list.querySelectorAll(".es-mp-play").forEach((b) => b.onclick = () => toggleMusicPreview(b));
+    list.querySelectorAll(".es-mp-item").forEach((it) => {
+      const pick = it.querySelector(".es-mp-pick");
+      if (pick) pick.onclick = () => { if (it.dataset.none) selectMusicTrack(null); else { const t = (ov._tracks || []).find((x) => x.id === it.dataset.id); if (t) selectMusicTrack(t); } stopMusicPreview(); ov.remove(); };
+      const del = it.querySelector(".es-mp-del");
+      if (del) del.onclick = async (e) => { e.stopPropagation(); if (!confirm("이 음악을 라이브러리에서 삭제할까요?")) return; await adminDeleteMusic(it.dataset.id); ov._tracks = (ov._tracks || []).filter((x) => x.id !== it.dataset.id); renderMusicList(ov, tempo); };
+    });
+  }
+  function toggleMusicPreview(btn) {
+    if (btn.classList.contains("on")) { stopMusicPreview(); return; }
+    stopMusicPreview();
+    try { _musicPreview = new Audio(btn.dataset.url); _musicPreview.play().catch(() => {}); _musicPreview.onended = () => stopMusicPreview(); btn.classList.add("on"); btn.textContent = "⏸"; } catch (_) {}
+  }
+  function selectMusicTrack(t) {
+    if (!E.using) return;
+    if (E.using.musicUrl && E.using._musicChanged) { try { URL.revokeObjectURL(E.using.musicUrl); } catch (_) {} }
+    if (t) { E.using.musicUrl = t.url; E.using.musicSel = { id: t.id, name: t.name, url: t.url, tempo: t.tempo }; E.using.template.music = { name: t.name, dur: 0 }; }
+    else { E.using.musicUrl = null; E.using.musicSel = null; E.using.template.music = null; }
+    E.using._musicChanged = false; E.using.musicRange = null;
+    const a = $("#esMusic");
+    if (a) { if (t) { a.src = t.url; a.loop = true; try { a.load(); } catch (_) {} } else { try { a.pause(); a.removeAttribute("src"); a.load(); } catch (_) {} } }
+    try { syncOrigAudio(); } catch (_) {}
+    try { seek(E.playhead); } catch (_) {}
+    refreshAudioBox(); scheduleSaveMeta();
+  }
+  function renderMusicAdmin(ov) {
+    const box = ov.querySelector("#esMpAdmin"); if (!box) return;
+    if (!isAudioAdmin()) {
+      box.innerHTML = `<button type="button" class="es-mp-adminlink" id="esMpAdminLink">관리자</button>`;
+      box.querySelector("#esMpAdminLink").onclick = () => { const k = prompt("관리자 키"); if (k) { try { localStorage.setItem("easy_admin_key", k.trim()); } catch (_) {} renderMusicAdmin(ov); renderMusicList(ov, ov._tempo || "fast"); } };
+      return;
+    }
+    box.innerHTML = `<div class="es-mp-adminbox">
+        <div class="es-mp-adminhd">＋ 관리자: 음악 추가</div>
+        <input type="text" id="esMpName" class="es-mp-in" placeholder="음악 이름" maxlength="40">
+        <div class="es-mp-temprow">${["fast", "mid", "slow"].map((t, i) => `<label class="es-mp-tempopt"><input type="radio" name="esMpTempo" value="${t}"${i === 1 ? " checked" : ""}> ${TEMPO_LABEL[t]}</label>`).join("")}</div>
+        <input type="file" id="esMpFile" accept="audio/*" class="es-mp-file">
+        <button type="button" class="es-btn es-btn-primary es-mp-up" id="esMpUpload">⬆ 업로드</button>
+        <span class="es-mp-msg" id="esMpMsg"></span>
+        <button type="button" class="es-mp-adminlink" id="esMpForget">관리자 해제</button>
+      </div>`;
+    box.querySelector("#esMpForget").onclick = () => { try { localStorage.removeItem("easy_admin_key"); } catch (_) {} renderMusicAdmin(ov); renderMusicList(ov, ov._tempo || "fast"); };
+    box.querySelector("#esMpUpload").onclick = () => adminUploadMusic(ov);
+  }
+  async function adminUploadMusic(ov) {
+    const name = (ov.querySelector("#esMpName").value || "").trim();
+    const file = ov.querySelector("#esMpFile").files[0];
+    const tempo = (ov.querySelector('input[name="esMpTempo"]:checked') || {}).value || "mid";
+    const msg = ov.querySelector("#esMpMsg");
+    if (!name) { msg.textContent = "이름을 입력하세요."; return; }
+    if (!file) { msg.textContent = "음악 파일을 선택하세요."; return; }
+    if (file.size > 4 * 1024 * 1024) { msg.textContent = "파일이 너무 커요 (4MB 이하 권장)."; return; }
+    msg.textContent = "업로드 중…";
+    try {
+      const b64 = await mpFileToB64(file);
+      const r = await fetch(easyAudioEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", key: localStorage.getItem("easy_admin_key"), name, tempo, audioB64: b64, audioType: file.type }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || "업로드 실패");
+      msg.textContent = "✓ 추가됨";
+      ov._tracks = (ov._tracks || []).concat(j.track);
+      ov.querySelectorAll(".es-mp-tab").forEach((x) => x.classList.toggle("on", x.dataset.t === tempo));
+      renderMusicList(ov, tempo);
+      const ni = ov.querySelector("#esMpName"); if (ni) ni.value = "";
+      const fi = ov.querySelector("#esMpFile"); if (fi) fi.value = "";
+    } catch (e) { msg.textContent = "✗ " + ((e && e.message) || "실패"); }
+  }
+  async function adminDeleteMusic(id) {
+    try { await fetch(easyAudioEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", key: localStorage.getItem("easy_admin_key"), id }) }); } catch (_) {}
   }
   function trimMusicAtPlayhead(side) {
     if (!E.using || !E.using.musicUrl) return;
@@ -4825,6 +5014,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const total = totalDur();
     let v = musicVolAt(time, total || 1);   // 음악 범위(인/아웃) + 끝 페이드 반영
     if (E.using && E.using.voiceUrl) v *= voiceDuckLevel();   // 나레이션이 있으면 음악을 줄여(덕킹) 목소리가 들리게
+    v *= musicBalanceVol();   // 🎚 원본 오디오 함께 쓸 때 음악 우세/덕킹
     mus.volume = v;
   }
   function seek(time) {
@@ -4843,6 +5033,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function togglePlay() { E.playing ? stopPlay() : startPlay(); }
   function startPlay() {
     if (!E.using) return;
+    try { syncOrigAudio(); } catch (_) {}   // 🎚 원본 오디오 클립 최신화
     const { total } = slotTimes();
     if (total <= 0) return;
     if (E.playhead >= total - 0.02) seek(0);
