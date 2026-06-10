@@ -319,15 +319,20 @@
         catch (e1) { j = JSON.parse(txt.replace(/[\u0000-\u001F]+/g, " ")); }   // 제어문자 정제 후 재시도
         if (j && j.ok && Array.isArray(j.templates)) {
           E.templates = j.templates;
+          E._taxonomy = (Array.isArray(j.taxonomy) && j.taxonomy.length) ? j.taxonomy : null;   // 관리자 분류 체계
+          E._cats = (j.cats && typeof j.cats === "object") ? j.cats : {};                          // 템플릿별 분류 {id:{goal,format,level}}
           try { await idbSet("templates", j.templates); } catch (_) {}   // 오프라인 폴백용 캐시
+          try { await idbSet("template_meta", { taxonomy: E._taxonomy, cats: E._cats }); } catch (_) {}
           return;
         }
         throw new Error("bad response");
       } catch (e) { lastErr = e; }
     }
     console.warn("[easyshorts] loadTemplates 실패 — 옛 캐시 사용(최신 게시가 안 보일 수 있음):", lastErr);
-    try { const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : []; }
-    catch (_2) { E.templates = []; }
+    try {
+      const m = await idbGet("templates"); E.templates = Array.isArray(m) ? m : [];
+      const meta = await idbGet("template_meta"); E._taxonomy = (meta && meta.taxonomy) || null; E._cats = (meta && meta.cats) || {};
+    } catch (_2) { E.templates = []; }
   }
   async function musicBlobUrl(templateId) {
     try { const b = await idbGet("music_" + templateId); if (b instanceof Blob) return URL.createObjectURL(b); } catch (_) {}
@@ -1152,6 +1157,34 @@
     if ((t.texts || []).length) parts.push("자막");
     return parts.join(" · ") || (s.length + "컷");
   }
+  // 템플릿 카드 한 장 HTML
+  function tplCardHtml(t, liked) {
+    const asp = (t.aspect || "9:16");
+    return `<div class="es-tplcard" data-tid="${t.id}">
+      <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
+        ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
+        <span class="es-tplcard-play">▶</span>
+        <button type="button" class="es-tplcard-like ${liked.has(t.id) ? "on" : ""}" title="찜하기" aria-label="찜하기">${liked.has(t.id) ? "♥" : "♡"}</button>
+        <button type="button" class="es-tplcard-go" title="이 스타일로 만들기" aria-label="이 스타일로 만들기">＋</button>
+      </div>
+    </div>`;
+  }
+  // 카탈로그 본문 — 관리자 분류(taxonomy+cats)가 있으면 '목적별 섹션 + 레벨 오름차순', 없으면 평면(기존)
+  function catalogBody(list, liked, allowGroup) {
+    const tax = E._taxonomy, cats = E._cats || {};
+    const anyCat = allowGroup && tax && tax.length && list.some((t) => cats[t.id] && cats[t.id].goal);
+    if (!anyCat) return `<div class="es-tplcat">${list.map((t) => tplCardHtml(t, liked)).join("")}</div>`;
+    let html = "";
+    tax.forEach((c) => {
+      const items = list.filter((t) => cats[t.id] && cats[t.id].goal === c.key)
+        .sort((a, b) => ((cats[a.id].level || 9) - (cats[b.id].level || 9)));
+      if (!items.length) return;
+      html += `<div class="es-cat-sec"><div class="es-cat-h">${esc(c.emoji)} ${esc(c.label)}</div><div class="es-tplcat">${items.map((t) => tplCardHtml(t, liked)).join("")}</div></div>`;
+    });
+    const uncat = list.filter((t) => !(cats[t.id] && cats[t.id].goal));
+    if (uncat.length) html += `<div class="es-cat-sec"><div class="es-cat-h">그 외</div><div class="es-tplcat">${uncat.map((t) => tplCardHtml(t, liked)).join("")}</div></div>`;
+    return html;
+  }
   function renderGallery() {
     const body = $("#esBody"); if (!body) return;
 
@@ -1173,19 +1206,7 @@
     const tplCatalog = list.length ? `
       <div class="es-gallery">
         ${headHtml}
-        <div class="es-tplcat">
-          ${list.map((t) => {
-            const asp = (t.aspect || "9:16");
-            return `<div class="es-tplcard" data-tid="${t.id}">
-              <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
-                ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
-                <span class="es-tplcard-play">▶</span>
-                <button type="button" class="es-tplcard-like ${liked.has(t.id) ? "on" : ""}" title="찜하기" aria-label="찜하기">${liked.has(t.id) ? "♥" : "♡"}</button>
-                <button type="button" class="es-tplcard-go" title="이 스타일로 만들기" aria-label="이 스타일로 만들기">＋</button>
-              </div>
-            </div>`;
-          }).join("")}
-        </div>
+        ${catalogBody(list, liked, !onlyLiked)}
       </div>` : "";
 
     // 둘 다 없으면 안내
