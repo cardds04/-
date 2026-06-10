@@ -5769,6 +5769,24 @@
         saveActiveUnitField("vocabStageCleared", o);
       }
       function isStageCleared(stage) { return getStageInfo(stage).count >= 2; }
+      // 🛠 디버그: 콘솔에서 _sgDump() 호출하면 현재 단원의 단계 클리어 상태를 출력
+      window._sgDump = function () {
+        try {
+          const u = getActiveUnit();
+          const o = u.vocabStageCleared || {};
+          const lines = ["[단계 클리어 상태] 단원: " + u.title + " (id=" + u.id + ")"];
+          [2, 3, 4].forEach((s) => {
+            const e = o[s];
+            if (!e) { lines.push("  " + s + "단계: (기록 없음)"); return; }
+            const cnt = typeof e.count === "number" ? e.count : (e.at ? 1 : 0);
+            const ago = e.firstAt ? Math.round((Date.now() - e.firstAt) / 60000) + "분 전" : "-";
+            lines.push("  " + s + "단계: " + cnt + "회, 첫 클리어 " + ago + ", 보류 " + (e.pendingPay || 0) + "원");
+          });
+          lines.push("  적립금: " + getSavings() + "원");
+          console.log(lines.join("\n"));
+          return o;
+        } catch (e) { console.warn(e); }
+      };
       // 단원·단계별 1회 클리어 후 3일 경과 시 벌금 자동 적용. 글로벌 적립금에서 차감.
       function checkAndApplyStagePenalty() {
         if (!getActiveUnitId) return;
@@ -6070,8 +6088,10 @@
           if (isPerfect) {
             // 💰 100점 통과 — 1회/2회 분리 시스템 + 6시간 간격 + 3일 벌금
             const earned = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
+            const unitBefore = getActiveUnit();
             const info = getStageInfo(stageNo);
             const nowTs = Date.now();
+            console.log("[StageClear] start", { stageNo: stageNo, unitId: unitBefore.id, unitTitle: unitBefore.title, info: info, earned: earned, noMoney: !!state.vocabNoMoney, retake: !!state.vocabRetake });
             let depositLine = "";
             let titleLine = "";
             if (info.count >= 2) {
@@ -6085,6 +6105,7 @@
                 const remainH = Math.ceil((STAGE_GAP_MS - passed) / 3600000);
                 titleLine = "🎉 100점! 잘했어요!";
                 depositLine = '<br>⏳ 2회 클리어는 첫 클리어로부터 <b>6시간 뒤</b>부터 가능해요. (약 ' + remainH + '시간 남음)<br><small>그때 다시 100점 맞으면 적립금이 들어와요!</small>';
+                console.log("[StageClear] too-soon for 2nd clear", { passedMs: passed, gapMs: STAGE_GAP_MS });
               } else {
                 // 6시간+ 지남 → 2회 완료! 보류금 + 이번 판 한꺼번에 적립
                 const totalDeposit = (info.pendingPay || 0) + earned;
@@ -6095,6 +6116,7 @@
                 saveStageInfo(stageNo, { count: 2, firstAt: info.firstAt, lastAt: nowTs, pendingPay: 0 });
                 titleLine = "🏆 " + stageNo + "단계 <b>2회 완료!</b> 진짜 잘했어요!";
                 depositLine = '<br>💰 적립금 <b>+' + totalDeposit + '원</b> 들어왔어요! (1차 보류 ' + (info.pendingPay || 0) + ' + 이번 판 ' + earned + ' / 총 ' + getSavings() + '원)';
+                console.log("[StageClear] 2nd clear DONE", { deposited: totalDeposit, newSavings: getSavings(), savedInfo: getStageInfo(stageNo) });
               }
             } else {
               // 첫 클리어 — 보류
@@ -6103,6 +6125,7 @@
               depositLine = earned > 0
                 ? '<br>💰 이번 판 <b>' + earned + '원</b>은 보류 중이에요. <b>6시간 뒤 2회 클리어</b>까지 마쳐야 적립돼요!<br><small>⚠ 3일 안에 2회 안 하면 -500원!</small>'
                 : '<br>⏳ 6시간 뒤 2회 도전 가능. (3일 안에 2회 안 하면 -500원)';
+              console.log("[StageClear] 1st clear saved", { savedInfo: getStageInfo(stageNo), pendingPay: earned });
             }
             reviewRow.insertAdjacentHTML("beforeend",
               '<div class="reward-banner" style="background:linear-gradient(135deg,#a7f3d0,#34d399);color:#064e3b">' + titleLine + depositLine + '</div>');
