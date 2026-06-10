@@ -4435,6 +4435,8 @@
           else localStorage.removeItem(FAMILY_KID_KEY);
         } catch (e) {}
         familyState.selectedKidId = id || "";
+        // 아이 변경되면 우리가족 투두 지갑(받을 돈) 새로 가져오기
+        try { if (typeof refreshFamilyWallet === "function") refreshFamilyWallet(); } catch (e) {}
       }
       function getSelectedKidName() {
         const k = familyState.kids.find((x) => x.id === familyState.selectedKidId);
@@ -4635,8 +4637,14 @@
         }
       }
 
-      // 페이지 로딩 직후 아이 목록 가져오기
-      loadFamilyKids();
+      // 페이지 로딩 직후 아이 목록 가져오기 + 우리가족 투두 지갑(받을 돈) 로드
+      loadFamilyKids().then(() => { try { refreshFamilyWallet(); } catch (e) {} });
+      // 30초마다 갱신 (부모님이 우리가족 투두에서 지급 처리하면 자동 반영)
+      setInterval(() => { try { refreshFamilyWallet(); } catch (e) {} }, 30 * 1000);
+      // 탭이 다시 보일 때도 한 번 갱신
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) { try { refreshFamilyWallet(); } catch (e) {} }
+      });
 
       function renderMenuDataInfo() {
         const sub = document.querySelector(".page-sub");
@@ -8258,9 +8266,58 @@
           return v;
         } catch (e) { return getSavings(); }
       }
+      // 💰 우리가족 투두의 지갑(스탬프·지급액)을 가져와 "실제 잔액" 계산
+      // 잔액 = (투두 완료수 × 100 + 게임 누적) − 부모님이 실제 지급한 돈
+      let _walletCache = { stamps: 0, paid: 0, loaded: false };
+      async function refreshFamilyWallet() {
+        if (!_supabase || typeof getSelectedKidId !== "function") { renderSavings(); return; }
+        const kid = getSelectedKidId();
+        if (!kid) { _walletCache = { stamps: 0, paid: 0, loaded: true }; renderSavings(); return; }
+        try {
+          const res = await _supabase
+            .from("family_kid_wallet")
+            .select("stamps,paid_won")
+            .eq("kid_id", kid)
+            .maybeSingle();
+          if (!res.error && res.data) {
+            _walletCache = {
+              stamps: res.data.stamps || 0,
+              paid: (typeof res.data.paid_won === "number" ? res.data.paid_won : 0),
+              loaded: true,
+            };
+          } else {
+            // paid_won 컬럼이 아직 없으면 stamps만, 지급 0
+            _walletCache = { stamps: (res.data && res.data.stamps) || 0, paid: 0, loaded: true };
+          }
+        } catch (e) {
+          _walletCache = { stamps: 0, paid: 0, loaded: true };
+        }
+        renderSavings();
+      }
+      function getOwedSavings() {
+        const todoMoney = (_walletCache.stamps || 0) * 100;
+        const gameMoney = getSavings();
+        const paid = _walletCache.paid || 0;
+        return Math.max(0, todoMoney + gameMoney - paid);
+      }
       function renderSavings() {
         const el = document.getElementById("savingsBanner");
-        if (el) el.innerHTML = "🪙 적립금 <b>" + getSavings() + "원</b>";
+        if (!el) return;
+        const kidSelected = typeof getSelectedKidId === "function" && getSelectedKidId();
+        if (!kidSelected || !_walletCache.loaded) {
+          el.innerHTML = "🪙 적립금 <b>" + getSavings() + "원</b>";
+          return;
+        }
+        const owed = getOwedSavings();
+        const todoMoney = (_walletCache.stamps || 0) * 100;
+        const gameMoney = getSavings();
+        const paid = _walletCache.paid || 0;
+        el.innerHTML =
+          "🪙 적립금 <b>" + owed + "원</b>" +
+          " <small style='font-size:0.78rem;color:#9a3412'>(투두 " + todoMoney +
+          " + 게임 " + gameMoney +
+          (paid > 0 ? " − 받음 " + paid : "") +
+          ")</small>";
       }
 
       /* ---------- 🏆 명예의 전당 (모든 친구 통합) ---------- */
