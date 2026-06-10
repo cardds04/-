@@ -8304,20 +8304,8 @@
         const el = document.getElementById("savingsBanner");
         if (!el) return;
         const kidSelected = typeof getSelectedKidId === "function" && getSelectedKidId();
-        if (!kidSelected || !_walletCache.loaded) {
-          el.innerHTML = "🪙 적립금 <b>" + getSavings() + "원</b>";
-          return;
-        }
-        const owed = getOwedSavings();
-        const todoMoney = (_walletCache.stamps || 0) * 100;
-        const gameMoney = getSavings();
-        const paid = _walletCache.paid || 0;
-        el.innerHTML =
-          "🪙 적립금 <b>" + owed + "원</b>" +
-          " <small style='font-size:0.78rem;color:#9a3412'>(투두 " + todoMoney +
-          " + 게임 " + gameMoney +
-          (paid > 0 ? " − 받음 " + paid : "") +
-          ")</small>";
+        const amount = (!kidSelected || !_walletCache.loaded) ? getSavings() : getOwedSavings();
+        el.innerHTML = "🪙 적립금 <b>" + amount + "원</b>";
       }
 
       /* ---------- 🏆 명예의 전당 (모든 친구 통합) ---------- */
