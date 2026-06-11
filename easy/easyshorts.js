@@ -2069,11 +2069,15 @@
     ctx.putImageData(id, 0, 0);
     return new Promise((res) => cv.toBlob(res, "image/png"));
   }
+  function titleTimingForCurrent() { const t = titleCatForCurrent().titleTiming; return (t && typeof t === "object") ? t : null; }
   function titleApplyOverlay(blob) {
     if (!E.using || !blob) return;
     if (E.using.logoUrl) { try { URL.revokeObjectURL(E.using.logoUrl); } catch (_) {} }
     E.using.logoUrl = URL.createObjectURL(blob); E.using._logoFile = blob; E.using._isTitle = true;
-    E.using.logo = { xPct: 50, yPct: 22, scale: +(85 / LOGO_BASE).toFixed(2), opacity: 1, fx: "pop", start: 0, dur: +((totalDur() || 5).toFixed(2)) };
+    const tt = titleTimingForCurrent(), tot = totalDur() || 5;   // 관리자가 정한 등장/길이 (없으면 전체)
+    const start = tt ? Math.max(0, Math.min(+tt.start || 0, tot)) : 0;
+    const dur = tt ? Math.max(0.3, +tt.dur || tot) : +tot.toFixed(2);
+    E.using.logo = { xPct: 50, yPct: 22, scale: +(85 / LOGO_BASE).toFixed(2), opacity: 1, fx: "pop", start: start, dur: dur };
     idbSet("sessLogo", blob).catch(() => {});
     const im = new Image(); im.onload = () => { E._logoExportImg = im; }; im.src = E.using.logoUrl;
     scheduleSaveMeta();
