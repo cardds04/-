@@ -5772,6 +5772,19 @@
         // 부트스트랩·포커스·탭 복귀에서는 pull 완료 후 hydrate 순서로 처리한다.
         renderList();
         renderPaymentList();
+        // 작가 급여 탭이 열려 있으면, 방금 로드된 일정 기준으로 완료촬영 수를 자동 갱신.
+        // (Supabase 재동기화 등으로 작가 일정이 늦게 들어오면 "완료촬영 0회"로 보이던 문제 해결)
+        // 단, 사용자가 유류비/급여형태 칸을 편집 중이면 입력 보호를 위해 건너뛴다.
+        try {
+          if (payrollSectionEl && !payrollSectionEl.classList.contains("hidden")) {
+            const ae = document.activeElement;
+            const editingPayrollInput =
+              ae &&
+              payrollSectionEl.contains(ae) &&
+              (ae.classList?.contains("payroll-admin-fuel") || ae.classList?.contains("payroll-admin-type"));
+            if (!editingPayrollInput) renderPhotographerPayrollAdmin();
+          }
+        } catch (_) {}
         return true;
       }
       async function fetchDayoffRequestsFromSupabase() {
