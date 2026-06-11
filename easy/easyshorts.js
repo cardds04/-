@@ -1158,12 +1158,23 @@
     return parts.join(" · ") || (s.length + "컷");
   }
   // 템플릿 카드 한 장 HTML
+  // 고객 카드용 카테고리 뱃지 (서버 분류 E._cats/E._taxonomy)
+  function custCatBadge(id) {
+    try {
+      const c = (E._cats || {})[id]; if (!c || !c.goal) return "";
+      const gc = (E._taxonomy || []).find((x) => x.key === c.goal); if (!gc) return "";
+      const fmt = (gc.formats || []).find((x) => x.id === c.format);
+      return `<span class="es-tplcard-cat">${esc(gc.emoji)} ${esc(fmt ? fmt.label : gc.label)}</span>`;
+    } catch (_) { return ""; }
+  }
   function tplCardHtml(t, liked) {
     const asp = (t.aspect || "9:16");
+    const badge = custCatBadge(t.id);
     return `<div class="es-tplcard" data-tid="${t.id}">
       <div class="es-tplcard-asp es-asp-${asp.replace(":", "_")}">
         ${t.thumb ? `<img class="es-tplcard-thumb" src="${t.thumb}" alt="">` : ""}
         <span class="es-tplcard-play">▶</span>
+        ${badge ? `<span class="es-tplcard-catwrap">${badge}</span>` : ""}
         <button type="button" class="es-tplcard-like ${liked.has(t.id) ? "on" : ""}" title="찜하기" aria-label="찜하기">${liked.has(t.id) ? "♥" : "♡"}</button>
         <button type="button" class="es-tplcard-go" title="이 스타일로 만들기" aria-label="이 스타일로 만들기">＋</button>
       </div>
