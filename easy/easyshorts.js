@@ -1196,6 +1196,195 @@
     if (uncat.length) html += `<div class="es-cat-sec"><div class="es-cat-h">그 외</div><div class="es-tplcat">${uncat.map((t) => tplCardHtml(t, liked)).join("")}</div></div>`;
     return html;
   }
+  // ════════════════════════════════════════════════════════════════
+  // 💡 아이디어 상자 — 업종을 적으면 그 업종에 맞는 숏폼 아이디어를 한가득
+  // ════════════════════════════════════════════════════════════════
+  const IDEAS_API = "https://sc-pink.vercel.app/api/easy-ideas";
+  const IDEA_HIST_KEY = "es_idea_history";
+  let _ideaCancel = false;
+
+  function ideaHistLoad() { try { const a = JSON.parse(localStorage.getItem(IDEA_HIST_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (_) { return []; } }
+  function ideaHistSave(arr) { try { localStorage.setItem(IDEA_HIST_KEY, JSON.stringify(arr.slice(0, 30))); } catch (_) {} }
+  function ideaHistAdd(entry) { const arr = ideaHistLoad(); arr.unshift(entry); ideaHistSave(arr); return arr; }
+  function ideaHistGet(ts) { return ideaHistLoad().find((e) => e.ts === ts) || null; }
+  // 최근 칩 — 업종 중복은 최신 1개만 (저장은 모두 유지)
+  function ideaRecentChipsHtml() {
+    const seen = new Set(), uniq = [];
+    ideaHistLoad().forEach((e) => { if (!seen.has(e.industry)) { seen.add(e.industry); uniq.push(e); } });
+    const chips = uniq.slice(0, 8).map((e) => `<button type="button" class="es-idea-chip" data-ts="${e.ts}">${esc(e.industry)}</button>`).join("");
+    return chips ? `<span class="es-idea-recent-lb">최근</span>${chips}` : "";
+  }
+  // 같은 업종으로 이미 만든 아이디어 텍스트(재생성 시 회피)
+  function ideaAvoidFor(industry) {
+    const out = [];
+    ideaHistLoad().forEach((e) => { if (e.industry === industry && e.items) Object.keys(e.items).forEach((k) => out.push(e.items[k])); });
+    return out;
+  }
+  function ideaFormatLabel(fid) {
+    const tax = E._taxonomy || [];
+    for (const c of tax) { const f = (c.formats || []).find((x) => x.id === fid); if (f) return f.label; }
+    return "";
+  }
+  function ideaTemplatesForFormat(fid) {
+    const cats = E._cats || {};
+    return (E.templates || []).filter((t) => (cats[t.id] || {}).format === fid);
+  }
+  function ideaLevelChip(lv) {
+    lv = Number(lv) || 1;
+    if (lv <= 2) return `<span class="es-idea-lv lv-easy">🟢 쉬움</span>`;
+    if (lv === 3) return `<span class="es-idea-lv lv-mid">🟡 보통</span>`;
+    return `<span class="es-idea-lv lv-hard">🔴 도전</span>`;
+  }
+
+  // ── 상단 아이디어 상자 바 (영상보기 갤러리 맨 위) ──
+  function ideaBoxHtml() {
+    return `
+      <div class="es-ideabox" id="esIdeaBox">
+        <div class="es-ideabox-head">
+          <span class="es-ideabox-ic">💡</span>
+          <div class="es-ideabox-tt">
+            <b>아이디어 상자</b>
+            <span>업종만 적으면, 그 업종에 딱 맞는 숏폼 아이디어를 한가득 만들어 드려요</span>
+          </div>
+        </div>
+        <div class="es-ideabox-row">
+          <input type="text" id="esIdeaInput" class="es-ideabox-input" placeholder="업종을 적어보세요  (예: 세차장, 꽃집, 학원, 미용실)" maxlength="40" autocomplete="off" />
+          <button type="button" id="esIdeaGo" class="es-ideabox-go">✨ 만들기</button>
+        </div>
+        <div class="es-ideabox-recent">${ideaRecentChipsHtml()}</div>
+      </div>`;
+  }
+  function wireIdeaBox(scope) {
+    const input = $("#esIdeaInput"), go = $("#esIdeaGo");
+    const fire = () => { const v = (input && input.value || "").trim(); if (v) ideaGenerate(v, { regen: false }); };
+    if (go) go.addEventListener("click", fire);
+    if (input) input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); fire(); } });
+    $$(".es-idea-chip", scope || document).forEach((c) => c.addEventListener("click", () => { const e = ideaHistGet(Number(c.dataset.ts)); if (e) openIdeaResults(e); }));
+  }
+  function refreshIdeaRecent() {
+    const box = $("#esIdeaBox"); if (!box) return;
+    let row = box.querySelector(".es-ideabox-recent"); if (!row) { row = document.createElement("div"); row.className = "es-ideabox-recent"; box.appendChild(row); }
+    row.innerHTML = ideaRecentChipsHtml();
+    $$(".es-idea-chip", row).forEach((c) => c.addEventListener("click", () => { const e = ideaHistGet(Number(c.dataset.ts)); if (e) openIdeaResults(e); }));
+  }
+
+  // ── 결과 오버레이(시트) ──
+  function ideaModalEl() {
+    let m = document.getElementById("esIdeaModal");
+    if (!m) {
+      const root = document.getElementById("easyRoot") || document.body;
+      m = document.createElement("div"); m.id = "esIdeaModal"; m.className = "es-idea-modal";
+      m.addEventListener("click", (e) => { if (e.target === m) closeIdeaResults(); });   // 배경 클릭 → 닫기 (1번만 등록)
+      root.appendChild(m);
+    }
+    return m;
+  }
+  function closeIdeaResults() {
+    _ideaCancel = true;
+    const m = document.getElementById("esIdeaModal"); if (m) m.remove();
+    document.body.classList.remove("es-idea-open");
+    refreshIdeaRecent();
+  }
+  function wireIdeaClose(m) { const x = m.querySelector("#esIdeaClose"); if (x) x.addEventListener("click", closeIdeaResults); }
+
+  function openIdeaLoading(industry) {
+    const m = ideaModalEl(); document.body.classList.add("es-idea-open");
+    m.innerHTML = `
+      <div class="es-idea-sheet">
+        <div class="es-idea-top"><b class="es-idea-title">💡 ${esc(industry)}</b><button type="button" class="es-idea-x" id="esIdeaClose">✕</button></div>
+        <div class="es-idea-load">
+          <div class="es-idea-spin"></div>
+          <div class="es-idea-load-tt">'${esc(industry)}' 맞춤 아이디어를 만들고 있어요</div>
+          <div class="es-idea-load-sub">업종에 딱 맞는 영상 아이디어를 한가득 뽑는 중<br>20~40초쯤 걸려요 · 잠깐만요</div>
+        </div>
+      </div>`;
+    wireIdeaClose(m); m.scrollTop = 0;
+  }
+  function openIdeaError(industry, msg) {
+    const m = ideaModalEl(); document.body.classList.add("es-idea-open");
+    m.innerHTML = `
+      <div class="es-idea-sheet">
+        <div class="es-idea-top"><b class="es-idea-title">💡 ${esc(industry)}</b><button type="button" class="es-idea-x" id="esIdeaClose">✕ 닫기</button></div>
+        <div class="es-idea-err">
+          <div class="es-idea-err-ic">😢</div>
+          <div>아이디어를 만들지 못했어요.<br><span class="es-idea-err-msg">${esc(msg || "잠시 후 다시 시도해 주세요.")}</span></div>
+          <button type="button" class="es-idea-retry">다시 시도</button>
+        </div>
+      </div>`;
+    wireIdeaClose(m);
+    const rt = m.querySelector(".es-idea-retry"); if (rt) rt.addEventListener("click", () => ideaGenerate(industry, { regen: false }));
+  }
+  function ideaResultsHtml(entry) {
+    const tax = E._taxonomy || [];
+    const items = entry.items || {};
+    const aces = new Set(entry.aces || []);
+    let total = 0, body = "";
+    tax.forEach((c) => {
+      const fmts = (c.formats || []).filter((f) => items[f.id]);
+      if (!fmts.length) return;
+      const cards = fmts.map((f) => {
+        const isAce = aces.has(f.id);
+        const tpls = ideaTemplatesForFormat(f.id);
+        const tplBtn = tpls.length ? `<button type="button" class="es-idea-use" data-tid="${tpls[0].id}">▶ 이 스타일로 만들기</button>` : "";
+        total++;
+        return `
+          <div class="es-idea-card${isAce ? " ace" : ""}">
+            <div class="es-idea-card-h">
+              <span class="es-idea-fmt">${esc(c.emoji)} ${esc(f.label)}</span>
+              ${isAce ? `<span class="es-idea-ace">⭐ 에이스</span>` : ""}
+              ${ideaLevelChip(f.level)}
+            </div>
+            <div class="es-idea-text">${esc(items[f.id])}</div>
+            ${tplBtn ? `<div class="es-idea-card-f">${tplBtn}</div>` : ""}
+          </div>`;
+      }).join("");
+      body += `<div class="es-idea-cat"><div class="es-idea-cat-h">${esc(c.emoji)} ${esc(c.label)}</div><div class="es-idea-cards">${cards}</div></div>`;
+    });
+    const aceLabels = (entry.aces || []).map(ideaFormatLabel).filter(Boolean);
+    const aceBar = aceLabels.length ? `<div class="es-idea-acebar">⭐ <b>이 업종 에이스</b> · ${aceLabels.map(esc).join(" · ")}${entry.why ? ` <span class="es-idea-why">— ${esc(entry.why)}</span>` : ""}</div>` : "";
+    const tipBar = entry.tip ? `<div class="es-idea-tip">👉 ${esc(entry.tip)}</div>` : "";
+    return `
+      <div class="es-idea-top">
+        <b class="es-idea-title">💡 ${esc(entry.industry)} <span class="es-idea-count">${total}개 아이디어</span></b>
+        <div class="es-idea-top-btns">
+          <button type="button" class="es-idea-regen">🔄 다르게 다시</button>
+          <button type="button" class="es-idea-x" id="esIdeaClose">✕ 닫기</button>
+        </div>
+      </div>
+      ${aceBar}${tipBar}
+      <div class="es-idea-scroll">${body || `<div class="es-idea-empty">아이디어가 비어 있어요. 다시 시도해 주세요.</div>`}</div>`;
+  }
+  function openIdeaResults(entry) {
+    const m = ideaModalEl(); document.body.classList.add("es-idea-open");
+    m.innerHTML = `<div class="es-idea-sheet">${ideaResultsHtml(entry)}</div>`;
+    wireIdeaClose(m);
+    const rg = m.querySelector(".es-idea-regen"); if (rg) rg.addEventListener("click", () => ideaGenerate(entry.industry, { regen: true }));
+    $$(".es-idea-use", m).forEach((b) => b.addEventListener("click", () => { const tid = b.dataset.tid; if (!tid) return; closeIdeaResults(); pickTemplate(tid, "easy"); }));
+    m.scrollTop = 0;
+  }
+  async function ideaGenerate(industry, opts) {
+    opts = opts || {};
+    industry = String(industry || "").trim().slice(0, 40); if (!industry) return;
+    const tax = E._taxonomy;
+    if (!tax || !tax.length) { openIdeaError(industry, "분류 체계를 아직 불러오지 못했어요. 새로고침 후 다시 시도해 주세요."); return; }
+    _ideaCancel = false;
+    openIdeaLoading(industry);
+    try {
+      const avoid = opts.regen ? ideaAvoidFor(industry) : [];
+      const r = await fetch(IDEAS_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", industry, taxonomy: tax, avoid }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const items = {}; (j.items || []).forEach((it) => { if (it && it.f) items[it.f] = it.i; });
+      const entry = { ts: Date.now(), industry: j.industry || industry, items, aces: j.aces || [], avoid: j.avoid || [], why: j.why || "", tip: j.tip || "" };
+      ideaHistAdd(entry); refreshIdeaRecent();
+      if (_ideaCancel) return;   // 로딩 중 사용자가 닫음 → 결과는 '최근'에 저장됨
+      openIdeaResults(entry);
+    } catch (e) {
+      if (_ideaCancel) return;
+      openIdeaError(industry, e && e.message);
+    }
+  }
+
   function renderGallery() {
     const body = $("#esBody"); if (!body) return;
 
@@ -1206,6 +1395,9 @@
     const headHtml = onlyLiked
       ? `<div class="es-section-head">♥ 찜한 영상 <span class="es-hint">하트를 누른 스타일이 여기 모여요</span>${speedBtnHtml()}</div>`
       : `<div class="es-section-head">✨ 어떤 영상을 만들까요? <span class="es-hint">스타일을 고르면 사진만 넣으면 완성돼요</span>${speedBtnHtml()}</div>`;
+
+    // 💡 아이디어 상자 — 영상보기 탭 맨 위에만 (찜 탭 제외)
+    const ideaBar = onlyLiked ? "" : ideaBoxHtml();
 
     // 찜 탭인데 비었으면 안내
     if (onlyLiked && !list.length) {
@@ -1220,19 +1412,21 @@
         ${catalogBody(list, liked, !onlyLiked)}
       </div>` : "";
 
-    // 둘 다 없으면 안내
+    // 둘 다 없으면 안내 (아이디어 상자는 템플릿이 없어도 쓸모 있으니 그대로 노출)
     if (!E.projects.length && !E.templates.length) {
-      body.innerHTML = `
+      body.innerHTML = ideaBar + `
         <div class="es-empty">
           <div class="es-empty-ico">⚡</div>
           <div class="es-empty-title">곧 새 템플릿이 올라와요</div>
           <div class="es-empty-msg">아직 등록된 스타일이 없어요.<br>잠시 후 새로고침하면 나타납니다.</div>
         </div>`;
+      wireIdeaBox(body);
       return;
     }
 
     if (onlyLiked || !E.projects.length) {
-      body.innerHTML = tplCatalog;
+      body.innerHTML = ideaBar + tplCatalog;
+      wireIdeaBox(body);
       wireTplCards(body);
       return;
     }
@@ -1254,10 +1448,11 @@
           </div>
         </div>
       </div>`).join("");
-    body.innerHTML = tplCatalog + `<div class="es-gallery">
+    body.innerHTML = ideaBar + tplCatalog + `<div class="es-gallery">
       <div class="es-section-head">🎬 내 영상 <span class="es-hint">▶ 누르면 그 자리에서 재생 · 위에 올리면 다시만들기·삭제</span></div>
       <div class="es-vgrid">${projCards}</div>
     </div>`;
+    wireIdeaBox(body);
     wireTplCards(body);
     $$(".es-vcard", body).forEach((card) => {
       const pid = card.dataset.pid;
