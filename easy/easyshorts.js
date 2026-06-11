@@ -2118,10 +2118,10 @@
       const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      const img = new Image();
-      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; });
-      const blob = await titleKeyBg(img, j.bg || "#ffffff");
-      if (!blob) throw new Error("배경 제거 실패");
+      let blob;
+      if (j.transparent) { blob = await (await fetch(j.image)).blob(); }   // gpt-image-1: 이미 투명 → 키잉 생략
+      else { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; }); blob = await titleKeyBg(img, j.bg || "#ffffff"); }
+      if (!blob) throw new Error("배경 처리 실패");
       titleApplyOverlay(blob);
       if (statusEl) statusEl.textContent = "✅ 완성! 영상 위에 올라갔어요";
       renderEasy();
