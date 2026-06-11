@@ -1207,12 +1207,16 @@
   function ideaHistSave(arr) { try { localStorage.setItem(IDEA_HIST_KEY, JSON.stringify(arr.slice(0, 30))); } catch (_) {} }
   function ideaHistAdd(entry) { const arr = ideaHistLoad(); arr.unshift(entry); ideaHistSave(arr); return arr; }
   function ideaHistGet(ts) { return ideaHistLoad().find((e) => e.ts === ts) || null; }
-  // 최근 칩 — 업종 중복은 최신 1개만 (저장은 모두 유지)
+  // ts → MMDD (저장 날짜 태그)
+  function ideaDateTag(ts) {
+    try { const d = new Date(ts); const mm = String(d.getMonth() + 1).padStart(2, "0"); const dd = String(d.getDate()).padStart(2, "0"); return mm + dd; } catch (_) { return ""; }
+  }
+  // 저장된 기록 칩 — 같은 날·같은 업종만 최신 1개로 합침 (다른 날 기록은 따로 보임)
   function ideaRecentChipsHtml() {
     const seen = new Set(), uniq = [];
-    ideaHistLoad().forEach((e) => { if (!seen.has(e.industry)) { seen.add(e.industry); uniq.push(e); } });
-    const chips = uniq.slice(0, 8).map((e) => `<button type="button" class="es-idea-chip" data-ts="${e.ts}">${esc(e.industry)}</button>`).join("");
-    return chips ? `<span class="es-idea-recent-lb">최근</span>${chips}` : "";
+    ideaHistLoad().forEach((e) => { const key = ideaDateTag(e.ts) + "|" + e.industry; if (!seen.has(key)) { seen.add(key); uniq.push(e); } });
+    const chips = uniq.slice(0, 12).map((e) => `<button type="button" class="es-idea-chip" data-ts="${e.ts}"><span class="es-idea-chip-date">${esc(ideaDateTag(e.ts))}</span> ${esc(e.industry)}</button>`).join("");
+    return chips ? `<span class="es-idea-recent-lb">저장된 기록</span>${chips}` : "";
   }
   // 같은 업종으로 이미 만든 아이디어 텍스트(재생성 시 회피)
   function ideaAvoidFor(industry) {
