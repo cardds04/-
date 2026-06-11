@@ -2048,7 +2048,9 @@
   // ════════════════════════════════════════════════════════════════
   const TITLE_API = "https://sc-pink.vercel.app/api/easy-title";
   const TITLE_STYLE_LABELS = { hand: "🧡 손글씨 오렌지", yellow: "📣 예능 옐로", red: "🔴 뉴스 레드", gold: "🏆 골드 메탈", marker: "🖍 형광 마커", mint: "🩵 민트 팝", purple: "💜 퍼플 팝" };
-  function titleStyleForCurrent() { const c = (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; return c.titleStyle || ""; }
+  function titleCatForCurrent() { return (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; }
+  function titleStyleForCurrent() { return titleCatForCurrent().titleStyle || ""; }
+  function titleRefForCurrent() { const u = titleCatForCurrent().titleRef; return (typeof u === "string" && /^https?:\/\//.test(u)) ? u : ""; }
   // 흰(단색) 배경 키잉 → 투명 PNG Blob
   function titleKeyBg(img, bgHex) {
     const W = img.naturalWidth, H = img.naturalHeight; if (!W || !H) return Promise.resolve(null);
@@ -2100,11 +2102,12 @@
   async function titleGenerate(text, statusEl, previewBox, btn) {
     text = String(text || "").trim(); if (!text) { if (statusEl) statusEl.textContent = "문구를 입력해 주세요."; return; }
     E.using._titleText = text;
-    const style = titleStyleForCurrent() || "hand";
+    const refUrl = titleRefForCurrent();   // 관리자가 참조사진을 지정했으면 그 스타일로
+    const reqBody = refUrl ? { action: "generate", text, refUrl } : { action: "generate", text, style: titleStyleForCurrent() || "hand" };
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 만드는 중… (10~30초)`;
     try {
-      const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", text, style }) });
+      const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
       const img = new Image();
@@ -2143,7 +2146,7 @@
     if (texts.some((tx) => !tx.locked && !_capInTrim(tx))) plan.push("caption");
     // 🎬 관리자가 이 템플릿에 타이틀 스타일을 지정해 뒀으면 → 타이틀 단계
     const _tcat = (E._cats || {})[E.using.template.id];
-    if (_tcat && _tcat.titleStyle) plan.push("title");
+    if (_tcat && (_tcat.titleStyle || _tcat.titleRef)) plan.push("title");
     plan.push("done");
     return plan;
   }
@@ -2379,7 +2382,7 @@
         </div>`;
     } else if (cur === "title") {
       const styleKey = titleStyleForCurrent() || "hand";
-      const styleLabel = TITLE_STYLE_LABELS[styleKey] || styleKey;
+      const styleLabel = titleRefForCurrent() ? "📎 관리자 지정 스타일" : (TITLE_STYLE_LABELS[styleKey] || styleKey);
       const hasT = !!(E.using.logo && E.using._isTitle);
       bodyHtml = `
         <div class="es-wiz-body es-title-step">

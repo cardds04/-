@@ -8,7 +8,7 @@
  */
 const { handleEasyTitle } = require("../lib/easy-title-logic.cjs");
 
-function readJsonBody(req, maxLen = 256 * 1024) {
+function readJsonBody(req, maxLen = 12 * 1024 * 1024) {   // 참조 이미지 dataURI 수용
   return new Promise((resolve, reject) => {
     let raw = "";
     req.on("data", (c) => { raw += c; if (raw.length > maxLen) reject(new Error("요청 본문이 너무 큽니다.")); });
