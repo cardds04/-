@@ -4746,9 +4746,29 @@
         if (/^\d{2}-\d{2}$/.test(raw)) return raw;
         return "";
       }
+      // 최근 로컬 편집 보호: 편집한 스케줄 id → 편집 시각(클라 Date.now()).
+      // pull 이 이 쿨다운 안의 행을 옛 서버값으로 덮어쓰지 못하게 한다(낙관적 업데이트 보호).
+      // localUpdatedAt(클라 시각) vs 서버 updated_at 비교는 네트워크 지연·클럭차이로 불안정해서,
+      // 클라 시각끼리만 비교하는 쿨다운으로 "작가/시간 바꾸면 5초 뒤 원복" 회귀를 막는다.
+      const SCHEDULE_EDIT_COOLDOWN_MS = 12000;
+      const recentlyEditedScheduleEditMs = new Map();
+      function noteScheduleLocalEdit(id) {
+        const sid = String(id || "").trim();
+        if (sid) recentlyEditedScheduleEditMs.set(sid, Date.now());
+      }
+      function isScheduleWithinEditCooldown(id) {
+        const sid = String(id || "").trim();
+        if (!sid) return false;
+        const ms = recentlyEditedScheduleEditMs.get(sid);
+        if (!ms) return false;
+        if (Date.now() - ms < SCHEDULE_EDIT_COOLDOWN_MS) return true;
+        recentlyEditedScheduleEditMs.delete(sid); // 만료 정리
+        return false;
+      }
       function markScheduleRowDirty(item, reason = "schedule_mutation") {
         if (!item || typeof item !== "object") return;
         item.localUpdatedAt = new Date().toISOString();
+        noteScheduleLocalEdit(item?.customerScheduleId);
         markDbMutationActivity(reason);
       }
       function buildPaymentRowsSnapshot() {
@@ -5635,10 +5655,19 @@
           const source = String(row?.source || "active").trim() || "active";
           const rid = String(row?.id || "").trim();
           const prevLocal = rid ? prevScheduleById.get(rid) : null;
-          if (prevLocal && prevLocal.localUpdatedAt) {
-            const localMs = new Date(prevLocal.localUpdatedAt).getTime();
-            const remoteMs = new Date(row?.updated_at || "").getTime();
-            if (Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs) {
+          if (prevLocal) {
+            // ① 최근 로컬 편집 쿨다운(클라 시각끼리 비교 — 네트워크지연·클럭차이에 안전).
+            //    편집 직후 12초 동안은 서버 push 가 아직 안 끝났어도 로컬 값을 유지한다.
+            //    (= "작가/시간 바꾸면 몇 초 뒤 원상복귀" 회귀 차단)
+            const withinCooldown = isScheduleWithinEditCooldown(rid);
+            // ② 기존 localUpdatedAt vs 서버 updated_at 비교(쿨다운 만료 후의 보조 가드).
+            let localNewer = false;
+            if (prevLocal.localUpdatedAt) {
+              const localMs = new Date(prevLocal.localUpdatedAt).getTime();
+              const remoteMs = new Date(row?.updated_at || "").getTime();
+              localNewer = Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs;
+            }
+            if (withinCooldown || localNewer) {
               if (source === "hold") nextHold.push(prevLocal);
               else if (source === "refund") nextRefund.push(prevLocal);
               else nextActive.push(prevLocal);
@@ -13823,6 +13852,8 @@ ${folderBtn}
         if (!USE_SUPABASE_SYNC || !item) return false;
         const scheduleId = String(item?.customerScheduleId || "").trim();
         if (!scheduleId) return false;
+        // 서버 id 가 확정된 이 시점에 편집 쿨다운을 기록(가장 신뢰도 높은 지점).
+        noteScheduleLocalEdit(scheduleId);
         const body = {
           writer_name: String(item?.name || "작가미정").trim() || "작가미정",
           date_key: String(item?.date || "").trim(),
