@@ -2070,14 +2070,18 @@
     return new Promise((res) => cv.toBlob(res, "image/png"));
   }
   function titleTimingForCurrent() { const t = titleCatForCurrent().titleTiming; return (t && typeof t === "object") ? t : null; }
+  function titleSpecForCurrent() { const s = titleCatForCurrent().titleSpec; return (s && typeof s === "object") ? s : null; }
   function titleApplyOverlay(blob) {
     if (!E.using || !blob) return;
     if (E.using.logoUrl) { try { URL.revokeObjectURL(E.using.logoUrl); } catch (_) {} }
     E.using.logoUrl = URL.createObjectURL(blob); E.using._logoFile = blob; E.using._isTitle = true;
-    const tt = titleTimingForCurrent(), tot = totalDur() || 5;   // 관리자가 정한 등장/길이 (없으면 전체)
+    const tt = titleTimingForCurrent(), sp = titleSpecForCurrent(), tot = totalDur() || 5;   // 관리자가 정한 효과/등장/길이 (없으면 기본)
     const start = tt ? Math.max(0, Math.min(+tt.start || 0, tot)) : 0;
     const dur = tt ? Math.max(0.3, +tt.dur || tot) : +tot.toFixed(2);
-    E.using.logo = { xPct: 50, yPct: 22, scale: +(85 / LOGO_BASE).toFixed(2), opacity: 1, fx: "pop", start: start, dur: dur };
+    const dflt = +(85 / LOGO_BASE).toFixed(2);
+    E.using.logo = sp
+      ? { xPct: sp.xPct != null ? sp.xPct : 50, yPct: sp.yPct != null ? sp.yPct : 22, scale: sp.scale || dflt, rotate: sp.rotate || 0, opacity: sp.opacity != null ? sp.opacity : 1, fx: sp.fx || "pop", start: start, dur: dur }
+      : { xPct: 50, yPct: 22, scale: dflt, rotate: 0, opacity: 1, fx: "pop", start: start, dur: dur };
     idbSet("sessLogo", blob).catch(() => {});
     const im = new Image(); im.onload = () => { E._logoExportImg = im; }; im.src = E.using.logoUrl;
     scheduleSaveMeta();
@@ -3198,8 +3202,8 @@
     const h = w * (logoImg.naturalHeight / logoImg.naturalWidth);
     const cx = (lg.xPct || 50) / 100 * W, cy = (lg.yPct || 50) / 100 * H;
     ctx.save(); ctx.globalAlpha = (lg.opacity != null ? lg.opacity : 1) * clamp(f.opacity, 0, 1);
-    ctx.translate(cx, cy); ctx.scale(f.scale, f.scale); ctx.translate(-cx, -cy);
-    try { ctx.drawImage(logoImg, cx - w / 2, cy - h / 2, w, h); } catch (_) {}
+    ctx.translate(cx, cy); ctx.rotate((lg.rotate || 0) * Math.PI / 180); ctx.scale(f.scale, f.scale);
+    try { ctx.drawImage(logoImg, -w / 2, -h / 2, w, h); } catch (_) {}
     ctx.restore();
   }
   // 현재 영상의 배경음악 교체
