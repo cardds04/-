@@ -2042,6 +2042,83 @@
     return "plain";                                      // 일반컷
   }
   // ── 이지숏폼 동적 단계 플랜 — 템플릿에 들어있는 컷 타입에 맞는 단계만 구성 ──
+  // ════════════════════════════════════════════════════════════════
+  // 🎬 AI 타이틀 — 관리자가 템플릿마다 지정한 스타일로, 고객은 글자만 입력
+  //   생성(흰 배경) → 브라우저에서 배경 투명화 → 로고 오버레이 슬롯으로 영상에 합성
+  // ════════════════════════════════════════════════════════════════
+  const TITLE_API = "https://sc-pink.vercel.app/api/easy-title";
+  const TITLE_STYLE_LABELS = { hand: "🧡 손글씨 오렌지", yellow: "📣 예능 옐로", red: "🔴 뉴스 레드", gold: "🏆 골드 메탈", marker: "🖍 형광 마커", mint: "🩵 민트 팝", purple: "💜 퍼플 팝" };
+  function titleStyleForCurrent() { const c = (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; return c.titleStyle || ""; }
+  // 흰(단색) 배경 키잉 → 투명 PNG Blob
+  function titleKeyBg(img, bgHex) {
+    const W = img.naturalWidth, H = img.naturalHeight; if (!W || !H) return Promise.resolve(null);
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0);
+    let id; try { id = ctx.getImageData(0, 0, W, H); } catch (_) { return Promise.resolve(null); }
+    const d = id.data, hex = (bgHex || "#ffffff").replace("#", "");
+    const br = parseInt(hex.slice(0, 2), 16) || 255, bgc = parseInt(hex.slice(2, 4), 16) || 255, bb = parseInt(hex.slice(4, 6), 16) || 255;
+    const thr = 72, soft = 46;
+    for (let i = 0; i < d.length; i += 4) {
+      const dr = d[i] - br, dg = d[i + 1] - bgc, dbv = d[i + 2] - bb;
+      const dist = Math.sqrt(dr * dr + dg * dg + dbv * dbv);
+      let a = (dist - thr) / soft; a = a < 0 ? 0 : a > 1 ? 1 : a;
+      d[i + 3] = Math.round(d[i + 3] * a);
+    }
+    ctx.putImageData(id, 0, 0);
+    return new Promise((res) => cv.toBlob(res, "image/png"));
+  }
+  function titleApplyOverlay(blob) {
+    if (!E.using || !blob) return;
+    if (E.using.logoUrl) { try { URL.revokeObjectURL(E.using.logoUrl); } catch (_) {} }
+    E.using.logoUrl = URL.createObjectURL(blob); E.using._logoFile = blob; E.using._isTitle = true;
+    E.using.logo = { xPct: 50, yPct: 22, scale: +(85 / LOGO_BASE).toFixed(2), opacity: 1, fx: "pop", start: 0, dur: +((totalDur() || 5).toFixed(2)) };
+    idbSet("sessLogo", blob).catch(() => {});
+    const im = new Image(); im.onload = () => { E._logoExportImg = im; }; im.src = E.using.logoUrl;
+    scheduleSaveMeta();
+  }
+  function titleRemove() {
+    if (!E.using) return;
+    if (E.using.logoUrl) { try { URL.revokeObjectURL(E.using.logoUrl); } catch (_) {} }
+    E.using.logoUrl = null; E.using._logoFile = null; E.using.logo = null; E.using._isTitle = false; E._logoExportImg = null;
+    idbDel("sessLogo").catch(() => {});
+    scheduleSaveMeta();
+  }
+  // 정적 미리보기 — 첫 채운 컷 위에 타이틀을 얹어 카드로 보여줌
+  async function titleRenderPreview(box) {
+    if (!box) return;
+    const asp = ASPECTS[E.using.template.aspect] || ASPECTS["9:16"];
+    const cw = 200, ch = Math.round(cw * asp.h / asp.w);
+    const cv = document.createElement("canvas"); cv.width = cw * 2; cv.height = ch * 2;
+    const ctx = cv.getContext("2d"); ctx.scale(2, 2);
+    ctx.fillStyle = "#111"; ctx.fillRect(0, 0, cw, ch);
+    let bgUrl = null;
+    for (const s of E.using.template.slots) { const f = E.using.fills[s.id]; if (f && f.kind === "image") { bgUrl = f.url; break; } }
+    if (bgUrl) await new Promise((res) => { const im = new Image(); im.onload = () => { const sc = Math.max(cw / im.width, ch / im.height); const w = im.width * sc, h = im.height * sc; try { ctx.drawImage(im, (cw - w) / 2, (ch - h) / 2, w, h); } catch (_) {} res(); }; im.onerror = res; im.src = bgUrl; });
+    if (E.using.logoUrl && E.using._isTitle) await new Promise((res) => { const im = new Image(); im.onload = () => { const lw = cw * 0.85, lh = lw * im.naturalHeight / im.naturalWidth; try { ctx.drawImage(im, (cw - lw) / 2, ch * 0.22 - lh / 2, lw, lh); } catch (_) {} res(); }; im.onerror = res; im.src = E.using.logoUrl; });
+    box.innerHTML = ""; cv.style.width = cw + "px"; cv.style.height = ch + "px"; cv.style.borderRadius = "10px"; cv.style.display = "block"; cv.style.margin = "0 auto"; box.appendChild(cv);
+  }
+  async function titleGenerate(text, statusEl, previewBox, btn) {
+    text = String(text || "").trim(); if (!text) { if (statusEl) statusEl.textContent = "문구를 입력해 주세요."; return; }
+    E.using._titleText = text;
+    const style = titleStyleForCurrent() || "hand";
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 만드는 중… (10~30초)`;
+    try {
+      const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", text, style }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; });
+      const blob = await titleKeyBg(img, j.bg || "#ffffff");
+      if (!blob) throw new Error("배경 제거 실패");
+      titleApplyOverlay(blob);
+      if (statusEl) statusEl.textContent = "✅ 완성! 영상 위에 올라갔어요";
+      renderEasy();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "😢 " + ((e && e.message) || "실패. 다시 시도해 주세요");
+    } finally { if (btn) btn.disabled = false; }
+  }
+
   function easyPlan() {
     if (!E.using) return ["done"];
     const slots = E.using.template.slots;
@@ -2064,10 +2141,13 @@
     for (const _s of slots) { const _ts = _ta; _ta += (_s.dur || 0); if (trims.indexOf(_s) >= 0) _tranges.push([_ts, _ta]); }
     const _capInTrim = (t) => _tranges.some((r) => (t.start || 0) >= r[0] - 0.01 && (t.start || 0) < r[1] - 0.01);
     if (texts.some((tx) => !tx.locked && !_capInTrim(tx))) plan.push("caption");
+    // 🎬 관리자가 이 템플릿에 타이틀 스타일을 지정해 뒀으면 → 타이틀 단계
+    const _tcat = (E._cats || {})[E.using.template.id];
+    if (_tcat && _tcat.titleStyle) plan.push("title");
     plan.push("done");
     return plan;
   }
-  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "영상", "caption": "문구", "done": "완성" };
+  const EASY_LABELS = { "ba-after": "시공후", "ba-before": "시공전", "ba-video": "영상", "plain": "사진", "detail": "디테일", "length": "영상", "caption": "문구", "title": "타이틀", "done": "완성" };
   // 📐 트림 창 — 전체 영상 길이 트랙 위에서 고정폭(정해진 길이) 창을 좌우로만 끌어 '시작 위치'만 변경.
   // 길이는 절대 안 바뀜(음악·타이밍 싱크 유지). 끌면 첫 장면(vidA)·끝 장면(vidB) 둘 다 미리보기. (마우스·터치 공용)
   function setupTrimBar(row, slot, srcDur, vidA, vidB) {
@@ -2297,6 +2377,26 @@
             <button type="button" class="es-btn es-btn-primary es-wiz-bigbtn2" id="esWizNext">다음 ›</button>
           </div>
         </div>`;
+    } else if (cur === "title") {
+      const styleKey = titleStyleForCurrent() || "hand";
+      const styleLabel = TITLE_STYLE_LABELS[styleKey] || styleKey;
+      const hasT = !!(E.using.logo && E.using._isTitle);
+      bodyHtml = `
+        <div class="es-wiz-body es-title-step">
+          <div class="es-wiz-num">${E.easyIdx + 1}</div>
+          <div class="es-wiz-title">🎬 타이틀을 만들어요</div>
+          <div class="es-wiz-note">글자만 적으면 <b>${esc(styleLabel)}</b> 스타일로 만들어 영상 맨 위에 얹어드려요</div>
+          <input type="text" id="esTitleText" class="es-title-input" maxlength="40" placeholder="영상 제목을 적어보세요 (예: 박스 뜯는데 사장 손이 멈췄다)" value="${esc(E.using._titleText || "")}">
+          <button type="button" class="es-btn es-btn-primary es-title-go" id="esTitleGo">${hasT ? "🔄 다시 만들기" : "✨ 타이틀 만들기"}</button>
+          <div class="es-title-status" id="esTitleStatus">${hasT ? "✅ 완성! 영상 위에 올라갔어요" : ""}</div>
+          <div class="es-title-preview" id="esTitlePreview"></div>
+          ${hasT ? `<div class="es-title-actions"><button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button></div>` : ""}
+        </div>
+        <div class="es-wiz-foot">
+          ${prevBtn}
+          <span class="es-use-head-sp"></span>
+          <button type="button" class="es-btn es-btn-primary es-wiz-nav" id="esWizNext">다음 ›</button>
+        </div>`;
     } else {   // done
       bodyHtml = `
         <div class="es-wiz-body es-wiz-done">
@@ -2354,6 +2454,14 @@
     const goPrev = () => { if (E.easyIdx <= 0) { clearSession(); E.using = null; renderEasy(); } else { E.easyIdx -= 1; scheduleSaveMeta(); renderEasy(); } };
     { const pv = $("#esWizPrev"); if (pv) pv.addEventListener("click", goPrev); }
     { const nx = $("#esWizNext"); if (nx) nx.addEventListener("click", goNext); }
+    // 🎬 타이틀 단계 바인딩
+    if (cur === "title") {
+      const ti = $("#esTitleText"), tgo = $("#esTitleGo"), tst = $("#esTitleStatus"), tpv = $("#esTitlePreview");
+      if (tgo) tgo.addEventListener("click", () => titleGenerate(ti ? ti.value : "", tst, tpv, tgo));
+      if (ti) ti.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); titleGenerate(ti.value, tst, tpv, tgo); } });
+      { const rm = $("#esTitleRemove"); if (rm) rm.addEventListener("click", () => { titleRemove(); renderEasy(); }); }
+      if (E.using.logo && E.using._isTitle) titleRenderPreview(tpv);
+    }
     // 공통: 사진 채우기 단계 바인딩 (시공후/일반/디테일)
     const bindPhoto = (arr, filter) => {
       const ids = arr.map((s) => s.id);
