@@ -5668,6 +5668,23 @@
               localNewer = Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs;
             }
             if (withinCooldown || localNewer) {
+              // 쿨다운 보호 중인데 서버가 아직 로컬 편집(작가·시간·날짜)을 반영하지 못했으면:
+              // ① 보호를 연장(noteScheduleLocalEdit)하고 ② 즉시 서버로 재푸시 → 수렴 보장.
+              // 이렇게 하면 directPatch 가 늦거나 한 번 실패해도, 서버가 따라잡을 때까지
+              // 화면이 절대 옛 값으로 되돌아가지 않는다. 서버가 일치하면 재푸시가 멈추고
+              // 쿨다운이 자연 만료되어 이후엔 서버가 기준이 된다(무한 보호 아님).
+              if (withinCooldown && source !== "hold" && source !== "refund") {
+                const serverWriter = String(row?.writer_name || "").trim();
+                const serverTime = String(row?.time_key || "").trim();
+                const serverDate = String(row?.date_key || "").trim();
+                const localWriter = String(prevLocal?.name || "").trim();
+                const localTime = String(prevLocal?.time || "").trim();
+                const localDate = String(prevLocal?.date || "").trim();
+                if (serverWriter !== localWriter || serverTime !== localTime || serverDate !== localDate) {
+                  noteScheduleLocalEdit(rid);
+                  try { void directPatchScheduleFields(prevLocal); } catch (_) {}
+                }
+              }
               if (source === "hold") nextHold.push(prevLocal);
               else if (source === "refund") nextRefund.push(prevLocal);
               else nextActive.push(prevLocal);
