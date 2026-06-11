@@ -2051,6 +2051,7 @@
   function titleCatForCurrent() { return (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; }
   function titleStyleForCurrent() { return titleCatForCurrent().titleStyle || ""; }
   function titleRefForCurrent() { const u = titleCatForCurrent().titleRef; return (typeof u === "string" && /^https?:\/\//.test(u)) ? u : ""; }
+  function titlePromptForCurrent() { const p = titleCatForCurrent().titlePrompt; return (typeof p === "string" && p.trim()) ? p.trim() : ""; }
   // 흰(단색) 배경 키잉 → 투명 PNG Blob
   function titleKeyBg(img, bgHex) {
     const W = img.naturalWidth, H = img.naturalHeight; if (!W || !H) return Promise.resolve(null);
@@ -2110,8 +2111,11 @@
   async function titleGenerate(text, statusEl, previewBox, btn) {
     text = String(text || "").trim(); if (!text) { if (statusEl) statusEl.textContent = "문구를 입력해 주세요."; return; }
     E.using._titleText = text;
-    const refUrl = titleRefForCurrent();   // 관리자가 참조사진을 지정했으면 그 스타일로
-    const reqBody = refUrl ? { action: "generate", text, refUrl } : { action: "generate", text, style: titleStyleForCurrent() || "hand" };
+    const refUrl = titleRefForCurrent(), cp = titlePromptForCurrent();   // 관리자가 정한 프롬프트/참조 스타일
+    const reqBody = { action: "generate", text };
+    if (cp) reqBody.customPrompt = cp;          // 관리자가 디테일에서 쓴 프롬프트 그대로 (문구만 고객 걸로)
+    if (refUrl) reqBody.refUrl = refUrl;
+    if (!cp && !refUrl) reqBody.style = titleStyleForCurrent() || "hand";
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 만드는 중… (10~30초)`;
     try {
@@ -2154,7 +2158,7 @@
     if (texts.some((tx) => !tx.locked && !_capInTrim(tx))) plan.push("caption");
     // 🎬 관리자가 이 템플릿에 타이틀 스타일을 지정해 뒀으면 → 타이틀 단계
     const _tcat = (E._cats || {})[E.using.template.id];
-    if (_tcat && (_tcat.titleStyle || _tcat.titleRef)) plan.push("title");
+    if (_tcat && (_tcat.titleStyle || _tcat.titleRef || _tcat.titlePrompt)) plan.push("title");
     plan.push("done");
     return plan;
   }
@@ -2390,7 +2394,7 @@
         </div>`;
     } else if (cur === "title") {
       const styleKey = titleStyleForCurrent() || "hand";
-      const styleLabel = titleRefForCurrent() ? "📎 관리자 지정 스타일" : (TITLE_STYLE_LABELS[styleKey] || styleKey);
+      const styleLabel = (titlePromptForCurrent() || titleRefForCurrent()) ? "🎨 관리자 지정 스타일" : (TITLE_STYLE_LABELS[styleKey] || styleKey);
       const hasT = !!(E.using.logo && E.using._isTitle);
       bodyHtml = `
         <div class="es-wiz-body es-title-step">
