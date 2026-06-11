@@ -4750,7 +4750,7 @@
       // pull 이 이 쿨다운 안의 행을 옛 서버값으로 덮어쓰지 못하게 한다(낙관적 업데이트 보호).
       // localUpdatedAt(클라 시각) vs 서버 updated_at 비교는 네트워크 지연·클럭차이로 불안정해서,
       // 클라 시각끼리만 비교하는 쿨다운으로 "작가/시간 바꾸면 5초 뒤 원복" 회귀를 막는다.
-      const SCHEDULE_EDIT_COOLDOWN_MS = 12000;
+      const SCHEDULE_EDIT_COOLDOWN_MS = 25000;
       const recentlyEditedScheduleEditMs = new Map();
       function noteScheduleLocalEdit(id) {
         const sid = String(id || "").trim();
@@ -5668,23 +5668,10 @@
               localNewer = Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs;
             }
             if (withinCooldown || localNewer) {
-              // 쿨다운 보호 중인데 서버가 아직 로컬 편집(작가·시간·날짜)을 반영하지 못했으면:
-              // ① 보호를 연장(noteScheduleLocalEdit)하고 ② 즉시 서버로 재푸시 → 수렴 보장.
-              // 이렇게 하면 directPatch 가 늦거나 한 번 실패해도, 서버가 따라잡을 때까지
-              // 화면이 절대 옛 값으로 되돌아가지 않는다. 서버가 일치하면 재푸시가 멈추고
-              // 쿨다운이 자연 만료되어 이후엔 서버가 기준이 된다(무한 보호 아님).
-              if (withinCooldown && source !== "hold" && source !== "refund") {
-                const serverWriter = String(row?.writer_name || "").trim();
-                const serverTime = String(row?.time_key || "").trim();
-                const serverDate = String(row?.date_key || "").trim();
-                const localWriter = String(prevLocal?.name || "").trim();
-                const localTime = String(prevLocal?.time || "").trim();
-                const localDate = String(prevLocal?.date || "").trim();
-                if (serverWriter !== localWriter || serverTime !== localTime || serverDate !== localDate) {
-                  noteScheduleLocalEdit(rid);
-                  try { void directPatchScheduleFields(prevLocal); } catch (_) {}
-                }
-              }
+              // 편집 쿨다운(또는 localUpdatedAt 최신) 동안은 로컬 값을 유지하고 서버값으로
+              // 덮어쓰지 않는다. ⚠️ 여기서 directPatch 재푸시를 하면 pull→push→realtime→pull
+              // 피드백 루프(렌더 폭주)가 생기므로 절대 하지 않는다. 서버 반영은 편집 시점의
+              // directPatch + 디바운스 스냅샷 업서트가 담당한다(쿨다운은 그 사이만 보호).
               if (source === "hold") nextHold.push(prevLocal);
               else if (source === "refund") nextRefund.push(prevLocal);
               else nextActive.push(prevLocal);
@@ -5772,9 +5759,9 @@
         // 부트스트랩·포커스·탭 복귀에서는 pull 완료 후 hydrate 순서로 처리한다.
         renderList();
         renderPaymentList();
-        // 작가 급여 탭이 열려 있으면, 방금 로드된 일정 기준으로 완료촬영 수를 자동 갱신.
-        // (Supabase 재동기화 등으로 작가 일정이 늦게 들어오면 "완료촬영 0회"로 보이던 문제 해결)
-        // 단, 사용자가 유류비/급여형태 칸을 편집 중이면 입력 보호를 위해 건너뛴다.
+        // 작가 급여 탭이 열려 있고 작가 일정이 실제로 로드된(>0) 경우에만 1회 갱신.
+        // 데이터가 비어 있는(전송 실패/과도기) pull 에서는 절대 다시 그리지 않아 "0회 깜빡임"을 막는다.
+        // 또한 직전 렌더와 완료촬영 합계가 같으면 재렌더를 생략(불필요한 깜빡임·포커스 리셋 방지).
         try {
           if (payrollSectionEl && !payrollSectionEl.classList.contains("hidden")) {
             const ae = document.activeElement;
@@ -5782,7 +5769,12 @@
               ae &&
               payrollSectionEl.contains(ae) &&
               (ae.classList?.contains("payroll-admin-fuel") || ae.classList?.contains("payroll-admin-type"));
-            if (!editingPayrollInput) renderPhotographerPayrollAdmin();
+            // data(관리자 일정)가 실제로 로드된 경우에만 갱신. 빈 pull(전송 실패/과도기)에선
+            // 절대 다시 그리지 않아 "0회 깜빡임"을 막는다.
+            const scheduleDataLoaded = Array.isArray(data) && data.length > 0;
+            if (!editingPayrollInput && scheduleDataLoaded) {
+              maybeRefreshPayrollSummaryIfChanged();
+            }
           }
         } catch (_) {}
         return true;
@@ -11023,7 +11015,14 @@ ${folderBtn}
       }
       /** 작가 화면 getMySchedules()와 동일: 고객·작가 미러 병합 후 id/날짜키로 중복 제거 */
       function dedupeCustomerAndWriterScheduleRowsForPayroll() {
-        const merged = [...readStorageArray(STORAGE_CUSTOMER_SCHEDULES), ...readStorageArray(STORAGE_WRITER_SCHEDULES)];
+        // 관리자 data 배열(항상 로드됨·달력과 동일 소스)을 1순위로 포함한다.
+        // STORAGE_WRITER_SCHEDULES / STORAGE_CUSTOMER_SCHEDULES 는 동기화 과정에서 잠깐
+        // 비거나 늦게 채워질 수 있어, 그것만 쓰면 "완료촬영 0회"로 깜빡이는 문제가 났음.
+        const merged = [
+          ...(Array.isArray(data) ? data : []),
+          ...readStorageArray(STORAGE_CUSTOMER_SCHEDULES),
+          ...readStorageArray(STORAGE_WRITER_SCHEDULES)
+        ];
         const dedupedMap = new Map();
         merged.forEach((row) => {
           const keyBase = normalize(row?.writerMirrorId || row?.customerScheduleId);
@@ -11054,6 +11053,22 @@ ${folderBtn}
           target.setHours(0, 0, 0, 0);
           return target.getTime() <= base.getTime();
         }).length;
+      }
+      // 완료촬영 합계 시그니처 — pull 때마다 무조건 재렌더하지 않고, 실제로 숫자가 바뀐
+      // 경우에만 급여 요약을 다시 그린다(0회 깜빡임·렌더 폭주 방지).
+      let lastPayrollShotSignature = "";
+      function maybeRefreshPayrollSummaryIfChanged() {
+        try {
+          const monthKey = normalizePayrollAdminMonthKey(payrollAdminMonthKey);
+          const names = photographers.filter((n) => n && n !== "작가미정");
+          const sig =
+            monthKey +
+            "@" +
+            names.map((n) => `${n}:${countMonthDoneShotsForWriterName(n, monthKey)}`).join("|");
+          if (sig === lastPayrollShotSignature) return; // 변화 없음 → 재렌더 생략
+          lastPayrollShotSignature = sig;
+          renderPhotographerPayrollAdmin();
+        } catch (_) {}
       }
       function renderPhotographerPayrollAdmin() {
         const configEl = document.getElementById("photographerPayrollConfigRows");
