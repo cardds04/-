@@ -1406,7 +1406,30 @@
     }
   }
 
-  // ── 💭 생각 확장하기 — 한 아이디어 → 후킹 10개(다음이 궁금해지는 한 줄) ──
+  // ── 💭 생각 확장하기 — 한 아이디어 → 후킹 10개(스타일 선택 가능) ──
+  const HOOK_STYLE_CHIPS = [
+    { k: "scene", label: "🎬 장면" },
+    { k: "news", label: "📰 뉴스낚시" },
+    { k: "provoke", label: "🔥 도발" },
+    { k: "emotion", label: "💗 감성" },
+  ];
+  function hookChipsHtml(active) {
+    return `<div class="es-idea-hkstyles">${HOOK_STYLE_CHIPS.map((s) => `<button type="button" class="es-idea-hkstyle${s.k === active ? " on" : ""}" data-style="${s.k}">${s.label}</button>`).join("")}</div>`;
+  }
+  // 저장 = 화면에 보이는 후킹만 체크상태로 반영(다른 스타일에서 저장한 건 유지)
+  function ideaSaveHooksReconcile(key, shownHooks, checkedHooks) {
+    const prev = ideaSavedHooksFor(key);
+    const shown = new Set(shownHooks);
+    const kept = prev.filter((h) => !shown.has(h));
+    const merged = kept.concat(checkedHooks.filter((h) => kept.indexOf(h) < 0));
+    ideaSaveHooks(key, merged);
+    return merged;
+  }
+  function updateSavedBadge(btn, n) {
+    if (!btn) return;
+    const old = btn.querySelector(".es-idea-savedn"); if (old) old.remove();
+    if (n) { const s = document.createElement("span"); s.className = "es-idea-savedn"; s.textContent = "후킹 " + n; btn.appendChild(s); }
+  }
   async function ideaExpand(btn) {
     const card = btn.closest(".es-idea-card"); if (!card) return;
     const panel = card.querySelector(".es-idea-hooks"); if (!panel) return;
@@ -1414,63 +1437,63 @@
     const idea = ((card.querySelector(".es-idea-text") || {}).textContent || "").trim();
     const fmtLabel = ideaFormatLabel(fid);
     const industry = (_ideaCurEntry && _ideaCurEntry.industry) || "";
-    const key = ideaHookKey(industry, idea);
-    // 토글: 열려 있으면 닫기
-    if (!panel.hidden) { panel.hidden = true; btn.classList.remove("on"); return; }
+    const ctx = { key: ideaHookKey(industry, idea), industry, idea, fmtLabel, btn };
+    if (!panel.hidden) { panel.hidden = true; btn.classList.remove("on"); return; }   // 토글 닫기
     panel.hidden = false; btn.classList.add("on");
-    if (_ideaHooksCache[key]) { renderHooks(panel, key, _ideaHooksCache[key], { industry, idea, fmtLabel, btn }); return; }
-    panel.innerHTML = `<div class="es-idea-hooks-load"><span class="es-idea-spin sm"></span> 다음이 궁금해지는 후킹 만드는 중…</div>`;
+    loadHooksForStyle(panel, ctx, "scene", false);
+  }
+  // 칩(스타일)+본문 셸 — 칩은 항상 보이고, 클릭하면 그 스타일로 로드
+  function hooksShell(panel, ctx, style, innerHtml) {
+    panel.dataset.style = style;
+    panel.innerHTML = hookChipsHtml(style) + innerHtml;
+    $$(".es-idea-hkstyle", panel).forEach((c) => c.addEventListener("click", () => {
+      const st = c.dataset.style;
+      if (st === panel.dataset.style && panel.querySelector(".es-idea-hooks-list")) return;   // 이미 그 스타일
+      loadHooksForStyle(panel, ctx, st, false);
+    }));
+  }
+  async function loadHooksForStyle(panel, ctx, style, forceNew) {
+    const cacheKey = ctx.key + "::" + style;
+    if (!forceNew && _ideaHooksCache[cacheKey]) { renderHooksBody(panel, ctx, style, _ideaHooksCache[cacheKey]); return; }
+    const prev = _ideaHooksCache[cacheKey];
+    const reqId = (panel._hookReqId = (panel._hookReqId || 0) + 1);   // 최신 요청만 반영(연타 경쟁 방지)
+    hooksShell(panel, ctx, style, `<div class="es-idea-hooks-load"><span class="es-idea-spin sm"></span> 후킹 만드는 중…</div>`);
     try {
-      const r = await fetch(IDEAS_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "hooks", industry, idea, format: fmtLabel }) });
+      const avoid = forceNew && prev ? prev : [];
+      const r = await fetch(IDEAS_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "hooks", industry: ctx.industry, idea: ctx.idea, format: ctx.fmtLabel, style, avoid }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      const hooks = Array.isArray(j.hooks) ? j.hooks : [];
-      if (!hooks.length) throw new Error("후킹이 비었어요");
-      _ideaHooksCache[key] = hooks;
-      renderHooks(panel, key, hooks, { industry, idea, fmtLabel, btn });
+      if (panel._hookReqId !== reqId) return;   // 더 최신 요청이 떴음 → 버림
+      if (!r.ok || !j.ok || !Array.isArray(j.hooks) || !j.hooks.length) throw new Error(j.error || ("HTTP " + r.status));
+      _ideaHooksCache[cacheKey] = j.hooks;
+      renderHooksBody(panel, ctx, style, j.hooks);
     } catch (e) {
-      panel.innerHTML = `<div class="es-idea-hooks-err">후킹을 못 만들었어요 (${esc((e && e.message) || "오류")}). <button type="button" class="es-idea-hooks-retry">다시</button></div>`;
-      const rt = panel.querySelector(".es-idea-hooks-retry");
-      if (rt) rt.addEventListener("click", () => { delete _ideaHooksCache[key]; panel.hidden = true; btn.classList.remove("on"); ideaExpand(btn); });
+      if (panel._hookReqId !== reqId) return;
+      hooksShell(panel, ctx, style, `<div class="es-idea-hooks-err">후킹을 못 만들었어요 (${esc((e && e.message) || "오류")}). <button type="button" class="es-idea-hooks-retry">다시</button></div>`);
+      const rt = panel.querySelector(".es-idea-hooks-retry"); if (rt) rt.addEventListener("click", () => loadHooksForStyle(panel, ctx, style, true));
     }
   }
-  function renderHooks(panel, key, hooks, ctx) {
-    const saved = new Set(ideaSavedHooksFor(key));
-    panel.innerHTML = `
-      <div class="es-idea-hooks-tt">🎣 다음이 궁금해지는 후킹 — 마음에 드는 걸 골라 저장하세요</div>
+  function renderHooksBody(panel, ctx, style, hooks) {
+    const saved = new Set(ideaSavedHooksFor(ctx.key));
+    hooksShell(panel, ctx, style, `
+      <div class="es-idea-hooks-tt">🎣 마음에 드는 후킹을 골라 저장하세요 · 위에서 스타일을 바꿔보세요</div>
       <div class="es-idea-hooks-list">
         ${hooks.map((h, i) => `<label class="es-idea-hook"><input type="checkbox" value="${i}"${saved.has(h) ? " checked" : ""}><span>${esc(h)}</span></label>`).join("")}
       </div>
       <div class="es-idea-hooks-foot">
         <button type="button" class="es-idea-hooks-regen">🔄 다른 후킹</button>
         <button type="button" class="es-idea-hooks-save">💾 후킹 저장하기</button>
-      </div>`;
-    // 저장
+      </div>`);
     const saveBtn = panel.querySelector(".es-idea-hooks-save");
     saveBtn.addEventListener("click", () => {
       const checked = $$(".es-idea-hook input:checked", panel).map((c) => hooks[Number(c.value)]).filter(Boolean);
-      ideaSaveHooks(key, checked);
-      saveBtn.textContent = checked.length ? `✓ ${checked.length}개 저장됨` : "비움(저장 해제)";
+      const merged = ideaSaveHooksReconcile(ctx.key, hooks, checked);
+      saveBtn.textContent = merged.length ? `✓ ${merged.length}개 저장됨` : "비움(저장 해제)";
       saveBtn.classList.add("done");
-      // 카드 버튼의 '후킹 N' 뱃지 갱신
-      if (ctx && ctx.btn) {
-        const old = ctx.btn.querySelector(".es-idea-savedn"); if (old) old.remove();
-        if (checked.length) { const s = document.createElement("span"); s.className = "es-idea-savedn"; s.textContent = "후킹 " + checked.length; ctx.btn.appendChild(s); }
-      }
+      updateSavedBadge(ctx.btn, merged.length);
       setTimeout(() => { saveBtn.textContent = "💾 후킹 저장하기"; saveBtn.classList.remove("done"); }, 1500);
     });
-    // 다른 후킹(재생성, 기존 회피)
     const regenBtn = panel.querySelector(".es-idea-hooks-regen");
-    regenBtn.addEventListener("click", async () => {
-      regenBtn.disabled = true; regenBtn.textContent = "만드는 중…";
-      try {
-        const r = await fetch(IDEAS_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "hooks", industry: ctx.industry, idea: ctx.idea, format: ctx.fmtLabel, avoid: hooks }) });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok || !Array.isArray(j.hooks) || !j.hooks.length) throw new Error(j.error || "오류");
-        _ideaHooksCache[key] = j.hooks;
-        renderHooks(panel, key, j.hooks, ctx);
-      } catch (e) { regenBtn.disabled = false; regenBtn.textContent = "🔄 다른 후킹"; }
-    });
+    regenBtn.addEventListener("click", () => loadHooksForStyle(panel, ctx, style, true));
   }
 
   function renderGallery() {
