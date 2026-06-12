@@ -779,7 +779,7 @@
         const seg = arr[idx], f = E.using.fills[seg.slot.id];
         if (f && f.kind === "video") {
           if (curVidSlot !== idx) { curVidSlot = idx; if (expVideo.src !== f.url) { expVideo.src = f.url; try { await expVideo.play().catch(() => {}); expVideo.pause(); } catch (_) {} } }
-          await seekVideoTo(expVideo, Math.min((t - seg.start) + (seg.slot.in || 0), (f.dur || seg.end - seg.start)));
+          await seekVideoTo(expVideo, seg.slot.timelapse ? slotVideoTime(seg.slot, t - seg.start, f.dur) : Math.min((t - seg.start) + (seg.slot.in || 0), (f.dur || seg.end - seg.start)));
         } else { curVidSlot = -1; }
         composeFrame(ctx, W, H, t, arr, imgs, expVideo, null);   // null → 릴스 오버레이 제외
         const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) });
@@ -2033,6 +2033,12 @@
     });
   }
   // ── 슬롯 역할 정규화 — 컷 타입을 하나의 객체 개념으로 (before/after/vresult/detail/plain) ──
+  // 슬롯 영상 시간: 타임랩스면 전체 소스를 dur 안에 압축(localTime/dur × 원본길이), 아니면 in 오프셋부터 1배속
+  function slotVideoTime(slot, localTime, srcDur) {
+    const dur = slot.dur || 1;
+    if (slot && slot.timelapse && srcDur > 0.1) return Math.max(0, Math.min(srcDur, (localTime / dur) * srcDur));
+    return Math.max(0, localTime + (slot.in || 0));
+  }
   function slotRole(s) {
     if (!s) return "plain";
     if (s.aiRole) return s.aiRole;                       // before / after / vresult
@@ -5300,8 +5306,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         vid.style.display = "block";
         if (vid._url !== fill.url) { vid.src = fill.url; vid._url = fill.url; }
         vid.style.transform = tf;
-        const local = clamp((time - seg.start) + (seg.slot.in || 0), 0, Math.max(0, (fill.dur || seg.slot.dur)));
-        if (E.playing) { if (vid.paused) { try { vid.play(); } catch (_) {} } if (Math.abs(vid.currentTime - local) > 0.35) vid.currentTime = local; }
+        const local = seg.slot.timelapse ? slotVideoTime(seg.slot, time - seg.start, fill.dur) : clamp((time - seg.start) + (seg.slot.in || 0), 0, Math.max(0, (fill.dur || seg.slot.dur)));
+        if (seg.slot.timelapse) { try { vid.pause(); } catch (_) {} if (Math.abs(vid.currentTime - local) > 0.03) { try { vid.currentTime = local; } catch (_) {} } }   // 타임랩스: 매 프레임 시킹(고속 압축)
+        else if (E.playing) { if (vid.paused) { try { vid.play(); } catch (_) {} } if (Math.abs(vid.currentTime - local) > 0.35) vid.currentTime = local; }
         else { try { vid.pause(); } catch (_) {} vid.currentTime = local; }
       }
     }
