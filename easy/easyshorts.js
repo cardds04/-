@@ -3882,10 +3882,12 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const total = totalDur();
     const start = clamp(E.playhead, 0, Math.max(0, total - 0.1));
     const dur = clamp(Math.min(2.5, total - start || 2.5), 0.3, Math.max(0.3, total - start || 2.5));
-    const tx = { id: uid(), text: "텍스트 입력", xPct: 50, yPct: 50, width: 70, size: 6, color: "#ffffff", bold: true, shadow: true, start, dur };
+    // 같은 장면(현재 시각)에 이미 있는 텍스트 수만큼 아래로 살짝 내려 배치 → 여러 개를 겹쳐 올려도 안 가려짐
+    const here = E.using.texts.filter((t) => start < (t.start || 0) + (t.dur || 0) && (start + dur) > (t.start || 0)).length;
+    const yPct = clamp(50 + here * 14, 12, 86);
+    const tx = { id: uid(), text: "텍스트 입력", xPct: 50, yPct, width: 70, size: 6, color: "#ffffff", bold: true, shadow: true, start, dur };
     pushSceneUndo();
     E.using.texts.push(tx);
-    resolveOverlaps();
     renderTexts();
     selectText(tx.id);
     scheduleSaveMeta();
@@ -4344,12 +4346,24 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     }
     if (!lane) return;
     lane.querySelectorAll(".es-tl-block").forEach((n) => n.remove());
+    // 같은 시간에 겹치는 텍스트는 위·아래 줄로 쌓아 보여줌 → 여러 개를 따로 잡을 수 있음
+    const sortedTl = E.using.texts.slice().sort((a, b) => (a.start || 0) - (b.start || 0));
+    const rowEnds = [], rowOf = {};
+    sortedTl.forEach((tx) => {
+      const s = tx.start || 0, e = s + (tx.dur || 0);
+      let r = rowEnds.findIndex((end) => s >= end - 1e-6);
+      if (r < 0) { r = rowEnds.length; rowEnds.push(e); } else rowEnds[r] = e;
+      rowOf[tx.id] = r;
+    });
+    const nRows = Math.max(1, rowEnds.length);
+    lane.classList.toggle("es-tl-lane-multi", nRows > 1);
     E.using.texts.forEach((tx) => {
       const el = document.createElement("div");
       el.className = "es-tl-block" + (isTextSel(tx.id) ? " sel" : "");
       el.dataset.id = tx.id;
       el.style.left = ((tx.start || 0) / total) * 100 + "%";
-      el.style.width = "calc(" + Math.max(0.5, ((tx.dur || 0) / total) * 100) + "% - 1px)";   // 실제 길이 비율 + 1px 틈 → 겹침 없음
+      el.style.width = "calc(" + Math.max(0.5, ((tx.dur || 0) / total) * 100) + "% - 1px)";   // 실제 길이 비율
+      if (nRows > 1) { const r = rowOf[tx.id] || 0; el.style.top = (r / nRows * 100) + "%"; el.style.height = "calc(" + (100 / nRows) + "% - 1px)"; }
       const label = (tx.text || "").split("\n")[0] || "텍스트";
       el.innerHTML = `<span class="es-tl-label">📝 ${esc(label)}</span><span class="es-tl-resize" title="길이 조절"></span>`;
       el.addEventListener("mousedown", (e) => startTlBlockDrag(e, tx, el));
@@ -4656,25 +4670,10 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     e.preventDefault();
   }
   // 블록이 서로 겹치지 않게 정리 — 시작순으로 보며 겹치면 뒤 블록을 앞 블록 끝으로 밀어냄
-  function resolveOverlaps() {
-    if (!E.using) return;
-    const total = totalDur();
-    const sorted = E.using.texts.slice().sort((a, b) => (a.start || 0) - (b.start || 0));
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1], cur = sorted[i];
-      const prevEnd = (prev.start || 0) + (prev.dur || 0);
-      if ((cur.start || 0) < prevEnd - 1e-6) cur.start = clamp(prevEnd, 0, Math.max(0, total));
-    }
-  }
-  // 길이가 바뀐 만큼 뒤(시작이 더 늦은) 블록들을 함께 밀어 겹침 방지
-  function rippleAfter(refTx, delta) {
-    if (!delta || !E.using) return;
-    const total = totalDur();
-    E.using.texts.forEach((o) => {
-      if (o.id === refTx.id) return;
-      if (o.start > (refTx.start || 0) + 1e-6) o.start = clamp((o.start || 0) + delta, 0, Math.max(0, total));
-    });
-  }
+  // 텍스트 여러 개를 '같은 장면'에 겹쳐 올릴 수 있게 — 자동 밀어내기 비활성화(겹침 허용).
+  // (관리자가 만든 겹친 텍스트가 손님 쪽에서 분리되지 않도록 — 대량/AI 자막은 순차 배치라 영향 없음)
+  function resolveOverlaps() { /* no-op: 겹침 허용 */ }
+  function rippleAfter() { /* no-op: 겹침 허용 */ }
   // 입력칸 포커스 해제 — 타임라인을 만지면 키보드(Ctrl+Z·Delete)가 입력칸에 막히지 않게
   function blurActive() { const a = document.activeElement; if (a && a.tagName === "INPUT" && a.blur) a.blur(); }
   function startTlBlockDrag(e, tx, el) {
