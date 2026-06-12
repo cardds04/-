@@ -2090,17 +2090,17 @@
   // ── 이지숏폼 동적 단계 플랜 — 템플릿에 들어있는 컷 타입에 맞는 단계만 구성 ──
   // ════════════════════════════════════════════════════════════════
   // 🎬 AI 타이틀 — 관리자가 템플릿마다 지정한 스타일로, 고객은 글자만 입력
-  //   생성(흰 배경) → 브라우저에서 배경 투명화 → 로고 오버레이 슬롯으로 영상에 합성
+  //   생성(크로마키 배경) → 브라우저에서 배경 투명화 → 로고 오버레이 슬롯으로 영상에 합성
   // ════════════════════════════════════════════════════════════════
   const TITLE_API = "https://sc-pink.vercel.app/api/easy-title";
-  const TITLE_STYLE_LABELS = { hand: "🧡 손글씨 오렌지", yellow: "📣 예능 옐로", red: "🔴 뉴스 레드", gold: "🏆 골드 메탈", marker: "🖍 형광 마커", mint: "🩵 민트 팝", purple: "💜 퍼플 팝" };
+  const TITLE_STYLE_LABELS = { movie: "🎬 영화 타이틀", hand: "🧡 손글씨 오렌지", yellow: "📣 예능 옐로", red: "🔴 뉴스 레드", gold: "🏆 골드 메탈", marker: "🖍 형광 마커", mint: "🩵 민트 팝", purple: "💜 퍼플 팝" };
   // 🎬 타이틀 문구 예시 — 어떤 문구를 넣을지 감 잡으라고 보여주는 후킹 예시(눌러서 넣기)
   const TITLE_EXAMPLES = ["박스 뜯는데 사장 손이 멈췄다", "이게 같은 집이라고?", "이 가격에 이게 된다고?", "10년 묵은 때가 싹 사라짐", "사장님이 직접 보여드려요", "여기 우리집 맞아요?", "딱 하루 만에 이렇게", "후기 보고 바로 예약함"];
   function titleCatForCurrent() { return (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; }
   function titleStyleForCurrent() { return titleCatForCurrent().titleStyle || ""; }
   function titleRefForCurrent() { const u = titleCatForCurrent().titleRef; return (typeof u === "string" && /^https?:\/\//.test(u)) ? u : ""; }
   function titlePromptForCurrent() { const p = titleCatForCurrent().titlePrompt; return (typeof p === "string" && p.trim()) ? p.trim() : ""; }
-  // 흰(단색) 배경 키잉 → 투명 PNG Blob
+  // 단색 크로마키 배경 키잉 → 투명 PNG Blob
   function titleKeyBg(img, bgHex) {
     const W = img.naturalWidth, H = img.naturalHeight; if (!W || !H) return Promise.resolve(null);
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
@@ -2174,8 +2174,8 @@
     const reqBody = { action: "generate", text };
     if (cp) reqBody.customPrompt = cp;          // 관리자가 디테일에서 쓴 프롬프트 그대로 (문구만 고객 걸로)
     if (refUrl) reqBody.refUrl = refUrl;
-    if (!cp && !refUrl) reqBody.style = titleStyleForCurrent() || "hand";
-    const N = 6;
+    if (!cp && !refUrl) reqBody.style = titleStyleForCurrent() || "movie";
+    const N = 1;   // 타이틀 1개만 생성
     const applyPick = (blob, cell, fromUser) => {
       titleApplyOverlay(blob);
       if (previewBox) previewBox.querySelectorAll(".es-title-cand").forEach((c) => c.classList.remove("sel"));
@@ -2184,7 +2184,7 @@
       ensureTitleActions();
     };
     if (btn) btn.disabled = true;
-    if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 ${N}개 만드는 중… (15~40초)`;
+    if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 만드는 중… (10~30초)`;
     if (previewBox) previewBox.innerHTML = `<div class="es-title-grid">${Array.from({ length: N }).map((_, i) => `<div class="es-title-cand loading" data-i="${i}"><span class="es-title-spin"></span></div>`).join("")}</div>`;
     let done = 0, ok = 0;
     const one = async (i) => {
@@ -2206,7 +2206,7 @@
         done++;
         if (done === N) {
           if (btn) btn.disabled = false;
-          if (statusEl) statusEl.innerHTML = ok === 0 ? "😢 실패. 다시 시도해 주세요" : `완성! 마음에 드는 타이틀을 <b>탭</b>해 고르세요 (${ok}개)`;
+          if (statusEl) statusEl.innerHTML = ok === 0 ? "😢 실패. 다시 시도해 주세요" : (N === 1 ? "✅ 완성! 영상 위에 올라갔어요" : `완성! 마음에 드는 타이틀을 <b>탭</b>해 고르세요 (${ok}개)`);
         }
       }
     };
@@ -2473,7 +2473,7 @@
           </div>
         </div>`;
     } else if (cur === "title") {
-      const styleKey = titleStyleForCurrent() || "hand";
+      const styleKey = titleStyleForCurrent() || "movie";
       const styleLabel = (titlePromptForCurrent() || titleRefForCurrent()) ? "🎨 관리자 지정 스타일" : (TITLE_STYLE_LABELS[styleKey] || styleKey);
       const hasT = !!(E.using.logo && E.using._isTitle);
       bodyHtml = `
