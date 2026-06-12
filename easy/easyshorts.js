@@ -667,9 +667,10 @@
     Object.keys(E._audioEls).forEach((id) => { if (!ids[id]) { try { E._audioEls[id].pause(); } catch (_) {} delete E._audioEls[id]; } });
     for (const c of clips) {
       let a = E._audioEls[c.id]; if (!a) { a = E._audioEls[c.id] = new Audio(); a.preload = "auto"; }
+      routePreviewEl(a);   // 📱 모바일: 컨텍스트 있으면 라우팅(iOS 무음스위치 우회)
       const url = audioClipUrl(c);
       if (url && a._url !== url) { a.src = url; a._url = url; }
-      a.volume = clamp(c.vol != null ? c.vol : 1, 0, 1);
+      setElVolume(a, clamp(c.vol != null ? c.vol : 1, 0, 1));
       const inClip = time >= (c.start || 0) && time < (c.start || 0) + (c.dur || 0);
       if (E.playing && inClip && url) {
         const local = (c.in || 0) + (time - (c.start || 0));
@@ -751,6 +752,7 @@
   const dlBtn = () => $("#esEasyGen") || $("#esDownload");   // 활성 다운로드 버튼(마법사/에디터 공용)
   async function exportVideo() {
     if (!E.using) return;
+    try { if (E.playing) stopPlay(); } catch (_) {}   // 미리보기 재생 중이면 멈춤(라우팅된 #esMusic 정리)
     try { syncOrigAudio(); } catch (_) {}   // 🎚 원본 오디오 클립 최신화(출력에 믹스)
     await ensureCaptionFontsLoaded();   // 자막 폰트가 캔버스에서 안 깨지게 먼저 로드
     const { total } = slotTimes();
@@ -861,26 +863,24 @@
       const vstream = cv.captureStream(30);
       const tracks = [...vstream.getVideoTracks()];
       const hasMusicEx = !!E.using.musicUrl, hasVoiceEx = !!(voiceEl && E.using.voiceUrl);
-      let mix = null;   // 나레이션이 있으면 음악+나레이션을 한 오디오 트랙으로 믹스
-      if (hasVoiceEx) {
+      // 🔊 내보내기 오디오 — 미리보기 #esMusic(Web Audio 라우팅됨)과 충돌 없게 항상 '새 엘리먼트'로 믹스
+      let mix = null;
+      if (hasMusicEx || hasVoiceEx) {
         try {
           const AC = window.AudioContext || window.webkitAudioContext;
           const ctx = new AC();
           const dest = ctx.createMediaStreamDestination();
-          const va = new Audio(E.using.voiceUrl);
-          ctx.createMediaElementSource(va).connect(dest);   // 임시 엘리먼트 → 미리보기용 esVoice 와 분리
-          let ma = null;
+          let va = null, ma = null, mg = null;
+          if (hasVoiceEx) { va = new Audio(E.using.voiceUrl); ctx.createMediaElementSource(va).connect(dest); }
           if (hasMusicEx) {
             ma = new Audio(E.using.musicUrl); ma.loop = true;
-            const mg = ctx.createGain(); mg.gain.value = voiceDuckLevel();   // 음악 덕킹
+            mg = ctx.createGain(); mg.gain.value = hasVoiceEx ? voiceDuckLevel() : musicVolAt(0, total);   // 보이스 있으면 덕킹, 없으면 음악 페이드
             ctx.createMediaElementSource(ma).connect(mg); mg.connect(dest);
           }
           const at = dest.stream.getAudioTracks()[0]; if (at) tracks.push(at);
-          mix = { ctx, va, ma };
-        } catch (e) { console.warn("[easyshorts] 나레이션 믹스 실패, 음악만 사용", e); mix = null; }
-      }
-      if (!mix && hasMusicEx && musicEl) {
-        try { const ms = musicEl.captureStream ? musicEl.captureStream() : (musicEl.mozCaptureStream ? musicEl.mozCaptureStream() : null); const at = ms && ms.getAudioTracks()[0]; if (at) tracks.push(at); } catch (_) {}
+          if (ctx.state === "suspended") { try { ctx.resume(); } catch (_) {} }
+          mix = { ctx, va, ma, mg };
+        } catch (e) { console.warn("[easyshorts] 내보내기 오디오 믹스 실패", e); mix = null; }
       }
       const stream = new MediaStream(tracks);
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
@@ -916,8 +916,7 @@
         if (reelsImg && reelsImg.complete) { try { ctx.drawImage(reelsImg, 0, 0, W, H); } catch (_) {} }
       };
       rec.start(100);
-      if (mix) { try { if (mix.ma) { mix.ma.currentTime = 0; mix.ma.play(); } mix.va.currentTime = 0; mix.va.play(); } catch (_) {} }
-      else if (musicEl && E.using.musicUrl) { try { musicEl.currentTime = 0; musicEl.volume = 1; await musicEl.play(); } catch (_) {} }
+      if (mix) { try { if (mix.ma) { mix.ma.currentTime = 0; mix.ma.play(); } if (mix.va) { mix.va.currentTime = 0; mix.va.play(); } } catch (_) {} }
       let curVid = -1;
       const startPerf = performance.now();
       await new Promise((resolve) => {
@@ -932,15 +931,15 @@
             if (seg.slot.timelapse && ratio > 16) { const tl = slotVideoTime(seg.slot, t - seg.start, f.dur); try { if (Math.abs((expVideo.currentTime || 0) - tl) > 0.05) expVideo.currentTime = tl; } catch (_) {} }   // 초고속(>16배) = 프레임 시킹으로 전체 압축
           }
           else if (curVid !== -1) { try { expVideo.pause(); } catch (_) {} curVid = -1; }
-          if (!mix && musicEl && E.using.musicUrl) musicEl.volume = musicVolAt(t, total);
+          if (mix && mix.mg && !hasVoiceEx) { try { mix.mg.gain.value = musicVolAt(t, total); } catch (_) {} }   // 음악만일 때 페이드(보이스 있으면 덕킹 고정)
           drawAt(t);
           requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
       });
       rec.stop();
-      if (mix) { try { mix.va.pause(); if (mix.ma) mix.ma.pause(); mix.ctx.close(); } catch (_) {} }
-      if (musicEl) { try { musicEl.pause(); musicEl.volume = 1; } catch (_) {} }
+      if (mix) { try { if (mix.va) mix.va.pause(); if (mix.ma) mix.ma.pause(); mix.ctx.close(); } catch (_) {} }
+      if (musicEl) { try { musicEl.pause(); } catch (_) {} }
       try { expVideo.pause(); } catch (_) {}
       await stopped;
       const blob = new Blob(chunks, { type: "video/webm" });
@@ -2155,11 +2154,14 @@
     if (E.using.logoUrl && E.using._isTitle) await new Promise((res) => { const im = new Image(); im.onload = () => { const lw = cw * 0.85, lh = lw * im.naturalHeight / im.naturalWidth; try { ctx.drawImage(im, (cw - lw) / 2, ch * 0.22 - lh / 2, lw, lh); } catch (_) {} res(); }; im.onerror = res; im.src = E.using.logoUrl; });
     box.innerHTML = ""; cv.style.width = cw + "px"; cv.style.height = ch + "px"; cv.style.borderRadius = "10px"; cv.style.display = "block"; cv.style.margin = "0 auto"; box.appendChild(cv);
   }
-  function ensureTitleRemoveBtn() {
+  function ensureTitleActions() {
     const box = document.getElementById("esTitleActions"); if (!box) return;
-    if (box.querySelector("#esTitleRemove")) return;
-    box.innerHTML = `<button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button>`;
-    const b = box.querySelector("#esTitleRemove"); if (b) b.addEventListener("click", () => { titleRemove(); renderEasy(); });
+    if (box.querySelector("#esTitleRegen")) return;
+    box.innerHTML = `<button type="button" class="es-btn es-btn-primary es-title-regen" id="esTitleRegen">🔄 다시 만들기</button><button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button>`;
+    const rg = box.querySelector("#esTitleRegen");
+    if (rg) rg.addEventListener("click", () => { const ti = document.getElementById("esTitleText"); titleGenerate(ti ? ti.value : (E.using && E.using._titleText) || "", document.getElementById("esTitleStatus"), document.getElementById("esTitlePreview"), document.getElementById("esTitleGo")); });
+    const rm = box.querySelector("#esTitleRemove");
+    if (rm) rm.addEventListener("click", () => { titleRemove(); renderEasy(); });
   }
   // 🎬 타이틀 — 한 번에 4개 만들고 그중 하나를 탭해서 고르게
   async function titleGenerate(text, statusEl, previewBox, btn) {
@@ -2176,7 +2178,7 @@
       if (previewBox) previewBox.querySelectorAll(".es-title-cand").forEach((c) => c.classList.remove("sel"));
       if (cell) cell.classList.add("sel");
       if (fromUser && statusEl) statusEl.textContent = "✅ 골랐어요! 영상 위에 올라갔어요";
-      ensureTitleRemoveBtn();
+      ensureTitleActions();
     };
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 ${N}개 만드는 중… (15~40초)`;
@@ -5445,7 +5447,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     let v = musicVolAt(time, total || 1);   // 음악 범위(인/아웃) + 끝 페이드 반영
     if (E.using && E.using.voiceUrl) v *= voiceDuckLevel();   // 나레이션이 있으면 음악을 줄여(덕킹) 목소리가 들리게
     v *= musicBalanceVol();   // 🎚 원본 오디오 함께 쓸 때 음악 우세/덕킹
-    mus.volume = v;
+    setElVolume(mus, v);   // 📱 Web Audio 라우팅 시 게인으로(아니면 element.volume)
   }
   function seek(time) {
     if (!E.using) return;
@@ -5460,9 +5462,30 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     updateAudioClips(E.playhead);   // 🔊 분리 오디오 위치 동기(정지 중이면 멈춤)
     if (!E.playing) scheduleSaveMeta();   // 수동 이동 위치 저장(재생 중 매 프레임 저장은 피함)
   }
+  // ── 📱 모바일 오디오 — iOS는 '무음 스위치'가 <audio> 소리를 막지만 Web Audio(AudioContext) 경로는 안 막힘.
+  // 미리보기 음악/나레이션/원본오디오를 컨텍스트→게인→스피커로 라우팅 + 재생 제스처에서 resume.
+  let _previewAC = null;
+  function previewAC() {
+    if (_previewAC) return _previewAC;
+    try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) _previewAC = new AC(); } catch (_) { _previewAC = null; }
+    return _previewAC;
+  }
+  function routePreviewEl(el) {   // 엘리먼트를 컨텍스트에 1회 연결(게인으로 볼륨 제어 = iOS도 적용). 컨텍스트 없으면 패스.
+    if (!el || el._waGain || !_previewAC) return el ? el._waGain || null : null;
+    try { const src = _previewAC.createMediaElementSource(el); const g = _previewAC.createGain(); src.connect(g); g.connect(_previewAC.destination); el._waSrc = src; el._waGain = g; el.volume = 1; return g; }
+    catch (_) { return null; }   // 이미 연결됐거나 CORS면 엘리먼트 직접재생으로 폴백
+  }
+  function setElVolume(el, v) { if (!el) return; if (el._waGain) { try { el._waGain.gain.value = v; } catch (_) {} el.volume = 1; } else el.volume = v; }
+  function unlockPreviewAudio() {   // 반드시 재생 '제스처' 안에서 호출
+    const ac = previewAC(); if (!ac) return;
+    routePreviewEl($("#esMusic")); routePreviewEl($("#esVoice"));
+    if (E._audioEls) Object.keys(E._audioEls).forEach((id) => routePreviewEl(E._audioEls[id]));
+    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+  }
   function togglePlay() { E.playing ? stopPlay() : startPlay(); }
   function startPlay() {
     if (!E.using) return;
+    unlockPreviewAudio();                    // 📱 모바일 오디오 깨우기 (제스처 직후)
     try { syncOrigAudio(); } catch (_) {}   // 🎚 원본 오디오 클립 최신화
     const { total } = slotTimes();
     if (total <= 0) return;
