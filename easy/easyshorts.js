@@ -5392,10 +5392,11 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         vid.style.display = "block";
         if (vid._url !== fill.url) { vid.src = fill.url; vid._url = fill.url; }
         vid.style.transform = tf;
+        const _tlRatio = (seg.slot.timelapse && fill.dur > 0.1) ? (fill.dur / (seg.slot.dur || 1)) : 1;   // 타임랩스 압축배율
         const local = seg.slot.timelapse ? slotVideoTime(seg.slot, time - seg.start, fill.dur) : clamp((time - seg.start) + (seg.slot.in || 0), 0, Math.max(0, (fill.dur || seg.slot.dur)));
-        if (seg.slot.timelapse) { try { vid.pause(); } catch (_) {} if (Math.abs(vid.currentTime - local) > 0.03) { try { vid.currentTime = local; } catch (_) {} } }   // 타임랩스: 매 프레임 시킹(고속 압축)
-        else if (E.playing) { if (vid.paused) { try { vid.play(); } catch (_) {} } if (Math.abs(vid.currentTime - local) > 0.35) vid.currentTime = local; }
-        else { try { vid.pause(); } catch (_) {} vid.currentTime = local; }
+        if (seg.slot.timelapse && _tlRatio > 16) { try { vid.pause(); } catch (_) {} if (Math.abs(vid.currentTime - local) > 0.03) { try { vid.currentTime = local; } catch (_) {} } }   // 초고속(>16배): 프레임 시킹
+        else if (E.playing) { try { if (vid.playbackRate !== _tlRatio) vid.playbackRate = _tlRatio; } catch (_) {} if (vid.paused) { try { vid.play(); } catch (_) {} } if (Math.abs(vid.currentTime - local) > (seg.slot.timelapse ? 0.6 : 0.35)) { try { vid.currentTime = local; } catch (_) {} } }   // 재생: 타임랩스면 ratio배속(부드럽게)
+        else { try { vid.pause(); vid.playbackRate = 1; } catch (_) {} vid.currentTime = local; }
       }
     }
   }
