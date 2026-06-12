@@ -586,7 +586,7 @@
   // 영상을 그리는 한 프레임 합성 (오프라인 인코딩/녹화/인라인 재생 공용)
   // st = { fills, texts, fxSpeed } — 없으면 현재 작업(E.using) 기준
   function composeFrame(ctx, W, H, t, arr, imgs, expVideo, reelsImg, st) {
-    st = st || { fills: E.using.fills, texts: E.using.texts, fxSpeed: E.using.template.fxSpeed };
+    st = st || { fills: E.using.fills, texts: E.using.texts, fxSpeed: E.using.template.fxSpeed, logo: E.using.logo, logoImg: E._logoExportImg };
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     let idx = arr.findIndex((a) => t >= a.start && t < a.end); if (idx < 0) idx = arr.length - 1;
     const seg = arr[idx], f = st.fills[seg.slot.id];
@@ -628,7 +628,7 @@
       if (!(t >= (txt.start || 0) && t < (txt.start || 0) + (txt.dur || 0))) return;
       drawCaptionCanvas(ctx, txt, t, W, H);
     });
-    drawLogoCanvas(ctx, W, H, t, E._logoExportImg);   // 로고 오버레이
+    drawLogoCanvas(ctx, W, H, t, st.logoImg, st.logo);   // 로고/타이틀 — st 기준(갤러리 미리보기에도 제대로)
     if (reelsImg && reelsImg.complete) { try { ctx.drawImage(reelsImg, 0, 0, W, H); } catch (_) {} }
   }
   function outputSize() {
@@ -1743,7 +1743,9 @@
     if (rec.hasMusic) { try { const b = await idbGet("proj_" + pid + "_music"); if (b instanceof Blob) { musicUrl = URL.createObjectURL(b); urls.push(musicUrl); } } catch (_) {} }
     let voiceUrl = null;
     if (rec.hasVoice) { try { const b = await idbGet("proj_" + pid + "_voice"); if (b instanceof Blob) { voiceUrl = URL.createObjectURL(b); urls.push(voiceUrl); } } catch (_) {} }
-    const st = { fills, texts: rec.texts || [], fxSpeed: rec.template.fxSpeed };
+    let logoImg = null, logoSpec = null;   // 🖼/🎬 로고·타이틀 — 갤러리 미리보기에도 그려지게 로드
+    if (rec.hasLogo && rec.logo) { try { const lb = await idbGet("proj_" + pid + "_logo"); if (lb instanceof Blob) { const lu = URL.createObjectURL(lb); urls.push(lu); const lim = new Image(); lim.src = lu; try { await lim.decode(); } catch (_) {} logoImg = lim; logoSpec = rec.logo; } } catch (_) {} }
+    const st = { fills, texts: rec.texts || [], fxSpeed: rec.template.fxSpeed, logo: logoSpec, logoImg };
     const asp = ASPECTS[rec.template.aspect] || ASPECTS["9:16"];
     const a = { rec, fills, imgs, urls, musicUrl, voiceUrl, voiceDuck: rec.voiceDuck, st, asp, slots, arr, total };
     _assetCache.set(pid, a);
@@ -3258,8 +3260,8 @@
     renderAudioLanes(); updateUseMeta(); scheduleSaveMeta(); toast("음악 제거됨");
   }
   // 캔버스(내보내기)에 로고 그리기 — 시간 범위·위치·크기·투명도 반영
-  function drawLogoCanvas(ctx, W, H, t, logoImg) {
-    const lg = E.using && E.using.logo;
+  function drawLogoCanvas(ctx, W, H, t, logoImg, logoSpec) {
+    const lg = logoSpec || (E.using && E.using.logo);
     if (!lg || !logoImg || !logoImg.complete || !logoImg.naturalWidth) return;
     if (!(t >= (lg.start || 0) && t < (lg.start || 0) + (lg.dur || 0))) return;
     const f = (lg.fx && lg.fx !== "none") ? logoFx(lg.fx, (t - (lg.start || 0)) / (lg.dur || 1)) : { opacity: 1, scale: 1 };
@@ -4358,6 +4360,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       applyCaptionStyle(el, tx);
       el.addEventListener("mousedown", (e) => startTextDrag(e, tx, el));
       el.addEventListener("dblclick", (e) => { e.preventDefault(); selectText(tx.id); const inp = $("#esTextInput"); if (inp) { inp.focus(); inp.select(); } });
+      { const rh = document.createElement("div"); rh.className = "es-text-rot"; rh.title = "드래그해서 글자 각도(회전)"; rh.addEventListener("mousedown", (ev) => startTextRotate(ev, tx, el)); el.appendChild(rh); }   // 🔄 각도 회전 핸들(선택 시 CSS로 표시)
       layer.appendChild(el);
     });
     updateTextVisibility(E.playhead);
@@ -4875,6 +4878,27 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     };
     document.addEventListener("mousemove", draw); document.addEventListener("mouseup", up);
     e.preventDefault();
+  }
+  // 🔄 글자 각도 회전 — 선택한 글자의 핸들을 끌어서 회전(Shift=15° 스냅)
+  function startTextRotate(e, tx, el) {
+    e.preventDefault(); e.stopPropagation();
+    blurActive();
+    E.using._activeTl = "text";
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const move = (ev) => {
+      const pt = (ev.touches && ev.touches[0]) ? ev.touches[0] : ev;
+      let rot = Math.round(Math.atan2(pt.clientY - cy, pt.clientX - cx) * 180 / Math.PI + 90);
+      if (ev.shiftKey) rot = Math.round(rot / 15) * 15;
+      while (rot > 180) rot -= 360; while (rot < -180) rot += 360;
+      tx.rotate = rot; el._rot = rot;
+      el.style.transform = "translate(-50%,-50%) rotate(" + rot + "deg)";
+      const rs = $("#esTextRotate"), rn = $("#esTextRotateN"); if (rs) rs.value = rot; if (rn) rn.value = rot;
+      if (ev.cancelable) ev.preventDefault();
+    };
+    const up = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); document.removeEventListener("touchmove", move); document.removeEventListener("touchend", up); scheduleSaveMeta(); };
+    document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
+    document.addEventListener("touchmove", move, { passive: false }); document.addEventListener("touchend", up);
   }
   function startTextDrag(e, tx, el) {
     e.preventDefault(); e.stopPropagation();
