@@ -418,22 +418,52 @@
     const s = Math.max(W / mw, H / mh), dw = mw * s, dh = mh * s;
     ctx.drawImage(media, (W - dw) / 2, (H - dh) / 2, dw, dh);
   }
-  function makeThumb() {
+  // 첫 장면 썸네일 — 영상/사진 프레임 + 그 위에 보이는 자막·로고(타이틀)까지 '합성'.
+  // src 안 주면 현재 작업본(E.using), 주면 그 데이터(저장영상 재생성용)로.
+  function makeThumb(src) {
+    const using = src || E.using;
     return new Promise((res) => {
-      const asp = ASPECTS[E.using.template.aspect] || ASPECTS["9:16"];
+      if (!using || !using.template) { res(""); return; }
+      const asp = ASPECTS[using.template.aspect] || ASPECTS["9:16"];
       const W = 720, H = Math.round(W * asp.h / asp.w);
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const ctx = cv.getContext("2d"); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-      let first = null;
-      for (const s of E.using.template.slots) { if (E.using.fills[s.id]) { first = E.using.fills[s.id]; break; } }
-      if (!first) { res(cv.toDataURL("image/jpeg", 0.9)); return; }
+      let first = null, firstSlot = null, acc = 0, firstStart = 0;
+      for (const s of using.template.slots) { if (using.fills && using.fills[s.id]) { first = using.fills[s.id]; firstSlot = s; firstStart = acc; break; } acc += (s.dur || 0); }
+      const firstEnd = firstSlot ? firstStart + (firstSlot.dur || 0) : 1e9;
+      const caps = (using.texts || []).filter((tx) => (tx.start || 0) < firstEnd && (tx.start || 0) + (tx.dur || 0) > firstStart).sort((a, b) => (a.start || 0) - (b.start || 0));
+      const at = caps.length ? ((caps[0].start || 0) + Math.min(caps[0].dur || 1, 0.6)) : firstStart;
+      let logoImg = null;
+      const overlays = () => {
+        try { (using.texts || []).forEach((tx) => { const s = tx.start || 0, e = s + (tx.dur || 0); if (at >= s && at < e) drawCaptionCanvas(ctx, Object.assign({}, tx, { fx: "none" }), 0, W, H); }); } catch (_) {}
+        try {
+          const lg = using.logo;
+          if (lg && logoImg && logoImg.complete && logoImg.naturalWidth && at >= (lg.start || 0) && at < (lg.start || 0) + (lg.dur || 0)) {
+            const w = W * (LOGO_BASE / 100) * (lg.scale || 1), h = w * (logoImg.naturalHeight / logoImg.naturalWidth);
+            const cx = (lg.xPct || 50) / 100 * W, cy = (lg.yPct || 50) / 100 * H;
+            ctx.save(); ctx.globalAlpha = (lg.opacity != null ? lg.opacity : 1); ctx.translate(cx, cy); ctx.rotate((lg.rotate || 0) * Math.PI / 180); ctx.drawImage(logoImg, -w / 2, -h / 2, w, h); ctx.restore();
+          }
+        } catch (_) {}
+      };
+      const done = () => { overlays(); res(cv.toDataURL("image/jpeg", 0.9)); };
+      const afterFrame = () => {
+        if (using.logo && using.logoUrl) { const lim = new Image(); lim.onload = () => { logoImg = lim; done(); }; lim.onerror = done; lim.src = using.logoUrl; }
+        else done();
+      };
+      if (!first) { afterFrame(); return; }
       if (first.kind === "image") {
-        const im = new Image(); im.onload = () => { drawCover(ctx, im, im.naturalWidth, im.naturalHeight, W, H); res(cv.toDataURL("image/jpeg", 0.9)); };
-        im.onerror = () => res(cv.toDataURL("image/jpeg", 0.9)); im.src = first.url;
+        const im = new Image(); im.onload = () => { drawCover(ctx, im, im.naturalWidth, im.naturalHeight, W, H); afterFrame(); };
+        im.onerror = afterFrame; im.src = first.url;
       } else {
-        const v = document.createElement("video"); v.muted = true; v.src = first.url;
-        v.onloadeddata = () => { try { drawCover(ctx, v, v.videoWidth, v.videoHeight, W, H); } catch (_) {} res(cv.toDataURL("image/jpeg", 0.9)); };
-        v.onerror = () => res(cv.toDataURL("image/jpeg", 0.9));
+        const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.src = first.url;
+        const cap = () => { try { drawCover(ctx, v, v.videoWidth, v.videoHeight, W, H); } catch (_) {} afterFrame(); };
+        v.onloadeddata = () => {
+          const dur = v.duration || 0;
+          const seekT = Math.min(((firstSlot && firstSlot.in) || 0) + Math.max(0, at - firstStart) + 0.03, dur > 0.2 ? dur - 0.05 : 0.05);
+          if (dur > 0.12 && isFinite(seekT) && seekT > 0.01) { v.onseeked = cap; try { v.currentTime = seekT; } catch (_) { cap(); } }
+          else cap();
+        };
+        v.onerror = afterFrame;
       }
     });
   }
@@ -452,19 +482,20 @@
   async function regenAllThumbs() {
     let changed = false;
     for (const p of E.projects) {
-      if (p.thumbV === 2) continue;
+      if (p.thumbV === 5) continue;   // 5 = 첫 장면 합성(자막·로고 포함) 썸네일
       try {
+        let d = null;
         const rec = await idbGet("proj_" + p.id + "_data");
-        if (rec && rec.fillSlotIds) {
-          let blob = null;
-          for (const sid of rec.fillSlotIds) { const b = await idbGet("proj_" + p.id + "_fill_" + sid); if (b instanceof Blob) { blob = b; break; } }
-          if (blob) {
-            const asp = ASPECTS[p.aspect || rec.aspect || "9:16"] || ASPECTS["9:16"];
-            const d = await drawBlobThumb(blob, 720, Math.round(720 * asp.h / asp.w));
-            if (d) p.thumb = d;
-          }
+        if (rec && rec.template) {
+          const fills = {}, urls = [];
+          for (const sid of (rec.fillSlotIds || [])) { const b = await idbGet("proj_" + p.id + "_fill_" + sid); if (b instanceof Blob) { const meta = (rec.fillMeta || {})[sid] || {}; const kind = meta.kind || (/^video\//.test(b.type) ? "video" : "image"); const u = URL.createObjectURL(b); urls.push(u); fills[sid] = { kind, url: u }; break; } }
+          let logoUrl = null;
+          if (rec.hasLogo && rec.logo) { try { const lb = await idbGet("proj_" + p.id + "_logo"); if (lb instanceof Blob) { logoUrl = URL.createObjectURL(lb); urls.push(logoUrl); } } catch (_) {} }
+          if (Object.keys(fills).length) { try { d = await makeThumb({ template: rec.template, fills, texts: rec.texts || [], logo: rec.logo || null, logoUrl }); } catch (_) {} }
+          urls.forEach((u) => { try { URL.revokeObjectURL(u); } catch (_) {} });
         }
-        p.thumbV = 2; changed = true;
+        if (d) p.thumb = d;
+        p.thumbV = 5; changed = true;
       } catch (_) {}
     }
     if (changed) { try { await saveProjectsList(); } catch (_) {} }
@@ -501,7 +532,7 @@
       hasMusic, hasVoice, voiceDur: u.voiceDur || 0, voiceGender: u._voiceGender || "female", voiceDuck: (u.voiceDuck != null ? u.voiceDuck : 0.35), voiceTone: u._voiceTone || "", reelsOn: E.reelsOn,
     };
     try { await idbSet("proj_" + id + "_data", rec); } catch (e) { console.warn(e); }
-    E.projects.unshift({ id: rec.id, name: rec.name, aspect: rec.aspect, total: rec.total, slotCount: rec.slotCount, thumb, thumbV: 2, createdAt: rec.createdAt });
+    E.projects.unshift({ id: rec.id, name: rec.name, aspect: rec.aspect, total: rec.total, slotCount: rec.slotCount, thumb, thumbV: 5, createdAt: rec.createdAt });
     await saveProjectsList();
     alert("저장됐어요! '내 영상' 목록에서 볼 수 있어요.");
   }
