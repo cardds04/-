@@ -2479,7 +2479,7 @@
         <div class="es-wiz-body es-title-step">
           <div class="es-wiz-num">${E.easyIdx + 1}</div>
           <div class="es-wiz-title">🎬 타이틀을 만들어요</div>
-          <div class="es-wiz-note">글자만 적으면 <b>${esc(styleLabel)}</b> 스타일로 만들어 영상 맨 위에 얹어드려요</div>
+          <div class="es-wiz-note"><b>AI</b>로 타이틀을 생성해드립니다. 마음에 안 들면 <b>재생성</b>해서 골라주세요</div>
           <input type="text" id="esTitleText" class="es-title-input" maxlength="40" placeholder="영상 제목을 적어보세요 (예: 박스 뜯는데 사장 손이 멈췄다)" value="${esc(E.using._titleText || "")}">
           <div class="es-title-ex">
             <div class="es-title-ex-lb">💡 여기에 들어갈 문구를 정해주세요 · 예시 (눌러서 넣기)</div>
