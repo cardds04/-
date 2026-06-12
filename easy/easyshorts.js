@@ -2094,6 +2094,8 @@
   // ════════════════════════════════════════════════════════════════
   const TITLE_API = "https://sc-pink.vercel.app/api/easy-title";
   const TITLE_STYLE_LABELS = { hand: "🧡 손글씨 오렌지", yellow: "📣 예능 옐로", red: "🔴 뉴스 레드", gold: "🏆 골드 메탈", marker: "🖍 형광 마커", mint: "🩵 민트 팝", purple: "💜 퍼플 팝" };
+  // 🎬 타이틀 문구 예시 — 어떤 문구를 넣을지 감 잡으라고 보여주는 후킹 예시(눌러서 넣기)
+  const TITLE_EXAMPLES = ["박스 뜯는데 사장 손이 멈췄다", "이게 같은 집이라고?", "이 가격에 이게 된다고?", "10년 묵은 때가 싹 사라짐", "사장님이 직접 보여드려요", "여기 우리집 맞아요?", "딱 하루 만에 이렇게", "후기 보고 바로 예약함"];
   function titleCatForCurrent() { return (E._cats || {})[E.using && E.using.template && E.using.template.id] || {}; }
   function titleStyleForCurrent() { return titleCatForCurrent().titleStyle || ""; }
   function titleRefForCurrent() { const u = titleCatForCurrent().titleRef; return (typeof u === "string" && /^https?:\/\//.test(u)) ? u : ""; }
@@ -2479,6 +2481,10 @@
           <div class="es-wiz-title">🎬 타이틀을 만들어요</div>
           <div class="es-wiz-note">글자만 적으면 <b>${esc(styleLabel)}</b> 스타일로 만들어 영상 맨 위에 얹어드려요</div>
           <input type="text" id="esTitleText" class="es-title-input" maxlength="40" placeholder="영상 제목을 적어보세요 (예: 박스 뜯는데 사장 손이 멈췄다)" value="${esc(E.using._titleText || "")}">
+          <div class="es-title-ex">
+            <div class="es-title-ex-lb">💡 여기에 들어갈 문구를 정해주세요 · 예시 (눌러서 넣기)</div>
+            <div class="es-title-ex-chips">${TITLE_EXAMPLES.map((s) => `<button type="button" class="es-title-ex-chip" data-ex="${esc(s)}">${esc(s)}</button>`).join("")}</div>
+          </div>
           <button type="button" class="es-btn es-btn-primary es-title-go" id="esTitleGo">${hasT ? "🔄 다시 만들기" : "✨ 타이틀 만들기"}</button>
           <div class="es-title-status" id="esTitleStatus">${hasT ? "✅ 완성! 영상 위에 올라갔어요" : ""}</div>
           <div class="es-title-preview" id="esTitlePreview"></div>
@@ -2552,6 +2558,7 @@
       const ti = $("#esTitleText"), tgo = $("#esTitleGo"), tst = $("#esTitleStatus"), tpv = $("#esTitlePreview");
       if (tgo) tgo.addEventListener("click", () => titleGenerate(ti ? ti.value : "", tst, tpv, tgo));
       if (ti) ti.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); titleGenerate(ti.value, tst, tpv, tgo); } });
+      $$(".es-title-ex-chip").forEach((c) => c.addEventListener("click", () => { if (ti) { ti.value = c.dataset.ex; ti.focus(); } }));   // 예시 눌러서 넣기
       { const rm = $("#esTitleRemove"); if (rm) rm.addEventListener("click", () => { titleRemove(); renderEasy(); }); }
       if (E.using.logo && E.using._isTitle) titleRenderPreview(tpv);
     }
