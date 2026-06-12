@@ -727,4 +727,15 @@ body.es-idea-open { overflow: hidden; }
 .es-title-spin { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: esSpin 0.9s linear infinite; }
 @keyframes esSpin { to { transform: rotate(360deg); } }
 .es-title-preview { margin-top: 2px; min-height: 4px; }
-.es-title-actions { margin-top: 2px; }
+.es-title-actions { margin-top: 2px; min-height: 4px; }
+/* 🎬 타이틀 후보 4개 그리드 — 탭해서 고르기 */
+.es-title-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(420px, 92%); margin: 0 auto; }
+.es-title-cand { position: relative; aspect-ratio: 1 / 1; border-radius: 12px; border: 2px solid var(--border); background: #1a1a1f repeating-conic-gradient(#2a2a30 0% 25%, #232328 0% 50%) 50% / 18px 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; transition: border-color .12s, transform .12s, box-shadow .12s; }
+.es-title-cand img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.es-title-cand:hover { border-color: var(--accent); transform: translateY(-1px); }
+.es-title-cand.sel { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
+.es-title-cand.sel::after { content: "✓ 선택"; position: absolute; left: 6px; bottom: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+.es-title-cand.loading { cursor: default; }
+.es-title-cand.failed { cursor: default; border-color: #6a3a3a; color: #c97a7a; }
+.es-title-cand-n { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 800; width: 19px; height: 19px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.es-title-cand-x { font-size: 22px; }

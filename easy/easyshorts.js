@@ -2155,6 +2155,13 @@
     if (E.using.logoUrl && E.using._isTitle) await new Promise((res) => { const im = new Image(); im.onload = () => { const lw = cw * 0.85, lh = lw * im.naturalHeight / im.naturalWidth; try { ctx.drawImage(im, (cw - lw) / 2, ch * 0.22 - lh / 2, lw, lh); } catch (_) {} res(); }; im.onerror = res; im.src = E.using.logoUrl; });
     box.innerHTML = ""; cv.style.width = cw + "px"; cv.style.height = ch + "px"; cv.style.borderRadius = "10px"; cv.style.display = "block"; cv.style.margin = "0 auto"; box.appendChild(cv);
   }
+  function ensureTitleRemoveBtn() {
+    const box = document.getElementById("esTitleActions"); if (!box) return;
+    if (box.querySelector("#esTitleRemove")) return;
+    box.innerHTML = `<button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button>`;
+    const b = box.querySelector("#esTitleRemove"); if (b) b.addEventListener("click", () => { titleRemove(); renderEasy(); });
+  }
+  // 🎬 타이틀 — 한 번에 4개 만들고 그중 하나를 탭해서 고르게
   async function titleGenerate(text, statusEl, previewBox, btn) {
     text = String(text || "").trim(); if (!text) { if (statusEl) statusEl.textContent = "문구를 입력해 주세요."; return; }
     E.using._titleText = text;
@@ -2163,22 +2170,43 @@
     if (cp) reqBody.customPrompt = cp;          // 관리자가 디테일에서 쓴 프롬프트 그대로 (문구만 고객 걸로)
     if (refUrl) reqBody.refUrl = refUrl;
     if (!cp && !refUrl) reqBody.style = titleStyleForCurrent() || "hand";
-    if (btn) btn.disabled = true;
-    if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 만드는 중… (10~30초)`;
-    try {
-      const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      let blob;
-      if (j.transparent) { blob = await (await fetch(j.image)).blob(); }   // gpt-image-1: 이미 투명 → 키잉 생략
-      else { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; }); blob = await titleKeyBg(img, j.bg || "#ffffff"); }
-      if (!blob) throw new Error("배경 처리 실패");
+    const N = 4;
+    const applyPick = (blob, cell, fromUser) => {
       titleApplyOverlay(blob);
-      if (statusEl) statusEl.textContent = "✅ 완성! 영상 위에 올라갔어요";
-      renderEasy();
-    } catch (e) {
-      if (statusEl) statusEl.textContent = "😢 " + ((e && e.message) || "실패. 다시 시도해 주세요");
-    } finally { if (btn) btn.disabled = false; }
+      if (previewBox) previewBox.querySelectorAll(".es-title-cand").forEach((c) => c.classList.remove("sel"));
+      if (cell) cell.classList.add("sel");
+      if (fromUser && statusEl) statusEl.textContent = "✅ 골랐어요! 영상 위에 올라갔어요";
+      ensureTitleRemoveBtn();
+    };
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.innerHTML = `<span class="es-title-spin"></span> 타이틀 ${N}개 만드는 중… (15~40초)`;
+    if (previewBox) previewBox.innerHTML = `<div class="es-title-grid">${Array.from({ length: N }).map((_, i) => `<div class="es-title-cand loading" data-i="${i}"><span class="es-title-spin"></span></div>`).join("")}</div>`;
+    let done = 0, ok = 0;
+    const one = async (i) => {
+      const cell = previewBox ? previewBox.querySelector(`.es-title-cand[data-i="${i}"]`) : null;
+      try {
+        const r = await fetch(TITLE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+        let blob;
+        if (j.transparent) { blob = await (await fetch(j.image)).blob(); }   // gpt-image-1: 이미 투명 → 키잉 생략
+        else { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; }); blob = await titleKeyBg(img, j.bg || "#ffffff"); }
+        if (!blob) throw new Error("배경 처리 실패");
+        ok++;
+        if (cell) { const url = URL.createObjectURL(blob); cell.classList.remove("loading"); cell.innerHTML = `<img src="${url}" alt=""><span class="es-title-cand-n">${ok}</span>`; cell.addEventListener("click", () => applyPick(blob, cell, true)); }
+        if (ok === 1) applyPick(blob, cell, false);   // 첫 결과는 자동 선택(원하면 다른 걸 탭)
+      } catch (e) {
+        if (cell) { cell.classList.remove("loading"); cell.classList.add("failed"); cell.innerHTML = `<span class="es-title-cand-x">✕</span>`; }
+      } finally {
+        done++;
+        if (done === N) {
+          if (btn) btn.disabled = false;
+          if (statusEl) statusEl.innerHTML = ok === 0 ? "😢 실패. 다시 시도해 주세요" : `완성! 마음에 드는 타이틀을 <b>탭</b>해 고르세요 (${ok}개)`;
+        }
+      }
+    };
+    await Promise.allSettled(Array.from({ length: N }).map((_, i) => one(i)));
+    if (btn) btn.disabled = false;
   }
 
   function easyPlan() {
@@ -2452,7 +2480,7 @@
           <button type="button" class="es-btn es-btn-primary es-title-go" id="esTitleGo">${hasT ? "🔄 다시 만들기" : "✨ 타이틀 만들기"}</button>
           <div class="es-title-status" id="esTitleStatus">${hasT ? "✅ 완성! 영상 위에 올라갔어요" : ""}</div>
           <div class="es-title-preview" id="esTitlePreview"></div>
-          ${hasT ? `<div class="es-title-actions"><button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button></div>` : ""}
+          <div class="es-title-actions" id="esTitleActions">${hasT ? `<button type="button" class="es-btn es-btn-ghost" id="esTitleRemove">✕ 타이틀 빼기</button>` : ""}</div>
         </div>
         <div class="es-wiz-foot">
           ${prevBtn}
@@ -2468,6 +2496,7 @@
             <div class="es-stage-empty" id="esStageEmpty">▶ 를 누르면 재생돼요</div>
             <div class="es-slot-badge" id="esSlotBadge" hidden></div>
             <div class="es-text-layer" id="esTextLayer"></div>
+            <img id="esLogo" class="es-logo-ov" alt="" hidden>
             <img id="esReelsOverlay" class="es-reels-overlay" alt="">
           </div>
           <div class="es-transport">
@@ -2616,6 +2645,7 @@
       }));
     } else {   // done
       renderTexts();
+      renderLogo();   // 🎬 타이틀/로고 — 완성(미리보기) 단계에도 보이게 (esStage 안 #esLogo)
       updateReelsOverlay();
       if (E.using.musicUrl) { const a = $("#esMusic"); if (a) { a.src = E.using.musicUrl; a.loop = true; } }
       if (E.using.voiceUrl) { const a = $("#esVoice"); if (a) a.src = E.using.voiceUrl; }
