@@ -926,7 +926,11 @@
           if (t >= total) { resolve(); return; }
           let idx = arr.findIndex((a) => t >= a.start && t < a.end); if (idx < 0) idx = arr.length - 1;
           const seg = arr[idx], f = E.using.fills[seg.slot.id];
-          if (f && f.kind === "video") { if (curVid !== idx) { curVid = idx; expVideo.src = f.url; try { expVideo.currentTime = 0; expVideo.play(); } catch (_) {} } }
+          if (f && f.kind === "video") {
+            const ratio = (seg.slot.timelapse && f.dur > 0.1) ? (f.dur / (seg.slot.dur || 1)) : 1;   // 타임랩스 압축배율 (원본길이 ÷ 정한시간)
+            if (curVid !== idx) { curVid = idx; if (expVideo.src !== f.url) expVideo.src = f.url; try { expVideo.currentTime = 0; if (!seg.slot.timelapse) { expVideo.playbackRate = 1; expVideo.play(); } else if (ratio <= 16) { expVideo.playbackRate = ratio; expVideo.play(); } else { expVideo.pause(); } } catch (_) {} }
+            if (seg.slot.timelapse && ratio > 16) { const tl = slotVideoTime(seg.slot, t - seg.start, f.dur); try { if (Math.abs((expVideo.currentTime || 0) - tl) > 0.05) expVideo.currentTime = tl; } catch (_) {} }   // 초고속(>16배) = 프레임 시킹으로 전체 압축
+          }
           else if (curVid !== -1) { try { expVideo.pause(); } catch (_) {} curVid = -1; }
           if (!mix && musicEl && E.using.musicUrl) musicEl.volume = musicVolAt(t, total);
           drawAt(t);
@@ -1795,7 +1799,11 @@
       }
       let idx = arr.findIndex((a) => t >= a.start && t < a.end); if (idx < 0) idx = arr.length - 1;
       const seg = arr[idx], f = fills[seg.slot.id];
-      if (f && f.kind === "video") { if (curVid !== idx) { curVid = idx; if (expVideo.src !== f.url) expVideo.src = f.url; try { expVideo.currentTime = Math.max(0, (t - seg.start) + (seg.slot.in || 0)); expVideo.play(); } catch (_) {} } }
+      if (f && f.kind === "video") {
+        const ratio = (seg.slot.timelapse && f.dur > 0.1) ? (f.dur / (seg.slot.dur || 1)) : 1;
+        if (curVid !== idx) { curVid = idx; if (expVideo.src !== f.url) expVideo.src = f.url; try { if (seg.slot.timelapse) { expVideo.currentTime = 0; if (ratio <= 16) { expVideo.playbackRate = ratio; expVideo.play(); } else expVideo.pause(); } else { expVideo.playbackRate = 1; expVideo.currentTime = Math.max(0, (t - seg.start) + (seg.slot.in || 0)); expVideo.play(); } } catch (_) {} }
+        if (seg.slot.timelapse && ratio > 16) { const tl = slotVideoTime(seg.slot, t - seg.start, f.dur); try { if (Math.abs((expVideo.currentTime || 0) - tl) > 0.05) expVideo.currentTime = tl; } catch (_) {} }
+      }
       else if (curVid !== -1) { try { expVideo.pause(); } catch (_) {} curVid = -1; }
       if (audio) { const fade = Math.min(5, total); audio.volume = t > total - fade ? clamp((total - t) / fade, 0, 1) : 1; }
       composeFrame(ctx, W, H, t, arr, imgs, expVideo, null, st);
