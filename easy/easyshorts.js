@@ -2174,7 +2174,7 @@
     if (cp) reqBody.customPrompt = cp;          // 관리자가 디테일에서 쓴 프롬프트 그대로 (문구만 고객 걸로)
     if (refUrl) reqBody.refUrl = refUrl;
     if (!cp && !refUrl) reqBody.style = titleStyleForCurrent() || "hand";
-    const N = 4;
+    const N = 6;
     const applyPick = (blob, cell, fromUser) => {
       titleApplyOverlay(blob);
       if (previewBox) previewBox.querySelectorAll(".es-title-cand").forEach((c) => c.classList.remove("sel"));
