@@ -3004,8 +3004,16 @@
     return (total > 0 && time > end - fade) ? clamp((end - time) / fade, 0, 1) : 1;   // 끝 페이드아웃
   }
   // ── 🎚 원본 영상 오디오 + 음악 볼륨 밸런스 ──────────────────────────
+  // 관리자가 디테일숏폼에서 정한 '원본 영상 소리' 크기(0~1). E._cats(clsMap) 채널로 동기화. 없으면 null.
+  function adminOrigVol() {
+    const id = E.using && E.using.template && E.using.template.id;
+    const c = id && (E._cats || {})[id];
+    return (c && c.origAudioVol != null) ? clamp(c.origAudioVol, 0, 1) : null;
+  }
   function audioVols() {
     const hasMusic = !!(E.using && E.using.musicUrl);
+    const av = adminOrigVol();
+    if (av != null) return { origVol: av, musicVol: 1 };           // 🎚 관리자(디테일숏폼) 설정 우선 — 원본 소리는 정한 크기, 음악은 그대로
     const useOrig = !!(E.using && E.using.origAudio);
     if (!useOrig) return { origVol: 0, musicVol: 1 };              // 음악만
     if (!hasMusic) return { origVol: 1, musicVol: 0 };             // 원본만
@@ -3020,8 +3028,10 @@
     tpl.audioClips = (tpl.audioClips || []).filter((c) => !c._orig);   // 이전 원본클립 제거
     E.using.audioBlobs = E.using.audioBlobs || {};
     Object.keys(E.using.audioBlobs).forEach((id) => { if (/^orig_/.test(id)) delete E.using.audioBlobs[id]; });
-    if (!E.using.origAudio) return;
-    const { origVol } = audioVols();
+    const av = adminOrigVol();
+    const useOrig = (av != null) ? (av > 0.001) : !!E.using.origAudio;   // 관리자가 정했으면 그 값 우선(손님 토글과 무관하게 적용)
+    if (!useOrig) return;
+    const origVol = (av != null) ? av : audioVols().origVol;
     let t = 0;
     for (const s of (tpl.slots || [])) {
       const sdur = s.dur || 0;
@@ -3038,8 +3048,22 @@
     if (!E.using) return;
     const name = $("#esEasyMusicName");
     if (name) name.textContent = (E.using.musicSel && E.using.musicSel.name) || (E.using.musicUrl ? "음악 있음" : "음악 없음");
-    const oa = $("#esOrigAudio"); if (oa) oa.checked = !!E.using.origAudio;
+    const av = adminOrigVol();
+    const oa = $("#esOrigAudio");
+    const label = oa && oa.closest ? oa.closest(".es-audio-check") : null;
     const bal = $("#esAudioBal");
+    if (av != null) {   // 🎚 디테일숏폼에서 제작자가 원본 영상 소리 크기를 정함 → 그대로 적용(손님은 안내만 표시)
+      if (oa) { oa.checked = av > 0.001; oa.disabled = true; }
+      if (label) {
+        let note = label.querySelector(".es-audio-adminnote");
+        if (!note) { note = document.createElement("span"); note.className = "es-audio-adminnote"; label.appendChild(note); }
+        note.textContent = " · 🎚 " + Math.round(av * 100) + "% (제작자 설정)";
+      }
+      if (bal) bal.hidden = true;
+      return;
+    }
+    if (oa) { oa.disabled = false; oa.checked = !!E.using.origAudio; }
+    if (label) { const note = label.querySelector(".es-audio-adminnote"); if (note) note.remove(); }
     if (bal) {
       bal.hidden = !(E.using.origAudio && E.using.musicUrl);
       const cur = E.using.audioBalance || "orig";
