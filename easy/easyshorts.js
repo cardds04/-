@@ -2107,7 +2107,8 @@
     const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0);
     let id; try { id = ctx.getImageData(0, 0, W, H); } catch (_) { return Promise.resolve(null); }
     const d = id.data, hex = (bgHex || "#ffffff").replace("#", "");
-    const br = parseInt(hex.slice(0, 2), 16) || 255, bgc = parseInt(hex.slice(2, 4), 16) || 255, bb = parseInt(hex.slice(4, 6), 16) || 255;
+    const _h = (s) => { const v = parseInt(s, 16); return isNaN(v) ? 255 : v; };   // 0채널(예: 마젠타 #ff00ff 의 G=0)을 보존 — 기존 `||255` 가 0을 255로 망가뜨림
+    const br = _h(hex.slice(0, 2)), bgc = _h(hex.slice(2, 4)), bb = _h(hex.slice(4, 6));
     const thr = 72, soft = 46;
     for (let i = 0; i < d.length; i += 4) {
       const dr = d[i] - br, dg = d[i + 1] - bgc, dbv = d[i + 2] - bb;
