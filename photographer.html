@@ -1606,7 +1606,11 @@
       }
       async function pullTablesToWriterStorage() {
         if (!USE_SUPABASE_SYNC) return;
-        const [writersRows, schedulesRows, companiesRows, dayoffRows] = await Promise.all([
+        // ⚠️ Promise.allSettled — 한 테이블(writers/schedules/company_directory/dayoff) 조회가
+        //    실패해도 나머지는 독립적으로 갱신한다. 예전 Promise.all 은 하나라도 실패하면
+        //    전부 갱신이 안 돼, (예: 관리자가 폴더주소를 저장했는데도) 작가 화면 업체 폴더가
+        //    옛 상태로 남는 버그가 있었음. 실패한 테이블은 null → 해당 저장소는 손대지 않음.
+        const __settled = await Promise.allSettled([
           fetchWriterJsonRows("writers?select=name,login_id,phone,car_number,created_at&order=updated_at.desc"),
           fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
           fetchWriterJsonRows(
@@ -1614,6 +1618,14 @@
           ),
           fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
         ]);
+        const __rowsOf = (i) =>
+          __settled[i] && __settled[i].status === "fulfilled" && Array.isArray(__settled[i].value)
+            ? __settled[i].value
+            : null;
+        const writersRows = __rowsOf(0);
+        const schedulesRows = __rowsOf(1);
+        const companiesRows = __rowsOf(2);
+        const dayoffRows = __rowsOf(3);
         const writers = (Array.isArray(writersRows) ? writersRows : [])
           .map((row) => ({
             id: normalize(row?.login_id),
@@ -1683,27 +1695,31 @@
           amount: 4,
           requestedAt: normalize(row?.created_at)
         }));
-        writeStorageArraySilently(STORAGE_WRITERS, writers);
-        writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, schedules.map((row) => ({
-          writerMirrorId: row.writerMirrorId,
-          customerScheduleId: row.customerScheduleId,
-          date: row.date,
-          time: row.time,
-          name: row.name,
-          company: row.company,
-          place: row.place,
-          pyeong: row.pyeong,
-          memo: row.memo,
-          composition: row.composition,
-          // ⚠️ jointCode/doorCode 누락 시 getMySchedules dedupe에서 customer 행을 덮어써
-          //    화면에 비번이 늘 "-"로만 보이는 회귀 버그가 발생한다. 반드시 함께 저장.
-          jointCode: row.jointCode,
-          doorCode: row.doorCode
-        })));
-        writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
-        writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
-        writeStorageArraySilently(STORAGE_COMPANIES, companies);
-        writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
+        // 각 저장소는 해당 fetch 가 성공(non-null)했을 때만 갱신. 실패한 테이블은 기존 값 유지
+        // (빈 배열로 덮어써서 데이터가 사라지는 것 방지).
+        if (writersRows) writeStorageArraySilently(STORAGE_WRITERS, writers);
+        if (schedulesRows) {
+          writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, schedules.map((row) => ({
+            writerMirrorId: row.writerMirrorId,
+            customerScheduleId: row.customerScheduleId,
+            date: row.date,
+            time: row.time,
+            name: row.name,
+            company: row.company,
+            place: row.place,
+            pyeong: row.pyeong,
+            memo: row.memo,
+            composition: row.composition,
+            // ⚠️ jointCode/doorCode 누락 시 getMySchedules dedupe에서 customer 행을 덮어써
+            //    화면에 비번이 늘 "-"로만 보이는 회귀 버그가 발생한다. 반드시 함께 저장.
+            jointCode: row.jointCode,
+            doorCode: row.doorCode
+          })));
+          writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
+          writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
+        }
+        if (companiesRows) writeStorageArraySilently(STORAGE_COMPANIES, companies);
+        if (dayoffRows) writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
       }
       function queueWriterTablePull() {
         if (!USE_SUPABASE_SYNC) return;
