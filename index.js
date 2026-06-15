@@ -5768,7 +5768,10 @@
             const editingPayrollInput =
               ae &&
               payrollSectionEl.contains(ae) &&
-              (ae.classList?.contains("payroll-admin-fuel") || ae.classList?.contains("payroll-admin-type"));
+              (ae.classList?.contains("payroll-admin-fuel") ||
+                ae.classList?.contains("payroll-admin-type") ||
+                ae.classList?.contains("payroll-admin-extra-memo") ||
+                ae.classList?.contains("payroll-admin-extra-amount"));
             // data(관리자 일정)가 실제로 로드된 경우에만 갱신. 빈 pull(전송 실패/과도기)에선
             // 절대 다시 그리지 않아 "0회 깜빡임"을 막는다.
             const scheduleDataLoaded = Array.isArray(data) && data.length > 0;
@@ -10925,6 +10928,63 @@ ${folderBtn}
         if (typeof requestClientKvPushWhenReady === "function") requestClientKvPushWhenReady();
         return true;
       }
+      /** 관리자 추가요금: STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY 의 (writerId, monthKey) 레코드에
+       *  라인 추가/삭제. 작가 페이지와 동일 레코드 구조(id=ppm-…, lines[], updatedAt)라
+       *  hydrate 가 updatedAt 기준으로 머지한다(관리자·작가 양쪽 입력 공존). */
+      function persistPayrollMonthlyArrayAdmin(arr) {
+        localStorage.setItem(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY, JSON.stringify(arr));
+        try {
+          if (typeof pendingLocalSyncKeys !== "undefined" && pendingLocalSyncKeys && typeof pendingLocalSyncKeys.add === "function") {
+            pendingLocalSyncKeys.add(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+          }
+        } catch (_) {}
+        if (typeof captureLocalChangesForSync === "function") captureLocalChangesForSync();
+        if (typeof requestClientKvPushWhenReady === "function") requestClientKvPushWhenReady();
+        renderPhotographerPayrollAdmin();
+      }
+      function adminAddPayrollExtraLine(writerId, monthKey, amountWon, memo) {
+        const wid = String(writerId || "").trim();
+        const mk = String(monthKey || "").trim();
+        const amt = Math.max(0, Math.floor(Number(amountWon) || 0));
+        if (!wid || !mk) {
+          alert("작가 계정 또는 조회 월이 올바르지 않습니다.");
+          return false;
+        }
+        if (amt <= 0) {
+          alert("추가요금 금액을 입력해주세요. (숫자)");
+          return false;
+        }
+        const arr = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+        let rec = arr.find((r) => r && r.writerId === wid && r.monthKey === mk);
+        if (!rec) {
+          rec = { id: `ppm-${wid}-${mk}`, writerId: wid, monthKey: mk, lines: [] };
+          arr.push(rec);
+        }
+        if (!Array.isArray(rec.lines)) rec.lines = [];
+        rec.lines.push({
+          id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          category: "admin",
+          amountWon: amt,
+          memo: String(memo || "").trim()
+        });
+        rec.updatedAt = new Date().toISOString();
+        persistPayrollMonthlyArrayAdmin(arr);
+        return true;
+      }
+      function adminRemovePayrollExtraLine(writerId, monthKey, lineId) {
+        const wid = String(writerId || "").trim();
+        const mk = String(monthKey || "").trim();
+        const lid = String(lineId || "").trim();
+        if (!wid || !mk || !lid) return;
+        const arr = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
+        const rec = arr.find((r) => r && r.writerId === wid && r.monthKey === mk);
+        if (!rec || !Array.isArray(rec.lines)) return;
+        const before = rec.lines.length;
+        rec.lines = rec.lines.filter((ln) => String(ln?.id) !== lid);
+        if (rec.lines.length === before) return;
+        rec.updatedAt = new Date().toISOString();
+        persistPayrollMonthlyArrayAdmin(arr);
+      }
       /** 마창진 등 시드: 작가명·writerId 둘 다에 써서 동기화/표기 불일치에도 남도록 함 */
       function ensurePayrollSeedOverridesForKnownWriters() {
         const entries = Object.entries(PAYROLL_SEED_OVERRIDES_BY_CANONICAL_NAME || {});
@@ -11109,12 +11169,37 @@ ${folderBtn}
             const wid = findWriterIdByPhotographerName(name);
             const { fuelWon, salaryType } = getPhotographerPayrollConfigForWriter(wid, name);
             const disabled = !wid;
+            // 이 작가의 선택월 추가요금 라인(관리자/작가가 입력한 것 모두).
+            const wrec = monthlyAll.find((r) => r && r.writerId === wid && r.monthKey === monthKey);
+            const wlines = Array.isArray(wrec?.lines) ? wrec.lines : [];
+            const linesHtml = wlines.length
+              ? wlines
+                  .map(
+                    (ln) =>
+                      `<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;font-size:0.76rem;padding:1px 0;">
+                        <span>${escapeHtml(String(ln?.memo || "항목"))} · ${Number(ln?.amountWon || 0).toLocaleString("ko-KR")}원</span>
+                        <button type="button" class="btn-sm payroll-admin-extra-del" data-writer-id="${escapeHtml(wid)}" data-line-id="${escapeHtml(String(ln?.id || ""))}" style="padding:0 6px;font-size:0.7rem;color:#b91c1c;border-color:#fca5a5;">삭제</button>
+                      </div>`
+                  )
+                  .join("")
+              : '<div class="hint" style="font-size:0.7rem;margin:0;">등록된 추가요금 없음</div>';
+            const extraHtml = disabled
+              ? ""
+              : `<div class="payroll-admin-extra-box" style="margin-top:8px;border-top:1px dashed #d6e0f5;padding-top:6px;">
+                  <div style="font-size:0.78rem;font-weight:700;color:#1f3a6b;margin-bottom:3px;">추가요금 (선택월 적용)</div>
+                  ${linesHtml}
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:5px;">
+                    <input type="text" class="inline-input payroll-admin-extra-memo" placeholder="항목(예:톨비)" style="width:90px;font-size:0.76rem;" autocomplete="off" />
+                    <input type="number" min="0" step="1000" class="inline-input payroll-admin-extra-amount" placeholder="금액" style="width:82px;font-size:0.76rem;" />
+                    <button type="button" class="btn-sm payroll-admin-extra-add" data-writer-id="${escapeHtml(wid)}" data-writer-name="${escapeHtml(name)}">추가</button>
+                  </div>
+                </div>`;
             return `
           <div class="company-item payroll-admin-writer-card">
             <div style="font-weight:700; font-size:0.92rem;">${escapeHtml(name)}</div>
             ${
               disabled
-                ? '<p class="hint">작가 회원 가입 이름과 동일해야 유류·급여형태를 저장할 수 있습니다.</p>'
+                ? '<p class="hint">작가 회원 가입 이름과 동일해야 유류·급여형태·추가요금을 저장할 수 있습니다.</p>'
                 : ""
             }
             <div class="payroll-admin-writer-fields">
@@ -11133,6 +11218,7 @@ ${folderBtn}
               name
             )}" ${disabled ? "disabled" : ""}>저장</button>
             </div>
+            ${extraHtml}
           </div>`;
           })
           .join("")}</div>`;
@@ -16416,7 +16502,101 @@ ${folderBtn}
           return aScore - bScore || a[0].localeCompare(b[0], "ko");
         });
 
-        const listMarkup = `
+        // 스케줄 수정 폼 — 작가별 카드 + 업체검색 컴팩트 리스트(편집 시) 양쪽에서 재사용.
+        function buildScheduleFullEditForm(item, index) {
+          const [rawHour = "09", rawMinute = "00"] = (item.time || "09:00").split(":");
+          const hourOptions = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"))
+            .map((h) => `<option value="${h}" ${h === rawHour ? "selected" : ""}>${h}시</option>`)
+            .join("");
+          const minuteOptions = ["00", "30"]
+            .map((m) => `<option value="${m}" ${m === rawMinute ? "selected" : ""}>${m}분</option>`)
+            .join("");
+          const compositionOptions = buildAdminCompositionSelectOptionsHtml(item.composition);
+          const pyeongOptions = ["45평이하", "45평이상", "95평이상", "145평이상"]
+            .map((v) => `<option value="${v}" ${item.pyeong === v ? "selected" : ""}>${v}</option>`)
+            .join("");
+          const photographerOptions = ["작가미정", ...photographers]
+            .map((n) => `<option value="${escapeHtml(n)}" ${item.name === n ? "selected" : ""}>${escapeHtml(n)}</option>`)
+            .join("");
+          const companyDefaultMemo = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx);
+          const base = item.memo || "";
+          const memoWithDefault = !companyDefaultMemo
+            ? base
+            : base.includes(companyDefaultMemo)
+            ? base
+            : base
+            ? `${base}\n${companyDefaultMemo}`
+            : companyDefaultMemo;
+          return `<div class="inline-pair" style="margin-bottom: 6px;">
+                                       <input class="inline-input edit-date-only" type="date" value="${item.date}" style="width: 150px;" />
+                                       <select class="inline-select edit-hour" style="width: 90px;">${hourOptions}</select>
+                                       <select class="inline-select edit-minute" style="width: 90px;">${minuteOptions}</select>
+                                     </div>
+                                     <div style="margin-bottom: 4px;">업체: <input class="inline-input edit-company" type="text" value="${escapeHtml(item.company || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">장소: <input class="inline-input edit-place" type="text" value="${escapeHtml(item.place || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
+                                     <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">세대비번: <input class="inline-input edit-doorCode" type="text" value="${escapeHtml(item.doorCode || "")}" /></div>
+                                     <div style="margin-bottom: 4px;">메모: <input class="inline-input edit-memo" type="text" value="${escapeHtml(memoWithDefault)}" /></div>
+                                     <div class="inline-pair" style="margin-bottom: 6px;">
+                                       <select class="inline-select edit-composition" style="width: 130px;">${compositionOptions}</select>
+                                       <select class="inline-select edit-name" style="width: 130px;">${photographerOptions}</select>
+                                     </div>
+                                     <div class="actions" style="justify-content: flex-start; margin-top: 0;">
+                                       <button class="btn-sm primary" type="button" data-action="saveEdit" data-index="${index}">저장</button>
+                                       <button class="btn-sm" type="button" data-action="cancelEdit" data-index="${index}">취소</button>
+                                     </div>`;
+        }
+        // 업체검색 컴팩트 리스트 1행 — 요약 한 줄 + <details> 상세보기(클릭하면 펼침).
+        function renderScheduleCompactRow(item, index) {
+          const dateLabel = formatScheduleDateWithoutYear(item.date);
+          const timeLabel = formatScheduleTimeWithPreference(item.time, item.timePreference);
+          const area = extractAreaLabel(item.place) || "-";
+          const writer = item.name || "작가미정";
+          const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx);
+          const sid = String(item.customerScheduleId || "");
+          const code = normalizeCompanyCode(item.companyCode || item.code || "");
+          const paid = item.paymentStatus === "입금완료";
+          return `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(sid)}">
+            <details class="schedule-extra-detail" style="margin:0;">
+              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong> · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
+              <div style="margin-top:5px;font-size:0.86rem;line-height:1.55;">
+                장소(전체): ${formatPlaceForDisplay(item.place)}<br />
+                연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
+                평수: ${escapeHtml(item.pyeong || "-")} / 비번: ${escapeHtml(item.jointCode || "-")} / ${escapeHtml(item.doorCode || "-")}<br />
+                구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(writer)}<br />
+                메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
+                ${dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""}
+                입금: ${paid ? "<span style='color:#15803d;font-weight:700;'>입금완료</span>" : "<span style='color:#b91c1c;'>미결</span>"}<br />
+                <span class="actions" style="justify-content:flex-start;margin-top:6px;">
+                  <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
+                  <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}" data-schedule-id="${escapeHtml(sid)}">삭제</button>
+                  <button class="btn-sm" type="button" data-action="showScheduleHistory" data-schedule-id="${escapeHtml(sid)}">기록</button>
+                  <button class="btn-sm" type="button" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(item.company || "")}" data-company-code="${escapeHtml(code)}" title="업체 납품 폴더 열기">📁 폴더</button>
+                </span>
+              </div>
+            </details>
+          </span>`;
+        }
+        const compactScheduleMode = !!companyKeyword;
+        let listMarkup;
+        if (compactScheduleMode) {
+          const kwLabel = escapeHtml(String(companyFilterInputEl?.value || "").trim());
+          const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">「${kwLabel}」 검색 결과 · 총 ${filtered.length}건</div>`;
+          const rowsHtml = filtered
+            .map(({ item, index }) =>
+              editingIndex === index
+                ? `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
+                    String(item.customerScheduleId || "")
+                  )}">${buildScheduleFullEditForm(item, index)}</span>`
+                : renderScheduleCompactRow(item, index)
+            )
+            .join("");
+          listMarkup = `${countHeader}<div class="writer-group-list"><div class="writer-places" style="display:block;">${
+            rowsHtml || '<div class="helper" style="margin:0;">검색 결과가 없습니다.</div>'
+          }</div></div>`;
+        } else {
+          listMarkup = `
           <div class="writer-group-list">
             ${writerRows
               .map(
@@ -16457,25 +16637,7 @@ ${folderBtn}
                             )}">
                               ${
                                 isEditing
-                                  ? `<div class="inline-pair" style="margin-bottom: 6px;">
-                                       <input class="inline-input edit-date-only" type="date" value="${item.date}" style="width: 150px;" />
-                                       <select class="inline-select edit-hour" style="width: 90px;">${hourOptions}</select>
-                                       <select class="inline-select edit-minute" style="width: 90px;">${minuteOptions}</select>
-                                     </div>
-                                     <div style="margin-bottom: 4px;">업체: <input class="inline-input edit-company" type="text" value="${escapeHtml(item.company || "")}" /></div>
-                                     <div style="margin-bottom: 4px;">장소: <input class="inline-input edit-place" type="text" value="${escapeHtml(item.place || "")}" /></div>
-                                     <div style="margin-bottom: 4px;">평수: <select class="inline-select edit-pyeong">${pyeongOptions}</select></div>
-                                     <div style="margin-bottom: 4px;">공동비번: <input class="inline-input edit-jointCode" type="text" value="${escapeHtml(item.jointCode || "")}" /></div>
-                                     <div style="margin-bottom: 4px;">세대비번: <input class="inline-input edit-doorCode" type="text" value="${escapeHtml(item.doorCode || "")}" /></div>
-                                     <div style="margin-bottom: 4px;">메모: <input class="inline-input edit-memo" type="text" value="${escapeHtml(memoWithDefault)}" /></div>
-                                     <div class="inline-pair" style="margin-bottom: 6px;">
-                                       <select class="inline-select edit-composition" style="width: 130px;">${compositionOptions}</select>
-                                       <select class="inline-select edit-name" style="width: 130px;">${photographerOptions}</select>
-                                     </div>
-                                     <div class="actions" style="justify-content: flex-start; margin-top: 0;">
-                                       <button class="btn-sm primary" type="button" data-action="saveEdit" data-index="${index}">저장</button>
-                                       <button class="btn-sm" type="button" data-action="cancelEdit" data-index="${index}">취소</button>
-                                     </div>`
+                                  ? buildScheduleFullEditForm(item, index)
                                   : editingDateIndex === index
                                   ? `<div class="inline-pair" style="margin-bottom: 6px;">
                                        <select class="inline-select edit-hour" style="width: 110px;">${hourOptions}</select>
@@ -16552,6 +16714,7 @@ ${folderBtn}
               .join("")}
           </div>
         `;
+        }
         // re-render 전에 <details> 가 열려있던 스케줄 id 들을 capture — innerHTML 교체로 사라지는
         // 열림 상태 보존. 새 markup 적용 후 동일 id 의 <details> 를 다시 열어준다.
         function captureOpenDetailScheduleIds(root) {
@@ -20305,6 +20468,35 @@ ${folderBtn}
       });
 
       document.getElementById("photographerPayrollAdminPanel")?.addEventListener("click", (event) => {
+        // 추가요금 추가
+        const addBtn = event.target.closest(".payroll-admin-extra-add");
+        if (addBtn) {
+          const writerId = String(addBtn.dataset.writerId || "").trim();
+          if (!writerId) {
+            alert("작가 계정과 이름이 연결되지 않았습니다. 작가용 페이지에서 가입한 작가명과 동일한지 확인해 주세요.");
+            return;
+          }
+          const card = addBtn.closest(".company-item");
+          const memoEl = card?.querySelector(".payroll-admin-extra-memo");
+          const amountEl = card?.querySelector(".payroll-admin-extra-amount");
+          adminAddPayrollExtraLine(
+            writerId,
+            normalizePayrollAdminMonthKey(payrollAdminMonthKey),
+            amountEl?.value,
+            memoEl?.value
+          );
+          return;
+        }
+        // 추가요금 삭제
+        const delBtn = event.target.closest(".payroll-admin-extra-del");
+        if (delBtn) {
+          adminRemovePayrollExtraLine(
+            delBtn.dataset.writerId,
+            normalizePayrollAdminMonthKey(payrollAdminMonthKey),
+            delBtn.dataset.lineId
+          );
+          return;
+        }
         const btn = event.target.closest(".payroll-admin-save");
         if (!btn) return;
         const writerId = String(btn.dataset.writerId || "").trim();
