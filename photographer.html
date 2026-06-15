@@ -2329,8 +2329,10 @@
           }
         }
         // 단일 출처: customer_phone 만. 옛 phone 필드는 의도적으로 fallback 사용 안 함.
-        const cp = normalize(matched?.customer_phone || matched?.customerPhone);
-        if (isUsablePhone(cp)) return cp;
+        // customer_phone 에 여러 번호(최대 3개, 쉼표 등 구분)가 있으면 첫 유효 번호만 표시(통화용).
+        const raw = normalize(matched?.customer_phone || matched?.customerPhone);
+        const first = raw.split(/[,;/\n|]+/).map((s) => normalize(s)).filter(Boolean)[0] || "";
+        if (isUsablePhone(first)) return first;
         return "-";
       }
 

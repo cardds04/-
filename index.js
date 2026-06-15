@@ -6549,6 +6549,16 @@
       }
 
       /** 하단 폼·인라인 공통 저장 (PATCH/POST + 동기화) */
+      /** 업체 연락처 입력 정리: 쉼표/슬래시/줄바꿈으로 구분된 여러 번호를 각각 trim·중복제거 후
+       *  최대 3개만 쉼표로 결합해 저장한다. 여러 번호를 넣으면 SMS 가 전부에게 발송된다.
+       *  단일 번호는 그대로 저장(하위호환). */
+      function normalizeCompanyPhonesInput(raw) {
+        const parts = String(raw || "")
+          .split(/[,;/\n|]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return [...new Set(parts)].slice(0, 3).join(",");
+      }
       async function persistCompanyDirectoryToSupabase({
         rowId,
         nm,
@@ -6571,7 +6581,7 @@
         // 단일 컬럼 통일: customer_phone 만 사용. 기존 phone 컬럼은 더 이상 쓰지 않음.
         const basePayload = {
           name: nm,
-          customer_phone: telRaw,
+          customer_phone: normalizeCompanyPhonesInput(telRaw),
           code: normalizedCodeUsed,
           site_type: siteType,
           login_id: loginTrim || null
@@ -10177,8 +10187,10 @@ ${folderBtn}
         };
         const pickPhoneFromCompanyRow = (row) => {
           if (!row) return "";
-          const cp = String(row?.customer_phone || row?.customerPhone || "").trim();
-          if (isUsablePhone(cp)) return cp;
+          // customer_phone 에 여러 번호(최대 3개, 쉼표 등 구분)가 있을 수 있다 → 첫 유효 번호만 표시.
+          const raw = String(row?.customer_phone || row?.customerPhone || "").trim();
+          const first = raw.split(/[,;/\n|]+/).map((s) => s.trim()).filter(Boolean)[0] || "";
+          if (isUsablePhone(first)) return first;
           // ⚠ 옛 phone 필드는 의도적으로 fallback 으로 쓰지 않는다.
           // customer_phone 만 단일 출처. (구 phone 컬럼 잔재 무시)
           return "";
@@ -10821,6 +10833,15 @@ ${folderBtn}
       }
 
       const PAYROLL_SHOOT_WON_ADMIN = 50000;
+      // 작가 급여 화면(설정 카드·요약·합계)에서 제외할 작가명. 급여 비대상(예: 대표 본인).
+      const PAYROLL_EXCLUDED_WRITER_NAMES = new Set(["김진영"]);
+      function isPayrollExcludedWriter(name) {
+        try {
+          return PAYROLL_EXCLUDED_WRITER_NAMES.has(normalizePayrollPersonName(name));
+        } catch (_) {
+          return PAYROLL_EXCLUDED_WRITER_NAMES.has(String(name || "").trim());
+        }
+      }
       function findWriterIdByPhotographerName(name) {
         const writers = readStorageArray(STORAGE_WRITERS);
         const key = normalizePayrollPersonName(name).toLowerCase();
@@ -11060,7 +11081,7 @@ ${folderBtn}
       function maybeRefreshPayrollSummaryIfChanged() {
         try {
           const monthKey = normalizePayrollAdminMonthKey(payrollAdminMonthKey);
-          const names = photographers.filter((n) => n && n !== "작가미정");
+          const names = photographers.filter((n) => n && n !== "작가미정" && !isPayrollExcludedWriter(n));
           const sig =
             monthKey +
             "@" +
@@ -11074,7 +11095,7 @@ ${folderBtn}
         const configEl = document.getElementById("photographerPayrollConfigRows");
         const summaryEl = document.getElementById("photographerPayrollMonthlySummaryAdmin");
         if (!configEl || !summaryEl) return;
-        const names = photographers.filter((n) => n && n !== "작가미정");
+        const names = photographers.filter((n) => n && n !== "작가미정" && !isPayrollExcludedWriter(n));
         const monthKey = normalizePayrollAdminMonthKey(payrollAdminMonthKey);
         payrollAdminMonthKey = monthKey;
         const monthlyAll = readStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY);
@@ -11115,6 +11136,13 @@ ${folderBtn}
           </div>`;
           })
           .join("")}</div>`;
+        // 합계 누적 (김진영 등 제외된 작가는 names 에서 빠져 합계에도 안 들어감)
+        let totalShots = 0;
+        let totalBase = 0;
+        let totalFuel = 0;
+        let totalExtra = 0;
+        let totalGross = 0;
+        let totalFinal = 0;
         const summaryLines = names
           .map((name) => {
             const wid = findWriterIdByPhotographerName(name);
@@ -11131,6 +11159,12 @@ ${folderBtn}
             const final =
               salaryType === "tax_invoice" ? Math.round(gross * 1.1) : Math.round(gross * (1 - 0.033));
             const typeLabel = salaryType === "tax_invoice" ? "세금계산서 포함" : "프리랜서 3.3%";
+            totalShots += shots;
+            totalBase += basePay;
+            totalFuel += fuelWon;
+            totalExtra += extraSum;
+            totalGross += gross;
+            totalFinal += final;
             return `<tr><td>${escapeHtml(name)}</td><td>${shots}회</td><td>${basePay.toLocaleString("ko-KR")}원</td><td>${fuelWon.toLocaleString(
               "ko-KR"
             )}원</td><td>${extraSum.toLocaleString("ko-KR")}원</td><td>${gross.toLocaleString("ko-KR")}원</td><td>${typeLabel}</td><td><strong>${final.toLocaleString(
@@ -11138,11 +11172,22 @@ ${folderBtn}
             )}원</strong></td></tr>`;
           })
           .join("");
+        // 합계 행 — 제외 작가 빼고 나머지 작가들의 총합. 최종표시 합계가 실제 지급 총액.
+        const totalRow = `<tr style="background:#eef3ff;border-top:2px solid #c3d2f0;font-weight:700;">
+              <td>합계</td>
+              <td>${totalShots}회</td>
+              <td>${totalBase.toLocaleString("ko-KR")}원</td>
+              <td>${totalFuel.toLocaleString("ko-KR")}원</td>
+              <td>${totalExtra.toLocaleString("ko-KR")}원</td>
+              <td>${totalGross.toLocaleString("ko-KR")}원</td>
+              <td>-</td>
+              <td><strong style="color:#1f3a6b;">${totalFinal.toLocaleString("ko-KR")}원</strong></td>
+            </tr>`;
         const headingHtml = `<div class="payroll-admin-summary-heading" style="font-weight:700; margin-bottom:6px;">${monthKey} 작가별 급여 요약</div>`;
         const tableHtml = `<div class="payroll-admin-summary-table" style="overflow:auto;">
             <table class="payment-table" style="font-size:0.85rem;"><thead><tr>
               <th>작가</th><th>완료촬영</th><th>기본급</th><th>유류</th><th>추가요금</th><th>세전</th><th>형태</th><th>최종표시</th>
-            </tr></thead><tbody>${summaryLines}</tbody></table>
+            </tr></thead><tbody>${summaryLines}${totalRow}</tbody></table>
           </div>`;
         // 사용자가 연/월 select 를 열어둔 채로 다른 브라우저의 soft pull 이 발생하면
         // innerHTML 통째 교체로 드롭다운이 닫혀버려 "월 선택 불가" 버그가 생긴다.
