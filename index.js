@@ -16591,9 +16591,9 @@ ${folderBtn}
             </details>
           </span>`;
         }
-        const compactScheduleMode = true; // 항상 리스트(컴팩트) 형태로 표시 — 카드 그리드 대신 한 줄 리스트
-        let listMarkup;
-        if (compactScheduleMode) {
+        // 아래쪽 검색/전체 스케줄 목록(listEl)은 컴팩트 리스트, 메인 달력 일정상세 모달(scheduleDetailListEl)은 예전 카드 그대로.
+        let compactListMarkup;
+        {
           const kwRaw = String(companyFilterInputEl?.value || "").trim();
           const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">${
             kwRaw ? `「${escapeHtml(kwRaw)}」 검색 결과 · ` : ""
@@ -16617,11 +16617,11 @@ ${folderBtn}
                 </article>`
             )
             .join("");
-          listMarkup = `${countHeader}<div class="writer-group-list">${
+          compactListMarkup = `${countHeader}<div class="writer-group-list">${
             groupsHtml || '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>'
           }</div>`;
-        } else {
-          listMarkup = `
+        }
+        const cardListMarkup = `
           <div class="writer-group-list">
             ${writerRows
               .map(
@@ -16739,7 +16739,6 @@ ${folderBtn}
               .join("")}
           </div>
         `;
-        }
         // re-render 전에 <details> 가 열려있던 스케줄 id 들을 capture — innerHTML 교체로 사라지는
         // 열림 상태 보존. 새 markup 적용 후 동일 id 의 <details> 를 다시 열어준다.
         function captureOpenDetailScheduleIds(root) {
@@ -16764,8 +16763,8 @@ ${folderBtn}
         const prevOpenListIds = captureOpenDetailScheduleIds(listEl);
         const prevOpenModalIds = captureOpenDetailScheduleIds(scheduleDetailListEl);
 
-        listEl.innerHTML = listMarkup;
-        if (scheduleDetailListEl) scheduleDetailListEl.innerHTML = listMarkup;
+        listEl.innerHTML = compactListMarkup;
+        if (scheduleDetailListEl) scheduleDetailListEl.innerHTML = cardListMarkup;
 
         restoreOpenDetailsByScheduleIds(listEl, prevOpenListIds);
         restoreOpenDetailsByScheduleIds(scheduleDetailListEl, prevOpenModalIds);
