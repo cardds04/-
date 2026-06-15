@@ -16557,9 +16557,9 @@ ${folderBtn}
           const sid = String(item.customerScheduleId || "");
           const code = normalizeCompanyCode(item.companyCode || item.code || "");
           const paid = item.paymentStatus === "입금완료";
-          return `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(sid)}">
+          return `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" style="display:block;border:none;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:6px 2px;margin:0;">
             <details class="schedule-extra-detail" style="margin:0;">
-              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong> · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
+              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;cursor:pointer;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong> · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
               <div style="margin-top:5px;font-size:0.86rem;line-height:1.55;">
                 장소(전체): ${formatPlaceForDisplay(item.place)}<br />
                 연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
@@ -16568,6 +16568,19 @@ ${folderBtn}
                 메모: ${escapeHtml(summarizeMemo(item.memo))}<br />
                 ${dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""}
                 입금: ${paid ? "<span style='color:#15803d;font-weight:700;'>입금완료</span>" : "<span style='color:#b91c1c;'>미결</span>"}<br />
+                <div class="quick-writer-row" style="margin-top:6px;">
+                  ${["작가미정", ...photographers]
+                    .slice(0, 8)
+                    .map(
+                      (wn) =>
+                        `<button class="btn-sm ${item.name === wn ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" data-writer-name="${escapeHtml(wn)}" title="작가 바로 변경">${escapeHtml(wn === "작가미정" ? "미정" : wn)}</button>`
+                    )
+                    .join("")}
+                </div>
+                <div class="quick-writer-row" style="margin-top:4px;">
+                  <button class="btn-sm ${item.composition === "사진만" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" data-composition="사진만">사진</button>
+                  <button class="btn-sm ${item.composition === "사진영상 둘다" ? "primary" : ""}" type="button" data-action="setQuickComposition" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" data-composition="사진영상 둘다">사영</button>
+                </div>
                 <span class="actions" style="justify-content:flex-start;margin-top:6px;">
                   <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
                   <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}" data-schedule-id="${escapeHtml(sid)}">삭제</button>
@@ -16578,23 +16591,35 @@ ${folderBtn}
             </details>
           </span>`;
         }
-        const compactScheduleMode = !!companyKeyword;
+        const compactScheduleMode = true; // 항상 리스트(컴팩트) 형태로 표시 — 카드 그리드 대신 한 줄 리스트
         let listMarkup;
         if (compactScheduleMode) {
-          const kwLabel = escapeHtml(String(companyFilterInputEl?.value || "").trim());
-          const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">「${kwLabel}」 검색 결과 · 총 ${filtered.length}건</div>`;
-          const rowsHtml = filtered
-            .map(({ item, index }) =>
-              editingIndex === index
-                ? `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
-                    String(item.customerScheduleId || "")
-                  )}">${buildScheduleFullEditForm(item, index)}</span>`
-                : renderScheduleCompactRow(item, index)
+          const kwRaw = String(companyFilterInputEl?.value || "").trim();
+          const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">${
+            kwRaw ? `「${escapeHtml(kwRaw)}」 검색 결과 · ` : ""
+          }총 ${filtered.length}건</div>`;
+          const renderEntry = (item, index) =>
+            editingIndex === index || editingDateIndex === index
+              ? `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
+                  String(item.customerScheduleId || "")
+                )}">${buildScheduleFullEditForm(item, index)}</span>`
+              : renderScheduleCompactRow(item, index);
+          const groupsHtml = writerRows
+            .map(
+              ([writer, schedules]) => `
+                <article class="writer-row" style="align-items:start;">
+                  <div class="writer-name" style="padding-top:6px;">${escapeHtml(writer)}작가 <span style="color:#6b7896;font-weight:600;font-size:0.8rem;">(${schedules.length}건)</span><br /><button type="button" class="btn-sm" data-action="copyWriterSchedule" data-writer="${escapeHtml(writer)}" title="이 작가 일정을 작가페이지 형식으로 복사" style="margin-top:4px;padding:1px 8px;font-size:0.72rem;font-weight:600;">📋 스케줄 복사</button></div>
+                  <div class="writer-places" style="display:block;">${schedules
+                    .slice()
+                    .sort((a, b) => compareScheduleDateTime(a.item, b.item))
+                    .map(({ item, index }) => renderEntry(item, index))
+                    .join("")}</div>
+                </article>`
             )
             .join("");
-          listMarkup = `${countHeader}<div class="writer-group-list"><div class="writer-places" style="display:block;">${
-            rowsHtml || '<div class="helper" style="margin:0;">검색 결과가 없습니다.</div>'
-          }</div></div>`;
+          listMarkup = `${countHeader}<div class="writer-group-list">${
+            groupsHtml || '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>'
+          }</div>`;
         } else {
           listMarkup = `
           <div class="writer-group-list">
