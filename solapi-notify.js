@@ -42,6 +42,18 @@
     return /^01[016789]\d{7,8}$/.test(v);
   }
 
+  // 쉼표 등으로 구분된 멀티번호 → 유효한 휴대폰 번호 배열(중복 제거). 고객이 등록한 모든 번호로 발송.
+  function splitValidMobiles(raw) {
+    return [
+      ...new Set(
+        String(raw || "")
+          .split(/[,;/\n|]+/)
+          .map((s) => onlyDigits(s))
+          .filter((d) => isValidKoreanMobile(d))
+      ),
+    ];
+  }
+
   function pad2(n) {
     return String(n).padStart(2, "0");
   }
@@ -496,16 +508,16 @@
     const siteLabel = String(opts?.siteLabel || "").trim();
     const schedule = opts?.schedule || {};
     const company = String(opts?.company || "").trim();
-    const initialPhone = onlyDigits(opts?.phone);
     const onPhoneSaved = typeof opts?.onPhoneSaved === "function" ? opts.onPhoneSaved : null;
 
-    let toPhone = initialPhone;
+    // 고객이 등록한 모든 번호로 발송(쉼표 멀티번호 지원).
+    let recipients = splitValidMobiles(opts?.phone);
     let phoneJustEntered = false;
 
-    // 관리자(01028692443) 확인용 단문은 고객 문자 성공 여부와 무관하게 항상 시도.
+    // 관리자(01028692443) 확인용 단문은 고객 문자 성공 여부와 무관하게 항상 시도(1회).
     sendAdminShortNotice({ company, schedule });
 
-    if (!isValidKoreanMobile(toPhone)) {
+    if (recipients.length === 0) {
       const entered = await promptPhoneNumber(siteLabel);
       if (!entered) {
         showToast(
@@ -514,36 +526,50 @@
         );
         return { ok: false, skipped: true, message: "no phone" };
       }
-      toPhone = entered;
+      recipients = [onlyDigits(entered)];
       phoneJustEntered = true;
     }
 
     const text = buildSmsText({ siteLabel, schedule, company });
     const subject = `[${siteLabel}] 촬영 접수 확인`;
 
-    try {
-      const sendBody = await postSolapiSend({ to: toPhone, text, subject });
+    // 고객 문자는 등록된 번호 각각으로 발송. 일부 실패해도 나머지는 진행.
+    let anyOk = false;
+    let anyDeferred = false;
+    let lastError = null;
+    for (const to of recipients) {
+      try {
+        const sendBody = await postSolapiSend({ to, text, subject });
+        anyOk = true;
+        if (sendBody && sendBody.smsDeferredToQuietHoursMorning) anyDeferred = true;
+      } catch (error) {
+        lastError = error;
+        console.error("[SolapiNotify] send failed", to, error);
+      }
+    }
+
+    if (anyOk) {
       if (phoneJustEntered && onPhoneSaved) {
         try {
-          await onPhoneSaved(toPhone);
+          await onPhoneSaved(recipients[0]);
         } catch (saveErr) {
           console.warn("[SolapiNotify] phone save failed", saveErr);
         }
       }
-      if (sendBody && sendBody.smsDeferredToQuietHoursMorning) {
-        showToast(`야간 시간대에는 오전 10시 예약 발송으로 등록되었습니다. (${toPhone})`);
+      const who = recipients.join(", ");
+      if (anyDeferred) {
+        showToast(`야간 시간대에는 오전 10시 예약 발송으로 등록되었습니다. (${who})`);
       } else {
-        showToast(`알림 문자가 발송되었습니다. (${toPhone})`);
+        showToast(`알림 문자가 발송되었습니다. (${who})`);
       }
       return { ok: true, skipped: false };
-    } catch (error) {
-      console.error("[SolapiNotify] send failed", error);
-      showToast(
-        `알림 문자 발송 실패: ${error?.message || "오류"}\n(스케줄 등록은 정상 처리되었습니다.)`,
-        "error"
-      );
-      return { ok: false, skipped: false, message: error?.message || "send failed" };
     }
+
+    showToast(
+      `알림 문자 발송 실패: ${lastError?.message || "오류"}\n(스케줄 등록은 정상 처리되었습니다.)`,
+      "error"
+    );
+    return { ok: false, skipped: false, message: lastError?.message || "send failed" };
   }
 
   /**
@@ -559,9 +585,9 @@
     const types = opts?.types;
     const sheetCount = opts?.sheetCount;
     const memo = opts?.memo;
-    const toPhone = onlyDigits(opts?.phone);
+    const recipients = splitValidMobiles(opts?.phone);
 
-    // 관리자 통보 — 고객 문자 성공 여부와 무관하게 항상 시도.
+    // 관리자 통보 — 고객 문자 성공 여부와 무관하게 항상 시도(1회).
     try {
       await postSolapiSend({
         to: ADMIN_NOTIFY_PHONE,
@@ -572,28 +598,37 @@
       console.warn("[SolapiNotify] edit-request admin notify failed", error);
     }
 
-    if (!isValidKoreanMobile(toPhone)) {
+    if (recipients.length === 0) {
       return { ok: true, customerSkipped: true, message: "no customer phone" };
     }
 
-    try {
-      const text = buildEditRequestCustomerSms({ siteLabel, types, sheetCount });
-      const sendBody = await postSolapiSend({
-        to: toPhone,
-        text,
-        subject: `[${siteLabel}] 편집 신청 확인`,
-      });
-      if (sendBody && sendBody.smsDeferredToQuietHoursMorning) {
-        showToast(`야간 시간대라 오전 10시 예약 발송으로 등록되었습니다. (${toPhone})`);
+    // 고객 확인 문자는 등록된 번호 각각으로 발송.
+    const text = buildEditRequestCustomerSms({ siteLabel, types, sheetCount });
+    const subject = `[${siteLabel}] 편집 신청 확인`;
+    let anyOk = false;
+    let anyDeferred = false;
+    let lastError = null;
+    for (const to of recipients) {
+      try {
+        const sendBody = await postSolapiSend({ to, text, subject });
+        anyOk = true;
+        if (sendBody && sendBody.smsDeferredToQuietHoursMorning) anyDeferred = true;
+      } catch (error) {
+        lastError = error;
+        console.error("[SolapiNotify] edit-request customer notify failed", to, error);
+      }
+    }
+    if (anyOk) {
+      const who = recipients.join(", ");
+      if (anyDeferred) {
+        showToast(`야간 시간대라 오전 10시 예약 발송으로 등록되었습니다. (${who})`);
       } else {
-        showToast(`편집 신청 확인 문자가 발송되었습니다. (${toPhone})`);
+        showToast(`편집 신청 확인 문자가 발송되었습니다. (${who})`);
       }
       return { ok: true, customerSkipped: false };
-    } catch (error) {
-      console.error("[SolapiNotify] edit-request customer notify failed", error);
-      // 고객 확인 문자 실패는 조용히 — 신청은 정상 접수됨.
-      return { ok: false, customerSkipped: false, message: error?.message || "send failed" };
     }
+    // 고객 확인 문자 실패는 조용히 — 신청은 정상 접수됨.
+    return { ok: false, customerSkipped: false, message: lastError?.message || "send failed" };
   }
 
   window.SolapiNotify = {
