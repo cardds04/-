@@ -1682,8 +1682,11 @@
     // 게시 템플릿이 아직 안 받아졌으면 받아서 다시 그림 — 어느 경로(메인/전체/세션나가기)로 들어와도 항상 게시본이 뜨게(자가복구)
     if (!(E.published && E.published.length) && !E._pubTried) {
       E._pubTried = true;
-      try { loadPublished().then((ok) => { if (ok && (E.published || []).length && E.mode2 === "easy" && !E.using) { const b = $("#esBody"); if (b) renderEasyCatalog(b); } }); } catch (_) {}
+      try { loadPublished().then(() => { E._pubLoadDone = true; if (E.mode2 === "easy" && !E.using) { const b = $("#esBody"); if (b) renderEasyCatalog(b); } }); } catch (_) { E._pubLoadDone = true; }
     }
+    if (E.published && E.published.length) E._pubLoadDone = true;
+    // 첫 진입에 서버 게시템플릿을 불러오는 중이면, 미리보기 안 되는 데모카드 대신 로딩 표시(깜빡임 방지)
+    const pubLoading = !(E.published && E.published.length) && !E._pubLoadDone;
     // 게시된 템플릿(서버) 우선 → 없으면 내 로컬 프로젝트 → 둘 다 없을 때만 데모
     const pubList = (E.published || []).filter((p) => p && p.id);
     const srcList = pubList.length ? pubList : (E.projects || []);
@@ -1698,7 +1701,7 @@
         allCards.push(card);
         if (recommended.length < 10) recommended.push(card);
       });
-    } else {
+    } else if (!pubLoading) {
       demoCards.forEach((d) => {
         if (!groups.has(d.cat)) groups.set(d.cat, []);
         if (!cats.includes(d.cat)) cats.push(d.cat);
@@ -1708,7 +1711,9 @@
         if (recommended.length < 10) recommended.push(card);
       });
     }
-    const featuredRail = [...recommended, ...recommended].join("");
+    const featuredRail = pubLoading
+      ? '<article class="es-cust-railloading">⏳ 추천 템플릿을 불러오는 중…</article>'
+      : [...recommended, ...recommended].join("");
     const isTemplatePage = E.easyPage === "templates";
     const latest = E.projects.slice(0, 3);
     const homeFlowHtml = `
@@ -1818,7 +1823,7 @@
         b.addEventListener("mouseleave", () => stopInline());
         b.addEventListener("click", () => playPublishedInline(card, url));   // 클릭/탭 = 화면 그 상태로 미리보기(다시 누르면 정지)
       } else {
-        b.addEventListener("click", () => startFromTemplate(tpl, "easy"));   // 미리보기 영상이 없으면 바로 제작
+        b.addEventListener("click", () => { try { toast("이 템플릿은 아직 미리보기 영상이 없어요 — ＋ 버튼으로 바로 만들 수 있어요"); } catch (_) {} });   // 미리보기 영상 없음 → 갑자기 제작으로 안 넘어가게(안내만)
       }
     });
     const go = (type) => {
