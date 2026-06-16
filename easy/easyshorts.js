@@ -1283,6 +1283,25 @@
     try { window.scrollTo(0, 0); } catch (_) {}
   }
 
+  // 🔙 브라우저(휴대폰) 뒤로가기 = 앱 내 뒤로 — 홈→템플릿/제작 후 뒤로 시 사이트가 통째로 나가지지 않게.
+  let _backTrapped = false;
+  function armBackTrap() {
+    if (_backTrapped) return;
+    if (!(E.using || E.easyPage === "templates")) return;   // 홈/메인에선 함정 불필요(정상 이탈 허용)
+    try { history.pushState({ esTrap: 1 }, ""); _backTrapped = true; } catch (_) {}
+  }
+  function setupBackTrap() {
+    if (E._backTrapInit) return; E._backTrapInit = true;
+    window.addEventListener("popstate", function () {
+      _backTrapped = false;   // 함정 1개가 소비됨
+      if (E.using || E.easyPage === "templates") {
+        try { easyBotBack(); } catch (_) {}   // 한 단계 앱 내 뒤로
+        armBackTrap();                          // 다음 뒤로도 잡도록 재설치
+      }
+      // 홈/메인이면 재설치 안 함 → 그 다음 뒤로는 정상적으로 사이트 나감
+    });
+  }
+
   // 뷰 전환 ────────────────────────────────────────────────────────
   function setView(view) {
     stopPlay();
@@ -1787,6 +1806,7 @@
         `}
       </div>`;
     try { body.scrollTop = 0; } catch (_) {}
+    if (isTemplatePage) { try { armBackTrap(); } catch (_) {} }   // 🔙 전체 템플릿 페이지 — 휴대폰 뒤로가기 잡기
     let activeCat = "all";
     const applyCustomerFilter = () => {
       const q = ($("#esCustSearch", body)?.value || "").trim().toLowerCase();
@@ -3368,6 +3388,8 @@
   function renderEasy() {
     const body = $("#esBody"); if (!body) return;
     if (!E.using) { renderGallery(); return; }   // 작업 전이면 공유 템플릿 공간
+    try { armBackTrap(); } catch (_) {}   // 🔙 제작(마법사) 진입 — 휴대폰 뒤로가기 잡기
+
     E._fillFilter = null;   // 단계 진입 시 필터 초기화(아래 단계별 핸들러가 다시 설정)
     E._detailEditor = false;   // 이지숏폼 마법사 — 영상 만들기·재생성 버튼 숨김
     const t = E.using.template, asp = ASPECTS[t.aspect] || ASPECTS["9:16"];
@@ -3401,7 +3423,7 @@
           <div class="es-wiz-title">${title}</div>
           ${sub ? `<div class="es-wiz-sub">${sub}</div>` : ""}
           <div class="es-wiz-bigcount">필요한 파일 <b>${arr.length}</b>개</div>
-          <button type="button" class="es-wiz-bigbtn es-wiz-drop" id="esWizAdd"><span class="es-wiz-drop-icon">📷</span><span>파일 올리기</span><span class="es-wiz-drop-sub">드래그하거나 클릭해서 ${label} ${arr.length}개를 추가하세요</span></button>
+          <button type="button" class="es-wiz-bigbtn es-wiz-drop" id="esWizAdd"><span class="es-wiz-drop-icon">📷</span><span>파일 올리기</span><span class="es-wiz-drop-sub">${label} ${arr.length}개 — 눌러서 넣기</span></button>
           <input type="file" id="esBulkFile" accept="image/*,video/*" multiple hidden>
           ${prevBtn ? `<div class="es-wiz-photobtns">${prevBtn}</div>` : ""}
         </div>`;
@@ -3430,8 +3452,8 @@
         <div class="es-wiz-body es-auto-step">
           <div class="es-wiz-num">${E.easyIdx + 1}</div>
           <div class="es-wiz-title">사진이나 영상을 넣어주세요</div>
-          <div class="es-wiz-note"><b>원하는 만큼</b> 넣으세요 — 10개든 20개든 OK. 넣은 <b>수만큼 장면</b>이 생겨요 (길이는 다음 단계에서 조절)</div>
-          <button type="button" class="es-wiz-bigbtn es-auto-drop" id="esAutoAdd"><span class="es-wiz-drop-icon">🎬</span><span>사진·영상 올리기</span><span class="es-wiz-drop-sub">여러 개를 한 번에, 몇 개든 추가할 수 있어요</span></button>
+          <div class="es-wiz-note">넣은 <b>수만큼 장면</b>이 생겨요</div>
+          <button type="button" class="es-wiz-bigbtn es-auto-drop" id="esAutoAdd"><span class="es-wiz-drop-icon">🎬</span><span>사진·영상 올리기</span><span class="es-wiz-drop-sub">여러 장 한 번에 OK</span></button>
           <input type="file" id="esAutoFile" accept="image/*,video/*" multiple hidden>
           <div class="es-auto-scenes" id="esAutoScenes"></div>
           <div class="es-asp-pick">
@@ -6590,7 +6612,7 @@
     const scenes = autoScenes();
     const thumb = (f) => f ? (f.kind === "video" ? `<video src="${f.url}" muted preload="metadata"></video>` : `<img src="${f.url}" alt="">`) : "";
     const filled = scenes.filter((s) => E.using.fills[s.id]);
-    if (!filled.length) { box.innerHTML = `<div class="es-auto-empty">아직 없어요 — 위 버튼으로 원하는 만큼 넣어보세요 (몇 개든 OK)</div>`; return; }
+    if (!filled.length) { box.innerHTML = `<div class="es-auto-empty">위 버튼으로 사진·영상을 넣어주세요</div>`; return; }
     // 정사각 미리보기 + 밑에 몇 초인지만 (길이·자막 조절은 다음 단계에서)
     const cards = scenes.filter((s) => E.using.fills[s.id]).map((s, i) => {
       const f = E.using.fills[s.id];
@@ -11019,6 +11041,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (!root) return;
     buildDom();
     E.inited = true;
+    try { setupBackTrap(); } catch (_) {}   // 🔙 휴대폰 뒤로가기 = 앱 내 뒤로
     $$(".es-modebtn", root).forEach((b) => b.addEventListener("click", () => enterMode2(b.dataset.mode2)));
     { const kb = $("#esNavKling", root); if (kb) kb.addEventListener("click", setKlingKeysOnline); }
     { const rb = $("#esNavReel", root); if (rb) rb.addEventListener("click", openReel); }
