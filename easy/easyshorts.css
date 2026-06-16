@@ -132,6 +132,31 @@ body.mode-easy #easyRoot {
 
 .es-body { flex: 1; min-height: 0; overflow-y: auto; }
 
+/* 📱 하단 앱형 고정 네비게이션 — 고객(이지) 모드 모든 화면에서 홈/뒤로 */
+.es-botnav { display: none; }
+body.es-cust .es-botnav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; align-items: stretch; justify-content: center; gap: 8px;
+  background: rgba(16, 18, 22, 0.94);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.38);
+}
+body.es-cust.es-locked .es-botnav { display: none !important; }   /* 잠금 화면에서는 숨김 */
+body.es-cust .es-body { padding-bottom: 80px; }   /* 고정 네비에 콘텐츠가 안 가리도록 */
+.es-botnav-btn {
+  flex: 1 1 0; max-width: 200px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: transparent; border: none; color: var(--text-dim);
+  font-size: 11px; font-weight: 800; font-family: inherit; cursor: pointer;
+  padding: 7px 4px; border-radius: 13px; transition: background .12s, color .12s, transform .08s;
+}
+.es-botnav-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.es-botnav-btn:active { transform: scale(0.94); }
+.es-botnav-ic { font-size: 21px; line-height: 1; }
+.es-botnav-lb { letter-spacing: 0.02em; }
+
 /* 공통 버튼 */
 .es-btn {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
@@ -5657,6 +5682,26 @@ body.mode-easy #easyRoot,
 .es-cl-caphandle { width: 9px; flex: none; align-self: stretch; background: rgba(0,0,0,.35); cursor: ew-resize; touch-action: none; }
 .es-cl-caph-l { border-radius: 5px 0 0 5px; }
 .es-cl-caph-r { border-radius: 0 5px 5px 0; }
+/* 🗑 선택한 컷 삭제 버튼(상태창) — 모바일에서 Delete 키 대신 탭으로 삭제 */
+.es-cl-st-delbtn { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,90,90,0.14); color: #ff8d8d; border: 1px solid rgba(255,90,90,0.5); border-radius: 8px; padding: 6px 11px; font-size: 12.5px; font-weight: 800; cursor: pointer; margin-left: 8px; vertical-align: middle; }
+.es-cl-st-delbtn:hover { background: rgba(255,90,90,0.24); }
+.es-cl-st-delbtn:active { transform: scale(0.96); }
+/* 📱 터치(모바일)에서 타임라인 블럭을 지우고/줄이기 쉽게 — 레인·손잡이를 키움 */
+@media (max-width: 760px), (pointer: coarse) {
+  .es-cl-caplane { height: 38px; }
+  .es-cl-vidlane { height: 60px; }
+  .es-cl-narrlane { height: 34px; }
+  .es-cl-labels .es-cl-rowlabel:nth-child(2) { height: 38px; }
+  .es-cl-labels .es-cl-rowlabel:nth-child(3) { height: 60px; }
+  .es-cl-labels .es-cl-rowlabel:nth-child(4) { height: 34px; }
+  .es-cl-handle { width: 26px; font-size: 15px; background: rgba(0,0,0,.5); }
+  .es-cl-h-l { box-shadow: inset -1px 0 0 rgba(255,255,255,.18); }
+  .es-cl-h-r { box-shadow: inset 1px 0 0 rgba(255,255,255,.18); }
+  .es-cl-block.sel .es-cl-handle { background: var(--accent); color: #04201a; }
+  .es-cl-caphandle { width: 16px; }
+  .es-cl-blk-label { font-size: 12.5px; }
+  .es-cl-st-delbtn { display: flex; width: 100%; justify-content: center; margin: 8px 0 0; padding: 11px; font-size: 14px; }
+}
 /* 안내선(플레이헤드) — 선은 클릭 통과, 위 손잡이(knob)만 잡아끌기 */
 .es-cl-playhead { position: absolute; top: 16px; bottom: 0; width: 2px; background: var(--accent); left: 0; pointer-events: none; z-index: 4; }
 .es-cl-playknob { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); width: 16px; height: 16px; pointer-events: auto; cursor: ew-resize; touch-action: none; }
@@ -5853,7 +5898,7 @@ body.mode-easy #easyRoot,
 .es-cl-layout {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(350px, 430px) minmax(0, 1fr);
+  grid-template-columns: minmax(390px, 520px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
   min-width: 0;
@@ -5901,8 +5946,8 @@ body.mode-easy #easyRoot,
 }
 .es-cl-panel-preview .es-cl-stage {
   margin: 0 auto;
-  width: min(100%, 380px);
-  max-height: min(65vh, 720px);
+  width: min(100%, 480px);
+  max-height: min(74vh, 820px);
 }
 .es-cl-panel-preview .es-transport,
 .es-cl-panel-preview .es-cl-micbox,
@@ -6031,7 +6076,7 @@ body.mode-easy #easyRoot,
     width: min(100%, calc(100vw - 28px));
   }
   .es-cl-layout {
-    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
     gap: 16px;
   }
   .es-cl-panel {
@@ -6074,7 +6119,7 @@ body.mode-easy #easyRoot,
     padding: 12px 14px;
   }
   .es-cl-panel-preview .es-cl-stage {
-    width: min(100%, 420px);
+    width: min(100%, 540px);
   }
   .es-cl-transport {
     gap: 10px;
@@ -6103,14 +6148,22 @@ body.mode-easy #easyRoot,
     padding: 14px;
     border-radius: 16px;
   }
+  /* 📺 미리보기는 라운드박스 여백을 최소화해 영상이 화면을 꽉 쓰게 */
+  .es-cl-panel-preview {
+    padding: 8px 8px 12px;
+    border-radius: 14px;
+  }
   .es-cl-panel-head {
     margin-bottom: 12px;
+  }
+  .es-cl-panel-preview .es-cl-panel-head {
+    margin-bottom: 8px;
   }
   .es-cl-panel-head span {
     font-size: 12px;
   }
   .es-cl-panel-preview .es-cl-stage {
-    width: min(100%, 100%);
+    width: 100%;
     max-height: none;
   }
   .es-cl-transport {

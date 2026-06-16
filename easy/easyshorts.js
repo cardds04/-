@@ -1261,7 +1261,26 @@
         </nav>
       </div>
       <div class="es-body" id="esBody"></div>
+      <nav class="es-botnav" id="esBotNav" aria-label="이동">
+        <button type="button" class="es-botnav-btn" id="esBotBack"><span class="es-botnav-ic">‹</span><span class="es-botnav-lb">뒤로</span></button>
+        <button type="button" class="es-botnav-btn" id="esBotHome"><span class="es-botnav-ic">🏠</span><span class="es-botnav-lb">홈</span></button>
+      </nav>
     `;
+  }
+  // 📱 하단 앱형 네비 — 모든 고객 화면에서 홈/뒤로. 작업은 지우지 않고 보존(편집 화면만 닫음 → 새로고침하면 복구)
+  function easyBotHome() {
+    try { stopPlay(); } catch (_) {}
+    E.mode2 = "easy"; E.using = null; E.easyPage = "main";
+    setView("gallery");
+    try { window.scrollTo(0, 0); } catch (_) {}
+  }
+  function easyBotBack() {
+    try { stopPlay(); } catch (_) {}
+    if (E.using) {
+      if ((E.easyIdx || 0) > 0) { E.easyIdx -= 1; scheduleSaveMeta(); renderEasy(); }   // 마법사 한 단계 뒤로
+      else { E.using = null; E.easyPage = "main"; setView("gallery"); }                  // 첫 단계에서 뒤로 = 카탈로그(작업 보존)
+    } else if (E.easyPage === "templates") { E.easyPage = "main"; renderGallery(); }     // 전체 템플릿 → 메인
+    try { window.scrollTo(0, 0); } catch (_) {}
   }
 
   // 뷰 전환 ────────────────────────────────────────────────────────
@@ -1269,6 +1288,7 @@
     stopPlay();
     try { stopInline(); } catch (_) {}
     E.view = view;
+    try { document.body.classList.toggle("es-cust", E.mode2 === "easy"); } catch (_) {}   // 📱 고객(이지) 모드에서만 하단 네비 표시
     if (view === "home") { E.mode2 = "easy"; E.easyPage = "main"; renderGallery(); }
     else if (view === "gallery") { renderGallery(); refreshPublished(); }   // 게시된 영상(서버) 목록도 새로 받아옴
     else if (view === "builder") renderBuilder();
@@ -1657,6 +1677,11 @@
     const recommended = [];
     const allCards = [];   // 전체 템플릿 = 분류 없이 한 그리드(분류는 필터 버튼으로만)
     const cats = [];
+    // 게시 템플릿이 아직 안 받아졌으면 받아서 다시 그림 — 어느 경로(메인/전체/세션나가기)로 들어와도 항상 게시본이 뜨게(자가복구)
+    if (!(E.published && E.published.length) && !E._pubTried) {
+      E._pubTried = true;
+      try { loadPublished().then((ok) => { if (ok && (E.published || []).length && E.mode2 === "easy" && !E.using) { const b = $("#esBody"); if (b) renderEasyCatalog(b); } }); } catch (_) {}
+    }
     // 게시된 템플릿(서버) 우선 → 없으면 내 로컬 프로젝트 → 둘 다 없을 때만 데모
     const pubList = (E.published || []).filter((p) => p && p.id);
     const srcList = pubList.length ? pubList : (E.projects || []);
@@ -3017,8 +3042,10 @@
     const arr = slotTimes().arr.filter((a) => !a.slot.locked && E.using.fills[a.slot.id]);
     const ai = arr.findIndex((a) => a.slot.id === key); const a = arr[ai]; if (!a) { el.textContent = "—"; return; }
     const s = a.slot, f = E.using.fills[s.id], isVid = f && f.kind === "video";
-    el.innerHTML = `🎬 <b>${ai + 1}번 컷</b> · ${(s.dur || 0).toFixed(1)}초${isVid ? ` <span class="es-cl-st-sub">(원본 ${(f.dur || 0).toFixed(1)}초 · ${(s.in || 0).toFixed(1)}초부터)</span>` : " · 사진"} <span class="es-cl-st-del">⌫ Delete 키로 이 컷+자막 삭제</span>` +
+    el.innerHTML = `🎬 <b>${ai + 1}번 컷</b> · ${(s.dur || 0).toFixed(1)}초${isVid ? ` <span class="es-cl-st-sub">(원본 ${(f.dur || 0).toFixed(1)}초 · ${(s.in || 0).toFixed(1)}초부터)</span>` : " · 사진"} <button type="button" class="es-cl-st-delbtn" data-delslot="${key}" title="이 컷과 그 안의 자막을 영상에서 지웁니다">🗑 이 컷·자막 삭제</button>` +
       (E.using.template.narrate ? `<br>🗣 나레이션 음성(영상 전체) ${hasVoice ? '<span class="es-cl-st-txt">✅ 들어가 있어요</span>' : "— 아직 (나레이션 단계에서 생성)"}` : "");
+    const db = el.querySelector(".es-cl-st-delbtn");   // 📱 모바일: Delete 키 없이 탭으로 컷 삭제(데스크탑 Delete 키도 그대로 동작)
+    if (db) db.onclick = () => { if (confirm("이 컷과 그 안의 자막을 영상에서 지울까요?\n(되돌리기 Ctrl+Z)")) deleteClipAndCaptions(key); };
   }
   // 수정한 자막(시간순)을 합쳐 나레이션 대본으로 → 음성 재생성 → 음성에 맞춰 자막 재싱크
   async function reNarrateFromCaptions(btn) {
@@ -4781,6 +4808,36 @@
   function tmBlobToDataUri(blob) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); }); }
   // ── 🎤 목소리 → 자막 (STT) — 자율컷 영상 음성 인식 → 15글자 이내 씽크 자막, 관리자 스타일 적용 ──
   function sttEndpoint() { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/stt"; return "https://sc-pink.vercel.app/api/stt"; }
+  // 🎚 영상/오디오에서 '음성만' 뽑아 16kHz 모노 WAV 로 압축 — Vercel 서버리스 본문 한도(약 4.5MB) 안에 들어가게 + Whisper 최적 포맷
+  //   (영상 파일 통째로 base64 전송하면 배포본에서 413/연결 실패 → '목소리를 자막으로'가 안 되던 원인)
+  function _encodeWav16(samples, sampleRate) {
+    const n = samples.length, buf = new ArrayBuffer(44 + n * 2), view = new DataView(buf);
+    const wr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+    wr(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); wr(8, "WAVE"); wr(12, "fmt ");
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true); wr(36, "data"); view.setUint32(40, n * 2, true);
+    let off = 44; for (let i = 0; i < n; i++) { let s = Math.max(-1, Math.min(1, samples[i])); view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true); off += 2; }
+    return buf;
+  }
+  async function _extractAudio16kWavUri(file) {
+    const arr = await file.arrayBuffer();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || typeof OfflineAudioContext === "undefined") throw new Error("no-audio-ctx");
+    const tmp = new AC(); let decoded;
+    try { decoded = await tmp.decodeAudioData(arr.slice(0)); } finally { try { tmp.close(); } catch (_) {} }
+    const SR = 16000, dur = Math.max(0.05, decoded.duration || 0), frames = Math.max(1, Math.ceil(dur * SR));
+    const off = new OfflineAudioContext(1, frames, SR);
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start(0);
+    const rendered = await off.startRendering();
+    const blob = new Blob([_encodeWav16(rendered.getChannelData(0), SR)], { type: "audio/wav" });
+    return await tmBlobToDataUri(blob);
+  }
+  // STT 로 보낼 {uri, mime} — 가능하면 음성만 압축, 실패하면(코덱 등) 원본으로 폴백
+  async function sttAudioUri(file) {
+    try { return { uri: await _extractAudio16kWavUri(file), mime: "audio/wav" }; }
+    catch (_) { return { uri: await tmBlobToDataUri(file), mime: (file && file.type) || "video/mp4" }; }
+  }
   const AUTO_CAP_KEYS = ["font", "size", "color", "bold", "outline", "outlineW", "glow", "shadow", "bg", "bgColor", "bgOpacity", "spacing", "italic", "underline", "lineSpacing", "align", "opacity", "upper", "width", "yPct", "fx"];
   function autoCapStyle() {
     const s = (E.using && E.using.template.autoCapStyle && typeof E.using.template.autoCapStyle === "object") ? E.using.template.autoCapStyle : null;
@@ -4816,8 +4873,8 @@
     const slotIn = (slot && slot.in) || 0, sceneDur = (slot && slot.dur) || 0;
     if (btn) { btn.disabled = true; btn._t = btn.textContent; btn.textContent = "🎤 듣는 중…"; }
     try {
-      const uri = await tmBlobToDataUri(f._file);
-      const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: uri, mime: f._file.type || "video/mp4", language: "ko" }) });
+      const aud = await sttAudioUri(f._file);   // 음성만 압축 전송(배포본 본문 한도 대응)
+      const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
       const words = j.words || [];
@@ -4853,8 +4910,8 @@
         const seg = arr.find((a) => a.slot.id === slot.id); const sceneStart = seg ? seg.start : 0;
         const slotIn = slot.in || 0, sceneDur = slot.dur || 0;
         try {
-          const uri = await tmBlobToDataUri(f._file);
-          const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: uri, mime: f._file.type || "video/mp4", language: "ko" }) });
+          const aud = await sttAudioUri(f._file);   // 음성만 16kHz WAV 로 압축 → 배포본(Vercel) 본문 한도 안에 들어가게
+          const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
           const j = await r.json().catch(() => ({}));
           if (!r.ok || !j.ok) { errored++; continue; }   // 서버 오류(연결 안 됨 등)
           const words = j.words || []; if (!words.length) continue;   // 말소리 없음(에러 아님)
@@ -7849,8 +7906,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     try {
       let words = [];
       try {
-        const uri = await tmBlobToDataUri(E.using.voiceBlob);
-        const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: uri, mime: E.using.voiceBlob.type || "audio/wav", language: "ko" }) });
+        const aud = await sttAudioUri(E.using.voiceBlob);   // 음성만 압축 전송(배포본 본문 한도 대응)
+        const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
         const j = await r.json().catch(() => ({}));
         if (r.ok && j.ok) words = j.words || [];
       } catch (_) {}
@@ -7939,8 +7996,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         // 나레이션 음성(영상 0초부터 재생) STT → 기존 자막 텍스트를 단어 타임라인에 재배치
         let words = [];
         try {
-          const uri = await tmBlobToDataUri(E.using.voiceBlob);
-          const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: uri, mime: E.using.voiceBlob.type || "audio/wav", language: "ko" }) });
+          const aud = await sttAudioUri(E.using.voiceBlob);   // 음성만 압축 전송(배포본 본문 한도 대응)
+          const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
           const j = await r.json().catch(() => ({}));
           if (r.ok && j.ok) words = j.words || [];
         } catch (_) {}
@@ -10929,6 +10986,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const eb = $("#esNavExplore", root); if (eb) eb.addEventListener("click", openExplore); }
     { const cb = $("#esNavClassify", root); if (cb) cb.addEventListener("click", openClassify); }
     { const rb = $("#esNavRoad", root); if (rb) rb.addEventListener("click", openRoadmap); }
+    { const bh = $("#esBotHome", root); if (bh) bh.addEventListener("click", easyBotHome); }   // 📱 하단 네비 홈
+    { const bb = $("#esBotBack", root); if (bb) bb.addEventListener("click", easyBotBack); }   // 📱 하단 네비 뒤로
     try { const m = localStorage.getItem("es_mode2"); if (m === "easy") E.mode2 = m; } catch (_) {}   // 새로고침 시 관리자(detail) 자동복원 안 함 → 항상 이지숏폼으로 시작(비번 재입력)
     // Ctrl/Cmd+A = 전체 선택, Delete = 선택 삭제, Ctrl/Cmd+Z = 되돌리기 (사용 화면 한정)
     // 마지막으로 만진 타임라인(_activeTl: 'scene' 장면 / 'text' 글자)을 대상으로 동작
