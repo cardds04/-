@@ -3706,12 +3706,19 @@
               ${caps.length ? `
               <section class="es-cl-panel es-cl-panel-style">
                 <div class="es-cl-panel-head">
-                  <b>2. 자막 스타일</b>
-                  <span>스타일 하나를 고른 뒤 글자체, 크기, 위치를 한 번에 정리하세요.</span>
+                  <b>자막 스타일</b>
+                  <span>마음에 드는 모양을 하나 골라요.</span>
                 </div>
                 <div class="es-cl-capstyle">
-                  <div class="es-cl-stylebar-hd">🎨 자막 스타일 <span class="es-cl-capedit-sub">누르면 그 모양으로</span></div>
                   <div class="es-cl-stylebar" id="esClStyleRow">${capStyleRowHtml}</div>
+                </div>
+              </section>
+              <section class="es-cl-panel es-cl-panel-font">
+                <div class="es-cl-panel-head">
+                  <b>글꼴·크기</b>
+                  <span>글자체, 크기, 배경 길이를 정리해요.</span>
+                </div>
+                <div class="es-cl-capstyle">
                   <div class="es-cl-capctl">
                     <span class="es-cl-capctl-lb">글자체</span>
                     <button type="button" class="es-btn es-btn-ghost es-cl-fontnav" id="esClFontPrev" title="이전 글자체">◀</button>
@@ -3771,9 +3778,11 @@
             </div>
           </div>
           <div class="es-cl-mobtools" aria-label="패널 열기">
-            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="style">🎨 자막 스타일</button>` : ""}
+            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="style">🎨 스타일</button>` : ""}
+            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="font">🔤 글꼴</button>` : ""}
             <button type="button" class="es-cl-mobtool" data-sheet="timeline">🎬 타임라인</button>
-            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="editor">✏️ 자막 편집</button>` : ""}
+            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="editor">✏️ 자막</button>` : ""}
+            <button type="button" class="es-cl-mobtool" data-music="1">🎵 음악</button>
           </div>
           <div class="es-cl-sheet-backdrop" id="esClSheetBackdrop"></div>
           ${caps.length ? `
@@ -4084,13 +4093,16 @@
           const tools = $$(".es-cl-mobtool", step);
           const sync = () => { const cur = step.getAttribute("data-sheet"); tools.forEach((b) => b.classList.toggle("on", b.dataset.sheet === cur)); };
           const setSheet = (name) => { const cur = step.getAttribute("data-sheet"); if (!name || cur === name) step.removeAttribute("data-sheet"); else step.setAttribute("data-sheet", name); sync(); };
-          [".es-cl-panel-style", ".es-cl-panel-timeline", ".es-cl-panel-editor"].forEach((sel) => {
+          [".es-cl-panel-style", ".es-cl-panel-font", ".es-cl-panel-timeline", ".es-cl-panel-editor"].forEach((sel) => {
             const p = step.querySelector(sel); if (p && !p.querySelector(".es-cl-sheet-close")) {
               const x = document.createElement("button"); x.type = "button"; x.className = "es-cl-sheet-close"; x.setAttribute("aria-label", "닫기"); x.textContent = "✕";
               x.addEventListener("click", () => setSheet(null)); p.insertBefore(x, p.firstChild);
             }
           });
-          tools.forEach((b) => b.addEventListener("click", () => setSheet(b.dataset.sheet)));
+          tools.forEach((b) => b.addEventListener("click", () => {
+            if (b.dataset.music) { setSheet(null); try { openMusicPicker(); } catch (_) {} return; }   // 🎵 음악 고르기(기존 음악 바텀시트)
+            setSheet(b.dataset.sheet);
+          }));
           { const bd = $("#esClSheetBackdrop"); if (bd) bd.addEventListener("click", () => setSheet(null)); }
         } }
       preloadFills(); seek(0);
