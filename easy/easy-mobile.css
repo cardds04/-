@@ -544,3 +544,92 @@ body.es-hasnav .es-bnav {
 @media (max-width: 720px) {
   .es-tplcard-info { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   고객 메인(이지숏폼) — 모바일 컴팩트화
+   ① 빠른 시작 헤더  ② 4가지 시작 방식  ③ 오늘의 추천(스와이프)
+   easyshorts.css 뒤에 로드되므로 같은 specificity여도 모바일이 이긴다.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  /* ── ① 빠른 시작 헤더 — 박스 축소 + 긴 안내문 숨김, 한 줄 레이아웃 ── */
+  #easyRoot .es-customer-head {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin: 12px auto 14px !important;
+    padding: 12px 14px !important;
+    border-radius: 16px;
+  }
+  #easyRoot .es-customer-head > div { flex: 1 1 auto; min-width: 0; }
+  #easyRoot .es-customer-head p { margin: 0 !important; font-size: 10.5px !important; line-height: 1.2; }
+  #easyRoot .es-customer-head h2 {
+    margin: 1px 0 0 !important;
+    font-size: 15px !important;
+    line-height: 1.22 !important;
+    letter-spacing: -0.03em;
+  }
+  /* 긴 안내 문구 숨김 ("카드 이미지를 누르면 먼저 재생되고…") */
+  #easyRoot .es-customer-head div > p + h2 + span { display: none !important; }
+  /* 아이디어 상자 = 작은 알약 */
+  #easyRoot .es-idea-pill { flex: 0 0 auto; padding: 9px 12px !important; font-size: 11.5px !important; white-space: nowrap; }
+
+  /* ── ② 4가지 시작 방식 — 카드 납작하게 + 글자 흐름배치(겹침 해결) ── */
+  #easyRoot .es-base-section { margin: 16px auto 22px !important; }
+  #easyRoot .es-base-sec-head { margin-bottom: 10px; }
+  #easyRoot .es-base-sec-head b { font-size: 15px; }
+  #easyRoot .es-base-sec-head span { font-size: 11px; }
+  #easyRoot .es-base-grid { gap: 10px; }
+  #easyRoot .es-base-start-card {
+    aspect-ratio: 1.35 / 1;
+    padding: 11px 12px;
+    gap: 3px;
+    justify-content: flex-end;
+  }
+  #easyRoot .es-base-start-card .es-base-card-no { top: 8px; left: 9px; font-size: 10.5px; padding: 2px 7px; }
+  /* 제목·설명·버튼: 절대배치 → 흐름배치 (낮은 카드에서도 안 겹침) */
+  #easyRoot .es-base-start-card .es-base-card-desc {
+    position: static; top: auto; left: auto;
+    width: auto; max-width: 100%; align-self: stretch;
+    font-size: 14px; line-height: 1.12; text-align: left;
+  }
+  #easyRoot .es-base-start-card .es-base-card-sub,
+  #easyRoot .es-base-start-card.is-orange .es-base-card-sub {
+    position: static; top: auto; left: auto;
+    max-width: 100%; align-self: stretch;
+    font-size: 10.5px; line-height: 1.2;
+  }
+  #easyRoot .es-base-start-card .es-base-card-action {
+    position: static; right: auto; bottom: auto;
+    align-self: flex-start; margin-top: 3px;
+    padding: 6px 10px; font-size: 10.5px;
+  }
+
+  /* ── ③ 오늘의 추천 — 자동마퀴 → 손가락 스와이프 캐러셀 + 카드 축소 ── */
+  #easyRoot .es-cust-featured { margin: 16px auto 24px !important; }
+  #easyRoot .es-cust-featured::before { display: none; }   /* 뒤 글로우 제거 */
+  #easyRoot .es-cust-featured-head { margin-bottom: 10px; }
+  #easyRoot .es-cust-featured-head b { font-size: 16px; }
+  #easyRoot .es-cust-rail {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scroll-padding-left: 4px;
+    padding: 22px 0 8px;
+    mask-image: none;             /* 가장자리 마스크 제거(카드 잘림 방지) */
+    scrollbar-width: none;
+  }
+  #easyRoot .es-cust-rail::-webkit-scrollbar { display: none; }
+  #easyRoot .es-cust-rail::before,
+  #easyRoot .es-cust-rail::after { display: none; }   /* 좌우 페이드(카드 가림) 제거 */
+  #easyRoot .es-cust-grid-featured {
+    animation: none !important;    /* 자동 흐름 정지 → 직접 스와이프 */
+    width: max-content;
+    gap: 11px;
+    padding: 0 4px;
+  }
+  #easyRoot .es-cust-grid-featured .es-cust-card { flex-basis: 124px; scroll-snap-align: start; }
+  /* 터치엔 hover가 없으니 hover 변형·힌트 무력화 */
+  #easyRoot .es-cust-grid-featured .es-cust-card:hover { transform: none; box-shadow: 0 16px 46px rgba(0,0,0,0.4); }
+  #easyRoot .es-cust-grid-featured .es-cust-card::after { display: none; }
+}
