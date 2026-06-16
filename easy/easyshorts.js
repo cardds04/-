@@ -2869,7 +2869,13 @@
     try {
       const r = await fetch(EASY_TPL_API, { cache: "no-store" });
       const j = await r.json();
-      if (j && j.ok && Array.isArray(j.templates)) { E.published = j.templates; return true; }
+      if (j && j.ok && Array.isArray(j.templates)) {
+        E.published = j.templates;
+        // #6 고객은 분류(clsMap)가 로컬에 없어 전부 '작업·과정형'으로 떴음 → 서버 분류·체계를 메모리에 받아 clsMap/taxLoad가 폴백
+        E._serverCats = (j.cats && typeof j.cats === "object") ? j.cats : {};
+        E._serverTax = (Array.isArray(j.taxonomy) && j.taxonomy.length) ? j.taxonomy : null;
+        return true;
+      }
     } catch (_) {}
     return false;
   }
@@ -10153,7 +10159,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       }
     } catch (_) {}
   }
-  function taxLoad() { taxMigrate(); try { const s = localStorage.getItem("es_taxonomy"); if (s) { const t = JSON.parse(s); if (Array.isArray(t) && t.length) return t; } } catch (_) {} return JSON.parse(JSON.stringify(ES_CATS)); }
+  function taxLoad() { if (E._serverTax && E._serverTax.length) return E._serverTax;   /* 고객: 서버 분류체계(커스텀 카테고리 포함) 우선 */ taxMigrate(); try { const s = localStorage.getItem("es_taxonomy"); if (s) { const t = JSON.parse(s); if (Array.isArray(t) && t.length) return t; } } catch (_) {} return JSON.parse(JSON.stringify(ES_CATS)); }
   function taxSave(t) { try { localStorage.setItem("es_taxonomy", JSON.stringify(t)); localStorage.setItem("es_taxonomy_ver", String(ES_CATS_VER)); } catch (_) {} }
   function TAX() { return taxLoad(); }
   function taxAddBucket(emoji, label) { const t = taxLoad(); t.push({ key: uid(), label: label, emoji: emoji || "📌", formats: [] }); taxSave(t); }
@@ -10162,7 +10168,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function taxDelFormat(goalKey, fmtId) { const t = taxLoad(); const c = t.find((x) => x.key === goalKey); if (c) { c.formats = (c.formats || []).filter((f) => f.id !== fmtId); taxSave(t); } }
   function clsGoal(k) { return TAX().find((c) => c.key === k); }
   function clsLevel(goalKey, fmtId) { const c = clsGoal(goalKey); const f = c && c.formats.find((x) => x.id === fmtId); return f ? f.level : null; }
-  function clsMap() { try { return JSON.parse(localStorage.getItem("es_template_cats") || "{}"); } catch (_) { return {}; } }
+  function clsMap() { try { const local = JSON.parse(localStorage.getItem("es_template_cats") || "{}"); if (local && Object.keys(local).length) return local; } catch (_) {} return E._serverCats || {}; }   // 로컬 분류 없으면 서버 분류(고객용) 폴백
   function clsMapSave(m) { try { localStorage.setItem("es_template_cats", JSON.stringify(m)); } catch (_) {} }
   function clsRowSave(id, goal, fmt) {
     const m = clsMap();
