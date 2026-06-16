@@ -3563,6 +3563,7 @@
           <div class="es-narr-tonerow">
             <select id="esNarrTone" class="es-mini-sel" title="나레이션 음성 스타일"><option value="">🎭 기본 (차분·신뢰)</option></select>
             <select id="esNarrGender" class="es-mini-sel" title="목소리 성별"><option value="female">👩 여성</option><option value="male">👨 남성</option></select>
+            <button type="button" class="es-btn es-btn-ghost es-narr-preview" id="esNarrPreview" title="고른 목소리로 짧게 들어보기">🔊 미리듣기</button>
           </div>
           <button type="button" class="es-btn es-btn-primary es-narr-make" id="esNarrMakeVoice">${hasVoice ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
           ${hasVoice ? `
@@ -3986,6 +3987,7 @@
           ts.addEventListener("change", () => { E.using._voiceTone = ts.value; const t = toneById(ts.value); if (t) { E.using._voiceGender = t.gender; const g = $("#esNarrGender"); if (g) g.value = t.gender; } scheduleSaveMeta(); });
         } }
       { const g = $("#esNarrGender"); if (g) { g.value = E.using._voiceGender || "female"; g.addEventListener("change", () => { E.using._voiceGender = g.value; scheduleSaveMeta(); }); } }
+      { const pv = $("#esNarrPreview"); if (pv) pv.addEventListener("click", () => previewVoiceTone(pv)); }   // 🔊 만들기 전 목소리 미리듣기
       { const mv = $("#esNarrMakeVoice"); if (mv) mv.addEventListener("click", async () => { await makeNarrationWhole(mv, false); if (E.using.voiceUrl) renderEasy(); }); }   // 나레이션(음성)만 → 끝나면 미리듣기+자막버튼 노출
       { const cap = $("#esNarrCap"); if (cap) cap.addEventListener("click", async () => { await makeCaptionsFromVoice(cap); renderEasy(); }); }   // 음성에 맞춰 자막
     } else if (cur === "caption") {
@@ -7790,11 +7792,32 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function origVolOf(tpl) { return (tpl && tpl.origAudioVol != null) ? clamp(tpl.origAudioVol, 0, 1) : 1; }   // 주어진 템플릿 기준(저장영상 미리보기·렌더는 그 프로젝트 템플릿을 넘겨야 함)
   function curOrigVol() { return origVolOf(E.using && E.using.template); }   // 편집기(라이브) 기준
   // 음성 스타일 프리셋 — 스튜디오와 동일한 /tts_tones.json (이름·성별·스타일 20종)
-  let ES_TONES = null;
+  let ES_TONES = null, ES_TONE_PREVIEW = "";
   async function loadVoiceTones() {
     if (ES_TONES) return ES_TONES;
-    try { const j = await (await fetch("/tts_tones.json")).json(); ES_TONES = (j && j.tones) || []; } catch (_) { ES_TONES = []; }
+    // 상대경로 — 배포본은 /easy/ 하위라 절대경로 /tts_tones.json 는 404(그래서 톤이 '기본'만 떴음)
+    try { const j = await (await fetch("tts_tones.json")).json(); ES_TONES = (j && j.tones) || []; ES_TONE_PREVIEW = (j && j.previewText) || ""; } catch (_) { ES_TONES = []; }
     return ES_TONES;
+  }
+  // 🔊 선택한 성별·톤으로 짧은 샘플을 합성해 들려주기(만들기 전에 목소리 고르기)
+  async function previewVoiceTone(btn) {
+    await loadVoiceTones();
+    const tone = toneById(E.using && E.using._voiceTone);
+    const styleHint = tone ? tone.style : "차분하고 신뢰감 있는 톤으로 한국어 나레이션을 읽어 주세요.";
+    const text = ES_TONE_PREVIEW || "안녕하세요, 오늘 소개해 드릴 곳은 바로 여기입니다.";
+    const old = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "🎤 듣는 중…"; }
+    try {
+      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: text, voiceGender: (E.using && E.using._voiceGender) || "female", styleHint }) });
+      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch (_) { j = { message: txt.slice(0, 160) }; }
+      if (!res.ok || !j.audioBase64) throw new Error(j.message || `HTTP ${res.status}`);
+      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+      if (!window._esPreviewAudio) window._esPreviewAudio = new Audio();
+      try { window._esPreviewAudio.pause(); } catch (_) {}
+      window._esPreviewAudio.src = url; window._esPreviewAudio.play().catch(() => {});
+    } catch (e) { try { toast("미리듣기 실패: " + (e && e.message || e)); } catch (_) {} }
+    finally { if (btn) { btn.disabled = false; btn.textContent = old || "🔊 미리듣기"; } }
   }
   function toneById(id) { return (ES_TONES || []).find((t) => t.id === id) || null; }
   // 자막 전체를 한 대본으로 모아 Gemini TTS 로 음성을 만들고, 🎙 음성 트랙에 넣음
