@@ -9025,7 +9025,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
             <button type="button" class="es-btn es-vidmake es-vidmake-ready es-vidregen" data-id="${s.srcBefore || ""}" title="비포·원본 소스로 영상을 다시 생성">🔁 재생성</button>
           </div>` : "";
       return `
-        <div class="es-fill-slot ${f ? "filled" : ""} ${s.virtual ? "virtual" : ""} ${s.aiRole ? "ai-" + s.aiRole : ""} ${isAutoMaster ? "auto-master" : ""} ${isSlotSel(s.id) ? "sel" : ""}" data-id="${s.id}">
+        <div class="es-fill-slot ${!E._detailEditor ? "es-easy-fill" : ""} ${f ? "filled" : ""} ${s.virtual ? "virtual" : ""} ${s.aiRole ? "ai-" + s.aiRole : ""} ${isAutoMaster ? "auto-master" : ""} ${isSlotSel(s.id) ? "sel" : ""}" data-id="${s.id}">
           <div class="es-fill-thumb" style="aspect-ratio:${asp.w}/${asp.h}">${media}${roleBadge}${engBadge}${s.virtual ? `<span class="es-virtual-badge">가상</span>` : ""}${isAutoMaster ? `<span class="es-auto-badge">♾ 자율컷</span>` : ""}${f ? `<button type="button" class="es-fill-x" data-id="${s.id}" title="미디어 비우기">×</button>` : ""}</div>
           ${genRow}${afterRow}${vresRow}
           <div class="es-fill-info">
