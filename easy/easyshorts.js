@@ -1600,7 +1600,7 @@
       const total = p.total || (p.slots || []).reduce((s, x) => s + (x.dur || 0), 0) || 0;
       return `
       <article class="es-cust-card" data-tpl="${esc(p.id)}" data-cat="${esc(cat)}" data-search="${esc(`${name} ${cat} ${tag}`.toLowerCase())}">
-        <button type="button" class="es-cust-thumb" data-tpl="${esc(p.id)}">
+        <button type="button" class="es-cust-thumb" data-tpl="${esc(p.id)}" data-pubvid="${esc(typeof p.video === "string" ? p.video : "")}">
           ${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy">` : ""}
           <span class="es-cust-chip">◀ ${esc(tag)}</span>
           <i class="es-cust-add" title="이 템플릿으로 만들기">＋</i>
@@ -1809,7 +1809,16 @@
       b.addEventListener("click", () => previewProject(pid, card));   // 클릭 = 크게 미리보기(라이트박스)
     });
     $$(".es-cust-thumb[data-demo]", body).forEach((b) => b.addEventListener("click", () => newDetailSession()));
-    $$(".es-cust-thumb[data-tpl]", body).forEach((b) => b.addEventListener("click", () => startFromTemplate(b.dataset.tpl, "easy")));   // ☁️ 게시된 템플릿 카드 → 그 템플릿으로 제작 시작
+    $$(".es-cust-thumb[data-tpl]", body).forEach((b) => {   // ☁️ 게시된 템플릿 카드 — 클릭=그 자리에서 미리보기, ＋버튼=제작 시작
+      const card = b.closest(".es-cust-card"), tpl = b.dataset.tpl, url = b.dataset.pubvid;
+      if (url) {
+        b.addEventListener("mouseenter", () => { if (card && card.classList.contains("playing")) return; playPublishedInline(card, url); });   // 데스크탑: 올리면 미리보기
+        b.addEventListener("mouseleave", () => stopInline());
+        b.addEventListener("click", () => playPublishedInline(card, url));   // 클릭/탭 = 화면 그 상태로 미리보기(다시 누르면 정지)
+      } else {
+        b.addEventListener("click", () => startFromTemplate(tpl, "easy"));   // 미리보기 영상이 없으면 바로 제작
+      }
+    });
     const go = (type) => {
       if (type === "new") { newDetailSession(); return; }
       if (type === "detail") { E.easyPage = "main"; enterMode2("detail"); return; }
