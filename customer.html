@@ -2848,6 +2848,16 @@
       function isValidCustomerMobilePhone(value) {
         return /^01[016789]\d{7,8}$/.test(normalizeCustomerKoMobileDigits(value));
       }
+      // 멀티번호(쉼표 구분) 중 첫 번째 유효한 휴대폰 번호. 없으면 "".
+      function firstValidCustomerPhone(raw) {
+        return (
+          String(raw || "")
+            .split(/[,;/\n|]+/)
+            .map((s) => normalize(s))
+            .filter(Boolean)
+            .find((p) => isValidCustomerMobilePhone(p)) || ""
+        );
+      }
       function formatDateTimeText(value) {
         const parsed = new Date(String(value || ""));
         if (!Number.isFinite(parsed.getTime())) return "-";
@@ -2942,6 +2952,9 @@
           <div class="hint" style="margin-bottom:8px;">등록된 모든 번호로 예약·안내 문자가 발송됩니다.</div>
           ${rowsHtml}
           ${addHtml}
+          <div style="margin-top:12px;text-align:right;">
+            <button class="btn small" type="button" data-action="closePhoneMgr">확인</button>
+          </div>
         `;
         phoneMgrBoxEl.classList.remove("hidden");
       }
@@ -4436,6 +4449,11 @@
           renderAuthState();
           return;
         }
+        if (action === "closePhoneMgr") {
+          phoneMgrOpen = false;
+          renderPhoneManager(user);
+          return;
+        }
         if (action === "delCustomerPhone") {
           const target = String(button.dataset.phone || "").trim();
           const targetDigits = normalizeCustomerKoMobileDigits(target);
@@ -4548,9 +4566,9 @@
             renderAuthState();
             return;
           }
-          if (!isValidCustomerMobilePhone(user.phone)) {
+          if (!firstValidCustomerPhone(user.phone)) {
             alert(
-              "휴대폰 연락처를 입력해 주세요.\n「내 정보」→「내정보수정」에서 번호를 저장한 뒤 스케줄을 등록할 수 있습니다."
+              "휴대폰 연락처를 입력해 주세요.\n상단 「📞 번호 추가」에서 번호를 저장한 뒤 스케줄을 등록할 수 있습니다."
             );
             return;
           }
@@ -4778,7 +4796,7 @@
             await window.SolapiNotify?.sendScheduleSubmitNotice({
               siteLabel: __siteLabel,
               company: scheduleCompanyName,
-              phone: user.phone,
+              phone: firstValidCustomerPhone(user.phone) || user.phone,
               schedule: createdSchedule,
               onPhoneSaved: async (newPhone) => {
                 // 1) 로컬 customers 스토리지의 현재 사용자 phone 갱신
