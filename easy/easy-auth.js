@@ -48,7 +48,7 @@
     .ea-chip{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:12px;z-index:4000;
       display:inline-flex;align-items:center;gap:6px;max-width:46vw;
       padding:8px 13px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;
-      border:1px solid var(--border,#2a2a2a);background:rgba(20,20,20,.82);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+      border:1px solid var(--border,#2a2a2a);background:rgba(24,24,24,.95);
       color:var(--text,#e2e2e2);font-size:12.5px;font-weight:800;font-family:var(--font-body,inherit);
       box-shadow:0 4px 16px rgba(0,0,0,.35)}
     .ea-chip:active{transform:scale(.95)}
