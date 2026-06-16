@@ -92,30 +92,12 @@
     launchApp();
   }
 
-  // ── 게이트 ─────────────────────────────────────────────────────
+  // ── 진입 ───────────────────────────────────────────────────────
+  // 홈(둘러보기)은 누구나 공개. 제작(생성)만 로그인 필요 → easy-auth.js 가 처리.
+  // (예전 공용 비밀번호 게이트는 회원제로 전환하면서 사용하지 않음)
   function initGate() {
-    const gate = $("#easyGate");
-    const pw = $("#easyGatePw");
-    const btn = $("#easyGateBtn");
-    const msg = $("#easyGateMsg");
-
-    let unlocked = false;
-    try { unlocked = localStorage.getItem(UNLOCK_KEY) === "1"; } catch (_) {}
-    if (unlocked) { afterUnlock(); return; }
-
-    function tryUnlock() {
-      const val = (pw && pw.value || "").trim();
-      if (val === PASSWORD) {
-        try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (_) {}
-        afterUnlock();
-      } else {
-        if (msg) { msg.textContent = "비밀번호가 올바르지 않습니다"; msg.className = "easy-gate-msg err"; }
-        if (pw) { pw.value = ""; pw.focus(); }
-      }
-    }
-    if (btn) btn.addEventListener("click", tryUnlock);
-    if (pw) pw.addEventListener("keydown", (e) => { if (e.key === "Enter") tryUnlock(); });
-    setTimeout(() => { if (pw) pw.focus(); }, 200);
+    void PASSWORD; void UNLOCK_KEY;
+    afterUnlock();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initGate);

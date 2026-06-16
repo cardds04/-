@@ -1324,6 +1324,8 @@
   }
   // 저장된 내 영상을 원하는 모드로 똑같이 다시 만들기
   function pickProject(pid, m) {
+    // 🔐 고객(easy) 편집 진입도 로그인 필요 (관리자 detail 은 제외)
+    if (window.EasyAuth && m !== "detail" && !window.EasyAuth.requireLogin(() => pickProject(pid, m))) return;
     E.mode2 = m;
     try { localStorage.setItem("es_mode2", m); } catch (_) {}
     $$(".es-modebtn", document.getElementById("easyRoot")).forEach((b) => b.classList.toggle("active", b.dataset.mode2 === m));
@@ -2377,6 +2379,8 @@
   }
   // 템플릿(기본 포함)으로 새 작업 시작 — 슬롯·자막·나레이션·타이틀요청 복제 후 편집기로
   async function startFromTemplate(tplId, mode) {
+    // 🔐 제작(생성)은 로그인 필요 — 비로그인 시 회원가입/로그인 모달 띄우고, 성공하면 이 동작을 이어감
+    if (window.EasyAuth && mode !== "detail" && !window.EasyAuth.requireLogin(() => startFromTemplate(tplId, mode))) return;
     const t = E.templates.find((x) => x.id === tplId) || (E.published || []).find((x) => x.id === tplId); if (!t) return;   // 기본 템플릿(로컬) 또는 게시된 템플릿(서버) 둘 다에서 찾음
     await clearSession();
     E.editing = null;
