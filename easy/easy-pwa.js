@@ -35,10 +35,10 @@
   function injectStyle() {
     if (document.getElementById("eaPwaStyle")) return;
     var css =
-      ".ea-install{position:fixed;left:12px;bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:3900;" +
-      "display:none;align-items:center;gap:7px;padding:10px 14px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;" +
+      ".ea-install{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:118px;z-index:3950;" +
+      "display:none;align-items:center;gap:5px;padding:8px 12px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;" +
       "border:1px solid var(--accent,#ffd700);background:var(--accent,#ffd700);color:var(--on-accent,#1a1400);" +
-      "font-size:13px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 6px 20px rgba(0,0,0,.4)}" +
+      "font-size:12px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 4px 14px rgba(0,0,0,.4)}" +
       ".ea-install.on{display:inline-flex}.ea-install:active{transform:scale(.95)}" +
       ".ea-ios{position:fixed;inset:0;z-index:6100;display:none;align-items:flex-end;justify-content:center;padding:0}" +
       ".ea-ios.on{display:flex}.ea-ios-bd{position:absolute;inset:0;background:rgba(0,0,0,.6)}" +
@@ -70,14 +70,35 @@
     document.body.appendChild(btnEl);
     return btnEl;
   }
+  var wanted = false;
+  // 홈 화면(추천 레일 보임)이고 제작 마법사가 아닐 때만 — 사용자 요청: 설치 못 숨기면 홈에서만
+  function isHome() {
+    return !!document.querySelector(".es-cust-grid-featured") &&
+      !document.querySelector(".es-wiz, .es-cl-stage, .es-length-step, .es-wiz-body");
+  }
+  function positionBtn() {
+    if (!btnEl) return;
+    var chip = document.getElementById("eaChip");
+    if (chip && getComputedStyle(chip).display !== "none") btnEl.style.right = (chip.offsetWidth + 24) + "px";   // 계정칩 왼쪽
+    else btnEl.style.right = "12px";
+  }
+  function refresh() {
+    if (!wanted || !btnEl) return;
+    if (isHome()) { btnEl.classList.add("on"); positionBtn(); }
+    else btnEl.classList.remove("on");
+  }
   function show() {
     if (document.body.classList.contains("es-locked")) {
       setTimeout(show, 400);
       return;
     }
-    ensureBtn().classList.add("on");
+    wanted = true;
+    ensureBtn();
+    refresh();
+    if (!window._eaInstallTick) window._eaInstallTick = setInterval(refresh, 1200);   // 화면 이동 시 홈에서만 보이게 갱신
   }
   function hide() {
+    wanted = false;
     if (btnEl) btnEl.classList.remove("on");
   }
 

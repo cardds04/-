@@ -1929,6 +1929,8 @@
             <details class="es-admin-more">
               <summary>더보기</summary>
               <div class="es-admin-more-actions">
+                <button type="button" data-act="classify">🗂 분류</button>
+                <button type="button" data-act="pv">🎬 ${p.previewVid ? "영상교체" : "영상넣기"}</button>
                 <button type="button" data-act="easy">고객화면</button>
                 <button type="button" data-act="delete">삭제</button>
               </div>
@@ -2036,6 +2038,8 @@
       card.querySelector('[data-act="easy"]')?.addEventListener("click", () => pickProject(pid, "easy"));
       card.querySelector('[data-act="publish"]')?.addEventListener("click", () => publishProject(pid));
       card.querySelector('[data-act="delete"]')?.addEventListener("click", () => deleteProject(pid));
+      card.querySelector('[data-act="classify"]')?.addEventListener("click", () => openQuickClassify(pid));   // 🗂 분류(복원)
+      card.querySelector('[data-act="pv"]')?.addEventListener("click", () => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "video/*"; inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) attachPreviewVideo(pid, f); }; inp.click(); });   // 🎬 영상넣기/교체(복원) — 템플릿에 미리보기 영상 나중에 추가
       card.querySelector('[data-play]')?.addEventListener("click", () => previewProject(pid, card));
     });
     $$(".es-admin-card[data-pub]", body).forEach((card) => {
