@@ -1101,6 +1101,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + "." + ext;
       document.body.appendChild(a); a.click(); a.remove();
+      try { maybeUploadCustomerVideo(blob, (E.using && E.using.template && E.using.template.name) || "내 영상", ext); } catch (_) {}   // 관리자 보관용 업로드
       setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
       return true;
     } finally {
@@ -1224,6 +1225,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + ".webm";
       document.body.appendChild(a); a.click(); a.remove();
+      try { maybeUploadCustomerVideo(blob, (E.using && E.using.template && E.using.template.name) || "내 영상", "webm"); } catch (_) {}   // 관리자 보관용 업로드
       setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
       return true;
     } catch (e) {
@@ -7922,6 +7924,22 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   // 나레이션 문구 생성 — 서버(ANTHROPIC_API_KEY) 사용 → 고객은 키 입력 불필요 (reel-suggest 와 동일 패턴)
   function narrEndpoint() { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/easy-narration"; return "https://sc-pink.vercel.app/api/easy-narration"; }
   function ttsEndpoint() { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/gemini-tts"; return "https://sc-pink.vercel.app/api/gemini-tts"; }
+  function custVideoEndpoint() { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/easy-customer-video"; return "https://sc-pink.vercel.app/api/easy-customer-video"; }
+  // ⑤ 고객이 만든 영상을 관리자가 볼 수 있게 서버 스토리지에 올림 — 로그인했을 때만, 백그라운드·실패는 조용히 무시
+  async function maybeUploadCustomerVideo(blob, name, ext) {
+    try {
+      if (!window.EasyAuth || !window.EasyAuth.isLoggedIn() || !blob || blob.size < 1000) return;
+      const token = window.EasyAuth.getToken();
+      let dur = 0; try { dur = slotTimes().total || 0; } catch (_) {}
+      const sr = await fetch(custVideoEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", token, ext: (ext === "mp4" ? "mp4" : "webm") }) });
+      const sj = await sr.json().catch(() => null);
+      if (!sj || !sj.ok || !sj.uploadUrl) return;
+      const up = await fetch(sj.uploadUrl, { method: "PUT", headers: { "x-upsert": "true", "Content-Type": blob.type || "video/webm" }, body: blob });
+      if (!up.ok) return;
+      await fetch(custVideoEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "record", token, publicUrl: sj.publicUrl, name: name || "내 영상", dur }) });
+      try { toast("관리자에게도 영상이 전달됐어요"); } catch (_) {}
+    } catch (_) {}
+  }
   async function narrAiGenerate(btn) {
     if (!E.using) return;
     const prompt = (E.using._narrPrompt || "").trim();

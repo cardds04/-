@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>고객 영상 보관함 (관리자)</title>
+  <style>
+    :root { --bg:#111114; --panel:#1b1b1f; --border:#2a2a30; --text:#e7e7ea; --dim:#9a9aa2; --accent:#26d3a6; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif; }
+    .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+    h1 { font-size:20px; margin:0 0 4px; }
+    .sub { color:var(--dim); font-size:13px; margin:0 0 18px; }
+    .gate { max-width:340px; margin:60px auto; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; text-align:center; }
+    .gate input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:#0e0e11; color:var(--text); font-size:16px; outline:none; }
+    .gate input:focus { border-color:var(--accent); }
+    .gate button, .reload { margin-top:12px; width:100%; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#04201a; font-size:15px; font-weight:800; cursor:pointer; }
+    .reload { width:auto; padding:8px 16px; margin:0 0 16px; font-size:13px; }
+    .msg { min-height:18px; color:#ff6b5b; font-size:13px; margin-top:8px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:16px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+    .card video { width:100%; aspect-ratio:9/16; object-fit:cover; background:#000; display:block; cursor:pointer; }
+    .meta { padding:10px 12px; }
+    .meta b { font-size:14px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .meta .who { color:var(--accent); font-size:12px; font-weight:700; margin-top:2px; }
+    .meta .when { color:var(--dim); font-size:11.5px; margin-top:2px; }
+    .meta a { display:inline-block; margin-top:8px; color:var(--accent); font-size:12.5px; text-decoration:none; font-weight:700; }
+    .empty { color:var(--dim); text-align:center; padding:50px 0; }
+    .count { color:var(--dim); font-size:13px; }
+  </style>
+</head>
+<body>
+  <div id="gate" class="gate">
+    <h1>🎬 고객 영상 보관함</h1>
+    <p class="sub">관리자 비밀번호를 입력하세요</p>
+    <input type="password" id="pw" placeholder="관리자 비밀번호" />
+    <button id="enter">들어가기</button>
+    <div class="msg" id="gateMsg"></div>
+  </div>
+
+  <div id="app" class="wrap" hidden>
+    <h1>🎬 고객이 만든 영상</h1>
+    <p class="sub">고객이 다운로드한 영상이 자동으로 모여요. <span class="count" id="count"></span></p>
+    <button class="reload" id="reload">↻ 새로고침</button>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" hidden>아직 들어온 영상이 없어요.</div>
+  </div>
+
+  <script>
+    var API = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname))
+      ? "http://127.0.0.1:8787/api/easy-customer-video"
+      : "https://sc-pink.vercel.app/api/easy-customer-video";
+    var KEY_LS = "easy_admin_key";
+    var $ = function (s) { return document.querySelector(s); };
+
+    function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+    function fmtDate(s){ try{ var d=new Date(s); return d.getFullYear()+"."+(d.getMonth()+1)+"."+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }catch(_){ return ""; } }
+
+    async function load(key) {
+      var r = await fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"list", adminKey:key }) });
+      var j = await r.json().catch(function(){ return null; });
+      if (!j || !j.ok) { throw new Error((j && j.message) || "불러오기 실패"); }
+      return j.videos || [];
+    }
+
+    function render(videos) {
+      $("#count").textContent = "총 " + videos.length + "개";
+      var grid = $("#grid"), empty = $("#empty");
+      if (!videos.length) { grid.innerHTML = ""; empty.hidden = false; return; }
+      empty.hidden = true;
+      grid.innerHTML = videos.map(function (v) {
+        var dur = v.dur ? (Math.round(v.dur*10)/10 + "초") : "";
+        return '<div class="card">' +
+          '<video src="' + esc(v.video_url) + '#t=0.1" preload="metadata" muted playsinline controls></video>' +
+          '<div class="meta">' +
+            '<b>' + esc(v.name || "내 영상") + '</b>' +
+            '<div class="who">👤 ' + esc(v.user_name || v.login_id || "") + '</div>' +
+            '<div class="when">' + esc(fmtDate(v.created_at)) + (dur ? " · " + dur : "") + '</div>' +
+            '<a href="' + esc(v.video_url) + '" download target="_blank" rel="noopener">⬇ 내려받기</a>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    async function enter(key) {
+      $("#gateMsg").textContent = "";
+      try {
+        var videos = await load(key);
+        try { localStorage.setItem(KEY_LS, key); } catch (_) {}
+        $("#gate").hidden = true; $("#app").hidden = false;
+        render(videos);
+      } catch (e) {
+        $("#gateMsg").textContent = "✗ " + (e && e.message || "비밀번호를 확인하세요");
+      }
+    }
+
+    $("#enter").addEventListener("click", function(){ enter($("#pw").value.trim()); });
+    $("#pw").addEventListener("keydown", function(e){ if (e.key==="Enter") enter($("#pw").value.trim()); });
+    $("#reload").addEventListener("click", function(){
+      var key=""; try{ key=localStorage.getItem(KEY_LS)||""; }catch(_){}
+      load(key).then(render).catch(function(e){ alert("새로고침 실패: "+(e&&e.message)); });
+    });
+
+    // 저장된 키로 자동 입장 시도
+    (function(){ var k=""; try{ k=localStorage.getItem(KEY_LS)||""; }catch(_){} if (k) enter(k); else $("#pw").focus(); })();
+  </script>
+</body>
+</html>
