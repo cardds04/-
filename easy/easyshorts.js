@@ -3116,6 +3116,13 @@
   }
   // 자막 일괄 편집 적용 — 싱크 보존이 핵심. 줄 수 그대로면 블럭별 타이밍 유지(글자만 교체),
   // 줄을 나누거나 합쳤으면 '안 바뀐 줄'을 기준점으로 그 사이만 다시 분배(전체 재정렬 X).
+  // 문구 단계 — 한 줄 = 그 번호 자리의 자막(빈 슬롯에 처음 채울 때 사용. applyCaptionBulkEdit는 기존 자막 재동기화용이라 빈 슬롯엔 안 먹음)
+  function applyCaptionStepBulk(text) {
+    if (!E.using) return;
+    const lines = String(text || "").split("\n");
+    (E.using.texts || []).forEach((tx, i) => { if (!tx.locked) tx.text = (lines[i] != null ? lines[i] : "").trim(); });
+    scheduleSaveMeta();
+  }
   function applyCaptionBulkEdit(text) {
     if (!E.using) return;
     const lines = String(text || "").split("\n").map((s) => s.trim()).filter(Boolean);
@@ -3585,18 +3592,48 @@
         </div>`;
     } else if (cur === "caption") {
       const caps = E.using.texts;
-      const capRows = caps.map((tx, i) => `
-            <label class="es-slotcap ${tx.locked ? "es-cap-locked" : ""}">
-              <span class="es-slotcap-num">${i + 1}번자리${tx.locked ? " 🔒" : ""}</span>
-              <input type="text" class="es-slotcap-in" data-idx="${i}" value="${esc(tx.text || "")}" placeholder="${i + 1}번 자막 내용을 적어주세요" ${tx.locked ? "disabled" : ""}>
-            </label>`).join("");
+      const asp = ASPECTS[E.using.template.aspect] || ASPECTS["9:16"];
+      const total = (() => { try { return slotTimes().total || 0; } catch (_) { return 0; } })();
+      const capJoined = caps.map((tx) => (tx.text || "")).join("\n");   // 한 줄 = 한 자막
       bodyHtml = `
-        <div class="es-wiz-body">
+        <div class="es-wiz-body es-length-step">
           <div class="es-wiz-num">${E.easyIdx + 1}</div>
           <div class="es-wiz-title">들어갈 문구를 넣어주세요</div>
-          <div class="es-wiz-note">자리마다 한 줄씩 적으면, 그 위치·타이밍에 자막이 나와요. (총 ${caps.length}자리)</div>
-          <button type="button" class="es-btn es-btn-primary es-aireco-btn" id="esAiReco" title="넣은 사진과 기존 문구를 분석해 비슷한 형태로 각 자리를 채워줍니다">✨ AI 추천 — 사진+기존 문구로 채우기</button>
-          <div class="es-slotcaps">${capRows}</div>
+          <div class="es-wiz-note">미리보기를 보면서 아래 <b>✏️ 자막 쓰기</b>에서 <b>한 줄에 한 자막씩</b> 적어요. (총 ${caps.length}자리)</div>
+          <div class="es-cl-layout">
+            <section class="es-cl-panel es-cl-panel-preview">
+              <div class="es-cl-panel-head"><b>미리보기</b><span>▶ 재생하면 자막이 들어간 화면을 볼 수 있어요.</span></div>
+              <div class="es-stage es-cl-stage" id="esStage" style="aspect-ratio:${asp.w}/${asp.h}">
+                <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
+                <div class="es-stage-empty" id="esStageEmpty">▶ 를 누르면 재생돼요</div>
+                <div class="es-slot-badge" id="esSlotBadge" hidden></div>
+                <div class="es-text-layer" id="esTextLayer"></div>
+                <div class="es-sticker-layer" id="esStickerLayer"></div>
+                <img id="esLogo" class="es-logo-ov" alt="" hidden>
+                <img id="esReelsOverlay" class="es-reels-overlay" alt="">
+              </div>
+              <div class="es-transport es-cl-transport">
+                <button type="button" class="es-btn es-btn-primary" id="esPlay">▶ 미리보기</button>
+                <input type="range" id="esSeek" min="0" max="${total}" step="0.01" value="0">
+                <span class="es-time" id="esTime">00:00 / ${fmtT(total)}</span>
+              </div>
+              <audio id="esMusic"></audio>
+              <audio id="esVoice"></audio>
+            </section>
+          </div>
+          <div class="es-cl-mobtools" aria-label="패널 열기">
+            <button type="button" class="es-cl-mobtool" data-sheet="editor">✏️ 자막 쓰기</button>
+            <button type="button" class="es-cl-mobtool" data-music="1">🎵 음악</button>
+          </div>
+          <div class="es-cl-sheet-backdrop" id="esClSheetBackdrop"></div>
+          <section class="es-cl-panel es-cl-panel-editor">
+            <div class="es-cl-panel-head"><b>자막 쓰기</b><span>한 줄에 한 자막씩 적고 ‘적용’을 눌러요. (총 ${caps.length}자리)</span></div>
+            <div class="es-cl-capedit">
+              <button type="button" class="es-btn es-btn-primary es-aireco-btn" id="esAiReco" title="넣은 사진과 기존 문구를 분석해 비슷한 형태로 각 자리를 채워줍니다">✨ AI 추천 — 사진으로 채우기</button>
+              <textarea id="esCapStepTa" class="es-cl-capedit-ta" rows="${Math.min(12, Math.max(4, caps.length + 1))}" placeholder="첫 줄 = 1번 자막\n둘째 줄 = 2번 자막\n…">${esc(capJoined)}</textarea>
+              <button type="button" class="es-btn es-btn-primary es-cl-capedit-apply" id="esCapStepApply">✓ 자막 적용</button>
+            </div>
+          </section>
         </div>
         <div class="es-wiz-foot">
           ${prevBtn}
@@ -3995,11 +4032,29 @@
       { const mv = $("#esNarrMakeVoice"); if (mv) mv.addEventListener("click", async () => { await makeNarrationWhole(mv, false); if (E.using.voiceUrl) renderEasy(); }); }   // 나레이션(음성)만 → 끝나면 미리듣기+자막버튼 노출
       { const cap = $("#esNarrCap"); if (cap) cap.addEventListener("click", async () => { await makeCaptionsFromVoice(cap); renderEasy(); }); }   // 음성에 맞춰 자막
     } else if (cur === "caption") {
-      $$(".es-slotcap-in").forEach((inp) => {
-        inp.addEventListener("input", (e) => { const i = parseInt(e.target.dataset.idx, 10); if (E.using.texts[i]) { E.using.texts[i].text = e.target.value; scheduleSaveMeta(); } });
-        inp.addEventListener("keydown", (e) => e.stopPropagation());
-      });
+      // 미리보기 플레이어(컷 길이 단계와 동일 경로)
+      renderTexts(); renderLogo(); updateReelsOverlay();
+      if (E.using.musicUrl) { const a = $("#esMusic"); if (a) { a.src = E.using.musicUrl; a.loop = true; } }
+      if (E.using.voiceUrl) { const a = $("#esVoice"); if (a) a.src = E.using.voiceUrl; }
+      { const p = $("#esPlay"); if (p) p.addEventListener("click", togglePlay); }
+      { const sk = $("#esSeek"); if (sk) sk.addEventListener("input", (e) => seek(parseFloat(e.target.value))); }
+      // 📱 '자막 쓰기'/음악 바텀시트 토글
+      { const step = $(".es-length-step");
+        if (step) {
+          const tools = $$(".es-cl-mobtool", step);
+          const sync = () => { const cur2 = step.getAttribute("data-sheet"); tools.forEach((b) => b.classList.toggle("on", b.dataset.sheet === cur2)); };
+          const setSheet = (name) => { const cur2 = step.getAttribute("data-sheet"); if (!name || cur2 === name) step.removeAttribute("data-sheet"); else step.setAttribute("data-sheet", name); sync(); };
+          { const p = step.querySelector(".es-cl-panel-editor"); if (p && !p.querySelector(".es-cl-sheet-close")) { const x = document.createElement("button"); x.type = "button"; x.className = "es-cl-sheet-close"; x.setAttribute("aria-label", "닫기"); x.textContent = "✕"; x.addEventListener("click", () => setSheet(null)); p.insertBefore(x, p.firstChild); } }
+          tools.forEach((b) => b.addEventListener("click", () => { if (b.dataset.music) { setSheet(null); try { openMusicPicker(); } catch (_) {} return; } setSheet(b.dataset.sheet); }));
+          { const bd = $("#esClSheetBackdrop"); if (bd) bd.addEventListener("click", () => setSheet(null)); }
+          setSheet("editor");   // 처음엔 자막 쓰기 시트를 열어둠
+        } }
+      // 한 줄 = 한 자막(번호순) 일괄 작성
+      { const ta = $("#esCapStepTa"), ap = $("#esCapStepApply");
+        if (ta) ta.addEventListener("keydown", (e) => e.stopPropagation());
+        if (ap && ta) ap.addEventListener("click", () => { applyCaptionStepBulk(ta.value); try { renderTexts(); } catch (_) {} try { seek(E.playhead || 0); } catch (_) {} try { toast("자막을 적용했어요"); } catch (_) {} }); }
       { const rb = $("#esAiReco"); if (rb) rb.addEventListener("click", aiRecommendCaptions); }
+      preloadFills(); seek(0);
     } else if (cur === "miccap") {
       { const mk = $("#esMicMake"); if (mk) mk.addEventListener("click", () => makeCaptionsFromMyVoice(mk)); }
       { const ta = $("#esMicCapTa"), ap = $("#esMicCapApply");
