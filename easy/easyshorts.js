@@ -1850,6 +1850,8 @@
         b.addEventListener("click", () => { try { toast("이 템플릿은 아직 미리보기 영상이 없어요 — ＋ 버튼으로 바로 만들 수 있어요"); } catch (_) {} });   // 미리보기 영상 없음 → 갑자기 제작으로 안 넘어가게(안내만)
       }
     });
+    // 📱 모바일: 미리보기 재생 중 옆으로 스와이프(레일 스크롤)하면 그 미리보기를 멈춤 (틀어놓고 넘겨도 계속 재생되던 것 방지)
+    { const rail = $(".es-cust-rail", body); if (rail) rail.addEventListener("scroll", () => { try { stopInline(); } catch (_) {} }, { passive: true }); }
     const go = (type) => {
       if (type === "new") { newDetailSession(); return; }
       if (type === "detail") { E.easyPage = "main"; enterMode2("detail"); return; }

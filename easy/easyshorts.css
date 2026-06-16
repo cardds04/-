@@ -5203,6 +5203,12 @@ body.mode-easy #easyRoot,
   box-shadow: 0 30px 90px rgba(38, 211, 166, 0.18), 0 24px 70px rgba(0, 0, 0, 0.45);
   z-index: 4;
 }
+/* 재생(미리보기) 중엔 카드를 키우지 않음 — PC에서 커지면 ＋버튼을 누르기 어려워서 */
+#easyRoot .es-cust-grid-featured .es-cust-card.playing,
+#easyRoot .es-cust-grid-featured .es-cust-card.playing:hover {
+  transform: none;
+  z-index: 4;
+}
 
 #easyRoot .es-cust-grid-featured .es-cust-card::before {
   content: "PICK " counter(es-featured-card, decimal-leading-zero);
@@ -5359,13 +5365,14 @@ body.mode-easy #easyRoot,
 }
 
 #easyRoot .es-cust-card.playing .es-cust-chip,
-#easyRoot .es-cust-card.playing .es-cust-add,
 #easyRoot .es-cust-card.playing .es-cust-thumb > em,
 #easyRoot .es-admin-card.playing .es-admin-chip,
 #easyRoot .es-admin-card.playing .es-admin-thumb > i,
 #easyRoot .es-admin-card.playing .es-admin-thumb > em {
   display: none;
 }
+/* 미리보기 재생 중에도 ＋(제작) 버튼은 보이게 + 영상 위로 — 재생 중에 바로 제작 누를 수 있게 */
+#easyRoot .es-cust-card.playing .es-cust-add { display: flex; z-index: 6; }
 
 #easyRoot .es-admin-toolbar {
   width: min(1160px, calc(100vw - 40px));
