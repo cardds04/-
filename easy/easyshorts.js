@@ -3739,6 +3739,12 @@
               </section>
             </div>
           </div>
+          <div class="es-cl-mobtools" aria-label="패널 열기">
+            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="style">🎨 자막 스타일</button>` : ""}
+            <button type="button" class="es-cl-mobtool" data-sheet="timeline">🎬 타임라인</button>
+            ${caps.length ? `<button type="button" class="es-cl-mobtool" data-sheet="editor">✏️ 자막 편집</button>` : ""}
+          </div>
+          <div class="es-cl-sheet-backdrop" id="esClSheetBackdrop"></div>
           ${caps.length ? `
           <section class="es-cl-panel es-cl-panel-editor">
             <div class="es-cl-panel-head">
@@ -4041,6 +4047,21 @@
       if (E.using.voiceUrl) { const a = $("#esVoice"); if (a) a.src = E.using.voiceUrl; }
       { const p = $("#esPlay"); if (p) p.addEventListener("click", togglePlay); }
       { const sk = $("#esSeek"); if (sk) sk.addEventListener("input", (e) => seek(parseFloat(e.target.value))); }
+      // 📱 모바일 — 자막스타일/타임라인/자막편집을 미리보기 위 바텀시트로 토글(아래로 펼치지 않고 겹쳐 보임)
+      { const step = $(".es-length-step");
+        if (step) {
+          const tools = $$(".es-cl-mobtool", step);
+          const sync = () => { const cur = step.getAttribute("data-sheet"); tools.forEach((b) => b.classList.toggle("on", b.dataset.sheet === cur)); };
+          const setSheet = (name) => { const cur = step.getAttribute("data-sheet"); if (!name || cur === name) step.removeAttribute("data-sheet"); else step.setAttribute("data-sheet", name); sync(); };
+          [".es-cl-panel-style", ".es-cl-panel-timeline", ".es-cl-panel-editor"].forEach((sel) => {
+            const p = step.querySelector(sel); if (p && !p.querySelector(".es-cl-sheet-close")) {
+              const x = document.createElement("button"); x.type = "button"; x.className = "es-cl-sheet-close"; x.setAttribute("aria-label", "닫기"); x.textContent = "✕";
+              x.addEventListener("click", () => setSheet(null)); p.insertBefore(x, p.firstChild);
+            }
+          });
+          tools.forEach((b) => b.addEventListener("click", () => setSheet(b.dataset.sheet)));
+          { const bd = $("#esClSheetBackdrop"); if (bd) bd.addEventListener("click", () => setSheet(null)); }
+        } }
       preloadFills(); seek(0);
     } else {   // done
       renderTexts();

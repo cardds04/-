@@ -658,4 +658,137 @@ body.es-hasnav .es-bnav {
   #easyRoot .es-wiz-foot {
     position: static !important;   /* sticky 해제: 스크롤 내용 위에 겹치지 않게 */
   }
+
+  /* ── ⑤ 컷 길이 단계 — 미리보기를 크게, 패널(자막스타일·타임라인·자막편집)은 버튼 누를 때만
+        미리보기 위로 반투명 바텀시트로 겹쳐 보이게 (아래로 쭉 펼치지 않음) ── */
+  #easyRoot .es-cl-layout { display: block; }
+  #easyRoot .es-cl-sidecol { display: block; }
+  #easyRoot .es-cl-panel-preview { margin: 0 auto; }
+  /* 헤더 컴팩트 + 미리보기 적당히 → 툴바가 스크롤 없이 보이게 */
+  #easyRoot .es-wiz-body.es-length-step { padding-top: 12px; gap: 12px; }
+  #easyRoot .es-length-step .es-wiz-num { display: none; }
+  #easyRoot .es-length-step .es-wiz-title { font-size: 21px; margin-top: 2px; }
+  #easyRoot .es-length-step .es-wiz-note { font-size: 12px; line-height: 1.45; }
+  #easyRoot .es-length-step .es-cl-panel-preview .es-cl-panel-head { margin-bottom: 6px; }
+  #easyRoot .es-length-step .es-cl-transport { margin-top: 8px; }
+  #easyRoot .es-length-step .es-cl-panel-preview .es-cl-stage {
+    height: auto !important;          /* 여러 곳의 clamp 높이 무력화 */
+    max-height: 42vh !important;
+    min-height: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  /* 패널 트리거 툴바 — 미리보기 바로 아래 항상 보이는 버튼 줄 */
+  #easyRoot .es-cl-mobtools {
+    display: flex;
+    gap: 8px;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));   /* 하단 고정탭(뒤로/홈) 바로 위에 항상 보임 */
+    z-index: 55;
+    padding: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(12, 16, 14, 0.95);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  }
+  /* 고정 툴바·하단탭에 콘텐츠/다음버튼이 가리지 않게 여백 확보 */
+  #easyRoot .es-wiz-body.es-length-step { padding-bottom: 78px; }
+  #easyRoot .es-wiz:has(.es-length-step) .es-wiz-foot {
+    margin-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
+  #easyRoot .es-cl-mobtool {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 11px 5px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--ui-text, #e2e2e2);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  #easyRoot .es-cl-mobtool.on {
+    background: var(--ui-accent, #26d3a6);
+    color: #06231c;
+    border-color: transparent;
+  }
+
+  /* 3개 패널 = 기본은 화면 밖 바텀시트, 활성화될 때만 올라옴 */
+  #easyRoot .es-cl-panel-style,
+  #easyRoot .es-cl-panel-timeline,
+  #easyRoot .es-cl-panel-editor {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 80;
+    margin: 0;
+    max-height: 78vh;
+    overflow-y: auto;
+    transform: translateY(101%);
+    transition: transform 0.26s ease;
+    background: rgba(12, 16, 14, 0.95);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 16px 14px calc(22px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
+  }
+  #easyRoot .es-length-step[data-sheet="style"] .es-cl-panel-style,
+  #easyRoot .es-length-step[data-sheet="timeline"] .es-cl-panel-timeline,
+  #easyRoot .es-length-step[data-sheet="editor"] .es-cl-panel-editor {
+    transform: translateY(0);
+  }
+
+  /* 닫힘용 백드롭 */
+  #easyRoot .es-cl-sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 79;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+  }
+  #easyRoot .es-length-step[data-sheet] .es-cl-sheet-backdrop {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* 시트 닫기(✕) 버튼 */
+  #easyRoot .es-cl-sheet-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+}
+
+/* ⑤ 데스크탑(넓은 화면)에선 모바일 시트 UI 요소 숨김 — min-width로 감싸 모바일 규칙을 덮지 않게 */
+@media (min-width: 761px) {
+  #easyRoot .es-cl-mobtools,
+  #easyRoot .es-cl-sheet-backdrop,
+  #easyRoot .es-cl-sheet-close { display: none; }
 }
