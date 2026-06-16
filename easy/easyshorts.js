@@ -1574,6 +1574,22 @@
         </button>
         <div class="es-cust-meta"><b>${esc(d.name)}</b><span>${esc(d.cat)} · 샘플</span></div>
       </article>`;
+    // ☁️ 게시된 템플릿(서버 E.published) 카드 — 썸네일 + 누르면 그 템플릿으로 제작 시작(startFromTemplate)
+    const publishedCard = (p) => {
+      const cat = pcat(p), tag = ptag(p), name = p.name || "템플릿";
+      const total = p.total || (p.slots || []).reduce((s, x) => s + (x.dur || 0), 0) || 0;
+      return `
+      <article class="es-cust-card" data-tpl="${esc(p.id)}" data-cat="${esc(cat)}" data-search="${esc(`${name} ${cat} ${tag}`.toLowerCase())}">
+        <button type="button" class="es-cust-thumb" data-tpl="${esc(p.id)}">
+          ${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy">` : ""}
+          <span class="es-cust-chip">◀ ${esc(tag)}</span>
+          <i class="es-cust-add" title="이 템플릿으로 만들기">＋</i>
+          <strong>${esc(name)}</strong>
+          <em>${total.toFixed(1)}초</em>
+        </button>
+        <div class="es-cust-meta"><b>${esc(name)}</b><span>${esc(cat)} · 사진·문구만 넣어 바로 제작</span></div>
+      </article>`;
+    };
     // 🧩 기본 템플릿 — 추천/전체와 섞지 않고 '따로' 섹션으로
     const baseEls = (t) => { const p = ["영상"]; if (t._wantTitle) p.push("타이틀"); if (t._micCap) p.push("내목소리자막"); else if ((t.texts || []).length) p.push("자막"); if (t.narrate) p.push("나레이션"); return p; };
     const baseKinds = (t) => {
@@ -1641,12 +1657,16 @@
     const recommended = [];
     const allCards = [];   // 전체 템플릿 = 분류 없이 한 그리드(분류는 필터 버튼으로만)
     const cats = [];
-    if (E.projects.length) {
-      E.projects.forEach((p) => {
+    // 게시된 템플릿(서버) 우선 → 없으면 내 로컬 프로젝트 → 둘 다 없을 때만 데모
+    const pubList = (E.published || []).filter((p) => p && p.id);
+    const srcList = pubList.length ? pubList : (E.projects || []);
+    const mkCard = pubList.length ? publishedCard : customerCard;
+    if (srcList.length) {
+      srcList.forEach((p) => {
         const k = pcat(p);
         if (!groups.has(k)) groups.set(k, []);
         if (!cats.includes(k)) cats.push(k);
-        const card = customerCard(p);
+        const card = mkCard(p);
         groups.get(k).push(card);
         allCards.push(card);
         if (recommended.length < 10) recommended.push(card);
@@ -1764,6 +1784,7 @@
       b.addEventListener("click", () => previewProject(pid, card));   // 클릭 = 크게 미리보기(라이트박스)
     });
     $$(".es-cust-thumb[data-demo]", body).forEach((b) => b.addEventListener("click", () => newDetailSession()));
+    $$(".es-cust-thumb[data-tpl]", body).forEach((b) => b.addEventListener("click", () => startFromTemplate(b.dataset.tpl, "easy")));   // ☁️ 게시된 템플릿 카드 → 그 템플릿으로 제작 시작
     const go = (type) => {
       if (type === "new") { newDetailSession(); return; }
       if (type === "detail") { E.easyPage = "main"; enterMode2("detail"); return; }
@@ -2322,12 +2343,13 @@
   }
   // 템플릿(기본 포함)으로 새 작업 시작 — 슬롯·자막·나레이션·타이틀요청 복제 후 편집기로
   async function startFromTemplate(tplId, mode) {
-    const t = E.templates.find((x) => x.id === tplId); if (!t) return;
+    const t = E.templates.find((x) => x.id === tplId) || (E.published || []).find((x) => x.id === tplId); if (!t) return;   // 기본 템플릿(로컬) 또는 게시된 템플릿(서버) 둘 다에서 찾음
     await clearSession();
     E.editing = null;
     const tpl = JSON.parse(JSON.stringify(t));
     if (mode) { E.mode2 = mode; try { localStorage.setItem("es_mode2", mode); } catch (_) {} const root = document.getElementById("easyRoot"); if (root) $$(".es-modebtn", root).forEach((b) => b.classList.toggle("active", b.dataset.mode2 === mode)); }
-    E.using = { template: tpl, musicUrl: null, fills: {}, texts: (tpl.texts || []).map((x) => Object.assign({}, x, { id: uid() })), selText: null, selTexts: [], _isTitle: false };
+    const tplMusicUrl = (typeof tpl.music === "string" && /^https?:\/\//.test(tpl.music)) ? tpl.music : null;   // 게시 템플릿은 음악이 URL → 그대로 재생
+    E.using = { template: tpl, musicUrl: tplMusicUrl, fills: {}, texts: (tpl.texts || []).map((x) => Object.assign({}, x, { id: uid() })), selText: null, selTexts: [], _isTitle: false };
     E.playhead = 0; E.easyIdx = 0;
     setView("use");
     scheduleSaveMeta();
