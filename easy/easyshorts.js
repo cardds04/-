@@ -10497,7 +10497,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         const isAce = aces.has(f.id); const ideaText = items[f.id];
         const savedN = ideaSavedHooksFor(ideaHookKey(entry.industry, ideaText)).length;
         total++;
-        cards.push(`<div class="es-idea-card${isAce ? " ace" : ""}"><div class="es-idea-card-h"><span class="es-idea-fmt">${esc(c.emoji)} ${esc(f.label)}</span>${isAce ? `<span class="es-idea-ace">⭐</span>` : ""}${ideaLevelChip(f.level)}<button type="button" class="es-idea-expand" data-fid="${f.id}" title="생각 확장하기 — 후킹 만들기">💭${savedN ? `<span class="es-idea-savedn">${savedN}</span>` : ""}</button></div><div class="es-idea-text">${esc(ideaText)}</div><div class="es-idea-hooks" hidden></div></div>`);
+        cards.push(`<div class="es-idea-card${isAce ? " ace" : ""}"><div class="es-idea-card-h"><span class="es-idea-fmt">${esc(c.emoji)} ${esc(f.label)}</span>${isAce ? `<span class="es-idea-ace">⭐</span>` : ""}${ideaLevelChip(f.level)}</div><div class="es-idea-text">${esc(ideaText)}</div><button type="button" class="es-idea-expand" data-fid="${f.id}" title="이 포맷에 맞는 어그로 제목을 더 보여줘요">🎣 어그로 제목 더 뽑기${savedN ? `<span class="es-idea-savedn">${savedN}</span>` : ""}</button><div class="es-idea-hooks" hidden></div></div>`);
       });
     });
     const body = cards.length ? `<div class="es-idea-cards">${cards.join("")}</div>` : "";
@@ -10545,7 +10545,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const ctx = { key: ideaHookKey(industry, idea), industry, idea, fmtLabel, btn };
     if (!panel.hidden) { panel.hidden = true; btn.classList.remove("on"); return; }
     panel.hidden = false; btn.classList.add("on");
-    loadHooksForStyle(panel, ctx, "scene", false);
+    loadHooksForStyle(panel, ctx, "news", false);   // 기본 = 낚시성 뉴스 제목 스타일
   }
   function hooksShell(panel, ctx, style, innerHtml) {
     panel.dataset.style = style; panel.innerHTML = hookChipsHtml(style) + innerHtml;
@@ -10556,7 +10556,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (!forceNew && _ideaHooksCache[cacheKey]) { renderHooksBody(panel, ctx, style, _ideaHooksCache[cacheKey]); return; }
     const prev = _ideaHooksCache[cacheKey];
     const reqId = (panel._hookReqId = (panel._hookReqId || 0) + 1);
-    hooksShell(panel, ctx, style, `<div class="es-idea-hooks-load"><span class="es-idea-spin sm"></span> 후킹 만드는 중…</div>`);
+    hooksShell(panel, ctx, style, `<div class="es-idea-hooks-load"><span class="es-idea-spin sm"></span> 어그로 제목 뽑는 중…</div>`);
     try {
       const avoid = forceNew && prev ? prev : [];
       const r = await fetch(IDEAS_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "hooks", industry: ctx.industry, idea: ctx.idea, format: ctx.fmtLabel, style, avoid }) });
@@ -10573,7 +10573,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function renderHooksBody(panel, ctx, style, hooks) {
     const saved = new Set(ideaSavedHooksFor(ctx.key));
-    hooksShell(panel, ctx, style, `<div class="es-idea-hooks-tt">🎣 마음에 드는 후킹을 골라 저장하세요 · 위에서 스타일을 바꿔보세요</div><div class="es-idea-hooks-list">${hooks.map((h, i) => `<label class="es-idea-hook"><input type="checkbox" value="${i}"${saved.has(h) ? " checked" : ""}><span>${esc(h)}</span></label>`).join("")}</div><div class="es-idea-hooks-foot"><button type="button" class="es-idea-hooks-regen">🔄 다른 후킹</button><button type="button" class="es-idea-hooks-save">💾 후킹 저장하기</button></div>`);
+    hooksShell(panel, ctx, style, `<div class="es-idea-hooks-tt">🎣 마음에 드는 어그로 제목을 골라 저장하세요 · 위 스타일도 바꿔보세요</div><div class="es-idea-hooks-list">${hooks.map((h, i) => `<label class="es-idea-hook"><input type="checkbox" value="${i}"${saved.has(h) ? " checked" : ""}><span>${esc(h)}</span></label>`).join("")}</div><div class="es-idea-hooks-foot"><button type="button" class="es-idea-hooks-regen">🔄 다른 제목 10개</button><button type="button" class="es-idea-hooks-save">💾 저장하기</button></div>`);
     const saveBtn = panel.querySelector(".es-idea-hooks-save");
     saveBtn.addEventListener("click", () => {
       const checked = $$(".es-idea-hook input:checked", panel).map((c) => hooks[Number(c.value)]).filter(Boolean);
