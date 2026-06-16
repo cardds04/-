@@ -404,12 +404,14 @@
         <div id="scheduleBlock" class="hidden">
           <div class="top-line">
             <strong id="welcomeText"></strong>
-            <div style="display:flex; gap:6px;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button id="phoneMgrBtn" class="btn outline" type="button">📞 번호 추가</button>
               <button id="myInfoBtn" class="btn outline" type="button">내 정보</button>
               <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
             </div>
           </div>
           <div id="myInfoBox" class="status-card hidden" style="margin-bottom:8px;"></div>
+          <div id="phoneMgrBox" class="status-card hidden" style="margin-bottom:8px;"></div>
 
           <div class="tabs" style="margin-top: 4px;">
             <button id="registerTabBtn" class="active" type="button">스케줄등록</button>
@@ -1520,6 +1522,8 @@
       const welcomeTextEl = document.getElementById("welcomeText");
       const myInfoBtnEl = document.getElementById("myInfoBtn");
       const myInfoBoxEl = document.getElementById("myInfoBox");
+      const phoneMgrBtnEl = document.getElementById("phoneMgrBtn");
+      const phoneMgrBoxEl = document.getElementById("phoneMgrBox");
       const logoutBtnEl = document.getElementById("logoutBtn");
 
       const registerTabBtnEl = document.getElementById("registerTabBtn");
@@ -1560,6 +1564,7 @@
       let customerScheduleSubmitting = false;
       let myInfoOpen = false;
       let myInfoEditMode = false;
+      let phoneMgrOpen = false;
       var customerTableSyncTimer = null;
       var customerTableSyncRunning = false;
       // 고객이 방금 취소한 스케줄 ID 집합 — pull 후 syncAdminSchedulesToCustomerUser가
@@ -2894,6 +2899,93 @@
         myInfoBoxEl.classList.remove("hidden");
       }
 
+      // ── 연락처 번호 관리 (최대 3개, 칩 형태로 추가/삭제) ─────────────────
+      // user.phone 은 쉼표로 구분된 멀티번호 문자열. 저장하면 syncCustomersTable
+      // FromStorage 가 company_directory.customer_phone 에 그대로 반영 → 모든 번호로 SMS.
+      function splitCustomerPhoneList(raw) {
+        return [
+          ...new Set(
+            String(raw || "")
+              .split(/[,;/\n|]+/)
+              .map((s) => normalize(s))
+              .filter(Boolean)
+          )
+        ].slice(0, 3);
+      }
+      function renderPhoneManager(user) {
+        if (!phoneMgrBoxEl) return;
+        if (!user || !phoneMgrOpen) {
+          phoneMgrBoxEl.classList.add("hidden");
+          return;
+        }
+        const list = splitCustomerPhoneList(user?.phone);
+        const rowsHtml = list.length
+          ? list
+              .map(
+                (p, i) => `
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="flex:1;font-weight:600;">${i + 1}. ${escapeHtml(p)}</span>
+                <button class="btn outline small" type="button" data-action="delCustomerPhone" data-phone="${escapeHtml(p)}" style="color:#b91c1c;border-color:#f3c0c0;">삭제</button>
+              </div>`
+              )
+              .join("")
+          : `<div class="hint" style="margin-bottom:6px;">등록된 번호가 없습니다. 아래에서 추가해주세요.</div>`;
+        const addHtml =
+          list.length < 3
+            ? `<div style="display:flex;gap:8px;margin-top:8px;">
+                 <input class="phonemgr-input" type="tel" inputmode="numeric" placeholder="번호 입력 (예: 01012345678)" style="flex:1;" />
+                 <button class="btn small" type="button" data-action="addCustomerPhone">추가</button>
+               </div>`
+            : `<div class="hint" style="margin-top:8px;color:#92400e;">최대 3개까지 등록할 수 있습니다. 더 추가하려면 기존 번호를 삭제하세요.</div>`;
+        phoneMgrBoxEl.innerHTML = `
+          <div style="font-weight:700; margin-bottom:6px;">연락처 번호 관리 (최대 3개)</div>
+          <div class="hint" style="margin-bottom:8px;">등록된 모든 번호로 예약·안내 문자가 발송됩니다.</div>
+          ${rowsHtml}
+          ${addHtml}
+        `;
+        phoneMgrBoxEl.classList.remove("hidden");
+      }
+      async function persistCustomerPhoneList(list) {
+        const user = getCurrentSessionUser();
+        if (!user) {
+          renderAuthState();
+          return;
+        }
+        const phoneStr = splitCustomerPhoneList(list.join(",")).join(",");
+        if (!phoneStr) {
+          alert("연락처는 최소 1개가 필요합니다.");
+          return;
+        }
+        const users = readStorageArray(STORAGE_CUSTOMERS);
+        const idx = users.findIndex((row) => String(row?.id || "") === String(user?.id || ""));
+        if (idx < 0) {
+          alert("내 계정을 찾지 못했습니다. 다시 로그인해주세요.");
+          return;
+        }
+        users[idx].phone = phoneStr;
+        writeStorageArray(STORAGE_CUSTOMERS, users);
+        // 로컬 업체목록 phone 도 갱신(있으면)
+        try {
+          const code = getEffectiveUserCompanyCode(users[idx]);
+          const company = resolveRegisteredCompanyNameForUser(users[idx], code) || normalize(users[idx]?.company);
+          const companies = readStorageArray(STORAGE_COMPANIES);
+          const cKey = getCompanyKey(company, code);
+          const cIdx = companies.findIndex((it) => getCompanyKey(it?.name, it?.companyCode || it?.code) === cKey);
+          if (cIdx >= 0) {
+            companies[cIdx].phone = phoneStr;
+            writeStorageArray(STORAGE_COMPANIES, companies);
+          }
+        } catch (_) {}
+        // 서버 동기화: company_directory.customer_phone 갱신 → 모든 번호로 SMS 발송
+        try {
+          await syncCustomersTableFromStorage();
+        } catch (e) {
+          console.warn("[phoneMgr] 서버 동기화 실패(로컬은 저장됨)", e);
+        }
+        renderPhoneManager(getCurrentSessionUser());
+        if (myInfoOpen) renderMyInfo(getCurrentSessionUser());
+      }
+
       function loadRememberedLogin() {
         try {
           const raw = localStorage.getItem(STORAGE_CUSTOMER_REMEMBERED_LOGIN);
@@ -3379,10 +3471,13 @@
         authBlockEl.classList.toggle("hidden", isLoggedIn);
         scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
         myInfoBtnEl?.classList.toggle("hidden", !isLoggedIn);
+        phoneMgrBtnEl?.classList.toggle("hidden", !isLoggedIn);
         if (!isLoggedIn) {
           myInfoOpen = false;
           myInfoEditMode = false;
+          phoneMgrOpen = false;
           renderMyInfo(null);
+          renderPhoneManager(null);
           switchAuthTab("login");
           const remembered = loadRememberedLogin();
           if (remembered?.id && document.getElementById("loginId")) document.getElementById("loginId").value = remembered.id;
@@ -4237,6 +4332,7 @@
         currentCustomerTab = "register";
         myInfoOpen = false;
         myInfoEditMode = false;
+        phoneMgrOpen = false;
         renderAuthState();
       });
       myInfoBtnEl?.addEventListener("click", () => {
@@ -4322,6 +4418,68 @@
         myInfoEditMode = false;
         renderAuthState();
         alert("내 정보가 저장되었습니다.");
+      });
+
+      // ── 연락처 번호 관리 버튼/패널 ─────────────────────────────────────
+      phoneMgrBtnEl?.addEventListener("click", () => {
+        const user = getCurrentSessionUser();
+        if (!user) return;
+        phoneMgrOpen = !phoneMgrOpen;
+        renderPhoneManager(user);
+      });
+      phoneMgrBoxEl?.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const action = String(button.dataset.action || "").trim();
+        const user = getCurrentSessionUser();
+        if (!user) {
+          renderAuthState();
+          return;
+        }
+        if (action === "delCustomerPhone") {
+          const target = String(button.dataset.phone || "").trim();
+          const targetDigits = normalizeCustomerKoMobileDigits(target);
+          const remaining = splitCustomerPhoneList(user.phone).filter(
+            (p) => normalizeCustomerKoMobileDigits(p) !== targetDigits
+          );
+          if (remaining.length === 0) {
+            alert("연락처는 최소 1개가 필요합니다. 새 번호를 먼저 추가한 뒤 삭제해주세요.");
+            return;
+          }
+          if (!confirm(`${target} 번호를 삭제할까요?`)) return;
+          await persistCustomerPhoneList(remaining);
+          return;
+        }
+        if (action === "addCustomerPhone") {
+          const inputEl = phoneMgrBoxEl.querySelector(".phonemgr-input");
+          const raw = normalize(inputEl?.value);
+          if (!raw) {
+            alert("추가할 번호를 입력해주세요.");
+            return;
+          }
+          if (!isValidCustomerMobilePhone(raw)) {
+            alert("올바른 휴대폰 번호 형식이 아닙니다. (예: 01012345678)");
+            return;
+          }
+          const current = splitCustomerPhoneList(user.phone);
+          const digits = normalizeCustomerKoMobileDigits(raw);
+          if (current.some((p) => normalizeCustomerKoMobileDigits(p) === digits)) {
+            alert("이미 등록된 번호입니다.");
+            return;
+          }
+          if (current.length >= 3) {
+            alert("최대 3개까지 등록할 수 있습니다.");
+            return;
+          }
+          await persistCustomerPhoneList([...current, digits]);
+          return;
+        }
+      });
+      phoneMgrBoxEl?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        if (!event.target?.classList?.contains("phonemgr-input")) return;
+        event.preventDefault();
+        phoneMgrBoxEl.querySelector('button[data-action="addCustomerPhone"]')?.click();
       });
 
       // ── 예약 확인 모달 ────────────────────────────────────────────────
