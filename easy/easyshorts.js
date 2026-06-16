@@ -852,7 +852,9 @@
       try { ctx.drawImage(media, -dw / 2, -dh / 2, dw, dh); } catch (_) {}
       ctx.restore();
     };
-    const trans = seg.slot.trans, transDur = seg.slot.transDur || 0.6;
+    // 전환 길이는 컷 길이의 절반을 넘지 않게 — 리듬컷(0.2초 등)에서 전환이 안 끝나
+    // 매 컷이 흐릿하게 섞이며 화면이 떨리고 검게 깜빡이던 버그 방지.
+    const trans = seg.slot.trans, transDur = Math.min(seg.slot.transDur || 0.6, Math.max(0.06, segDur * 0.5));
     const prevSeg = idx > 0 ? arr[idx - 1] : null;
     const prevF = prevSeg && st.fills[prevSeg.slot.id];
     // 앞 컷 화면 준비됨? 사진=디코드된 이미지, 영상=캡처한 마지막 프레임
@@ -9328,7 +9330,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     let tf = fxTransform(seg.slot.fx || "none", p);
     // 전환(앞 컷 → 이 컷) — 사진·영상 모두. 앞 컷 화면: 사진=url, 영상=캡처한 마지막 프레임
     const prevImg = $("#esImgPrev");
-    const trans = seg.slot.trans, transDur = seg.slot.transDur || 0.6;
+    // 전환 길이는 컷 길이의 절반을 넘지 않게 — 리듬컷(0.2초 등)에서 전환이 안 끝나
+    // 매 컷이 흐릿하게 섞이며 화면이 떨리고 검게 깜빡이던 버그 방지.
+    const trans = seg.slot.trans, transDur = Math.min(seg.slot.transDur || 0.6, Math.max(0.06, segDur * 0.5));
     const prevSeg = idx > 0 ? arr[idx - 1] : null;
     const prevFill = prevSeg && E.using.fills[prevSeg.slot.id];
     let prevSrc = null;
