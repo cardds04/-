@@ -31,6 +31,12 @@
     .hint { font-size:11.5px; color:var(--dim); margin:-6px 0 12px; line-height:1.5; }
     .upbtn { width:100%; padding:13px; border:0; border-radius:10px; background:var(--accent); color:#04201a; font-size:15px; font-weight:800; cursor:pointer; }
     .upbtn:disabled { opacity:.55; cursor:default; }
+    #upProg { margin:10px 0 2px; }
+    .prog { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:6px 2px; border-bottom:1px solid var(--border); }
+    .prog .pgn { color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .prog .pgs { color:var(--dim); flex:0 0 auto; font-weight:700; }
+    .prog.ok .pgs { color:var(--accent); }
+    .prog.err .pgs { color:#ff6b5b; }
 
     .reload { padding:8px 16px; margin:0 0 14px; font-size:13px; border:1px solid var(--border); border-radius:10px; background:var(--panel); color:var(--text); cursor:pointer; }
     .grouphd { font-size:14px; font-weight:800; margin:18px 0 9px; color:var(--accent); }
@@ -56,19 +62,18 @@
     <p class="sub">여기에 올린 음악이 고객 화면 <b>배경음악 → 📚 내장 배경음악</b>의 <b>빠른 / 중간 / 느린</b> 탭에 나옵니다.</p>
 
     <div class="upbox">
-      <div class="uphd">＋ 음악 추가</div>
-      <label class="fld">음악 이름</label>
-      <input type="text" id="mName" placeholder="예: 잔잔한 피아노" maxlength="40" />
-      <label class="fld">빠르기(고객 탭 분류)</label>
+      <div class="uphd">＋ 음악 추가 <span style="font-weight:600;color:var(--dim);font-size:12px">— 여러 곡 한꺼번에 OK</span></div>
+      <label class="fld">빠르기 — 선택한 파일 모두 이 분류로 들어가요</label>
       <div class="temprow" id="tempo">
         <label data-t="fast"><input type="radio" name="tempo" value="fast"> ⚡ 빠른</label>
         <label data-t="mid" class="on"><input type="radio" name="tempo" value="mid" checked> 🎵 중간</label>
         <label data-t="slow"><input type="radio" name="tempo" value="slow"> 🌙 느린</label>
       </div>
-      <label class="fld">음악 파일</label>
-      <input type="file" id="mFile" accept="audio/*" />
-      <div class="hint">⚠️ 한 곡당 3MB 이하 (짧은 배경음악 권장). 더 긴 음원이 필요하면 알려주세요 — 대용량 업로드로 바꿔드릴게요.</div>
+      <label class="fld">음악 파일 (여러 개 선택 가능)</label>
+      <input type="file" id="mFile" accept="audio/*" multiple />
+      <div class="hint">📌 <b>파일 이름이 그대로 곡 제목</b>이 돼요(확장자 제외). 여러 곡을 한 번에 골라 올리세요 · 한 곡 최대 60MB.</div>
       <button class="upbtn" id="upBtn">⬆ 업로드</button>
+      <div id="upProg"></div>
       <div class="msg" id="upMsg"></div>
     </div>
 
@@ -122,37 +127,49 @@
       });
     }
 
-    function fileToB64(file) {
-      return new Promise(function (res, rej) {
-        var r = new FileReader();
-        r.onload = function () { res(String(r.result).split(",")[1] || ""); };
-        r.onerror = rej; r.readAsDataURL(file);
-      });
+    function baseName(fname) { return String(fname || "").replace(/\.[^.]+$/, "").trim().slice(0, 60) || "음악"; }
+
+    // 한 곡: 서명 URL 받기 → Supabase 에 직접 PUT(Vercel 한도 우회) → 목록 등록
+    async function uploadOne(file, name, tempo, key) {
+      var sr = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sign", key: key, audioType: file.type }) });
+      var sj = await sr.json().catch(function () { return null; });
+      if (!sr.ok || !sj || !sj.ok || !sj.uploadUrl) throw new Error((sj && sj.error) || "서명 발급 실패");
+      var pr = await fetch(sj.uploadUrl, { method: "PUT", headers: { "x-upsert": "true", "Content-Type": file.type || "audio/mpeg" }, body: file });
+      if (!pr.ok) throw new Error("저장소 업로드 실패(" + pr.status + ")");
+      var rr = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "register", key: key, id: sj.id, name: name, tempo: tempo, path: sj.path }) });
+      var rj = await rr.json().catch(function () { return null; });
+      if (!rr.ok || !rj || !rj.ok) throw new Error((rj && rj.error) || "목록 등록 실패");
     }
 
-    async function upload() {
-      var msg = $("#upMsg"); msg.className = "msg";
+    async function uploadAll() {
+      var msg = $("#upMsg"); msg.className = "msg"; msg.textContent = "";
+      var prog = $("#upProg"); prog.innerHTML = "";
       var key = ""; try { key = localStorage.getItem(KEY_LS) || ""; } catch (_) {}
-      var name = ($("#mName").value || "").trim();
-      var file = $("#mFile").files[0];
+      var files = Array.prototype.slice.call(($("#mFile").files || []));
       var tempo = ($('input[name="tempo"]:checked') || {}).value || "mid";
-      if (!name) { msg.className = "msg err"; msg.textContent = "음악 이름을 입력하세요."; return; }
-      if (!file) { msg.className = "msg err"; msg.textContent = "음악 파일을 선택하세요."; return; }
-      if (file.size > 3 * 1024 * 1024) { msg.className = "msg err"; msg.textContent = "파일이 너무 커요 (3MB 이하). 더 큰 파일은 알려주세요."; return; }
+      if (!files.length) { msg.className = "msg err"; msg.textContent = "음악 파일을 선택하세요 (여러 개 가능)."; return; }
       var btn = $("#upBtn"); btn.disabled = true;
-      msg.className = "msg"; msg.textContent = "업로드 중…";
-      try {
-        var b64 = await fileToB64(file);
-        var r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "add", key: key, name: name, tempo: tempo, audioB64: b64, audioType: file.type }) });
-        var j = await r.json().catch(function () { return null; });
-        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("업로드 실패 (" + r.status + ")"));
-        msg.className = "msg ok"; msg.textContent = "✓ 추가됐어요: " + name;
-        $("#mName").value = ""; $("#mFile").value = "";
-        render(await loadTracks());
-      } catch (e) {
-        msg.className = "msg err"; msg.textContent = "✗ " + ((e && e.message) || "실패");
-      } finally { btn.disabled = false; }
+      var rows = files.map(function (f, i) {
+        var d = document.createElement("div"); d.className = "prog"; d.id = "pg" + i;
+        d.innerHTML = '<span class="pgn">' + esc(baseName(f.name)) + '</span><span class="pgs">대기…</span>';
+        prog.appendChild(d); return d;
+      });
+      function setS(i, t, cls) { rows[i].querySelector(".pgs").textContent = t; rows[i].className = "prog" + (cls ? " " + cls : ""); }
+      var ok = 0, fail = 0;
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (f.size > 60 * 1024 * 1024) { setS(i, "✗ 너무 큼(60MB↑)", "err"); fail++; continue; }
+        setS(i, "업로드 중…");
+        try { await uploadOne(f, baseName(f.name), tempo, key); setS(i, "✓ 완료", "ok"); ok++; }
+        catch (e) { setS(i, "✗ " + ((e && e.message) || "실패"), "err"); fail++; }
+      }
+      btn.disabled = false;
+      msg.className = "msg " + (fail ? "err" : "ok");
+      msg.textContent = "✓ " + ok + "곡 완료" + (fail ? (" · ✗ " + fail + "곡 실패") : "");
+      $("#mFile").value = "";
+      try { render(await loadTracks()); } catch (_) {}
     }
 
     async function del(id) {
@@ -188,7 +205,7 @@
 
     $("#enter").addEventListener("click", function () { enter($("#pw").value.trim()); });
     $("#pw").addEventListener("keydown", function (e) { if (e.key === "Enter") enter($("#pw").value.trim()); });
-    $("#upBtn").addEventListener("click", upload);
+    $("#upBtn").addEventListener("click", uploadAll);
     $("#reload").addEventListener("click", function () { loadTracks().then(render).catch(function (e) { alert("새로고침 실패: " + (e && e.message)); }); });
 
     // 저장된 키로 자동 입장
