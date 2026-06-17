@@ -2722,9 +2722,17 @@
       };
       try {
         if (kind === "video") {
-          const v = document.createElement("video"); v.muted = true; v.src = URL.createObjectURL(blob);
-          v.onloadeddata = () => { try { draw(v, v.videoWidth, v.videoHeight); } catch (_) { resolve(null); } };
-          v.onerror = () => resolve(null);
+          const v = document.createElement("video"); v.muted = true; v.playsInline = true;
+          let drew = false;
+          const grab = () => { if (drew) return; drew = true; try { draw(v, v.videoWidth, v.videoHeight); } catch (_) { resolve(null); } };
+          const to = setTimeout(grab, 6000);   // 안전장치
+          v.onloadeddata = () => {   // 첫 프레임은 검정인 경우가 많아 살짝 뒤(≈10%, 최대 0.5초)로 탐색
+            try { const t = Math.min(0.5, (isFinite(v.duration) ? v.duration : 1) * 0.1); if (t > 0.05) { v.currentTime = t; } else { clearTimeout(to); grab(); } }
+            catch (_) { clearTimeout(to); grab(); }
+          };
+          v.onseeked = () => { clearTimeout(to); grab(); };
+          v.onerror = () => { clearTimeout(to); resolve(null); };
+          v.src = URL.createObjectURL(blob);
         } else {
           const im = new Image(); im.onload = () => draw(im, im.naturalWidth, im.naturalHeight); im.onerror = () => resolve(null); im.src = URL.createObjectURL(blob);
         }
@@ -6741,16 +6749,25 @@
   function renderAutoScenes() {
     const box = document.getElementById("esAutoScenes"); if (!box || !E.using) return;
     const scenes = autoScenes();
-    const thumb = (f) => f ? (f.kind === "video" ? `<video src="${f.url}" muted preload="metadata"></video>` : `<img src="${f.url}" alt="">`) : "";
+    const thumb = (f) => {
+      if (!f) return "";
+      let inner = f.poster ? `<img src="${f.poster}" alt="">`                                  // ☁ 클라우드 영상: 가벼운 포스터 우선
+        : (f.kind === "video" && f.url) ? `<video src="${f.url}" muted preload="metadata"></video>`
+        : f.url ? `<img src="${f.url}" alt="">`
+        : `<div class="es-fill-ph">🎬</div>`;
+      if (f._uploading) inner += `<div class="es-fill-upov"><div class="es-fill-upbar"><span style="width:${Math.round((f._uploadPct || 0) * 100)}%"></span></div><div class="es-fill-uptxt">${esc(f._upLabel || "☁ 올리는 중")} ${Math.round((f._uploadPct || 0) * 100)}%</div></div>`;
+      return inner;
+    };
     const filled = scenes.filter((s) => E.using.fills[s.id]);
     if (!filled.length) { box.innerHTML = `<div class="es-auto-empty">위 버튼으로 사진·영상을 넣어주세요</div>`; return; }
     // 정사각 미리보기 + 밑에 몇 초인지만 (길이·자막 조절은 다음 단계에서)
     const cards = scenes.filter((s) => E.using.fills[s.id]).map((s, i) => {
       const f = E.using.fills[s.id];
-      const secs = f.kind === "video" ? (f.dur || s.dur || 0) : (s.dur || 0);
+      const isVid = f.kind === "video" || f._cloud || f._wantVideo;   // 클라우드 영상은 업로드 중 kind=image 라도 영상으로 표기
+      const secs = f.dur || s.dur || 0;
       return `<div class="es-auto-card filled" data-id="${s.id}">
           <div class="es-auto-thumb">${thumb(f)}<span class="es-auto-num">${i + 1}</span><button type="button" class="es-auto-rm" data-id="${s.id}" title="이 장면 빼기">×</button></div>
-          <div class="es-auto-secs">${secs.toFixed(1)}초${f.kind === "video" ? "" : " · 사진"}</div>
+          <div class="es-auto-secs">${secs.toFixed(1)}초${isVid ? "" : " · 사진"}</div>
         </div>`;
     }).join("");
     box.innerHTML = `<div class="es-auto-count">${filled.length}개 넣음</div><div class="es-auto-grid">${cards}</div>`;
@@ -9441,11 +9458,17 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       try { if (url) URL.revokeObjectURL(url); } catch (_) {}
     }
   }
-  // 슬롯 카드 업로드/압축 진행 표시
+  // 슬롯/자율컷 카드 업로드·압축 진행 표시
   function setSlotUpProgress(slotId, pct, label) {
     const f = E.using && E.using.fills[slotId]; if (f) { f._uploadPct = pct; if (label) f._upLabel = label; }
-    const bar = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-upbar > span'); if (bar) bar.style.width = Math.round((pct || 0) * 100) + "%";
-    const tx = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-uptxt'); if (tx) tx.textContent = (label || "올리는 중") + " " + Math.round((pct || 0) * 100) + "%";
+    document.querySelectorAll('.es-fill-slot[data-id="' + slotId + '"], .es-auto-card[data-id="' + slotId + '"]').forEach(function (card) {
+      const bar = card.querySelector('.es-fill-upbar > span'); if (bar) bar.style.width = Math.round((pct || 0) * 100) + "%";
+      const tx = card.querySelector('.es-fill-uptxt'); if (tx) tx.textContent = (label || "올리는 중") + " " + Math.round((pct || 0) * 100) + "%";
+    });
+  }
+  // 채움 카드 UI 다시 그리기 — 자율컷 화면이면 자율컷을, 아니면 일반 슬롯 목록을
+  function refreshFillCards() {
+    try { if (document.getElementById("esAutoScenes")) renderAutoScenes(); else renderFillSlots(); } catch (_) {}
   }
 
   // 영상 채움 직후 호출 — 백그라운드로 클라우드 백업(진행률은 해당 슬롯 카드에). 미리보기는 그대로 로컬 사용.
@@ -9497,10 +9520,10 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         const remoteUrl = await uploadInputMedia(up, (p) => setSlotUpProgress(slotId, compressed ? 0.5 + p * 0.5 : p, "☁ 올리는 중"));
         const f = E.using && E.using.fills[slotId]; if (!f) return;
         f.kind = "video"; f.url = remoteUrl; f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; delete f._wantVideo; delete f._upLabel;
-        try { refreshSlots(); preloadFills(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
+        try { refreshSlots(); preloadFills(); refreshFillCards(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
       } catch (e) {
         const f = E.using && E.using.fills[slotId]; if (f) { f._uploading = false; f._uploadErr = true; }
-        try { renderFillSlots(); } catch (_) {}
+        try { refreshFillCards(); } catch (_) {}
         try { toast("영상 업로드 실패 — 다시 넣어주세요: " + ((e && e.message) || "")); } catch (_) {}
       }
     })();
