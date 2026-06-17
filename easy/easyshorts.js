@@ -9144,7 +9144,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
           </div>` : "";
       return `
         <div class="es-fill-slot ${!E._detailEditor ? "es-easy-fill" : ""} ${f ? "filled" : ""} ${s.virtual ? "virtual" : ""} ${s.aiRole ? "ai-" + s.aiRole : ""} ${isAutoMaster ? "auto-master" : ""} ${isSlotSel(s.id) ? "sel" : ""}" data-id="${s.id}">
-          <div class="es-fill-thumb" style="aspect-ratio:${asp.w}/${asp.h}">${media}${roleBadge}${engBadge}${s.virtual ? `<span class="es-virtual-badge">가상</span>` : ""}${isAutoMaster ? `<span class="es-auto-badge">♾ 자율컷</span>` : ""}${f && f._uploading ? `<div class="es-fill-upov"><div class="es-fill-upbar"><span style="width:${Math.round((f._uploadPct || 0) * 100)}%"></span></div><div class="es-fill-uptxt">☁ 올리는 중…</div></div>` : ""}${f && f.remoteUrl && !f._uploading ? `<span class="es-fill-cloud" title="클라우드 백업 완료">☁︎</span>` : ""}${f && f._uploadErr ? `<span class="es-fill-cloud es-fill-cloud-err" title="백업 실패(영상은 사용 가능)">⚠︎</span>` : ""}${f ? `<button type="button" class="es-fill-x" data-id="${s.id}" title="미디어 비우기">×</button>` : ""}</div>
+          <div class="es-fill-thumb" style="aspect-ratio:${asp.w}/${asp.h}">${media}${roleBadge}${engBadge}${s.virtual ? `<span class="es-virtual-badge">가상</span>` : ""}${isAutoMaster ? `<span class="es-auto-badge">♾ 자율컷</span>` : ""}${f && f._uploading ? `<div class="es-fill-upov"><div class="es-fill-upbar"><span style="width:${Math.round((f._uploadPct || 0) * 100)}%"></span></div><div class="es-fill-uptxt">${esc(f._upLabel || "☁ 올리는 중")} ${Math.round((f._uploadPct || 0) * 100)}%</div></div>` : ""}${f && f.remoteUrl && !f._uploading ? `<span class="es-fill-cloud" title="클라우드 백업 완료">☁︎</span>` : ""}${f && f._uploadErr ? `<span class="es-fill-cloud es-fill-cloud-err" title="백업 실패(영상은 사용 가능)">⚠︎</span>` : ""}${f ? `<button type="button" class="es-fill-x" data-id="${s.id}" title="미디어 비우기">×</button>` : ""}</div>
           ${genRow}${afterRow}${vresRow}
           <div class="es-fill-info">
             <span class="es-fill-num">${i + 1}</span>
@@ -9374,6 +9374,80 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     await putWithProgress(sj.uploadUrl, file, onProgress);
     return sj.publicUrl;
   }
+  // 📉 입력 영상 압축 — 다운스케일(긴 변≤1920) + 저비트레이트 재인코딩 → 업로드 용량·시간 확 줄임.
+  //    캔버스 captureStream(영상) + AudioContext(원음 라우팅)로 녹화. WebM/MP4 지원 브라우저(주로 안드로이드 크롬)에서 동작.
+  //    실시간 재생 기반이라 영상 길이만큼 걸림(짧은 릴스용). 지원 안 되거나 실패하면 null → 원본 그대로 업로드.
+  function videoCompressSupported() {
+    try { return typeof MediaRecorder !== "undefined" && !!(HTMLCanvasElement.prototype.captureStream) && !!(window.AudioContext || window.webkitAudioContext); } catch (_) { return false; }
+  }
+  async function compressVideoFile(file, onProgress) {
+    if (!videoCompressSupported()) return null;
+    let url = null, vid = null, rec = null, actx = null;
+    try {
+      url = URL.createObjectURL(file);
+      vid = document.createElement("video"); vid.src = url; vid.playsInline = true; vid.preload = "auto";
+      await new Promise((res, rej) => { vid.onloadedmetadata = function () { res(); }; vid.onerror = function () { rej(new Error("decode")); }; setTimeout(function () { rej(new Error("meta-timeout")); }, 9000); });
+      const W0 = vid.videoWidth, H0 = vid.videoHeight, dur = vid.duration;
+      if (!W0 || !H0 || !isFinite(dur) || dur <= 0) return null;
+      if (dur > 240) return null;                                          // 4분↑ 은 실시간 압축 비현실적 → 원본
+      const longSide = Math.max(W0, H0), scale = Math.min(1, 1920 / longSide);
+      if (scale >= 0.999 && file.size < 80 * 1024 * 1024) return null;     // 이미 작으면 의미 없음
+      const W = Math.max(2, Math.round(W0 * scale / 2) * 2), H = Math.max(2, Math.round(H0 * scale / 2) * 2);
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const c2 = cv.getContext("2d"); c2.imageSmoothingQuality = "high";
+      const vstream = cv.captureStream(30);
+      const tracks = vstream.getVideoTracks().slice();
+      // 오디오: 입력영상 → AudioContext → MediaStreamDestination (스피커로 안 나가고 stream 으로만 들어감)
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        actx = new AC();
+        const dest = actx.createMediaStreamDestination();
+        actx.createMediaElementSource(vid).connect(dest);
+        const at = dest.stream.getAudioTracks()[0]; if (at) tracks.push(at);
+        if (actx.state === "suspended") { try { await actx.resume(); } catch (_) {} }
+      } catch (e) { return null; }   // 오디오 못 살리면 무음영상 위험 → 압축 포기(원본 업로드)
+      const stream = new MediaStream(tracks);
+      const mime = ["video/mp4;codecs=h264,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(function (m) { try { return MediaRecorder.isTypeSupported(m); } catch (e) { return false; } });
+      if (!mime) return null;
+      const bitrate = Math.min(12000000, Math.max(2500000, Math.round((W * H) / (1920 * 1080) * 6000000)));
+      rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate, audioBitsPerSecond: 128000 });
+      const chunks = []; rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      const stopped = new Promise(function (r) { rec.onstop = r; });
+      rec.start(500);
+      try { await vid.play(); } catch (e) { try { rec.stop(); } catch (_) {} return null; }
+      await new Promise(function (resolve) {
+        const tick = function () {
+          if (vid.ended || vid.paused) { resolve(); return; }
+          try { c2.drawImage(vid, 0, 0, W, H); } catch (e) {}
+          if (onProgress && dur) { try { onProgress(Math.min(0.99, vid.currentTime / dur)); } catch (_) {} }
+          requestAnimationFrame(tick);
+        };
+        vid.onended = function () { resolve(); };
+        tick();
+      });
+      try { rec.stop(); } catch (e) {}
+      await stopped;
+      const outType = mime.split(";")[0];
+      const blob = new Blob(chunks, { type: outType });
+      if (!blob.size || blob.size >= file.size * 0.9) return null;        // 10%도 못 줄이면 원본 사용
+      const ext = outType.indexOf("mp4") >= 0 ? "mp4" : "webm";
+      const base = String(file.name || "video").replace(/\.[^.]+$/, "") || "video";
+      return new File([blob], base + "." + ext, { type: outType });       // File 로 감싸 이름/확장자 부여
+    } catch (e) { return null; }
+    finally {
+      try { if (rec && rec.state !== "inactive") rec.stop(); } catch (_) {}
+      try { if (actx) actx.close(); } catch (_) {}
+      try { if (vid) { vid.pause(); vid.removeAttribute("src"); vid.load(); } } catch (_) {}
+      try { if (url) URL.revokeObjectURL(url); } catch (_) {}
+    }
+  }
+  // 슬롯 카드 업로드/압축 진행 표시
+  function setSlotUpProgress(slotId, pct, label) {
+    const f = E.using && E.using.fills[slotId]; if (f) { f._uploadPct = pct; if (label) f._upLabel = label; }
+    const bar = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-upbar > span'); if (bar) bar.style.width = Math.round((pct || 0) * 100) + "%";
+    const tx = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-uptxt'); if (tx) tx.textContent = (label || "올리는 중") + " " + Math.round((pct || 0) * 100) + "%";
+  }
+
   // 영상 채움 직후 호출 — 백그라운드로 클라우드 백업(진행률은 해당 슬롯 카드에). 미리보기는 그대로 로컬 사용.
   function kickCloudBackup(slotId, file) {
     if (!useCloudInput() || !file || !/^video\//.test(file.type)) return;
@@ -9407,19 +9481,29 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     E.using.fills[slotId] = { kind: "image", url: posterUrl || "", poster: posterUrl, name: file.name, dur, _cloud: true, _uploading: true, _uploadPct: 0, _wantVideo: true };
     delFillBlob(slotId);   // 큰 blob 은 IDB 에 안 둠
     refreshSlots(); seek(E.playhead);
-    // 3) 백그라운드 업로드 → 끝나면 클라우드 스트리밍 영상으로 전환
-    uploadInputMedia(file, (pct) => {
-      const f = E.using && E.using.fills[slotId]; if (!f) return; f._uploadPct = pct;
-      const bar = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-upbar > span'); if (bar) bar.style.width = Math.round(pct * 100) + "%";
-    }).then((remoteUrl) => {
-      const f = E.using && E.using.fills[slotId]; if (!f) return;
-      f.kind = "video"; f.url = remoteUrl; f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; delete f._wantVideo;   // 이제 미리보기=클라우드 스트리밍(메모리 가벼움)
-      try { refreshSlots(); preloadFills(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
-    }).catch((e) => {
-      const f = E.using && E.using.fills[slotId]; if (f) { f._uploading = false; f._uploadErr = true; }
-      try { renderFillSlots(); } catch (_) {}
-      try { toast("영상 업로드 실패 — 다시 넣어주세요: " + ((e && e.message) || "")); } catch (_) {}
-    });
+    // 3) (가능하면) 압축 → 백그라운드 업로드 → 끝나면 클라우드 스트리밍 영상으로 전환
+    (async function () {
+      let up = file;
+      try {
+        if (file.size > 12 * 1024 * 1024) {   // 작은 영상은 압축 생략(이득 적음)
+          setSlotUpProgress(slotId, 0, "📉 압축 중");
+          const comp = await compressVideoFile(file, (p) => setSlotUpProgress(slotId, p * 0.5, "📉 압축 중"));
+          if (comp) up = comp;   // 더 작아졌으면 압축본 업로드
+        }
+      } catch (_) {}
+      const compressed = up !== file;
+      try {
+        setSlotUpProgress(slotId, compressed ? 0.5 : 0, "☁ 올리는 중");
+        const remoteUrl = await uploadInputMedia(up, (p) => setSlotUpProgress(slotId, compressed ? 0.5 + p * 0.5 : p, "☁ 올리는 중"));
+        const f = E.using && E.using.fills[slotId]; if (!f) return;
+        f.kind = "video"; f.url = remoteUrl; f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; delete f._wantVideo; delete f._upLabel;
+        try { refreshSlots(); preloadFills(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
+      } catch (e) {
+        const f = E.using && E.using.fills[slotId]; if (f) { f._uploading = false; f._uploadErr = true; }
+        try { renderFillSlots(); } catch (_) {}
+        try { toast("영상 업로드 실패 — 다시 넣어주세요: " + ((e && e.message) || "")); } catch (_) {}
+      }
+    })();
   }
 
   async function fillSlot(slotId, file) {
