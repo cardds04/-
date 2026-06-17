@@ -154,3 +154,86 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
+
+/* ───────────────────────────────────────────────────────────────
+   🔄 업데이트 버튼 — 설치된 PWA 는 새로고침이 어렵고, sw.js 자체는
+   배포마다 안 바뀌므로(스크립트 ?v= 만 바뀜) SW updatefound 가 안 뜬다.
+   → 라이브 index.html 의 easyshorts.js?v= 를 현재 로드된 버전과 비교해
+   새 버전이면 버튼을 띄우고, 누르면 캐시 비우고 최신으로 갈아끼운다.
+   (설치/브라우저 모드 무관하게 항상 동작 — 위 설치 IIFE 와 별개)
+   ─────────────────────────────────────────────────────────────── */
+(function () {
+  "use strict";
+  // 앱 핵심 파일들의 ?v= 를 모아 '버전 지문' 으로 — 하나라도 바뀌면 새 버전으로 인식
+  var FILES = ["easyshorts.js", "easyshorts.css", "easy-mobile.css", "easy-pwa.js"];
+  function curSig() {
+    return FILES.map(function (f) {
+      var el = document.querySelector('script[src*="' + f + '"], link[href*="' + f + '"]');
+      var u = el ? (el.src || el.getAttribute("href") || "") : "";
+      var m = u.match(/[?&]v=(\d+)/);
+      return m ? m[1] : "0";
+    }).join(".");
+  }
+  function htmlSig(html) {
+    return FILES.map(function (f) {
+      var m = html.match(new RegExp(f.replace(/\./g, "\\.") + "\\?v=(\\d+)"));
+      return m ? m[1] : "0";
+    }).join(".");
+  }
+  var CUR = curSig();
+  var shown = false, btn = null;
+
+  function injectStyle() {
+    if (document.getElementById("eaUpStyle")) return;
+    var css =
+      ".ea-update{position:fixed;left:50%;transform:translateX(-50%);top:calc(8px + env(safe-area-inset-top,0px));z-index:6300;" +
+      "display:none;align-items:center;gap:7px;padding:10px 16px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;border:none;" +
+      "background:#ff7a3d;color:#fff;font-size:13px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 6px 20px rgba(0,0,0,.45);" +
+      "animation:eaUpPulse 1.7s ease-in-out infinite}" +
+      ".ea-update.on{display:inline-flex}.ea-update:active{transform:translateX(-50%) scale(.95)}" +
+      ".ea-update:disabled{opacity:.7;animation:none}" +
+      "@keyframes eaUpPulse{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.45)}50%{box-shadow:0 6px 28px rgba(255,122,61,.75)}}";
+    var st = document.createElement("style"); st.id = "eaUpStyle"; st.textContent = css; document.head.appendChild(st);
+  }
+  function ensureBtn() {
+    injectStyle();
+    if (btn) return btn;
+    btn = document.createElement("button");
+    btn.type = "button"; btn.className = "ea-update";
+    btn.innerHTML = "🔄 새 버전 — 업데이트";
+    btn.addEventListener("click", doUpdate);
+    document.body.appendChild(btn);
+    return btn;
+  }
+  function showBtn() { if (shown) return; shown = true; ensureBtn().classList.add("on"); }
+
+  function doUpdate() {
+    if (btn) { btn.disabled = true; btn.innerHTML = "⏳ 업데이트 중…"; }
+    var fresh = function () { try { location.replace(location.pathname + "?fresh=" + Date.now()); } catch (e) { try { location.reload(); } catch (_) {} } };
+    var jobs = [];
+    try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) {}
+    try { if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.update().catch(function () {}); })); })); } catch (e) {}
+    Promise.all(jobs).then(fresh, fresh);
+    setTimeout(fresh, 4000);   // 안전장치: 4초 안에 안 끝나면 그냥 갱신
+  }
+
+  function check() {
+    try {
+      fetch("index.html?u=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          if (!html) return;
+          if (htmlSig(html) !== CUR) showBtn();   // 어느 파일이든 버전이 바뀌면 새 버전
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function start() {
+    if (document.body.classList.contains("es-locked")) { setTimeout(start, 600); return; }
+    check();
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });   // 앱 다시 켤 때마다 확인
+    setInterval(check, 90000);   // 90초마다
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
