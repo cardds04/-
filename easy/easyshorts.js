@@ -9526,9 +9526,15 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function setElVolume(el, v) { if (!el) return; if (el._waGain) { try { el._waGain.gain.value = v; } catch (_) {} el.volume = 1; } else el.volume = v; }
   function unlockPreviewAudio() {   // 반드시 재생 '제스처' 안에서 호출
     const ac = previewAC(); if (!ac) return;
-    routePreviewEl($("#esMusic")); routePreviewEl($("#esVoice"));
-    if (E._audioEls) Object.keys(E._audioEls).forEach((id) => routePreviewEl(E._audioEls[id]));
-    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+    // ⚠️ suspended 컨텍스트에 createMediaElementSource 로 라우팅하면 element 가 그 그래프에만 묶여
+    //    소리가 아예 안 난다(미리보기 무음 버그). 컨텍스트가 실제 'running' 일 때만 Web Audio 로 라우팅하고,
+    //    아니면 resume 만 걸고 이번 재생은 네이티브 <audio>(element.volume)로 보낸다 → 소리 보장.
+    if (ac.state === "running") {
+      routePreviewEl($("#esMusic")); routePreviewEl($("#esVoice"));
+      if (E._audioEls) Object.keys(E._audioEls).forEach((id) => routePreviewEl(E._audioEls[id]));
+    } else {
+      try { ac.resume(); } catch (_) {}   // 다음 재생부터 Web Audio(iOS 무음스위치 우회), 이번 재생은 네이티브로
+    }
   }
   function togglePlay() { E.playing ? stopPlay() : startPlay(); }
   function startPlay() {

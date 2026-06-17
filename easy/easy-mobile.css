@@ -195,8 +195,15 @@ body.es-locked #easyRoot { visibility: hidden; }
   .es-btn, .es-step-btn, .es-navbtn { min-height: 44px; }
   .es-wiz-photobtns { flex-wrap: wrap; gap: 12px; }
 
-  /* 완성 화면 미리보기 — 화면 높이에 맞춤 */
-  .es-wiz-done .es-stage { height: 56vh !important; max-height: 56vh !important; }
+  /* 완성 화면 미리보기 — 좌우 여백 최소화: 높이가 아니라 '너비' 기준으로 키운다.
+     세로폰(예: 390×844)은 화면비가 9:16보다 더 좁아서, 너비를 꽉 채워도 세로로 들어간다. */
+  #easyRoot .es-wiz-done .es-stage {
+    width: 96vw !important;
+    height: auto !important;
+    max-height: 82vh !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
 
   /* 가로 넘침 방지 */
   .es-builder, .es-wiz-text, .es-slotcaps, .es-ai-box, .es-easy-strip { max-width: 100% !important; }
@@ -693,17 +700,18 @@ body.es-hasnav .es-bnav {
   #easyRoot .es-length-step .es-cl-transport { margin-top: 8px; }
   #easyRoot .es-length-step .es-cl-panel-preview .es-cl-stage {
     height: auto !important;          /* 여러 곳의 clamp 높이 무력화 */
-    max-height: 42vh !important;
+    max-height: 60vh !important;      /* 미리보기 키움(42→60vh) — 좌우 여백 줄고 화면 커짐 */
     min-height: 0 !important;
-    width: auto !important;
+    width: min(96vw, calc(60vh * 9 / 16)) !important;   /* 너비 기준으로 채워 양옆 여백 최소화 */
     max-width: 100% !important;
     margin: 0 auto !important;
   }
 
-  /* 패널 트리거 툴바 — 미리보기 바로 아래 항상 보이는 버튼 줄 */
+  /* 패널 트리거 툴바 — 미리보기 바로 아래 항상 보이는 버튼 줄. 1행당 3개씩(3열 그리드) */
   #easyRoot .es-cl-mobtools {
-    display: flex;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
     position: fixed;
     left: 10px;
     right: 10px;
@@ -715,13 +723,12 @@ body.es-hasnav .es-bnav {
     background: rgba(12, 16, 14, 0.99);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   }
-  /* 고정 툴바·하단탭에 콘텐츠/다음버튼이 가리지 않게 여백 확보 */
-  #easyRoot .es-wiz-body.es-length-step { padding-bottom: 78px; }
+  /* 고정 툴바(2줄)·하단탭에 콘텐츠/다음버튼이 가리지 않게 여백 확보 */
+  #easyRoot .es-wiz-body.es-length-step { padding-bottom: 132px; }
   #easyRoot .es-wiz:has(.es-length-step) .es-wiz-foot {
-    margin-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
   }
   #easyRoot .es-cl-mobtool {
-    flex: 1 1 0;
     min-width: 0;
     padding: 11px 3px;
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -895,3 +902,23 @@ body.es-hasnav .es-bnav {
 /* 메인 하단 01/02/03 라우트 카드(고객처럼 만들기·만든 영상 관리·새 템플릿 제작) 제거 —
    고객에겐 불필요. 관리자는 하단 푸터 메뉴(디테일숏폼 목록·새 템플릿)로 접근. */
 #easyRoot .es-customer-routes { display: none !important; }
+
+/* 사진·영상 채우기 단계 — ① 제목이 낱말 중간에서 끊기던 것(넣어주/요) 방지 + ② 글씨 전체적으로 살짝 줄임 */
+@media (max-width: 760px) {
+  #easyRoot .es-wiz-title { word-break: keep-all; }   /* 한국어는 띄어쓰기 단위로만 줄바꿈 → '사진이나 영상을 / 넣어주세요' */
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-title {
+    font-size: 27px !important; line-height: 1.22;
+  }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-sub,
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-note { font-size: 14px !important; }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-num {
+    width: 52px !important; height: 52px !important; font-size: 25px !important;
+  }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-bigcount { font-size: 15px !important; }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-bigcount b { font-size: 32px !important; }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-bigbtn,
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-auto-drop {
+    padding: 24px 26px !important; min-height: 92px !important; font-size: 18px !important;
+  }
+  #easyRoot .es-wiz-body:not(.es-length-step):not(.es-wiz-done) .es-wiz-drop-sub { font-size: 12px !important; }
+}
