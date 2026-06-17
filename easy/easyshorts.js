@@ -384,15 +384,26 @@
     return new Promise((res) => {
       if (!isVideo) { res(0); return; }
       const v = document.createElement("video");
-      v.preload = "metadata"; v.muted = true; v.src = url;
-      v.onloadedmetadata = () => res(isFinite(v.duration) ? v.duration : 0);
-      v.onerror = () => res(0);
+      let done = false;
+      const finish = (d) => { if (done) return; done = true; try { v.removeAttribute("src"); v.load(); } catch (_) {} res(d); };
+      // ⏱ 큰 영상/디코딩 안 되는 코덱(아이폰 HEVC 등)에서 metadata 가 영영 안 와 멈추는 걸 방지 — 8초 타임아웃 후 0(기본 길이)로 진행
+      const to = setTimeout(() => finish(0), 8000);
+      v.preload = "metadata"; v.muted = true; v.playsInline = true;
+      v.onloadedmetadata = () => { clearTimeout(to); finish(isFinite(v.duration) ? v.duration : 0); };
+      v.onerror = () => { clearTimeout(to); finish(0); };
+      v.src = url;
     });
   }
 
   // 세션(작업물) 저장/복원 ─────────────────────────────────────────
   // 'session' 키에 메타(템플릿·글자·재생위치·채움목록), 'sessFill_<slotId>' 키에 미디어 Blob 저장.
-  function saveFillBlob(slotId, file) { if (file instanceof Blob) idbSet("sessFill_" + slotId, file).catch(() => {}); }
+  function saveFillBlob(slotId, file) {
+    if (!(file instanceof Blob)) return;
+    // 📱 모바일에서 아주 큰 영상(>40MB)을 IDB 에 넣으면 용량초과로 탭이 죽을 수 있음 → IDB 저장 건너뜀.
+    //    (클라우드 백업 업로드로 원본은 따로 보관되므로 잃지 않음. 새로고침 복원만 영향.)
+    if (file.size > 40 * 1024 * 1024 && isMobileInput()) return;
+    idbSet("sessFill_" + slotId, file).catch(() => {});
+  }
   function delFillBlob(slotId) { idbDel("sessFill_" + slotId).catch(() => {}); }
   let _metaT = null;
   function scheduleSaveMeta() { if (_metaT) clearTimeout(_metaT); _metaT = setTimeout(saveMeta, 400); }
@@ -9124,7 +9135,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
           </div>` : "";
       return `
         <div class="es-fill-slot ${!E._detailEditor ? "es-easy-fill" : ""} ${f ? "filled" : ""} ${s.virtual ? "virtual" : ""} ${s.aiRole ? "ai-" + s.aiRole : ""} ${isAutoMaster ? "auto-master" : ""} ${isSlotSel(s.id) ? "sel" : ""}" data-id="${s.id}">
-          <div class="es-fill-thumb" style="aspect-ratio:${asp.w}/${asp.h}">${media}${roleBadge}${engBadge}${s.virtual ? `<span class="es-virtual-badge">가상</span>` : ""}${isAutoMaster ? `<span class="es-auto-badge">♾ 자율컷</span>` : ""}${f ? `<button type="button" class="es-fill-x" data-id="${s.id}" title="미디어 비우기">×</button>` : ""}</div>
+          <div class="es-fill-thumb" style="aspect-ratio:${asp.w}/${asp.h}">${media}${roleBadge}${engBadge}${s.virtual ? `<span class="es-virtual-badge">가상</span>` : ""}${isAutoMaster ? `<span class="es-auto-badge">♾ 자율컷</span>` : ""}${f && f._uploading ? `<div class="es-fill-upov"><div class="es-fill-upbar"><span style="width:${Math.round((f._uploadPct || 0) * 100)}%"></span></div><div class="es-fill-uptxt">☁ 올리는 중…</div></div>` : ""}${f && f.remoteUrl && !f._uploading ? `<span class="es-fill-cloud" title="클라우드 백업 완료">☁︎</span>` : ""}${f && f._uploadErr ? `<span class="es-fill-cloud es-fill-cloud-err" title="백업 실패(영상은 사용 가능)">⚠︎</span>` : ""}${f ? `<button type="button" class="es-fill-x" data-id="${s.id}" title="미디어 비우기">×</button>` : ""}</div>
           ${genRow}${afterRow}${vresRow}
           <div class="es-fill-info">
             <span class="es-fill-num">${i + 1}</span>
@@ -9324,6 +9335,54 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     document.addEventListener("keydown", onKey);
   }
 
+  // ── 📱 입력 파이프라인(Phase 1): 고객이 올린 원본 영상을 클라우드로 백업 업로드 ──
+  //    목적: ① 폰에서 큰 영상이 IDB 용량초과로 죽는 것 방지 ② 나중에 서버 렌더(Phase 2)의 입력원 확보.
+  //    미리보기/내보내기는 이번 단계에선 기존 로컬 경로 그대로(안전). 스트리밍 미리보기는 다음 단계.
+  function isMobileInput() {
+    try { const ua = navigator.userAgent || ""; const touch = (navigator.maxTouchPoints || 0) > 1; return /iphone|ipad|ipod|android|mobile/i.test(ua) || (touch && Math.min(screen.width || 9999, screen.height || 9999) <= 820); } catch (_) { return false; }
+  }
+  function useCloudInput() { return !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn()); }
+  function putWithProgress(url, blob, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("x-upsert", "true");
+      xhr.setRequestHeader("Content-Type", blob.type || "application/octet-stream");
+      if (xhr.upload) xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      xhr.onload = () => { (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error("업로드 실패 " + xhr.status)); };
+      xhr.onerror = () => reject(new Error("네트워크 오류"));
+      xhr.send(blob);
+    });
+  }
+  async function uploadInputMedia(file, onProgress) {
+    const token = (window.EasyAuth && window.EasyAuth.getToken && window.EasyAuth.getToken()) || "";
+    if (!token) throw new Error("로그인이 필요해요");
+    let ext = (String(file.name || "").split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (/quicktime/i.test(file.type || "")) ext = "mov";
+    const sr = await fetch(custVideoEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign", token, input: true, ext }) });
+    const sj = await sr.json().catch(() => null);
+    if (!sj || !sj.ok || !sj.uploadUrl) throw new Error((sj && sj.message) || "업로드 준비 실패");
+    await putWithProgress(sj.uploadUrl, file, onProgress);
+    return sj.publicUrl;
+  }
+  // 영상 채움 직후 호출 — 백그라운드로 클라우드 백업(진행률은 해당 슬롯 카드에). 미리보기는 그대로 로컬 사용.
+  function kickCloudBackup(slotId, file) {
+    if (!useCloudInput() || !file || !/^video\//.test(file.type)) return;
+    const f0 = E.using && E.using.fills[slotId]; if (f0) { f0._uploading = true; f0._uploadPct = 0; }
+    try { renderFillSlots(); } catch (_) {}
+    uploadInputMedia(file, (pct) => {
+      const f = E.using && E.using.fills[slotId]; if (!f) return; f._uploadPct = pct;
+      const bar = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-upbar > span'); if (bar) bar.style.width = Math.round(pct * 100) + "%";
+    }).then((remoteUrl) => {
+      const f = E.using && E.using.fills[slotId]; if (f) { f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; }
+      try { renderFillSlots(); } catch (_) {} scheduleSaveMeta();
+    }).catch((e) => {
+      const f = E.using && E.using.fills[slotId]; if (f) { f._uploading = false; f._uploadErr = true; }
+      try { renderFillSlots(); } catch (_) {}
+      try { toast("☁ 백업 실패 (영상은 계속 쓸 수 있어요): " + ((e && e.message) || "")); } catch (_) {}
+    });
+  }
+
   async function fillSlot(slotId, file) {
     if (!E.using) return;
     const isVideo = /^video\//.test(file.type);
@@ -9338,7 +9397,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (isVideo && dur > 0) { const slot = E.using.template.slots.find((s) => s.id === slotId); if (slot && !slot.timelapse) slot.dur = +clamp(dur, 0.3, 60).toFixed(2); }
     refreshSlots();            // 길이 변동(원본맞춤)까지 타임라인·총길이 반영
     seek(E.playhead);          // 미리보기 화면 즉시 갱신
-    saveFillBlob(slotId, file); scheduleSaveMeta();
+    saveFillBlob(slotId, file); kickCloudBackup(slotId, file); scheduleSaveMeta();
   }
   function clearSlot(slotId) {
     if (!E.using) return;
@@ -9366,7 +9425,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[s.id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
       if (isVideo && dur > 0 && !s.timelapse) { s.dur = +clamp(dur, 0.3, 60).toFixed(2); durChanged = true; }   // 🎬 영상은 원본 길이에 맞춤
-      saveFillBlob(s.id, file);
+      saveFillBlob(s.id, file); kickCloudBackup(s.id, file);
     }
     if (created || durChanged) refreshSlots(); else renderFillSlots();   // 컷이 새로 생기거나 길이가 바뀌면 타임라인까지 전체 갱신
     preloadFills();
@@ -9391,7 +9450,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const url = URL.createObjectURL(file);
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
-      saveFillBlob(id, file);
+      saveFillBlob(id, file); kickCloudBackup(id, file);
     }
     renderFillSlots(); preloadFills(); seek(E.playhead); scheduleSaveMeta();
   }
