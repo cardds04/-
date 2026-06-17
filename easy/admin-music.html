@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>내장 배경음악 관리 (관리자)</title>
+  <style>
+    :root { --bg:#111114; --panel:#1b1b1f; --panel2:#0e0e11; --border:#2a2a30; --text:#e7e7ea; --dim:#9a9aa2; --accent:#26d3a6; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif; }
+    .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+    h1 { font-size:20px; margin:0 0 4px; }
+    .sub { color:var(--dim); font-size:13px; margin:0 0 18px; line-height:1.5; }
+    .gate { max-width:340px; margin:60px auto; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; text-align:center; }
+    .gate input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--text); font-size:16px; outline:none; }
+    .gate input:focus { border-color:var(--accent); }
+    .gate button { margin-top:12px; width:100%; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#04201a; font-size:15px; font-weight:800; cursor:pointer; }
+    .msg { min-height:18px; font-size:13px; margin-top:8px; }
+    .msg.err { color:#ff6b5b; } .msg.ok { color:var(--accent); }
+
+    /* 업로드 박스 */
+    .upbox { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:22px; }
+    .uphd { font-size:15px; font-weight:800; margin-bottom:12px; }
+    .upbox label.fld { display:block; font-size:12px; color:var(--dim); margin:0 0 5px; }
+    .upbox input[type=text], .upbox input[type=file] { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--text); font-size:14px; outline:none; margin-bottom:13px; }
+    .upbox input[type=text]:focus { border-color:var(--accent); }
+    .temprow { display:flex; gap:8px; margin-bottom:13px; }
+    .temprow label { flex:1; text-align:center; padding:10px 4px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); cursor:pointer; font-size:14px; font-weight:700; }
+    .temprow label.on { background:var(--accent); color:#04201a; border-color:transparent; }
+    .temprow input { display:none; }
+    .hint { font-size:11.5px; color:var(--dim); margin:-6px 0 12px; line-height:1.5; }
+    .upbtn { width:100%; padding:13px; border:0; border-radius:10px; background:var(--accent); color:#04201a; font-size:15px; font-weight:800; cursor:pointer; }
+    .upbtn:disabled { opacity:.55; cursor:default; }
+
+    .reload { padding:8px 16px; margin:0 0 14px; font-size:13px; border:1px solid var(--border); border-radius:10px; background:var(--panel); color:var(--text); cursor:pointer; }
+    .grouphd { font-size:14px; font-weight:800; margin:18px 0 9px; color:var(--accent); }
+    .grouphd .n { color:var(--dim); font-weight:600; font-size:12px; }
+    .trk { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 12px; margin-bottom:9px; }
+    .trk b { font-size:14px; flex:0 0 auto; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .trk audio { flex:1 1 auto; height:34px; min-width:0; }
+    .trk .del { flex:0 0 auto; border:0; background:transparent; color:#ff6b5b; font-size:17px; cursor:pointer; padding:4px 6px; }
+    .empty { color:var(--dim); text-align:center; padding:40px 0; }
+  </style>
+</head>
+<body>
+  <div id="gate" class="gate">
+    <h1>🎵 내장 배경음악</h1>
+    <p class="sub" style="margin-bottom:14px">관리자 비밀번호를 입력하세요</p>
+    <input type="password" id="pw" placeholder="관리자 비밀번호" />
+    <button id="enter">들어가기</button>
+    <div class="msg err" id="gateMsg"></div>
+  </div>
+
+  <div id="app" class="wrap" hidden>
+    <h1>🎵 내장 배경음악 관리</h1>
+    <p class="sub">여기에 올린 음악이 고객 화면 <b>배경음악 → 📚 내장 배경음악</b>의 <b>빠른 / 중간 / 느린</b> 탭에 나옵니다.</p>
+
+    <div class="upbox">
+      <div class="uphd">＋ 음악 추가</div>
+      <label class="fld">음악 이름</label>
+      <input type="text" id="mName" placeholder="예: 잔잔한 피아노" maxlength="40" />
+      <label class="fld">빠르기(고객 탭 분류)</label>
+      <div class="temprow" id="tempo">
+        <label data-t="fast"><input type="radio" name="tempo" value="fast"> ⚡ 빠른</label>
+        <label data-t="mid" class="on"><input type="radio" name="tempo" value="mid" checked> 🎵 중간</label>
+        <label data-t="slow"><input type="radio" name="tempo" value="slow"> 🌙 느린</label>
+      </div>
+      <label class="fld">음악 파일</label>
+      <input type="file" id="mFile" accept="audio/*" />
+      <div class="hint">⚠️ 한 곡당 3MB 이하 (짧은 배경음악 권장). 더 긴 음원이 필요하면 알려주세요 — 대용량 업로드로 바꿔드릴게요.</div>
+      <button class="upbtn" id="upBtn">⬆ 업로드</button>
+      <div class="msg" id="upMsg"></div>
+    </div>
+
+    <button class="reload" id="reload">↻ 새로고침</button>
+    <div id="lists"></div>
+    <div id="empty" class="empty" hidden>아직 올린 음악이 없어요. 위에서 추가하세요.</div>
+  </div>
+
+  <script>
+    var API = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname))
+      ? "http://127.0.0.1:8787/api/easy-audio"
+      : "https://sc-pink.vercel.app/api/easy-audio";
+    var KEY_LS = "easy_admin_key";
+    var TEMPO_LABEL = { fast: "⚡ 빠른", mid: "🎵 중간", slow: "🌙 느린" };
+    var TEMPOS = ["fast", "mid", "slow"];
+    var $ = function (s) { return document.querySelector(s); };
+    function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+
+    // 빠르기 칩 선택 표시
+    $("#tempo").addEventListener("click", function (e) {
+      var lab = e.target.closest("label[data-t]"); if (!lab) return;
+      $("#tempo").querySelectorAll("label").forEach(function (x) { x.classList.toggle("on", x === lab); });
+    });
+
+    // 공개 목록(키 불필요)
+    async function loadTracks() {
+      var r = await fetch(API, { cache: "no-store" });
+      var j = await r.json().catch(function () { return null; });
+      if (!j || !j.ok) throw new Error("목록을 불러오지 못했어요");
+      return j.tracks || [];
+    }
+
+    function render(tracks) {
+      var lists = $("#lists"), empty = $("#empty");
+      if (!tracks.length) { lists.innerHTML = ""; empty.hidden = false; return; }
+      empty.hidden = true;
+      lists.innerHTML = TEMPOS.map(function (tp) {
+        var rows = tracks.filter(function (t) { return t.tempo === tp; });
+        if (!rows.length) return "";
+        return '<div class="grouphd">' + TEMPO_LABEL[tp] + ' <span class="n">' + rows.length + '곡</span></div>' +
+          rows.map(function (t) {
+            return '<div class="trk" data-id="' + esc(t.id) + '">' +
+              '<b>' + esc(t.name || "이름없음") + '</b>' +
+              '<audio src="' + esc(t.url) + '" controls preload="none"></audio>' +
+              '<button class="del" title="삭제">🗑</button>' +
+            '</div>';
+          }).join("");
+      }).join("");
+      lists.querySelectorAll(".trk .del").forEach(function (b) {
+        b.addEventListener("click", function () { del(b.closest(".trk").dataset.id); });
+      });
+    }
+
+    function fileToB64(file) {
+      return new Promise(function (res, rej) {
+        var r = new FileReader();
+        r.onload = function () { res(String(r.result).split(",")[1] || ""); };
+        r.onerror = rej; r.readAsDataURL(file);
+      });
+    }
+
+    async function upload() {
+      var msg = $("#upMsg"); msg.className = "msg";
+      var key = ""; try { key = localStorage.getItem(KEY_LS) || ""; } catch (_) {}
+      var name = ($("#mName").value || "").trim();
+      var file = $("#mFile").files[0];
+      var tempo = ($('input[name="tempo"]:checked') || {}).value || "mid";
+      if (!name) { msg.className = "msg err"; msg.textContent = "음악 이름을 입력하세요."; return; }
+      if (!file) { msg.className = "msg err"; msg.textContent = "음악 파일을 선택하세요."; return; }
+      if (file.size > 3 * 1024 * 1024) { msg.className = "msg err"; msg.textContent = "파일이 너무 커요 (3MB 이하). 더 큰 파일은 알려주세요."; return; }
+      var btn = $("#upBtn"); btn.disabled = true;
+      msg.className = "msg"; msg.textContent = "업로드 중…";
+      try {
+        var b64 = await fileToB64(file);
+        var r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add", key: key, name: name, tempo: tempo, audioB64: b64, audioType: file.type }) });
+        var j = await r.json().catch(function () { return null; });
+        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("업로드 실패 (" + r.status + ")"));
+        msg.className = "msg ok"; msg.textContent = "✓ 추가됐어요: " + name;
+        $("#mName").value = ""; $("#mFile").value = "";
+        render(await loadTracks());
+      } catch (e) {
+        msg.className = "msg err"; msg.textContent = "✗ " + ((e && e.message) || "실패");
+      } finally { btn.disabled = false; }
+    }
+
+    async function del(id) {
+      if (!confirm("이 음악을 라이브러리에서 삭제할까요?")) return;
+      var key = ""; try { key = localStorage.getItem(KEY_LS) || ""; } catch (_) {}
+      try {
+        var r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", key: key, id: id }) });
+        var j = await r.json().catch(function () { return null; });
+        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || "삭제 실패");
+        render(await loadTracks());
+      } catch (e) { alert("삭제 실패: " + ((e && e.message) || "")); }
+    }
+
+    // 키 검증: name 비워 add 호출 → 키 틀리면 401, 맞으면 400(이름 필요). 부작용 없음.
+    async function validateKey(key) {
+      var r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", key: key, name: "" }) });
+      if (r.status === 401) throw new Error("관리자 비밀번호가 올바르지 않습니다");
+      return true;   // 401 외(보통 400 이름필요) → 키 정상
+    }
+
+    async function enter(key) {
+      var gm = $("#gateMsg"); gm.textContent = "";
+      if (!key) { gm.textContent = "비밀번호를 입력하세요"; return; }
+      try {
+        await validateKey(key);
+        try { localStorage.setItem(KEY_LS, key); } catch (_) {}
+        $("#gate").hidden = true; $("#app").hidden = false;
+        render(await loadTracks());
+      } catch (e) { gm.textContent = "✗ " + ((e && e.message) || "확인 실패"); }
+    }
+
+    $("#enter").addEventListener("click", function () { enter($("#pw").value.trim()); });
+    $("#pw").addEventListener("keydown", function (e) { if (e.key === "Enter") enter($("#pw").value.trim()); });
+    $("#upBtn").addEventListener("click", upload);
+    $("#reload").addEventListener("click", function () { loadTracks().then(render).catch(function (e) { alert("새로고침 실패: " + (e && e.message)); }); });
+
+    // 저장된 키로 자동 입장
+    (function () { var k = ""; try { k = localStorage.getItem(KEY_LS) || ""; } catch (_) {} if (k) enter(k); else $("#pw").focus(); })();
+  </script>
+</body>
+</html>
