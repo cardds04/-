@@ -3629,8 +3629,8 @@
                 <input type="range" id="esSeek" min="0" max="${total}" step="0.01" value="0">
                 <span class="es-time" id="esTime">00:00 / ${fmtT(total)}</span>
               </div>
-              <audio id="esMusic"></audio>
-              <audio id="esVoice"></audio>
+              <audio id="esMusic" crossorigin="anonymous"></audio>
+              <audio id="esVoice" crossorigin="anonymous"></audio>
             </section>
           </div>
           <div class="es-cl-mobtools" aria-label="패널 열기">
@@ -3743,8 +3743,8 @@
                 <input type="range" id="esSeek" min="0" max="${total}" step="0.01" value="0">
                 <span class="es-time" id="esTime">00:00 / ${fmtT(total)}</span>
               </div>
-              <audio id="esMusic"></audio>
-              <audio id="esVoice"></audio>
+              <audio id="esMusic" crossorigin="anonymous"></audio>
+              <audio id="esVoice" crossorigin="anonymous"></audio>
               ${isMic ? `
               <div class="es-cl-micbox">
                 <button type="button" class="es-btn es-btn-primary es-cl-micmake" id="esClMicMake">${caps.length ? "🔄 목소리로 자막 다시 만들기" : "🎤 목소리를 자막으로 바꾸기"}</button>
@@ -3754,6 +3754,19 @@
                 <span class="es-cl-music-ic">🎵 배경음악</span>
                 <span class="es-cl-music-cur">${E.using.musicUrl ? esc((E.using.template.music && E.using.template.music.name) || (E.using.musicSel && E.using.musicSel.name) || "선택됨") : "없음"}</span>
                 <button type="button" class="es-btn es-btn-ghost es-cl-music-btn" id="esClMusicBtn">🎵 음악 고르기</button>
+              </div>
+              <div class="es-cl-volbox">
+                <div class="es-cl-vol-hd">🔉 소리 크기</div>
+                <div class="es-cl-volrow">
+                  <span class="es-cl-vol-lb">🎬 원본 영상 소리</span>
+                  <input type="range" class="es-cl-vol-range" id="esEzOrigVol" min="0" max="100" step="5" value="${Math.round(curOrigVol() * 100)}">
+                  <span class="es-cl-vol-val" id="esEzOrigVolV">${Math.round(curOrigVol() * 100)}%</span>
+                </div>
+                <div class="es-cl-volrow">
+                  <span class="es-cl-vol-lb">🎵 배경음악</span>
+                  <input type="range" class="es-cl-vol-range" id="esEzMusicVol" min="0" max="100" step="5" value="${Math.round((E.using.musicVol != null ? E.using.musicVol : 1) * 100)}"${E.using.musicUrl ? "" : " disabled"}>
+                  <span class="es-cl-vol-val" id="esEzMusicVolV">${Math.round((E.using.musicVol != null ? E.using.musicVol : 1) * 100)}%</span>
+                </div>
               </div>
             </section>
             <div class="es-cl-sidecol">
@@ -3960,8 +3973,8 @@
             <button type="button" class="es-btn es-btn-ghost" id="esReelsPick">UI</button>
             <input type="file" id="esReelsFile" accept="image/*" hidden>
           </div>
-          <audio id="esMusic"></audio>
-          <audio id="esVoice"></audio>
+          <audio id="esMusic" crossorigin="anonymous"></audio>
+          <audio id="esVoice" crossorigin="anonymous"></audio>
           <div class="es-wiz-genrow">
             <button type="button" class="es-btn es-btn-primary es-wiz-gen" id="esEasyGen">⬇ 영상 생성·다운로드</button>
             <button type="button" class="es-btn es-btn-ghost" id="esEasySave">💾 내 영상으로 저장</button>
@@ -4112,6 +4125,24 @@
       { const nb = $("#esTlNarr .es-cl-narr"); if (nb) nb.addEventListener("click", () => { const el = $("#esTlStatus"); if (el) el.innerHTML = `🎙 <b>나레이션 음성</b> · ${(E.using.voiceDur || 0).toFixed(1)}초 <span class="es-cl-st-sub">(영상 0초부터 전체에 깔려요)</span>`; $$(".es-cl-block,.es-cl-cap,.es-cl-narr").forEach((x) => x.classList.remove("sel")); nb.classList.add("sel"); }); }
       // 🎵 배경음악 고르기(내 파일 + 내장 라이브러리)
       { const mb = $("#esClMusicBtn"); if (mb) mb.addEventListener("click", () => openMusicPicker()); }
+      // 🔉 원본 영상 소리 / 배경음악 볼륨 — 재생 중이면 즉시 반영
+      { const ov = $("#esEzOrigVol"), ovv = $("#esEzOrigVolV");
+        if (ov) ov.addEventListener("input", () => {
+          const v = (+ov.value || 0) / 100;
+          E.using.template.origAudioVol = v;
+          if (ovv) ovv.textContent = ov.value + "%";
+          const pv = $("#esVideo"); if (pv) { try { pv.volume = clamp(v, 0, 1); pv.muted = v <= 0.001; } catch (_) {} }
+          try { propagateOrigVol(); } catch (_) {}
+          scheduleSaveMeta();
+        }); }
+      { const mv = $("#esEzMusicVol"), mvv = $("#esEzMusicVolV");
+        if (mv) mv.addEventListener("input", () => {
+          E.using.musicVol = (+mv.value || 0) / 100;
+          if (mvv) mvv.textContent = mv.value + "%";
+          if (E.playing) { try { updateMusicVolume(E.playhead); } catch (_) {} }
+          else { const a = $("#esMusic"); if (a) { try { setElVolume(a, musicVolAt(E.playhead || 0, totalDur() || 1)); } catch (_) {} } }
+          scheduleSaveMeta();
+        }); }
       // 📝 자막 인라인 편집(항상 보임) — 적용 누르면 줄 단위로 자막 재생성
       { const ta = $("#esClCapTa"), ap = $("#esClCapApply");
         if (ta) ta.addEventListener("keydown", (e) => e.stopPropagation());
@@ -4631,8 +4662,8 @@
             <input type="file" id="esLogoFile" accept="image/png,image/*" hidden>
             <span class="es-logo-ctl" id="esLogoCtl" hidden></span>
           </div>
-          <audio id="esMusic"></audio>
-          <audio id="esVoice"></audio>
+          <audio id="esMusic" crossorigin="anonymous"></audio>
+          <audio id="esVoice" crossorigin="anonymous"></audio>
         </div>
         <div class="es-use-right">
           <div class="es-rt-empty" hidden>👈 타임라인에서 <b>장면·자막·음악·나레이션</b> 블록을 선택하면<br>여기에서 바로 편집할 수 있어요.</div>
