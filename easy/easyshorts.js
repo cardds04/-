@@ -412,7 +412,7 @@
       if (!E.using) { await idbDel("session"); return; }
       const u = E.using;
       const fillMeta = {};
-      Object.keys(u.fills).forEach((id) => { const f = u.fills[id]; fillMeta[id] = { kind: f.kind, name: f.name, dur: f.dur }; });
+      Object.keys(u.fills).forEach((id) => { const f = u.fills[id]; fillMeta[id] = { kind: f.kind, name: f.name, dur: f.dur, remoteUrl: f.remoteUrl || null }; });   // remoteUrl: ☁ 클라우드 백업 — blob 없이도 새로고침 복원
       await idbSet("session", {
         view: "use", templateId: u.template.id, template: u.template,
         texts: u.texts, playhead: E.playhead, fillMeta, fillSlotIds: Object.keys(u.fills),
@@ -446,11 +446,15 @@
       if (s.voiceChanged) { try { const b = await idbGet("sessVoice"); if (b instanceof Blob) { voiceBlob = b; voiceUrl = URL.createObjectURL(b); } } catch (_) {} }
       const fills = {};
       for (const id of (s.fillSlotIds || [])) {
-        const blob = await idbGet("sessFill_" + id);
-        if (!(blob instanceof Blob)) continue;
         const meta = (s.fillMeta || {})[id] || {};
-        const kind = meta.kind || (/^video\//.test(blob.type) ? "video" : "image");
-        fills[id] = { kind, name: meta.name || "", dur: meta.dur || 0, url: URL.createObjectURL(blob), _file: blob };
+        const blob = await idbGet("sessFill_" + id);
+        if (blob instanceof Blob) {
+          const kind = meta.kind || (/^video\//.test(blob.type) ? "video" : "image");
+          fills[id] = { kind, name: meta.name || "", dur: meta.dur || 0, url: URL.createObjectURL(blob), _file: blob };
+        } else if (meta.remoteUrl) {
+          // ☁ 클라우드 백업된 입력 영상 — blob 없이 원격 URL 로 복원(스트리밍 미리보기)
+          fills[id] = { kind: meta.kind || "video", name: meta.name || "", dur: meta.dur || 0, url: meta.remoteUrl, remoteUrl: meta.remoteUrl, _cloud: true };
+        }
       }
       E.using = { template: s.template, musicUrl, voiceUrl, voiceBlob, voiceDur: s.voiceDur || 0, voiceDuck: (s.voiceDuck != null ? s.voiceDuck : 0.35), voiceVol: s.voiceVol, _voiceGender: s.voiceGender || "female", _voiceTone: s.voiceTone || "", fills, texts: Array.isArray(s.texts) ? s.texts : [], selText: null, selTexts: [], _musicChanged: !!s.musicChanged, _voiceChanged: !!s.voiceChanged, _baFlow: !!s.baFlow, logo: s.logo || null, musicRange: s.musicRange || null, musicVol: s.musicVol, musicFadeIn: s.musicFadeIn, musicFadeOut: s.musicFadeOut, _isTitle: !!s.isTitle, _titleText: s.titleText || "", _titlePrompt: s.titlePrompt || "", stickerLib: Array.isArray(s.stickerLib) ? s.stickerLib : [], stickers: Array.isArray(s.stickers) ? s.stickers : [] };
       E.using.audioBlobs = {};   // 🔊 분리 오디오 blob 복원(sessAudio_<id>)
@@ -1078,7 +1082,7 @@
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";   // 고품질 스케일링
       const { imgs } = await preloadExportMedia();   // 릴스 오버레이는 로드하지 않음
       try { await prewarmLastFrames(); } catch (_) {}   // 영상 전환용 — 각 영상 컷의 마지막 프레임 캡처
-      const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.preload = "auto";
+      const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.crossOrigin = "anonymous"; expVideo.preload = "auto";
       const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => console.warn("[video enc]", e) });
       const autoBitrate = Math.min(80000000, Math.max(16000000, Math.round((W * H) / (1920 * 1080) * 32000000)));   // 1080p≈32Mbps, 해상도 비례(최대 80Mbps)
       venc.configure(Object.assign({ codec: vcodec, width: W, height: H, bitrate: opts.bitrate || autoBitrate, framerate: FPS, latencyMode: "quality" }, vcfgExtra));
@@ -1142,7 +1146,7 @@
       E._logoExportImg = null;
       if (E.using.logo && E.using.logoUrl) { const lim = new Image(); lim.src = E.using.logoUrl; try { await lim.decode(); } catch (_) {} E._logoExportImg = lim; }
       await preloadStickerExportImgs();   // 🎨 스티커 이미지 미리 로드
-      const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true;
+      const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.crossOrigin = "anonymous";
       const musicEl = $("#esMusic");
       const voiceEl = $("#esVoice");
       // 스트림 구성
@@ -2270,7 +2274,7 @@
     cv.width = 810; cv.height = Math.round(810 * asp.h / asp.w);
     thumb.appendChild(cv);
     const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
-    const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true;
+    const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.crossOrigin = "anonymous";
     const audio = musicUrl ? new Audio(musicUrl) : null;   // 캐시된 URL로 즉시 생성(IDB 읽기 없음)
     const voice = voiceUrl ? new Audio(voiceUrl) : null;   // 나레이션
     const clipAudios = (audioClips || []).map((c) => ({ c, el: (audioUrls && audioUrls[c.id]) ? new Audio(audioUrls[c.id]) : null }));   // 🔊 분리 오디오
@@ -3627,7 +3631,7 @@
             <section class="es-cl-panel es-cl-panel-preview">
               <div class="es-cl-panel-head"><b>미리보기</b><span>▶ 재생하면 자막이 들어간 화면을 볼 수 있어요.</span></div>
               <div class="es-stage es-cl-stage" id="esStage" style="aspect-ratio:${asp.w}/${asp.h}">
-                <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
+                <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline crossorigin="anonymous"></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
                 <div class="es-stage-empty" id="esStageEmpty">▶ 를 누르면 재생돼요</div>
                 <div class="es-slot-badge" id="esSlotBadge" hidden></div>
                 <div class="es-text-layer" id="esTextLayer"></div>
@@ -3741,7 +3745,7 @@
                 <span>재생으로 흐름을 보고, 문제가 있는 컷만 손잡이로 길이를 줄여주세요.</span>
               </div>
               <div class="es-stage es-cl-stage" id="esStage" style="aspect-ratio:${asp.w}/${asp.h}">
-                <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
+                <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline crossorigin="anonymous"></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
                 <div class="es-stage-empty" id="esStageEmpty">▶ 를 누르면 재생돼요</div>
                 <div class="es-slot-badge" id="esSlotBadge" hidden></div>
                 <div class="es-text-layer" id="esTextLayer"></div>
@@ -3968,7 +3972,7 @@
         <div class="es-wiz-body es-wiz-done">
           <div class="es-wiz-title">완성! 미리보기로 확인하세요</div>
           <div class="es-stage" id="esStage" style="aspect-ratio:${asp.w}/${asp.h}">
-            <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
+            <img id="esImgPrev" alt=""><video id="esVideo" muted playsinline crossorigin="anonymous"></video><img id="esImg" alt=""><img id="esHold" class="es-hold" alt="">
             <div class="es-stage-empty" id="esStageEmpty">▶ 를 누르면 재생돼요</div>
             <div class="es-slot-badge" id="esSlotBadge" hidden></div>
             <div class="es-text-layer" id="esTextLayer"></div>
@@ -4645,7 +4649,7 @@
         <div class="es-use-left">
           <div class="es-stage es-asp-${asp.w < asp.h ? "portrait" : asp.w > asp.h ? "wide" : "square"}" id="esStage" style="aspect-ratio:${asp.w}/${asp.h}">
             <img id="esImgPrev" alt="">
-            <video id="esVideo" muted playsinline></video>
+            <video id="esVideo" muted playsinline crossorigin="anonymous"></video>
             <img id="esImg" alt="">
             <img id="esHold" class="es-hold" alt="">
             <div class="es-stage-empty" id="esStageEmpty">슬롯에 사진·영상을 넣고 ▶ 를 누르면 자동으로 이어붙여 재생돼요</div>
@@ -9100,7 +9104,12 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const f = E.using.fills[s.id];
       const asp = ASPECTS[t.aspect] || ASPECTS["9:16"];
       let media = `<div class="es-fill-ph">＋<br>끌어다 놓기<br><span class="es-fill-ph-sub">(또는 클릭)</span></div>`;
-      if (f) media = f.kind === "video" ? `<video src="${f.url}" muted preload="metadata"></video>` : `<img src="${f.url}" alt="">`;
+      if (f) {
+        if (f.poster) media = `<img src="${f.poster}" alt="">`;   // ☁ 클라우드 입력: 가벼운 포스터(첫 프레임)로 — 큰 영상 디코딩 안 함
+        else if (f.kind === "video" && f.url) media = `<video src="${f.url}" muted preload="metadata"></video>`;
+        else if (f.url) media = `<img src="${f.url}" alt="">`;
+        else media = `<div class="es-fill-ph">☁</div>`;
+      }
       const isAutoMaster = !!(s.auto && !s.fromAuto);
       if (isAutoMaster && !f) media = `<div class="es-fill-ph es-auto-ph">♾<br><b>자율컷</b><br><span class="es-fill-ph-sub">손님이 넣는 영상<br>수만큼 장면 자동생성</span></div>`;
       if (s.virtual && !f && !isAutoMaster) media = `<div class="es-fill-ph es-virtual-ph">◇<br><b>${esc(s.label || "가상컷")}</b><br><span class="es-fill-ph-sub">실제 컷 없이<br>템플릿 설계용</span></div>`;
@@ -9383,11 +9392,42 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     });
   }
 
+  // 📱 모바일 영상 슬롯 — 큰 영상을 폰에 통째로 안 들고: 업로드 중엔 포스터(첫 프레임)만, 끝나면 클라우드 스트리밍으로 미리보기. (메모리 해방)
+  async function fillSlotCloudVideo(slotId, file) {
+    if (!E.using) return;
+    const slot = E.using.template.slots.find((s) => s.id === slotId);
+    const prev = E.using.fills[slotId];
+    if (prev) { try { if (prev.url) URL.revokeObjectURL(prev.url); } catch (_) {} try { if (prev.poster && prev.poster !== prev.url) URL.revokeObjectURL(prev.poster); } catch (_) {} }
+    // 1) 포스터(첫 프레임, 작게) — HEVC 등 디코딩 실패하면 null
+    let posterUrl = null; try { const pj = await blobToPreviewJpeg(file, "video", 720); if (pj) posterUrl = URL.createObjectURL(pj); } catch (_) {}
+    // 2) 길이(타임아웃 있는 mediaDuration) — metadata 만, 큰 blob 안 보유
+    let dur = 0; { const tmp = URL.createObjectURL(file); try { dur = await mediaDuration(tmp, true); } catch (_) {} try { URL.revokeObjectURL(tmp); } catch (_) {} }
+    if (dur > 0 && slot && !slot.timelapse) slot.dur = +clamp(dur, 0.3, 60).toFixed(2);
+    // 업로드 중: 포스터(정지) 표시 → 영상 디코딩/보유 안 함
+    E.using.fills[slotId] = { kind: "image", url: posterUrl || "", poster: posterUrl, name: file.name, dur, _cloud: true, _uploading: true, _uploadPct: 0, _wantVideo: true };
+    delFillBlob(slotId);   // 큰 blob 은 IDB 에 안 둠
+    refreshSlots(); seek(E.playhead);
+    // 3) 백그라운드 업로드 → 끝나면 클라우드 스트리밍 영상으로 전환
+    uploadInputMedia(file, (pct) => {
+      const f = E.using && E.using.fills[slotId]; if (!f) return; f._uploadPct = pct;
+      const bar = document.querySelector('.es-fill-slot[data-id="' + slotId + '"] .es-fill-upbar > span'); if (bar) bar.style.width = Math.round(pct * 100) + "%";
+    }).then((remoteUrl) => {
+      const f = E.using && E.using.fills[slotId]; if (!f) return;
+      f.kind = "video"; f.url = remoteUrl; f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; delete f._wantVideo;   // 이제 미리보기=클라우드 스트리밍(메모리 가벼움)
+      try { refreshSlots(); preloadFills(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
+    }).catch((e) => {
+      const f = E.using && E.using.fills[slotId]; if (f) { f._uploading = false; f._uploadErr = true; }
+      try { renderFillSlots(); } catch (_) {}
+      try { toast("영상 업로드 실패 — 다시 넣어주세요: " + ((e && e.message) || "")); } catch (_) {}
+    });
+  }
+
   async function fillSlot(slotId, file) {
     if (!E.using) return;
     const isVideo = /^video\//.test(file.type);
     const isImage = /^image\//.test(file.type);
     if (!isVideo && !isImage) { alert("사진 또는 영상 파일만 넣을 수 있어요."); return; }
+    if (isVideo && isMobileInput() && useCloudInput()) { return fillSlotCloudVideo(slotId, file); }   // 📱 모바일: 클라우드 스트리밍 경로(메모리 해방)
     const prev = E.using.fills[slotId];
     if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
     const url = URL.createObjectURL(file);
@@ -9418,9 +9458,10 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       if (i >= t.slots.length) { t.slots.push({ id: uid(), dur: 2, label: "" }); created = true; }   // 슬롯이 모자라면 새 컷을 만들어 채움(빈 템플릿에 업로드 시 장면 자동 생성)
       const s = t.slots[i];
       const file = media[fi++];
+      const isVideo = /^video\//.test(file.type);
+      if (isVideo && isMobileInput() && useCloudInput()) { await fillSlotCloudVideo(s.id, file); durChanged = true; continue; }   // 📱 모바일: 클라우드 스트리밍 경로
       const prev = E.using.fills[s.id];
       if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }  // 기존 것 덮어쓰기
-      const isVideo = /^video\//.test(file.type);
       const url = URL.createObjectURL(file);
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[s.id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
@@ -9445,8 +9486,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     for (const id of ids) {
       if (fi >= media.length) break;
       const file = media[fi++];
-      const prev = E.using.fills[id]; if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
       const isVideo = /^video\//.test(file.type);
+      if (isVideo && isMobileInput() && useCloudInput()) { await fillSlotCloudVideo(id, file); continue; }   // 📱 모바일: 클라우드 스트리밍 경로
+      const prev = E.using.fills[id]; if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
       const url = URL.createObjectURL(file);
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
