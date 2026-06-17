@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>고객 스케줄 등록</title>
+    <!-- PWA(앱 설치) -->
+    <meta name="theme-color" content="#466ba9" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="촬영예약" />
+    <link rel="manifest" href="./app-inlog.webmanifest" />
+    <link rel="icon" type="image/png" href="./icon-192.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -389,6 +397,24 @@
       <div class="card">
         <h1>고객용 스케줄 등록</h1>
         <p class="sub">관리자가 전달한 계정으로 로그인하면 업체 스케줄을 직접 등록할 수 있습니다.</p>
+
+        <div id="installAppRow" class="hidden" style="margin:0 0 14px;">
+          <button id="installAppBtn" type="button" class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#466ba9;color:#fff;border-color:#466ba9;font-weight:700;">
+            <span style="font-size:1.1em;">📲</span> 홈 화면에 앱으로 설치
+          </button>
+          <p class="sub" style="margin:6px 0 0;font-size:0.8rem;">설치하면 매번 주소 입력 없이 앱처럼 바로 열 수 있어요.</p>
+        </div>
+        <div id="iosInstallModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;">
+          <div style="background:#fff;border-radius:16px;max-width:340px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div style="font-weight:800;font-size:1.05rem;margin-bottom:12px;text-align:center;">홈 화면에 앱 추가하기</div>
+            <div style="font-size:0.92rem;line-height:1.8;color:#384b6a;text-align:left;">
+              ① 하단(또는 상단)의 <b>공유 버튼</b> <span style="display:inline-block;border:1px solid #9aa;border-radius:5px;padding:0 5px;">⬆️</span> 을 누르세요.<br />
+              ② 메뉴에서 <b>「홈 화면에 추가」</b>를 선택하세요.<br />
+              ③ 오른쪽 위 <b>「추가」</b>를 누르면 완료!
+            </div>
+            <button id="iosInstallClose" type="button" class="btn" style="margin-top:18px;width:100%;background:#466ba9;color:#fff;border-color:#466ba9;">확인</button>
+          </div>
+        </div>
 
         <div id="authBlock">
           <div class="tabs">
@@ -5131,6 +5157,83 @@
           renderAuthState();
         }
       });
+    </script>
+    <script>
+      // ── PWA(앱 설치) ───────────────────────────────────────────────
+      (function () {
+        "use strict";
+        var params = new URLSearchParams(location.search);
+        var isLite = params.get("mode") === "lite";
+        var inIframe = window.self !== window.top;
+
+        // 모드별 매니페스트(인로그/쇼픽)
+        var mlink = document.querySelector('link[rel="manifest"]');
+        if (mlink && isLite) mlink.href = "./app-shopick.webmanifest";
+
+        // 서비스워커 등록(설치 자격). 임베드(iframe) 안에서는 생략.
+        if ("serviceWorker" in navigator && !inIframe) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register("./app-sw.js").catch(function (e) {
+              console.warn("[PWA] SW 등록 실패", e);
+            });
+          });
+        }
+
+        var installRow = document.getElementById("installAppRow");
+        var installBtn = document.getElementById("installAppBtn");
+        if (!installRow || !installBtn || inIframe) return;
+
+        var standalone =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone === true;
+        if (standalone) return; // 이미 앱으로 실행 중
+
+        var ua = navigator.userAgent || "";
+        var isIOS =
+          /iphone|ipad|ipod/i.test(ua) ||
+          (/Macintosh/.test(ua) && typeof document.ontouchend !== "undefined");
+        var deferredPrompt = null;
+
+        window.addEventListener("beforeinstallprompt", function (e) {
+          e.preventDefault();
+          deferredPrompt = e;
+          installRow.classList.remove("hidden");
+        });
+        window.addEventListener("appinstalled", function () {
+          installRow.classList.add("hidden");
+          deferredPrompt = null;
+        });
+
+        // iOS 사파리는 beforeinstallprompt 없음 → 버튼 항상 표시(누르면 안내).
+        if (isIOS) installRow.classList.remove("hidden");
+
+        installBtn.addEventListener("click", function () {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            if (deferredPrompt.userChoice && deferredPrompt.userChoice.finally) {
+              deferredPrompt.userChoice.finally(function () {
+                deferredPrompt = null;
+              });
+            }
+            return;
+          }
+          if (isIOS) {
+            var m = document.getElementById("iosInstallModal");
+            if (m) m.classList.remove("hidden");
+            return;
+          }
+          alert(
+            "이 브라우저에서는 메뉴의 ‘홈 화면에 추가 / 앱 설치’를 눌러 설치할 수 있어요.\n(크롬·엣지·삼성인터넷 권장)"
+          );
+        });
+
+        var iosClose = document.getElementById("iosInstallClose");
+        if (iosClose)
+          iosClose.addEventListener("click", function () {
+            var m = document.getElementById("iosInstallModal");
+            if (m) m.classList.add("hidden");
+          });
+      })();
     </script>
   </body>
 </html>
