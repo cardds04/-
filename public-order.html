@@ -4120,8 +4120,8 @@
       }
 
       function setSelectedComposition(value, rootEl = composeButtonsEl, hiddenInputEl = scheduleCompositionEl) {
-        hiddenInputEl.value = value;
-        rootEl.querySelectorAll("button[data-compose]").forEach((btn) => {
+        if (hiddenInputEl) hiddenInputEl.value = value;
+        rootEl?.querySelectorAll("button[data-compose]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.compose === value);
         });
         updateExpectedPaymentText();
@@ -5996,13 +5996,18 @@
             });
             writeStorageArray(STORAGE_ALERTS, alerts);
           }
-          customerScheduleFormEl.reset();
-          setupDateTimeSelectors();
-          setSelectedPyeong("미선택");
-          setSelectedComposition("미선택");
-          setTaxInvoiceRequested(false);
-          updateExpectedPaymentText();
-          renderPaymentSummary();
+          // UI 초기화는 best-effort — 여기서 에러가 나도 문자/등록완료 안내까지 막지 않도록 보호.
+          try {
+            customerScheduleFormEl.reset();
+            setupDateTimeSelectors();
+            setSelectedPyeong("미선택");
+            setSelectedComposition("미선택");
+            setTaxInvoiceRequested(false);
+            updateExpectedPaymentText();
+            renderPaymentSummary();
+          } catch (uiResetErr) {
+            console.warn("[등록] 등록 후 화면 초기화 중 오류(무시) — 등록·문자는 정상 진행", uiResetErr);
+          }
 
           // ── 솔라피 SMS 알림 (사이트별 표기) ──
           // 더필링 사이트 접수 시 항상 "더필링" 라벨로 발송. 알림 실패해도 등록은 유효.
