@@ -1630,7 +1630,14 @@
             STORAGE_ADMIN_DASHBOARD_COMPLETED,
             STORAGE_ADMIN_WRITER_PROCESS_LOG,
             STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY,
-            STORAGE_BLOG_SEND_LOG // 전용 테이블 blog_send_log 로 관리 — client_kv push 금지
+            STORAGE_BLOG_SEND_LOG, // 전용 테이블 blog_send_log 로 관리 — client_kv push 금지
+            // ↓ 스케줄 3종은 전용 schedules 테이블로 동기화되므로 client_kv 에선 중복 → 제외.
+            //   오토백업은 로컬 안전스냅샷이라 동기화 불필요. → client_kv 행 4MB→~2MB 로 축소,
+            //   upsert statement timeout(57014) 해소(쿠폰·입금 변경이 저장 안 돼 리셋되던 근본 원인).
+            STORAGE_ADMIN_SCHEDULES,
+            STORAGE_CUSTOMER_SCHEDULES,
+            STORAGE_WRITER_SCHEDULES,
+            STORAGE_AUTO_BACKUP_ENTRIES
           ]);
           const kvFilteredLocal = Object.fromEntries(
             [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -1652,12 +1659,7 @@
           const serverKvRaw = serverRow.kv && typeof serverRow.kv === "object" ? serverRow.kv : {};
           const serverKvFiltered = Object.fromEntries(
             Object.entries(serverKvRaw).filter(
-              ([k]) =>
-                String(k || "").startsWith("scheduleSite") &&
-                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED &&
-                k !== STORAGE_ADMIN_WRITER_PROCESS_LOG &&
-                k !== STORAGE_ADMIN_DASHBOARD_COMPLETED_HISTORY &&
-                k !== STORAGE_BLOG_SEND_LOG // 전용 테이블 이전 후 client_kv 잔존 데이터 무시
+              ([k]) => String(k || "").startsWith("scheduleSite") && !EXCLUDED_KEYS.has(k)
             )
           );
           // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로

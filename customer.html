@@ -4515,10 +4515,21 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_ONLY_MODE || !scheduleSiteClientKvState.initialPullDone) return;
         if (scheduleSiteClientKvPushInFlight) return;
         // 관리자 전용 키 및 세션/인증 키를 제외하고 push
+        // 전용 schedules 테이블로 동기화되는 스케줄 3종 + 로컬 백업은 client_kv 에서 제외 →
+        // 공유 행이 4MB→~2MB 로 줄어 upsert statement timeout(57014) 해소.
+        const CLIENT_KV_EXCLUDE_HEAVY_KEYS = [
+          "scheduleSiteAdminSchedules",
+          "scheduleSiteCustomerSchedules",
+          "scheduleSiteWriterSchedules",
+          "scheduleSiteAutoBackupEntriesV1"
+        ];
         const kv = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
             ([k]) =>
-              !ADMIN_ONLY_KV_KEYS.has(k) && !PRIVATE_LOCAL_KEYS.has(k) && !CUSTOMER_NEVER_PUSH_TO_KV_KEYS.has(k)
+              !ADMIN_ONLY_KV_KEYS.has(k) &&
+              !PRIVATE_LOCAL_KEYS.has(k) &&
+              !CUSTOMER_NEVER_PUSH_TO_KV_KEYS.has(k) &&
+              !CLIENT_KV_EXCLUDE_HEAVY_KEYS.includes(k)
           )
         );
         if (!Object.keys(kv).length) return;
