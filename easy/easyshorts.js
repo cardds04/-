@@ -1046,7 +1046,7 @@
     if (btn) btn.dataset.base = baseTxt;   // 원래 라벨 기억
     let ok = false;
     // 📱 폰에서 직접 내보낼 땐 1080p·16Mbps 로 제한 → 인코딩 빨라지고 파일도 작아짐(숏폼 표준). 데스크탑은 원본 그대로.
-    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 10000000 } : {};
+    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1280, bitrate: 8000000, fps: 24 } : {};   // 폰: 720p·24fps·8Mbps (속도·메모리 우선)
     if ((typeof VideoEncoder !== "undefined") && window.EasyMux) {
       try { if (await exportOffline("mp4", exOpts)) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
       if (!ok) { try { if (await exportOffline("webm", exOpts)) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
@@ -1058,7 +1058,7 @@
   async function exportOffline(fmt, opts) {
     opts = opts || {};
     const { arr, total } = slotTimes();
-    const FPS = 30;
+    const FPS = opts.fps || 30;
     const { W, H } = await bestOutputSize(opts.maxLong);   // 원본 해상도에 맞춤(4K까지). 게시 미리보기는 maxLong=1920로 1080p 제한
     if (!opts.returnBlob) { try { const sd = E._srcDims; toast(`내보내기 ${W}×${H}${sd ? ` (원본영상 ${sd.w}×${sd.h})` : " (영상없음·사진)"}`); } catch (_) {} }   // 진단용
     // 영상 코덱 선택
@@ -1111,7 +1111,7 @@
         vf.close();
         // 🧠 백프레셔 — 인코더가 폰 속도를 못 따라가면 대기 프레임(비압축, 장당 수 MB)이 쌓여 OOM(앱 꺼짐).
         //    큐가 빠질 때까지 잠깐 기다려 메모리 상한을 둠 → 긴 영상도 안 터짐.
-        if (venc.encodeQueueSize > 6) { while (venc.encodeQueueSize > 3) { await new Promise((r) => setTimeout(r, 6)); } }
+        if (venc.encodeQueueSize > 6) { let _bg = 0; while (venc.encodeQueueSize > 3 && _bg++ < 800) { await new Promise((r) => setTimeout(r, 6)); } }   // 큐 비우기 대기(무한 멈춤 방지 상한)
         if (i % 15 === 0) { if (btn) btn.textContent = `⬇ 다운로드 중… ${Math.round(i / totalFrames * 100)}%`; if (opts.onProgress) opts.onProgress(i / totalFrames); await new Promise((r) => setTimeout(r, 0)); }
       }
       await venc.flush(); venc.close();
@@ -11556,6 +11556,16 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (!root) return;
     buildDom();
     E.inited = true;
+    try {   // 🔖 화면 우하단에 현재 버전 표시(업데이트가 적용됐는지 바로 확인용)
+      if (!document.getElementById("esVerBadge")) {
+        const vsEl = document.querySelector('script[src*="easyshorts.js"]');
+        const vm = vsEl && (vsEl.src || "").match(/[?&]v=(\d+)/);
+        const vb = document.createElement("div"); vb.id = "esVerBadge";
+        vb.textContent = "v" + (vm ? vm[1] : "?");
+        vb.style.cssText = "position:fixed;right:7px;bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:99999;background:rgba(0,0,0,.6);color:#9ef;font:700 11px/1 ui-monospace,monospace;padding:4px 7px;border-radius:8px;pointer-events:none;letter-spacing:.5px";
+        document.body.appendChild(vb);
+      }
+    } catch (_) {}
     try { setupBackTrap(); } catch (_) {}   // 🔙 휴대폰 뒤로가기 = 앱 내 뒤로
     $$(".es-modebtn", root).forEach((b) => b.addEventListener("click", () => enterMode2(b.dataset.mode2)));
     { const kb = $("#esNavKling", root); if (kb) kb.addEventListener("click", setKlingKeysOnline); }
