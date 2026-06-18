@@ -9585,20 +9585,12 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     E.using.fills[slotId] = { kind: "image", url: posterUrl || "", poster: posterUrl, name: file.name, dur, _cloud: true, _uploading: true, _uploadPct: 0, _wantVideo: true };
     delFillBlob(slotId);   // 큰 blob 은 IDB 에 안 둠
     refreshSlots(); seek(E.playhead);
-    // 3) (가능하면) 압축 → 백그라운드 업로드 → 끝나면 클라우드 스트리밍 영상으로 전환
+    // 3) 백그라운드로 '원본 그대로' 청크 업로드(폰에서 디코딩/재인코딩 안 함 → 메모리 안 터짐).
+    //    용량 줄이기는 서버 렌더가 1080p 로 처리하므로 폰 압축은 안 함(폰 압축이 '앗 이런' 크래시의 원인이었음).
     (async function () {
-      let up = file;
       try {
-        if (file.size > 12 * 1024 * 1024) {   // 작은 영상은 압축 생략(이득 적음)
-          setSlotUpProgress(slotId, 0, "📉 압축 중");
-          const comp = await compressVideoFile(file, (p) => setSlotUpProgress(slotId, p * 0.5, "📉 압축 중"));
-          if (comp) up = comp;   // 더 작아졌으면 압축본 업로드
-        }
-      } catch (_) {}
-      const compressed = up !== file;
-      try {
-        setSlotUpProgress(slotId, compressed ? 0.5 : 0, "☁ 올리는 중");
-        const remoteUrl = await uploadInputMedia(up, (p) => setSlotUpProgress(slotId, compressed ? 0.5 + p * 0.5 : p, "☁ 올리는 중"));
+        setSlotUpProgress(slotId, 0, "☁ 올리는 중");
+        const remoteUrl = await uploadInputMedia(file, (p) => setSlotUpProgress(slotId, p, "☁ 올리는 중"));
         const f = E.using && E.using.fills[slotId]; if (!f) return;
         f.kind = "video"; f.url = remoteUrl; f.remoteUrl = remoteUrl; f._uploading = false; f._uploadPct = 1; delete f._wantVideo; delete f._upLabel;
         try { refreshSlots(); preloadFills(); refreshFillCards(); seek(E.playhead); } catch (_) {} scheduleSaveMeta();
