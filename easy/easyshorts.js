@@ -1113,11 +1113,8 @@
       const blob = muxer.finalize();
       if (!blob || blob.size < 1000) throw new Error("빈 결과");
       if (opts.returnBlob) return blob;   // 게시용: 다운로드 대신 blob 반환
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + "." + ext;
-      document.body.appendChild(a); a.click(); a.remove();
+      await saveOrDownloadBlob(blob, (E.using.template.name || "easyshorts") + "." + ext, blob.type || (ext === "mp4" ? "video/mp4" : "video/webm"));
       try { maybeUploadCustomerVideo(blob, (E.using && E.using.template && E.using.template.name) || "내 영상", ext); } catch (_) {}   // 관리자 보관용 업로드
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
       return true;
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = oldTxt || "⬇ 다운로드"; }
@@ -1237,11 +1234,8 @@
       try { expVideo.pause(); } catch (_) {}
       await stopped;
       const blob = new Blob(chunks, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = (E.using.template.name || "easyshorts") + ".webm";
-      document.body.appendChild(a); a.click(); a.remove();
+      await saveOrDownloadBlob(blob, (E.using.template.name || "easyshorts") + ".webm", "video/webm");
       try { maybeUploadCustomerVideo(blob, (E.using && E.using.template && E.using.template.name) || "내 영상", "webm"); } catch (_) {}   // 관리자 보관용 업로드
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
       return true;
     } catch (e) {
       console.warn("[easyshorts] exportVideo", e); alert("녹화 중 오류가 발생했어요: " + (e && e.message || e));
@@ -4242,8 +4236,9 @@
       $("#esPlay").addEventListener("click", togglePlay);
       $("#esSeek").addEventListener("input", (e) => seek(parseFloat(e.target.value)));
       $("#esEasyGen").addEventListener("click", () => {
-        if (isMobileInput() && useCloudInput()) serverRender();   // 📱 폰: 서버 렌더(안 멈춤)
-        else exportVideo();                                       // 💻 데스크탑: 로컬(빠름)
+        if (isNativeApp()) exportVideo();                            // 📦 설치형 앱: 폰 안에서 직접(largeHeap, 업로드 0)
+        else if (isMobileInput() && useCloudInput()) serverRender(); // 📱 폰 웹: 서버 렌더(안 멈춤)
+        else exportVideo();                                          // 💻 데스크탑: 로컬(빠름)
       });
       $("#esEasySave").addEventListener("click", saveCurrentProject);
       $("#esReels").addEventListener("change", async (e) => { if (e.target.checked && !E.reelsUrl) { e.target.checked = false; $("#esReelsFile").click(); return; } E.reelsOn = e.target.checked; try { await idbSet("reelsOn", E.reelsOn); } catch (_) {} updateReelsOverlay(); });
@@ -9371,6 +9366,39 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     try { const ua = navigator.userAgent || ""; const touch = (navigator.maxTouchPoints || 0) > 1; return /iphone|ipad|ipod|android|mobile/i.test(ua) || (touch && Math.min(screen.width || 9999, screen.height || 9999) <= 820); } catch (_) { return false; }
   }
   function useCloudInput() { return !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn()); }
+  // 📦 설치형 앱(Capacitor Android) 안에서 열렸는지 — 그렇다면 내보내기를 폰 안에서 직접(largeHeap, 업로드 0).
+  function isNativeApp() {
+    try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (_) { return false; }
+  }
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => { const s = String(fr.result || ""); const i = s.indexOf(","); resolve(i >= 0 ? s.slice(i + 1) : s); };
+      fr.onerror = () => reject(fr.error || new Error("파일 읽기 실패"));
+      fr.readAsDataURL(blob);
+    });
+  }
+  // 완성 영상 저장: 설치형 앱이면 파일로 쓰고 공유 시트(갤러리·카톡 등) → 업로드 없이 폰에 바로. 웹이면 기존 다운로드.
+  async function saveOrDownloadBlob(blob, filename, mime) {
+    if (isNativeApp()) {
+      try {
+        const P = (window.Capacitor && window.Capacitor.Plugins) || {};
+        const Filesystem = P.Filesystem, Share = P.Share;
+        if (!Filesystem) throw new Error("Filesystem 플러그인 없음");
+        const data = await blobToBase64(blob);
+        const w = await Filesystem.writeFile({ path: filename, data, directory: "CACHE", recursive: true });
+        const uri = (w && w.uri) || "";
+        if (Share && uri) { try { await Share.share({ title: filename, text: "이지숏폼에서 만든 영상", url: uri, dialogTitle: "영상 저장·공유" }); } catch (_) {} }
+        else { try { toast("저장됨: " + filename); } catch (_) {} }
+        return true;
+      } catch (e) { console.warn("[native save]", e); /* 아래 웹 경로로 폴백 */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
+    return true;
+  }
   function putWithProgress(url, blob, onProgress) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
