@@ -853,7 +853,7 @@
       let media = null, mw = 0, mh = 0;
       if (ff.kind === "image") { media = imgs[sg.slot.id]; if (media) { mw = media.naturalWidth; mh = media.naturalHeight; } }
       else if (isPrev) { media = lastFrameImg(sg.slot.id); if (media) { mw = media.naturalWidth; mh = media.naturalHeight; } }   // 전환 중 앞 영상 = 캡처한 마지막 프레임
-      else { media = expVideo; mw = expVideo.videoWidth; mh = expVideo.videoHeight; }
+      else { media = expVideo; mw = expVideo.videoWidth || expVideo.width || 0; mh = expVideo.videoHeight || expVideo.height || 0; }   // video(seek) 또는 canvas(순차 디코드) 둘 다 지원
       if (!media || !mw || !mh) return;
       const { s: sc, tx, ty } = xform || fxParams(sg.slot.fx || "none", pp);
       ctx.save();
@@ -1054,6 +1054,49 @@
     if (!ok) ok = await exportViaRecorder();
     if (ok && btn) { btn.disabled = false; btn.textContent = "✅ 다운로드 완료!"; setTimeout(() => { if (btn) btn.textContent = btn.dataset.base || "⬇ 다운로드"; }, 2800); }
   }
+  // 🚀 빠른 내보내기 엔진 — 원본 영상을 프레임마다 seek 하지 않고 WebCodecs 디코더로 '순차' 디코드(mediabunny).
+  //    CapCut·릴스 방식. 안드 WebView 는 H.264 를 하드웨어로 디코드 → 5~20배 빠름. 실패하면 기존 seek 로 자동 폴백.
+  let _mb = null, _mbTried = false;
+  async function loadMediabunny() {
+    if (_mb || _mbTried) return _mb;
+    _mbTried = true;
+    try {
+      if (typeof VideoDecoder === "undefined" || typeof VideoEncoder === "undefined") return null;   // WebCodecs 없으면 폴백
+      _mb = await import("./mediabunny.min.mjs?v=1");
+    } catch (e) { console.warn("[mediabunny] 로드 실패 → 기존 방식", e); _mb = null; }
+    return _mb;
+  }
+  async function clipBlob(f) {
+    if (f._file instanceof Blob) return f._file;
+    if (f._fastBlob instanceof Blob) return f._fastBlob;
+    if (f.url) { const r = await fetch(f.url); const b = await r.blob(); try { f._fastBlob = b; } catch (_) {} return b; }
+    throw new Error("영상 파일을 찾을 수 없어요");
+  }
+  // 한 클립을 '순차'로 읽는 리더. drawAt(소스시각) 은 단조증가(앞으로만) 호출 가정 → seek 없음. 동시 생존 프레임 ≤2(메모리 안전).
+  async function openClipReader(mb, blob, startSec) {
+    const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(blob) });
+    const track = await input.getPrimaryVideoTrack();
+    const _dispose = () => { try { (input[Symbol.dispose] || input.dispose || function () {}).call(input); } catch (_) {} };
+    if (!track) { _dispose(); throw new Error("영상 트랙이 없어요"); }
+    const sink = new mb.VideoSampleSink(track);
+    const gen = sink.samples(Math.max(0, startSec || 0));
+    let cur = null, nxt = null, done = false;
+    const pull = async () => { if (done) return null; const r = await gen.next(); if (r.done) { done = true; return null; } return r.value; };
+    cur = await pull(); nxt = await pull();
+    return {
+      w: cur ? (cur.displayWidth || 0) : 0,
+      h: cur ? (cur.displayHeight || 0) : 0,
+      async drawAt(st, ctx, dw, dh) {
+        while (nxt && nxt.timestamp <= st + 1e-4) { try { if (cur) cur.close(); } catch (_) {} cur = nxt; nxt = await pull(); }
+        if (!cur) return false;
+        try { cur.draw(ctx, 0, 0, dw, dh); return true; } catch (_) { return false; }
+      },
+      async close() {
+        try { if (cur) cur.close(); } catch (_) {} try { if (nxt) nxt.close(); } catch (_) {}
+        try { await gen.return(); } catch (_) {} _dispose();
+      },
+    };
+  }
   // 오프라인(녹화 X) — WebCodecs 로 프레임 인코딩 후 직접 먹싱. 릴스 UI 오버레이는 제외(확인용).
   async function exportOffline(fmt, opts) {
     opts = opts || {};
@@ -1096,24 +1139,46 @@
         else muxer.configureAudio({ sampleRate: 48000, channels: 2, codecId: "A_OPUS", codecPrivate: window.EasyMux.opusHead(2, 48000, 312) });
       }
       const totalFrames = Math.max(1, Math.round(total * FPS));
+      // 🚀 빠른 디코드(WebCodecs 순차) 준비 — 실패 시 프레임 단위로 기존 seek 자동 폴백(이미 만든 프레임은 그대로 유효).
+      const _mbLib = await loadMediabunny();
+      let fastCv = null, fastCtx = null, fastReader = null, fastDead = !_mbLib, fastUsedAny = false;
+      if (_mbLib) { fastCv = document.createElement("canvas"); fastCtx = fastCv.getContext("2d", { alpha: false }); }
       let curVidSlot = -1;
       for (let i = 0; i < totalFrames; i++) {
         const t = i / FPS;
         let idx = arr.findIndex((a) => t >= a.start && t < a.end); if (idx < 0) idx = arr.length - 1;
         const seg = arr[idx], f = E.using.fills[seg.slot.id];
+        let srcEl = expVideo;
         if (f && f.kind === "video") {
-          if (curVidSlot !== idx) { curVidSlot = idx; const _k = f._srcId || f.url; if (expVideo._loadedKey !== _k) { expVideo._loadedKey = _k; expVideo.src = f.url; try { await expVideo.play().catch(() => {}); expVideo.pause(); } catch (_) {} } }   // 같은 소스 세그먼트는 재로드 없이 seek만
-          await seekVideoTo(expVideo, seg.slot.timelapse ? slotVideoTime(seg.slot, t - seg.start, f.dur) : Math.min((t - seg.start) + (seg.slot.in || 0), (f.dur || seg.end - seg.start)));
-        } else { curVidSlot = -1; }
-        composeFrame(ctx, W, H, t, arr, imgs, expVideo, null);   // null → 릴스 오버레이 제외
+          const stime = seg.slot.timelapse ? slotVideoTime(seg.slot, t - seg.start, f.dur) : Math.min((t - seg.start) + (seg.slot.in || 0), (f.dur || seg.end - seg.start));
+          let usedFast = false;
+          if (_mbLib && !fastDead) {
+            try {
+              if (curVidSlot !== idx) {   // 새 클립 → 리더 새로 열기(키프레임 1회 seek 후 순차)
+                curVidSlot = idx;
+                if (fastReader) { await fastReader.close(); fastReader = null; }
+                fastReader = await openClipReader(_mbLib, await clipBlob(f), seg.slot.timelapse ? 0 : (seg.slot.in || 0));
+                if (fastReader.w && fastReader.h) { fastCv.width = fastReader.w; fastCv.height = fastReader.h; }
+              }
+              if (fastReader && fastCv.width && await fastReader.drawAt(stime, fastCtx, fastCv.width, fastCv.height)) { srcEl = fastCv; usedFast = true; fastUsedAny = true; }
+            } catch (e) { console.warn("[빠른 디코드] 폴백:", (e && e.message) || e); fastDead = true; if (fastReader) { try { await fastReader.close(); } catch (_) {} fastReader = null; } }
+          }
+          if (!usedFast) {   // 폴백: 기존 video seek 방식
+            const _k = f._srcId || f.url;
+            if (expVideo._loadedKey !== _k) { expVideo._loadedKey = _k; expVideo.src = f.url; try { await expVideo.play().catch(() => {}); expVideo.pause(); } catch (_) {} }
+            await seekVideoTo(expVideo, stime);
+            srcEl = expVideo;
+          }
+        } else { curVidSlot = -1; if (fastReader) { try { await fastReader.close(); } catch (_) {} fastReader = null; } }
+        composeFrame(ctx, W, H, t, arr, imgs, srcEl, null);   // null → 릴스 오버레이 제외 / srcEl = canvas(순차) 또는 video(폴백)
         const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) });
         venc.encode(vf, { keyFrame: i % FPS === 0 });
         vf.close();
-        // 🧠 백프레셔 — 인코더가 폰 속도를 못 따라가면 대기 프레임(비압축, 장당 수 MB)이 쌓여 OOM(앱 꺼짐).
-        //    큐가 빠질 때까지 잠깐 기다려 메모리 상한을 둠 → 긴 영상도 안 터짐.
-        if (venc.encodeQueueSize > 6) { let _bg = 0; while (venc.encodeQueueSize > 3 && _bg++ < 800) { await new Promise((r) => setTimeout(r, 6)); } }   // 큐 비우기 대기(무한 멈춤 방지 상한)
-        if (i % 15 === 0) { if (btn) btn.textContent = `⬇ 다운로드 중… ${Math.round(i / totalFrames * 100)}%`; if (opts.onProgress) opts.onProgress(i / totalFrames); await new Promise((r) => setTimeout(r, 0)); }
+        // 🧠 백프레셔 — 인코더가 폰 속도를 못 따라가면 대기 프레임(비압축, 장당 수 MB)이 쌓여 OOM 방지.
+        if (venc.encodeQueueSize > 6) { let _bg = 0; while (venc.encodeQueueSize > 3 && _bg++ < 800) { await new Promise((r) => setTimeout(r, 6)); } }
+        if (i % 15 === 0) { if (btn) btn.textContent = `${fastUsedAny ? "⚡ 빠르게" : "⬇"} 만드는 중… ${Math.round(i / totalFrames * 100)}%`; if (opts.onProgress) opts.onProgress(i / totalFrames); await new Promise((r) => setTimeout(r, 0)); }
       }
+      if (fastReader) { try { await fastReader.close(); } catch (_) {} fastReader = null; }
       await venc.flush(); venc.close();
       const blob = muxer.finalize();
       if (!blob || blob.size < 1000) throw new Error("빈 결과");
