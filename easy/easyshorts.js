@@ -4241,7 +4241,10 @@
       if (E.using.voiceUrl) { const a = $("#esVoice"); if (a) a.src = E.using.voiceUrl; }
       $("#esPlay").addEventListener("click", togglePlay);
       $("#esSeek").addEventListener("input", (e) => seek(parseFloat(e.target.value)));
-      $("#esEasyGen").addEventListener("click", exportVideo);
+      $("#esEasyGen").addEventListener("click", () => {
+        if (isMobileInput() && useCloudInput()) serverRender();   // 📱 폰: 서버 렌더(안 멈춤)
+        else exportVideo();                                       // 💻 데스크탑: 로컬(빠름)
+      });
       $("#esEasySave").addEventListener("click", saveCurrentProject);
       $("#esReels").addEventListener("change", async (e) => { if (e.target.checked && !E.reelsUrl) { e.target.checked = false; $("#esReelsFile").click(); return; } E.reelsOn = e.target.checked; try { await idbSet("reelsOn", E.reelsOn); } catch (_) {} updateReelsOverlay(); });
       $("#esReelsPick").addEventListener("click", () => $("#esReelsFile").click());
@@ -9391,6 +9394,84 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     await putWithProgress(sj.uploadUrl, file, onProgress);
     return sj.publicUrl;
   }
+  // ── 🖥 서버 렌더(Phase 2) 클라이언트: 설계도(spec)+미디어를 서버로 보내고 결과 받기 ──
+  function renderEndpoint() { return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? "http://127.0.0.1:8787/api/easy-render" : "https://sc-pink.vercel.app/api/easy-render"; }
+  // 로컬 미디어(blob/blob-url) → 클라우드 URL. 이미 클라우드(http)면 그대로.
+  async function ensureCloudUrl(urlOrNull, blobOrNull, name) {
+    if (urlOrNull && /^https?:\/\//.test(urlOrNull) && urlOrNull.indexOf("blob:") < 0) return urlOrNull;
+    let blob = (blobOrNull instanceof Blob) ? blobOrNull : null;
+    if (!blob && urlOrNull) { try { blob = await fetch(urlOrNull).then((r) => r.blob()); } catch (_) {} }
+    if (!blob) return null;
+    const file = (blob instanceof File) ? blob : new File([blob], name || "media", { type: blob.type || "application/octet-stream" });
+    return await uploadInputMedia(file);
+  }
+  // 편집 상태 → 서버 렌더 설계도. 로컬 미디어는 클라우드로 올려 URL 로 바꿈.
+  async function buildRenderSpec(onStep) {
+    const u = E.using; if (!u || !u.template) throw new Error("프로젝트가 없어요");
+    const tpl = u.template;
+    const fills = {};
+    for (const s of tpl.slots) {
+      if (s.locked) continue;                       // 고정컷은 서버가 템플릿 원본으로 처리
+      const f = u.fills[s.id]; if (!f) continue;
+      if (onStep) onStep("미디어 올리는 중");
+      const url = await ensureCloudUrl(f.remoteUrl || f.url, f._file, f.name);
+      if (url) fills[s.id] = { kind: f.kind || "image", url };
+    }
+    if (onStep) onStep("음악·자막 정리 중");
+    const musicUrl = await ensureCloudUrl(u.musicUrl, null, "music");
+    const voiceUrl = await ensureCloudUrl(u.voiceUrl, u.voiceBlob, "voice");
+    const logoUrl = u.logo ? await ensureCloudUrl(u.logoUrl, u._logoFile, "logo") : null;
+    const audioUrls = {};
+    if (Array.isArray(tpl.audioClips) && u.audioBlobs) {
+      for (const c of tpl.audioClips) { const ab = u.audioBlobs[c.id]; if (ab) { const url = await ensureCloudUrl(ab.url, ab._file, "clip"); if (url) audioUrls[c.id] = url; } }
+    }
+    let cleanTpl, cleanTexts;
+    try { cleanTpl = JSON.parse(JSON.stringify(tpl)); } catch (_) { cleanTpl = { id: tpl.id, name: tpl.name, aspect: tpl.aspect, slots: tpl.slots, texts: tpl.texts || [], audioClips: tpl.audioClips || [], origAudioVol: tpl.origAudioVol }; }
+    try { cleanTexts = JSON.parse(JSON.stringify((u.texts || []).filter((t) => (t.text || "").trim()))); } catch (_) { cleanTexts = []; }
+    return {
+      template: cleanTpl, texts: cleanTexts, fills, musicUrl, voiceUrl, logoUrl, logo: u.logo || null, audioUrls,
+      musicVol: u.musicVol, musicRange: u.musicRange, musicFadeIn: u.musicFadeIn, musicFadeOut: u.musicFadeOut,
+      voiceVol: u.voiceVol, voiceDuck: u.voiceDuck, voiceDur: u.voiceDur,
+      stickers: u.stickers || [], stickerLib: u.stickerLib || [], reelsOn: false, maxLong: 1920,
+    };
+  }
+  // 폰 '내보내기' → 서버 렌더(등록 → 처리 중 → 다운로드). 폰 메모리 안 쓰니 안 멈춤.
+  async function serverRender() {
+    if (!E.using) return;
+    const token = (window.EasyAuth && window.EasyAuth.getToken && window.EasyAuth.getToken()) || "";
+    if (!token) { try { window.EasyAuth.requireLogin(() => serverRender()); } catch (_) {} return; }
+    const btn = $("#esEasyGen"); const base = (btn && (btn.dataset.base || btn.textContent)) || "⬇ 영상 생성·다운로드";
+    if (btn) btn.dataset.base = base;
+    const setBtn = (t) => { if (btn) { btn.disabled = true; btn.textContent = t; } };
+    const reset = () => { if (btn) { btn.disabled = false; btn.textContent = btn.dataset.base || base; } };
+    try {
+      setBtn("⏳ 준비 중…");
+      const spec = await buildRenderSpec((s) => setBtn("⏳ " + s + "…"));
+      if (!Object.keys(spec.fills).length) throw new Error("넣은 사진·영상이 없어요");
+      setBtn("⏳ 서버에 등록 중…");
+      const cr = await fetch(renderEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", token, name: (E.using.template.name || "내 영상"), spec }) }).then((r) => r.json()).catch(() => null);
+      if (!cr || !cr.ok || !cr.id) throw new Error((cr && (cr.message || cr.error)) || "등록 실패");
+      let result = null;
+      for (let i = 0; i < 220; i++) {                 // 최대 ~11분 폴링
+        await new Promise((r) => setTimeout(r, 3000));
+        const st = await fetch(renderEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "status", id: cr.id }) }).then((r) => r.json()).catch(() => null);
+        if (!st || !st.ok) continue;
+        if (st.status === "done") { result = st.result_url; break; }
+        if (st.status === "error") throw new Error(st.error || "서버 렌더 실패");
+        setBtn("🖥 서버에서 만드는 중… " + Math.round((st.progress || 0) * 100) + "%");
+      }
+      if (!result) throw new Error("시간 초과 — 잠시 후 다시 시도");
+      setBtn("✅ 완료! 받는 중…");
+      try { const a = document.createElement("a"); a.href = result; a.download = (E.using.template.name || "easyshorts") + ".mp4"; a.target = "_blank"; document.body.appendChild(a); a.click(); a.remove(); } catch (_) { try { window.open(result, "_blank"); } catch (e) {} }
+      if (btn) { btn.textContent = "✅ 다운로드 완료!"; setTimeout(reset, 3000); }
+    } catch (e) {
+      reset();
+      try { toast("서버 만들기 실패: " + ((e && e.message) || "")); } catch (_) {}
+    }
+  }
+
   // 📉 입력 영상 압축 — 다운스케일(긴 변≤1920) + 저비트레이트 재인코딩 → 업로드 용량·시간 확 줄임.
   //    캔버스 captureStream(영상) + AudioContext(원음 라우팅)로 녹화. WebM/MP4 지원 브라우저(주로 안드로이드 크롬)에서 동작.
   //    실시간 재생 기반이라 영상 길이만큼 걸림(짧은 릴스용). 지원 안 되거나 실패하면 null → 원본 그대로 업로드.
