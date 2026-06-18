@@ -9795,19 +9795,21 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         // 같은 영상에서 자른 세그먼트(_srcId 동일)는 다시 로드하지 않고 '탐색(seek)'만 → 이음매서 버벅임·소리끊김 줄임
         const fkey = fill._srcId || fill.url;
         if (vid._loadedKey !== fkey) {
-          // 검은 깜빡임 방지 — 새 클립이 첫 프레임을 그릴 때까지 직전 프레임을 위에 잠깐 덮어둠
+          // 검은 깜빡임 방지 — 새 클립이 '실제로' 첫 프레임을 그릴 때까지 직전 프레임을 위에 덮어둠.
+          // (영상→영상 전환에선 들어오는 영상이 로딩되는 동안 전환이 검정을 통과하므로, 전환 유무와 무관하게 항상 홀드)
           try {
             const hold = $("#esHold");
-            if (hold && vid._url && vid.videoWidth && (!trans || trans === "none")) {
+            if (hold && vid._url && vid.videoWidth) {
               const c = document.createElement("canvas"); c.width = vid.videoWidth; c.height = vid.videoHeight;
               c.getContext("2d").drawImage(vid, 0, 0);
               hold.src = c.toDataURL("image/jpeg", 0.82);
               hold.style.transform = vid.style.transform || tf || "";   // 영상과 같은 배율(기본 1.02) → 경계서 살짝 줄어드는 현상 방지
               hold.style.display = "block";
               const off = () => { hold.style.display = "none"; };
+              vid.addEventListener("loadeddata", off, { once: true });   // 새 src 첫 프레임 준비됨(가장 정확)
               vid.addEventListener("seeked", off, { once: true });
               vid.addEventListener("canplay", off, { once: true });
-              setTimeout(off, 600);
+              setTimeout(off, 1500);
             }
           } catch (_) {}
           vid.src = fill.url; vid._url = fill.url; vid._loadedKey = fkey;
@@ -9818,7 +9820,14 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         const local = seg.slot.timelapse ? slotVideoTime(seg.slot, time - seg.start, fill.dur) : clamp((time - seg.start) + (seg.slot.in || 0), 0, Math.max(0, (fill.dur || seg.slot.dur)));
         if (seg.slot.timelapse && _tlRatio > 16) { try { vid.pause(); } catch (_) {} if (Math.abs(vid.currentTime - local) > 0.03) { try { vid.currentTime = local; } catch (_) {} } }   // 초고속(>16배): 프레임 시킹
         else if (E.playing) { try { if (vid.playbackRate !== _tlRatio) vid.playbackRate = _tlRatio; } catch (_) {} if (vid.paused) { try { vid.play(); } catch (_) {} } if (Math.abs(vid.currentTime - local) > (seg.slot.timelapse ? 0.6 : 0.35)) { try { vid.currentTime = local; } catch (_) {} } }   // 재생: 타임랩스면 ratio배속(부드럽게)
-        else { try { vid.pause(); vid.playbackRate = 1; } catch (_) {} vid.currentTime = local; }
+        else {
+          try { vid.pause(); vid.playbackRate = 1; } catch (_) {} vid.currentTime = local;
+          // 📱 모바일: 정지 상태에선 <video> 첫 프레임이 안 그려져 검정 → 음소거로 한 프레임만 깨운 뒤 멈춤(클립당 1회)
+          if (vid._primedKey !== vid._loadedKey) {
+            vid._primedKey = vid._loadedKey;
+            try { vid.muted = true; const pr = vid.play(); if (pr && pr.then) pr.then(() => { requestAnimationFrame(() => { if (!E.playing) { try { vid.pause(); vid.currentTime = local; } catch (_) {} } }); }).catch(() => {}); } catch (_) {}
+          }
+        }
       }
     }
   }
