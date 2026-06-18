@@ -8784,11 +8784,9 @@
         var standalone =
           window.matchMedia("(display-mode: standalone)").matches ||
           window.navigator.standalone === true;
-        if (standalone) {
-          try { localStorage.setItem(installDismissKey, "1"); } catch (_) {}
-          setInstallVisible(false);
-        }
-        try { if (localStorage.getItem(installDismissKey) === "1") setInstallVisible(false); } catch (_) {}
+        // 설치 버튼은 "항상 표시", 단 설치된 앱으로 실행 중(standalone)일 때만 숨김.
+        // (조건부 표시가 일부 환경에서 안 떠서 — 무조건 노출로 단순화. 클릭 동작은 환경별로 적응.)
+        setInstallVisible(!standalone);
 
         var ua = navigator.userAgent || "";
         var isIOS =
@@ -8828,10 +8826,18 @@
           }
         });
         window.addEventListener("appinstalled", function () {
-          try { localStorage.setItem(installDismissKey, "1"); } catch (_) {}
-          setInstallVisible(false);
+          // 설치 직후엔 deferredPrompt 만 비움 — 버튼은 브라우저에선 계속 보이게(앱으로 들어가면 standalone 으로 숨겨짐).
           deferredPrompt = null;
         });
+        // 설치된 앱(standalone)으로 전환되면 그때 숨김.
+        try {
+          var __dmQuery = window.matchMedia("(display-mode: standalone)");
+          (__dmQuery.addEventListener
+            ? __dmQuery.addEventListener.bind(__dmQuery, "change")
+            : __dmQuery.addListener.bind(__dmQuery))(function (e) {
+            if (e.matches) setInstallVisible(false);
+          });
+        } catch (_) {}
 
         // iOS 사파리는 beforeinstallprompt 없음 → 버튼 항상 표시(누르면 안내).
         if (isIOS && !standalone) setInstallVisible(true);

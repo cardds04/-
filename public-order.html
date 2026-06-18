@@ -6538,7 +6538,9 @@
         var standalone =
           window.matchMedia("(display-mode: standalone)").matches ||
           window.navigator.standalone === true;
-        if (standalone) return; // 이미 앱으로 실행 중
+        if (standalone) return; // 이미 앱으로 실행 중 → 버튼 숨김(노출 안 함)
+        // 브라우저면 설치 버튼 항상 표시(클릭 동작은 환경별로 적응).
+        installRow.classList.remove("hidden");
 
         var ua = navigator.userAgent || "";
         var isIOS =
@@ -6572,9 +6574,17 @@
           installRow.classList.remove("hidden");
         });
         window.addEventListener("appinstalled", function () {
-          installRow.classList.add("hidden");
+          // 설치 직후엔 deferredPrompt 만 비움 — 버튼은 브라우저에선 계속 보이게(앱으로 들어가면 숨겨짐).
           deferredPrompt = null;
         });
+        try {
+          var __dmQuery = window.matchMedia("(display-mode: standalone)");
+          (__dmQuery.addEventListener
+            ? __dmQuery.addEventListener.bind(__dmQuery, "change")
+            : __dmQuery.addListener.bind(__dmQuery))(function (e) {
+            if (e.matches) installRow.classList.add("hidden");
+          });
+        } catch (_) {}
 
         if (isIOS) installRow.classList.remove("hidden");
 
