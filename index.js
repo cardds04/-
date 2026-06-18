@@ -2863,6 +2863,15 @@
           // - local 에만 있는 key: 보존 (canonical merge 가 아직 처리 못 한 unmapped 항목)
           // 부팅 직후 localStorage 의 옛 값이 신선한 server 값을 이기던 버그 해결.
           const merged = { ...localNorm, ...remoteNorm };
+          // ✨ 안전장치: 아직 서버 저장 안 된(dirty) 회차권 키는 로컬 값을 지킨다.
+          //   저장이 일시 실패해도 풀(remote-wins)이 옛 서버값으로 되돌려 리셋시키던 문제 방지.
+          try {
+            if (couponPassesDirtyKeys && typeof couponPassesDirtyKeys.forEach === "function") {
+              couponPassesDirtyKeys.forEach((k) => {
+                if (Object.prototype.hasOwnProperty.call(localNorm, k)) merged[k] = localNorm[k];
+              });
+            }
+          } catch (_) {}
           const mergedSig = JSON.stringify(merged);
           const localSig = JSON.stringify(localNorm);
           if (mergedSig === localSig) return false;
