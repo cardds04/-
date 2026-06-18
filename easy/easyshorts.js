@@ -9582,7 +9582,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
   // 영상 채움 직후 호출 — 백그라운드로 클라우드 백업(진행률은 해당 슬롯 카드에). 미리보기는 그대로 로컬 사용.
   function kickCloudBackup(slotId, file) {
-    if (!useCloudInput() || !file || !/^video\//.test(file.type)) return;
+    if (!useCloudInput() || isNativeApp() || !file || !/^video\//.test(file.type)) return;   // 설치형 앱: 입력 백업 업로드 안 함(로컬 처리)
     const f0 = E.using && E.using.fills[slotId]; if (f0) { f0._uploading = true; f0._uploadPct = 0; }
     try { renderFillSlots(); } catch (_) {}
     uploadInputMedia(file, (pct) => {
@@ -9636,7 +9636,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const isVideo = /^video\//.test(file.type);
     const isImage = /^image\//.test(file.type);
     if (!isVideo && !isImage) { alert("사진 또는 영상 파일만 넣을 수 있어요."); return; }
-    if (isVideo && isMobileInput() && useCloudInput()) { return fillSlotCloudVideo(slotId, file); }   // 📱 모바일: 클라우드 스트리밍 경로(메모리 해방)
+    if (isVideo && isMobileInput() && useCloudInput() && !isNativeApp()) { return fillSlotCloudVideo(slotId, file); }   // 📱 폰 웹: 클라우드 스트리밍(설치형 앱은 로컬 보관 → 업로드 0)
     const prev = E.using.fills[slotId];
     if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
     const url = URL.createObjectURL(file);
@@ -9668,7 +9668,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const s = t.slots[i];
       const file = media[fi++];
       const isVideo = /^video\//.test(file.type);
-      if (isVideo && isMobileInput() && useCloudInput()) { await fillSlotCloudVideo(s.id, file); durChanged = true; continue; }   // 📱 모바일: 클라우드 스트리밍 경로
+      if (isVideo && isMobileInput() && useCloudInput() && !isNativeApp()) { await fillSlotCloudVideo(s.id, file); durChanged = true; continue; }   // 📱 폰 웹: 클라우드 스트리밍(설치형 앱은 로컬 보관)
       const prev = E.using.fills[s.id];
       if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }  // 기존 것 덮어쓰기
       const url = URL.createObjectURL(file);
@@ -9696,7 +9696,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       if (fi >= media.length) break;
       const file = media[fi++];
       const isVideo = /^video\//.test(file.type);
-      if (isVideo && isMobileInput() && useCloudInput()) { await fillSlotCloudVideo(id, file); continue; }   // 📱 모바일: 클라우드 스트리밍 경로
+      if (isVideo && isMobileInput() && useCloudInput() && !isNativeApp()) { await fillSlotCloudVideo(id, file); continue; }   // 📱 폰 웹: 클라우드 스트리밍(설치형 앱은 로컬 보관)
       const prev = E.using.fills[id]; if (prev && prev.url) { try { URL.revokeObjectURL(prev.url); } catch (_) {} }
       const url = URL.createObjectURL(file);
       const dur = isVideo ? await mediaDuration(url, true) : 0;
