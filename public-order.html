@@ -6584,6 +6584,11 @@
               : "이 화면에서는 설치가 안 돼요. 버튼을 눌러 기본 브라우저(크롬·사파리)로 열어주세요.";
         }
 
+        // 안드로이드/데스크톱: beforeinstallprompt 가 늦거나 안 떠도 설치 버튼은 노출(새 고객이 놓치지 않게).
+        if (!isIOS && !isInAppBrowser) {
+          setTimeout(function () { installRow.classList.remove("hidden"); }, 1500);
+        }
+
         installBtn.addEventListener("click", function () {
           if (isInAppBrowser) {
             if (openInExternalBrowser()) return;

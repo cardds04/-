@@ -8843,6 +8843,14 @@
               : "이 앱 화면에서는 설치가 안 돼요. 버튼을 눌러 기본 브라우저(크롬·사파리)로 열어주세요.";
         }
 
+        // 안드로이드/데스크톱(크롬·엣지·삼성): beforeinstallprompt 가 늦거나 안 떠도 설치 버튼은 노출.
+        // (이미 설치/인앱/iOS/standalone 제외 — 새 고객이 버튼을 놓치지 않게.) 클릭 시 네이티브 프롬프트 없으면 수동 안내.
+        if (!isIOS && !isInAppBrowser && !standalone) {
+          var canShowInstallProactively = true;
+          try { canShowInstallProactively = localStorage.getItem(installDismissKey) !== "1"; } catch (_) {}
+          if (canShowInstallProactively) setTimeout(function () { setInstallVisible(true); }, 1500);
+        }
+
         installBtn.addEventListener("click", function () {
           if (isInAppBrowser) {
             if (openInExternalBrowser()) return;
