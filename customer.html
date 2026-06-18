@@ -8112,6 +8112,13 @@
         });
       }
 
+      // 제출 직전 Supabase pull 이 느려도(예: client_kv statement timeout) 버튼이 멈추지 않도록 시간 제한.
+      function withSubmitTimeout(promise, ms) {
+        return Promise.race([
+          Promise.resolve(promise).catch(function () { return null; }),
+          new Promise(function (resolve) { setTimeout(resolve, ms); }),
+        ]);
+      }
       customerScheduleFormEl.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (customerScheduleSubmitting) return;
@@ -8119,7 +8126,7 @@
         try {
           if (USE_SUPABASE_SYNC) {
             try {
-              await pullTablesToCustomerStorage();
+              await withSubmitTimeout(pullTablesToCustomerStorage(), 2500);
             } catch (error) {
               console.error("[TABLE][customer] submit 직전 pull 실패", error);
             }
@@ -8212,7 +8219,7 @@
           // 쇼픽 촬영구성은 관리자 쪽에서 업체정보로 변경될 수 있으므로, 접수 직전에 client_kv 를 한 번 더 pull 하여
           // STORAGE_ADMIN_COMPANIES 의 최신 쇼픽 플래그(사진/영상/블로그)를 반영한다.
           if (isLiteCustomerMode) {
-            try { await pullScheduleSiteClientKvFromSupabase(); } catch (_) {}
+            try { await withSubmitTimeout(pullScheduleSiteClientKvFromSupabase(), 2000); } catch (_) {}
           }
           const _wdNames = ["일","월","화","수","목","금","토"];
           const _dateObj = new Date(`${date}T00:00:00`);
