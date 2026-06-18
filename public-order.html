@@ -1203,7 +1203,7 @@
                 <div class="row"><span>🔒</span><input id="scheduleJointCode" type="text" placeholder="공동현관 비번" /></div>
                 <div class="row"><span>🗝️</span><input id="scheduleDoorCode" type="text" placeholder="세대 비번" /></div>
               </div>
-              <div class="row"><span>📝</span><input id="scheduleMemo" type="text" placeholder="메모사항" /></div>
+              <div class="row" style="align-items:flex-start;"><span style="padding-top:2px;">📝</span><textarea id="scheduleMemo" rows="1" placeholder="메모사항" style="width:100%;border:0;outline:none;background:transparent;font-family:inherit;font-size:0.95rem;line-height:1.5;resize:none;overflow:hidden;padding:0;margin:0;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';"></textarea></div>
               <div class="compose-wrap" id="compositionSection">
                 <span class="compose-label">촬영구성</span>
                 <div class="compose-buttons" id="composeButtons">
@@ -6006,6 +6006,7 @@
           // UI 초기화는 best-effort — 여기서 에러가 나도 문자/등록완료 안내까지 막지 않도록 보호.
           try {
             customerScheduleFormEl.reset();
+            try { const __memoEl = document.getElementById("scheduleMemo"); if (__memoEl) __memoEl.style.height = "auto"; } catch (_) {}
             setupDateTimeSelectors();
             setSelectedPyeong("미선택");
             setSelectedComposition("미선택");
