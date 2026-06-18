@@ -2787,27 +2787,27 @@
       };
       try {
         if (kind === "video") {
-          // 📱 모바일은 seek 직후 프레임이 아직 디코드 안 돼 검정이 잡힘 → 음소거 재생으로 디코드 강제 +
-          //    requestVideoFrameCallback 로 '실제 그려진 프레임'에 캡처 + 검정이면 다음 프레임으로 재시도.
+          // 📱 모바일은 seek 직후 프레임이 아직 디코드 안 돼 검정이 잡힘 → seek 프레임 시도 + 음소거 재생으로 디코드 강제 +
+          //    requestVideoFrameCallback 로 '실제 그려진 프레임'에 캡처. 검정이면 다음 프레임, 끝/타임아웃이면 무조건 마무리(멈춤 방지).
           const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
           let done = false, tries = 0, to = null;
           const finish = (b) => { if (done) return; done = true; if (to) clearTimeout(to); try { v.pause(); } catch (_) {} try { URL.revokeObjectURL(v.src); } catch (_) {} resolve(b); };
-          const tryGrab = () => {
+          const grabNow = (force) => {
             if (done) return;
             const r = drawTo(v, v.videoWidth, v.videoHeight);
-            if (!r) { schedule(); return; }
-            let avg = 255;
-            try { const sd = r.cx.getImageData(0, 0, Math.min(16, r.cw), Math.min(16, r.ch)).data; let s = 0, n = 0; for (let i = 0; i < sd.length; i += 4) { s += sd[i] + sd[i + 1] + sd[i + 2]; n++; } avg = n ? s / (n * 3) : 255; } catch (_) {}
-            if (avg < 8 && tries < 24) { tries++; schedule(); return; }   // 거의 검정(디코드 전/검은 인트로) → 다음 프레임
+            if (!r) { if (force) finish(null); else schedule(); return; }
+            if (!force) {
+              let avg = 255;
+              try { const sd = r.cx.getImageData(0, 0, Math.min(16, r.cw), Math.min(16, r.ch)).data; let s = 0, n = 0; for (let i = 0; i < sd.length; i += 4) { s += sd[i] + sd[i + 1] + sd[i + 2]; n++; } avg = n ? s / (n * 3) : 255; } catch (_) {}
+              if (avg < 8 && tries < 20) { tries++; schedule(); return; }   // 거의 검정(디코드 전/검은 인트로) → 다음 프레임
+            }
             r.cv.toBlob((b) => finish(b), "image/jpeg", 0.82);
           };
-          const schedule = () => { if (done) return; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => tryGrab()); else setTimeout(tryGrab, 50); };
-          to = setTimeout(tryGrab, 8000);   // 안전장치(그래도 못 잡으면 마지막 시도)
-          v.onloadeddata = () => {
-            try { v.currentTime = Math.min(1, (isFinite(v.duration) ? v.duration : 1) * 0.25); } catch (_) {}   // 인트로 검정 피해 살짝 뒤로
-            try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}                       // 재생으로 프레임 디코드 강제(모바일)
-            schedule();
-          };
+          const schedule = () => { if (done) return; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => grabNow(false)); else setTimeout(() => grabNow(false), 60); };
+          to = setTimeout(() => grabNow(true), 4500);   // 안전장치: 무조건 현재 프레임 잡기(검정이어도 멈추지 않게)
+          v.onloadeddata = () => { try { v.currentTime = Math.min(1, (isFinite(v.duration) ? v.duration : 1) * 0.25); } catch (_) {} };   // 인트로 검정 피해 살짝 뒤로
+          v.onseeked = () => { grabNow(false); try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} };   // seek 프레임 시도 + 재생으로 디코드
+          v.onended = () => grabNow(true);   // 짧은 영상: 재생 끝나면 마지막 프레임이라도 잡고 마무리
           v.onerror = () => finish(null);
           v.src = URL.createObjectURL(blob);
         } else {
@@ -6835,10 +6835,9 @@
     const scenes = autoScenes();
     const thumb = (f) => {
       if (!f) return "";
-      let inner = f.poster ? `<img src="${f.poster}" alt="">`                                  // ☁ 클라우드 영상: 가벼운 포스터 우선
-        : (f.kind === "video" && f.url) ? `<video src="${f.url}" muted preload="metadata"></video>`
-        : f.url ? `<img src="${f.url}" alt="">`
-        : `<div class="es-fill-ph">🎬</div>`;
+      let inner = f.poster ? `<img src="${f.poster}" alt="">`                                  // 포스터(영상 미리보기 이미지) 우선
+        : (f.kind === "image" && f.url) ? `<img src="${f.url}" alt="">`
+        : `<div class="es-fill-ph">🎬</div>`;                                                  // 영상이고 포스터 아직이면 회색▶ 대신 깔끔한 🎬
       if (f._uploading) inner += `<div class="es-fill-upov"><div class="es-fill-upbar"><span style="width:${Math.round((f._uploadPct || 0) * 100)}%"></span></div><div class="es-fill-uptxt">${esc(f._upLabel || "☁ 올리는 중")} ${Math.round((f._uploadPct || 0) * 100)}%</div></div>`;
       return inner;
     };
@@ -9206,10 +9205,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const asp = ASPECTS[t.aspect] || ASPECTS["9:16"];
       let media = `<div class="es-fill-ph">＋<br>끌어다 놓기<br><span class="es-fill-ph-sub">(또는 클릭)</span></div>`;
       if (f) {
-        if (f.poster) media = `<img src="${f.poster}" alt="">`;   // ☁ 클라우드 입력: 가벼운 포스터(첫 프레임)로 — 큰 영상 디코딩 안 함
-        else if (f.kind === "video" && f.url) media = `<video src="${f.url}" muted preload="metadata"></video>`;
-        else if (f.url) media = `<img src="${f.url}" alt="">`;
-        else media = `<div class="es-fill-ph">☁</div>`;
+        if (f.poster) media = `<img src="${f.poster}" alt="">`;   // 포스터(영상 미리보기 이미지) 우선
+        else if (f.kind === "image" && f.url) media = `<img src="${f.url}" alt="">`;
+        else media = `<div class="es-fill-ph">🎬</div>`;   // 영상이고 포스터 아직이면 회색▶ 대신 깔끔한 🎬
       }
       const isAutoMaster = !!(s.auto && !s.fromAuto);
       if (isAutoMaster && !f) media = `<div class="es-fill-ph es-auto-ph">♾<br><b>자율컷</b><br><span class="es-fill-ph-sub">손님이 넣는 영상<br>수만큼 장면 자동생성</span></div>`;
