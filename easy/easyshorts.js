@@ -9576,16 +9576,17 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const slot = E.using.template.slots.find((s) => s.id === slotId);
     const prev = E.using.fills[slotId];
     if (prev) { try { if (prev.url) URL.revokeObjectURL(prev.url); } catch (_) {} try { if (prev.poster && prev.poster !== prev.url) URL.revokeObjectURL(prev.poster); } catch (_) {} }
-    // 1) 포스터(첫 프레임, 작게) — HEVC 등 디코딩 실패하면 null
-    let posterUrl = null; try { const pj = await blobToPreviewJpeg(file, "video", 720); if (pj) posterUrl = URL.createObjectURL(pj); } catch (_) {}
-    // 2) 길이(타임아웃 있는 mediaDuration) — metadata 만, 큰 blob 안 보유
-    let dur = 0; { const tmp = URL.createObjectURL(file); try { dur = await mediaDuration(tmp, true); } catch (_) {} try { URL.revokeObjectURL(tmp); } catch (_) {} }
-    if (dur > 0 && slot && !slot.timelapse) slot.dur = +clamp(dur, 0.3, 60).toFixed(2);
-    // 업로드 중: 포스터(정지) 표시 → 영상 디코딩/보유 안 함
-    E.using.fills[slotId] = { kind: "image", url: posterUrl || "", poster: posterUrl, name: file.name, dur, _cloud: true, _uploading: true, _uploadPct: 0, _wantVideo: true };
+    // 1) 슬롯 '즉시' 표시 — 포스터·길이 디코딩을 기다리지 않음(4K HEVC 는 그게 느림). 업로드도 바로 시작.
+    E.using.fills[slotId] = { kind: "image", url: "", poster: null, name: file.name, dur: (slot && slot.dur) || 3, _cloud: true, _uploading: true, _uploadPct: 0, _wantVideo: true };
     delFillBlob(slotId);   // 큰 blob 은 IDB 에 안 둠
     refreshSlots(); seek(E.playhead);
-    // 3) 백그라운드로 '원본 그대로' 청크 업로드(폰에서 디코딩/재인코딩 안 함 → 메모리 안 터짐).
+    // 2) 포스터 + 길이 — 비동기(슬롯/업로드 안 막음). 끝나면 살짝 채워짐.
+    (async function () {
+      try { const pj = await blobToPreviewJpeg(file, "video", 720); const f = E.using && E.using.fills[slotId]; if (pj && f) { f.poster = URL.createObjectURL(pj); try { refreshFillCards(); } catch (_) {} } } catch (_) {}
+      let dur = 0; { const tmp = URL.createObjectURL(file); try { dur = await mediaDuration(tmp, true); } catch (_) {} try { URL.revokeObjectURL(tmp); } catch (_) {} }
+      if (dur > 0 && slot && !slot.timelapse) { slot.dur = +clamp(dur, 0.3, 60).toFixed(2); const f = E.using && E.using.fills[slotId]; if (f) f.dur = slot.dur; try { refreshSlots(); seek(E.playhead); } catch (_) {} }
+    })();
+    // 3) 백그라운드로 '원본 그대로' 청크 업로드(폰에서 디코딩/재인코딩 안 함 → 메모리 안 터짐). 포스터 추출과 병렬.
     //    용량 줄이기는 서버 렌더가 1080p 로 처리하므로 폰 압축은 안 함(폰 압축이 '앗 이런' 크래시의 원인이었음).
     (async function () {
       try {
