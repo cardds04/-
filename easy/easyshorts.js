@@ -1046,7 +1046,7 @@
     if (btn) btn.dataset.base = baseTxt;   // 원래 라벨 기억
     let ok = false;
     // 📱 폰에서 직접 내보낼 땐 1080p·16Mbps 로 제한 → 인코딩 빨라지고 파일도 작아짐(숏폼 표준). 데스크탑은 원본 그대로.
-    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1280, bitrate: 8000000, fps: 24 } : {};   // 폰: 720p·24fps·8Mbps (속도·메모리 우선)
+    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 12000000, fps: 24, latency: "realtime" } : {};   // 폰: 1080p 유지 + 24fps·12Mbps·빠른압축(realtime) — 화질 지키며 속도↑
     if ((typeof VideoEncoder !== "undefined") && window.EasyMux) {
       try { if (await exportOffline("mp4", exOpts)) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
       if (!ok) { try { if (await exportOffline("webm", exOpts)) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
@@ -1087,7 +1087,7 @@
       const expVideo = document.createElement("video"); expVideo.muted = true; expVideo.playsInline = true; expVideo.crossOrigin = "anonymous"; expVideo.preload = "auto";
       const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => console.warn("[video enc]", e) });
       const autoBitrate = Math.min(80000000, Math.max(16000000, Math.round((W * H) / (1920 * 1080) * 32000000)));   // 1080p≈32Mbps, 해상도 비례(최대 80Mbps)
-      venc.configure(Object.assign({ codec: vcodec, width: W, height: H, bitrate: opts.bitrate || autoBitrate, framerate: FPS, latencyMode: "quality" }, vcfgExtra));
+      venc.configure(Object.assign({ codec: vcodec, width: W, height: H, bitrate: opts.bitrate || autoBitrate, framerate: FPS, latencyMode: opts.latency || "quality" }, vcfgExtra));
       // 음악 인코딩
       let hasAudio = false;
       try { hasAudio = await encodeAudioInto(muxer, total, fmt === "mp4" ? "mp4a.40.2" : "opus"); } catch (e) { console.warn("[audio]", e); }
