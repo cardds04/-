@@ -2727,6 +2727,32 @@
         writeStorageArray(STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY, rest);
       }
 
+      // 급여 첨부(영수증)를 Supabase Storage 에 업로드하고 공개 URL 반환.
+      // base64 를 localStorage/동기화 덩어리에 넣으면 행이 커져 statement timeout → 데이터 리셋 유발하므로
+      // 이미지는 Storage 에 두고 URL 만 저장한다. (인로그 홈과 동일한 inlog_home 버킷 재사용)
+      async function uploadPayrollAttachmentToStorage(file) {
+        const orig = String((file.name || "receipt").split(/[/\\]/).pop() || "receipt");
+        const extPart = orig.includes(".") ? orig.split(".").pop() : "";
+        const ext = String(extPart || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `payroll/${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+        const pathForUrl = path.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+        const base = String(SUPABASE_URL || "").replace(/\/$/, "");
+        const res = await fetch(`${base}/storage/v1/object/inlog_home/${pathForUrl}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": file.type || "application/octet-stream"
+          },
+          body: file
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(errText || `업로드 실패 (${res.status})`);
+        }
+        return `${base}/storage/v1/object/public/inlog_home/${pathForUrl}`;
+      }
+
       function formatWonPay(n) {
         const x = Number(n) || 0;
         return `${x.toLocaleString("ko-KR")}원`;
@@ -2795,8 +2821,9 @@
             : lines
                 .map((ln) => {
                   const lab = PAYROLL_LINE_CATEGORY_LABELS[ln.category] || ln.category || "기타";
-                  const att = ln.attachmentDataUrl
-                    ? `<img class="payroll-thumb" src="${ln.attachmentDataUrl}" alt="" />`
+                  const attSrc = ln.attachmentUrl || ln.attachmentDataUrl || "";
+                  const att = attSrc
+                    ? `<img class="payroll-thumb" src="${attSrc}" alt="" loading="lazy" />`
                     : "";
                   return `
               <div class="payroll-line" data-line-id="${ln.id || ""}">
@@ -3943,26 +3970,26 @@
         const monthKey = payrollViewMonthKey || getCurrentMonthKey();
         const { rec } = getMonthlyPayrollRecord(writer.id, monthKey);
         const lines = Array.isArray(rec.lines) ? rec.lines.slice() : [];
-        let attachmentDataUrl = "";
+        let attachmentUrl = "";
         const file = payrollFileInputEl?.files && payrollFileInputEl.files[0];
         if (file) {
-          if (file.size > 900 * 1024) {
-            alert("첨부 이미지는 900KB 이하로 올려 주세요.");
+          if (file.size > 5 * 1024 * 1024) {
+            alert("첨부 이미지는 5MB 이하로 올려 주세요.");
             return;
           }
-          attachmentDataUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result || ""));
-            reader.onerror = () => resolve("");
-            reader.readAsDataURL(file);
-          });
+          try {
+            attachmentUrl = await uploadPayrollAttachmentToStorage(file);
+          } catch (e) {
+            alert("첨부 업로드에 실패했습니다: " + (e?.message || e) + "\n첨부 없이 저장하려면 파일을 빼고 다시 시도해 주세요.");
+            return;
+          }
         }
         lines.push({
           id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           category: payrollCategorySelectEl.value || "etc",
           amountWon: amount,
           memo: normalize(payrollMemoInputEl?.value || ""),
-          attachmentDataUrl
+          attachmentUrl
         });
         rec.lines = lines;
         persistMonthlyPayrollRecord(rec);
