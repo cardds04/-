@@ -6539,6 +6539,26 @@
         var isIOS =
           /iphone|ipad|ipod/i.test(ua) ||
           (/Macintosh/.test(ua) && typeof document.ontouchend !== "undefined");
+        var isAndroid = /android/i.test(ua);
+        // 카카오톡 등 인앱(WebView) 브라우저 — PWA 설치 원천 불가 → 외부 브라우저로 유도.
+        var isKakaoInApp = /KAKAOTALK/i.test(ua);
+        var isInAppBrowser =
+          isKakaoInApp ||
+          /\b(NAVER|Instagram|FBAN|FBAV|FB_IAB|Line\/|DaumApps)\b/i.test(ua) ||
+          /; wv\)/i.test(ua);
+        function openInExternalBrowser() {
+          var url = location.href;
+          if (isKakaoInApp) {
+            location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(url);
+            return true;
+          }
+          if (isAndroid) {
+            location.href =
+              "intent://" + url.replace(/^https?:\/\//, "") + "#Intent;scheme=https;package=com.android.chrome;end";
+            return true;
+          }
+          return false;
+        }
         var deferredPrompt = null;
 
         window.addEventListener("beforeinstallprompt", function (e) {
@@ -6553,7 +6573,25 @@
 
         if (isIOS) installRow.classList.remove("hidden");
 
+        // 카카오톡 등 인앱 → 버튼 표시 + 안내(누르면 외부 브라우저로 열기)
+        if (isInAppBrowser) {
+          installRow.classList.remove("hidden");
+          installBtn.innerHTML = '<span style="font-size:1.1em;">📲</span> 브라우저로 열어 앱 설치';
+          var inAppHint = installRow.querySelector(".page-sub");
+          if (inAppHint)
+            inAppHint.textContent = isKakaoInApp
+              ? "카카오톡 안에서는 설치가 안 돼요. 버튼을 누르면 기본 브라우저로 열려요 — 거기서 설치하세요."
+              : "이 화면에서는 설치가 안 돼요. 버튼을 눌러 기본 브라우저(크롬·사파리)로 열어주세요.";
+        }
+
         installBtn.addEventListener("click", function () {
+          if (isInAppBrowser) {
+            if (openInExternalBrowser()) return;
+            alert(
+              "화면의 메뉴(•••)를 눌러 ‘Safari로 열기’ 또는 ‘다른 브라우저로 열기’를 선택해주세요.\n그 브라우저에서 앱을 설치할 수 있어요."
+            );
+            return;
+          }
           if (deferredPrompt) {
             deferredPrompt.prompt();
             if (deferredPrompt.userChoice && deferredPrompt.userChoice.finally) {

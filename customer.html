@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>고객 스케줄 등록</title>
     <!-- PWA(앱 설치) -->
-    <meta name="theme-color" content="#466ba9" />
+    <meta name="theme-color" content="#111816" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="촬영예약" />
     <link rel="manifest" href="./app-inlog.webmanifest" />
-    <link rel="icon" type="image/png" href="./icon-192.png" />
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="./app-inlog-icon-192.png" />
+    <link rel="apple-touch-icon" href="./app-inlog-apple-touch.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -390,17 +390,3504 @@
           font-size: 1.25rem;
         }
       }
+
+      :root {
+        --app-bg: #eef3f8;
+        --surface: #ffffff;
+        --surface-soft: #f6f9fc;
+        --ink: #172033;
+        --ink-soft: #66758b;
+        --primary: #197c72;
+        --primary-dark: #0f5f58;
+        --primary-soft: #e5f5f2;
+        --accent: #e9b949;
+        --danger: #d84b4b;
+        --border: #dce5ee;
+        --shadow: 0 22px 60px rgba(33, 50, 74, 0.14);
+        --field-shadow: 0 1px 0 rgba(23, 32, 51, 0.04);
+      }
+
+      html {
+        min-height: 100%;
+        background: var(--app-bg);
+      }
+
+      body {
+        min-height: 100vh;
+        background:
+          linear-gradient(180deg, #dcece9 0, rgba(220, 236, 233, 0) 280px),
+          var(--app-bg);
+        color: var(--ink);
+        letter-spacing: 0;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 50% -80px, rgba(25, 124, 114, 0.2), transparent 270px),
+          linear-gradient(90deg, rgba(255,255,255,0.34), transparent 24%, transparent 76%, rgba(255,255,255,0.34));
+      }
+
+      .wrap {
+        width: min(480px, calc(100vw - 28px));
+        margin: 28px auto 46px;
+        position: relative;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 30px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: var(--shadow);
+        padding: 0;
+      }
+
+      .card::before {
+        content: "";
+        display: block;
+        height: 118px;
+        background:
+          linear-gradient(135deg, rgba(25, 124, 114, 0.96), rgba(20, 96, 88, 0.96)),
+          var(--primary);
+      }
+
+      .card > h1,
+      .card > .sub,
+      #installAppRow,
+      #authBlock,
+      #scheduleBlock {
+        position: relative;
+        z-index: 1;
+      }
+
+      .card > h1 {
+        margin: -88px 22px 4px;
+        color: #fff;
+        font-size: 1.62rem;
+        line-height: 1.18;
+        letter-spacing: 0;
+      }
+
+      .card > .sub {
+        margin: 0 22px 22px;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.92rem;
+        line-height: 1.5;
+        word-break: keep-all;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding: 18px 18px 22px;
+      }
+
+      #authBlock {
+        margin-top: 6px;
+        padding-top: 10px;
+      }
+
+      #authBlock .tabs {
+        display: none;
+      }
+
+      #scheduleBlock {
+        padding-top: 16px;
+        padding-bottom: 132px;
+      }
+
+      .tabs {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 4px;
+        padding: 5px;
+        margin: 0 0 16px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #eef4f8;
+      }
+
+      .tabs button {
+        min-height: 42px;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+        font-weight: 800;
+      }
+
+      .tabs button.active {
+        background: var(--surface);
+        color: var(--primary-dark);
+        box-shadow: 0 8px 20px rgba(23, 32, 51, 0.1);
+      }
+
+      .form {
+        gap: 10px;
+      }
+
+      .row,
+      .compose-wrap,
+      .status-card,
+      .payment-summary-box {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: var(--field-shadow);
+      }
+
+      .row {
+        min-height: 54px;
+        padding: 8px 12px;
+      }
+
+      .row span {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: var(--primary-soft);
+        font-size: 1rem;
+      }
+
+      .row input,
+      .row select {
+        min-width: 0;
+        color: var(--ink);
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .row input::placeholder {
+        color: #8b98aa;
+        font-weight: 700;
+      }
+
+      .pair,
+      .triple {
+        gap: 10px;
+      }
+
+      .triple {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .date-quick {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .date-quick .year-field {
+        display: none;
+      }
+
+      .date-helper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: -2px 2px -2px;
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .date-helper strong {
+        color: var(--primary-dark);
+      }
+
+      .time-label-row {
+        margin: 2px 2px -4px !important;
+      }
+
+      .time-label-row span:first-child {
+        color: var(--ink) !important;
+      }
+
+      .time-label-row span:last-child {
+        color: var(--danger) !important;
+      }
+
+      .hint,
+      .sub {
+        color: var(--ink-soft);
+        line-height: 1.56;
+        word-break: keep-all;
+      }
+
+      .hint {
+        margin: -2px 2px 2px;
+        font-size: 0.83rem;
+      }
+
+      .time-guide {
+        margin: -2px 0 0;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+      }
+
+      .time-guide summary {
+        width: fit-content;
+        cursor: pointer;
+        color: var(--primary-dark);
+        font-weight: 900;
+        list-style: none;
+      }
+
+      .time-guide summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .time-guide summary::after {
+        content: " 보기";
+        color: var(--ink-soft);
+        font-weight: 800;
+      }
+
+      .time-guide[open] summary::after {
+        content: " 닫기";
+      }
+
+      .time-guide-body {
+        padding-top: 6px;
+        line-height: 1.55;
+      }
+
+      .optional-info {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: var(--field-shadow);
+        overflow: hidden;
+      }
+
+      .optional-info summary {
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px;
+        color: var(--ink);
+        cursor: pointer;
+        font-weight: 900;
+        list-style: none;
+      }
+
+      .optional-info summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .optional-info summary::after {
+        content: "+";
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+      }
+
+      .optional-info[open] summary::after {
+        content: "-";
+      }
+
+      .optional-info-body {
+        display: grid;
+        gap: 10px;
+        padding: 0 12px 12px;
+      }
+
+      .place-line {
+        display: grid;
+        grid-template-columns: minmax(116px, 0.48fr) minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .option-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .danger,
+      .hint.danger {
+        color: var(--danger);
+      }
+
+      .btn {
+        min-height: 50px;
+        border-radius: 16px;
+        background: linear-gradient(180deg, var(--primary), var(--primary-dark));
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 900;
+        box-shadow: 0 12px 24px rgba(25, 124, 114, 0.24);
+      }
+
+      .btn.outline {
+        min-height: 40px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: none;
+      }
+
+      .small {
+        min-height: 34px;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+      }
+
+      #loginForm .btn,
+      #customerScheduleForm > .btn {
+        width: 100%;
+        min-height: 56px;
+        margin-top: 2px;
+      }
+
+      #customerScheduleForm > .btn {
+        position: static;
+        bottom: auto;
+        z-index: auto;
+      }
+
+      .top-line {
+        align-items: flex-start;
+        margin: 0 0 12px;
+      }
+
+      #welcomeText {
+        display: block;
+        min-width: 0;
+        color: var(--ink);
+        font-size: 1.12rem;
+        line-height: 1.35;
+      }
+
+      .top-line > div {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .top-line .btn {
+        min-height: 36px;
+        border-radius: 999px;
+        padding: 7px 11px;
+        font-size: 0.82rem;
+      }
+
+      .app-bottom-nav {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        transform: none;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin: 0;
+        padding: 9px max(14px, calc((100vw - 480px) / 2 + 14px)) calc(9px + env(safe-area-inset-bottom));
+        border: 0;
+        border-top: 1px solid #cbd8e4;
+        border-radius: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,249,252,0.98));
+        box-shadow: 0 -14px 36px rgba(23, 32, 51, 0.16);
+        backdrop-filter: blur(14px);
+      }
+
+      .app-bottom-nav button {
+        min-height: 56px;
+        border: 0;
+        border-radius: 16px;
+        background: transparent;
+        color: var(--ink-soft);
+        font-family: inherit;
+        font-size: 0.82rem;
+        font-weight: 900;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .app-bottom-nav button::before {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      #registerTabBtn::before { content: "＋"; }
+      #statusTabBtn::before { content: "☰"; }
+      #infoTabBtn::before { content: "○"; }
+
+      .app-bottom-nav button.active {
+        background: #e4f4f1;
+        color: var(--primary-dark);
+        box-shadow: inset 0 0 0 1px rgba(25, 124, 114, 0.18);
+      }
+
+      .app-bottom-nav button.active::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 5px;
+        width: 22px;
+        height: 3px;
+        border-radius: 999px;
+        background: var(--primary);
+        transform: translateX(-50%);
+      }
+
+      .info-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      #myInfoBox,
+      #phoneMgrBox,
+      #closedDatesNoticeBox {
+        margin-bottom: 12px !important;
+      }
+
+      #closedDatesNoticeBox:empty {
+        display: none;
+      }
+
+      #closedDatesNoticeBox {
+        padding: 0 !important;
+        overflow: hidden;
+      }
+
+      .closed-notice {
+        padding: 0;
+      }
+
+      .closed-notice summary {
+        min-height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .closed-notice summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .closed-notice-title {
+        display: block;
+        color: var(--ink);
+        font-size: 0.92rem;
+        font-weight: 900;
+        margin-bottom: 4px;
+      }
+
+      .closed-notice-month {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 0.86rem;
+        font-weight: 800;
+        line-height: 1.45;
+      }
+
+      .closed-notice summary::after {
+        content: "+";
+        width: 26px;
+        height: 26px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+        font-weight: 900;
+      }
+
+      .closed-notice[open] summary::after {
+        content: "-";
+      }
+
+      .closed-notice-body {
+        padding: 0 14px 14px;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: var(--ink-soft);
+      }
+
+      .compose-wrap {
+        padding: 12px;
+        background: var(--surface-soft);
+      }
+
+      .compose-label {
+        margin-bottom: 10px;
+        color: var(--ink);
+        font-size: 0.94rem;
+      }
+
+      .compose-buttons {
+        gap: 8px;
+      }
+
+      .compose-btn {
+        min-height: 34px;
+        border-color: var(--border);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+      }
+
+      .compose-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(25, 124, 114, 0.22);
+      }
+
+      .compose-price-guide {
+        border: 0;
+        border-radius: 14px;
+        background: #fff;
+        color: var(--ink-soft);
+        font-size: 0.79rem;
+      }
+
+      details.compose-price-guide {
+        padding: 0;
+        overflow: hidden;
+      }
+
+      details.compose-price-guide summary {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        cursor: pointer;
+        color: var(--primary-dark);
+        font-weight: 900;
+        list-style: none;
+      }
+
+      details.compose-price-guide summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.compose-price-guide summary::after {
+        content: "+";
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+      }
+
+      details.compose-price-guide[open] summary::after {
+        content: "-";
+      }
+
+      .compose-price-body {
+        padding: 0 12px 12px;
+        line-height: 1.55;
+      }
+
+      #expectedPaymentText {
+        padding: 10px 14px;
+        border-radius: 16px;
+        background: #fff8e6;
+        color: #76520b;
+        font-size: 0.95rem;
+        font-weight: 800;
+      }
+
+      .status-list {
+        gap: 10px;
+      }
+
+      .status-card,
+      .payment-summary-box {
+        padding: 12px;
+      }
+
+      .status-card {
+        background: #fff;
+      }
+
+      .status-head,
+      .payment-summary-title {
+        color: var(--ink);
+      }
+
+      .status-meta {
+        color: #3a4659;
+      }
+
+      .status-actions {
+        gap: 8px;
+      }
+
+      .status-actions .btn {
+        min-height: 36px;
+        box-shadow: none;
+      }
+
+      .payment-state-badge {
+        padding: 5px 9px;
+      }
+
+      #installAppRow {
+        margin: 10px 18px -4px !important;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      #installAppRow.hidden {
+        display: none !important;
+      }
+
+      #installAppRow .btn {
+        width: auto !important;
+        min-height: 32px;
+        padding: 7px 12px !important;
+        border-radius: 999px !important;
+        gap: 5px !important;
+        background: #ffd166 !important;
+        border: 1px solid #f3b739 !important;
+        color: #3f2b00 !important;
+        font-size: 0.78rem !important;
+        box-shadow: 0 10px 20px rgba(113, 78, 0, 0.18) !important;
+      }
+
+      #installAppRow .sub {
+        display: none;
+      }
+
+      #iosInstallClose {
+        background: linear-gradient(180deg, var(--primary), var(--primary-dark)) !important;
+        border-color: transparent !important;
+      }
+
+      #iosInstallModal > div,
+      .history-panel,
+      #scheduleConfirmModal > div {
+        border-radius: 24px !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow) !important;
+      }
+
+      #scheduleConfirmOkBtn {
+        background: var(--primary) !important;
+        border-radius: 14px !important;
+      }
+
+      #scheduleConfirmCancelBtn {
+        border-radius: 14px !important;
+      }
+
+      body.customer-lite {
+        background:
+          linear-gradient(180deg, #dcece9 0, rgba(220, 236, 233, 0) 280px),
+          var(--app-bg);
+        color: var(--ink);
+      }
+
+      body.customer-lite .wrap {
+        width: min(480px, calc(100vw - 28px));
+        margin: 28px auto 46px;
+      }
+
+      body.customer-lite .card {
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: var(--shadow);
+      }
+
+      body.customer-lite h1 {
+        color: #fff;
+        font-size: 1.62rem;
+      }
+
+      body.customer-lite .sub {
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.92rem;
+      }
+
+      body.customer-lite .tabs,
+      body.customer-lite .row,
+      body.customer-lite .status-card,
+      body.customer-lite .payment-summary-box {
+        border-color: var(--border);
+        background: var(--surface);
+      }
+
+      body.customer-lite .tabs {
+        background: #eef4f8;
+      }
+
+      body.customer-lite .tabs button {
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+
+      body.customer-lite .tabs button.active {
+        background: var(--surface);
+        color: var(--primary-dark);
+      }
+
+      body.customer-lite .row span {
+        min-width: 34px;
+        color: inherit;
+      }
+
+      body.customer-lite .btn,
+      body.customer-lite .compose-btn.active {
+        background: linear-gradient(180deg, var(--primary), var(--primary-dark));
+      }
+
+      body.customer-lite #customerScheduleForm > .btn {
+        font-size: 1rem;
+      }
+
+      @media (min-width: 860px) {
+        .wrap {
+          margin-top: 38px;
+        }
+
+        body {
+          display: grid;
+          place-items: start center;
+        }
+      }
+
+      @media (max-width: 520px) {
+        body {
+          background: var(--app-bg);
+        }
+
+        .wrap,
+        body.customer-lite .wrap {
+          width: 100%;
+          min-height: 100vh;
+          margin: 0;
+        }
+
+        .card,
+        body.customer-lite .card {
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        .card::before {
+          height: 122px;
+        }
+
+        .card > h1 {
+          margin: -92px 18px 4px;
+          font-size: 1.44rem;
+        }
+
+        .card > .sub {
+          margin-inline: 18px;
+          margin-bottom: 20px;
+          font-size: 0.86rem;
+        }
+
+        #authBlock,
+        #scheduleBlock {
+          padding: 16px 14px 24px;
+        }
+
+        #scheduleBlock {
+          padding-bottom: 136px;
+        }
+
+        .row {
+          min-height: 56px;
+          padding-inline: 10px;
+        }
+
+        .row span {
+          width: 32px;
+          min-width: 32px;
+          height: 32px;
+        }
+
+        .row input,
+        .row select {
+          font-size: 0.95rem;
+        }
+
+        .pair {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .triple {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .date-quick {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .place-line {
+          grid-template-columns: 1fr;
+        }
+
+        .option-line {
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .top-line {
+          display: grid;
+        }
+
+        .top-line > div {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .status-top {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .status-top .btn {
+          width: 100%;
+        }
+
+        #customerScheduleForm > .btn {
+          bottom: 10px;
+        }
+      }
+
+      /* White mobile-app visual refresh */
+      :root {
+        --app-bg: #f6f8fb;
+        --surface-soft: #f9fbfe;
+        --ink: #111827;
+        --ink-soft: #64748b;
+        --primary: #2563db;
+        --primary-dark: #1d4ed8;
+        --primary-soft: #eaf1ff;
+        --border: #dfe7f1;
+        --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      body,
+      body.customer-lite {
+        background: var(--app-bg);
+      }
+
+      body::before {
+        display: none;
+      }
+
+      .wrap,
+      body.customer-lite .wrap {
+        width: min(520px, 100vw);
+        margin: 0 auto;
+      }
+
+      .card,
+      body.customer-lite .card {
+        min-height: 100vh;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+      }
+
+      .card::before {
+        height: 48px;
+        border-bottom: 1px solid #e5edf5;
+        background: #fff;
+      }
+
+      .card::after {
+        display: none;
+      }
+
+      .top-menu-btn {
+        position: absolute;
+        top: 7px;
+        left: 8px;
+        z-index: 4;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #111827;
+        font-family: inherit;
+        font-size: 1.15rem;
+        font-weight: 900;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .top-menu-btn:active {
+        background: #eef4ff;
+      }
+
+      .side-menu {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+      }
+
+      .side-menu.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .side-menu-backdrop {
+        position: absolute;
+        inset: 0;
+        border: 0;
+        background: rgba(15, 23, 42, 0.28);
+      }
+
+      .side-menu-panel {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(280px, 82vw);
+        padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+        background: #fff;
+        box-shadow: 18px 0 42px rgba(15, 23, 42, 0.18);
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+      }
+
+      .side-menu.open .side-menu-panel {
+        transform: translateX(0);
+      }
+
+      .side-menu-title {
+        margin: 4px 4px 16px;
+        color: #111827;
+        font-size: 1rem;
+        font-weight: 900;
+      }
+
+      .side-menu-item {
+        width: 100%;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: #334155;
+        font-family: inherit;
+        font-size: 0.92rem;
+        font-weight: 900;
+        text-align: left;
+        cursor: pointer;
+        padding: 0 12px;
+      }
+
+      .side-menu-item + .side-menu-item {
+        margin-top: 6px;
+      }
+
+      .side-menu-item.active {
+        background: #eaf1ff;
+        color: #1d4ed8;
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        margin: -34px 68px 0;
+        color: #111827;
+        font-size: 0.92rem;
+        font-weight: 900;
+        line-height: 1.2;
+        text-align: center;
+      }
+
+      .card > h1::before {
+        display: none;
+      }
+
+      .card > h1::after {
+        display: none;
+      }
+
+      .card > .sub,
+      body.customer-lite .sub {
+        display: none;
+      }
+
+      #installAppRow {
+        margin: 10px 12px -2px !important;
+      }
+
+      #installAppRow .btn {
+        min-height: 30px;
+        padding: 6px 10px !important;
+        background: #fff7e6 !important;
+        border-color: #f5c76b !important;
+        color: #7a4a00 !important;
+        box-shadow: none !important;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding: 18px 12px 128px;
+      }
+
+      .top-line {
+        margin: 0 0 12px;
+      }
+
+      #welcomeText {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.98rem;
+        font-weight: 900;
+      }
+
+      #welcomeText::before {
+        content: "▦";
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 11px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 1rem;
+      }
+
+      .row,
+      .status-card,
+      .payment-summary-box,
+      .compose-price-guide,
+      .optional-info {
+        border-color: #dfe7f1;
+        border-radius: 9px;
+        background: #fff;
+        box-shadow: none;
+      }
+
+      .row {
+        min-height: 42px;
+        padding: 6px 10px;
+      }
+
+      .row span {
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: #f1f5fb;
+        font-size: 0.78rem;
+      }
+
+      .row input,
+      .row select {
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .form {
+        gap: 8px;
+      }
+
+      .date-helper {
+        margin: 2px 0 -2px;
+        font-size: 0.78rem;
+      }
+
+      .date-quick,
+      .option-line,
+      .pair,
+      .place-line {
+        gap: 7px;
+      }
+
+      .closed-notice summary {
+        min-height: 46px;
+        padding: 10px 12px;
+      }
+
+      .closed-notice-title {
+        font-size: 0.8rem;
+      }
+
+      .closed-notice-month,
+      .closed-notice-body,
+      .hint,
+      .time-guide {
+        font-size: 0.72rem;
+      }
+
+      .time-guide summary {
+        color: #1d4ed8;
+      }
+
+      .compose-price-guide summary {
+        min-height: 34px;
+        color: #1d4ed8;
+        font-size: 0.78rem;
+      }
+
+      #expectedPaymentText {
+        border-radius: 9px;
+        background: #f8fbff;
+        color: #334155;
+        font-size: 0.78rem;
+      }
+
+      .btn,
+      body.customer-lite .btn {
+        min-height: 44px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, #2f6fea, #1d4ed8);
+        box-shadow: 0 10px 18px rgba(37, 99, 219, 0.18);
+      }
+
+      .btn.outline {
+        background: #fff;
+        color: #111827;
+        box-shadow: none;
+      }
+
+      #customerScheduleForm > .btn {
+        min-height: 50px;
+        border-radius: 8px;
+        margin-top: 4px;
+      }
+
+      .app-bottom-nav {
+        padding: 8px max(10px, calc((100vw - 520px) / 2 + 10px)) calc(8px + env(safe-area-inset-bottom));
+        border-top-color: #d9e3ef;
+        background: rgba(255, 255, 255, 0.98);
+      }
+
+      .app-bottom-nav button {
+        min-height: 48px;
+        border-radius: 12px;
+        font-size: 0.72rem;
+      }
+
+      .app-bottom-nav button.active {
+        background: #eaf1ff;
+        color: #1d4ed8;
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 219, 0.18);
+      }
+
+      .app-bottom-nav button.active::after {
+        background: #2563db;
+      }
+
+      @media (min-width: 521px) {
+        .card,
+        body.customer-lite .card {
+          border-left: 1px solid #e5edf5;
+          border-right: 1px solid #e5edf5;
+        }
+      }
+
+      /* Restore the spacious first-app feeling */
+      :root {
+        --app-bg: #eef3fb;
+        --ink: #172033;
+        --ink-soft: #66758b;
+        --primary: #2563db;
+        --primary-dark: #1d4ed8;
+        --primary-soft: #eaf1ff;
+        --border: #dce5ee;
+      }
+
+      body,
+      body.customer-lite {
+        background:
+          linear-gradient(180deg, #dce8fb 0, rgba(220, 232, 251, 0) 280px),
+          var(--app-bg);
+      }
+
+      .wrap,
+      body.customer-lite .wrap {
+        width: min(520px, calc(100vw - 24px));
+        margin: 16px auto 42px;
+      }
+
+      .card,
+      body.customer-lite .card {
+        min-height: auto;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 22px 60px rgba(33, 50, 74, 0.14);
+      }
+
+      .card::before {
+        height: 80px;
+        border-bottom: 0;
+        background: linear-gradient(135deg, #2563db, #1d4ed8);
+      }
+
+      .top-menu-btn {
+        top: 18px;
+        left: 18px;
+        width: 36px;
+        height: 36px;
+        color: #fff;
+        border-radius: 12px;
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .top-menu-btn:active {
+        background: rgba(255,255,255,0.16);
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        margin: -62px 112px 28px 58px;
+        color: #fff;
+        font-size: 1.2rem;
+        font-weight: 800;
+        line-height: 36px;
+        text-align: left;
+      }
+
+      #installAppRow {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        z-index: 5;
+        margin: 0 !important;
+      }
+
+      #installAppRow.hidden {
+        display: none !important;
+      }
+
+      #installAppRow .btn {
+        min-height: 36px !important;
+        padding: 7px 12px !important;
+        font-weight: 700 !important;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding: 18px 18px 138px;
+      }
+
+      #welcomeText {
+        font-size: 1.14rem;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      #welcomeText::before {
+        width: 38px;
+        height: 38px;
+        border-radius: 13px;
+        background: var(--primary);
+      }
+
+      .form {
+        gap: 11px;
+      }
+
+      .row,
+      .status-card,
+      .payment-summary-box,
+      .compose-price-guide,
+      .optional-info {
+        border-color: var(--border);
+        border-radius: 16px;
+        background: #fff;
+      }
+
+      .row {
+        min-height: 56px;
+        padding: 9px 12px;
+      }
+
+      .row span {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: var(--primary-soft);
+        font-size: 1rem;
+      }
+
+      .row input,
+      .row select {
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .date-helper,
+      .closed-notice-title,
+      .compose-price-guide summary,
+      .time-guide summary,
+      .app-bottom-nav button,
+      .side-menu-item {
+        font-weight: 700;
+      }
+
+      .btn,
+      body.customer-lite .btn,
+      #customerScheduleForm > .btn {
+        font-weight: 800;
+      }
+
+      .date-helper {
+        margin: 2px 2px -2px;
+        font-size: 0.84rem;
+      }
+
+      .date-quick,
+      .option-line,
+      .pair,
+      .place-line {
+        gap: 10px;
+      }
+
+      .closed-notice summary {
+        min-height: 54px;
+        padding: 12px 14px;
+      }
+
+      .closed-notice-title {
+        font-size: 0.94rem;
+      }
+
+      .closed-notice-month,
+      .closed-notice-body,
+      .hint,
+      .time-guide {
+        font-size: 0.84rem;
+      }
+
+      .time-guide summary,
+      .compose-price-guide summary {
+        color: var(--primary-dark);
+      }
+
+      #expectedPaymentText {
+        border-radius: 16px;
+        background: #fff8e6;
+        color: #76520b;
+        font-size: 0.94rem;
+      }
+
+      .btn,
+      body.customer-lite .btn {
+        min-height: 52px;
+        border-radius: 15px;
+        background: linear-gradient(180deg, var(--primary), var(--primary-dark));
+        box-shadow: 0 12px 24px rgba(25, 124, 114, 0.24);
+      }
+
+      #customerScheduleForm > .btn {
+        min-height: 56px;
+        border-radius: 16px;
+        margin-top: 4px;
+      }
+
+      .side-menu-item.active,
+      .app-bottom-nav button.active {
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+      }
+
+      .app-bottom-nav button.active::after {
+        background: var(--primary);
+      }
+
+      @media (max-width: 520px) {
+        .wrap,
+        body.customer-lite .wrap {
+          width: 100%;
+          margin: 0;
+        }
+
+        .card,
+        body.customer-lite .card {
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        #authBlock,
+        #scheduleBlock {
+          padding: 16px 14px 136px;
+        }
+      }
+
+      /* Premium app direction: soft lime canvas, dark hero, polished controls */
+      :root {
+        --app-bg: #f0fbdf;
+        --ink: #151a18;
+        --ink-soft: #667062;
+        --primary: #111816;
+        --primary-dark: #050807;
+        --primary-soft: #d8f86d;
+        --accent: #c9f35b;
+        --border: #dde8d6;
+      }
+
+      body,
+      body.customer-lite {
+        background:
+          radial-gradient(circle at 50% 0, rgba(203, 245, 97, 0.62), transparent 280px),
+          linear-gradient(180deg, #f3ffe6 0, #f7fbf2 380px, #f6f8f4 100%);
+        color: var(--ink);
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      }
+
+      .wrap,
+      body.customer-lite .wrap {
+        width: min(500px, calc(100vw - 22px));
+        margin: 12px auto 34px;
+      }
+
+      .card,
+      body.customer-lite .card {
+        border: 1px solid rgba(255,255,255,0.86);
+        border-radius: 36px;
+        background: rgba(255,255,255,0.78);
+        box-shadow: 0 28px 70px rgba(25, 35, 30, 0.14);
+        backdrop-filter: blur(18px);
+      }
+
+      .card::before {
+        height: 78px;
+        background: transparent;
+      }
+
+      .top-menu-btn {
+        top: 18px;
+        left: 18px;
+        width: 40px;
+        height: 40px;
+        color: #111816;
+        background: rgba(255,255,255,0.74);
+        box-shadow: 0 8px 20px rgba(26, 34, 28, 0.08);
+      }
+
+      .top-menu-btn:active {
+        background: #eaffaf;
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        margin: -60px 116px 22px 68px;
+        color: #151a18;
+        font-size: 1.08rem;
+        font-weight: 800;
+        line-height: 40px;
+        letter-spacing: 0;
+      }
+
+      #installAppRow {
+        top: 18px;
+        right: 18px;
+      }
+
+      #installAppRow .btn {
+        min-height: 40px !important;
+        border-radius: 999px !important;
+        background: #d8f86d !important;
+        border: 1px solid rgba(17, 24, 22, 0.08) !important;
+        color: #111816 !important;
+        box-shadow: 0 10px 24px rgba(139, 177, 38, 0.28) !important;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding: 10px 18px 140px;
+      }
+
+      .top-line {
+        margin: 4px 0 14px;
+      }
+
+      #welcomeText {
+        min-height: 104px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        flex-direction: column;
+        gap: 7px;
+        padding: 18px 18px 16px;
+        border-radius: 28px;
+        background:
+          radial-gradient(circle at 87% 23%, rgba(216, 248, 109, 0.9) 0 11px, transparent 12px),
+          linear-gradient(135deg, #151a18, #202923);
+        color: #fff;
+        font-size: 1.2rem;
+        font-weight: 800;
+        box-shadow: 0 18px 38px rgba(17, 24, 22, 0.24);
+      }
+
+      #welcomeText::before {
+        content: "고객 예약";
+        width: auto;
+        min-width: 0;
+        height: auto;
+        display: block;
+        border-radius: 0;
+        background: transparent;
+        color: #d8f86d;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      #welcomeText::after {
+        content: "스케줄을 간편하게 접수하세요";
+        color: rgba(255,255,255,0.64);
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+
+      .form {
+        gap: 12px;
+      }
+
+      .row,
+      .status-card,
+      .payment-summary-box,
+      .compose-price-guide,
+      .optional-info {
+        border: 1px solid rgba(37, 49, 42, 0.09);
+        border-radius: 18px;
+        background: rgba(255,255,255,0.9);
+        box-shadow: 0 10px 26px rgba(38, 51, 43, 0.06);
+      }
+
+      .row {
+        min-height: 58px;
+        padding: 10px 13px;
+      }
+
+      .row span {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        border-radius: 13px;
+        background: #eff8e9;
+        color: #111816;
+      }
+
+      .row input,
+      .row select {
+        color: #18201c;
+        font-size: 0.98rem;
+        font-weight: 650;
+      }
+
+      .row input::placeholder {
+        color: #8b9588;
+        font-weight: 650;
+      }
+
+      .date-helper {
+        color: #667062;
+        font-size: 0.84rem;
+        font-weight: 750;
+      }
+
+      .date-helper strong {
+        color: #111816;
+      }
+
+      .closed-notice-title {
+        color: #151a18;
+        font-size: 0.95rem;
+        font-weight: 800;
+      }
+
+      .closed-notice-month,
+      .closed-notice-body,
+      .hint,
+      .time-guide {
+        color: #667062;
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+
+      .time-guide summary,
+      .compose-price-guide summary {
+        color: #151a18;
+        font-weight: 800;
+      }
+
+      .closed-notice summary::after,
+      details.compose-price-guide summary::after,
+      .optional-info summary::after {
+        background: #d8f86d;
+        color: #111816;
+      }
+
+      #expectedPaymentText {
+        border: 1px solid rgba(216, 248, 109, 0.75);
+        border-radius: 20px;
+        background: linear-gradient(180deg, #fbffe9, #f4ffd1);
+        color: #252b20;
+        font-size: 0.92rem;
+        font-weight: 750;
+      }
+
+      .btn,
+      body.customer-lite .btn,
+      #customerScheduleForm > .btn {
+        border-radius: 20px;
+        background: linear-gradient(180deg, #151a18, #050807);
+        color: #fff;
+        font-weight: 800;
+        box-shadow: 0 16px 30px rgba(17, 24, 22, 0.22);
+      }
+
+      #customerScheduleForm > .btn {
+        min-height: 60px;
+      }
+
+      .btn.outline {
+        border-color: rgba(37, 49, 42, 0.12);
+        background: rgba(255,255,255,0.82);
+        color: #151a18;
+      }
+
+      .side-menu-panel {
+        background: #fbfff4;
+      }
+
+      .side-menu-item.active,
+      .app-bottom-nav button.active {
+        background: #d8f86d;
+        color: #111816;
+      }
+
+      .app-bottom-nav {
+        background: rgba(18, 24, 21, 0.96);
+        border-top: 0;
+        box-shadow: 0 -18px 40px rgba(17, 24, 22, 0.18);
+      }
+
+      .app-bottom-nav button {
+        color: rgba(255,255,255,0.64);
+        font-weight: 750;
+      }
+
+      .app-bottom-nav button.active {
+        box-shadow: none;
+      }
+
+      .app-bottom-nav button.active::after {
+        background: #111816;
+        opacity: 0.35;
+      }
+
+      @media (max-width: 520px) {
+        .wrap,
+        body.customer-lite .wrap {
+          width: 100%;
+          margin: 0;
+        }
+
+        .card,
+        body.customer-lite .card {
+          min-height: 100vh;
+          border-radius: 0;
+          border: 0;
+          box-shadow: none;
+        }
+
+        #authBlock,
+        #scheduleBlock {
+          padding: 10px 14px 140px;
+        }
+      }
+
+      /* Lite route: same app structure, warmer pink palette for the sc-pink link */
+      body.customer-lite {
+        --app-bg: #fff3f7;
+        --ink: #21171c;
+        --ink-soft: #74626b;
+        --primary: #3c1424;
+        --primary-dark: #18070e;
+        --primary-soft: #ffd7e4;
+        --accent: #ff9ebd;
+        --border: #ecd9e0;
+        background:
+          radial-gradient(circle at 50% 0, rgba(255, 170, 198, 0.58), transparent 290px),
+          linear-gradient(180deg, #fff1f6 0, #fff8fb 380px, #faf5f8 100%);
+        color: var(--ink);
+      }
+
+      body.customer-lite .card {
+        border-color: rgba(255,255,255,0.9);
+        box-shadow: 0 28px 70px rgba(78, 32, 51, 0.13);
+      }
+
+      body.customer-lite .top-menu-btn {
+        color: #3c1424;
+      }
+
+      body.customer-lite .top-menu-btn:active {
+        background: #ffe3ec;
+      }
+
+      body.customer-lite #welcomeText {
+        background:
+          radial-gradient(circle at 87% 23%, rgba(255, 158, 189, 0.92) 0 11px, transparent 12px),
+          linear-gradient(135deg, #3c1424, #1b0a12);
+        box-shadow: 0 18px 38px rgba(60, 20, 36, 0.24);
+      }
+
+      body.customer-lite #welcomeText::before {
+        color: #ffd7e4;
+      }
+
+      body.customer-lite .row span {
+        background: #fff0f5;
+        color: #3c1424;
+      }
+
+      body.customer-lite .closed-notice summary::after,
+      body.customer-lite details.compose-price-guide summary::after,
+      body.customer-lite .optional-info summary::after,
+      body.customer-lite .side-menu-item.active,
+      body.customer-lite .app-bottom-nav button.active {
+        background: #ffd7e4;
+        color: #3c1424;
+      }
+
+      body.customer-lite #installAppRow .btn {
+        background: #ffd7e4 !important;
+        color: #3c1424 !important;
+        box-shadow: 0 10px 24px rgba(205, 82, 121, 0.24) !important;
+      }
+
+      body.customer-lite .btn,
+      body.customer-lite #customerScheduleForm > .btn {
+        background: linear-gradient(180deg, #3c1424, #18070e);
+        box-shadow: 0 16px 30px rgba(60, 20, 36, 0.22);
+      }
+
+      body.customer-lite #expectedPaymentText {
+        border-color: rgba(255, 183, 207, 0.8);
+        background: linear-gradient(180deg, #fff8fb, #ffeaf1);
+        color: #4a1a2c;
+      }
+
+      body.customer-lite .side-menu-panel {
+        background: #fff8fb;
+      }
+
+      body.customer-lite .app-bottom-nav {
+        background: rgba(35, 12, 22, 0.96);
+        box-shadow: 0 -18px 40px rgba(60, 20, 36, 0.18);
+      }
+
+      body.customer-lite .app-bottom-nav button.active::after {
+        background: #3c1424;
+      }
+
+      #installAppRow {
+        gap: 8px;
+      }
+
+      #installAppRow .btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 7px !important;
+        white-space: nowrap;
+      }
+
+      #installAppRow .btn.hidden {
+        display: none !important;
+      }
+
+      #updateAppBtn {
+        min-height: 40px !important;
+        border-radius: 999px !important;
+        border: 1px solid rgba(255,255,255,0.5) !important;
+        background: linear-gradient(180deg, #111816, #050807) !important;
+        color: #fff !important;
+        box-shadow: 0 10px 24px rgba(17, 24, 22, 0.22) !important;
+      }
+
+      body.customer-lite #updateAppBtn {
+        background: linear-gradient(180deg, #3c1424, #18070e) !important;
+        box-shadow: 0 10px 24px rgba(60, 20, 36, 0.22) !important;
+      }
+
+      .pwa-action-icon {
+        width: 18px;
+        height: 18px;
+        position: relative;
+        display: inline-block;
+        flex: 0 0 auto;
+        border-radius: 7px;
+        background: rgba(255,255,255,0.92);
+        box-shadow:
+          inset 0 0 0 1px rgba(17,24,22,0.08),
+          0 3px 8px rgba(17,24,22,0.1);
+      }
+
+      .pwa-action-icon::before {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 3px;
+        width: 8px;
+        height: 12px;
+        border-radius: 3px;
+        background: #111816;
+        box-shadow: inset 0 -2px 0 rgba(255,255,255,0.2);
+      }
+
+      .pwa-action-icon::after {
+        content: "";
+        position: absolute;
+        right: 2px;
+        bottom: 3px;
+        width: 6px;
+        height: 6px;
+        border-right: 2px solid #d8f86d;
+        border-bottom: 2px solid #d8f86d;
+        transform: rotate(45deg);
+      }
+
+      body.customer-lite .pwa-action-icon {
+        box-shadow:
+          inset 0 0 0 1px rgba(60,20,36,0.1),
+          0 3px 8px rgba(60,20,36,0.1);
+      }
+
+      body.customer-lite .pwa-action-icon::before {
+        background: #3c1424;
+      }
+
+      body.customer-lite .pwa-action-icon::after {
+        border-color: #ff9ebd;
+      }
+
+      .pwa-action-icon--update {
+        background: rgba(255,255,255,0.94);
+      }
+
+      .pwa-action-icon--update::before {
+        left: 4px;
+        top: 4px;
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: transparent;
+        border: 2px solid #111816;
+        border-right-color: transparent;
+        box-shadow: none;
+      }
+
+      .pwa-action-icon--update::after {
+        right: 3px;
+        top: 2px;
+        bottom: auto;
+        width: 5px;
+        height: 5px;
+        border-right: 2px solid #111816;
+        border-bottom: 2px solid #111816;
+        transform: rotate(-35deg);
+      }
+
+      body.customer-lite .pwa-action-icon--update {
+        background: rgba(255,255,255,0.94);
+      }
+
+      body.customer-lite .pwa-action-icon--update::before {
+        background: transparent;
+        border-color: #3c1424;
+        border-right-color: transparent;
+      }
+
+      body.customer-lite .pwa-action-icon--update::after {
+        border-color: #3c1424;
+      }
+
+      @media (min-width: 900px) {
+        .wrap,
+        body.customer-lite .wrap {
+          width: min(760px, calc(100vw - 64px));
+          margin: 28px auto 54px;
+        }
+
+        .card,
+        body.customer-lite .card {
+          min-height: auto;
+          border-radius: 34px;
+        }
+
+        #authBlock,
+        #scheduleBlock {
+          padding: 18px 28px 150px;
+        }
+
+        .card > h1,
+        body.customer-lite h1 {
+          margin: -58px 130px 24px 70px;
+        }
+
+        #welcomeText {
+          min-height: 126px;
+          padding: 22px 24px 20px;
+        }
+
+        .date-quick {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .option-line,
+        .pair,
+        .place-line {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .place-line .row,
+        .pair .row:last-child {
+          grid-column: auto;
+        }
+
+        .row {
+          min-height: 62px;
+        }
+
+        .app-bottom-nav {
+          padding-left: max(28px, calc((100vw - 760px) / 2 + 28px));
+          padding-right: max(28px, calc((100vw - 760px) / 2 + 28px));
+        }
+      }
+
+      /* Final polish fixes for lite hero contrast and bottom menu stability */
+      body.customer-lite #welcomeText {
+        color: #fff !important;
+        text-shadow: 0 1px 8px rgba(0,0,0,0.18);
+      }
+
+      body.customer-lite #welcomeText::after {
+        color: rgba(255,255,255,0.78) !important;
+      }
+
+      .app-bottom-nav {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+      }
+
+      .app-bottom-nav button {
+        width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        line-height: 1.15 !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow: hidden !important;
+      }
+
+      .app-bottom-nav button::before {
+        margin: 0 !important;
+        display: block !important;
+        flex: 0 0 auto !important;
+      }
+
+      body.customer-lite #statusSection .payment-summary-box,
+      body.customer-lite #statusSection .status-card,
+      body.customer-lite .history-item {
+        border-color: rgba(92, 31, 55, 0.14) !important;
+        background: rgba(255,255,255,0.86) !important;
+        box-shadow: 0 10px 28px rgba(60, 20, 36, 0.06) !important;
+      }
+
+      body.customer-lite #statusSection .status-head,
+      body.customer-lite #statusSection .payment-summary-title {
+        color: #35101f !important;
+      }
+
+      body.customer-lite #statusSection .status-meta {
+        color: #514047 !important;
+      }
+
+      body.customer-lite #statusSection .hint {
+        color: #74626b !important;
+      }
+
+      body.customer-lite #statusSection .hint.danger,
+      body.customer-lite #statusSection .danger {
+        color: #c02f57 !important;
+      }
+
+      body.customer-lite .customer-drive-banner {
+        border-left: 4px solid #ff9ebd !important;
+        background: linear-gradient(135deg, #fff5f8, #ffe8f0) !important;
+      }
+
+      body.customer-lite .customer-drive-banner-title,
+      body.customer-lite .customer-drive-banner a {
+        color: #3c1424 !important;
+      }
+
+      body.customer-lite .customer-status-section-title {
+        color: #3c1424 !important;
+        background: linear-gradient(180deg, #fff, #fff7fa) !important;
+      }
+
+      body.customer-lite .customer-site-shoot-block {
+        border-color: rgba(255, 158, 189, 0.54) !important;
+        background: linear-gradient(135deg, #fff7fa, #fff0f5) !important;
+        color: #4a1a2c !important;
+      }
+
+      body.customer-lite .customer-site-shoot-done .customer-site-shoot-title {
+        color: #9a2348 !important;
+      }
+
+      body.customer-lite .customer-site-work-link,
+      body.customer-lite .customer-site-work-link .helper,
+      body.customer-lite .customer-site-work-link a,
+      body.customer-lite .customer-site-delivery-meta {
+        color: #8e2547 !important;
+      }
+
+      body.customer-lite .customer-del-ic {
+        border-color: rgba(142, 37, 71, 0.2) !important;
+        background: rgba(255,255,255,0.76) !important;
+        color: #8e2547 !important;
+      }
+
+      body.customer-lite .customer-del-ic--ok {
+        background: #ffe5ee !important;
+        border-color: #ffb7ce !important;
+        color: #81203f !important;
+      }
+
+      body.customer-lite .customer-del-ic--wait {
+        background: #f8eef2 !important;
+        border-color: #ead4dc !important;
+        color: #74626b !important;
+      }
+
+      body.customer-lite .customer-del-sep {
+        color: #bf6682 !important;
+      }
+
+      body.customer-lite .status-actions .btn.outline {
+        border-color: rgba(92, 31, 55, 0.2) !important;
+        background: #fff8fb !important;
+        color: #3c1424 !important;
+      }
+
+      body.customer-lite .payment-state-badge {
+        background: #fff0f5 !important;
+        border-color: #ffc8da !important;
+        color: #8e2547 !important;
+      }
+
+      body.customer-lite .payment-state-paid {
+        background: #ffe5ee !important;
+        border-color: #ffabc5 !important;
+        color: #7c1d3b !important;
+      }
+
+      body.customer-lite .payment-state-hold {
+        background: #fff7ea !important;
+        border-color: #f4d9a6 !important;
+        color: #7a5216 !important;
+      }
+
+      body.customer-lite .payment-state-refund {
+        background: #f7eef7 !important;
+        border-color: #e7cfe4 !important;
+        color: #6f3464 !important;
+      }
+
+      body.customer-lite .payment-summary-amount {
+        color: #8e2547 !important;
+      }
+
+      body.customer-lite .payment-summary-hold {
+        color: #6f3464 !important;
+      }
+
+      /* Skeleton restore: app-like structure only, keeping the current visual language */
+      .wrap,
+      body.customer-lite .wrap {
+        width: min(520px, 100vw) !important;
+        margin: 0 auto !important;
+      }
+
+      .card,
+      body.customer-lite .card {
+        position: relative !important;
+        min-height: 100vh !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        min-height: 58px !important;
+        display: flex !important;
+        align-items: center !important;
+        margin: 0 102px 0 58px !important;
+        font-size: 1.05rem !important;
+        line-height: 1.2 !important;
+        letter-spacing: 0 !important;
+        white-space: nowrap !important;
+      }
+
+      .card > .sub {
+        display: none !important;
+      }
+
+      .top-menu-btn {
+        position: absolute !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 20 !important;
+        width: 36px !important;
+        height: 36px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 0 !important;
+        border-radius: 13px !important;
+        background: rgba(255,255,255,0.72) !important;
+        color: inherit !important;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      #installAppRow {
+        position: absolute !important;
+        top: 12px !important;
+        right: 12px !important;
+        z-index: 21 !important;
+        margin: 0 !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+      }
+
+      #installAppRow.hidden {
+        display: none !important;
+      }
+
+      #installAppRow .sub {
+        display: none !important;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding: 14px 16px 128px !important;
+      }
+
+      #authBlock {
+        padding-top: 8px !important;
+      }
+
+      #authBlock .tabs,
+      #scheduleBlock > .tabs,
+      #registerSection > .tabs,
+      .tabs:not(#orderHistoryModal .tabs) {
+        display: none !important;
+      }
+
+      #scheduleBlock .top-line {
+        display: block !important;
+        margin: 0 0 12px !important;
+      }
+
+      #scheduleBlock .top-line > div {
+        display: none !important;
+      }
+
+      #welcomeText {
+        width: min(280px, 78vw) !important;
+        min-height: 92px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        margin: 0 !important;
+        padding: 16px 18px !important;
+        border-radius: 24px !important;
+        font-size: 1.08rem !important;
+        line-height: 1.25 !important;
+        word-break: keep-all !important;
+      }
+
+      .form {
+        gap: 10px !important;
+      }
+
+      .date-helper {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        margin: 2px 2px 0 !important;
+        font-size: 0.84rem !important;
+      }
+
+      .date-quick,
+      .option-line,
+      .pair,
+      .place-line {
+        display: grid !important;
+        gap: 10px !important;
+      }
+
+      .date-quick {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      }
+
+      .date-quick .year-field {
+        display: none !important;
+      }
+
+      .option-line,
+      .pair {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+
+      .row,
+      body.customer-lite .row {
+        min-height: 54px !important;
+        padding: 9px 12px !important;
+      }
+
+      .row span,
+      body.customer-lite .row span {
+        width: 34px !important;
+        min-width: 34px !important;
+        height: 34px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 12px !important;
+        font-size: 0.95rem !important;
+      }
+
+      .row input,
+      .row select {
+        min-width: 0 !important;
+        font-size: 0.95rem !important;
+      }
+
+      .time-guide,
+      .compose-price-guide,
+      .optional-info {
+        width: 100% !important;
+      }
+
+      #customerScheduleForm > .btn {
+        width: 100% !important;
+        min-height: 56px !important;
+        margin-top: 4px !important;
+        font-size: 1rem !important;
+      }
+
+      .app-bottom-nav {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        z-index: 50 !important;
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        margin: 0 !important;
+        padding: 9px max(12px, calc((100vw - 520px) / 2 + 12px)) calc(9px + env(safe-area-inset-bottom)) !important;
+        border-radius: 0 !important;
+      }
+
+      .app-bottom-nav button {
+        min-height: 52px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        border: 0 !important;
+        line-height: 1.15 !important;
+        font-size: 0.78rem !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+      }
+
+      #registerTabBtn::before { content: "＋" !important; }
+      #statusTabBtn::before { content: "☰" !important; }
+      #infoTabBtn::before { content: "○" !important; }
+
+      .side-menu {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 80 !important;
+      }
+
+      .side-menu.hidden {
+        display: none !important;
+      }
+
+      .side-menu-backdrop {
+        position: absolute !important;
+        inset: 0 !important;
+        border: 0 !important;
+        background: rgba(0,0,0,0.28) !important;
+      }
+
+      .side-menu-panel {
+        position: relative !important;
+        width: min(280px, 82vw) !important;
+        height: 100% !important;
+        padding: 22px 16px !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.22s ease !important;
+        box-shadow: 18px 0 38px rgba(0,0,0,0.18) !important;
+      }
+
+      .side-menu.open .side-menu-panel,
+      .side-menu-panel.open {
+        transform: translateX(0) !important;
+      }
+
+      .side-menu.open .side-menu-panel {
+        transform: translateX(0) !important;
+      }
+
+      .side-menu-title {
+        margin-bottom: 14px !important;
+        font-weight: 800 !important;
+      }
+
+      .side-menu-item {
+        width: 100% !important;
+        min-height: 46px !important;
+        margin-bottom: 8px !important;
+        border: 0 !important;
+        border-radius: 14px !important;
+        text-align: left !important;
+        font-weight: 800 !important;
+      }
+
+      @media (min-width: 760px) {
+        .wrap,
+        body.customer-lite .wrap {
+          width: min(760px, calc(100vw - 56px)) !important;
+          margin: 26px auto 42px !important;
+        }
+
+        .card,
+        body.customer-lite .card {
+          min-height: auto !important;
+          border-radius: 28px !important;
+        }
+
+        #authBlock,
+        #scheduleBlock {
+          padding: 18px 28px 136px !important;
+        }
+
+        #welcomeText {
+          width: 320px !important;
+          min-height: 104px !important;
+        }
+      }
+
+      @media (max-width: 430px) {
+        #authBlock,
+        #scheduleBlock {
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+
+        .date-quick {
+          gap: 8px !important;
+        }
+
+        .option-line,
+        .pair {
+          gap: 8px !important;
+        }
+
+        .row,
+        body.customer-lite .row {
+          padding-inline: 9px !important;
+        }
+      }
+
+      /* Bottom nav hard reset: avoid stacked pseudo-icon/text collisions */
+      .app-bottom-nav {
+        box-sizing: border-box !important;
+        grid-auto-flow: column !important;
+        grid-auto-columns: minmax(0, 1fr) !important;
+        overflow: visible !important;
+      }
+
+      .app-bottom-nav button::before,
+      .app-bottom-nav button::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      .app-bottom-nav button {
+        box-sizing: border-box !important;
+        padding: 6px 4px !important;
+        overflow: visible !important;
+        text-indent: 0 !important;
+        letter-spacing: 0 !important;
+        writing-mode: horizontal-tb !important;
+      }
+
+      .bottom-nav-icon {
+        width: 22px !important;
+        height: 22px !important;
+        flex: 0 0 22px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        font-size: 0.9rem !important;
+        line-height: 1 !important;
+      }
+
+      .bottom-nav-label {
+        display: block !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        writing-mode: horizontal-tb !important;
+      }
+
+      /* Bottom nav absolute reset: force three equal app tabs */
+      nav.app-bottom-nav {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        min-width: 100vw !important;
+        height: auto !important;
+        min-height: 70px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        gap: 8px !important;
+        padding: 9px max(12px, calc((100vw - 520px) / 2 + 12px)) calc(9px + env(safe-area-inset-bottom)) !important;
+        margin: 0 !important;
+        transform: none !important;
+        overflow: visible !important;
+      }
+
+      nav.app-bottom-nav > button {
+        all: unset !important;
+        box-sizing: border-box !important;
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+        min-height: 52px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        border-radius: 16px !important;
+        font-family: inherit !important;
+        font-weight: 800 !important;
+        font-size: 0.78rem !important;
+        line-height: 1.1 !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        cursor: pointer !important;
+        writing-mode: horizontal-tb !important;
+      }
+
+      nav.app-bottom-nav > button::before,
+      nav.app-bottom-nav > button::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      nav.app-bottom-nav > button.active {
+        background: rgba(255,255,255,0.14) !important;
+      }
+
+      nav.app-bottom-nav > button > .bottom-nav-icon,
+      nav.app-bottom-nav > button > .bottom-nav-label {
+        all: unset !important;
+        box-sizing: border-box !important;
+        display: block !important;
+        max-width: 100% !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        writing-mode: horizontal-tb !important;
+      }
+
+      nav.app-bottom-nav > button > .bottom-nav-icon {
+        width: 22px !important;
+        height: 22px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        font-size: 0.92rem !important;
+        line-height: 22px !important;
+      }
+
+      nav.app-bottom-nav > button > .bottom-nav-label {
+        font-size: 0.78rem !important;
+        line-height: 1.1 !important;
+      }
+
+      /* Bottom nav visual reset: readable app tabs */
+      nav.app-bottom-nav {
+        background: rgba(17, 24, 22, 0.97) !important;
+        border-top: 0 !important;
+        box-shadow: 0 -18px 42px rgba(17, 24, 22, 0.22) !important;
+      }
+
+      nav.app-bottom-nav > button {
+        color: rgba(255,255,255,0.72) !important;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+
+      nav.app-bottom-nav > button.active {
+        color: #111816 !important;
+        background: #d8f86d !important;
+        box-shadow: 0 10px 24px rgba(216, 248, 109, 0.18) !important;
+      }
+
+      nav.app-bottom-nav > button > .bottom-nav-icon {
+        color: currentColor !important;
+        background: rgba(255,255,255,0.12) !important;
+      }
+
+      nav.app-bottom-nav > button.active > .bottom-nav-icon {
+        color: #111816 !important;
+        background: rgba(17,24,22,0.08) !important;
+      }
+
+      nav.app-bottom-nav > button > .bottom-nav-label {
+        color: currentColor !important;
+        font-weight: 850 !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav {
+        background: rgba(35, 12, 22, 0.97) !important;
+        box-shadow: 0 -18px 42px rgba(60, 20, 36, 0.2) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button {
+        color: rgba(255,255,255,0.74) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button.active {
+        color: #3c1424 !important;
+        background: #ffd7e4 !important;
+        box-shadow: 0 10px 24px rgba(255, 158, 189, 0.16) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button.active > .bottom-nav-icon {
+        color: #3c1424 !important;
+        background: rgba(60,20,36,0.08) !important;
+      }
+
+      /* Bottom nav alignment: match the app card width, not the full viewport math */
+      nav.app-bottom-nav {
+        left: 50% !important;
+        right: auto !important;
+        width: min(520px, 100vw) !important;
+        min-width: 0 !important;
+        transform: translateX(-50%) !important;
+        padding: 9px 14px calc(9px + env(safe-area-inset-bottom)) !important;
+        gap: 8px !important;
+        border-bottom-left-radius: 28px !important;
+        border-bottom-right-radius: 28px !important;
+      }
+
+      nav.app-bottom-nav > button {
+        flex: 1 1 0 !important;
+        max-width: none !important;
+      }
+
+      @media (min-width: 760px) {
+        nav.app-bottom-nav {
+          width: min(760px, calc(100vw - 56px)) !important;
+          padding-left: 24px !important;
+          padding-right: 24px !important;
+        }
+      }
+
+      @media (max-width: 520px) {
+        nav.app-bottom-nav {
+          width: 100vw !important;
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
+        }
+      }
+
+      /* Header emphasis: make the screen title feel like the app's main anchor */
+      .card > h1,
+      body.customer-lite h1 {
+        position: relative !important;
+        min-height: 72px !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        flex-direction: column !important;
+        gap: 3px !important;
+        padding-left: 46px !important;
+        font-size: 1.18rem !important;
+        font-weight: 900 !important;
+      }
+
+      .card > h1::before,
+      body.customer-lite h1::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        transform: translateY(-50%);
+        background:
+          radial-gradient(circle at 68% 28%, rgba(255,255,255,0.95) 0 3px, transparent 4px),
+          linear-gradient(135deg, #111816, #d8f86d);
+        box-shadow: 0 10px 24px rgba(17, 24, 22, 0.14);
+      }
+
+      .card > h1::after,
+      body.customer-lite h1::after {
+        content: "촬영 일정을 간편하게 접수하세요";
+        display: block;
+        margin-top: 2px;
+        color: var(--ink-soft);
+        font-size: 0.74rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      body.customer-lite h1::before {
+        background:
+          radial-gradient(circle at 68% 28%, rgba(255,255,255,0.96) 0 3px, transparent 4px),
+          linear-gradient(135deg, #3c1424, #ff9ebd);
+        box-shadow: 0 10px 24px rgba(60, 20, 36, 0.14);
+      }
+
+      body.customer-lite h1::after {
+        color: #74626b;
+      }
+
+      @media (min-width: 760px) {
+        .card > h1,
+        body.customer-lite h1 {
+          margin-top: 8px !important;
+        }
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        min-height: 82px !important;
+        font-size: 1.38rem !important;
+      }
+
+      .card > h1::after,
+      body.customer-lite h1::after {
+        font-size: 0.86rem !important;
+      }
+
+      .customer-hero-carousel {
+        position: relative;
+        z-index: 1;
+        height: 118px;
+        margin: -4px 16px 14px;
+        overflow: hidden;
+        border-radius: 24px;
+        background: #111816;
+        box-shadow: 0 18px 42px rgba(17, 24, 22, 0.14);
+      }
+
+      .customer-hero-slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        animation: customerHeroFade 12s infinite;
+      }
+
+      .customer-hero-slide:nth-child(1) { animation-delay: 0s; }
+      .customer-hero-slide:nth-child(2) { animation-delay: 4s; }
+      .customer-hero-slide:nth-child(3) { animation-delay: 8s; }
+
+      .customer-hero-slide img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+
+      .customer-hero-slide::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(17,24,22,0.62), rgba(17,24,22,0.12) 46%, rgba(17,24,22,0.08)),
+          linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.08));
+        pointer-events: none;
+      }
+
+      .customer-hero-caption {
+        position: absolute;
+        left: 16px;
+        bottom: 14px;
+        z-index: 2;
+        color: #fff;
+        font-size: 0.82rem;
+        font-weight: 800;
+        line-height: 1.35;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.34);
+      }
+
+      .customer-hero-caption span {
+        display: block;
+        margin-top: 2px;
+        color: rgba(255,255,255,0.78);
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
+      .customer-hero-dots {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        z-index: 3;
+        display: flex;
+        gap: 5px;
+      }
+
+      .customer-hero-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.45);
+        animation: customerHeroDot 12s infinite;
+      }
+
+      .customer-hero-dots span:nth-child(1) { animation-delay: 0s; }
+      .customer-hero-dots span:nth-child(2) { animation-delay: 4s; }
+      .customer-hero-dots span:nth-child(3) { animation-delay: 8s; }
+
+      @keyframes customerHeroFade {
+        0%, 28% { opacity: 1; }
+        33%, 100% { opacity: 0; }
+      }
+
+      @keyframes customerHeroDot {
+        0%, 28% {
+          width: 16px;
+          background: #d8f86d;
+        }
+        33%, 100% {
+          width: 6px;
+          background: rgba(255,255,255,0.45);
+        }
+      }
+
+      body.customer-lite .customer-hero-carousel {
+        background: #3c1424;
+        box-shadow: 0 18px 42px rgba(60, 20, 36, 0.14);
+      }
+
+      body.customer-lite .customer-hero-dots span {
+        animation-name: customerHeroDotLite;
+      }
+
+      @keyframes customerHeroDotLite {
+        0%, 28% {
+          width: 16px;
+          background: #ffd7e4;
+        }
+        33%, 100% {
+          width: 6px;
+          background: rgba(255,255,255,0.45);
+        }
+      }
+
+      @media (min-width: 760px) {
+        .customer-hero-carousel {
+          height: 132px;
+          margin: -2px 28px 16px;
+        }
+      }
+
+      @media (max-width: 430px) {
+        .customer-hero-carousel {
+          height: 104px;
+          margin-inline: 12px;
+          border-radius: 20px;
+        }
+
+        .customer-hero-caption {
+          left: 14px;
+          bottom: 12px;
+          font-size: 0.78rem;
+        }
+      }
+
+      /* Header/banner alignment: keep the title, banner, and form on one clean axis */
+      .card {
+        --customer-app-gutter: 28px;
+      }
+
+      .card > h1,
+      body.customer-lite h1 {
+        display: block !important;
+        min-height: auto !important;
+        margin: 22px var(--customer-app-gutter) 8px !important;
+        padding-left: 0 !important;
+        font-size: 1.5rem !important;
+        font-weight: 850 !important;
+        line-height: 1.18 !important;
+        letter-spacing: 0 !important;
+      }
+
+      .card > h1::before,
+      body.customer-lite h1::before {
+        content: none !important;
+        display: none !important;
+      }
+
+      .card > h1::after,
+      body.customer-lite h1::after {
+        margin-top: 6px !important;
+        font-size: 0.9rem !important;
+        font-weight: 700 !important;
+      }
+
+      .customer-hero-carousel {
+        margin: 12px var(--customer-app-gutter) 22px !important;
+        width: auto !important;
+      }
+
+      #authBlock,
+      #scheduleBlock {
+        padding-left: var(--customer-app-gutter) !important;
+        padding-right: var(--customer-app-gutter) !important;
+      }
+
+      #installAppRow {
+        margin-left: var(--customer-app-gutter) !important;
+        margin-right: var(--customer-app-gutter) !important;
+      }
+
+      #welcomeText {
+        width: min(320px, 100%) !important;
+        margin: 0 0 14px !important;
+      }
+
+      @media (min-width: 760px) {
+        .card > h1,
+        body.customer-lite h1 {
+          margin-top: 24px !important;
+        }
+
+        .customer-hero-carousel {
+          height: 132px !important;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .card {
+          --customer-app-gutter: 16px;
+        }
+
+        .card > h1,
+        body.customer-lite h1 {
+          margin-top: 18px !important;
+          font-size: 1.34rem !important;
+        }
+
+        .card > h1::after,
+        body.customer-lite h1::after {
+          font-size: 0.82rem !important;
+        }
+
+        .customer-hero-carousel {
+          height: 108px !important;
+          border-radius: 20px !important;
+        }
+      }
+
+      /* Lite route blue mood: cooler, cleaner variant for the sc-pink link */
+      body.customer-lite {
+        --app-bg: #eef5ff !important;
+        --surface: #ffffff !important;
+        --surface-soft: #f5f9ff !important;
+        --ink: #111827 !important;
+        --ink-soft: #5d6b82 !important;
+        --primary: #2563eb !important;
+        --primary-dark: #123a8c !important;
+        --primary-soft: #eaf2ff !important;
+        --accent: #7dd3fc !important;
+        --border: #d7e4f8 !important;
+        background:
+          radial-gradient(circle at 50% 0, rgba(104, 161, 255, 0.34), transparent 310px),
+          linear-gradient(180deg, #eef6ff 0, #fbfdff 420px, #f5f8fc 100%) !important;
+      }
+
+      body.customer-lite .card {
+        background: rgba(255,255,255,0.94) !important;
+        border-color: rgba(255,255,255,0.9) !important;
+        box-shadow: 0 28px 70px rgba(37, 99, 235, 0.13) !important;
+      }
+
+      body.customer-lite .top-menu-btn {
+        color: #1d4ed8 !important;
+        background: rgba(255,255,255,0.88) !important;
+      }
+
+      body.customer-lite .top-menu-btn:active {
+        background: #eaf2ff !important;
+      }
+
+      body.customer-lite h1,
+      body.customer-lite h1::after {
+        color: #111827 !important;
+      }
+
+      body.customer-lite h1::after {
+        color: #64748b !important;
+      }
+
+      body.customer-lite #welcomeText {
+        background:
+          radial-gradient(circle at 87% 23%, rgba(125, 211, 252, 0.95) 0 9px, transparent 10px),
+          linear-gradient(135deg, #1d4ed8, #0f172a) !important;
+        box-shadow: 0 18px 38px rgba(37, 99, 235, 0.22) !important;
+      }
+
+      body.customer-lite #welcomeText::before {
+        color: #bfdbfe !important;
+      }
+
+      body.customer-lite #welcomeText::after {
+        color: rgba(255,255,255,0.78) !important;
+      }
+
+      body.customer-lite .row,
+      body.customer-lite .status-card,
+      body.customer-lite .payment-summary-box,
+      body.customer-lite details.compose-price-guide,
+      body.customer-lite .closed-notice,
+      body.customer-lite .optional-info {
+        border-color: rgba(37, 99, 235, 0.16) !important;
+        background: rgba(255,255,255,0.9) !important;
+        box-shadow: 0 10px 26px rgba(37, 99, 235, 0.045) !important;
+      }
+
+      body.customer-lite .row span {
+        background: #eaf2ff !important;
+        color: #1d4ed8 !important;
+      }
+
+      body.customer-lite .closed-notice summary::after,
+      body.customer-lite details.compose-price-guide summary::after,
+      body.customer-lite .optional-info summary::after,
+      body.customer-lite .side-menu-item.active {
+        background: #dbeafe !important;
+        color: #1d4ed8 !important;
+      }
+
+      body.customer-lite #installAppRow .btn {
+        background: #dbeafe !important;
+        color: #123a8c !important;
+        border-color: rgba(37, 99, 235, 0.18) !important;
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.16) !important;
+      }
+
+      body.customer-lite #updateAppBtn,
+      body.customer-lite .btn,
+      body.customer-lite #customerScheduleForm > .btn {
+        background: linear-gradient(180deg, #2563eb, #123a8c) !important;
+        color: #fff !important;
+        box-shadow: 0 16px 32px rgba(37, 99, 235, 0.22) !important;
+      }
+
+      body.customer-lite #expectedPaymentText {
+        border-color: rgba(37, 99, 235, 0.22) !important;
+        background: linear-gradient(180deg, #f8fbff, #edf5ff) !important;
+        color: #123a8c !important;
+      }
+
+      body.customer-lite .customer-hero-carousel {
+        background: #0f172a !important;
+        box-shadow: 0 18px 42px rgba(37, 99, 235, 0.14) !important;
+      }
+
+      body.customer-lite .customer-hero-dots span {
+        animation-name: customerHeroDotLiteBlue !important;
+      }
+
+      @keyframes customerHeroDotLiteBlue {
+        0%, 28% {
+          width: 16px;
+          background: #7dd3fc;
+        }
+        33%, 100% {
+          width: 6px;
+          background: rgba(255,255,255,0.48);
+        }
+      }
+
+      body.customer-lite nav.app-bottom-nav {
+        background: rgba(15, 23, 42, 0.97) !important;
+        box-shadow: 0 -18px 42px rgba(15, 23, 42, 0.2) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button {
+        color: rgba(255,255,255,0.74) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button.active {
+        background: #bfdbfe !important;
+        color: #123a8c !important;
+        box-shadow: 0 10px 24px rgba(96, 165, 250, 0.2) !important;
+      }
+
+      body.customer-lite nav.app-bottom-nav > button.active > .bottom-nav-icon {
+        color: #123a8c !important;
+        background: rgba(18, 58, 140, 0.09) !important;
+      }
+
+      body.customer-lite .pwa-action-icon::before {
+        background: #1d4ed8 !important;
+      }
+
+      body.customer-lite .pwa-action-icon::after {
+        border-color: #7dd3fc !important;
+      }
+
+      body.customer-lite .pwa-action-icon--update::before {
+        background: transparent !important;
+        border-color: #1d4ed8 !important;
+        border-right-color: transparent !important;
+      }
+
+      body.customer-lite .pwa-action-icon--update::after {
+        border-color: #1d4ed8 !important;
+      }
+
+      /* Header action alignment: match the menu button to the centered title block */
+      .top-menu-btn {
+        top: 19px !important;
+        left: 16px !important;
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 16px !important;
+        font-size: 1.18rem !important;
+      }
+
+      /* Customer reservation card alignment: make the mobile card feel intentional */
+      #scheduleBlock .top-line {
+        width: 100% !important;
+        margin: 0 0 18px !important;
+      }
+
+      #welcomeText {
+        position: relative !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 112px !important;
+        margin: 0 !important;
+        padding: 22px 76px 20px 24px !important;
+        border-radius: 28px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        gap: 7px !important;
+        line-height: 1.18 !important;
+        text-align: left !important;
+        word-break: keep-all !important;
+        overflow: hidden !important;
+        background:
+          radial-gradient(circle at calc(100% - 42px) 31px, #d8f86d 0 14px, transparent 15px),
+          linear-gradient(135deg, #121815, #1d2924) !important;
+      }
+
+      #welcomeText::before {
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        color: #d8f86d !important;
+        font-size: 0.84rem !important;
+        font-weight: 850 !important;
+        line-height: 1.05 !important;
+      }
+
+      #welcomeText::after {
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        color: rgba(255,255,255,0.68) !important;
+        font-size: 0.9rem !important;
+        font-weight: 650 !important;
+        line-height: 1.15 !important;
+      }
+
+      body.customer-lite #welcomeText {
+        background:
+          radial-gradient(circle at calc(100% - 42px) 31px, #7dd3fc 0 14px, transparent 15px),
+          linear-gradient(135deg, #1d4ed8, #0f172a) !important;
+      }
+
+      body.customer-lite #welcomeText::before {
+        color: #bfdbfe !important;
+      }
+
+      body.customer-lite #welcomeText::after {
+        color: rgba(255,255,255,0.72) !important;
+      }
+
+      /* App header title: center the screen title between menu and update actions */
+      .card > h1,
+      body.customer-lite h1 {
+        position: absolute !important;
+        top: 12px !important;
+        left: 108px !important;
+        right: 108px !important;
+        z-index: 22 !important;
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 58px !important;
+        height: 58px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        color: #111827 !important;
+        font-size: 1.42rem !important;
+        font-weight: 850 !important;
+        line-height: 1.1 !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        pointer-events: none !important;
+      }
+
+      .card > h1::after,
+      body.customer-lite h1::after {
+        content: "촬영 일정을 간편하게 접수하세요" !important;
+        display: block !important;
+        margin: 0 !important;
+        color: #64748b !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
+      }
+
+      .customer-hero-carousel {
+        margin-top: 42px !important;
+      }
+
+      #installAppRow {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: calc(var(--customer-bottom-nav-height, 86px) + 16px + env(safe-area-inset-bottom)) !important;
+        z-index: 10010 !important;
+        width: min(360px, calc(100vw - 36px)) !important;
+        margin: 0 !important;
+        padding: 8px !important;
+        transform: translateX(-50%) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        border-radius: 999px !important;
+        background: rgba(255,255,255,0.86) !important;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18) !important;
+        backdrop-filter: blur(18px) !important;
+      }
+
+      #installAppRow.hidden {
+        display: none !important;
+      }
+
+      #installAppRow .sub {
+        display: none !important;
+      }
+
+      #installAppRow .btn {
+        width: auto !important;
+        min-width: 112px !important;
+        min-height: 42px !important;
+        padding: 0 18px !important;
+        border-radius: 999px !important;
+        font-size: 0.88rem !important;
+        font-weight: 850 !important;
+      }
+
+      #installAppRow .btn.hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 520px) {
+        .card > h1,
+        body.customer-lite h1 {
+          top: 10px !important;
+          left: 66px !important;
+          right: 66px !important;
+          height: 60px !important;
+          min-height: 60px !important;
+          font-size: 1.22rem !important;
+        }
+
+        .card > h1::after,
+        body.customer-lite h1::after {
+          font-size: 0.76rem !important;
+        }
+
+        .customer-hero-carousel {
+          margin-top: 20px !important;
+        }
+
+        #installAppRow {
+          width: min(330px, calc(100vw - 28px)) !important;
+          bottom: calc(var(--customer-bottom-nav-height, 78px) + 12px + env(safe-area-inset-bottom)) !important;
+          padding: 7px !important;
+        }
+
+        #installAppRow .btn {
+          min-width: 104px !important;
+          min-height: 40px !important;
+          padding-inline: 15px !important;
+          font-size: 0.84rem !important;
+        }
+      }
+
+      @media (max-width: 520px) {
+        #scheduleBlock .top-line {
+          margin-bottom: 16px !important;
+        }
+
+        #welcomeText {
+          min-height: 116px !important;
+          padding: 22px 64px 20px 24px !important;
+          border-radius: 27px !important;
+          font-size: 1.42rem !important;
+          background:
+            radial-gradient(circle at calc(100% - 42px) 31px, #d8f86d 0 13px, transparent 14px),
+            linear-gradient(135deg, #121815, #1d2924) !important;
+        }
+
+        body.customer-lite #welcomeText {
+          background:
+            radial-gradient(circle at calc(100% - 42px) 31px, #7dd3fc 0 13px, transparent 14px),
+            linear-gradient(135deg, #1d4ed8, #0f172a) !important;
+        }
+
+        #welcomeText::before {
+          font-size: 0.82rem !important;
+        }
+
+        #welcomeText::after {
+          font-size: 0.88rem !important;
+        }
+      }
+
+      /* Fixed customer app navigation: stay pinned while the form scrolls */
+      :root {
+        --customer-bottom-nav-height: 86px;
+      }
+
+      body {
+        padding-bottom: calc(var(--customer-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
+      }
+
+      .card {
+        overflow: visible !important;
+      }
+
+      #scheduleBlock {
+        padding-bottom: calc(var(--customer-bottom-nav-height) + 30px) !important;
+      }
+
+      nav.app-bottom-nav {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: 0 !important;
+        width: min(760px, calc(100vw - 56px)) !important;
+        min-width: 0 !important;
+        height: var(--customer-bottom-nav-height) !important;
+        min-height: var(--customer-bottom-nav-height) !important;
+        transform: translateX(-50%) !important;
+        z-index: 9990 !important;
+        box-sizing: border-box !important;
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin: 0 !important;
+        padding: 10px 24px calc(10px + env(safe-area-inset-bottom)) !important;
+        border-radius: 26px 26px 0 0 !important;
+        overflow: hidden !important;
+        transform-origin: center bottom !important;
+      }
+
+      nav.app-bottom-nav > button {
+        min-height: 56px !important;
+        height: 56px !important;
+        padding: 7px 8px !important;
+      }
+
+      body > nav.app-bottom-nav[data-fixed-dock="true"] {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: 0 !important;
+        transform: translate3d(-50%, 0, 0) !important;
+        will-change: transform !important;
+      }
+
+      @media (max-width: 520px) {
+        :root {
+          --customer-bottom-nav-height: 78px;
+        }
+
+        body {
+          padding-bottom: calc(var(--customer-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
+        }
+
+        #scheduleBlock {
+          padding-bottom: calc(var(--customer-bottom-nav-height) + 24px) !important;
+        }
+
+        nav.app-bottom-nav {
+          width: 100vw !important;
+          height: var(--customer-bottom-nav-height) !important;
+          min-height: var(--customer-bottom-nav-height) !important;
+          padding: 8px 12px calc(8px + env(safe-area-inset-bottom)) !important;
+          border-radius: 20px 20px 0 0 !important;
+        }
+
+        nav.app-bottom-nav > button {
+          min-height: 52px !important;
+          height: 52px !important;
+        }
+      }
     </style>
   </head>
   <body>
     <main class="wrap">
       <div class="card">
-        <h1>고객용 스케줄 등록</h1>
-        <p class="sub">관리자가 전달한 계정으로 로그인하면 업체 스케줄을 직접 등록할 수 있습니다.</p>
+        <button id="topMenuBtn" class="top-menu-btn" type="button" aria-label="메뉴">☰</button>
+        <div id="sideMenu" class="side-menu hidden" aria-hidden="true">
+          <button class="side-menu-backdrop" type="button" data-close-menu aria-label="메뉴 닫기"></button>
+          <div class="side-menu-panel" role="dialog" aria-label="고객 메뉴">
+            <div class="side-menu-title">메뉴</div>
+            <button class="side-menu-item active" type="button" data-tab="register">＋ 스케줄등록</button>
+            <button class="side-menu-item" type="button" data-tab="status">☰ 내등록현황</button>
+            <button class="side-menu-item" type="button" data-tab="info">○ 내정보</button>
+          </div>
+        </div>
+        <h1>촬영 스케줄 등록</h1>
+        <div class="customer-hero-carousel" aria-label="촬영 예약 안내 배너">
+          <div class="customer-hero-slide">
+            <img src="./assets/customer-banners/shoot-banner-1.jpg" alt="감성적인 거실 촬영 공간" loading="eager" />
+            <div class="customer-hero-caption">공간의 첫인상을 선명하게<span>촬영 일정만 빠르게 접수하세요</span></div>
+          </div>
+          <div class="customer-hero-slide">
+            <img src="./assets/customer-banners/shoot-banner-2.jpg" alt="모던한 주택 촬영 공간" loading="lazy" />
+            <div class="customer-hero-caption">예약부터 촬영까지 간단하게<span>필요한 정보만 차분하게 입력</span></div>
+          </div>
+          <div class="customer-hero-slide">
+            <img src="./assets/customer-banners/shoot-banner-3.jpg" alt="밝은 인테리어 촬영 공간" loading="lazy" />
+            <div class="customer-hero-caption">잡지처럼 정돈된 촬영 준비<span>등록 후 현황에서 바로 확인</span></div>
+          </div>
+          <div class="customer-hero-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        </div>
+        <p class="sub">전달받은 계정으로 로그인하고 필요한 일정만 빠르게 접수하세요.</p>
 
         <div id="installAppRow" class="hidden" style="margin:0 0 14px;">
-          <button id="installAppBtn" type="button" class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#466ba9;color:#fff;border-color:#466ba9;font-weight:700;">
-            <span style="font-size:1.1em;">📲</span> 홈 화면에 앱으로 설치
+          <button id="installAppBtn" type="button" class="btn hidden" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#466ba9;color:#fff;border-color:#466ba9;font-weight:700;">
+            <span class="pwa-action-icon" aria-hidden="true"></span> 앱 설치
+          </button>
+          <button id="updateAppBtn" type="button" class="btn hidden">
+            <span class="pwa-action-icon pwa-action-icon--update" aria-hidden="true"></span> 업데이트
           </button>
           <p class="sub" style="margin:6px 0 0;font-size:0.8rem;">설치하면 매번 주소 입력 없이 앱처럼 바로 열 수 있어요.</p>
         </div>
@@ -420,7 +3907,7 @@
           <div class="tabs">
             <button id="loginTabBtn" class="active" type="button">로그인</button>
           </div>
-          <form id="loginForm" class="form">
+          <form id="loginForm" class="form" autocomplete="on">
             <div class="row"><span>🆔</span><input id="loginId" type="text" placeholder="아이디" required /></div>
             <div class="row"><span>🔑</span><input id="loginPassword" type="password" placeholder="비밀번호" required /></div>
             <button class="btn" type="submit">로그인</button>
@@ -430,69 +3917,59 @@
         <div id="scheduleBlock" class="hidden">
           <div class="top-line">
             <strong id="welcomeText"></strong>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button id="phoneMgrBtn" class="btn outline" type="button">📞 번호 추가</button>
-              <button id="myInfoBtn" class="btn outline" type="button">내 정보</button>
-              <button id="logoutBtn" class="btn outline" type="button">로그아웃</button>
-            </div>
-          </div>
-          <div id="myInfoBox" class="status-card hidden" style="margin-bottom:8px;"></div>
-          <div id="phoneMgrBox" class="status-card hidden" style="margin-bottom:8px;"></div>
-
-          <div class="tabs" style="margin-top: 4px;">
-            <button id="registerTabBtn" class="active" type="button">스케줄등록</button>
-            <button id="statusTabBtn" type="button">내등록현황</button>
           </div>
 
           <section id="registerSection">
             <div id="closedDatesNoticeBox" class="status-card" style="margin-bottom: 8px;"></div>
             <form id="customerScheduleForm" class="form">
-              <div class="triple">
-                <div class="row"><span>📅</span><select id="scheduleYear" required></select></div>
+              <div class="date-helper">
+                <span>예약 날짜/시간</span>
+                <strong id="selectedYearLabel"></strong>
+              </div>
+              <div class="triple date-quick">
+                <div class="row year-field" aria-hidden="true"><span>📅</span><select id="scheduleYear" required tabindex="-1"></select></div>
                 <div class="row"><span>📆</span><select id="scheduleMonth" required></select></div>
                 <div class="row"><span>🗓️</span><select id="scheduleDay" required></select></div>
-              </div>
-              <div class="time-label-row" style="display:flex;align-items:center;gap:6px;margin:6px 2px 4px;">
-                <span style="font-size:0.95rem;font-weight:800;color:#1f2940;">희망시간</span>
-                <span style="font-size:0.78rem;font-weight:700;color:#b91c1c;">(확정아님)</span>
-              </div>
-              <div class="pair">
                 <div class="row"><span>⏰</span><select id="scheduleHour" required></select></div>
-                <div class="row"><span>⏱️</span><select id="scheduleMinute" required></select></div>
               </div>
-              <p class="hint"><strong>희망시간</strong> | 선택 가능 시간은 9시~18시이며, 그 외 시간은 관리자에게 문의해주세요.<br />스케줄에 따라 시간은 변동될 수 있으며, 변동 시 안내 후 협의를 통해 시간을 다시 정합니다.</p>
+              <select id="scheduleMinute" required class="hidden" aria-hidden="true" tabindex="-1"></select>
+              <details class="time-guide">
+                <summary>시간 안내</summary>
+                <div class="time-guide-body">
+                  선택 가능 시간은 9시~18시이며, 그 외 시간은 관리자에게 문의해주세요.<br />
+                  스케줄에 따라 시간은 변동될 수 있고, 변동 시 안내 후 협의합니다.
+                </div>
+              </details>
+              <div class="option-line">
+                <div class="row" id="pyeongSection">
+                  <span>🏠</span>
+                  <select id="schedulePyeong" required>
+                    <option value="미선택">평수</option>
+                    <option value="45평이하">45평이하</option>
+                    <option value="46평이상">46평이상</option>
+                    <option value="100평이상">100평이상</option>
+                  </select>
+                </div>
+                <div class="row" id="compositionSection">
+                  <span>📷</span>
+                  <select id="scheduleComposition" required>
+                    <option value="미선택">촬영구성</option>
+                    <option value="사진만">사진만</option>
+                    <option value="사진영상 둘다">사진영상둘다</option>
+                  </select>
+                </div>
+              </div>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소" required /></div>
-              <div class="compose-wrap" id="pyeongSection">
-                <span class="compose-label">평수선택</span>
-                <div class="compose-buttons" id="pyeongButtons">
-                  <button class="compose-btn active" type="button" data-pyeong="미선택">미선택</button>
-                  <button class="compose-btn" type="button" data-pyeong="45평이하">45평이하</button>
-                  <button class="compose-btn" type="button" data-pyeong="46평이상">46평이상</button>
-                  <button class="compose-btn" type="button" data-pyeong="100평이상">100평이상</button>
-                </div>
-                <input id="schedulePyeong" type="hidden" value="미선택" />
-              </div>
-              <div class="pair">
-                <div class="row"><span>🔒</span><input id="scheduleJointCode" type="text" placeholder="공동현관 비번" /></div>
-                <div class="row"><span>🗝️</span><input id="scheduleDoorCode" type="text" placeholder="세대 비번" /></div>
-              </div>
-              <div class="row"><span>📝</span><input id="scheduleMemo" type="text" placeholder="메모사항" /></div>
-              <div class="compose-wrap" id="compositionSection">
-                <span class="compose-label">촬영구성</span>
-                <div class="compose-buttons" id="composeButtons">
-                  <button class="compose-btn active" type="button" data-compose="미선택">미선택</button>
-                  <button class="compose-btn" type="button" data-compose="사진만">사진만</button>
-                  <button class="compose-btn" type="button" data-compose="사진영상 둘다">사진영상둘다</button>
-                </div>
-                <input id="scheduleComposition" type="hidden" value="미선택" />
-                <p class="compose-price-guide">
-                  <strong>금액 산출 기준</strong><br />
+              <div class="row"><span>📝</span><input id="scheduleMemo" type="text" placeholder="현관/세대비번과 메모사항을 남겨주세요" /></div>
+              <details class="compose-price-guide">
+                <summary>금액 산출 기준 보기</summary>
+                <div class="compose-price-body">
                   45평 이하: 사진 15만원 / 영상 10만원<br />
                   46평 이상(45평 초과): 사진 +5만원, 영상 +3만원<br />
                   100평 이상: 사진 +5만원, 영상 +3만원 추가<br />
                   예) 사진영상둘다 기준: 25만원 → 33만원 → 41만원
-                </p>
-              </div>
+                </div>
+              </details>
               <p id="expectedPaymentText" class="hint"><strong>결제예정금액:</strong> -</p>
               <button class="btn" type="submit">스케줄 등록</button>
               <p class="hint">스케줄 등록 후에는 <strong>내등록현황</strong> 탭에서 확인할 수 있습니다.</p>
@@ -507,6 +3984,20 @@
             </div>
             <div id="statusList" class="status-list"></div>
           </section>
+
+          <section id="infoSection" class="hidden">
+            <div class="info-actions">
+              <button id="logoutBtn" class="btn outline small" type="button">로그아웃</button>
+            </div>
+            <div id="myInfoBox" class="status-card hidden" style="margin-bottom:8px;"></div>
+            <div id="phoneMgrBox" class="status-card hidden" style="margin-bottom:8px;"></div>
+          </section>
+
+          <nav class="app-bottom-nav" aria-label="고객 메뉴">
+            <button id="registerTabBtn" class="active" type="button"><span class="bottom-nav-icon" aria-hidden="true">＋</span><span class="bottom-nav-label">스케줄등록</span></button>
+            <button id="statusTabBtn" type="button"><span class="bottom-nav-icon" aria-hidden="true">☰</span><span class="bottom-nav-label">내등록현황</span></button>
+            <button id="infoTabBtn" type="button"><span class="bottom-nav-icon" aria-hidden="true">○</span><span class="bottom-nav-label">내정보</span></button>
+          </nav>
         </div>
       </div>
     </main>
@@ -1187,28 +4678,10 @@
         return `${h}:${m}:${s}`;
       }
       function setSyncStatus(text, tone = "info") {
-        if (!syncStatusBadgeEl) {
-          syncStatusBadgeEl = document.createElement("div");
-          syncStatusBadgeEl.style.position = "fixed";
-          syncStatusBadgeEl.style.right = "14px";
-          syncStatusBadgeEl.style.bottom = "14px";
-          syncStatusBadgeEl.style.zIndex = "99999";
-          syncStatusBadgeEl.style.padding = "8px 10px";
-          syncStatusBadgeEl.style.borderRadius = "10px";
-          syncStatusBadgeEl.style.fontSize = "12px";
-          syncStatusBadgeEl.style.fontWeight = "700";
-          syncStatusBadgeEl.style.color = "#fff";
-          syncStatusBadgeEl.style.boxShadow = "0 6px 18px rgba(0,0,0,0.2)";
-          document.body.appendChild(syncStatusBadgeEl);
+        if (syncStatusBadgeEl) {
+          syncStatusBadgeEl.remove();
+          syncStatusBadgeEl = null;
         }
-        const toneMap = {
-          ok: "#166534",
-          warn: "#b45309",
-          error: "#b91c1c",
-          info: "#1d4ed8"
-        };
-        syncStatusBadgeEl.style.background = toneMap[tone] || toneMap.info;
-        syncStatusBadgeEl.textContent = `동기화: ${text}`;
       }
       async function fetchRemoteStateSnapshot() {
         if (USE_SUPABASE_SYNC) {
@@ -1545,6 +5018,8 @@
       const loginFormEl = document.getElementById("loginForm");
       const authBlockEl = document.getElementById("authBlock");
       const scheduleBlockEl = document.getElementById("scheduleBlock");
+      const topMenuBtnEl = document.getElementById("topMenuBtn");
+      const sideMenuEl = document.getElementById("sideMenu");
       const welcomeTextEl = document.getElementById("welcomeText");
       const myInfoBtnEl = document.getElementById("myInfoBtn");
       const myInfoBoxEl = document.getElementById("myInfoBox");
@@ -1554,8 +5029,11 @@
 
       const registerTabBtnEl = document.getElementById("registerTabBtn");
       const statusTabBtnEl = document.getElementById("statusTabBtn");
+      const infoTabBtnEl = document.getElementById("infoTabBtn");
+      const appBottomNavEl = document.querySelector("nav.app-bottom-nav");
       const registerSectionEl = document.getElementById("registerSection");
       const statusSectionEl = document.getElementById("statusSection");
+      const infoSectionEl = document.getElementById("infoSection");
       const statusListEl = document.getElementById("statusList");
       const orderHistoryBtnEl = document.getElementById("orderHistoryBtn");
       const orderHistoryModalEl = document.getElementById("orderHistoryModal");
@@ -1565,7 +5043,15 @@
 
       const customerScheduleFormEl = document.getElementById("customerScheduleForm");
       const customerScheduleSubmitBtnEl = customerScheduleFormEl?.querySelector('button[type="submit"]') || null;
+
+      function mountFixedCustomerBottomNav() {
+        if (!appBottomNavEl || appBottomNavEl.parentElement === document.body) return;
+        appBottomNavEl.dataset.fixedDock = "true";
+        document.body.appendChild(appBottomNavEl);
+      }
+      mountFixedCustomerBottomNav();
       const scheduleYearEl = document.getElementById("scheduleYear");
+      const selectedYearLabelEl = document.getElementById("selectedYearLabel");
       const scheduleMonthEl = document.getElementById("scheduleMonth");
       const scheduleDayEl = document.getElementById("scheduleDay");
       const scheduleHourEl = document.getElementById("scheduleHour");
@@ -3353,12 +6839,18 @@
             .join(", ")
           : "마감일 없음");
         closedDatesNoticeBoxEl.innerHTML = `
-          <div style="font-weight: 700; margin-bottom: 4px;">촬영예약 마감일</div>
-          <div style="font-size: 0.9rem; line-height: 1.5;">
-            이번달(${thisYear}년 ${thisMonth}월): ${formatDays(thisMonthClosed)}<br />
-            다음달(${nextYear}년 ${nextMonth}월): ${formatDays(nextMonthClosed)}<br />
-            <span class="danger">스케줄이 꽉차서 이날짜에는 예약이 어렵습니다. 이날짜에 반드시 촬영해야하는경우 관리자에게 문의하세요.</span>
-          </div>
+          <details class="closed-notice">
+            <summary>
+              <span>
+                <span class="closed-notice-title">촬영예약 마감일</span>
+                <span class="closed-notice-month">이번달(${thisYear}년 ${thisMonth}월): ${formatDays(thisMonthClosed)}</span>
+              </span>
+            </summary>
+            <div class="closed-notice-body">
+              다음달(${nextYear}년 ${nextMonth}월): ${formatDays(nextMonthClosed)}<br />
+              <span class="danger">스케줄이 꽉차서 이날짜에는 예약이 어렵습니다. 이날짜에 반드시 촬영해야하는경우 관리자에게 문의하세요.</span>
+            </div>
+          </details>
         `;
       }
 
@@ -3370,7 +6862,7 @@
         updateExpectedPaymentText();
       }
       function setSelectedPyeong(value, rootEl = pyeongButtonsEl, hiddenInputEl = schedulePyeongEl) {
-        hiddenInputEl.value = value;
+        if (hiddenInputEl) hiddenInputEl.value = value;
         rootEl?.querySelectorAll("button[data-pyeong]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.pyeong === value);
         });
@@ -3384,13 +6876,27 @@
 
       function switchCustomerTab(tab) {
         const isRegister = tab === "register";
-        currentCustomerTab = isRegister ? "register" : "status";
+        const isStatus = tab === "status";
+        const isInfo = tab === "info";
+        currentCustomerTab = isInfo ? "info" : isStatus ? "status" : "register";
         registerTabBtnEl.classList.toggle("active", isRegister);
-        statusTabBtnEl.classList.toggle("active", !isRegister);
+        statusTabBtnEl.classList.toggle("active", isStatus);
+        infoTabBtnEl?.classList.toggle("active", isInfo);
+        sideMenuEl?.querySelectorAll(".side-menu-item[data-tab]").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.tab === currentCustomerTab);
+        });
         registerSectionEl.classList.toggle("hidden", !isRegister);
-        statusSectionEl.classList.toggle("hidden", isRegister);
+        statusSectionEl.classList.toggle("hidden", !isStatus);
+        infoSectionEl?.classList.toggle("hidden", !isInfo);
         if (isRegister) renderClosedDatesNotice();
-        if (!isRegister) renderStatusList();
+        if (isStatus) renderStatusList();
+        if (isInfo) {
+          const user = getCurrentSessionUser();
+          myInfoOpen = true;
+          phoneMgrOpen = true;
+          renderMyInfo(user);
+          renderPhoneManager(user);
+        }
       }
 
       function getCurrentSessionUser() {
@@ -3509,6 +7015,7 @@
         const isLoggedIn = Boolean(user);
         authBlockEl.classList.toggle("hidden", isLoggedIn);
         scheduleBlockEl.classList.toggle("hidden", !isLoggedIn);
+        appBottomNavEl?.classList.toggle("hidden", !isLoggedIn);
         myInfoBtnEl?.classList.toggle("hidden", !isLoggedIn);
         phoneMgrBtnEl?.classList.toggle("hidden", !isLoggedIn);
         if (!isLoggedIn) {
@@ -3608,34 +7115,65 @@
           .join("") + '<option value="any-time">시간상관없음</option>';
         scheduleMinuteEl.innerHTML = `
           <option value="exact">정시</option>
-          <option value="before">이전</option>
-          <option value="after">이후</option>
           <option value="any">시간상관없음</option>
-          <option value="other">그외시간</option>
         `;
         scheduleHourEl.value = "09";
         scheduleMinuteEl.value = "exact";
         setSelectedPyeong("미선택");
 
         renderDayOptions(currentYearValue, currentMonth, currentDay);
+        syncYearFromMonthDay();
       }
 
-      function renderRegisterMonthOptions(selectedYear, preferredMonth) {
+      function updateSelectedYearLabel() {
+        if (!selectedYearLabelEl || !scheduleYearEl) return;
+        const year = Number(scheduleYearEl.value) || new Date().getFullYear();
+        const currentYearValue = new Date().getFullYear();
+        selectedYearLabelEl.textContent = year === currentYearValue ? `${String(year).slice(2)}년 올해 기준` : `${String(year).slice(2)}년 예약`;
+      }
+
+      function getAutoScheduleYear(monthValue, dayValue) {
         const now = new Date();
         const currentYearValue = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-        const year = Number(selectedYear);
-        const startMonth = year === currentYearValue ? currentMonth : 1;
-        scheduleMonthEl.innerHTML = Array.from({ length: 12 - startMonth + 1 }, (_, idx) => startMonth + idx)
+        const currentDay = now.getDate();
+        const month = Number(monthValue) || currentMonth;
+        const day = Number(dayValue) || 1;
+        return month < currentMonth || (month === currentMonth && day < currentDay)
+          ? currentYearValue + 1
+          : currentYearValue;
+      }
+
+      function ensureScheduleYearOption(year) {
+        if (!scheduleYearEl) return;
+        const value = String(year);
+        if ([...scheduleYearEl.options].some((option) => option.value === value)) return;
+        scheduleYearEl.insertAdjacentHTML("beforeend", `<option value="${value}">${value}년</option>`);
+      }
+
+      function syncYearFromMonthDay() {
+        if (!scheduleYearEl || !scheduleMonthEl || !scheduleDayEl) return;
+        const year = getAutoScheduleYear(scheduleMonthEl.value, scheduleDayEl.value);
+        ensureScheduleYearOption(year);
+        scheduleYearEl.value = String(year);
+        updateSelectedYearLabel();
+      }
+
+      function renderRegisterMonthOptions(selectedYear, preferredMonth) {
+        scheduleMonthEl.innerHTML = Array.from({ length: 12 }, (_, idx) => idx + 1)
           .map((month) => `<option value="${month}">${month}월</option>`)
           .join("");
         const safePreferred = Number(preferredMonth);
-        const nextMonth = Number.isNaN(safePreferred) ? startMonth : Math.max(safePreferred, startMonth);
+        const nextMonth = Number.isNaN(safePreferred) ? new Date().getMonth() + 1 : Math.min(Math.max(safePreferred, 1), 12);
         scheduleMonthEl.value = String(nextMonth);
+        syncYearFromMonthDay();
       }
 
       function renderDayOptions(year, month, preferredDay) {
-        const selectedYear = Number(year);
+        const selectedYear = getAutoScheduleYear(month, preferredDay);
+        ensureScheduleYearOption(selectedYear);
+        scheduleYearEl.value = String(selectedYear);
+        updateSelectedYearLabel();
         const selectedMonth = Number(month);
         const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
         const todayKey = getTodayDateKey();
@@ -4016,7 +7554,7 @@
             info.work_url && String(info.work_url).trim().replace(/^https?:\/\//i, "").length > 0;
           const workRow =
             hasWork || metaExtra
-              ? `<div class="customer-site-work-link"><span class="helper" style="font-weight:800;margin-right:2px;color:#15803d;">작업링크</span>${
+              ? `<div class="customer-site-work-link"><span class="helper" style="font-weight:800;margin-right:2px;">작업링크</span>${
                   hasWork
                     ? `<a href="${escapeHtml(String(info.work_url).trim())}" target="_blank" rel="noopener noreferrer">납품 폴더 열기 ↗</a>`
                     : ""
@@ -4043,9 +7581,9 @@
         const sessionUserForDrive = getCurrentSessionUser();
         const customerDriveFolderUrl = normalize(sessionUserForDrive?.companyDriveFolderUrl || "");
         const customerDriveBanner =
-          `<div class="status-card" style="margin-bottom:12px;border-left:4px solid #2563eb;background:#eef4ff;"><div style="font-weight:800;margin-bottom:4px;color:#1e3a5f;">촬영한 현장 사진 및 영상 파일 폴더</div>` +
+          `<div class="status-card customer-drive-banner" style="margin-bottom:12px;"><div class="customer-drive-banner-title" style="font-weight:800;margin-bottom:4px;">촬영한 현장 사진 및 영상 파일 폴더</div>` +
           (customerDriveFolderUrl
-            ? `<div><a href="${escapeHtml(customerDriveFolderUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;font-weight:700;">폴더 열기 ↗</a></div>`
+            ? `<div><a href="${escapeHtml(customerDriveFolderUrl)}" target="_blank" rel="noopener noreferrer" style="font-weight:700;">폴더 열기 ↗</a></div>`
             : `<div style="font-size:13px;color:#92400e;">아직 폴더가 연결되지 않았거나 동기화 전입니다. 잠시 후 새로고침하거나 로그아웃 후 다시 로그인해 보세요.</div>`) +
           `</div>`;
 
@@ -4197,9 +7735,9 @@
           ? pastSchedules.map((item) => renderScheduleCard(item)).join("")
           : '<div class="status-card">과거기록이 없습니다.</div>';
         statusListEl.innerHTML = `${customerDriveBanner}
-          <div class="status-card" style="font-weight:700;">촬영예정 / 오늘촬영</div>
+          <div class="status-card customer-status-section-title" style="font-weight:700;">촬영예정 / 오늘촬영</div>
           ${upcomingMarkup}
-          <div class="status-card" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
+          <div class="status-card customer-status-section-title" style="font-weight:700; margin-top: 8px;">과거기록보기</div>
           ${pastMarkup}
         `;
       }
@@ -4238,8 +7776,8 @@
             <div class="status-card">보류: <strong>${holdCount}건</strong></div>
           </div>
           <div class="status-card" style="margin-top:8px; line-height:1.65;">
-            <div><strong>내가 입금해야 할 금액: <span style="color:#1d9f57;">${formatWonText(unpaidTotalAmount)}</span></strong></div>
-            <div><strong>적립된금액(보류): <span style="color:#365ea8;">${formatWonText(holdAccruedAmount)}</span></strong></div>
+            <div><strong>내가 입금해야 할 금액: <span class="payment-summary-amount">${formatWonText(unpaidTotalAmount)}</span></strong></div>
+            <div><strong>적립된금액(보류): <span class="payment-summary-hold">${formatWonText(holdAccruedAmount)}</span></strong></div>
             <div class="hint"><strong>계좌번호:</strong> 농협 3021511169151 김진영</div>
             <div style="font-size:0.9rem; margin-top:2px;">세금계산서 발행시: ${formatWonText(totalWithVat)} (10% 추가)</div>
             <div class="hint">입금후 관리자에게 세금계산서를 요청해주세요.</div>
@@ -4612,6 +8150,7 @@
             }
           }
 
+          syncYearFromMonthDay();
           const year = Number(scheduleYearEl.value);
           const month = Number(scheduleMonthEl.value);
           const day = Number(scheduleDayEl.value);
@@ -4719,8 +8258,8 @@
             companyCode: normalize(effectiveCompanyCode),
             place,
             pyeong: _pyeong,
-            jointCode: normalize(document.getElementById("scheduleJointCode").value),
-            doorCode: normalize(document.getElementById("scheduleDoorCode").value),
+            jointCode: "",
+            doorCode: "",
             memo: _memo,
             composition: isLiteCustomerMode ? getShopickLiteCompositionString(user) : scheduleCompositionEl.value || "사진만",
             paymentStatus: "미입금",
@@ -5075,8 +8614,30 @@
       });
 
       loginTabBtnEl.addEventListener("click", () => switchAuthTab("login"));
+      topMenuBtnEl?.addEventListener("click", () => {
+        if (!sideMenuEl) return;
+        sideMenuEl.classList.remove("hidden");
+        requestAnimationFrame(() => sideMenuEl.classList.add("open"));
+        sideMenuEl.setAttribute("aria-hidden", "false");
+      });
+      sideMenuEl?.addEventListener("click", (event) => {
+        const closeMenu = () => {
+          sideMenuEl.classList.remove("open");
+          sideMenuEl.setAttribute("aria-hidden", "true");
+          setTimeout(() => sideMenuEl.classList.add("hidden"), 220);
+        };
+        if (event.target.closest("[data-close-menu]")) {
+          closeMenu();
+          return;
+        }
+        const button = event.target.closest(".side-menu-item[data-tab]");
+        if (!button) return;
+        switchCustomerTab(button.dataset.tab || "register");
+        closeMenu();
+      });
       registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
       statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
+      infoTabBtnEl?.addEventListener("click", () => switchCustomerTab("info"));
       orderHistoryBtnEl.addEventListener("click", () => {
         renderOrderHistorySummary();
         orderHistoryModalEl.classList.remove("hidden");
@@ -5089,7 +8650,7 @@
           orderHistoryModalEl.classList.add("hidden");
         }
       });
-      composeButtonsEl.addEventListener("click", (event) => {
+      composeButtonsEl?.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-compose]");
         if (!button) return;
         setSelectedComposition(button.dataset.compose || "미선택");
@@ -5099,29 +8660,31 @@
         if (!button) return;
         setSelectedPyeong(button.dataset.pyeong || "미선택");
       });
-      scheduleMinuteEl?.addEventListener("change", () => {
-        const mode = normalizeTimePreference(scheduleMinuteEl.value);
-        if (mode === "any" || mode === "other") {
-          scheduleHourEl.value = "any-time";
-          return;
-        }
-        if (scheduleHourEl.value === "any-time") {
-          scheduleHourEl.value = "09";
-        }
+      schedulePyeongEl?.addEventListener("change", () => {
+        updateExpectedPaymentText();
+      });
+      scheduleCompositionEl?.addEventListener("change", () => {
+        updateExpectedPaymentText();
       });
       scheduleHourEl?.addEventListener("change", () => {
         if (scheduleHourEl.value === "any-time") {
           scheduleMinuteEl.value = "any";
+          return;
         }
+        scheduleMinuteEl.value = "exact";
       });
       scheduleYearEl.addEventListener("change", () => {
         renderRegisterMonthOptions(scheduleYearEl.value, scheduleMonthEl.value);
         renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
       });
       scheduleMonthEl.addEventListener("change", () => {
+        syncYearFromMonthDay();
         renderDayOptions(scheduleYearEl.value, scheduleMonthEl.value, scheduleDayEl.value);
       });
-      scheduleDayEl.addEventListener("change", updateSelectedDayColor);
+      scheduleDayEl.addEventListener("change", () => {
+        syncYearFromMonthDay();
+        updateSelectedDayColor();
+      });
       updateExpectedPaymentText();
 
       function refreshDaySelectorsAndNotice() {
@@ -5159,55 +8722,136 @@
       });
     </script>
     <script>
-      // ── PWA(앱 설치) ───────────────────────────────────────────────
+      // ── PWA(앱 설치/업데이트) ─────────────────────────────────────
       (function () {
         "use strict";
         var params = new URLSearchParams(location.search);
         var isLite = params.get("mode") === "lite";
         var inIframe = window.self !== window.top;
+        var appMode = isLite ? "shopick" : "inlog";
 
         // 모드별 매니페스트(인로그/쇼픽)
         var mlink = document.querySelector('link[rel="manifest"]');
         if (mlink && isLite) mlink.href = "./app-shopick.webmanifest";
+        var themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute("content", isLite ? "#2563eb" : "#111816");
+        var iconLink = document.querySelector('link[rel="icon"]');
+        if (iconLink) iconLink.href = isLite ? "./app-shopick-icon-192.png" : "./app-inlog-icon-192.png";
+        var appleIconLink = document.querySelector('link[rel="apple-touch-icon"]');
+        if (appleIconLink) appleIconLink.href = isLite ? "./app-shopick-apple-touch.png" : "./app-inlog-apple-touch.png";
 
         // 서비스워커 등록(설치 자격). 임베드(iframe) 안에서는 생략.
+        var swRegistrationPromise = Promise.resolve(null);
         if ("serviceWorker" in navigator && !inIframe) {
-          window.addEventListener("load", function () {
-            navigator.serviceWorker.register("./app-sw.js").catch(function (e) {
+          swRegistrationPromise = navigator.serviceWorker.register("./app-sw.js").catch(function (e) {
               console.warn("[PWA] SW 등록 실패", e);
+              return null;
             });
-          });
         }
 
         var installRow = document.getElementById("installAppRow");
         var installBtn = document.getElementById("installAppBtn");
-        if (!installRow || !installBtn || inIframe) return;
+        var updateBtn = document.getElementById("updateAppBtn");
+        if (!installRow || !installBtn || !updateBtn || inIframe) return;
+        if (installRow.parentElement !== document.body) {
+          installRow.dataset.pwaDock = "true";
+          document.body.appendChild(installRow);
+        }
+        var installDismissKey = "scheduleSiteCustomerPwaInstalled:" + appMode;
+        var releaseSeenKey = "scheduleSiteCustomerReleaseSeen:" + appMode;
+        var latestReleaseSignature = "";
+
+        function setInstallVisible(visible) {
+          installBtn.classList.toggle("hidden", !visible);
+          syncUtilityRow();
+        }
+
+        function setUpdateVisible(visible) {
+          updateBtn.classList.toggle("hidden", !visible);
+          syncUtilityRow();
+        }
+
+        function syncUtilityRow() {
+          var hasVisibleButton = !installBtn.classList.contains("hidden") || !updateBtn.classList.contains("hidden");
+          installRow.classList.toggle("hidden", !hasVisibleButton);
+        }
 
         var standalone =
           window.matchMedia("(display-mode: standalone)").matches ||
           window.navigator.standalone === true;
-        if (standalone) return; // 이미 앱으로 실행 중
+        if (standalone) {
+          try { localStorage.setItem(installDismissKey, "1"); } catch (_) {}
+          setInstallVisible(false);
+        }
+        try { if (localStorage.getItem(installDismissKey) === "1") setInstallVisible(false); } catch (_) {}
 
         var ua = navigator.userAgent || "";
         var isIOS =
           /iphone|ipad|ipod/i.test(ua) ||
           (/Macintosh/.test(ua) && typeof document.ontouchend !== "undefined");
+        var isAndroid = /android/i.test(ua);
+        // 카카오톡 등 인앱(WebView) 브라우저 — 여기선 PWA 설치가 원천 불가 → 외부 브라우저로 유도.
+        var isKakaoInApp = /KAKAOTALK/i.test(ua);
+        var isInAppBrowser =
+          isKakaoInApp ||
+          /\b(NAVER|Instagram|FBAN|FBAV|FB_IAB|Line\/|DaumApps)\b/i.test(ua) ||
+          /; wv\)/i.test(ua);
+        function openInExternalBrowser() {
+          var url = location.href;
+          if (isKakaoInApp) {
+            // 카카오톡: iOS·안드로이드 모두 기본 브라우저로 열림
+            location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(url);
+            return true;
+          }
+          if (isAndroid) {
+            // 안드로이드 기타 인앱: 크롬으로 강제 오픈
+            location.href =
+              "intent://" + url.replace(/^https?:\/\//, "") + "#Intent;scheme=https;package=com.android.chrome;end";
+            return true;
+          }
+          return false; // iOS 비카카오 인앱 → 사파리 수동 열기 안내 필요
+        }
         var deferredPrompt = null;
 
         window.addEventListener("beforeinstallprompt", function (e) {
           e.preventDefault();
           deferredPrompt = e;
-          installRow.classList.remove("hidden");
+          try {
+            if (localStorage.getItem(installDismissKey) !== "1" && !standalone) setInstallVisible(true);
+          } catch (_) {
+            if (!standalone) setInstallVisible(true);
+          }
         });
         window.addEventListener("appinstalled", function () {
-          installRow.classList.add("hidden");
+          try { localStorage.setItem(installDismissKey, "1"); } catch (_) {}
+          setInstallVisible(false);
           deferredPrompt = null;
         });
 
         // iOS 사파리는 beforeinstallprompt 없음 → 버튼 항상 표시(누르면 안내).
-        if (isIOS) installRow.classList.remove("hidden");
+        if (isIOS && !standalone) setInstallVisible(true);
+
+        // 카카오톡 등 인앱 브라우저 → 설치 버튼을 보이고, 누르면 기본 브라우저로 열어 설치 유도.
+        if (isInAppBrowser && !standalone) {
+          setInstallVisible(true);
+          installBtn.innerHTML =
+            '<span class="pwa-action-icon" aria-hidden="true"></span> 브라우저로 열어 앱 설치';
+          var inAppHint = installRow.querySelector(".sub");
+          if (inAppHint)
+            inAppHint.textContent = isKakaoInApp
+              ? "카카오톡 안에서는 설치가 안 돼요. 버튼을 누르면 기본 브라우저로 열려요 — 거기서 설치하시면 됩니다."
+              : "이 앱 화면에서는 설치가 안 돼요. 버튼을 눌러 기본 브라우저(크롬·사파리)로 열어주세요.";
+        }
 
         installBtn.addEventListener("click", function () {
+          if (isInAppBrowser) {
+            if (openInExternalBrowser()) return;
+            // iOS 비카카오 인앱(인스타그램 등): 사파리로 직접 열도록 안내
+            alert(
+              "화면의 메뉴(•••)를 눌러 ‘Safari로 열기’ 또는 ‘다른 브라우저로 열기’를 선택해주세요.\n그 브라우저에서 앱을 설치할 수 있어요."
+            );
+            return;
+          }
           if (deferredPrompt) {
             deferredPrompt.prompt();
             if (deferredPrompt.userChoice && deferredPrompt.userChoice.finally) {
@@ -5227,12 +8871,71 @@
           );
         });
 
+        function releaseSignature(meta) {
+          if (!meta || !meta.ok) return "";
+          return String(meta.gitCommitShaFull || meta.gitCommitShaShort || meta.serverRevisionStartedAtIsoUtc || "").trim();
+        }
+
+        function checkForAppUpdate() {
+          fetch("./api/site-release-meta?t=" + Date.now(), { cache: "no-store" })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (meta) {
+              var sig = releaseSignature(meta);
+              if (!sig) return;
+              latestReleaseSignature = sig;
+              var seen = "";
+              try { seen = localStorage.getItem(releaseSeenKey) || ""; } catch (_) {}
+              if (!seen) {
+                try { localStorage.setItem(releaseSeenKey, sig); } catch (_) {}
+                return;
+              }
+              if (seen !== sig) setUpdateVisible(true);
+            })
+            .catch(function () {});
+        }
+
+        updateBtn.addEventListener("click", function () {
+          updateBtn.disabled = true;
+          updateBtn.textContent = "업데이트 중";
+          var jobs = [];
+          try {
+            if (window.caches) {
+              jobs.push(caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+              }));
+            }
+          } catch (_) {}
+          jobs.push(
+            swRegistrationPromise.then(function (reg) {
+              if (!reg) return null;
+              return reg.update().then(function () {
+                var worker = reg.waiting || reg.installing || reg.active;
+                if (worker) worker.postMessage({ type: "SKIP_WAITING" });
+              }).catch(function () {});
+            })
+          );
+          Promise.all(jobs).finally(function () {
+            try {
+              if (latestReleaseSignature) localStorage.setItem(releaseSeenKey, latestReleaseSignature);
+            } catch (_) {}
+            var nextUrl = new URL(location.href);
+            nextUrl.searchParams.set("updated", Date.now().toString());
+            location.replace(nextUrl.toString());
+          });
+        });
+
+        window.addEventListener("load", function () {
+          checkForAppUpdate();
+          setInterval(checkForAppUpdate, 5 * 60 * 1000);
+        });
+
         var iosClose = document.getElementById("iosInstallClose");
         if (iosClose)
           iosClose.addEventListener("click", function () {
             var m = document.getElementById("iosInstallModal");
             if (m) m.classList.add("hidden");
           });
+        syncUtilityRow();
       })();
     </script>
   </body>

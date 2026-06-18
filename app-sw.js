@@ -6,6 +6,11 @@ self.addEventListener("install", function () {
 self.addEventListener("activate", function (event) {
   event.waitUntil(self.clients.claim());
 });
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 self.addEventListener("fetch", function (event) {
   // 네트워크 우선(캐시 미사용). 핸들러 존재 자체가 설치 자격 요건.
   event.respondWith(
