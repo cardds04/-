@@ -9467,7 +9467,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (isNativeApp()) {
       try {
         const P = (window.Capacitor && window.Capacitor.Plugins) || {};
-        const Filesystem = P.Filesystem, Share = P.Share;
+        const Filesystem = P.Filesystem, Share = P.Share, Gallery = P.GallerySaver;
         if (!Filesystem) throw new Error("Filesystem 플러그인 없음");
         const mb = Math.max(1, Math.round(blob.size / 1048576));
         try { toast("💾 폰에 저장 중… " + mb + "MB"); } catch (_) {}
@@ -9488,15 +9488,23 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
           }
         }
         if (!uri) throw new Error("저장 경로를 받지 못했어요");
-        // 공유 시트(저장/보내기) — 에러를 삼키지 않고 사용자에게 보여줌(취소는 정상 처리)
+        // 1) 📥 갤러리에 직접 저장(설치형 앱 네이티브) — 이게 사장님이 원하던 '폰에 저장'
+        if (Gallery && Gallery.saveVideo) {
+          try {
+            await Gallery.saveVideo({ path: uri, fileName: filename });
+            try { toast("✅ 갤러리에 저장됐어요! (동영상 → '이지숏폼' 앨범)"); } catch (_) {}
+            return true;
+          } catch (ge) { console.warn("[gallery save]", ge); }   // 실패하면 아래 공유로 폴백
+        }
+        // 2) 폴백: 공유 시트(갤러리 저장 기능이 없거나 실패 — 구버전 앱 등). 취소는 정상 처리.
         if (Share && Share.share) {
           try {
-            await Share.share({ title: filename, text: "이지숏폼 영상", url: uri, dialogTitle: "갤러리 저장 또는 보내기" });
+            await Share.share({ title: filename, text: "이지숏폼 영상", url: uri, dialogTitle: "저장 또는 보내기" });
           } catch (se) {
             const sm = (se && se.message) || String(se);
-            if (!/cancel|abort|dismiss/i.test(sm)) { try { alert("저장/보내기 창을 여는 데 실패했어요:\n" + sm + "\n\n(영상은 앱 폴더에 있어요)"); } catch (_) {} }
+            if (!/cancel|abort|dismiss/i.test(sm)) { try { alert("저장/보내기 창을 여는 데 실패했어요:\n" + sm); } catch (_) {} }
           }
-        } else { try { alert("저장은 됐는데 '공유' 기능을 못 찾았어요: " + filename); } catch (_) {} }
+        } else { try { alert("저장은 됐는데 저장 기능을 못 찾았어요: " + filename); } catch (_) {} }
         return true;
       } catch (e) {
         console.warn("[native save]", e);
