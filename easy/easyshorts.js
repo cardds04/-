@@ -1046,7 +1046,7 @@
     if (btn) btn.dataset.base = baseTxt;   // 원래 라벨 기억
     let ok = false;
     // 📱 폰에서 직접 내보낼 땐 1080p·16Mbps 로 제한 → 인코딩 빨라지고 파일도 작아짐(숏폼 표준). 데스크탑은 원본 그대로.
-    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 16000000 } : {};
+    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 10000000 } : {};
     if ((typeof VideoEncoder !== "undefined") && window.EasyMux) {
       try { if (await exportOffline("mp4", exOpts)) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
       if (!ok) { try { if (await exportOffline("webm", exOpts)) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
@@ -1109,6 +1109,9 @@
         const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) });
         venc.encode(vf, { keyFrame: i % FPS === 0 });
         vf.close();
+        // 🧠 백프레셔 — 인코더가 폰 속도를 못 따라가면 대기 프레임(비압축, 장당 수 MB)이 쌓여 OOM(앱 꺼짐).
+        //    큐가 빠질 때까지 잠깐 기다려 메모리 상한을 둠 → 긴 영상도 안 터짐.
+        if (venc.encodeQueueSize > 6) { while (venc.encodeQueueSize > 3) { await new Promise((r) => setTimeout(r, 6)); } }
         if (i % 15 === 0) { if (btn) btn.textContent = `⬇ 다운로드 중… ${Math.round(i / totalFrames * 100)}%`; if (opts.onProgress) opts.onProgress(i / totalFrames); await new Promise((r) => setTimeout(r, 0)); }
       }
       await venc.flush(); venc.close();
@@ -9387,9 +9390,22 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         const P = (window.Capacitor && window.Capacitor.Plugins) || {};
         const Filesystem = P.Filesystem, Share = P.Share;
         if (!Filesystem) throw new Error("Filesystem 플러그인 없음");
-        const data = await blobToBase64(blob);
-        const w = await Filesystem.writeFile({ path: filename, data, directory: "CACHE", recursive: true });
-        const uri = (w && w.uri) || "";
+        // 큰 영상은 통째로 base64(≈1.33배 메모리)하면 저장 단계에서 OOM → 3MB 조각으로 나눠 write→append.
+        const dir = "CACHE", CHUNK = 3 * 1024 * 1024;
+        let uri = "";
+        if (blob.size <= CHUNK) {
+          const w = await Filesystem.writeFile({ path: filename, data: await blobToBase64(blob), directory: dir, recursive: true });
+          uri = (w && w.uri) || "";
+        } else {
+          let off = 0, first = true;
+          while (off < blob.size) {
+            const data = await blobToBase64(blob.slice(off, off + CHUNK));
+            if (first) { const w = await Filesystem.writeFile({ path: filename, data, directory: dir, recursive: true }); uri = (w && w.uri) || ""; first = false; }
+            else { await Filesystem.appendFile({ path: filename, data, directory: dir }); }
+            off += CHUNK;
+            await new Promise((r) => setTimeout(r, 0));   // 조각 사이 메모리 회수 + UI 양보
+          }
+        }
         if (Share && uri) { try { await Share.share({ title: filename, text: "이지숏폼에서 만든 영상", url: uri, dialogTitle: "영상 저장·공유" }); } catch (_) {} }
         else { try { toast("저장됨: " + filename); } catch (_) {} }
         return true;
