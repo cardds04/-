@@ -2777,28 +2777,44 @@
   function blobToPreviewJpeg(blob, kind, maxW) {
     return new Promise((resolve) => {
       maxW = maxW || 540;
-      const draw = (src, w, h) => {
-        if (!w || !h) { resolve(null); return; }
+      const drawTo = (src, w, h) => {
+        if (!w || !h) return null;
         const scale = Math.min(1, maxW / w), cw = Math.round(w * scale), ch = Math.round(h * scale);
         const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
-        cv.getContext("2d").drawImage(src, 0, 0, cw, ch);
-        cv.toBlob((b) => resolve(b), "image/jpeg", 0.82);
+        const cx = cv.getContext("2d");
+        try { cx.drawImage(src, 0, 0, cw, ch); } catch (_) { return null; }
+        return { cv, cx, cw, ch };
       };
       try {
         if (kind === "video") {
-          const v = document.createElement("video"); v.muted = true; v.playsInline = true;
-          let drew = false;
-          const grab = () => { if (drew) return; drew = true; try { draw(v, v.videoWidth, v.videoHeight); } catch (_) { resolve(null); } };
-          const to = setTimeout(grab, 6000);   // 안전장치
-          v.onloadeddata = () => {   // 첫 프레임은 검정인 경우가 많아 살짝 뒤(≈10%, 최대 0.5초)로 탐색
-            try { const t = Math.min(0.5, (isFinite(v.duration) ? v.duration : 1) * 0.1); if (t > 0.05) { v.currentTime = t; } else { clearTimeout(to); grab(); } }
-            catch (_) { clearTimeout(to); grab(); }
+          // 📱 모바일은 seek 직후 프레임이 아직 디코드 안 돼 검정이 잡힘 → 음소거 재생으로 디코드 강제 +
+          //    requestVideoFrameCallback 로 '실제 그려진 프레임'에 캡처 + 검정이면 다음 프레임으로 재시도.
+          const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
+          let done = false, tries = 0, to = null;
+          const finish = (b) => { if (done) return; done = true; if (to) clearTimeout(to); try { v.pause(); } catch (_) {} try { URL.revokeObjectURL(v.src); } catch (_) {} resolve(b); };
+          const tryGrab = () => {
+            if (done) return;
+            const r = drawTo(v, v.videoWidth, v.videoHeight);
+            if (!r) { schedule(); return; }
+            let avg = 255;
+            try { const sd = r.cx.getImageData(0, 0, Math.min(16, r.cw), Math.min(16, r.ch)).data; let s = 0, n = 0; for (let i = 0; i < sd.length; i += 4) { s += sd[i] + sd[i + 1] + sd[i + 2]; n++; } avg = n ? s / (n * 3) : 255; } catch (_) {}
+            if (avg < 8 && tries < 24) { tries++; schedule(); return; }   // 거의 검정(디코드 전/검은 인트로) → 다음 프레임
+            r.cv.toBlob((b) => finish(b), "image/jpeg", 0.82);
           };
-          v.onseeked = () => { clearTimeout(to); grab(); };
-          v.onerror = () => { clearTimeout(to); resolve(null); };
+          const schedule = () => { if (done) return; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => tryGrab()); else setTimeout(tryGrab, 50); };
+          to = setTimeout(tryGrab, 8000);   // 안전장치(그래도 못 잡으면 마지막 시도)
+          v.onloadeddata = () => {
+            try { v.currentTime = Math.min(1, (isFinite(v.duration) ? v.duration : 1) * 0.25); } catch (_) {}   // 인트로 검정 피해 살짝 뒤로
+            try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}                       // 재생으로 프레임 디코드 강제(모바일)
+            schedule();
+          };
+          v.onerror = () => finish(null);
           v.src = URL.createObjectURL(blob);
         } else {
-          const im = new Image(); im.onload = () => draw(im, im.naturalWidth, im.naturalHeight); im.onerror = () => resolve(null); im.src = URL.createObjectURL(blob);
+          const im = new Image();
+          im.onload = () => { const r = drawTo(im, im.naturalWidth, im.naturalHeight); try { URL.revokeObjectURL(im.src); } catch (_) {} if (!r) { resolve(null); return; } r.cv.toBlob((b) => resolve(b), "image/jpeg", 0.82); };
+          im.onerror = () => resolve(null);
+          im.src = URL.createObjectURL(blob);
         }
       } catch (_) { resolve(null); }
     });
