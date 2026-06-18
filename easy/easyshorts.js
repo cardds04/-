@@ -9455,6 +9455,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         const P = (window.Capacitor && window.Capacitor.Plugins) || {};
         const Filesystem = P.Filesystem, Share = P.Share;
         if (!Filesystem) throw new Error("Filesystem 플러그인 없음");
+        const mb = Math.max(1, Math.round(blob.size / 1048576));
+        try { toast("💾 폰에 저장 중… " + mb + "MB"); } catch (_) {}
         // 큰 영상은 통째로 base64(≈1.33배 메모리)하면 저장 단계에서 OOM → 3MB 조각으로 나눠 write→append.
         const dir = "CACHE", CHUNK = 3 * 1024 * 1024;
         let uri = "";
@@ -9471,10 +9473,22 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
             await new Promise((r) => setTimeout(r, 0));   // 조각 사이 메모리 회수 + UI 양보
           }
         }
-        if (Share && uri) { try { await Share.share({ title: filename, text: "이지숏폼에서 만든 영상", url: uri, dialogTitle: "영상 저장·공유" }); } catch (_) {} }
-        else { try { toast("저장됨: " + filename); } catch (_) {} }
+        if (!uri) throw new Error("저장 경로를 받지 못했어요");
+        // 공유 시트(저장/보내기) — 에러를 삼키지 않고 사용자에게 보여줌(취소는 정상 처리)
+        if (Share && Share.share) {
+          try {
+            await Share.share({ title: filename, text: "이지숏폼 영상", url: uri, dialogTitle: "갤러리 저장 또는 보내기" });
+          } catch (se) {
+            const sm = (se && se.message) || String(se);
+            if (!/cancel|abort|dismiss/i.test(sm)) { try { alert("저장/보내기 창을 여는 데 실패했어요:\n" + sm + "\n\n(영상은 앱 폴더에 있어요)"); } catch (_) {} }
+          }
+        } else { try { alert("저장은 됐는데 '공유' 기능을 못 찾았어요: " + filename); } catch (_) {} }
         return true;
-      } catch (e) { console.warn("[native save]", e); /* 아래 웹 경로로 폴백 */ }
+      } catch (e) {
+        console.warn("[native save]", e);
+        try { alert("영상 저장 중 문제가 생겼어요:\n" + ((e && e.message) || e)); } catch (_) {}
+        return true;   // 네이티브에선 웹 다운로드(<a download>)가 무의미하므로 폴백 안 함
+      }
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename;
