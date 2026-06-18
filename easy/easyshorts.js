@@ -1045,9 +1045,11 @@
     const btn = dlBtn(); const baseTxt = btn ? (btn.dataset.base || btn.textContent) : "";
     if (btn) btn.dataset.base = baseTxt;   // 원래 라벨 기억
     let ok = false;
+    // 📱 폰에서 직접 내보낼 땐 1080p·16Mbps 로 제한 → 인코딩 빨라지고 파일도 작아짐(숏폼 표준). 데스크탑은 원본 그대로.
+    const exOpts = (isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 16000000 } : {};
     if ((typeof VideoEncoder !== "undefined") && window.EasyMux) {
-      try { if (await exportOffline("mp4")) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
-      if (!ok) { try { if (await exportOffline("webm")) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
+      try { if (await exportOffline("mp4", exOpts)) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
+      if (!ok) { try { if (await exportOffline("webm", exOpts)) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
     }
     if (!ok) ok = await exportViaRecorder();
     if (ok && btn) { btn.disabled = false; btn.textContent = "✅ 다운로드 완료!"; setTimeout(() => { if (btn) btn.textContent = btn.dataset.base || "⬇ 다운로드"; }, 2800); }
