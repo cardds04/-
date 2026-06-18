@@ -12,6 +12,13 @@
  *   POLL_MS               (기본 5000)  RENDER_TIMEOUT_MS (기본 900000=15분)
  */
 const puppeteer = require("puppeteer");
+const http = require("http");
+
+// Railway 등은 '웹 서버'(포트 응답)를 기대하므로, 헬스체크용 작은 HTTP 서버를 띄운다.
+// (워커는 백그라운드 폴링이라 원래 포트가 없어 healthcheck 가 실패함)
+const PORT = process.env.PORT || 8080;
+http.createServer((req, res) => { res.writeHead(200, { "Content-Type": "text/plain" }); res.end("render-worker ok"); })
+  .listen(PORT, () => console.log("✓ health 서버 listening on", PORT));
 
 const API = process.env.RENDER_API || "https://sc-pink.vercel.app/api/easy-render";
 const RENDER_URL = process.env.RENDER_PAGE || "https://sc-pink.vercel.app/easy/render.html";
