@@ -232,6 +232,8 @@
     if (document.body.classList.contains("es-locked")) { setTimeout(start, 600); return; }
     check();
     document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });   // 앱 다시 켤 때마다 확인
+    window.addEventListener("pageshow", check);    // 앱 복귀(WebView 재진입) 보강
+    window.addEventListener("focus", check);
     setInterval(check, 90000);   // 90초마다
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);

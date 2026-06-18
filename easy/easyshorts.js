@@ -9579,6 +9579,22 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function refreshFillCards() {
     try { if (document.getElementById("esAutoScenes")) renderAutoScenes(); else renderFillSlots(); } catch (_) {}
   }
+  // 📱 로컬 영상의 포스터(첫 프레임 이미지) 1장 생성(비동기). 모바일 WebView 는 재생 전 <video> 의 첫 프레임을
+  //    안 그려 카드가 회색 ▶, 미리보기가 검정으로 보임 → 이미지 포스터를 카드 썸네일·video[poster] 로 써서 해결.
+  function genFillPoster(slotId, file) {
+    if (!file || !/^video\//.test(file.type)) return;
+    (async function () {
+      try {
+        const pj = await blobToPreviewJpeg(file, "video", 720);
+        const f = E.using && E.using.fills[slotId];
+        if (!pj || !f) return;
+        try { if (f.poster) URL.revokeObjectURL(f.poster); } catch (_) {}
+        f.poster = URL.createObjectURL(pj);
+        try { refreshFillCards(); } catch (_) {}
+        if (!E.playing) { try { applyFrame(E.playhead); } catch (_) {} }   // 지금 미리보기에 떠있는 컷이면 poster 즉시 반영
+      } catch (_) {}
+    })();
+  }
 
   // 영상 채움 직후 호출 — 백그라운드로 클라우드 백업(진행률은 해당 슬롯 카드에). 미리보기는 그대로 로컬 사용.
   function kickCloudBackup(slotId, file) {
@@ -9646,7 +9662,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (isVideo && dur > 0) { const slot = E.using.template.slots.find((s) => s.id === slotId); if (slot && !slot.timelapse) slot.dur = +clamp(dur, 0.3, 60).toFixed(2); }
     refreshSlots();            // 길이 변동(원본맞춤)까지 타임라인·총길이 반영
     seek(E.playhead);          // 미리보기 화면 즉시 갱신
-    saveFillBlob(slotId, file); kickCloudBackup(slotId, file); scheduleSaveMeta();
+    saveFillBlob(slotId, file); kickCloudBackup(slotId, file); genFillPoster(slotId, file); scheduleSaveMeta();
   }
   function clearSlot(slotId) {
     if (!E.using) return;
@@ -9675,7 +9691,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[s.id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
       if (isVideo && dur > 0 && !s.timelapse) { s.dur = +clamp(dur, 0.3, 60).toFixed(2); durChanged = true; }   // 🎬 영상은 원본 길이에 맞춤
-      saveFillBlob(s.id, file); kickCloudBackup(s.id, file);
+      saveFillBlob(s.id, file); kickCloudBackup(s.id, file); genFillPoster(s.id, file);
     }
     if (created || durChanged) refreshSlots(); else renderFillSlots();   // 컷이 새로 생기거나 길이가 바뀌면 타임라인까지 전체 갱신
     preloadFills();
@@ -9701,7 +9717,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const url = URL.createObjectURL(file);
       const dur = isVideo ? await mediaDuration(url, true) : 0;
       E.using.fills[id] = { kind: isVideo ? "video" : "image", url, name: file.name, dur, _file: file };
-      saveFillBlob(id, file); kickCloudBackup(id, file);
+      saveFillBlob(id, file); kickCloudBackup(id, file); genFillPoster(id, file);
     }
     renderFillSlots(); preloadFills(); seek(E.playhead); scheduleSaveMeta();
   }
@@ -9792,6 +9808,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       if (img) img.style.display = "none";
       if (vid) {
         vid.style.display = "block";
+        try { if (vid._posterUrl !== (fill.poster || "")) { vid.poster = fill.poster || ""; vid._posterUrl = fill.poster || ""; } } catch (_) {}   // 📱 정지·로딩 중 검정 방지: 포스터 이미지 표시
         // 같은 영상에서 자른 세그먼트(_srcId 동일)는 다시 로드하지 않고 '탐색(seek)'만 → 이음매서 버벅임·소리끊김 줄임
         const fkey = fill._srcId || fill.url;
         if (vid._loadedKey !== fkey) {
