@@ -930,7 +930,7 @@
     const imgs = {};
     for (const s of E.using.template.slots) {
       const f = E.using.fills[s.id];
-      if (f && f.kind === "image") { const im = new Image(); im.src = f.url; try { await im.decode(); } catch (_) {} imgs[s.id] = im; }
+      if (f && f.kind === "image") { const im = new Image(); im.crossOrigin = "anonymous"; im.src = f.url; try { await im.decode(); } catch (_) {} imgs[s.id] = im; }   // crossorigin: 서버 렌더(외부 URL)도 캔버스 안 깨지게
     }
     let reelsImg = null;
     if (E.reelsOn && E.reelsUrl) { reelsImg = new Image(); reelsImg.src = E.reelsUrl; try { await reelsImg.decode(); } catch (_) {} }
@@ -11512,5 +11512,49 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function show() { init(); if (E._loaded) { if (E.using) enterMode2(E.mode2); else { E.easyPage = "main"; enterMode2("easy"); } } }
   function hide() { stopPlay(); }
 
-  window.EasyShorts = { init, show, hide };
+  // ── 🖥 서버 렌더(Phase 2): 설계도(spec) → E.using 재구성 → 기존 exportOffline 으로 영상 blob ──
+  //    헤드리스 크롬(Railway 워커)에서 호출. 모든 미디어는 외부(Supabase) URL.
+  async function renderSpec(spec, onProgress) {
+    if (!spec || !spec.template || !Array.isArray(spec.template.slots)) throw new Error("spec.template 이 올바르지 않습니다.");
+    const prevUsing = E.using, prevHead = E.playhead, prevReels = E.reelsOn;
+    try {
+      const fills = {};
+      const sf = spec.fills || {};
+      Object.keys(sf).forEach((sid) => { const f = sf[sid]; if (f && f.url) fills[sid] = { kind: f.kind || "image", name: f.name || "", dur: f.dur || 0, url: f.url }; });
+      const audioBlobs = {};
+      if (spec.audioUrls && Array.isArray(spec.template.audioClips)) {
+        spec.template.audioClips.forEach((c) => { const u = spec.audioUrls[c.id]; if (u) audioBlobs[c.id] = { url: u, dur: c.srcDur || 0 }; });
+      }
+      E.using = {
+        template: spec.template,
+        fills, audioBlobs,
+        texts: Array.isArray(spec.texts) ? spec.texts : (spec.template.texts || []),
+        musicUrl: spec.musicUrl || (spec.music && spec.music.url) || null,
+        voiceUrl: spec.voiceUrl || (spec.voice && spec.voice.url) || null,
+        voiceDur: spec.voiceDur || 0,
+        voiceDuck: (spec.voiceDuck != null ? spec.voiceDuck : 0.35),
+        voiceVol: spec.voiceVol,
+        musicVol: spec.musicVol,
+        musicRange: spec.musicRange || null,
+        musicFadeIn: spec.musicFadeIn, musicFadeOut: spec.musicFadeOut,
+        logo: spec.logo || null, logoUrl: spec.logoUrl || null,
+        stickers: Array.isArray(spec.stickers) ? spec.stickers : [],
+        stickerLib: Array.isArray(spec.stickerLib) ? spec.stickerLib : [],
+        selText: null, selTexts: [], _isTitle: false, _musicChanged: false, _voiceChanged: false,
+      };
+      E.reelsOn = (typeof spec.reelsOn === "boolean") ? spec.reelsOn : false;
+      E.playhead = 0;
+      try { await ensureCaptionFontsLoaded(); } catch (_) {}
+      // 로고/스티커 외부 이미지도 캔버스 안 깨지게 — exportOffline 내부 로더가 처리. (logoUrl 은 그대로 사용)
+      const maxLong = spec.maxLong || 1920;
+      let blob = null;
+      try { blob = await exportOffline("mp4", { returnBlob: true, maxLong, onProgress }); } catch (e) { console.warn("[renderSpec mp4]", e); }
+      if (!blob) { try { blob = await exportOffline("webm", { returnBlob: true, maxLong, onProgress }); } catch (e) { console.warn("[renderSpec webm]", e); } }
+      return blob;
+    } finally {
+      E.using = prevUsing; E.playhead = prevHead; E.reelsOn = prevReels;
+    }
+  }
+
+  window.EasyShorts = { init, show, hide, renderSpec };
 })();

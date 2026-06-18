@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>이지숏폼 — 서버 렌더</title>
+  <!-- 자막 폰트(캔버스에서 깨지지 않게 미리) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>body{margin:0;background:#000;color:#9aa;font:13px/1.5 system-ui}#log{padding:16px;white-space:pre-wrap}</style>
+</head>
+<body>
+  <!-- 헤드리스 크롬(Railway 워커)이 띄우는 렌더 전용 페이지. UI 없음. -->
+  <section id="easyRoot" hidden></section>
+  <audio id="esMusic" crossorigin="anonymous"></audio>
+  <audio id="esVoice" crossorigin="anonymous"></audio>
+  <div id="log">대기 중…</div>
+
+  <script src="easymux.js?v=1"></script>
+  <script src="easyshorts.js?v=312"></script>
+  <script>
+  (function () {
+    "use strict";
+    var API = (/^(localhost|127\.0\.0\.1)$/.test(location.hostname))
+      ? "http://127.0.0.1:8787/api/easy-render"
+      : "https://sc-pink.vercel.app/api/easy-render";
+    var logEl = document.getElementById("log");
+    function log(m) { try { logEl.textContent = m; } catch (_) {} try { console.log("[render]", m); } catch (_) {} }
+    function finish(result) {
+      window.__renderResult = result;            // 워커(Puppeteer)가 이 값을 읽고 종료
+      var d = document.createElement("div"); d.id = "renderDone"; d.setAttribute("data-result", JSON.stringify(result));
+      document.body.appendChild(d);
+      log((result.ok ? "✅ 완료 " : "✗ 실패 ") + (result.url || result.error || ""));
+    }
+    function post(action, extra, secret) {
+      return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.assign({ action: action, secret: secret }, extra || {})) }).then(function (r) { return r.json(); });
+    }
+    // 워커가 evaluateOnNewDocument 로 window.__renderJob = { id, secret, spec } 주입함. 잠깐 대기.
+    function waitJob(tries) {
+      return new Promise(function (res, rej) {
+        var n = 0;
+        var iv = setInterval(function () {
+          n++;
+          if (window.__renderJob && window.__renderJob.id && window.__renderJob.spec) { clearInterval(iv); res(window.__renderJob); }
+          else if (n > (tries || 40)) { clearInterval(iv); rej(new Error("렌더 작업이 주입되지 않았어요")); }
+        }, 250);
+      });
+    }
+    (async function () {
+      var job = null;
+      try {
+        if (!window.EasyShorts || !window.EasyShorts.renderSpec) throw new Error("renderSpec 로드 실패");
+        log("작업 대기…");
+        job = await waitJob();
+        var secret = job.secret;
+        log("렌더 시작 (job " + job.id + ")");
+        var blob = await window.EasyShorts.renderSpec(job.spec, function (p) {
+          log("렌더 " + Math.round((p || 0) * 100) + "%");
+          try { post("progress", { id: job.id, progress: p }, secret); } catch (_) {}
+        });
+        if (!blob || !blob.size) throw new Error("렌더 결과가 비었어요");
+        var ext = (blob.type || "").indexOf("mp4") >= 0 ? "mp4" : "webm";
+        log("결과 업로드 준비…");
+        var sr = await post("signresult", { id: job.id, ext: ext }, secret);
+        if (!sr || !sr.ok || !sr.uploadUrl) throw new Error("결과 서명 실패: " + ((sr && sr.error) || ""));
+        log("결과 업로드 중… (" + Math.round(blob.size / 1048576) + "MB)");
+        var put = await fetch(sr.uploadUrl, { method: "PUT", headers: { "x-upsert": "true", "Content-Type": blob.type || "video/mp4" }, body: blob });
+        if (!put.ok) throw new Error("결과 업로드 실패 " + put.status);
+        await post("complete", { id: job.id, result_url: sr.publicUrl }, secret);
+        finish({ ok: true, url: sr.publicUrl });
+      } catch (e) {
+        var msg = (e && e.message) || "렌더 실패";
+        try { if (job && job.id) await post("fail", { id: job.id, error: msg }, job.secret); } catch (_) {}
+        finish({ ok: false, error: msg });
+      }
+    })();
+  })();
+  </script>
+</body>
+</html>
