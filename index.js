@@ -5095,7 +5095,7 @@
         const localSyncKeySet = new Set(localRows.map((entry) => entry.syncKey));
         const insertRows = [];
         const patchTasks = [];
-        localRows.forEach(({ syncKey, row }) => {
+        localRows.forEach(({ syncKey, row }, idx) => {
           const remote = remoteBySyncKey.get(syncKey);
           if (!remote) {
             insertRows.push(row);
@@ -5111,6 +5111,22 @@
             Boolean(remote.is_half_paid) === Boolean(row.is_half_paid) &&
             String(remote.memo || "") === String(row.memo || "");
           if (!same) {
+            // ✨ 옛 화면이 '입금완료'를 '미입금'으로 되돌리는 사고 방지(회차권사용 후 다음날 리셋의 근본).
+            //   같은 행에서 원격=입금완료, 로컬=미입금(다운그레이드)인데 원격이 로컬 편집시각보다 최신이면
+            //   → 로컬이 stale 이므로 다운그레이드 PATCH 를 건너뛰어 서버의 입금완료를 보호한다.
+            //   (정상 입금취소는 markScheduleRowDirty 로 localUpdatedAt 이 최신이라 그대로 통과됨.)
+            if (String(remote.status || "") === "입금완료" && String(row.status || "") === "미입금") {
+              const localItem = paymentRows[idx] && paymentRows[idx].item;
+              const localTs = Date.parse(String(localItem?.localUpdatedAt || "")) || 0;
+              const remoteTs = Date.parse(String(remote.updated_at || "")) || 0;
+              if (remoteTs > localTs) {
+                console.warn(
+                  "[PAYMENT][index] 옛값 다운그레이드 차단 — 서버 입금완료 보호:",
+                  row.company_name
+                );
+                return;
+              }
+            }
             patchTasks.push({ id: remote.id, row });
           }
         });
