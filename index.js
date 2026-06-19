@@ -5713,6 +5713,12 @@
             String(row?.code || "").trim(),
             pullScheduleCanonicalCtx
           );
+          // 입금상태 권위 = payments 테이블/풀. 스케줄 행이 '입금완료'를 '미입금'으로 다운그레이드하려 하면
+          // 기존 로컬(입금완료)을 유지한다 → payments 풀(입금완료)·schedules 풀(미입금)이 번갈아 적용돼
+          // 화면이 깜빡이던(두 자아가 싸우던) 문제 차단. (정상 입금취소는 위 쿨다운/localNewer 에서 이미 보호됨)
+          const _rowPayStatus = String(row?.payment_status || "미입금").trim() || "미입금";
+          const _keepLocalPaid =
+            !!prevLocal && String(prevLocal.paymentStatus || "") === "입금완료" && _rowPayStatus !== "입금완료";
           const nextItem = {
             customerScheduleId: String(row?.id || "").trim(),
             date: String(row?.date_key || "").trim(),
@@ -5730,12 +5736,12 @@
             memo: parsedMemo.memo,
             requestedAt: String(row?.created_at || "").trim(),
             composition: String(row?.composition || "사진만").trim() || "사진만",
-            paymentStatus: String(row?.payment_status || "미입금").trim() || "미입금",
-            paymentPayer: String(row?.payment_payer || "").trim(),
-            paymentAmount: String(row?.payment_amount || "").trim(),
-            paymentDate: String(row?.payment_date || "").trim(),
-            couponUsed: Boolean(row?.coupon_used),
-            partialPaid: status === "partial",
+            paymentStatus: _keepLocalPaid ? "입금완료" : _rowPayStatus,
+            paymentPayer: _keepLocalPaid ? String(prevLocal.paymentPayer || "") : String(row?.payment_payer || "").trim(),
+            paymentAmount: _keepLocalPaid ? String(prevLocal.paymentAmount || "") : String(row?.payment_amount || "").trim(),
+            paymentDate: _keepLocalPaid ? String(prevLocal.paymentDate || "") : String(row?.payment_date || "").trim(),
+            couponUsed: _keepLocalPaid ? Boolean(prevLocal.couponUsed) : Boolean(row?.coupon_used),
+            partialPaid: _keepLocalPaid ? Boolean(prevLocal.partialPaid) : status === "partial",
             refundChecked: status === "refund_done"
           };
           if (source === "hold") {
