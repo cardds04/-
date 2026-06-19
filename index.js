@@ -446,7 +446,8 @@
               (k === STORAGE_ADMIN_COMPANIES ||
                 k === STORAGE_COMPANY_DEFAULT_MEMOS ||
                 k === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG ||
-                k === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY) &&
+                k === STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY ||
+                k === STORAGE_BLOG_VENDOR_LIST) &&
               typeof getAppliedStorageValue === "function"
             ) {
               try {
@@ -3037,6 +3038,20 @@
         }
         const incomingText = String(incomingValue);
         if (!CRITICAL_SYNC_KEYS.includes(key)) {
+          // 블로그업체 리스트(set): 편집 직후(pending)엔 로컬 우선 — 옛 서버 client_kv 값이
+          // 방금 한 체크해제/체크를 되돌리던(다시 돌아오던) 문제 방지. push 성공하면 pending 해제됨.
+          if (key === STORAGE_BLOG_VENDOR_LIST) {
+            const hasPendingLocal =
+              typeof pendingLocalSyncKeys !== "undefined" &&
+              pendingLocalSyncKeys &&
+              typeof pendingLocalSyncKeys.has === "function" &&
+              pendingLocalSyncKeys.has(key);
+            if (hasPendingLocal) {
+              const localRaw = localStorage.getItem(key);
+              if (localRaw !== null && localRaw !== undefined) return String(localRaw);
+            }
+            return incomingText;
+          }
           // admin companies는 defaultMemo를 로컬에서 보존
           if (key === STORAGE_ADMIN_COMPANIES) {
             try {
@@ -7318,6 +7333,12 @@ ${folderBtn}
             .map((s) => String(s || "").toLowerCase())
             .filter(Boolean);
           localStorage.setItem(STORAGE_BLOG_VENDOR_LIST, JSON.stringify(arr));
+          // 편집 직후엔 로컬 우선 보호(getAppliedStorageValue) — 옛 서버값이 덮어 되돌리는 것 방지.
+          try {
+            if (typeof pendingLocalSyncKeys !== "undefined" && pendingLocalSyncKeys?.add) {
+              pendingLocalSyncKeys.add(STORAGE_BLOG_VENDOR_LIST);
+            }
+          } catch (_) {}
           // client_kv 테이블로 즉시 push (모든 관리자 공유) — 디바운스 대신 즉시 푸시.
           try {
             scheduleSiteClientKvState?.flushSnapshotNow?.();
