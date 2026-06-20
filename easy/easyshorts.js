@@ -367,7 +367,7 @@
   async function idbKeys() { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(STORE, "readonly"); const rq = t.objectStore(STORE).getAllKeys(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); }); }
 
   async function saveTemplates() {
-    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "" }));
+    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette }));
     try { await idbSet("templates", meta); } catch (e) { console.warn("[easyshorts] saveTemplates", e); }
   }
   async function loadTemplates() {
@@ -1359,6 +1359,8 @@
   }
   function easyBotBack() {
     try { stopPlay(); } catch (_) {}
+    if (E.view === "palette") { setView("admin"); return; }   // 팔레트 → 관리자
+    if (E.view === "admin") { easyBotHome(); return; }          // 관리자 → 홈
     if (E.using) {
       if ((E.easyIdx || 0) > 0) { E.easyIdx -= 1; scheduleSaveMeta(); renderEasy(); }   // 마법사 한 단계 뒤로
       else { E.using = null; E.easyPage = "main"; setView("gallery"); }                  // 첫 단계에서 뒤로 = 카탈로그(작업 보존)
@@ -1395,8 +1397,1474 @@
     else if (view === "gallery") { renderGallery(); refreshPublished(); }   // 게시된 영상(서버) 목록도 새로 받아옴
     else if (view === "builder") renderBuilder();
     else if (view === "use") { if (E.mode2 === "easy") renderEasy(); else renderUse(); }
+    else if (view === "palette") renderPalette();
+    else if (view === "admin") renderAdmin();
     try { reelResumeChip(); } catch (_) {}   // 진행 중인 릴스 '이어하기' 칩 갱신(이식)
   }
+
+  // ════════════ 🎨 팔레트 — 템플릿을 단계별로 직접 조립하는 빌더 (이지숏폼 안에서) ════════════
+  //  3구역: ⬆️ 단계 트랙(＋추가) · ⬛ 가운데 단계 화면 · ⬇️ 기능 아이콘 상자(드래그/탭으로 단계에 넣기)
+  //  여기서 만든 템플릿이 '템플릿 그대로 따라하기' 탭에 카드로 쌓임. (저장 컴파일은 다음 단계)
+  const PALETTE_FNS = [
+    { key: "media",   icon: "🎬", label: "영상넣기" },
+    { key: "tref",    icon: "🖼", label: "타이틀 참조" },
+    { key: "tgen",    icon: "🔤", label: "타이틀 생성" },
+    { key: "tpos",    icon: "🔲", label: "위치 조정" },
+    { key: "cref",    icon: "🗨", label: "자막 참조" },
+    { key: "caption", icon: "💬", label: "자막 생성" },
+    { key: "narrate", icon: "🎙", label: "나레이션" },
+    { key: "length",  icon: "✂️", label: "컷 길이" },
+    { key: "music",   icon: "🎵", label: "배경음악" },
+    { key: "done",    icon: "✅", label: "완성" },
+  ];
+  const paletteFn = (k) => PALETTE_FNS.find((f) => f.key === (k === "title" ? "tgen" : k)) || null;   // 옛 'title'은 'tgen'으로
+  const PAL_CAPTION_STYLES = [
+    { id: "clean", label: "깔끔한 하단", sample: "공간의 첫인상", props: { color: "#ffffff", bold: true, shadow: true, outline: "#000000", outlineW: 0.12, bg: "none", size: 6.5, width: 80, yPct: 82 } },
+    { id: "box", label: "검정 박스", sample: "핵심 포인트", props: { color: "#ffffff", bold: true, shadow: false, outline: "#000000", outlineW: 0, bg: "box", bgColor: "#000000", bgOpacity: 0.72, size: 6, width: 82, yPct: 82 } },
+    { id: "yellow", label: "노란 강조", sample: "꼭 보세요", props: { color: "#ffe45c", bold: true, shadow: true, outline: "#111111", outlineW: 0.16, bg: "none", size: 7.2, width: 84, yPct: 80 } },
+    { id: "soft", label: "부드러운 설명", sample: "차분한 안내", props: { color: "#f5f7f2", bold: false, shadow: true, outline: "#141414", outlineW: 0.08, bg: "pill", bgColor: "#111827", bgOpacity: 0.48, size: 5.8, width: 78, yPct: 84 } },
+  ];
+  function palCaptionStyle(id) { return PAL_CAPTION_STYLES.find((s) => s.id === id) || PAL_CAPTION_STYLES[0]; }
+  function palCaptionStyleClass(id) { return "capstyle-" + (palCaptionStyle(id).id || "clean"); }
+  function palCaptionTextProps(id) {
+    const p = palCaptionStyle(id).props || {};
+    return Object.assign({ xPct: 50, yPct: 82, width: 80, size: 6.5, color: "#ffffff", bold: true, shadow: true, outline: "#000000", outlineW: 0.12, start: 0, dur: 3 }, p);
+  }
+  // 각 기능의 '고객이 보는 화면' — 실제로 작동하는 컨트롤(업로드·입력). 여기서 넣으면 왼쪽 '실제 결과 미리보기'(P.demo)에 반영됨.
+  // 각 단계 고객화면 문구(제목·설명) 기본값 — 템플릿마다 P.copy 로 덮어쓸 수 있음(사장님이 수정 → 템플릿에 저장)
+  const PAL_COPY_DEF = {
+    media:   { title: "사진이나 영상을 넣어주세요", note: "넣은 수만큼 장면이 생겨요" },
+    tref:    { title: "마음에 드는 스타일을 골라요", note: "이 느낌으로 타이틀을 만들어요" },
+    tgen:    { title: "뭐라고 바꿀까요?",            note: "고른 스타일로 글자만 바꿔서 만들어요" },
+    tpos:    { title: "참조사진 크기와 위치를 조정해주세요", note: "영상 위 어디에 얼마나 크게 올릴지" },
+    cref:    { title: "자막 스타일을 골라요",        note: "이 느낌으로 자막을 만들어요" },
+    caption: { title: "자막을 입력하세요",          note: "장면에 맞춰 글자가 나와요" },
+    narrate: { title: "나레이션을 만들어요",        note: "자막을 AI 목소리가 읽어줘요" },
+    length:  { title: "컷 길이를 조절하세요",        note: "각 장면이 나오는 시간(초)" },
+    music:   { title: "배경음악을 골라요",          note: "분위기에 맞는 음악을 선택" },
+    done:    { title: "완성! 🎉",                  note: "영상을 만들어 저장해요" },
+  };
+  function palCopyGet(step, fnKey, field) {
+    const c = (step && step.copy) || {};   // 문구는 '단계마다' 저장(같은 영상넣기라도 단계별로 다름) → step.copy
+    if (c[field] != null && String(c[field]).length) return c[field];
+    return (PAL_COPY_DEF[fnKey] || {})[field] || "";
+  }
+  // 각 기능의 '고객이 보는 화면' — 번호는 단계 순서(stepNum), 문구는 수정 가능(P.copy), 컨트롤은 실제 작동.
+  function paletteStepScreen(fnKey, P, stepNum, step) {
+    if (fnKey === "title") fnKey = "tgen";
+    P = P || E.palette || {};
+    const d = P.demo || (P.demo = { media: [], title: "", caption: "" });
+    const editing = !!step && P._copyEdit === step.id;
+    const numTxt = (stepNum && stepNum > 0) ? String(stepNum) : "•";
+    const T = palCopyGet(step, fnKey, "title"), N = palCopyGet(step, fnKey, "note");
+    const br = (s) => esc(s).replace(/\n/g, "<br>");   // 저장된 줄바꿈(엔터)을 화면에 그대로
+    const head = editing
+      ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-t" id="esCopyTitle" rows="2" placeholder="제목 (엔터=줄바꿈)">${esc(T)}</textarea>`
+      : `<div class="es-pal-scr-title">${br(T)}</div>`;
+    const noteEl = editing
+      ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-n" id="esCopyNote" rows="2" placeholder="작은 설명 글씨 (비워도 돼요 · 엔터=줄바꿈)">${esc(N)}</textarea>`
+      : (N ? `<div class="es-pal-scr-note">${br(N)}</div>` : "");
+    const editBtn = editing
+      ? `<div class="es-pal-scr-editwrap"><div class="es-pal-scr-edithint">📌 <b>저장해두기</b> = 오른쪽 기능상자 <b>${esc((paletteFn(fnKey) || {}).label || "")}</b> 아이콘에 붙여서 <b>다시 꺼내 써요</b></div><input type="text" class="es-pal-scr-cname" id="esCopyName" placeholder="📌 저장 이름 (비우면 문구 그대로)"><div class="es-pal-scr-editrow"><button type="button" class="es-pal-scr-copybtn save" id="esCopySave">📌 저장해두기</button><button type="button" class="es-pal-scr-copybtn done" id="esCopyDone">✓ 완료</button></div></div>`
+      : `<button type="button" class="es-pal-scr-copybtn" id="esCopyEdit" data-fn="${esc(fnKey)}"${step ? ` data-step="${esc(step.id)}"` : ""}>✏️ 이 화면 문구 고치기</button>`;
+    const btn = (ic, t, s) => `<div class="es-pal-scr-btn"><span class="es-pal-scr-btn-ic">${ic}</span><span class="es-pal-scr-btn-t">${t}</span><span class="es-pal-scr-btn-s">${s}</span></div>`;
+    let body = "";
+    if (!editing) {
+      switch (fnKey) {
+        case "media": {
+          const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+          const inner = list.length
+            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted playsinline></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoShootBtn">📹 찍기</button><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
+            : `<div class="es-pal-scr-twin">
+                 <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half" id="esDemoShootBtn"><span class="es-pal-scr-btn-ic">📹</span><span class="es-pal-scr-btn-t">영상 찍기</span><span class="es-pal-scr-btn-s">카메라로 바로 촬영</span></button>
+                 <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half ghost" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 첨부</span><span class="es-pal-scr-btn-s">여러 개 한꺼번에 OK</span></button>
+               </div>`;
+          body = `<div class="es-pal-scr-drop" id="esDemoMediaDrop">${inner}</div><input type="file" id="esDemoMediaFile" accept="image/*,video/*" multiple hidden>`;
+          break;
+        }
+        case "tref": {   // ① 타이틀 참조 — 스타일 사진 고르기(타이틀 글씨박스, 영구저장)
+          const opts = palRefsArr("title");
+          const sel = d.titleRef;
+          const gallery = opts.length
+            ? `<div class="es-pal-tref-gal" id="esTRefGal">${opts.map((rf, i) => `<button type="button" class="es-pal-tref-opt ${sel && sel.dataUrl === rf.dataUrl ? "sel" : ""}" data-pickref="${i}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-tref-fontbadge" title="글자체">✍️</span>` : ""}<span class="es-pal-tref-optx" data-rmref="${i}" title="삭제">×</span></button>`).join("")}</div>`
+            : `<div class="es-pal-tgen-noref">왼쪽 편집기에서 타이틀을 만들고 <b>'내 글씨박스에 저장'</b>을 누르면 여기에 줄줄이 쌓여요</div>`;
+          body = `<div class="es-pal-tref-lb">🖼 ${opts.length ? "내 글씨박스 — 눌러서 골라요" : "아직 없어요"}</div>${gallery}<input type="file" id="esTRefFile" accept="image/*" multiple hidden>`;
+          break;
+        }
+        case "tgen": {   // ② 타이틀 — 고객은 칸(1·2·3번칸)별 '문구만' 바꿈(글씨체·위치·크기는 관리자가 왼쪽에서 정함)
+          const ts = palTitles();
+          if (!ts.length) { body = `<div class="es-pal-tgen-noref">이 영상엔 타이틀이 없어요 🔤</div>`; break; }
+          const rows = ts.map((t, i) => {
+            const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체";
+            return `<div class="es-pal-cslot ${i === (d.titleSel || 0) ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 문구 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
+          }).join("");
+          body = `<div class="es-pal-cslot-lb">칸별로 <b>문구만</b> 바꾸면 돼요 ✍️ <span class="es-pal-tref-hint">(글씨체·위치는 그대로)</span></div>${rows}`;
+          break;
+        }
+        case "tpos": {   // ③ 위치 조정 — 선택된 칸의 크기·위치(왼쪽 미리보기에서 끌어도 됨)
+          if (!palTitles().length) { body = `<div class="es-pal-tgen-noref">이 영상엔 타이틀이 없어요 🔤</div>`; break; }
+          const cur = palCurTitle(); const ti = cur.result; const sz = (cur.size != null ? cur.size : 60); const py = (cur.posY != null ? cur.posY : 18);
+          const stage = (ti && ti.url)
+            ? `<div class="es-pal-tpos-stage" id="esTPosStage"><img class="es-pal-tpos-title" src="${ti.url}" style="height:${palBoxH(cur, sz)}cqh; width:auto; top:${py}%" alt=""></div>`
+            : `<div class="es-pal-tgen-noref">왼쪽 편집기에서 ${(d.titleSel || 0) + 1}번칸 문구를 먼저 입력해주세요</div>`;
+          const ctrl = (ti && ti.url) ? `<div class="es-pal-tpos-ctrl"><div class="es-pal-tpos-lb">크기</div><input type="range" id="esTPosSize" min="3" max="35" value="${sz}"><div class="es-pal-tpos-lb">위치</div><div class="es-pal-tpos-row">${[["8", "⬆ 위"], ["45", "● 중간"], ["80", "⬇ 아래"]].map((p) => `<button type="button" class="es-pal-tpos-btn ${Math.abs(py - +p[0]) < 12 ? "sel" : ""}" data-tposy="${p[0]}">${p[1]}</button>`).join("")}</div></div>` : "";
+          body = `${stage}${ctrl}`;
+          break;
+        }
+        case "cref": {   // 🗨 자막 참조 — 자막 글씨박스에서 스타일 골라 자막 칸에 적용(타이틀 참조와 동일, 자막 전용 글씨박스)
+          const opts = palRefsArr("caption");
+          const sel = d.captionRef;
+          const gallery = opts.length
+            ? `<div class="es-pal-tref-gal" id="esTRefGal">${opts.map((rf, i) => `<button type="button" class="es-pal-tref-opt ${sel && sel.dataUrl === rf.dataUrl ? "sel" : ""}" data-pickref="${i}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-tref-fontbadge" title="글자체">✍️</span>` : ""}<span class="es-pal-tref-optx" data-rmref="${i}" title="삭제">×</span></button>`).join("")}</div>`
+            : `<div class="es-pal-tgen-noref">왼쪽 자막 작업대에서 자막을 만들고 <b>'내 자막 글씨박스에 저장'</b>을 누르면 여기에 줄줄이 쌓여요</div>`;
+          body = `<div class="es-pal-tref-lb">🗨 ${opts.length ? "내 자막 글씨박스 — 눌러서 골라요" : "아직 없어요"}</div>${gallery}`;
+          break;
+        }
+        case "caption": {   // 💬 자막 생성 — 타이틀과 동일하게 칸(1·2·3번칸)별 '문구만' 바꿈(글씨체·위치·크기는 관리자가 왼쪽에서 정함)
+          const ts = palTitles();
+          if (!ts.length) { body = `<div class="es-pal-tgen-noref">이 영상엔 자막이 없어요 💬</div>`; break; }
+          const rows = ts.map((t, i) => {
+            const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체";
+            return `<div class="es-pal-cslot ${i === palSel() ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 자막 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
+          }).join("");
+          body = `<div class="es-pal-cslot-lb">칸별로 <b>자막만</b> 바꾸면 돼요 💬 <span class="es-pal-tref-hint">(글씨체·위치는 그대로)</span></div>${rows}`;
+          break;
+        }
+        case "narrate": body = btn("🎙", "나레이션 만들기", "목소리 자동 생성"); break;
+        case "length":  body = `<div class="es-pal-scr-bar"><span style="width:42%"></span></div><div class="es-pal-scr-bar"><span style="width:70%"></span></div><div class="es-pal-scr-bar"><span style="width:28%"></span></div>`; break;
+        case "music":   body = `<div class="es-pal-scr-row">🎵 봄날의 산책 · 30초</div><div class="es-pal-scr-row">🎵 잔잔한 오후 · 24초</div><div class="es-pal-scr-row">🎵 신나는 하루 · 18초</div>`; break;
+        case "done":    body = btn("⬇", "영상 생성·다운로드", "갤러리에 저장"); break;
+      }
+    }
+    const _live = ["tref", "tgen", "cref", "caption"].includes(fnKey);   // 글자 단계 = 위에 live 미리보기 있음 → 큰 번호 빼고 컴팩트하게(아래 컨트롤 바로 보이게)
+    const numEl = _live ? "" : `<div class="es-pal-scr-num">${numTxt}</div>`;
+    return `<div class="es-pal-scr ${_live ? "es-pal-scr-compact" : ""}">${numEl}${head}${noteEl}${body}${editBtn}</div>`;   // 고객화면 아래 '저장한 문구' 목록 제거(관리자 기능박스 저장문구 패널은 유지)
+  }
+  // 📱 인스타 릴스 UI 오버레이 — 미리보기 '확인용'(영상 출력엔 절대 안 들어감). 인스타에 올리면 이렇게 보인다는 느낌만.
+  function palInstaOverlay() {
+    const S = `fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+    const ic = {
+      heart: `<svg viewBox="0 0 24 24" ${S}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>`,
+      comment: `<svg viewBox="0 0 24 24" ${S}><path d="M21 11.5a8.4 8.4 0 0 1-11.3 7.9L3.5 21l1.6-6.2A8.4 8.4 0 1 1 21 11.5z"/></svg>`,
+      repost: `<svg viewBox="0 0 24 24" ${S}><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+      share: `<svg viewBox="0 0 24 24" ${S}><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>`,
+      save: `<svg viewBox="0 0 24 24" ${S}><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
+    };
+    const item = (svg, n) => `<div class="es-pal-insta-item"><span class="es-pal-insta-ic">${svg}</span><span class="es-pal-insta-n">${n}</span></div>`;
+    return `<div class="es-pal-insta" aria-hidden="true">
+      <div class="es-pal-insta-side">
+        ${item(ic.heart, "33.1만")}${item(ic.comment, "6,080")}${item(ic.repost, "5,859")}${item(ic.share, "23.4만")}${item(ic.save, "8.4만")}
+        <div class="es-pal-insta-more">⋯</div>
+        <div class="es-pal-insta-av">Y</div>
+      </div>
+      <div class="es-pal-insta-bottom">
+        <div class="es-pal-insta-acct"><span class="es-pal-insta-acct-av">Y</span><b>yourshop</b><span class="es-pal-insta-follow">팔로우</span></div>
+        <div class="es-pal-insta-cap">✨ 새 영상 — 미리보기 확인용 (실제 영상엔 안 나와요)</div>
+      </div>
+    </div>`;
+  }
+  // 줄 수 — 크기(size)를 '한 줄 글자 높이'로 고정. 박스 높이 = size × 줄수 cqh → 줄 늘어도 글자 크기 일정(절대값), 짧은/긴 문구 같은 크기
+  function palLineCount(t) { return String((t && t.text) || "").split("\n").length || 1; }
+  // 박스 높이(cqh) — 줄당 글자 높이를 '항상 일정'하게(엔터/줄수 무관). 1줄일 땐 정확히 sz(예전 크기 유지), 줄 늘면 글자는 그대로·박스만 줄당 0.642 증가. (0.642=글자/이미지 비율, 0.358=상하여백 보정)
+  function palBoxH(t, sz) { return (palLineCount(t) * 0.642 + 0.358) * sz; }
+  // ▶ 실제 결과 미리보기 — 고객 화면(P.demo)에서 넣은 사진/영상 위에, 입력한 타이틀·자막이 입혀진 '완성 모습'(고객 영상이 이렇게 나옴)
+  // live=true → 고객 화면 위쪽 '읽기전용' 미리보기(드래그/핸들/배지/인스타/재생버튼 없이 영상 자동재생 + 글자만)
+  function paletteRealPreview(P, live) {
+    const fns = (P.steps || []).map((s) => s.fn).filter(Boolean);
+    const has = (k) => fns.includes(k);
+    const d = P.demo || {};
+    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    const m = list[0] || null;
+    let media;
+    if (m && m.url) {
+      media = m.kind === "video"
+        ? `<video class="es-pal-real-media" src="${m.url}"${live ? " autoplay" : ""} muted loop playsinline preload="auto"></video>`
+        : `<img class="es-pal-real-media" src="${m.url}" alt="">`;
+    } else {
+      media = live
+        ? `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎬</div><div class="es-pal-real-empty-t">아래에서 사진·영상을 넣으면<br>여기에 미리보기가 떠요</div></div>`
+        : `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">👉</div><div class="es-pal-real-empty-t">고객 화면에서 넣어보세요</div><div class="es-pal-real-empty-d">오른쪽 '사진·영상 올리기'로 넣으면 여기 떠요</div></div>`;
+    }
+    let ov = "";
+    let anyRendered = false;   // 🅰🅱🅲 타이틀·자막 칸 모두 — 끌어서 위치·모서리로 크기·눌러서 편집
+    const _renderBlocks = (blocks, kind) => {
+      blocks.forEach((t, i) => {
+        if (!(t.result && t.result.url)) return;
+        anyRendered = true;
+        const sz = (t.size != null ? t.size : (kind === "caption" ? 7 : 14)), py = (t.posY != null ? t.posY : (kind === "caption" ? 88 : 18)), px = (t.posX != null ? t.posX : 50), op = (t.opacity != null ? t.opacity : 100) / 100;
+        const padX = t.bgPadX != null ? t.bgPadX : 4, padY = t.bgPadY != null ? t.bgPadY : 2;
+        const bgS = t.bg ? `background:${hexToRgba(t.bg, op)}; border-radius:${_bgRadius(t.bgStyle)}; padding:${padY}cqh ${padX}cqw;` : "";
+        const isSel = !live && (kind === E._palEditKind) && i === palSel(kind);
+        const _ts = t.start != null ? t.start : 0;
+        const tinfo = (t.dur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + t.dur}초`;
+        const tbadge = isSel ? `<span class="es-pal-real-tbadge" style="position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9px;line-height:1;background:#1ed6a5;color:#04231a;padding:2px 6px;border-radius:6px;white-space:nowrap;font-weight:800;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)">${tinfo}</span>` : "";
+        const dataAttr = live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`;   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신)
+        ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
+      });
+    };
+    if (has("tgen") || has("tref") || has("tpos")) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }
+    if (has("caption") || has("cref")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
+    if (!anyRendered && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
+    let chips = "";
+    if (list.length > 1) chips += `<span class="es-pal-real-chip">🎬 ${list.length}컷</span>`;
+    if (has("narrate")) chips += `<span class="es-pal-real-chip">🎙 나레이션</span>`;
+    if (has("music")) chips += `<span class="es-pal-real-chip">🎵 배경음악</span>`;
+    const chipBar = chips ? `<div class="es-pal-real-chips">${chips}</div>` : "";
+    const playable = !live && (!!m || has("narrate") || has("music"));
+    const playBtn = playable ? `<button type="button" class="es-pal-real-play" id="esPalRealPlay" aria-label="재생/정지">▶</button>` : "";
+    const insta = (!live && E._palInstaPreview) ? palInstaOverlay() : "";   // 📱 인스타 미리보기(확인용, 출력 X)
+    return `<div class="es-pal-real-stage ${m ? "has-media" : ""}">${media}${ov}${chipBar}${playBtn}${insta}</div>`;
+  }
+  // ✋ 왼쪽 미리보기의 여러 칸을 각각 끌어 위치 / 핸들로 크기 / 클릭으로 그 칸 선택(편집).
+  function palTitleDragInit() {
+    const P = E.palette; if (!P) return; const d = P.demo || (P.demo = {});
+    const stage = document.querySelector(".es-pal-real-stage"); if (!stage) return;
+    stage.querySelectorAll(".es-pal-real-titlebox[data-titleidx]").forEach((box) => {
+      const idx = +box.getAttribute("data-titleidx");
+      const kind = box.getAttribute("data-kind") || "title";
+      const arr = () => (kind === "caption" ? (d.captions || []) : (d.titles || []));
+      const handle = box.querySelector(".es-pal-real-thandle");
+      box.addEventListener("pointerdown", (e) => {
+        if (handle && e.target === handle) return;
+        e.preventDefault();
+        const r = stage.getBoundingClientRect();
+        const blk = arr()[idx]; if (!blk) return;
+        let moved = false; const sx = e.clientX, sy = e.clientY;
+        try { box.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+          if (Math.abs(ev.clientX - sx) > 3 || Math.abs(ev.clientY - sy) > 3) moved = true;
+          let px = (ev.clientX - r.left) / r.width * 100, py = (ev.clientY - r.top) / r.height * 100;
+          px = px < 4 ? 4 : px > 96 ? 96 : px; py = py < 4 ? 4 : py > 96 ? 96 : py;
+          blk.posX = Math.round(px); blk.posY = Math.round(py);
+          box.style.left = blk.posX + "%"; box.style.top = blk.posY + "%";
+        };
+        const up = () => {
+          try { box.releasePointerCapture(e.pointerId); } catch (_) {}
+          box.removeEventListener("pointermove", move); box.removeEventListener("pointerup", up);
+          if (!moved) { if (kind === E._palEditKind && palSel(kind) !== idx) { palSetSel(idx, kind); renderPalette(); } }   // 안 움직였으면 = 그 칸 선택(현재 종류만)
+          else palDraftSave();
+        };
+        box.addEventListener("pointermove", move); box.addEventListener("pointerup", up);
+      });
+      if (handle) handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const r = stage.getBoundingClientRect();
+        const blk = arr()[idx]; if (!blk) return;
+        const cy = r.top + (blk.posY != null ? blk.posY : 18) / 100 * r.height;   // 절대값=세로 높이% → 핸들을 위아래로 끌어 크기
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+          let h = Math.abs(ev.clientY - cy) * 2 / r.height * 100;
+          h = h < 3 ? 3 : h > 35 ? 35 : h;
+          blk.size = Math.round(h); box.style.height = blk.size + "cqh";
+        };
+        const up = () => { try { handle.releasePointerCapture(e.pointerId); } catch (_) {} handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); palDraftSave(); };
+        handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", up);
+      });
+    });
+  }
+  // ── 🅰🅱🅲 다중 타이틀 칸(블록) — 각 칸: {id,text,font,color,stroke,size,posX,posY,opacity,bg,result} ──
+  const TITLE_BG_COLORS = ["", "#000000", "#ffffff", "#1ed6a5", "#ff5252", "#2979ff", "#ffd54a", "#c44dff"];   // ""=없음(투명)
+  const TITLE_BG_STYLES = [["box", "박스", "14px"], ["pill", "알약", "999px"], ["sharp", "각짐", "0"]];   // 모양=border-radius (여백은 가로/세로 따로 조절)
+  const _bgRadius = (k) => { const f = TITLE_BG_STYLES.find((s) => s[0] === (k || "box")); return f ? f[2] : "14px"; };
+  function hexToRgba(hex, a) {   // #rrggbb + 투명도(0~1) → rgba (배경색 투명도 전용)
+    const h = String(hex || "").replace("#", ""); if (h.length < 6) return hex || "transparent";
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${a == null ? 1 : a})`;
+  }
+  function palNewTitleBlock(base, idx) {
+    return { id: uid(), text: "", font: (base && base.font) || "giants-bold", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 14, posX: 50, posY: idx != null ? Math.min(86, 18 + idx * 24) : 18, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
+  }
+  function palNewCaptionBlock(base, idx) {   // 자막 — 기본은 하단 흰글씨(타이틀보다 작게)
+    return { id: uid(), text: "", font: (base && base.font) || "bm-hanna-air", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 7, posX: 50, posY: idx != null ? Math.max(56, 88 - idx * 12) : 88, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
+  }
+  function palNewBlock(base, idx) { return (E._palEditKind === "caption") ? palNewCaptionBlock(base, idx) : palNewTitleBlock(base, idx); }
+  // 종류별(타이틀/자막) 블록 배열 — kind: "title" | "caption". 둘 다 같은 구조·편집기 공유.
+  function palBlocks(kind) {
+    kind = kind || E._palEditKind || "title";
+    const cap = kind === "caption", ak = cap ? "captions" : "titles", sk = cap ? "captionSel" : "titleSel";
+    const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
+    if (!Array.isArray(d[ak])) {
+      d[ak] = [];
+      if (!cap && ((d.title || "").trim() || d.titleResult)) {
+        d[ak].push({ id: uid(), text: d.title || "", font: d.titleFont || (d.titleRef && d.titleRef.font) || "giants-bold", color: d.titleColor || (d.titleRef && d.titleRef.color) || "#ffffff", stroke: (d.titleStroke != null && d.titleStroke !== "#111111") ? d.titleStroke : (((d.titleRef && d.titleRef.stroke) != null && d.titleRef.stroke !== "#111111") ? d.titleRef.stroke : ""), size: d.titleSize != null ? d.titleSize : 64, posX: d.titlePosX != null ? d.titlePosX : 50, posY: d.titlePosY != null ? d.titlePosY : 18, opacity: 100, bg: "", result: d.titleResult || null });
+      } else if (cap && (d.caption || "").trim()) {
+        d[ak].push(Object.assign(palNewCaptionBlock(null, 0), { text: d.caption }));
+      }
+      if (d[sk] == null) d[sk] = 0;
+    }
+    const minDef = cap ? 7 : 14;
+    d[ak].forEach((t) => { if (t.size == null || t.size > 35) t.size = minDef; if (t.bgPadX == null) t.bgPadX = 4; if (t.bgPadY == null) t.bgPadY = 2; if (t.bgStyle === "band") t.bgStyle = "box"; if (t.start == null) t.start = 0; if (t.dur === undefined) t.dur = null; if (t.letterSpacing == null) t.letterSpacing = 0; if (t.lineHeight == null) t.lineHeight = 1.22; if (t.italic == null) t.italic = false; if (t.shadow === undefined) t.shadow = null; if (t.animIn == null) t.animIn = "none"; if (t.animOut == null) t.animOut = "none"; });
+    return d[ak];
+  }
+  function palSel(kind) { const k = kind || E._palEditKind || "title"; return E.palette.demo[k === "caption" ? "captionSel" : "titleSel"] || 0; }
+  function palSetSel(i, kind) { const k = kind || E._palEditKind || "title"; E.palette.demo[k === "caption" ? "captionSel" : "titleSel"] = i; }
+  function palTitles() { return palBlocks(E._palEditKind || "title"); }   // 편집기·핸들러용 = 현재 종류
+  function palCurBlock(kind) {
+    kind = kind || E._palEditKind || "title";
+    const bs = palBlocks(kind); const d = E.palette.demo, sk = kind === "caption" ? "captionSel" : "titleSel";
+    if (!bs.length) bs.push(kind === "caption" ? palNewCaptionBlock(null, 0) : palNewTitleBlock(null, 0));
+    if (d[sk] == null || d[sk] < 0 || d[sk] >= bs.length) d[sk] = bs.length - 1;
+    return bs[d[sk]];
+  }
+  function palCurTitle() { return palCurBlock(E._palEditKind || "title"); }
+  // 한 칸을 실제 폰트로 렌더 → block.result
+  async function palTitleRenderBlock(block) {
+    if (!block) return;
+    const text = String(block.text || "").trim();
+    if (!text) { try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {} block.result = null; return; }
+    const blob = await renderFontToBlob({ text, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, shadow: block.shadow || null });
+    if (!blob) return;
+    try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {}
+    block.result = { url: URL.createObjectURL(blob), blob, font: block.font };
+  }
+  // ✍️ 왼쪽 미리보기 바로 아래 — 여러 칸(1·2·3번칸) 타이틀 편집(문구·글씨체·색·테두리·배경·크기·투명도)
+  function paletteTitleEditor(P) {
+    const d = P.demo || {};
+    const fns = (P.steps || []).map((s) => s.fn);
+    if (!fns.includes("tgen") && !fns.includes("tref") && !fns.includes("tpos") && !fns.includes("caption") && !fns.includes("cref")) return "";
+    const cap = E._palEditKind === "caption";   // 자막/타이틀 같은 편집기
+    const ts = palTitles();
+    if (!ts.length) {   // 0칸 = 이 영상엔 타이틀/자막이 안 들어감(빈 상태). ＋로 다시 넣기
+      return `<div class="es-pal-ted es-pal-ted-noslot">
+        <div class="es-pal-ted-top"><div><div class="es-pal-ted-k">${cap ? "자막" : "타이틀"} 편집</div><div class="es-pal-ted-h">${cap ? "자막 작업대" : "타이틀 작업대"}</div></div><span class="es-pal-ted-state">없음</span></div>
+        <div class="es-pal-ted-emptyslot">
+          <div class="es-pal-ted-emptyslot-ic">${cap ? "💬" : "🔤"}</div>
+          <div class="es-pal-ted-emptyslot-t">이 영상엔 ${cap ? "자막" : "타이틀"}이 안 들어가요</div>
+          <div class="es-pal-ted-emptyslot-s">${cap ? "자막" : "타이틀"}을 넣고 싶으면 아래를 눌러요</div>
+          <button type="button" class="es-pal-ted-tabadd es-pal-ted-addbig" id="esTedAdd">＋ ${cap ? "자막" : "타이틀"} 넣기</button>
+        </div>
+      </div>`;
+    }
+    const cur = palCurTitle(); const sel = palSel();
+    const font = cur.font || "giants-bold", color = (cur.color || "#ffffff").toLowerCase();
+    const stroke = (cur.stroke && cur.stroke !== "#111111") ? cur.stroke : "";   // #111111=구 기본 외곽선 → 없음으로 정리
+    const sz = cur.size != null ? cur.size : 60, op = cur.opacity != null ? cur.opacity : 100, bg = (cur.bg || "").toLowerCase();
+    const align = cur.align || "center";
+    const tStart = cur.start != null ? cur.start : 0, tDur = cur.dur != null ? cur.dur : null;   // 머무는 시간(dur=null → 쭉 보임)
+    const durLabel = tDur == null ? "쭉 보여요" : (tDur + "초 동안");
+    const startLabel = tStart > 0 ? (tStart + "초 뒤에 나와요") : "바로 나와요";
+    const alignBtns = [["left", "⬅", "왼쪽"], ["center", "↔", "가운데"], ["right", "➡", "오른쪽"]].map((a) => `<button type="button" class="es-pal-ted-stroke ${align === a[0] ? "sel" : ""}" data-tedalign="${a[0]}" title="${a[2]}">${a[1]} ${a[2]}</button>`).join("");
+    const ls = cur.letterSpacing != null ? cur.letterSpacing : 0;   // 자간
+    const lhR = cur.lineHeight != null ? cur.lineHeight : 1.22;   // 줄간격 배율
+    const italic = !!cur.italic;   // 비스듬히
+    // ✨ 효과(애니메이션) — 나타날 때(animIn)·사라질 때(animOut)
+    const ANIM_IN = [["none", "✕ 없음"], ["fade", "페이드인"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["slideU", "↑ 위로"], ["slideD", "↓ 아래로"], ["zoom", "확대"], ["fly", "날아오기"], ["pop", "팝!"], ["bounce", "통통"], ["rotate", "회전"], ["blur", "흐림 등장"]];
+    const ANIM_OUT = [["none", "✕ 없음"], ["fade", "페이드아웃"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["slideU", "↑ 위로"], ["slideD", "↓ 아래로"], ["zoom", "축소"], ["pop", "팝!"]];
+    const aIn = cur.animIn || "none", aOut = cur.animOut || "none";
+    const animInBtns = ANIM_IN.map((a) => `<button type="button" class="es-pal-ted-animbtn ${aIn === a[0] ? "sel" : ""}" data-tedanimin="${a[0]}">${a[1]}</button>`).join("");
+    const animOutBtns = ANIM_OUT.map((a) => `<button type="button" class="es-pal-ted-animbtn ${aOut === a[0] ? "sel" : ""}" data-tedanimout="${a[0]}">${a[1]}</button>`).join("");
+    // 🎨 글자색 · 🔲 외곽선 · 🌑 그림자 · ▢ 배경 — 한 줄 아이콘(눌러서 펼침), '없음'(✕)이 끄기
+    const shd = cur.shadow || null, shOn = !!shd;
+    const shColor = ((shd && shd.color) || "#000000").toLowerCase(), shDir = (shd && shd.dir != null) ? shd.dir : 315, shOp = (shd && shd.op != null) ? shd.op : 55, shDist = (shd && shd.dist != null) ? shd.dist : 0, shBlur = (shd && shd.blur != null) ? shd.blur : 22;
+    const outlineOn = !!stroke, bgOn = !!bg;
+    const FX_COLORS = ["#000000", "#ffffff", "#333333", "#1ed6a5", "#ff5470", "#4a7bff", "#ffd34d"];
+    const noneSw = (attr, off) => `<button type="button" class="es-pal-ted-color ${off ? "sel" : ""}" data-${attr}="" style="background:repeating-conic-gradient(#666 0% 25%,#333 0% 50%) 50%/7px 7px" title="없음">✕</button>`;
+    const shColorSw = noneSw("tedshcolor", !shOn) + FX_COLORS.map((c) => `<button type="button" class="es-pal-ted-color ${shOn && shColor === c.toLowerCase() ? "sel" : ""}" data-tedshcolor="${c}" style="background:${c}"></button>`).join("");
+    const outlineColorSw = noneSw("tedstroke", !outlineOn) + FX_COLORS.slice(0, 4).map((c) => `<button type="button" class="es-pal-ted-color ${outlineOn && (stroke || "").toLowerCase() === c.toLowerCase() ? "sel" : ""}" data-tedstroke="${c}" style="background:${c}"></button>`).join("");
+    const fxBtn = (key, icon, name, dotColor) => `<button type="button" class="es-pal-ted-fxbtn ${E._tedColorOpen === key ? "open" : ""}" data-tedcolorbtn="${key}"><span class="es-pal-ted-fxbtnico">${icon}</span><span class="es-pal-ted-fxbtnlb">${name}</span><span class="es-pal-ted-fxbtndot ${dotColor ? "" : "off"}" style="${dotColor ? `background:${dotColor}` : ""}"></span></button>`;
+    const fxRow = `<div class="es-pal-ted-fxrow">${fxBtn("text", "🎨", "글자색", color)}${fxBtn("outline", "🔲", "외곽선", outlineOn ? stroke : null)}${fxBtn("shadow", "🌑", "그림자", shOn ? shColor : null)}${fxBtn("bg", "▢", "배경", bgOn ? bg : null)}</div>`;
+    const tabs = ts.map((t, i) => `<button type="button" class="es-pal-ted-tab ${i === sel ? "sel" : ""}" data-tedtab="${i}">${i + 1}번칸<span class="es-pal-ted-tabx" data-teddel="${i}" title="이 칸 삭제(없애기)">×</span></button>`).join("") + (ts.length < 5 ? `<button type="button" class="es-pal-ted-tabadd" id="esTedAdd">＋ 칸 추가</button>` : "");
+    const curFont = MY_FONT_MAP[font] ? font : "giants-bold";
+    const curFontLabel = (MY_FONT_MAP[curFont] && MY_FONT_MAP[curFont].k) || curFont;
+    const fontMenu = E._tedFontOpen ? `<div class="es-pal-ted-fontmenu">${MY_FONTS.map((ft) => `<button type="button" class="es-pal-ted-fontitem ${curFont === ft.f ? "sel" : ""}" data-tedfont="${esc(ft.f)}"><span style="font-family:${titleFontStack(ft.f)}">${esc(ft.k)}</span></button>`).join("")}</div>` : "";
+    const colors = FONT_TITLE_COLORS.map((c) => `<button type="button" class="es-pal-ted-color ${color === c ? "sel" : ""}" data-tedcolor="${c}" style="background:${c}"></button>`).join("");
+    const strokes = FONT_TITLE_STROKES.map((s) => `<button type="button" class="es-pal-ted-stroke ${(stroke || "") === s[0] ? "sel" : ""}" data-tedstroke="${s[0]}">${s[1]}</button>`).join("");
+    const bgs = TITLE_BG_COLORS.map((c) => `<button type="button" class="es-pal-ted-color ${bg === c.toLowerCase() ? "sel" : ""}" data-tedbg="${c}" style="${c ? `background:${c}` : "background:repeating-conic-gradient(#555 0% 25%,#333 0% 50%) 50%/8px 8px"}" title="${c ? c : "없음"}">${c ? "" : "✕"}</button>`).join("");
+    const bgStyleCur = cur.bgStyle || "box";
+    const bgStyleBtns = TITLE_BG_STYLES.map((s) => `<button type="button" class="es-pal-ted-stroke ${bgStyleCur === s[0] ? "sel" : ""}" data-tedbgstyle="${s[0]}">${s[1]}</button>`).join("");
+    const fxPop = E._tedColorOpen === "text" ? `<div class="es-pal-ted-colorpop">${colors}</div>`
+      : E._tedColorOpen === "outline" ? `<div class="es-pal-ted-colorpop">${outlineColorSw}</div>`
+      : E._tedColorOpen === "shadow" ? `<div class="es-pal-ted-fxpop"><div class="es-pal-ted-colorpop">${shColorSw}</div>${shOn ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">방향 <small>${shDir}°</small></span><input type="range" class="es-pal-ted-op" id="esTedShDir" min="0" max="360" value="${shDir}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">불투명도 <small>${shOp}%</small></span><input type="range" class="es-pal-ted-op" id="esTedShOp" min="0" max="100" value="${shOp}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">거리 <small>${shDist}</small></span><input type="range" class="es-pal-ted-op" id="esTedShDist" min="0" max="40" value="${shDist}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">흐림 <small>${shBlur}</small></span><input type="range" class="es-pal-ted-op" id="esTedShBlur" min="0" max="50" value="${shBlur}"></div>` : ""}</div>`
+      : E._tedColorOpen === "bg" ? `<div class="es-pal-ted-fxpop"><div class="es-pal-ted-colorpop">${bgs}</div>${bgOn ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">모양</span><div class="es-pal-ted-sw">${bgStyleBtns}</div></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">가로 <small>${cur.bgPadX != null ? cur.bgPadX : 4}</small></span><input type="range" class="es-pal-ted-op" id="esTedBgX" min="0" max="22" value="${cur.bgPadX != null ? cur.bgPadX : 4}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">세로 <small>${cur.bgPadY != null ? cur.bgPadY : 2}</small></span><input type="range" class="es-pal-ted-op" id="esTedBgY" min="0" max="16" value="${cur.bgPadY != null ? cur.bgPadY : 2}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${op}</small></span><input type="range" class="es-pal-ted-op" id="esTedOp" min="0" max="100" value="${op}"></div>` : ""}</div>` : "";
+    const refs = palRefsArr();   // 현재 종류(타이틀/자막)의 글씨박스만
+    const refStrip = refs.length ? `<div class="es-pal-ted-lb">내 ${cap ? "자막" : "타이틀"} 글씨박스 <span class="es-pal-ted-hint">(눌러서 이 칸에 적용)</span></div><div class="es-pal-ted-refs">${refs.map((rf, i) => `<button type="button" class="es-pal-ted-ref" data-tedref="${i}" title="${esc(rf.name || "")}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-ted-refb">✍️</span>` : ""}</button>`).join("")}</div>` : "";
+    const hasTitle = !!(cur.result && cur.result.url);
+    // 📑 라벨(탭) 방식 — 문구/스타일/배치/시간/보관 중 누른 것만 펼침(세로로 다 안 보이게)
+    let tedTab = E._tedTab || "all"; if (tedTab === "text" || tedTab === "style" || tedTab === "pos" || tedTab === "save") tedTab = "all";   // 문구+스타일 한 탭, 보관은 아래 고정
+    const TED_TABS = [["all", "✏️", "문구·스타일"], ["time", "✨", "기능"]];
+    const tedTabBar = `<div class="es-pal-ted-secbar">${TED_TABS.map((t) => `<button type="button" class="es-pal-ted-secbtn ${tedTab === t[0] ? "sel" : ""}" data-tedsec="${t[0]}"><span class="es-pal-ted-secico">${t[1]}</span>${t[2]}</button>`).join("")}</div>`;
+    const secText = `<div class="es-pal-ted-section is-main">
+        <div class="es-pal-ted-sec-h"><b>문구</b><span>고객이 바꿀 글자 칸</span></div>
+        <div class="es-pal-ted-tabs">${tabs}</div>
+        <textarea class="es-pal-ted-text" id="esTedText" rows="2" placeholder="${sel + 1}번칸 ${cap ? "자막" : "문구"} (엔터=줄바꿈)">${esc(cur.text || "")}</textarea>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">정렬</span><div class="es-pal-ted-sw">${alignBtns}<button type="button" class="es-pal-ted-stroke es-pal-ted-italbtn ${italic ? "sel" : ""}" data-teditalic="${italic ? "0" : "1"}" title="기울임"><i>𝑖 기울임</i></button></div></div>
+      </div>`;
+    const secStyle = `<div class="es-pal-ted-section">
+        <div class="es-pal-ted-lb">글씨체 <span class="es-pal-ted-hint">(◀▶ 하나씩 / 눌러서 목록)</span></div>
+        <div class="es-pal-ted-fontpick">
+          <button type="button" class="es-pal-ted-arrow" data-tedfontprev title="이전 글씨체">◀</button>
+          <button type="button" class="es-pal-ted-fontcur" id="esTedFontToggle"><span style="font-family:${titleFontStack(curFont)}">${esc(curFontLabel)}</span> <span class="es-pal-ted-caret">▾</span></button>
+          <button type="button" class="es-pal-ted-arrow" data-tedfontnext title="다음 글씨체">▶</button>
+        </div>
+        ${fontMenu}
+        ${fxRow}
+        ${fxPop}
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">크기 <small>${sz}</small></span><input type="range" class="es-pal-ted-size" id="esTedSize" min="3" max="35" value="${sz}"><button type="button" class="es-pal-ted-mini sm" id="esTedCenter" title="가운데로">⊕</button></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">자간 <small>${ls}</small></span><input type="range" class="es-pal-ted-op" id="esTedLS" min="-10" max="40" value="${ls}"></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">줄간격 <small>${lhR.toFixed(2)}</small></span><input type="range" class="es-pal-ted-op" id="esTedLH" min="80" max="220" value="${Math.round(lhR * 100)}"></div>
+      </div>`;
+    const secTime = `<div class="es-pal-ted-section">
+        <div class="es-pal-ted-sec-h"><b>✨ 나타나는 효과</b><span>이 글자가 화면에 들어올 때</span></div>
+        <div class="es-pal-ted-animgrid">${animInBtns}</div>
+        <button type="button" class="es-pal-ted-mini" id="esTedAnimPlay" style="margin-top:8px">▶ 나타나는 효과 미리보기</button>
+        <div class="es-pal-ted-sec-h" style="margin-top:14px"><b>사라지는 효과</b><span>화면에서 나갈 때</span></div>
+        <div class="es-pal-ted-animgrid">${animOutBtns}</div>
+        <button type="button" class="es-pal-ted-mini" id="esTedAnimPlayOut" style="margin-top:8px">▶ 사라지는 효과 미리보기</button>
+        <div class="es-pal-ted-sec-h" style="margin-top:14px"><b>⏱ 시간</b><span>언제·얼마나 보일지</span></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">머무는 시간</span><div class="es-pal-ted-sw"><button type="button" class="es-pal-ted-stroke ${tDur == null ? "sel" : ""}" id="esTedDurAll">♾ 쭉 보이기</button><button type="button" class="es-pal-ted-stroke ${tDur != null ? "sel" : ""}" id="esTedDurSet">⏱ 시간 정하기</button></div></div>
+        ${tDur != null ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">⏱ <small>${durLabel}</small></span><input type="range" class="es-pal-ted-size" id="esTedDur" min="0.5" max="10" step="0.5" value="${tDur}"></div>` : `<div class="es-pal-ted-hint" style="margin-top:4px">${durLabel} — '시간 정하기'를 누르면 몇 초만 보일지 정할 수 있어요</div>`}
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${startLabel}</small></span><input type="range" class="es-pal-ted-size" id="esTedStart" min="0" max="8" step="0.5" value="${tStart}"></div>
+      </div>`;
+    const secSave = `<div class="es-pal-ted-section es-pal-ted-savebox">
+        <div class="es-pal-ted-sec-h"><b>📌 보관</b><span>저장하면 고객 화면에서 골라 쓸 수 있어요</span></div>
+        <button type="button" class="es-pal-ted-save ${hasTitle ? "" : "off"}" id="esTedSaveRef">📌 이 칸을 내 ${cap ? "자막" : "타이틀"} 글씨박스에 저장</button>
+      </div>`;
+    const SEC = { all: `${secText}${secStyle}`, time: secTime };
+    return `<div class="es-pal-ted">
+      <div class="es-pal-ted-top">
+        <div><div class="es-pal-ted-k">문구 편집</div><div class="es-pal-ted-h">${cap ? "자막 작업대" : "타이틀 작업대"}</div></div>
+        <span class="es-pal-ted-state">${sel + 1}번칸</span>
+      </div>
+      ${tedTabBar}
+      ${SEC[tedTab] || SEC.all}
+      ${secSave}
+    </div>`;
+  }
+  // 📱 릴스(9:16) 전체화면 미리보기 — 사진 위에 모든 칸 타이틀·자막을 시간(머무는 시간)대로 보였다 숨김
+  function palReelsPreview() {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    const m = list[0] || null;
+    const media = m && m.url ? (m.kind === "video" ? `<video id="esReelsVid" src="${m.url}" autoplay muted loop playsinline></video>` : `<img src="${m.url}" alt="">`) : `<div class="es-pal-reels-empty">📷 사진·영상을 먼저 넣으면 그 위에 보여요</div>`;
+    const blocks = [...(d.titles || []), ...(d.captions || [])].filter((t) => t.result && t.result.url);
+    const metas = blocks.map((t) => ({ start: t.start != null ? t.start : 0, dur: t.dur != null ? t.dur : null, animIn: t.animIn || "none", animOut: t.animOut || "none" }));
+    const tiles = blocks.map((t, i) => {
+      const op = (t.opacity != null ? t.opacity : 100) / 100; const padX = t.bgPadX != null ? t.bgPadX : 4, padY = t.bgPadY != null ? t.bgPadY : 2;
+      const bgS = t.bg ? `background:${hexToRgba(t.bg, op)}; border-radius:${_bgRadius(t.bgStyle)}; padding:${padY}cqh ${padX}cqw;` : "";
+      return `<div class="es-pal-reels-title" data-rt="${i}" data-start="${t.start != null ? t.start : 0}" data-dur="${t.dur != null ? t.dur : ""}" style="left:${t.posX != null ? t.posX : 50}%; top:${t.posY != null ? t.posY : 18}%; height:${palBoxH(t, t.size != null ? t.size : 14)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}"><img src="${t.result.url}" alt=""></div>`;
+    }).join("");
+    const maxT = Math.max(5, ...metas.map((mm) => (mm.start || 0) + (mm.dur != null ? mm.dur : 3)));
+    const ov = document.createElement("div"); ov.className = "es-pal-reels"; ov.id = "esReels";
+    ov.innerHTML = `<div class="es-pal-reels-phone">${media}${tiles}<div class="es-pal-reels-time" style="position:absolute;left:0;right:0;bottom:0;padding:7px 11px 9px;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));display:flex;align-items:center;gap:8px;pointer-events:none"><span id="esReelsClock" style="min-width:42px">0.0초</span><span style="flex:1;height:4px;background:rgba(255,255,255,.28);border-radius:2px;overflow:hidden"><i id="esReelsBar" style="display:block;height:100%;width:0;background:#1ed6a5"></i></span></div><button type="button" class="es-pal-reels-x" id="esReelsX">✕ 닫기</button></div>`;
+    document.body.appendChild(ov);
+    const vid = ov.querySelector("#esReelsVid");
+    const tEls = Array.from(ov.querySelectorAll("[data-rt]"));
+    const clock = ov.querySelector("#esReelsClock"), bar = ov.querySelector("#esReelsBar");
+    let timer = 0; const t0 = performance.now();   // performance.now()=실시간(탭 숨겨도 흐름), setInterval=탭 가려도 도는 검증
+    const tick = () => {
+      const useVid = vid && isFinite(vid.duration) && vid.duration > 0;
+      const t = useVid ? vid.currentTime : (((performance.now() - t0) / 1000) % maxT);
+      const denom = useVid ? vid.duration : maxT;
+      tEls.forEach((el, i) => { const mm = metas[i]; const on = t >= mm.start && (mm.dur == null || t < mm.start + mm.dur); if (on === el._lastOn) return; el._lastOn = on; if (on) { if (mm.animIn !== "none") { el.style.animation = "none"; void el.offsetWidth; el.style.animation = `anim-${mm.animIn} 0.5s both`; } else { el.style.animation = ""; el.style.opacity = "1"; } } else { if (mm.animOut !== "none") { el.style.animation = "none"; void el.offsetWidth; el.style.animation = `anim-out-${mm.animOut} 0.4s both`; } else { el.style.animation = ""; el.style.opacity = "0"; } } });   // ✨ 등장 effectIn / 퇴장 effectOut 애니메이션
+      if (clock) clock.textContent = t.toFixed(1) + "초";
+      if (bar) bar.style.width = Math.min(100, (t / denom) * 100) + "%";
+    };
+    tick(); timer = setInterval(tick, 60);
+    const close = () => { try { clearInterval(timer); } catch (_) {} try { ov.remove(); } catch (_) {} };
+    ov.addEventListener("click", (e) => { if (e.target === ov || e.target.id === "esReelsX") close(); });
+  }
+  // 현재(선택된) 칸을 실제 폰트로 렌더
+  async function palTitleRender() { await palTitleRenderBlock(palCurTitle()); }
+  function palSyncRefStyle() {}   // (다중 칸 전환 — 참조 자동동기화 중단, 저장은 명시적으로)
+  // 현재 칸을 '타이틀 참조'(가운데)에 맨 앞으로 추가 — 글씨체·색·배경·위치·크기 담아서
+  async function palSaveTitleAsRef() {
+    const P = E.palette; if (!P) return; const cur = palCurTitle();
+    if (!(cur.result && cur.result.blob)) { try { toast("먼저 이 칸 문구를 입력해 주세요"); } catch (_) {} return; }
+    const font = cur.font || null;
+    try {
+      const dataUrl = await tmBlobToDataUri(cur.result.blob);
+      const cap = E._palEditKind === "caption";
+      const arr = palRefsArr();   // 현재 종류(타이틀/자막) 글씨박스에 따로 저장
+      const nm = font ? "✍️ " + ((MY_FONT_MAP[font] && MY_FONT_MAP[font].k) || "글자체") : (cap ? "내가 만든 자막" : "내가 만든 타이틀");
+      // 🅰🅱🅲 칸 개수까지 통째로 저장 — 현재 만든 모든 칸(글자·스타일·위치·효과)을 slots 에 담음
+      const _slots = palTitles().map((t) => ({ text: t.text || "", font: t.font || null, color: t.color || null, stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : null, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : (cap ? 88 : 18), size: t.size != null ? t.size : (cap ? 7 : 14), bg: t.bg || null, opacity: t.opacity != null ? t.opacity : 100, align: t.align || "center", bgStyle: t.bgStyle || "box", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none" }));
+      const rf = { id: uid(), dataUrl, name: nm, text: cur.text || "", font: font || null, color: cur.color || null, stroke: cur.stroke != null ? cur.stroke : null, kind: font ? "font" : null,
+        posX: cur.posX != null ? cur.posX : 50, posY: cur.posY != null ? cur.posY : (cap ? 88 : 18), size: cur.size != null ? cur.size : (cap ? 7 : 14),
+        bg: cur.bg || null, opacity: cur.opacity != null ? cur.opacity : 100,
+        align: cur.align || "center", bgStyle: cur.bgStyle || "box", bgPadX: cur.bgPadX != null ? cur.bgPadX : 4, bgPadY: cur.bgPadY != null ? cur.bgPadY : 2,
+        start: cur.start != null ? cur.start : 0, dur: cur.dur !== undefined ? cur.dur : null,
+        letterSpacing: cur.letterSpacing || 0, lineHeight: cur.lineHeight || 1.22, italic: !!cur.italic, shadow: cur.shadow ? Object.assign({}, cur.shadow) : null, animIn: cur.animIn || "none", animOut: cur.animOut || "none", slots: _slots };   // 글씨·스타일·시간·그림자·효과 + 칸 묶음(slots) 전부 저장
+      arr.unshift(rf);
+      try { savePalRefs(); } catch (_) {}
+      try { toast(cap ? "📌 자막 글씨박스에 저장됐어요" : "📌 타이틀 글씨박스에 저장됐어요"); } catch (_) {}
+      renderPalette();
+    } catch (_) {}
+  }
+  // 🎬 편집 트랙 — 추가한 기능을 컷편집창처럼 순서대로 레인으로. 고객이 채운 값(P.demo)이 들어감.
+  function paletteTracks(P) {
+    const order = (P.steps || []).map((s) => s.fn).filter(Boolean);
+    if (!order.length) return `<div class="es-pal-trk-empty">단계에 기능을 넣으면 여기 트랙이 쌓여요</div>`;
+    const d = P.demo || {};
+    return order.map((fn, i) => {
+      const f = paletteFn(fn) || { icon: "•", label: fn };
+      let val = "", on = false, kind = "";
+      switch (fn) {
+        case "media":   kind = "vid"; { const ml = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []); if (ml.length) { on = true; val = ml.length + "개 — " + esc((ml[0].name || "영상").slice(0, 12)); } else val = "사진·영상 대기"; } break;
+        case "tref":    kind = "txt"; { on = !!d.titleRef; val = d.titleRef ? "✅ 스타일 골랐어요" : "참조사진 고르기 대기"; } break;
+        case "tgen":    kind = "txt"; { const ts = Array.isArray(d.titles) ? d.titles : []; const filled = ts.filter((t) => (t.text || "").trim()); if (filled.length) { on = true; val = filled.length > 1 ? `✍️ ${filled.length}칸 타이틀` : "“" + esc((filled[0].text || "").replace(/\n/g, " ")) + "”"; } else val = "타이틀 입력 대기"; } break;
+        case "tpos":    kind = "len"; { const ts = Array.isArray(d.titles) ? d.titles : []; const any = ts.some((t) => t.result); on = any; val = any ? "🔲 크기·위치 조정" : "타이틀 만든 뒤 조정"; } break;
+        case "cref":    kind = "txt"; { on = !!d.captionRef; val = d.captionRef ? "✅ 자막 스타일 골랐어요" : "자막 참조 고르기 대기"; } break;
+        case "caption": kind = "txt"; { const cs = Array.isArray(d.captions) ? d.captions : []; const filled = cs.filter((t) => (t.text || "").trim()); if (filled.length) { on = true; val = filled.length > 1 ? `💬 ${filled.length}칸 자막` : "“" + esc((filled[0].text || "").replace(/\n/g, " ")) + "”"; } else val = "자막 입력 대기"; } break;
+        case "narrate": kind = "aud"; on = true; val = "🎙 AI 음성으로 자막 읽기"; break;
+        case "music":   kind = "aud"; on = true; val = "🎵 배경음악 깔림"; break;
+        case "length":  kind = "len"; on = true; val = "✂️ 컷 길이 조절"; break;
+        default:        val = f.label;
+      }
+      const _m0 = (fn === "media") ? ((Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []))[0] || null) : null;
+      const thumb = _m0 ? `<span class="es-pal-trk-thumb">${_m0.kind === "video" ? `<video src="${_m0.url}" muted></video>` : `<img src="${_m0.url}" alt="">`}</span>` : "";
+      return `<div class="es-pal-trk ${on ? "on" : ""} trk-${kind}"><span class="es-pal-trk-n">${i + 1}</span><span class="es-pal-trk-ic">${f.icon}</span>${thumb}<div class="es-pal-trk-body"><span class="es-pal-trk-lb">${esc(f.label)}</span><span class="es-pal-trk-val">${val}</span></div></div>`;
+    }).join("");
+  }
+  // 📹 영상 찍기 — 앱 안에서 카메라로 바로 녹화(getUserMedia + MediaRecorder). 다 찍으면 onDone(File) 호출(취소면 null). localhost/https 필요.
+  function palOpenCamera(onDone) {
+    let stream = null, recorder = null, chunks = [], timerIv = null, recording = false, fired = false;
+    const ov = document.createElement("div");
+    ov.className = "es-pal-cam";
+    ov.innerHTML = `<div class="es-pal-cam-box">
+        <div class="es-pal-cam-head"><b>📹 영상 찍기</b><button type="button" class="es-pal-cam-x" id="esCamX" aria-label="닫기">✕</button></div>
+        <div class="es-pal-cam-stage"><video id="esCamVid" autoplay muted playsinline></video><div class="es-pal-cam-rec" id="esCamDot" hidden><span></span><em id="esCamTime">0:00</em></div></div>
+        <div class="es-pal-cam-msg" id="esCamMsg">카메라 준비 중…</div>
+        <button type="button" class="es-pal-cam-shoot" id="esCamShoot" disabled>● 촬영 시작</button>
+      </div>`;
+    (document.getElementById("easyRoot") || document.body).appendChild(ov);
+    const q = (s) => ov.querySelector(s);
+    const done = (file) => { if (fired) return; fired = true; try { if (timerIv) clearInterval(timerIv); } catch (_) {} try { if (stream) stream.getTracks().forEach((t) => t.stop()); } catch (_) {} try { ov.remove(); } catch (_) {} if (onDone) onDone(file || null); };
+    q("#esCamX").addEventListener("click", () => { if (recording && recorder) { try { recorder.stop(); } catch (_) {} } done(null); });
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+        const v = q("#esCamVid"); if (v) v.srcObject = stream;
+        q("#esCamMsg").textContent = "● 촬영 시작을 누르고, 다 찍으면 ■ 완료를 누르세요";
+        q("#esCamShoot").disabled = false;
+      } catch (e) {
+        q("#esCamMsg").innerHTML = "카메라를 열 수 없어요 (" + esc((e && e.message) || "권한 거부") + ").<br>대신 <b>영상 첨부</b>로 넣어주세요.";
+      }
+    })();
+    q("#esCamShoot").addEventListener("click", () => {
+      if (!stream) return;
+      if (!recording) {
+        chunks = [];
+        let mime = "";
+        try { ["video/mp4", "video/webm;codecs=vp9", "video/webm"].some((m) => { if (MediaRecorder.isTypeSupported(m)) { mime = m; return true; } return false; }); } catch (_) {}
+        try { recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); } catch (_) { try { recorder = new MediaRecorder(stream); } catch (e2) { q("#esCamMsg").textContent = "이 브라우저는 녹화를 지원하지 않아요 — '영상 첨부'를 써주세요."; return; } }
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        recorder.onstop = () => { const type = (recorder.mimeType || "video/webm").split(";")[0]; const ext = type.indexOf("mp4") >= 0 ? "mp4" : "webm"; done(new File(chunks, "촬영영상." + ext, { type })); };
+        try { recorder.start(); } catch (_) { q("#esCamMsg").textContent = "녹화를 시작할 수 없어요 — '영상 첨부'를 써주세요."; return; }
+        recording = true;
+        q("#esCamShoot").textContent = "■ 촬영 완료"; q("#esCamShoot").classList.add("rec"); q("#esCamDot").hidden = false;
+        const t0 = Date.now();
+        timerIv = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); const el = q("#esCamTime"); if (el) el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 250);
+      } else {
+        try { recorder.stop(); } catch (_) {}
+      }
+    });
+  }
+  // ✨ 팔레트 타이틀 단계 — 참조사진 + 제목 → AI(gpt-image-2 저화질) 로 타이틀 이미지 생성. 실제 마법사와 같은 /api/easy-title.
+  async function palTitleGenerate() {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const text = String(d.title || "").trim();
+    const status = $("#esTStatus"), btn = $("#esTGen");
+    if (!text) { if (status) status.textContent = "먼저 제목을 입력해 주세요."; return; }
+    const reqBody = { action: "generate", text, quality: "low" };   // 🎚 저화질 = gpt-image-2 low(~9원)
+    if (d.titleRef && d.titleRef.dataUrl) reqBody.refImage = d.titleRef.dataUrl;   // 🖼 참조사진 → images/edits
+    else reqBody.style = "movie";
+    if (btn) btn.disabled = true;
+    if (status) status.innerHTML = `<span class="es-title-spin"></span> AI가 제목 2개 만드는 중… (20~60초)`;
+    // 팔레트는 로컬(바탕화면 아이콘)서 돌아도 배포된 API로 바로 → 로컬 API 서버 없이도 생성됨(CORS 허용)
+    const ep = "https://sc-pink.vercel.app/api/easy-title";
+    async function genOne() {   // 한 번 호출 → 키잉된 투명 PNG blob 하나
+      const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(reqBody) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      if (j.transparent) return await (await fetch(j.image)).blob();
+      const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("이미지 로드 실패")); img.src = j.image; });
+      const b = await titleKeyBg(img, j.bg || "#ffffff"); if (!b) throw new Error("배경 처리 실패"); return b;
+    }
+    try {
+      // 🅰🅱 후보 2개 동시 생성 → 사장님이 둘 중 하나 고름(각 호출마다 결과가 달라짐)
+      const settled = await Promise.allSettled([genOne(), genOne()]);
+      const blobs = settled.filter((s) => s.status === "fulfilled" && s.value).map((s) => s.value);
+      if (!blobs.length) { const f = settled.find((s) => s.status === "rejected"); throw (f && f.reason) || new Error("생성 실패"); }
+      // 이전 후보/결과 URL 정리
+      try { (d.titleResults || []).forEach((t) => { if (t && t.url) URL.revokeObjectURL(t.url); }); } catch (_) {}
+      try { if (d.titleResult && d.titleResult.url && !(d.titleResults || []).some((t) => t.url === d.titleResult.url)) URL.revokeObjectURL(d.titleResult.url); } catch (_) {}
+      d.titleResults = blobs.map((b) => ({ url: URL.createObjectURL(b), blob: b }));
+      d.titleResult = d.titleResults[0];   // 기본은 1안 선택 — 손님이 탭해서 바꿈
+      if (status) status.textContent = blobs.length >= 2 ? "✅ 2개 완성! 마음에 드는 걸 눌러서 골라요" : "✅ 1개 완성(나머지는 실패) — 다시 누르면 또 만들어요";
+      renderPalette(); palDraftSave();
+    } catch (e) {
+      if (status) status.textContent = "😢 생성 실패: " + ((e && e.message) || e);
+      if (btn) btn.disabled = false;
+    }
+  }
+  // 🖼 글씨박스(참조 라이브러리) — 타이틀/자막 '따로' 보관. 타이틀=E.palTitleRefs(idb 'palTitleRefLib'), 자막=E.palCaptionRefs(idb 'palCaptionRefLib').
+  function palRefsArr(kind) { const cap = (kind || E._palEditKind || "title") === "caption"; const key = cap ? "palCaptionRefs" : "palTitleRefs"; if (!Array.isArray(E[key])) E[key] = []; return E[key]; }   // 현재(또는 지정) 종류의 글씨박스 배열
+  // 📌 글씨박스(프리셋) → 현재 칸에 '전부' 적용 — 누락 필드는 기본값으로 명시(현재 설정을 절대 안 따라가게), 옛 size(>35)는 기본 크기로
+  function palApplyRef(cur, rf) {
+    const cap = E._palEditKind === "caption";
+    if (rf.text != null) cur.text = rf.text;   // 글씨(글자 내용)까지 복원 — 누른 뒤 바꿀 수 있음
+    cur.posX = rf.posX != null ? rf.posX : 50;
+    cur.posY = rf.posY != null ? rf.posY : (cap ? 88 : 18);
+    cur.size = (rf.size != null && rf.size <= 35) ? Math.max(3, rf.size) : (cap ? 7 : 14);
+    if (rf.font) cur.font = rf.font;
+    cur.color = rf.color || "#ffffff";
+    cur.stroke = (rf.stroke != null && rf.stroke !== "#111111") ? rf.stroke : "";   // 글씨박스 외곽선 정보 없거나 구 기본(#111111)이면 외곽선 없음
+    cur.bg = rf.bg || "";
+    cur.opacity = rf.opacity != null ? rf.opacity : 100;
+    cur.align = rf.align || "center";
+    cur.bgStyle = rf.bgStyle || "box";
+    cur.bgPadX = rf.bgPadX != null ? rf.bgPadX : 4;
+    cur.bgPadY = rf.bgPadY != null ? rf.bgPadY : 2;
+    cur.start = rf.start != null ? rf.start : 0;
+    cur.dur = rf.dur !== undefined ? rf.dur : null;
+    cur.letterSpacing = rf.letterSpacing != null ? rf.letterSpacing : 0;
+    cur.lineHeight = rf.lineHeight != null ? rf.lineHeight : 1.22;
+    cur.italic = !!rf.italic;
+    cur.shadow = rf.shadow ? Object.assign({}, rf.shadow) : null;
+    cur.animIn = rf.animIn || "none";
+    cur.animOut = rf.animOut || "none";
+  }
+  // 🅰🅱🅲 글씨박스(slots)로 칸 전체 복원 — 칸 개수까지 맞춤. 옛 단일 글씨박스(slots 없음)는 palApplyRef 사용
+  function palApplyRefSlots(rf) {
+    if (!Array.isArray(rf.slots) || !rf.slots.length) return false;
+    const cap = E._palEditKind === "caption";
+    const arr = palTitles();
+    arr.forEach((t) => { try { if (t.result && t.result.url) URL.revokeObjectURL(t.result.url); } catch (_) {} });
+    arr.length = 0;
+    rf.slots.forEach((s, i) => {
+      const blk = palNewBlock(null, i);
+      if (s.text != null) blk.text = s.text;
+      if (s.font) blk.font = s.font;
+      blk.color = s.color || "#ffffff";
+      blk.stroke = (s.stroke != null && s.stroke !== "#111111") ? s.stroke : "";
+      blk.size = (s.size != null && s.size <= 35) ? Math.max(3, s.size) : (cap ? 7 : 14);
+      blk.posX = s.posX != null ? s.posX : 50;
+      blk.posY = s.posY != null ? s.posY : (cap ? 88 : 18);
+      blk.opacity = s.opacity != null ? s.opacity : 100;
+      blk.bg = s.bg || "";
+      blk.bgStyle = s.bgStyle || "box";
+      blk.align = s.align || "center";
+      blk.bgPadX = s.bgPadX != null ? s.bgPadX : 4;
+      blk.bgPadY = s.bgPadY != null ? s.bgPadY : 2;
+      blk.start = s.start != null ? s.start : 0;
+      blk.dur = s.dur !== undefined ? s.dur : null;
+      blk.letterSpacing = s.letterSpacing || 0;
+      blk.lineHeight = s.lineHeight || 1.22;
+      blk.italic = !!s.italic;
+      blk.shadow = s.shadow ? Object.assign({}, s.shadow) : null;
+      blk.animIn = s.animIn || "none";
+      blk.animOut = s.animOut || "none";
+      arr.push(blk);
+    });
+    palSetSel(0);
+    return true;
+  }
+  function palRefsIdbKey(kind) { return ((kind || E._palEditKind || "title") === "caption") ? "palCaptionRefLib" : "palTitleRefLib"; }
+  async function savePalRefs(kind) { const arr = palRefsArr(kind); try { await idbSet(palRefsIdbKey(kind), arr.map((r) => ({ id: r.id, dataUrl: r.dataUrl, name: r.name, text: r.text != null ? r.text : null, font: r.font || null, color: r.color || null, stroke: (r.stroke != null && r.stroke !== "#111111") ? r.stroke : null, kind: r.kind || null, posX: r.posX != null ? r.posX : null, posY: r.posY != null ? r.posY : null, size: r.size != null ? r.size : null, bg: r.bg || null, opacity: r.opacity != null ? r.opacity : null, align: r.align || null, bgStyle: r.bgStyle || null, bgPadX: r.bgPadX != null ? r.bgPadX : null, bgPadY: r.bgPadY != null ? r.bgPadY : null, start: r.start != null ? r.start : null, dur: r.dur !== undefined ? r.dur : null, letterSpacing: r.letterSpacing || 0, lineHeight: r.lineHeight || 1.22, italic: !!r.italic, shadow: r.shadow ? Object.assign({}, r.shadow) : null, animIn: r.animIn || "none", animOut: r.animOut || "none", slots: Array.isArray(r.slots) ? r.slots : null }))); } catch (_) {} }
+  async function loadPalTitleRefs() {   // 둘 다 불러오기(1회)
+    try { const a = await idbGet("palTitleRefLib"); E.palTitleRefs = Array.isArray(a) ? a : []; } catch (_) { E.palTitleRefs = []; }
+    try { const b = await idbGet("palCaptionRefLib"); E.palCaptionRefs = Array.isArray(b) ? b : []; } catch (_) { E.palCaptionRefs = []; }
+  }
+  async function savePalTitleRefs() { return savePalRefs(); }   // 현재 종류 저장(이전 호출 호환)
+  // 관리자가 미리보기에서 끌어 옮긴 위치·크기를 '선택된 참조'에 그대로 저장(=고객이 그 배치 그대로 씀)
+  function palSyncRefPos() {}   // (다중 칸 전환 — 참조 자동동기화 중단; 저장은 '이 칸을 참조에 저장'으로 명시적)
+  function palAddTitleRefData(dataUrl, name, extra) {   // dataUrl 을 (현재 종류) 글씨박스에 추가(영구) + 그걸로 선택. extra=위치·크기·글자체메타
+    if (!dataUrl) return;
+    const arr = palRefsArr();
+    const rf = Object.assign({ id: uid(), dataUrl, name: name || "참조" }, extra || {});
+    arr.push(rf);
+    try { savePalRefs(); } catch (_) {}
+    const P = E.palette; if (P && P.demo) P.demo.titleRef = rf;
+    renderPalette();
+  }
+  function palAddTitleRef(file) {   // 파일/드롭/붙여넣기 → dataUrl → 라이브러리
+    if (!file || !/^image\//.test(file.type || "")) return;
+    const fr = new FileReader();
+    fr.onload = () => palAddTitleRefData(fr.result, file.name || "참조");
+    fr.readAsDataURL(file);
+  }
+  async function palAddGenToRef() {   // ✨ AI로 만든 타이틀(demo.titleResult)을 참조 라이브러리에 저장
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const blob = d.titleResult && d.titleResult.blob; if (!blob) return;
+    const src = (d.titleRef && d.titleRef.kind === "font") ? d.titleRef : null;   // 글자체에서 온 거면 글자체 참조로(글자만 바꿔 재사용)
+    const extra = { posX: d.titlePosX != null ? d.titlePosX : 50, posY: d.titlePosY != null ? d.titlePosY : 18, size: d.titleSize != null ? d.titleSize : 64, font: src ? src.font : null, color: src ? src.color : null, stroke: src ? src.stroke : null, kind: src ? "font" : null };
+    try { const dataUrl = await tmBlobToDataUri(blob); palAddTitleRefData(dataUrl, src ? d.titleRef.name : "내가 만든 타이틀", extra); try { toast("📌 이 배치(위치·크기) 그대로 참조에 저장됐어요"); } catch (_) {} } catch (_) {}
+  }
+  // ✍️ 실제 글씨체(폰트)로 타이틀 렌더 — AI 없이 진짜 폰트로 투명 PNG 생성(초록 번짐·외곽선 문제 0, 즉시·무료)
+  // ✍️ 사장님이 모아둔 글씨체 — easy/fonts/myfonts.css 의 @font-face (family=파일명). 글자체 타이틀 메이커 전용.
+  const MY_FONTS = [
+    { f: "pretendard-bold", k: "프리텐다드", g: "깔끔" },
+    { f: "giants-bold", k: "자이언츠 볼드", g: "타이틀·임팩트" },
+    { f: "giants-inline", k: "자이언츠 인라인", g: "타이틀·임팩트" },
+    { f: "giants", k: "자이언츠", g: "타이틀·임팩트" },
+    { f: "kbljump-eb", k: "KBL점프 굵게", g: "타이틀·임팩트" },
+    { f: "kbljump", k: "KBL점프", g: "타이틀·임팩트" },
+    { f: "kblcourt", k: "KBL코트", g: "타이틀·임팩트" },
+    { f: "bm-dohyeon", k: "배민 도현", g: "타이틀·임팩트" },
+    { f: "bm-jua", k: "배민 주아", g: "타이틀·임팩트" },
+    { f: "bm-euljiro", k: "배민 을지로", g: "타이틀·임팩트" },
+    { f: "bm-euljiro10", k: "배민 을지로 10년후", g: "타이틀·임팩트" },
+    { f: "bm-euljiro-orae", k: "배민 을지로 오래오래", g: "타이틀·임팩트" },
+    { f: "bm-kirang", k: "배민 기랑해랑", g: "손글씨·감성" },
+    { f: "bm-kkubulim", k: "배민 꾸불림", g: "손글씨·감성" },
+    { f: "bm-hanna-pro", k: "배민 한나 프로", g: "타이틀·임팩트" },
+    { f: "bm-hanna-air", k: "배민 한나 에어", g: "깔끔" },
+    { f: "bm-hanna11", k: "배민 한나 11세", g: "타이틀·임팩트" },
+    { f: "bm-yeonsung", k: "배민 연성", g: "손글씨·감성" },
+    { f: "shilla-b", k: "신라문화 볼드", g: "타이틀·임팩트" },
+    { f: "shilla", k: "신라문화", g: "깔끔" },
+    { f: "gapyeong-hanseokbong-b", k: "가평 한석봉 볼드", g: "감성 명조" },
+    { f: "gapyeong-hanseokbong", k: "가평 한석봉", g: "감성 명조" },
+    { f: "heiroflight-bold", k: "빛의계승자 볼드", g: "타이틀·임팩트" },
+    { f: "heiroflight", k: "빛의계승자", g: "깔끔" },
+    { f: "kyobo-handwriting", k: "교보 손글씨", g: "손글씨·감성" },
+    { f: "gapyeong-wave", k: "가평 물결", g: "손글씨·감성" },
+    { f: "jejudoldam", k: "제주돌담", g: "손글씨·감성" },
+    { f: "childfund-daehan", k: "초록우산 대한", g: "손글씨·감성" },
+    { f: "childfund-manseh", k: "초록우산 만세", g: "손글씨·감성" },
+    { f: "childfund-minguk", k: "초록우산 민국", g: "손글씨·감성" },
+    { f: "maru-minya", k: "마루미냐 픽셀", g: "복고·픽셀" },
+    { f: "mona12", k: "모나 픽셀", g: "복고·픽셀" },
+  ];
+  const MY_FONT_MAP = {}; MY_FONTS.forEach((f) => { MY_FONT_MAP[f.f] = f; });
+  // 타이틀 폰트 스택 — 로컬(myfonts.css)·CDN(CAPTION) 어느 쪽이든 그 family 를 그대로 씀
+  function titleFontStack(fam) { return fam ? `'${fam}', -apple-system, 'Apple SD Gothic Neo', sans-serif` : `-apple-system, 'Apple SD Gothic Neo', sans-serif`; }   // 작은따옴표 — style="" 속성 안에서도 안 깨짐
+  async function renderFontToBlob(opts) {
+    const text = String((opts && opts.text) || "").trim() || "가나다";
+    const fam = (opts && opts.font) || "";
+    const color = (opts && opts.color) || "#ffffff";
+    const stroke = (opts && opts.stroke) || "";
+    if (fam) {   // 그 폰트만 로드 + 최대 2.5초만 대기(절대 안 멈추게 — document.fonts.ready 는 다 기다려서 위험). 로컬은 myfonts.css 가 이미 선언함.
+      loadCaptionFont(fam);
+      try { await Promise.race([document.fonts.load(`140px "${fam}"`), new Promise((res) => setTimeout(res, 2500))]); } catch (_) {}
+    }
+    const ls = (opts && +opts.letterSpacing) || 0;   // 자간(px @ FS150)
+    const lhR = (opts && +opts.lineHeight) || 1.22;   // 줄간격 배율
+    const ital = (opts && opts.italic) ? "italic " : "";   // 비스듬히(기울임)
+    const lines = text.split("\n");
+    const FS = 150, LH = Math.round(FS * lhR), PAD = Math.round(FS * 0.34);
+    const ff = titleFontStack(fam);   // 굵게(700) 강제 안 함 — 페이크볼드로 글씨체 망가지는 것 방지(파일 자체 굵기 사용)
+    const fontStr = `${ital}${FS}px ${ff}`;
+    const mctx = document.createElement("canvas").getContext("2d");
+    mctx.font = fontStr;
+    try { if ("letterSpacing" in mctx) mctx.letterSpacing = ls + "px"; } catch (_) {}
+    let maxW = 0; lines.forEach((L) => { maxW = Math.max(maxW, mctx.measureText(L || " ").width); });
+    const sw = stroke ? Math.ceil(FS * 0.13) : 0;
+    const sh = (opts && opts.shadow) || null;   // 그림자 {color,dir,op,dist,blur} 또는 null
+    const shScale = FS / 30;
+    const shDist = sh ? (sh.dist != null ? sh.dist : 0) * shScale : 0;
+    const shBlur = sh ? (sh.blur != null ? sh.blur : 22) * shScale : 0;
+    const shRad = sh ? ((sh.dir != null ? sh.dir : 315) * Math.PI / 180) : 0;
+    const shOX = sh ? Math.cos(shRad) * shDist : 0, shOY = sh ? Math.sin(shRad) * shDist : 0;
+    const shColor = sh ? hexToRgba(sh.color || "#000000", (sh.op != null ? sh.op : 55) / 100) : "";
+    const shPad = sh ? Math.ceil(shDist + shBlur + 6) : 0;   // 그림자 잘림 방지 여유
+    const sidePad = PAD + sw + (ital ? Math.ceil(FS * 0.22) : 0) + shPad;   // 기울임·그림자 가로 여유
+    const W = Math.max(2, Math.ceil(maxW + sidePad * 2)), H = Math.max(2, Math.ceil(lines.length * LH + PAD * 2 + shPad * 2));
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const align = (opts && opts.align) || "center";   // 글자(텍스트) 정렬 — 여러 줄을 왼/가운데/오른쪽으로
+    ctx.font = fontStr; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    try { if ("letterSpacing" in ctx) ctx.letterSpacing = ls + "px"; } catch (_) {}
+    ctx.textAlign = align === "left" ? "left" : align === "right" ? "right" : "center";
+    const ax = align === "left" ? sidePad : align === "right" ? (W - sidePad) : (W / 2);
+    lines.forEach((L, i) => {
+      const y = PAD + shPad + LH * i + LH / 2;
+      if (stroke) { ctx.shadowColor = "transparent"; ctx.strokeStyle = stroke; ctx.lineWidth = sw * 2; ctx.strokeText(L, ax, y); }
+      if (sh) { ctx.shadowColor = shColor; ctx.shadowBlur = shBlur; ctx.shadowOffsetX = shOX; ctx.shadowOffsetY = shOY; }   // 그림자(방향·불투명도·거리·흐림)
+      ctx.fillStyle = color; ctx.fillText(L, ax, y);
+      ctx.shadowColor = "transparent";
+    });
+    return await new Promise((res) => cv.toBlob(res, "image/png"));
+  }
+  const FONT_TITLE_COLORS = ["#ffffff", "#111111", "#ffd54a", "#ff5252", "#1ed6a5", "#2979ff", "#ff8f3a", "#c44dff"];
+  const FONT_TITLE_STROKES = [["", "없음"], ["#000000", "검정"], ["#ffffff", "흰"]];
+  // ✍️ 글자체로 '타이틀 참조' 만들기 — 오버레이(글씨체+색+테두리 고르고 참조에 저장, 맨 앞에)
+  function palOpenFontMaker() {
+    if (document.getElementById("esFontMaker")) return;
+    if (!E._fontMaker) E._fontMaker = { font: "giants-bold", color: "#ffffff", stroke: "", text: "" };
+    const ov = document.createElement("div"); ov.id = "esFontMaker"; ov.className = "es-pal-fm";
+    document.body.appendChild(ov);
+    renderFontMaker();
+  }
+  function renderFontMaker() {
+    const ov = document.getElementById("esFontMaker"); if (!ov) return;
+    const st = E._fontMaker; const sample = (st.text || "").replace(/\n/g, " ").trim().slice(0, 10) || "가나다 AB";
+    const gal = MY_FONTS.map((ft) => `<button type="button" class="es-pal-fm-opt ${st.font === ft.f ? "sel" : ""}" data-fmfont="${esc(ft.f)}"><span class="es-pal-fm-samp" style="font-family:${titleFontStack(ft.f)}">${esc(sample)}</span><span class="es-pal-fm-nm">${esc(ft.k)}</span></button>`).join("");
+    const sw = FONT_TITLE_COLORS.map((c) => `<button type="button" class="es-pal-fm-color ${(st.color || "").toLowerCase() === c ? "sel" : ""}" data-fmcolor="${c}" style="background:${c}"></button>`).join("");
+    const stb = FONT_TITLE_STROKES.map((s) => `<button type="button" class="es-pal-fm-stroke ${(st.stroke || "") === s[0] ? "sel" : ""}" data-fmstroke="${s[0]}">${s[1]}</button>`).join("");
+    ov.innerHTML = `<div class="es-pal-fm-card">
+      <div class="es-pal-fm-h">✍️ 글자체로 타이틀 만들기<button type="button" class="es-pal-fm-x" id="esFMClose">✕</button></div>
+      <div class="es-pal-fm-prevwrap"><div class="es-pal-fm-prev" id="esFMPrev"></div></div>
+      <textarea class="es-pal-fm-text" id="esFMText" rows="2" placeholder="미리볼 문구 (엔터=줄바꿈) — 손님은 나중에 자기 문구를 써넣어요">${esc(st.text || "")}</textarea>
+      <div class="es-pal-fm-lb">① 글씨체</div><div class="es-pal-fm-gal">${gal}</div>
+      <div class="es-pal-fm-row"><span class="es-pal-fm-rl">② 색</span>${sw}</div>
+      <div class="es-pal-fm-row"><span class="es-pal-fm-rl">③ 테두리</span>${stb}</div>
+      <button type="button" class="es-pal-fm-save" id="esFMSave">📌 '타이틀 참조'에 저장 (맨 앞에 추가)</button>
+    </div>`;
+    document.getElementById("esFMClose").onclick = () => ov.remove();
+    ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+    const txt = document.getElementById("esFMText");
+    txt.oninput = () => { st.text = txt.value; clearTimeout(E._fmT); E._fmT = setTimeout(fmPreview, 280); };
+    ov.querySelectorAll("[data-fmfont]").forEach((b) => { b.onclick = () => { st.font = b.dataset.fmfont; renderFontMaker(); }; });
+    ov.querySelectorAll("[data-fmcolor]").forEach((b) => { b.onclick = () => { st.color = b.dataset.fmcolor; renderFontMaker(); }; });
+    ov.querySelectorAll("[data-fmstroke]").forEach((b) => { b.onclick = () => { st.stroke = b.dataset.fmstroke; renderFontMaker(); }; });
+    document.getElementById("esFMSave").onclick = fmSave;
+    fmPreview();
+  }
+  async function fmPreview() {
+    const st = E._fontMaker; if (!st) return;
+    const blob = await renderFontToBlob({ text: st.text, font: st.font, color: st.color, stroke: st.stroke });
+    const box = document.getElementById("esFMPrev"); if (!box || !blob) return;
+    try { if (E._fmPrevUrl) URL.revokeObjectURL(E._fmPrevUrl); } catch (_) {}
+    E._fmPrevUrl = URL.createObjectURL(blob);
+    box.innerHTML = `<img src="${E._fmPrevUrl}" alt="">`;
+  }
+  async function fmSave() {
+    const st = E._fontMaker; if (!st) return;
+    const blob = await renderFontToBlob({ text: st.text, font: st.font, color: st.color, stroke: st.stroke });
+    if (!blob) return;
+    const dataUrl = await tmBlobToDataUri(blob);
+    const arr = palRefsArr();   // 현재 종류(타이틀/자막) 글씨박스
+    const nm = (MY_FONT_MAP[st.font] && MY_FONT_MAP[st.font].k) || (CAPTION_FONT_MAP[st.font] && CAPTION_FONT_MAP[st.font].k) || "글자체";
+    const _cap = E._palEditKind === "caption";
+    const rf = { id: uid(), dataUrl, name: "✍️ " + nm, font: st.font, color: st.color, stroke: st.stroke, kind: "font", posX: 50, posY: _cap ? 88 : 18, size: _cap ? 7 : 14 };   // 기본 배치(블록 크기 범위 3~35) — 관리자가 작업대에서 끌어 조정 후 저장하면 그 값
+    arr.unshift(rf);   // 맨 앞에 — 글자체 참조가 먼저 보이게
+    try { savePalRefs(); } catch (_) {}
+    const P = E.palette; if (P && P.demo) P.demo.titleRef = rf;
+    try { toast("📌 글자체 참조가 맨 앞에 저장됐어요 — '타이틀 참조'에서 골라요"); } catch (_) {}
+    const ov = document.getElementById("esFontMaker"); if (ov) ov.remove();
+    renderPalette();
+  }
+  // ✍️ 글자체 참조를 골랐을 때 — 손님 문구를 그 글씨체로 즉시 렌더(AI 안 씀)
+  async function palFontTitleFromRef() {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const text = String(d.title || "").trim();
+    const status = $("#esTStatus"), btn = $("#esTGen");
+    if (!text) { if (status) status.textContent = "먼저 제목을 입력해 주세요."; return; }
+    const ref = d.titleRef || {};
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = "✍️ 글자체로 만드는 중…";
+    try {
+      const blob = await renderFontToBlob({ text, font: ref.font, color: ref.color, stroke: ref.stroke });
+      if (!blob) throw new Error("렌더 실패");
+      try { (d.titleResults || []).forEach((t) => { if (t && t.url) URL.revokeObjectURL(t.url); }); } catch (_) {}
+      try { if (d.titleResult && d.titleResult.url) URL.revokeObjectURL(d.titleResult.url); } catch (_) {}
+      d.titleResults = null;   // 글자체는 단일 결과(2개 후보는 AI 전용)
+      d.titleResult = { url: URL.createObjectURL(blob), blob, font: ref.font };
+      if (status) status.textContent = "✅ 글자체로 완성!";
+      renderPalette(); palDraftSave();
+    } catch (e) { if (status) status.textContent = "😢 실패: " + ((e && e.message) || e); if (btn) btn.disabled = false; }
+  }
+  async function palPasteTitleRef() {   // 📋 클립보드에서 이미지 붙여넣기(버튼)
+    const status = $("#esTStatus");
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) { if (status) status.textContent = "이 브라우저는 붙여넣기 버튼을 지원 안 해요 — 드래그하거나 ＋로 넣어요."; return; }
+      const items = await navigator.clipboard.read();
+      for (const it of items) { const type = (it.types || []).find((t) => t.startsWith("image/")); if (type) { const blob = await it.getType(type); palAddTitleRef(new File([blob], "붙여넣기.png", { type })); return; } }
+      if (status) status.textContent = "클립보드에 이미지가 없어요. 사진을 복사하고 다시 눌러요.";
+    } catch (e) { if (status) status.textContent = "붙여넣기 권한을 허용해 주세요(브라우저 팝업)."; }
+  }
+  // 💾 작업 중인 팔레트를 IndexedDB에 자동 저장(나갔다 와도 그대로). blob/dataUrl 포함(structured clone).
+  function palDraftSave() {
+    clearTimeout(E._palDraftT);
+    E._palDraftT = setTimeout(async () => {
+      const P = E.palette; if (!P) return; const d = P.demo || {};
+      try {
+        const snap = {
+          name: P.name || "", aspect: P.aspect || "9:16", sel: P.sel || 0,
+          steps: (P.steps || []).map((s) => ({ id: s.id, fn: s.fn || null, copy: s.copy || null, titleRefs: (s.titleRefs || []).map((r) => ({ dataUrl: r.dataUrl, name: r.name || "" })) })),
+          demo: {
+            title: d.title || "", caption: d.caption || "", captionStyle: d.captionStyle || "clean",
+            media: (Array.isArray(d.media) ? d.media : []).filter((m) => m && m.blob).map((m) => ({ blob: m.blob, kind: m.kind, name: m.name || "" })),
+            titleRef: d.titleRef ? { dataUrl: d.titleRef.dataUrl || null, id: d.titleRef.id || null, name: d.titleRef.name || "", font: d.titleRef.font || null, color: d.titleRef.color || null, stroke: d.titleRef.stroke || null, kind: d.titleRef.kind || null, posX: d.titleRef.posX != null ? d.titleRef.posX : null, posY: d.titleRef.posY != null ? d.titleRef.posY : null, size: d.titleRef.size != null ? d.titleRef.size : null } : null,
+            captionRef: d.captionRef ? { dataUrl: d.captionRef.dataUrl || null, id: d.captionRef.id || null, name: d.captionRef.name || "", font: d.captionRef.font || null, color: d.captionRef.color || null, stroke: d.captionRef.stroke || null, kind: d.captionRef.kind || null, posX: d.captionRef.posX != null ? d.captionRef.posX : null, posY: d.captionRef.posY != null ? d.captionRef.posY : null, size: d.captionRef.size != null ? d.captionRef.size : null } : null,
+            titleResult: (d.titleResult && d.titleResult.blob) || null,
+            titleResults: (Array.isArray(d.titleResults) ? d.titleResults : []).filter((t) => t && t.blob).map((t) => t.blob),
+            titleResultSel: (Array.isArray(d.titleResults) && d.titleResult) ? d.titleResults.findIndex((t) => t === d.titleResult) : -1,
+            titlePosX: d.titlePosX != null ? d.titlePosX : null, titlePosY: d.titlePosY != null ? d.titlePosY : null, titleSize: d.titleSize != null ? d.titleSize : null,
+            titleFont: d.titleFont || null, titleColor: d.titleColor || null, titleStroke: d.titleStroke !== undefined ? d.titleStroke : null,
+            titleSel: d.titleSel || 0,
+            titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
+            captionSel: d.captionSel || 0,
+            captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
+          },
+        };
+        await idbSet("palDraft", snap);
+      } catch (_) {}
+    }, 600);
+  }
+  async function palDraftLoad() {
+    try {
+      const snap = await idbGet("palDraft");
+      if (!snap || !Array.isArray(snap.steps) || !snap.steps.length) return null;
+      const P = {
+        name: snap.name || "", aspect: snap.aspect || "9:16", sel: snap.sel || 0, preview: null, _copyEdit: null,
+        steps: snap.steps.map((s) => ({ id: s.id || uid(), fn: s.fn || null, copy: s.copy || null, titleRefs: (s.titleRefs || []).map((r) => ({ url: r.dataUrl, dataUrl: r.dataUrl, name: r.name || "" })) })),
+        demo: { media: [], title: (snap.demo && snap.demo.title) || "", caption: (snap.demo && snap.demo.caption) || "", captionStyle: (snap.demo && snap.demo.captionStyle) || "clean" },
+      };
+      const sd = snap.demo || {};
+      if (Array.isArray(sd.media)) P.demo.media = sd.media.filter((m) => m && m.blob).map((m) => { try { return { url: URL.createObjectURL(m.blob), blob: m.blob, kind: m.kind, name: m.name || "" }; } catch (_) { return null; } }).filter(Boolean);
+      if (sd.titleRef) {   // 문자열(옛) 또는 객체(글자체 메타 포함) 둘 다 복원
+        const t = sd.titleRef;
+        if (typeof t === "string") P.demo.titleRef = { url: t, dataUrl: t };
+        else P.demo.titleRef = { url: t.dataUrl, dataUrl: t.dataUrl, id: t.id || undefined, name: t.name || "", font: t.font || undefined, color: t.color || undefined, stroke: t.stroke || undefined, kind: t.kind || undefined, posX: t.posX != null ? t.posX : undefined, posY: t.posY != null ? t.posY : undefined, size: t.size != null ? t.size : undefined };
+      }
+      if (sd.captionRef) {   // 🗨 자막 참조 복원
+        const t = sd.captionRef;
+        P.demo.captionRef = { url: t.dataUrl, dataUrl: t.dataUrl, id: t.id || undefined, name: t.name || "", font: t.font || undefined, color: t.color || undefined, stroke: t.stroke || undefined, kind: t.kind || undefined, posX: t.posX != null ? t.posX : undefined, posY: t.posY != null ? t.posY : undefined, size: t.size != null ? t.size : undefined };
+      }
+      if (sd.titleFont != null) P.demo.titleFont = sd.titleFont;
+      if (sd.titleColor != null) P.demo.titleColor = sd.titleColor;
+      if (sd.titleStroke != null) P.demo.titleStroke = sd.titleStroke;
+      if (sd.titlePosX != null) P.demo.titlePosX = sd.titlePosX;
+      if (sd.titlePosY != null) P.demo.titlePosY = sd.titlePosY;
+      if (sd.titleSize != null) P.demo.titleSize = sd.titleSize;
+      if (Array.isArray(sd.titleResults) && sd.titleResults.length) {   // 🅰🅱 후보 2개 복원 + 고른 것 유지
+        P.demo.titleResults = sd.titleResults.filter(Boolean).map((b) => { try { return { url: URL.createObjectURL(b), blob: b }; } catch (_) { return null; } }).filter(Boolean);
+        const si = (typeof sd.titleResultSel === "number" && sd.titleResultSel >= 0 && sd.titleResultSel < P.demo.titleResults.length) ? sd.titleResultSel : 0;
+        if (P.demo.titleResults.length) P.demo.titleResult = P.demo.titleResults[si];
+      } else if (sd.titleResult) { try { P.demo.titleResult = { url: URL.createObjectURL(sd.titleResult), blob: sd.titleResult }; } catch (_) {} }
+      if (Array.isArray(sd.titles)) {   // 🅰🅱🅲 칸들 복원(각 칸 result blob → objectURL)
+        P.demo.titles = sd.titles.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "giants-bold", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 60, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 18, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
+        P.demo.titleSel = (typeof sd.titleSel === "number" && sd.titleSel >= 0 && sd.titleSel < P.demo.titles.length) ? sd.titleSel : 0;
+      }
+      if (Array.isArray(sd.captions)) {   // 💬 자막 칸들 복원(타이틀과 동일 구조 — 하단 흰글씨 기본값)
+        P.demo.captions = sd.captions.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "bm-hanna-air", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 7, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 88, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
+        P.demo.captionSel = (typeof sd.captionSel === "number" && sd.captionSel >= 0 && sd.captionSel < P.demo.captions.length) ? sd.captionSel : 0;
+      }
+      if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
+      return P;
+    } catch (_) { return null; }
+  }
+  function palDraftClear() { clearTimeout(E._palDraftT); try { idbSet("palDraft", null); } catch (_) {} }
+  async function openPalette() {
+    E.mode2 = "easy"; try { stopPlay(); } catch (_) {}
+    if (!E.palette) { try { const dr = await palDraftLoad(); if (dr) E.palette = dr; } catch (_) {} }   // 💾 작업 중이던 게 있으면 그대로 복원
+    setView("palette");
+  }
+  function renderPalette() {
+    const body = $("#esBody"); if (!body) return;
+    if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
+    const P = E.palette;
+    (P.steps || []).forEach((s) => { if (s.fn === "title") s.fn = "tgen"; });   // 옛 통합 '타이틀'을 '타이틀 생성'으로 이전
+    if (!P.demo) P.demo = { media: [], title: "", caption: "" };   // 🎮 고객 화면에서 실제로 넣은 값(미리보기에 반영). media=여러 개 배열
+    if (!Array.isArray(P.demo.media)) P.demo.media = P.demo.media ? [P.demo.media] : [];   // 옛 단일값 호환
+    if (E.palPresets === undefined) { E.palPresets = []; try { loadPalPresets().then(() => { if (E.view === "palette") renderPalette(); }); } catch (_) {} }   // 📌 저장한 문구 프리셋 불러오기(1회)
+    if (!E._palRefsLoaded) { E._palRefsLoaded = true; try { loadPalTitleRefs().then(() => { if (E.view === "palette") renderPalette(); }); } catch (_) {} }   // 🖼 저장한 글씨박스(타이틀+자막) 불러오기(1회). palRefsArr가 []로 초기화해도 이 플래그로 로드 보장
+    try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}   // 재렌더 시 재생 중이던 나레이션 음성 정지
+    if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
+    const aspBtns = Object.keys(ASPECTS).map((k) => `<button type="button" class="es-asp-btn ${P.aspect === k ? "active" : ""}" data-pasp="${k}">${esc(ASPECTS[k].label)}</button>`).join("");
+    const stepsHtml = P.steps.map((s, i) => {
+      const fn = s.fn ? paletteFn(s.fn) : null;
+      return `<div class="es-pal-step ${i === P.sel ? "sel" : ""} ${fn ? "filled" : "empty"}" data-i="${i}" draggable="true">
+        <span class="es-pal-step-n">${i + 1}</span>
+        <span class="es-pal-step-ico">${fn ? fn.icon : "·"}</span>
+        <span class="es-pal-step-lb">${fn ? esc(fn.label) : "비어있음"}</span>
+        <button type="button" class="es-pal-step-x" data-rm="${i}" title="이 단계 삭제">×</button>
+      </div>`;
+    }).join("");
+    const boxHtml = PALETTE_FNS.map((f) => {
+      const n = (E.palPresets || []).filter((p) => p.fn === f.key).length;
+      const badge = n ? `<span class="es-pal-fn-badge ${E._palBadgePulse === f.key ? "pulse" : ""}" data-presetfn="${f.key}" title="저장한 문구 ${n}개 — 눌러서 열기">📌 ${n}</span>` : "";
+      return `<button type="button" class="es-pal-fn" draggable="true" data-fn="${f.key}"><span class="es-pal-fn-ico">${f.icon}</span><span class="es-pal-fn-lb">${esc(f.label)}</span>${badge}</button>`;
+    }).join("");
+    // 📌 내가 저장한 문구 — 기능상자 아래 항상 보이는 목록(눌러서 그 문구로 단계 추가)
+    const allPresets = E.palPresets || [];
+    const savedListHtml = allPresets.length
+      ? allPresets.map((p) => { const pf = paletteFn(p.fn) || {}; return `<button type="button" class="es-pal-saved-item" data-applypreset="${esc(p.id)}" title="${esc(((p.copy && p.copy.title) || "").replace(/\n/g, " "))}"><span class="es-pal-saved-item-ic">${pf.icon || "📌"}</span><span class="es-pal-saved-item-tx"><b>${esc(p.name)}</b><span>${esc(pf.label || "")} 문구</span></span><span class="es-pal-saved-item-x" data-delpreset2="${esc(p.id)}" title="삭제">×</span></button>`; }).join("")
+      : `<div class="es-pal-saved-empty">아직 없어요.<br>화면에서 <b>✏️ 문구 고치기 → 📌 저장해두기</b> 하면 여기 떠요.</div>`;
+    const sel = P.steps[P.sel];
+    const showKey = P.preview || (sel && sel.fn) || null;   // 한 번 클릭한 기능(미리보기) 우선, 없으면 선택 단계의 기능
+    const showFn = showKey ? paletteFn(showKey) : null;
+    const isPrev = !!P.preview;
+    // 현재 단계 종류 — 타이틀(tref/tgen/tpos) 또는 자막(cref/caption) → 같은 작업대 편집기 공유
+    const _curFn = (P.steps[P.sel] || {}).fn;
+    const _isTitleStep = !isPrev && (_curFn === "tref" || _curFn === "tgen" || _curFn === "tpos");
+    const _isCaptionStep = !isPrev && (_curFn === "cref" || _curFn === "caption");
+    const _isEditStep = _isTitleStep || _isCaptionStep;
+    E._palEditKind = _isCaptionStep ? "caption" : "title";
+    // 고객화면 번호 = 그 기능의 '단계 순서'(1-based). 미리보기 중이고 아직 단계에 없으면 0(•).
+    let stepNum = 0;
+    if (showKey) { if (P.preview) { const _i = P.steps.findIndex((s) => s.fn === P.preview); stepNum = _i >= 0 ? _i + 1 : 0; } else { stepNum = P.sel + 1; } }
+    const arc = "ar-" + (P.aspect || "9:16").replace(":", "-");
+    // 📱 고객 화면 하단 고정 '다음/이전' — 실제 고객처럼 단계를 넘김(미리보기 모드 아닐 때만)
+    const _isLast = P.sel >= P.steps.length - 1;
+    const custNav = !isPrev
+      ? `<div class="es-pal-cust-nav">${P.sel > 0 ? `<button type="button" class="es-pal-cust-prev" id="esCustPrev">← 이전</button>` : `<span class="es-pal-cust-navsp"></span>`}<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span><button type="button" class="es-pal-cust-next" id="esCustNext">${_isLast ? "완성 ✓" : "다음 →"}</button></div>`
+      : "";
+    // 👀 고객 화면 — 글자 단계(타이틀/자막 참조·생성)면 위쪽에 '실제 미리보기'(영상+적용된 글자) + 아래쪽에 그 단계 컨트롤
+    const _liveSteps = ["tref", "tgen", "cref", "caption"];
+    const _showsLive = showKey && _liveSteps.includes(showKey);
+    const liveTop = _showsLive ? `<div class="es-pal-cust-live">${paletteRealPreview(P, true)}</div>` : "";
+    const canvasHtml = showFn
+      ? `<div class="es-pal-prev"><div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div><div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div>`
+      : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
+    const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
+    const realHtml = `<div class="es-pal-prev es-pal-prev-editor">
+          <div class="es-pal-prev-tag es-pal-prev-tag-real">▶ 실제 결과 미리보기 — 끌어서 배치<button type="button" class="es-pal-insta-btn ${E._palInstaPreview ? "on" : ""}" id="esInstaToggle" title="인스타에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button></div>
+          <div class="es-pal-phone es-pal-phone-sm ${realArc}" id="esPalReal"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P)}</div></div>
+          <div class="es-pal-tracks-h">🎬 편집 트랙 — 추가한 기능이 다 들어가요</div>
+          <div class="es-pal-tracks">${paletteTracks(P)}</div>
+        </div>`;
+    // 가운데 '작업대' 칸 — 레이아웃 고정 위해 항상 자리 차지(3열 유지). 타이틀/자막 단계면 편집기, 아니면 '작업대 없음' 안내.
+    const editorZone = _isEditStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
+      : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
+    body.innerHTML = `
+      <div class="es-palette">
+        <div class="es-pal-head">
+          <input type="text" id="esPalName" class="es-name-input" placeholder="템플릿 이름 (예: 인테리어 비포애프터)" value="${esc(P.name)}">
+          <div class="es-asp-row">${aspBtns}</div>
+          <button type="button" class="es-btn es-btn-ghost" id="esPalNew" title="작업 지우고 처음부터">🆕 새로</button>
+          <button type="button" class="es-btn es-btn-primary" id="esPalSave">💾 저장</button>
+        </div>
+        <div class="es-pal-zone es-pal-zone-steps">
+          <div class="es-pal-zone-lb">⬆️ 단계 — ＋추가 · <b>끌어서 순서 바꾸기</b> · 기능 끼우기</div>
+          <div class="es-pal-steps" id="esPalSteps">${stepsHtml}<button type="button" class="es-pal-addstep" id="esPalAdd" title="단계 추가">＋</button></div>
+        </div>
+        <div class="es-pal-funcbar ${E._palFuncCollapsed ? "collapsed" : ""}">
+          <button type="button" class="es-pal-funcbar-toggle" id="esPalFuncToggle">${E._palFuncCollapsed ? "🧩 기능 · 📌 저장 문구  —  펼치기 ▼" : "기능·저장문구 접기 ▲"}</button>
+          ${E._palFuncCollapsed ? "" : `<div class="es-pal-funcbar-body">
+            <div class="es-pal-funcbar-row">
+              <span class="es-pal-funcbar-lb">🧩 기능 <small>끌거나 두 번 눌러 위 단계에</small></span>
+              <div class="es-pal-funcbar-icons es-pal-box" id="esPalBox">${boxHtml}</div>
+            </div>
+            ${(E.palPresets || []).length ? `<div class="es-pal-funcbar-row"><span class="es-pal-funcbar-lb">📌 저장<br>문구</span><div class="es-pal-funcbar-presets">${savedListHtml}</div></div>` : ""}
+          </div>`}
+        </div>
+        <div class="es-pal-body ${_isEditStep ? "has-editor" : ""}">
+          <div class="es-pal-zone es-pal-zone-real">${realHtml}</div>
+          ${editorZone}
+          <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
+        </div>
+      </div>`;
+    const add = $("#esPalAdd"); if (add) add.addEventListener("click", () => { P.preview = null; P.steps.push({ id: uid(), fn: null }); P.sel = P.steps.length - 1; renderPalette(); });
+    const _funcTog = $("#esPalFuncToggle"); if (_funcTog) _funcTog.addEventListener("click", () => { E._palFuncCollapsed = !E._palFuncCollapsed; renderPalette(); });
+    $$("#esPalSteps .es-pal-step").forEach((el) => {
+      el.addEventListener("click", (e) => { if (e.target.closest("[data-rm]")) return; P.preview = null; P._copyEdit = null; P.sel = +el.dataset.i; renderPalette(); });
+      el.addEventListener("dragstart", (e) => { try { e.dataTransfer.setData("text/step", el.dataset.i); e.dataTransfer.effectAllowed = "move"; } catch (_) {} el.classList.add("dragging"); });
+      el.addEventListener("dragend", () => el.classList.remove("dragging"));
+      el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("dragover"); });
+      el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+      el.addEventListener("drop", (e) => {
+        e.preventDefault(); el.classList.remove("dragover");
+        const si = e.dataTransfer.getData("text/step");
+        if (si !== "") {   // 단계 순서 바꾸기(단계끼리 드래그)
+          const from = +si, to = +el.dataset.i;
+          if (!isNaN(from) && from !== to) { const m = P.steps.splice(from, 1)[0]; P.steps.splice(to, 0, m); P.sel = to; P.preview = null; renderPalette(); }
+          return;
+        }
+        const pid = e.dataTransfer.getData("text/preset");
+        if (pid) {   // 저장한 문구(프리셋)를 단계에 끼우기 — 기능 + 문구 같이
+          const p = (E.palPresets || []).find((x) => x.id === pid); const st = P.steps[+el.dataset.i];
+          if (p && st) { st.fn = p.fn; st.copy = p.copy ? JSON.parse(JSON.stringify(p.copy)) : null; P.preview = null; P._copyEdit = null; P.sel = +el.dataset.i; renderPalette(); }
+          return;
+        }
+        const k = e.dataTransfer.getData("text/fn"); if (k) paletteAssign(+el.dataset.i, k);   // 기능을 단계에 끼우기(기능상자에서 드래그)
+      });
+    });
+    $$("#esPalSteps [data-rm]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation(); const i = +b.dataset.rm; P.steps.splice(i, 1);
+      if (!P.steps.length) P.steps.push({ id: uid(), fn: null });
+      if (P.sel >= P.steps.length) P.sel = P.steps.length - 1; renderPalette();
+    }));
+    const nm = $("#esPalName"); if (nm) nm.addEventListener("input", (e) => { P.name = e.target.value; });
+    $$("[data-pasp]").forEach((b) => b.addEventListener("click", () => { P.aspect = b.dataset.pasp; renderPalette(); }));
+    let _palFnTimer = null;
+    $$("#esPalBox .es-pal-fn").forEach((b) => {
+      b.addEventListener("click", () => {   // 한 번 = 그 기능의 고객 화면 미리보기(더블클릭과 안 겹치게 살짝 지연)
+        if (_palFnTimer) return;
+        _palFnTimer = setTimeout(() => { _palFnTimer = null; P.preview = b.dataset.fn; renderPalette(); }, 210);
+      });
+      b.addEventListener("dblclick", () => {   // 두 번 = 단계에 추가
+        if (_palFnTimer) { clearTimeout(_palFnTimer); _palFnTimer = null; }
+        paletteTap(b.dataset.fn);
+      });
+      b.addEventListener("dragstart", (e) => { try { e.dataTransfer.setData("text/fn", b.dataset.fn); e.dataTransfer.effectAllowed = "copy"; } catch (_) {} b.classList.add("dragging"); });
+      b.addEventListener("dragend", () => b.classList.remove("dragging"));
+    });
+    // 📌 기능 아이콘의 저장문구 뱃지 — 누르면 그 기능 '안'의 저장 문구 목록(시트) 열림
+    $$("#esPalBox .es-pal-fn-badge").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palPresetSheet(b.dataset.presetfn); }));
+    // 🎮 고객 화면 = 실제 작동 — 여기서 넣은 사진/영상·타이틀·자막이 왼쪽 '실제 결과 미리보기'에 반영
+    const demo = P.demo;
+    const _dFile = $("#esDemoMediaFile"), _dBtn = $("#esDemoMediaBtn"), _dClr = $("#esDemoMediaClear");
+    if (_dBtn && _dFile) _dBtn.addEventListener("click", () => _dFile.click());   // 🎬 영상 첨부 = 파일 선택(기존)
+    const _dShoot = $("#esDemoShootBtn");   // 📹 영상 찍기 = 카메라로 바로 촬영 → 목록에 더함
+    const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); };
+    const _fileToMedia = (f) => ({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" });
+    if (_dShoot) _dShoot.addEventListener("click", () => palOpenCamera((file) => { if (file) _addMedia([{ url: URL.createObjectURL(file), blob: file, kind: "video", name: file.name || "촬영영상" }]); }));
+    if (_dFile) _dFile.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (fs.length) _addMedia(fs.map(_fileToMedia)); });   // 🎬 첨부/더넣기 = 여러 개 한꺼번에
+    if (_dClr) _dClr.addEventListener("click", () => { try { (demo.media || []).forEach((mm) => mm && mm.url && URL.revokeObjectURL(mm.url)); } catch (_) {} demo.media = []; renderPalette(); });
+    // ❌ 개별 영상 빼기 — 썸네일 위 × 누르면 그 영상만 제거
+    $$("#esBody [data-rmmedia]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation(); const i = +b.dataset.rmmedia;
+      if (Array.isArray(demo.media) && demo.media[i]) { try { if (demo.media[i].url) URL.revokeObjectURL(demo.media[i].url); } catch (_) {} demo.media.splice(i, 1); renderPalette(); }
+    }));
+    // 🖱 드래그앤드롭 — 영상넣기 칸에 파일을 여러 개 끌어다 놓아도 다 들어감
+    const _drop = $("#esDemoMediaDrop");
+    if (_drop) {
+      _drop.addEventListener("dragover", (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; _drop.classList.add("dragover"); });
+      _drop.addEventListener("dragleave", (e) => { if (!_drop.contains(e.relatedTarget)) _drop.classList.remove("dragover"); });
+      _drop.addEventListener("drop", (e) => { e.preventDefault(); _drop.classList.remove("dragover"); const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []); if (fs.length) _addMedia(fs.map(_fileToMedia)); });
+    }
+    // 📱 고객화면 하단 다음/이전 — 실제 고객처럼 단계 진행(왼쪽 트랙·결과는 P.demo 라 자동 반영)
+    const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { P.preview = null; P._copyEdit = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
+    const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { P.preview = null; P._copyEdit = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
+    // ✏️ 이 화면 문구 고치기 — '그 단계'에 저장(step.copy). 미리보기(단계 아님)서 누르면 그 기능을 단계로 만든 뒤 편집.
+    const _cEdit = $("#esCopyEdit");
+    if (_cEdit) _cEdit.addEventListener("click", () => {
+      let sid = _cEdit.dataset.step;
+      if (!sid) {   // 미리보기 모드 → 그 기능을 단계로 추가하고 그 단계를 편집
+        const fk = _cEdit.dataset.fn; const s = P.steps[P.sel]; let st;
+        if (s && !s.fn) { s.fn = fk; st = s; } else { st = { id: uid(), fn: fk }; P.steps.push(st); P.sel = P.steps.length - 1; }
+        sid = st.id; P.preview = null;
+      }
+      P._copyEdit = sid; renderPalette();
+    });
+    const _cDone = $("#esCopyDone"); if (_cDone) _cDone.addEventListener("click", () => { P._copyEdit = null; renderPalette(); });
+    const _setCopy = (field, val) => { const st = (P.steps || []).find((s) => s.id === P._copyEdit); if (!st) return; if (!st.copy) st.copy = {}; st.copy[field] = val; };
+    const _cT = $("#esCopyTitle"); if (_cT) _cT.addEventListener("input", (e) => _setCopy("title", e.target.value));
+    const _cN = $("#esCopyNote"); if (_cN) _cN.addEventListener("input", (e) => _setCopy("note", e.target.value));
+    // 📌 따로 저장해놓기 — 지금 단계의 문구를 이름 붙여 기능상자에 프리셋으로(나중에 불러오기)
+    const _cSave = $("#esCopySave");
+    if (_cSave) _cSave.addEventListener("click", () => {
+      const st = (P.steps || []).find((s) => s.id === P._copyEdit); if (!st || !st.fn) return;
+      const c = st.copy || {}; const def = ((c.title || "").split("\n")[0] || "").slice(0, 24) || "내 문구";
+      const _nm = $("#esCopyName"); const name = ((_nm && _nm.value) || "").trim() || def;   // 입력칸 이름, 비우면 문구로 (prompt 없앰)
+      if (!Array.isArray(E.palPresets)) E.palPresets = [];
+      E.palPresets.push({ id: uid(), fn: st.fn, name, copy: { title: c.title || "", note: c.note || "" } });
+      try { savePalPresets(); } catch (_) {}
+      P._copyEdit = null;
+      E._palBadgePulse = st.fn;   // ✨ 그 기능 아이콘의 📌뱃지 잠깐 반짝(어디 저장됐는지 보이게)
+      try { toast("📌 저장됨! 오른쪽 기능상자 " + ((paletteFn(st.fn) || {}).label || "") + " 아이콘의 📌 를 누르면 다시 꺼내 써요"); } catch (_) {}
+      renderPalette();
+      setTimeout(() => { E._palBadgePulse = null; }, 2400);
+    });
+    // 📌 화면 안 '저장한 문구' 칩 — 눌러서 이 화면에 적용(현재 단계가 같은 기능이면 그 단계에, 아니면 새 단계로)
+    $$("#esBody [data-applypreset]").forEach((b) => b.addEventListener("click", (e) => {
+      if (e.target.closest("[data-delpreset2]")) return;
+      const p = (E.palPresets || []).find((x) => x.id === b.dataset.applypreset); if (!p) return;
+      const st = P.steps[P.sel];
+      if (st && st.fn === p.fn) { st.copy = p.copy ? JSON.parse(JSON.stringify(p.copy)) : null; P.preview = null; P._copyEdit = null; renderPalette(); }
+      else palAddPreset(p.id);
+    }));
+    $$("#esBody [data-delpreset2]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!confirm("이 저장한 문구를 지울까요?")) return;
+      E.palPresets = (E.palPresets || []).filter((p) => p.id !== b.dataset.delpreset2);
+      try { savePalPresets(); } catch (_) {} renderPalette();
+    }));
+    // 타이틀·자막 입력 → 미리보기 글자 실시간 반영(재렌더 없이 입력 포커스 유지)
+    const _dTitle = $("#esDemoTitle");
+    if (_dTitle) _dTitle.addEventListener("input", (e) => { demo.title = e.target.value; const t = $(".es-pal-real-title"); if (t) { const v = demo.title.trim(); t.innerHTML = v ? esc(v).replace(/\n/g, "<br>") : "여기에 타이틀"; t.classList.toggle("is-ph", !v); } });
+    // 🔲 위치 조정 — 크기 슬라이더 + 위/중간/아래
+    const _tpSize = $("#esTPosSize");
+    if (_tpSize) _tpSize.addEventListener("input", (e) => { const cur = palCurTitle(); cur.size = +e.target.value; const h = palBoxH(cur, cur.size) + "cqh"; const im = $(".es-pal-tpos-title"), rbox = _curBox(); if (im) im.style.height = h; if (rbox) rbox.style.height = h; clearTimeout(E._tpSzT); E._tpSzT = setTimeout(palDraftSave, 300); });
+    $$("#esBody [data-tposy]").forEach((b) => b.addEventListener("click", () => { palCurTitle().posY = +b.dataset.tposy; renderPalette(); palDraftSave(); }));
+    // 자막도 타이틀과 동일하게 칸(data-cslot) 입력으로 처리 — 아래 공용 data-cslot 핸들러가 캡션 블록까지 함께 담당
+    // 🖼 타이틀 단계 — 관리자가 참조사진 옵션을 단계(step.titleRefs)에 넣고(＋·드래그·📋), 고객은 그 중 골라(demo.titleRef) AI 생성
+    const _trBtn = $("#esTRefBtn"), _trFile = $("#esTRefFile"), _trPaste = $("#esTRefPaste"), _trGal = $("#esTRefGal"), _tgen = $("#esTGen");
+    const _trFontMake = $("#esTRefFontMake"); if (_trFontMake) _trFontMake.addEventListener("click", palOpenFontMaker);   // ✍️ 글자체로 만들기
+    if (_trBtn && _trFile) _trBtn.addEventListener("click", () => _trFile.click());   // ＋ 파일 선택
+    if (_trFile) _trFile.addEventListener("change", (e) => { Array.from(e.target.files || []).forEach(palAddTitleRef); });   // 여러 장 OK
+    if (_trPaste) _trPaste.addEventListener("click", palPasteTitleRef);   // 📋 클립보드 붙여넣기
+    if (_trGal) {   // 🖱 드래그앤드롭 — 갤러리에 이미지 끌어다 놓기
+      _trGal.addEventListener("dragover", (e) => { e.preventDefault(); _trGal.classList.add("dragover"); });
+      _trGal.addEventListener("dragleave", (e) => { if (!_trGal.contains(e.relatedTarget)) _trGal.classList.remove("dragover"); });
+      _trGal.addEventListener("drop", (e) => { e.preventDefault(); _trGal.classList.remove("dragover"); Array.from((e.dataTransfer && e.dataTransfer.files) || []).forEach(palAddTitleRef); });
+    }
+    if (!E._palPasteBound) {   // ⌨️ Ctrl+V — 타이틀 단계에서 이미지 붙여넣기(한 번만 등록)
+      E._palPasteBound = true;
+      document.addEventListener("paste", (e) => {
+        if (E.view !== "palette" || !E.palette) return; const st = E.palette.steps[E.palette.sel]; if (!st || st.fn !== "tref" || E.palette.preview) return;
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        for (let k = 0; k < items.length; k++) { if (items[k].type && items[k].type.indexOf("image/") === 0) { const f = items[k].getAsFile(); if (f) { e.preventDefault(); palAddTitleRef(f); return; } } }
+      });
+    }
+    const _tAddRef = $("#esTGenAddRef"); if (_tAddRef) _tAddRef.addEventListener("click", palAddGenToRef);   // ✨ 만든 타이틀을 참조에 저장
+    $$("#esBody [data-pickresult]").forEach((b) => b.addEventListener("click", () => {   // 🅰🅱 후보 2개 중 하나 고르기
+      const i = +b.dataset.pickresult;
+      if (demo.titleResults && demo.titleResults[i]) { demo.titleResult = demo.titleResults[i]; renderPalette(); palDraftSave(); }
+    }));
+    $$("#esBody [data-pickref]").forEach((b) => b.addEventListener("click", (e) => {   // 고객이 참조 고르기 — 현재 종류(타이틀/자막) 글씨박스
+      if (e.target.closest("[data-rmref]")) return;
+      const i = +b.dataset.pickref;
+      const _kind = E._palEditKind === "caption" ? "caption" : "title";
+      const _refs = palRefsArr(_kind);
+      if (_refs[i]) {   // 글씨박스(프리셋) 적용 — slots 있으면 칸 개수까지 통째 복원, 없으면(옛 단일) 선택 칸만
+        const rf = _refs[i]; demo[_kind === "caption" ? "captionRef" : "titleRef"] = rf;
+        if (Array.isArray(rf.slots) && rf.slots.length) {
+          palApplyRefSlots(rf);
+          (async () => { for (const blk of palTitles()) { if ((blk.text || "").trim()) await palTitleRenderBlock(blk); } renderPalette(); palDraftSave(); })();
+        } else {
+          const cur = palCurTitle(); palApplyRef(cur, rf);
+          (async () => { if ((cur.text || "").trim()) { await palTitleRenderBlock(cur); } renderPalette(); palDraftSave(); })();   // 글씨체·색·정렬 바뀌면 이미지 다시 그림
+        }
+      }
+    }));
+    $$("#esBody [data-rmref]").forEach((b) => b.addEventListener("click", (e) => {   // 글씨박스에서 삭제(영구) — 현재 종류
+      e.stopPropagation(); const i = +b.dataset.rmref;
+      const _kind = E._palEditKind === "caption" ? "caption" : "title";
+      const _refs = palRefsArr(_kind); const _rk = _kind === "caption" ? "captionRef" : "titleRef";
+      if (_refs[i]) { const rm = _refs.splice(i, 1)[0]; if (demo[_rk] === rm) demo[_rk] = null; try { savePalRefs(_kind); } catch (_) {} renderPalette(); }
+    }));
+    if (_tgen) _tgen.addEventListener("click", () => { const r = demo.titleRef; if (r && r.kind === "font") palFontTitleFromRef(); else palTitleGenerate(); });   // ✍️글자체면 즉시 렌더, 아니면 ✨AI
+    // ▶ 미리보기 재생/정지 — 결과 화면 아무 데나 클릭(영상·버튼) → 영상 재생 + 나레이션(자막을 AI 음성으로, 브라우저 TTS)
+    const _play = $("#esPalRealPlay");
+    const _realScreen = $(".es-pal-phone-screen-real");
+    if (_play && _realScreen) _realScreen.addEventListener("click", () => {
+      const stage = $(".es-pal-real-stage");
+      const vid = stage ? stage.querySelector("video.es-pal-real-media") : null;
+      const fns = P.steps.map((s) => s.fn);
+      if (_play.classList.contains("playing")) {
+        _play.classList.remove("playing"); _play.textContent = "▶";
+        try { if (vid) vid.pause(); } catch (_) {}
+        try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}
+      } else {
+        _play.classList.add("playing"); _play.textContent = "⏸";
+        if (vid) { vid.muted = true; const pr = vid.play(); if (pr && pr.catch) pr.catch(() => {}); }
+        if (fns.includes("narrate") && window.speechSynthesis) {
+          try {
+            speechSynthesis.cancel();
+            const txt = (P.demo.caption || "").trim() || (P.demo.title || "").trim() || "여기에 나레이션 음성이 나와요";
+            const u = new SpeechSynthesisUtterance(txt); u.lang = "ko-KR"; u.rate = 1.0;
+            u.onend = () => { try { if (!vid || vid.paused) { _play.classList.remove("playing"); _play.textContent = "▶"; } } catch (_) {} };
+            speechSynthesis.speak(u);
+          } catch (_) {}
+        }
+      }
+    });
+    // 📱 인스타 릴스 미리보기 토글(확인용 — 출력엔 안 들어감)
+    const _insta = $("#esInstaToggle"); if (_insta) _insta.addEventListener("click", (e) => { e.stopPropagation(); E._palInstaPreview = !E._palInstaPreview; renderPalette(); });
+    // ✍️ 왼쪽 타이틀 편집기 — 칸(1·2·3번칸)별 문구·글씨체·색·테두리·배경·크기·투명도
+    const _curBox = () => $(`.es-pal-real-titlebox[data-kind="${E._palEditKind || "title"}"][data-titleidx="${palSel()}"]`);
+    const _tedText = $("#esTedText");
+    if (_tedText) _tedText.addEventListener("input", () => {
+      const cur = palCurTitle(); cur.text = _tedText.value;
+      clearTimeout(E._tedT);
+      E._tedT = setTimeout(async () => {
+        await palTitleRenderBlock(cur);
+        const pos = _tedText.selectionStart; renderPalette();   // 미리보기·live·박스높이(줄수 반영) 다 갱신 + 포커스 복원
+        const t2 = document.getElementById("esTedText"); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
+      }, 320);
+    });
+    $$("#esBody [data-tedfont]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().font = b.dataset.tedfont; E._tedFontOpen = false; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
+    // 🎨 글자색·배경색 — 버튼 눌러서 팔레트 열고(E._tedColorOpen), 색 고르면 닫힘
+    $$("#esBody [data-tedcolorbtn]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.tedcolorbtn; E._tedColorOpen = (E._tedColorOpen === k) ? null : k; renderPalette(); }));
+    $$("#esBody [data-tedcolor]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().color = b.dataset.tedcolor; E._tedColorOpen = null; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
+    $$("#esBody [data-tedstroke]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().stroke = b.dataset.tedstroke; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
+    $$("#esBody [data-tedbg]").forEach((b) => b.addEventListener("click", () => { palCurTitle().bg = b.dataset.tedbg; E._tedColorOpen = null; renderPalette(); }));   // 배경색(모양·투명도 행이 생기므로 재렌더)
+    $$("#esBody [data-teditalic]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().italic = b.dataset.teditalic === "1"; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));   // 비스듬히
+    // 🌑 외곽선·그림자·배경 접이식 섹션 토글(ON/OFF) + 그림자 색
+    $$("#esBody [data-tedfx]").forEach((b) => b.addEventListener("click", async () => { const cur = palCurTitle(); const k = b.dataset.tedfx; if (k === "outline") { cur.stroke = cur.stroke ? "" : "#000000"; await palTitleRenderBlock(cur); } else if (k === "shadow") { cur.shadow = cur.shadow ? null : { color: "#000000", dir: 315, op: 55, dist: 0, blur: 22 }; await palTitleRenderBlock(cur); } else if (k === "bg") { cur.bg = cur.bg ? "" : "#000000"; } renderPalette(); palDraftSave(); }));
+    $$("#esBody [data-tedshcolor]").forEach((b) => b.addEventListener("click", async () => { const cur = palCurTitle(); const v = b.dataset.tedshcolor; if (!v) { cur.shadow = null; } else { if (!cur.shadow) cur.shadow = { dir: 315, op: 55, dist: 0, blur: 22 }; cur.shadow.color = v; } await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }));
+    $$("#esBody [data-tedbgstyle]").forEach((b) => b.addEventListener("click", () => { palCurTitle().bgStyle = b.dataset.tedbgstyle; renderPalette(); }));   // 배경 모양
+    $$("#esBody [data-tedalign]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().align = b.dataset.tedalign; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));   // 글자 정렬(왼/가운데/오른쪽)
+    // 글씨체 ◀▶ 하나씩 / 펼침 / 가운데정렬 / 릴스보기 / 내 글씨박스 적용
+    const _tedFontStep = (dir) => { const cur = palCurTitle(); let idx = MY_FONTS.findIndex((f) => f.f === cur.font); if (idx < 0) idx = 0; idx = (idx + dir + MY_FONTS.length) % MY_FONTS.length; cur.font = MY_FONTS[idx].f; palTitleRenderBlock(cur).then(() => renderPalette()); };
+    const _tfPrev = $("#esBody [data-tedfontprev]"); if (_tfPrev) _tfPrev.addEventListener("click", () => _tedFontStep(-1));
+    const _tfNext = $("#esBody [data-tedfontnext]"); if (_tfNext) _tfNext.addEventListener("click", () => _tedFontStep(1));
+    const _tfToggle = $("#esTedFontToggle"); if (_tfToggle) _tfToggle.addEventListener("click", () => { E._tedFontOpen = !E._tedFontOpen; renderPalette(); });
+    const _tedCenter = $("#esTedCenter"); if (_tedCenter) _tedCenter.addEventListener("click", () => { palCurTitle().posX = 50; renderPalette(); palDraftSave(); });
+    const _tedReels = $("#esTedReels"); if (_tedReels) _tedReels.addEventListener("click", palReelsPreview);
+    // ⏱ 머무는 시간 — 쭉(dur=null) / 시간 정하기(초) + 나오는 때(start)
+    const _tedDurAll = $("#esTedDurAll"); if (_tedDurAll) _tedDurAll.addEventListener("click", () => { palCurTitle().dur = null; renderPalette(); palDraftSave(); });
+    const _tedDurSet = $("#esTedDurSet"); if (_tedDurSet) _tedDurSet.addEventListener("click", () => { const cur = palCurTitle(); if (cur.dur == null) cur.dur = 3; renderPalette(); palDraftSave(); });
+    const _tedBadge = (cur) => { const bx = _curBox(); const bd = bx && bx.querySelector(".es-pal-real-tbadge"); if (bd) { const s = cur.start != null ? cur.start : 0; bd.textContent = cur.dur == null ? "♾ 쭉" : `⏱ ${s}–${s + cur.dur}초`; } };
+    const _tedDur = $("#esTedDur"); if (_tedDur) _tedDur.addEventListener("input", (e) => { const cur = palCurTitle(); cur.dur = +e.target.value; const lb = _tedDur.parentElement.querySelector("small"); if (lb) lb.textContent = cur.dur + "초 동안"; _tedBadge(cur); clearTimeout(E._tedDurT); E._tedDurT = setTimeout(palDraftSave, 300); });
+    const _tedStart = $("#esTedStart"); if (_tedStart) _tedStart.addEventListener("input", (e) => { const cur = palCurTitle(); cur.start = +e.target.value; const lb = _tedStart.parentElement.querySelector("small"); if (lb) lb.textContent = cur.start > 0 ? (cur.start + "초 뒤에 나와요") : "바로 나와요"; _tedBadge(cur); clearTimeout(E._tedStartT); E._tedStartT = setTimeout(palDraftSave, 300); });
+    // ✨ 효과(애니메이션) — 나타나는/사라지는 효과 선택 + 미리보기 1회 재생
+    const _animBoxes = () => { const k = E._palEditKind || "title"; return [`.es-pal-real-titlebox[data-kind="${k}"][data-titleidx="${palSel()}"]`, `.es-pal-cust-live .es-pal-real-titlebox[data-livekind="${k}"][data-liveidx="${palSel()}"]`].map((sel) => $(sel)).filter(Boolean); };
+    const _runAnim = (box, nm) => { box.style.animation = "none"; void box.offsetWidth; box.style.animation = `${nm} 0.6s both`; };
+    // kind="in" → 나타나는 효과 재생 / kind="out" → 사라지는 효과 재생 후 박스 다시 보이게 복원
+    const _playAnim = (kind) => {
+      const cur = palCurTitle(); const ai = cur.animIn || "none", ao = cur.animOut || "none";
+      const boxes = _animBoxes(); if (!boxes.length) return;
+      if (E._animTimer) { clearTimeout(E._animTimer); E._animTimer = null; }
+      if (kind === "out") {
+        if (ao === "none") return;
+        boxes.forEach((b) => _runAnim(b, `anim-out-${ao}`));
+        E._animTimer = setTimeout(() => { boxes.forEach((b) => { b.style.animation = ""; }); E._animTimer = null; }, 780);
+      } else {
+        if (ai === "none") return;
+        boxes.forEach((b) => _runAnim(b, `anim-${ai}`));
+      }
+    };
+    $$("#esBody [data-tedanimin]").forEach((b) => b.addEventListener("click", () => { palCurTitle().animIn = b.dataset.tedanimin; renderPalette(); palDraftSave(); setTimeout(() => _playAnim("in"), 40); }));
+    $$("#esBody [data-tedanimout]").forEach((b) => b.addEventListener("click", () => { palCurTitle().animOut = b.dataset.tedanimout; renderPalette(); palDraftSave(); setTimeout(() => _playAnim("out"), 40); }));
+    const _animPlay = $("#esTedAnimPlay"); if (_animPlay) _animPlay.addEventListener("click", () => _playAnim("in"));
+    const _animPlayOut = $("#esTedAnimPlayOut"); if (_animPlayOut) _animPlayOut.addEventListener("click", () => _playAnim("out"));
+    // 📑 작업대 라벨(탭) 전환 — 문구/스타일/배치/시간/보관
+    $$("#esBody [data-tedsec]").forEach((b) => b.addEventListener("click", () => { E._tedTab = b.dataset.tedsec; renderPalette(); }));
+    $$("#esBody [data-tedref]").forEach((b) => b.addEventListener("click", async () => { const rf = palRefsArr()[+b.dataset.tedref]; if (!rf) return; const cur = palCurTitle(); palApplyRef(cur, rf); demo[E._palEditKind === "caption" ? "captionRef" : "titleRef"] = rf; if ((cur.text || "").trim()) await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }));
+    const _tedSize = $("#esTedSize");
+    if (_tedSize) _tedSize.addEventListener("input", (e) => { const cur = palCurTitle(); cur.size = +e.target.value; const box = _curBox(); if (box) box.style.height = palBoxH(cur, cur.size) + "cqh"; const lb = _tedSize.parentElement.querySelector("small"); if (lb) lb.textContent = cur.size; clearTimeout(E._tedSzT); E._tedSzT = setTimeout(palDraftSave, 300); });   // 절대값=한 줄 글자 높이(줄 수·문구 길이 무관)
+    const _tedLS = $("#esTedLS"); if (_tedLS) _tedLS.addEventListener("input", (e) => { const cur = palCurTitle(); cur.letterSpacing = +e.target.value; const lb = _tedLS.parentElement.querySelector("small"); if (lb) lb.textContent = cur.letterSpacing; clearTimeout(E._tedLST); E._tedLST = setTimeout(async () => { await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }, 350); });   // 자간(이미지 재렌더)
+    const _tedLH = $("#esTedLH"); if (_tedLH) _tedLH.addEventListener("input", (e) => { const cur = palCurTitle(); cur.lineHeight = +e.target.value / 100; const lb = _tedLH.parentElement.querySelector("small"); if (lb) lb.textContent = cur.lineHeight.toFixed(2); clearTimeout(E._tedLHT); E._tedLHT = setTimeout(async () => { await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }, 350); });   // 줄간격(이미지 재렌더)
+    // 🌑 그림자 슬라이더 — 방향·불투명도·거리·흐림 (이미지 재렌더, 디바운스)
+    const _shSlider = (id, prop, unit) => { const el = $("#" + id); if (el) el.addEventListener("input", (e) => { const cur = palCurTitle(); if (!cur.shadow) cur.shadow = { color: "#000000", dir: 315, op: 55, dist: 0, blur: 22 }; cur.shadow[prop] = +e.target.value; const lb = el.parentElement.querySelector("small"); if (lb) lb.textContent = e.target.value + (unit || ""); clearTimeout(E["_sh" + prop]); E["_sh" + prop] = setTimeout(async () => { await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }, 350); }); };
+    _shSlider("esTedShDir", "dir", "°"); _shSlider("esTedShOp", "op", "%"); _shSlider("esTedShDist", "dist", ""); _shSlider("esTedShBlur", "blur", "");
+    const _tedBgX = $("#esTedBgX"); if (_tedBgX) _tedBgX.addEventListener("input", (e) => { const cur = palCurTitle(); cur.bgPadX = +e.target.value; const box = _curBox(); if (box && cur.bg) { box.style.paddingLeft = cur.bgPadX + "cqw"; box.style.paddingRight = cur.bgPadX + "cqw"; } clearTimeout(E._tedBgXT); E._tedBgXT = setTimeout(palDraftSave, 300); });   // 배경 가로 여백
+    const _tedBgY = $("#esTedBgY"); if (_tedBgY) _tedBgY.addEventListener("input", (e) => { const cur = palCurTitle(); cur.bgPadY = +e.target.value; const box = _curBox(); if (box && cur.bg) { box.style.paddingTop = cur.bgPadY + "cqh"; box.style.paddingBottom = cur.bgPadY + "cqh"; } clearTimeout(E._tedBgYT); E._tedBgYT = setTimeout(palDraftSave, 300); });   // 배경 세로 여백
+    const _tedOp = $("#esTedOp");
+    if (_tedOp) _tedOp.addEventListener("input", (e) => { const cur = palCurTitle(); cur.opacity = +e.target.value; const box = _curBox(); if (box && cur.bg) box.style.background = hexToRgba(cur.bg, cur.opacity / 100); clearTimeout(E._tedOpT); E._tedOpT = setTimeout(palDraftSave, 300); });   // 배경색 투명도만(글씨 안 변함)
+    // 칸 탭: 선택 / 추가 / 삭제
+    $$("#esBody [data-tedtab]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-teddel]")) return; palSetSel(+b.dataset.tedtab); renderPalette(); }));
+    $$("#esBody [data-teddel]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const i = +b.dataset.teddel; const ts = palTitles(); if (!ts[i]) return; try { if (ts[i].result && ts[i].result.url) URL.revokeObjectURL(ts[i].result.url); } catch (_) {} ts.splice(i, 1); if (palSel() >= ts.length) palSetSel(Math.max(0, ts.length - 1)); renderPalette(); palDraftSave(); }));   // 마지막 칸까지 삭제 가능(0칸=타이틀/자막 없음)
+    const _tedAdd = $("#esTedAdd"); if (_tedAdd) _tedAdd.addEventListener("click", () => { const ts = palTitles(); const base = ts[palSel()]; ts.push(palNewBlock(base, ts.length)); palSetSel(ts.length - 1); renderPalette(); palDraftSave(); });
+    const _tedSave = $("#esTedSaveRef"); if (_tedSave) _tedSave.addEventListener("click", palSaveTitleAsRef);
+    // 🅰🅱🅲 고객 화면(가운데) — 칸별 문구 입력 → 그 칸 실시간 렌더
+    $$("#esBody [data-cslot]").forEach((ta) => ta.addEventListener("input", () => {
+      const i = +ta.dataset.cslot; const ts = palTitles(); const blk = ts[i]; if (!blk) return;
+      blk.text = ta.value;
+      clearTimeout(E._cslotT);
+      E._cslotT = setTimeout(async () => {
+        await palTitleRenderBlock(blk);
+        const pos = ta.selectionStart; renderPalette();   // 왼쪽 미리보기 + 고객화면 live 둘 다 확실히 갱신(타이핑 멈춘 뒤 1회) + 입력 포커스/커서 복원
+        const t2 = document.querySelector(`[data-cslot="${i}"]`); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
+      }, 320);
+    }));
+    palTitleDragInit();   // ✋ 칸 끌어 위치·모서리로 크기·눌러 선택
+    const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
+    const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { (P.demo && P.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
+    palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
+  }
+  function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
+  function paletteTap(fnKey) {
+    const P = E.palette; if (!P) return;
+    P.preview = null;
+    const s = P.steps[P.sel];
+    if (s && !s.fn) { s.fn = fnKey; }                                            // 비어있는 선택 단계면 채움
+    else { P.steps.push({ id: uid(), fn: fnKey }); P.sel = P.steps.length - 1; }  // 아니면 새 단계로 추가
+    renderPalette();
+  }
+  // 📌 문구 프리셋 — 저장한 문구를 기능상자에 붙여두고 나중에 다시 불러옴(IndexedDB 영구). [{id,fn,name,copy:{title,note}}]
+  async function loadPalPresets() { try { const a = await idbGet("palCopyPresets"); E.palPresets = Array.isArray(a) ? a : []; } catch (_) { E.palPresets = []; } }
+  async function savePalPresets() { try { await idbSet("palCopyPresets", E.palPresets || []); } catch (_) {} }
+  function palAddPreset(presetId) {   // 프리셋을 단계로 — 그 기능 + 저장한 문구가 같이 들어감
+    const P = E.palette; if (!P) return;
+    const p = (E.palPresets || []).find((x) => x.id === presetId); if (!p) return;
+    P.preview = null; P._copyEdit = null;
+    const ns = { id: uid(), fn: p.fn, copy: p.copy ? JSON.parse(JSON.stringify(p.copy)) : null };
+    const s = P.steps[P.sel];
+    if (s && !s.fn) { ns.id = s.id; P.steps[P.sel] = ns; } else { P.steps.push(ns); P.sel = P.steps.length - 1; }
+    renderPalette();
+  }
+  // 📌 기능 아이콘 '안'의 저장 문구 — 뱃지를 누르면 그 기능의 프리셋 목록이 열림(아이콘 안에 든 셈)
+  function palPresetSheet(fnKey) {
+    const f = paletteFn(fnKey); if (!f) return;
+    const presets = (E.palPresets || []).filter((p) => p.fn === fnKey);
+    const ov = document.createElement("div");
+    ov.className = "es-pal-sheet";
+    const rows = presets.length ? presets.map((p) => `<div class="es-pal-sheet-row">
+        <button type="button" class="es-pal-sheet-use" data-use="${esc(p.id)}"><span class="es-pal-sheet-nm">📌 ${esc(p.name)}</span><span class="es-pal-sheet-tx">${esc(((p.copy && p.copy.title) || "").split("\n").join(" ").slice(0, 32)) || "(문구 없음)"}</span></button>
+        <button type="button" class="es-pal-sheet-del" data-del="${esc(p.id)}" title="삭제">🗑</button>
+      </div>`).join("") : `<div class="es-pal-sheet-empty">아직 저장한 문구가 없어요.<br>화면에서 <b>✏️ 문구 고치기 → 📌 따로 저장해놓기</b> 로 만들어요.</div>`;
+    ov.innerHTML = `<div class="es-pal-sheet-box">
+        <div class="es-pal-sheet-head"><b>${f.icon} ${esc(f.label)} — 저장한 문구</b><button type="button" class="es-pal-sheet-x" id="esPSheetX" aria-label="닫기">✕</button></div>
+        <div class="es-pal-sheet-list">${rows}</div>
+        <button type="button" class="es-pal-sheet-plain" id="esPSheetPlain">＋ 문구 없이 ${esc(f.label)}만 넣기</button>
+      </div>`;
+    (document.getElementById("easyRoot") || document.body).appendChild(ov);
+    const close = () => { try { ov.remove(); } catch (_) {} };
+    ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+    ov.querySelector("#esPSheetX").addEventListener("click", close);
+    ov.querySelector("#esPSheetPlain").addEventListener("click", () => { close(); paletteTap(fnKey); });
+    ov.querySelectorAll("[data-use]").forEach((b) => b.addEventListener("click", () => { close(); palAddPreset(b.dataset.use); }));
+    ov.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+      if (!confirm("이 저장한 문구를 지울까요?")) return;
+      E.palPresets = (E.palPresets || []).filter((p) => p.id !== b.dataset.del);
+      try { savePalPresets(); } catch (_) {}
+      close(); renderPalette();
+      if ((E.palPresets || []).some((p) => p.fn === fnKey)) palPresetSheet(fnKey);   // 남은 게 있으면 다시 열어둠
+    }));
+  }
+  // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
+  function paletteToTemplate(P) {
+    const fns = P.steps.map((s) => s.fn).filter(Boolean);
+    const has = (k) => fns.includes(k);
+    return {
+      id: uid(),
+      name: (P.name || "").trim() || "새 템플릿",
+      aspect: P.aspect || "9:16",
+      music: null, audioClips: [], createdAt: Date.now(),
+      slots: [{ id: uid(), dur: 3, label: "", auto: true, easyTrim: has("length") }],   // 영상넣기 = 자율컷(무제한). 컷길이 기능 있으면 길이조절 켬.
+      texts: has("caption") ? [Object.assign({ id: uid(), text: "여기에 자막을 입력하세요" }, palCaptionTextProps(P.demo && P.demo.captionStyle))] : [],
+      narrate: has("narrate"), _wantTitle: has("tgen") || has("title"), _palette: true,
+      _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
+    };
+  }
+  function savePalette() {
+    const P = E.palette; if (!P) return;
+    if (!P.name.trim()) { try { toast("템플릿 이름을 정해주세요"); } catch (_) {} const n = $("#esPalName"); if (n) n.focus(); return; }
+    const filled = P.steps.filter((s) => s.fn);
+    if (!filled.length) { try { toast("단계에 기능을 하나 이상 넣어주세요"); } catch (_) {} return; }
+    const tpl = paletteToTemplate(P);
+    if (!Array.isArray(E.templates)) E.templates = [];
+    E.templates.push(tpl);
+    try { saveTemplates(); } catch (_) {}
+    try { toast("✅ '" + tpl.name + "' 저장됨 — 관리자 페이지 '내가 만든 템플릿'에 추가됐어요"); } catch (_) {}
+    try { palDraftClear(); } catch (_) {}   // 템플릿으로 저장됐으니 임시 작업초안 정리
+    E.palette = null;                 // 다음 제작은 빈 팔레트로
+    setView("admin");                 // 관리자 페이지(목록)로
+  }
+
+  // ════════════ 🔧 관리자 페이지 — 하단 '관리자'로 진입(비번 6315). 관리 도구 모음 ════════════
+  function openAdmin() { if (!adminUnlock()) return; try { stopPlay(); } catch (_) {} E.mode2 = "easy"; setView("admin"); }
+  function renderAdmin() {
+    const body = $("#esBody"); if (!body) return;
+    // 게시 상태(● 게시중) 표시용 — 서버 게시본 목록이 아직 안 받아졌으면 한 번 받아서 다시 그림
+    if (!E._pubAdminTried) { E._pubAdminTried = true; if (!(E.published && E.published.length)) { try { loadPublished().then(() => { if (E.view === "admin") renderAdmin(); }); } catch (_) {} } }
+    const liveIds = new Set((E.published || []).map((p) => p && p.id).filter(Boolean));
+    const myTpls = (E.templates || []).filter((t) => t && (t._palette || !t._base));   // 팔레트/직접 만든 템플릿(기본 8종 제외)
+    const tplDesc = (t) => [(t.aspect || "9:16"), t._wantTitle ? "타이틀" : "", t.narrate ? "나레이션" : "", (t.texts && t.texts.length) ? "자막" : ""].filter(Boolean).join(" · ");
+    const tplsHtml = myTpls.length
+      ? `<div class="es-admin-tpls">${myTpls.map((t) => { const live = liveIds.has(t.id); return `<div class="es-admin-tpl ${live ? "is-live" : ""}">
+            <button type="button" class="es-admin-tpl-use" data-tid="${esc(t.id)}"><span class="es-admin-tpl-ico">🎬</span><span class="es-admin-tpl-info"><b>${esc(t.name || "템플릿")}${live ? '<span class="es-admin-tpl-badge">● 게시중</span>' : ""}</b><span>${esc(tplDesc(t))}</span></span><span class="es-admin-tpl-go">▶ 만들기</span></button>
+            <div class="es-admin-tpl-ops">
+              <button type="button" class="es-admin-tpl-pub" data-tid="${esc(t.id)}">${live ? "↻ 다시 올리기" : "☁️ 실제 이지숏폼에 올리기"}</button>
+              ${live ? `<button type="button" class="es-admin-tpl-unpub" data-tid="${esc(t.id)}" title="고객 사이트에서 내리기">내리기</button>` : ""}
+              <button type="button" class="es-admin-tpl-del" data-tid="${esc(t.id)}" title="로컬에서 삭제">🗑</button>
+            </div>
+          </div>`; }).join("")}</div>`
+      : `<div class="es-admin-empty">아직 없어요 — 위 <b>🎨 새 이지숏폼 만들기</b>로 첫 템플릿을 만들어보세요</div>`;
+    body.innerHTML = `
+      <div class="es-admin">
+        <div class="es-admin-head">🔧 관리자 페이지</div>
+        <div class="es-admin-grid">
+          <button type="button" class="es-admin-card es-admin-card-hi" id="esAdmPalette"><span class="es-admin-ic">🎨</span><span class="es-admin-t">새 이지숏폼 만들기</span><span class="es-admin-d">팔레트로 템플릿 조립</span></button>
+          <button type="button" class="es-admin-card" id="esAdmDetail"><span class="es-admin-ic">🎬</span><span class="es-admin-t">디테일숏폼</span><span class="es-admin-d">템플릿 제작·편집·게시</span></button>
+          <button type="button" class="es-admin-card" id="esAdmMusic"><span class="es-admin-ic">🎵</span><span class="es-admin-t">노래 올리기</span><span class="es-admin-d">내장 음악 업로드</span></button>
+          <button type="button" class="es-admin-card" id="esAdmVideos"><span class="es-admin-ic">📹</span><span class="es-admin-t">고객 영상 확인</span><span class="es-admin-d">고객이 만든 영상 보관함</span></button>
+        </div>
+        <div class="es-admin-sec">📐 내가 만든 템플릿 <span class="es-hint">☁️ 올리기 = 실제 이지숏폼(고객)에 게시 · ▶ 만들기 · 🗑 로컬삭제</span></div>
+        ${tplsHtml}
+      </div>`;
+    const el = (id) => $("#" + id);
+    el("esAdmPalette") && el("esAdmPalette").addEventListener("click", openPalette);
+    el("esAdmDetail") && el("esAdmDetail").addEventListener("click", () => enterMode2("detail"));
+    el("esAdmMusic") && el("esAdmMusic").addEventListener("click", () => { location.href = "admin-music.html"; });
+    el("esAdmVideos") && el("esAdmVideos").addEventListener("click", () => { location.href = "admin-videos.html"; });
+    $$(".es-admin-tpl-use", body).forEach((b) => b.addEventListener("click", () => startFromTemplate(b.dataset.tid, "easy")));
+    $$(".es-admin-tpl-pub", body).forEach((b) => b.addEventListener("click", async () => {
+      const old = b.textContent; b.disabled = true; b.textContent = "☁️ 올리는 중…";
+      const ok = await publishTemplateById(b.dataset.tid);
+      b.disabled = false; b.textContent = old;
+      if (ok && E.view === "admin") renderAdmin();
+    }));
+    $$(".es-admin-tpl-unpub", body).forEach((b) => b.addEventListener("click", async () => {
+      await unpublishTemplateById(b.dataset.tid);
+      try { await loadPublished(); } catch (_) {}
+      if (E.view === "admin") renderAdmin();
+    }));
+    $$(".es-admin-tpl-del", body).forEach((b) => b.addEventListener("click", () => {
+      if (!confirm("이 템플릿을 로컬에서 삭제할까요?\n(고객 사이트 게시본은 '내리기'로 따로 내려야 해요)")) return;
+      E.templates = (E.templates || []).filter((x) => x.id !== b.dataset.tid);
+      try { saveTemplates(); } catch (_) {} renderAdmin();
+    }));
+  }
+
   // 🔒 관리자 모드(디테일숏폼) 잠금 — 비밀번호 6315. 세션당 한 번만 물어봄(새로고침 시 다시 잠김)
   function adminUnlock() {
     if (E._adminUnlocked) return true;
@@ -1784,7 +3252,7 @@
     // 게시 템플릿이 아직 안 받아졌으면 받아서 다시 그림 — 어느 경로(메인/전체/세션나가기)로 들어와도 항상 게시본이 뜨게(자가복구)
     if (!(E.published && E.published.length) && !E._pubTried) {
       E._pubTried = true;
-      try { loadPublished().then(() => { E._pubLoadDone = true; if (E.mode2 === "easy" && !E.using) { const b = $("#esBody"); if (b) renderEasyCatalog(b); } }); } catch (_) { E._pubLoadDone = true; }
+      try { loadPublished().then(() => { E._pubLoadDone = true; if (E.mode2 === "easy" && !E.using && E.view !== "admin" && E.view !== "palette") { const b = $("#esBody"); if (b) renderEasyCatalog(b); } }); } catch (_) { E._pubLoadDone = true; }
     }
     if (E.published && E.published.length) E._pubLoadDone = true;
     // 첫 진입에 서버 게시템플릿을 불러오는 중이면, 미리보기 안 되는 데모카드 대신 로딩 표시(깜빡임 방지)
@@ -2727,10 +4195,10 @@
       try { toast("🗑 고객 사이트에서 내렸습니다"); } catch (_) {}
     } catch (e) { alert("내리기 오류: " + (e && e.message || e)); }
   }
-  // 저장된 템플릿(목록)을 id 로 바로 게시 — 빌더 안 거치고
+  // 저장된 템플릿(목록)을 id 로 바로 게시 — 빌더 안 거치고. 성공하면 true.
   async function publishTemplateById(id) {
-    const t = E.templates.find((x) => x.id === id); if (!t) return;
-    const key = easyAdminKey(); if (!key) return;
+    const t = E.templates.find((x) => x.id === id); if (!t) return false;
+    const key = easyAdminKey(); if (!key) return false;
     try {
       let musicB64 = null, musicType = null;
       if (t.music) { const mb = await idbGet("music_" + id); if (mb instanceof Blob) { musicType = mb.type || "audio/mpeg"; musicB64 = await blobToB64(mb); } }
@@ -2738,9 +4206,22 @@
       if (musicB64) { payload.musicB64 = musicB64; payload.musicType = musicType; } else if (!t.music) { payload.clearMusic = true; }
       const r = await fetch(EASY_TPL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j = await r.json().catch(() => null);
-      if (!j || !j.ok) { alert("게시 실패: " + ((j && j.error) || ("HTTP " + r.status))); return; }
-      try { toast("☁️ 온라인 게시 완료 — 고객 사이트에 반영됩니다"); } catch (_) {}
-    } catch (e) { alert("게시 오류: " + (e && e.message || e)); }
+      if (!j || !j.ok) { alert("게시 실패: " + ((j && j.error) || ("HTTP " + r.status))); return false; }
+      // 🎬 타이틀·나레이션은 서버 템플릿 행에 칸이 없음 → 분류맵(cats)으로 고객에 전달(디테일숏폼과 같은 경로). 팔레트/기본 템플릿만 해당.
+      try {
+        if (t._wantTitle || t.narrate) {
+          if (!(E._serverCats && Object.keys(E._serverCats).length)) { try { await loadPublished(); } catch (_) {} }
+          const m = clsMap(); const cur = Object.assign({}, m[t.id]);
+          if (t.narrate) cur.narrate = true; else delete cur.narrate;
+          if (t._wantTitle) { if (!cur.titleStyle && !cur.titlePrompt && !cur.titleRef) cur.titleStyle = "movie"; }
+          m[t.id] = cur; clsMapSave(m);
+          await clsServerSave();
+        }
+      } catch (_) {}
+      try { await loadPublished(); } catch (_) {}   // 게시 상태(E.published) 즉시 갱신
+      try { toast("☁️ 게시 완료 — 실제 이지숏폼(고객)에 바로 반영됩니다"); } catch (_) {}
+      return true;
+    } catch (e) { alert("게시 오류: " + (e && e.message || e)); return false; }
   }
   // 온라인에서 내리기 (목록에서 id 로)
   async function unpublishTemplateById(id) {
@@ -5222,8 +6703,43 @@
     const d = id.data, hex = (bgHex || "#ffffff").replace("#", "");
     const _h = (s) => { const v = parseInt(s, 16); return isNaN(v) ? 255 : v; };   // 0채널(예: 마젠타 #ff00ff 의 G=0)을 보존 — 기존 `||255` 가 0을 255로 망가뜨림
     const br = _h(hex.slice(0, 2)), bgc = _h(hex.slice(2, 4)), bb = _h(hex.slice(4, 6));
-    const thr = 72, soft = 46;
-    for (let i = 0; i < d.length; i += 4) { const dr = d[i] - br, dg = d[i + 1] - bgc, dbv = d[i + 2] - bb; const dist = Math.sqrt(dr * dr + dg * dg + dbv * dbv); let a = (dist - thr) / soft; a = a < 0 ? 0 : a > 1 ? 1 : a; d[i + 3] = Math.round(d[i + 3] * a); }
+    const thr = 80, soft = 46;
+    const bgGreen = (bgc > br + 50 && bgc > bb + 50);   // 🟢 크로마가 초록(#00ff00)이면 그린 스필 제거 ON
+    // ── 1차: 알파 키잉 (배경색 거리로 투명도 결정) ──
+    for (let i = 0; i < d.length; i += 4) {
+      const dr = d[i] - br, dg = d[i + 1] - bgc, dbv = d[i + 2] - bb;
+      const dist = Math.sqrt(dr * dr + dg * dg + dbv * dbv);
+      let a = (dist - thr) / soft; a = a < 0 ? 0 : a > 1 ? 1 : a;
+      d[i + 3] = Math.round(d[i + 3] * a);
+    }
+    // ── 2차: 그린 스필 제거(공간적) — 투명해진 배경(헤일로)에 맞닿은 "테두리" 픽셀의 초록을 깎음.
+    //    글자 안쪽(솔리드)은 그대로라 초록 글자도 선명하게 보존되고, 번져나오는 초록 글로우/테두리만 사라짐.
+    //    반경 R 은 이미지 크기에 비례(실제 gpt-image 는 ~1024px라 글로우가 여러 px) → 작은 글자획은 보존.
+    if (bgGreen) {
+      const R = Math.max(3, Math.min(11, Math.round(Math.min(W, H) / 100)));
+      // 원본 알파 스냅샷(2차에서 알파는 안 바꾸지만, 명확히 분리)
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          const a = d[i + 3];
+          if (a === 0) continue;                        // 완전 투명 → 건너뜀
+          const maxRB = d[i] > d[i + 2] ? d[i] : d[i + 2];
+          if (d[i + 1] <= maxRB) continue;              // 초록이 우세하지 않음 → 손대지 않음
+          let kill = a < 210;                           // 반투명(가장자리/글로우)은 초록 제거. 솔리드 초록 글자(a≈244)는 살려서 무채색화 방지
+          if (!kill) {                                  // 불투명이면: 반경 R 안에 (거의)투명 픽셀이 있나(=테두리) 확인
+            for (let dy = -R; dy <= R && !kill; dy++) {
+              const yy = y + dy; if (yy < 0 || yy >= H) continue;
+              const base = yy * W;
+              for (let dx = -R; dx <= R; dx++) {
+                const xx = x + dx; if (xx < 0 || xx >= W) continue;
+                if (d[(base + xx) * 4 + 3] < 40) { kill = true; break; }
+              }
+            }
+          }
+          if (kill) d[i + 1] = maxRB;                   // 테두리의 초록 과잉 제거 → 무채색 가장자리
+        }
+      }
+    }
     ctx.putImageData(id, 0, 0);
     return new Promise((res) => cv.toBlob(res, "image/png"));
   }
@@ -11676,6 +13192,13 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const rb = $("#esNavRoad", root); if (rb) rb.addEventListener("click", openRoadmap); }
     { const bh = $("#esBotHome", root); if (bh) bh.addEventListener("click", easyBotHome); }   // 📱 하단 네비 홈
     { const bb = $("#esBotBack", root); if (bb) bb.addEventListener("click", easyBotBack); }   // 📱 하단 네비 뒤로
+    // 🔧 바탕화면 바로가기(?admin=1) → 게이트·비번 없이 '이지숏폼 생성기'(관리자)로 바로 진입. 고객 앱엔 관리자 버튼 없음.
+    try {
+      if (/[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash)) {
+        E._adminUnlocked = true;
+        setTimeout(() => { try { openAdmin(); } catch (_) {} }, 150);
+      }
+    } catch (_) {}
     try { const m = localStorage.getItem("es_mode2"); if (m === "easy") E.mode2 = m; } catch (_) {}   // 새로고침 시 관리자(detail) 자동복원 안 함 → 항상 이지숏폼으로 시작(비번 재입력)
     // Ctrl/Cmd+A = 전체 선택, Delete = 선택 삭제, Ctrl/Cmd+Z = 되돌리기 (사용 화면 한정)
     // 마지막으로 만진 타임라인(_activeTl: 'scene' 장면 / 'text' 글자)을 대상으로 동작
@@ -11813,5 +13336,5 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     }
   }
 
-  window.EasyShorts = { init, show, hide, renderSpec };
+  window.EasyShorts = { init, show, hide, renderSpec, openPalette };
 })();
