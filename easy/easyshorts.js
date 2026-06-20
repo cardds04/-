@@ -1486,7 +1486,7 @@
           const opts = palRefsArr("title");
           const sel = d.titleRef;
           const gallery = opts.length
-            ? `<div class="es-pal-tref-gal" id="esTRefGal">${opts.map((rf, i) => `<button type="button" class="es-pal-tref-opt ${sel && sel.dataUrl === rf.dataUrl ? "sel" : ""}" data-pickref="${i}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-tref-fontbadge" title="글자체">✍️</span>` : ""}<span class="es-pal-tref-optx" data-rmref="${i}" title="삭제">×</span></button>`).join("")}</div>`
+            ? palRefGalHTML(opts, sel, "title")
             : `<div class="es-pal-tgen-noref">왼쪽 편집기에서 타이틀을 만들고 <b>'내 글씨박스에 저장'</b>을 누르면 여기에 줄줄이 쌓여요</div>`;
           body = `<div class="es-pal-tref-lb">🖼 ${opts.length ? "내 글씨박스 — 눌러서 골라요" : "아직 없어요"}</div>${gallery}<input type="file" id="esTRefFile" accept="image/*" multiple hidden>`;
           break;
@@ -1515,22 +1515,58 @@
           const opts = palRefsArr("caption");
           const sel = d.captionRef;
           const gallery = opts.length
-            ? `<div class="es-pal-tref-gal" id="esTRefGal">${opts.map((rf, i) => `<button type="button" class="es-pal-tref-opt ${sel && sel.dataUrl === rf.dataUrl ? "sel" : ""}" data-pickref="${i}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-tref-fontbadge" title="글자체">✍️</span>` : ""}<span class="es-pal-tref-optx" data-rmref="${i}" title="삭제">×</span></button>`).join("")}</div>`
+            ? palRefGalHTML(opts, sel, "caption")
             : `<div class="es-pal-tgen-noref">왼쪽 자막 작업대에서 자막을 만들고 <b>'내 자막 글씨박스에 저장'</b>을 누르면 여기에 줄줄이 쌓여요</div>`;
           body = `<div class="es-pal-tref-lb">🗨 ${opts.length ? "내 자막 글씨박스 — 눌러서 골라요" : "아직 없어요"}</div>${gallery}`;
           break;
         }
-        case "caption": {   // 💬 자막 생성 — 타이틀과 동일하게 칸(1·2·3번칸)별 '문구만' 바꿈(글씨체·위치·크기는 관리자가 왼쪽에서 정함)
+        case "caption": {   // 💬 자막 생성 — ①방법 고르기(AI/직접) → AI생성 or 직접 칸별 입력
           const ts = palTitles();
           if (!ts.length) { body = `<div class="es-pal-tgen-noref">이 영상엔 자막이 없어요 💬</div>`; break; }
-          const rows = ts.map((t, i) => {
+          const cstep = E._palCapStep || 0;
+          const capRows = () => ts.map((t, i) => {
             const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체";
             return `<div class="es-pal-cslot ${i === palSel() ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 자막 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
           }).join("");
-          body = `<div class="es-pal-cslot-lb">칸별로 <b>자막만</b> 바꾸면 돼요 💬 <span class="es-pal-tref-hint">(글씨체·위치는 그대로)</span></div>${rows}`;
+          if (cstep === "ai") {
+            body = `<div class="es-pal-capm-lb">🤖 AI로 자막 만들기</div>
+              <div class="es-pal-capm-hint">어떤 영상인지 알려주면 자막을 만들어드려요</div>
+              <textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="3" placeholder="예: 오래된 욕실을 모던하게 리모델링한 비포애프터 영상">${esc(E._palCapPrompt || "")}</textarea>
+              <button type="button" class="es-pal-capm-gen" id="esPalCapGen">✨ 자막 만들기 (${ts.length}칸)</button>
+              <div id="esPalCapStatus" class="es-pal-narr-status"></div>
+              <button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 뒤로</button>`;
+          } else if (cstep === 1) {
+            body = `<div class="es-pal-cslot-lb">✍️ 지금의 자막을 입력하세요 <span class="es-pal-tref-hint">(칸별로)</span></div>${capRows()}<button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 방법 다시 고르기</button>`;
+          } else {
+            body = `<div class="es-pal-capm-lb">💬 자막을 어떻게 만들까요?</div>
+              <button type="button" class="es-pal-capm-btn" data-capmethod="ai"><span class="es-pal-capm-ic">🤖</span><span class="es-pal-capm-t"><b>AI 생성하기</b><small>주제만 알려주면 자동으로</small></span></button>
+              <button type="button" class="es-pal-capm-btn" data-capmethod="1"><span class="es-pal-capm-ic">✍️</span><span class="es-pal-capm-t"><b>직접 입력하기</b><small>내가 직접 자막 작성</small></span></button>`;
+          }
           break;
         }
-        case "narrate": body = btn("🎙", "나레이션 만들기", "목소리 자동 생성"); break;
+        case "narrate": {   // 🎙 나레이션 — 앞 '자막'을 AI 목소리로. 2단계: ①스타일 고르기 ②생성·미리듣기
+          const caps = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean);
+          if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성' 단계에서 자막을 입력하면, 그 자막을 AI 목소리로 읽어드려요 🎙</div>`; break; }
+          const script = caps.join(" ");
+          const nstep = E._palNarrStep || 0;
+          const g = d.voiceGender || "female";
+          if (nstep === 0) {
+            body = `<div class="es-pal-narr-lb">🎙 ① 목소리 스타일 고르기</div>
+              <div class="es-pal-narr-row"><span class="es-pal-narr-rl">스타일</span><select id="esPalNarrTone" class="es-pal-narr-sel"><option>불러오는 중…</option></select></div>
+              <div class="es-pal-narr-row"><span class="es-pal-narr-rl">목소리</span><select id="esPalNarrGender" class="es-pal-narr-sel"><option value="female"${g === "female" ? " selected" : ""}>👩 여성</option><option value="male"${g === "male" ? " selected" : ""}>👨 남성</option></select></div>
+              <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(script)}</p></div>
+              <button type="button" class="es-pal-narr-next" id="esPalNarrNext">다음 ▶ 나레이션 만들기</button>`;
+          } else {
+            const hasVoice = !!d.voiceUrl;
+            body = `<div class="es-pal-narr-lb">🎙 ② 나레이션 만들기 · 미리듣기</div>
+              <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(script)}</p></div>
+              <button type="button" class="es-pal-narr-make" id="esPalNarrMake">${hasVoice ? "🔄 다시 만들기" : "🎙 나레이션 만들기"}</button>
+              <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
+              ${hasVoice ? `<audio id="esPalNarrAudio" controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>` : ""}
+              <button type="button" class="es-pal-narr-back" id="esPalNarrBack">◀ 스타일 다시 고르기</button>`;
+          }
+          break;
+        }
         case "length":  body = `<div class="es-pal-scr-bar"><span style="width:42%"></span></div><div class="es-pal-scr-bar"><span style="width:70%"></span></div><div class="es-pal-scr-bar"><span style="width:28%"></span></div>`; break;
         case "music":   body = `<div class="es-pal-scr-row">🎵 봄날의 산책 · 30초</div><div class="es-pal-scr-row">🎵 잔잔한 오후 · 24초</div><div class="es-pal-scr-row">🎵 신나는 하루 · 18초</div>`; break;
         case "done":    body = btn("⬇", "영상 생성·다운로드", "갤러리에 저장"); break;
@@ -1672,10 +1708,10 @@
     return `rgba(${r},${g},${b},${a == null ? 1 : a})`;
   }
   function palNewTitleBlock(base, idx) {
-    return { id: uid(), text: "", font: (base && base.font) || "giants-bold", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 14, posX: 50, posY: idx != null ? Math.min(86, 18 + idx * 24) : 18, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
+    return { id: uid(), text: "", font: (base && base.font) || "giants-bold", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 14, posX: 50, posY: idx != null ? Math.min(86, 18 + idx * 24) : 18, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), bold: !!(base && base.bold), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
   }
   function palNewCaptionBlock(base, idx) {   // 자막 — 기본은 하단 흰글씨(타이틀보다 작게)
-    return { id: uid(), text: "", font: (base && base.font) || "bm-hanna-air", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 7, posX: 50, posY: idx != null ? Math.max(56, 88 - idx * 12) : 88, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
+    return { id: uid(), text: "", font: (base && base.font) || "bm-hanna-air", color: (base && base.color) || "#ffffff", stroke: base ? base.stroke : "", size: (base && base.size != null && base.size <= 35) ? base.size : 7, posX: 50, posY: idx != null ? Math.max(56, 88 - idx * 12) : 88, opacity: 100, bg: (base && base.bg) || "", bgStyle: (base && base.bgStyle) || "box", align: (base && base.align) || "center", bgPadX: (base && base.bgPadX != null) ? base.bgPadX : 4, bgPadY: (base && base.bgPadY != null) ? base.bgPadY : 2, start: (base && base.start != null) ? base.start : 0, dur: (base && base.dur !== undefined) ? base.dur : null, letterSpacing: (base && base.letterSpacing) || 0, lineHeight: (base && base.lineHeight) || 1.22, italic: !!(base && base.italic), bold: !!(base && base.bold), shadow: (base && base.shadow) ? Object.assign({}, base.shadow) : null, animIn: (base && base.animIn) || "none", animOut: (base && base.animOut) || "none", result: null };
   }
   function palNewBlock(base, idx) { return (E._palEditKind === "caption") ? palNewCaptionBlock(base, idx) : palNewTitleBlock(base, idx); }
   // 종류별(타이틀/자막) 블록 배열 — kind: "title" | "caption". 둘 다 같은 구조·편집기 공유.
@@ -1693,7 +1729,7 @@
       if (d[sk] == null) d[sk] = 0;
     }
     const minDef = cap ? 7 : 14;
-    d[ak].forEach((t) => { if (t.size == null || t.size > 35) t.size = minDef; if (t.bgPadX == null) t.bgPadX = 4; if (t.bgPadY == null) t.bgPadY = 2; if (t.bgStyle === "band") t.bgStyle = "box"; if (t.start == null) t.start = 0; if (t.dur === undefined) t.dur = null; if (t.letterSpacing == null) t.letterSpacing = 0; if (t.lineHeight == null) t.lineHeight = 1.22; if (t.italic == null) t.italic = false; if (t.shadow === undefined) t.shadow = null; if (t.animIn == null) t.animIn = "none"; if (t.animOut == null) t.animOut = "none"; });
+    d[ak].forEach((t) => { if (t.size == null || t.size > 35) t.size = minDef; if (t.bgPadX == null) t.bgPadX = 4; if (t.bgPadY == null) t.bgPadY = 2; if (t.bgStyle === "band") t.bgStyle = "box"; if (t.start == null) t.start = 0; if (t.dur === undefined) t.dur = null; if (t.letterSpacing == null) t.letterSpacing = 0; if (t.lineHeight == null) t.lineHeight = 1.22; if (t.italic == null) t.italic = false; if (t.bold == null) t.bold = false; if (t.shadow === undefined) t.shadow = null; if (t.animIn == null) t.animIn = "none"; if (t.animOut == null) t.animOut = "none"; });
     return d[ak];
   }
   function palSel(kind) { const k = kind || E._palEditKind || "title"; return E.palette.demo[k === "caption" ? "captionSel" : "titleSel"] || 0; }
@@ -1712,7 +1748,7 @@
     if (!block) return;
     const text = String(block.text || "").trim();
     if (!text) { try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {} block.result = null; return; }
-    const blob = await renderFontToBlob({ text, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, shadow: block.shadow || null });
+    const blob = await renderFontToBlob({ text, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, bold: !!block.bold, shadow: block.shadow || null });
     if (!blob) return;
     try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {}
     block.result = { url: URL.createObjectURL(blob), blob, font: block.font };
@@ -1747,6 +1783,7 @@
     const ls = cur.letterSpacing != null ? cur.letterSpacing : 0;   // 자간
     const lhR = cur.lineHeight != null ? cur.lineHeight : 1.22;   // 줄간격 배율
     const italic = !!cur.italic;   // 비스듬히
+    const bold = !!cur.bold;   // 굵게
     // ✨ 효과(애니메이션) — 나타날 때(animIn)·사라질 때(animOut)
     const ANIM_IN = [["none", "✕ 없음"], ["fade", "페이드인"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["slideU", "↑ 위로"], ["slideD", "↓ 아래로"], ["zoom", "확대"], ["fly", "날아오기"], ["pop", "팝!"], ["bounce", "통통"], ["rotate", "회전"], ["blur", "흐림 등장"]];
     const ANIM_OUT = [["none", "✕ 없음"], ["fade", "페이드아웃"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["slideU", "↑ 위로"], ["slideD", "↓ 아래로"], ["zoom", "축소"], ["pop", "팝!"]];
@@ -1787,7 +1824,7 @@
         <div class="es-pal-ted-sec-h"><b>문구</b><span>고객이 바꿀 글자 칸</span></div>
         <div class="es-pal-ted-tabs">${tabs}</div>
         <textarea class="es-pal-ted-text" id="esTedText" rows="2" placeholder="${sel + 1}번칸 ${cap ? "자막" : "문구"} (엔터=줄바꿈)">${esc(cur.text || "")}</textarea>
-        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">정렬</span><div class="es-pal-ted-sw">${alignBtns}<button type="button" class="es-pal-ted-stroke es-pal-ted-italbtn ${italic ? "sel" : ""}" data-teditalic="${italic ? "0" : "1"}" title="기울임"><i>𝑖 기울임</i></button></div></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">정렬</span><div class="es-pal-ted-sw">${alignBtns}<button type="button" class="es-pal-ted-stroke es-pal-ted-boldbtn ${bold ? "sel" : ""}" data-tedbold="${bold ? "0" : "1"}" title="굵게"><b>𝐁 굵게</b></button><button type="button" class="es-pal-ted-stroke es-pal-ted-italbtn ${italic ? "sel" : ""}" data-teditalic="${italic ? "0" : "1"}" title="기울임"><i>𝑖 기울임</i></button></div></div>
       </div>`;
     const secStyle = `<div class="es-pal-ted-section">
         <div class="es-pal-ted-lb">글씨체 <span class="es-pal-ted-hint">(◀▶ 하나씩 / 눌러서 목록)</span></div>
@@ -1877,13 +1914,13 @@
       const arr = palRefsArr();   // 현재 종류(타이틀/자막) 글씨박스에 따로 저장
       const nm = font ? "✍️ " + ((MY_FONT_MAP[font] && MY_FONT_MAP[font].k) || "글자체") : (cap ? "내가 만든 자막" : "내가 만든 타이틀");
       // 🅰🅱🅲 칸 개수까지 통째로 저장 — 현재 만든 모든 칸(글자·스타일·위치·효과)을 slots 에 담음
-      const _slots = palTitles().map((t) => ({ text: t.text || "", font: t.font || null, color: t.color || null, stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : null, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : (cap ? 88 : 18), size: t.size != null ? t.size : (cap ? 7 : 14), bg: t.bg || null, opacity: t.opacity != null ? t.opacity : 100, align: t.align || "center", bgStyle: t.bgStyle || "box", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none" }));
+      const _slots = palTitles().map((t) => ({ text: t.text || "", font: t.font || null, color: t.color || null, stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : null, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : (cap ? 88 : 18), size: t.size != null ? t.size : (cap ? 7 : 14), bg: t.bg || null, opacity: t.opacity != null ? t.opacity : 100, align: t.align || "center", bgStyle: t.bgStyle || "box", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none" }));
       const rf = { id: uid(), dataUrl, name: nm, text: cur.text || "", font: font || null, color: cur.color || null, stroke: cur.stroke != null ? cur.stroke : null, kind: font ? "font" : null,
         posX: cur.posX != null ? cur.posX : 50, posY: cur.posY != null ? cur.posY : (cap ? 88 : 18), size: cur.size != null ? cur.size : (cap ? 7 : 14),
         bg: cur.bg || null, opacity: cur.opacity != null ? cur.opacity : 100,
         align: cur.align || "center", bgStyle: cur.bgStyle || "box", bgPadX: cur.bgPadX != null ? cur.bgPadX : 4, bgPadY: cur.bgPadY != null ? cur.bgPadY : 2,
         start: cur.start != null ? cur.start : 0, dur: cur.dur !== undefined ? cur.dur : null,
-        letterSpacing: cur.letterSpacing || 0, lineHeight: cur.lineHeight || 1.22, italic: !!cur.italic, shadow: cur.shadow ? Object.assign({}, cur.shadow) : null, animIn: cur.animIn || "none", animOut: cur.animOut || "none", slots: _slots };   // 글씨·스타일·시간·그림자·효과 + 칸 묶음(slots) 전부 저장
+        letterSpacing: cur.letterSpacing || 0, lineHeight: cur.lineHeight || 1.22, italic: !!cur.italic, bold: !!cur.bold, shadow: cur.shadow ? Object.assign({}, cur.shadow) : null, animIn: cur.animIn || "none", animOut: cur.animOut || "none", slots: _slots };   // 글씨·스타일·시간·그림자·효과 + 칸 묶음(slots) 전부 저장
       arr.unshift(rf);
       try { savePalRefs(); } catch (_) {}
       try { toast(cap ? "📌 자막 글씨박스에 저장됐어요" : "📌 타이틀 글씨박스에 저장됐어요"); } catch (_) {}
@@ -2000,6 +2037,18 @@
   }
   // 🖼 글씨박스(참조 라이브러리) — 타이틀/자막 '따로' 보관. 타이틀=E.palTitleRefs(idb 'palTitleRefLib'), 자막=E.palCaptionRefs(idb 'palCaptionRefLib').
   function palRefsArr(kind) { const cap = (kind || E._palEditKind || "title") === "caption"; const key = cap ? "palCaptionRefs" : "palTitleRefs"; if (!Array.isArray(E[key])) E[key] = []; return E[key]; }   // 현재(또는 지정) 종류의 글씨박스 배열
+  // 🖼 글씨박스 갤러리 — 한 줄에 3개(가로폭 3등분) + 위/아래 페이지 버튼(다음 3개)
+  function palRefGalHTML(opts, sel, kind) {
+    const PER = 3;
+    const pageKey = kind === "caption" ? "_crefPage" : "_trefPage";
+    const pages = Math.ceil(opts.length / PER) || 1;
+    let page = E[pageKey] || 0; if (page >= pages) page = pages - 1; if (page < 0) page = 0; E[pageKey] = page;
+    const start = page * PER;
+    const chips = opts.slice(start, start + PER).map((rf, j) => { const i = start + j; return `<button type="button" class="es-pal-tref-opt ${sel && sel.dataUrl === rf.dataUrl ? "sel" : ""}" data-pickref="${i}"${rf.bg ? ` style="background:${rf.bg}"` : ""}><img src="${rf.dataUrl}" alt="">${rf.kind === "font" ? `<span class="es-pal-tref-fontbadge" title="글자체">✍️</span>` : ""}<span class="es-pal-tref-optx" data-rmref="${i}" title="삭제">×</span></button>`; }).join("");
+    const multi = pages > 1;
+    const nav = multi ? `<div class="es-pal-tref-pagenav"><button type="button" class="es-pal-tref-pagebtn" data-refpage="prev" data-refkind="${kind}"${page <= 0 ? " disabled" : ""}>◀ 이전</button><span class="es-pal-tref-pageno">${page + 1} / ${pages}쪽</span><button type="button" class="es-pal-tref-pagebtn" data-refpage="next" data-refkind="${kind}"${page >= pages - 1 ? " disabled" : ""}>다음 ▶</button></div>` : "";
+    return `<div class="es-pal-tref-gal es-pal-tref-grid" id="esTRefGal">${chips}</div>${nav}`;
+  }
   // 📌 글씨박스(프리셋) → 현재 칸에 '전부' 적용 — 누락 필드는 기본값으로 명시(현재 설정을 절대 안 따라가게), 옛 size(>35)는 기본 크기로
   function palApplyRef(cur, rf) {
     const cap = E._palEditKind === "caption";
@@ -2021,6 +2070,7 @@
     cur.letterSpacing = rf.letterSpacing != null ? rf.letterSpacing : 0;
     cur.lineHeight = rf.lineHeight != null ? rf.lineHeight : 1.22;
     cur.italic = !!rf.italic;
+    cur.bold = !!rf.bold;
     cur.shadow = rf.shadow ? Object.assign({}, rf.shadow) : null;
     cur.animIn = rf.animIn || "none";
     cur.animOut = rf.animOut || "none";
@@ -2052,6 +2102,7 @@
       blk.letterSpacing = s.letterSpacing || 0;
       blk.lineHeight = s.lineHeight || 1.22;
       blk.italic = !!s.italic;
+      blk.bold = !!s.bold;
       blk.shadow = s.shadow ? Object.assign({}, s.shadow) : null;
       blk.animIn = s.animIn || "none";
       blk.animOut = s.animOut || "none";
@@ -2061,7 +2112,7 @@
     return true;
   }
   function palRefsIdbKey(kind) { return ((kind || E._palEditKind || "title") === "caption") ? "palCaptionRefLib" : "palTitleRefLib"; }
-  async function savePalRefs(kind) { const arr = palRefsArr(kind); try { await idbSet(palRefsIdbKey(kind), arr.map((r) => ({ id: r.id, dataUrl: r.dataUrl, name: r.name, text: r.text != null ? r.text : null, font: r.font || null, color: r.color || null, stroke: (r.stroke != null && r.stroke !== "#111111") ? r.stroke : null, kind: r.kind || null, posX: r.posX != null ? r.posX : null, posY: r.posY != null ? r.posY : null, size: r.size != null ? r.size : null, bg: r.bg || null, opacity: r.opacity != null ? r.opacity : null, align: r.align || null, bgStyle: r.bgStyle || null, bgPadX: r.bgPadX != null ? r.bgPadX : null, bgPadY: r.bgPadY != null ? r.bgPadY : null, start: r.start != null ? r.start : null, dur: r.dur !== undefined ? r.dur : null, letterSpacing: r.letterSpacing || 0, lineHeight: r.lineHeight || 1.22, italic: !!r.italic, shadow: r.shadow ? Object.assign({}, r.shadow) : null, animIn: r.animIn || "none", animOut: r.animOut || "none", slots: Array.isArray(r.slots) ? r.slots : null }))); } catch (_) {} }
+  async function savePalRefs(kind) { const arr = palRefsArr(kind); try { await idbSet(palRefsIdbKey(kind), arr.map((r) => ({ id: r.id, dataUrl: r.dataUrl, name: r.name, text: r.text != null ? r.text : null, font: r.font || null, color: r.color || null, stroke: (r.stroke != null && r.stroke !== "#111111") ? r.stroke : null, kind: r.kind || null, posX: r.posX != null ? r.posX : null, posY: r.posY != null ? r.posY : null, size: r.size != null ? r.size : null, bg: r.bg || null, opacity: r.opacity != null ? r.opacity : null, align: r.align || null, bgStyle: r.bgStyle || null, bgPadX: r.bgPadX != null ? r.bgPadX : null, bgPadY: r.bgPadY != null ? r.bgPadY : null, start: r.start != null ? r.start : null, dur: r.dur !== undefined ? r.dur : null, letterSpacing: r.letterSpacing || 0, lineHeight: r.lineHeight || 1.22, italic: !!r.italic, bold: !!r.bold, shadow: r.shadow ? Object.assign({}, r.shadow) : null, animIn: r.animIn || "none", animOut: r.animOut || "none", slots: Array.isArray(r.slots) ? r.slots : null }))); } catch (_) {} }
   async function loadPalTitleRefs() {   // 둘 다 불러오기(1회)
     try { const a = await idbGet("palTitleRefLib"); E.palTitleRefs = Array.isArray(a) ? a : []; } catch (_) { E.palTitleRefs = []; }
     try { const b = await idbGet("palCaptionRefLib"); E.palCaptionRefs = Array.isArray(b) ? b : []; } catch (_) { E.palCaptionRefs = []; }
@@ -2095,6 +2146,11 @@
   // ✍️ 사장님이 모아둔 글씨체 — easy/fonts/myfonts.css 의 @font-face (family=파일명). 글자체 타이틀 메이커 전용.
   const MY_FONTS = [
     { f: "pretendard-bold", k: "프리텐다드", g: "깔끔" },
+    { f: "chosun-nm", k: "조선일보명조", g: "감성 명조" },
+    { f: "chosun-sm", k: "조선신명조", g: "감성 명조" },
+    { f: "chosun-gu", k: "조선굴림체", g: "깔끔" },
+    { f: "chosun-sg", k: "조선가는고딕", g: "깔끔" },
+    { f: "chungju-kimsaeng", k: "충주 김생체", g: "감성 명조" },
     { f: "giants-bold", k: "자이언츠 볼드", g: "타이틀·임팩트" },
     { f: "giants-inline", k: "자이언츠 인라인", g: "타이틀·임팩트" },
     { f: "giants", k: "자이언츠", g: "타이틀·임팩트" },
@@ -2142,6 +2198,7 @@
     const ls = (opts && +opts.letterSpacing) || 0;   // 자간(px @ FS150)
     const lhR = (opts && +opts.lineHeight) || 1.22;   // 줄간격 배율
     const ital = (opts && opts.italic) ? "italic " : "";   // 비스듬히(기울임)
+    const bold = !!(opts && opts.bold);   // 굵게 — 글자색 외곽선으로 두께 추가(페이크볼드, 폰트 모양 유지)
     const lines = text.split("\n");
     const FS = 150, LH = Math.round(FS * lhR), PAD = Math.round(FS * 0.34);
     const ff = titleFontStack(fam);   // 굵게(700) 강제 안 함 — 페이크볼드로 글씨체 망가지는 것 방지(파일 자체 굵기 사용)
@@ -2151,6 +2208,7 @@
     try { if ("letterSpacing" in mctx) mctx.letterSpacing = ls + "px"; } catch (_) {}
     let maxW = 0; lines.forEach((L) => { maxW = Math.max(maxW, mctx.measureText(L || " ").width); });
     const sw = stroke ? Math.ceil(FS * 0.13) : 0;
+    const boldW = bold ? Math.ceil(FS * 0.05) : 0;   // 굵게 두께
     const sh = (opts && opts.shadow) || null;   // 그림자 {color,dir,op,dist,blur} 또는 null
     const shScale = FS / 30;
     const shDist = sh ? (sh.dist != null ? sh.dist : 0) * shScale : 0;
@@ -2159,7 +2217,7 @@
     const shOX = sh ? Math.cos(shRad) * shDist : 0, shOY = sh ? Math.sin(shRad) * shDist : 0;
     const shColor = sh ? hexToRgba(sh.color || "#000000", (sh.op != null ? sh.op : 55) / 100) : "";
     const shPad = sh ? Math.ceil(shDist + shBlur + 6) : 0;   // 그림자 잘림 방지 여유
-    const sidePad = PAD + sw + (ital ? Math.ceil(FS * 0.22) : 0) + shPad;   // 기울임·그림자 가로 여유
+    const sidePad = PAD + sw + boldW + (ital ? Math.ceil(FS * 0.22) : 0) + shPad;   // 기울임·그림자·굵게 가로 여유
     const W = Math.max(2, Math.ceil(maxW + sidePad * 2)), H = Math.max(2, Math.ceil(lines.length * LH + PAD * 2 + shPad * 2));
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
@@ -2172,6 +2230,7 @@
       const y = PAD + shPad + LH * i + LH / 2;
       if (stroke) { ctx.shadowColor = "transparent"; ctx.strokeStyle = stroke; ctx.lineWidth = sw * 2; ctx.strokeText(L, ax, y); }
       if (sh) { ctx.shadowColor = shColor; ctx.shadowBlur = shBlur; ctx.shadowOffsetX = shOX; ctx.shadowOffsetY = shOY; }   // 그림자(방향·불투명도·거리·흐림)
+      if (bold) { ctx.strokeStyle = color; ctx.lineWidth = boldW; ctx.strokeText(L, ax, y); ctx.shadowColor = "transparent"; }   // 굵게: 글자색 외곽선으로 두께 추가
       ctx.fillStyle = color; ctx.fillText(L, ax, y);
       ctx.shadowColor = "transparent";
     });
@@ -2285,9 +2344,9 @@
             titlePosX: d.titlePosX != null ? d.titlePosX : null, titlePosY: d.titlePosY != null ? d.titlePosY : null, titleSize: d.titleSize != null ? d.titleSize : null,
             titleFont: d.titleFont || null, titleColor: d.titleColor || null, titleStroke: d.titleStroke !== undefined ? d.titleStroke : null,
             titleSel: d.titleSel || 0,
-            titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
+            titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             captionSel: d.captionSel || 0,
-            captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
+            captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
           },
         };
         await idbSet("palDraft", snap);
@@ -2326,11 +2385,11 @@
         if (P.demo.titleResults.length) P.demo.titleResult = P.demo.titleResults[si];
       } else if (sd.titleResult) { try { P.demo.titleResult = { url: URL.createObjectURL(sd.titleResult), blob: sd.titleResult }; } catch (_) {} }
       if (Array.isArray(sd.titles)) {   // 🅰🅱🅲 칸들 복원(각 칸 result blob → objectURL)
-        P.demo.titles = sd.titles.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "giants-bold", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 60, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 18, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
+        P.demo.titles = sd.titles.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "giants-bold", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 60, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 18, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
         P.demo.titleSel = (typeof sd.titleSel === "number" && sd.titleSel >= 0 && sd.titleSel < P.demo.titles.length) ? sd.titleSel : 0;
       }
       if (Array.isArray(sd.captions)) {   // 💬 자막 칸들 복원(타이틀과 동일 구조 — 하단 흰글씨 기본값)
-        P.demo.captions = sd.captions.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "bm-hanna-air", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 7, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 88, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
+        P.demo.captions = sd.captions.map((t) => ({ id: t.id || uid(), text: t.text || "", font: t.font || "bm-hanna-air", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 7, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 88, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
         P.demo.captionSel = (typeof sd.captionSel === "number" && sd.captionSel >= 0 && sd.captionSel < P.demo.captions.length) ? sd.captionSel : 0;
       }
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
@@ -2603,6 +2662,21 @@
         }
       }
     }));
+    $$("#esBody [data-refpage]").forEach((b) => b.addEventListener("click", () => {   // 글씨박스 갤러리 페이지(다음/이전 3개)
+      const key = b.dataset.refkind === "caption" ? "_crefPage" : "_trefPage";
+      E[key] = Math.max(0, (E[key] || 0) + (b.dataset.refpage === "next" ? 1 : -1));
+      renderPalette();
+    }));
+    // 🎙 나레이션 2단계(①스타일 ②생성·미리듣기)
+    { const ts = $("#esPalNarrTone"); if (ts) loadVoiceTones().then((tones) => { const cur = (E.palette && E.palette.demo.voiceTone) || ""; ts.innerHTML = `<option value="">🎭 기본 (차분·신뢰)</option>` + (tones || []).map((t) => `<option value="${t.id}"${cur === t.id ? " selected" : ""}>${esc(t.name)} (${t.gender === "male" ? "남" : "여"})</option>`).join(""); ts.addEventListener("change", () => { E.palette.demo.voiceTone = ts.value; const t = toneById(ts.value); if (t) { E.palette.demo.voiceGender = t.gender; const gg = $("#esPalNarrGender"); if (gg) gg.value = t.gender; } try { palDraftSave(); } catch (_) {} }); }); }
+    { const g = $("#esPalNarrGender"); if (g) g.addEventListener("change", () => { E.palette.demo.voiceGender = g.value; try { palDraftSave(); } catch (_) {} }); }
+    { const n = $("#esPalNarrNext"); if (n) n.addEventListener("click", () => { E._palNarrStep = 1; renderPalette(); }); }
+    { const bk = $("#esPalNarrBack"); if (bk) bk.addEventListener("click", () => { E._palNarrStep = 0; renderPalette(); }); }
+    { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
+    // 💬 자막 생성 방법(①AI ②직접) + AI 생성
+    $$("#esBody [data-capmethod]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.capmethod; E._palCapStep = (v === "ai") ? "ai" : (v === "0") ? 0 : 1; renderPalette(); }));
+    { const cp = $("#esPalCapPrompt"); if (cp) cp.addEventListener("input", () => { E._palCapPrompt = cp.value; }); }
+    { const cg = $("#esPalCapGen"); if (cg) cg.addEventListener("click", () => palCaptionAI(cg)); }
     $$("#esBody [data-rmref]").forEach((b) => b.addEventListener("click", (e) => {   // 글씨박스에서 삭제(영구) — 현재 종류
       e.stopPropagation(); const i = +b.dataset.rmref;
       const _kind = E._palEditKind === "caption" ? "caption" : "title";
@@ -2656,6 +2730,7 @@
     $$("#esBody [data-tedstroke]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().stroke = b.dataset.tedstroke; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
     $$("#esBody [data-tedbg]").forEach((b) => b.addEventListener("click", () => { palCurTitle().bg = b.dataset.tedbg; E._tedColorOpen = null; renderPalette(); }));   // 배경색(모양·투명도 행이 생기므로 재렌더)
     $$("#esBody [data-teditalic]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().italic = b.dataset.teditalic === "1"; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));   // 비스듬히
+    $$("#esBody [data-tedbold]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().bold = b.dataset.tedbold === "1"; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));   // 굵게
     // 🌑 외곽선·그림자·배경 접이식 섹션 토글(ON/OFF) + 그림자 색
     $$("#esBody [data-tedfx]").forEach((b) => b.addEventListener("click", async () => { const cur = palCurTitle(); const k = b.dataset.tedfx; if (k === "outline") { cur.stroke = cur.stroke ? "" : "#000000"; await palTitleRenderBlock(cur); } else if (k === "shadow") { cur.shadow = cur.shadow ? null : { color: "#000000", dir: 315, op: 55, dist: 0, blur: 22 }; await palTitleRenderBlock(cur); } else if (k === "bg") { cur.bg = cur.bg ? "" : "#000000"; } renderPalette(); palDraftSave(); }));
     $$("#esBody [data-tedshcolor]").forEach((b) => b.addEventListener("click", async () => { const cur = palCurTitle(); const v = b.dataset.tedshcolor; if (!v) { cur.shadow = null; } else { if (!cur.shadow) cur.shadow = { dir: 315, op: 55, dist: 0, blur: 22 }; cur.shadow.color = v; } await palTitleRenderBlock(cur); renderPalette(); palDraftSave(); }));
@@ -9720,6 +9795,61 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       try { toast(withCaptions ? "🎙 나레이션과 자막을 만들었어요!" : "🎙 나레이션을 만들었어요!"); } catch (_) {}
     } catch (e) { if (status) status.textContent = "⚠️ " + (e && e.message || e); alert("나레이션 생성 실패: " + (e && e.message || e)); if (btn) btn.textContent = old || "나레이션 만들기"; }
     finally { if (btn) btn.disabled = false; }
+  }
+  // 🎙 팔레트 나레이션 — 고객 자막(P.demo.captions)을 합쳐 AI 음성으로(서버 TTS, gemini-tts). 결과 P.demo.voiceUrl/blob → 미리듣기
+  async function palMakeNarration(btn) {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const script = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean).join(" ");
+    if (!script) { try { toast("먼저 '자막 생성' 단계에서 자막을 입력해 주세요"); } catch (_) {} return; }
+    await loadVoiceTones();
+    const tone = toneById(d.voiceTone);
+    const styleHint = tone ? tone.style : "차분하고 신뢰감 있는 톤으로 한국어 나레이션을 읽어 주세요.";
+    const status = $("#esPalNarrStatus"); const old = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "🎤 만드는 중…"; }
+    if (status) status.textContent = "🎤 AI가 자막을 읽고 있어요… (10~20초)";
+    try {
+      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, voiceGender: d.voiceGender || "female", styleHint }) });
+      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
+      if (!res.ok) throw new Error(j.message || ("HTTP " + res.status));
+      if (!j.audioBase64) throw new Error("음성 응답이 비어있어요");
+      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "audio/wav" });
+      if (d.voiceUrl) { try { URL.revokeObjectURL(d.voiceUrl); } catch (_) {} }
+      d.voiceUrl = URL.createObjectURL(blob); d.voiceBlob = blob;
+      try { palDraftSave(); } catch (_) {}
+      renderPalette();
+      setTimeout(() => { const a = $("#esPalNarrAudio"); if (a) { try { a.play(); } catch (_) {} } }, 120);   // 미리듣기 자동 재생
+    } catch (e) {
+      if (status) status.textContent = "⚠️ 나레이션 생성 실패: " + (e && e.message || e);
+      try { toast("⚠️ 나레이션 생성 실패"); } catch (_) {}
+      if (btn) { btn.disabled = false; btn.textContent = old || "🎙 나레이션 만들기"; }
+    }
+  }
+  // 🤖 팔레트 AI 자막 생성 — 주제 프롬프트 → Claude(easy-narration generate)로 칸 수만큼 자막 문구 → 각 칸에 채우고 입력화면으로
+  async function palCaptionAI(btn) {
+    const P = E.palette; if (!P) return;
+    const prompt = (($("#esPalCapPrompt") || {}).value || "").trim();
+    if (!prompt) { try { toast("어떤 영상인지 한 줄로 알려주세요"); } catch (_) {} return; }
+    E._palCapPrompt = prompt;
+    const caps = palBlocks("caption"); const n = Math.max(1, caps.length);
+    const status = $("#esPalCapStatus"); const old = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "✨ 만드는 중…"; }
+    if (status) status.textContent = "🤖 AI가 자막을 쓰고 있어요…";
+    try {
+      const res = await fetch(narrEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "captions", prompt, count: n }) });
+      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { error: txt.slice(0, 200) }; }
+      if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
+      const lines = Array.isArray(j.lines) ? j.lines : [];
+      if (!lines.length) throw new Error("자막을 받지 못했어요");
+      caps.forEach((c, i) => { if (lines[i]) c.text = lines[i]; });
+      E._palCapStep = 1;   // 생성 후 → 입력(수정) 화면으로
+      try { palDraftSave(); } catch (_) {}
+      renderPalette();
+    } catch (e) {
+      if (status) status.textContent = "⚠️ 자막 생성 실패: " + (e && e.message || e);
+      try { toast("⚠️ 자막 생성 실패"); } catch (_) {}
+      if (btn) { btn.disabled = false; btn.textContent = old || "✨ 자막 만들기"; }
+    }
   }
   // 나레이션 스크립트 → 자막 블럭(_narrCap)으로 균등 분배 (문장·구두점 우선, 길면 단어로 분할). span=깔 구간 길이(기본=음성 길이→없으면 영상 길이)
   function buildNarrCaptions(script, span) {
