@@ -1683,7 +1683,7 @@
           body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
           break;
         }
-        case "length":  body = `<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P)}</div>`; break;
+        case "length":  body = `${palCapMiniBar(P)}<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P)}</div>`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
@@ -1965,6 +1965,14 @@
       }
       // 🎙 나레이션 1초 지연 — 클럭이 delay 넘으면 그때 음성 시작. ✅ '한 번만': 끝까지 재생된(ended) 음성은 다시 안 켬(끝에서 반복 방지). 일시정지(아직 안 끝남)만 재개.
       if (c.voiceA) { if (t >= c.voiceDelay) { if (c.voiceA.paused && !c.voiceA.ended) { try { c.voiceA.currentTime = Math.max(0, t - c.voiceDelay); const p = c.voiceA.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} } } else if (!c.voiceA.paused) { try { c.voiceA.pause(); c.voiceA.currentTime = 0; } catch (_) {} } }
+      // 🔊 마지막 2초 페이드아웃 — 끝에서 음악·나레이션·원음을 부드럽게 줄여 '툭 끊김' 방지(실제 출력처럼). maxT 기준이라 AI 리듬으로 길이 바뀌어도 항상 맞음. fg=1이면 평소 볼륨이라 슬라이더와 충돌X·재생 처음으로 가면 자동복구.
+      if (!c.lite) {
+        const _fd = 2, _rem = c.maxT - t, _fg = _rem >= _fd ? 1 : Math.max(0, _rem / _fd);
+        const _dd = (E.palette && E.palette.demo) || {}, _cl = (x) => Math.max(0, Math.min(1, x));
+        const _vv = _cl((_dd.voiceVol != null ? _dd.voiceVol : 100) / 100), _mv = _cl((_dd.musicVol != null ? _dd.musicVol : 35) / 100), _ov = _cl((_dd.origVol != null ? _dd.origVol : 100) / 100);
+        c.audios.forEach((a) => { try { a.volume = (a._kind === "voice" ? _vv : _mv) * _fg; } catch (_) {} });
+        const _vids = c.bufs || (c.vid ? [c.vid] : []); _vids.forEach((v) => { try { if (_ov > 0) v.volume = _ov * _fg; } catch (_) {} });
+      }
       c.render(t);
     };
     c.render(0);
@@ -2148,6 +2156,25 @@
         <button type="button" class="es-pal-tpos-btn${pz === "mid" ? " sel" : ""}" data-posmove="mid" data-poskind="${kind}">● 중간</button>
         <button type="button" class="es-pal-tpos-btn${pz === "down" ? " sel" : ""}" data-posmove="down" data-poskind="${kind}">⬇ 아래</button>
       </div></div>`;
+  }
+  // 📝 컷 타임라인 맨 위 — 자막 크기·위아래를 '1줄로 작게'. 기존 data-poskind(크기)/data-posmove(위치) 핸들러를 그대로 재사용(전체 자막 통일 적용).
+  function palCapMiniBar(P) {
+    const d = (P && P.demo) || {};
+    const caps = (d.captions || []).filter((c) => (c.text || "").trim());
+    if (!caps.length) return "";   // 자막 없으면 안 보임
+    const cur = palCurBlock("caption") || caps[0];
+    const sz = (cur && cur.size != null) ? cur.size : 7;
+    const py = (cur && cur.posY != null) ? cur.posY : 88;
+    const pz = py <= 33 ? "up" : py >= 67 ? "down" : "mid";
+    return `<div class="es-pal-capmini">
+      <span class="es-pal-capmini-lb">자막</span>
+      <input type="range" class="es-pal-pos-size es-pal-capmini-size" data-poskind="caption" min="3" max="35" value="${sz}" aria-label="자막 크기">
+      <span class="es-pal-capmini-pos">
+        <button type="button" class="es-pal-capmini-btn${pz === "up" ? " sel" : ""}" data-posmove="up" data-poskind="caption" aria-label="자막 위로">⬆</button>
+        <button type="button" class="es-pal-capmini-btn${pz === "mid" ? " sel" : ""}" data-posmove="mid" data-poskind="caption" aria-label="자막 가운데">●</button>
+        <button type="button" class="es-pal-capmini-btn${pz === "down" ? " sel" : ""}" data-posmove="down" data-poskind="caption" aria-label="자막 아래로">⬇</button>
+      </span>
+    </div>`;
   }
   function palCurTitle() { return palCurBlock(E._palEditKind || "title"); }
   // 한 칸을 실제 폰트로 렌더 → block.result
