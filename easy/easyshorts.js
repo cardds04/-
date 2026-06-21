@@ -1687,14 +1687,14 @@
           if (!d.voiceUrl) { body = `<div class="es-pal-tgen-noref">먼저 '나레이션 생성'에서 음성을 만들어주세요 🔊</div>`; break; }
           const vd = d.voiceDur ? d.voiceDur.toFixed(1) + "초" : "음성";
           const capList = (palBlocks("caption") || []).filter((t) => (t.text || "").trim());
-          const hasCaps = capList.some((t) => t.result && t.result.url);   // 자막이 만들어졌는지
+          const synced = !!(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl);   // 이 음성에 '음성씽크'를 실제로 했는지 (자막 존재 ≠ 싱크 완료)
           const capJoined = capList.map((t) => (t.text || "").replace(/\n/g, " ").trim()).join("\n");
           body = `<div class="es-pal-narr-lb">📝 음성에 맞춰 자막 만들기</div>
             <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 타이밍 자동)</span></div>
-            <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="${hasCaps ? "한 줄에 자막 하나씩" : "먼저 아래 '음성씽크'를 누르면 자막이 여기 들어와요"}">${esc(capJoined)}</textarea>
+            <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="자막을 한 줄에 하나씩 — '음성씽크'를 누르면 말하는 타이밍에 맞춰져요">${esc(capJoined)}</textarea>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
-            <button type="button" class="es-pal-narr-make" id="esPalNarrCap"${hasCaps ? " disabled" : ""}>🎯 음성씽크</button>
-            <button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply"${hasCaps ? "" : " disabled"}>✓ 적용</button>`;
+            <button type="button" class="es-pal-narr-make" id="esPalNarrCap"${synced ? " disabled" : ""}>🎯 음성씽크</button>
+            <button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply"${synced ? "" : " disabled"}>✓ 적용</button>`;
           break;
         }
         case "cedit": {   // ✏️ 자막 다듬기 — 한 줄=자막 1개(엔터로 나누고, 줄 합치면 자막도 합쳐짐). 음성 있으면 말하는 타이밍에 다시 싱크
@@ -2225,18 +2225,15 @@
   }
   // 🧰 컷편집 도구를 'CapCut식' 아래 아이콘 툴바로 모음 — 아이콘 누르면 그 도구만 펼쳐져(화면 정돈). E._palCutTool = 펼친 도구(null/cap/beat/trim)
   function palCutToolbar() {
+    if (E._palCutTool === "beat" || E._palCutTool === "trim") E._palCutTool = null;   // 제거된 도구 잔여상태 정리
     const cur = E._palCutTool || "";
-    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "beat", ic: "🥁", lb: "AI 리듬" }, { k: "trim", ic: "🔇", lb: "음성없는구간" }, { k: "add", ic: "➕", lb: "영상추가" }];
+    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "add", ic: "➕", lb: "영상추가" }];   // 🥁AI리듬·🔇음성없는구간 제거(사용자 요청)
     return `<div class="es-pal-cut-toolbar">${items.map((it) => `<button type="button" class="es-pal-cut-tbtn${cur === it.k ? " on" : ""}" data-cuttoolbar="${it.k}"><span class="es-pal-cut-tbic">${it.ic}</span><span class="es-pal-cut-tblb">${it.lb}</span></button>`).join("")}</div>`;
   }
   function palCutToolPanel(P) {
     const t = E._palCutTool; if (!t) return "";
     let inner = "";
     if (t === "cap") inner = palCapMiniBar(P) || `<div class="es-pal-cut-tp-empty">자막을 먼저 넣으면 크기·위치를 바꿀 수 있어요</div>`;
-    else if (t === "beat") {
-      const tempoSel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
-      inner = `<div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트를 분석해 컷을 리듬에 맞춰 끊어요">🥁 AI 리듬</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tempoSel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div>`;
-    }
     if (!inner) return "";
     return `<div class="es-pal-cut-toolpanel">${inner}</div>`;
   }
@@ -11081,6 +11078,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       for (const b of caps) { if ((b.text || "").trim()) await palTitleRenderBlock(b); }
       if (status) status.textContent = synced ? `✅ ${chunks.length}개 자막을 말하는 타이밍에 맞췄어요` : `✅ ${chunks.length}개 자막을 음성 길이에 맞췄어요(타이밍 추정)`;
       try { toast(synced ? "🎬 말하는 타이밍에 맞춰 자막을 만들었어요!" : "🎬 자막을 만들었어요 (음성 길이 기준)"); } catch (_) {}
+      d.capSyncedVoice = d.voiceUrl;   // ✅ 이 음성에 싱크 완료 → 음성씽크 비활성·적용 활성
       try { palDraftSave(); } catch (_) {}
       renderPalette();
     } catch (e) {
@@ -11217,6 +11215,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     palSetSel(0, "caption");
     try {
       for (const b of caps) { if ((b.text || "").trim()) await palTitleRenderBlock(b); }
+      if (d.voiceUrl) d.capSyncedVoice = d.voiceUrl;   // 적용도 음성 타이밍 재정렬 → 싱크 유지
       try { palDraftSave(); } catch (_) {} renderPalette();
       try { toast(`자막 ${lines.length}줄로 다듬었어요 (싱크 그대로)`); } catch (_) {}
     } catch (e) { if (btn) { btn.disabled = false; btn.textContent = old || "✓ 자막 적용"; } }
@@ -11233,6 +11232,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const words = await palVoiceWords();
     if (words && palAlignCapsToWords(caps, words)) {   // 글자 위치로 정밀 정렬(text 보존), 1초 지연 반영
       caps.forEach((b) => { b.start = +((b.start || 0) + PAL_VOICE_DELAY).toFixed(2); });
+      d.capSyncedVoice = d.voiceUrl;   // ✅ 싱크 완료 표시
       try { palDraftSave(); } catch (_) {}
       if (status) status.textContent = `✅ 자막 ${caps.length}개를 말하는 타이밍에 다시 맞췄어요 (글자는 그대로)`;
       try { toast("🎯 자막을 음성 타이밍에 다시 맞췄어요!"); } catch (_) {}
