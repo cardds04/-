@@ -5197,6 +5197,19 @@
       if (t.music) { const mb = await idbGet("music_" + id); if (mb instanceof Blob) { musicType = mb.type || "audio/mpeg"; musicB64 = await blobToB64(mb); } }
       const payload = { key, template: { id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, texts: t.texts || [] } };
       if (musicB64) { payload.musicB64 = musicB64; payload.musicType = musicType; } else if (!t.music) { payload.clearMusic = true; }
+      // 🎬 '영상 대체하기'로 넣은 미리보기 영상도 함께 게시 — storage(서명URL)에 올려 그 URL을 행(video)에 저장 → 고객 카드가 이 영상을 미리보기로 재생. 썸네일(첫 프레임)도 같이.
+      try {
+        if (t.previewVid) {
+          const pvBlob = await idbGet("tpl_" + id + "_pv");
+          if (pvBlob instanceof Blob) {
+            try { toast("🎬 미리보기 영상 올리는 중… (잠시만요)"); } catch (_) {}
+            const ext = (pvBlob.type && pvBlob.type.indexOf("mp4") >= 0) ? "mp4" : "webm";
+            const vurl = await uploadMediaSigned(id, "preview." + ext, pvBlob, pvBlob.type || "video/mp4", key);
+            if (vurl) payload.video = vurl;
+          }
+        } else { payload.video = null; }   // 미리보기 영상을 뺐으면 서버에서도 비움
+      } catch (e) { console.warn("[easyshorts] 미리보기 영상 업로드", e); try { toast("⚠️ 미리보기 영상 업로드 실패 — 템플릿 자체는 게시돼요"); } catch (_) {} }
+      if (typeof t.thumb === "string" && t.thumb) payload.thumb = t.thumb;   // 카드 썸네일(영상 첫 프레임)
       const r = await fetch(EASY_TPL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j = await r.json().catch(() => null);
       if (!j || !j.ok) { alert("게시 실패: " + ((j && j.error) || ("HTTP " + r.status))); return false; }
