@@ -1612,12 +1612,12 @@
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들면, 그 자막을 AI 목소리로 읽어드려요 🎙</div>`; break; }
           if (E._tcVoices === undefined) { try { loadTypecastVoices(); } catch (_) {} }   // 1회 로드
           const voices = E._tcVoices, curV = d.voiceTypecastId || "";
-          let voiceCtrl;
-          if (voices == null) voiceCtrl = `<select class="es-pal-narr-sel" disabled><option>목소리 불러오는 중…</option></select>`;
-          else if (!voices.length) voiceCtrl = `<select class="es-pal-narr-sel" disabled><option>목소리를 못 불러왔어요 (API 키 확인)</option></select><button type="button" class="es-pal-narr-reload" id="esPalTcReload">🔄 다시 시도</button>`;
-          else voiceCtrl = `<input id="esPalTcSearch" class="es-pal-tc-search" placeholder="🔎 목소리 이름 검색 (예: Chan-gu)" value="${esc(E._tcVoiceQuery || "")}" autocomplete="off"><div id="esPalTcSelWrap">${palTcSelectInner()}</div>`;
+          let pick;
+          if (voices == null) pick = `<div class="es-pal-tc-loading">목소리 불러오는 중…</div>`;
+          else if (!voices.length) pick = `<div class="es-pal-tc-fail">목소리를 못 불러왔어요 (API 키 확인) <button type="button" class="es-pal-narr-reload" id="esPalTcReload">🔄 다시 시도</button></div>`;
+          else pick = palTcVoicePicker();
           body = `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트)</span></div>
-            <div class="es-pal-narr-row"><span class="es-pal-narr-rl">목소리</span><div class="es-pal-narr-vcol">${voiceCtrl}</div></div>
+            <div class="es-pal-tc-pick">${pick}</div>
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${(voices && voices.length && !curV) ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
             ${d.voiceUrl ? `<audio id="esPalNarrAudio" controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>` : ""}
@@ -1883,43 +1883,37 @@
     }
     const c = { maxT, lite, tiles, clockNum, bar, vid, playhead, ctScroll, audios, playing: false, base: 0, t0: 0, timer: 0, PPS: PAL_CT_PPS, mediaEl, playClips, curClip: 0 };
     c.voiceDelay = PAL_VOICE_DELAY; c.voiceA = audios.find((a) => a._kind === "voice") || null;   // 🎙 나레이션은 1초 뒤부터 — tick이 시점 맞춰 켬
-    // 🎬 더블버퍼: 컷 전환 때 영상 한 장의 src를 바로 갈아끼우면 로딩 중 스테이지 배경(검정)이 비쳐 '검은 화면'이 깜빡임. → 영상 2장을 정확히 겹쳐두고, 다음 컷을 '숨은' 버퍼에 미리 로드해뒀다가 준비되면(loadeddata) 즉시 보이기 교체(이전 컷이 끝까지 보여 검은화면 없음). 출력물처럼 하드컷.
-    c.bufs = [mediaEl]; c.activeBuf = 0;
+    // 🎬 컷 전환 깜빡임 방지(모바일 안전) — 영상은 '1장'만 사용. (모바일/아이폰은 영상 2개 동시재생을 막아서, 더블버퍼는 숨은 영상이 프레임을 못 만들어 오히려 검은화면이 컷마다 깜빡였음.) 전환 순간엔 '직전 프레임'을 캔버스에 떠서 영상 위에 덮어 로딩 중 검은 배경을 가리고, 새 컷의 첫 프레임이 그려지면 덮개를 치움.
     const _multiVid = playClips.length > 1 && mediaEl && mediaEl.tagName === "VIDEO";
     if (_multiVid) {
-      let bufB = mediaEl.parentElement.querySelector("video.es-pal-real-mediabuf");
-      if (!bufB) { try { bufB = mediaEl.cloneNode(false); bufB.classList.add("es-pal-real-mediabuf"); bufB.removeAttribute("src"); bufB.removeAttribute("autoplay"); mediaEl.parentElement.insertBefore(bufB, mediaEl.nextSibling); } catch (_) { bufB = null; } }
-      if (bufB) { try { bufB.muted = mediaEl.muted; bufB.volume = mediaEl.volume; } catch (_) {} bufB.style.opacity = "0"; mediaEl.style.opacity = "1"; c.bufs = [mediaEl, bufB]; }
+      let cover = mediaEl.parentElement.querySelector("canvas.es-pal-real-cover");
+      if (!cover) { try { cover = document.createElement("canvas"); cover.className = "es-pal-real-cover"; mediaEl.parentElement.insertBefore(cover, mediaEl.nextSibling); } catch (_) { cover = null; } }
+      if (cover) { cover.style.opacity = "0"; c.cover = cover; }
+      mediaEl.style.opacity = "1";
     }
-    c.preloadNext = (i) => {   // 다음 컷 영상을 '숨은' 버퍼에 미리 로드 → 전환이 즉시·검은화면 없이
-      if (c.bufs.length !== 2) return; const cm = c.playClips[i]; if (!cm || !cm.url || cm.kind !== "video") return;
-      const sp = c.bufs[1 - c.activeBuf]; try { if (sp.getAttribute("src") !== cm.url) { sp.src = cm.url; sp.load(); } } catch (_) {}
-    };
-    c.showClip = (idx) => {   // 컷에 맞춰 미리보기 미디어 전환
+    c.showClip = (idx) => {   // 컷에 맞춰 미리보기 영상 전환(영상 1장 + 캔버스 덮개)
       const cm = c.playClips[idx]; if (!cm || !cm.url) return;
+      const el = c.mediaEl; if (!el) return;
       const isVid = cm.kind === "video";
-      if (c.bufs.length === 2 && isVid) {   // 더블버퍼 교차(영상↔영상): 다음 컷 프레임이 실제 준비될 때까지(canplay) 이전 컷을 계속 보여줘 검은화면 방지
-        const cur = c.bufs[c.activeBuf], nxt = c.bufs[1 - c.activeBuf];
-        const reveal = () => {   // 프레임 준비된 뒤에만 교체 — currentTime은 여기서 안 건드림(되감기 seek로 인한 검은 깜빡임 방지)
-          try { const p = nxt.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
-          nxt.style.opacity = "1"; cur.style.opacity = "0"; try { cur.pause(); } catch (_) {}
-          c.activeBuf = 1 - c.activeBuf; c.preloadNext(idx + 1);   // 그 다음 컷도 미리
+      if (isVid && el.tagName === "VIDEO") {
+        if (el.getAttribute("src") === cm.url) { try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} return; }
+        const cov = c.cover;
+        // 1) 직전 프레임을 덮개 캔버스에 떠서 영상 위에 깔기 → 로딩 중 검은 배경을 가림
+        if (cov) { try { if (el.videoWidth > 0) { cov.width = el.videoWidth; cov.height = el.videoHeight; cov.getContext("2d").drawImage(el, 0, 0, cov.width, cov.height); cov.style.opacity = "1"; } } catch (_) {} }
+        const hideCover = () => { if (cov && el.readyState >= 2) cov.style.opacity = "0"; };   // 영상이 프레임을 가질 때만 치움(미준비 상태로 치우면 검은화면)
+        // 2) 새 컷 로드 → 0초부터 재생 → 첫 프레임이 그려지면 덮개 치움(그때 새 컷이 보임 = 검은화면 없음)
+        const onReady = () => {
+          el.removeEventListener("loadeddata", onReady);
+          try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+          if (typeof el.requestVideoFrameCallback === "function") { try { el.requestVideoFrameCallback(() => hideCover()); } catch (_) { hideCover(); } }
+          else { const tu = () => { el.removeEventListener("timeupdate", tu); hideCover(); }; el.addEventListener("timeupdate", tu); }
+          let _ht = 0; const _fb = () => { if (el.readyState >= 2 || _ht++ > 25) { if (cov) cov.style.opacity = "0"; } else setTimeout(_fb, 100); }; setTimeout(_fb, 450);   // 폴백도 준비됐을 때만(최대 ~3s 재시도)
         };
-        try {
-          if (nxt.getAttribute("src") !== cm.url) { nxt.src = cm.url; nxt.load(); }   // 새 컷이면 로드(0초부터 디코드)
-          else if (nxt.currentTime > 0.05) { try { nxt.currentTime = 0; } catch (_) {} }   // 재생됐던 버퍼면 미리 되감아둠(아래 canplay가 seek 끝까지 기다림)
-          if (nxt.readyState >= 3) reveal();   // 프레임 준비됨(HAVE_FUTURE_DATA) → 즉시 교체
-          else { const on = () => { nxt.removeEventListener("canplay", on); reveal(); }; nxt.addEventListener("canplay", on); }   // 준비될 때까지 이전 컷 유지 → 검은화면 없음
-        } catch (_) {}
-      } else {   // 단일 요소(사진 컷 또는 사진↔영상 혼합) — 기존 방식
-        const el = c.bufs[c.activeBuf] || c.mediaEl;
-        try {
-          if (isVid && el.tagName === "VIDEO") { if (el.getAttribute("src") !== cm.url) el.src = cm.url; el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); }
-          else if (!isVid && el.tagName === "IMG") { if (el.getAttribute("src") !== cm.url) el.src = cm.url; }
-        } catch (_) {}
+        try { el.src = cm.url; el.addEventListener("loadeddata", onReady); el.load(); } catch (_) { hideCover(); }
+      } else if (!isVid && el.tagName === "IMG") {
+        if (el.getAttribute("src") !== cm.url) el.src = cm.url;
       }
     };
-    if (_multiVid) c.preloadNext(1);   // 첫 전환(1번 컷) 미리 로드해두기
     E._palPlay = c;
     c.render = (t) => {
       c.tiles.forEach((el) => {
@@ -2141,7 +2135,14 @@
     if (!text) { try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {} block.result = null; return; }
     const _d = (E.palette && E.palette.demo) || {};
     const _isCap = Array.isArray(_d.captions) && _d.captions.indexOf(block) >= 0;   // 자막이면 더 좁게 줄바꿈(화면 밖으로 안 나가게)
-    const maxWidth = _isCap ? 1700 : 2600;
+    // 📏 자막은 화면 양옆 끝까지 닿지 않게 — 표시 폭이 약 80%를 넘으면 아래로 줄바꿈. 표시 폭은 폰트크기(size)·화면비율에 비례하므로 캔버스 줄바꿈 폭을 거기에 맞춰 계산(큰 폰트일수록 더 좁게 끊음).
+    let maxWidth = 2600;
+    if (_isCap) {
+      const _ap = String((E.palette && E.palette.aspect) || "9:16").split(":");
+      const _aspect = (+_ap[0] || 9) / (+_ap[1] || 16);   // 9:16=0.5625
+      const _sz = block.size != null ? block.size : 7, _lh = block.lineHeight || 1.22;
+      maxWidth = Math.round(Math.max(450, Math.min(2200, 17000 * _lh * _aspect / Math.max(4, _sz))));   // ≈ 화면폭 80%에서 줄바꿈(상수는 실측으로 보정)
+    }
     const blob = await renderFontToBlob({ text, maxWidth, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, bold: !!block.bold, shadow: block.shadow || null });
     if (!blob) return;
     try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {}
@@ -3386,6 +3387,8 @@
       palBlocks(kind).forEach((blk) => { blk.size = v; });
       _posRefresh(kind);
       clearTimeout(E._tpSzT); E._tpSzT = setTimeout(palDraftSave, 300);
+      // 📏 자막은 글씨 크기에 따라 '80% 폭 줄바꿈' 기준(maxWidth)이 달라짐 → 슬라이드 멈추면 이미지를 다시 그려 항상 80% 폭 유지(안 그러면 옛 이미지가 커지며 양옆으로 넘침)
+      if (kind === "caption") { clearTimeout(E._tpReR); E._tpReR = setTimeout(async () => { for (const blk of palBlocks("caption")) { if ((blk.text || "").trim()) await palTitleRenderBlock(blk); } renderPalette(); palDraftSave(); }, 320); }
     });
     // ⬆⬇ 위/아래 = 누를 때마다 현재 위치에서 조금씩(5%), 중간 = 가운데로. 그 종류 전 블록을 같이 이동(자막 통일 유지)
     $$("#esBody [data-posmove]").forEach((b) => b.addEventListener("click", () => {
@@ -3445,6 +3448,12 @@
     { const rl = $("#esPalTcReload"); if (rl) rl.addEventListener("click", () => { E._tcVoices = undefined; loadTypecastVoices(); }); }
     { const ss = $("#esPalTcSearch"); if (ss) ss.addEventListener("input", () => { E._tcVoiceQuery = ss.value; E._tcVoicesAll = false; const w = $("#esPalTcSelWrap"); if (w) { w.innerHTML = palTcSelectInner(); palTcBindSelWrap(); } }); }
     palTcBindSelWrap();   // #esPalTcVoice change + #esPalTcAll 토글 연결(검색으로 selwrap 교체돼도 다시 연결)
+    // 🎙 추천 목소리 픽커 — 성별·연령·형 고르기 + 목소리 칩 선택 + 다른목소리
+    $$("#esBody [data-tcpick]").forEach((b) => b.addEventListener("click", () => { const id = b.dataset.tcpick; E.palette.demo.voiceTypecastId = id; E.palette.demo.voiceModel = palTcModelOf(id); try { palDraftSave(); } catch (_) {} renderPalette(); }));
+    $$("#esBody [data-tcg]").forEach((b) => b.addEventListener("click", () => { E._tcFlow = { g: b.dataset.tcg, age: null, type: null, page: 0 }; renderPalette(); }));
+    $$("#esBody [data-tcage]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.age = b.dataset.tcage; f.type = null; f.page = 0; renderPalette(); }));
+    $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
+    { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
@@ -10553,6 +10562,56 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (E.view === "palette") renderPalette();
   }
   var PAL_TC_SHOW = 10;   // 목소리 1129개 → 기본은 10개만, 검색·'전체 보기'로 펼침
+  // 🎙 추천 목소리 카탈로그 — 타입캐스트 API엔 성별·연령·형 정보가 없어, 웹조사로 고른 추천 목소리를 직접 분류(점점 추가 가능). g=성별(m/f) age=연령(young청년/mid중년/sen장년) types=어울리는 형. rec=메인 추천10.
+  var PAL_TC_TYPES = [{ k: "talk", lb: "대화형" }, { k: "doc", lb: "다큐형" }, { k: "short", lb: "숏폼형" }, { k: "ad", lb: "광고형" }, { k: "pod", lb: "팟캐스트형" }];
+  var PAL_TC_AGES = [{ k: "young", lb: "청년" }, { k: "mid", lb: "중년" }, { k: "sen", lb: "장년" }];
+  var PAL_TC_CAT = [
+    { id: "tc_666a9871abcf27a5169850d0", name: "소진", g: "f", age: "young", types: ["talk", "short", "ad", "doc", "pod"], rec: 1 },
+    { id: "tc_6059dad0b83880769a50502f", name: "박창수", g: "m", age: "mid", types: ["talk", "short", "doc", "pod"], rec: 1 },
+    { id: "tc_68785db8ba9cd7503f27d921", name: "고운", g: "f", age: "young", types: ["talk", "doc", "pod", "ad", "short"], rec: 1 },
+    { id: "tc_68257f68bc6e3c161ab5078d", name: "필재", g: "m", age: "young", types: ["talk", "doc", "short", "ad", "pod"], rec: 1 },
+    { id: "tc_61f0859907085fc68561c9a1", name: "지훈", g: "m", age: "young", types: ["doc", "short", "ad"], rec: 1 },
+    { id: "tc_61de29497924994f5abd68db", name: "세진", g: "m", age: "young", types: ["talk", "short", "pod"], rec: 1 },
+    { id: "tc_646f0dac2465b38f37787f64", name: "다현", g: "f", age: "young", types: ["short", "talk"], rec: 1 },
+    { id: "tc_694395d43f2c8d9d43e9a897", name: "병훈", g: "m", age: "mid", types: ["short", "doc", "talk", "pod"], rec: 1 },
+    { id: "tc_694b51e6dc12c8f4ec1a959c", name: "정숙", g: "f", age: "mid", types: ["talk", "pod", "ad"], rec: 1 },
+    { id: "tc_6596849ea3ecaa12a8b13989", name: "봉규", g: "m", age: "young", types: ["short", "talk", "ad"], rec: 1 },
+    { id: "tc_66596206b7bd6e89c3a2c54e", name: "아찌", g: "m", age: "mid", types: ["short", "talk"] },
+    { id: "tc_5c547544fcfee90007fed455", name: "찬구", g: "m", age: "young", types: ["short"] },
+  ];
+  function palTcModelOf(id) { var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.model) || "ssfm-v30"; }
+  function palTcNameOf(id) { var c = PAL_TC_CAT.find(function (v) { return v.id === id; }); if (c) return c.name; var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.voice_name) || ""; }
+  function palTcChip(v, curV) {   // v = 카탈로그항목{id,name} 또는 API목소리{voice_id,voice_name}
+    var id = v.id || v.voice_id, name = v.name || v.voice_name || id, sel = curV === id;
+    return '<button type="button" class="es-pal-tc-chip' + (sel ? " on" : "") + '" data-tcpick="' + esc(id) + '">' + esc(name) + (sel ? " ✓" : "") + "</button>";
+  }
+  function palTcPageVoices(f) {   // 현재 성별·연령·형에 맞는 추천 3개(다른목소리 누르면 다음 3개; 카탈로그 소진되면 전체목록서 채움)
+    var matched = PAL_TC_CAT.filter(function (v) { return v.g === f.g && v.age === f.age && v.types.indexOf(f.type) >= 0; });
+    var catIds = {}; PAL_TC_CAT.forEach(function (c) { catIds[c.id] = 1; });
+    var extra = palTcRankedVoices().filter(function (v) { return !catIds[v.voice_id]; });   // 카탈로그 밖 목소리(성별정보 없음) — 폴백
+    var pool = matched.concat(extra);
+    var per = 3, start = ((f.page || 0) * per) % Math.max(per, pool.length);
+    var win = pool.slice(start, start + per);
+    if (win.length < per) win = win.concat(pool.slice(0, per - win.length));   // 끝이면 앞에서 이어 채움
+    return win;
+  }
+  function palTcVoicePicker() {
+    var d = (E.palette && E.palette.demo) || {}, curV = d.voiceTypecastId || "";
+    var f = E._tcFlow || (E._tcFlow = { g: null, age: null, type: null, page: 0 });
+    var h = "";
+    if (curV) h += '<div class="es-pal-tc-cur">🎙 고른 목소리: <b>' + esc(palTcNameOf(curV) || "선택됨") + "</b></div>";
+    h += '<div class="es-pal-tc-sec">⭐ 추천 목소리</div><div class="es-pal-tc-chips">' + PAL_TC_CAT.filter(function (v) { return v.rec; }).map(function (v) { return palTcChip(v, curV); }).join("") + "</div>";
+    h += '<div class="es-pal-tc-sec">🔍 골라서 찾기</div>';
+    h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">성별</span><div class="es-pal-tc-opts">' + [["f", "여성 ♀"], ["m", "남성 ♂"]].map(function (o) { return '<button type="button" class="es-pal-tc-opt' + (f.g === o[0] ? " on" : "") + '" data-tcg="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
+    if (f.g) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">연령</span><div class="es-pal-tc-opts">' + PAL_TC_AGES.map(function (a) { return '<button type="button" class="es-pal-tc-opt' + (f.age === a.k ? " on" : "") + '" data-tcage="' + a.k + '">' + a.lb + "</button>"; }).join("") + "</div></div>";
+    if (f.g && f.age) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">형식</span><div class="es-pal-tc-opts">' + PAL_TC_TYPES.map(function (t) { return '<button type="button" class="es-pal-tc-opt' + (f.type === t.k ? " on" : "") + '" data-tctype="' + t.k + '">' + t.lb + "</button>"; }).join("") + "</div></div>";
+    if (f.g && f.age && f.type) {
+      h += '<div class="es-pal-tc-sec">이런 목소리 어때요?</div><div class="es-pal-tc-chips">' + palTcPageVoices(f).map(function (v) { return palTcChip(v, curV); }).join("") + "</div>";
+      h += '<button type="button" class="es-pal-tc-more" id="esPalTcMore">🔄 다른 목소리로 바꾸기</button>';
+    }
+    h += '<details class="es-pal-tc-search-wrap"><summary>이름으로 직접 찾기</summary><input id="esPalTcSearch" class="es-pal-tc-search" placeholder="🔎 이름 검색 (예: Chan-gu)" value="' + esc(E._tcVoiceQuery || "") + '" autocomplete="off"><div id="esPalTcSelWrap">' + palTcSelectInner() + "</div></details>";
+    return h;
+  }
   // 타입캐스트 목소리는 같은 목소리가 모델 2개(ssfm-v30/v21)로 중복 옴 → 이름당 1개로(신모델 v30 우선). 이름이 전부 로마자라 언어/인기 필드는 없음.
   function palTcRankedVoices() {
     var vs = Array.isArray(E._tcVoices) ? E._tcVoices : [];
@@ -10693,7 +10752,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const status = $("#esPalNarrCapStatus"); const old = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "🎤 음성 분석 중…"; }
     if (status) status.textContent = "🎤 나레이션을 듣고 말하는 타이밍에 자막을 맞추는 중… (10~20초)";
-    const MAX = 18;   // 한 자막 최대 글자
+    const MAX = 15;   // 한 자막(=한 줄) 최대 글자 — 사장님 요청: 15자 이하
     // 🎤 1순위: STT 단어 타임스탬프로 '말하는 타이밍'에 정확히 싱크 (원래 잘 되던 방식). 실패 시 음성 길이에 균등 분배 폴백.
     let chunks = null, synced = false;
     const words = await palVoiceWords();
@@ -10790,7 +10849,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const MAX = maxChars || 18, out = [];
     (chunks || []).forEach((c) => {
       const text = String(c.text || "").trim();
-      if (text.replace(/\s/g, "").length <= Math.round(MAX * 1.5)) { out.push(c); return; }   // 적당하면 그대로
+      if (text.replace(/\s/g, "").length <= MAX) { out.push(c); return; }   // 15자 이하면 그대로
       const st0 = c.start || 0, dur = Math.max(0.3, (c.end || 0) - st0);
       const useSpace = /\s/.test(text);
       const units = useSpace ? text.split(/\s+/).filter(Boolean) : Array.from(text);   // 띄어쓰기 있으면 어절, 없으면 글자 단위

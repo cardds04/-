@@ -6381,6 +6381,7 @@ body.mode-easy #easyRoot,
 .es-pal-phone-screen-real { background: #000; overflow: hidden; pointer-events: auto; cursor: pointer; }
 .es-pal-real-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #0a0a0a; container-type: size; }
 .es-pal-real-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.es-pal-real-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; opacity: 0; }
 .es-pal-real-empty { position: relative; z-index: 1; text-align: center; color: var(--text-dim); padding: 20px; }
 .es-pal-real-empty-ic { font-size: 44px; margin-bottom: 10px; line-height: 1; }
 .es-pal-real-empty-t { font-size: 16px; font-weight: 700; color: var(--text-mid); margin-bottom: 4px; }
@@ -6519,6 +6520,25 @@ body.mode-easy #easyRoot,
 .es-pal-tc-search::placeholder { color: #777; }
 #esPalTcSelWrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; width: 100%; }
 .es-pal-tc-none { font-size: 12px; color: #888; padding: 4px 2px; }
+/* 🎙 추천 목소리 픽커 */
+.es-pal-tc-pick { display: flex; flex-direction: column; gap: 8px; }
+.es-pal-tc-loading, .es-pal-tc-fail { font-size: 13px; color: var(--text-mid); padding: 10px 2px; }
+.es-pal-tc-cur { font-size: 13px; color: #1ed6a5; background: rgba(30,214,165,.1); border: 1px solid rgba(30,214,165,.3); border-radius: 9px; padding: 8px 11px; }
+.es-pal-tc-cur b { color: #6ff0cd; }
+.es-pal-tc-sec { font-size: 12.5px; font-weight: 800; color: var(--text-hi); margin-top: 4px; }
+.es-pal-tc-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.es-pal-tc-chip { padding: 9px 13px; border-radius: 20px; border: 1px solid #3a3a42; background: #1c1c22; color: #ddd; font-size: 13px; font-weight: 700; cursor: pointer; }
+.es-pal-tc-chip:hover { border-color: #555; }
+.es-pal-tc-chip.on { background: #1ed6a5; color: #06281f; border-color: #1ed6a5; }
+.es-pal-tc-row { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 10px; }
+.es-pal-tc-rl { font-size: 12.5px; color: var(--text-mid); }
+.es-pal-tc-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.es-pal-tc-opt { padding: 7px 13px; border-radius: 9px; border: 1px solid #3a3a42; background: #18181d; color: #ccc; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.es-pal-tc-opt.on { background: #2a2a33; color: #fff; border-color: #1ed6a5; }
+.es-pal-tc-more { align-self: flex-start; margin-top: 2px; padding: 8px 14px; border-radius: 9px; border: 1px dashed var(--border-hi); background: var(--panel-2); color: var(--text-mid); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.es-pal-tc-search-wrap { margin-top: 4px; }
+.es-pal-tc-search-wrap summary { font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; list-style: revert; }
+.es-pal-tc-search-wrap[open] summary { margin-bottom: 6px; }
 .es-pal-narr-script { margin: 12px 0; padding: 11px 13px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid #2a2a33; }
 .es-pal-narr-script b { font-size: 11px; color: #888; display: block; margin-bottom: 5px; }
 .es-pal-narr-script p { font-size: 13.5px; color: #ddd; line-height: 1.5; margin: 0; max-height: 120px; overflow-y: auto; }
@@ -7019,6 +7039,61 @@ body.mode-easy #easyRoot,
 .es-pal-cust-next { flex: 0 0 auto; padding: 11px 20px; border: 0; border-radius: 11px; background: #1ed6a5; color: #07221b; font-size: 15px; font-weight: 800; cursor: pointer; }
 .es-pal-cust-next:hover { filter: brightness(1.07); }
 
+/* ════════ 고객 화면 디자인 업그레이드 — 공용 시스템(전 화면 일괄) v485 ════════ */
+/* 시트(바텀 패널): 더 깊은 둥근 모서리 + 살짝 떠 보이게 */
+.es-pal-phone-screen-cust.has-live .es-pal-cust-sheet { background: #131316; border-radius: 22px 22px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5); }
+.es-pal-cust-grip-bar { width: 42px; height: 5px; background: rgba(255,255,255,0.22); }
+/* 단계 제목·설명: 더 또렷한 위계 + 여백 */
+.es-pal-scr { gap: 13px; padding: 19px 17px 16px; }
+.es-pal-scr-title { font-size: 19px; font-weight: 800; color: #fbfbfc; letter-spacing: -0.3px; }
+.es-pal-scr-note { font-size: 12.5px; color: #9b9ba3; line-height: 1.55; }
+/* 본문 안 섹션 라벨(🎙 나레이션·✂️ 컷·💬 자막 등) 통일 */
+.es-pal-narr-lb, .es-pal-cut-lb, .es-pal-capm-lb, .es-pal-cap-lb { font-size: 14.5px; font-weight: 800; color: #f3f3f5; letter-spacing: -0.2px; }
+/* 큰 액션 버튼: 아이콘 왼쪽 + 제목·설명 가로형(세련된 리스트형), 전체폭 세로 스택 */
+.es-pal-phone-screen-cust .es-pal-scr-twin { flex-direction: column; gap: 11px; }
+.es-pal-phone-screen-cust .es-pal-scr-half { width: 100%; }
+.es-pal-phone-screen-cust .es-pal-scr-half .es-pal-scr-btn-s { font-size: 12px; }
+.es-pal-scr-btn { display: grid; grid-template-columns: auto 1fr; column-gap: 14px; row-gap: 2px; align-items: center; text-align: left; border-radius: 15px; padding: 17px 18px; box-shadow: 0 5px 18px rgba(30,214,165,0.18); }
+.es-pal-scr-btn-ic { grid-row: span 2; font-size: 25px; align-self: center; }
+.es-pal-scr-btn-t { font-size: 16px; font-weight: 800; align-self: end; }
+.es-pal-scr-btn-s { font-size: 12px; opacity: 0.82; align-self: start; }
+.es-pal-scr-act.ghost { border-radius: 15px; box-shadow: none; }
+/* 입력칸·텍스트영역: 통일된 다크 필드 */
+.es-pal-cust-scroll textarea, .es-pal-cust-scroll input[type="text"] { border-radius: 12px; background: #1c1c21; border: 1px solid #2c2c33; color: #ededf0; }
+.es-pal-cust-scroll textarea:focus, .es-pal-cust-scroll input[type="text"]:focus { border-color: rgba(30,214,165,0.55); outline: none; }
+/* 이전/다음 네비: 다음 버튼 살짝 입체 */
+.es-pal-cust-nav { padding: 11px 13px 12px; border-top: 1px solid rgba(255,255,255,0.07); }
+.es-pal-cust-next { border-radius: 13px; padding: 12px 22px; box-shadow: 0 5px 16px rgba(30,214,165,0.22); }
+.es-pal-cust-prev { border-radius: 13px; }
+.es-pal-cust-dots i.on { width: 18px; }
+
+/* ── 정돈(크기 통일) + 답답함 해소(여백) v486 ── */
+/* 컨트롤 영역 숨 트이게: 시트 살짝 크게 + 넉넉한 패딩·간격 */
+.es-pal-phone-screen-cust.has-live .es-pal-cust-sheet { max-height: 57%; }
+.es-pal-scr { gap: 16px; padding: 22px 18px 20px; }
+.es-pal-cust-scroll { padding-bottom: 4px; }
+/* 폼 컨트롤(입력·텍스트·선택) 크기 한 가지로 통일 — 높이 44, 라운드 12 */
+.es-pal-phone-screen-cust .es-pal-cust-scroll input[type="text"],
+.es-pal-phone-screen-cust .es-pal-cust-scroll select { height: 44px; }
+.es-pal-phone-screen-cust .es-pal-cust-scroll input[type="text"],
+.es-pal-phone-screen-cust .es-pal-cust-scroll textarea,
+.es-pal-phone-screen-cust .es-pal-cust-scroll select { font-size: 14px; padding: 0 13px; border-radius: 12px; box-sizing: border-box; }
+.es-pal-phone-screen-cust .es-pal-cust-scroll textarea { padding: 12px 13px; line-height: 1.5; }
+/* 알약·옵션·보조 버튼 크기 통일 — 높이 42, 라운드 11, 글씨 13.5 */
+.es-pal-phone-screen-cust .es-pal-tc-chip,
+.es-pal-phone-screen-cust .es-pal-tc-opt,
+.es-pal-phone-screen-cust .es-pal-ct-tool,
+.es-pal-phone-screen-cust .es-pal-narr-reload,
+.es-pal-phone-screen-cust .es-pal-tc-more,
+.es-pal-phone-screen-cust .es-pal-tpos-btn,
+.es-pal-phone-screen-cust .es-pal-pos-mini-row button { min-height: 42px; border-radius: 11px; font-size: 13.5px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; }
+/* 큰 액션·다음단계 버튼 라운드 통일 */
+.es-pal-phone-screen-cust .es-pal-narr-make,
+.es-pal-phone-screen-cust .es-pal-narr-next { border-radius: 13px; min-height: 48px; font-size: 14.5px; }
+/* 가로 줄(칩·옵션 모음) 간격 통일 */
+.es-pal-phone-screen-cust .es-pal-tc-chips,
+.es-pal-phone-screen-cust .es-pal-tc-opts { gap: 8px; }
+
 /* 🎬 왼쪽 편집 뷰 — 결과 폰(작게) + 편집 트랙 */
 .es-pal-prev-editor { justify-content: flex-start; }
 .es-pal-phone-sm { height: min(540px, 64vh); flex: 0 0 auto; }
@@ -7124,3 +7199,48 @@ body.mode-easy #easyRoot,
 .es-pal-ted .es-pal-ted-color.sel { box-shadow: 0 0 0 2px rgba(30,214,165,0.34); }
 .es-pal-ted .es-pal-ted-stroke { flex: 0 0 auto; min-width: 40px; padding: 5px 9px; border-radius: 8px; font-size: 11px; line-height: 1; white-space: nowrap; }
 .es-pal-ted .es-pal-ted-row:has(.es-pal-ted-stroke) .es-pal-ted-sw { align-items: center; }
+
+/* ════════ 생성기(빌더) 디자인 업그레이드 — 고객 화면과 같은 세련된 톤 v487 ════════ */
+/* 구역(3분할 패널): 더 둥글게 + 여백 */
+.es-pal-zone { border-radius: 16px; padding: 12px 14px; }
+.es-pal-zone-lb { font-size: 12.5px; letter-spacing: -0.2px; }
+/* 단계 카드: 둥글게 + 부드러운 hover/선택 */
+.es-pal-step { border-radius: 14px; transition: border-color .13s, background .13s, box-shadow .13s; }
+.es-pal-step:hover { border-color: var(--border-hi); }
+.es-pal-step.sel { border-color: #1ed6a5; box-shadow: 0 0 0 2px rgba(30,214,165,0.28) inset, 0 5px 16px rgba(30,214,165,0.13); }
+.es-pal-step-ico { font-size: 27px; }
+/* 기능 타일(아이콘): 둥글게 + 민트 hover */
+.es-pal-fn { border-radius: 14px; transition: border-color .13s, color .13s, background .13s; }
+.es-pal-fn:hover { border-color: rgba(30,214,165,0.55); color: #1ed6a5; background: rgba(30,214,165,0.06); }
+.es-pal-fn-ico { font-size: 27px; }
+/* 기능 박스 컨테이너 */
+.es-pal-funcbar { border-radius: 16px; }
+/* 작업대(가운데) 라벨·버튼 톤 통일 */
+.es-pal-prev-tag { font-weight: 700; letter-spacing: -0.2px; }
+/* 단계 추가(+) 카드도 둥글게 */
+.es-pal-step.empty { border-radius: 14px; }
+
+/* ════════ 고객 화면 마무리 — 음악·리스트·슬라이더 세련되게 v488 ════════ */
+/* 음악 빠르기 탭: 알약, 선택=밝은 칩(레퍼런스 톤) */
+.es-pal-phone-screen-cust .es-pal-mus-tempos { display: flex; gap: 7px; flex-wrap: wrap; margin: 6px 0 11px; }
+.es-pal-phone-screen-cust .es-pal-mus-tempo { min-height: 38px; padding: 0 15px; border-radius: 999px; border: 1px solid #2e2e35; background: #18181d; color: #c4c4cc; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; }
+.es-pal-phone-screen-cust .es-pal-mus-tempo.sel { background: #f1f1f3; color: #15151a; border-color: #f1f1f3; }
+/* 음악 리스트: 깔끔한 줄, 선택=민트 강조 */
+.es-pal-phone-screen-cust .es-pal-mus-list { display: flex; flex-direction: column; gap: 9px; }
+.es-pal-phone-screen-cust .es-pal-mus-item { display: flex; align-items: center; gap: 11px; padding: 10px 13px; border-radius: 13px; background: #1c1c21; border: 1px solid transparent; min-height: 58px; box-sizing: border-box; }
+.es-pal-phone-screen-cust .es-pal-mus-item.sel { background: rgba(30,214,165,0.1); border-color: rgba(30,214,165,0.42); }
+.es-pal-phone-screen-cust .es-pal-mus-play { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: 1px solid #3a3a42; background: #26262d; color: #e6e6ea; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.es-pal-phone-screen-cust .es-pal-mus-item.sel .es-pal-mus-play { background: #1ed6a5; color: #07221b; border-color: #1ed6a5; }
+.es-pal-phone-screen-cust .es-pal-mus-name { flex: 1 1 auto; min-width: 0; font-size: 14px; color: #ededf0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-pal-phone-screen-cust .es-pal-mus-pick { flex: 0 0 auto; min-height: 34px; padding: 0 13px; border-radius: 9px; border: 1px solid #3a3a42; background: transparent; color: #c4c4cc; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.es-pal-phone-screen-cust .es-pal-mus-item.sel .es-pal-mus-pick { background: #1ed6a5; color: #07221b; border-color: #1ed6a5; }
+.es-pal-phone-screen-cust .es-pal-mus-none { width: 100%; min-height: 46px; border-radius: 12px; margin-bottom: 8px; }
+.es-pal-phone-screen-cust .es-pal-mus-none.sel { border-color: #1ed6a5; color: #1ed6a5; }
+.es-pal-phone-screen-cust .es-pal-mus-lb, .es-pal-phone-screen-cust .es-pal-mus-sechd { font-size: 14px; font-weight: 800; color: #f3f3f5; letter-spacing: -0.2px; }
+/* 슬라이더(음량·크기): 민트 트랙 + 정돈된 줄 */
+.es-pal-phone-screen-cust .es-pal-mus-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; margin: 10px 0; }
+.es-pal-phone-screen-cust .es-pal-mus-rl { font-size: 13px; color: #c4c4cc; }
+.es-pal-phone-screen-cust .es-pal-mus-v { font-size: 13px; color: #1ed6a5; font-weight: 800; min-width: 28px; text-align: right; }
+.es-pal-phone-screen-cust input[type="range"] { accent-color: #1ed6a5; }
+/* 안내 줄(자막 없음 등) 통일 */
+.es-pal-phone-screen-cust .es-pal-tgen-noref, .es-pal-phone-screen-cust .es-pal-mus-hint { font-size: 13px; color: #9b9ba3; line-height: 1.55; }
