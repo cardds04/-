@@ -1693,7 +1693,7 @@
           body = `<div class="es-pal-narr-lb">📝 음성에 맞춰 자막 만들기</div>
             <div class="es-pal-capm-hint">나레이션 음성(${vd}) 길이에 맞춰, 자막이 말하는 타이밍에 자동으로 들어가요</div>
             <audio controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>
-            <button type="button" class="es-pal-narr-make" id="esPalNarrCap">${hasCaps ? "🎯 자막을 음성 싱크에 맞춰 재정렬" : "🎬 음성에 맞춰 자막 만들기"}</button>
+            <button type="button" class="es-pal-narr-make" id="esPalNarrCap">${hasCaps ? "🎯 음성 싱크 재정렬" : "🎬 음성맞춰 자막 만들기"}</button>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
             ${hasCaps ? `<div class="es-pal-capedit-sec">
               <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(띄어쓰기·줄바꿈만, 싱크 유지)</span></div>
@@ -1743,8 +1743,6 @@
           else if (!tracks.length) listHtml = `<div class="es-pal-tgen-noref">이 빠르기의 음악이 없어요 — 다른 빠르기를 골라보세요</div>`;
           else { palMusLoadDur(tracks); listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => { const _s = sel && sel.id === t.id; const _du = (E._palMusDur && E._palMusDur[t.id]) ? palMusFmt(E._palMusDur[t.id]) : ""; return `<div class="es-pal-mus-item${_s ? " sel" : ""}" data-muspick="${esc(t.id)}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span>${_s ? '<span class="es-pal-mus-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ""}<span class="es-pal-mus-dur">${_du}</span></div>`; }).join("")}</div>`; }
           body = `<div class="es-pal-mus-lb">🎵 배경음악 고르기</div>
-            <button type="button" class="es-pal-mus-none ${!sel ? "sel" : ""}" data-muspick="none">🔇 음악 안 깔기 (고르지 않기)</button>
-            <div class="es-pal-mus-sechd">📚 저장한 음악 <span class="es-pal-tref-hint">빠르기로 골라요</span></div>
             ${tempoBar}
             ${listHtml}
             ${sel ? `<div class="es-pal-mus-hint">✅ 골랐어요 — 다음 <b>🎚 음악 소리조절</b> 단계에서 크기를 맞춰요</div>` : ""}`;
@@ -3395,9 +3393,10 @@
     // 📱 고객 화면 하단 고정 '다음/이전' — 실제 고객처럼 단계를 넘김(미리보기 모드 아닐 때만)
     const _isLast = P.sel >= P.steps.length - 1;
     const _isCutStep = ["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey);   // 컷 단계 = 기능버튼을 하단 nav 가운데로
+    const _dotsHtml = P.steps.length > 10 ? `<span class="es-pal-cust-dots es-pal-cust-stepnum">${P.sel + 1} / ${P.steps.length}</span>` : `<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span>`;
     const _navMid = _isCutStep
       ? `<div class="es-pal-cust-nav-tools">${palCutToolbar()}</div>`
-      : (P.steps.length > 10 ? `<span class="es-pal-cust-dots es-pal-cust-stepnum">${P.sel + 1} / ${P.steps.length}</span>` : `<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span>`);
+      : `<div class="es-pal-cust-nav-mid">${_dotsHtml}</div>`;   // 가운데 — 렌더 후 주요 액션버튼이 여기로 옮겨짐(있으면 점 숨김)
     const custNav = !isPrev
       ? `<div class="es-pal-cust-nav${_isCutStep ? " es-pal-cust-nav-cut" : ""}">${P.sel > 0 ? `<button type="button" class="es-pal-cust-prev" id="esCustPrev">←<span class="es-nav-lb"> 이전</span></button>` : `<span class="es-pal-cust-navsp"></span>`}${_navMid}<button type="button" class="es-pal-cust-next" id="esCustNext"><span class="es-nav-lb">${_isLast ? "완성 " : "다음 "}</span>${_isLast ? "✓" : "→"}</button></div>`
       : "";
@@ -3454,6 +3453,15 @@
           <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
         </div>
       </div>`;
+    // 🔽 단계별 주요 액션 버튼(나레이션 만들기·자막 적용/싱크 재정렬·더 넣기 등)을 하단 nav 가운데로 모음 — 컷편집처럼.
+    //    핸들러는 #esBody 기준 셀렉터라 옮겨도 그대로 동작(연결 전에 옮김).
+    try {
+      const _navMidEl = body.querySelector(".es-pal-cust-nav .es-pal-cust-nav-mid");
+      if (_navMidEl) {
+        const _moved = body.querySelectorAll(".es-pal-cust-scroll .es-pal-narr-make, .es-pal-cust-scroll .es-pal-capedit-apply, .es-pal-cust-scroll .es-pal-scr-media-acts");
+        if (_moved.length) { _navMidEl.classList.add("has-navbtns"); _moved.forEach((b) => _navMidEl.appendChild(b)); }
+      }
+    } catch (_) {}
     const _tExit = $("#esPalTestExit"); if (_tExit) _tExit.addEventListener("click", palTestExit);   // 🧪 테스트 나가기 → 관리자 + 드래프트 복원
     const _cuExit = $("#esPalCustExit"); if (_cuExit) _cuExit.addEventListener("click", palCustExit);   // 🙋 고객 템플릿 사용 나가기 → 갤러리
     const add = $("#esPalAdd"); if (add) add.addEventListener("click", () => { P.preview = null; P.steps.push({ id: uid(), fn: null }); P.sel = P.steps.length - 1; renderPalette(); });
