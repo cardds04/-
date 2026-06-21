@@ -2119,12 +2119,14 @@
     if (!blocks.length) return "";
     const cur = palCurBlock(kind);
     const sz = (cur && cur.size != null) ? cur.size : (cap ? 7 : 14);
+    const py = (cur && cur.posY != null) ? cur.posY : (cap ? 88 : 18);
+    const pz = py <= 33 ? "up" : py >= 67 ? "down" : "mid";   // 현재 위치 구역(위/중간/아래) → 그 버튼 선택강조
     return `<div class="es-pal-tpos-ctrl es-pal-pos-mini">
-      <span class="es-pal-pos-mini-lb">📍 ${cap ? "자막" : "타이틀"} 크기</span><input type="range" class="es-pal-pos-size" data-poskind="${kind}" min="3" max="35" value="${sz}">
+      <div class="es-pal-pos-sizerow"><span class="es-pal-pos-mini-lb">${cap ? "자막" : "타이틀"} 크기</span><input type="range" class="es-pal-pos-size" data-poskind="${kind}" min="3" max="35" value="${sz}"></div>
       <div class="es-pal-tpos-row">
-        <button type="button" class="es-pal-tpos-btn" data-posmove="up" data-poskind="${kind}">⬆ 위</button>
-        <button type="button" class="es-pal-tpos-btn" data-posmove="mid" data-poskind="${kind}">● 중간</button>
-        <button type="button" class="es-pal-tpos-btn" data-posmove="down" data-poskind="${kind}">⬇ 아래</button>
+        <button type="button" class="es-pal-tpos-btn${pz === "up" ? " sel" : ""}" data-posmove="up" data-poskind="${kind}">⬆ 위</button>
+        <button type="button" class="es-pal-tpos-btn${pz === "mid" ? " sel" : ""}" data-posmove="mid" data-poskind="${kind}">● 중간</button>
+        <button type="button" class="es-pal-tpos-btn${pz === "down" ? " sel" : ""}" data-posmove="down" data-poskind="${kind}">⬇ 아래</button>
       </div></div>`;
   }
   function palCurTitle() { return palCurBlock(E._palEditKind || "title"); }
