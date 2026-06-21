@@ -1360,8 +1360,11 @@
     ensureSharpenSvg();
     root.innerHTML = `
       <div class="es-top">
+        <div class="es-topnav">
+          <button type="button" class="es-topnav-btn" id="esTopBack" title="뒤로" aria-label="뒤로">←</button>
+          <button type="button" class="es-topnav-btn" id="esTopHome" title="홈" aria-label="홈">🏠</button>
+        </div>
         <span class="es-logo">⚡ 이지숏폼 <span class="es-beta">BETA</span></span>
-        <span class="es-top-sub">템플릿에 사진·영상만 넣으면 음악에 맞춰 자동으로 한 편이 완성돼요</span>
         <span class="es-sp"></span>
         <nav class="es-nav">
           <button type="button" class="es-modebtn" data-mode2="easy" title="사진만 넣으면 자동 완성 — 쉽게 만들기">⚡ 이지숏폼</button>
@@ -1371,6 +1374,9 @@
       </div>
       <div class="es-body" id="esBody"></div>
     `;
+    // 📱 상단 홈·뒤로 버튼(고객 앱) — 하단 고정 네비 대신 상단에서 이동
+    { const _bb = root.querySelector("#esTopBack"); if (_bb) _bb.addEventListener("click", easyBotBack); }
+    { const _hb = root.querySelector("#esTopHome"); if (_hb) _hb.addEventListener("click", easyBotHome); }
   }
   // 📱 하단 앱형 네비 — 모든 고객 화면에서 홈/뒤로. 작업은 지우지 않고 보존(편집 화면만 닫음 → 새로고침하면 복구)
   function easyBotHome() {
@@ -1680,7 +1686,7 @@
           body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
           break;
         }
-        case "length":  body = `${palCapMiniBar(P)}<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P)}</div>`; break;
+        case "length":  body = `<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>${palCutToolPanel(P)}${palCutToolbar()}`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
@@ -2172,6 +2178,23 @@
         <button type="button" class="es-pal-capmini-btn${pz === "down" ? " sel" : ""}" data-posmove="down" data-poskind="caption" aria-label="자막 아래로">⬇</button>
       </span>
     </div>`;
+  }
+  // 🧰 컷편집 도구를 'CapCut식' 아래 아이콘 툴바로 모음 — 아이콘 누르면 그 도구만 펼쳐져(화면 정돈). E._palCutTool = 펼친 도구(null/cap/beat/trim)
+  function palCutToolbar() {
+    const cur = E._palCutTool || "";
+    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "beat", ic: "🥁", lb: "AI 리듬" }, { k: "trim", ic: "🔇", lb: "음성없는구간" }];
+    return `<div class="es-pal-cut-toolbar">${items.map((it) => `<button type="button" class="es-pal-cut-tbtn${cur === it.k ? " on" : ""}" data-cuttoolbar="${it.k}"><span class="es-pal-cut-tbic">${it.ic}</span><span class="es-pal-cut-tblb">${it.lb}</span></button>`).join("")}</div>`;
+  }
+  function palCutToolPanel(P) {
+    const t = E._palCutTool; if (!t) return "";
+    let inner = "";
+    if (t === "cap") inner = palCapMiniBar(P) || `<div class="es-pal-cut-tp-empty">자막을 먼저 넣으면 크기·위치를 바꿀 수 있어요</div>`;
+    else if (t === "beat") {
+      const tempoSel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
+      inner = `<div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트를 분석해 컷을 리듬에 맞춰 끊어요">🥁 AI 리듬</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tempoSel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div>`;
+    } else if (t === "trim") inner = `<div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button></div>`;
+    if (!inner) return "";
+    return `<div class="es-pal-cut-toolpanel">${inner}</div>`;
   }
   function palCurTitle() { return palCurBlock(E._palEditKind || "title"); }
   // 한 칸을 실제 폰트로 렌더 → block.result
@@ -3513,6 +3536,8 @@
       _posRefresh(kind);
       palDraftSave();
     }));
+    // 🧰 컷편집 아래 아이콘 툴바 — 아이콘 누르면 그 도구 펼침/접힘(같은 거 또 누르면 접힘)
+    $$("#esBody [data-cuttoolbar]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.cuttoolbar; E._palCutTool = (E._palCutTool === k) ? null : k; renderPalette(); }));
     // 자막도 타이틀과 동일하게 칸(data-cslot) 입력으로 처리 — 아래 공용 data-cslot 핸들러가 캡션 블록까지 함께 담당
     // 🖼 타이틀 단계 — 관리자가 참조사진 옵션을 단계(step.titleRefs)에 넣고(＋·드래그·📋), 고객은 그 중 골라(demo.titleRef) AI 생성
     const _trBtn = $("#esTRefBtn"), _trFile = $("#esTRefFile"), _trPaste = $("#esTRefPaste"), _trGal = $("#esTRefGal"), _tgen = $("#esTGen");

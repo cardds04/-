@@ -6538,7 +6538,7 @@ body.mode-easy #easyRoot,
 .es-pal-tc-search-wrap { margin-top: 4px; }
 .es-pal-tc-search-wrap summary { font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; list-style: revert; }
 .es-pal-tc-search-wrap[open] summary { margin-bottom: 6px; }
-.es-pal-narr-script { margin: 12px 0; padding: 11px 13px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid #2a2a33; }
+.es-pal-narr-script { width: 100%; box-sizing: border-box; margin: 12px 0; padding: 11px 13px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid #2a2a33; }
 .es-pal-narr-script b { font-size: 11px; color: #888; display: block; margin-bottom: 5px; }
 .es-pal-narr-script p { font-size: 13.5px; color: #ddd; line-height: 1.5; margin: 0; max-height: 120px; overflow-y: auto; }
 .es-pal-narr-next, .es-pal-narr-make { width: 100%; padding: 13px; border-radius: 11px; border: none; background: #1ed6a5; color: #06281f; font-size: 14.5px; font-weight: 800; cursor: pointer; }
@@ -6694,6 +6694,20 @@ body.mode-easy #easyRoot,
 .es-pal-capmini-btn { width: 30px; height: 30px; padding: 0; border-radius: 8px; border: 1px solid #2e2e38; background: #1a1a20; color: #cfcfd6; font-size: 12px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .es-pal-capmini-btn.sel { border-color: #1ed6a5; color: #1ed6a5; background: rgba(30, 214, 165, 0.12); }
 .es-pal-phone-screen-cust .es-pal-capmini-btn { min-height: 36px; width: 36px; }
+/* 🧰 컷편집 아래 아이콘 툴바(CapCut식) + 펼침 패널 */
+.es-pal-cut-toolbar { display: flex; gap: 6px; margin-top: 12px; padding: 9px 4px 2px; border-top: 1px solid #23232a; }
+.es-pal-cut-tbtn { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 9px 4px; border: 1px solid transparent; border-radius: 13px; background: transparent; color: #cfcfd6; cursor: pointer; transition: background .12s, border-color .12s; }
+.es-pal-cut-tbtn .es-pal-cut-tbic { font-size: 20px; line-height: 1; }
+.es-pal-cut-tbtn .es-pal-cut-tblb { font-size: 11px; font-weight: 800; white-space: nowrap; letter-spacing: -0.02em; }
+.es-pal-cut-tbtn:active { background: #1a1a20; }
+.es-pal-cut-tbtn.on { background: rgba(30, 214, 165, 0.12); border-color: #1ed6a5; color: #1ed6a5; }
+.es-pal-cut-toolpanel { margin-top: 11px; padding: 11px; border: 1px solid #2a2a32; border-radius: 13px; background: #15151a; animation: esCutTpIn .14s ease; }
+@keyframes esCutTpIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.es-pal-cut-toolpanel .es-pal-ct-tools { margin: 0; }
+.es-pal-cut-toolpanel .es-pal-capmini { margin: 0; border: 0; padding: 0; background: transparent; }
+.es-pal-cut-tp-empty { font-size: 12.5px; color: #8a8a96; text-align: center; padding: 8px; }
+.es-pal-phone-screen-cust .es-pal-cut-tbtn { min-height: 58px; border-radius: 14px; }
+.es-pal-phone-screen-cust .es-pal-cut-tbtn .es-pal-cut-tbic { font-size: 23px; }
 .es-pal-ct-evenbox { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; }
 .es-pal-ct-evensec { width: 42px; padding: 6px 4px; border-radius: 8px; border: 1px solid #2e2e38; background: #1a1a20; color: #ffd54a; font-size: 12px; font-weight: 700; text-align: center; -moz-appearance: textfield; }
 .es-pal-ct-evensec::-webkit-outer-spin-button, .es-pal-ct-evensec::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -7214,6 +7228,21 @@ body.mode-easy #easyRoot,
   box-shadow: none;
 }
 .es-pal-cust-use .es-pal-phone-notch { display: none; }             /* 가짜 노치 숨김 */
+
+/* 📱 고객 앱 상단바 — 최대한 컴팩트(부제 문구 제거) + 홈·뒤로 버튼.
+   #easyRoot(특이도 1,1,0)와 easy-mobile.css의 !important 를 이기려고 .easy-only #easyRoot 로 스코프 */
+.easy-only #easyRoot .es-top { min-height: 0 !important; padding: 5px 10px !important; gap: 8px; flex-direction: row; flex-wrap: nowrap; align-items: center; }
+.easy-only #easyRoot .es-logo { font-size: 12.5px; }
+.easy-only #easyRoot .es-beta { font-size: 8px; padding: 1px 4px; }
+.easy-only #easyRoot .es-topnav { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.easy-only #easyRoot .es-topnav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; flex: 0 0 auto;
+  border-radius: 9px; border: 1px solid var(--ui-line, #2a2a2a);
+  background: var(--ui-surface, rgba(255,255,255,0.06)); color: var(--ui-text, #f6fbf7);
+  font-size: 16px; line-height: 1; cursor: pointer; -webkit-appearance: none;
+}
+.easy-only #easyRoot .es-topnav-btn:active { transform: scale(0.94); }
 
 /* Palette compact controls: reduce visual noise in title/subtitle editing panels. */
 .es-pal-ted .es-pal-ted-lb { margin-top: 4px; margin-bottom: 5px; font-size: 11px; color: #8f9996; }
