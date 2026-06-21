@@ -1728,7 +1728,7 @@
           body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
           break;
         }
-        case "length":  body = `<div class="es-pal-cut-edit"><div class="es-pal-cut-lb es-pal-cut-lb-sm">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div class="es-pal-cut-bottom">${palCutToolPanel(P)}${palCutToolbar()}<div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div></div></div>`; break;
+        case "length":  body = `<div class="es-pal-cut-edit"><div class="es-pal-cut-lb es-pal-cut-lb-sm">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div>${palCutToolPanel(P)}<div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div></div>`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
@@ -2480,7 +2480,8 @@
   }
   // ✂️ 컷 타임라인(에디트 앱식) — 가로 시간축에 영상 필름스트립·타이틀·자막·나레이션·음악을 같은 눈금으로. 블록 탭→길이조절(끝 손잡이 드래그)·빼기.
   const PAL_CT_PPS = 60;   // 1초 = 60px (좌우로 길게)
-  function palCutClipDur(m) { return (m && m.dur > 0) ? m.dur : 2.5; }
+  function palCutClipDur(m) { const raw = (m && m.dur > 0) ? m.dur : 2.5; return (m && m.kind === "video" && m.srcDur > 0) ? Math.min(raw, m.srcDur) : raw; }   // 영상은 원본 길이 초과 금지(넘으면 반복 재생됨)
+  function palClipMaxDur(m) { return (m && m.kind === "video" && m.srcDur > 0) ? m.srcDur : 30; }   // 길이 조절 상한 — 영상은 원본 길이까지만
   // 🎬 영상 더 넣기(컷 타임라인에서 바로) — 파일 골라 demo.media 에 추가
   function palAddMediaPick() {
     const inp = document.createElement("input");
@@ -2581,6 +2582,24 @@
       }).catch(() => { m._posterPend = false; });
     });
   }
+  // ⏱ 영상 클립 원본 길이 로드 → m.dur 가 원본보다 길면 잘라(반복 재생 방지). 타임라인만 갱신(미리보기 안 튐).
+  function palEnsureClipDurs() {
+    if (!document.getElementById("esPalCutWrap")) return;   // 컷 단계일 때만
+    const d = E.palette && E.palette.demo; if (!d) return;
+    const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    clips.forEach((m) => {
+      if (!m || m.kind !== "video" || m.srcDur != null || m._durPend || !m.url) return;
+      m._durPend = true;
+      mediaDuration(m.url, true).then((dur) => {
+        m._durPend = false;
+        m.srcDur = (dur > 0) ? dur : 0;
+        let changed = false;
+        if (m.srcDur > 0 && m.dur > m.srcDur + 0.02) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 원본 초과분 잘라냄
+        if (changed) { try { palDraftSave(); } catch (_) {} }
+        try { if (E.view === "palette" && document.getElementById("esPalCutWrap")) palCutReflow(); } catch (_) {}
+      }).catch(() => { m._durPend = false; });
+    });
+  }
   function palAudioDur(url) { return new Promise((res) => { if (!url) return res(0); const a = document.createElement("audio"); let done = false; const fin = (d) => { if (done) return; done = true; res(d || 0); }; const to = setTimeout(() => fin(0), 6000); a.preload = "metadata"; a.onloadedmetadata = () => { clearTimeout(to); fin(isFinite(a.duration) ? a.duration : 0); }; a.onerror = () => { clearTimeout(to); fin(0); }; a.src = url; }); }
   // 🟰 컷 균등 나누기 — 사장님이 정한 '한 컷 길이(초)'로 모든 컷을 똑같이(기본 2초)
   function palEvenSec() { let v = E._palEvenSec; if (v == null) { try { v = parseFloat(localStorage.getItem("es_pal_even_sec")) || 0; } catch (_) {} } return (v > 0) ? v : 2; }
@@ -2589,7 +2608,7 @@
     const d = E.palette && E.palette.demo; if (!d) return;
     const clips = d.media || []; if (!clips.length) { try { toast("영상을 먼저 넣어주세요"); } catch (_) {} return; }
     const per = palEvenSec();
-    clips.forEach((m) => { m.dur = per; });
+    clips.forEach((m) => { m.dur = Math.min(per, palClipMaxDur(m)); });   // 영상은 원본 길이까지만(반복 방지)
     palDraftSave(); renderPalette();
     try { toast(`컷 ${clips.length}개를 ${per.toFixed(1)}초씩 똑같이 맞췄어요`); } catch (_) {}
   }
@@ -2621,7 +2640,7 @@
         }
         cuts.push(Math.max(cuts[i] + 0.3, best));
       }
-      clips.forEach((m, i) => { m.dur = Math.max(0.3, +(cuts[i + 1] - cuts[i]).toFixed(2)); });
+      clips.forEach((m, i) => { m.dur = Math.min(palClipMaxDur(m), Math.max(0.3, +(cuts[i + 1] - cuts[i]).toFixed(2))); });
       const voiceTotal = (d.voiceUrl && d.voiceDur > 0.3) ? (d.voiceDur + PAL_VOICE_DELAY) : 0;
       const _capEnd = (d.captions || []).filter((c) => (c.text || "").trim()).reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
       const _content = Math.max(voiceTotal, _capEnd);   // 자막(없으면 나레이션)이 끝나는 시점
@@ -2674,7 +2693,7 @@
   function palCutDur(delta) {   // ± 버튼: 0.5초 단위
     const sel = E._palCutSel; if (!sel) return;
     const arr = palCutArr(sel.lane), item = arr[sel.idx]; if (!item) return;
-    const nd = Math.max(0.5, Math.min(30, palCutDurOf(sel.lane, item) + delta));
+    const nd = Math.max(0.5, Math.min(palClipMaxDur(item), palCutDurOf(sel.lane, item) + delta));
     item.dur = Math.round(nd * 2) / 2;
     palDraftSave(); renderPalette();
   }
@@ -2698,13 +2717,13 @@
     const snap = (x) => Math.round(x * 2) / 2;
     const move = (ev) => {
       const dSec = (ev.clientX - startX) / PPS;
-      if (side === "r") blkEl.style.width = Math.round(Math.max(0.5, dur0 + dSec) * PPS) + "px";
+      if (side === "r") blkEl.style.width = Math.round(Math.min(palClipMaxDur(item), Math.max(0.5, dur0 + dSec)) * PPS) + "px";
       else { const ns = Math.max(0, start0 + dSec), nd = Math.max(0.5, dur0 - (ns - start0)); blkEl.style.left = Math.round(ns * PPS) + "px"; blkEl.style.width = Math.round(nd * PPS) + "px"; }
     };
     const up = (ev) => {
       h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up);
       const dSec = (ev.clientX - startX) / PPS;
-      if (side === "r") item.dur = Math.max(0.5, snap(dur0 + dSec));
+      if (side === "r") item.dur = Math.min(palClipMaxDur(item), Math.max(0.5, snap(dur0 + dSec)));
       else { const ns = Math.max(0, snap(start0 + dSec)); item.start = ns; item.dur = Math.max(0.5, snap(dur0 - (ns - start0))); }
       palDraftSave(); palCutReflow();   // 타임라인만 갱신 → 길이 수정해도 위 미리보기 안 튐
     };
@@ -3375,8 +3394,12 @@
     const arc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     // 📱 고객 화면 하단 고정 '다음/이전' — 실제 고객처럼 단계를 넘김(미리보기 모드 아닐 때만)
     const _isLast = P.sel >= P.steps.length - 1;
+    const _isCutStep = ["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey);   // 컷 단계 = 기능버튼을 하단 nav 가운데로
+    const _navMid = _isCutStep
+      ? `<div class="es-pal-cust-nav-tools">${palCutToolbar()}</div>`
+      : (P.steps.length > 10 ? `<span class="es-pal-cust-dots es-pal-cust-stepnum">${P.sel + 1} / ${P.steps.length}</span>` : `<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span>`);
     const custNav = !isPrev
-      ? `<div class="es-pal-cust-nav">${P.sel > 0 ? `<button type="button" class="es-pal-cust-prev" id="esCustPrev">← 이전</button>` : `<span class="es-pal-cust-navsp"></span>`}${P.steps.length > 10 ? `<span class="es-pal-cust-dots es-pal-cust-stepnum">${P.sel + 1} / ${P.steps.length}</span>` : `<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span>`}<button type="button" class="es-pal-cust-next" id="esCustNext">${_isLast ? "완성 ✓" : "다음 →"}</button></div>`
+      ? `<div class="es-pal-cust-nav${_isCutStep ? " es-pal-cust-nav-cut" : ""}">${P.sel > 0 ? `<button type="button" class="es-pal-cust-prev" id="esCustPrev">←<span class="es-nav-lb"> 이전</span></button>` : `<span class="es-pal-cust-navsp"></span>`}${_navMid}<button type="button" class="es-pal-cust-next" id="esCustNext"><span class="es-nav-lb">${_isLast ? "완성 " : "다음 "}</span>${_isLast ? "✓" : "→"}</button></div>`
       : "";
     // 👀 고객 화면 — 글자 단계(타이틀/자막 참조·생성)면 위쪽에 '실제 미리보기'(영상+적용된 글자) + 아래쪽에 그 단계 컨트롤
     const _showsLive = showKey && PAL_LIVE_STEPS.includes(showKey);
@@ -3386,7 +3409,7 @@
     const _sheetUp = _showsLive && E._palCustSheetUp === showKey;
     const custGrip = _showsLive ? `<button type="button" class="es-pal-cust-grip" id="esCustGrip" aria-label="작업창 펼치기·접기"><span class="es-pal-cust-grip-bar"></span></button>` : "";
     const canvasHtml = showFn
-      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-sheet">${custGrip}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div></div>`
+      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     const realHtml = `<div class="es-pal-prev es-pal-prev-editor">
@@ -3401,7 +3424,7 @@
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
     body.innerHTML = (E._palTestMode || E._palCustomerMode)
       ? `<div class="es-pal-test${E._palCustomerMode ? " es-pal-cust-use" : ""}">${E._palCustomerMode
-          ? `<div class="es-pal-test-bar es-pal-cust-usebar"><span class="es-pal-test-lb">⚡ ${esc(P.name || "이지숏폼")}</span><button type="button" class="es-pal-test-exit" id="esPalCustExit">✕ 나가기</button></div>`
+          ? ""
           : `<div class="es-pal-test-bar"><span class="es-pal-test-lb">🧪 테스트 — 고객이 보는 화면 그대로 <small>(저장 안 됨)</small></span><button type="button" class="es-pal-test-exit" id="esPalTestExit">✕ 나가기</button></div>`}<div class="es-pal-test-stage">${canvasHtml}</div></div>`
       : `
       <div class="es-palette">
@@ -3822,6 +3845,7 @@
     palCutInit();         // ✂️ 컷 타임라인 — 블록 선택·길이조절(손잡이)·빼기
     try { palLivePlayInit(); } catch (_) {}   // 🎬 컷편집 단계면 미리보기를 실제 출력물처럼 타이밍 재생
     try { palEnsureCutPosters(); } catch (_) {}   // 🖼 타임라인 영상 클립 썸네일(포스터) 채우기
+    try { palEnsureClipDurs(); } catch (_) {}   // ⏱ 영상 클립 원본 길이로 캡(반복 재생 방지)
     // 📱 모바일: 라이브 미리보기 영상을 명시적으로 재생(autoplay 속성만으론 iOS가 ▶ 오버레이를 띄울 때가 있어 직접 play())
     try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
