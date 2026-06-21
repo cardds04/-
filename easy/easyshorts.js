@@ -1644,7 +1644,7 @@
             const capJoined = (palBlocks("caption") || []).map((t) => (t.text || "").replace(/\n/g, " ").trim()).filter(Boolean).join("\n");
             body = `<div class="es-pal-capm-hint">✍️ <b>한 줄에 자막 하나씩</b> — 엔터로 줄을 나누면 자막 블럭이 하나씩 쌓여요</div>
               <textarea id="esPalCapMulti" class="es-pal-capedit-ta" rows="6" placeholder="한 줄에 자막 하나씩&#10;엔터로 나누면 자막이 하나씩 늘어나요&#10;(나중에 수정도 여기서)">${esc(capJoined)}</textarea>
-              <button type="button" class="es-pal-capedit-apply" id="esPalCapApply">✓ 자막 적용</button>
+              <button type="button" class="es-pal-capedit-apply" id="esPalCapApply">✓ 적용</button>
               <button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 방법 다시 고르기</button>`;
           } else {
             body = `<div class="es-pal-capm-lb">💬 자막을 어떻게 만들까요?</div>
@@ -1668,7 +1668,6 @@
             <div class="es-pal-tc-pick">${pick}</div>
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${(voices && voices.length && !curV) ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
-            ${d.voiceUrl ? `<audio id="esPalNarrAudio" controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>` : ""}
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
             <div class="es-pal-narr-hint2">${d.voiceUrl ? "✅ 만들었어요! 다음 <b>📝 음성맞춰 자막</b> 단계로" : "목소리 고르고 <b>🎙 나레이션 만들기</b>를 누르세요"}</div>`;
           break;
@@ -1681,7 +1680,7 @@
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake">${hasVoice ? "🔄 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
-            ${hasVoice ? `<audio id="esPalNarrAudio" controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio><div class="es-pal-narr-hint2">✅ 완성! 다음 <b>📝 음성맞춰 자막</b> 단계로</div>` : ""}`;
+            ${hasVoice ? `<div class="es-pal-narr-hint2">✅ 완성! 다음 <b>📝 음성맞춰 자막</b> 단계로</div>` : ""}`;
           break;
         }
         case "ncap": {   // 📝 음성에 맞춰 자막 만들기 + ✏️ 자막 다듬기(생성되면 바로 아래에)
@@ -1691,15 +1690,11 @@
           const hasCaps = capList.some((t) => t.result && t.result.url);   // 자막이 만들어졌는지
           const capJoined = capList.map((t) => (t.text || "").replace(/\n/g, " ").trim()).join("\n");
           body = `<div class="es-pal-narr-lb">📝 음성에 맞춰 자막 만들기</div>
-            <div class="es-pal-capm-hint">나레이션 음성(${vd}) 길이에 맞춰, 자막이 말하는 타이밍에 자동으로 들어가요</div>
-            <audio controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>
-            <button type="button" class="es-pal-narr-make" id="esPalNarrCap">${hasCaps ? "🎯 음성 싱크 재정렬" : "🎬 음성맞춰 자막 만들기"}</button>
+            <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 타이밍 자동)</span></div>
+            <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="${hasCaps ? "한 줄에 자막 하나씩" : "먼저 아래 '음성씽크'를 누르면 자막이 여기 들어와요"}">${esc(capJoined)}</textarea>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
-            ${hasCaps ? `<div class="es-pal-capedit-sec">
-              <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(띄어쓰기·줄바꿈만, 싱크 유지)</span></div>
-              <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="한 줄에 자막 하나씩">${esc(capJoined)}</textarea>
-              <button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply">✓ 자막 적용</button>
-            </div>` : ""}`;
+            <button type="button" class="es-pal-narr-make" id="esPalNarrCap"${hasCaps ? " disabled" : ""}>🎯 음성씽크</button>
+            <button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply"${hasCaps ? "" : " disabled"}>✓ 적용</button>`;
           break;
         }
         case "cedit": {   // ✏️ 자막 다듬기 — 한 줄=자막 1개(엔터로 나누고, 줄 합치면 자막도 합쳐짐). 음성 있으면 말하는 타이밍에 다시 싱크
@@ -1709,7 +1704,7 @@
           const sync = d.voiceUrl ? `<div class="es-pal-capm-subhint">✓ 띄어쓰기·줄바꿈만 다듬어요 — 맞춰둔 싱크는 그대로 유지돼요</div>` : "";
           body = `<div class="es-pal-capm-hint">✏️ <b>한 줄 = 자막 하나</b> — 엔터로 나누면 자막이 갈라지고, 줄을 합치면(백스페이스) 자막도 합쳐져요</div>
             <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="8" placeholder="한 줄에 자막 하나씩">${esc(capJoined)}</textarea>
-            ${sync}<button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply">✓ 자막 적용</button>`;
+            ${sync}<button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply">✓ 적용</button>`;
           break;
         }
         case "csync": {   // 🎯 자막 씽크 맞추기 — 다듬어 놓은 자막(글자 그대로) 타이밍만 음성에 다시 정렬
@@ -1719,8 +1714,7 @@
           const vd = d.voiceDur ? d.voiceDur.toFixed(1) + "초" : "음성";
           body = `<div class="es-pal-narr-lb">🎯 자막과 음성 씽크 맞추기</div>
             <div class="es-pal-capm-hint">지금 자막 <b>${capN}개</b>의 <b>글자는 그대로</b> 두고, 나레이션(${vd}) <b>말하는 타이밍</b>에 자막이 뜨도록 위치(시간)만 다시 맞춰요</div>
-            <audio controls src="${d.voiceUrl}" class="es-pal-narr-audio"></audio>
-            <button type="button" class="es-pal-narr-make" id="esPalCapSync">🎯 음성에 씽크 맞추기</button>
+            <button type="button" class="es-pal-narr-make" id="esPalCapSync">🎯 음성씽크</button>
             <div id="esPalCapSyncStatus" class="es-pal-narr-status"></div>`;
           break;
         }
