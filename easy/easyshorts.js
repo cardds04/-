@@ -2660,14 +2660,34 @@
     q("#esCamX").addEventListener("click", () => { if (recording && recorder) { try { recorder.stop(); } catch (_) {} } done(null); });
     ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
     (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
-        const v = q("#esCamVid"); if (v) v.srcObject = stream;
-        q("#esCamMsg").textContent = "● 촬영 시작을 누르고, 다 찍으면 ■ 완료를 누르세요";
-        q("#esCamShoot").disabled = false;
-      } catch (e) {
-        q("#esCamMsg").innerHTML = "카메라를 열 수 없어요 (" + esc((e && e.message) || "권한 거부") + ").<br>대신 <b>영상 첨부</b>로 넣어주세요.";
+      const msg = q("#esCamMsg");
+      // 🔒 보안 컨텍스트(https/localhost)에서만 카메라 가능. 없으면 = 앱 안 브라우저(카톡 등)거나 http
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (msg) msg.innerHTML = "이 화면에선 카메라를 열 수 없어요.<br>카톡·인스타 등 <b>앱 안에서 열었다면</b> · · · 메뉴로 <b>사파리·크롬에서 열기</b> 하거나, 아래 <b>영상 첨부</b>로 넣어주세요.";
+        return;
       }
+      // 후면+마이크 → 후면만 → 아무 카메라+마이크 → 아무 카메라만 순으로 시도(하나라도 되면 사용). 마이크 막힘·후면 없음도 통과.
+      const tries = [
+        { video: { facingMode: "environment" }, audio: true },
+        { video: { facingMode: "environment" }, audio: false },
+        { video: true, audio: true },
+        { video: true, audio: false },
+      ];
+      let lastErr = null;
+      for (const c of tries) {
+        try { stream = await navigator.mediaDevices.getUserMedia(c); if (stream) break; } catch (e) { lastErr = e; if (/NotAllowed|Security|Permission/i.test((e && e.name) || "")) break; }   // 권한 거부면 더 시도해도 소용없음
+      }
+      if (!stream) {
+        const nm = (lastErr && (lastErr.name || "")) + " " + ((lastErr && lastErr.message) || "");
+        const denied = /NotAllowed|Security|Permission|denied/i.test(nm);
+        if (msg) msg.innerHTML = denied
+          ? "카메라 권한이 막혀 있어요.<br>· 브라우저 주소창의 <b>카메라 아이콘</b>에서 허용하거나<br>· 카톡·인스타 등 앱 안이면 <b>사파리·크롬으로 열기</b><br>· 아니면 아래 <b>영상 첨부</b>로 넣어주세요."
+          : "카메라를 열 수 없어요 (" + esc((lastErr && lastErr.message) || nm || "오류") + ").<br>대신 <b>영상 첨부</b>로 넣어주세요.";
+        return;
+      }
+      const v = q("#esCamVid"); if (v) v.srcObject = stream;
+      if (msg) msg.textContent = "● 촬영 시작을 누르고, 다 찍으면 ■ 완료를 누르세요";
+      q("#esCamShoot").disabled = false;
     })();
     q("#esCamShoot").addEventListener("click", () => {
       if (!stream) return;
