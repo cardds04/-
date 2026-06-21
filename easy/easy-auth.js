@@ -46,10 +46,10 @@
     if (document.getElementById("eaStyle")) return;
     var css = `
     .ea-chip{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));right:10px;z-index:4000;
-      display:inline-flex;align-items:center;gap:4px;max-width:40vw;
-      padding:4px 9px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;
+      display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;
+      border-radius:9px;cursor:pointer;-webkit-appearance:none;
       border:1px solid var(--border,#2a2a2a);background:rgba(24,24,24,.95);
-      color:var(--text,#e2e2e2);font-size:11px;font-weight:800;font-family:var(--font-body,inherit);
+      color:var(--text,#e2e2e2);font-size:15px;font-weight:800;font-family:var(--font-body,inherit);
       box-shadow:0 3px 12px rgba(0,0,0,.3)}
     .ea-chip:active{transform:scale(.95)}
     .ea-chip.on{border-color:var(--accent,#ffd700)}
@@ -110,13 +110,12 @@
     }
     if (isLoggedIn()) {
       chip.classList.add("on");
-      chip.innerHTML = '<span class="ea-chip-dot"></span><span class="ea-chip-nm">' +
-        esc(currentUser().name || "회원") + "</span>";
-      chip.title = "로그아웃";
+      chip.innerHTML = "👤";
+      chip.title = (currentUser().name || "회원") + " — 눌러서 로그아웃";
     } else {
       chip.classList.remove("on");
-      chip.innerHTML = "👤 로그인 / 가입";
-      chip.title = "로그인하고 숏폼 만들기";
+      chip.innerHTML = "👤";
+      chip.title = "로그인 / 가입";
     }
   }
 

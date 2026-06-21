@@ -2523,7 +2523,8 @@
     if (clips.length) {
       const clipEls = clips.map((m, i) => {
         const w = px(palCutClipDur(m)), on = isSel("vid", i);
-        const media = m.kind === "video" ? `<video src="${m.url}" muted playsinline></video>` : `<img src="${m.url}" alt="">`;
+        // 📱 모바일 WebView 는 재생 전 <video> 첫 프레임을 안 그림 → 포스터(있으면) 이미지로, 없으면 영상 폴백(palEnsureCutPosters 가 채움)
+        const media = m.kind === "video" ? (m.poster ? `<img src="${m.poster}" alt="">` : `<video src="${m.url}" muted playsinline preload="metadata"></video>`) : `<img src="${m.url}" alt="">`;
         const hnd = on ? `<span class="es-pal-ct-h r" data-cth="r" data-lane="vid" data-idx="${i}"></span>` : "";
         return `<div class="es-pal-ct-clip ${on ? "sel" : ""}" data-ctsel="vid" data-idx="${i}" style="width:${w}px">${media}<span class="es-pal-ct-dur">${palCutClipDur(m).toFixed(1)}초</span>${hnd}</div>`;
       }).join("");
@@ -2557,6 +2558,28 @@
       <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button>
     </div>` : "";
     return `${tools}<div class="es-pal-ct"><div class="es-pal-ct-gut-wrap">${gutter}</div><div class="es-pal-ct-scroll">${inner}</div></div>`;   // 삭제=컷 사이 − · 길이=손잡이 드래그 · 영상 추가=툴바 ➕ 또는 끝+ 버튼
+  }
+  // 🖼 컷 타임라인 영상 클립 썸네일 — 모바일은 재생 전 <video> 첫 프레임을 안 그려 검정/빈칸 → 포스터(JPEG) 만들어 <img> 로 교체
+  function palEnsureCutPosters() {
+    if (!document.getElementById("esPalCutWrap")) return;   // 컷 단계(타임라인)일 때만
+    const d = E.palette && E.palette.demo; if (!d) return;
+    const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    clips.forEach((m, i) => {
+      if (!m || m.kind !== "video" || m.poster || m._posterPend || !m.blob) return;
+      m._posterPend = true;
+      blobToPreviewJpeg(m.blob, "video", 240).then((pj) => {
+        m._posterPend = false;
+        if (!pj) return;
+        try { m.poster = URL.createObjectURL(pj); } catch (_) { return; }
+        try {   // 전체 재렌더 없이 해당 클립 이미지만 교체(스크롤·선택 유지)
+          document.querySelectorAll('.es-pal-ct-clip[data-ctsel="vid"][data-idx="' + i + '"]').forEach((el) => {
+            const cur = el.querySelector("video, img");
+            const img = document.createElement("img"); img.src = m.poster; img.alt = "";
+            if (cur) cur.replaceWith(img); else el.insertBefore(img, el.firstChild);
+          });
+        } catch (_) {}
+      }).catch(() => { m._posterPend = false; });
+    });
   }
   function palAudioDur(url) { return new Promise((res) => { if (!url) return res(0); const a = document.createElement("audio"); let done = false; const fin = (d) => { if (done) return; done = true; res(d || 0); }; const to = setTimeout(() => fin(0), 6000); a.preload = "metadata"; a.onloadedmetadata = () => { clearTimeout(to); fin(isFinite(a.duration) ? a.duration : 0); }; a.onerror = () => { clearTimeout(to); fin(0); }; a.src = url; }); }
   // 🟰 컷 균등 나누기 — 사장님이 정한 '한 컷 길이(초)'로 모든 컷을 똑같이(기본 2초)
@@ -3363,7 +3386,7 @@
     const _sheetUp = _showsLive && E._palCustSheetUp === showKey;
     const custGrip = _showsLive ? `<button type="button" class="es-pal-cust-grip" id="esCustGrip" aria-label="작업창 펼치기·접기"><span class="es-pal-cust-grip-bar"></span></button>` : "";
     const canvasHtml = showFn
-      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}">${liveTop}<div class="es-pal-cust-sheet">${custGrip}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div></div>`
+      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-sheet">${custGrip}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     const realHtml = `<div class="es-pal-prev es-pal-prev-editor">
@@ -3798,6 +3821,7 @@
     palTitleDragInit();   // ✋ 칸 끌어 위치·모서리로 크기·눌러 선택
     palCutInit();         // ✂️ 컷 타임라인 — 블록 선택·길이조절(손잡이)·빼기
     try { palLivePlayInit(); } catch (_) {}   // 🎬 컷편집 단계면 미리보기를 실제 출력물처럼 타이밍 재생
+    try { palEnsureCutPosters(); } catch (_) {}   // 🖼 타임라인 영상 클립 썸네일(포스터) 채우기
     // 📱 모바일: 라이브 미리보기 영상을 명시적으로 재생(autoplay 속성만으론 iOS가 ▶ 오버레이를 띄울 때가 있어 직접 play())
     try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);

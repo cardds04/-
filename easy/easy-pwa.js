@@ -35,10 +35,10 @@
   function injectStyle() {
     if (document.getElementById("eaPwaStyle")) return;
     var css =
-      ".ea-install{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:118px;z-index:3950;" +
-      "display:none;align-items:center;gap:5px;padding:8px 12px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;" +
+      ".ea-install{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));right:47px;z-index:3950;" +
+      "display:none;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:9px;cursor:pointer;-webkit-appearance:none;" +
       "border:1px solid var(--accent,#ffd700);background:var(--accent,#ffd700);color:var(--on-accent,#1a1400);" +
-      "font-size:12px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 4px 14px rgba(0,0,0,.4)}" +
+      "font-size:15px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 3px 12px rgba(0,0,0,.35)}" +
       ".ea-install.on{display:inline-flex}.ea-install:active{transform:scale(.95)}" +
       ".ea-ios{position:fixed;inset:0;z-index:6100;display:none;align-items:flex-end;justify-content:center;padding:0}" +
       ".ea-ios.on{display:flex}.ea-ios-bd{position:absolute;inset:0;background:rgba(0,0,0,.6)}" +
@@ -64,8 +64,8 @@
     btnEl = document.createElement("button");
     btnEl.type = "button";
     btnEl.className = "ea-install";
-    btnEl.innerHTML = "📲 앱 설치";
-    btnEl.title = "홈 화면에 앱으로 추가";
+    btnEl.innerHTML = "📲";
+    btnEl.title = "앱 설치 — 홈 화면에 추가";
     btnEl.addEventListener("click", onClick);
     document.body.appendChild(btnEl);
     return btnEl;
@@ -79,8 +79,8 @@
   function positionBtn() {
     if (!btnEl) return;
     var chip = document.getElementById("eaChip");
-    if (chip && getComputedStyle(chip).display !== "none") btnEl.style.right = (chip.offsetWidth + 24) + "px";   // 계정칩 왼쪽
-    else btnEl.style.right = "12px";
+    if (chip && getComputedStyle(chip).display !== "none") btnEl.style.right = (chip.offsetWidth + 17) + "px";   // 계정칩 왼쪽(7px 간격)
+    else btnEl.style.right = "10px";
   }
   function refresh() {
     if (!wanted || !btnEl) return;
@@ -186,13 +186,13 @@
   function injectStyle() {
     if (document.getElementById("eaUpStyle")) return;
     var css =
-      ".ea-update{position:fixed;left:50%;transform:translateX(-50%);top:calc(8px + env(safe-area-inset-top,0px));z-index:6300;" +
-      "display:none;align-items:center;gap:7px;padding:10px 16px;border-radius:9999px;cursor:pointer;-webkit-appearance:none;border:none;" +
-      "background:#ff7a3d;color:#fff;font-size:13px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 6px 20px rgba(0,0,0,.45);" +
+      ".ea-update{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));right:84px;z-index:6300;" +
+      "display:none;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:9px;cursor:pointer;-webkit-appearance:none;border:none;" +
+      "background:#ff7a3d;color:#fff;font-size:15px;font-weight:900;font-family:var(--font-body,inherit);box-shadow:0 4px 14px rgba(255,122,61,.5);" +
       "animation:eaUpPulse 1.7s ease-in-out infinite}" +
-      ".ea-update.on{display:inline-flex}.ea-update:active{transform:translateX(-50%) scale(.95)}" +
+      ".ea-update.on{display:inline-flex}.ea-update:active{transform:scale(.95)}" +
       ".ea-update:disabled{opacity:.7;animation:none}" +
-      "@keyframes eaUpPulse{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.45)}50%{box-shadow:0 6px 28px rgba(255,122,61,.75)}}";
+      "@keyframes eaUpPulse{0%,100%{box-shadow:0 4px 14px rgba(255,122,61,.5)}50%{box-shadow:0 0 0 4px rgba(255,122,61,.35),0 4px 16px rgba(255,122,61,.7)}}";
     var st = document.createElement("style"); st.id = "eaUpStyle"; st.textContent = css; document.head.appendChild(st);
   }
   function ensureBtn() {
@@ -200,7 +200,7 @@
     if (btn) return btn;
     btn = document.createElement("button");
     btn.type = "button"; btn.className = "ea-update";
-    btn.innerHTML = "🔄 새 버전 — 업데이트";
+    btn.innerHTML = "🔄"; btn.title = "새 버전 — 눌러서 업데이트";
     btn.addEventListener("click", doUpdate);
     document.body.appendChild(btn);
     return btn;
@@ -208,7 +208,7 @@
   function showBtn() { if (shown) return; shown = true; ensureBtn().classList.add("on"); }
 
   function doUpdate() {
-    if (btn) { btn.disabled = true; btn.innerHTML = "⏳ 업데이트 중…"; }
+    if (btn) { btn.disabled = true; btn.innerHTML = "⏳"; }
     var fresh = function () { try { location.replace(location.pathname + "?fresh=" + Date.now()); } catch (e) { try { location.reload(); } catch (_) {} } };
     var jobs = [];
     try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) {}
