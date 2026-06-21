@@ -1685,7 +1685,7 @@
         }
         case "length":  body = `<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P)}</div>`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
-        case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
+        case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "music": {   // 🎵 배경음악 고르기(선택 전용) — 소리 조절은 다음 'musicvol' 단계
           const sel = d.musicSel;
@@ -2454,6 +2454,7 @@
     const tools = (clips.length && !opts.noTools) ? `<div class="es-pal-ct-tools">
       <button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트를 분석해 컷을 리듬에 맞춰 끊어요">🥁 AI 리듬</button>
       <select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tempoSel}</select>
+      <label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label>
       <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button>
     </div>` : "";
     return `${tools}<div class="es-pal-ct"><div class="es-pal-ct-gut-wrap">${gutter}</div><div class="es-pal-ct-scroll">${inner}</div></div><button type="button" class="es-pal-ct-addmore" data-ctaddclip>🎬 영상 더 추가하기</button>`;   // 삭제=컷 사이 − · 길이=손잡이 드래그 · 영상 끝+/아래 버튼으로 더 추가
@@ -2499,21 +2500,27 @@
         cuts.push(Math.max(cuts[i] + 0.3, best));
       }
       clips.forEach((m, i) => { m.dur = Math.max(0.3, +(cuts[i + 1] - cuts[i]).toFixed(2)); });
-      // 🎙 나레이션이 잘리지 않게 — 컷 합이 나레이션(영상 시작 1초 뒤부터)보다 짧으면 비율대로 늘려서 나레이션 길이를 덮음
       const voiceTotal = (d.voiceUrl && d.voiceDur > 0.3) ? (d.voiceDur + PAL_VOICE_DELAY) : 0;
-      let fitted = false;
-      if (voiceTotal > 0) {
-        const total = clips.reduce((a, m) => a + (m.dur || 0), 0);
-        if (total > 0.3 && total < voiceTotal - 0.05) { const scale = voiceTotal / total; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); fitted = true; }
-      }
-      // 🕒 끝 여유 — 마지막 자막/나레이션이 끝난 뒤 최소 3초는 남겨 '툭 끊김' 방지(마지막 컷을 그만큼 늘림)
       const _capEnd = (d.captions || []).filter((c) => (c.text || "").trim()).reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
-      const _needEnd = Math.max(voiceTotal, _capEnd) + 3;
-      const _curTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
-      if (_curTotal < _needEnd - 0.05 && clips.length) { const _last = clips[clips.length - 1]; _last.dur = Math.max(0.3, +((_last.dur || 0) + (_needEnd - _curTotal)).toFixed(2)); }
+      const _content = Math.max(voiceTotal, _capEnd);   // 자막(없으면 나레이션)이 끝나는 시점
+      let fitMode = "";
+      if (curBeatFit() && _content > 0.3) {
+        // 📝 자막에 맞추기(기본) — 총 길이를 '자막 끝 + 3초'로 고정하고, 그 안에서 리듬 비율 그대로 컷을 나눔
+        const fitTotal = _content + 3, natTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
+        if (natTotal > 0.3) { const scale = fitTotal / natTotal; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); }
+        fitMode = "cap";
+      } else {
+        // 🎙 리듬 그대로 — 단 나레이션이 잘리면 비율대로 늘리고(잘림 방지), 끝 3초 여유는 마지막 컷으로 채움
+        if (voiceTotal > 0) {
+          const total = clips.reduce((a, m) => a + (m.dur || 0), 0);
+          if (total > 0.3 && total < voiceTotal - 0.05) { const scale = voiceTotal / total; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); fitMode = "voice"; }
+        }
+        const _needEnd = _content + 3, _curTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
+        if (_content > 0.3 && _curTotal < _needEnd - 0.05 && clips.length) { const _last = clips[clips.length - 1]; _last.dur = Math.max(0.3, +((_last.dur || 0) + (_needEnd - _curTotal)).toFixed(2)); }
+      }
       const durs = clips.map((m) => m.dur), uniq = new Set(durs.map((x) => x.toFixed(1)));
       palDraftSave(); renderPalette();
-      try { toast(fitted ? `음악 리듬에 맞춰 ${clips.length}컷 — 나레이션(${voiceTotal.toFixed(1)}초)에 맞게 늘렸어요` : (uniq.size <= 1 ? `리듬이 일정한 음악이라 컷이 비슷해요 (약 ${Math.round(60 / Pd)}BPM)` : `음악 리듬에 맞춰 ${clips.length}컷을 끊었어요 (약 ${Math.round(60 / Pd)}BPM)`)); } catch (_) {}
+      try { toast(fitMode === "cap" ? `자막에 맞춰 총 ${(_content + 3).toFixed(1)}초로 ${clips.length}컷을 리듬대로 나눴어요` : (fitMode === "voice" ? `음악 리듬에 맞춰 ${clips.length}컷 — 나레이션(${voiceTotal.toFixed(1)}초)에 맞게 늘렸어요` : (uniq.size <= 1 ? `리듬이 일정한 음악이라 컷이 비슷해요 (약 ${Math.round(60 / Pd)}BPM)` : `음악 리듬에 맞춰 ${clips.length}컷을 끊었어요 (약 ${Math.round(60 / Pd)}BPM)`))); } catch (_) {}
     } catch (e) { console.warn("[easyshorts] palCutBeat", e); try { toast("리듬 분석 실패: " + ((e && e.message) || e)); } catch (_) {} }
     finally { if (btn) { btn.disabled = false; btn.textContent = old || "🥁 AI 리듬"; } }
   }
@@ -2605,6 +2612,7 @@
     $$(".es-pal-ct-h").forEach((h) => h.addEventListener("pointerdown", palCutDragStart));
     $$("[data-cttool]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.cttool; if (k === "even") palCutEven(); else if (k === "beat") palCutBeat(b); else if (k === "trim") palCutTrimSilence(); }));
     { const tp = $("[data-cttempo]"); if (tp) tp.addEventListener("change", (e) => { try { setBeatTempo(e.target.value); } catch (_) {} }); }
+    { const fc = $("[data-ctfitcap]"); if (fc) fc.addEventListener("change", (e) => { try { setBeatFit(e.target.checked); } catch (_) {} }); }   // 📝 자막에 맞추기 토글
     { const es = $("[data-ctevensec]"); if (es) es.addEventListener("change", (e) => { const v = setPalEvenSec(e.target.value); e.target.value = v; }); }   // 컷 균등 '초' 지정(기본 2)
   }
   // 📹 영상 찍기 — 앱 안에서 카메라로 바로 녹화(getUserMedia + MediaRecorder). 다 찍으면 onDone(File) 호출(취소면 null). localhost/https 필요.
@@ -9506,6 +9514,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   const BEAT_TEMPO = { vfast: 0.5, fast: 1, mid: 2, slow: 4, vslow: 8 };
   function curBeatTempo() { let v = E.beatTempo; if (!v) { try { v = localStorage.getItem("es_beat_tempo") || ""; } catch (_) {} } return BEAT_TEMPO[v] ? v : "mid"; }
   function setBeatTempo(v) { if (!BEAT_TEMPO[v]) return; E.beatTempo = v; try { localStorage.setItem("es_beat_tempo", v); } catch (_) {} }
+  // 📝 자막에 맞추기 — AI 리듬 컷의 총 길이를 '자막 끝 + 3초'로 맞춤(기본 켜짐). localStorage es_beat_fitcap("1"/"0")
+  function curBeatFit() { let v = E._beatFit; if (v == null) { try { const s = localStorage.getItem("es_beat_fitcap"); v = (s == null) ? true : (s === "1"); } catch (_) { v = true; } } return v !== false; }
+  function setBeatFit(v) { v = !!v; E._beatFit = v; try { localStorage.setItem("es_beat_fitcap", v ? "1" : "0"); } catch (_) {} }
   // fal.ai 첫·끝 프레임 영상 생성 — 브라우저에서 직접 호출(Authorization: Key)
   async function falTransformVideo(engineKey, beforeUri, afterUri, prompt, fk, ar, onProgress) {
     const model = VID_ENGINES[engineKey] && VID_ENGINES[engineKey].fal;
