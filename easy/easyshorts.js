@@ -1693,7 +1693,7 @@
           if (!allTr) listHtml = `<div class="es-pal-mus-loading" id="esPalMusLoad">불러오는 중…</div>`;
           else if (!allTr.length) listHtml = `<div class="es-pal-tgen-noref">저장한 음악이 아직 없어요 — 관리자 '🎵 노래 올리기'에서 추가하세요</div>`;
           else if (!tracks.length) listHtml = `<div class="es-pal-tgen-noref">이 빠르기의 음악이 없어요 — 다른 빠르기를 골라보세요</div>`;
-          else listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => `<div class="es-pal-mus-item ${sel && sel.id === t.id ? "sel" : ""}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span><button type="button" class="es-pal-mus-pick" data-muspick="${esc(t.id)}">${sel && sel.id === t.id ? "✓ 선택됨" : "선택"}</button></div>`).join("")}</div>`;
+          else { palMusLoadDur(tracks); listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => { const _s = sel && sel.id === t.id; const _du = (E._palMusDur && E._palMusDur[t.id]) ? palMusFmt(E._palMusDur[t.id]) : ""; return `<div class="es-pal-mus-item${_s ? " sel" : ""}" data-muspick="${esc(t.id)}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span>${_s ? '<span class="es-pal-mus-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ""}<span class="es-pal-mus-dur">${_du}</span></div>`; }).join("")}</div>`; }
           body = `<div class="es-pal-mus-lb">🎵 배경음악 고르기</div>
             <button type="button" class="es-pal-mus-none ${!sel ? "sel" : ""}" data-muspick="none">🔇 음악 안 깔기 (고르지 않기)</button>
             <div class="es-pal-mus-sechd">📚 저장한 음악 <span class="es-pal-tref-hint">빠르기로 골라요</span></div>
@@ -3472,7 +3472,7 @@
     if ($("#esPalMusLoad") && !E._palMusicTracks && !E._palMusicLoading) { E._palMusicLoading = true; fetch(easyAudioEndpoint(), { cache: "no-store" }).then((r) => r.json()).then((j) => { E._palMusicTracks = (j && j.tracks) || []; E._palMusicLoading = false; renderPalette(); }).catch(() => { E._palMusicTracks = []; E._palMusicLoading = false; renderPalette(); }); }
     $$("#esBody [data-mustempo]").forEach((b) => b.addEventListener("click", () => { E._palMusicTempo = b.dataset.mustempo; renderPalette(); }));   // 🎵 빠르기 필터
     $$("#esBody [data-muspick]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.muspick; const dm = E.palette.demo; if (v === "none") { dm.musicUrl = ""; dm.musicSel = null; } else { const t = (E._palMusicTracks || []).find((x) => x.id === v); if (t) { dm.musicUrl = t.url; dm.musicSel = { id: t.id, name: t.name, url: t.url }; } } try { palDraftSave(); } catch (_) {} renderPalette(); }));
-    $$("#esBody [data-musplay]").forEach((b) => b.addEventListener("click", () => palMusPreview(b.dataset.musplay, b)));
+    $$("#esBody [data-musplay]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palMusPreview(b.dataset.musplay, b); }));   // ▶는 재생만(줄 선택 안 됨)
     $$("#esBody [data-musmix]").forEach((b) => b.addEventListener("click", () => { E._palMusicMix = b.dataset.musmix === "1"; renderPalette(); }));
     [["esPalVolOrig", "origVol"], ["esPalVolVoice", "voiceVol"], ["esPalVolMusic", "musicVol"]].forEach((pair) => { const el = $("#" + pair[0]); if (el) el.addEventListener("input", () => { E.palette.demo[pair[1]] = +el.value; const bb = el.parentElement.querySelector("b"); if (bb) bb.textContent = el.value; try { palPlayApplyVolumes(); } catch (_) {} clearTimeout(E._palVolT); E._palVolT = setTimeout(() => { try { palDraftSave(); } catch (_) {} }, 300); }); });
     $$("#esBody [data-rmref]").forEach((b) => b.addEventListener("click", (e) => {   // 글씨박스에서 삭제(영구) — 현재 종류
@@ -10985,6 +10985,16 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (wasOn) return;
     const a = new Audio(url); a.volume = 0.85; try { a.play(); } catch (_) {} E._palMusPrev = a;
     if (btn) { btn.classList.add("on"); btn.textContent = "⏸"; a.onended = () => { try { btn.classList.remove("on"); btn.textContent = "▶"; } catch (_) {} }; }
+  }
+  function palMusFmt(s) { s = Math.round(s || 0); if (!s) return ""; const m = Math.floor(s / 60), ss = s % 60; return m + ":" + (ss < 10 ? "0" : "") + ss; }   // 초 → m:ss
+  // 🎵 곡 재생시간을 메타데이터만 가볍게 불러와 표시(서버 트랙엔 길이 없음). 캐시 E._palMusDur, 로드되면 한 번 재렌더.
+  function palMusLoadDur(tracks) {
+    E._palMusDur = E._palMusDur || {};
+    (tracks || []).forEach((t) => {
+      if (!t || !t.url || E._palMusDur[t.id] !== undefined) return;
+      E._palMusDur[t.id] = 0;
+      try { const a = new Audio(); a.preload = "metadata"; a.muted = true; a.src = t.url; a.addEventListener("loadedmetadata", () => { E._palMusDur[t.id] = isFinite(a.duration) ? a.duration : 0; clearTimeout(E._palMusDurT); E._palMusDurT = setTimeout(() => { if (E.view === "palette") renderPalette(); }, 350); }); a.addEventListener("error", () => {}); } catch (_) {}
+    });
   }
   // 🤖 팔레트 AI 자막 생성 — 주제 프롬프트 → Claude(easy-narration generate)로 칸 수만큼 자막 문구 → 각 칸에 채우고 입력화면으로
   async function palCaptionAI(btn, maxChars) {
