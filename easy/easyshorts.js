@@ -1541,7 +1541,7 @@
         case "media": {
           const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
           const inner = list.length
-            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted playsinline></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoShootBtn">📹 찍기</button><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
+            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted autoplay loop playsinline preload="auto"></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoShootBtn">📹 찍기</button><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
             : `<div class="es-pal-scr-twin">
                  <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half" id="esDemoShootBtn"><span class="es-pal-scr-btn-ic">📹</span><span class="es-pal-scr-btn-t">영상 찍기</span><span class="es-pal-scr-btn-s">카메라로 바로 촬영</span></button>
                  <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half ghost" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 첨부</span><span class="es-pal-scr-btn-s">여러 개 한꺼번에 OK</span></button>
@@ -2823,10 +2823,30 @@
     return true;
   }
   function palRefsIdbKey(kind) { return ((kind || E._palEditKind || "title") === "caption") ? "palCaptionRefLib" : "palTitleRefLib"; }
-  async function savePalRefs(kind) { const arr = palRefsArr(kind); try { await idbSet(palRefsIdbKey(kind), arr.map((r) => ({ id: r.id, dataUrl: r.dataUrl, name: r.name, text: r.text != null ? r.text : null, font: r.font || null, color: r.color || null, stroke: (r.stroke != null && r.stroke !== "#111111") ? r.stroke : null, kind: r.kind || null, posX: r.posX != null ? r.posX : null, posY: r.posY != null ? r.posY : null, size: r.size != null ? r.size : null, bg: r.bg || null, opacity: r.opacity != null ? r.opacity : null, align: r.align || null, bgStyle: r.bgStyle || null, bgPadX: r.bgPadX != null ? r.bgPadX : null, bgPadY: r.bgPadY != null ? r.bgPadY : null, start: r.start != null ? r.start : null, dur: r.dur !== undefined ? r.dur : null, letterSpacing: r.letterSpacing || 0, lineHeight: r.lineHeight || 1.22, italic: !!r.italic, bold: !!r.bold, shadow: r.shadow ? Object.assign({}, r.shadow) : null, animIn: r.animIn || "none", animOut: r.animOut || "none", slots: Array.isArray(r.slots) ? r.slots : null }))); } catch (_) {} }
-  async function loadPalTitleRefs() {   // 둘 다 불러오기(1회)
+  async function savePalRefs(kind) {
+    const arr = palRefsArr(kind);
+    const clean = arr.map((r) => ({ id: r.id, dataUrl: r.dataUrl, name: r.name, text: r.text != null ? r.text : null, font: r.font || null, color: r.color || null, stroke: (r.stroke != null && r.stroke !== "#111111") ? r.stroke : null, kind: r.kind || null, posX: r.posX != null ? r.posX : null, posY: r.posY != null ? r.posY : null, size: r.size != null ? r.size : null, bg: r.bg || null, opacity: r.opacity != null ? r.opacity : null, align: r.align || null, bgStyle: r.bgStyle || null, bgPadX: r.bgPadX != null ? r.bgPadX : null, bgPadY: r.bgPadY != null ? r.bgPadY : null, start: r.start != null ? r.start : null, dur: r.dur !== undefined ? r.dur : null, letterSpacing: r.letterSpacing || 0, lineHeight: r.lineHeight || 1.22, italic: !!r.italic, bold: !!r.bold, shadow: r.shadow ? Object.assign({}, r.shadow) : null, animIn: r.animIn || "none", animOut: r.animOut || "none", slots: Array.isArray(r.slots) ? r.slots : null }));
+    try { await idbSet(palRefsIdbKey(kind), clean); } catch (_) {}
+    // ☁️ 서버에도 동기화 — 다른 기기·고객 폰에서도 이 글씨박스/스타일이 보이게(관리자만). 실패해도 로컬은 저장됨.
+    try { const k = easyAdminKey(); if (k) { const cap = (kind || E._palEditKind || "title") === "caption"; const body = { action: "saverefs", key: k }; body[cap ? "captionRefs" : "titleRefs"] = clean; fetch(EASY_TPL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {}); } } catch (_) {}
+  }
+  async function loadPalTitleRefs() {   // 둘 다 불러오기(1회). 로컬에 없으면(다른 기기·고객 폰) 서버에서 받아옴.
     try { const a = await idbGet("palTitleRefLib"); E.palTitleRefs = Array.isArray(a) ? a : []; } catch (_) { E.palTitleRefs = []; }
     try { const b = await idbGet("palCaptionRefLib"); E.palCaptionRefs = Array.isArray(b) ? b : []; } catch (_) { E.palCaptionRefs = []; }
+    // ☁️ 로컬에 글씨박스/스타일이 비어 있으면 서버에서 받아 채움(1회) — 관리자가 다른 기기서 만든 것·고객 폰에서 보이게
+    if (!E._palRefsServerTried && (!E.palTitleRefs.length || !E.palCaptionRefs.length)) {
+      E._palRefsServerTried = true;
+      try {
+        const r = await fetch(EASY_TPL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "getrefs" }) });
+        const j = await r.json().catch(() => null);
+        if (j && j.ok) {
+          if (!E.palTitleRefs.length && Array.isArray(j.titleRefs) && j.titleRefs.length) { E.palTitleRefs = j.titleRefs; try { await idbSet("palTitleRefLib", j.titleRefs); } catch (_) {} }
+          if (!E.palCaptionRefs.length && Array.isArray(j.captionRefs) && j.captionRefs.length) { E.palCaptionRefs = j.captionRefs; try { await idbSet("palCaptionRefLib", j.captionRefs); } catch (_) {} }
+        }
+      } catch (_) {}
+    }
+    // ☁️ 관리자 기기에 이미 만들어둔 글씨박스를 서버에 1회 올림(이 기능 추가 '전'에 저장한 것도 폰·고객이 보이게)
+    try { const k = easyAdminKey(); if (k && !E._palRefsPushedUp && (E.palTitleRefs.length || E.palCaptionRefs.length)) { E._palRefsPushedUp = true; if (E.palTitleRefs.length) savePalRefs("title"); if (E.palCaptionRefs.length) savePalRefs("caption"); } } catch (_) {}
   }
   async function savePalTitleRefs() { return savePalRefs(); }   // 현재 종류 저장(이전 호출 호환)
   // 관리자가 미리보기에서 끌어 옮긴 위치·크기를 '선택된 참조'에 그대로 저장(=고객이 그 배치 그대로 씀)
@@ -3700,6 +3720,8 @@
     palTitleDragInit();   // ✋ 칸 끌어 위치·모서리로 크기·눌러 선택
     palCutInit();         // ✂️ 컷 타임라인 — 블록 선택·길이조절(손잡이)·빼기
     try { palLivePlayInit(); } catch (_) {}   // 🎬 컷편집 단계면 미리보기를 실제 출력물처럼 타이밍 재생
+    // 📱 모바일: 라이브 미리보기 영상을 명시적으로 재생(autoplay 속성만으론 iOS가 ▶ 오버레이를 띄울 때가 있어 직접 play())
+    try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
     const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { (P.demo && P.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
