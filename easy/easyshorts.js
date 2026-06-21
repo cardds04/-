@@ -1385,7 +1385,7 @@
   }
   function easyBotBack() {
     try { stopPlay(); } catch (_) {}
-    if (E.view === "palette") { setView("admin"); return; }   // 팔레트 → 관리자
+    if (E.view === "palette") { setView(E._palCustomerMode ? "gallery" : "admin"); return; }   // 팔레트 → (고객 사용 중이면 갤러리, 아니면 관리자)
     if (E.view === "admin") { easyBotHome(); return; }          // 관리자 → 홈
     if (E.using) {
       if ((E.easyIdx || 0) > 0) { E.easyIdx -= 1; scheduleSaveMeta(); renderEasy(); }   // 마법사 한 단계 뒤로
@@ -1420,7 +1420,7 @@
     try { palPlayStop(); } catch (_) {}   // 🎬 컷편집 미리보기 재생(소리) — 화면 바꾸면 정지
     if (E.view === "palette" && view !== "palette") {   // 팔레트 떠날 때 ✏️수정·🧪테스트 모드면 새 드래프트 복원(저장 안 했어도 원래대로)
       if (E._palEditingTid) { try { E.palette = E._palEditBackup || null; } catch (_) {} E._palEditBackup = null; E._palEditingTid = null; }
-      if (E._palTestMode) { E._palTestMode = false; try { E.palette = E._palTestBackup || null; } catch (_) {} E._palTestBackup = null; }
+      if (E._palTestMode || E._palCustomerMode) { E._palTestMode = false; E._palCustomerMode = false; try { E.palette = E._palTestBackup || null; } catch (_) {} E._palTestBackup = null; }
     }
     E.view = view;
     try { document.body.classList.toggle("es-cust", E.mode2 === "easy"); } catch (_) {}   // 📱 고객(이지) 모드에서만 하단 네비 표시
@@ -3032,7 +3032,7 @@
   }
   // 💾 작업 중인 팔레트를 IndexedDB에 자동 저장(나갔다 와도 그대로). blob/dataUrl 포함(structured clone).
   function palDraftSave() {
-    if (E._palTestMode || E._palEditingTid) return;   // 🧪 테스트·✏️수정 중엔 드래프트(새 작업본) 건드리지 않음
+    if (E._palTestMode || E._palEditingTid || E._palCustomerMode) return;   // 🧪 테스트·✏️수정·🙋고객사용 중엔 드래프트(새 작업본) 건드리지 않음
     clearTimeout(E._palDraftT);
     E._palDraftT = setTimeout(async () => {
       const P = E.palette; if (!P) return; const d = P.demo || {};
@@ -3133,6 +3133,14 @@
     try { (E.palette && E.palette.demo && E.palette.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {}   // 테스트 중 넣은 영상 정리
     E.palette = E._palTestBackup || null; E._palTestBackup = null;
     setView("admin");
+  }
+  // 🙋 고객이 '게시된 팔레트 템플릿' 사용 화면에서 나가기 → 갤러리(목록). 작업본(palDraft) 복원.
+  function palCustExit() {
+    E._palCustomerMode = false; E._palCustSheetUp = null;
+    try { if (E._palMusPrev) { E._palMusPrev.pause(); E._palMusPrev = null; } } catch (_) {}   // 음악 미리듣기 멈춤
+    try { (E.palette && E.palette.demo && E.palette.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {}
+    E.palette = E._palTestBackup || null; E._palTestBackup = null;
+    setView("gallery");
   }
   // ✏️ 수정하기 — 템플릿의 단계(_paletteSteps)를 이지숏폼 생성기(팔레트)로 불러와 고치고 💾 저장하면 덮어씀
   function palEditTemplate(tid) {
@@ -3244,7 +3252,7 @@
     const _sheetUp = _showsLive && E._palCustSheetUp === showKey;
     const custGrip = _showsLive ? `<button type="button" class="es-pal-cust-grip" id="esCustGrip" aria-label="작업창 펼치기·접기"><span class="es-pal-cust-grip-bar"></span></button>` : "";
     const canvasHtml = showFn
-      ? `<div class="es-pal-prev"><div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div><div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}">${liveTop}<div class="es-pal-cust-sheet">${custGrip}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div></div>`
+      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}">${liveTop}<div class="es-pal-cust-sheet">${custGrip}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     const realHtml = `<div class="es-pal-prev es-pal-prev-editor">
@@ -3257,8 +3265,10 @@
     const editorZone = _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
-    body.innerHTML = E._palTestMode
-      ? `<div class="es-pal-test"><div class="es-pal-test-bar"><span class="es-pal-test-lb">🧪 테스트 — 고객이 보는 화면 그대로 <small>(저장 안 됨)</small></span><button type="button" class="es-pal-test-exit" id="esPalTestExit">✕ 나가기</button></div><div class="es-pal-test-stage">${canvasHtml}</div></div>`
+    body.innerHTML = (E._palTestMode || E._palCustomerMode)
+      ? `<div class="es-pal-test${E._palCustomerMode ? " es-pal-cust-use" : ""}">${E._palCustomerMode
+          ? `<div class="es-pal-test-bar es-pal-cust-usebar"><span class="es-pal-test-lb">⚡ ${esc(P.name || "이지숏폼")}</span><button type="button" class="es-pal-test-exit" id="esPalCustExit">✕ 나가기</button></div>`
+          : `<div class="es-pal-test-bar"><span class="es-pal-test-lb">🧪 테스트 — 고객이 보는 화면 그대로 <small>(저장 안 됨)</small></span><button type="button" class="es-pal-test-exit" id="esPalTestExit">✕ 나가기</button></div>`}<div class="es-pal-test-stage">${canvasHtml}</div></div>`
       : `
       <div class="es-palette">
         <div class="es-pal-head">
@@ -3288,6 +3298,7 @@
         </div>
       </div>`;
     const _tExit = $("#esPalTestExit"); if (_tExit) _tExit.addEventListener("click", palTestExit);   // 🧪 테스트 나가기 → 관리자 + 드래프트 복원
+    const _cuExit = $("#esPalCustExit"); if (_cuExit) _cuExit.addEventListener("click", palCustExit);   // 🙋 고객 템플릿 사용 나가기 → 갤러리
     const add = $("#esPalAdd"); if (add) add.addEventListener("click", () => { P.preview = null; P.steps.push({ id: uid(), fn: null }); P.sel = P.steps.length - 1; renderPalette(); });
     const _funcTog = $("#esPalFuncToggle"); if (_funcTog) _funcTog.addEventListener("click", () => { E._palFuncCollapsed = !E._palFuncCollapsed; renderPalette(); });
     $$("#esPalSteps .es-pal-step").forEach((el) => {
@@ -4930,6 +4941,22 @@
     // 🔐 제작(생성)은 로그인 필요 — 비로그인 시 회원가입/로그인 모달. 단, 🧪 테스트(opts.test)는 관리자 미리체험이라 로그인 생략
     if (!opts.test && window.EasyAuth && mode !== "detail" && !window.EasyAuth.requireLogin(() => startFromTemplate(tplId, mode))) return;
     const t = E.templates.find((x) => x.id === tplId) || (E.published || []).find((x) => x.id === tplId); if (!t) return;   // 기본 템플릿(로컬) 또는 게시된 템플릿(서버) 둘 다에서 찾음
+    // 🎨 이지숏폼 생성기(팔레트)로 만든 템플릿 → 고객 '단계 플로우' 화면으로 실행(옛 renderEasy 화면 아님).
+    //    로컬 템플릿은 t._paletteSteps, 게시본은 단계가 서버 cats(clsMap)로 옴. cats 미로드면 한 번 받아 재확인.
+    let _palSteps = (t._paletteSteps && t._paletteSteps.length) ? t._paletteSteps : ((((typeof clsMap === "function" && clsMap()) || {})[tplId] || {}).paletteSteps || null);
+    if (!_palSteps && !t._paletteSteps && !(E._serverCats && Object.keys(E._serverCats).length)) {
+      try { await loadPublished(); _palSteps = ((((typeof clsMap === "function" && clsMap()) || {})[tplId] || {}).paletteSteps || null); } catch (_) {}
+    }
+    if (_palSteps && _palSteps.length) {
+      await clearSession(); E.editing = null;
+      const steps = _palSteps.map((s) => ({ id: uid(), fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null }));
+      E._palTestBackup = E.palette || null; E._palCustSheetUp = null;
+      E._palTestMode = false; E._palCustomerMode = true;   // 🙋 고객 풀스크린 깔끔 뷰(테스트 바·관리자 문구 없음) + 작업본(palDraft) 보호
+      E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, demo: { media: [], title: "", caption: "" } };
+      E.mode2 = "easy";
+      setView("palette");
+      return;
+    }
     await clearSession();
     E.editing = null;
     const tpl = JSON.parse(JSON.stringify(t));
@@ -5175,11 +5202,13 @@
       if (!j || !j.ok) { alert("게시 실패: " + ((j && j.error) || ("HTTP " + r.status))); return false; }
       // 🎬 타이틀·나레이션은 서버 템플릿 행에 칸이 없음 → 분류맵(cats)으로 고객에 전달(디테일숏폼과 같은 경로). 팔레트/기본 템플릿만 해당.
       try {
-        if (t._wantTitle || t.narrate) {
+        if (t._wantTitle || t.narrate || t._palette) {
           if (!(E._serverCats && Object.keys(E._serverCats).length)) { try { await loadPublished(); } catch (_) {} }
           const m = clsMap(); const cur = Object.assign({}, m[t.id]);
           if (t.narrate) cur.narrate = true; else delete cur.narrate;
           if (t._wantTitle) { if (!cur.titleStyle && !cur.titlePrompt && !cur.titleRef) cur.titleStyle = "movie"; }
+          if (t._palette && t._paletteSteps && t._paletteSteps.length) { cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; }   // 🎨 팔레트 단계를 cats로 전달(서버 템플릿 행엔 칸 없음) → 고객이 단계 플로우로 열 수 있게
+          else { delete cur.palette; delete cur.paletteSteps; }
           m[t.id] = cur; clsMapSave(m);
           await clsServerSave();
         }
