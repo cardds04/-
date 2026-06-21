@@ -1685,7 +1685,7 @@
         }
         case "length":  body = `<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P)}</div>`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
-        case "cutbeat": { const tsel = ["fast:빠르게", "mid:중간", "slow:느리게"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
+        case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "music": {   // 🎵 배경음악 고르기(선택 전용) — 소리 조절은 다음 'musicvol' 단계
           const sel = d.musicSel;
@@ -1886,37 +1886,54 @@
     }
     const c = { maxT, lite, tiles, clockNum, bar, vid, playhead, ctScroll, audios, playing: false, base: 0, t0: 0, timer: 0, PPS: PAL_CT_PPS, mediaEl, playClips, curClip: 0 };
     c.voiceDelay = PAL_VOICE_DELAY; c.voiceA = audios.find((a) => a._kind === "voice") || null;   // 🎙 나레이션은 1초 뒤부터 — tick이 시점 맞춰 켬
-    // 🎬 컷 전환 깜빡임 방지(모바일 안전) — 영상은 '1장'만 사용. (모바일/아이폰은 영상 2개 동시재생을 막아서, 더블버퍼는 숨은 영상이 프레임을 못 만들어 오히려 검은화면이 컷마다 깜빡였음.) 전환 순간엔 '직전 프레임'을 캔버스에 떠서 영상 위에 덮어 로딩 중 검은 배경을 가리고, 새 컷의 첫 프레임이 그려지면 덮개를 치움.
+    // 🎬 컷 전환을 부드럽게 — 영상 2장(A·B)을 번갈아 쓰고, 다음 컷을 '숨은' 쪽에 미리 로드해 전환이 즉시. ⚠️모바일 안전: '한 번에 하나만 재생'(다음 켜기 전에 이전을 멈춤 → 동시재생 금지), 그리고 전환 중엔 직전 프레임을 캔버스 덮개로 가려 검은화면 0. (미리로드가 안 되는 환경이면 덮개가 로딩 동안 가려 — 끊겨도 검은화면은 없음.)
     const _multiVid = playClips.length > 1 && mediaEl && mediaEl.tagName === "VIDEO";
     if (_multiVid) {
       let cover = mediaEl.parentElement.querySelector("canvas.es-pal-real-cover");
       if (!cover) { try { cover = document.createElement("canvas"); cover.className = "es-pal-real-cover"; mediaEl.parentElement.insertBefore(cover, mediaEl.nextSibling); } catch (_) { cover = null; } }
-      if (cover) { cover.style.opacity = "0"; c.cover = cover; }
+      let bufB = mediaEl.parentElement.querySelector("video.es-pal-real-mediabuf");
+      if (!bufB) { try { bufB = mediaEl.cloneNode(false); bufB.classList.add("es-pal-real-mediabuf"); bufB.removeAttribute("src"); bufB.removeAttribute("autoplay"); mediaEl.parentElement.insertBefore(bufB, mediaEl.nextSibling); } catch (_) { bufB = null; } }
+      if (cover) { cover.style.opacity = "0"; c.cover = cover; }   // 덮개가 맨 위(가장 마지막 DOM)
       mediaEl.style.opacity = "1";
+      if (bufB) { try { bufB.muted = mediaEl.muted; bufB.volume = mediaEl.volume; } catch (_) {} bufB.style.opacity = "0"; c.bufs = [mediaEl, bufB]; c.activeBuf = 0; }
     }
-    c.showClip = (idx) => {   // 컷에 맞춰 미리보기 영상 전환(영상 1장 + 캔버스 덮개)
+    c.preloadNext = (i) => {   // 다음 컷을 숨은 버퍼에 미리 로드(재생은 안 함)
+      if (!c.bufs || c.bufs.length !== 2) return; const cm = c.playClips[i]; if (!cm || !cm.url || cm.kind !== "video") return;
+      const sp = c.bufs[1 - c.activeBuf]; try { if (sp.getAttribute("src") !== cm.url) { sp.src = cm.url; sp.load(); } } catch (_) {}
+    };
+    c.showClip = (idx) => {   // 컷에 맞춰 미리보기 영상 전환
       const cm = c.playClips[idx]; if (!cm || !cm.url) return;
-      const el = c.mediaEl; if (!el) return;
       const isVid = cm.kind === "video";
-      if (isVid && el.tagName === "VIDEO") {
-        if (el.getAttribute("src") === cm.url) { try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} return; }
-        const cov = c.cover;
-        // 1) 직전 프레임을 덮개 캔버스에 떠서 영상 위에 깔기 → 로딩 중 검은 배경을 가림
-        if (cov) { try { if (el.videoWidth > 0) { cov.width = el.videoWidth; cov.height = el.videoHeight; cov.getContext("2d").drawImage(el, 0, 0, cov.width, cov.height); cov.style.opacity = "1"; } } catch (_) {} }
-        const hideCover = () => { if (cov && el.readyState >= 2) cov.style.opacity = "0"; };   // 영상이 프레임을 가질 때만 치움(미준비 상태로 치우면 검은화면)
-        // 2) 새 컷 로드 → 0초부터 재생 → 첫 프레임이 그려지면 덮개 치움(그때 새 컷이 보임 = 검은화면 없음)
-        const onReady = () => {
-          el.removeEventListener("loadeddata", onReady);
-          try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
-          if (typeof el.requestVideoFrameCallback === "function") { try { el.requestVideoFrameCallback(() => hideCover()); } catch (_) { hideCover(); } }
-          else { const tu = () => { el.removeEventListener("timeupdate", tu); hideCover(); }; el.addEventListener("timeupdate", tu); }
-          let _ht = 0; const _fb = () => { if (el.readyState >= 2 || _ht++ > 25) { if (cov) cov.style.opacity = "0"; } else setTimeout(_fb, 100); }; setTimeout(_fb, 450);   // 폴백도 준비됐을 때만(최대 ~3s 재시도)
+      if (c.bufs && c.bufs.length === 2 && isVid) {
+        const cur = c.bufs[c.activeBuf], nxt = c.bufs[1 - c.activeBuf], cov = c.cover;
+        if (cov) { try { if (cur.videoWidth > 0) { cov.width = cur.videoWidth; cov.height = cur.videoHeight; cov.getContext("2d").drawImage(cur, 0, 0, cov.width, cov.height); cov.style.opacity = "1"; } } catch (_) {} }   // 직전 프레임 덮개로 가림
+        try { cur.pause(); } catch (_) {}   // ⚠️이전 컷 먼저 멈춤(한 번에 하나만 재생 = 모바일 안전)
+        let done = false;
+        const reveal = () => { if (done) return; done = true; nxt.style.opacity = "1"; cur.style.opacity = "0"; if (cov) cov.style.opacity = "0"; c.activeBuf = 1 - c.activeBuf; c.preloadNext(idx + 1); };
+        const arm = () => {   // 새 컷 재생 → 첫 프레임이 '실제로 그려진' 순간(rVFC)에만 교체. 그 전까진 덮개가 가림 → 검은화면 0.
+          try { nxt.currentTime = 0; const p = nxt.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+          if (typeof nxt.requestVideoFrameCallback === "function") { try { nxt.requestVideoFrameCallback(() => reveal()); } catch (_) { reveal(); } }
+          else { const tu = () => { nxt.removeEventListener("timeupdate", tu); reveal(); }; nxt.addEventListener("timeupdate", tu); }
+          let _h = 0; const _fb = () => { if (done) return; if (nxt.readyState >= 2) reveal(); else if (_h++ < 30) setTimeout(_fb, 100); }; setTimeout(_fb, 260);   // 안전 폴백: 준비된 뒤에만(덮개가 가리므로 검은화면 없음)
         };
-        try { el.src = cm.url; el.addEventListener("loadeddata", onReady); el.load(); } catch (_) { hideCover(); }
-      } else if (!isVid && el.tagName === "IMG") {
-        if (el.getAttribute("src") !== cm.url) el.src = cm.url;
+        try {
+          if (nxt.getAttribute("src") !== cm.url) { nxt.src = cm.url; }
+          if (nxt.readyState >= 2) arm();   // 미리 로드됨 → 즉시(부드러움)
+          else { const on = () => { nxt.removeEventListener("loadeddata", on); arm(); }; nxt.addEventListener("loadeddata", on); nxt.load(); }
+        } catch (_) {}
+      } else {   // 영상 1장(사진·혼합 등) — 단일 요소 + 덮개
+        const el = c.mediaEl; if (!el) return;
+        if (isVid && el.tagName === "VIDEO") {
+          if (el.getAttribute("src") === cm.url) { try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} return; }
+          const cov = c.cover;
+          if (cov) { try { if (el.videoWidth > 0) { cov.width = el.videoWidth; cov.height = el.videoHeight; cov.getContext("2d").drawImage(el, 0, 0, cov.width, cov.height); cov.style.opacity = "1"; } } catch (_) {} }
+          const hideCover = () => { if (cov && el.readyState >= 2) cov.style.opacity = "0"; };
+          const onReady = () => { el.removeEventListener("loadeddata", onReady); try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} if (typeof el.requestVideoFrameCallback === "function") { try { el.requestVideoFrameCallback(() => hideCover()); } catch (_) { hideCover(); } } else { const tu = () => { el.removeEventListener("timeupdate", tu); hideCover(); }; el.addEventListener("timeupdate", tu); } let _ht = 0; const _fb = () => { if (el.readyState >= 2 || _ht++ > 25) { if (cov) cov.style.opacity = "0"; } else setTimeout(_fb, 100); }; setTimeout(_fb, 450); };
+          try { el.src = cm.url; el.addEventListener("loadeddata", onReady); el.load(); } catch (_) { hideCover(); }
+        } else if (!isVid && el.tagName === "IMG") { if (el.getAttribute("src") !== cm.url) el.src = cm.url; }
       }
     };
+    if (_multiVid && c.bufs) c.preloadNext(1);   // 첫 전환(1번 컷) 미리 로드
     E._palPlay = c;
     c.render = (t) => {
       c.tiles.forEach((el) => {
@@ -2433,13 +2450,11 @@
     const laneHtml = lanes.map((l) => `<div class="es-pal-ct-lane ${l.cls}" style="width:${W}px">${l.html}</div>`).join("");
     const inner = `<div class="es-pal-ct-inner" style="width:${W}px"><div class="es-pal-ct-ruler">${ticks}</div>${laneHtml}<div class="es-pal-ct-playhead" style="left:0"><span class="es-pal-ct-playgrab" aria-label="재생 위치 옮기기"></span></div></div>`;   // ▍재생선(꽁다리 잡고 드래그로 위치 이동)
     // 🔧 자동 도구 — 컷 균등 나누기 · AI 리듬 나누기(배경음악 기준) · 음성 없는 공간 없애기
-    const tempoSel = ["fast:빠르게", "mid:중간", "slow:느리게"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
+    const tempoSel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
     const tools = (clips.length && !opts.noTools) ? `<div class="es-pal-ct-tools">
-      <button type="button" class="es-pal-ct-tool" data-cttool="even" title="모든 컷을 옆에 정한 초로 똑같이 맞춰요">🟰 컷 균등</button>
-      <span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span>
       <button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트를 분석해 컷을 리듬에 맞춰 끊어요">🥁 AI 리듬</button>
       <select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tempoSel}</select>
-      <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 빈 구간</button>
+      <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button>
     </div>` : "";
     return `${tools}<div class="es-pal-ct"><div class="es-pal-ct-gut-wrap">${gutter}</div><div class="es-pal-ct-scroll">${inner}</div></div><button type="button" class="es-pal-ct-addmore" data-ctaddclip>🎬 영상 더 추가하기</button>`;   // 삭제=컷 사이 − · 길이=손잡이 드래그 · 영상 끝+/아래 버튼으로 더 추가
   }
@@ -3315,8 +3330,9 @@
       _drop.addEventListener("drop", (e) => { e.preventDefault(); _drop.classList.remove("dragover"); const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []); if (fs.length) _addMedia(fs.map(_fileToMedia)); });
     }
     // 📱 고객화면 하단 다음/이전 — 실제 고객처럼 단계 진행(왼쪽 트랙·결과는 P.demo 라 자동 반영)
-    const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
-    const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
+    const _palStopMus = () => { if (E._palMusPrev) { try { E._palMusPrev.pause(); } catch (_) {} E._palMusPrev = null; } };   // 음악 미리듣기 멈춤(단계 넘어가면)
+    const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
+    const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
     // 📲 바텀시트 그립 — 탭하면 작업창이 위로 커졌다(다시 누르면) 접힘. 상태는 현재 보여지는 화면(showKey)에 묶음.
     const _cGrip = $("#esCustGrip");
     if (_cGrip) _cGrip.addEventListener("click", () => {
@@ -9487,7 +9503,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function setVidEngine(e) { if (!VID_ENGINES[e]) return; E.aiVidEngine = e; try { localStorage.setItem("es_ai_videngine", e); } catch (_) {} }
   // 리듬 맞추기 빠르기 — 컷당 박자 수(작을수록 사진이 빨리 넘어감)
-  const BEAT_TEMPO = { fast: 1, mid: 2, slow: 4 };
+  const BEAT_TEMPO = { vfast: 0.5, fast: 1, mid: 2, slow: 4, vslow: 8 };
   function curBeatTempo() { let v = E.beatTempo; if (!v) { try { v = localStorage.getItem("es_beat_tempo") || ""; } catch (_) {} } return BEAT_TEMPO[v] ? v : "mid"; }
   function setBeatTempo(v) { if (!BEAT_TEMPO[v]) return; E.beatTempo = v; try { localStorage.setItem("es_beat_tempo", v); } catch (_) {} }
   // fal.ai 첫·끝 프레임 영상 생성 — 브라우저에서 직접 호출(Authorization: Key)
