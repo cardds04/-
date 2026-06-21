@@ -43,9 +43,19 @@ app.use(express.json({ limit: "50mb" }));
 
 const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-generate-logic.cjs");
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
+const { handleTypecastTtsRequest, handleTypecastVoicesRequest } = require("./lib/typecast-tts-logic.cjs");
+const { handleKlingVideoRequest } = require("./lib/kling-video-logic.cjs");
 const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
 const { handleMentorRequest } = require("./lib/mentor-logic.cjs");
+const { handleReelRequest } = require("./lib/reel-suggest-logic.cjs");
+const { handleNarrationRequest } = require("./lib/easy-narration-logic.cjs");
+const { handleEasyIdeas } = require("./lib/easy-ideas-logic.cjs");
+const { handleEasyTitle } = require("./lib/easy-title-logic.cjs");
+const { handleSttRequest } = require("./lib/stt-logic.cjs");
+const { handleEasyAudio } = require("./lib/easy-audio-logic.cjs");
+const { handleShortsExplore } = require("./lib/shorts-explore-logic.cjs");
+const { handleShortsAnalyze } = require("./lib/shorts-analyze-logic.cjs");
 const { handleSolapiSendRequest } = require("./lib/solapi-logic.cjs");
 const { handleCustomerAuthRequest } = require("./lib/customer-auth-logic.cjs");
 const { handleCustomerDataRequest } = require("./lib/customer-data-logic.cjs");
@@ -115,6 +125,18 @@ app.post("/api/blog-generate", async (req, res) => {
   }
 });
 
+/** 음성→자막 STT — lib/stt-logic.cjs (Vercel api/stt.js 와 공유) */
+app.post("/api/stt", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleSttRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[stt]", error);
+    res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
 /** 나레이션 TTS — lib/gemini-tts-logic.cjs (Vercel api/gemini-tts.js 와 공유) */
 app.post("/api/gemini-tts", async (req, res) => {
   try {
@@ -124,6 +146,43 @@ app.post("/api/gemini-tts", async (req, res) => {
   } catch (error) {
     console.error("[gemini-tts]", error);
     res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** 🎙 Typecast 나레이션 TTS — lib/typecast-tts-logic.cjs (Vercel api/typecast-tts.js 와 공유) */
+app.post("/api/typecast-tts", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleTypecastTtsRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[typecast-tts]", error);
+    res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** 🎙 Typecast 목소리 목록 */
+app.all("/api/typecast-voices", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleTypecastVoicesRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[typecast-voices]", error);
+    res.status(500).json({ message: error?.message || "서버 오류" });
+  }
+});
+
+/** Kling(클링) 공식 image2video 프록시 — lib/kling-video-logic.cjs (Vercel api/kling-video.js 와 공유) */
+app.post("/api/kling-video", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleKlingVideoRequest(body);
+    res.status(200).json(out);
+  } catch (error) {
+    const status = error?.status && error.status >= 400 && error.status < 600 ? error.status : 500;
+    console.error("[kling-video]", error?.message);
+    res.status(status).json({ ok: false, error: error?.message || "서버 오류", detail: error?.data || null });
   }
 });
 
@@ -147,6 +206,87 @@ app.post("/api/mentor", async (req, res) => {
     res.status(out.status).json(out.json);
   } catch (error) {
     console.error("[mentor]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 릴스 제안 제조기(각인 기반 제안 + 촬영 지시서) — lib/reel-suggest-logic.cjs (Vercel api/reel-suggest.js 와 공유) */
+app.post("/api/reel-suggest", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleReelRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[reel-suggest]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 이지숏폼 나레이션 문구 생성(고객 프롬프트 → Claude 대본) — lib/easy-narration-logic.cjs (Vercel api/easy-narration.js 와 공유) */
+app.post("/api/easy-narration", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleNarrationRequest(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[easy-narration]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 아이디어 상자(업종 → 포맷별 맞춤 숏폼 아이디어) — lib/easy-ideas-logic.cjs (Vercel api/easy-ideas.js 와 공유) */
+app.post("/api/easy-ideas", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleEasyIdeas(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[easy-ideas]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 타이틀 메이커(문구+스타일 → AI 이미지 크로마키 타이틀) — lib/easy-title-logic.cjs (Vercel api/easy-title.js 와 공유) */
+app.post("/api/easy-title", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleEasyTitle(body);
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[easy-title]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 음악 라이브러리 — lib/easy-audio-logic.cjs (Vercel api/easy-audio.js 와 공유) */
+app.all("/api/easy-audio", async (req, res) => {
+  try {
+    const out = await handleEasyAudio({ method: req.method, query: req.query || {}, body: req.body || {} });
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[easy-audio]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 숏츠 탐색기 — lib/shorts-explore-logic.cjs (Vercel api/shorts-explore.js 와 공유) */
+app.all("/api/shorts-explore", async (req, res) => {
+  try {
+    const out = await handleShortsExplore({ method: req.method, query: req.query || {}, body: req.body || {} });
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[shorts-explore]", error);
+    res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
+  }
+});
+
+/** 쇼츠 분석 → 따라 찍는 지시서 — lib/shorts-analyze-logic.cjs (Vercel api/shorts-analyze.js 와 공유) */
+app.post("/api/shorts-analyze", async (req, res) => {
+  try {
+    const out = await handleShortsAnalyze({ method: "POST", body: req.body || {} });
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error("[shorts-analyze]", error);
     res.status(500).json({ ok: false, error: error?.message || "서버 오류" });
   }
 });

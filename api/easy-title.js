@@ -1,10 +1,10 @@
 /**
  * Vercel Serverless: POST /api/easy-title
  *
- * 타이틀 메이커 — 문구 + 스타일 → Gemini 이미지로 타이틀 레터링(평평한 흰 배경).
+ * 타이틀 메이커 — 문구 + 스타일 → AI 이미지로 타이틀 레터링(평평한 크로마키 배경).
  * 배경 투명화는 클라이언트가 처리. 로직은 lib/easy-title-logic.cjs (server.js 와 공유).
  *
- * 환경 변수: GEMINI_API_KEY (필수), GEMINI_TITLE_MODEL (선택)
+ * 환경 변수: OPENAI_API_KEY (기본 엔진 필수), OPENAI_IMAGE_MODEL (선택), TITLE_ENGINE=gemini 로 되돌릴 경우 GEMINI_API_KEY
  */
 const { handleEasyTitle } = require("../lib/easy-title-logic.cjs");
 

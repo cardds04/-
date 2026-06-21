@@ -138,6 +138,7 @@ async function handleImage(apiKey, body) {
     };
   }
 
+  reqBody.response_format = "b64_json";   // URL 대신 base64로 받기 → 브라우저 CORS 회피
   let data = await xaiJson("POST", ep, apiKey, reqBody);
 
   if (
@@ -163,10 +164,24 @@ async function handleImage(apiKey, body) {
     throw e;
   }
   const item = arr[0];
+  let b64 = item.b64_json || null;
+  let mime = "image/png";
+  // xAI가 그래도 URL로 주면 서버에서 받아 base64로 변환(서버 fetch는 CORS 영향 없음)
+  if (!b64 && item.url) {
+    try {
+      const ir = await fetch(item.url);
+      if (ir.ok) {
+        mime = ir.headers.get("content-type") || mime;
+        const buf = Buffer.from(await ir.arrayBuffer());
+        b64 = buf.toString("base64");
+      }
+    } catch (_) {}
+  }
   return {
     ok: true,
     url: item.url || null,
-    b64_json: item.b64_json || null,
+    b64_json: b64,
+    mime_type: mime,
   };
 }
 
@@ -221,6 +236,17 @@ async function handleVideoPoll(apiKey, body) {
   };
   if (data.status === "done" && data.video?.url) {
     out.video_url = data.video.url;
+    // 브라우저 CORS 회피 — 작은 영상은 서버에서 받아 base64로도 반환
+    try {
+      const vr = await fetch(data.video.url);
+      if (vr.ok) {
+        const buf = Buffer.from(await vr.arrayBuffer());
+        if (buf.length > 0 && buf.length < 3 * 1024 * 1024) {   // 3MB 미만만 (Vercel 응답 한도)
+          out.video_b64 = buf.toString("base64");
+          out.video_mime = vr.headers.get("content-type") || "video/mp4";
+        }
+      }
+    } catch (_) {}
   }
   return out;
 }
@@ -275,3 +301,6 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+// 이미지/영상 생성은 시간이 걸려 기본 10초 제한에 걸림 → 최대 60초로 늘림 (재배포 필요)
+module.exports.config = { maxDuration: 60 };
