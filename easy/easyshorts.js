@@ -3451,7 +3451,8 @@
     { const ss = $("#esPalTcSearch"); if (ss) ss.addEventListener("input", () => { E._tcVoiceQuery = ss.value; E._tcVoicesAll = false; const w = $("#esPalTcSelWrap"); if (w) { w.innerHTML = palTcSelectInner(); palTcBindSelWrap(); } }); }
     palTcBindSelWrap();   // #esPalTcVoice change + #esPalTcAll 토글 연결(검색으로 selwrap 교체돼도 다시 연결)
     // 🎙 추천 목소리 픽커 — 성별·연령·형 고르기 + 목소리 칩 선택 + 다른목소리
-    $$("#esBody [data-tcpick]").forEach((b) => b.addEventListener("click", () => { const id = b.dataset.tcpick; E.palette.demo.voiceTypecastId = id; E.palette.demo.voiceModel = palTcModelOf(id); try { palDraftSave(); } catch (_) {} renderPalette(); }));
+    $$("#esBody [data-tcpick]").forEach((b) => b.addEventListener("click", () => { const id = b.dataset.tcpick; E.palette.demo.voiceTypecastId = id; E.palette.demo.voiceModel = palTcModelOf(id); if (b.dataset.tcrec) E._tcFilterOpen = false; try { palDraftSave(); } catch (_) {} renderPalette(); }));   // 추천 목소리 고르면 스타일 필터 접기
+    { const st = $("#esPalTcStyle"); if (st) st.addEventListener("click", () => { E._tcFilterOpen = !E._tcFilterOpen; renderPalette(); }); }   // 🎨 스타일 고르기 펼치기/접기
     $$("#esBody [data-tcg]").forEach((b) => b.addEventListener("click", () => { E._tcFlow = { g: b.dataset.tcg, age: null, type: null, page: 0 }; renderPalette(); }));
     $$("#esBody [data-tcage]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.age = b.dataset.tcage; f.type = null; f.page = 0; renderPalette(); }));
     $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
@@ -10583,9 +10584,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   ];
   function palTcModelOf(id) { var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.model) || "ssfm-v30"; }
   function palTcNameOf(id) { var c = PAL_TC_CAT.find(function (v) { return v.id === id; }); if (c) return c.name; var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.voice_name) || ""; }
-  function palTcChip(v, curV) {   // v = 카탈로그항목{id,name} 또는 API목소리{voice_id,voice_name}
+  function palTcChip(v, curV, rec) {   // v = 카탈로그항목{id,name} 또는 API목소리{voice_id,voice_name}. rec=추천목소리(고르면 필터 접힘)
     var id = v.id || v.voice_id, name = v.name || v.voice_name || id, sel = curV === id;
-    return '<button type="button" class="es-pal-tc-chip' + (sel ? " on" : "") + '" data-tcpick="' + esc(id) + '">' + esc(name) + (sel ? " ✓" : "") + "</button>";
+    return '<button type="button" class="es-pal-tc-chip' + (sel ? " on" : "") + '" data-tcpick="' + esc(id) + '"' + (rec ? ' data-tcrec="1"' : "") + ">" + esc(name) + (sel ? " ✓" : "") + "</button>";
   }
   function palTcPageVoices(f) {   // 현재 성별·연령·형에 맞는 추천 3개(다른목소리 누르면 다음 3개; 카탈로그 소진되면 전체목록서 채움)
     var matched = PAL_TC_CAT.filter(function (v) { return v.g === f.g && v.age === f.age && v.types.indexOf(f.type) >= 0; });
@@ -10597,21 +10598,30 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (win.length < per) win = win.concat(pool.slice(0, per - win.length));   // 끝이면 앞에서 이어 채움
     return win;
   }
+  function palTcVcard(v, curV) {   // 추천 결과 = 카드(파형 + 이름)
+    var id = v.id || v.voice_id, nm = v.name || v.voice_name || id, sl = curV === id;
+    return '<button type="button" class="es-pal-tc-vcard' + (sl ? " on" : "") + '" data-tcpick="' + esc(id) + '"><span class="es-pal-tc-wave"><i></i><i></i><i></i><i></i><i></i></span><span class="es-pal-tc-vname">' + esc(nm) + (sl ? " ✓" : "") + "</span></button>";
+  }
   function palTcVoicePicker() {
     var d = (E.palette && E.palette.demo) || {}, curV = d.voiceTypecastId || "";
     var f = E._tcFlow || (E._tcFlow = { g: null, age: null, type: null, page: 0 });
+    var open = !!E._tcFilterOpen;   // 🎨 스타일 고르기(필터) 펼침 여부 — 기본 접힘, 추천 고르면 접힘
     var h = "";
-    if (curV) h += '<div class="es-pal-tc-cur">🎙 고른 목소리: <b>' + esc(palTcNameOf(curV) || "선택됨") + "</b></div>";
-    h += '<div class="es-pal-tc-sec">⭐ 추천 목소리</div><div class="es-pal-tc-chips">' + PAL_TC_CAT.filter(function (v) { return v.rec; }).map(function (v) { return palTcChip(v, curV); }).join("") + "</div>";
-    h += '<div class="es-pal-tc-sec">🔍 골라서 찾기</div>';
-    h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">성별</span><div class="es-pal-tc-opts">' + [["f", "여성 ♀"], ["m", "남성 ♂"]].map(function (o) { return '<button type="button" class="es-pal-tc-opt' + (f.g === o[0] ? " on" : "") + '" data-tcg="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
-    if (f.g) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">연령</span><div class="es-pal-tc-opts">' + PAL_TC_AGES.map(function (a) { return '<button type="button" class="es-pal-tc-opt' + (f.age === a.k ? " on" : "") + '" data-tcage="' + a.k + '">' + a.lb + "</button>"; }).join("") + "</div></div>";
-    if (f.g && f.age) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">형식</span><div class="es-pal-tc-opts">' + PAL_TC_TYPES.map(function (t) { return '<button type="button" class="es-pal-tc-opt' + (f.type === t.k ? " on" : "") + '" data-tctype="' + t.k + '">' + t.lb + "</button>"; }).join("") + "</div></div>";
-    if (f.g && f.age && f.type) {
-      h += '<div class="es-pal-tc-sec">이런 목소리 어때요?</div><div class="es-pal-tc-chips">' + palTcPageVoices(f).map(function (v) { return palTcChip(v, curV); }).join("") + "</div>";
-      h += '<button type="button" class="es-pal-tc-more" id="esPalTcMore">🔄 다른 목소리로 바꾸기</button>';
+    if (curV) h += '<div class="es-pal-tc-cur"><span class="es-pal-tc-cur-ic">🎙</span><span class="es-pal-tc-cur-tx"><span class="es-pal-tc-cur-lb">선택된 목소리</span><span class="es-pal-tc-cur-nm">' + esc(palTcNameOf(curV) || "선택됨") + '</span></span><span class="es-pal-tc-cur-ck">✓</span></div>';
+    h += '<div class="es-pal-tc-sec">⭐ 추천 목소리</div><div class="es-pal-tc-chips">' + PAL_TC_CAT.filter(function (v) { return v.rec; }).map(function (v) { return palTcChip(v, curV, 1); }).join("") + "</div>";
+    h += '<button type="button" class="es-pal-tc-styletoggle' + (open ? " open" : "") + '" id="esPalTcStyle"><span>🎨 스타일 고르기</span><span class="es-pal-tc-stylechev">' + (open ? "▲" : "▼") + "</span></button>";
+    if (open) {
+      h += '<div class="es-pal-tc-filter">';
+      h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">성별</span><div class="es-pal-tc-opts">' + [["f", "여성 ♀"], ["m", "남성 ♂"]].map(function (o) { return '<button type="button" class="es-pal-tc-opt' + (f.g === o[0] ? " on" : "") + '" data-tcg="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
+      if (f.g) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">연령</span><div class="es-pal-tc-opts">' + PAL_TC_AGES.map(function (a) { return '<button type="button" class="es-pal-tc-opt' + (f.age === a.k ? " on" : "") + '" data-tcage="' + a.k + '">' + a.lb + "</button>"; }).join("") + "</div></div>";
+      if (f.g && f.age) h += '<div class="es-pal-tc-row"><span class="es-pal-tc-rl">형식</span><div class="es-pal-tc-opts">' + PAL_TC_TYPES.map(function (t) { return '<button type="button" class="es-pal-tc-opt' + (f.type === t.k ? " on" : "") + '" data-tctype="' + t.k + '">' + t.lb + "</button>"; }).join("") + "</div></div>";
+      h += "</div>";
+      if (f.g && f.age && f.type) {
+        h += '<div class="es-pal-tc-sec">💡 이런 목소리 어때요?</div><div class="es-pal-tc-vcards">' + palTcPageVoices(f).map(function (v) { return palTcVcard(v, curV); }).join("") + "</div>";
+        h += '<button type="button" class="es-pal-tc-more" id="esPalTcMore">🔄 다른 목소리로 바꾸기</button>';
+      }
+      h += '<details class="es-pal-tc-search-wrap"><summary>이름으로 직접 찾기</summary><input id="esPalTcSearch" class="es-pal-tc-search" placeholder="🔎 이름 검색 (예: Chan-gu)" value="' + esc(E._tcVoiceQuery || "") + '" autocomplete="off"><div id="esPalTcSelWrap">' + palTcSelectInner() + "</div></details>";
     }
-    h += '<details class="es-pal-tc-search-wrap"><summary>이름으로 직접 찾기</summary><input id="esPalTcSearch" class="es-pal-tc-search" placeholder="🔎 이름 검색 (예: Chan-gu)" value="' + esc(E._tcVoiceQuery || "") + '" autocomplete="off"><div id="esPalTcSelWrap">' + palTcSelectInner() + "</div></details>";
     return h;
   }
   // 타입캐스트 목소리는 같은 목소리가 모델 2개(ssfm-v30/v21)로 중복 옴 → 이름당 1개로(신모델 v30 우선). 이름이 전부 로마자라 언어/인기 필드는 없음.
