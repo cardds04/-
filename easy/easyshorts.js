@@ -1040,6 +1040,9 @@
     const rendered = await off.startRendering();
     const ch0 = rendered.getChannelData(0);
     const ch1 = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : ch0;
+    // 🔊 마지막 2초 마스터 페이드아웃 — 음악·나레이션·원음 전부 자연스럽게 끝나게(끝에서 툭 끊김 방지)
+    const _fadeSamp = Math.min(rendered.length, Math.round(2 * SR)), _fadeStart = rendered.length - _fadeSamp;
+    for (let i = 0; i < _fadeSamp; i++) { const _g = 1 - i / _fadeSamp, _x = _fadeStart + i; ch0[_x] *= _g; if (ch1 !== ch0) ch1[_x] *= _g; }
     try { const sup = await AudioEncoder.isConfigSupported({ codec, sampleRate: SR, numberOfChannels: CH }); if (!sup || !sup.supported) return false; } catch (_) { return false; }
     const enc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => console.warn("[audio enc]", e) });
     enc.configure({ codec, sampleRate: SR, numberOfChannels: CH, bitrate: 128000 });
@@ -2488,6 +2491,11 @@
         const total = clips.reduce((a, m) => a + (m.dur || 0), 0);
         if (total > 0.3 && total < voiceTotal - 0.05) { const scale = voiceTotal / total; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); fitted = true; }
       }
+      // 🕒 끝 여유 — 마지막 자막/나레이션이 끝난 뒤 최소 3초는 남겨 '툭 끊김' 방지(마지막 컷을 그만큼 늘림)
+      const _capEnd = (d.captions || []).filter((c) => (c.text || "").trim()).reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
+      const _needEnd = Math.max(voiceTotal, _capEnd) + 3;
+      const _curTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
+      if (_curTotal < _needEnd - 0.05 && clips.length) { const _last = clips[clips.length - 1]; _last.dur = Math.max(0.3, +((_last.dur || 0) + (_needEnd - _curTotal)).toFixed(2)); }
       const durs = clips.map((m) => m.dur), uniq = new Set(durs.map((x) => x.toFixed(1)));
       palDraftSave(); renderPalette();
       try { toast(fitted ? `음악 리듬에 맞춰 ${clips.length}컷 — 나레이션(${voiceTotal.toFixed(1)}초)에 맞게 늘렸어요` : (uniq.size <= 1 ? `리듬이 일정한 음악이라 컷이 비슷해요 (약 ${Math.round(60 / Pd)}BPM)` : `음악 리듬에 맞춰 ${clips.length}컷을 끊었어요 (약 ${Math.round(60 / Pd)}BPM)`)); } catch (_) {}
@@ -2501,7 +2509,8 @@
     const voiceEnd = (d.voiceUrl && d.voiceDur) ? d.voiceDur : 0;
     const caps = (d.captions || []).filter((c) => (c.text || "").trim());
     const capEnd = caps.reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
-    const target = Math.max(voiceEnd, capEnd);
+    const content = Math.max(voiceEnd, capEnd);
+    const target = content ? content + 3 : 0;   // 🕒 끝에 3초 여유 남기고 자름(툭 끊김 방지)
     if (!target) { try { toast("나레이션이나 자막이 있어야 음성 없는 공간을 찾아요"); } catch (_) {} return; }
     const total = clips.reduce((a, m) => a + palCutClipDur(m), 0);
     if (total <= target + 0.05) { try { toast("이미 음성 길이에 맞아요 (자를 빈 공간 없음)"); } catch (_) {} return; }
