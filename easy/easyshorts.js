@@ -1368,7 +1368,7 @@
           <button type="button" class="es-modebtn" data-mode2="detail" title="관리자 전용 — 템플릿 제작·편집·게시 (비밀번호 필요)">🔒 관리자 모드</button>
         </nav>
         <div class="es-topnav">
-          <button type="button" class="es-topnav-admin" id="esTopAdmin" title="이지숏폼 생성기(관리자 페이지)로 이동">🔧 관리자</button>
+          <button type="button" class="es-topnav-admin" id="esTopAdmin" title="이지숏폼 생성기(관리자 페이지)로 이동"><span class="es-topnav-admin-ic">🔧</span><span class="es-topnav-admin-tx">관리자</span></button>
           <button type="button" class="es-topnav-btn" id="esTopBack" title="뒤로" aria-label="뒤로">←</button>
           <button type="button" class="es-topnav-btn" id="esTopHome" title="홈" aria-label="홈">🏠</button>
         </div>
@@ -1379,6 +1379,46 @@
     { const _bb = root.querySelector("#esTopBack"); if (_bb) _bb.addEventListener("click", easyBotBack); }
     { const _hb = root.querySelector("#esTopHome"); if (_hb) _hb.addEventListener("click", easyBotHome); }
     { const _ab = root.querySelector("#esTopAdmin"); if (_ab) _ab.addEventListener("click", openAdmin); }   // 🔧 관리자 → 이지숏폼 생성기(비번 게이트 통과 시)
+    initTopnavFit();   // 우상단 고정 계정칩(.ea-chip)과 안 겹치게 상단네비 오른쪽 여백 확보
+  }
+  // 우상단 고정 위젯(설치 버튼 .ea-install / 계정칩 #eaChip)은 position:fixed라 상단네비와 겹침
+  // → 그 위젯들이 차지한 오른쪽 폭만큼 여백을 줘서 ←/🏠/관리자가 그 뒤로 숨지 않게
+  function fitTopnavToChip() {
+    try {
+      var tn = document.querySelector("#easyRoot .es-topnav");
+      if (!tn) return;
+      var vw = window.innerWidth, minLeft = vw;
+      [document.getElementById("eaChip"), document.querySelector(".ea-install")].forEach(function (el) {
+        if (!el) return;
+        var cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden" || +cs.opacity === 0) return;
+        var r = el.getBoundingClientRect();
+        if (r.width > 0 && r.left < minLeft) minLeft = r.left;
+      });
+      var v = (minLeft < vw) ? (Math.ceil(vw - minLeft) + 8) + "px" : "";
+      if (tn.style.marginRight !== v) tn.style.marginRight = v;   // 바뀔 때만 적용(레이아웃 thrash 방지)
+    } catch (_) {}
+  }
+  var _topnavFitInit = false;
+  function initTopnavFit() {
+    fitTopnavToChip();
+    try { requestAnimationFrame(fitTopnavToChip); } catch (_) {}
+    setTimeout(fitTopnavToChip, 300);   // 위젯이 늦게 그려질 때 대비
+    if (_topnavFitInit) return;
+    _topnavFitInit = true;
+    try { window.addEventListener("resize", fitTopnavToChip); } catch (_) {}
+    try {
+      var ro = new ResizeObserver(fitTopnavToChip), seen = new WeakSet();
+      function arm() {
+        [document.getElementById("eaChip"), document.querySelector(".ea-install")].forEach(function (el) {
+          if (el && !seen.has(el)) { seen.add(el); try { ro.observe(el); } catch (_) {} }
+        });
+        fitTopnavToChip();
+      }
+      arm();
+      new MutationObserver(arm).observe(document.body, { childList: true });   // 위젯이 body에 추가될 때 감지
+    } catch (_) {}
+    setInterval(fitTopnavToChip, 1200);   // 설치버튼은 홈에서만 1.2초 주기로 토글 → 안전망
   }
   // 📱 하단 앱형 네비 — 모든 고객 화면에서 홈/뒤로. 작업은 지우지 않고 보존(편집 화면만 닫음 → 새로고침하면 복구)
   function easyBotHome() {
@@ -1535,7 +1575,7 @@
     const noteEl = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-n" id="esCopyNote" rows="2" placeholder="작은 설명 글씨 (비워도 돼요 · 엔터=줄바꿈)">${esc(N)}</textarea>`
       : (N ? `<div class="es-pal-scr-note">${br(N)}</div>` : "");
-    const editBtn = editing
+    const editBtn = (E._palTestMode || E._palCustomerMode) ? "" : editing   // ✏️ 문구 고치기는 이지숏폼 생성기(관리자)에서만 — 고객·테스트 화면엔 안 보임
       ? `<div class="es-pal-scr-editwrap"><div class="es-pal-scr-edithint">📌 <b>저장해두기</b> = 오른쪽 기능상자 <b>${esc((paletteFn(fnKey) || {}).label || "")}</b> 아이콘에 붙여서 <b>다시 꺼내 써요</b></div><input type="text" class="es-pal-scr-cname" id="esCopyName" placeholder="📌 저장 이름 (비우면 문구 그대로)"><div class="es-pal-scr-editrow"><button type="button" class="es-pal-scr-copybtn save" id="esCopySave">📌 저장해두기</button><button type="button" class="es-pal-scr-copybtn done" id="esCopyDone">✓ 완료</button></div></div>`
       : `<button type="button" class="es-pal-scr-copybtn" id="esCopyEdit" data-fn="${esc(fnKey)}"${step ? ` data-step="${esc(step.id)}"` : ""}>✏️ 이 화면 문구 고치기</button>`;
     const btn = (ic, t, s) => `<div class="es-pal-scr-btn"><span class="es-pal-scr-btn-ic">${ic}</span><span class="es-pal-scr-btn-t">${t}</span><span class="es-pal-scr-btn-s">${s}</span></div>`;
@@ -1688,7 +1728,7 @@
           body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
           break;
         }
-        case "length":  body = `<div class="es-pal-cut-lb">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>${palCutToolPanel(P)}${palCutToolbar()}`; break;
+        case "length":  body = `<div class="es-pal-cut-edit"><div class="es-pal-cut-lb es-pal-cut-lb-sm">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div><div class="es-pal-cut-bottom">${palCutToolPanel(P)}${palCutToolbar()}<div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div></div></div>`; break;
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
@@ -1909,6 +1949,12 @@
     c.showClip = (idx) => {   // 컷에 맞춰 미리보기 영상 전환
       const cm = c.playClips[idx]; if (!cm || !cm.url) return;
       const isVid = cm.kind === "video";
+      if (c.scrub) {   // 🎯 컷편집 스크럽 — 자동재생 X. 클립 src만 바꾸고 정지(프레임 위치는 c.render가 seek). 모바일 첫 프레임 보이게 한 번만 깨움.
+        const el = c.mediaEl; if (!el) return;
+        if (isVid && el.tagName === "VIDEO") { try { if (el.getAttribute("src") !== cm.url) { el.removeAttribute("autoplay"); el.src = cm.url; el.load(); el.muted = true; const _p = el.play(); if (_p && _p.then) _p.then(() => { try { el.pause(); } catch (_) {} }).catch(() => {}); } else { try { el.pause(); } catch (_) {} } } catch (_) {} }
+        else if (!isVid && el.tagName === "IMG") { if (el.getAttribute("src") !== cm.url) el.src = cm.url; }
+        return;
+      }
       if (c.bufs && c.bufs.length === 2 && isVid) {
         const cur = c.bufs[c.activeBuf], nxt = c.bufs[1 - c.activeBuf], cov = c.cover;
         if (cov) { try { if (cur.videoWidth > 0) { cov.width = cur.videoWidth; cov.height = cur.videoHeight; cov.getContext("2d").drawImage(cur, 0, 0, cov.width, cov.height); cov.style.opacity = "1"; } } catch (_) {} }   // 직전 프레임 덮개로 가림
@@ -1940,6 +1986,8 @@
     };
     if (_multiVid && c.bufs) c.preloadNext(1);   // 첫 전환(1번 컷) 미리 로드
     E._palPlay = c;
+    c.scrub = isCutEdit;   // 🎯 컷편집 단계 = 스크럽(자동재생 X, 재생선 위치 프레임만 정지표시)
+    if (c.scrub) { const _vs = c.bufs || (c.mediaEl ? [c.mediaEl] : []); _vs.forEach((v) => { try { v.removeAttribute("autoplay"); v.muted = true; const _p = v.play(); if (_p && _p.then) _p.then(() => { try { v.pause(); } catch (_) {} }).catch(() => {}); } catch (_) {} }); }
     c.render = (t) => {
       c.tiles.forEach((el) => {
         const start = parseFloat(el.getAttribute("data-rt-start")) || 0;
@@ -1953,10 +2001,12 @@
       if (c.clockNum) c.clockNum.textContent = t.toFixed(1) + "초";
       if (c.bar) c.bar.style.width = Math.min(100, (t / c.maxT) * 100) + "%";
       // 🎬 컷에 맞춰 미리보기 영상 전환 — 지금 시각(t)이 몇 번째 컷인지 찾아 바뀌면 그 컷 미디어로(실제 출력처럼 미리보기가 컷대로)
-      if (c.playClips && c.playClips.length > 1 && c.mediaEl) {
+      if (c.playClips && c.playClips.length && c.mediaEl) {
         let acc = 0, idx = c.playClips.length - 1;
         for (let i = 0; i < c.playClips.length; i++) { const dd = c.playClips[i].dur > 0 ? c.playClips[i].dur : 2.5; if (t < acc + dd) { idx = i; break; } acc += dd; }
-        if (idx !== c.curClip) { c.curClip = idx; c.showClip(idx); }
+        if (c.playClips.length > 1 && idx !== c.curClip) { c.curClip = idx; c.showClip(idx); }
+        if (c.scrub && c.mediaEl.tagName === "VIDEO") {   // 🎯 재생선 위치 프레임을 정지표시(스크럽) — 그 컷 안의 offset으로 seek
+          try { c.mediaEl.pause(); const _off = Math.max(0, t - acc); if (isFinite(c.mediaEl.duration) && c.mediaEl.duration > 0 && Math.abs((c.mediaEl.currentTime || 0) - _off) > 0.06) c.mediaEl.currentTime = Math.min(_off, Math.max(0, c.mediaEl.duration - 0.05)); } catch (_) {} }
       }
       if (c.playhead) { c.playhead.style.left = (t * c.PPS) + "px"; c.playhead.style.opacity = "1"; }
       // 컷 편집 타임라인은 재생 중에도 0초(왼쪽)에 머무름 — 재생선 따라 스크롤 안 함(짤려 보이는 문제 방지). 진행은 위 영상·시계로 확인.
@@ -2184,7 +2234,7 @@
   // 🧰 컷편집 도구를 'CapCut식' 아래 아이콘 툴바로 모음 — 아이콘 누르면 그 도구만 펼쳐져(화면 정돈). E._palCutTool = 펼친 도구(null/cap/beat/trim)
   function palCutToolbar() {
     const cur = E._palCutTool || "";
-    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "beat", ic: "🥁", lb: "AI 리듬" }, { k: "trim", ic: "🔇", lb: "음성없는구간" }];
+    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "beat", ic: "🥁", lb: "AI 리듬" }, { k: "trim", ic: "🔇", lb: "음성없는구간" }, { k: "add", ic: "➕", lb: "영상추가" }];
     return `<div class="es-pal-cut-toolbar">${items.map((it) => `<button type="button" class="es-pal-cut-tbtn${cur === it.k ? " on" : ""}" data-cuttoolbar="${it.k}"><span class="es-pal-cut-tbic">${it.ic}</span><span class="es-pal-cut-tblb">${it.lb}</span></button>`).join("")}</div>`;
   }
   function palCutToolPanel(P) {
@@ -2194,7 +2244,7 @@
     else if (t === "beat") {
       const tempoSel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
       inner = `<div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트를 분석해 컷을 리듬에 맞춰 끊어요">🥁 AI 리듬</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tempoSel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div>`;
-    } else if (t === "trim") inner = `<div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button></div>`;
+    }
     if (!inner) return "";
     return `<div class="es-pal-cut-toolpanel">${inner}</div>`;
   }
@@ -2506,7 +2556,7 @@
       <label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label>
       <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="나레이션·자막이 끝난 뒤 음성 없는 부분을 잘라내요">🔇 음성 없는 구간 없애기</button>
     </div>` : "";
-    return `${tools}<div class="es-pal-ct"><div class="es-pal-ct-gut-wrap">${gutter}</div><div class="es-pal-ct-scroll">${inner}</div></div><button type="button" class="es-pal-ct-addmore" data-ctaddclip>🎬 영상 더 추가하기</button>`;   // 삭제=컷 사이 − · 길이=손잡이 드래그 · 영상 끝+/아래 버튼으로 더 추가
+    return `${tools}<div class="es-pal-ct"><div class="es-pal-ct-gut-wrap">${gutter}</div><div class="es-pal-ct-scroll">${inner}</div></div>`;   // 삭제=컷 사이 − · 길이=손잡이 드래그 · 영상 추가=툴바 ➕ 또는 끝+ 버튼
   }
   function palAudioDur(url) { return new Promise((res) => { if (!url) return res(0); const a = document.createElement("audio"); let done = false; const fin = (d) => { if (done) return; done = true; res(d || 0); }; const to = setTimeout(() => fin(0), 6000); a.preload = "metadata"; a.onloadedmetadata = () => { clearTimeout(to); fin(isFinite(a.duration) ? a.duration : 0); }; a.onerror = () => { clearTimeout(to); fin(0); }; a.src = url; }); }
   // 🟰 컷 균등 나누기 — 사장님이 정한 '한 컷 길이(초)'로 모든 컷을 똑같이(기본 2초)
@@ -3539,7 +3589,12 @@
       palDraftSave();
     }));
     // 🧰 컷편집 아래 아이콘 툴바 — 아이콘 누르면 그 도구 펼침/접힘(같은 거 또 누르면 접힘)
-    $$("#esBody [data-cuttoolbar]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.cuttoolbar; E._palCutTool = (E._palCutTool === k) ? null : k; renderPalette(); }));
+    $$("#esBody [data-cuttoolbar]").forEach((b) => b.addEventListener("click", () => {
+      const k = b.dataset.cuttoolbar;
+      if (k === "trim") { try { palCutTrimSilence(); } catch (_) {} return; }   // 🔇 클릭 즉시 음성 없는 구간 자르기(메뉴 X)
+      if (k === "add") { try { palAddMediaPick(); } catch (_) {} return; }       // ➕ 영상 추가
+      E._palCutTool = (E._palCutTool === k) ? null : k; renderPalette();         // 💬 자막 · 🥁 AI 리듬 = 메뉴 펼침/접힘
+    }));
     // 자막도 타이틀과 동일하게 칸(data-cslot) 입력으로 처리 — 아래 공용 data-cslot 핸들러가 캡션 블록까지 함께 담당
     // 🖼 타이틀 단계 — 관리자가 참조사진 옵션을 단계(step.titleRefs)에 넣고(＋·드래그·📋), 고객은 그 중 골라(demo.titleRef) AI 생성
     const _trBtn = $("#esTRefBtn"), _trFile = $("#esTRefFile"), _trPaste = $("#esTRefPaste"), _trGal = $("#esTRefGal"), _tgen = $("#esTGen");
