@@ -1687,14 +1687,12 @@
           if (!d.voiceUrl) { body = `<div class="es-pal-tgen-noref">먼저 '나레이션 생성'에서 음성을 만들어주세요 🔊</div>`; break; }
           const vd = d.voiceDur ? d.voiceDur.toFixed(1) + "초" : "음성";
           const capList = (palBlocks("caption") || []).filter((t) => (t.text || "").trim());
-          const synced = !!(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl);   // 이 음성에 '음성씽크'를 실제로 했는지 (자막 존재 ≠ 싱크 완료)
           const capJoined = capList.map((t) => (t.text || "").replace(/\n/g, " ").trim()).join("\n");
           body = `<div class="es-pal-narr-lb">📝 음성에 맞춰 자막 만들기</div>
-            <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 타이밍 자동)</span></div>
+            <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 자동 타이밍 · 칸 밖을 누르면 자동 적용)</span></div>
             <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="자막을 한 줄에 하나씩 — '음성씽크'를 누르면 말하는 타이밍에 맞춰져요">${esc(capJoined)}</textarea>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
-            <button type="button" class="es-pal-narr-make" id="esPalNarrCap"${synced ? " disabled" : ""}>🎯 음성씽크</button>
-            <button type="button" class="es-pal-capedit-apply" id="esPalCapEditApply"${synced ? "" : " disabled"}>✓ 적용</button>`;
+            <button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`;
           break;
         }
         case "cedit": {   // ✏️ 자막 다듬기 — 한 줄=자막 1개(엔터로 나누고, 줄 합치면 자막도 합쳐짐). 음성 있으면 말하는 타이밍에 다시 싱크
@@ -1866,7 +1864,7 @@
     const timed = playMode || timedCap;
     let playData = "", playUi = "";
     if (timed) {   // 전체 길이(maxT) = 컷 합 / 글자 끝 / 나레이션 중 큰 값(타임라인과 일치)
-      const vidTotal = list.reduce((a, mm) => a + (mm && mm.dur > 0 ? mm.dur : 2.5), 0);
+      const vidTotal = list.reduce((a, mm) => a + palCutClipDur(mm), 0);
       const blkEnd = [...(d.titles || []), ...(d.captions || [])].reduce((mx, b) => (b && b.result && b.result.url) ? Math.max(mx, (b.start || 0) + (b.dur != null ? b.dur : 3)) : mx, 0);
       const voiceDur = d.voiceUrl ? ((d.voiceDur || 0) + PAL_VOICE_DELAY) : 0;   // 🎙 1초 지연 포함
       const maxT = Math.max(5, vidTotal, blkEnd, voiceDur);
@@ -1883,6 +1881,7 @@
     const c = E._palPlay; if (c) { try { clearInterval(c.timer); } catch (_) {} (c.audios || []).forEach((a) => { try { a.pause(); a.src = ""; a.load(); } catch (_) {} }); }
     E._palPlay = null;
   }
+  function palStopNarrPreview() { try { const a = E._palNarrPreviewAudio; if (a) { a.pause(); a.currentTime = 0; } } catch (_) {} E._palNarrPreviewAudio = null; }   // 🔊 나레이션 1회 미리듣기 정지(다음/이전/나가기 시)
   function palPlayStart() {
     const c = E._palPlay; if (!c || c.playing) return;
     if (!c.lite) E._palPlayPaused = false;   // lite는 full의 일시정지 의도 안 건드림
@@ -1992,7 +1991,7 @@
     };
     if (_multiVid && c.bufs) c.preloadNext(1);   // 첫 전환(1번 컷) 미리 로드
     E._palPlay = c;
-    c.scrub = isCutEdit;   // 🎯 컷편집 단계 = 스크럽(자동재생 X, 재생선 위치 프레임만 정지표시)
+    c.scrub = isCutEdit && (curFn !== "length" || !!E._palCutTlOpen);   // 🎯 컷편집 = 스크럽(프레임만), 단 length 단계에서 타임라인 펼쳤을 때만 — 접힘(기본)에선 부드럽게 재생
     if (c.scrub) { const _vs = c.bufs || (c.mediaEl ? [c.mediaEl] : []); _vs.forEach((v) => { try { v.removeAttribute("autoplay"); v.muted = true; const _p = v.play(); if (_p && _p.then) _p.then(() => { try { v.pause(); } catch (_) {} }).catch(() => {}); } catch (_) {} }); }
     c.render = (t) => {
       c.tiles.forEach((el) => {
@@ -2009,7 +2008,7 @@
       // 🎬 컷에 맞춰 미리보기 영상 전환 — 지금 시각(t)이 몇 번째 컷인지 찾아 바뀌면 그 컷 미디어로(실제 출력처럼 미리보기가 컷대로)
       if (c.playClips && c.playClips.length && c.mediaEl) {
         let acc = 0, idx = c.playClips.length - 1;
-        for (let i = 0; i < c.playClips.length; i++) { const dd = c.playClips[i].dur > 0 ? c.playClips[i].dur : 2.5; if (t < acc + dd) { idx = i; break; } acc += dd; }
+        for (let i = 0; i < c.playClips.length; i++) { const dd = palCutClipDur(c.playClips[i]); if (t < acc + dd) { idx = i; break; } acc += dd; }
         if (c.playClips.length > 1 && idx !== c.curClip) { c.curClip = idx; c.showClip(idx); }
         if (c.scrub && c.mediaEl.tagName === "VIDEO") {   // 🎯 재생선 위치 프레임을 정지표시(스크럽) — 그 컷 안의 offset으로 seek
           try { c.mediaEl.pause(); const _off = Math.max(0, t - acc); if (isFinite(c.mediaEl.duration) && c.mediaEl.duration > 0 && Math.abs((c.mediaEl.currentTime || 0) - _off) > 0.06) c.mediaEl.currentTime = Math.min(_off, Math.max(0, c.mediaEl.duration - 0.05)); } catch (_) {} }
@@ -2597,7 +2596,10 @@
         m._durPend = false;
         m.srcDur = (dur > 0) ? dur : 0;
         let changed = false;
-        if (m.srcDur > 0 && m.dur > m.srcDur + 0.02) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 원본 초과분 잘라냄
+        if (m.srcDur > 0) {
+          if (m.dur == null) { m.dur = +Math.min(m.srcDur, 2.5).toFixed(2); changed = true; }   // 기본 길이 = 원본(짧으면 그대로)·2.5(길면)
+          else if (m.dur > m.srcDur + 0.02) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 원본 초과분 잘라냄(반복 방지)
+        }
         if (changed) { try { palDraftSave(); } catch (_) {} }
         try { if (E.view === "palette" && document.getElementById("esPalCutWrap")) palCutReflow(); } catch (_) {}
       }).catch(() => { m._durPend = false; });
@@ -3321,9 +3323,9 @@
     if (btn) btn.disabled = true;
     if (prog) prog.hidden = false; setProg(0, "준비 중…");
     try {
-      const slots = clips.map((m) => ({ id: uid(), dur: (m.dur > 0 ? m.dur : 2.5) }));
+      const slots = clips.map((m) => ({ id: uid(), dur: palCutClipDur(m) }));
       const fills = {};
-      slots.forEach((s, i) => { const m = clips[i]; fills[s.id] = { url: m.url, blob: m.blob, kind: (m.kind === "video" ? "video" : "image"), dur: (m.dur > 0 ? m.dur : 2.5) }; });
+      slots.forEach((s, i) => { const m = clips[i]; fills[s.id] = { url: m.url, blob: m.blob, kind: (m.kind === "video" ? "video" : "image"), dur: palCutClipDur(m) }; });
       const mkText = (b, isCap) => {
         // 🎨 자막/타이틀 블록은 bg=색·bgStyle=모양(box/pill/sharp)로 저장. 출력 텍스트 그리기는 bg=모양·bgColor=색·bgOpacity를 기대 → 여기서 올바로 변환(안 하면 bgColor 없어 검정 배경으로 나옴).
         const _bgCol = (b.bg && b.bg !== "none" && b.bg !== "") ? b.bg : null;
@@ -3554,7 +3556,7 @@
       _drop.addEventListener("drop", (e) => { e.preventDefault(); _drop.classList.remove("dragover"); const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []); if (fs.length) _addMedia(fs.map(_fileToMedia)); });
     }
     // 📱 고객화면 하단 다음/이전 — 실제 고객처럼 단계 진행(왼쪽 트랙·결과는 P.demo 라 자동 반영)
-    const _palStopMus = () => { if (E._palMusPrev) { try { E._palMusPrev.pause(); } catch (_) {} E._palMusPrev = null; } };   // 음악 미리듣기 멈춤(단계 넘어가면)
+    const _palStopMus = () => { if (E._palMusPrev) { try { E._palMusPrev.pause(); } catch (_) {} E._palMusPrev = null; } try { palStopNarrPreview(); } catch (_) {} };   // 음악·나레이션 미리듣기 멈춤(단계 넘어가면)
     const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
     const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
     // 📲 바텀시트 그립 — 탭하면 작업창이 위로 커졌다(다시 누르면) 접힘. 상태는 현재 보여지는 화면(showKey)에 묶음.
@@ -3717,6 +3719,7 @@
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
     { const ce = $("#esPalCapEditApply"); if (ce) ce.addEventListener("click", () => palCapEditApply(ce)); }   // ✏️ 자막 다듬기 적용(한 줄=한 블럭, 음성 있으면 타이밍 재싱크)
+    { const _ceta = $("#esPalCapEditTa"); if (_ceta) { const _ov = _ceta.value; _ceta.addEventListener("blur", (e) => { const rt = e.relatedTarget; if (rt && /^(esPalNarrCap|esCustNext|esCustPrev|esPalCapEditApply)$/.test(rt.id || "")) return; if (_ceta.value !== _ov && _ceta.value.trim()) { try { palCapEditApply(null); } catch (_) {} } }); } }   // ✏️ 칸 밖 누르면 자동 적용(적용버튼 대체)
     { const cs = $("#esPalCapSync"); if (cs) cs.addEventListener("click", () => palCapSync(cs)); }   // 🎯 자막 씽크 — 글자 그대로, 타이밍만 음성에 재정렬
     { const sj = $("#esPalStepJump"); if (sj) sj.addEventListener("click", palStepJump); }   // ✅ 최종본 확인 → 단계로 돌아가기 팝업
     { const ex = $("#esPalExport"); if (ex) ex.addEventListener("click", () => palExportVideo(ex)); }   // 📤 내보내기 — 실제 영상 렌더
@@ -11040,7 +11043,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       try { d.voiceDur = await voiceDuration(d.voiceUrl); } catch (_) {}   // 음성 길이(음성맞춰 자막 타이밍에 사용)
       try { palDraftSave(); } catch (_) {}
       renderPalette();
-      setTimeout(() => { const a = $("#esPalNarrAudio"); if (a) { try { a.play(); } catch (_) {} } }, 120);   // 미리듣기 자동 재생
+      try { palStopNarrPreview(); const _na = new Audio(d.voiceUrl); E._palNarrPreviewAudio = _na; _na.play().catch(() => {}); } catch (_) {}   // 🔊 만든 나레이션 1회 자동재생(다음 누르면 멈춤)
     } catch (e) {
       if (status) status.textContent = "⚠️ 나레이션 생성 실패: " + (e && e.message || e);
       try { toast("⚠️ 나레이션 생성 실패"); } catch (_) {}
