@@ -1717,7 +1717,7 @@
           break;
         }
         case "review": {   // ✅ 최종본 확인 — 위 미리보기 크게, 아래 컨트롤 작게(▶로 확인 + 단계로 돌아가기)
-          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
+          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 고칠 단계로 돌아가기</button><div class="es-pal-export-prog" id="esPalExportProg" hidden><span class="es-pal-export-progt" id="esPalExportProgT">준비 중…</span><span class="es-pal-export-progbar"><i id="esPalExportProgI"></i></span></div><button type="button" class="es-pal-navbtn es-pal-export-btn" id="esPalExport">📤 영상 내보내기</button></div>`;
           break;
         }
         case "length": {
@@ -3480,7 +3480,7 @@
     try {
       const _navMidEl = body.querySelector(".es-pal-cust-nav .es-pal-cust-nav-mid");
       if (_navMidEl) {
-        const _moved = body.querySelectorAll(".es-pal-cust-scroll .es-pal-narr-make, .es-pal-cust-scroll .es-pal-capedit-apply, .es-pal-cust-scroll .es-pal-scr-media-acts");
+        const _moved = body.querySelectorAll(".es-pal-cust-scroll .es-pal-narr-make, .es-pal-cust-scroll .es-pal-capedit-apply, .es-pal-cust-scroll .es-pal-scr-media-acts, .es-pal-cust-scroll .es-pal-navbtn");
         if (_moved.length) { _navMidEl.classList.add("has-navbtns"); _moved.forEach((b) => _navMidEl.appendChild(b)); }
       }
     } catch (_) {}
