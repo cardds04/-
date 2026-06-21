@@ -2585,14 +2585,28 @@
     });
   }
   // ⏱ 영상 클립 원본 길이 로드 → m.dur 가 원본보다 길면 잘라(반복 재생 방지). 타임라인만 갱신(미리보기 안 튐).
+  // ⏱ 영상 길이 — preload=metadata 가 안 오는 코덱(아이폰 등) 대응: 음소거 재생까지 해서 강제로 길이 확보(포스터 생성과 같은 방식이라 잘 됨)
+  function palVideoDur(url) {
+    return new Promise((res) => {
+      if (!url) { res(0); return; }
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
+      let done = false;
+      const fin = (d) => { if (done) return; done = true; clearTimeout(to); try { v.pause(); } catch (_) {} try { v.removeAttribute("src"); v.load(); } catch (_) {} res(isFinite(d) && d > 0 ? d : 0); };
+      const chk = () => { if (isFinite(v.duration) && v.duration > 0) fin(v.duration); };
+      const to = setTimeout(() => fin(v.duration), 9000);
+      v.addEventListener("loadedmetadata", chk); v.addEventListener("durationchange", chk); v.addEventListener("loadeddata", chk);
+      v.addEventListener("error", () => fin(0));
+      try { v.src = url; v.load(); const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) { fin(0); }
+    });
+  }
   function palEnsureClipDurs() {
     if (!document.getElementById("esPalCutWrap")) return;   // 컷 단계일 때만
     const d = E.palette && E.palette.demo; if (!d) return;
     const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
     clips.forEach((m) => {
-      if (!m || m.kind !== "video" || m.srcDur != null || m._durPend || !m.url) return;
-      m._durPend = true;
-      mediaDuration(m.url, true).then((dur) => {
+      if (!m || m.kind !== "video" || m.srcDur > 0 || m._durPend || !m.url || (m._durTries || 0) >= 3) return;   // 0(실패)·null 이면 재시도(최대 3회), 양수면 확정
+      m._durPend = true; m._durTries = (m._durTries || 0) + 1;
+      palVideoDur(m.url).then((dur) => {
         m._durPend = false;
         m.srcDur = (dur > 0) ? dur : 0;
         let changed = false;
