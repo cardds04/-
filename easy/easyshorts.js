@@ -1360,10 +1360,6 @@
     ensureSharpenSvg();
     root.innerHTML = `
       <div class="es-top">
-        <div class="es-topnav">
-          <button type="button" class="es-topnav-btn" id="esTopBack" title="뒤로" aria-label="뒤로">←</button>
-          <button type="button" class="es-topnav-btn" id="esTopHome" title="홈" aria-label="홈">🏠</button>
-        </div>
         <span class="es-logo">⚡ 이지숏폼 <span class="es-beta">BETA</span></span>
         <span class="es-sp"></span>
         <nav class="es-nav">
@@ -1371,12 +1367,18 @@
           <button type="button" class="es-btn es-btn-ghost" id="esNavRoad" title="콘텐츠 로드맵 — 과정·카테고리별 분류 한눈에">🗺 로드맵</button>
           <button type="button" class="es-modebtn" data-mode2="detail" title="관리자 전용 — 템플릿 제작·편집·게시 (비밀번호 필요)">🔒 관리자 모드</button>
         </nav>
+        <div class="es-topnav">
+          <button type="button" class="es-topnav-admin" id="esTopAdmin" title="이지숏폼 생성기(관리자 페이지)로 이동">🔧 관리자</button>
+          <button type="button" class="es-topnav-btn" id="esTopBack" title="뒤로" aria-label="뒤로">←</button>
+          <button type="button" class="es-topnav-btn" id="esTopHome" title="홈" aria-label="홈">🏠</button>
+        </div>
       </div>
       <div class="es-body" id="esBody"></div>
     `;
     // 📱 상단 홈·뒤로 버튼(고객 앱) — 하단 고정 네비 대신 상단에서 이동
     { const _bb = root.querySelector("#esTopBack"); if (_bb) _bb.addEventListener("click", easyBotBack); }
     { const _hb = root.querySelector("#esTopHome"); if (_hb) _hb.addEventListener("click", easyBotHome); }
+    { const _ab = root.querySelector("#esTopAdmin"); if (_ab) _ab.addEventListener("click", openAdmin); }   // 🔧 관리자 → 이지숏폼 생성기(비번 게이트 통과 시)
   }
   // 📱 하단 앱형 네비 — 모든 고객 화면에서 홈/뒤로. 작업은 지우지 않고 보존(편집 화면만 닫음 → 새로고침하면 복구)
   function easyBotHome() {
