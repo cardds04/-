@@ -3367,6 +3367,20 @@
     } catch (e) { console.warn("[easyshorts] palExportVideo", e); if (prog) prog.hidden = true; try { toast("내보내기 실패: " + ((e && e.message) || e)); } catch (_) {} }
     finally { if (btn) { btn.disabled = false; const t = btn.querySelector(".es-pal-scr-btn-t"); if (t) t.textContent = "영상으로 내보내기"; } }
   }
+  // 📥 관리자 빌더 1열 — 내 영상을 직접 넣어서 미리보기·고객화면에 똑같이 반영(실제 영상으로 편집)
+  function paletteUploadZone(P) {
+    const d = P.demo || {};
+    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    const grid = list.length
+      ? `<div class="es-pal-up-grid">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-uprm="${i}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div><div class="es-pal-up-cnt">✅ ${list.length}개 · 미리보기·고객화면에 반영돼요</div>`
+      : `<div class="es-pal-up-empty"><div class="es-pal-up-empty-ic">🎬</div><div class="es-pal-up-empty-t">여기에 내 영상을 넣어<br>똑같이 편집해요</div></div>`;
+    return `<div class="es-pal-zone es-pal-zone-upload">
+      <div class="es-pal-prev-tag es-pal-up-tag">📥 내 영상 — 넣어서 편집</div>
+      <button type="button" class="es-pal-up-btn" id="esPalUpBtn">＋ 영상·사진 넣기</button>
+      ${grid}
+      <input type="file" id="esPalUpFile" accept="image/*,video/*" multiple hidden>
+    </div>`;
+  }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
     if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
@@ -3469,7 +3483,8 @@
             ${(E.palPresets || []).length ? `<div class="es-pal-funcbar-row"><span class="es-pal-funcbar-lb">📌 저장<br>문구</span><div class="es-pal-funcbar-presets">${savedListHtml}</div></div>` : ""}
           </div>`}
         </div>
-        <div class="es-pal-body ${_isEditStep ? "has-editor" : ""}">
+        <div class="es-pal-body es-pal-body-4 ${_isEditStep ? "has-editor" : ""}">
+          ${paletteUploadZone(P)}
           <div class="es-pal-zone es-pal-zone-real">${realHtml}</div>
           ${editorZone}
           <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
@@ -3881,6 +3896,10 @@
     try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
     const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { (P.demo && P.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
+    // 📥 관리자 빌더 1열 — 내 영상 넣기/빼기 (demo.media 에 반영 → 미리보기·고객화면 동기화)
+    { const ub = $("#esPalUpBtn"), uf = $("#esPalUpFile"); if (ub && uf) ub.addEventListener("click", () => uf.click()); }
+    { const uf = $("#esPalUpFile"); if (uf) uf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.media)) P.demo.media = P.demo.media ? [P.demo.media] : []; fs.forEach((f) => { try { P.demo.media.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); try { palDraftSave(); } catch (_) {} renderPalette(); }); }
+    $$("#esBody [data-uprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.uprm; const arr = (P.demo && P.demo.media) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); try { palDraftSave(); } catch (_) {} renderPalette(); } }));
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
