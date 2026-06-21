@@ -10827,7 +10827,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const status = $("#esPalNarrCapStatus"); const old = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "🎤 음성 분석 중…"; }
     if (status) status.textContent = "🎤 나레이션을 듣고 말하는 타이밍에 자막을 맞추는 중… (10~20초)";
-    const MAX = 15;   // 한 자막(=한 줄) 최대 글자 — 사장님 요청: 15자 이하
+    const MAX = 10;   // 한 자막(=한 줄) 최대 글자 — 사장님 요청: 10자에서 끊기(STT 청크·폴백·강제분할 모두 이 값 사용)
     // 🎤 1순위: STT 단어 타임스탬프로 '말하는 타이밍'에 정확히 싱크 (원래 잘 되던 방식). 실패 시 음성 길이에 균등 분배 폴백.
     let chunks = null, synced = false;
     const words = await palVoiceWords();
