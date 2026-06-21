@@ -1722,7 +1722,21 @@
           body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 단계로 돌아가기</button></div>`;
           break;
         }
-        case "length":  body = `<div class="es-pal-cut-edit"><div class="es-pal-cut-lb es-pal-cut-lb-sm">✂️ 컷 타임라인 <span class="es-pal-tref-hint">(좌우로 넘기며 길이 조절 · 블록 탭)</span></div>${palCutToolPanel(P)}<div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div></div>`; break;
+        case "length": {
+          const _tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
+          const _tlOpen = !!E._palCutTlOpen;
+          body = `<div class="es-pal-cut-edit">${palCutToolPanel(P)}
+            <div class="es-pal-ct-tools es-pal-ct-tools-1line">
+              <button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트에 맞춰 컷 끊기">🥁 AI리듬</button>
+              <select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${_tsel}</select>
+              <label class="es-pal-ct-fitcap"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막</label>
+              <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="음성 없는 부분 잘라내기">🔇 음성없애기</button>
+            </div>
+            <button type="button" class="es-pal-cut-tltoggle" data-cttltoggle>${_tlOpen ? "▾ 타임라인 접기" : "▸ 타임라인 펼쳐서 자세히 편집"}</button>
+            <div id="esPalCutWrap" class="es-pal-cut-wrap${_tlOpen ? "" : " collapsed"}">${palCutTimeline(P, { noTools: 1 })}</div>
+          </div>`;
+          break;
+        }
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
@@ -2049,7 +2063,7 @@
     const wrap = document.getElementById("esPalCutWrap");
     if (!wrap) { renderPalette(); return; }
     const fn = P.preview || ((P.steps[P.sel] || {}).fn);
-    wrap.innerHTML = palCutTimeline(P, (fn === "length") ? {} : { noTools: 1 });
+    wrap.innerHTML = palCutTimeline(P, { noTools: 1 });   // 도구는 본문 1줄바에 따로 → 타임라인엔 안 넣음
     palCutInit();
     const c = E._palPlay;   // 재생 중이면 새 재생선으로 다시 연결(미리보기 DOM은 그대로라 영상은 계속 재생)
     if (c) { const nph = document.querySelector(".es-pal-ct-playhead"); if (nph) { c.playhead = nph; const t = c.playing ? (c.base + (performance.now() - c.t0) / 1000) : (c.base || 0); nph.style.left = (Math.min(c.maxT, Math.max(0, t)) * c.PPS) + "px"; nph.style.opacity = "1"; palArmPlayheadGrab(c); } }
@@ -2743,6 +2757,7 @@
     $$("[data-cttool]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.cttool; if (k === "even") palCutEven(); else if (k === "beat") palCutBeat(b); else if (k === "trim") palCutTrimSilence(); }));
     { const tp = $("[data-cttempo]"); if (tp) tp.addEventListener("change", (e) => { try { setBeatTempo(e.target.value); } catch (_) {} }); }
     { const fc = $("[data-ctfitcap]"); if (fc) fc.addEventListener("change", (e) => { try { setBeatFit(e.target.checked); } catch (_) {} }); }   // 📝 자막에 맞추기 토글
+    { const tg = $("[data-cttltoggle]"); if (tg) tg.addEventListener("click", () => { E._palCutTlOpen = !E._palCutTlOpen; const w = $("#esPalCutWrap"); if (w) w.classList.toggle("collapsed", !E._palCutTlOpen); tg.textContent = E._palCutTlOpen ? "▾ 타임라인 접기" : "▸ 타임라인 펼쳐서 자세히 편집"; }); }   // ▸ 타임라인 펼치기/접기(재렌더 없이 — 미리보기 안 튐)
     { const es = $("[data-ctevensec]"); if (es) es.addEventListener("change", (e) => { const v = setPalEvenSec(e.target.value); e.target.value = v; }); }   // 컷 균등 '초' 지정(기본 2)
   }
   // 📹 영상 찍기 — 앱 안에서 카메라로 바로 녹화(getUserMedia + MediaRecorder). 다 찍으면 onDone(File) 호출(취소면 null). localhost/https 필요.
