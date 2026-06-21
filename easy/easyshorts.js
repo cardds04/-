@@ -1009,7 +1009,8 @@
     if (vBuf) {
       const vsrc = off.createBufferSource(); vsrc.buffer = vBuf;
       const vg = off.createGain(); vg.gain.setValueAtTime(1, 0);
-      vsrc.connect(vg); vg.connect(off.destination); vsrc.start(0);   // 나레이션은 0초부터 한 번
+      const _vDelay = Math.max(0, +(E.using && E.using.voiceDelay) || 0);   // 🎙 나레이션 시작 지연(팔레트=1초) — 미리보기와 동일하게. 자막도 이만큼 늦게 시작돼 있어 맞춰야 싱크 맞음
+      vsrc.connect(vg); vg.connect(off.destination); vsrc.start(_vDelay);   // 나레이션은 voiceDelay 뒤부터 한 번(0초 즉시재생 X → 자막 싱크 유지)
     }
     // 영상 클립 원음 — 각 슬롯 시간 위치(start)에 in-오프셋만큼 잘라 배치 (음악과 함께)
     for (const { seg, buf } of segBufs) {
@@ -3158,7 +3159,13 @@
       const slots = clips.map((m) => ({ id: uid(), dur: (m.dur > 0 ? m.dur : 2.5) }));
       const fills = {};
       slots.forEach((s, i) => { const m = clips[i]; fills[s.id] = { url: m.url, blob: m.blob, kind: (m.kind === "video" ? "video" : "image"), dur: (m.dur > 0 ? m.dur : 2.5) }; });
-      const mkText = (b, isCap) => ({ id: uid(), text: b.text || "", start: b.start || 0, dur: (b.dur != null ? b.dur : 3), xPct: (b.posX != null ? b.posX : 50), yPct: (b.posY != null ? b.posY : (isCap ? 88 : 18)), width: 86, size: (b.size != null ? b.size : (isCap ? 7 : 14)), color: b.color || "#ffffff", font: b.font || null, bold: !!b.bold, italic: !!b.italic, outline: (b.stroke && b.stroke !== "#111111") ? b.stroke : "", shadow: b.shadow || null, bg: b.bg || null, align: b.align || "center", fx: "none" });
+      const mkText = (b, isCap) => {
+        // 🎨 자막/타이틀 블록은 bg=색·bgStyle=모양(box/pill/sharp)로 저장. 출력 텍스트 그리기는 bg=모양·bgColor=색·bgOpacity를 기대 → 여기서 올바로 변환(안 하면 bgColor 없어 검정 배경으로 나옴).
+        const _bgCol = (b.bg && b.bg !== "none" && b.bg !== "") ? b.bg : null;
+        const _shape = _bgCol ? (({ box: "box", pill: "pill", sharp: "box" })[b.bgStyle || "box"] || "box") : "none";
+        const _op = (b.opacity != null ? Math.max(0, Math.min(1, b.opacity / 100)) : 1);
+        return { id: uid(), text: b.text || "", start: b.start || 0, dur: (b.dur != null ? b.dur : 3), xPct: (b.posX != null ? b.posX : 50), yPct: (b.posY != null ? b.posY : (isCap ? 88 : 18)), width: 86, size: (b.size != null ? b.size : (isCap ? 7 : 14)), color: b.color || "#ffffff", font: b.font || null, bold: !!b.bold, italic: !!b.italic, outline: (b.stroke && b.stroke !== "#111111") ? b.stroke : "", shadow: b.shadow || null, bg: _shape, bgColor: _bgCol, bgOpacity: _op, align: b.align || "center", fx: "none" };
+      };
       const texts = [];
       (d.titles || []).forEach((b) => { if ((b.text || "").trim() && b.result) texts.push(mkText(b, false)); });
       (d.captions || []).forEach((b) => { if ((b.text || "").trim() && b.result) texts.push(mkText(b, true)); });
