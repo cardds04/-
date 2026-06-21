@@ -1370,10 +1370,6 @@
         </nav>
       </div>
       <div class="es-body" id="esBody"></div>
-      <nav class="es-botnav" id="esBotNav" aria-label="이동">
-        <button type="button" class="es-botnav-btn" id="esBotBack"><span class="es-botnav-ic">‹</span><span class="es-botnav-lb">뒤로</span></button>
-        <button type="button" class="es-botnav-btn" id="esBotHome"><span class="es-botnav-ic">🏠</span><span class="es-botnav-lb">홈</span></button>
-      </nav>
     `;
   }
   // 📱 하단 앱형 네비 — 모든 고객 화면에서 홈/뒤로. 작업은 지우지 않고 보존(편집 화면만 닫음 → 새로고침하면 복구)
@@ -14649,8 +14645,6 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const eb = $("#esNavExplore", root); if (eb) eb.addEventListener("click", openExplore); }
     { const cb = $("#esNavClassify", root); if (cb) cb.addEventListener("click", openClassify); }
     { const rb = $("#esNavRoad", root); if (rb) rb.addEventListener("click", openRoadmap); }
-    { const bh = $("#esBotHome", root); if (bh) bh.addEventListener("click", easyBotHome); }   // 📱 하단 네비 홈
-    { const bb = $("#esBotBack", root); if (bb) bb.addEventListener("click", easyBotBack); }   // 📱 하단 네비 뒤로
     // 🔧 바탕화면 바로가기(?admin=1) → 게이트·비번 없이 '이지숏폼 생성기'(관리자)로 바로 진입. 고객 앱엔 관리자 버튼 없음.
     try {
       if (/[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash)) {
