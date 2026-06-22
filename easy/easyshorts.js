@@ -912,14 +912,32 @@
       if (!(t >= (txt.start || 0) && t < (txt.start || 0) + (txt.dur || 0))) return;
       drawCaptionCanvas(ctx, txt, t, W, H);
     });
-    (st.stickers || []).forEach((sk) => {   // 🏷 스티커 이미지 오버레이(위치·크기·회전·투명도·타이밍)
-      if (!(t >= (sk.start || 0) && (sk.dur == null || t < (sk.start || 0) + sk.dur))) return;
+    (st.stickers || []).forEach((sk) => {   // 🏷 스티커 이미지 오버레이(위치·크기·회전·투명도·타이밍·효과)
+      const start = sk.start || 0;
+      if (!(t >= start && (sk.dur == null || t < start + sk.dur))) return;
       const im = sk.img; if (!im || !im.complete || !im.naturalWidth) return;
       const h = Math.max(1, (sk.sizePct / 100) * H), w = h * (im.naturalWidth / im.naturalHeight);
+      // ✨ 효과 — 나올 때(animIn) 0.45초, 사라질 때(animOut) 0.4초
+      let alpha = clamp((sk.opacity != null ? sk.opacity : 100) / 100, 0, 1), sc = 1, dx = 0, dy = 0;
+      const into = t - start, AIN = 0.45;
+      if (into < AIN && sk.animIn && sk.animIn !== "none") {
+        const k = clamp(into / AIN, 0, 1);
+        if (sk.animIn === "fade") alpha *= k;
+        else if (sk.animIn === "pop") { sc = 0.2 + 1.05 * k - 0.25 * k * k; alpha *= clamp(k * 1.6, 0, 1); }
+        else if (sk.animIn === "zoom") { sc = 0.35 + 0.65 * k; alpha *= clamp(k * 1.6, 0, 1); }
+        else if (sk.animIn === "slideL") { dx = (1 - k) * (-0.35 * W); }
+        else if (sk.animIn === "slideR") { dx = (1 - k) * (0.35 * W); }
+        else if (sk.animIn === "bounce") { sc = k < 0.7 ? (0.3 + k) : (1.0 + (1 - (k - 0.7) / 0.3) * 0.12); alpha *= clamp(k * 1.6, 0, 1); }
+      }
+      if (sk.dur != null && sk.animOut && sk.animOut !== "none") {
+        const fromEnd = (start + sk.dur) - t, AOUT = 0.4;
+        if (fromEnd < AOUT) { const k = clamp(fromEnd / AOUT, 0, 1); if (sk.animOut === "fade") alpha *= k; else if (sk.animOut === "zoom") sc *= (0.35 + 0.65 * k); else if (sk.animOut === "pop") { sc *= (0.35 + 0.65 * k); alpha *= k; } }
+      }
       ctx.save();
-      ctx.globalAlpha = clamp((sk.opacity != null ? sk.opacity : 100) / 100, 0, 1);
-      ctx.translate((sk.xPct != null ? sk.xPct : 50) / 100 * W, (sk.yPct != null ? sk.yPct : 50) / 100 * H);
+      ctx.globalAlpha = clamp(alpha, 0, 1);
+      ctx.translate((sk.xPct != null ? sk.xPct : 50) / 100 * W + dx, (sk.yPct != null ? sk.yPct : 50) / 100 * H + dy);
       if (sk.rotate) ctx.rotate(sk.rotate * Math.PI / 180);
+      if (sc !== 1) ctx.scale(sc, sc);
       try { ctx.drawImage(im, -w / 2, -h / 2, w, h); } catch (_) {}
       ctx.restore();
     });
@@ -3559,7 +3577,8 @@
         const _bgCol = (b.bg && b.bg !== "none" && b.bg !== "") ? b.bg : null;
         const _shape = _bgCol ? (({ box: "box", pill: "pill", sharp: "box" })[b.bgStyle || "box"] || "box") : "none";
         const _op = (b.opacity != null ? Math.max(0, Math.min(1, b.opacity / 100)) : 1);
-        return { id: uid(), text: b.text || "", start: b.start || 0, dur: (b.dur != null ? b.dur : 3), xPct: (b.posX != null ? b.posX : 50), yPct: (b.posY != null ? b.posY : (isCap ? 88 : 18)), width: 86, size: (b.size != null ? b.size : (isCap ? 7 : 14)), color: b.color || "#ffffff", font: b.font || null, bold: !!b.bold, italic: !!b.italic, outline: (b.stroke && b.stroke !== "#111111") ? b.stroke : "", shadow: b.shadow || null, bg: _shape, bgColor: _bgCol, bgOpacity: _op, align: b.align || "center", fx: "none" };
+        const _outline = (b.stroke && b.stroke !== "#111111") ? b.stroke : "";
+        return { id: uid(), text: b.text || "", start: b.start || 0, dur: (b.dur != null ? b.dur : 3), xPct: (b.posX != null ? b.posX : 50), yPct: (b.posY != null ? b.posY : (isCap ? 88 : 18)), width: 86, size: (b.size != null ? b.size : (isCap ? 7 : 14)), color: b.color || "#ffffff", font: b.font || null, bold: !!b.bold, italic: !!b.italic, outline: _outline, outlineW: _outline ? 0.15 : 0, shadow: b.shadow || null, bg: _shape, bgColor: _bgCol, bgOpacity: _op, align: b.align || "center", fx: "none" };
       };
       const texts = [];
       (d.titles || []).forEach((b) => { if ((b.text || "").trim() && b.result) texts.push(mkText(b, false)); });
@@ -3572,7 +3591,7 @@
         const im = new Image(); im.src = s.result.url;
         try { await new Promise((res) => { if (im.complete && im.naturalWidth) return res(); im.onload = res; im.onerror = res; }); } catch (_) {}
         if (!im.naturalWidth) continue;
-        stickersRes.push({ img: im, start: r.start || 0, dur: (r.dur != null ? r.dur : null), xPct: (s.posX != null ? s.posX : 50), yPct: (s.posY != null ? s.posY : 50), sizePct: (s.size != null ? s.size : 22), rotate: s.rotate || 0, opacity: (s.opacity != null ? s.opacity : 100) });
+        stickersRes.push({ img: im, start: r.start || 0, dur: (r.dur != null ? r.dur : null), xPct: (s.posX != null ? s.posX : 50), yPct: (s.posY != null ? s.posY : 50), sizePct: (s.size != null ? s.size : 22), rotate: s.rotate || 0, opacity: (s.opacity != null ? s.opacity : 100), animIn: s.animIn || "none", animOut: s.animOut || "none" });
       }
       // 🔔 효과음 — 컷→절대시간
       const sfxRes = [];
