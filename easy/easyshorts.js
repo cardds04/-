@@ -14047,13 +14047,12 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
   // ════════════ 🗂 템플릿 분류 도구 (관리자) — 목적/포맷/레벨 태깅 ════════════
   // 손님 갤러리를 '목적별 + 레벨순'으로 묶기 위한 분류. v1: localStorage 저장(es_template_cats).
-  const ES_CATS_VER = 4;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
-  // 🏢 대분류=업종(미용실·헬스장…) → 소분류=영상유형 4가지(얼굴 유무 × 음성/무음/AI나레이션). 업종 추가하면 4유형 자동 따라옴.
+  const ES_CATS_VER = 5;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
+  // 🏢 대분류=업종(미용실·헬스장…) → 소분류=영상유형 3가지. 업종 추가하면 3유형 자동 따라옴.
   function ES_SUBFMTS() { return [
-    { id: "fv", label: "얼굴+음성", level: 1 },
-    { id: "fo", label: "얼굴+무음", level: 1 },
-    { id: "vo", label: "보이스오버", level: 1 },
-    { id: "ai", label: "AI 나레이션", level: 1 },
+    { id: "nn", label: "얼굴없이+나레이션", level: 1 },
+    { id: "fn", label: "얼굴+나레이션", level: 1 },
+    { id: "fv", label: "얼굴+실제음성", level: 1 },
   ]; }
   const ES_CATS = [
     { key: "biz_hair", label: "미용실", emoji: "💇", formats: ES_SUBFMTS() },
@@ -14125,10 +14124,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const n = String((t && t.name) || "").toLowerCase();
     const fns = (t && (t._paletteSteps || t.steps) || []).map((s) => s && s.fn).filter(Boolean);
     const has = (re) => re.test(n);
-    let fmt = "fv";   // 기본: 얼굴+음성
-    if ((t && t.narrate) || fns.includes("ngen") || fns.includes("nstyle") || has(/나레이션|tts|독백|자동\s*나레/)) fmt = "ai";   // AI 나레이션
-    else if (has(/무음|무언|음성\s*없|asmr|타임랩스|timelapse|montage|몽타주|브이로그|vlog/)) fmt = "fo";   // 얼굴+무음(추정)
-    else if (has(/보이스오버|voiceover|성우|내레/)) fmt = "vo";   // 보이스오버
+    let fmt = "fv";   // 기본: 얼굴+실제음성
+    if ((t && t.narrate) || fns.includes("ngen") || fns.includes("nstyle") || has(/나레이션|tts|독백|보이스오버|voiceover|성우|내레/)) fmt = "nn";   // 나레이션 → 얼굴없이+나레이션(기본)
     return { goal: biz, format: fmt };
   }
   function clsFormatOptions(goalKey, selFmt) {
