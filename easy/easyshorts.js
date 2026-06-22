@@ -3600,6 +3600,15 @@
         if (_moved.length) { _navMidEl.classList.add("has-navbtns"); _moved.forEach((b) => _navMidEl.appendChild(b)); }
       }
     } catch (_) {}
+    // 🎬 1열 시안 영상 = 재렌더(타이핑 등)에도 같은 <video> 재사용 → 0:00 리셋·재로딩 안 됨(글씨 쳐도 반응 안 하는 정지 플레이어)
+    try {
+      const _slotVid = body.querySelector(".es-pal-zone-src video.es-pal-ref-vid");
+      if (_slotVid) {
+        const _src = _slotVid.getAttribute("src") || "";
+        if (E._refVid && E._refVid.getAttribute("src") === _src) { _slotVid.replaceWith(E._refVid); }   // 보존된 요소(재생위치·정지상태)로 교체 — 페인트 전이라 깜빡임 없음
+        else { E._refVid = _slotVid; }   // 첫 렌더 또는 영상 바뀜 → 이걸 보존
+      } else { E._refVid = null; }
+    } catch (_) {}
     const _tExit = $("#esPalTestExit"); if (_tExit) _tExit.addEventListener("click", palTestExit);   // 🧪 테스트 나가기 → 관리자 + 드래프트 복원
     const _cuExit = $("#esPalCustExit"); if (_cuExit) _cuExit.addEventListener("click", palCustExit);   // 🙋 고객 템플릿 사용 나가기 → 갤러리
     const add = $("#esPalAdd"); if (add) add.addEventListener("click", () => { P.preview = null; P.steps.push({ id: uid(), fn: null }); P.sel = P.steps.length - 1; renderPalette(); });
