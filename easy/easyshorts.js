@@ -3181,7 +3181,13 @@
     try { if (_blob) _blob._lines = lines.length; } catch (_) {}   // 📏 실제 렌더된 줄 수(자동 줄바꿈 포함) — palBoxH가 글씨 안 짜부라뜨리게
     return _blob;
   }
-  const FONT_TITLE_COLORS = ["#ffffff", "#111111", "#ffd54a", "#ff5252", "#1ed6a5", "#2979ff", "#ff8f3a", "#c44dff"];
+  const FONT_TITLE_COLORS = [
+    "#ffffff", "#f2f2f2", "#bdbdbd", "#777777", "#111111", "#000000",
+    "#fff59d", "#ffd54a", "#ffc107", "#ff8f3a", "#ff7043", "#ff5252",
+    "#e53935", "#ff4081", "#ff80ab", "#c44dff", "#7c4dff", "#5e35b1",
+    "#90caf9", "#2979ff", "#1565c0", "#26c6da", "#00b8d4", "#1ed6a5",
+    "#00c853", "#7cb342", "#a5d6a7", "#ffab91", "#8d6e63", "#5d4037"
+  ];
   const FONT_TITLE_STROKES = [["", "없음"], ["#000000", "검정"], ["#ffffff", "흰"]];
   // ✍️ 글자체로 '타이틀 참조' 만들기 — 오버레이(글씨체+색+테두리 고르고 참조에 저장, 맨 앞에)
   function palOpenFontMaker() {
@@ -3558,6 +3564,9 @@
       : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
+    // 📜 재렌더(글자·색 변경 등)로 스크롤이 맨 위로 튀지 않게 — 스크롤 위치 저장 후 아래서 복원
+    const _palScroll = {};
+    try { [".es-pal-zone-editor", ".es-pal-zone-src", ".es-pal-zone-tmpl", ".es-pal-zone-canvas", ".es-pal-cust-scroll", ".es-pal-setup-music"].forEach((s) => { const el = body.querySelector(s); if (el && el.scrollTop) _palScroll[s] = el.scrollTop; }); } catch (_) {}
     body.innerHTML = (E._palTestMode || E._palCustomerMode)
       ? `<div class="es-pal-test${E._palCustomerMode ? " es-pal-cust-use" : ""}">${E._palCustomerMode
           ? ""
@@ -3591,6 +3600,7 @@
           <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
         </div>
       </div>`;
+    try { Object.keys(_palScroll).forEach((s) => { const el = body.querySelector(s); if (el) el.scrollTop = _palScroll[s]; }); } catch (_) {}   // 📜 스크롤 위치 복원(위로 안 튐)
     // 🔽 단계별 주요 액션 버튼(나레이션 만들기·자막 적용/싱크 재정렬·더 넣기 등)을 하단 nav 가운데로 모음 — 컷편집처럼.
     //    핸들러는 #esBody 기준 셀렉터라 옮겨도 그대로 동작(연결 전에 옮김).
     try {
