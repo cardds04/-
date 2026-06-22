@@ -1828,11 +1828,9 @@
         }
         case "length": {
           const _tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
-          const _tlOpen = !!E._palCutTlOpen;
-          void _tsel;   // 🥁AI리듬·🔇음성없애기 툴은 위(본문)에서 빼고 하단바(palCutToolbar)로 옮김
+          void _tsel; E._palCutTlOpen = true;   // 타임라인 항상 펼침(요청: 접기 버튼 제거)
           body = `<div class="es-pal-cut-edit">${palCutToolPanel(P)}
-            <button type="button" class="es-pal-cut-tltoggle" data-cttltoggle>${_tlOpen ? "▾ 타임라인 접기" : "▸ 타임라인 펼쳐서 자세히 편집"}</button>
-            <div id="esPalCutWrap" class="es-pal-cut-wrap${_tlOpen ? "" : " collapsed"}">${palCutTimeline(P, { noTools: 1 })}</div>
+            <div id="esPalCutWrap" class="es-pal-cut-wrap">${palCutTimeline(P, { noTools: 1 })}</div>
           </div>`;
           break;
         }
@@ -3981,6 +3979,10 @@
       if (_navMidEl) {
         const _moved = body.querySelectorAll(".es-pal-cust-scroll .es-pal-narr-make, .es-pal-cust-scroll .es-pal-capedit-apply, .es-pal-cust-scroll .es-pal-scr-media-acts, .es-pal-cust-scroll .es-pal-navbtn");
         if (_moved.length) { _navMidEl.classList.add("has-navbtns"); _moved.forEach((b) => _navMidEl.appendChild(b)); }
+        // 📣 단계 안내바(뭐라고 바꿀까요/자막을 만들어주세요 등)도 하단 네비 안으로 합침
+        const _screen = _navMidEl.closest(".es-pal-phone-screen-cust");
+        const _guide = _screen && _screen.querySelector(":scope > .es-pal-cust-guide");
+        if (_guide) { _navMidEl.classList.add("has-navbtns"); _navMidEl.appendChild(_guide); }
       }
     } catch (_) {}
     // 🎬 1열 시안 영상 = 재렌더(타이핑 등)에도 같은 <video> 재사용 → 0:00 리셋·재로딩 안 됨(글씨 쳐도 반응 안 하는 정지 플레이어)
