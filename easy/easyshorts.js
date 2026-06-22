@@ -1704,32 +1704,22 @@
           body = `${palPosControls("caption")}${opts.length ? "" : `<div class="es-pal-tref-lb">🗨 아직 없어요</div>`}${gallery}`;
           break;
         }
-        case "caption": {   // 💬 자막 생성 — ①방법 고르기(AI/직접) → AI생성 or 직접 칸별 입력
-          const ts = palTitles();
-          if (!ts.length) { body = `<div class="es-pal-tgen-noref">이 영상엔 자막이 없어요 💬</div>`; break; }
-          const cstep = E._palCapStep || 0;
-          const capRows = () => ts.map((t, i) => {
+        case "caption": {   // 💬 자막 생성 — 자동세팅과 동일한 3가지 방법: AI 생성 / 음성에서 출력 / 직접 작성
+          const ccs = palBlocks("caption") || [];
+          if (!ccs.length) { body = `<div class="es-pal-tgen-noref">이 영상엔 자막이 없어요 💬</div>`; break; }
+          const cm = E._palCapMethod || "manual";
+          const _mbtn = (k, ic, lb) => `<button type="button" class="es-pal-capm-btn3 ${cm === k ? "on" : ""}" data-palcapm="${k}"><span class="es-pal-capm-ic">${ic}</span>${lb}</button>`;
+          const methods = `<div class="es-pal-capm-grid3">${_mbtn("ai", "🤖", "AI로 자막 생성")}${_mbtn("voice", "🎤", "음성에서 출력")}${_mbtn("manual", "✍️", "직접 작성")}</div>`;
+          const capRows = ccs.map((t, i) => {
             const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체";
-            return `<div class="es-pal-cslot ${i === palSel() ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 자막 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
+            return `<div class="es-pal-cslot ${i === palSel("caption") ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 자막 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
           }).join("");
-          if (cstep === "ai") {
-            body = `<div class="es-pal-capm-lb">📖 AI로 자막(독백) 만들기</div>
-              <div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 흐르는 자막을 만들어드려요</div>
-              ${palCapAiCore()}
-              <button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 뒤로</button>`;
-          } else if (cstep === 1) {
-            const capJoined = (palBlocks("caption") || []).map((t) => (t.text || "").replace(/\n/g, " ").trim()).filter(Boolean).join("\n");
-            body = `<div class="es-pal-capm-hint">✍️ <b>한 줄에 자막 하나씩</b> — 엔터로 줄을 나누면 자막 블럭이 하나씩 쌓여요</div>
-              <textarea id="esPalCapMulti" class="es-pal-capedit-ta" rows="6" placeholder="한 줄에 자막 하나씩&#10;엔터로 나누면 자막이 하나씩 늘어나요&#10;(나중에 수정도 여기서)">${esc(capJoined)}</textarea>
-              <button type="button" class="es-pal-capedit-apply" id="esPalCapApply">✓ 적용</button>
-              <button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 방법 다시 고르기</button>`;
-          } else {
-            body = `<div class="es-pal-capm-lb">💬 자막을 어떻게 만들까요?</div>
-              <div class="es-pal-capm-grid">
-                <button type="button" class="es-pal-capm-btn" data-capmethod="ai"><span class="es-pal-capm-ic">🤖</span><b>AI 생성</b></button>
-                <button type="button" class="es-pal-capm-btn" data-capmethod="1"><span class="es-pal-capm-ic">✍️</span><b>직접 입력</b></button>
-              </div>`;
-          }
+          const cslots = `<div class="es-pal-cslot-lb">💬 자막 글자</div>${capRows}`;
+          let _inner;
+          if (cm === "ai") _inner = `<div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>${palCapAiCore()}`;
+          else if (cm === "voice") _inner = `<div class="es-pal-capm-hint">🎤 1열에 넣은 <b>따라할 영상의 말소리</b>를 그대로 자막으로 옮겨요(말하는 타이밍에 맞춰서)</div><button type="button" class="es-pal-capm-go" id="esPalCapVoice">🎤 영상 음성에서 자막 뽑기</button><div id="esPalCapVoiceStatus" class="es-pal-narr-status"></div>${cslots}`;
+          else _inner = cslots;   // manual
+          body = methods + _inner;
           break;
         }
         case "nstyle": {   // 🎙 나레이션 목소리 고르기 — 타입캐스트 목소리 목록에서 선택
