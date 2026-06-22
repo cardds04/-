@@ -1847,7 +1847,9 @@
     let media;
     if (m && m.url) {
       media = m.kind === "video"
-        ? `<video class="es-pal-real-media" src="${m.url}"${(live || ro) ? " autoplay" : ""} muted loop playsinline preload="auto"></video>`
+        ? (opts.videoControls
+            ? `<video class="es-pal-real-media es-pal-ref-vid" src="${m.url}" controls muted playsinline preload="auto"></video>`   // 🎬 1열 시안 = 재생/정지·스크럽 컨트롤(자동재생·반복 끔)
+            : `<video class="es-pal-real-media" src="${m.url}"${(live || ro) ? " autoplay" : ""} muted loop playsinline preload="auto"></video>`)
         : `<img class="es-pal-real-media" src="${m.url}" alt="">`;
     } else if (opts.emptyHtml) {
       media = opts.emptyHtml;
@@ -3528,7 +3530,7 @@
     // 🖼 1열 = '시안'(따라할 원본 영상만 — 작업한 타이틀/자막 적용 안 함, 읽기전용). 보고 따라 만들기용.
     const _refEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎬</div><div class="es-pal-real-empty-t"><b>따라할 영상(시안)</b>을 넣으면<br>여기 떠요 — 보고 따라 만들어요</div></div>`;
     const refHtml = `<div class="es-pal-prev es-pal-prev-editor">
-          <div class="es-pal-phone es-pal-phone-sm ${realArc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { readonly: true, noOverlay: true, emptyHtml: _refEmpty })}</div></div>
+          <div class="es-pal-phone es-pal-phone-sm ${realArc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { readonly: true, noOverlay: true, videoControls: true, emptyHtml: _refEmpty })}</div></div>
         </div>`;
     // 🎞 2열 = '내 템플릿' 미리보기 — 작업한 타이틀/자막이 여기 적용됨(편집·끌어서 배치). 테스트 영상(d.testMedia) 위에 보여줌.
     const _testEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎞</div><div class="es-pal-real-empty-t">테스트 영상을 넣으면<br>그 위에 <b>작업한 게</b> 보여요</div></div>`;
