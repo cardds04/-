@@ -3523,7 +3523,7 @@
     const cur = stk[sel] || null;
     const tabs = stk.map((s, i) => `<button type="button" class="es-pal-ted-tab ${i === sel ? "sel" : ""}" data-stkrtab="${i}">🏷${i + 1}<span class="es-pal-ted-tabx" data-stkrdel="${i}" title="이 스티커 삭제">×</span></button>`).join("") + `<button type="button" class="es-pal-ted-tabadd" id="esStkrAdd">＋ 스티커</button>`;
     if (!cur) {
-      return `<div class="es-pal-ted"><div class="es-pal-ted-tabs">${tabs}</div><div class="es-pal-stkr-empty"><div class="es-pal-stkr-empty-ic">🏷</div><div>영상 위에 붙일 스티커를 추가해요<br>AI로 만들거나 이미지를 올릴 수 있어요</div><button type="button" class="es-pal-up-btn" id="esStkrAdd2">＋ 스티커 추가</button></div></div>`;
+      return `<div class="es-pal-ted"><div class="es-pal-ted-tabs">${tabs}</div><div class="es-pal-stkr-lib" id="esStkrLib"></div><div class="es-pal-stkr-empty"><div class="es-pal-stkr-empty-ic">🏷</div><div>영상 위에 붙일 스티커를 추가해요<br>AI로 만들거나 이미지를 올릴 수 있어요</div><button type="button" class="es-pal-up-btn" id="esStkrAdd2">＋ 스티커 추가</button></div></div>`;
     }
     const img = cur.result && cur.result.url;
     const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
@@ -3547,6 +3547,7 @@
       : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (PNG)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" hidden><div class="es-pal-stkr-pastehint">사진 복사한 뒤 📋 또는 ⌘V / Ctrl+V</div>`;
     return `<div class="es-pal-ted">
       <div class="es-pal-ted-tabs">${tabs}</div>
+      <div class="es-pal-stkr-lib" id="esStkrLib"></div>
       <div class="es-pal-stkr-srcbtns"><button type="button" class="es-pal-capm-btn3 ${aiMode ? "on" : ""}" data-stkrsrc="ai">🤖 AI로 만들기</button><button type="button" class="es-pal-capm-btn3 ${!aiMode ? "on" : ""}" data-stkrsrc="up">📤 이미지 올리기</button></div>
       ${srcUI}
       ${img ? `<div class="es-pal-stkr-preview"><img src="${esc(img)}" alt=""><span>↔ 왼쪽 미리보기에서 끌어 위치를 정해요</span></div>` : `<div class="es-pal-stkr-hint">아직 스티커 이미지가 없어요 — 위에서 만들거나 올리세요</div>`}
@@ -3574,6 +3575,7 @@
       try { if (cur.result && cur.result.url && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {}
       cur.result = { url: URL.createObjectURL(blob), blob };
       try { palDraftSave(); } catch (_) {}
+      try { stkrLibAdd(blob).then(() => { try { palStkrLibRender(); } catch (_) {} }); } catch (_) {}   // 📚 라이브러리 자동 저장
     }
     renderPalette();
   }
@@ -3593,6 +3595,27 @@
     } catch (e) {
       fail(((e && e.message) || e) + " — 키보드로 ⌘V(Ctrl+V)를 눌러 보세요.");
     }
+  }
+  // 📚 라이브러리에서 스티커를 새 한 장으로 추가(여러 번 누르면 여러 장 겹쳐짐)
+  async function palStkrAddFromLib(id) {
+    let blob = null; try { blob = await stkrLibGet(id); } catch (_) {}
+    if (!(blob instanceof Blob)) return;
+    const arr = palBlocks("sticker");
+    const s = palNewSticker(); s.result = { url: URL.createObjectURL(blob), blob };
+    arr.push(s); palSetSel(arr.length - 1, "sticker");
+    try { palDraftSave(); } catch (_) {}
+    renderPalette();
+    try { toast("🏷 스티커를 추가했어요 — 위치를 옮기고, 또 누르면 겹쳐서 넣을 수 있어요"); } catch (_) {}
+  }
+  // 📚 저장된 스티커 목록 채우기(비동기 IDB) — 작업대에 #esStkrLib 있을 때
+  async function palStkrLibRender() {
+    const box = document.querySelector("#esStkrLib"); if (!box) return;
+    let lib = []; try { lib = await stkrLibList(); } catch (_) {}
+    if (!lib.length) { box.innerHTML = `<div class="es-pal-stkr-lib-empty">📚 저장된 스티커가 없어요 — 올리거나 만들면 여기에 모여서 다른 템플릿에서도 써요</div>`; return; }
+    box.innerHTML = `<div class="es-pal-stkr-lib-h">📚 저장된 스티커 <small>탭해서 추가 · 여러 번 탭하면 겹쳐요</small></div><div class="es-pal-stkr-lib-row">` + lib.map((it) => `<div class="es-pal-stkr-lib-item" data-stkrlib="${it.id}" title="탭해서 추가"><img data-stkrlibimg="${it.id}" alt=""><button type="button" class="es-pal-stkr-lib-x" data-stkrlibdel="${it.id}" title="라이브러리에서 삭제">×</button></div>`).join("") + `</div>`;
+    for (const it of lib) { try { const b = await stkrLibGet(it.id); if (b instanceof Blob) { const img = box.querySelector(`img[data-stkrlibimg="${it.id}"]`); if (img) img.src = URL.createObjectURL(b); } } catch (_) {} }
+    box.querySelectorAll("[data-stkrlib]").forEach((el) => el.addEventListener("click", (e) => { if (e.target.closest("[data-stkrlibdel]")) return; palStkrAddFromLib(el.getAttribute("data-stkrlib")); }));
+    box.querySelectorAll("[data-stkrlibdel]").forEach((b) => b.addEventListener("click", async (e) => { e.stopPropagation(); const id = b.getAttribute("data-stkrlibdel"); if (!(window.confirm && window.confirm("이 스티커를 라이브러리에서 지울까요?"))) return; try { await stkrLibDel(id); } catch (_) {} palStkrLibRender(); }));
   }
   // 🏷 AI 스티커 생성 — 참조사진(있으면) + 글씨(선택)로 gpt-image(easy-title sticker 모드) → 투명 키잉
   async function palStickerGen(btn) {
@@ -3614,6 +3637,7 @@
       if (cur.result && cur.result.url && String(cur.result.url).startsWith("blob:")) { try { URL.revokeObjectURL(cur.result.url); } catch (_) {} }
       cur.result = { url: URL.createObjectURL(blob), blob };
       try { palDraftSave(); } catch (_) {}
+      try { stkrLibAdd(blob).then(() => { try { palStkrLibRender(); } catch (_) {} }); } catch (_) {}   // 📚 만든 스티커도 라이브러리에 자동 저장
       renderPalette();
       try { toast("✨ 스티커를 만들었어요 — 위치·크기·시간을 정해보세요"); } catch (_) {}
     } catch (e) {
@@ -4246,6 +4270,7 @@
     $$("#esBody [data-stkranimin]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animIn = b.dataset.stkranimin; palDraftSave(); renderPalette(); } }));
     $$("#esBody [data-stkranimout]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animOut = b.dataset.stkranimout; palDraftSave(); renderPalette(); } }));
     { const b = $("#esStkrApply"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (!cur || !(cur.result && cur.result.url)) { try { toast("먼저 스티커를 만들거나 올려주세요"); } catch (_) {} return; } try { palDraftSave(); } catch (_) {} try { toast("✅ 스티커를 영상에 적용했어요 — 고객 영상에 자동으로 나와요"); } catch (_) {} }); }
+    if (document.querySelector("#esStkrLib")) { try { palStkrLibRender(); } catch (_) {} }   // 📚 저장된 스티커 목록 채우기
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
@@ -8589,6 +8614,26 @@
   // 🎬 타이틀 — 한 번에 4개 만들고 그중 하나를 탭해서 고르게
   // ── 🖼 타이틀 참조사진 라이브러리 — 과거에 쓴 참조사진을 영구 보관(IndexedDB). 인덱스 1개 + 블롭별 키. 최근 24개, 같은 사진은 중복 저장 안 함 ──
   const TITLE_REF_LIB_MAX = 24;
+  // 🏷 스티커 라이브러리 — 올리거나 만든 스티커 이미지를 IDB에 보관(템플릿 간 재사용·삭제). titleRefLib 패턴 동일.
+  const STKR_LIB_MAX = 80;
+  async function stkrLibList() { try { const a = await idbGet("stkrLib"); return Array.isArray(a) ? a.slice().sort((x, y) => (y.ts || 0) - (x.ts || 0)) : []; } catch (_) { return []; } }
+  async function stkrLibGet(id) { try { return await idbGet("stkrLib:" + id); } catch (_) { return null; } }
+  async function stkrLibDel(id) { try { await idbDel("stkrLib:" + id); let a = (await idbGet("stkrLib")) || []; if (!Array.isArray(a)) a = []; await idbSet("stkrLib", a.filter((e) => e.id !== id)); } catch (_) {} }
+  async function stkrLibAdd(file) {
+    if (!(file instanceof Blob) || !/^image\//.test(file.type || "")) return null;
+    try {
+      let a = (await idbGet("stkrLib")) || []; if (!Array.isArray(a)) a = [];
+      const sig = (file.size || 0) + ":" + (file.type || "") + ":" + String(file.name || "").slice(0, 40);
+      const ex = a.find((e) => e.sig === sig); let id;
+      if (ex) { ex.ts = Date.now(); id = ex.id; }   // 이미 있는 스티커면 최신으로만(중복 X)
+      else { id = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); await idbSet("stkrLib:" + id, file); a.unshift({ id, ts: Date.now(), name: String(file.name || "스티커").slice(0, 40), type: file.type || "image/png", size: file.size || 0, sig }); }
+      a.sort((x, y) => (y.ts || 0) - (x.ts || 0));
+      const keep = a.slice(0, STKR_LIB_MAX), drop = a.slice(STKR_LIB_MAX);
+      for (const d of drop) { try { await idbDel("stkrLib:" + d.id); } catch (_) {} }
+      await idbSet("stkrLib", keep);
+      return id;
+    } catch (_) { return null; }
+  }
   async function titleRefLibList() { try { const a = await idbGet("titleRefLib"); return Array.isArray(a) ? a.slice().sort((x, y) => (y.ts || 0) - (x.ts || 0)) : []; } catch (_) { return []; } }
   async function titleRefLibGet(id) { try { return await idbGet("titleRefLib:" + id); } catch (_) { return null; } }
   async function titleRefLibDel(id) { try { await idbDel("titleRefLib:" + id); let a = (await idbGet("titleRefLib")) || []; if (!Array.isArray(a)) a = []; await idbSet("titleRefLib", a.filter((e) => e.id !== id)); } catch (_) {} }
