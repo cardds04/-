@@ -1531,6 +1531,7 @@
     { key: "sticker", icon: "🏷", label: "스티커" },
     { key: "sfx",     icon: "🔔", label: "효과음" },
     { key: "nstyle",  icon: "🎙", label: "목소리 고르기" },
+    { key: "narrforce", icon: "🎤", label: "나레이션강제" },
     { key: "ngen",    icon: "🔊", label: "나레이션 생성" },
     { key: "ncap",    icon: "📝", label: "음성맞춰 자막" },
     { key: "cedit",   icon: "✏️", label: "자막 다듬기", hidden: true },   // 음성맞춰자막(ncap)에 합쳐짐 — funcbar에선 숨김(기존 단계 호환 위해 목록엔 유지)
@@ -1545,7 +1546,7 @@
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "narrforce", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
   const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
@@ -1586,6 +1587,7 @@
     cref:    { title: "자막 스타일을 골라요",        note: "이 느낌으로 자막을 만들어요" },
     caption: { title: "자막을 입력하세요",          note: "장면에 맞춰 글자가 나와요" },
     nstyle:  { title: "나레이션 목소리를 골라요",    note: "어떤 톤·목소리로 읽을지" },
+    narrforce: { title: "나레이션을 만들어요",       note: "버튼을 누르면 자막을 AI 목소리로 읽어드려요" },
     ngen:    { title: "나레이션을 만들어요",        note: "자막을 AI 목소리로 → 미리듣기" },
     ncap:    { title: "음성에 맞춰 자막을 만들어요", note: "나레이션 음성 길이에 맞춰 자막 타이밍" },
     cedit:   { title: "자막을 다듬어요",            note: "한 줄=자막 하나 · 엔터로 나누고, 줄을 합치면 자막도 합쳐져요" },
@@ -1779,6 +1781,17 @@
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
             <div class="es-pal-narr-hint2">${d.voiceUrl ? "✅ 만들었어요! 다음 <b>📝 음성맞춰 자막</b> 단계로" : "목소리 고르고 <b>🎙 나레이션 만들기</b>를 누르세요"}</div>`;
+          break;
+        }
+        case "narrforce": {   // 🎤 나레이션강제 — 목소리는 관리자가 작업대서 정함. 고객은 '만들기'만.
+          const caps = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean);
+          if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들면 AI 목소리로 읽어드려요 🎙</div>`; break; }
+          const _noVoice = !d.voiceTypecastId;
+          body = `<div class="es-pal-narr-lb">🎙 나레이션 만들기</div>
+            <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${_noVoice ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
+            <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
+            <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
+            <div class="es-pal-narr-hint2">${_noVoice ? "관리자가 목소리를 정하면 여기서 만들 수 있어요" : (d.voiceUrl ? "✅ 만들었어요!" : "<b>🎙 나레이션 만들기</b>를 누르세요 (목소리는 정해져 있어요)")}</div>`;
           break;
         }
         case "ngen": {   // 🔊 나레이션 생성·미리듣기 (단계 2)
@@ -3830,6 +3843,16 @@
       <div class="es-pal-ted-section es-pal-ted-savebox"><div class="es-pal-ted-sec-h"><b>✅ 적용</b><span>적용하면 고객 영상에 자동으로 들어가요</span></div><button type="button" class="es-pal-ted-save ${hasAudio ? "" : "off"}" id="esSfxApply">✅ 이 효과음을 영상에 적용</button></div>
     </div>`;
   }
+  // 🎤 나레이션강제 작업대 — 관리자가 목소리 고름(고객은 이 목소리로 고정). nstyle 목소리 picker 재사용.
+  function palNarrforceEditor(P) {
+    if (E._tcVoices === undefined) { try { loadTypecastVoices(); } catch (_) {} }   // 1회 로드
+    const voices = E._tcVoices, d = P.demo || {}, curV = d.voiceTypecastId || "";
+    let pick;
+    if (voices == null) pick = `<div class="es-pal-tc-loading">목소리 불러오는 중…</div>`;
+    else if (!voices.length) pick = `<div class="es-pal-tc-fail">목소리를 못 불러왔어요 (API 키 확인) <button type="button" class="es-pal-narr-reload" id="esPalTcReload">🔄 다시 시도</button></div>`;
+    else pick = palTcVoicePicker();
+    return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}`;
+  }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
     if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
@@ -3880,7 +3903,8 @@
     const _isCaptionStep = !isPrev && (_curFn === "cref" || _curFn === "caption");
     const _isStickerStep = !isPrev && _curFn === "sticker";
     const _isSfxStep = !isPrev && _curFn === "sfx";
-    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep;
+    const _isNarrforceStep = !isPrev && _curFn === "narrforce";
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep || _isNarrforceStep;
     E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : _isSfxStep ? "sfx" : (_isCaptionStep ? "caption" : "title");
     // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
     if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
@@ -3941,6 +3965,8 @@
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🏷 스티커 작업대 — 만들고 위치·시간·효과 정한 뒤 적용</div>${paletteStickerEditor(P)}</div></div>`
       : _isSfxStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🔔 효과음 작업대 — 올리고 컷·볼륨 정한 뒤 적용</div>${paletteSfxEditor(P)}</div></div>`
+      : _isNarrforceStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎤 나레이션강제 — 목소리 정하기 (고객은 '만들기'만)</div>${palNarrforceEditor(P)}</div></div>`
       : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
