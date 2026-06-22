@@ -1821,7 +1821,7 @@
         case "narrforce": {   // 🎤 나레이션강제 — 목소리는 관리자가 작업대서 정함. 고객은 '만들기'만.
           const caps = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean);
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들면 AI 목소리로 읽어드려요 🎙</div>`; break; }
-          const _noVoice = !d.voiceTypecastId;
+          const _noVoice = !d.voiceTypecastId && !(palNarrVoice() && palNarrVoice().id);   // 전역 목소리 있으면 활성
           body = `<div class="es-pal-narr-lb">🎙 나레이션 만들기</div>
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${_noVoice ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
@@ -11968,40 +11968,35 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     finally { if (btn) btn.disabled = false; }
   }
   // 🎙 팔레트 나레이션 — 고객 자막(P.demo.captions)을 합쳐 AI 음성으로(서버 TTS, gemini-tts). 결과 P.demo.voiceUrl/blob → 미리듣기
-  // 🎙 전역 나레이션 말투 — 바깥(템플릿 고르기)서 한 번 정하면 모든 나레이션이 그 말투로(템플릿별 설정 무시)
-  const PAL_NARR_TONES = [
-    { v: "", lb: "🎯 자동" },
-    { v: "밝고 경쾌하게 읽어주세요", lb: "😊 밝게" },
-    { v: "차분하고 신뢰감 있게 읽어주세요", lb: "🧊 차분하게" },
-    { v: "신나고 활기차게 읽어주세요", lb: "🔥 신나게" },
-    { v: "진지하고 담담하게 읽어주세요", lb: "🎙 진지하게" },
-    { v: "다정하고 부드럽게 읽어주세요", lb: "🤍 다정하게" },
-  ];
-  function palNarrTone() { try { return localStorage.getItem("easy_narr_tone_v1") || ""; } catch (_) { return ""; } }
-  function palNarrToneSet(v) { try { if (v) localStorage.setItem("easy_narr_tone_v1", v); else localStorage.removeItem("easy_narr_tone_v1"); } catch (_) {} }
+  // 🎙 전역 나레이션 목소리(캐릭터) — 바깥(템플릿 고르기)서 한 번 정하면 모든 나레이션이 그 캐릭터로(템플릿별 설정 무시)
+  function palNarrVoice() { try { return JSON.parse(localStorage.getItem("easy_narr_voice_v1") || "null"); } catch (_) { return null; } }
+  function palNarrVoiceSet(o) { try { if (o && o.id) localStorage.setItem("easy_narr_voice_v1", JSON.stringify(o)); else localStorage.removeItem("easy_narr_voice_v1"); } catch (_) {} }
   function palNarrToneOpen() {
-    const cur = palNarrTone();
-    const isCustom = cur && !PAL_NARR_TONES.some((t) => t.v === cur);
-    const chips = PAL_NARR_TONES.map((t) => `<button type="button" class="es-narrtone-chip ${(cur === t.v && !(t.v === "" && isCustom)) ? "on" : ""}" data-narrtone="${esc(t.v)}">${t.lb}</button>`).join("");
+    if (E._tcVoices === undefined) { try { loadTypecastVoices(); } catch (_) {} }   // 모델 정보용 1회 로드
+    const cur = palNarrVoice(), curId = (cur && cur.id) || "";
+    const autoChip = `<button type="button" class="es-narrtone-chip ${!curId ? "on" : ""}" data-narrvoice="">🎯 자동 (템플릿대로)</button>`;
+    const chips = (typeof PAL_TC_CAT !== "undefined" ? PAL_TC_CAT : []).map((c) => `<button type="button" class="es-narrtone-chip ${curId === c.id ? "on" : ""}" data-narrvoice="${esc(c.id)}" data-narrvname="${esc(c.name)}">${c.g === "m" ? "👨" : "👩"} ${esc(c.name)}</button>`).join("");
     const ov = document.createElement("div"); ov.className = "es-narrtone-ov"; ov.id = "esNarrToneOv";
-    ov.innerHTML = `<div class="es-narrtone-box"><button type="button" class="es-narrtone-x" id="esNarrToneX">✕</button><div class="es-narrtone-h">🎙 나레이션 말투 정하기</div><div class="es-narrtone-sub">정한 말투로 <b>모든 나레이션</b>이 만들어져요 (템플릿별 설정 무시)</div><div class="es-narrtone-chips">${chips}</div><div class="es-narrtone-customlb">직접 쓰기</div><input type="text" id="esNarrToneCustom" class="es-narrtone-input" placeholder="예: 또박또박 친절하게" value="${isCustom ? esc(cur) : ""}"><button type="button" class="es-narrtone-save" id="esNarrToneSave">✓ 이 말투로 저장</button></div>`;
+    ov.innerHTML = `<div class="es-narrtone-box"><button type="button" class="es-narrtone-x" id="esNarrToneX">✕</button><div class="es-narrtone-h">🎙 나레이션 목소리 정하기</div><div class="es-narrtone-sub">정한 <b>캐릭터 목소리</b>로 모든 나레이션이 만들어져요 (템플릿별 설정 무시)</div><div class="es-narrtone-chips">${autoChip}${chips}</div></div>`;
     document.body.appendChild(ov);
     const close = () => { try { ov.remove(); } catch (_) {} };
     ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
     const xb = ov.querySelector("#esNarrToneX"); if (xb) xb.addEventListener("click", close);
-    ov.querySelectorAll("[data-narrtone]").forEach((b) => b.addEventListener("click", () => { palNarrToneSet(b.getAttribute("data-narrtone")); close(); try { toast("🎙 나레이션 말투: " + b.textContent.trim()); } catch (_) {} }));
-    const sv = ov.querySelector("#esNarrToneSave"); if (sv) sv.addEventListener("click", () => { const v = ((ov.querySelector("#esNarrToneCustom") || {}).value || "").trim(); palNarrToneSet(v); close(); try { toast(v ? "🎙 나레이션 말투: " + v : "🎙 자동 말투로"); } catch (_) {} });
+    ov.querySelectorAll("[data-narrvoice]").forEach((b) => b.addEventListener("click", () => { const id = b.getAttribute("data-narrvoice"); if (id) { palNarrVoiceSet({ id, model: palTcModelOf(id), name: b.getAttribute("data-narrvname") || "" }); } else palNarrVoiceSet(null); close(); try { toast("🎙 나레이션 목소리: " + b.textContent.trim()); } catch (_) {} }));
   }
   async function palMakeNarration(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {};
     const script = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean).join(" ");
     if (!script) { try { toast("먼저 '자막 생성' 단계에서 자막을 입력해 주세요"); } catch (_) {} return; }
-    if (!d.voiceTypecastId) { try { toast("먼저 목소리를 골라주세요 🎙"); } catch (_) {} return; }   // 타입캐스트 목소리 필수
+    const _gv = palNarrVoice();   // 🎙 바깥서 정한 전역 목소리(캐릭터)가 있으면 그걸 우선(템플릿 설정 무시)
+    const _useVoice = (_gv && _gv.id) || d.voiceTypecastId;
+    const _useModel = (_gv && _gv.id) ? (_gv.model || undefined) : (d.voiceModel || undefined);
+    if (!_useVoice) { try { toast("먼저 목소리를 골라주세요 🎙"); } catch (_) {} return; }   // 타입캐스트 목소리 필수
     const status = $("#esPalNarrStatus"); const old = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "🎤 만드는 중…"; }
     if (status) status.textContent = "🎤 타입캐스트가 자막을 읽고 있어요… (10~20초)";
     try {
-      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, voiceId: d.voiceTypecastId, model: d.voiceModel || undefined, language: "kor", emotionPrompt: palNarrTone() || undefined }) });   // 🎙 전역 나레이션 말투(있으면) 적용
+      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, voiceId: _useVoice, model: _useModel, language: "kor" }) });   // 🎙 전역 목소리 우선
       const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
       if (!res.ok) throw new Error(j.message || ("HTTP " + res.status));
       if (!j.audioBase64) throw new Error("음성 응답이 비어있어요");
