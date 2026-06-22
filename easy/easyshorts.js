@@ -1839,6 +1839,21 @@
   function palLineCount(t) { if (t && t.result && t.result.lines) return t.result.lines; return String((t && t.text) || "").split("\n").length || 1; }   // 렌더된 실제 줄 수(자동 줄바꿈 포함) 우선 → 글씨크기 고정, 길면 줄만 늘어남
   // 박스 높이(cqh) — 줄당 글자 높이를 '항상 일정'하게(엔터/줄수 무관). 1줄일 땐 정확히 sz(예전 크기 유지), 줄 늘면 글자는 그대로·박스만 줄당 0.642 증가. (0.642=글자/이미지 비율, 0.358=상하여백 보정)
   function palBoxH(t, sz) { return (palLineCount(t) * 0.642 + 0.358) * sz; }
+  // 🏷 스티커 '어느 컷에' 해석 — cut: 0=전체(수동 start/dur), N=N번째 컷, -1=마지막 컷. 미디어 모르면 전체처럼, 컷이 없으면 skip(고객 출력서 안 넣음).
+  function palStkrCut(s, clips) {
+    const cut = s.cut || 0;
+    const manual = { start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, skip: false };
+    if (!cut) return manual;
+    clips = Array.isArray(clips) ? clips : [];
+    if (!clips.length) return manual;   // 영상 아직 없음 = 미리보기에선 전체처럼 보임
+    const idx = (cut === -1) ? clips.length - 1 : cut - 1;
+    if (idx < 0 || idx >= clips.length) return { start: manual.start, dur: manual.dur, skip: true };   // 지정한 컷이 없음 → 안 넣음
+    let acc = 0; for (let i = 0; i < idx; i++) acc += palCutClipDur(clips[i]);
+    const cutDur = palCutClipDur(clips[idx]);
+    const off = s.start != null ? s.start : 0;   // 그 컷 안에서의 추가 지연
+    const dur = (s.dur == null) ? Math.max(0.3, cutDur - off) : s.dur;   // 머무는 시간(null=그 컷 끝까지)
+    return { start: acc + off, dur, skip: false };
+  }
   // ▶ 실제 결과 미리보기 — 고객 화면(P.demo)에서 넣은 사진/영상 위에, 입력한 타이틀·자막이 입혀진 '완성 모습'(고객 영상이 이렇게 나옴)
   // live=true → 고객 화면 위쪽 '읽기전용' 미리보기(드래그/핸들/배지/인스타/재생버튼 없이 영상 자동재생 + 글자만)
   function paletteRealPreview(P, live, opts) {
@@ -1874,21 +1889,24 @@
     let anyRendered = false;   // 🅰🅱🅲 타이틀·자막 칸 모두 — 끌어서 위치·모서리로 크기·눌러서 편집
     const _renderBlocks = (blocks, kind) => {
       blocks.forEach((t, i) => {
+        if (t._skip) return;   // 🏷 스티커: 지정한 컷이 고객 영상에 없으면 안 넣음
         if (!(t.result && t.result.url)) return;
         anyRendered = true;
+        const eStart = t._effStart != null ? t._effStart : (t.start != null ? t.start : 0);   // 컷 해석된 실제 시작(스티커), 없으면 원래 start
+        const eDur = t._effDur !== undefined ? t._effDur : (t.dur !== undefined ? t.dur : null);
         const sz = (t.size != null ? t.size : (kind === "caption" ? 7 : 14)), py = (t.posY != null ? t.posY : (kind === "caption" ? 88 : 18)), px = (t.posX != null ? t.posX : 50), op = (t.opacity != null ? t.opacity : 100) / 100;
         const padX = t.bgPadX != null ? t.bgPadX : 4, padY = t.bgPadY != null ? t.bgPadY : 2;
         const bgS = t.bg ? `background:${hexToRgba(t.bg, op)}; border-radius:${_bgRadius(t.bgStyle)}; padding:${padY}cqh ${padX}cqw;` : "";
         const asTile = playMode || (kind === "caption" && timedCap);   // 타이밍 타일 = 시간 맞춰 하나씩(처음 숨김, tick이 켜고 끔)
         if (asTile) {
-          const _st0 = t.start != null ? t.start : 0;
+          const _st0 = eStart;
           const _liveAttr = live ? ` data-livekind="${kind}" data-liveidx="${i}"` : "";   // 위치 컨트롤이 타이밍 타일도 찾아 움직이게(자막 위치 조정)
-          ov += `<div class="es-pal-real-titlebox es-pal-play-tile" data-rt-start="${_st0}" data-rt-dur="${t.dur != null ? t.dur : ""}" data-rt-in="${t.animIn || "none"}" data-rt-out="${t.animOut || "none"}"${_liveAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt=""></div>`;
+          ov += `<div class="es-pal-real-titlebox es-pal-play-tile" data-rt-start="${_st0}" data-rt-dur="${eDur != null ? eDur : ""}" data-rt-in="${t.animIn || "none"}" data-rt-out="${t.animOut || "none"}"${_liveAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt=""></div>`;
           return;
         }
         const isSel = !live && !ro && (kind === E._palEditKind) && i === palSel(kind);
-        const _ts = t.start != null ? t.start : 0;
-        const tinfo = (t.dur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + t.dur}초`;
+        const _ts = eStart;
+        const tinfo = (eDur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + eDur}초`;
         const tbadge = isSel ? `<span class="es-pal-real-tbadge" style="position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9px;line-height:1;background:#1ed6a5;color:#04231a;padding:2px 6px;border-radius:6px;white-space:nowrap;font-weight:800;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)">${tinfo}</span>` : "";
         const dataAttr = ro ? "" : (live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`);   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신). ro(2열)는 아무 속성 없음=완전 정적
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
@@ -1897,7 +1915,7 @@
     if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
       if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
       if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
-      if (has("sticker")) { palBlocks("sticker"); _renderBlocks(d.stickers || [], "sticker"); }   // 🏷 스티커 오버레이(이미지 + 위치·타이밍·효과)
+      if (has("sticker")) { palBlocks("sticker"); (d.stickers || []).forEach((s) => { const r = palStkrCut(s, list); s._effStart = r.start; s._effDur = r.dur; s._skip = live ? !!r.skip : false; }); _renderBlocks(d.stickers || [], "sticker"); }   // 🏷 스티커 오버레이(어느 컷에 해석 — 고객(live)서 컷 없으면 skip, 관리자 편집선 항상 보임)
       if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     }
     let chips = "";
@@ -1969,7 +1987,7 @@
     pb.classList.add("playing"); pb.textContent = "⏸";
     boxes.forEach((b) => { b.style.transition = "opacity .15s ease"; });
     let maxT = 4;
-    const info = boxes.map((box) => { const k = box.getAttribute("data-kind") || "title"; const blk = (palBlocks(k) || [])[+box.getAttribute("data-titleidx")] || {}; const s = blk.start || 0, d = blk.dur; maxT = Math.max(maxT, s + (d != null ? d : 3) + 0.6); return { box, s, d }; });
+    const info = boxes.map((box) => { const k = box.getAttribute("data-kind") || "title"; const blk = (palBlocks(k) || [])[+box.getAttribute("data-titleidx")] || {}; const s = (blk._effStart != null ? blk._effStart : (blk.start || 0)), d = (blk._effDur !== undefined ? blk._effDur : blk.dur); maxT = Math.max(maxT, s + (d != null ? d : 3) + 0.6); return { box, s, d }; });
     if (v) { try { v.muted = true; v.currentTime = 0; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (_) {} }
     const t0 = performance.now();
     const tick = () => {
@@ -2215,7 +2233,7 @@
     if (kind === "sticker") {   // 🏷 스티커 = 이미지 오버레이(위치·크기·타이밍·효과). 자동생성 X(명시적 추가).
       const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
       if (!Array.isArray(d.stickers)) { d.stickers = []; if (d.stickerSel == null) d.stickerSel = 0; }
-      d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
+      d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.cut == null) s.cut = 0; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
       return d.stickers;
     }
     const cap = kind === "caption", ak = cap ? "captions" : "titles", sk = cap ? "captionSel" : "titleSel";
@@ -3352,7 +3370,7 @@
             titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             captionSel: d.captionSel || 0,
             captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
-            stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
+            stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
           },
         };
         await idbSet("palDraft", snap);
@@ -3402,7 +3420,7 @@
         P.demo.captionSel = (typeof sd.captionSel === "number" && sd.captionSel >= 0 && sd.captionSel < P.demo.captions.length) ? sd.captionSel : 0;
       }
       if (Array.isArray(sd.stickers)) {   // 🏷 스티커 복원(이미지 blob → objectURL)
-        P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
+        P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
@@ -3515,7 +3533,7 @@
       <input type="file" id="esPalTestFile" accept="image/*,video/*" hidden>`;
   }
   // 🏷 스티커 = 이미지 오버레이 블록(AI생성/업로드 + 위치·크기·타이밍·효과). 타이틀 오버레이 렌더 재사용(result.url=스티커 이미지).
-  function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
+  function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, cut: 0, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
   function paletteStickerEditor(P) {
     const d = P.demo || {};
     const stk = palBlocks("sticker");
@@ -3527,9 +3545,10 @@
     }
     const img = cur.result && cur.result.url;
     const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
-    const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
-    let acc = 0;
-    const cutBtns = clips.map((m, i) => { const s0 = acc; const du = palCutClipDur(m); acc += du; const lbl = clips.length === 1 ? "전체" : (i === 0 ? "첫 컷" : (i === clips.length - 1 ? "마지막 컷" : (i + 1) + "번 컷")); const on = Math.abs((cur.start || 0) - s0) < 0.06; return `<button type="button" class="es-pal-ted-stroke ${on ? "sel" : ""}" data-stkrcut="${s0.toFixed(2)}" data-stkrcutdur="${du.toFixed(2)}">${lbl}</button>`; }).join("");
+    // 📍 어느 컷에 — 영상 없어도 인덱스로 지정(첫/2번/…/마지막). 고객 영상에 그 컷이 없으면 자동으로 안 들어감.
+    const CUTS = [[0, "전체"], [1, "첫 컷"], [2, "2번 컷"], [3, "3번 컷"], [4, "4번 컷"], [5, "5번 컷"], [-1, "마지막 컷"]];
+    const curCut = cur.cut || 0;
+    const cutBtns = CUTS.map((c) => `<button type="button" class="es-pal-ted-stroke ${curCut === c[0] ? "sel" : ""}" data-stkrcut="${c[0]}">${c[1]}</button>`).join("");
     const ANIM_IN = [["none", "✕ 없음"], ["fade", "페이드"], ["pop", "팝!"], ["zoom", "확대"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["bounce", "통통"]];
     const ANIM_OUT = [["none", "✕ 없음"], ["fade", "페이드"], ["zoom", "축소"], ["pop", "팝!"]];
     const animInBtns = ANIM_IN.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animIn || "none") === a[0] ? "sel" : ""}" data-stkranimin="${a[0]}">${a[1]}</button>`).join("");
@@ -3555,10 +3574,10 @@
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">크기 <small>${cur.size || 22}</small></span><input type="range" class="es-pal-ted-size" id="esStkrSize" min="6" max="60" value="${cur.size || 22}"></div>
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${cur.opacity != null ? cur.opacity : 100}</small></span><input type="range" class="es-pal-ted-size" id="esStkrOp" min="20" max="100" value="${cur.opacity != null ? cur.opacity : 100}"></div>
       </div>
-      ${clips.length ? `<div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>그 컷 시작에 맞춰 나와요</span></div><div class="es-pal-ted-sw">${cutBtns}</div></div>` : ""}
+      <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>${curCut ? "그 컷에 나와요 · 영상에 그 컷이 없으면 자동으로 안 들어가요" : "전체 영상 기준 타이밍"}</span></div><div class="es-pal-ted-sw">${cutBtns}</div></div>
       <div class="es-pal-ted-section">
-        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${tStart > 0 ? tStart + "초 뒤" : "바로"}</small></span><input type="range" class="es-pal-ted-size" id="esStkrStart" min="0" max="15" step="0.5" value="${tStart}"></div>
-        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">언제까지</span><div class="es-pal-ted-sw"><button type="button" class="es-pal-ted-stroke ${tDur == null ? "sel" : ""}" id="esStkrDurAll">♾ 끝까지</button><button type="button" class="es-pal-ted-stroke ${tDur != null ? "sel" : ""}" id="esStkrDurSet">⏱ 시간 정하기</button></div></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${tStart > 0 ? (curCut ? "그 컷에서 " : "") + tStart + "초 뒤" : (curCut ? "그 컷 시작" : "바로")}</small></span><input type="range" class="es-pal-ted-size" id="esStkrStart" min="0" max="15" step="0.5" value="${tStart}"></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">언제까지</span><div class="es-pal-ted-sw"><button type="button" class="es-pal-ted-stroke ${tDur == null ? "sel" : ""}" id="esStkrDurAll">${curCut ? "♾ 그 컷 끝까지" : "♾ 끝까지"}</button><button type="button" class="es-pal-ted-stroke ${tDur != null ? "sel" : ""}" id="esStkrDurSet">⏱ 시간 정하기</button></div></div>
         ${tDur != null ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">⏱ <small>${tDur}초 동안</small></span><input type="range" class="es-pal-ted-size" id="esStkrDur" min="0.5" max="10" step="0.5" value="${tDur}"></div>` : ""}
       </div>
       <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>✨ 효과</b></div><div class="es-pal-ted-rl2">나올 때</div><div class="es-pal-ted-anims">${animInBtns}</div><div class="es-pal-ted-rl2">사라질 때</div><div class="es-pal-ted-anims">${animOutBtns}</div></div>
@@ -4264,7 +4283,7 @@
     { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.result && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {} cur.result = { url: URL.createObjectURL(file), blob: file }; palDraftSave(); renderPalette(); }); }
     const _stkrSlide = (id, prop, label) => { const s = $("#" + id); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (!cur) return; cur[prop] = +s.value; clearTimeout(E._stkrT); E._stkrT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); };
     _stkrSlide("esStkrSize", "size"); _stkrSlide("esStkrOp", "opacity"); _stkrSlide("esStkrStart", "start"); _stkrSlide("esStkrDur", "dur");
-    $$("#esBody [data-stkrcut]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.start = +b.dataset.stkrcut; cur.dur = +b.dataset.stkrcutdur; palDraftSave(); renderPalette(); } }));
+    $$("#esBody [data-stkrcut]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.cut = parseInt(b.dataset.stkrcut, 10) || 0; if (cur.cut) cur.start = 0; palDraftSave(); renderPalette(); } }));   // 컷 인덱스 지정(전체/첫/2번/…/마지막)
     { const b = $("#esStkrDurAll"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.dur = null; palDraftSave(); renderPalette(); } }); }
     { const b = $("#esStkrDurSet"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur && cur.dur == null) { cur.dur = 3; palDraftSave(); renderPalette(); } }); }
     $$("#esBody [data-stkranimin]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animIn = b.dataset.stkranimin; palDraftSave(); renderPalette(); } }));
@@ -4334,7 +4353,7 @@
     if (!P || !P.demo) return; let any = false;
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
-    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
+    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -4351,7 +4370,7 @@
       narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
-      _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
+      _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
     };
   }
   function savePalette() {
