@@ -3419,7 +3419,8 @@
     if (!steps.length) { try { toast("이 템플릿은 이지숏폼 생성기로 만든 게 아니라 여기선 수정할 수 없어요"); } catch (_) {} return; }
     E._palEditBackup = E.palette;   // 작업 중이던 새 드래프트 보존
     E._palEditingTid = tid; E._palCustSheetUp = null; E._palTestMode = false;
-    E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, demo: { media: [], title: "", caption: "" } };
+    const _ec = clsMap()[tid] || {};   // 🗂 기존 분류 불러와 분류 칸에 표시
+    E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, cls: (_ec.goal ? { goal: _ec.goal, format: _ec.format } : null), demo: { media: [], title: "", caption: "" } };
     E.mode2 = "easy"; setView("palette");
     try { toast("✏️ 수정 모드 — 고친 뒤 💾 저장하면 이 템플릿이 업데이트돼요"); } catch (_) {}
   }
@@ -3493,6 +3494,12 @@
     try { cancelAnimationFrame(E._col2RAF); E._col2RAF = 0; } catch (_) {}   // 2열 타이밍 재생도 정지(재렌더 시)
     if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
     const aspBtns = Object.keys(ASPECTS).map((k) => `<button type="button" class="es-asp-btn ${P.aspect === k ? "active" : ""}" data-pasp="${k}">${esc(ASPECTS[k].label)}</button>`).join("");
+    // 🗂 분류 칸(맨 위) — 이 템플릿이 들어갈 대분류(업종)+소분류(영상유형). 저장 시 clsMap 에 반영.
+    const _pcls = P.cls || {};
+    const _pclsGoalOpts = TAX().map((c) => `<option value="${esc(c.key)}" ${_pcls.goal === c.key ? "selected" : ""}>${c.emoji || ""} ${esc(c.label)}</option>`).join("");
+    const _pclsFmtSrc = (clsGoal(_pcls.goal) || TAX()[0] || { formats: [] }).formats || [];
+    const _pclsFmtOpts = `<option value="">유형 고르기…</option>` + _pclsFmtSrc.map((f) => `<option value="${esc(f.id)}" ${_pcls.format === f.id ? "selected" : ""}>${esc(f.label)}</option>`).join("");
+    const palClsRow = `<div class="es-pal-clsrow"><span class="es-pal-cls-lb">🗂 이 영상 분류</span><select id="esPalClsGoal" class="es-pal-clssel">${_pclsGoalOpts}</select><select id="esPalClsFmt" class="es-pal-clssel">${_pclsFmtOpts}</select><span class="es-pal-cls-hint">업종 + 영상유형을 고르면 저장 시 그 분류로 들어가요</span></div>`;
     const stepsHtml = P.steps.map((s, i) => {
       const fn = s.fn ? paletteFn(s.fn) : null;
       return `<div class="es-pal-step ${i === P.sel ? "sel" : ""} ${fn ? "filled" : "empty"}" data-i="${i}" draggable="true">
@@ -3597,6 +3604,7 @@
           <button type="button" class="es-btn es-btn-ghost" id="esPalNew" title="작업 지우고 처음부터">🆕 새로</button>
           <button type="button" class="es-btn es-btn-primary" id="esPalSave">💾 저장</button>
         </div>
+        ${palClsRow}
         <div class="es-pal-zone es-pal-zone-steps">
           <div class="es-pal-zone-lb">⬆️ 단계 — ＋추가 · <b>끌어서 순서 바꾸기</b> · 기능 끼우기</div>
           <div class="es-pal-steps" id="esPalSteps">${stepsHtml}<button type="button" class="es-pal-addstep" id="esPalAdd" title="단계 추가">＋</button></div>
@@ -3670,6 +3678,9 @@
       if (P.sel >= P.steps.length) P.sel = P.steps.length - 1; renderPalette();
     }));
     const nm = $("#esPalName"); if (nm) nm.addEventListener("input", (e) => { P.name = e.target.value; });
+    // 🗂 분류 칸 — 대분류(업종)·소분류(영상유형) 고르면 P.cls 에 기억(저장 시 clsMap 반영)
+    { const cg = $("#esPalClsGoal"); if (cg) cg.addEventListener("change", (e) => { P.cls = Object.assign({}, P.cls, { goal: e.target.value }); try { palDraftSave(); } catch (_) {} }); }
+    { const cf = $("#esPalClsFmt"); if (cf) cf.addEventListener("change", (e) => { P.cls = Object.assign({}, P.cls, { format: e.target.value }); try { palDraftSave(); } catch (_) {} }); }
     $$("[data-pasp]").forEach((b) => b.addEventListener("click", () => { P.aspect = b.dataset.pasp; renderPalette(); }));
     let _palFnTimer = null;
     $$("#esPalBox .es-pal-fn").forEach((b) => {
@@ -4130,12 +4141,14 @@
       const idx = E.templates.findIndex((x) => x.id === E._palEditingTid);
       if (idx >= 0) { const old = E.templates[idx]; tpl.id = old.id; tpl.thumb = old.thumb || null; tpl.previewVid = !!old.previewVid; tpl.pvDur = old.pvDur || 0; E.templates[idx] = tpl; }
       else E.templates.push(tpl);
+      if (P.cls && P.cls.goal && P.cls.format) { try { clsRowSave(tpl.id, P.cls.goal, P.cls.format); } catch (_) {} }   // 🗂 분류 반영
       try { saveTemplates(); } catch (_) {}
       try { toast("✅ '" + tpl.name + "' 수정됨 — 템플릿이 업데이트됐어요"); } catch (_) {}
       E._palEditingTid = null; E.palette = E._palEditBackup || null; E._palEditBackup = null;   // 새 드래프트 복원(수정은 드래프트 안 건드림)
       setView("admin"); return;
     }
     E.templates.push(tpl);
+    if (P.cls && P.cls.goal && P.cls.format) { try { clsRowSave(tpl.id, P.cls.goal, P.cls.format); } catch (_) {} }   // 🗂 분류 반영
     try { saveTemplates(); } catch (_) {}
     try { toast("✅ '" + tpl.name + "' 저장됨 — 관리자 페이지 '내가 만든 템플릿'에 추가됐어요"); } catch (_) {}
     try { palDraftClear(); } catch (_) {}   // 템플릿으로 저장됐으니 임시 작업초안 정리
@@ -4180,6 +4193,11 @@
           <button type="button" class="es-admin-card" id="esAdmMusic"><span class="es-admin-ic">🎵</span><span class="es-admin-t">노래 올리기</span><span class="es-admin-d">내장 음악 업로드</span></button>
           <button type="button" class="es-admin-card" id="esAdmVideos"><span class="es-admin-ic">📹</span><span class="es-admin-t">고객 영상 확인</span><span class="es-admin-d">고객이 만든 영상 보관함</span></button>
         </div>
+        <div class="es-admin-sec">🏢 업종 분류 (대분류) <span class="es-hint">업종 아래에 영상유형 4가지(얼굴+음성·얼굴+무음·보이스오버·AI나레이션)가 자동으로 들어가요</span></div>
+        <div class="es-admin-bizrow">
+          ${TAX().map((c) => `<span class="es-admin-biz">${c.emoji || ""} ${esc(c.label)}${TAX().length > 1 ? `<button type="button" class="es-admin-biz-x" data-bizdel="${esc(c.key)}" title="이 업종 빼기">×</button>` : ""}</span>`).join("")}
+          <button type="button" class="es-admin-biz-add" id="esAdmBizAdd">＋ 분류 추가하기</button>
+        </div>
         <div class="es-admin-sec">📐 내가 만든 템플릿 <span class="es-hint">실제 게시 모습 그대로 · 🎬 영상 대체하기로 미리보기 영상 교체 · 🗂 분류 · ☁️ 게시/내리기</span></div>
         ${tplsHtml}
       </div>`;
@@ -4188,6 +4206,8 @@
     el("esAdmDetail") && el("esAdmDetail").addEventListener("click", () => enterMode2("detail"));
     el("esAdmMusic") && el("esAdmMusic").addEventListener("click", () => { location.href = "admin-music.html"; });
     el("esAdmVideos") && el("esAdmVideos").addEventListener("click", () => { location.href = "admin-videos.html"; });
+    el("esAdmBizAdd") && el("esAdmBizAdd").addEventListener("click", () => { const nm = (prompt("추가할 업종 이름 (예: 헬스장, 카페, 병원)") || "").trim(); if (!nm) return; taxAddBucket("🏢", nm); try { toast("🏢 '" + nm + "' 업종 추가 — 영상유형 4가지가 자동으로 들어갔어요"); } catch (_) {} renderAdmin(); });   // 🏢 업종(대분류) 추가 → 4유형 자동
+    $$("[data-bizdel]", body).forEach((b) => b.addEventListener("click", () => { if (!confirm("이 업종 분류를 뺄까요? (이 업종으로 분류한 템플릿은 미분류가 돼요)")) return; taxDelBucket(b.dataset.bizdel); renderAdmin(); }));
     $$(".es-admin-tpl-use, .es-admin-tpl-thumb", body).forEach((b) => b.addEventListener("click", () => startFromTemplate(b.dataset.tid, "easy")));
     $$(".es-admin-tpl-test", body).forEach((b) => b.addEventListener("click", () => palTestTemplate(b.dataset.tid)));   // 🧪 테스트해보기 — 고객 화면 그대로 실행
     $$(".es-admin-tpl-edit", body).forEach((b) => b.addEventListener("click", () => palEditTemplate(b.dataset.tid)));   // ✏️ 수정하기 — 생성기로 불러와 수정
@@ -14027,13 +14047,16 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
   // ════════════ 🗂 템플릿 분류 도구 (관리자) — 목적/포맷/레벨 태깅 ════════════
   // 손님 갤러리를 '목적별 + 레벨순'으로 묶기 위한 분류. v1: localStorage 저장(es_template_cats).
-  const ES_CATS_VER = 3;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
-  // 🎬 분류 4가지 — 얼굴 유무 × 음성(직접/없음/AI 나레이션). 카테고리=포맷 1개씩(56→4 축소).
+  const ES_CATS_VER = 4;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
+  // 🏢 대분류=업종(미용실·헬스장…) → 소분류=영상유형 4가지(얼굴 유무 × 음성/무음/AI나레이션). 업종 추가하면 4유형 자동 따라옴.
+  function ES_SUBFMTS() { return [
+    { id: "fv", label: "얼굴+음성", level: 1 },
+    { id: "fo", label: "얼굴+무음", level: 1 },
+    { id: "vo", label: "보이스오버", level: 1 },
+    { id: "ai", label: "AI 나레이션", level: 1 },
+  ]; }
   const ES_CATS = [
-    { key: "fv", label: "얼굴+음성", emoji: "🗣", formats: [{ id: "fv", label: "얼굴 나옴 · 음성 나옴 · 영상", level: 1 }] },
-    { key: "fo", label: "얼굴+무음", emoji: "😶", formats: [{ id: "fo", label: "얼굴 나옴 · 음성 없음 · 영상", level: 1 }] },
-    { key: "vo", label: "보이스오버", emoji: "🎙", formats: [{ id: "vo", label: "얼굴 안 나옴 · 음성 나옴 · 영상", level: 1 }] },
-    { key: "ai", label: "AI 나레이션", emoji: "🤖", formats: [{ id: "ai", label: "얼굴 안 나옴 · AI 나레이션 · 영상", level: 1 }] },
+    { key: "biz_hair", label: "미용실", emoji: "💇", formats: ES_SUBFMTS() },
   ];
   // 편집 가능한 분류 체계(taxonomy). 버전 바뀌면 기존 저장본·분류 비우고 새 기본값 시드.
   var _taxMigrated = false;
@@ -14047,10 +14070,15 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       }
     } catch (_) {}
   }
-  function taxLoad() { if (E._serverTax && E._serverTax.length) return E._serverTax;   /* 고객: 서버 분류체계(커스텀 카테고리 포함) 우선 */ taxMigrate(); try { const s = localStorage.getItem("es_taxonomy"); if (s) { const t = JSON.parse(s); if (Array.isArray(t) && t.length) return t; } } catch (_) {} return JSON.parse(JSON.stringify(ES_CATS)); }
+  function taxLoad() {
+    taxMigrate();   // 버전 올라가면 로컬을 새 기본값으로 시드(아래에서 우선 사용)
+    try { if (localStorage.getItem("es_taxonomy_ver") === String(ES_CATS_VER)) { const s = localStorage.getItem("es_taxonomy"); if (s) { const t = JSON.parse(s); if (Array.isArray(t) && t.length) return t; } } } catch (_) {}   // 현재 버전 로컬 분류 우선(관리자 편집·새 기본값 반영)
+    if (E._serverTax && E._serverTax.length) return E._serverTax;   /* 고객: 로컬 없으면 서버 분류 */
+    return JSON.parse(JSON.stringify(ES_CATS));
+  }
   function taxSave(t) { try { localStorage.setItem("es_taxonomy", JSON.stringify(t)); localStorage.setItem("es_taxonomy_ver", String(ES_CATS_VER)); } catch (_) {} }
   function TAX() { return taxLoad(); }
-  function taxAddBucket(emoji, label) { const t = taxLoad(); t.push({ key: uid(), label: label, emoji: emoji || "📌", formats: [] }); taxSave(t); }
+  function taxAddBucket(emoji, label) { const t = taxLoad(); t.push({ key: "biz_" + uid(), label: label, emoji: emoji || "🏢", formats: ES_SUBFMTS() }); taxSave(t); }   // 업종 추가 = 4유형 자동 따라옴
   function taxDelBucket(key) { taxSave(taxLoad().filter((c) => c.key !== key)); }
   function taxAddFormat(goalKey, name, level) { const t = taxLoad(); const c = t.find((x) => x.key === goalKey); if (c) { (c.formats = c.formats || []).push({ id: uid(), label: name, level: Math.max(1, Math.min(5, Number(level) || 1)) }); taxSave(t); } }
   function taxDelFormat(goalKey, fmtId) { const t = taxLoad(); const c = t.find((x) => x.key === goalKey); if (c) { c.formats = (c.formats || []).filter((f) => f.id !== fmtId); taxSave(t); } }
@@ -14091,16 +14119,17 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       renderClassify();
     } catch (e) { alert("참조사진 업로드 실패: " + (e && e.message || e)); if (btn) { btn.disabled = false; btn.textContent = old; } }
   }
-  // 이름·구조로 분류 추측(휴리스틱). 관리자가 확인·수정.
+  // 이름·구조로 분류 추측(휴리스틱). 대분류(업종)은 첫 업종으로 두고, 소분류(영상유형)만 추론. 관리자가 확인·수정.
   function classifyGuess(t) {
-    // 🎬 4분류(얼굴×음성/AI) — 얼굴 유무는 이름으로 알 수 없어 추론 가능한 것만(AI나레이션·무음), 기본은 얼굴+음성. 관리자가 손으로 고치면 됨.
+    const biz = ((TAX()[0] || {}).key) || "biz_hair";   // 대분류=업종(이름으론 못 알아 첫 업종 기본)
     const n = String((t && t.name) || "").toLowerCase();
     const fns = (t && (t._paletteSteps || t.steps) || []).map((s) => s && s.fn).filter(Boolean);
     const has = (re) => re.test(n);
-    if ((t && t.narrate) || fns.includes("ngen") || fns.includes("nstyle") || has(/나레이션|ai|tts|독백|자동\s*나레/)) return { goal: "ai", format: "ai" };   // AI 나레이션
-    if (has(/무음|무언|음성\s*없|asmr|타임랩스|timelapse|montage|몽타주|브이로그|vlog/)) return { goal: "fo", format: "fo" };   // 얼굴+무음(추정)
-    if (has(/보이스오버|voiceover|성우|내레/)) return { goal: "vo", format: "vo" };   // 보이스오버
-    return { goal: "fv", format: "fv" };   // 기본: 얼굴+음성
+    let fmt = "fv";   // 기본: 얼굴+음성
+    if ((t && t.narrate) || fns.includes("ngen") || fns.includes("nstyle") || has(/나레이션|tts|독백|자동\s*나레/)) fmt = "ai";   // AI 나레이션
+    else if (has(/무음|무언|음성\s*없|asmr|타임랩스|timelapse|montage|몽타주|브이로그|vlog/)) fmt = "fo";   // 얼굴+무음(추정)
+    else if (has(/보이스오버|voiceover|성우|내레/)) fmt = "vo";   // 보이스오버
+    return { goal: biz, format: fmt };
   }
   function clsFormatOptions(goalKey, selFmt) {
     const c = clsGoal(goalKey);
