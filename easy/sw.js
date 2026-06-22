@@ -1,7 +1,7 @@
 /* 이지숏폼 최소 서비스워커
    · PWA 설치 가능 조건(fetch 핸들러) 충족 + 오프라인 진입 폴백
    · 앱은 ?v= 캐시버스팅을 쓰므로 네트워크 우선(스테일 방지) */
-const CACHE = "easyshorts-shell-v1";
+const CACHE = "easyshorts-shell-v2";
 const SHELL = ["./", "./index.html"];
 
 self.addEventListener("install", (e) => {
