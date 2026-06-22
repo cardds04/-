@@ -16772,23 +16772,8 @@ ${folderBtn}
               groupsHtml || '<div class="helper" style="margin:0;">검색 결과가 없습니다.</div>'
             }</div>`;
           } else {
-            const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">총 ${filtered.length}건</div>`;
-            const groupsHtml = writerRows
-              .map(
-                ([writer, schedules]) => `
-                <article class="writer-row" style="align-items:start;">
-                  <div class="writer-name" style="padding-top:6px;">${escapeHtml(writer)}작가 <span style="color:#6b7896;font-weight:600;font-size:0.8rem;">(${schedules.length}건)</span><br /><button type="button" class="btn-sm" data-action="copyWriterSchedule" data-writer="${escapeHtml(writer)}" title="이 작가 일정을 작가페이지 형식으로 복사" style="margin-top:4px;padding:1px 8px;font-size:0.72rem;font-weight:600;">📋 스케줄 복사</button></div>
-                  <div class="writer-places" style="display:block;">${schedules
-                    .slice()
-                    .sort((a, b) => compareScheduleDateTime(a.item, b.item))
-                    .map(({ item, index }) => renderEntry(item, index))
-                    .join("")}</div>
-                </article>`
-              )
-              .join("");
-            compactListMarkup = `${countHeader}<div class="writer-group-list">${
-              groupsHtml || '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>'
-            }</div>`;
+            // 업체명 검색을 안 한 경우: 목록을 비워둔다(작가별 분류 표시 안 함).
+            compactListMarkup = "";
           }
         }
         const cardListMarkup = `
