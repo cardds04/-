@@ -3546,7 +3546,6 @@
       return `<div class="es-pal-ted"><div class="es-pal-ted-tabs">${tabs}</div><div class="es-pal-stkr-lib" id="esStkrLib"></div><div class="es-pal-stkr-empty"><div class="es-pal-stkr-empty-ic">🏷</div><div>영상 위에 붙일 스티커를 추가해요<br>AI로 만들거나 이미지를 올릴 수 있어요</div><button type="button" class="es-pal-up-btn" id="esStkrAdd2">＋ 스티커 추가</button></div></div>`;
     }
     const img = cur.result && cur.result.url;
-    const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
     // 📍 어느 컷에 — 영상 없어도 숫자로 지정. 전체/마지막 컷 버튼 + 직접 번호 입력. 고객 영상에 그 컷이 없으면 자동으로 안 들어감.
     const curCut = cur.cut || 0;
     const cutBtns = [[0, "전체"], [-1, "마지막 컷"]].map((c) => `<button type="button" class="es-pal-ted-stroke ${curCut === c[0] ? "sel" : ""}" data-stkrcut="${c[0]}">${c[1]}</button>`).join("");
@@ -3556,20 +3555,10 @@
     const animInBtns = ANIM_IN.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animIn || "none") === a[0] ? "sel" : ""}" data-stkranimin="${a[0]}">${a[1]}</button>`).join("");
     const animOutBtns = ANIM_OUT.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animOut || "none") === a[0] ? "sel" : ""}" data-stkranimout="${a[0]}">${a[1]}</button>`).join("");
     const tStart = cur.start || 0, tDur = cur.dur;
-    const srcUI = aiMode
-      ? `<div class="es-pal-stkr-airow">
-          <div class="es-pal-stkr-reflbl">참조 사진 <small>(비슷한 느낌으로 만들어요)</small></div>
-          ${cur.refUrl ? `<div class="es-pal-stkr-refwrap"><img class="es-pal-stkr-ref" src="${esc(cur.refUrl)}"><button type="button" class="es-pal-stkr-refx" id="esStkrRefX">×</button></div>` : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrRefBtn">＋ 사진 고르기</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrRefPaste">📋 붙여넣기</button></div><div class="es-pal-stkr-pastehint">사진 복사한 뒤 📋 또는 ⌘V / Ctrl+V</div>`}
-          <input type="file" id="esStkrRefFile" accept="image/*" hidden>
-          <textarea class="es-pal-capm-prompt" id="esStkrText" rows="2" placeholder="스티커에 들어갈 글씨(선택) — 예: SALE / 신상 / 7월 한정">${esc(cur.text || "")}</textarea>
-          <button type="button" class="es-pal-capm-go" id="esStkrGen">✨ AI로 스티커 만들기</button>
-          <div id="esStkrStatus" class="es-pal-narr-status"></div>
-        </div>`
-      : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (여러 장 OK)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" multiple hidden><div class="es-pal-stkr-pastehint">여러 장 한꺼번에 선택 가능 · 복사 후 📋 / ⌘V / Ctrl+V</div>`;
+    const srcUI = `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (여러 장 OK)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" multiple hidden><div class="es-pal-stkr-pastehint">여러 장 한꺼번에 선택 가능 · 복사 후 📋 / ⌘V / Ctrl+V</div>`;
     return `<div class="es-pal-ted">
       <div class="es-pal-ted-tabs">${tabs}</div>
       <div class="es-pal-stkr-lib" id="esStkrLib"></div>
-      <div class="es-pal-stkr-srcbtns"><button type="button" class="es-pal-capm-btn3 ${aiMode ? "on" : ""}" data-stkrsrc="ai">🤖 AI로 만들기</button><button type="button" class="es-pal-capm-btn3 ${!aiMode ? "on" : ""}" data-stkrsrc="up">📤 이미지 올리기</button></div>
       ${srcUI}
       ${img ? `<div class="es-pal-stkr-preview"><img src="${esc(img)}" alt=""><span>↔ 왼쪽 미리보기에서 끌어 위치를 정해요</span><button type="button" class="es-pal-up-btn es-stkr-savebtn" id="esStkrSave">💾 이 스티커 저장하기</button></div>` : `<div class="es-pal-stkr-hint">아직 스티커 이미지가 없어요 — 위에서 만들거나 올리세요</div>`}
       <div class="es-pal-ted-section">
@@ -4257,15 +4246,10 @@
     $$("#esBody [data-palcapm]").forEach((b) => b.addEventListener("click", () => { E._palCapMethod = b.dataset.palcapm; renderPalette(); }));   // 🤖AI / 🎤음성 / ✍️직접
     { const b = $("#esPalCapVoice"); if (b) b.addEventListener("click", () => palExtractVoiceCaptions(b)); }   // 🎤 영상 음성 → 자막
     // 🏷 스티커 작업대 핸들러
-    { const _add = () => { const arr = palBlocks("sticker"); arr.push(palNewSticker()); palSetSel(arr.length - 1, "sticker"); if (E._palStkrAiMode == null) E._palStkrAiMode = true; renderPalette(); };
+    { const _add = () => { const arr = palBlocks("sticker"); arr.push(palNewSticker()); palSetSel(arr.length - 1, "sticker"); renderPalette(); };
       const a1 = $("#esStkrAdd"); if (a1) a1.addEventListener("click", _add); const a2 = $("#esStkrAdd2"); if (a2) a2.addEventListener("click", _add); }
     $$("#esBody [data-stkrtab]").forEach((b) => b.addEventListener("click", () => { palSetSel(+b.dataset.stkrtab, "sticker"); renderPalette(); }));
     $$("#esBody [data-stkrdel]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const arr = palBlocks("sticker"); const i = +b.dataset.stkrdel; if (arr[i]) { try { if (arr[i].result && String(arr[i].result.url).startsWith("blob:")) URL.revokeObjectURL(arr[i].result.url); } catch (_) {} arr.splice(i, 1); palSetSel(Math.max(0, i - 1), "sticker"); palDraftSave(); renderPalette(); } }));
-    $$("#esBody [data-stkrsrc]").forEach((b) => b.addEventListener("click", () => { E._palStkrAiMode = (b.dataset.stkrsrc === "ai"); renderPalette(); }));
-    { const b = $("#esStkrRefBtn"), f = $("#esStkrRefFile"); if (b && f) b.addEventListener("click", () => f.click()); }
-    { const f = $("#esStkrRefFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = URL.createObjectURL(file); cur.refBlob = file; renderPalette(); }); }
-    { const b = $("#esStkrRefX"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = null; cur.refBlob = null; renderPalette(); } }); }
-    { const b = $("#esStkrRefPaste"); if (b) b.addEventListener("click", () => palStkrPaste("ref")); }   // 📋 참조사진 붙여넣기
     { const b = $("#esStkrUpPaste"); if (b) b.addEventListener("click", () => palStkrPaste("img")); }    // 📋 스티커 이미지 붙여넣기
     if (!E._stkrPasteBound) {   // ⌘V / Ctrl+V — 스티커 단계에서 이미지 붙여넣기(한 번만 등록)
       E._stkrPasteBound = true;
@@ -4277,13 +4261,10 @@
         for (let i = 0; i < items.length; i++) { const it = items[i]; if (it.type && it.type.indexOf("image/") === 0) { file = it.getAsFile(); break; } }
         if (!file) return;
         e.preventDefault();
-        const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
-        palStkrSetImage(cur, file, aiMode ? "ref" : "img");
-        try { toast(aiMode ? "📋 참조 사진을 붙여넣었어요" : "📋 스티커 이미지를 붙여넣었어요"); } catch (_) {}
+        palStkrSetImage(cur, file, "img");
+        try { toast("📋 스티커 이미지를 붙여넣었어요"); } catch (_) {}
       });
     }
-    { const t = $("#esStkrText"); if (t) t.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (cur) cur.text = t.value; }); }
-    { const b = $("#esStkrGen"); if (b) b.addEventListener("click", () => palStickerGen(b)); }
     { const b = $("#esStkrUpBtn"), f = $("#esStkrUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
     { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", async (e) => {   // 📤 여러 장 한꺼번에 — 각자 스티커 1장(첫 장은 빈 현재 스티커에) + 전부 라이브러리 저장
         const files = [...(e.target.files || [])].filter((x) => /^image\//.test(x.type || ""));
