@@ -1482,6 +1482,7 @@
   //  여기서 만든 템플릿이 '템플릿 그대로 따라하기' 탭에 카드로 쌓임. (저장 컴파일은 다음 단계)
   const PALETTE_FNS = [
     { key: "media",   icon: "🎬", label: "영상넣기" },
+    { key: "setup",   icon: "✨", label: "자동세팅" },   // 🎁 타이틀·자막 스타일 + 음악을 관리자가 한 번에 세팅 → 고객은 글자만 수정
     { key: "tref",    icon: "🖼", label: "타이틀 참조" },
     { key: "tgen",    icon: "🔤", label: "타이틀 생성" },
     { key: "tpos",    icon: "🔲", label: "타이틀 위치" },
@@ -1503,9 +1504,9 @@
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["tref", "tgen", "cref", "caption", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
-  const PAL_BODYHD_STEPS = ["caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
   const paletteFn = (k) => PALETTE_FNS.find((f) => f.key === (k === "title" ? "tgen" : k)) || null;   // 옛 'title'은 'tgen'으로
   // 🧩 기능 아이콘 순서 — 사장님이 끌어서 바꾼 순서(localStorage 영속). 새로 생긴 기능은 끝에, 없어진 키는 무시.
@@ -1536,6 +1537,7 @@
   // 각 단계 고객화면 문구(제목·설명) 기본값 — 템플릿마다 P.copy 로 덮어쓸 수 있음(사장님이 수정 → 템플릿에 저장)
   const PAL_COPY_DEF = {
     media:   { title: "사진이나 영상을 넣어주세요", note: "넣은 수만큼 장면이 생겨요" },
+    setup:   { title: "글자만 바꾸면 완성!",        note: "타이틀·자막 글자만 고치면 돼요 (스타일·음악은 이미 세팅돼 있어요)" },
     tref:    { title: "마음에 드는 스타일을 골라요", note: "이 느낌으로 타이틀을 만들어요" },
     tgen:    { title: "뭐라고 바꿀까요?",            note: "고른 스타일로 글자만 바꿔서 만들어요" },
     tpos:    { title: "타이틀 크기·위치 조정", note: "위·아래 버튼은 누를 때마다 조금씩 움직여요" },
@@ -1560,6 +1562,20 @@
     const c = (step && step.copy) || {};   // 문구는 '단계마다' 저장(같은 영상넣기라도 단계별로 다름) → step.copy
     if (c[field] != null && String(c[field]).length) return c[field];
     return (PAL_COPY_DEF[fnKey] || {})[field] || "";
+  }
+  // 🎵 배경음악 고르기 UI(빠르기 필터 + 목록) — 음악 단계·자동세팅 작업대 공용
+  function palMusicPicker(P) {
+    const d = P.demo || {};
+    const sel = d.musicSel;
+    const allTr = E._palMusicTracks, tf = E._palMusicTempo || "all";
+    const tracks = (allTr && tf !== "all") ? allTr.filter((t) => (t.tempo || "mid") === tf) : allTr;
+    const tempoBar = (allTr && allTr.length) ? `<div class="es-pal-mus-tempos">${[["all", "전체"], ["fast", "⚡ 빠른"], ["mid", "🎵 중간"], ["slow", "🌙 느린"]].map((o) => `<button type="button" class="es-pal-mus-tempo ${tf === o[0] ? "sel" : ""}" data-mustempo="${o[0]}">${o[1]}</button>`).join("")}</div>` : "";
+    let listHtml;
+    if (!allTr) listHtml = `<div class="es-pal-mus-loading" id="esPalMusLoad">불러오는 중…</div>`;
+    else if (!allTr.length) listHtml = `<div class="es-pal-tgen-noref">저장한 음악이 아직 없어요 — 관리자 '🎵 노래 올리기'에서 추가하세요</div>`;
+    else if (!tracks.length) listHtml = `<div class="es-pal-tgen-noref">이 빠르기의 음악이 없어요 — 다른 빠르기를 골라보세요</div>`;
+    else { palMusLoadDur(tracks); listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => { const _s = sel && sel.id === t.id; const _du = (E._palMusDur && E._palMusDur[t.id]) ? palMusFmt(E._palMusDur[t.id]) : ""; return `<div class="es-pal-mus-item${_s ? " sel" : ""}" data-muspick="${esc(t.id)}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span>${_s ? '<span class="es-pal-mus-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ""}<span class="es-pal-mus-dur">${_du}</span></div>`; }).join("")}</div>`; }
+    return `${tempoBar}${listHtml}`;
   }
   // 각 기능의 '고객이 보는 화면' — 번호는 단계 순서(stepNum), 문구는 수정 가능(P.copy), 컨트롤은 실제 작동.
   function paletteStepScreen(fnKey, P, stepNum, step) {
@@ -1591,6 +1607,17 @@
                  <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half ghost" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 첨부</span><span class="es-pal-scr-btn-s">여러 개 한꺼번에 OK</span></button>
                </div>`;
           body = `<div class="es-pal-scr-drop" id="esDemoMediaDrop">${inner}</div><input type="file" id="esDemoMediaFile" accept="image/*,video/*" multiple hidden>`;
+          break;
+        }
+        case "setup": {   // ✨ 자동세팅 — 고객은 타이틀·자막 '글자'만 수정(스타일·음악은 관리자가 작업대에서 세팅). 있는 것만 보여줌.
+          const _row = (t, i, kind) => { const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체"; const lb = kind === "caption" ? "자막" : "타이틀"; return `<div class="es-pal-cslot"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${lb} ${i + 1}</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" data-cslotkind="${kind}" rows="2" placeholder="${lb} 글자 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`; };
+          const tts = palBlocks("title"), ccs = palBlocks("caption");
+          let parts = "";
+          if (tts.length) parts += `<div class="es-pal-cslot-lb">🔤 타이틀 글자</div>${tts.map((t, i) => _row(t, i, "title")).join("")}`;
+          if (ccs.length) parts += `<div class="es-pal-cslot-lb">💬 자막 글자</div>${ccs.map((t, i) => _row(t, i, "caption")).join("")}`;
+          if (!parts) parts = `<div class="es-pal-tgen-noref">왼쪽 작업대에서 타이틀·자막을 만들면<br>여기서 글자만 고치면 돼요 ✍️</div>`;
+          const _mus = d.musicSel ? `<div class="es-pal-mus-hint">🎵 음악: <b>${esc(d.musicSel.name || "")}</b> (자동 적용)</div>` : "";
+          body = `${parts}${_mus}`;
           break;
         }
         case "tref": {   // ① 타이틀 참조 — 스타일 사진 고르기(타이틀 글씨박스, 영구저장)
@@ -1740,18 +1767,7 @@
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "music": {   // 🎵 배경음악 고르기(선택 전용) — 소리 조절은 다음 'musicvol' 단계
           const sel = d.musicSel;
-          const allTr = E._palMusicTracks, tf = E._palMusicTempo || "all";
-          const tracks = (allTr && tf !== "all") ? allTr.filter((t) => (t.tempo || "mid") === tf) : allTr;
-          const tempoBar = (allTr && allTr.length) ? `<div class="es-pal-mus-tempos">${[["all", "전체"], ["fast", "⚡ 빠른"], ["mid", "🎵 중간"], ["slow", "🌙 느린"]].map((o) => `<button type="button" class="es-pal-mus-tempo ${tf === o[0] ? "sel" : ""}" data-mustempo="${o[0]}">${o[1]}</button>`).join("")}</div>` : "";
-          let listHtml;
-          if (!allTr) listHtml = `<div class="es-pal-mus-loading" id="esPalMusLoad">불러오는 중…</div>`;
-          else if (!allTr.length) listHtml = `<div class="es-pal-tgen-noref">저장한 음악이 아직 없어요 — 관리자 '🎵 노래 올리기'에서 추가하세요</div>`;
-          else if (!tracks.length) listHtml = `<div class="es-pal-tgen-noref">이 빠르기의 음악이 없어요 — 다른 빠르기를 골라보세요</div>`;
-          else { palMusLoadDur(tracks); listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => { const _s = sel && sel.id === t.id; const _du = (E._palMusDur && E._palMusDur[t.id]) ? palMusFmt(E._palMusDur[t.id]) : ""; return `<div class="es-pal-mus-item${_s ? " sel" : ""}" data-muspick="${esc(t.id)}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span>${_s ? '<span class="es-pal-mus-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ""}<span class="es-pal-mus-dur">${_du}</span></div>`; }).join("")}</div>`; }
-          body = `<div class="es-pal-mus-lb">🎵 배경음악 고르기</div>
-            ${tempoBar}
-            ${listHtml}
-            ${sel ? `<div class="es-pal-mus-hint">✅ 골랐어요 — 다음 <b>🎚 음악 소리조절</b> 단계에서 크기를 맞춰요</div>` : ""}`;
+          body = `<div class="es-pal-mus-lb">🎵 배경음악 고르기</div>${palMusicPicker(P)}${sel ? `<div class="es-pal-mus-hint">✅ 골랐어요 — 다음 <b>🎚 음악 소리조절</b> 단계에서 크기를 맞춰요</div>` : ""}`;
           break;
         }
         case "musicvol": {   // 🎚 음악 소리 조절(원본·나레이션·음악 볼륨) — 위 미리보기 ▶로 들어봄
@@ -3418,10 +3434,14 @@
     const isPrev = !!P.preview;
     // 현재 단계 종류 — 타이틀(tref/tgen/tpos) 또는 자막(cref/caption) → 같은 작업대 편집기 공유
     const _curFn = (P.steps[P.sel] || {}).fn;
+    const _isSetupStep = !isPrev && _curFn === "setup";
+    const _setupTab = E._palSetupTab || "title";   // ✨ 자동세팅 작업대 하위탭: title/caption/music
     const _isTitleStep = !isPrev && (_curFn === "tref" || _curFn === "tgen" || _curFn === "tpos");
     const _isCaptionStep = !isPrev && (_curFn === "cref" || _curFn === "caption");
-    const _isEditStep = _isTitleStep || _isCaptionStep;
-    E._palEditKind = _isCaptionStep ? "caption" : "title";
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep;
+    E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : (_isCaptionStep ? "caption" : "title");
+    // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
+    if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
     // 고객화면 번호 = 그 기능의 '단계 순서'(1-based). 미리보기 중이고 아직 단계에 없으면 0(•).
     let stepNum = 0;
     if (showKey) { if (P.preview) { const _i = P.steps.findIndex((s) => s.fn === P.preview); stepNum = _i >= 0 ? _i + 1 : 0; } else { stepNum = P.sel + 1; } }
@@ -3454,7 +3474,20 @@
           <div class="es-pal-tracks">${paletteTracks(P)}</div>
         </div>`;
     // 가운데 '작업대' 칸 — 레이아웃 고정 위해 항상 자리 차지(3열 유지). 타이틀/자막 단계면 편집기, 아니면 '작업대 없음' 안내.
-    const editorZone = _isEditStep
+    // ✨ 자동세팅 작업대 — 타이틀/자막 탭일 때 위쪽에 '저장된 스타일 고르기'(자막참조·타이틀참조와 동일), 아래에 편집기
+    let _setupGallery = "";
+    if (_isSetupStep && _setupTab !== "music") {
+      const _kk = _setupTab;
+      const _opts = palRefsArr(_kk);
+      const _sel = (P.demo || {})[_kk === "caption" ? "captionRef" : "titleRef"];
+      const _galHtml = _opts.length
+        ? palRefGalHTML(_opts, _sel, _kk)
+        : `<div class="es-pal-tgen-noref">아직 저장된 ${_kk === "caption" ? "자막" : "타이틀"} 스타일이 없어요<br>아래에서 만들고 <b>'${_kk === "caption" ? "내 자막" : "내"} 글씨박스에 저장'</b>을 누르면 여기 쌓여요</div>`;
+      _setupGallery = `<div class="es-pal-setup-gallery"><div class="es-pal-cslot-lb">${_kk === "caption" ? "🗨 자막" : "🖼 타이틀"} 스타일 고르기 <span class="es-pal-tref-hint">(자막참조·타이틀참조와 동일)</span></div>${_galHtml}</div>`;
+    }
+    const editorZone = _isSetupStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">✨ 자동세팅 작업대 — 타이틀·자막 스타일 + 음악 한 번에</div><div class="es-pal-setup-tabs"><button type="button" class="es-pal-setup-tab ${_setupTab === "title" ? "on" : ""}" data-setuptab="title">🔤 타이틀</button><button type="button" class="es-pal-setup-tab ${_setupTab === "caption" ? "on" : ""}" data-setuptab="caption">💬 자막</button><button type="button" class="es-pal-setup-tab ${_setupTab === "music" ? "on" : ""}" data-setuptab="music">🎵 음악</button></div>${_setupTab === "music" ? `<div class="es-pal-setup-music">${palMusicPicker(P)}</div>` : `${_setupGallery}${paletteTitleEditor(P)}`}</div></div>`
+      : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
     body.innerHTML = (E._palTestMode || E._palCustomerMode)
@@ -3878,13 +3911,13 @@
     const _tedSave = $("#esTedSaveRef"); if (_tedSave) _tedSave.addEventListener("click", palSaveTitleAsRef);
     // 🅰🅱🅲 고객 화면(가운데) — 칸별 문구 입력 → 그 칸 실시간 렌더
     $$("#esBody [data-cslot]").forEach((ta) => ta.addEventListener("input", () => {
-      const i = +ta.dataset.cslot; const ts = palTitles(); const blk = ts[i]; if (!blk) return;
+      const i = +ta.dataset.cslot; const kind = ta.dataset.cslotkind || E._palEditKind || "title"; const blk = palBlocks(kind)[i]; if (!blk) return;   // 자동세팅 화면은 타이틀·자막 섞여 있어 종류(data-cslotkind)로 구분
       blk.text = ta.value;
       clearTimeout(E._cslotT);
       E._cslotT = setTimeout(async () => {
         await palTitleRenderBlock(blk);
         const pos = ta.selectionStart; renderPalette();   // 왼쪽 미리보기 + 고객화면 live 둘 다 확실히 갱신(타이핑 멈춘 뒤 1회) + 입력 포커스/커서 복원
-        const t2 = document.querySelector(`[data-cslot="${i}"]`); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
+        const t2 = document.querySelector(`[data-cslot="${i}"][data-cslotkind="${kind}"]`) || document.querySelector(`[data-cslot="${i}"]`); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
       }, 320);
     }));
     palTitleDragInit();   // ✋ 칸 끌어 위치·모서리로 크기·눌러 선택
@@ -3900,6 +3933,8 @@
     { const ub = $("#esPalUpBtn"), uf = $("#esPalUpFile"); if (ub && uf) ub.addEventListener("click", () => uf.click()); }
     { const uf = $("#esPalUpFile"); if (uf) uf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.media)) P.demo.media = P.demo.media ? [P.demo.media] : []; fs.forEach((f) => { try { P.demo.media.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); try { palDraftSave(); } catch (_) {} renderPalette(); }); }
     $$("#esBody [data-uprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.uprm; const arr = (P.demo && P.demo.media) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); try { palDraftSave(); } catch (_) {} renderPalette(); } }));
+    // ✨ 자동세팅 작업대 하위탭(타이틀·자막·음악) 전환
+    $$("#esBody [data-setuptab]").forEach((b) => b.addEventListener("click", () => { E._palSetupTab = b.dataset.setuptab; renderPalette(); }));
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
