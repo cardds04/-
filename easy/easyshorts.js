@@ -1863,9 +1863,9 @@
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
       });
     };
-    if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김
-    if (has("caption") || has("cref")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
-    if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
+    if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
+    if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
+    if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     let chips = "";
     if (!playMode) {   // 실제 출력 재생 모드에선 안내 칩 숨김(자막 타이밍 표시 lite는 유지)
       if (list.length > 1) chips += `<span class="es-pal-real-chip">🎬 ${list.length}컷</span>`;
@@ -2293,7 +2293,7 @@
   function paletteTitleEditor(P) {
     const d = P.demo || {};
     const fns = (P.steps || []).map((s) => s.fn);
-    if (!fns.includes("tgen") && !fns.includes("tref") && !fns.includes("tpos") && !fns.includes("caption") && !fns.includes("cref")) return "";
+    if (!fns.includes("tgen") && !fns.includes("tref") && !fns.includes("tpos") && !fns.includes("caption") && !fns.includes("cref") && !fns.includes("setup")) return "";
     const cap = E._palEditKind === "caption";   // 자막/타이틀 같은 편집기
     const ts = palTitles();
     if (!ts.length) {   // 0칸 = 이 영상엔 타이틀/자막이 안 들어감(빈 상태). ＋로 다시 넣기
@@ -4039,8 +4039,8 @@
       aspect: P.aspect || "9:16",
       music: null, audioClips: [], createdAt: Date.now(),
       slots: [{ id: uid(), dur: 3, label: "", auto: true, easyTrim: has("length") }],   // 영상넣기 = 자율컷(무제한). 컷길이 기능 있으면 길이조절 켬.
-      texts: has("caption") ? [Object.assign({ id: uid(), text: "여기에 자막을 입력하세요" }, palCaptionTextProps(P.demo && P.demo.captionStyle))] : [],
-      narrate: has("narrate"), _wantTitle: has("tgen") || has("title"), _palette: true,
+      texts: (has("caption") || has("setup")) ? [Object.assign({ id: uid(), text: "여기에 자막을 입력하세요" }, palCaptionTextProps(P.demo && P.demo.captionStyle))] : [],
+      narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
     };
   }
