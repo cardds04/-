@@ -1916,11 +1916,23 @@
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${handles}</div>`;
       });
     };
-    if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
-      if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
-      if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
-      if (has("sticker")) { palBlocks("sticker"); (d.stickers || []).forEach((s) => { const r = palStkrCut(s, list); s._effStart = r.start; s._effDur = r.dur; s._skip = live ? !!r.skip : false; }); _renderBlocks(d.stickers || [], "sticker"); }   // 🏷 스티커 오버레이(어느 컷에 해석 — 고객(live)서 컷 없으면 skip, 관리자 편집선 항상 보임)
-      if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
+    // 편집 미리보기(col2, live 아님)는 '지금 단계 종류'만 보임. 고객/최종본(live)·재생은 적용된 전부.
+    const _renderTitles = () => { palBlocks("title"); _renderBlocks(d.titles || [], "title"); };
+    const _renderCaptions = () => { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); };
+    const _renderStickers = () => { palBlocks("sticker"); (d.stickers || []).forEach((s) => { const r = palStkrCut(s, list); s._effStart = r.start; s._effDur = r.dur; s._skip = live ? !!r.skip : false; }); _renderBlocks(d.stickers || [], "sticker"); };
+    const editKind = (!live) ? (curFn === "sticker" ? "sticker" : (curFn === "cref" || curFn === "caption") ? "caption" : (curFn === "tgen" || curFn === "tref" || curFn === "tpos") ? "title" : curFn === "setup" ? "setup" : null) : null;
+    if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 것 안 그림, 원본 영상만
+      if (live) {   // 🟢 고객/최종본 = 적용된 전부
+        if (has("tgen") || has("tref") || has("tpos") || has("setup")) _renderTitles();
+        if (has("caption") || has("cref") || has("setup")) _renderCaptions();
+        if (has("sticker")) _renderStickers();
+      } else if (editKind === "title") _renderTitles();   // ✏️ 편집 = 그 종류만
+      else if (editKind === "caption") _renderCaptions();
+      else if (editKind === "sticker") _renderStickers();
+      else if (editKind === "setup") { _renderTitles(); _renderCaptions(); }   // 자동세팅 = 타이틀+자막 같이
+      // editKind null(편집 단계 아님) → 아무것도 안 그림
+      const _phKinds = live ? (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup")) : (editKind === "title" || editKind === "caption" || editKind === "setup");
+      if (!anyRendered && !playMode && _phKinds) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     }
     let chips = "";
     if (!playMode && !opts.noOverlay) {   // 실제 출력 재생 모드·시안(noOverlay)에선 안내 칩 숨김
