@@ -12077,26 +12077,38 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   async function palExtractVoiceCaptions(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {};
     const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
-    const m = list.find((x) => x && x.blob && x.kind === "video") || (list[0] && list[0].blob ? list[0] : null);
-    if (!m || !m.blob) { try { toast("따라할 영상(1열)을 먼저 넣어주세요"); } catch (_) {} return; }
+    const vids = list.filter((x) => x && x.blob && x.kind === "video");
+    if (!vids.length) { try { toast("따라할 영상(1열)을 먼저 넣어주세요"); } catch (_) {} return; }
     const caps = palBlocks("caption");
     const status = $("#esPalCapVoiceStatus");
     if (btn) { btn.disabled = true; btn._t = btn.textContent; btn.textContent = "🎤 듣는 중…"; }
-    if (status) status.textContent = "🎤 영상 음성을 듣고 자막으로 옮기는 중… (10~30초)";
     const MAX = 14;
     try {
-      const aud = await sttAudioUri(m.blob);
-      const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      let chunks = (j.words || []).length ? chunkCapWords(j.words, MAX) : null;
-      if (!chunks || !chunks.length) {   // 폴백 — 전체 전사를 글자수로 분할(타이밍 추정)
-        const text = String(j.text || "").trim();
-        if (!text) throw new Error("말소리를 못 알아들었어요 (음성이 없거나 작아요)");
-        const parts = []; let cur = ""; text.replace(/\s+/g, " ").split(" ").forEach((w) => { const c2 = cur ? cur + " " + w : w; if (cur && c2.length > MAX) { parts.push(cur); cur = w; } else cur = c2; }); if (cur) parts.push(cur);
-        const per = 2.2; chunks = parts.map((c, i) => ({ text: c, start: i * per, end: (i + 1) * per }));
+      // 🎤 첨부한 모든 영상 음성을 순서대로 듣고, 각 영상의 타임라인 위치(누적 시작시각)에 자막을 얹음 (예전엔 첫 영상만)
+      let allChunks = [], acc = 0, done = 0;
+      for (const m of list) {
+        const clipDur = palCutClipDur(m);
+        if (m && m.blob && m.kind === "video") {
+          done++;
+          if (status) status.textContent = `🎤 영상 음성 듣는 중… (${done}/${vids.length})`;
+          try {
+            const aud = await sttAudioUri(m.blob);
+            const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
+            const j = await r.json().catch(() => ({}));
+            if (r.ok && j.ok) {
+              let ch = (j.words || []).length ? chunkCapWords(j.words, MAX) : null;
+              if (!ch || !ch.length) {   // 폴백 — 전체 전사를 글자수로 분할(타이밍 추정, 그 컷 길이 안에)
+                const text = String(j.text || "").trim();
+                if (text) { const parts = []; let cur = ""; text.replace(/\s+/g, " ").split(" ").forEach((w) => { const c2 = cur ? cur + " " + w : w; if (cur && c2.length > MAX) { parts.push(cur); cur = w; } else cur = c2; }); if (cur) parts.push(cur); const per = Math.max(1.2, clipDur / Math.max(1, parts.length)); ch = parts.map((c, i) => ({ text: c, start: i * per, end: (i + 1) * per })); }
+              }
+              if (ch && ch.length) ch.forEach((c) => { const st = acc + Math.max(0, c.start || 0); const en = acc + Math.max((c.start || 0) + 0.4, c.end || ((c.start || 0) + 0.7)); allChunks.push({ text: c.text, start: st, end: Math.min(en, acc + clipDur + 0.4) }); });   // 각 컷 음성 → 컷 시작(acc) 기준으로 배치
+            }
+          } catch (_) {}
+        }
+        acc += clipDur;
       }
-      chunks = palSplitLongChunks(chunks, MAX);
+      if (!allChunks.length) throw new Error("말소리를 못 알아들었어요 (음성이 없거나 작아요)");
+      let chunks = palSplitLongChunks(allChunks, MAX);
       if (!chunks.length) throw new Error("자막을 만들지 못했어요");
       const base = caps[0] ? Object.assign({}, caps[0]) : null;
       const basePosY = (base && base.posY != null) ? base.posY : 88, basePosX = (base && base.posX != null) ? base.posX : 50;
