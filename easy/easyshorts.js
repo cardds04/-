@@ -442,13 +442,13 @@
       if (!s || !s.template || !Array.isArray(s.template.slots)) return false;
       let musicUrl = null;
       if (s.musicChanged) { try { const b = await idbGet("sessMusic"); if (b instanceof Blob) musicUrl = URL.createObjectURL(b); } catch (_) {} }
-      if (!musicUrl && s.template.music) musicUrl = await musicBlobUrl(s.templateId);
+      if (!musicUrl && s.template.music) { try { musicUrl = await musicBlobUrl(s.templateId); } catch (_) {} }   // 음악 복원 실패해도 작업 자리는 복원되게
       let voiceUrl = null, voiceBlob = null;
       if (s.voiceChanged) { try { const b = await idbGet("sessVoice"); if (b instanceof Blob) { voiceBlob = b; voiceUrl = URL.createObjectURL(b); } } catch (_) {} }
       const fills = {};
       for (const id of (s.fillSlotIds || [])) {
         const meta = (s.fillMeta || {})[id] || {};
-        const blob = await idbGet("sessFill_" + id);
+        let blob = null; try { blob = await idbGet("sessFill_" + id); } catch (_) {}
         if (blob instanceof Blob) {
           const kind = meta.kind || (/^video\//.test(blob.type) ? "video" : "image");
           fills[id] = { kind, name: meta.name || "", dur: meta.dur || 0, url: URL.createObjectURL(blob), _file: blob };
@@ -462,7 +462,7 @@
       for (const c of ((s.template && s.template.audioClips) || [])) {
         try { const b = await idbGet("sessAudio_" + c.id); if (b instanceof Blob) E.using.audioBlobs[c.id] = { url: URL.createObjectURL(b), _file: b, dur: c.srcDur || 0 }; } catch (_) {}
       }
-      if (s.logo) await loadSessLogo();   // 로고 blob 복원
+      if (s.logo) { try { await loadSessLogo(); } catch (_) {} }   // 로고 blob 복원(실패해도 복원 중단 안 함)
       // 🎨 스티커함은 전역(loadStickerLib)에서 이미 로드됨 — 세션별 복원 불필요
       if (s.isTitle) { try { const rb = await idbGet("sessTitleRef"); if (rb instanceof Blob) E.using._titleRefFile = rb; } catch (_) {} }   // 🎬 타이틀 참조사진 복원
       if (s.easyIdx != null) E.easyIdx = s.easyIdx;
@@ -4201,8 +4201,9 @@
     }
     // 📱 고객화면 하단 다음/이전 — 실제 고객처럼 단계 진행(왼쪽 트랙·결과는 P.demo 라 자동 반영)
     const _palStopMus = () => { if (E._palMusPrev) { try { E._palMusPrev.pause(); } catch (_) {} E._palMusPrev = null; } try { palStopNarrPreview(); } catch (_) {} };   // 음악·나레이션 미리듣기 멈춤(단계 넘어가면)
-    const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
-    const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
+    const _navLock = () => { if (E._palNavLock) return true; E._palNavLock = true; setTimeout(() => { E._palNavLock = false; }, 350); return false; };   // 영상 로드중 연타→단계 휙휙 넘어감 방지
+    const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { if (_navLock()) return; _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
+    const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { if (_navLock()) return; _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
     $$("#esBody [data-custsfx]").forEach((b) => b.addEventListener("click", () => { const arr = ((E.palette && E.palette.demo && E.palette.demo.sfx) || []).filter((s) => s && s.result && s.result.url); const s = arr[+b.dataset.custsfx]; if (s) palSfxPlay(s.result.url, s.vol); }));   // 🔔 고객 효과음 들어보기
     // 📲 바텀시트 그립 — 탭하면 작업창이 위로 커졌다(다시 누르면) 접힘. 상태는 현재 보여지는 화면(showKey)에 묶음.
     const _cGrip = $("#esCustGrip");
@@ -12005,7 +12006,11 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   // 🎙 전역 나레이션 목소리(캐릭터) — 바깥(템플릿 고르기)서 한 번 정하면 모든 나레이션이 그 캐릭터로(템플릿별 설정 무시)
   function palNarrVoice() { try { return JSON.parse(localStorage.getItem("easy_narr_voice_v1") || "null"); } catch (_) { return null; } }
   function palNarrVoiceSet(o) { try { if (o && o.id) localStorage.setItem("easy_narr_voice_v1", JSON.stringify(o)); else localStorage.removeItem("easy_narr_voice_v1"); } catch (_) {} }
+  function palMuteScreenMedia() {   // 말투 팝업/샘플 들을 때 화면에서 돌던 영상·오디오 정지
+    try { document.querySelectorAll("video, audio").forEach((m) => { try { if (!m.paused) m.pause(); } catch (_) {} }); } catch (_) {}
+  }
   function palNarrToneOpen() {
+    palMuteScreenMedia();   // 팝업 열면 릴스 등 재생중 소리 끔
     if (E._tcVoices === undefined) { try { loadTypecastVoices(); } catch (_) {} }   // 모델 정보용 1회 로드
     const cur = palNarrVoice(), curId = (cur && cur.id) || "";
     const autoChip = `<span class="es-narrtone-chipwrap"><button type="button" class="es-narrtone-chip ${!curId ? "on" : ""}" data-narrvoice="">🎯 자동 (템플릿대로)</button></span>`;
@@ -12024,6 +12029,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   async function palVoiceSample(id, model, btn) {
     if (!id) return;
     palStopVoiceSample();
+    palMuteScreenMedia();   // 샘플 들을 때 화면 영상 소리 끔
     E._tcSampleCache = E._tcSampleCache || {};
     const _t = btn ? btn.textContent : "";
     try {
