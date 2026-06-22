@@ -2282,7 +2282,9 @@
       const _sz = block.size != null ? block.size : 7, _lh = block.lineHeight || 1.22;
       maxWidth = Math.round(Math.max(450, Math.min(2200, 17000 * _lh * _aspect / Math.max(4, _sz))));   // ≈ 화면폭 80%에서 줄바꿈(상수는 실측으로 보정)
     }
-    const blob = await renderFontToBlob({ text, maxWidth, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, bold: !!block.bold, shadow: block.shadow || null });
+    const _raw = String(block.text || ""), _lead = _raw.length - _raw.replace(/^\s+/, "").length;   // trim 으로 인덱스 안 밀리게 colorMap도 같이 잘라 정렬
+    const _cm = (Array.isArray(block.colorMap) && block.colorMap.some((c) => c)) ? block.colorMap.slice(_lead, _lead + text.length) : null;
+    const blob = await renderFontToBlob({ text, maxWidth, font: block.font || "giants-bold", color: block.color || "#ffffff", stroke: (block.stroke && block.stroke !== "#111111") ? block.stroke : "", align: block.align || "center", letterSpacing: block.letterSpacing || 0, lineHeight: block.lineHeight || 1.22, italic: !!block.italic, bold: !!block.bold, shadow: block.shadow || null, colorMap: _cm });
     if (!blob) return;
     try { if (block.result && block.result.url) URL.revokeObjectURL(block.result.url); } catch (_) {}
     block.result = { url: URL.createObjectURL(blob), blob, font: block.font, lines: blob._lines || (text.split("\n").length || 1) };
@@ -2343,7 +2345,7 @@
     const bgs = TITLE_BG_COLORS.map((c) => `<button type="button" class="es-pal-ted-color ${bg === c.toLowerCase() ? "sel" : ""}" data-tedbg="${c}" style="${c ? `background:${c}` : "background:repeating-conic-gradient(#555 0% 25%,#333 0% 50%) 50%/8px 8px"}" title="${c ? c : "없음"}">${c ? "" : "✕"}</button>`).join("");
     const bgStyleCur = cur.bgStyle || "box";
     const bgStyleBtns = TITLE_BG_STYLES.map((s) => `<button type="button" class="es-pal-ted-stroke ${bgStyleCur === s[0] ? "sel" : ""}" data-tedbgstyle="${s[0]}">${s[1]}</button>`).join("");
-    const fxPop = E._tedColorOpen === "text" ? `<div class="es-pal-ted-colorpop">${colors}</div>`
+    const fxPop = E._tedColorOpen === "text" ? `<div class="es-pal-ted-colorhint">✋ 글자 일부를 <b>드래그로 선택</b>하고 색을 누르면 <b>그 부분만</b> 바뀌어요 (선택 안 하면 전체)</div><div class="es-pal-ted-colorpop">${colors}</div>`
       : E._tedColorOpen === "outline" ? `<div class="es-pal-ted-colorpop">${outlineColorSw}</div>`
       : E._tedColorOpen === "shadow" ? `<div class="es-pal-ted-fxpop"><div class="es-pal-ted-colorpop">${shColorSw}</div>${shOn ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">방향 <small>${shDir}°</small></span><input type="range" class="es-pal-ted-op" id="esTedShDir" min="0" max="360" value="${shDir}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">불투명도 <small>${shOp}%</small></span><input type="range" class="es-pal-ted-op" id="esTedShOp" min="0" max="100" value="${shOp}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">거리 <small>${shDist}</small></span><input type="range" class="es-pal-ted-op" id="esTedShDist" min="0" max="40" value="${shDist}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">흐림 <small>${shBlur}</small></span><input type="range" class="es-pal-ted-op" id="esTedShBlur" min="0" max="50" value="${shBlur}"></div>` : ""}</div>`
       : E._tedColorOpen === "bg" ? `<div class="es-pal-ted-fxpop"><div class="es-pal-ted-colorpop">${bgs}</div>${bgOn ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">모양</span><div class="es-pal-ted-sw">${bgStyleBtns}</div></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">가로 <small>${cur.bgPadX != null ? cur.bgPadX : 4}</small></span><input type="range" class="es-pal-ted-op" id="esTedBgX" min="0" max="22" value="${cur.bgPadX != null ? cur.bgPadX : 4}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">세로 <small>${cur.bgPadY != null ? cur.bgPadY : 2}</small></span><input type="range" class="es-pal-ted-op" id="esTedBgY" min="0" max="16" value="${cur.bgPadY != null ? cur.bgPadY : 2}"></div><div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${op}</small></span><input type="range" class="es-pal-ted-op" id="esTedOp" min="0" max="100" value="${op}"></div>` : ""}</div>` : "";
@@ -3079,7 +3081,9 @@
     const lhR = (opts && +opts.lineHeight) || 1.22;   // 줄간격 배율
     const ital = (opts && opts.italic) ? "italic " : "";   // 비스듬히(기울임)
     const bold = !!(opts && opts.bold);   // 굵게 — 글자색 외곽선으로 두께 추가(페이크볼드, 폰트 모양 유지)
-    let lines = text.split("\n");
+    const colorMap = (opts && opts.colorMap) || null;   // 🎨 글자별 색(한 문장 안 부분 색칠) — text(UTF-16) 인덱스 기준
+    const _multiColor = !!(colorMap && colorMap.some((c) => c));
+    let lines = []; { let _gi = 0; String(text).split("\n").forEach((seg) => { lines.push({ str: seg, gi: _gi }); _gi += seg.length + 1; }); }   // {str, gi=text 내 시작 인덱스}
     const FS = 150, LH = Math.round(FS * lhR), PAD = Math.round(FS * 0.34);
     const ff = titleFontStack(fam);   // 굵게(700) 강제 안 함 — 페이크볼드로 글씨체 망가지는 것 방지(파일 자체 굵기 사용)
     const fontStr = `${ital}${FS}px ${ff}`;
@@ -3090,16 +3094,17 @@
     const MAXW = (opts && +opts.maxWidth) || 0;
     if (MAXW > 0) {
       const wrapped = [];
-      lines.forEach((L) => {
-        if (!L) { wrapped.push(""); return; }
-        if (mctx.measureText(L).width <= MAXW) { wrapped.push(L); return; }
-        let line = "";
-        for (const ch of L) { const test = line + ch; if (mctx.measureText(test).width > MAXW && line) { wrapped.push(line); line = ch; } else line = test; }
-        if (line) wrapped.push(line);
+      lines.forEach((info) => {
+        const L = info.str;
+        if (!L) { wrapped.push({ str: "", gi: info.gi }); return; }
+        if (mctx.measureText(L).width <= MAXW) { wrapped.push(info); return; }
+        let line = "", start = info.gi;
+        for (let k = 0; k < L.length; k++) { const ch = L[k]; const test = line + ch; if (mctx.measureText(test).width > MAXW && line) { wrapped.push({ str: line, gi: start }); line = ch; start = info.gi + k; } else line = test; }
+        if (line) wrapped.push({ str: line, gi: start });
       });
-      lines = wrapped.length ? wrapped : [""];
+      lines = wrapped.length ? wrapped : [{ str: "", gi: 0 }];
     }
-    let maxW = 0; lines.forEach((L) => { maxW = Math.max(maxW, mctx.measureText(L || " ").width); });
+    let maxW = 0; lines.forEach((info) => { maxW = Math.max(maxW, mctx.measureText(info.str || " ").width); });
     const sw = stroke ? Math.ceil(FS * 0.13) : 0;
     const boldW = bold ? Math.ceil(FS * 0.05) : 0;   // 굵게 두께
     const sh = (opts && opts.shadow) || null;   // 그림자 {color,dir,op,dist,blur} 또는 null
@@ -3117,16 +3122,35 @@
     const align = (opts && opts.align) || "center";   // 글자(텍스트) 정렬 — 여러 줄을 왼/가운데/오른쪽으로
     ctx.font = fontStr; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
     try { if ("letterSpacing" in ctx) ctx.letterSpacing = ls + "px"; } catch (_) {}
-    ctx.textAlign = align === "left" ? "left" : align === "right" ? "right" : "center";
-    const ax = align === "left" ? sidePad : align === "right" ? (W - sidePad) : (W / 2);
-    lines.forEach((L, i) => {
-      const y = PAD + shPad + LH * i + LH / 2;
-      if (stroke) { ctx.shadowColor = "transparent"; ctx.strokeStyle = stroke; ctx.lineWidth = sw * 2; ctx.strokeText(L, ax, y); }
-      if (sh) { ctx.shadowColor = shColor; ctx.shadowBlur = shBlur; ctx.shadowOffsetX = shOX; ctx.shadowOffsetY = shOY; }   // 그림자(방향·불투명도·거리·흐림)
-      if (bold) { ctx.strokeStyle = color; ctx.lineWidth = boldW; ctx.strokeText(L, ax, y); ctx.shadowColor = "transparent"; }   // 굵게: 글자색 외곽선으로 두께 추가
-      ctx.fillStyle = color; ctx.fillText(L, ax, y);
-      ctx.shadowColor = "transparent";
-    });
+    if (!_multiColor) {
+      ctx.textAlign = align === "left" ? "left" : align === "right" ? "right" : "center";
+      const ax = align === "left" ? sidePad : align === "right" ? (W - sidePad) : (W / 2);
+      lines.forEach((info, i) => {
+        const L = info.str, y = PAD + shPad + LH * i + LH / 2;
+        if (stroke) { ctx.shadowColor = "transparent"; ctx.strokeStyle = stroke; ctx.lineWidth = sw * 2; ctx.strokeText(L, ax, y); }
+        if (sh) { ctx.shadowColor = shColor; ctx.shadowBlur = shBlur; ctx.shadowOffsetX = shOX; ctx.shadowOffsetY = shOY; }   // 그림자(방향·불투명도·거리·흐림)
+        if (bold) { ctx.strokeStyle = color; ctx.lineWidth = boldW; ctx.strokeText(L, ax, y); ctx.shadowColor = "transparent"; }   // 굵게: 글자색 외곽선으로 두께 추가
+        ctx.fillStyle = color; ctx.fillText(L, ax, y);
+        ctx.shadowColor = "transparent";
+      });
+    } else {
+      // 🎨 멀티컬러 — 글자 하나씩(colorMap[글로벌 인덱스] 색, 없으면 기본색). 정렬은 줄 시작 x를 직접 계산.
+      ctx.textAlign = "left";
+      lines.forEach((info, i) => {
+        const L = info.str, y = PAD + shPad + LH * i + LH / 2;
+        const lw = ctx.measureText(L).width;
+        const startX = align === "left" ? sidePad : align === "right" ? (W - sidePad - lw) : (W / 2 - lw / 2);
+        for (let j = 0; j < L.length; j++) {
+          const ch = L[j], x = startX + ctx.measureText(L.slice(0, j)).width;
+          const cc = colorMap[info.gi + j] || color;
+          if (stroke) { ctx.shadowColor = "transparent"; ctx.strokeStyle = stroke; ctx.lineWidth = sw * 2; ctx.strokeText(ch, x, y); }
+          if (sh) { ctx.shadowColor = shColor; ctx.shadowBlur = shBlur; ctx.shadowOffsetX = shOX; ctx.shadowOffsetY = shOY; }
+          if (bold) { ctx.strokeStyle = cc; ctx.lineWidth = boldW; ctx.strokeText(ch, x, y); ctx.shadowColor = "transparent"; }
+          ctx.fillStyle = cc; ctx.fillText(ch, x, y);
+          ctx.shadowColor = "transparent";
+        }
+      });
+    }
     const _blob = await new Promise((res) => cv.toBlob(res, "image/png"));
     try { if (_blob) _blob._lines = lines.length; } catch (_) {}   // 📏 실제 렌더된 줄 수(자동 줄바꿈 포함) — palBoxH가 글씨 안 짜부라뜨리게
     return _blob;
@@ -3835,19 +3859,36 @@
     // ✍️ 왼쪽 타이틀 편집기 — 칸(1·2·3번칸)별 문구·글씨체·색·테두리·배경·크기·투명도
     const _curBox = () => $(`.es-pal-real-titlebox[data-kind="${E._palEditKind || "title"}"][data-titleidx="${palSel()}"]`);
     const _tedText = $("#esTedText");
-    if (_tedText) _tedText.addEventListener("input", () => {
-      const cur = palCurTitle(); cur.text = _tedText.value;
-      clearTimeout(E._tedT);
-      E._tedT = setTimeout(async () => {
-        await palTitleRenderBlock(cur);
-        const pos = _tedText.selectionStart; renderPalette();   // 미리보기·live·박스높이(줄수 반영) 다 갱신 + 포커스 복원
-        const t2 = document.getElementById("esTedText"); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
-      }, 320);
-    });
+    if (_tedText) {
+      const _capSel = () => { try { E._tedSel = { s: _tedText.selectionStart, e: _tedText.selectionEnd }; } catch (_) {} };   // 🎨 부분 색칠용 — 선택 영역 기억
+      ["select", "keyup", "mouseup", "click"].forEach((ev) => _tedText.addEventListener(ev, _capSel));
+      _tedText.addEventListener("input", () => {
+        const cur = palCurTitle();
+        if (Array.isArray(cur.colorMap)) { const n = _tedText.value.length; if (cur.colorMap.length > n) cur.colorMap.length = n; else while (cur.colorMap.length < n) cur.colorMap.push(null); }   // 글자수 맞춰 색맵 길이 동기화
+        cur.text = _tedText.value; _capSel();
+        clearTimeout(E._tedT);
+        E._tedT = setTimeout(async () => {
+          await palTitleRenderBlock(cur);
+          const pos = _tedText.selectionStart; renderPalette();   // 미리보기·live·박스높이(줄수 반영) 다 갱신 + 포커스 복원
+          const t2 = document.getElementById("esTedText"); if (t2) { t2.focus(); try { t2.setSelectionRange(pos, pos); } catch (_) {} }
+        }, 320);
+      });
+    }
     $$("#esBody [data-tedfont]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().font = b.dataset.tedfont; E._tedFontOpen = false; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
     // 🎨 글자색·배경색 — 버튼 눌러서 팔레트 열고(E._tedColorOpen), 색 고르면 닫힘
     $$("#esBody [data-tedcolorbtn]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.tedcolorbtn; E._tedColorOpen = (E._tedColorOpen === k) ? null : k; renderPalette(); }));
-    $$("#esBody [data-tedcolor]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().color = b.dataset.tedcolor; E._tedColorOpen = null; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
+    $$("#esBody [data-tedcolor]").forEach((b) => b.addEventListener("click", async () => {
+      const cur = palCurTitle(), c = b.dataset.tedcolor;
+      const ta = $("#esTedText");
+      const sel = (ta && ta.selectionEnd > ta.selectionStart) ? { s: ta.selectionStart, e: ta.selectionEnd } : (E._tedSel && E._tedSel.e > E._tedSel.s ? E._tedSel : null);
+      if (sel) {   // 🎨 선택한 글자만 색칠(한 문장 안 부분 색)
+        const n = (cur.text || "").length;
+        if (!Array.isArray(cur.colorMap)) cur.colorMap = new Array(n).fill(null);
+        while (cur.colorMap.length < n) cur.colorMap.push(null);
+        for (let i = sel.s; i < sel.e && i < cur.colorMap.length; i++) cur.colorMap[i] = c;
+      } else { cur.color = c; }   // 선택 없으면 전체 기본색
+      E._tedColorOpen = null; await palTitleRenderBlock(cur); renderPalette();
+    }));
     $$("#esBody [data-tedstroke]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().stroke = b.dataset.tedstroke; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));
     $$("#esBody [data-tedbg]").forEach((b) => b.addEventListener("click", () => { palCurTitle().bg = b.dataset.tedbg; E._tedColorOpen = null; renderPalette(); }));   // 배경색(모양·투명도 행이 생기므로 재렌더)
     $$("#esBody [data-teditalic]").forEach((b) => b.addEventListener("click", async () => { palCurTitle().italic = b.dataset.teditalic === "1"; await palTitleRenderBlock(palCurTitle()); renderPalette(); }));   // 비스듬히
