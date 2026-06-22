@@ -1604,6 +1604,24 @@
     if (c[field] != null && String(c[field]).length) return c[field];
     return (PAL_COPY_DEF[fnKey] || {})[field] || "";
   }
+  // 🏷🔔 스티커·효과음이 어느 컷에 들어가는지 라벨(고객 안내용)
+  function palCustCutLabel(list) {
+    const arr = (list || []).filter((s) => s && s.result && s.result.url);
+    if (!arr.length) return "";
+    const cuts = [...new Set(arr.map((s) => s.cut || 0))];
+    const one = (c) => c === -1 ? "마지막 컷" : c > 0 ? (c + "번 컷") : "전체 영상";
+    return cuts.length === 1 ? one(cuts[0]) : "정해진 컷";
+  }
+  // 📣 고객 화면 하단 안내바 문구(단계별). 빈 문자열이면 안내바 없음.
+  function palCustGuide(key, P, step) {
+    if (key === "title") key = "tgen";
+    const d = (P && P.demo) || {};
+    if (key === "tgen") return "✍️ " + (palCopyGet(step, "tgen", "title") || "뭐라고 바꿀까요?");
+    if (key === "caption") return "💬 자막을 만들어주세요";
+    if (key === "sticker") { const arr = (d.stickers || []).filter((s) => s && s.result && s.result.url); if (!arr.length) return ""; const cl = palCustCutLabel(arr); return `🏷 스티커가 ${cl ? cl + "에 " : ""}들어가요`; }
+    if (key === "sfx") { const arr = (d.sfx || []).filter((s) => s && s.result && s.result.url); if (!arr.length) return ""; const cl = palCustCutLabel(arr); return `🔔 효과음이 ${cl ? cl + "에 " : ""}들어가요`; }
+    return "";
+  }
   // 🎵 배경음악 고르기 UI(빠르기 필터 + 목록) — 음악 단계·자동세팅 작업대 공용
   function palMusicPicker(P) {
     const d = P.demo || {};
@@ -1626,9 +1644,11 @@
     const editing = !!step && P._copyEdit === step.id;
     const T = palCopyGet(step, fnKey, "title"), N = palCopyGet(step, fnKey, "note");
     const br = (s) => esc(s).replace(/\n/g, "<br>");   // 저장된 줄바꿈(엔터)을 화면에 그대로
+    const _custLike = (E._palCustomerMode || E._palTestMode);
+    const _moveToBottom = _custLike && !editing && !!palCustGuide(fnKey, P, step);   // 고객 화면 = 제목을 하단 안내바로 옮김(중복 방지)
     const head = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-t" id="esCopyTitle" rows="2" placeholder="제목 (엔터=줄바꿈)">${esc(T)}</textarea>`
-      : `<div class="es-pal-scr-title">${br(T)}</div>`;
+      : _moveToBottom ? "" : `<div class="es-pal-scr-title">${br(T)}</div>`;
     const noteEl = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-n" id="esCopyNote" rows="2" placeholder="작은 설명 글씨 (비워도 돼요 · 엔터=줄바꿈)">${esc(N)}</textarea>`
       : (N ? `<div class="es-pal-scr-note">${br(N)}</div>` : "");
@@ -1708,9 +1728,10 @@
           body = `<div class="es-pal-tgen-noref">🏷 스티커는 자동으로 영상에 들어가요${_sn ? ` (${_sn}개)` : ""}<br><span class="es-pal-tref-hint">관리자가 정해둔 위치·시간·효과로 나옵니다</span></div>`;
           break;
         }
-        case "sfx": {   // 🔔 효과음 — 관리자가 정함. 고객 영상에 자동으로 들어감(수정 X).
-          const _fn = (d.sfx || []).filter((s) => s && s.result && s.result.url).length;
-          body = `<div class="es-pal-tgen-noref">🔔 효과음은 자동으로 영상에 들어가요${_fn ? ` (${_fn}개)` : ""}<br><span class="es-pal-tref-hint">관리자가 정해둔 컷·볼륨으로 재생됩니다</span></div>`;
+        case "sfx": {   // 🔔 효과음 — 들어보기(고객) + 자동으로 영상에 들어감(수정 X).
+          const _sl = (d.sfx || []).filter((s) => s && s.result && s.result.url);
+          if (!_sl.length) { body = `<div class="es-pal-tgen-noref">🔔 효과음이 없어요</div>`; break; }
+          body = `<div class="es-pal-capm-hint">🔔 효과음을 들어보세요 — 영상에 자동으로 들어가요</div>` + _sl.map((s, i) => `<div class="es-pal-sfx-now"><span class="es-pal-sfx-name">🔔 ${esc(s.name || "효과음")}</span><button type="button" class="es-pal-sfx-play" data-custsfx="${i}">▶ 들어보기</button></div>`).join("");
           break;
         }
         case "cref": {   // 🗨 자막 참조 — 자막 글씨박스에서 스타일 골라 자막 칸에 적용(타이틀 참조와 동일, 자막 전용 글씨박스)
@@ -3882,7 +3903,7 @@
     const _sheetUp = _showsLive && E._palCustSheetUp === showKey;
     const custGrip = _showsLive ? `<button type="button" class="es-pal-cust-grip" id="esCustGrip" aria-label="작업창 펼치기·접기"><span class="es-pal-cust-grip-bar"></span></button>` : "";
     const canvasHtml = showFn
-      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div>`
+      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${(!isPrev && (E._palCustomerMode || E._palTestMode) && palCustGuide(showKey, P, P.preview ? null : sel)) ? `<div class="es-pal-cust-guide">${esc(palCustGuide(showKey, P, P.preview ? null : sel))}</div>` : ""}${custNav}</div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     // 🖼 1열 = '시안'(따라할 원본 영상만 — 작업한 타이틀/자막 적용 안 함, 읽기전용). 보고 따라 만들기용.
@@ -4068,6 +4089,7 @@
     const _palStopMus = () => { if (E._palMusPrev) { try { E._palMusPrev.pause(); } catch (_) {} E._palMusPrev = null; } try { palStopNarrPreview(); } catch (_) {} };   // 음악·나레이션 미리듣기 멈춤(단계 넘어가면)
     const _cNext = $("#esCustNext"); if (_cNext) _cNext.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel < P.steps.length - 1) P.sel += 1; renderPalette(); });
     const _cPrev = $("#esCustPrev"); if (_cPrev) _cPrev.addEventListener("click", () => { _palStopMus(); P.preview = null; P._copyEdit = null; E._palCustSheetUp = null; if (P.sel > 0) P.sel -= 1; renderPalette(); });
+    $$("#esBody [data-custsfx]").forEach((b) => b.addEventListener("click", () => { const arr = ((E.palette && E.palette.demo && E.palette.demo.sfx) || []).filter((s) => s && s.result && s.result.url); const s = arr[+b.dataset.custsfx]; if (s) palSfxPlay(s.result.url, s.vol); }));   // 🔔 고객 효과음 들어보기
     // 📲 바텀시트 그립 — 탭하면 작업창이 위로 커졌다(다시 누르면) 접힘. 상태는 현재 보여지는 화면(showKey)에 묶음.
     const _cGrip = $("#esCustGrip");
     if (_cGrip) _cGrip.addEventListener("click", () => {
