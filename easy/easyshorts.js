@@ -861,7 +861,7 @@
     const tm = ov.querySelector(".es-cctv-time"); if (tm) tm.textContent = _cctvStampText(time);
   }
   function composeFrame(ctx, W, H, t, arr, imgs, expVideo, reelsImg, st) {
-    st = st || { fills: E.using.fills, texts: E.using.texts, fxSpeed: E.using.template.fxSpeed, logo: E.using.logo, logoImg: E._logoExportImg };
+    st = st || { fills: E.using.fills, texts: E.using.texts, fxSpeed: E.using.template.fxSpeed, logo: E.using.logo, logoImg: E._logoExportImg, stickers: E.using._palStickersResolved };
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     let idx = arr.findIndex((a) => t >= a.start && t < a.end); if (idx < 0) idx = arr.length - 1;
     const seg = arr[idx], f = st.fills[seg.slot.id];
@@ -911,6 +911,17 @@
     (st.texts || []).forEach((txt) => {
       if (!(t >= (txt.start || 0) && t < (txt.start || 0) + (txt.dur || 0))) return;
       drawCaptionCanvas(ctx, txt, t, W, H);
+    });
+    (st.stickers || []).forEach((sk) => {   // 🏷 스티커 이미지 오버레이(위치·크기·회전·투명도·타이밍)
+      if (!(t >= (sk.start || 0) && (sk.dur == null || t < (sk.start || 0) + sk.dur))) return;
+      const im = sk.img; if (!im || !im.complete || !im.naturalWidth) return;
+      const h = Math.max(1, (sk.sizePct / 100) * H), w = h * (im.naturalWidth / im.naturalHeight);
+      ctx.save();
+      ctx.globalAlpha = clamp((sk.opacity != null ? sk.opacity : 100) / 100, 0, 1);
+      ctx.translate((sk.xPct != null ? sk.xPct : 50) / 100 * W, (sk.yPct != null ? sk.yPct : 50) / 100 * H);
+      if (sk.rotate) ctx.rotate(sk.rotate * Math.PI / 180);
+      try { ctx.drawImage(im, -w / 2, -h / 2, w, h); } catch (_) {}
+      ctx.restore();
     });
     drawLogoCanvas(ctx, W, H, t, st.logoImg, st.logo);   // 로고/타이틀 — st 기준(갤러리 미리보기에도 제대로 그려짐)
     if (reelsImg && reelsImg.complete) { try { ctx.drawImage(reelsImg, 0, 0, W, H); } catch (_) {} }
@@ -972,7 +983,8 @@
     // 영상 클립 원음(음소거 안 한 것) — 음악과 함께 믹스
     const vidSegs = (curOrigVol() > 0.001) ? slotTimes().arr.filter((seg) => { const f = E.using.fills[seg.slot.id]; return f && f.kind === "video" && f.url && !seg.slot._muteAudio; }) : [];   // 🔊 원본 소리 0%면 영상 원음 안 섞음
     const audioClips = (E.using.template.audioClips) || [];   // 🔊 분리한 오디오 클립
-    if ((!hasMusic && !hasVoice && !vidSegs.length && !audioClips.length) || typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return false;
+    const sfxList = (E.using._palSfxResolved) || [];   // 🔔 효과음(절대시간·볼륨)
+    if ((!hasMusic && !hasVoice && !vidSegs.length && !audioClips.length && !sfxList.length) || typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return false;
     const SR = 48000, CH = 2;
     const fetchDecode = async (url) => {
       try {
@@ -989,7 +1001,9 @@
     for (const seg of vidSegs) { const f = E.using.fills[seg.slot.id]; const buf = await fetchDecode(f.url); if (buf) segBufs.push({ seg, buf }); }
     const clipBufs = [];
     for (const c of audioClips) { const u = audioClipUrl(c); if (!u) continue; const buf = await fetchDecode(u); if (buf) clipBufs.push({ c, buf }); }
-    if (!mBuf && !vBuf && !segBufs.length && !clipBufs.length) return false;
+    const sfxBufs = [];
+    for (const s of sfxList) { if (!s || !s.url) continue; const buf = await fetchDecode(s.url); if (buf) sfxBufs.push({ at: s.at || 0, vol: (s.vol != null ? s.vol : 1), buf }); }   // 🔔 효과음 디코드
+    if (!mBuf && !vBuf && !segBufs.length && !clipBufs.length && !sfxBufs.length) return false;
     const frames = Math.ceil(total * SR);
     const off = new OfflineAudioContext(CH, frames, SR);
     if (mBuf) {
@@ -1037,6 +1051,13 @@
       const cgn = off.createGain(); cgn.gain.setValueAtTime(clamp(c.vol != null ? c.vol : 1, 0, 1), 0);
       cs.connect(cgn); cgn.connect(off.destination);
       try { cs.start(c.start || 0, inOff, playDur); } catch (_) { try { cs.start(c.start || 0, inOff); } catch (__) {} }
+    }
+    for (const { at, vol, buf } of sfxBufs) {   // 🔔 효과음 — 정한 시각에 한 번 재생(볼륨 반영)
+      if (at >= total) continue;
+      const ss = off.createBufferSource(); ss.buffer = buf;
+      const sg = off.createGain(); sg.gain.setValueAtTime(clamp(vol, 0, 1), 0);
+      ss.connect(sg); sg.connect(off.destination);
+      try { ss.start(Math.max(0, at)); } catch (_) {}
     }
     const rendered = await off.startRendering();
     const ch0 = rendered.getChannelData(0);
@@ -3553,6 +3574,23 @@
       const texts = [];
       (d.titles || []).forEach((b) => { if ((b.text || "").trim() && b.result) texts.push(mkText(b, false)); });
       (d.captions || []).forEach((b) => { if ((b.text || "").trim() && b.result) texts.push(mkText(b, true)); });
+      // 🏷 스티커 — 컷→절대시간 해석 + 이미지 프리로드(내보내기 합성용)
+      const stickersRes = [];
+      for (const s of (d.stickers || [])) {
+        if (!(s.result && s.result.url)) continue;
+        const r = palStkrCut(s, clips); if (r.skip) continue;
+        const im = new Image(); im.src = s.result.url;
+        try { await new Promise((res) => { if (im.complete && im.naturalWidth) return res(); im.onload = res; im.onerror = res; }); } catch (_) {}
+        if (!im.naturalWidth) continue;
+        stickersRes.push({ img: im, start: r.start || 0, dur: (r.dur != null ? r.dur : null), xPct: (s.posX != null ? s.posX : 50), yPct: (s.posY != null ? s.posY : 50), sizePct: (s.size != null ? s.size : 22), rotate: s.rotate || 0, opacity: (s.opacity != null ? s.opacity : 100) });
+      }
+      // 🔔 효과음 — 컷→절대시간
+      const sfxRes = [];
+      for (const s of (d.sfx || [])) {
+        if (!(s.result && s.result.url)) continue;
+        const r = palStkrCut(s, clips); if (r.skip) continue;
+        sfxRes.push({ url: s.result.url, at: r.start || 0, vol: (s.vol != null ? s.vol : 100) / 100 });
+      }
       const musicUrl = (d.musicSel && d.musicSel.url) || d.musicUrl || null;
       E.using = {
         template: { name: (P.name || "").trim() || "이지숏폼", aspect: P.aspect || "9:16", slots, music: musicUrl ? { name: (d.musicSel && d.musicSel.name) || "음악", dur: 0 } : null },
@@ -3561,6 +3599,7 @@
         voiceVol: (d.voiceVol != null ? d.voiceVol / 100 : 1), voiceDuck: 0.35, voiceDelay: (d.voiceUrl ? PAL_VOICE_DELAY : 0),
         musicVol: (d.musicVol != null ? d.musicVol / 100 : 0.35), musicRange: null,
         selText: null, selTexts: [], _baFlow: false, logo: null,
+        _palStickersResolved: stickersRes, _palSfxResolved: sfxRes,   // 🏷🔔 내보내기 합성용
       };
       E.mode2 = "easy";
       // 📐 1080p · 24fps · MP4(WebCodecs 우선) · 작은 용량(6Mbps=화질 괜찮으면서 12~16Mbps보다 절반↓)
