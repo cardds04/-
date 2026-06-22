@@ -1818,17 +1818,23 @@
   function palBoxH(t, sz) { return (palLineCount(t) * 0.642 + 0.358) * sz; }
   // ▶ 실제 결과 미리보기 — 고객 화면(P.demo)에서 넣은 사진/영상 위에, 입력한 타이틀·자막이 입혀진 '완성 모습'(고객 영상이 이렇게 나옴)
   // live=true → 고객 화면 위쪽 '읽기전용' 미리보기(드래그/핸들/배지/인스타/재생버튼 없이 영상 자동재생 + 글자만)
-  function paletteRealPreview(P, live) {
+  function paletteRealPreview(P, live, opts) {
+    opts = opts || {};
+    const ro = !!opts.readonly;   // 📺 읽기전용(2열 템플릿 미리보기) — 드래그 편집·재생버튼 없음, 위치컨트롤 대상 아님
     const fns = (P.steps || []).map((s) => s.fn).filter(Boolean);
     const has = (k) => fns.includes(k);
     const d = P.demo || {};
-    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    const list = opts.media !== undefined
+      ? (Array.isArray(opts.media) ? opts.media : (opts.media ? [opts.media] : []))   // 영상 소스 교체(예: 테스트 영상)
+      : (Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []));
     const m = list[0] || null;
     let media;
     if (m && m.url) {
       media = m.kind === "video"
-        ? `<video class="es-pal-real-media" src="${m.url}"${live ? " autoplay" : ""} muted loop playsinline preload="auto"></video>`
+        ? `<video class="es-pal-real-media" src="${m.url}"${(live || ro) ? " autoplay" : ""} muted loop playsinline preload="auto"></video>`
         : `<img class="es-pal-real-media" src="${m.url}" alt="">`;
+    } else if (opts.emptyHtml) {
+      media = opts.emptyHtml;
     } else {
       media = live
         ? `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎬</div><div class="es-pal-real-empty-t">아래에서 사진·영상을 넣으면<br>여기에 미리보기가 떠요</div></div>`
@@ -1855,11 +1861,11 @@
           ov += `<div class="es-pal-real-titlebox es-pal-play-tile" data-rt-start="${_st0}" data-rt-dur="${t.dur != null ? t.dur : ""}" data-rt-in="${t.animIn || "none"}" data-rt-out="${t.animOut || "none"}"${_liveAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt=""></div>`;
           return;
         }
-        const isSel = !live && (kind === E._palEditKind) && i === palSel(kind);
+        const isSel = !live && !ro && (kind === E._palEditKind) && i === palSel(kind);
         const _ts = t.start != null ? t.start : 0;
         const tinfo = (t.dur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + t.dur}초`;
         const tbadge = isSel ? `<span class="es-pal-real-tbadge" style="position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9px;line-height:1;background:#1ed6a5;color:#04231a;padding:2px 6px;border-radius:6px;white-space:nowrap;font-weight:800;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)">${tinfo}</span>` : "";
-        const dataAttr = live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`;   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신)
+        const dataAttr = ro ? "" : (live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`);   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신). ro(2열)는 아무 속성 없음=완전 정적
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
       });
     };
@@ -1873,7 +1879,7 @@
       if (has("music")) chips += `<span class="es-pal-real-chip">🎵 배경음악</span>`;
     }
     const chipBar = chips ? `<div class="es-pal-real-chips">${chips}</div>` : "";
-    const playable = !live && (!!m || has("narrate") || has("music"));
+    const playable = !live && !ro && (!!m || has("narrate") || has("music"));
     const playBtn = playable ? `<button type="button" class="es-pal-real-play" id="esPalRealPlay" aria-label="재생/정지">▶</button>` : "";
     const insta = E._palInstaPreview ? palInstaOverlay() : "";   // 📱 인스타 미리보기(확인용, 출력 X) — 미리보기/라이브 둘 다
     const instaBtn = live ? `<button type="button" class="es-pal-insta-btn es-pal-insta-live ${E._palInstaPreview ? "on" : ""}" id="esInstaToggleLive" title="인스타 릴스에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button>` : "";   // 미리보기 위 릴스 적용 토글
@@ -3407,19 +3413,29 @@
     } catch (e) { console.warn("[easyshorts] palExportVideo", e); if (prog) prog.hidden = true; try { toast("내보내기 실패: " + ((e && e.message) || e)); } catch (_) {} }
     finally { if (btn) { btn.disabled = false; const t = btn.querySelector(".es-pal-scr-btn-t"); if (t) t.textContent = "영상으로 내보내기"; } }
   }
-  // 📥 관리자 빌더 1열 — 내 영상을 직접 넣어서 미리보기·고객화면에 똑같이 반영(실제 영상으로 편집)
+  // 📥 관리자 빌더 1열 컨트롤 — '따라할 영상'(원본) 넣기 + 썸네일(컴팩트). 미리보기 폰은 바깥에서 이 아래에 붙임.
   function paletteUploadZone(P) {
     const d = P.demo || {};
     const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
     const grid = list.length
-      ? `<div class="es-pal-up-grid">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-uprm="${i}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div><div class="es-pal-up-cnt">✅ ${list.length}개 · 미리보기·고객화면에 반영돼요</div>`
-      : `<div class="es-pal-up-empty"><div class="es-pal-up-empty-ic">🎬</div><div class="es-pal-up-empty-t">여기에 내 영상을 넣어<br>똑같이 편집해요</div></div>`;
-    return `<div class="es-pal-zone es-pal-zone-upload">
-      <div class="es-pal-prev-tag es-pal-up-tag">📥 내 영상 — 넣어서 편집</div>
+      ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-uprm="${i}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
+      : "";
+    return `<div class="es-pal-prev-tag es-pal-up-tag">📥 따라할 영상 — 넣고 똑같이 편집</div>
       <button type="button" class="es-pal-up-btn" id="esPalUpBtn">＋ 영상·사진 넣기</button>
       ${grid}
-      <input type="file" id="esPalUpFile" accept="image/*,video/*" multiple hidden>
-    </div>`;
+      <input type="file" id="esPalUpFile" accept="image/*,video/*" multiple hidden>`;
+  }
+  // 🎞 관리자 빌더 2열 컨트롤 — 영상 뺀 '템플릿 미리보기'에 넣어볼 테스트 영상(원본 d.media 와 별도, d.testMedia)
+  function paletteTestZone(P) {
+    const d = P.demo || {};
+    const list = Array.isArray(d.testMedia) ? d.testMedia : [];
+    const grid = list.length
+      ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-tprm="${i}" title="이 테스트 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
+      : "";
+    return `<div class="es-pal-prev-tag">🎞 템플릿 미리보기 — <b>테스트 영상</b> 넣어보기</div>
+      <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">＋ 테스트 영상 넣기</button>
+      ${grid}
+      <input type="file" id="esPalTestFile" accept="image/*,video/*" multiple hidden>`;
   }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
@@ -3497,6 +3513,11 @@
           <div class="es-pal-tracks-h">🎬 편집 트랙 — 추가한 기능이 다 들어가요</div>
           <div class="es-pal-tracks">${paletteTracks(P)}</div>
         </div>`;
+    // 🎞 2열 = 영상 뺀 '템플릿 미리보기'(읽기전용). 테스트 영상(d.testMedia) 넣으면 그 위에 템플릿이 어떻게 보이는지 확인.
+    const _testEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎞</div><div class="es-pal-real-empty-t">영상 없이 <b>템플릿만</b> 보여요<br>테스트 영상을 넣어보세요</div></div>`;
+    const testPreviewHtml = `<div class="es-pal-prev es-pal-prev-editor">
+          <div class="es-pal-phone es-pal-phone-sm ${realArc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { media: (P.demo.testMedia || []), readonly: true, emptyHtml: _testEmpty })}</div></div>
+        </div>`;
     // 가운데 '작업대' 칸 — 레이아웃 고정 위해 항상 자리 차지(3열 유지). 타이틀/자막 단계면 편집기, 아니면 '작업대 없음' 안내.
     // ✨ 자동세팅 작업대 — 타이틀/자막 탭일 때 위쪽에 '저장된 스타일 고르기'(자막참조·타이틀참조와 동일), 아래에 편집기
     let _setupGallery = "";
@@ -3542,8 +3563,8 @@
           </div>`}
         </div>
         <div class="es-pal-body es-pal-body-4 ${_isEditStep ? "has-editor" : ""}">
-          ${paletteUploadZone(P)}
-          <div class="es-pal-zone es-pal-zone-real">${realHtml}</div>
+          <div class="es-pal-zone es-pal-zone-upload es-pal-zone-src">${paletteUploadZone(P)}${realHtml}</div>
+          <div class="es-pal-zone es-pal-zone-real es-pal-zone-tmpl">${paletteTestZone(P)}${testPreviewHtml}</div>
           ${editorZone}
           <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
         </div>
@@ -3970,11 +3991,15 @@
     // 📱 모바일: 라이브 미리보기 영상을 명시적으로 재생(autoplay 속성만으론 iOS가 ▶ 오버레이를 띄울 때가 있어 직접 play())
     try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
-    const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { (P.demo && P.demo.media || []).forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
+    const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { [...(P.demo && P.demo.media || []), ...(P.demo && P.demo.testMedia || [])].forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
     // 📥 관리자 빌더 1열 — 내 영상 넣기/빼기 (demo.media 에 반영 → 미리보기·고객화면 동기화)
     { const ub = $("#esPalUpBtn"), uf = $("#esPalUpFile"); if (ub && uf) ub.addEventListener("click", () => uf.click()); }
     { const uf = $("#esPalUpFile"); if (uf) uf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.media)) P.demo.media = P.demo.media ? [P.demo.media] : []; fs.forEach((f) => { try { P.demo.media.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); try { palDraftSave(); } catch (_) {} renderPalette(); }); }
     $$("#esBody [data-uprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.uprm; const arr = (P.demo && P.demo.media) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); try { palDraftSave(); } catch (_) {} renderPalette(); } }));
+    // 🎞 2열 테스트 영상 — d.testMedia(원본과 별도). 저장 안 함(테스트용), 미리보기에만 반영.
+    { const tb = $("#esPalTestBtn"), tf = $("#esPalTestFile"); if (tb && tf) tb.addEventListener("click", () => tf.click()); }
+    { const tf = $("#esPalTestFile"); if (tf) tf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.testMedia)) P.demo.testMedia = []; fs.forEach((f) => { try { P.demo.testMedia.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); renderPalette(); }); }
+    $$("#esBody [data-tprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.tprm; const arr = (P.demo && P.demo.testMedia) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); renderPalette(); } }));
     // ✨ 자동세팅 작업대 하위탭(타이틀·자막·음악) 전환
     $$("#esBody [data-setuptab]").forEach((b) => b.addEventListener("click", () => { E._palSetupTab = b.dataset.setuptab; renderPalette(); }));
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
@@ -4613,6 +4638,13 @@
           <section class="es-catalog-hero" aria-label="이지숏폼 서비스 소개">
             <img src="/assets/easy-hero/service-intro.png?v=2" alt="이지숏폼 서비스 소개" loading="eager">
           </section>
+          <section class="es-reelsentry">
+            <button type="button" class="es-reelsentry-btn" id="esOpenReels">
+              <span class="es-reelsentry-ic">📱</span>
+              <span class="es-reelsentry-tx"><b>릴스 만들기 페이지</b><small>등록된 '따라하기' 영상을 릴스처럼 넘겨보기</small></span>
+              <span class="es-reelsentry-go">▶</span>
+            </button>
+          </section>
           <section class="es-customer-head">
             <div><p>✨ 빠른 시작</p><h2>많이 쓰는 템플릿부터 골라보세요</h2><span>카드 이미지를 누르면 먼저 재생되고, ＋ 버튼을 누르면 바로 제작으로 들어갑니다.</span></div>
             <button type="button" class="es-idea-pill" id="esIdeaOpen" title="업종을 적으면 어울리는 숏폼 유형을 추천해요">💡 아이디어 상자</button>
@@ -4644,6 +4676,7 @@
       if (emptyMsg) emptyMsg.hidden = visible > 0;
     };
     $("#esIdeaOpen", body)?.addEventListener("click", openIdeaBox);   // 💡 아이디어 상자 → 팝업
+    $("#esOpenReels", body)?.addEventListener("click", openReels);   // 📱 릴스 만들기 페이지
     $("#esCustSearch", body)?.addEventListener("input", applyCustomerFilter);
     $$(".es-cust-catbar [data-cat]", body).forEach((btn) => btn.addEventListener("click", () => {
       activeCat = btn.dataset.cat || "all";
@@ -4690,6 +4723,106 @@
       const pid = card && card.dataset.pid; if (pid) pickProject(pid, "easy");
     }));
     prefetchAssets();   // 백그라운드 선로딩 → hover 즉시 재생
+  }
+  // ════════════ 📱 릴스 만들기 — '템플릿 그대로 따라하기' 영상을 릴스처럼 가로(분류)·세로(영상) 스와이프 ════════════
+  // 가로 스와이프 = 다른 분류 / 세로 스와이프 = 같은 분류 안의 다른 영상. CSS 2D scroll-snap + 보이는 영상만 재생(IntersectionObserver).
+  function reelsGroups() {
+    var catOf = function (p) {
+      try { var c = clsMap()[p.id]; if (c && c.goal) { var g = clsGoal(c.goal); if (g) return ((g.emoji || "") + " " + (g.label || "추천 영상")).trim(); } } catch (_) {}
+      return "📁 기타";
+    };
+    var groups = new Map();
+    (E.published || []).forEach(function (p) {
+      if (!p || typeof p.video !== "string" || !p.video) return;   // 미리보기 영상 있는 게시 템플릿만(=따라하기 영상)
+      var k = catOf(p);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    });
+    return groups;   // Map<분류, [template,...]>
+  }
+  function _reelsKey(e) { if (e.key === "Escape") closeReels(); }
+  function closeReels() {
+    var ov = document.getElementById("esReelsOv");
+    if (ov) {
+      try { if (ov._io) ov._io.disconnect(); } catch (_) {}
+      try { ov.querySelectorAll("video").forEach(function (v) { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (_) {} }); } catch (_) {}
+      ov.remove();
+    }
+    document.removeEventListener("keydown", _reelsKey);
+  }
+  function openReels() {
+    try { stopPlay(); } catch (_) {}
+    try { stopInline(); } catch (_) {}
+    if (!(E.published && E.published.length)) {   // 게시 목록 아직이면 먼저 받아오고 다시
+      try { loadPublished().then(function () { renderReels(); }); } catch (_) { renderReels(); }
+      return;
+    }
+    renderReels();
+  }
+  function renderReels() {
+    var old = document.getElementById("esReelsOv"); if (old) old.remove();
+    var groups = reelsGroups();
+    var ov = document.createElement("div");
+    ov.id = "esReelsOv"; ov.className = "es-reels-ov";
+    if (!groups.size) {
+      ov.innerHTML = '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>' +
+        '<div class="es-reels-empty">아직 등록된 따라하기 영상이 없어요.<br><small>관리자에서 템플릿에 미리보기 영상을 올리면 여기에 릴스로 떠요.</small></div>';
+      document.body.appendChild(ov);
+      ov.querySelector(".es-reels-x").addEventListener("click", closeReels);
+      document.addEventListener("keydown", _reelsKey);
+      return;
+    }
+    var colsHtml = "";
+    groups.forEach(function (list, catName) {
+      var pages = list.map(function (p, i) {
+        return '<div class="es-reels-page" data-src="' + esc(p.video) + '">' +
+          '<video class="es-reels-vid" loop playsinline preload="none" muted' + (p.thumb ? (' poster="' + esc(p.thumb) + '"') : "") + '></video>' +
+          '<div class="es-reels-grad"></div>' +
+          '<div class="es-reels-dots">' + list.map(function (_x, j) { return '<i' + (j === i ? ' class="on"' : "") + '></i>'; }).join("") + '</div>' +
+          '<div class="es-reels-info"><span class="es-reels-cat">' + esc(catName) + '</span><b class="es-reels-nm">' + esc(p.name || "템플릿") + '</b></div>' +
+          '<button type="button" class="es-reels-make" data-tpl="' + esc(p.id) + '">＋ 이 템플릿으로 만들기</button>' +
+          '</div>';
+      }).join("");
+      colsHtml += '<div class="es-reels-col">' + pages + '</div>';
+    });
+    ov.innerHTML =
+      '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>' +
+      '<button type="button" class="es-reels-sound" title="소리 켜기/끄기">🔇</button>' +
+      '<div class="es-reels-h">' + colsHtml + '</div>' +
+      '<div class="es-reels-hint">↕ 같은 분류 · ↔ 다른 분류</div>';
+    document.body.appendChild(ov);
+    ov.querySelector(".es-reels-x").addEventListener("click", closeReels);
+    document.addEventListener("keydown", _reelsKey);
+
+    var soundOn = false;
+    var soundBtn = ov.querySelector(".es-reels-sound");
+    soundBtn.addEventListener("click", function () {
+      soundOn = !soundOn;
+      soundBtn.textContent = soundOn ? "🔊" : "🔇";
+      ov.querySelectorAll("video").forEach(function (v) { v.muted = !soundOn; });
+      var cur = ov.querySelector(".es-reels-page.cur video"); if (cur) cur.play().catch(function () {});
+    });
+    ov.querySelectorAll(".es-reels-make").forEach(function (b) {
+      b.addEventListener("click", function (e) { e.stopPropagation(); var tid = b.dataset.tpl; closeReels(); try { startFromTemplate(tid, "easy"); } catch (_) {} });
+    });
+
+    // 보이는 영상만 재생(+ lazy 로드). 화면 60% 이상 보이면 play, 벗어나면 pause.
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var page = en.target, vid = page.querySelector("video"); if (!vid) return;
+        if (en.isIntersecting && en.intersectionRatio >= 0.6) {
+          if (!vid.getAttribute("src") && page.dataset.src) vid.src = page.dataset.src;
+          vid.muted = !soundOn;
+          page.classList.add("cur");
+          vid.play().catch(function () {});
+        } else { page.classList.remove("cur"); try { vid.pause(); } catch (_) {} }
+      });
+    }, { threshold: [0, 0.6, 1] });
+    ov.querySelectorAll(".es-reels-page").forEach(function (p) { io.observe(p); });
+    ov._io = io;
+
+    var first = ov.querySelector(".es-reels-page");   // 첫 영상 즉시 재생
+    if (first) { var fv = first.querySelector("video"); if (fv && first.dataset.src) { fv.src = first.dataset.src; fv.muted = true; first.classList.add("cur"); fv.play().catch(function () {}); } }
   }
   // 💡 아이디어 상자 — 버튼 클릭 시 팝업으로 진짜 아이디어 생성기(업종 → AI 아이디어)
   function openIdeaBox() {
