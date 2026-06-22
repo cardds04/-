@@ -1609,15 +1609,31 @@
           body = `<div class="es-pal-scr-drop" id="esDemoMediaDrop">${inner}</div><input type="file" id="esDemoMediaFile" accept="image/*,video/*" multiple hidden>`;
           break;
         }
-        case "setup": {   // ✨ 자동세팅 — 고객은 타이틀·자막 '글자'만 수정(스타일·음악은 관리자가 작업대에서 세팅). 있는 것만 보여줌.
+        case "setup": {   // ✨ 자동세팅 — 고객: 아래 바 [타이틀][자막] 토글, 타이틀 먼저→다 쓰면 자막 활성. 자막엔 AI 생성(영상 말투).
           const _row = (t, i, kind) => { const famLabel = (MY_FONT_MAP[t.font] && MY_FONT_MAP[t.font].k) || "글자체"; const lb = kind === "caption" ? "자막" : "타이틀"; return `<div class="es-pal-cslot"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${lb} ${i + 1}</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" data-cslotkind="${kind}" rows="2" placeholder="${lb} 글자 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`; };
           const tts = palBlocks("title"), ccs = palBlocks("caption");
+          if (!tts.length && !ccs.length) { body = `<div class="es-pal-tgen-noref">왼쪽 작업대에서 타이틀·자막을 만들면<br>여기서 글자만 고치면 돼요 ✍️</div>`; break; }
+          const titleStarted = tts.some((t) => (t.text || "").trim());   // 타이틀 한 줄이라도 쓰면 자막 열림
+          let sct = E._palSetupCustTab || "title";
+          if (sct === "caption" && tts.length && !titleStarted) sct = "title";   // 타이틀 먼저
+          if (sct === "title" && !tts.length) sct = "caption";   // 타이틀 없으면 자막
           let parts = "";
-          if (tts.length) parts += `<div class="es-pal-cslot-lb">🔤 타이틀 글자</div>${tts.map((t, i) => _row(t, i, "title")).join("")}`;
-          if (ccs.length) parts += `<div class="es-pal-cslot-lb">💬 자막 글자</div>${ccs.map((t, i) => _row(t, i, "caption")).join("")}`;
-          if (!parts) parts = `<div class="es-pal-tgen-noref">왼쪽 작업대에서 타이틀·자막을 만들면<br>여기서 글자만 고치면 돼요 ✍️</div>`;
+          if (sct === "title") {
+            parts = `<div class="es-pal-cslot-lb">🔤 타이틀 글자 — 영상에 크게 들어가요</div>${tts.map((t, i) => _row(t, i, "title")).join("")}`;
+            if (ccs.length) parts += `<div class="es-pal-setup-next-hint">✍️ 타이틀을 다 쓰면 아래 <b>💬 자막</b>을 눌러 자막을 적어요</div>`;
+          } else {   // caption
+            if (ccs.length) {
+              const aiOn = !!E._palSetupCapAi;
+              parts = aiOn
+                ? `<div class="es-pal-capm-lb">🤖 AI로 자막 만들기</div><div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>${palCapAiCore()}<button type="button" class="es-pal-narr-back" id="esPalSetupCapManual">◀ 직접 적기</button>`
+                : `<button type="button" class="es-pal-capm-btn es-pal-setup-capai-btn" id="esPalSetupCapAi"><span class="es-pal-capm-ic">🤖</span><b>AI로 자막 만들기 (영상 말투)</b></button><div class="es-pal-cslot-lb">💬 자막 글자 — 직접 적기</div>${ccs.map((t, i) => _row(t, i, "caption")).join("")}`;
+            } else parts = `<div class="es-pal-tgen-noref">이 템플릿엔 자막이 없어요</div>`;
+          }
           const _mus = d.musicSel ? `<div class="es-pal-mus-hint">🎵 음악: <b>${esc(d.musicSel.name || "")}</b> (자동 적용)</div>` : "";
-          body = `${parts}${_mus}`;
+          // 🔽 하단 바 [타이틀][자막] — 타이틀 먼저, 다 쓰면 자막 활성
+          const _capDisabled = (tts.length && !titleStarted);
+          const navTabs = `<div class="es-pal-navbtn es-pal-setupcust-tabs">${tts.length ? `<button type="button" class="es-pal-setupcust-tab ${sct === "title" ? "on" : ""}" data-setupcusttab="title">🔤 타이틀</button>` : ""}${ccs.length ? `<button type="button" class="es-pal-setupcust-tab ${sct === "caption" ? "on" : ""} ${_capDisabled ? "off" : ""}" data-setupcusttab="caption" ${_capDisabled ? "disabled" : ""}>💬 자막${_capDisabled ? " 🔒" : ""}</button>` : ""}</div>`;
+          body = `${parts}${_mus}${navTabs}`;
           break;
         }
         case "tref": {   // ① 타이틀 참조 — 스타일 사진 고르기(타이틀 글씨박스, 영구저장)
@@ -1659,29 +1675,9 @@
             return `<div class="es-pal-cslot ${i === palSel() ? "sel" : ""}"><div class="es-pal-cslot-h"><span class="es-pal-cslot-n">${i + 1}번칸</span><span class="es-pal-cslot-font">${esc(famLabel)}</span></div><textarea class="es-pal-scr-field es-pal-cslot-text" data-cslot="${i}" rows="2" placeholder="${i + 1}번칸에 들어갈 자막 (엔터=줄바꿈)">${esc(t.text || "")}</textarea></div>`;
           }).join("");
           if (cstep === "ai") {
-            const LENS = [[100, "짧게", "10초"], [300, "보통", "30초"], [500, "길게", "50초"]];
-            const _at = E._palActiveTone, _ft = palGetFixedTone();   // 🗣 활성 말투 / 저장된 고정말투
-            const _toneCur = _at
-              ? `<b>${esc(_at.name)}</b> 적용 중 <span class="es-pal-tone-snip">“${esc((_at.sample || "").replace(/\s+/g, " ").slice(0, 34))}…”</span>`
-              : `기본 (부드러운 존댓말 독백)`;
-            const toneBlock = `<div class="es-pal-tone-box">
-                <div class="es-pal-tone-cur">🗣 말투 — ${_toneCur}</div>
-                <div class="es-pal-tone-hint">1열에 넣은 <b>따라할 영상</b>의 말투를 그대로 따라 자막을 만들어요</div>
-                <div class="es-pal-tone-btns">
-                  <button type="button" class="es-pal-tone-btn" id="esPalToneVideo">🎬 영상 말투 가져오기</button>
-                  ${_ft ? `<button type="button" class="es-pal-tone-btn" id="esPalToneFixed">📌 고정말투 적용</button>` : ""}
-                  ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-save" id="esPalToneSave">💾 고정말투로 저장</button>` : ""}
-                  ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-off" id="esPalToneOff">✖ 끄기</button>` : ""}
-                </div>
-                <div id="esPalToneStatus" class="es-pal-narr-status"></div>
-              </div>`;
             body = `<div class="es-pal-capm-lb">📖 AI로 자막(독백) 만들기</div>
               <div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 흐르는 자막을 만들어드려요</div>
-              <textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="2" placeholder="예: 10년 살던 집을 떠나며 / 첫 가게를 오픈하던 날">${esc(E._palCapPrompt || "")}</textarea>
-              ${toneBlock}
-              <div class="es-pal-capm-lensub">길이를 골라주세요 <span>(글자 수 · 예상 길이)</span></div>
-              <div class="es-pal-caplen">${LENS.map((l) => `<button type="button" class="es-pal-caplen-btn" data-caplen="${l[0]}"><b>${l[1]}</b><span>${l[0]}자<br>약 ${l[2]}</span></button>`).join("")}</div>
-              <div id="esPalCapStatus" class="es-pal-narr-status"></div>
+              ${palCapAiCore()}
               <button type="button" class="es-pal-narr-back" data-capmethod="0">◀ 뒤로</button>`;
           } else if (cstep === 1) {
             const capJoined = (palBlocks("caption") || []).map((t) => (t.text || "").replace(/\n/g, " ").trim()).filter(Boolean).join("\n");
@@ -4060,6 +4056,10 @@
     $$("#esBody [data-tprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.tprm; const arr = (P.demo && P.demo.testMedia) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); renderPalette(); } }));
     // ✨ 자동세팅 작업대 하위탭(타이틀·자막·음악) 전환
     $$("#esBody [data-setuptab]").forEach((b) => b.addEventListener("click", () => { E._palSetupTab = b.dataset.setuptab; renderPalette(); }));
+    // ✨ 자동세팅 고객화면 — 아래 바 [타이틀][자막] 토글, 자막 AI 켜기/끄기
+    $$("#esBody [data-setupcusttab]").forEach((b) => b.addEventListener("click", () => { if (b.disabled) return; E._palSetupCustTab = b.dataset.setupcusttab; renderPalette(); }));
+    { const b = $("#esPalSetupCapAi"); if (b) b.addEventListener("click", () => { E._palSetupCapAi = true; renderPalette(); }); }
+    { const b = $("#esPalSetupCapManual"); if (b) b.addEventListener("click", () => { E._palSetupCapAi = false; renderPalette(); }); }
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
@@ -11598,6 +11598,30 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     });
   }
   // 🗣 말투(고정말투) 저장소 — 기기별 localStorage. {name, sample}
+  // 🤖 AI 자막 생성 핵심 UI(주제+말투+길이) — 자막생성 단계·자동세팅 둘 다 재사용. 핸들러(data-caplen·esPalTone*)는 #esBody 기준이라 공용.
+  function palCapAiCore() {
+    const LENS = [[100, "짧게", "10초"], [300, "보통", "30초"], [500, "길게", "50초"]];
+    const _at = E._palActiveTone, _ft = palGetFixedTone();
+    const _toneCur = _at
+      ? `<b>${esc(_at.name)}</b> 적용 중 <span class="es-pal-tone-snip">“${esc((_at.sample || "").replace(/\s+/g, " ").slice(0, 34))}…”</span>`
+      : `기본 (부드러운 존댓말 독백)`;
+    const toneBlock = `<div class="es-pal-tone-box">
+        <div class="es-pal-tone-cur">🗣 말투 — ${_toneCur}</div>
+        <div class="es-pal-tone-hint">1열에 넣은 <b>따라할 영상</b>의 말투를 그대로 따라 자막을 만들어요</div>
+        <div class="es-pal-tone-btns">
+          <button type="button" class="es-pal-tone-btn" id="esPalToneVideo">🎬 영상 말투 가져오기</button>
+          ${_ft ? `<button type="button" class="es-pal-tone-btn" id="esPalToneFixed">📌 고정말투 적용</button>` : ""}
+          ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-save" id="esPalToneSave">💾 고정말투로 저장</button>` : ""}
+          ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-off" id="esPalToneOff">✖ 끄기</button>` : ""}
+        </div>
+        <div id="esPalToneStatus" class="es-pal-narr-status"></div>
+      </div>`;
+    return `<textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="2" placeholder="예: 10년 살던 집을 떠나며 / 첫 가게를 오픈하던 날">${esc(E._palCapPrompt || "")}</textarea>
+      ${toneBlock}
+      <div class="es-pal-capm-lensub">길이를 골라주세요 <span>(글자 수 · 예상 길이)</span></div>
+      <div class="es-pal-caplen">${LENS.map((l) => `<button type="button" class="es-pal-caplen-btn" data-caplen="${l[0]}"><b>${l[1]}</b><span>${l[0]}자<br>약 ${l[2]}</span></button>`).join("")}</div>
+      <div id="esPalCapStatus" class="es-pal-narr-status"></div>`;
+  }
   function palGetFixedTone() { try { const s = localStorage.getItem("easy_fixed_tone"); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
   function palSaveFixedTone(t) { try { localStorage.setItem("easy_fixed_tone", JSON.stringify({ name: "📌 고정말투", sample: String((t && t.sample) || "").slice(0, 1200) })); } catch (_) {} }
   // 🎬 영상(1열 시안) 음성 → STT 전사 → 그 '말투'를 활성 말투로. AI 자막 생성 시 이 말투를 흉내냄.
@@ -11644,6 +11668,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       if (!text) throw new Error("자막을 받지 못했어요");
       if (caps[0]) caps[0].text = text;   // 독백 한 덩어리 → 첫 칸(입력화면에서 수정·분배)
       E._palCapStep = 1;   // 생성 후 → 입력(수정) 화면으로
+      E._palSetupCapAi = false;   // ✨ 자동세팅: 생성 후 자막 글자칸(cslot)에 결과 보이게(수정 가능)
       try { palDraftSave(); } catch (_) {}
       renderPalette();
     } catch (e) {
