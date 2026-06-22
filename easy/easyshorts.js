@@ -1916,22 +1916,23 @@
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${handles}</div>`;
       });
     };
-    // 편집 미리보기(col2, live 아님)는 '지금 단계 종류'만 보임. 고객/최종본(live)·재생은 적용된 전부.
+    // 단계별 미리보기(편집 col2 + 고객 live 둘 다)는 '지금 단계 종류'만 보임. 최종본/재생(컷·길이·완성=playMode)만 적용된 전부.
     const _renderTitles = () => { palBlocks("title"); _renderBlocks(d.titles || [], "title"); };
     const _renderCaptions = () => { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); };
     const _renderStickers = () => { palBlocks("sticker"); (d.stickers || []).forEach((s) => { const r = palStkrCut(s, list); s._effStart = r.start; s._effDur = r.dur; s._skip = live ? !!r.skip : false; }); _renderBlocks(d.stickers || [], "sticker"); };
-    const editKind = (!live) ? (curFn === "sticker" ? "sticker" : (curFn === "cref" || curFn === "caption") ? "caption" : (curFn === "tgen" || curFn === "tref" || curFn === "tpos") ? "title" : curFn === "setup" ? "setup" : null) : null;
+    const editKind = curFn === "sticker" ? "sticker" : (curFn === "cref" || curFn === "caption") ? "caption" : (curFn === "tgen" || curFn === "tref" || curFn === "tpos") ? "title" : curFn === "setup" ? "setup" : null;
+    const _setupActive = (live ? E._palSetupCustTab : E._palSetupTab) || "title";   // 자동세팅 활성 탭(고객/관리자 각각)
     if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 것 안 그림, 원본 영상만
-      if (live) {   // 🟢 고객/최종본 = 적용된 전부
+      if (playMode) {   // 🎬 최종본/재생(컷·길이·완성) = 적용된 전부
         if (has("tgen") || has("tref") || has("tpos") || has("setup")) _renderTitles();
         if (has("caption") || has("cref") || has("setup")) _renderCaptions();
         if (has("sticker")) _renderStickers();
-      } else if (editKind === "title") _renderTitles();   // ✏️ 편집 = 그 종류만
+      } else if (editKind === "title") _renderTitles();   // ✏️ 그 단계 종류만(편집·고객 공통)
       else if (editKind === "caption") _renderCaptions();
       else if (editKind === "sticker") _renderStickers();
-      else if (editKind === "setup") { const _st = E._palSetupTab || "title"; if (_st === "caption") _renderCaptions(); else if (_st !== "music") _renderTitles(); }   // 자동세팅도 탭(타이틀/자막)만, 음악탭은 안 그림
+      else if (editKind === "setup") { if (_setupActive === "caption") _renderCaptions(); else if (_setupActive !== "music") _renderTitles(); }   // 자동세팅도 활성 탭만
       // editKind null(편집 단계 아님) → 아무것도 안 그림
-      const _phKinds = live ? (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup")) : (editKind === "title" || editKind === "caption" || (editKind === "setup" && (E._palSetupTab || "title") !== "music"));
+      const _phKinds = editKind === "title" || editKind === "caption" || (editKind === "setup" && _setupActive !== "music");
       if (!anyRendered && !playMode && _phKinds) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     }
     let chips = "";
