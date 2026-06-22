@@ -368,7 +368,7 @@
   async function idbKeys() { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(STORE, "readonly"); const rq = t.objectStore(STORE).getAllKeys(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); }); }
 
   async function saveTemplates() {
-    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0 }));
+    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0, _palTitles: t._palTitles || null, _palCaptions: t._palCaptions || null, _palStickers: t._palStickers || null, _palSfx: t._palSfx || null }));   // 🎨 글씨체·스타일·스티커·효과음 사전설정도 저장(안 넣으면 저장/새로고침 시 사라져 고객용에 스타일 안 나옴)
     try { await idbSet("templates", meta); } catch (e) { console.warn("[easyshorts] saveTemplates", e); }
   }
   async function loadTemplates() {
@@ -5866,6 +5866,16 @@
       E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, demo: { media: [], title: "", caption: "" } };
       E.mode2 = "easy";
       setView("palette");
+      // 🎨 스타일/스티커/효과음 복원 — 로컬 템플릿은 t에, 게시본은 cats(clsMap)에서. (이게 빠져서 고객용엔 스타일이 안 나왔음)
+      try {
+        const _cm = (typeof clsMap === "function" ? (clsMap()[tplId] || {}) : {});
+        const _tStyle = Object.assign({}, t);
+        if (!_tStyle._palTitles && _cm.palTitles) _tStyle._palTitles = _cm.palTitles;
+        if (!_tStyle._palCaptions && _cm.palCaptions) _tStyle._palCaptions = _cm.palCaptions;
+        if (!_tStyle._palStickers && _cm.palStickers) _tStyle._palStickers = _cm.palStickers;
+        if (!_tStyle._palSfx && _cm.palSfx) _tStyle._palSfx = _cm.palSfx;
+        await palApplySavedStyles(E.palette, _tStyle);
+      } catch (_) {}
       return;
     }
     await clearSession();
@@ -6131,8 +6141,8 @@
           const m = clsMap(); const cur = Object.assign({}, m[t.id]);
           if (t.narrate) cur.narrate = true; else delete cur.narrate;
           if (t._wantTitle) { if (!cur.titleStyle && !cur.titlePrompt && !cur.titleRef) cur.titleStyle = "movie"; }
-          if (t._palette && t._paletteSteps && t._paletteSteps.length) { cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; }   // 🎨 팔레트 단계를 cats로 전달(서버 템플릿 행엔 칸 없음) → 고객이 단계 플로우로 열 수 있게
-          else { delete cur.palette; delete cur.paletteSteps; }
+          if (t._palette && t._paletteSteps && t._paletteSteps.length) { cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; cur.palTitles = t._palTitles || null; cur.palCaptions = t._palCaptions || null; }   // 🎨 팔레트 단계 + 글씨체·스타일 사전설정을 cats로 전달 → 고객이 단계 플로우 + 그 스타일로 열림
+          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; }
           m[t.id] = cur; clsMapSave(m);
           await clsServerSave();
         }
