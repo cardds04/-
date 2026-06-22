@@ -9332,25 +9332,28 @@ ${folderBtn}
           return `${y}년 ${Number(m)}월`;
         };
         const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
-        // 월별 컬럼: 이번 달만 빨강 강조.
+        // 월별 컬럼: 이번 달은 초록(글자·막대) 강조.
         const monthDecorate = (key) => {
           const hot = key === monthKeyNow;
-          return { label: `${Number(key.slice(5, 7))}월`, sub: "", textColor: hot ? "#d93025" : "#555", barColor: hot ? "#d93025" : "#3b82f6", bold: hot };
+          return { label: `${Number(key.slice(5, 7))}월`, sub: "", textColor: hot ? "#16a34a" : "#555", barColor: hot ? "#16a34a" : "#3b82f6", bold: hot };
         };
-        // 일별 컬럼: 요일 표기, 토·일은 빨강, 오늘은 막대까지 빨강.
+        // 일별 컬럼: 요일 표기. 토·일은 글자·막대 빨강, 오늘은 초록(주말보다 우선).
         const dayDecorate = (key) => {
           const [y, m, d] = key.split("-").map(Number);
           const dow = new Date(y, m - 1, d).getDay();
           const isWeekend = dow === 0 || dow === 6;
           const isToday = key === todayKey;
-          const red = isWeekend || isToday;
-          return {
-            label: String(d),
-            sub: WEEKDAY_KO[dow],
-            textColor: red ? "#d93025" : "#555",
-            barColor: isToday ? "#d93025" : "#3b82f6",
-            bold: red
-          };
+          let textColor = "#555";
+          let barColor = "#3b82f6";
+          if (isWeekend) {
+            textColor = "#d93025";
+            barColor = "#d93025";
+          }
+          if (isToday) {
+            textColor = "#16a34a";
+            barColor = "#16a34a";
+          }
+          return { label: String(d), sub: WEEKDAY_KO[dow], textColor, barColor, bold: isWeekend || isToday };
         };
 
         // 가로형 막대그래프 한 줄 — 컬럼마다 [라벨·요일(위) / 막대 / 건수(아래)]. 막대 높이 ∝ 건수.
