@@ -1829,13 +1829,8 @@
         case "length": {
           const _tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
           const _tlOpen = !!E._palCutTlOpen;
+          void _tsel;   // 🥁AI리듬·🔇음성없애기 툴은 위(본문)에서 빼고 하단바(palCutToolbar)로 옮김
           body = `<div class="es-pal-cut-edit">${palCutToolPanel(P)}
-            <div class="es-pal-ct-tools es-pal-ct-tools-1line">
-              <button type="button" class="es-pal-ct-tool" data-cttool="beat" title="배경음악 비트에 맞춰 컷 끊기">🥁 AI리듬</button>
-              <select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${_tsel}</select>
-              <label class="es-pal-ct-fitcap"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막</label>
-              <button type="button" class="es-pal-ct-tool" data-cttool="trim" title="음성 없는 부분 잘라내기">🔇 음성없애기</button>
-            </div>
             <button type="button" class="es-pal-cut-tltoggle" data-cttltoggle>${_tlOpen ? "▾ 타임라인 접기" : "▸ 타임라인 펼쳐서 자세히 편집"}</button>
             <div id="esPalCutWrap" class="es-pal-cut-wrap${_tlOpen ? "" : " collapsed"}">${palCutTimeline(P, { noTools: 1 })}</div>
           </div>`;
@@ -2442,15 +2437,18 @@
   }
   // 🧰 컷편집 도구를 'CapCut식' 아래 아이콘 툴바로 모음 — 아이콘 누르면 그 도구만 펼쳐져(화면 정돈). E._palCutTool = 펼친 도구(null/cap/beat/trim)
   function palCutToolbar() {
-    if (E._palCutTool === "beat" || E._palCutTool === "trim") E._palCutTool = null;   // 제거된 도구 잔여상태 정리
     const cur = E._palCutTool || "";
-    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "add", ic: "➕", lb: "영상추가" }];   // 🥁AI리듬·🔇음성없는구간 제거(사용자 요청)
+    const items = [{ k: "cap", ic: "💬", lb: "자막" }, { k: "beat", ic: "🥁", lb: "AI리듬" }, { k: "trim", ic: "🔇", lb: "음성없애기" }, { k: "add", ic: "➕", lb: "영상추가" }];   // 🥁AI리듬·🔇음성없애기를 하단바로(요청)
     return `<div class="es-pal-cut-toolbar">${items.map((it) => `<button type="button" class="es-pal-cut-tbtn${cur === it.k ? " on" : ""}" data-cuttoolbar="${it.k}"><span class="es-pal-cut-tbic">${it.ic}</span><span class="es-pal-cut-tblb">${it.lb}</span></button>`).join("")}</div>`;
   }
   function palCutToolPanel(P) {
     const t = E._palCutTool; if (!t) return "";
     let inner = "";
     if (t === "cap") inner = palCapMiniBar(P) || `<div class="es-pal-cut-tp-empty">자막을 먼저 넣으면 크기·위치를 바꿀 수 있어요</div>`;
+    else if (t === "beat") {   // 🥁 AI 리듬 — 빠르기·자막맞추기 + 실행 버튼
+      const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join("");
+      inner = `<div class="es-pal-cut-beatbar"><span class="es-pal-cut-tp-lb">🥁 음악 리듬에 맞춰 컷 끊기</span><div class="es-pal-ct-tools"><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 리듬 맞추기</button></div></div>`;
+    }
     if (!inner) return "";
     return `<div class="es-pal-cut-toolpanel">${inner}</div>`;
   }
@@ -2758,11 +2756,8 @@
       const hnd = on ? `<span class="es-pal-ct-h l" data-cth="l" data-lane="${lane}" data-idx="${i}"></span><span class="es-pal-ct-h r" data-cth="r" data-lane="${lane}" data-idx="${i}"></span>` : "";
       return `<div class="es-pal-ct-blk ${cls} ${on ? "sel" : ""}" data-ctsel="${lane}" data-idx="${i}" style="left:${px(start)}px;width:${px(dur)}px">${hnd}<span class="es-pal-ct-blk-t">${label}</span></div>`;
     }).join("");
-    const lanes = [{ ic: "🎬", cls: "lane-vid", html: vid }];
-    if (titles.length) lanes.push({ ic: "🅰", cls: "lane-title", html: blkLane(titlesAll, "title", "blk-title") });
-    if (caps.length) lanes.push({ ic: "💬", cls: "lane-cap", html: blkLane(capsAll, "cap", "blk-cap") });
-    if (voiceDur) lanes.push({ ic: "🎙", cls: "lane-narr", html: `<div class="es-pal-ct-blk blk-narr" style="left:0;width:${px(voiceDur)}px"><span class="es-pal-ct-blk-t">나레이션 ${voiceDur.toFixed(1)}초</span></div>` });
-    if (music) lanes.push({ ic: "🎵", cls: "lane-music", html: `<div class="es-pal-ct-blk blk-music" style="left:0;width:${W}px"><span class="es-pal-ct-blk-t">🎵 ${esc((music.name || "음악").slice(0, 18))}</span></div>` });
+    const lanes = [{ ic: "🎬", cls: "lane-vid", html: vid }];   // 🎬 영상 라인만(요청: 자막·타이틀·나레이션·음악 라인 제거 — 컷편집은 영상 길이만)
+    void blkLane; void titles; void caps; void voiceDur; void music;   // (레인 제거 — 변수 미사용 경고 방지)
     const gutter = `<div class="es-pal-ct-gutter"><div class="es-pal-ct-gtk"></div>${lanes.map((l) => `<div class="es-pal-ct-gic ${l.cls}">${l.ic}</div>`).join("")}</div>`;
     const laneHtml = lanes.map((l) => `<div class="es-pal-ct-lane ${l.cls}" style="width:${W}px">${l.html}</div>`).join("");
     const inner = `<div class="es-pal-ct-inner" style="width:${W}px"><div class="es-pal-ct-ruler">${ticks}</div>${laneHtml}<div class="es-pal-ct-playhead" style="left:0"><span class="es-pal-ct-playgrab" aria-label="재생 위치 옮기기"></span></div></div>`;   // ▍재생선(꽁다리 잡고 드래그로 위치 이동)
@@ -4400,8 +4395,9 @@
     try { palLivePlayInit(); } catch (_) {}   // 🎬 컷편집 단계면 미리보기를 실제 출력물처럼 타이밍 재생
     try { palEnsureCutPosters(); } catch (_) {}   // 🖼 타임라인 영상 클립 썸네일(포스터) 채우기
     try { palEnsureClipDurs(); } catch (_) {}   // ⏱ 영상 클립 원본 길이로 캡(반복 재생 방지)
-    // 📱 모바일: 라이브 미리보기 영상을 명시적으로 재생(autoplay 속성만으론 iOS가 ▶ 오버레이를 띄울 때가 있어 직접 play())
-    try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }); } catch (_) {}
+    // 📱 모바일: 라이브 미리보기 영상 재생. 단, 컷편집 단계는 '자동재생 안 함' — 첫 프레임만 그리고 멈춤(요청).
+    { const _cfL = P.preview || ((P.steps[P.sel] || {}).fn); const _noAuto = ["length", "cuteven", "cutbeat", "cuttrim"].includes(_cfL);
+      try { $$(".es-pal-cust-live video[autoplay], .es-pal-real-media[autoplay]").forEach((v) => { try { v.muted = true; const p = v.play(); if (p && p.then) { p.then(() => { if (_noAuto) { try { v.pause(); } catch (_) {} } }).catch(() => {}); } else if (_noAuto) { try { v.pause(); } catch (_) {} } } catch (_) {} }); } catch (_) {} }
     const sv = $("#esPalSave"); if (sv) sv.addEventListener("click", savePalette);
     const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { [...(P.demo && P.demo.media || []), ...(P.demo && P.demo.testMedia || [])].forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
     // 📥 관리자 빌더 1열 — 내 영상 넣기/빼기 (demo.media 에 반영 → 미리보기·고객화면 동기화)
