@@ -1899,7 +1899,7 @@
       if (has("music")) chips += `<span class="es-pal-real-chip">🎵 배경음악</span>`;
     }
     const chipBar = chips ? `<div class="es-pal-real-chips">${chips}</div>` : "";
-    const playable = !live && !ro && (!!m || has("narrate") || has("music"));
+    const playable = !live && !ro && (!!m || has("narrate") || has("music") || anyRendered);   // 🎬 타이틀/자막(anyRendered)만 있어도 ▶ — 테스트영상 없이 타이밍(나오는 때·머무는 시간) 미리보기
     const playBtn = playable ? `<button type="button" class="es-pal-real-play" id="esPalRealPlay" aria-label="재생/정지">▶</button>` : "";
     const insta = E._palInstaPreview ? palInstaOverlay() : "";   // 📱 인스타 미리보기(확인용, 출력 X) — 미리보기/라이브 둘 다
     const instaBtn = live ? `<button type="button" class="es-pal-insta-btn es-pal-insta-live ${E._palInstaPreview ? "on" : ""}" id="esInstaToggleLive" title="인스타 릴스에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button>` : "";   // 미리보기 위 릴스 적용 토글
@@ -1944,6 +1944,35 @@
     palPlaySetBtn();
   }
   function palPlayToggle() { const c = E._palPlay; if (!c) return; c.playing ? palPlayPause() : palPlayStart(); }
+  // ▶ 2열(작업 적용 미리보기) 타이밍 재생 — 타이틀/자막을 각자 start·dur(나오는 때·머무는 시간)대로 보였다 숨김. 테스트영상 있으면 그 시간, 없으면 자체 시계.
+  function palCol2Boxes() { return $$("#esPalReal .es-pal-real-titlebox[data-titleidx]"); }
+  function palCol2Stop() {
+    try { cancelAnimationFrame(E._col2RAF); } catch (_) {} E._col2RAF = 0;
+    const pb = $("#esPalRealPlay"); if (pb) { pb.classList.remove("playing"); pb.textContent = "▶"; }
+    palCol2Boxes().forEach((b) => { b.style.opacity = ""; b.style.transition = ""; });   // 멈추면 전부 다시 보임(편집 상태)
+    const v = $("#esPalReal video.es-pal-real-media"); try { if (v) v.pause(); } catch (_) {}
+    try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}
+  }
+  function palCol2Play() {
+    const pb = $("#esPalRealPlay"); if (!pb) return;
+    const v = $("#esPalReal video.es-pal-real-media");
+    const boxes = palCol2Boxes();
+    if (!boxes.length && !v) return;
+    pb.classList.add("playing"); pb.textContent = "⏸";
+    boxes.forEach((b) => { b.style.transition = "opacity .15s ease"; });
+    let maxT = 4;
+    const info = boxes.map((box) => { const k = box.getAttribute("data-kind") || "title"; const blk = (palBlocks(k) || [])[+box.getAttribute("data-titleidx")] || {}; const s = blk.start || 0, d = blk.dur; maxT = Math.max(maxT, s + (d != null ? d : 3) + 0.6); return { box, s, d }; });
+    if (v) { try { v.muted = true; v.currentTime = 0; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (_) {} }
+    const t0 = performance.now();
+    const tick = () => {
+      if (!pb.classList.contains("playing")) return;
+      const t = (v && v.readyState >= 2 && !v.paused) ? (v.currentTime || 0) : (performance.now() - t0) / 1000;
+      info.forEach((b) => { b.box.style.opacity = (t >= b.s && (b.d == null || t < b.s + b.d)) ? "1" : "0"; });
+      if (t >= maxT) { palCol2Stop(); return; }
+      E._col2RAF = requestAnimationFrame(tick);
+    };
+    E._col2RAF = requestAnimationFrame(tick);
+  }
   function palPlayApplyVolumes() {   // 🎚 슬라이더 드래그 시 재생 중인 소리에 바로 반영
     const c = E._palPlay; if (!c) return; const d = (E.palette && E.palette.demo) || {};
     const cl = (x) => Math.max(0, Math.min(1, x));
@@ -3473,6 +3502,7 @@
     if (E.palPresets === undefined) { E.palPresets = []; try { loadPalPresets().then(() => { if (E.view === "palette") renderPalette(); }); } catch (_) {} }   // 📌 저장한 문구 프리셋 불러오기(1회)
     if (!E._palRefsLoaded) { E._palRefsLoaded = true; try { loadPalTitleRefs().then(() => { if (E.view === "palette") renderPalette(); }); } catch (_) {} }   // 🖼 저장한 글씨박스(타이틀+자막) 불러오기(1회). palRefsArr가 []로 초기화해도 이 플래그로 로드 보장
     try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}   // 재렌더 시 재생 중이던 나레이션 음성 정지
+    try { cancelAnimationFrame(E._col2RAF); E._col2RAF = 0; } catch (_) {}   // 2열 타이밍 재생도 정지(재렌더 시)
     if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
     const aspBtns = Object.keys(ASPECTS).map((k) => `<button type="button" class="es-asp-btn ${P.aspect === k ? "active" : ""}" data-pasp="${k}">${esc(ASPECTS[k].label)}</button>`).join("");
     const stepsHtml = P.steps.map((s, i) => {
@@ -3899,26 +3929,8 @@
     const _play = $("#esPalRealPlay");
     const _realScreen = $("#esPalReal .es-pal-phone-screen-real");
     if (_play && _realScreen) _realScreen.addEventListener("click", () => {
-      const stage = $("#esPalReal .es-pal-real-stage");
-      const vid = stage ? stage.querySelector("video.es-pal-real-media") : null;
-      const fns = P.steps.map((s) => s.fn);
-      if (_play.classList.contains("playing")) {
-        _play.classList.remove("playing"); _play.textContent = "▶";
-        try { if (vid) vid.pause(); } catch (_) {}
-        try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}
-      } else {
-        _play.classList.add("playing"); _play.textContent = "⏸";
-        if (vid) { vid.muted = true; const pr = vid.play(); if (pr && pr.catch) pr.catch(() => {}); }
-        if (fns.includes("narrate") && window.speechSynthesis) {
-          try {
-            speechSynthesis.cancel();
-            const txt = (P.demo.caption || "").trim() || (P.demo.title || "").trim() || "여기에 나레이션 음성이 나와요";
-            const u = new SpeechSynthesisUtterance(txt); u.lang = "ko-KR"; u.rate = 1.0;
-            u.onend = () => { try { if (!vid || vid.paused) { _play.classList.remove("playing"); _play.textContent = "▶"; } } catch (_) {} };
-            speechSynthesis.speak(u);
-          } catch (_) {}
-        }
-      }
+      if (_play.classList.contains("playing")) palCol2Stop();   // ⏸ 멈춤 → 전부 다시 보임
+      else palCol2Play();                                       // ▶ 타이밍 재생(타이틀 사라짐·자막 나타남)
     });
     // 📱 인스타 릴스 미리보기 토글(확인용 — 출력엔 안 들어감)
     const _insta = $("#esInstaToggle"); if (_insta) _insta.addEventListener("click", (e) => { e.stopPropagation(); E._palInstaPreview = !E._palInstaPreview; renderPalette(); });
