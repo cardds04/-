@@ -9302,30 +9302,44 @@ ${folderBtn}
           return id ? canceledIdSet.has(id) : canceledFallbackSet.has(fallbackKey(item));
         };
 
-        // 촬영일별 예약 건수 집계 (달력 셀의 'N건'과 동일)
-        const dayMap = new Map(); // dayKey(YYYY-MM-DD) -> 건수
+        // 매출(원): 쿠폰 사용분은 1개당 30만원, 그 외는 입금관리에 기록된 금액.
+        const scheduleRevenue = (item) => {
+          if (item?.couponUsed) return 300000;
+          const amount = parseAmountToNumber(item?.paymentAmount);
+          return amount && amount > 0 ? amount : 0;
+        };
+
+        // 촬영일별 예약 건수 + 매출 집계 (달력 셀의 'N건'과 동일 기준)
+        const dayMap = new Map(); // dayKey(YYYY-MM-DD) -> { count, revenue }
         data.forEach((item) => {
           if (isCanceled(item)) return;
           const dayKey = String(item?.date || "").slice(0, 10);
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
-          dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1);
+          if (!dayMap.has(dayKey)) dayMap.set(dayKey, { count: 0, revenue: 0 });
+          const bucket = dayMap.get(dayKey);
+          bucket.count += 1;
+          bucket.revenue += scheduleRevenue(item);
         });
 
         // 월별 집계 (달력 상단 '이번 달 총 예약 N건'과 동일)
-        const monthMap = new Map(); // monthKey(YYYY-MM) -> { total, days }
-        [...dayMap.entries()].forEach(([dayKey, count]) => {
+        const monthMap = new Map(); // monthKey(YYYY-MM) -> { total, days, revenue }
+        [...dayMap.entries()].forEach(([dayKey, stat]) => {
           const monthKey = dayKey.slice(0, 7);
-          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { total: 0, days: 0 });
+          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { total: 0, days: 0, revenue: 0 });
           const m = monthMap.get(monthKey);
-          m.total += count;
+          m.total += stat.count;
           m.days += 1;
+          m.revenue += stat.revenue;
         });
 
         const todayKey = new Date().toISOString().slice(0, 10);
         const monthKeyNow = todayKey.slice(0, 7);
-        const todayCount = dayMap.get(todayKey) || 0;
-        const monthNow = monthMap.get(monthKeyNow) || { total: 0, days: 0 };
+        const todayStat = dayMap.get(todayKey) || { count: 0, revenue: 0 };
+        const todayCount = todayStat.count;
+        const monthNow = monthMap.get(monthKeyNow) || { total: 0, days: 0, revenue: 0 };
         const hasData = dayMap.size > 0;
+        const formatWon = (won) => `${Math.round(won || 0).toLocaleString("ko-KR")}원`;
+        const formatManwon = (won) => `${Math.round((won || 0) / 10000).toLocaleString("ko-KR")}만`;
 
         const monthLabel = (key) => {
           const [y, m] = key.split("-");
@@ -9363,17 +9377,19 @@ ${folderBtn}
           }
           const maxCount = Math.max(1, ...entries.map(([, c]) => c));
           const cols = entries
-            .map(([key, count]) => {
+            .map(([key, count, revenue]) => {
               const barH = Math.max(4, Math.round((count / maxCount) * 80));
               const deco = decorate(key);
               const subHtml = deco.sub ? `<br /><span style="font-size:10px;">${escapeHtml(deco.sub)}</span>` : "";
+              const revHtml = revenue > 0 ? `<div style="font-size:10px;color:#888;margin-top:1px;white-space:nowrap;">${formatManwon(revenue)}</div>` : "";
               return `
-                <div style="display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:42px;">
+                <div style="display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:44px;">
                   <div style="font-size:11px;line-height:1.25;text-align:center;color:${deco.textColor};${deco.bold ? "font-weight:700;" : ""}margin-bottom:4px;white-space:nowrap;">${escapeHtml(deco.label)}${subHtml}</div>
                   <div style="display:flex;align-items:flex-end;height:84px;">
-                    <div title="${count}건" style="width:20px;height:${barH}px;background:${deco.barColor};border-radius:5px 5px 0 0;"></div>
+                    <div title="${count}건 · ${formatManwon(revenue)}원" style="width:20px;height:${barH}px;background:${deco.barColor};border-radius:5px 5px 0 0;"></div>
                   </div>
-                  <div style="font-size:12px;font-weight:700;color:#1f3a6b;margin-top:4px;">${count}</div>
+                  <div style="font-size:12px;font-weight:700;color:#1f3a6b;margin-top:4px;">${count}건</div>
+                  ${revHtml}
                 </div>`;
             })
             .join("");
@@ -9383,10 +9399,11 @@ ${folderBtn}
         const monthEntries = [...monthMap.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .slice(-12)
-          .map(([key, m]) => [key, m.total]);
+          .map(([key, m]) => [key, m.total, m.revenue]);
         const dayEntries = [...dayMap.entries()]
           .filter(([dayKey]) => dayKey.slice(0, 7) === monthKeyNow)
-          .sort((a, b) => a[0].localeCompare(b[0]));
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([key, s]) => [key, s.count, s.revenue]);
 
         const summaryStyle =
           "cursor:pointer;font-weight:700;font-size:0.95rem;color:#1f3a6b;padding:8px 2px;user-select:none;list-style-position:inside;";
@@ -9398,8 +9415,10 @@ ${folderBtn}
             <span>총업체수: ${totalCompanies}개</span>
             <span>오늘 예약: ${todayCount}건</span>
             <span>이번 달 예약: ${monthNow.total}건</span>
+            <span>오늘 매출: ${formatWon(todayStat.revenue)}</span>
+            <span>이번 달 매출: ${formatWon(monthNow.revenue)}</span>
           </div>
-          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">달력과 동일 — 촬영일 기준 실제 예약 건수(취소 제외). 제목을 누르면 펼치기/접기.</div>
+          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">달력과 동일 — 촬영일 기준 실제 예약 건수(취소 제외). 매출은 입금관리 기록 금액 + 쿠폰(1개 30만원). 제목을 누르면 펼치기/접기.</div>
           ${
             hasData
               ? `
