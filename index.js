@@ -16756,7 +16756,7 @@ ${folderBtn}
               monthGroups.get(monthKey).push({ item, index });
             });
             const groupsHtml = [...monthGroups.entries()]
-              .sort((a, b) => a[0].localeCompare(b[0]))
+              .sort((a, b) => b[0].localeCompare(a[0])) // 월: 최신월 먼저(내림차순). 월 안 날짜는 1일→말일 유지.
               .map(([monthKey, rows]) => {
                 const monthNum = Number(monthKey.slice(5, 7));
                 return `
