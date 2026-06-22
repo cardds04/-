@@ -1563,6 +1563,10 @@
     return out;
   }
   function setPalFnOrder(arr) { E._palFnOrder = arr; try { localStorage.setItem("es_pal_fn_order", JSON.stringify(arr)); } catch (_) {} }
+  // 🙈 안 쓰는 기능 아이콘 숨기기 — 사장님이 고른 숨김 목록(localStorage 영속). 평소엔 기능상자에서 빠지고, 숨기기 모드에선 흐리게 다 보임.
+  function palHiddenFns() { try { const a = JSON.parse(localStorage.getItem("es_pal_hidden_fns") || "[]"); return Array.isArray(a) ? a : []; } catch (_) { return []; } }
+  function setPalHiddenFns(a) { try { localStorage.setItem("es_pal_hidden_fns", JSON.stringify(a || [])); } catch (_) {} }
+  function palToggleHiddenFn(key) { const a = palHiddenFns(); const i = a.indexOf(key); if (i >= 0) a.splice(i, 1); else a.push(key); setPalHiddenFns(a); }
   const PAL_CAPTION_STYLES = [
     { id: "clean", label: "깔끔한 하단", sample: "공간의 첫인상", props: { color: "#ffffff", bold: true, shadow: true, outline: "#000000", outlineW: 0.12, bg: "none", size: 6.5, width: 80, yPct: 82 } },
     { id: "box", label: "검정 박스", sample: "핵심 포인트", props: { color: "#ffffff", bold: true, shadow: false, outline: "#000000", outlineW: 0, bg: "box", bgColor: "#000000", bgOpacity: 0.72, size: 6, width: 82, yPct: 82 } },
@@ -1623,6 +1627,19 @@
     if (key === "sticker") { const arr = (d.stickers || []).filter((s) => s && s.result && s.result.url); if (!arr.length) return ""; const cl = palCustCutLabel(arr); return `🏷 스티커가 ${cl ? cl + "에 " : ""}들어가요`; }
     if (key === "sfx") { const arr = (d.sfx || []).filter((s) => s && s.result && s.result.url); if (!arr.length) return ""; const cl = palCustCutLabel(arr); return `🔔 효과음이 ${cl ? cl + "에 " : ""}들어가요`; }
     return "";
+  }
+  // 🎵 관리자 전용 '배경음악 깔기' — 빌더에 항상 보임(단계 무관). 정한 음악이 _palMusic로 영속되어 모든 고객 영상에 자동으로 깔림(고객은 안 고름). 끝 2초 페이드아웃은 이미 내보내기/미리보기에 있음.
+  function palBgMusicAdmin(P) {
+    const d = (P && P.demo) || {};
+    const ms = d.musicSel;
+    const cur = ms
+      ? `<span class="es-pal-bgmus-cur"><button type="button" class="es-pal-mus-play" data-musplay="${esc(ms.url || "")}">▶</button>🎵 ${esc(ms.name || "음악")}${ms._up ? ` <small>(내 음악)</small>` : ``}<button type="button" class="es-pal-bgmus-x" id="esPalBgMusX" title="배경음악 빼기">×</button></span>`
+      : `<span class="es-pal-bgmus-none">아직 없음 — 음악을 깔면 모든 고객 영상에 자동으로 들어가요</span>`;
+    return `<div class="es-pal-bgmus">
+      <div class="es-pal-bgmus-lb">🎵 배경음악 깔기 <small>고객은 안 골라요 · 정한 음악이 영상에 자동으로 깔려요</small></div>
+      <div class="es-pal-bgmus-row">${cur}<button type="button" class="es-pal-up-btn es-pal-bgmus-up" id="esPalBgMusUp">＋ 음악 올리기 (mp3·m4a 등)</button><input type="file" id="esPalBgMusFile" accept="audio/*" hidden></div>
+      ${ms ? `<div class="es-pal-mus-fadehint">끝에서 2초 부드럽게 줄어요(페이드아웃)</div>` : ``}
+    </div>`;
   }
   // 🎵 배경음악 고르기 UI(빠르기 필터 + 목록) — 음악 단계·자동세팅 작업대 공용
   function palMusicPicker(P) {
@@ -3881,10 +3898,13 @@
         <button type="button" class="es-pal-step-x" data-rm="${i}" title="이 단계 삭제">×</button>
       </div>`;
     }).join("");
-    const boxHtml = palFnOrder().filter((f) => !f.hidden).map((f) => {   // hidden(예: cedit—ncap에 합쳐짐)은 기능상자에서 숨김
+    const _fnHideMode = !!E._palFnHideMode;   // 🙈 숨기기 관리 모드
+    const _fnHidden = palHiddenFns();
+    const boxHtml = palFnOrder().filter((f) => !f.hidden).filter((f) => _fnHideMode || !_fnHidden.includes(f.key)).map((f) => {   // hidden=내장 숨김 / _fnHidden=사장님이 숨긴 것(평소엔 빠지고, 숨기기 모드선 흐리게 보임)
+      const _uh = _fnHidden.includes(f.key);
       const n = (E.palPresets || []).filter((p) => p.fn === f.key).length;
       const badge = n ? `<span class="es-pal-fn-badge ${E._palBadgePulse === f.key ? "pulse" : ""}" data-presetfn="${f.key}" title="저장한 문구 ${n}개 — 눌러서 열기">📌 ${n}</span>` : "";
-      return `<button type="button" class="es-pal-fn" draggable="true" data-fn="${f.key}"><span class="es-pal-fn-ico">${f.icon}</span><span class="es-pal-fn-lb">${esc(f.label)}</span>${badge}</button>`;
+      return `<button type="button" class="es-pal-fn${_fnHideMode ? " fn-managehide" : ""}${_uh ? " fn-userhidden" : ""}" draggable="${_fnHideMode ? "false" : "true"}" data-fn="${f.key}"><span class="es-pal-fn-ico">${f.icon}</span><span class="es-pal-fn-lb">${esc(f.label)}</span>${_fnHideMode ? `<span class="es-pal-fn-hidemark">${_uh ? "🚫" : "👁"}</span>` : badge}</button>`;
     }).join("");
     // 📌 내가 저장한 문구 — 기능상자 아래 항상 보이는 목록(눌러서 그 문구로 단계 추가)
     const allPresets = E.palPresets || [];
@@ -3985,6 +4005,7 @@
           <button type="button" class="es-btn es-btn-ghost" id="esPalNew" title="작업 지우고 처음부터">🆕 새로</button>
           <button type="button" class="es-btn es-btn-primary" id="esPalSave">💾 저장</button>
         </div>
+        ${palBgMusicAdmin(P)}
         ${palClsRow}
         <div class="es-pal-zone es-pal-zone-steps">
           <div class="es-pal-zone-lb">⬆️ 단계 — ＋추가 · <b>끌어서 순서 바꾸기</b> · 기능 끼우기</div>
@@ -3994,7 +4015,8 @@
           <button type="button" class="es-pal-funcbar-toggle" id="esPalFuncToggle">${E._palFuncCollapsed ? "🧩 기능 · 📌 저장 문구  —  펼치기 ▼" : "기능·저장문구 접기 ▲"}</button>
           ${E._palFuncCollapsed ? "" : `<div class="es-pal-funcbar-body">
             <div class="es-pal-funcbar-row">
-              <span class="es-pal-funcbar-lb">🧩 기능 <small>두 번 눌러 단계에 · 아이콘끼리 끌어 순서 바꾸기</small></span>
+              <span class="es-pal-funcbar-lb">🧩 기능 <small>${_fnHideMode ? "아이콘을 탭해 숨기기/보이기" : "두 번 눌러 단계에 · 끌어 순서 바꾸기"}</small></span>
+              <button type="button" class="es-pal-fnhide-btn${_fnHideMode ? " on" : ""}" id="esPalFnHide" title="안 쓰는 기능 아이콘을 숨겨 정리해요">${_fnHideMode ? "✓ 완료" : "🙈 안 쓰는<br>아이콘 숨기기" + (_fnHidden.length ? `<small>${_fnHidden.length}개 숨김</small>` : "")}</button>
               <div class="es-pal-funcbar-icons es-pal-box" id="esPalBox">${boxHtml}</div>
             </div>
             ${(E.palPresets || []).length ? `<div class="es-pal-funcbar-row"><span class="es-pal-funcbar-lb">📌 저장<br>문구</span><div class="es-pal-funcbar-presets">${savedListHtml}</div></div>` : ""}
@@ -4070,10 +4092,12 @@
     let _palFnTimer = null;
     $$("#esPalBox .es-pal-fn").forEach((b) => {
       b.addEventListener("click", () => {   // 한 번 = 그 기능의 고객 화면 미리보기(더블클릭과 안 겹치게 살짝 지연)
+        if (E._palFnHideMode) { palToggleHiddenFn(b.dataset.fn); renderPalette(); return; }   // 🙈 숨기기 모드 — 탭해서 숨김/보임 토글
         if (_palFnTimer) return;
         _palFnTimer = setTimeout(() => { _palFnTimer = null; P.preview = b.dataset.fn; E._palCustSheetUp = null; renderPalette(); }, 210);
       });
       b.addEventListener("dblclick", () => {   // 두 번 = 단계에 추가
+        if (E._palFnHideMode) return;   // 숨기기 모드에선 단계 추가 안 함
         if (_palFnTimer) { clearTimeout(_palFnTimer); _palFnTimer = null; }
         paletteTap(b.dataset.fn);
       });
@@ -4096,6 +4120,7 @@
     });
     // 📌 기능 아이콘의 저장문구 뱃지 — 누르면 그 기능 '안'의 저장 문구 목록(시트) 열림
     $$("#esPalBox .es-pal-fn-badge").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palPresetSheet(b.dataset.presetfn); }));
+    { const _fh = $("#esPalFnHide"); if (_fh) _fh.addEventListener("click", () => { E._palFnHideMode = !E._palFnHideMode; renderPalette(); }); }   // 🙈 안 쓰는 아이콘 숨기기 모드 토글
     // 🎮 고객 화면 = 실제 작동 — 여기서 넣은 사진/영상·타이틀·자막이 왼쪽 '실제 결과 미리보기'에 반영
     const demo = P.demo;
     const _dFile = $("#esDemoMediaFile"), _dBtn = $("#esDemoMediaBtn"), _dClr = $("#esDemoMediaClear");
@@ -4305,6 +4330,10 @@
     { const b = $("#esPalMusUp"), f = $("#esPalMusUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }   // 🎵 내 음악 올리기
     { const f = $("#esPalMusUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} const url = URL.createObjectURL(file); const nm = String(file.name || "내 음악").replace(/\.[a-z0-9]+$/i, "").slice(0, 30); dm.musicSel = { id: "up" + Date.now().toString(36), name: nm, url, blob: file, _up: true }; dm.musicUrl = url; try { palDraftSave(); } catch (_) {} renderPalette(); try { toast("🎵 음악을 넣었어요 — 배경음악으로 깔립니다 (끝 2초 페이드아웃)"); } catch (_) {} }); }
     { const b = $("#esBody") ? document.querySelector("#esBody [data-musupx]") : null; if (b) b.addEventListener("click", () => { const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} dm.musicSel = null; dm.musicUrl = ""; try { palDraftSave(); } catch (_) {} renderPalette(); }); }
+    // 🎵 관리자 전용 '배경음악 깔기'(빌더 헤더, 단계 무관) — 정한 음악이 모든 고객 영상에 자동으로 깔림
+    { const b = $("#esPalBgMusUp"), f = $("#esPalBgMusFile"); if (b && f) b.addEventListener("click", () => f.click()); }
+    { const f = $("#esPalBgMusFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} const url = URL.createObjectURL(file); const nm = String(file.name || "내 음악").replace(/\.[a-z0-9]+$/i, "").slice(0, 30); dm.musicSel = { id: "up" + Date.now().toString(36), name: nm, url, blob: file, _up: true }; dm.musicUrl = url; try { palDraftSave(); } catch (_) {} renderPalette(); try { toast("🎵 배경음악을 깔았어요 — 모든 고객 영상에 자동으로 들어가요 (끝 2초 페이드아웃)"); } catch (_) {} }); }
+    { const x = $("#esPalBgMusX"); if (x) x.addEventListener("click", () => { const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} dm.musicSel = null; dm.musicUrl = ""; try { palDraftSave(); } catch (_) {} renderPalette(); }); }
     $$("#esBody [data-musplay]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palMusPreview(b.dataset.musplay, b); }));   // ▶는 재생만(줄 선택 안 됨)
     $$("#esBody [data-musmix]").forEach((b) => b.addEventListener("click", () => { E._palMusicMix = b.dataset.musmix === "1"; renderPalette(); }));
     [["esPalVolOrig", "origVol"], ["esPalVolVoice", "voiceVol"], ["esPalVolMusic", "musicVol"]].forEach((pair) => { const el = $("#" + pair[0]); if (el) el.addEventListener("input", () => { E.palette.demo[pair[1]] = +el.value; const bb = el.parentElement.querySelector("b"); if (bb) bb.textContent = el.value; try { palPlayApplyVolumes(); } catch (_) {} clearTimeout(E._palVolT); E._palVolT = setTimeout(() => { try { palDraftSave(); } catch (_) {} }, 300); }); });
