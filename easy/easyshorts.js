@@ -1859,7 +1859,7 @@
             <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 자동 타이밍 · 칸 밖을 누르면 자동 적용)</span></div>
             <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="자막을 한 줄에 하나씩 — '음성씽크'를 누르면 말하는 타이밍에 맞춰져요">${esc(capJoined)}</textarea>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
-            <button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`;
+            ${(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl) ? `<button type="button" class="es-pal-narr-make" id="esPalCapGrammar">✏️ 자막 자동 문법 수정</button><button type="button" class="es-pal-cap-resync" id="esPalNarrCap">🎯 다시 음성씽크</button>` : `<button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`}`;
           break;
         }
         case "cedit": {   // ✏️ 자막 다듬기 — 한 줄=자막 1개(엔터로 나누고, 줄 합치면 자막도 합쳐짐). 음성 있으면 말하는 타이밍에 다시 싱크
@@ -1879,7 +1879,7 @@
           const vd = d.voiceDur ? d.voiceDur.toFixed(1) + "초" : "음성";
           body = `<div class="es-pal-narr-lb">🎯 자막과 음성 씽크 맞추기</div>
             <div class="es-pal-capm-hint">지금 자막 <b>${capN}개</b>의 <b>글자는 그대로</b> 두고, 나레이션(${vd}) <b>말하는 타이밍</b>에 자막이 뜨도록 위치(시간)만 다시 맞춰요</div>
-            <button type="button" class="es-pal-narr-make" id="esPalCapSync">🎯 음성씽크</button>
+            ${(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl) ? `<button type="button" class="es-pal-narr-make" id="esPalCapGrammar">✏️ 자막 자동 문법 수정</button><button type="button" class="es-pal-cap-resync" id="esPalCapSync">🎯 다시 음성씽크</button>` : `<button type="button" class="es-pal-narr-make" id="esPalCapSync">🎯 음성씽크</button>`}
             <div id="esPalCapSyncStatus" class="es-pal-narr-status"></div>`;
           break;
         }
@@ -4356,6 +4356,7 @@
     { const ce = $("#esPalCapEditApply"); if (ce) ce.addEventListener("click", () => palCapEditApply(ce)); }   // ✏️ 자막 다듬기 적용(한 줄=한 블럭, 음성 있으면 타이밍 재싱크)
     { const _ceta = $("#esPalCapEditTa"); if (_ceta) { const _ov = _ceta.value; _ceta.addEventListener("blur", (e) => { const rt = e.relatedTarget; if (rt && /^(esPalNarrCap|esCustNext|esCustPrev|esPalCapEditApply)$/.test(rt.id || "")) return; if (_ceta.value !== _ov && _ceta.value.trim()) { try { palCapEditApply(null); } catch (_) {} } }); } }   // ✏️ 칸 밖 누르면 자동 적용(적용버튼 대체)
     { const cs = $("#esPalCapSync"); if (cs) cs.addEventListener("click", () => palCapSync(cs)); }   // 🎯 자막 씽크 — 글자 그대로, 타이밍만 음성에 재정렬
+    { const gb = $("#esPalCapGrammar"); if (gb) gb.addEventListener("click", () => palFixCaptionGrammar(gb)); }   // ✏️ 자막 자동 문법 수정(타이밍 유지)
     { const sj = $("#esPalStepJump"); if (sj) sj.addEventListener("click", palStepJump); }   // ✅ 최종본 확인 → 단계로 돌아가기 팝업
     { const ex = $("#esPalExport"); if (ex) ex.addEventListener("click", () => palExportVideo(ex)); }   // 📤 내보내기 — 실제 영상 렌더
     // 💬 자막 생성 방법(①AI ②직접) + AI 생성
@@ -11993,15 +11994,38 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   function palNarrToneOpen() {
     if (E._tcVoices === undefined) { try { loadTypecastVoices(); } catch (_) {} }   // 모델 정보용 1회 로드
     const cur = palNarrVoice(), curId = (cur && cur.id) || "";
-    const autoChip = `<button type="button" class="es-narrtone-chip ${!curId ? "on" : ""}" data-narrvoice="">🎯 자동 (템플릿대로)</button>`;
-    const chips = (typeof PAL_TC_CAT !== "undefined" ? PAL_TC_CAT : []).map((c) => `<button type="button" class="es-narrtone-chip ${curId === c.id ? "on" : ""}" data-narrvoice="${esc(c.id)}" data-narrvname="${esc(c.name)}">${c.g === "m" ? "👨" : "👩"} ${esc(c.name)}</button>`).join("");
+    const autoChip = `<span class="es-narrtone-chipwrap"><button type="button" class="es-narrtone-chip ${!curId ? "on" : ""}" data-narrvoice="">🎯 자동 (템플릿대로)</button></span>`;
+    const chips = (typeof PAL_TC_CAT !== "undefined" ? PAL_TC_CAT : []).map((c) => `<span class="es-narrtone-chipwrap"><button type="button" class="es-narrtone-chip ${curId === c.id ? "on" : ""}" data-narrvoice="${esc(c.id)}" data-narrvname="${esc(c.name)}">${c.g === "m" ? "👨" : "👩"} ${esc(c.name)}</button><button type="button" class="es-narrtone-sample" data-narrsample="${esc(c.id)}" data-narrsmodel="${esc(palTcModelOf(c.id))}" title="목소리 들어보기" aria-label="샘플 듣기">▶</button></span>`).join("");
     const ov = document.createElement("div"); ov.className = "es-narrtone-ov"; ov.id = "esNarrToneOv";
-    ov.innerHTML = `<div class="es-narrtone-box"><button type="button" class="es-narrtone-x" id="esNarrToneX">✕</button><div class="es-narrtone-h">🎙 나레이션 목소리 정하기</div><div class="es-narrtone-sub">정한 <b>캐릭터 목소리</b>로 모든 나레이션이 만들어져요 (템플릿별 설정 무시)</div><div class="es-narrtone-chips">${autoChip}${chips}</div></div>`;
+    ov.innerHTML = `<div class="es-narrtone-box"><button type="button" class="es-narrtone-x" id="esNarrToneX">✕</button><div class="es-narrtone-h">🎙 나레이션 목소리 정하기</div><div class="es-narrtone-sub">▶로 <b>목소리를 들어보고</b> 고르세요. 정한 캐릭터로 모든 나레이션이 만들어져요 (템플릿별 설정 무시)</div><div class="es-narrtone-chips">${autoChip}${chips}</div></div>`;
     document.body.appendChild(ov);
-    const close = () => { try { ov.remove(); } catch (_) {} };
+    const close = () => { palStopVoiceSample(); try { ov.remove(); } catch (_) {} };
     ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
     const xb = ov.querySelector("#esNarrToneX"); if (xb) xb.addEventListener("click", close);
+    ov.querySelectorAll("[data-narrsample]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palVoiceSample(b.getAttribute("data-narrsample"), b.getAttribute("data-narrsmodel"), b); }));   // ▶ 샘플 듣기
     ov.querySelectorAll("[data-narrvoice]").forEach((b) => b.addEventListener("click", () => { const id = b.getAttribute("data-narrvoice"); if (id) { palNarrVoiceSet({ id, model: palTcModelOf(id), name: b.getAttribute("data-narrvname") || "" }); } else palNarrVoiceSet(null); close(); try { toast("🎙 나레이션 목소리: " + b.textContent.trim()); } catch (_) {} }));
+  }
+  // ▶ 캐릭터 목소리 샘플 — TTS로 짧은 문장 생성해 들려줌(캐시). 타입캐스트가 샘플 URL을 안 줘서 직접 생성.
+  function palStopVoiceSample() { try { const a = E._tcSampleAudio; if (a) { a.pause(); a.currentTime = 0; } } catch (_) {} E._tcSampleAudio = null; }
+  async function palVoiceSample(id, model, btn) {
+    if (!id) return;
+    palStopVoiceSample();
+    E._tcSampleCache = E._tcSampleCache || {};
+    const _t = btn ? btn.textContent : "";
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+      let url = E._tcSampleCache[id];
+      if (!url) {
+        const r = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: "안녕하세요, 이 목소리로 자막을 읽어드릴게요.", voiceId: id, model: model || undefined, language: "kor" }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.audioBase64) throw new Error(j.message || "샘플 실패");
+        const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })); E._tcSampleCache[id] = url;
+      }
+      const a = new Audio(url); E._tcSampleAudio = a; a.onended = () => { if (btn) btn.textContent = "▶"; }; const p = a.play(); if (p && p.catch) p.catch(() => {});
+      if (btn) btn.textContent = "⏸";
+    } catch (e) { try { toast("목소리 샘플을 못 만들었어요 (API 키 확인)"); } catch (_) {} if (btn) btn.textContent = "▶"; }
+    finally { if (btn) btn.disabled = false; }
   }
   async function palMakeNarration(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {};
@@ -12034,6 +12058,32 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     }
   }
   // 📝 음성에 맞춰 자막 — 나레이션 음성 길이에 자막을 18자 단위로 쪼개 타이밍(start/dur) 균등 분배
+  // ✏️ 자막 자동 문법 수정 — 자막 글자만 Claude로 띄어쓰기·어법 교정(타이밍·컷 그대로 유지, 음성씽크 보존)
+  async function palFixCaptionGrammar(btn) {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const caps = (palBlocks("caption") || []).filter((t) => (t.text || "").trim());
+    if (!caps.length) { try { toast("고칠 자막이 없어요"); } catch (_) {} return; }
+    const status = $("#esPalNarrCapStatus") || $("#esPalCapSyncStatus");
+    if (btn) { btn.disabled = true; btn._t = btn.textContent; btn.textContent = "✏️ 고치는 중…"; }
+    if (status) status.textContent = "✏️ 띄어쓰기·어법을 고치는 중… (타이밍은 그대로 둬요)";
+    try {
+      const lines = caps.map((t) => (t.text || "").replace(/\n/g, " ").trim());
+      const r = await fetch(narrEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fixcaptions", lines }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const fixed = Array.isArray(j.lines) ? j.lines : null;
+      if (!fixed || fixed.length !== caps.length) throw new Error("교정 결과가 자막 개수와 안 맞아 적용 안 했어요(싱크 보호)");
+      let changed = 0;
+      for (let i = 0; i < caps.length; i++) { const nt = String(fixed[i] || "").trim(); if (nt && nt !== caps[i].text) { caps[i].text = nt; changed++; await palTitleRenderBlock(caps[i]); } }   // 🔒 텍스트만 교체 — start/dur(타이밍) 그대로
+      try { palDraftSave(); } catch (_) {}
+      renderPalette();
+      if (status) status.textContent = changed ? `✏️ ${changed}개 자막을 고쳤어요 (타이밍 그대로)` : "이미 깔끔해요 — 고칠 게 없었어요";
+      try { toast(changed ? "✏️ 자막 띄어쓰기·어법을 고쳤어요" : "이미 깔끔해요"); } catch (_) {}
+    } catch (e) {
+      if (status) status.textContent = "⚠️ " + ((e && e.message) || e);
+      if (btn) { btn.disabled = false; btn.textContent = btn._t || "✏️ 자막 자동 문법 수정"; }
+    }
+  }
   async function palBuildNarrCaptions(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {};
     if (!d.voiceUrl) { try { toast("먼저 나레이션을 만들어주세요"); } catch (_) {} return; }
