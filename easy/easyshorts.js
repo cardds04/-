@@ -5321,7 +5321,7 @@
       if (emptyMsg) emptyMsg.hidden = visible > 0;
     };
     $("#esIdeaOpen", body)?.addEventListener("click", openIdeaBox);   // 💡 아이디어 상자 → 팝업
-    $("#esOpenReels", body)?.addEventListener("click", openReels);   // 📱 릴스 만들기 페이지
+    if ($("#esOpenReels", body)) { $("#esOpenReels", body).addEventListener("click", openReels); if (!(E.published && E.published.length) && !E._pubLoadingP) { try { loadPublished(); } catch (_) {} } }   // 📱 릴스 만들기 — 홈 들어오면 미리 받아둬 클릭 시 즉시 열림
     $("#esCustSearch", body)?.addEventListener("input", applyCustomerFilter);
     $$(".es-cust-catbar [data-cat]", body).forEach((btn) => btn.addEventListener("click", () => {
       activeCat = btn.dataset.cat || "all";
@@ -5396,13 +5396,19 @@
     document.removeEventListener("keydown", _reelsKey);
   }
   function openReels() {
+    if (E._reelsOpening || document.getElementById("esReelsOv")) return;   // 🚫 로딩 중·이미 열림이면 중복 클릭 무시(여러 개 뜨던 문제)
     try { stopPlay(); } catch (_) {}
     try { stopInline(); } catch (_) {}
-    if (!(E.published && E.published.length)) {   // 게시 목록 아직이면 먼저 받아오고 다시
-      try { loadPublished().then(function () { renderReels(); }); } catch (_) { renderReels(); }
-      return;
-    }
-    renderReels();
+    if (E.published && E.published.length) { renderReels(); return; }   // 이미 받아둠 = 즉시
+    // 게시 목록 로딩 — 즉시 로딩 화면을 띄워 '몇 번씩 누르는' 일을 막고, 받아오면 교체
+    E._reelsOpening = true;
+    var ov = document.createElement("div"); ov.id = "esReelsOv"; ov.className = "es-reels-ov";
+    ov.innerHTML = '<button type="button" class="es-reels-x" aria-label="닫기">✕</button><div class="es-reels-empty es-reels-loading"><span class="es-reels-spin"></span><br>📱 영상 불러오는 중…</div>';
+    document.body.appendChild(ov);
+    ov.querySelector(".es-reels-x").addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
+    document.addEventListener("keydown", _reelsKey);
+    var fin = function () { E._reelsOpening = false; if (document.getElementById("esReelsOv")) renderReels(); };   // 닫혔으면 안 그림
+    try { loadPublished().then(fin, fin); } catch (_) { fin(); }
   }
   function renderReels() {
     var old = document.getElementById("esReelsOv"); if (old) old.remove();
@@ -6564,7 +6570,8 @@
     } catch (e) { alert("내리기 오류: " + (e && e.message || e)); }
   }
   // ── 게시된 영상(고객 사이트 서버 목록) — 로컬 프로젝트가 없어도 여기서 직접 내릴 수 있음 ──
-  async function loadPublished() {
+  function loadPublished() { if (E._pubLoadingP) return E._pubLoadingP; E._pubLoadingP = _loadPublishedDo().finally(() => { E._pubLoadingP = null; }); return E._pubLoadingP; }   // 진행 중이면 그 fetch 재사용(중복 네트워크 방지)
+  async function _loadPublishedDo() {
     try {
       const r = await fetch(EASY_TPL_API, { cache: "no-store" });
       const j = await r.json();
