@@ -14027,88 +14027,13 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
   // ════════════ 🗂 템플릿 분류 도구 (관리자) — 목적/포맷/레벨 태깅 ════════════
   // 손님 갤러리를 '목적별 + 레벨순'으로 묶기 위한 분류. v1: localStorage 저장(es_template_cats).
-  const ES_CATS_VER = 2;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
+  const ES_CATS_VER = 3;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
+  // 🎬 분류 4가지 — 얼굴 유무 × 음성(직접/없음/AI 나레이션). 카테고리=포맷 1개씩(56→4 축소).
   const ES_CATS = [
-    { key: "a", label: "작업·과정형", emoji: "🔨", formats: [
-      { id: "a1", label: "비포애프터", level: 1 },
-      { id: "a2", label: "타임랩스", level: 3 },
-      { id: "a3", label: "손작업 고정샷", level: 3 },
-      { id: "a4", label: "POV 1인칭 작업", level: 3 },
-      { id: "a5", label: "언박싱/입고", level: 3 },
-      { id: "a6", label: "하루 루틴", level: 4 },
-      { id: "a7", label: "디테일 클로즈업+ASMR", level: 3 },
-      { id: "a8", label: "공간 투어", level: 2 },
-      { id: "a9", label: "무언 브이로그", level: 4 },
-    ] },
-    { key: "b", label: "정보·지식형", emoji: "💡", formats: [
-      { id: "b1", label: "사장만 아는 것", level: 2 },
-      { id: "b2", label: "오해 깨기", level: 1 },
-      { id: "b3", label: "고르는 법", level: 1 },
-      { id: "b4", label: "실수 모음", level: 1 },
-      { id: "b5", label: "용어/원리 설명", level: 2 },
-      { id: "b6", label: "가격·원가·견적 공개", level: 1 },
-      { id: "b7", label: "튜토리얼", level: 3 },
-      { id: "b8", label: "추천·큐레이션", level: 1 },
-      { id: "b9", label: "플랫레이 정리", level: 1 },
-    ] },
-    { key: "c", label: "이슈·후킹형", emoji: "🔥", formats: [
-      { id: "c1", label: "가격 공개 챌린지", level: 1 },
-      { id: "c2", label: "논쟁 던지기", level: 1 },
-      { id: "c3", label: "극단 비교", level: 2 },
-      { id: "c4", label: "실험형", level: 4 },
-      { id: "c5", label: "솔직 고백", level: 2 },
-      { id: "c6", label: "트렌드 밈/음원", level: 5 },
-    ] },
-    { key: "d", label: "고객·스토리형", emoji: "💬", formats: [
-      { id: "d1", label: "Q&A", level: 2 },
-      { id: "d2", label: "문의 카톡 캡처", level: 1 },
-      { id: "d3", label: "리뷰 리액션", level: 3 },
-      { id: "d4", label: "에피소드 자막 스토리", level: 2 },
-      { id: "d5", label: "고객 여정 안내", level: 2 },
-      { id: "d6", label: "지역 밀착", level: 2 },
-    ] },
-    { key: "e", label: "기록·시리즈형", emoji: "📅", formats: [
-      { id: "e1", label: "숫자 일기", level: 1 },
-      { id: "e2", label: "N일 챌린지", level: 5 },
-      { id: "e3", label: "성장 기록", level: 5 },
-    ] },
-    { key: "f", label: "판매·오퍼형", emoji: "🏷️", formats: [
-      { id: "f1", label: "신메뉴/신상품 티저", level: 1 },
-      { id: "f2", label: "이벤트·혜택 고지", level: 1 },
-      { id: "f3", label: "예약·문의 유도", level: 1 },
-      { id: "f4", label: "묶음 제안", level: 1 },
-    ] },
-    { key: "g", label: "참여유도형", emoji: "🙋", formats: [
-      { id: "g1", label: "밸런스게임/투표", level: 1 },
-      { id: "g2", label: "퀴즈형", level: 1 },
-      { id: "g3", label: "댓글 답변 시리즈", level: 3 },
-      { id: "g4", label: "맞히면 드림", level: 2 },
-    ] },
-    { key: "i", label: "시점전환형", emoji: "🎥", formats: [
-      { id: "i1", label: "사물 POV", level: 3 },
-      { id: "i2", label: "신입/알바 시점", level: 4 },
-      { id: "i3", label: "CCTV 각도", level: 3 },
-      { id: "i4", label: "마스코트 성장일기", level: 4 },
-    ] },
-    { key: "j", label: "시간축 비틀기", emoji: "⏳", formats: [
-      { id: "j1", label: "역재생", level: 4 },
-      { id: "j2", label: "타임캡슐 예고", level: 3 },
-      { id: "j3", label: "같은 시각 시리즈", level: 5 },
-      { id: "j4", label: "착시·합성", level: 5 },
-    ] },
-    { key: "k", label: "제3자 활용형", emoji: "🔗", formats: [
-      { id: "k1", label: "납품처/거래처 추적", level: 4 },
-      { id: "k2", label: "폐기물/부산물 서사", level: 3 },
-    ] },
-    { key: "m", label: "장르 패러디", emoji: "🎭", formats: [
-      { id: "m1", label: "스포츠 중계형", level: 4 },
-      { id: "m2", label: "속보/뉴스형", level: 2 },
-    ] },
-    { key: "n", label: "게임화·이벤트형", emoji: "🎮", formats: [
-      { id: "n1", label: "스피드런", level: 3 },
-      { id: "n2", label: "진열대 레이스", level: 4 },
-      { id: "n3", label: "랜덤 넘버 손님", level: 4 },
-    ] },
+    { key: "fv", label: "얼굴+음성", emoji: "🗣", formats: [{ id: "fv", label: "얼굴 나옴 · 음성 나옴 · 영상", level: 1 }] },
+    { key: "fo", label: "얼굴+무음", emoji: "😶", formats: [{ id: "fo", label: "얼굴 나옴 · 음성 없음 · 영상", level: 1 }] },
+    { key: "vo", label: "보이스오버", emoji: "🎙", formats: [{ id: "vo", label: "얼굴 안 나옴 · 음성 나옴 · 영상", level: 1 }] },
+    { key: "ai", label: "AI 나레이션", emoji: "🤖", formats: [{ id: "ai", label: "얼굴 안 나옴 · AI 나레이션 · 영상", level: 1 }] },
   ];
   // 편집 가능한 분류 체계(taxonomy). 버전 바뀌면 기존 저장본·분류 비우고 새 기본값 시드.
   var _taxMigrated = false;
@@ -14168,32 +14093,14 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   // 이름·구조로 분류 추측(휴리스틱). 관리자가 확인·수정.
   function classifyGuess(t) {
+    // 🎬 4분류(얼굴×음성/AI) — 얼굴 유무는 이름으로 알 수 없어 추론 가능한 것만(AI나레이션·무음), 기본은 얼굴+음성. 관리자가 손으로 고치면 됨.
     const n = String((t && t.name) || "").toLowerCase();
-    const slots = ((t && t.slots) || []).length, texts = ((t && t.texts) || []).length;
+    const fns = (t && (t._paletteSteps || t.steps) || []).map((s) => s && s.fn).filter(Boolean);
     const has = (re) => re.test(n);
-    if (has(/비포|애프터|before|after|전후/)) return { goal: "a", format: "a1" };
-    if (has(/타임랩스|timelapse|과정|메이킹|making|리듬|리드미컬|레이싱|몽타주|montage/)) return { goal: "a", format: "a2" };
-    if (has(/투어|tour|공간|둘러|매장|작업실/)) return { goal: "a", format: "a8" };
-    if (has(/asmr|클로즈업|디테일/)) return { goal: "a", format: "a7" };
-    if (has(/언박싱|입고|개봉|unbox/)) return { goal: "a", format: "a5" };
-    if (has(/감성|무드|분위기|브이로그|vlog|emotion|mood/)) return { goal: "a", format: "a9" };
-    if (has(/후기|리뷰|review/)) return { goal: "d", format: "d3" };
-    if (has(/q&a|질문|문의|카톡/)) return { goal: "d", format: "d1" };
-    if (has(/가격|견적|원가|price/)) return { goal: "b", format: "b6" };
-    if (has(/얼마|챌린지/)) return { goal: "c", format: "c1" };
-    if (has(/꿀팁|노하우|아는|tip/)) return { goal: "b", format: "b1" };
-    if (has(/실수|리스트|가지|목록|list/)) return { goal: "b", format: "b4" };
-    if (has(/비교|고르|선택/)) return { goal: "b", format: "b3" };
-    if (has(/오해|경고|주의|사실|warning/)) return { goal: "b", format: "b2" };
-    if (has(/튜토리얼|따라|관리법|사용법/)) return { goal: "b", format: "b7" };
-    if (has(/신상|신메뉴|티저|출시/)) return { goal: "f", format: "f1" };
-    if (has(/이벤트|할인|혜택|특가|선착순/)) return { goal: "f", format: "f2" };
-    if (has(/예약|모집|슬롯/)) return { goal: "f", format: "f3" };
-    if (has(/역재생|reverse/)) return { goal: "j", format: "j1" };
-    if (has(/투표|밸런스/)) return { goal: "g", format: "g1" };
-    if (has(/퀴즈/)) return { goal: "g", format: "g2" };
-    if (slots >= 12 && texts === 0) return { goal: "a", format: "a2" };   // 컷 많고 자막 없음 = 타임랩스/몽타주
-    return { goal: "a", format: "a1" };   // 기본값: 비포애프터
+    if ((t && t.narrate) || fns.includes("ngen") || fns.includes("nstyle") || has(/나레이션|ai|tts|독백|자동\s*나레/)) return { goal: "ai", format: "ai" };   // AI 나레이션
+    if (has(/무음|무언|음성\s*없|asmr|타임랩스|timelapse|montage|몽타주|브이로그|vlog/)) return { goal: "fo", format: "fo" };   // 얼굴+무음(추정)
+    if (has(/보이스오버|voiceover|성우|내레/)) return { goal: "vo", format: "vo" };   // 보이스오버
+    return { goal: "fv", format: "fv" };   // 기본: 얼굴+음성
   }
   function clsFormatOptions(goalKey, selFmt) {
     const c = clsGoal(goalKey);
