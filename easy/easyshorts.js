@@ -2760,6 +2760,18 @@
   function palCutClipDur(m) { const raw = (m && m.dur > 0) ? m.dur : 2.5; return (m && m.kind === "video" && m.srcDur > 0) ? Math.min(raw, m.srcDur) : raw; }   // 영상은 원본 길이 초과 금지(넘으면 반복 재생됨)
   function palClipMaxDur(m) { return (m && m.kind === "video" && m.srcDur > 0) ? m.srcDur : 30; }   // 길이 조절 상한 — 영상은 원본 길이까지만
   // 🎬 영상 더 넣기(컷 타임라인에서 바로) — 파일 골라 demo.media 에 추가
+  // 🖱 드래그앤드롭 — 업로드 칸(또는 그 영역)에 영상/사진/오디오를 끌어다 놓으면 그 input의 change로 보내 기존 로직 그대로 처리
+  function palWireDrop(target, inputEl) {
+    if (!target || !inputEl || target._dropWired) return; target._dropWired = true;
+    target.addEventListener("dragover", (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = "copy"; } catch (_) {} target.classList.add("es-drop-over"); });
+    target.addEventListener("dragleave", () => target.classList.remove("es-drop-over"));
+    target.addEventListener("drop", (e) => {
+      e.preventDefault(); e.stopPropagation(); target.classList.remove("es-drop-over");
+      const files = [...((e.dataTransfer && e.dataTransfer.files) || [])].filter((f) => /^(image|video|audio)\//.test(f.type || ""));
+      if (!files.length) return;
+      try { const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f)); inputEl.files = dt.files; inputEl.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
+    });
+  }
   function palAddMediaPick() {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*,video/*"; inp.multiple = true;
@@ -4526,6 +4538,9 @@
     { const tb = $("#esPalTestBtn"), tf = $("#esPalTestFile"); if (tb && tf) tb.addEventListener("click", () => tf.click()); }
     { const tf = $("#esPalTestFile"); if (tf) tf.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; try { (P.demo.testMedia || []).forEach((mm) => mm && mm.url && URL.revokeObjectURL(mm.url)); } catch (_) {} P.demo.testMedia = [{ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }]; renderPalette(); }); }   // 하나씩 교체
     $$("#esBody [data-tprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.tprm; const arr = (P.demo && P.demo.testMedia) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); renderPalette(); } }));
+    // 🖱 드래그앤드롭 — 따라할영상·테스트영상·스티커·효과음 칸 전부 끌어다 놓기 가능(버튼 + 그 영역)
+    [["esPalUpBtn", "esPalUpFile"], ["esPalTestBtn", "esPalTestFile"], ["esStkrUpBtn", "esStkrUpFile"], ["esSfxUpBtn", "esSfxUpFile"]].forEach((pair) => { const inp = $("#" + pair[1]), btn = $("#" + pair[0]); if (!inp) return; [btn, btn && btn.closest(".es-pal-zone"), btn && btn.closest(".es-pal-ted")].forEach((t) => palWireDrop(t, inp)); });
+    if (!E._dropGuard) { E._dropGuard = true; document.addEventListener("dragover", (e) => { if (e.target.closest && e.target.closest("#easyRoot")) e.preventDefault(); }); document.addEventListener("drop", (e) => { if (e.target.closest && e.target.closest("#easyRoot") && !e.target.closest(".es-drop-over,[id$='File']")) e.preventDefault(); }); }   // 칸 밖에 떨어뜨려도 브라우저가 파일 열어 페이지 벗어나는 것 방지
     // ✨ 자동세팅 작업대 하위탭(타이틀·자막·음악) 전환
     $$("#esBody [data-setuptab]").forEach((b) => b.addEventListener("click", () => { E._palSetupTab = b.dataset.setuptab; renderPalette(); }));
     // ✨ 자동세팅 고객화면 — 아래 바 [타이틀][자막] 토글, 자막 AI 켜기/끄기
@@ -15941,6 +15956,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     });
     // 창 크기 변경 시 음악 파형 다시 그리기(폭 변동 대응)
     window.addEventListener("resize", () => { const c = $("#esMusicLane .es-wave"); if (c) drawMusicWave(c); });
+    // 💾 새로고침·앱 업데이트·탭 닫기 직전 작업을 '즉시' 저장(디바운스 flush) → 다시 열면 작업하던 단계 그대로 복원
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && E.using) { try { saveMeta(); } catch (_) {} } });
+    window.addEventListener("pagehide", () => { if (E.using) { try { saveMeta(); } catch (_) {} } });
     loadTemplates().then(async () => {
       await ensureBaseTemplates();   // 🧩 기본 템플릿 8종 항상 유지(없으면 채움)
       await loadReels();
