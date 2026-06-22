@@ -2113,11 +2113,13 @@
       if (!bufB) { try { bufB = mediaEl.cloneNode(false); bufB.classList.add("es-pal-real-mediabuf"); bufB.removeAttribute("src"); bufB.removeAttribute("autoplay"); mediaEl.parentElement.insertBefore(bufB, mediaEl.nextSibling); } catch (_) { bufB = null; } }
       if (cover) { cover.style.opacity = "0"; c.cover = cover; }   // 덮개가 맨 위(가장 마지막 DOM)
       mediaEl.style.opacity = "1";
-      if (bufB) { try { bufB.muted = mediaEl.muted; bufB.volume = mediaEl.volume; } catch (_) {} bufB.style.opacity = "0"; c.bufs = [mediaEl, bufB]; c.activeBuf = 0; }
+      try { mediaEl.loop = false; } catch (_) {}   // 멀티클립 = loop 끄기(컷 끝에서 0초로 되감겨 깜빡이는 것 방지)
+      if (bufB) { try { bufB.muted = mediaEl.muted; bufB.volume = mediaEl.volume; bufB.loop = false; bufB.preload = "auto"; } catch (_) {} bufB.style.opacity = "0"; c.bufs = [mediaEl, bufB]; c.activeBuf = 0; }
     }
-    c.preloadNext = (i) => {   // 다음 컷을 숨은 버퍼에 미리 로드(재생은 안 함)
+    c.preloadNext = (i) => {   // 다음 컷을 숨은 버퍼에 미리 로드 + 첫 프레임까지 미리 디코드(모바일 전환 끊김↓)
       if (!c.bufs || c.bufs.length !== 2) return; const cm = c.playClips[i]; if (!cm || !cm.url || cm.kind !== "video") return;
-      const sp = c.bufs[1 - c.activeBuf]; try { if (sp.getAttribute("src") !== cm.url) { sp.src = cm.url; sp.load(); } } catch (_) {}
+      const sp = c.bufs[1 - c.activeBuf];
+      try { if (sp.getAttribute("src") !== cm.url) { sp.preload = "auto"; sp.src = cm.url; sp.load(); const on = () => { sp.removeEventListener("loadeddata", on); try { sp.currentTime = 0; } catch (_) {} }; sp.addEventListener("loadeddata", on); } else { try { if ((sp.currentTime || 0) > 0.01) sp.currentTime = 0; } catch (_) {} } } catch (_) {}
     };
     c.showClip = (idx) => {   // 컷에 맞춰 미리보기 영상 전환
       const cm = c.playClips[idx]; if (!cm || !cm.url) return;
@@ -2177,7 +2179,10 @@
       if (c.playClips && c.playClips.length && c.mediaEl) {
         let acc = 0, idx = c.playClips.length - 1;
         for (let i = 0; i < c.playClips.length; i++) { const dd = palCutClipDur(c.playClips[i]); if (t < acc + dd) { idx = i; break; } acc += dd; }
-        if (c.playClips.length > 1 && idx !== c.curClip) { c.curClip = idx; c.showClip(idx); }
+        // 🎬 전환을 살짝 선행(LEAD초 전)으로 — 다음 컷 첫 프레임 디코드 지연을 가려 모바일에서 '컷 끝 멈칫'을 줄임. (스크럽은 정확한 컷)
+        let swIdx = idx;
+        if (!c.scrub && c.playClips.length > 1) { const LEAD = 0.12; let a2 = 0, look = c.playClips.length - 1; for (let i = 0; i < c.playClips.length; i++) { const dd = palCutClipDur(c.playClips[i]); if (t + LEAD < a2 + dd) { look = i; break; } a2 += dd; } swIdx = look; }
+        if (c.playClips.length > 1 && swIdx !== c.curClip) { c.curClip = swIdx; c.showClip(swIdx); }
         if (c.scrub && c.mediaEl.tagName === "VIDEO") {   // 🎯 재생선 위치 프레임을 정지표시(스크럽) — 그 컷 안의 offset으로 seek
           try { c.mediaEl.pause(); const _off = Math.max(0, t - acc); if (isFinite(c.mediaEl.duration) && c.mediaEl.duration > 0 && Math.abs((c.mediaEl.currentTime || 0) - _off) > 0.06) c.mediaEl.currentTime = Math.min(_off, Math.max(0, c.mediaEl.duration - 0.05)); } catch (_) {} }
       }
