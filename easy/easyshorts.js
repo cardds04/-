@@ -368,7 +368,7 @@
   async function idbKeys() { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(STORE, "readonly"); const rq = t.objectStore(STORE).getAllKeys(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); }); }
 
   async function saveTemplates() {
-    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0, _palTitles: t._palTitles || null, _palCaptions: t._palCaptions || null, _palStickers: t._palStickers || null, _palSfx: t._palSfx || null, _palMusic: t._palMusic || null }));   // 🎨 글씨체·스타일·스티커·효과음 사전설정도 저장(안 넣으면 저장/새로고침 시 사라져 고객용에 스타일 안 나옴)
+    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0, _palTitles: t._palTitles || null, _palCaptions: t._palCaptions || null, _palStickers: t._palStickers || null, _palSfx: t._palSfx || null, _palMusic: t._palMusic || null, _palCapTone: t._palCapTone || null }));   // 🎨 글씨체·스타일·스티커·효과음 사전설정도 저장(안 넣으면 저장/새로고침 시 사라져 고객용에 스타일 안 나옴)
     try { await idbSet("templates", meta); } catch (e) { console.warn("[easyshorts] saveTemplates", e); }
   }
   async function loadTemplates() {
@@ -1643,7 +1643,8 @@
       <div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎬 원본</span><input type="range" id="esPalVolOrig" min="0" max="100" value="${ov}"><b class="es-pal-mus-v">${ov}</b></div>
       <div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎙 나레이션</span><input type="range" id="esPalVolVoice" min="0" max="100" value="${vv}"><b class="es-pal-mus-v">${vv}</b></div>
       ${sel ? `<div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎵 음악</span><input type="range" id="esPalVolMusic" min="0" max="100" value="${mv}"><b class="es-pal-mus-v">${mv}</b></div>` : ""}
-      <div class="es-pal-mus-hint">✅ 정한 크기로 고객 영상이 나와요 (고객은 이 단계를 안 봐요)</div>`;
+      <div class="es-pal-mus-hint">✅ 정한 크기로 고객 영상이 나와요 (고객은 이 단계를 안 봐요)</div>
+      <button type="button" class="es-pal-narr-make" id="esPalMusVolForceLock" style="margin-top:10px">✅ 이 설정으로 지정</button>`;
   }
   function palBgMusicAdmin(P) {
     const d = (P && P.demo) || {};
@@ -1654,7 +1655,7 @@
     return `<div class="es-pal-bgmus">
       <div class="es-pal-bgmus-lb">🎵 배경음악 깔기 <small>고객은 안 골라요 · 정한 음악이 영상에 자동으로 깔려요</small></div>
       <div class="es-pal-bgmus-row">${cur}<button type="button" class="es-pal-up-btn es-pal-bgmus-up" id="esPalBgMusUp">＋ 음악 올리기 (mp3·m4a 등)</button><input type="file" id="esPalBgMusFile" accept="audio/*" hidden></div>
-      ${ms ? `<div class="es-pal-mus-fadehint">끝에서 2초 부드럽게 줄어요(페이드아웃)</div>` : ``}
+      ${ms ? `<div class="es-pal-mus-fadehint">끝에서 2초 부드럽게 줄어요(페이드아웃)</div><button type="button" class="es-pal-narr-make" id="esPalBgMusLock" style="margin-top:10px">✅ 이 음악으로 지정</button>` : ``}
     </div>`;
   }
   // 🎵 배경음악 고르기 UI(빠르기 필터 + 목록) — 음악 단계·자동세팅 작업대 공용
@@ -1728,7 +1729,7 @@
               const methods = `<div class="es-pal-capm-grid3">${_mbtn("ai", "🤖", "AI로 자막 생성")}${_mbtn("voice", "🎤", "음성에서 출력")}${_mbtn("manual", "✍️", "직접 작성")}</div>`;
               const cslots = `<div class="es-pal-cslot-lb">💬 자막 글자</div>${ccs.map((t, i) => _row(t, i, "caption")).join("")}`;
               let _inner;
-              if (cm === "ai") _inner = `<div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>${palCapAiCore()}`;
+              if (cm === "ai") _inner = `${(E._palCustomerMode || E._palTestMode) ? "" : '<div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>'}${palCapAiCore()}`;
               else if (cm === "voice") _inner = `<div class="es-pal-capm-hint">🎤 1열에 넣은 <b>따라할 영상의 말소리</b>를 그대로 자막으로 옮겨요(말하는 타이밍에 맞춰서)</div><button type="button" class="es-pal-capm-go" id="esPalCapVoice">🎤 영상 음성에서 자막 뽑기</button><div id="esPalCapVoiceStatus" class="es-pal-narr-status"></div>${cslots}`;
               else _inner = cslots;   // manual
               parts = methods + _inner;
@@ -1794,7 +1795,7 @@
           }).join("");
           const cslots = `<div class="es-pal-cslot-lb">💬 자막 글자</div>${capRows}`;
           let _inner;
-          if (cm === "ai") _inner = `<div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>${palCapAiCore()}`;
+          if (cm === "ai") _inner = `${(E._palCustomerMode || E._palTestMode) ? "" : '<div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 자막을 만들어드려요</div>'}${palCapAiCore()}`;
           else if (cm === "voice") _inner = `<div class="es-pal-capm-hint">🎤 1열에 넣은 <b>따라할 영상의 말소리</b>를 그대로 자막으로 옮겨요(말하는 타이밍에 맞춰서)</div><button type="button" class="es-pal-capm-go" id="esPalCapVoice">🎤 영상 음성에서 자막 뽑기</button><div id="esPalCapVoiceStatus" class="es-pal-narr-status"></div>${cslots}`;
           else _inner = cslots;   // manual
           body = methods + _inner;
@@ -2881,7 +2882,7 @@
         m.srcDur = (dur > 0) ? dur : 0;
         let changed = false;
         if (m.srcDur > 0) {
-          if (m.dur == null) { m.dur = +Math.min(m.srcDur, 2.5).toFixed(2); changed = true; }   // 기본 길이 = 원본(짧으면 그대로)·2.5(길면)
+          if (m.dur == null) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 기본 길이 = 영상 원본 전체(안 만지면 원본 그대로 — 2.5초 고정 X). 짧게는 컷편집서.
           else if (m.dur > m.srcDur + 0.02) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 원본 초과분 잘라냄(반복 방지)
         }
         if (changed) { try { palDraftSave(); } catch (_) {} }
@@ -3894,7 +3895,7 @@
     if (voices == null) pick = `<div class="es-pal-tc-loading">목소리 불러오는 중…</div>`;
     else if (!voices.length) pick = `<div class="es-pal-tc-fail">목소리를 못 불러왔어요 (API 키 확인) <button type="button" class="es-pal-narr-reload" id="esPalTcReload">🔄 다시 시도</button></div>`;
     else pick = palTcVoicePicker();
-    return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<button type="button" class="es-pal-narr-make" id="esPalNarrforceLock">✅ 이 목소리로 지정</button><div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}`;
+    return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}<button type="button" class="es-pal-narr-make" id="esPalNarrforceLock" style="margin-top:10px"${curV ? "" : " disabled"}>✅ 이 나레이션으로 지정</button>`;
   }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
@@ -4338,7 +4339,7 @@
     $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
     { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
-    { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 목소리로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이걸로 지정' — 고른 목소리 확정
+    { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 나레이션으로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } else { try { toast("먼저 위에서 목소리를 골라주세요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이 나레이션으로 지정' — 고른 목소리 확정
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
     { const ce = $("#esPalCapEditApply"); if (ce) ce.addEventListener("click", () => palCapEditApply(ce)); }   // ✏️ 자막 다듬기 적용(한 줄=한 블럭, 음성 있으면 타이밍 재싱크)
@@ -4353,10 +4354,10 @@
     // 🗣 말투 — 영상 말투 가져오기 / 고정말투 적용·저장 / 끄기
     { const b = $("#esPalToneVideo"); if (b) b.addEventListener("click", () => { E._palToneSavedOpen = false; palExtractVideoTone(b); }); }   // 🎬 영상말투 추출→적용
     { const b = $("#esPalToneSaved"); if (b) b.addEventListener("click", () => { E._palToneSavedOpen = !E._palToneSavedOpen; renderPalette(); }); }   // 📌 지정말투 목록 토글
-    $$("#esBody [data-savedtone]").forEach((b) => b.addEventListener("click", () => { const t = palGetSavedTones()[+b.dataset.savedtone]; if (t && t.sample) { E._palActiveTone = { name: t.name, sample: t.sample, _src: "saved" }; E._palToneSavedOpen = false; renderPalette(); try { toast("📌 '" + t.name + "' 말투 적용 — 이 말투로만 만들어요"); } catch (_) {} } }));
+    $$("#esBody [data-savedtone]").forEach((b) => b.addEventListener("click", () => { const t = palGetSavedTones()[+b.dataset.savedtone]; if (t && t.sample) { E._palActiveTone = { name: t.name, sample: t.sample, _src: "saved" }; try { if (E.palette && E.palette.demo) E.palette.demo._capTone = { name: t.name, sample: t.sample }; palDraftSave(); } catch (_) {} E._palToneSavedOpen = false; renderPalette(); try { toast("📌 '" + t.name + "' 말투 적용 — 이 말투로만 만들어요"); } catch (_) {} } }));
     $$("#esBody [data-savedtonedel]").forEach((b) => b.addEventListener("click", () => { if (!confirm("이 지정말투를 지울까요?")) return; palDelTone(+b.dataset.savedtonedel); renderPalette(); }));
-    { const b = $("#esPalToneSave"); if (b) b.addEventListener("click", () => { const at = E._palActiveTone; if (!at || !at.sample) return; const nm = (prompt("이 말투 이름을 정하세요 (예: 친근한 사장님 말투)") || "").trim(); if (!nm) return; palSaveTone(nm, at.sample); E._palActiveTone = { name: nm, sample: at.sample, _src: "saved" }; renderPalette(); try { toast("💾 '" + nm + "' 지정말투로 저장 — 다음엔 📌 지정말투에서 불러와요"); } catch (_) {} }); }   // 💾 영상말투→이름 지어 지정말투 저장
-    { const b = $("#esPalToneOff"); if (b) b.addEventListener("click", () => { E._palActiveTone = null; E._palToneSavedOpen = false; renderPalette(); }); }
+    { const b = $("#esPalToneSave"); if (b) b.addEventListener("click", () => { const at = E._palActiveTone; if (!at || !at.sample) return; const nm = (prompt("이 말투 이름을 정하세요 (예: 친근한 사장님 말투)") || "").trim(); if (!nm) return; palSaveTone(nm, at.sample); E._palActiveTone = { name: nm, sample: at.sample, _src: "saved" }; try { if (E.palette && E.palette.demo) E.palette.demo._capTone = { name: nm, sample: at.sample }; palDraftSave(); } catch (_) {} renderPalette(); try { toast("💾 '" + nm + "' 지정말투로 저장 — 다음엔 📌 지정말투에서 불러와요"); } catch (_) {} }); }   // 💾 영상말투→이름 지어 지정말투 저장
+    { const b = $("#esPalToneOff"); if (b) b.addEventListener("click", () => { E._palActiveTone = null; try { if (E.palette && E.palette.demo) E.palette.demo._capTone = null; palDraftSave(); } catch (_) {} E._palToneSavedOpen = false; renderPalette(); }); }
     // 🎵 배경음악 (저장음악 목록·고르지않기·미리듣기·볼륨 믹서)
     if ($("#esPalMusLoad") && !E._palMusicTracks && !E._palMusicLoading) { E._palMusicLoading = true; fetch(easyAudioEndpoint(), { cache: "no-store" }).then((r) => r.json()).then((j) => { E._palMusicTracks = (j && j.tracks) || []; E._palMusicLoading = false; renderPalette(); }).catch(() => { E._palMusicTracks = []; E._palMusicLoading = false; renderPalette(); }); }
     $$("#esBody [data-mustempo]").forEach((b) => b.addEventListener("click", () => { E._palMusicTempo = b.dataset.mustempo; renderPalette(); }));   // 🎵 빠르기 필터
@@ -4368,9 +4369,11 @@
     { const b = $("#esPalBgMusUp"), f = $("#esPalBgMusFile"); if (b && f) b.addEventListener("click", () => f.click()); }
     { const f = $("#esPalBgMusFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} const url = URL.createObjectURL(file); const nm = String(file.name || "내 음악").replace(/\.[a-z0-9]+$/i, "").slice(0, 30); dm.musicSel = { id: "up" + Date.now().toString(36), name: nm, url, blob: file, _up: true }; dm.musicUrl = url; try { palDraftSave(); } catch (_) {} renderPalette(); try { toast("🎵 배경음악을 깔았어요 — 모든 고객 영상에 자동으로 들어가요 (끝 2초 페이드아웃)"); } catch (_) {} }); }
     { const x = $("#esPalBgMusX"); if (x) x.addEventListener("click", () => { const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} dm.musicSel = null; dm.musicUrl = ""; try { palDraftSave(); } catch (_) {} renderPalette(); }); }
+    { const lk = $("#esPalBgMusLock"); if (lk) lk.addEventListener("click", () => { const dm = E.palette && E.palette.demo; if (dm && dm.musicSel) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 음악으로 지정됐어요 — 모든 고객 영상에 이 음악이 자동으로 깔려요"); } catch (_) {} } }); }   // 🎵 음악 깔기 '이 음악으로 지정'
     $$("#esBody [data-musplay]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palMusPreview(b.dataset.musplay, b); }));   // ▶는 재생만(줄 선택 안 됨)
     $$("#esBody [data-musmix]").forEach((b) => b.addEventListener("click", () => { E._palMusicMix = b.dataset.musmix === "1"; renderPalette(); }));
     [["esPalVolOrig", "origVol"], ["esPalVolVoice", "voiceVol"], ["esPalVolMusic", "musicVol"]].forEach((pair) => { const el = $("#" + pair[0]); if (el) el.addEventListener("input", () => { E.palette.demo[pair[1]] = +el.value; const bb = el.parentElement.querySelector("b"); if (bb) bb.textContent = el.value; try { palPlayApplyVolumes(); } catch (_) {} clearTimeout(E._palVolT); E._palVolT = setTimeout(() => { try { palDraftSave(); } catch (_) {} }, 300); }); });
+    { const lk = $("#esPalMusVolForceLock"); if (lk) lk.addEventListener("click", () => { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 설정으로 지정됐어요 — 고객 영상이 이 소리 크기로 나와요"); } catch (_) {} }); }   // 🎚 음악소리강제 '이 설정으로 지정'
     $$("#esBody [data-rmref]").forEach((b) => b.addEventListener("click", (e) => {   // 글씨박스에서 삭제(영구) — 현재 종류
       e.stopPropagation(); const i = +b.dataset.rmref;
       const _kind = E._palEditKind === "caption" ? "caption" : "title";
@@ -4662,6 +4665,7 @@
     if (!P || !P.demo) return; let any = false;
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
+    if (t._palCapTone && t._palCapTone.sample) { P.demo._capTone = t._palCapTone; E._palActiveTone = { name: t._palCapTone.name || "🎬 영상 말투", sample: t._palCapTone.sample, _src: "saved" }; any = true; }   // 🗣 AI 자막 생성 말투 복원
     if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(로컬=blob / 게시본=url)
     if (Array.isArray(t._palSfx) && t._palSfx.length) { P.demo.sfx = t._palSfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.sfxSel = 0; }   // 🔔 효과음 복원(로컬=blob / 게시본=url)
     if (t._palMusic) { const ms = t._palMusic; const url = (ms.result instanceof Blob) ? (function () { try { return URL.createObjectURL(ms.result); } catch (_) { return null; } })() : (ms.url || null); if (url) { P.demo.musicSel = { id: ms.id || "m", name: ms.name || "음악", url, blob: (ms.result instanceof Blob) ? ms.result : null, _up: !!ms._up }; P.demo.musicUrl = url; } }   // 🎵 배경음악 복원(로컬=blob / 게시본=url)
@@ -4681,6 +4685,8 @@
       narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
+      _palCapTone: (P.demo && P.demo._capTone) || null,   // 🗣 AI 자막 생성 말투(영상말투/지정말투) — 고객은 이 말투로 생성
+
       _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
       _palSfx: (Array.isArray(P.demo && P.demo.sfx) ? P.demo.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
       _palMusic: (P.demo && P.demo.musicSel) ? { id: P.demo.musicSel.id, name: P.demo.musicSel.name || "음악", _up: !!P.demo.musicSel._up, url: P.demo.musicSel.blob ? null : (P.demo.musicSel.url || null), result: P.demo.musicSel.blob || null } : null,   // 🎵 배경음악(업로드=blob / 라이브러리=url)
@@ -6015,6 +6021,7 @@
         const _tStyle = Object.assign({}, t);
         if (!_tStyle._palTitles && _cm.palTitles) _tStyle._palTitles = _cm.palTitles;
         if (!_tStyle._palCaptions && _cm.palCaptions) _tStyle._palCaptions = _cm.palCaptions;
+        if (!_tStyle._palCapTone && _cm.palCapTone) _tStyle._palCapTone = _cm.palCapTone;
         if (!_tStyle._palStickers && _cm.palStickers) _tStyle._palStickers = _cm.palStickers;
         if (!_tStyle._palSfx && _cm.palSfx) _tStyle._palSfx = _cm.palSfx;
         if (!_tStyle._palMusic && _cm.palMusic) _tStyle._palMusic = _cm.palMusic;
@@ -6286,7 +6293,7 @@
           if (t.narrate) cur.narrate = true; else delete cur.narrate;
           if (t._wantTitle) { if (!cur.titleStyle && !cur.titlePrompt && !cur.titleRef) cur.titleStyle = "movie"; }
           if (t._palette && t._paletteSteps && t._paletteSteps.length) {
-            cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; cur.palTitles = t._palTitles || null; cur.palCaptions = t._palCaptions || null;
+            cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; cur.palTitles = t._palTitles || null; cur.palCaptions = t._palCaptions || null; cur.palCapTone = t._palCapTone || null;
             // 🏷🔔 스티커 이미지·효과음 오디오를 스토리지에 올려 URL로 전달(온라인 고객·게시본에도 보이게)
             try {
               const _stk = [];
@@ -6299,7 +6306,7 @@
               const pm = t._palMusic; if (pm) { let mu = pm.url || null; if (!mu && pm.result instanceof Blob) { try { toast("🎵 음악 올리는 중…"); } catch (_) {} mu = await uploadMediaSigned(id, "bgmusic.mp3", pm.result, pm.result.type || "audio/mpeg", key); } cur.palMusic = mu ? { id: pm.id, name: pm.name || "음악", url: mu } : null; } else cur.palMusic = null;
             } catch (e) { console.warn("[easyshorts] 스티커/효과음/음악 게시 업로드", e); try { toast("⚠️ 일부 업로드 실패 — 다시 게시해 보세요"); } catch (_) {} }
           }
-          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; delete cur.palStickers; delete cur.palSfx; delete cur.palMusic; }
+          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; delete cur.palCapTone; delete cur.palStickers; delete cur.palSfx; delete cur.palMusic; }
           m[t.id] = cur; clsMapSave(m);
           await clsServerSave();
         }
@@ -12273,6 +12280,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   // 🗣 말투(고정말투) 저장소 — 기기별 localStorage. {name, sample}
   // 🤖 AI 자막 생성 핵심 UI(주제+말투+길이) — 자막생성 단계·자동세팅 둘 다 재사용. 핸들러(data-caplen·esPalTone*)는 #esBody 기준이라 공용.
   function palCapAiCore() {
+    if (E._palCustomerMode || E._palTestMode) {   // 🙋 고객: 입력칸 + '자막 만들기'(길이 300 고정 · 말투는 관리자가 템플릿에 지정). 말투/길이/안내 없음.
+      return `<textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="2" placeholder="예: 10년 살던 집을 떠나며 / 첫 가게를 오픈하던 날">${esc(E._palCapPrompt || "")}</textarea><button type="button" class="es-pal-narr-make" data-caplen="300" style="margin-top:10px">🤖 자막 만들기</button><div id="esPalCapStatus" class="es-pal-narr-status"></div>`;
+    }
     const LENS = [[100, "짧게", "10초"], [300, "보통", "30초"], [500, "길게", "50초"]];
     const _at = E._palActiveTone, _saved = palGetSavedTones(), _open = E._palToneSavedOpen;
     const _isVid = _at && _at._src === "video";
@@ -12324,6 +12334,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const text = String(j.text || "").trim() || (j.words || []).map((w) => w.w || w.text || "").join(" ").trim();
       if (!text) throw new Error("말소리를 못 알아들었어요 (음성이 없거나 너무 작아요)");
       E._palActiveTone = { name: "🎬 영상 말투", sample: text.slice(0, 1200), _src: "video" };
+      try { if (P.demo) P.demo._capTone = { name: "🎬 영상 말투", sample: text.slice(0, 1200) }; palDraftSave(); } catch (_) {}   // 🗣 템플릿에 말투 지정 → 고객 자막이 이 말투로
       renderPalette();
       try { toast("🗣 영상 말투를 가져왔어요 — 이 말투로 자막을 만들어요"); } catch (_) {}
     } catch (e) {
@@ -12343,7 +12354,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     $$("#esBody [data-caplen]").forEach((b) => { b.disabled = true; });
     if (status) status.textContent = `🤖 약 ${maxChars}자 독백을 쓰고 있어요… (10~20초)`;
     try {
-      const tone = (E._palActiveTone && E._palActiveTone.sample) || "";   // 🗣 활성 말투(영상/고정) 있으면 흉내
+      const tone = (P.demo && P.demo._capTone && P.demo._capTone.sample) || (E._palActiveTone && E._palActiveTone.sample) || "";   // 🗣 템플릿 지정 말투 우선, 없으면 활성 말투
       const res = await fetch(narrEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "diary", prompt, maxChars, tone }) });
       const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { error: txt.slice(0, 200) }; }
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
