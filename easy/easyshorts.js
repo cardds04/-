@@ -3906,10 +3906,12 @@
     { const cp = $("#esPalCapPrompt"); if (cp) cp.addEventListener("input", () => { E._palCapPrompt = cp.value; }); }
     $$("#esBody [data-caplen]").forEach((b) => b.addEventListener("click", () => palCaptionAI(b, +b.dataset.caplen)));
     // 🗣 말투 — 영상 말투 가져오기 / 고정말투 적용·저장 / 끄기
-    { const b = $("#esPalToneVideo"); if (b) b.addEventListener("click", () => palExtractVideoTone(b)); }
-    { const b = $("#esPalToneFixed"); if (b) b.addEventListener("click", () => { const ft = palGetFixedTone(); if (ft && ft.sample) { E._palActiveTone = ft; renderPalette(); try { toast("📌 고정말투를 적용했어요"); } catch (_) {} } else { try { toast("저장된 고정말투가 없어요"); } catch (_) {} } }); }
-    { const b = $("#esPalToneSave"); if (b) b.addEventListener("click", () => { if (E._palActiveTone && E._palActiveTone.sample) { palSaveFixedTone(E._palActiveTone); renderPalette(); try { toast("💾 고정말투로 저장됐어요 — 다른 영상에서 '고정말투 적용'으로 써요"); } catch (_) {} } }); }
-    { const b = $("#esPalToneOff"); if (b) b.addEventListener("click", () => { E._palActiveTone = null; renderPalette(); }); }
+    { const b = $("#esPalToneVideo"); if (b) b.addEventListener("click", () => { E._palToneSavedOpen = false; palExtractVideoTone(b); }); }   // 🎬 영상말투 추출→적용
+    { const b = $("#esPalToneSaved"); if (b) b.addEventListener("click", () => { E._palToneSavedOpen = !E._palToneSavedOpen; renderPalette(); }); }   // 📌 지정말투 목록 토글
+    $$("#esBody [data-savedtone]").forEach((b) => b.addEventListener("click", () => { const t = palGetSavedTones()[+b.dataset.savedtone]; if (t && t.sample) { E._palActiveTone = { name: t.name, sample: t.sample, _src: "saved" }; E._palToneSavedOpen = false; renderPalette(); try { toast("📌 '" + t.name + "' 말투 적용 — 이 말투로만 만들어요"); } catch (_) {} } }));
+    $$("#esBody [data-savedtonedel]").forEach((b) => b.addEventListener("click", () => { if (!confirm("이 지정말투를 지울까요?")) return; palDelTone(+b.dataset.savedtonedel); renderPalette(); }));
+    { const b = $("#esPalToneSave"); if (b) b.addEventListener("click", () => { const at = E._palActiveTone; if (!at || !at.sample) return; const nm = (prompt("이 말투 이름을 정하세요 (예: 친근한 사장님 말투)") || "").trim(); if (!nm) return; palSaveTone(nm, at.sample); E._palActiveTone = { name: nm, sample: at.sample, _src: "saved" }; renderPalette(); try { toast("💾 '" + nm + "' 지정말투로 저장 — 다음엔 📌 지정말투에서 불러와요"); } catch (_) {} }); }   // 💾 영상말투→이름 지어 지정말투 저장
+    { const b = $("#esPalToneOff"); if (b) b.addEventListener("click", () => { E._palActiveTone = null; E._palToneSavedOpen = false; renderPalette(); }); }
     // 🎵 배경음악 (저장음악 목록·고르지않기·미리듣기·볼륨 믹서)
     if ($("#esPalMusLoad") && !E._palMusicTracks && !E._palMusicLoading) { E._palMusicLoading = true; fetch(easyAudioEndpoint(), { cache: "no-store" }).then((r) => r.json()).then((j) => { E._palMusicTracks = (j && j.tracks) || []; E._palMusicLoading = false; renderPalette(); }).catch(() => { E._palMusicTracks = []; E._palMusicLoading = false; renderPalette(); }); }
     $$("#esBody [data-mustempo]").forEach((b) => b.addEventListener("click", () => { E._palMusicTempo = b.dataset.mustempo; renderPalette(); }));   // 🎵 빠르기 필터
@@ -11613,19 +11615,26 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   // 🤖 AI 자막 생성 핵심 UI(주제+말투+길이) — 자막생성 단계·자동세팅 둘 다 재사용. 핸들러(data-caplen·esPalTone*)는 #esBody 기준이라 공용.
   function palCapAiCore() {
     const LENS = [[100, "짧게", "10초"], [300, "보통", "30초"], [500, "길게", "50초"]];
-    const _at = E._palActiveTone, _ft = palGetFixedTone();
+    const _at = E._palActiveTone, _saved = palGetSavedTones(), _open = E._palToneSavedOpen;
+    const _isVid = _at && _at._src === "video";
     const _toneCur = _at
-      ? `<b>${esc(_at.name)}</b> 적용 중 <span class="es-pal-tone-snip">“${esc((_at.sample || "").replace(/\s+/g, " ").slice(0, 34))}…”</span>`
-      : `기본 (부드러운 존댓말 독백)`;
+      ? `<b>${esc(_at.name)}</b> — 이 말투로만 만들어요 <span class="es-pal-tone-snip">“${esc((_at.sample || "").replace(/\s+/g, " ").slice(0, 30))}…”</span>`
+      : `기본 (앱 기본 규칙)`;
+    const _savedList = _open
+      ? `<div class="es-pal-tone-saved">${_saved.length
+          ? _saved.map((s, i) => `<span class="es-pal-tone-chip"><button type="button" class="es-pal-tone-pick ${_at && _at.name === s.name ? "on" : ""}" data-savedtone="${i}">📌 ${esc(s.name)}</button><button type="button" class="es-pal-tone-del" data-savedtonedel="${i}" title="삭제">×</button></span>`).join("")
+          : `<div class="es-pal-tone-empty">아직 지정한 말투가 없어요 — 🎬 영상말투로 만든 뒤 <b>'💾 고정으로 지정'</b>을 누르면 여기 저장돼요</div>`}</div>`
+      : "";
     const toneBlock = `<div class="es-pal-tone-box">
         <div class="es-pal-tone-cur">🗣 말투 — ${_toneCur}</div>
-        <div class="es-pal-tone-hint">1열에 넣은 <b>따라할 영상</b>의 말투를 그대로 따라 자막을 만들어요</div>
+        <div class="es-pal-tone-hint">영상말투/지정말투를 고르면 <b>앱 규칙 무시하고 그 말투로만</b> 자막을 만들어요</div>
         <div class="es-pal-tone-btns">
-          <button type="button" class="es-pal-tone-btn" id="esPalToneVideo">🎬 영상 말투 가져오기</button>
-          ${_ft ? `<button type="button" class="es-pal-tone-btn" id="esPalToneFixed">📌 고정말투 적용</button>` : ""}
-          ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-save" id="esPalToneSave">💾 고정말투로 저장</button>` : ""}
+          <button type="button" class="es-pal-tone-btn ${_isVid ? "on" : ""}" id="esPalToneVideo">🎬 영상말투</button>
+          <button type="button" class="es-pal-tone-btn ${_open ? "on" : ""}" id="esPalToneSaved">📌 지정말투${_saved.length ? ` (${_saved.length})` : ""}</button>
           ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-off" id="esPalToneOff">✖ 끄기</button>` : ""}
         </div>
+        ${_savedList}
+        ${_isVid ? `<button type="button" class="es-pal-tone-btn es-pal-tone-save" id="esPalToneSave">💾 이 영상말투를 '지정말투'로 저장</button>` : ""}
         <div id="esPalToneStatus" class="es-pal-narr-status"></div>
       </div>`;
     return `<textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="2" placeholder="예: 10년 살던 집을 떠나며 / 첫 가게를 오픈하던 날">${esc(E._palCapPrompt || "")}</textarea>
@@ -11634,8 +11643,11 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       <div class="es-pal-caplen">${LENS.map((l) => `<button type="button" class="es-pal-caplen-btn" data-caplen="${l[0]}"><b>${l[1]}</b><span>${l[0]}자<br>약 ${l[2]}</span></button>`).join("")}</div>
       <div id="esPalCapStatus" class="es-pal-narr-status"></div>`;
   }
-  function palGetFixedTone() { try { const s = localStorage.getItem("easy_fixed_tone"); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
-  function palSaveFixedTone(t) { try { localStorage.setItem("easy_fixed_tone", JSON.stringify({ name: "📌 고정말투", sample: String((t && t.sample) || "").slice(0, 1200) })); } catch (_) {} }
+  // 🗣 지정말투(여러 개, 이름 지정) — 기기 localStorage. [{name, sample}]
+  function palGetSavedTones() { try { const s = JSON.parse(localStorage.getItem("easy_saved_tones") || "[]"); return Array.isArray(s) ? s : []; } catch (_) { return []; } }
+  function palSaveTonesArr(a) { try { localStorage.setItem("easy_saved_tones", JSON.stringify((a || []).slice(0, 30))); } catch (_) {} }
+  function palSaveTone(name, sample) { const a = palGetSavedTones(); const nm = String(name || "").trim() || ("말투 " + (a.length + 1)); const i = a.findIndex((x) => x.name === nm); const item = { name: nm, sample: String(sample || "").slice(0, 1200) }; if (i >= 0) a[i] = item; else a.push(item); palSaveTonesArr(a); return nm; }
+  function palDelTone(i) { const a = palGetSavedTones(); a.splice(i, 1); palSaveTonesArr(a); }
   // 🎬 영상(1열 시안) 음성 → STT 전사 → 그 '말투'를 활성 말투로. AI 자막 생성 시 이 말투를 흉내냄.
   async function palExtractVideoTone(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {};
@@ -11652,7 +11664,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
       const text = String(j.text || "").trim() || (j.words || []).map((w) => w.w || w.text || "").join(" ").trim();
       if (!text) throw new Error("말소리를 못 알아들었어요 (음성이 없거나 너무 작아요)");
-      E._palActiveTone = { name: "🎬 영상 말투", sample: text.slice(0, 1200) };
+      E._palActiveTone = { name: "🎬 영상 말투", sample: text.slice(0, 1200), _src: "video" };
       renderPalette();
       try { toast("🗣 영상 말투를 가져왔어요 — 이 말투로 자막을 만들어요"); } catch (_) {}
     } catch (e) {
