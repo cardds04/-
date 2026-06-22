@@ -3588,7 +3588,7 @@
       for (const s of (d.stickers || [])) {
         if (!(s.result && s.result.url)) continue;
         const r = palStkrCut(s, clips); if (r.skip) continue;
-        const im = new Image(); im.src = s.result.url;
+        const im = new Image(); try { im.crossOrigin = "anonymous"; } catch (_) {} im.src = s.result.url;   // crossorigin: 게시본(외부 URL) 스티커도 캔버스 안 오염되게
         try { await new Promise((res) => { if (im.complete && im.naturalWidth) return res(); im.onload = res; im.onerror = res; }); } catch (_) {}
         if (!im.naturalWidth) continue;
         stickersRes.push({ img: im, start: r.start || 0, dur: (r.dur != null ? r.dur : null), xPct: (s.posX != null ? s.posX : 50), yPct: (s.posY != null ? s.posY : 50), sizePct: (s.size != null ? s.size : 22), rotate: s.rotate || 0, opacity: (s.opacity != null ? s.opacity : 100), animIn: s.animIn || "none", animOut: s.animOut || "none" });
@@ -4540,8 +4540,8 @@
     if (!P || !P.demo) return; let any = false;
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
-    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
-    if (Array.isArray(t._palSfx) && t._palSfx.length) { P.demo.sfx = t._palSfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.sfxSel = 0; }   // 🔔 효과음 복원
+    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(로컬=blob / 게시본=url)
+    if (Array.isArray(t._palSfx) && t._palSfx.length) { P.demo.sfx = t._palSfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.sfxSel = 0; }   // 🔔 효과음 복원(로컬=blob / 게시본=url)
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -6160,8 +6160,19 @@
           const m = clsMap(); const cur = Object.assign({}, m[t.id]);
           if (t.narrate) cur.narrate = true; else delete cur.narrate;
           if (t._wantTitle) { if (!cur.titleStyle && !cur.titlePrompt && !cur.titleRef) cur.titleStyle = "movie"; }
-          if (t._palette && t._paletteSteps && t._paletteSteps.length) { cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; cur.palTitles = t._palTitles || null; cur.palCaptions = t._palCaptions || null; }   // 🎨 팔레트 단계 + 글씨체·스타일 사전설정을 cats로 전달 → 고객이 단계 플로우 + 그 스타일로 열림
-          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; }
+          if (t._palette && t._paletteSteps && t._paletteSteps.length) {
+            cur.palette = true; cur.paletteSteps = t._paletteSteps; cur.aspect = t.aspect || "9:16"; cur.palTitles = t._palTitles || null; cur.palCaptions = t._palCaptions || null;
+            // 🏷🔔 스티커 이미지·효과음 오디오를 스토리지에 올려 URL로 전달(온라인 고객·게시본에도 보이게)
+            try {
+              const _stk = [];
+              for (let i = 0; i < (t._palStickers || []).length; i++) { const s = t._palStickers[i]; const { result, ...meta } = s; let url = s.url || null; if (!url && result instanceof Blob) { try { toast("🏷 스티커 올리는 중…"); } catch (_) {} url = await uploadMediaSigned(id, "stk" + i + ".png", result, result.type || "image/png", key); } if (url) _stk.push(Object.assign(meta, { url })); }
+              cur.palStickers = _stk.length ? _stk : null;
+              const _sx = [];
+              for (let i = 0; i < (t._palSfx || []).length; i++) { const s = t._palSfx[i]; const { result, ...meta } = s; let url = s.url || null; if (!url && result instanceof Blob) { try { toast("🔔 효과음 올리는 중…"); } catch (_) {} const ext = (result.type && result.type.indexOf("wav") >= 0) ? "wav" : (result.type && result.type.indexOf("mpeg") >= 0) ? "mp3" : "m4a"; url = await uploadMediaSigned(id, "sfx" + i + "." + ext, result, result.type || "audio/mpeg", key); } if (url) _sx.push(Object.assign(meta, { url })); }
+              cur.palSfx = _sx.length ? _sx : null;
+            } catch (e) { console.warn("[easyshorts] 스티커/효과음 게시 업로드", e); try { toast("⚠️ 스티커/효과음 업로드 일부 실패 — 다시 게시해 보세요"); } catch (_) {} }
+          }
+          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; delete cur.palStickers; delete cur.palSfx; }
           m[t.id] = cur; clsMapSave(m);
           await clsServerSave();
         }
