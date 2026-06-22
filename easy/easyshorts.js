@@ -3467,26 +3467,18 @@
   // 📥 관리자 빌더 1열 컨트롤 — '따라할 영상'(원본) 넣기 + 썸네일(컴팩트). 미리보기 폰은 바깥에서 이 아래에 붙임.
   function paletteUploadZone(P) {
     const d = P.demo || {};
-    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
-    const grid = list.length
-      ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-uprm="${i}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
-      : "";
+    const has = Array.isArray(d.media) && d.media.length;   // 썸네일 없앰 — 미리보기 폰이 곧 영상. 하나씩만(교체).
     return `<div class="es-pal-prev-tag es-pal-up-tag">📥 따라할 영상 (시안) — 보고 따라 만들기 <span class="es-pal-tref-hint">(작업 적용 안 됨)</span></div>
-      <button type="button" class="es-pal-up-btn" id="esPalUpBtn">＋ 영상·사진 넣기</button>
-      ${grid}
-      <input type="file" id="esPalUpFile" accept="image/*,video/*" multiple hidden>`;
+      <button type="button" class="es-pal-up-btn" id="esPalUpBtn">${has ? "🔄 영상 바꾸기" : "＋ 영상·사진 넣기"}</button>
+      <input type="file" id="esPalUpFile" accept="image/*,video/*" hidden>`;
   }
-  // 🎞 관리자 빌더 2열 컨트롤 — 영상 뺀 '템플릿 미리보기'에 넣어볼 테스트 영상(원본 d.media 와 별도, d.testMedia)
+  // 🎞 관리자 빌더 2열 컨트롤 — 영상 뺀 '템플릿 미리보기'에 넣어볼 테스트 영상(원본 d.media 와 별도, d.testMedia). 하나씩만(교체).
   function paletteTestZone(P) {
     const d = P.demo || {};
-    const list = Array.isArray(d.testMedia) ? d.testMedia : [];
-    const grid = list.length
-      ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-tprm="${i}" title="이 테스트 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
-      : "";
+    const has = Array.isArray(d.testMedia) && d.testMedia.length;
     return `<div class="es-pal-prev-tag">🎞 내 템플릿 (작업 적용됨) — <b>테스트 영상</b>에 확인</div>
-      <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">＋ 테스트 영상 넣기</button>
-      ${grid}
-      <input type="file" id="esPalTestFile" accept="image/*,video/*" multiple hidden>`;
+      <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">${has ? "🔄 테스트 영상 바꾸기" : "＋ 테스트 영상 넣기"}</button>
+      <input type="file" id="esPalTestFile" accept="image/*,video/*" hidden>`;
   }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
@@ -4048,11 +4040,11 @@
     const nw = $("#esPalNew"); if (nw) nw.addEventListener("click", () => { if (!confirm("지금 작업을 지우고 처음부터 새로 시작할까요?")) return; try { [...(P.demo && P.demo.media || []), ...(P.demo && P.demo.testMedia || [])].forEach((m) => m && m.url && URL.revokeObjectURL(m.url)); } catch (_) {} palDraftClear(); E.palette = null; renderPalette(); });
     // 📥 관리자 빌더 1열 — 내 영상 넣기/빼기 (demo.media 에 반영 → 미리보기·고객화면 동기화)
     { const ub = $("#esPalUpBtn"), uf = $("#esPalUpFile"); if (ub && uf) ub.addEventListener("click", () => uf.click()); }
-    { const uf = $("#esPalUpFile"); if (uf) uf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.media)) P.demo.media = P.demo.media ? [P.demo.media] : []; fs.forEach((f) => { try { P.demo.media.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); try { palDraftSave(); } catch (_) {} renderPalette(); }); }
+    { const uf = $("#esPalUpFile"); if (uf) uf.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; try { (P.demo.media || []).forEach((mm) => mm && mm.url && URL.revokeObjectURL(mm.url)); } catch (_) {} P.demo.media = [{ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }]; E._refVid = null; try { palDraftSave(); } catch (_) {} renderPalette(); }); }   // 하나씩 교체
     $$("#esBody [data-uprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.uprm; const arr = (P.demo && P.demo.media) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); try { palDraftSave(); } catch (_) {} renderPalette(); } }));
     // 🎞 2열 테스트 영상 — d.testMedia(원본과 별도). 저장 안 함(테스트용), 미리보기에만 반영.
     { const tb = $("#esPalTestBtn"), tf = $("#esPalTestFile"); if (tb && tf) tb.addEventListener("click", () => tf.click()); }
-    { const tf = $("#esPalTestFile"); if (tf) tf.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (!fs.length) return; if (!Array.isArray(P.demo.testMedia)) P.demo.testMedia = []; fs.forEach((f) => { try { P.demo.testMedia.push({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }); } catch (_) {} }); renderPalette(); }); }
+    { const tf = $("#esPalTestFile"); if (tf) tf.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; try { (P.demo.testMedia || []).forEach((mm) => mm && mm.url && URL.revokeObjectURL(mm.url)); } catch (_) {} P.demo.testMedia = [{ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" }]; renderPalette(); }); }   // 하나씩 교체
     $$("#esBody [data-tprm]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.tprm; const arr = (P.demo && P.demo.testMedia) || []; if (arr[i]) { try { if (arr[i].url) URL.revokeObjectURL(arr[i].url); } catch (_) {} arr.splice(i, 1); renderPalette(); } }));
     // ✨ 자동세팅 작업대 하위탭(타이틀·자막·음악) 전환
     $$("#esBody [data-setuptab]").forEach((b) => b.addEventListener("click", () => { E._palSetupTab = b.dataset.setuptab; renderPalette(); }));
