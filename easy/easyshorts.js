@@ -1910,8 +1910,10 @@
         const _ts = eStart;
         const tinfo = (eDur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + eDur}초`;
         const tbadge = isSel ? `<span class="es-pal-real-tbadge" style="position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9px;line-height:1;background:#1ed6a5;color:#04231a;padding:2px 6px;border-radius:6px;white-space:nowrap;font-weight:800;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)">${tinfo}</span>` : "";
-        const dataAttr = ro ? "" : (live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`);   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신). ro(2열)는 아무 속성 없음=완전 정적
-        ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
+        const editable = !live && !ro && (kind === E._palEditKind);   // 지금 편집 중인 종류만 드래그/선택 (다른 종류는 보이기만, 안 잡힘)
+        const dataAttr = ro ? "" : (live ? ` data-livekind="${kind}" data-liveidx="${i}"` : (editable ? ` data-kind="${kind}" data-titleidx="${i}"` : ` data-static="1"`));
+        const handles = isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>${kind === "sticker" ? `<span class="es-pal-real-rhandle" data-rhandle="${i}" title="끌어서 회전">⟳</span>` : ""}` : "";
+        ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${handles}</div>`;
       });
     };
     if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
@@ -2173,7 +2175,7 @@
     stage.querySelectorAll(".es-pal-real-titlebox[data-titleidx]").forEach((box) => {
       const idx = +box.getAttribute("data-titleidx");
       const kind = box.getAttribute("data-kind") || "title";
-      const arr = () => (kind === "caption" ? (d.captions || []) : (d.titles || []));
+      const arr = () => palBlocks(kind);   // 🐛 title/caption/sticker 각자 배열(예전엔 sticker도 titles로 새서 좌표가 저장 안 됨)
       const handle = box.querySelector(".es-pal-real-thandle");
       box.addEventListener("pointerdown", (e) => {
         if (handle && e.target === handle) return;
@@ -2210,6 +2212,22 @@
         };
         const up = () => { try { handle.releasePointerCapture(e.pointerId); } catch (_) {} handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); palDraftSave(); };
         handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", up);
+      });
+      const rhandle = box.querySelector(".es-pal-real-rhandle");   // ⟳ 회전 핸들(스티커) — 박스 중심 기준 각도
+      if (rhandle) rhandle.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const r = stage.getBoundingClientRect();
+        const blk = arr()[idx]; if (!blk) return;
+        const cx = r.left + (blk.posX != null ? blk.posX : 50) / 100 * r.width;
+        const cy = r.top + (blk.posY != null ? blk.posY : 50) / 100 * r.height;
+        try { rhandle.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+          let deg = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90;   // 핸들이 정위(위)일 때 0°
+          deg = Math.round(deg); while (deg > 180) deg -= 360; while (deg < -180) deg += 360;
+          blk.rotate = deg; box.style.transform = `translate(-50%,-50%) rotate(${deg}deg)`;
+        };
+        const up = () => { try { rhandle.releasePointerCapture(e.pointerId); } catch (_) {} rhandle.removeEventListener("pointermove", move); rhandle.removeEventListener("pointerup", up); palDraftSave(); renderPalette(); };
+        rhandle.addEventListener("pointermove", move); rhandle.addEventListener("pointerup", up);
       });
     });
   }
