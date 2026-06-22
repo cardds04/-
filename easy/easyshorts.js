@@ -3688,7 +3688,7 @@
       }
       const musicUrl = (d.musicSel && d.musicSel.url) || d.musicUrl || null;
       E.using = {
-        template: { name: (P.name || "").trim() || "이지숏폼", aspect: P.aspect || "9:16", slots, music: musicUrl ? { name: (d.musicSel && d.musicSel.name) || "음악", dur: 0 } : null },
+        template: { name: (P.name || "").trim() || "이지숏폼", aspect: P.aspect || "9:16", slots, music: musicUrl ? { name: (d.musicSel && d.musicSel.name) || "음악", dur: 0 } : null, origAudioVol: (d.origVol != null ? Math.max(0, Math.min(1, d.origVol / 100)) : 1) },   // 🔊 원본 소리 크기(0%면 원음 빠짐 — 안 넣으면 100%로 딸려나옴)
         fills, texts, musicUrl,
         voiceUrl: d.voiceUrl || null, voiceBlob: d.voiceBlob || null, voiceDur: d.voiceDur || 0,
         voiceVol: (d.voiceVol != null ? d.voiceVol / 100 : 1), voiceDuck: 0.35, voiceDelay: (d.voiceUrl ? PAL_VOICE_DELAY : 0),
