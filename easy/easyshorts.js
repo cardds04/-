@@ -3547,10 +3547,10 @@
     }
     const img = cur.result && cur.result.url;
     const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
-    // 📍 어느 컷에 — 영상 없어도 인덱스로 지정(첫/2번/…/마지막). 고객 영상에 그 컷이 없으면 자동으로 안 들어감.
-    const CUTS = [[0, "전체"], [1, "첫 컷"], [2, "2번 컷"], [3, "3번 컷"], [4, "4번 컷"], [5, "5번 컷"], [-1, "마지막 컷"]];
+    // 📍 어느 컷에 — 영상 없어도 숫자로 지정. 전체/마지막 컷 버튼 + 직접 번호 입력. 고객 영상에 그 컷이 없으면 자동으로 안 들어감.
     const curCut = cur.cut || 0;
-    const cutBtns = CUTS.map((c) => `<button type="button" class="es-pal-ted-stroke ${curCut === c[0] ? "sel" : ""}" data-stkrcut="${c[0]}">${c[1]}</button>`).join("");
+    const cutBtns = [[0, "전체"], [-1, "마지막 컷"]].map((c) => `<button type="button" class="es-pal-ted-stroke ${curCut === c[0] ? "sel" : ""}" data-stkrcut="${c[0]}">${c[1]}</button>`).join("");
+    const cutNumVal = curCut > 0 ? curCut : "";
     const ANIM_IN = [["none", "✕ 없음"], ["fade", "페이드"], ["pop", "팝!"], ["zoom", "확대"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["bounce", "통통"]];
     const ANIM_OUT = [["none", "✕ 없음"], ["fade", "페이드"], ["zoom", "축소"], ["pop", "팝!"]];
     const animInBtns = ANIM_IN.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animIn || "none") === a[0] ? "sel" : ""}" data-stkranimin="${a[0]}">${a[1]}</button>`).join("");
@@ -3565,19 +3565,21 @@
           <button type="button" class="es-pal-capm-go" id="esStkrGen">✨ AI로 스티커 만들기</button>
           <div id="esStkrStatus" class="es-pal-narr-status"></div>
         </div>`
-      : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (PNG)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" hidden><div class="es-pal-stkr-pastehint">사진 복사한 뒤 📋 또는 ⌘V / Ctrl+V</div>`;
+      : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (여러 장 OK)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" multiple hidden><div class="es-pal-stkr-pastehint">여러 장 한꺼번에 선택 가능 · 복사 후 📋 / ⌘V / Ctrl+V</div>`;
     return `<div class="es-pal-ted">
       <div class="es-pal-ted-tabs">${tabs}</div>
       <div class="es-pal-stkr-lib" id="esStkrLib"></div>
       <div class="es-pal-stkr-srcbtns"><button type="button" class="es-pal-capm-btn3 ${aiMode ? "on" : ""}" data-stkrsrc="ai">🤖 AI로 만들기</button><button type="button" class="es-pal-capm-btn3 ${!aiMode ? "on" : ""}" data-stkrsrc="up">📤 이미지 올리기</button></div>
       ${srcUI}
-      ${img ? `<div class="es-pal-stkr-preview"><img src="${esc(img)}" alt=""><span>↔ 왼쪽 미리보기에서 끌어 위치를 정해요</span></div>` : `<div class="es-pal-stkr-hint">아직 스티커 이미지가 없어요 — 위에서 만들거나 올리세요</div>`}
+      ${img ? `<div class="es-pal-stkr-preview"><img src="${esc(img)}" alt=""><span>↔ 왼쪽 미리보기에서 끌어 위치를 정해요</span><button type="button" class="es-pal-up-btn es-stkr-savebtn" id="esStkrSave">💾 이 스티커 저장하기</button></div>` : `<div class="es-pal-stkr-hint">아직 스티커 이미지가 없어요 — 위에서 만들거나 올리세요</div>`}
       <div class="es-pal-ted-section">
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">크기 <small>${cur.size || 22}</small></span><input type="range" class="es-pal-ted-size" id="esStkrSize" min="6" max="60" value="${cur.size || 22}"></div>
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${cur.opacity != null ? cur.opacity : 100}</small></span><input type="range" class="es-pal-ted-size" id="esStkrOp" min="20" max="100" value="${cur.opacity != null ? cur.opacity : 100}"></div>
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">🔄 회전 <small>${(cur.rotate || 0)}°</small></span><input type="range" class="es-pal-ted-size" id="esStkrRotate" min="-180" max="180" step="5" value="${cur.rotate || 0}">${(cur.rotate || 0) ? `<button type="button" class="es-pal-ted-stroke es-stkr-rot0" id="esStkrRot0">↩︎ 0°</button>` : ""}</div>
       </div>
-      <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>${curCut ? "그 컷에 나와요 · 영상에 그 컷이 없으면 자동으로 안 들어가요" : "전체 영상 기준 타이밍"}</span></div><div class="es-pal-ted-sw">${cutBtns}</div></div>
+      <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>${curCut ? (curCut === -1 ? "마지막 컷에 나와요" : curCut + "번 컷에 나와요") + " · 그 컷이 없으면 자동으로 안 들어가요" : "전체 영상 기준 타이밍"}</span></div>
+        <div class="es-pal-ted-sw">${cutBtns}</div>
+        <div class="es-stkr-cutnum"><span>또는 컷 번호</span><button type="button" class="es-pal-ted-stroke" data-stkrcutstep="-1">−</button><input type="number" id="esStkrCutNum" min="1" max="50" value="${cutNumVal}" placeholder="예: 2"><span>번 컷</span><button type="button" class="es-pal-ted-stroke" data-stkrcutstep="1">＋</button></div></div>
       <div class="es-pal-ted-section">
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${tStart > 0 ? (curCut ? "그 컷에서 " : "") + tStart + "초 뒤" : (curCut ? "그 컷 시작" : "바로")}</small></span><input type="range" class="es-pal-ted-size" id="esStkrStart" min="0" max="15" step="0.5" value="${tStart}"></div>
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">언제까지</span><div class="es-pal-ted-sw"><button type="button" class="es-pal-ted-stroke ${tDur == null ? "sel" : ""}" id="esStkrDurAll">${curCut ? "♾ 그 컷 끝까지" : "♾ 끝까지"}</button><button type="button" class="es-pal-ted-stroke ${tDur != null ? "sel" : ""}" id="esStkrDurSet">⏱ 시간 정하기</button></div></div>
@@ -4283,7 +4285,25 @@
     { const t = $("#esStkrText"); if (t) t.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (cur) cur.text = t.value; }); }
     { const b = $("#esStkrGen"); if (b) b.addEventListener("click", () => palStickerGen(b)); }
     { const b = $("#esStkrUpBtn"), f = $("#esStkrUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
-    { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.result && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {} cur.result = { url: URL.createObjectURL(file), blob: file }; palDraftSave(); renderPalette(); }); }
+    { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", async (e) => {   // 📤 여러 장 한꺼번에 — 각자 스티커 1장(첫 장은 빈 현재 스티커에) + 전부 라이브러리 저장
+        const files = [...(e.target.files || [])].filter((x) => /^image\//.test(x.type || ""));
+        if (!files.length) return;
+        const arr = palBlocks("sticker"); const cur = palCurBlock("sticker");
+        for (let k = 0; k < files.length; k++) {
+          const file = files[k];
+          let target;
+          if (k === 0 && cur && !(cur.result && cur.result.url)) { target = cur; try { if (cur.result && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {} }
+          else { target = palNewSticker(); arr.push(target); }
+          target.result = { url: URL.createObjectURL(file), blob: file };
+          try { await stkrLibAdd(file); } catch (_) {}
+        }
+        palSetSel(arr.length - 1, "sticker"); try { palDraftSave(); } catch (_) {}
+        renderPalette(); try { palStkrLibRender(); } catch (_) {}
+        try { toast(files.length > 1 ? `🏷 ${files.length}장 올렸어요 — 각자 위치를 정해보세요` : "🏷 스티커를 올렸어요"); } catch (_) {}
+      }); }
+    { const b = $("#esStkrSave"); if (b) b.addEventListener("click", async () => { const cur = palCurBlock("sticker"); const bl = cur && cur.result && cur.result.blob; if (!bl) { try { toast("먼저 스티커를 만들거나 올려주세요"); } catch (_) {} return; } try { await stkrLibAdd(bl); palStkrLibRender(); } catch (_) {} try { toast("💾 라이브러리에 저장했어요 — 다른 템플릿에서도 써요"); } catch (_) {} }); }   // 💾 스티커 저장하기
+    { const n = $("#esStkrCutNum"); if (n) n.addEventListener("change", () => { const cur = palCurBlock("sticker"); if (!cur) return; const v = parseInt(n.value, 10); cur.cut = (v >= 1) ? v : 0; if (cur.cut) cur.start = 0; palDraftSave(); renderPalette(); }); }   // 컷 번호 직접 입력
+    $$("#esBody [data-stkrcutstep]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (!cur) return; const cur0 = cur.cut > 0 ? cur.cut : 0; let v = cur0 + parseInt(b.dataset.stkrcutstep, 10); if (v < 1) v = 1; cur.cut = v; cur.start = 0; palDraftSave(); renderPalette(); }));   // 컷 번호 −/＋
     const _stkrSlide = (id, prop, label) => { const s = $("#" + id); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (!cur) return; cur[prop] = +s.value; clearTimeout(E._stkrT); E._stkrT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); };
     _stkrSlide("esStkrSize", "size"); _stkrSlide("esStkrOp", "opacity"); _stkrSlide("esStkrStart", "start"); _stkrSlide("esStkrDur", "dur"); _stkrSlide("esStkrRotate", "rotate");
     { const b = $("#esStkrRot0"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.rotate = 0; palDraftSave(); renderPalette(); } }); }   // 🔄 회전 0°로
