@@ -1490,6 +1490,7 @@
     { key: "caption", icon: "💬", label: "자막 생성" },
     { key: "cpos",    icon: "🔳", label: "자막 위치" },
     { key: "sticker", icon: "🏷", label: "스티커" },
+    { key: "sfx",     icon: "🔔", label: "효과음" },
     { key: "nstyle",  icon: "🎙", label: "목소리 고르기" },
     { key: "ngen",    icon: "🔊", label: "나레이션 생성" },
     { key: "ncap",    icon: "📝", label: "음성맞춰 자막" },
@@ -1505,7 +1506,7 @@
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
   const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
@@ -1666,6 +1667,11 @@
         case "sticker": {   // 🏷 스티커 — 관리자가 작업대에서 다 정함. 고객은 자동으로 영상에 나옴(수정 X).
           const _sn = (d.stickers || []).filter((s) => s && s.result && s.result.url).length;
           body = `<div class="es-pal-tgen-noref">🏷 스티커는 자동으로 영상에 들어가요${_sn ? ` (${_sn}개)` : ""}<br><span class="es-pal-tref-hint">관리자가 정해둔 위치·시간·효과로 나옵니다</span></div>`;
+          break;
+        }
+        case "sfx": {   // 🔔 효과음 — 관리자가 정함. 고객 영상에 자동으로 들어감(수정 X).
+          const _fn = (d.sfx || []).filter((s) => s && s.result && s.result.url).length;
+          body = `<div class="es-pal-tgen-noref">🔔 효과음은 자동으로 영상에 들어가요${_fn ? ` (${_fn}개)` : ""}<br><span class="es-pal-tref-hint">관리자가 정해둔 컷·볼륨으로 재생됩니다</span></div>`;
           break;
         }
         case "cref": {   // 🗨 자막 참조 — 자막 글씨박스에서 스타일 골라 자막 칸에 적용(타이틀 참조와 동일, 자막 전용 글씨박스)
@@ -1994,6 +2000,7 @@
     const pb = $("#esPalRealPlay"); if (pb) { pb.classList.remove("playing"); pb.textContent = "▶"; }
     palCol2Boxes().forEach((b) => { b.style.opacity = ""; b.style.transition = ""; });   // 멈추면 전부 다시 보임(편집 상태)
     const v = $("#esPalReal video.es-pal-real-media"); try { if (v) v.pause(); } catch (_) {}
+    try { (E._col2Sfx || []).forEach((a) => { try { a.pause(); a.currentTime = 0; } catch (_) {} }); E._col2Sfx = []; } catch (_) {}   // 🔔 효과음 정지
     try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (_) {}
   }
   function palCol2Play() {
@@ -2005,12 +2012,16 @@
     boxes.forEach((b) => { b.style.transition = "opacity .15s ease"; });
     let maxT = 4;
     const info = boxes.map((box) => { const k = box.getAttribute("data-kind") || "title"; const blk = (palBlocks(k) || [])[+box.getAttribute("data-titleidx")] || {}; const s = (blk._effStart != null ? blk._effStart : (blk.start || 0)), d = (blk._effDur !== undefined ? blk._effDur : blk.dur); maxT = Math.max(maxT, s + (d != null ? d : 3) + 0.6); return { box, s, d }; });
+    const _d = (E.palette && E.palette.demo) || {}; const _clips = Array.isArray(_d.testMedia) ? _d.testMedia : [];   // 🔔 효과음 스케줄(테스트영상 컷 기준)
+    const sfxSched = (_d.sfx || []).map((s) => { if (!(s.result && s.result.url)) return null; const r = palStkrCut(s, _clips); if (r.skip) return null; const at = r.start || 0; maxT = Math.max(maxT, at + 1.5); return { at, vol: (s.vol != null ? s.vol : 100) / 100, url: s.result.url, played: false }; }).filter(Boolean);
+    E._col2Sfx = [];
     if (v) { try { v.muted = true; v.currentTime = 0; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (_) {} }
     const t0 = performance.now();
     const tick = () => {
       if (!pb.classList.contains("playing")) return;
       const t = (v && v.readyState >= 2 && !v.paused) ? (v.currentTime || 0) : (performance.now() - t0) / 1000;
       info.forEach((b) => { b.box.style.opacity = (t >= b.s && (b.d == null || t < b.s + b.d)) ? "1" : "0"; });
+      sfxSched.forEach((x) => { if (!x.played && t >= x.at) { x.played = true; try { const a = new Audio(x.url); a.volume = x.vol; E._col2Sfx.push(a); const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} } });   // 🔔 효과음 재생
       if (t >= maxT) { palCol2Stop(); return; }
       E._col2RAF = requestAnimationFrame(tick);
     };
@@ -2269,6 +2280,12 @@
       d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.rotate == null) s.rotate = 0; if (s.cut == null) s.cut = 0; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
       return d.stickers;
     }
+    if (kind === "sfx") {   // 🔔 효과음 = 오디오 클립(컷·나오는때·볼륨). 시각 오버레이 아님(_renderBlocks 안 탐).
+      const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
+      if (!Array.isArray(d.sfx)) { d.sfx = []; if (d.sfxSel == null) d.sfxSel = 0; }
+      d.sfx.forEach((s) => { if (s.cut == null) s.cut = 0; if (s.start == null) s.start = 0; if (s.vol == null) s.vol = 100; });
+      return d.sfx;
+    }
     const cap = kind === "caption", ak = cap ? "captions" : "titles", sk = cap ? "captionSel" : "titleSel";
     const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
     if (!Array.isArray(d[ak])) {
@@ -2284,14 +2301,14 @@
     d[ak].forEach((t) => { if (t.size == null || t.size > 35) t.size = minDef; if (t.bgPadX == null) t.bgPadX = 4; if (t.bgPadY == null) t.bgPadY = 2; if (t.bgStyle === "band") t.bgStyle = "box"; if (t.start == null) t.start = 0; if (t.dur === undefined) t.dur = null; if (t.letterSpacing == null) t.letterSpacing = 0; if (t.lineHeight == null) t.lineHeight = 1.22; if (t.italic == null) t.italic = false; if (t.bold == null) t.bold = false; if (t.shadow === undefined) t.shadow = null; if (t.animIn == null) t.animIn = "none"; if (t.animOut == null) t.animOut = "none"; });
     return d[ak];
   }
-  function _palSelKey(k) { return k === "caption" ? "captionSel" : k === "sticker" ? "stickerSel" : "titleSel"; }
+  function _palSelKey(k) { return k === "caption" ? "captionSel" : k === "sticker" ? "stickerSel" : k === "sfx" ? "sfxSel" : "titleSel"; }
   function palSel(kind) { const k = kind || E._palEditKind || "title"; return E.palette.demo[_palSelKey(k)] || 0; }
   function palSetSel(i, kind) { const k = kind || E._palEditKind || "title"; E.palette.demo[_palSelKey(k)] = i; }
   function palTitles() { return palBlocks(E._palEditKind || "title"); }   // 편집기·핸들러용 = 현재 종류
   function palCurBlock(kind) {
     kind = kind || E._palEditKind || "title";
     const bs = palBlocks(kind); const d = E.palette.demo, sk = _palSelKey(kind);
-    if (!bs.length) { if (kind === "sticker") return null; bs.push(kind === "caption" ? palNewCaptionBlock(null, 0) : palNewTitleBlock(null, 0)); }   // 스티커는 자동생성 X
+    if (!bs.length) { if (kind === "sticker" || kind === "sfx") return null; bs.push(kind === "caption" ? palNewCaptionBlock(null, 0) : palNewTitleBlock(null, 0)); }   // 스티커·효과음은 자동생성 X
     if (d[sk] == null || d[sk] < 0 || d[sk] >= bs.length) d[sk] = bs.length - 1;
     return bs[d[sk]];
   }
@@ -3404,6 +3421,7 @@
             captionSel: d.captionSel || 0,
             captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
+            sfx: (Array.isArray(d.sfx) ? d.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
           },
         };
         await idbSet("palDraft", snap);
@@ -3454,6 +3472,9 @@
       }
       if (Array.isArray(sd.stickers)) {   // 🏷 스티커 복원(이미지 blob → objectURL)
         P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
+      }
+      if (Array.isArray(sd.sfx)) {   // 🔔 효과음 복원(오디오 blob → objectURL)
+        P.demo.sfx = sd.sfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
@@ -3567,6 +3588,7 @@
   }
   // 🏷 스티커 = 이미지 오버레이 블록(AI생성/업로드 + 위치·크기·타이밍·효과). 타이틀 오버레이 렌더 재사용(result.url=스티커 이미지).
   function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, rotate: 0, cut: 0, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
+  function palNewSfx() { return { id: uid(), name: "효과음", result: null, cut: 0, start: 0, vol: 100 }; }   // 🔔 효과음 블록(오디오)
   function paletteStickerEditor(P) {
     const d = P.demo || {};
     const stk = palBlocks("sticker");
@@ -3689,6 +3711,53 @@
       if (btn) { btn.disabled = false; btn.textContent = btn._t || "✨ AI로 스티커 만들기"; }
     }
   }
+  // ──────── 🔔 효과음 작업대 ────────
+  function palSfxStopPreview() { try { const a = E._sfxPrevAudio; if (a) { a.pause(); a.currentTime = 0; } } catch (_) {} E._sfxPrevAudio = null; }
+  function palSfxPlay(url, vol) { if (!url) return; palSfxStopPreview(); try { const a = new Audio(url); a.volume = (vol != null ? vol : 100) / 100; E._sfxPrevAudio = a; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }
+  async function palSfxAddFromLib(id, name) {
+    let blob = null; try { blob = await sfxLibGet(id); } catch (_) {}
+    if (!(blob instanceof Blob)) return;
+    const arr = palBlocks("sfx"); const s = palNewSfx(); s.result = { url: URL.createObjectURL(blob), blob }; s.name = name || "효과음";
+    arr.push(s); palSetSel(arr.length - 1, "sfx"); try { palDraftSave(); } catch (_) {}
+    renderPalette(); try { toast("🔔 효과음을 추가했어요 — 컷·볼륨을 정해보세요"); } catch (_) {}
+  }
+  async function palSfxLibRender() {
+    const box = document.querySelector("#esSfxLib"); if (!box) return;
+    let lib = []; try { lib = await sfxLibList(); } catch (_) {}
+    if (!lib.length) { box.innerHTML = `<div class="es-pal-stkr-lib-empty">📚 저장된 효과음이 없어요 — 올리면 여기 모여서 다른 템플릿에서도 써요</div>`; return; }
+    box.innerHTML = `<div class="es-pal-stkr-lib-h">📚 저장된 효과음 <small>탭해서 추가</small></div>` + lib.map((it) => `<div class="es-pal-sfx-libitem" data-sfxlib="${it.id}" data-sfxname="${esc(it.name || "효과음")}"><span class="es-pal-sfx-libname">🔔 ${esc(it.name || "효과음")}</span><button type="button" class="es-pal-sfx-libplay" data-sfxlibplay="${it.id}" title="들어보기">▶</button><button type="button" class="es-pal-stkr-lib-x es-pal-sfx-libx" data-sfxlibdel="${it.id}" title="라이브러리에서 삭제">×</button></div>`).join("");
+    box.querySelectorAll("[data-sfxlib]").forEach((el) => el.addEventListener("click", (e) => { if (e.target.closest("[data-sfxlibdel]") || e.target.closest("[data-sfxlibplay]")) return; palSfxAddFromLib(el.getAttribute("data-sfxlib"), el.getAttribute("data-sfxname")); }));
+    box.querySelectorAll("[data-sfxlibplay]").forEach((b) => b.addEventListener("click", async (e) => { e.stopPropagation(); try { const bl = await sfxLibGet(b.getAttribute("data-sfxlibplay")); if (bl instanceof Blob) palSfxPlay(URL.createObjectURL(bl), 100); } catch (_) {} }));
+    box.querySelectorAll("[data-sfxlibdel]").forEach((b) => b.addEventListener("click", async (e) => { e.stopPropagation(); if (!(window.confirm && window.confirm("이 효과음을 라이브러리에서 지울까요?"))) return; try { await sfxLibDel(b.getAttribute("data-sfxlibdel")); } catch (_) {} palSfxLibRender(); }));
+  }
+  function paletteSfxEditor(P) {
+    const d = P.demo || {};
+    const sfx = palBlocks("sfx");
+    const sel = palSel("sfx");
+    const cur = sfx[sel] || null;
+    const tabs = sfx.map((s, i) => `<button type="button" class="es-pal-ted-tab ${i === sel ? "sel" : ""}" data-sfxtab="${i}">🔔${i + 1}<span class="es-pal-ted-tabx" data-sfxdel="${i}" title="삭제">×</span></button>`).join("") + `<button type="button" class="es-pal-ted-tabadd" id="esSfxAdd">＋ 효과음</button>`;
+    if (!cur) {
+      return `<div class="es-pal-ted"><div class="es-pal-ted-tabs">${tabs}</div><div class="es-pal-stkr-lib" id="esSfxLib"></div><div class="es-pal-stkr-empty"><div class="es-pal-stkr-empty-ic">🔔</div><div>영상에 넣을 효과음을 추가해요<br>오디오 파일을 올리면 돼요</div><button type="button" class="es-pal-up-btn" id="esSfxAdd2">＋ 효과음 추가</button></div></div>`;
+    }
+    const hasAudio = cur.result && cur.result.url;
+    const curCut = cur.cut || 0;
+    const cutBtns = [[0, "전체"], [-1, "마지막 컷"]].map((c) => `<button type="button" class="es-pal-ted-stroke ${curCut === c[0] ? "sel" : ""}" data-sfxcut="${c[0]}">${c[1]}</button>`).join("");
+    const cutNumVal = curCut > 0 ? curCut : "";
+    const tStart = cur.start || 0;
+    return `<div class="es-pal-ted">
+      <div class="es-pal-ted-tabs">${tabs}</div>
+      <div class="es-pal-stkr-lib" id="esSfxLib"></div>
+      <button type="button" class="es-pal-up-btn" id="esSfxUpBtn">📤 효과음 올리기 (여러 개 OK)</button>
+      <input type="file" id="esSfxUpFile" accept="audio/*" multiple hidden>
+      ${hasAudio ? `<div class="es-pal-sfx-now"><span class="es-pal-sfx-name">🔔 ${esc(cur.name || "효과음")}</span><button type="button" class="es-pal-sfx-play" id="esSfxPreview">▶ 들어보기</button><button type="button" class="es-pal-up-btn es-stkr-savebtn" id="esSfxSave">💾 저장</button></div>` : `<div class="es-pal-stkr-hint">아직 효과음이 없어요 — 위에서 올리세요</div>`}
+      <div class="es-pal-ted-section"><div class="es-pal-ted-row"><span class="es-pal-ted-rl">🔊 볼륨 <small>${cur.vol != null ? cur.vol : 100}</small></span><input type="range" class="es-pal-ted-size" id="esSfxVol" min="0" max="100" value="${cur.vol != null ? cur.vol : 100}"></div></div>
+      <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>${curCut ? (curCut === -1 ? "마지막 컷에서" : curCut + "번 컷에서") + " 재생 · 그 컷이 없으면 안 들어가요" : "전체 영상 기준"}</span></div>
+        <div class="es-pal-ted-sw">${cutBtns}</div>
+        <div class="es-stkr-cutnum"><span>또는 컷 번호</span><button type="button" class="es-pal-ted-stroke" data-sfxcutstep="-1">−</button><input type="number" id="esSfxCutNum" min="1" max="50" value="${cutNumVal}" placeholder="예: 2"><span>번 컷</span><button type="button" class="es-pal-ted-stroke" data-sfxcutstep="1">＋</button></div></div>
+      <div class="es-pal-ted-section"><div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${tStart > 0 ? (curCut ? "그 컷에서 " : "") + tStart + "초 뒤" : (curCut ? "그 컷 시작" : "바로")}</small></span><input type="range" class="es-pal-ted-size" id="esSfxStart" min="0" max="15" step="0.5" value="${tStart}"></div></div>
+      <div class="es-pal-ted-section es-pal-ted-savebox"><div class="es-pal-ted-sec-h"><b>✅ 적용</b><span>적용하면 고객 영상에 자동으로 들어가요</span></div><button type="button" class="es-pal-ted-save ${hasAudio ? "" : "off"}" id="esSfxApply">✅ 이 효과음을 영상에 적용</button></div>
+    </div>`;
+  }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
     if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
@@ -3738,8 +3807,9 @@
     const _isTitleStep = !isPrev && (_curFn === "tref" || _curFn === "tgen" || _curFn === "tpos");
     const _isCaptionStep = !isPrev && (_curFn === "cref" || _curFn === "caption");
     const _isStickerStep = !isPrev && _curFn === "sticker";
-    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep;
-    E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : (_isCaptionStep ? "caption" : "title");
+    const _isSfxStep = !isPrev && _curFn === "sfx";
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep;
+    E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : _isSfxStep ? "sfx" : (_isCaptionStep ? "caption" : "title");
     // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
     if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
     // 고객화면 번호 = 그 기능의 '단계 순서'(1-based). 미리보기 중이고 아직 단계에 없으면 0(•).
@@ -3797,6 +3867,8 @@
       ? `<div class="es-pal-zone es-pal-zone-editor es-pal-zone-editor-setup"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-setup-tabs"><button type="button" class="es-pal-setup-tab ${_setupTab === "title" ? "on" : ""}" data-setuptab="title">🔤 타이틀</button><button type="button" class="es-pal-setup-tab ${_setupTab === "caption" ? "on" : ""}" data-setuptab="caption">💬 자막</button><button type="button" class="es-pal-setup-tab ${_setupTab === "music" ? "on" : ""}" data-setuptab="music">🎵 음악</button></div><div class="es-pal-prev-tag es-pal-setup-lb">${_setupTabLb}</div>${_setupTab === "music" ? `<div class="es-pal-setup-music">${palMusicPicker(P)}</div>` : `${_setupGallery}${paletteTitleEditor(P)}`}</div></div>`
       : _isStickerStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🏷 스티커 작업대 — 만들고 위치·시간·효과 정한 뒤 적용</div>${paletteStickerEditor(P)}</div></div>`
+      : _isSfxStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🔔 효과음 작업대 — 올리고 컷·볼륨 정한 뒤 적용</div>${paletteSfxEditor(P)}</div></div>`
       : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
@@ -4326,6 +4398,37 @@
     $$("#esBody [data-stkranimout]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animOut = b.dataset.stkranimout; palDraftSave(); renderPalette(); } }));
     { const b = $("#esStkrApply"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (!cur || !(cur.result && cur.result.url)) { try { toast("먼저 스티커를 만들거나 올려주세요"); } catch (_) {} return; } try { palDraftSave(); } catch (_) {} try { toast("✅ 스티커를 영상에 적용했어요 — 고객 영상에 자동으로 나와요"); } catch (_) {} }); }
     if (document.querySelector("#esStkrLib")) { try { palStkrLibRender(); } catch (_) {} }   // 📚 저장된 스티커 목록 채우기
+    // 🔔 효과음 작업대 핸들러
+    { const _add = () => { const arr = palBlocks("sfx"); arr.push(palNewSfx()); palSetSel(arr.length - 1, "sfx"); renderPalette(); };
+      const a1 = $("#esSfxAdd"); if (a1) a1.addEventListener("click", _add); const a2 = $("#esSfxAdd2"); if (a2) a2.addEventListener("click", _add); }
+    $$("#esBody [data-sfxtab]").forEach((b) => b.addEventListener("click", () => { palSetSel(+b.dataset.sfxtab, "sfx"); renderPalette(); }));
+    $$("#esBody [data-sfxdel]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const arr = palBlocks("sfx"); const i = +b.dataset.sfxdel; if (arr[i]) { try { if (arr[i].result && String(arr[i].result.url).startsWith("blob:")) URL.revokeObjectURL(arr[i].result.url); } catch (_) {} arr.splice(i, 1); palSetSel(Math.max(0, i - 1), "sfx"); palDraftSave(); renderPalette(); } }));
+    { const b = $("#esSfxUpBtn"), f = $("#esSfxUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
+    { const f = $("#esSfxUpFile"); if (f) f.addEventListener("change", async (e) => {   // 📤 여러 개 한꺼번에 — 각자 효과음 1개(첫 개는 빈 현재) + 전부 라이브러리
+        const files = [...(e.target.files || [])].filter((x) => /^audio\//.test(x.type || ""));
+        if (!files.length) return;
+        const arr = palBlocks("sfx"); const cur = palCurBlock("sfx");
+        for (let k = 0; k < files.length; k++) {
+          const file = files[k]; const nm = String(file.name || "효과음").replace(/\.[a-z0-9]+$/i, "").slice(0, 30);
+          let target;
+          if (k === 0 && cur && !(cur.result && cur.result.url)) target = cur;
+          else { target = palNewSfx(); arr.push(target); }
+          target.result = { url: URL.createObjectURL(file), blob: file }; target.name = nm;
+          try { await sfxLibAdd(file); } catch (_) {}
+        }
+        palSetSel(arr.length - 1, "sfx"); try { palDraftSave(); } catch (_) {}
+        renderPalette(); try { palSfxLibRender(); } catch (_) {}
+        try { toast(files.length > 1 ? `🔔 ${files.length}개 올렸어요` : "🔔 효과음을 올렸어요"); } catch (_) {}
+      }); }
+    { const b = $("#esSfxPreview"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sfx"); if (cur && cur.result) palSfxPlay(cur.result.url, cur.vol); }); }
+    { const b = $("#esSfxSave"); if (b) b.addEventListener("click", async () => { const cur = palCurBlock("sfx"); const bl = cur && cur.result && cur.result.blob; if (!bl) { try { toast("먼저 효과음을 올려주세요"); } catch (_) {} return; } try { await sfxLibAdd(bl); palSfxLibRender(); } catch (_) {} try { toast("💾 라이브러리에 저장했어요"); } catch (_) {} }); }
+    { const s = $("#esSfxVol"); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sfx"); if (!cur) return; cur.vol = +s.value; clearTimeout(E._sfxVolT); E._sfxVolT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); }
+    { const s = $("#esSfxStart"); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sfx"); if (!cur) return; cur.start = +s.value; clearTimeout(E._sfxStartT); E._sfxStartT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); }
+    $$("#esBody [data-sfxcut]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sfx"); if (cur) { cur.cut = parseInt(b.dataset.sfxcut, 10) || 0; if (cur.cut) cur.start = 0; palDraftSave(); renderPalette(); } }));
+    { const n = $("#esSfxCutNum"); if (n) n.addEventListener("change", () => { const cur = palCurBlock("sfx"); if (!cur) return; const v = parseInt(n.value, 10); cur.cut = (v >= 1) ? v : 0; if (cur.cut) cur.start = 0; palDraftSave(); renderPalette(); }); }
+    $$("#esBody [data-sfxcutstep]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sfx"); if (!cur) return; const c0 = cur.cut > 0 ? cur.cut : 0; let v = c0 + parseInt(b.dataset.sfxcutstep, 10); if (v < 1) v = 1; cur.cut = v; cur.start = 0; palDraftSave(); renderPalette(); }));
+    { const b = $("#esSfxApply"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sfx"); if (!cur || !(cur.result && cur.result.url)) { try { toast("먼저 효과음을 올려주세요"); } catch (_) {} return; } try { palDraftSave(); } catch (_) {} try { toast("✅ 효과음을 영상에 적용했어요 — 고객 영상에 자동으로 들어가요"); } catch (_) {} }); }
+    if (document.querySelector("#esSfxLib")) { try { palSfxLibRender(); } catch (_) {} }
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
@@ -4390,6 +4493,7 @@
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
     if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
+    if (Array.isArray(t._palSfx) && t._palSfx.length) { P.demo.sfx = t._palSfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.sfxSel = 0; }   // 🔔 효과음 복원
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -4407,6 +4511,7 @@
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
       _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
+      _palSfx: (Array.isArray(P.demo && P.demo.sfx) ? P.demo.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
     };
   }
   function savePalette() {
@@ -8686,6 +8791,26 @@
       const keep = a.slice(0, STKR_LIB_MAX), drop = a.slice(STKR_LIB_MAX);
       for (const d of drop) { try { await idbDel("stkrLib:" + d.id); } catch (_) {} }
       await idbSet("stkrLib", keep);
+      return id;
+    } catch (_) { return null; }
+  }
+  // 🔔 효과음 라이브러리 — 올린 오디오를 IDB에 보관(템플릿 간 재사용·삭제). stkrLib 패턴 동일.
+  const SFX_LIB_MAX = 80;
+  async function sfxLibList() { try { const a = await idbGet("sfxLib"); return Array.isArray(a) ? a.slice().sort((x, y) => (y.ts || 0) - (x.ts || 0)) : []; } catch (_) { return []; } }
+  async function sfxLibGet(id) { try { return await idbGet("sfxLib:" + id); } catch (_) { return null; } }
+  async function sfxLibDel(id) { try { await idbDel("sfxLib:" + id); let a = (await idbGet("sfxLib")) || []; if (!Array.isArray(a)) a = []; await idbSet("sfxLib", a.filter((e) => e.id !== id)); } catch (_) {} }
+  async function sfxLibAdd(file) {
+    if (!(file instanceof Blob) || !/^audio\//.test(file.type || "")) return null;
+    try {
+      let a = (await idbGet("sfxLib")) || []; if (!Array.isArray(a)) a = [];
+      const sig = (file.size || 0) + ":" + (file.type || "") + ":" + String(file.name || "").slice(0, 40);
+      const ex = a.find((e) => e.sig === sig); let id;
+      if (ex) { ex.ts = Date.now(); id = ex.id; }
+      else { id = "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); await idbSet("sfxLib:" + id, file); a.unshift({ id, ts: Date.now(), name: String(file.name || "효과음").slice(0, 40), type: file.type || "audio/mpeg", size: file.size || 0, sig }); }
+      a.sort((x, y) => (y.ts || 0) - (x.ts || 0));
+      const keep = a.slice(0, SFX_LIB_MAX), drop = a.slice(SFX_LIB_MAX);
+      for (const dd of drop) { try { await idbDel("sfxLib:" + dd.id); } catch (_) {} }
+      await idbSet("sfxLib", keep);
       return id;
     } catch (_) { return null; }
   }
