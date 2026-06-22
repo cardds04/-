@@ -3024,6 +3024,11 @@
     if (!E.palette) return;
     // ◀ 컷 타임라인은 항상 0초(왼쪽)부터 보이게 — 재생선 따라가다 멈춰도, 단계 들어와도 처음으로(재생 중일 때만 유지)
     $$(".es-pal-ct-scroll").forEach((sc) => { if (!(E._palPlay && E._palPlay.playing)) sc.scrollLeft = 0; });
+    // 🎯 타임라인을 드래그(가로 스크롤)하면 안내선이 왼쪽 끝에 따라오며 미리보기가 그 지점으로 스크럽 — 화면 보면서 편집
+    $$(".es-pal-ct-scroll").forEach((sc) => sc.addEventListener("scroll", () => {
+      const c = E._palPlay; if (!c || c.playing) return;
+      const t = Math.max(0, Math.min(c.maxT, sc.scrollLeft / c.PPS)); c.base = t; c.render(t);
+    }, { passive: true }));
     // ▶ 타임라인 클릭 = 재생선을 그 위치로(seek) — 클립 선택 재렌더보다 먼저(capture). 손잡이·삭제·추가·재생선꽁다리는 제외.
     $$(".es-pal-ct-inner").forEach((inner) => inner.addEventListener("click", (e) => {
       if (e.target.closest(".es-pal-ct-h, [data-ctcut], [data-ctaddclip], .es-pal-ct-playgrab")) return;
