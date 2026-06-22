@@ -3944,12 +3944,14 @@
   function palFaceSwapEditor(P) {
     const d = P.demo || {}; const fs = d.faceSwap || (d.faceSwap = {});
     const faceSrc = fs.faceUrl || (fs.faceBlob instanceof Blob ? URL.createObjectURL(fs.faceBlob) : "");
-    const mode = fs.mode === "head" ? "head" : "face";
+    const mode = (fs.mode === "head" || fs.mode === "kling") ? fs.mode : "face";
     return `<div class="es-pal-narr-lb">🪄 바꿀 얼굴 만들기 <span class="es-pal-tref-hint">(AI 생성 · WaveSpeed 영상 얼굴교체)</span></div>
       <div class="es-pal-face-mode"><span class="es-pal-face-mode-lb">바꾸는 범위</span>
-        <button type="button" class="es-pal-face-modebtn ${mode === "face" ? "on" : ""}" data-facemode="face">😊 얼굴만<small>머리·안경 유지</small></button>
-        <button type="button" class="es-pal-face-modebtn ${mode === "head" ? "on" : ""}" data-facemode="head">🧑 머리까지<small>머리·안경도 교체</small></button>
+        <button type="button" class="es-pal-face-modebtn ${mode === "face" ? "on" : ""}" data-facemode="face">😊 얼굴만<small>머리·안경 유지 · ~210원</small></button>
+        <button type="button" class="es-pal-face-modebtn ${mode === "head" ? "on" : ""}" data-facemode="head">🧑 머리까지<small>머리·안경 교체 720p · ~1,660원</small></button>
+        <button type="button" class="es-pal-face-modebtn ${mode === "kling" ? "on" : ""}" data-facemode="kling">🎬 클링<small>인물 전체생성·배경도 바뀜 · ~1,450원</small></button>
       </div>
+      ${mode === "kling" ? `<div class="es-pal-narr-hint2" style="color:#e0b3ff">🎬 클링은 인물을 통째로 새로 그려요 — 얼굴·머리 가장 자연스럽지만 <b>가게·배경도 AI로 바뀝니다</b>. 비교용으로 써보세요.</div>` : ""}
       <textarea id="esPalFacePrompt" class="es-pal-face-prompt" placeholder="원하는 얼굴을 설명하세요 (예: 30대 한국 남성, 짧은 머리, 친근한 미소, 정면 사진)">${esc(fs.prompt || "")}</textarea>
       <div class="es-pal-face-row">
         <button type="button" class="es-pal-stkr-genbtn" id="esPalFaceGen">✨ AI 얼굴 만들기</button>
@@ -4006,7 +4008,7 @@
         const vblob = m.blob || await (await fetch(m.url)).blob();
         const vurl = await uploadMediaSigned(tid, `in${i}.mp4`, vblob, vblob.type || "video/mp4", key);
         setS(`영상 ${done + 1}/${vids.length} 얼굴 바꾸는 중… (1~3분)`);
-        const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0, mode: fs.mode === "head" ? "head" : "face" }) });
+        const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0, mode: (fs.mode === "head" || fs.mode === "kling") ? fs.mode : "face", resolution: "720p" }) });
         const cj = await cr.json().catch(() => ({}));
         if (!cr.ok || !cj.id) throw new Error((cj && (cj.error || cj.message)) || "교체 요청 실패");
         // 폴링 (최대 ~5분)
@@ -4485,7 +4487,7 @@
     { const fa = $("#esPalFaceApply"); if (fa) fa.addEventListener("click", () => palFaceSwapApply(fa)); }   // 🪄 얼굴 바꾸기 실행
     { const fu = $("#esPalFaceUpFile"); if (fu) fu.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); try { if (fs.faceUrl && fs.faceUrl.startsWith("blob:")) URL.revokeObjectURL(fs.faceUrl); } catch (_) {} fs.faceBlob = f; fs.faceUrl = URL.createObjectURL(f); fs.faceRemoteUrl = null; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }); }   // 🪄 얼굴 사진 업로드
     { const fub = $("#esPalFaceUpBtn"), fuf = $("#esPalFaceUpFile"); if (fub && fuf) fub.addEventListener("click", () => fuf.click()); }
-    $$("[data-facemode]").forEach((b) => b.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); fs.mode = b.dataset.facemode === "head" ? "head" : "face"; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }));   // 🪄 얼굴만 / 머리까지
+    $$("[data-facemode]").forEach((b) => b.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); const m = b.dataset.facemode; fs.mode = (m === "head" || m === "kling") ? m : "face"; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }));   // 🪄 얼굴만 / 머리까지 / 클링
     { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 나레이션으로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } else { try { toast("먼저 위에서 목소리를 골라주세요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이 나레이션으로 지정' — 고른 목소리 확정
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
