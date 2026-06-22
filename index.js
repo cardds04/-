@@ -9331,35 +9331,44 @@ ${folderBtn}
           const [y, m] = key.split("-");
           return `${y}년 ${Number(m)}월`;
         };
-        const avgPerDay = (m) => (m.days ? (m.total / m.days).toFixed(1) : "0");
+        const monthLabelShort = (key) => `${Number(key.slice(5, 7))}월`;
+        const dayLabelShort = (key) => String(Number(key.slice(8, 10)));
 
-        const monthRows = [...monthMap.entries()]
-          .sort((a, b) => b[0].localeCompare(a[0]))
-          .slice(0, 12)
-          .map(
-            ([key, m]) => `
-              <tr>
-                <td>${escapeHtml(monthLabel(key))}${key === monthKeyNow ? ' <span style="color:#1a73e8;">(이번 달)</span>' : ""}</td>
-                <td style="font-weight: 700;">${m.total}건</td>
-                <td>${avgPerDay(m)}건</td>
-                <td>${m.days}일</td>
-              </tr>
-            `
-          )
-          .join("");
+        // 가로형 막대그래프 한 줄 — 컬럼마다 [라벨(위) / 막대 / 건수(아래)]. 막대 높이 ∝ 건수.
+        const renderBarStrip = (entries, labelFn, isHot) => {
+          if (!entries.length) {
+            return '<div style="color:#888;font-size:13px;padding:10px 2px;">표시할 데이터가 없습니다.</div>';
+          }
+          const maxCount = Math.max(1, ...entries.map(([, c]) => c));
+          const cols = entries
+            .map(([key, count]) => {
+              const barH = Math.max(4, Math.round((count / maxCount) * 80));
+              const hot = isHot && isHot(key);
+              const color = hot ? "#d93025" : "#3b82f6";
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:42px;">
+                  <div style="font-size:11px;color:${hot ? "#d93025" : "#555"};${hot ? "font-weight:700;" : ""}margin-bottom:4px;white-space:nowrap;">${escapeHtml(labelFn(key))}</div>
+                  <div style="display:flex;align-items:flex-end;height:84px;">
+                    <div title="${count}건" style="width:20px;height:${barH}px;background:${color};border-radius:5px 5px 0 0;"></div>
+                  </div>
+                  <div style="font-size:12px;font-weight:700;color:#1f3a6b;margin-top:4px;">${count}</div>
+                </div>`;
+            })
+            .join("");
+          return `<div style="display:flex;gap:8px;overflow-x:auto;padding:8px 2px 4px;">${cols}</div>`;
+        };
 
-        const dayRows = [...dayMap.entries()]
-          .filter(([dayKey]) => dayKey.slice(0, 7) === monthKeyNow)
+        const monthEntries = [...monthMap.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(
-            ([dayKey, count]) => `
-              <tr>
-                <td>${escapeHtml(dayKey)}${dayKey === todayKey ? ' <span style="color:#1a73e8;">(오늘)</span>' : ""}</td>
-                <td style="font-weight: 700;">${count}건</td>
-              </tr>
-            `
-          )
-          .join("");
+          .slice(-12)
+          .map(([key, m]) => [key, m.total]);
+        const dayEntries = [...dayMap.entries()]
+          .filter(([dayKey]) => dayKey.slice(0, 7) === monthKeyNow)
+          .sort((a, b) => a[0].localeCompare(b[0]));
+
+        const summaryStyle =
+          "cursor:pointer;font-weight:700;font-size:0.95rem;color:#1f3a6b;padding:8px 2px;user-select:none;list-style-position:inside;";
+        const detailsStyle = "border:1px solid var(--line);border-radius:10px;padding:2px 12px;margin-bottom:10px;";
 
         customerStatsBoxEl.innerHTML = `
           <div class="customer-stats-head">
@@ -9368,20 +9377,18 @@ ${folderBtn}
             <span>오늘 예약: ${todayCount}건</span>
             <span>이번 달 예약: ${monthNow.total}건</span>
           </div>
-          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">달력과 동일 — 촬영일 기준 실제 예약 건수(취소 제외). 일평균 = 예약 있는 날 기준.</div>
+          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">달력과 동일 — 촬영일 기준 실제 예약 건수(취소 제외). 제목을 누르면 펼치기/접기.</div>
           ${
             hasData
               ? `
-            <div style="font-weight: 700; margin: 6px 0 4px;">월별 예약 통계</div>
-            <table class="payment-table" style="margin-top: 0;">
-              <thead><tr><th>월</th><th>예약 건수</th><th>일평균</th><th>예약일 수</th></tr></thead>
-              <tbody>${monthRows}</tbody>
-            </table>
-            <div style="font-weight: 700; margin: 16px 0 4px;">일별 예약 통계 (${escapeHtml(monthLabel(monthKeyNow))})</div>
-            <table class="payment-table" style="margin-top: 0;">
-              <thead><tr><th>일자</th><th>예약 건수</th></tr></thead>
-              <tbody>${dayRows || '<tr><td colspan="2">이번 달 예약이 없습니다.</td></tr>'}</tbody>
-            </table>
+            <details open style="${detailsStyle}">
+              <summary style="${summaryStyle}">📊 월별 예약 통계</summary>
+              ${renderBarStrip(monthEntries, monthLabelShort, (k) => k === monthKeyNow)}
+            </details>
+            <details style="${detailsStyle}">
+              <summary style="${summaryStyle}">📅 일별 예약 통계 (${escapeHtml(monthLabel(monthKeyNow))}) · 펼쳐보기</summary>
+              ${renderBarStrip(dayEntries, dayLabelShort, (k) => k === todayKey)}
+            </details>
           `
               : '<div>아직 예약 데이터가 없습니다.</div>'
           }
