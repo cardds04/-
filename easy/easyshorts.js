@@ -1684,8 +1684,7 @@
     const editing = !!step && P._copyEdit === step.id;
     const T = palCopyGet(step, fnKey, "title"), N = palCopyGet(step, fnKey, "note");
     const br = (s) => esc(s).replace(/\n/g, "<br>");   // 저장된 줄바꿈(엔터)을 화면에 그대로
-    const _custLike = (E._palCustomerMode || E._palTestMode);
-    const _moveToBottom = _custLike && !editing && !!palCustGuide(fnKey, P, step);   // 고객 화면 = 제목을 하단 안내바로 옮김(중복 방지)
+    const _moveToBottom = !editing && !!palCustGuide(fnKey, P, step);   // 고객 화면 = 제목을 하단 안내바로 옮김(생성기 col4도 실제 고객화면과 동일하게)
     const _beatMin = (fnKey === "cutbeat") && !editing;   // 🥁 AI리듬 단계 = 제목·설명 숨겨 최소화(타임라인+드롭다운만, 요청)
     const head = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-t" id="esCopyTitle" rows="2" placeholder="제목 (엔터=줄바꿈)">${esc(T)}</textarea>`
@@ -3992,7 +3991,7 @@
     const _sheetUp = _showsLive && E._palCustSheetUp === showKey;
     const custGrip = _showsLive ? `<button type="button" class="es-pal-cust-grip" id="esCustGrip" aria-label="작업창 펼치기·접기"><span class="es-pal-cust-grip-bar"></span></button>` : "";
     const canvasHtml = showFn
-      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${(!isPrev && (E._palCustomerMode || E._palTestMode) && palCustGuide(showKey, P, P.preview ? null : sel)) ? `<div class="es-pal-cust-guide">${esc(palCustGuide(showKey, P, P.preview ? null : sel))}</div>` : ""}${custNav}</div></div></div>`
+      ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${(!isPrev && palCustGuide(showKey, P, P.preview ? null : sel)) ? `<div class="es-pal-cust-guide">${esc(palCustGuide(showKey, P, P.preview ? null : sel))}</div>` : ""}${custNav}</div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
     // 🖼 1열 = '시안'(따라할 원본 영상만 — 작업한 타이틀/자막 적용 안 함, 읽기전용). 보고 따라 만들기용.
