@@ -2445,8 +2445,8 @@
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${startLabel}</small></span><input type="range" class="es-pal-ted-size" id="esTedStart" min="0" max="8" step="0.5" value="${tStart}"></div>
       </div>`;
     const secSave = `<div class="es-pal-ted-section es-pal-ted-savebox">
-        <div class="es-pal-ted-sec-h"><b>📌 보관</b><span>저장하면 고객 화면에서 골라 쓸 수 있어요</span></div>
-        <button type="button" class="es-pal-ted-save ${hasTitle ? "" : "off"}" id="esTedSaveRef">📌 이 칸을 내 ${cap ? "자막" : "타이틀"} 글씨박스에 저장</button>
+        <div class="es-pal-ted-sec-h"><b>✅ 이 템플릿에 적용</b><span>저장하면 고객이 글자만 바꿔도 이 글씨체·스타일로 나와요</span></div>
+        <button type="button" class="es-pal-ted-save ${hasTitle ? "" : "off"}" id="esTedSaveRef">✅ 이 ${cap ? "자막" : "타이틀"} 글씨·스타일을 이 템플릿에 적용</button>
       </div>`;
     const SEC = { all: `${secText}${secStyle}`, time: secTime };
     return `<div class="es-pal-ted">
@@ -2495,6 +2495,14 @@
   // 현재(선택된) 칸을 실제 폰트로 렌더
   async function palTitleRender() { await palTitleRenderBlock(palCurTitle()); }
   function palSyncRefStyle() {}   // (다중 칸 전환 — 참조 자동동기화 중단, 저장은 명시적으로)
+  // ✅ 이 템플릿에 적용 — 현재 글씨체·스타일이 템플릿 사전설정으로 저장되게(paletteToTemplate가 _palTitles/_palCaptions 로 저장 → 로드시 복원). 버튼은 확인+초안저장.
+  function palApplyTitleStyleToTemplate() {
+    const cur = palCurTitle();
+    if (!cur || !(cur.text || "").trim()) { try { toast("먼저 이 칸 문구를 입력해 주세요"); } catch (_) {} return; }
+    const cap = E._palEditKind === "caption";
+    try { palDraftSave(); } catch (_) {}
+    try { toast("✅ 이 " + (cap ? "자막" : "타이틀") + " 글씨·스타일을 이 템플릿에 적용했어요 — 💾 저장하면 고객이 글자만 바꿔도 이 스타일로 나와요"); } catch (_) {}
+  }
   // 현재 칸을 '타이틀 참조'(가운데)에 맨 앞으로 추가 — 글씨체·색·배경·위치·크기 담아서
   async function palSaveTitleAsRef() {
     const P = E.palette; if (!P) return; const cur = palCurTitle();
@@ -3398,6 +3406,7 @@
       E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, demo: { media: [], title: "", caption: "" } };
       E._palTestMode = true; E.mode2 = "easy";
       setView("palette");
+      try { palApplySavedStyles(E.palette, t); } catch (_) {}   // 🎨 저장된 글씨·스타일 복원(고객 테스트도 그 스타일로)
     } else {   // 🎬 기본/디테일 템플릿 → 실제 고객 이지숏폼 편집기(renderEasy) 그대로 실행
       try { toast("🧪 테스트 — 고객이 보는 이지숏폼 화면으로 실행해요"); } catch (_) {}
       startFromTemplate(tid, "easy", { test: true });
@@ -3427,6 +3436,7 @@
     const _ec = clsMap()[tid] || {};   // 🗂 기존 분류 불러와 분류 칸에 표시
     E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, cls: (_ec.goal ? { goal: _ec.goal, format: _ec.format } : null), demo: { media: [], title: "", caption: "" } };
     E.mode2 = "easy"; setView("palette");
+    try { palApplySavedStyles(E.palette, t); } catch (_) {}   // 🎨 저장된 글씨·스타일 복원
     try { toast("✏️ 수정 모드 — 고친 뒤 💾 저장하면 이 템플릿이 업데이트돼요"); } catch (_) {}
   }
   // 📤 내보내기 — 팔레트 데모(P.demo)를 E.using으로 변환해 기존 영상 내보내기 엔진(exportVideo) 사용
@@ -4035,7 +4045,7 @@
     $$("#esBody [data-tedtab]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-teddel]")) return; palSetSel(+b.dataset.tedtab); renderPalette(); }));
     $$("#esBody [data-teddel]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const i = +b.dataset.teddel; const ts = palTitles(); if (!ts[i]) return; try { if (ts[i].result && ts[i].result.url) URL.revokeObjectURL(ts[i].result.url); } catch (_) {} ts.splice(i, 1); if (palSel() >= ts.length) palSetSel(Math.max(0, ts.length - 1)); renderPalette(); palDraftSave(); }));   // 마지막 칸까지 삭제 가능(0칸=타이틀/자막 없음)
     const _tedAdd = $("#esTedAdd"); if (_tedAdd) _tedAdd.addEventListener("click", () => { const ts = palTitles(); const base = ts[palSel()]; ts.push(palNewBlock(base, ts.length)); palSetSel(ts.length - 1); renderPalette(); palDraftSave(); });
-    const _tedSave = $("#esTedSaveRef"); if (_tedSave) _tedSave.addEventListener("click", palSaveTitleAsRef);
+    const _tedSave = $("#esTedSaveRef"); if (_tedSave) _tedSave.addEventListener("click", palApplyTitleStyleToTemplate);   // ✅ 이 템플릿에 적용(저장하면 사전설정으로 고정)
     // 🅰🅱🅲 고객 화면(가운데) — 칸별 문구 입력 → 그 칸 실시간 렌더
     $$("#esBody [data-cslot]").forEach((ta) => ta.addEventListener("input", () => {
       const i = +ta.dataset.cslot; const kind = ta.dataset.cslotkind || E._palEditKind || "title"; const blk = palBlocks(kind)[i]; if (!blk) return;   // 자동세팅 화면은 타이틀·자막 섞여 있어 종류(data-cslotkind)로 구분
@@ -4122,6 +4132,20 @@
       if ((E.palPresets || []).some((p) => p.fn === fnKey)) palPresetSheet(fnKey);   // 남은 게 있으면 다시 열어둠
     }));
   }
+  // 🎨 타이틀/자막 글씨·스타일 스냅샷(템플릿 사전설정 저장용 — result 블롭 제외, 스타일+문구만)
+  function palStyleSnap(kind) {
+    const d = (E.palette && E.palette.demo) || {};
+    const arr = (kind === "caption") ? d.captions : d.titles;
+    return (Array.isArray(arr) ? arr : []).map((t) => ({ text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size, posX: t.posX, posY: t.posY, opacity: t.opacity, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX, bgPadY: t.bgPadY, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none" }));
+  }
+  // 저장된 사전설정(글씨체·스타일) → 템플릿 로드 시 타이틀/자막 칸에 복원(고객이 글자만 바꿔도 이 스타일로). 렌더까지.
+  async function palApplySavedStyles(P, t) {
+    if (!P || !P.demo) return; let any = false;
+    if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
+    if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
+    if (!any) return;
+    try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
+  }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
   function paletteToTemplate(P) {
     const fns = P.steps.map((s) => s.fn).filter(Boolean);
@@ -4135,6 +4159,7 @@
       texts: (has("caption") || has("setup")) ? [Object.assign({ id: uid(), text: "여기에 자막을 입력하세요" }, palCaptionTextProps(P.demo && P.demo.captionStyle))] : [],
       narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
+      _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
     };
   }
   function savePalette() {
