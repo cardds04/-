@@ -3474,7 +3474,7 @@
   function paletteUploadZone(P) {
     const d = P.demo || {};
     const has = Array.isArray(d.media) && d.media.length;   // 썸네일 없앰 — 미리보기 폰이 곧 영상. 하나씩만(교체).
-    return `<div class="es-pal-prev-tag es-pal-up-tag">📥 따라할 영상 (시안) — 보고 따라 만들기 <span class="es-pal-tref-hint">(작업 적용 안 됨)</span></div>
+    return `<div class="es-pal-prev-tag es-pal-up-tag es-pal-coltag">📥 따라할 영상 <span class="es-pal-tref-hint">(시안)</span></div>
       <button type="button" class="es-pal-up-btn" id="esPalUpBtn">${has ? "🔄 영상 바꾸기" : "＋ 영상·사진 넣기"}</button>
       <input type="file" id="esPalUpFile" accept="image/*,video/*" hidden>`;
   }
@@ -3482,7 +3482,7 @@
   function paletteTestZone(P) {
     const d = P.demo || {};
     const has = Array.isArray(d.testMedia) && d.testMedia.length;
-    return `<div class="es-pal-prev-tag">🎞 내 템플릿 (작업 적용됨) — <b>테스트 영상</b>에 확인</div>
+    return `<div class="es-pal-prev-tag es-pal-coltag">🎞 내 템플릿 <span class="es-pal-tref-hint">(작업 적용)</span></div>
       <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">${has ? "🔄 테스트 영상 바꾸기" : "＋ 테스트 영상 넣기"}</button>
       <input type="file" id="esPalTestFile" accept="image/*,video/*" hidden>`;
   }
@@ -3571,8 +3571,8 @@
     // 🎞 2열 = '내 템플릿' 미리보기 — 작업한 타이틀/자막이 여기 적용됨(편집·끌어서 배치). 테스트 영상(d.testMedia) 위에 보여줌.
     const _testEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎞</div><div class="es-pal-real-empty-t">테스트 영상을 넣으면<br>그 위에 <b>작업한 게</b> 보여요</div></div>`;
     const workHtml = `<div class="es-pal-prev es-pal-prev-editor">
-          <div class="es-pal-prev-tag es-pal-prev-tag-real">▶ 작업 적용된 미리보기 — 끌어서 배치<button type="button" class="es-pal-insta-btn ${E._palInstaPreview ? "on" : ""}" id="esInstaToggle" title="인스타에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button></div>
           <div class="es-pal-phone es-pal-phone-sm ${realArc}" id="esPalReal"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { media: (P.demo.testMedia || []), emptyHtml: _testEmpty })}</div></div>
+          <button type="button" class="es-pal-insta-btn es-pal-insta-below ${E._palInstaPreview ? "on" : ""}" id="esInstaToggle" title="인스타에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button>
           <div class="es-pal-tracks-h">🎬 편집 트랙 — 추가한 기능이 다 들어가요</div>
           <div class="es-pal-tracks">${paletteTracks(P)}</div>
         </div>`;
