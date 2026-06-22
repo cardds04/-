@@ -309,7 +309,8 @@
       ctx.save(); ctx.shadowColor = "transparent"; ctx.fillStyle = _hexA(txt.bgColor || "#000", txt.bgOpacity != null ? txt.bgOpacity : 1);
       const padX = fontPx * (txt.bgPadX != null ? txt.bgPadX : (txt.bg === "marker" ? 0.18 : (txt.bg === "bubble" ? 0.45 : 0.42)));
       if (txt.bg === "box") {
-        _roundRect(ctx, cx - blockW / 2 - padX, startY - lh * 0.62, blockW + padX * 2, blockH + lh * 0.24, fontPx * 0.22); ctx.fill();
+        const _vy = (txt.bgPadY != null ? txt.bgPadY : 2), _m = lh * (0.46 + 0.08 * _vy);   // 📦 세로 여백 = 세로 슬라이더(bgPadY) 연동 — 기본(2)이면 기존과 동일, 낮추면 위아래로 더 타이트
+        _roundRect(ctx, cx - blockW / 2 - padX, startY - _m, blockW + padX * 2, blockH - lh + 2 * _m, fontPx * 0.22); ctx.fill();
       } else if (txt.bg === "bubble") {   // 💬 카톡식 말풍선 — 줄마다 둥근 박스, 첫 줄 왼쪽 위에 꼬리
         lines.forEach((ln, i) => {
           const w = widths[i]; if (w < 1) return; const lcx = lineCenterX(i); const yy = startY + i * lh; const padY = fontPx * 0.18;
@@ -1531,6 +1532,7 @@
     { key: "cpos",    icon: "🔳", label: "자막 위치" },
     { key: "sticker", icon: "🏷", label: "스티커" },
     { key: "sfx",     icon: "🔔", label: "효과음" },
+    { key: "faceswap",icon: "🪄", label: "얼굴 바꾸기" },   // 🪄 AI 얼굴 생성 → WaveSpeed 영상 얼굴 교체
     { key: "nstyle",  icon: "🎙", label: "목소리 고르기" },
     { key: "narrforce", icon: "🎤", label: "나레이션강제" },
     { key: "bgmusic", icon: "🎶", label: "음악 깔기" },
@@ -1549,7 +1551,7 @@
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "narrforce", "bgmusic", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "musicvolforce", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "faceswap", "nstyle", "narrforce", "bgmusic", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "musicvolforce", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
   const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "musicvolforce", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
@@ -1829,6 +1831,17 @@
             <div class="es-pal-narr-hint2">${_noVoice ? "관리자가 목소리를 정하면 여기서 만들 수 있어요" : (d.voiceUrl ? "✅ 만들었어요!" : "<b>🎙 나레이션 만들기</b>를 누르세요 (목소리는 정해져 있어요)")}</div>`;
           break;
         }
+        case "faceswap": {   // 🪄 얼굴 바꾸기 — 얼굴은 관리자가 작업대서 정함. 고객은 '바꾸기'만.
+          const fs = d.faceSwap || {};
+          const _haveFace = !!(fs.faceUrl || (fs.faceBlob instanceof Blob));
+          const _done = !!fs.appliedAt;
+          body = `<div class="es-pal-narr-lb">🪄 얼굴 바꾸기</div>
+            ${_haveFace ? `<div class="es-pal-face-thumb"><img src="${fs.faceUrl || (fs.faceBlob ? URL.createObjectURL(fs.faceBlob) : "")}" alt="바꿀 얼굴"></div>` : ""}
+            <button type="button" class="es-pal-narr-make es-pal-face-make" id="esPalFaceApply"${_haveFace ? "" : " disabled"}>${_done ? "🔄 다시 바꾸기" : "🪄 얼굴 바꾸기"}</button>
+            <div id="esPalFaceStatus" class="es-pal-narr-status"></div>
+            <div class="es-pal-narr-hint2">${_haveFace ? (_done ? "✅ 바꿨어요! (1~3분 걸려요)" : "<b>🪄 얼굴 바꾸기</b>를 누르면 영상 속 얼굴이 위 얼굴로 바뀌어요 (1~3분)") : "관리자가 바꿀 얼굴을 정하면 여기서 바꿀 수 있어요"}</div>`;
+          break;
+        }
         case "bgmusic": {   // 🎶 음악 깔기 = 관리자 전용(고객 단계엔 빠짐). 여긴 빌더 미리보기용 안내만.
           const _mn = (d.musicSel && d.musicSel.name) || "";
           body = `<div class="es-pal-narr-lb">🎶 배경음악 (관리자 전용)</div><div class="es-pal-tgen-noref">이 단계는 <b>고객 화면엔 안 나와요</b>.<br>관리자가 정한 음악${_mn ? ` (🎵 ${esc(_mn)})` : ""}이 고객 영상에 <b>자동으로 깔려요</b>.<br><small>가운데 '음악 깔기' 작업대에서 음악을 올리세요.</small></div>`;
@@ -1999,6 +2012,7 @@
     const _renderBlocks = (blocks, kind) => {
       blocks.forEach((t, i) => {
         if (t._skip) return;   // 🏷 스티커: 지정한 컷이 고객 영상에 없으면 안 넣음
+        if (kind === "caption" && !live && !playMode && i !== palSel("caption")) return;   // 📺 2열 '내 템플릿': 편집 중인 칸 자막 하나만 보이게(여러 칸 겹쳐 안 보이던 문제)
         if (!(t.result && t.result.url)) return;
         anyRendered = true;
         const eStart = t._effStart != null ? t._effStart : (t.start != null ? t.start : 0);   // 컷 해석된 실제 시작(스티커), 없으면 원래 start
@@ -3553,6 +3567,7 @@
             stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
             sfx: (Array.isArray(d.sfx) ? d.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
             musicSel: d.musicSel ? { id: d.musicSel.id, name: d.musicSel.name || "음악", _up: !!d.musicSel._up, blob: d.musicSel.blob || null, url: d.musicSel.blob ? null : (d.musicSel.url || null) } : null,   // 🎵 배경음악(업로드=blob / 라이브러리=url)
+            faceSwap: d.faceSwap ? { prompt: d.faceSwap.prompt || "", faceBlob: d.faceSwap.faceBlob || null, targetIndex: d.faceSwap.targetIndex || 0 } : null,   // 🪄 얼굴 바꾸기(바꿀 얼굴 이미지 blob)
           },
         };
         await idbSet("palDraft", snap);
@@ -3608,6 +3623,7 @@
         P.demo.sfx = sd.sfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
       if (sd.musicSel) { const ms = sd.musicSel; const url = ms.blob ? (function () { try { return URL.createObjectURL(ms.blob); } catch (_) { return null; } })() : (ms.url || null); if (url) { P.demo.musicSel = { id: ms.id || "m", name: ms.name || "음악", url, blob: ms.blob || null, _up: !!ms._up }; P.demo.musicUrl = url; } }   // 🎵 배경음악 복원
+      if (sd.faceSwap) { const f = sd.faceSwap; P.demo.faceSwap = { prompt: f.prompt || "", targetIndex: f.targetIndex || 0, faceBlob: f.faceBlob || null, faceUrl: f.faceBlob ? (function () { try { return URL.createObjectURL(f.faceBlob); } catch (_) { return null; } })() : null, faceRemoteUrl: null, appliedAt: 0 }; }   // 🪄 얼굴 바꾸기 복원
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
     } catch (_) { return null; }
@@ -3919,6 +3935,97 @@
     else pick = palTcVoicePicker();
     return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}<button type="button" class="es-pal-narr-make" id="esPalNarrforceLock" style="margin-top:10px"${curV ? "" : " disabled"}>✅ 이 나레이션으로 지정</button>`;
   }
+  // 🪄 얼굴 바꾸기 작업대 — AI로 바꿀 얼굴을 만들고(또는 사진 업로드), 미리보기. 실제 교체는 고객 '바꾸기' 버튼에서.
+  function palFaceSwapEditor(P) {
+    const d = P.demo || {}; const fs = d.faceSwap || (d.faceSwap = {});
+    const faceSrc = fs.faceUrl || (fs.faceBlob instanceof Blob ? URL.createObjectURL(fs.faceBlob) : "");
+    return `<div class="es-pal-narr-lb">🪄 바꿀 얼굴 만들기 <span class="es-pal-tref-hint">(AI 생성 · WaveSpeed 영상 얼굴교체)</span></div>
+      <textarea id="esPalFacePrompt" class="es-pal-face-prompt" placeholder="원하는 얼굴을 설명하세요 (예: 30대 한국 남성, 짧은 머리, 친근한 미소, 정면 사진)">${esc(fs.prompt || "")}</textarea>
+      <div class="es-pal-face-row">
+        <button type="button" class="es-pal-stkr-genbtn" id="esPalFaceGen">✨ AI 얼굴 만들기</button>
+        <button type="button" class="es-pal-up-btn" id="esPalFaceUpBtn">＋ 얼굴 사진 올리기</button>
+        <input type="file" id="esPalFaceUpFile" accept="image/*" hidden>
+      </div>
+      <div id="esPalFaceGenStatus" class="es-pal-narr-status"></div>
+      ${faceSrc ? `<div class="es-pal-face-preview"><img src="${faceSrc}" alt="바꿀 얼굴"><div class="es-pal-mus-hint">✅ 이 얼굴로 고객 영상 속 얼굴이 바뀌어요</div></div>` : `<div class="es-pal-narr-hint2">얼굴을 만들거나 올리면, 고객이 '바꾸기'를 누를 때 영상 속 얼굴이 이 얼굴로 바뀌어요</div>`}`;
+  }
+  function faceSwapEndpoint() { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return "http://127.0.0.1:8787/api/wavespeed-faceswap"; return "https://sc-pink.vercel.app/api/wavespeed-faceswap"; }
+  // ✨ AI 얼굴 생성 — fal-image(flux-pro-ultra) 로 정면 얼굴 사진 생성 → d.faceSwap 에 저장.
+  async function palFaceGen(btn) {
+    const P = E.palette; if (!P) return; const d = P.demo || {}; const fs = d.faceSwap || (d.faceSwap = {});
+    const ta = $("#esPalFacePrompt"); const desc = (ta && ta.value || "").trim();
+    if (!desc) { try { toast("바꿀 얼굴을 먼저 설명해 주세요"); } catch (_) {} return; }
+    fs.prompt = desc;
+    const st = $("#esPalFaceGenStatus"); const setS = (m) => { if (st) st.textContent = m; };
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "✨ 만드는 중…"; }
+      setS("AI가 얼굴을 그리는 중… (10~30초)");
+      const prompt = `Photorealistic portrait headshot of ${desc}. Front-facing, looking at camera, neutral background, sharp focus, natural lighting, high detail face. Single person.`;
+      const r = await fetch("https://sc-pink.vercel.app/api/fal-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "flux-pro-ultra", prompt, aspect_ratio: "1:1" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.b64_json) throw new Error((j && (j.error || j.message)) || `HTTP ${r.status}`);
+      const dataUri = "data:" + (j.mime_type || "image/png") + ";base64," + j.b64_json;
+      const blob = await (await fetch(dataUri)).blob();
+      try { if (fs.faceUrl && fs.faceUrl.startsWith("blob:")) URL.revokeObjectURL(fs.faceUrl); } catch (_) {}
+      fs.faceBlob = blob; fs.faceUrl = URL.createObjectURL(blob); fs.faceRemoteUrl = null; fs.appliedAt = 0;
+      try { palDraftSave(); } catch (_) {}
+      setS(""); renderPalette();
+    } catch (e) { setS("얼굴 생성 실패: " + (e.message || e)); if (btn) { btn.disabled = false; btn.textContent = "✨ AI 얼굴 만들기"; } }
+  }
+  // 🪄 얼굴 교체 실행 — 바꿀 얼굴 + 영상을 공개 URL로 올리고 WaveSpeed 로 교체, 결과로 미디어 교체. (관리자 키 사용)
+  async function palFaceSwapApply(btn) {
+    const P = E.palette; if (!P) return; const d = P.demo || {}; const fs = d.faceSwap || {};
+    if (!(fs.faceBlob instanceof Blob) && !fs.faceRemoteUrl) { try { toast("먼저 바꿀 얼굴을 만들어 주세요"); } catch (_) {} return; }
+    // 어떤 영상에 적용? — 테스트영상(작업대) 우선, 없으면 고객이 넣은 media.
+    const list = (Array.isArray(d.testMedia) && d.testMedia.length) ? d.testMedia : (Array.isArray(d.media) ? d.media : []);
+    const vids = list.map((m, i) => ({ m, i })).filter((x) => x.m && x.m.kind === "video" && (x.m.blob || x.m.url));
+    if (!vids.length) { try { toast("얼굴을 바꿀 영상을 먼저 넣어 주세요"); } catch (_) {} return; }
+    const key = easyAdminKey();
+    if (!key) { try { toast("관리자 키가 필요해요 (이 기능은 관리자 작업대에서 먼저 테스트하세요)"); } catch (_) {} return; }
+    const st = $("#esPalFaceStatus"); const setS = (m) => { if (st) st.textContent = m; };
+    const tid = "faceswap_" + uid();
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "🪄 바꾸는 중…"; }
+      // 1) 바꿀 얼굴을 공개 URL 로
+      setS("얼굴 올리는 중…");
+      let faceUrl = fs.faceRemoteUrl;
+      if (!faceUrl) { faceUrl = await uploadMediaSigned(tid, "face.png", fs.faceBlob, fs.faceBlob.type || "image/png", key); fs.faceRemoteUrl = faceUrl; }
+      // 2) 각 영상 클립을 올리고 → 교체 → 폴링 → 결과로 교체
+      let done = 0;
+      for (const { m, i } of vids) {
+        setS(`영상 ${done + 1}/${vids.length} 올리는 중…`);
+        const vblob = m.blob || await (await fetch(m.url)).blob();
+        const vurl = await uploadMediaSigned(tid, `in${i}.mp4`, vblob, vblob.type || "video/mp4", key);
+        setS(`영상 ${done + 1}/${vids.length} 얼굴 바꾸는 중… (1~3분)`);
+        const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0 }) });
+        const cj = await cr.json().catch(() => ({}));
+        if (!cr.ok || !cj.id) throw new Error((cj && (cj.error || cj.message)) || "교체 요청 실패");
+        // 폴링 (최대 ~5분)
+        let outUrl = null;
+        for (let t = 0; t < 100; t++) {
+          await new Promise((rs) => setTimeout(rs, 3000));
+          const qr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "query", id: cj.id }) });
+          const qj = await qr.json().catch(() => ({}));
+          if (qj.status === "completed" && qj.video_url) { outUrl = qj.video_url; break; }
+          if (qj.status === "failed") throw new Error(qj.error || "얼굴 교체 실패");
+          setS(`영상 ${done + 1}/${vids.length} 처리 중… (${(t + 1) * 3}초)`);
+        }
+        if (!outUrl) throw new Error("시간이 너무 오래 걸려요 (나중에 다시 시도)");
+        // 결과 영상 다운로드 → 미디어 교체
+        const outBlob = await (await fetch(outUrl)).blob();
+        try { if (m.url && m.url.startsWith("blob:")) URL.revokeObjectURL(m.url); } catch (_) {}
+        m.blob = outBlob; m.url = URL.createObjectURL(outBlob); m.faceSwapped = true;
+        done++;
+      }
+      fs.appliedAt = Date.now();
+      try { palDraftSave(); } catch (_) {}
+      setS(`✅ ${done}개 영상 얼굴을 바꿨어요!`);
+      renderPalette();
+    } catch (e) {
+      setS("얼굴 교체 실패: " + (e.message || e));
+      if (btn) { btn.disabled = false; btn.textContent = "🪄 얼굴 바꾸기"; }
+    }
+  }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
     if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
@@ -3973,9 +4080,10 @@
     const _isStickerStep = !isPrev && _curFn === "sticker";
     const _isSfxStep = !isPrev && _curFn === "sfx";
     const _isNarrforceStep = !isPrev && _curFn === "narrforce";
+    const _isFaceSwapStep = !isPrev && _curFn === "faceswap";   // 🪄 얼굴 바꾸기 = 관리자가 얼굴 정함, 고객은 '바꾸기' 버튼만
     const _isBgMusicStep = !isPrev && _curFn === "bgmusic";   // 🎶 음악 깔기 = 관리자 전용(고객 단계엔 없음)
     const _isMusicVolForceStep = !isPrev && _curFn === "musicvolforce";   // 🎚 음악소리강제 = 관리자 전용(고객 단계엔 없음)
-    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep || _isNarrforceStep || _isBgMusicStep || _isMusicVolForceStep;
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep || _isNarrforceStep || _isFaceSwapStep || _isBgMusicStep || _isMusicVolForceStep;
     E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : _isSfxStep ? "sfx" : (_isCaptionStep ? "caption" : "title");
     // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
     if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
@@ -4040,6 +4148,8 @@
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🔔 효과음 작업대 — 올리고 컷·볼륨 정한 뒤 적용</div>${paletteSfxEditor(P)}</div></div>`
       : _isNarrforceStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎤 나레이션강제 — 목소리 정하기 (고객은 '만들기'만)</div>${palNarrforceEditor(P)}</div></div>`
+      : _isFaceSwapStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🪄 얼굴 바꾸기 — AI로 얼굴을 만든 뒤, 고객 영상의 얼굴이 이 얼굴로 바뀌어요 (고객은 '바꾸기'만)</div>${palFaceSwapEditor(P)}</div></div>`
       : _isBgMusicStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎶 음악 깔기 — 여기서 정한 음악이 고객 영상에 자동으로 깔려요 (고객 화면엔 없음)</div>${palBgMusicAdmin(P)}</div></div>`
       : _isMusicVolForceStep
@@ -4362,6 +4472,10 @@
     $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
     { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
+    { const fg = $("#esPalFaceGen"); if (fg) fg.addEventListener("click", () => palFaceGen(fg)); }   // 🪄 AI 얼굴 만들기
+    { const fa = $("#esPalFaceApply"); if (fa) fa.addEventListener("click", () => palFaceSwapApply(fa)); }   // 🪄 얼굴 바꾸기 실행
+    { const fu = $("#esPalFaceUpFile"); if (fu) fu.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); try { if (fs.faceUrl && fs.faceUrl.startsWith("blob:")) URL.revokeObjectURL(fs.faceUrl); } catch (_) {} fs.faceBlob = f; fs.faceUrl = URL.createObjectURL(f); fs.faceRemoteUrl = null; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }); }   // 🪄 얼굴 사진 업로드
+    { const fub = $("#esPalFaceUpBtn"), fuf = $("#esPalFaceUpFile"); if (fub && fuf) fub.addEventListener("click", () => fuf.click()); }
     { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 나레이션으로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } else { try { toast("먼저 위에서 목소리를 골라주세요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이 나레이션으로 지정' — 고른 목소리 확정
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
@@ -14850,15 +14964,15 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
   // ════════════ 🗂 템플릿 분류 도구 (관리자) — 목적/포맷/레벨 태깅 ════════════
   // 손님 갤러리를 '목적별 + 레벨순'으로 묶기 위한 분류. v1: localStorage 저장(es_template_cats).
-  const ES_CATS_VER = 5;   // taxonomy 버전 — 올리면 기존 저장본·분류 비우고 새 기본값 사용
-  // 🏢 대분류=업종(미용실·헬스장…) → 소분류=영상유형 3가지. 업종 추가하면 3유형 자동 따라옴.
+  const ES_CATS_VER = 6;   // taxonomy 버전 — 6: 대분류↔소분류 스왑(업종↔영상유형) + 기존 분류 자동 이전(맞바꿈)
+  // 🎬 대분류=영상유형(얼굴+나레이션…) → 소분류=업종(미용실·헬스장…). 업종 추가하면 모든 영상유형에 자동 따라옴.
   function ES_SUBFMTS() { return [
-    { id: "nn", label: "얼굴없이+나레이션", level: 1 },
-    { id: "fn", label: "얼굴+나레이션", level: 1 },
-    { id: "fv", label: "얼굴+실제음성", level: 1 },
+    { id: "biz_hair", label: "미용실", level: 1 },
   ]; }
   const ES_CATS = [
-    { key: "biz_hair", label: "미용실", emoji: "💇", formats: ES_SUBFMTS() },
+    { key: "nn", label: "얼굴없이+나레이션", emoji: "🎙", formats: ES_SUBFMTS() },
+    { key: "fn", label: "얼굴+나레이션", emoji: "🙂", formats: ES_SUBFMTS() },
+    { key: "fv", label: "얼굴+실제음성", emoji: "🎬", formats: ES_SUBFMTS() },
   ];
   // 편집 가능한 분류 체계(taxonomy). 버전 바뀌면 기존 저장본·분류 비우고 새 기본값 시드.
   var _taxMigrated = false;
@@ -14866,8 +14980,22 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (_taxMigrated) return; _taxMigrated = true;
     try {
       if (localStorage.getItem("es_taxonomy_ver") !== String(ES_CATS_VER)) {
-        localStorage.setItem("es_taxonomy", JSON.stringify(ES_CATS));   // 새 기본 taxonomy 강제
-        localStorage.setItem("es_template_cats", "{}");                  // 기존 분류 제거(서버 재시드도 막음)
+        // 🔄 대분류↔소분류 스왑: 기존 업종(대분류)→소분류, 영상유형(소분류)→대분류로 뒤집고, 분류값(clsMap)도 goal↔format 맞바꿔 보존
+        var _inv = null;
+        try {
+          var _oldT = JSON.parse(localStorage.getItem("es_taxonomy") || "null");
+          if (Array.isArray(_oldT) && _oldT.length && _oldT[0] && _oldT[0].formats) {
+            var _EMO = { nn: "🎙", fn: "🙂", fv: "🎬" }, _fmap = {}, _biz = [];
+            _oldT.forEach(function (b) { _biz.push({ id: b.key, label: b.label, level: 1 }); (b.formats || []).forEach(function (f) { if (!_fmap[f.id]) _fmap[f.id] = { key: f.id, label: f.label, emoji: _EMO[f.id] || "🎬" }; }); });
+            _inv = Object.keys(_fmap).map(function (k) { return { key: _fmap[k].key, label: _fmap[k].label, emoji: _fmap[k].emoji, formats: _biz.slice() }; });
+          }
+        } catch (_) {}
+        localStorage.setItem("es_taxonomy", JSON.stringify(_inv && _inv.length ? _inv : ES_CATS));
+        try {
+          var _cm = JSON.parse(localStorage.getItem("es_template_cats") || "{}"), _out = {};
+          Object.keys(_cm).forEach(function (id) { var c = _cm[id] || {}; _out[id] = Object.assign({}, c, { goal: c.format || "", format: c.goal || "" }); });   // goal↔format 맞바꿈(분류 보존)
+          localStorage.setItem("es_template_cats", JSON.stringify(_out));
+        } catch (_) {}
         localStorage.setItem("es_taxonomy_ver", String(ES_CATS_VER));
       }
     } catch (_) {}

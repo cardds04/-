@@ -45,6 +45,7 @@ const { handleBlogGenerateRequest, pickGeminiModel } = require("./lib/blog-gener
 const { handleGeminiTtsRequest } = require("./lib/gemini-tts-logic.cjs");
 const { handleTypecastTtsRequest, handleTypecastVoicesRequest } = require("./lib/typecast-tts-logic.cjs");
 const { handleKlingVideoRequest } = require("./lib/kling-video-logic.cjs");
+const { handleWaveSpeedFaceSwap } = require("./lib/wavespeed-faceswap-logic.cjs");
 const { handleTopazUpscaleRequest } = require("./lib/topaz-photo-ai-logic.cjs");
 const { handleAiDebateRequest } = require("./lib/ai-debate-logic.cjs");
 const { handleMentorRequest } = require("./lib/mentor-logic.cjs");
@@ -182,6 +183,19 @@ app.post("/api/kling-video", async (req, res) => {
   } catch (error) {
     const status = error?.status && error.status >= 400 && error.status < 600 ? error.status : 500;
     console.error("[kling-video]", error?.message);
+    res.status(status).json({ ok: false, error: error?.message || "서버 오류", detail: error?.data || null });
+  }
+});
+
+/** WaveSpeedAI 영상 얼굴 교체 프록시 — lib/wavespeed-faceswap-logic.cjs (Vercel api/wavespeed-faceswap.js 와 공유) */
+app.post("/api/wavespeed-faceswap", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const out = await handleWaveSpeedFaceSwap(body);
+    res.status(200).json(out);
+  } catch (error) {
+    const status = error?.status && error.status >= 400 && error.status < 600 ? error.status : 500;
+    console.error("[wavespeed-faceswap]", error?.message);
     res.status(status).json({ ok: false, error: error?.message || "서버 오류", detail: error?.data || null });
   }
 });
