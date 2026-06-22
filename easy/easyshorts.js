@@ -2943,21 +2943,26 @@
       let Pd = estimateBeatPeriod(onset, frameDur); if (!(Pd > 0.15) || Pd > 2) Pd = 0.5;
       const k = BEAT_TEMPO[curBeatTempo()] || 2, target = Math.max(0.3, k * Pd);   // 컷당 목표 길이(빠르기)
       const bts = beats.slice().sort((a, b) => a.t - b.t);
-      // 목표 컷 지점 근처(±0.45×target) 창에서 '가장 강한 비트'로 끊어 변주(리듬감) — 균등 0.9초 방지
+      // 🎵 그루브 — 컷 길이를 일정하게 두지 않고 '길게-짧게-짧게' 식 싱코페이션 패턴으로 변주.
+      //    각 컷의 목표 길이 = target × 그루브배수. 평균≈0.95라 전체적으론 더 빠르되, 길고 짧음이 섞여 리듬(그루브)감.
+      const MINCUT = 0.22;   // 펀치감 있는 짧은 컷 허용(0.3→0.22)
+      const GROOVE = [1.7, 0.5, 0.6, 1.45, 0.55, 1.0, 0.5, 1.5, 0.6, 0.9];   // 합/개수 ≈ 0.93
+      const gOff = Math.floor(Math.random() * GROOVE.length);   // 매번 시작점 달라 같은 음악도 패턴 변주
       const cuts = [0];
       for (let i = 0; i < clips.length; i++) {
-        const want = cuts[i] + target;
+        const segT = Math.max(MINCUT, target * GROOVE[(i + gOff) % GROOVE.length]);   // 이 컷의 그루브 목표 길이
+        const want = cuts[i] + segT;
         if (want >= dur - 0.12) { cuts.push(want); continue; }   // 음악 끝을 넘으면 목표 길이 그대로
         let best = want, bestScore = -Infinity;
         for (const b of bts) {
-          if (b.t <= cuts[i] + 0.28) continue;
-          const dd = Math.abs(b.t - want); if (dd > target * 0.45) continue;
-          const score = (b.s || 0.3) * 1.4 - dd / target;   // 강세 셀수록·목표에 가까울수록 우선
+          if (b.t <= cuts[i] + MINCUT) continue;
+          const dd = Math.abs(b.t - want); if (dd > segT * 0.5) continue;   // 창을 그 컷 길이에 비례(짧은 컷도 비트에 스냅)
+          const score = (b.s || 0.3) * 1.6 - dd / segT;   // 강세 셀수록·목표에 가까울수록 우선(강세 가중↑ → 그루브)
           if (score > bestScore) { bestScore = score; best = b.t; }
         }
-        cuts.push(Math.max(cuts[i] + 0.3, best));
+        cuts.push(Math.max(cuts[i] + MINCUT, best));
       }
-      clips.forEach((m, i) => { m.dur = Math.min(palClipMaxDur(m), Math.max(0.3, +(cuts[i + 1] - cuts[i]).toFixed(2))); });
+      clips.forEach((m, i) => { m.dur = Math.min(palClipMaxDur(m), Math.max(MINCUT, +(cuts[i + 1] - cuts[i]).toFixed(2))); });
       const voiceTotal = (d.voiceUrl && d.voiceDur > 0.3) ? (d.voiceDur + PAL_VOICE_DELAY) : 0;
       const _capEnd = (d.captions || []).filter((c) => (c.text || "").trim()).reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
       const _content = Math.max(voiceTotal, _capEnd);   // 자막(없으면 나레이션)이 끝나는 시점
@@ -2965,13 +2970,13 @@
       if (curBeatFit() && _content > 0.3) {
         // 📝 자막에 맞추기(기본) — 총 길이를 '자막 끝 + 3초'로 고정하고, 그 안에서 리듬 비율 그대로 컷을 나눔
         const fitTotal = _content + 3, natTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
-        if (natTotal > 0.3) { const scale = fitTotal / natTotal; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); }
+        if (natTotal > 0.3) { const scale = fitTotal / natTotal; clips.forEach((m) => { m.dur = Math.max(MINCUT, +((m.dur || 0) * scale).toFixed(2)); }); }
         fitMode = "cap";
       } else {
         // 🎙 리듬 그대로 — 단 나레이션이 잘리면 비율대로 늘리고(잘림 방지), 끝 3초 여유는 마지막 컷으로 채움
         if (voiceTotal > 0) {
           const total = clips.reduce((a, m) => a + (m.dur || 0), 0);
-          if (total > 0.3 && total < voiceTotal - 0.05) { const scale = voiceTotal / total; clips.forEach((m) => { m.dur = Math.max(0.3, +((m.dur || 0) * scale).toFixed(2)); }); fitMode = "voice"; }
+          if (total > 0.3 && total < voiceTotal - 0.05) { const scale = voiceTotal / total; clips.forEach((m) => { m.dur = Math.max(MINCUT, +((m.dur || 0) * scale).toFixed(2)); }); fitMode = "voice"; }
         }
         const _needEnd = _content + 3, _curTotal = clips.reduce((a, m) => a + (m.dur || 0), 0);
         if (_content > 0.3 && _curTotal < _needEnd - 0.05 && clips.length) { const _last = clips[clips.length - 1]; _last.dur = Math.max(0.3, +((_last.dur || 0) + (_needEnd - _curTotal)).toFixed(2)); }
@@ -14973,6 +14978,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { key: "nn", label: "얼굴없이+나레이션", emoji: "🎙", formats: ES_SUBFMTS() },
     { key: "fn", label: "얼굴+나레이션", emoji: "🙂", formats: ES_SUBFMTS() },
     { key: "fv", label: "얼굴+실제음성", emoji: "🎬", formats: ES_SUBFMTS() },
+    { key: "ns", label: "얼굴없이+음성없이", emoji: "🔇", formats: ES_SUBFMTS() },
   ];
   // 편집 가능한 분류 체계(taxonomy). 버전 바뀌면 기존 저장본·분류 비우고 새 기본값 시드.
   var _taxMigrated = false;
@@ -14997,6 +15003,18 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
           localStorage.setItem("es_template_cats", JSON.stringify(_out));
         } catch (_) {}
         localStorage.setItem("es_taxonomy_ver", String(ES_CATS_VER));
+      }
+      // 🆕 새 대분류 '얼굴없이+음성없이'(ns) 1회 추가 — 이미 v6로 바뀐 사용자에게도 들어가게(별도 플래그, 재반전 안 함)
+      if (!localStorage.getItem("es_tax_add_ns")) {
+        try {
+          var _t = JSON.parse(localStorage.getItem("es_taxonomy") || "null");
+          if (Array.isArray(_t) && _t.length && !_t.some(function (c) { return c && c.key === "ns"; })) {
+            var _f = (_t[0] && _t[0].formats) ? JSON.parse(JSON.stringify(_t[0].formats)) : ES_SUBFMTS();
+            _t.push({ key: "ns", label: "얼굴없이+음성없이", emoji: "🔇", formats: _f });
+            localStorage.setItem("es_taxonomy", JSON.stringify(_t));
+          }
+        } catch (_) {}
+        localStorage.setItem("es_tax_add_ns", "1");
       }
     } catch (_) {}
   }
