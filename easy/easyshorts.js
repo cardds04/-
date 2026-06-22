@@ -4082,10 +4082,10 @@
       if (_navMidEl) {
         const _moved = body.querySelectorAll(".es-pal-cust-scroll .es-pal-narr-make, .es-pal-cust-scroll .es-pal-capedit-apply, .es-pal-cust-scroll .es-pal-scr-media-acts, .es-pal-cust-scroll .es-pal-navbtn");
         if (_moved.length) { _navMidEl.classList.add("has-navbtns"); _moved.forEach((b) => _navMidEl.appendChild(b)); }
-        // 📣 단계 안내바(뭐라고 바꿀까요/자막을 만들어주세요 등)도 하단 네비 안으로 합침
+        // 📣 단계 안내바(뭐라고 바꿀까요 등) — 단, 액션 버튼이 이미 있으면 생략(버튼만 깔끔히, 두 개로 보이던 것 방지)
         const _screen = _navMidEl.closest(".es-pal-phone-screen-cust");
         const _guide = _screen && _screen.querySelector(":scope > .es-pal-cust-guide");
-        if (_guide) { _navMidEl.classList.add("has-navbtns"); _navMidEl.appendChild(_guide); }
+        if (_guide) { if (_moved.length) { try { _guide.remove(); } catch (_) {} } else { _navMidEl.classList.add("has-navbtns"); _navMidEl.appendChild(_guide); } }
       }
     } catch (_) {}
     // 🎬 1열 시안 영상 = 재렌더(타이핑 등)에도 같은 <video> 재사용 → 0:00 리셋·재로딩 안 됨(글씨 쳐도 반응 안 하는 정지 플레이어)
