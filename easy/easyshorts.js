@@ -3602,7 +3602,8 @@
     if (status) status.textContent = "✨ 스티커를 만들고 있어요… (20~40초)";
     try {
       const body = { action: "generate", sticker: true, text: (cur.text || "").trim(), quality: "low" };
-      if (cur.refUrl) { try { body.refImage = cur.refBlob ? await tmBlobToDataUri(cur.refBlob) : null; } catch (_) {} }
+      if (cur.refUrl) { try { let rb = cur.refBlob; if (!rb) rb = await (await fetch(cur.refUrl)).blob(); if (rb) body.refImage = await tmBlobToDataUri(rb); } catch (_) {} }   // 참조사진 확실히 전송(refBlob 없으면 url에서)
+      if (status) status.textContent = body.refImage ? "✨ 참조사진으로 스티커를 만들고 있어요… (20~40초)" : "✨ 스티커를 만들고 있어요… (20~40초)";
       const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok || !j.image) throw new Error(j.error || ("HTTP " + r.status));
