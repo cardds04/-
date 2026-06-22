@@ -16585,13 +16585,44 @@ ${folderBtn}
           })
           .sort((a, b) => compareScheduleDateTime(a.item, b.item));
 
+        // 업체명 검색 시: 월/일 선택 무시(선택 연도의 전체 날짜), 작가별 그룹 대신 월별로 모아 본다.
+        // (달력 일정상세 모달은 위 filtered 를 그대로 써서 영향 없음)
+        const isCompanySearchMode = !!companyKeyword;
+        const companySearchRows = !isCompanySearchMode
+          ? []
+          : data
+              .map((item, index) => ({ item, index }))
+              .filter(({ item }) => {
+                const dateText = String(item.date || "").trim();
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
+                const itemScheduleId = String(item?.customerScheduleId || "").trim();
+                const itemFallbackKey = [
+                  String(item?.date || "").trim(),
+                  String(item?.time || "").trim(),
+                  normalizeCompanyName(item?.company).toLowerCase(),
+                  normalizeCompanyName(item?.place).toLowerCase()
+                ].join("|");
+                const isCanceled = itemScheduleId
+                  ? canceledScheduleIdSet.has(itemScheduleId)
+                  : canceledFallbackKeySet.has(itemFallbackKey);
+                if (isCanceled) return false;
+                if (dateText.slice(0, 4) !== selectedYear) return false;
+                const passPhotographer =
+                  currentPhotographerFilter === "all" || item.name === currentPhotographerFilter;
+                return passPhotographer && normalizeCompanyName(item.company).toLowerCase().includes(companyKeyword);
+              })
+              .sort((a, b) => compareScheduleDateTime(a.item, b.item));
+
         const monthLabel = selectedMonth === "all" ? "전체월" : `${selectedMonth}월`;
         const dayLabel = selectedDay === "all" ? "전체일" : `${selectedDay}일`;
         const writerLabel = currentPhotographerFilter === "all" ? "전체작가" : `${currentPhotographerFilter}작가`;
-        latestScheduleCopyRows = filtered.map(({ item }) => item);
-        latestScheduleCopyLabel = `${selectedYear}년 ${monthLabel} ${dayLabel} / ${writerLabel}`;
+        const copyRows = isCompanySearchMode ? companySearchRows : filtered;
+        latestScheduleCopyRows = copyRows.map(({ item }) => item);
+        latestScheduleCopyLabel = isCompanySearchMode
+          ? `${selectedYear}년 전체월 / ${companyFilterInputEl.value.trim()} (업체검색)`
+          : `${selectedYear}년 ${monthLabel} ${dayLabel} / ${writerLabel}`;
 
-        if (totalCountEl) totalCountEl.textContent = String(filtered.length);
+        if (totalCountEl) totalCountEl.textContent = String(copyRows.length);
         const grouped = new Map();
         filtered.forEach(({ item, index }) => {
           const writer = item.name || "작가미정";
@@ -16700,18 +16731,44 @@ ${folderBtn}
         let compactListMarkup;
         {
           const kwRaw = String(companyFilterInputEl?.value || "").trim();
-          const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">${
-            kwRaw ? `「${escapeHtml(kwRaw)}」 검색 결과 · ` : ""
-          }총 ${filtered.length}건</div>`;
           const renderEntry = (item, index) =>
             editingIndex === index || editingDateIndex === index
               ? `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(
                   String(item.customerScheduleId || "")
                 )}">${buildScheduleFullEditForm(item, index)}</span>`
               : renderScheduleCompactRow(item, index);
-          const groupsHtml = writerRows
-            .map(
-              ([writer, schedules]) => `
+          if (isCompanySearchMode) {
+            // 업체검색: 작가 분류 없이 월별로 모아서(선택 연도의 전체 날짜) 출력.
+            const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">「${escapeHtml(
+              kwRaw
+            )}」 검색 결과 · ${escapeHtml(selectedYear)}년 전체 · 총 ${companySearchRows.length}건</div>`;
+            const monthGroups = new Map();
+            companySearchRows.forEach(({ item, index }) => {
+              const monthKey = String(item.date || "").slice(0, 7);
+              if (!monthGroups.has(monthKey)) monthGroups.set(monthKey, []);
+              monthGroups.get(monthKey).push({ item, index });
+            });
+            const groupsHtml = [...monthGroups.entries()]
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([monthKey, rows]) => {
+                const monthNum = Number(monthKey.slice(5, 7));
+                return `
+                <article class="writer-row" style="align-items:start;">
+                  <div class="writer-name" style="padding-top:6px;">${escapeHtml(`${monthNum}월`)} <span style="color:#6b7896;font-weight:600;font-size:0.8rem;">(${rows.length}건)</span></div>
+                  <div class="writer-places" style="display:block;">${rows
+                    .map(({ item, index }) => renderEntry(item, index))
+                    .join("")}</div>
+                </article>`;
+              })
+              .join("");
+            compactListMarkup = `${countHeader}<div class="writer-group-list">${
+              groupsHtml || '<div class="helper" style="margin:0;">검색 결과가 없습니다.</div>'
+            }</div>`;
+          } else {
+            const countHeader = `<div style="font-weight:700;color:#1f3a6b;margin:0 0 8px;font-size:0.95rem;">총 ${filtered.length}건</div>`;
+            const groupsHtml = writerRows
+              .map(
+                ([writer, schedules]) => `
                 <article class="writer-row" style="align-items:start;">
                   <div class="writer-name" style="padding-top:6px;">${escapeHtml(writer)}작가 <span style="color:#6b7896;font-weight:600;font-size:0.8rem;">(${schedules.length}건)</span><br /><button type="button" class="btn-sm" data-action="copyWriterSchedule" data-writer="${escapeHtml(writer)}" title="이 작가 일정을 작가페이지 형식으로 복사" style="margin-top:4px;padding:1px 8px;font-size:0.72rem;font-weight:600;">📋 스케줄 복사</button></div>
                   <div class="writer-places" style="display:block;">${schedules
@@ -16720,11 +16777,12 @@ ${folderBtn}
                     .map(({ item, index }) => renderEntry(item, index))
                     .join("")}</div>
                 </article>`
-            )
-            .join("");
-          compactListMarkup = `${countHeader}<div class="writer-group-list">${
-            groupsHtml || '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>'
-          }</div>`;
+              )
+              .join("");
+            compactListMarkup = `${countHeader}<div class="writer-group-list">${
+              groupsHtml || '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>'
+            }</div>`;
+          }
         }
         const cardListMarkup = `
           <div class="writer-group-list">
