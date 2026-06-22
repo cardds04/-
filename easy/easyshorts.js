@@ -3969,9 +3969,9 @@
     const st = $("#esPalFaceGenStatus"); const setS = (m) => { if (st) st.textContent = m; };
     try {
       if (btn) { btn.disabled = true; btn.textContent = "✨ 만드는 중…"; }
-      setS("AI가 얼굴을 그리는 중… (10~30초)");
-      // 🪄 얼굴 = 기존 gpt-image-2(타이틀/스티커와 같은 OpenAI 키) 인물 사진 모드 — 새 키(FAL) 불필요
-      const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", portrait: true, text: desc, quality: "low" }) });
+      setS("AI가 얼굴을 고화질로 그리는 중… (30~60초)");
+      // 🪄 얼굴 = 기존 gpt-image-2(타이틀/스티커와 같은 OpenAI 키) 인물 사진 모드 — 새 키(FAL) 불필요. high 화질로 사실적인 얼굴(교체 품질↑)
+      const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", portrait: true, text: desc, quality: "high" }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.image) throw new Error((j && (j.error || j.message)) || `HTTP ${r.status}`);
       const blob = await (await fetch(j.image)).blob();
