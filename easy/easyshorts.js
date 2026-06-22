@@ -368,7 +368,7 @@
   async function idbKeys() { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(STORE, "readonly"); const rq = t.objectStore(STORE).getAllKeys(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); }); }
 
   async function saveTemplates() {
-    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0, _palTitles: t._palTitles || null, _palCaptions: t._palCaptions || null, _palStickers: t._palStickers || null, _palSfx: t._palSfx || null }));   // 🎨 글씨체·스타일·스티커·효과음 사전설정도 저장(안 넣으면 저장/새로고침 시 사라져 고객용에 스타일 안 나옴)
+    const meta = E.templates.map((t) => ({ id: t.id, name: t.name, aspect: t.aspect, slots: t.slots, music: t.music || null, texts: t.texts || [], createdAt: t.createdAt, narrate: !!t.narrate, narrateHideText: !!t.narrateHideText, _wantTitle: !!t._wantTitle, _micCap: !!t._micCap, _base: !!t._base, _baseKey: t._baseKey || "", _paletteSteps: t._paletteSteps || null, _palette: !!t._palette, thumb: t.thumb || null, previewVid: !!t.previewVid, pvDur: t.pvDur || 0, _palTitles: t._palTitles || null, _palCaptions: t._palCaptions || null, _palStickers: t._palStickers || null, _palSfx: t._palSfx || null, _palMusic: t._palMusic || null }));   // 🎨 글씨체·스타일·스티커·효과음 사전설정도 저장(안 넣으면 저장/새로고침 시 사라져 고객용에 스타일 안 나옴)
     try { await idbSet("templates", meta); } catch (e) { console.warn("[easyshorts] saveTemplates", e); }
   }
   async function loadTemplates() {
@@ -1634,7 +1634,10 @@
     else if (!allTr.length) listHtml = `<div class="es-pal-tgen-noref">저장한 음악이 아직 없어요 — 관리자 '🎵 노래 올리기'에서 추가하세요</div>`;
     else if (!tracks.length) listHtml = `<div class="es-pal-tgen-noref">이 빠르기의 음악이 없어요 — 다른 빠르기를 골라보세요</div>`;
     else { palMusLoadDur(tracks); listHtml = `<div class="es-pal-mus-list">${tracks.map((t) => { const _s = sel && sel.id === t.id; const _du = (E._palMusDur && E._palMusDur[t.id]) ? palMusFmt(E._palMusDur[t.id]) : ""; return `<div class="es-pal-mus-item${_s ? " sel" : ""}" data-muspick="${esc(t.id)}"><button type="button" class="es-pal-mus-play" data-musplay="${esc(t.url)}">▶</button><span class="es-pal-mus-name">${esc(t.name)}</span>${_s ? '<span class="es-pal-mus-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ""}<span class="es-pal-mus-dur">${_du}</span></div>`; }).join("")}</div>`; }
-    return `${tempoBar}${listHtml}`;
+    // 🎵 관리자가 직접 음악 파일 올리기(+현재 올린 음악 표시) — 정하면 배경음악으로 깔리고 끝 2초 페이드아웃
+    const upCur = (sel && sel._up) ? `<div class="es-pal-mus-item sel"><button type="button" class="es-pal-mus-play" data-musplay="${esc(sel.url || "")}">▶</button><span class="es-pal-mus-name">🎵 ${esc(sel.name || "내 음악")} <small>(내가 올린 음악)</small></span><button type="button" class="es-pal-mus-upx" data-musupx title="빼기">×</button></div>` : "";
+    const upBtn = `<button type="button" class="es-pal-up-btn es-pal-mus-up" id="esPalMusUp">＋ 내 음악 파일 올리기 (mp3·m4a 등)</button><input type="file" id="esPalMusUpFile" accept="audio/*" hidden><div class="es-pal-mus-fadehint">정하면 배경음악으로 깔리고 끝에서 2초 부드럽게 줄어요(페이드아웃)</div>`;
+    return `${upBtn}${upCur}${tempoBar}${listHtml}`;
   }
   // 각 기능의 '고객이 보는 화면' — 번호는 단계 순서(stepNum), 문구는 수정 가능(P.copy), 컨트롤은 실제 작동.
   function paletteStepScreen(fnKey, P, stepNum, step) {
@@ -3470,6 +3473,7 @@
             captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
             sfx: (Array.isArray(d.sfx) ? d.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
+            musicSel: d.musicSel ? { id: d.musicSel.id, name: d.musicSel.name || "음악", _up: !!d.musicSel._up, blob: d.musicSel.blob || null, url: d.musicSel.blob ? null : (d.musicSel.url || null) } : null,   // 🎵 배경음악(업로드=blob / 라이브러리=url)
           },
         };
         await idbSet("palDraft", snap);
@@ -3524,6 +3528,7 @@
       if (Array.isArray(sd.sfx)) {   // 🔔 효과음 복원(오디오 blob → objectURL)
         P.demo.sfx = sd.sfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
+      if (sd.musicSel) { const ms = sd.musicSel; const url = ms.blob ? (function () { try { return URL.createObjectURL(ms.blob); } catch (_) { return null; } })() : (ms.url || null); if (url) { P.demo.musicSel = { id: ms.id || "m", name: ms.name || "음악", url, blob: ms.blob || null, _up: !!ms._up }; P.demo.musicUrl = url; } }   // 🎵 배경음악 복원
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
     } catch (_) { return null; }
@@ -4271,6 +4276,9 @@
     if ($("#esPalMusLoad") && !E._palMusicTracks && !E._palMusicLoading) { E._palMusicLoading = true; fetch(easyAudioEndpoint(), { cache: "no-store" }).then((r) => r.json()).then((j) => { E._palMusicTracks = (j && j.tracks) || []; E._palMusicLoading = false; renderPalette(); }).catch(() => { E._palMusicTracks = []; E._palMusicLoading = false; renderPalette(); }); }
     $$("#esBody [data-mustempo]").forEach((b) => b.addEventListener("click", () => { E._palMusicTempo = b.dataset.mustempo; renderPalette(); }));   // 🎵 빠르기 필터
     $$("#esBody [data-muspick]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.muspick; const dm = E.palette.demo; if (v === "none") { dm.musicUrl = ""; dm.musicSel = null; } else { const t = (E._palMusicTracks || []).find((x) => x.id === v); if (t) { dm.musicUrl = t.url; dm.musicSel = { id: t.id, name: t.name, url: t.url }; } } try { palDraftSave(); } catch (_) {} renderPalette(); }));
+    { const b = $("#esPalMusUp"), f = $("#esPalMusUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }   // 🎵 내 음악 올리기
+    { const f = $("#esPalMusUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} const url = URL.createObjectURL(file); const nm = String(file.name || "내 음악").replace(/\.[a-z0-9]+$/i, "").slice(0, 30); dm.musicSel = { id: "up" + Date.now().toString(36), name: nm, url, blob: file, _up: true }; dm.musicUrl = url; try { palDraftSave(); } catch (_) {} renderPalette(); try { toast("🎵 음악을 넣었어요 — 배경음악으로 깔립니다 (끝 2초 페이드아웃)"); } catch (_) {} }); }
+    { const b = $("#esBody") ? document.querySelector("#esBody [data-musupx]") : null; if (b) b.addEventListener("click", () => { const dm = E.palette.demo; try { if (dm.musicSel && dm.musicSel._up && String(dm.musicSel.url || "").startsWith("blob:")) URL.revokeObjectURL(dm.musicSel.url); } catch (_) {} dm.musicSel = null; dm.musicUrl = ""; try { palDraftSave(); } catch (_) {} renderPalette(); }); }
     $$("#esBody [data-musplay]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palMusPreview(b.dataset.musplay, b); }));   // ▶는 재생만(줄 선택 안 됨)
     $$("#esBody [data-musmix]").forEach((b) => b.addEventListener("click", () => { E._palMusicMix = b.dataset.musmix === "1"; renderPalette(); }));
     [["esPalVolOrig", "origVol"], ["esPalVolVoice", "voiceVol"], ["esPalVolMusic", "musicVol"]].forEach((pair) => { const el = $("#" + pair[0]); if (el) el.addEventListener("input", () => { E.palette.demo[pair[1]] = +el.value; const bb = el.parentElement.querySelector("b"); if (bb) bb.textContent = el.value; try { palPlayApplyVolumes(); } catch (_) {} clearTimeout(E._palVolT); E._palVolT = setTimeout(() => { try { palDraftSave(); } catch (_) {} }, 300); }); });
@@ -4567,6 +4575,7 @@
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
     if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(로컬=blob / 게시본=url)
     if (Array.isArray(t._palSfx) && t._palSfx.length) { P.demo.sfx = t._palSfx.map((s) => ({ id: s.id || uid(), name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result instanceof Blob) ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : (s.url ? { url: s.url } : null) })); P.demo.sfxSel = 0; }   // 🔔 효과음 복원(로컬=blob / 게시본=url)
+    if (t._palMusic) { const ms = t._palMusic; const url = (ms.result instanceof Blob) ? (function () { try { return URL.createObjectURL(ms.result); } catch (_) { return null; } })() : (ms.url || null); if (url) { P.demo.musicSel = { id: ms.id || "m", name: ms.name || "음악", url, blob: (ms.result instanceof Blob) ? ms.result : null, _up: !!ms._up }; P.demo.musicUrl = url; } }   // 🎵 배경음악 복원(로컬=blob / 게시본=url)
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -4585,6 +4594,7 @@
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
       _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
       _palSfx: (Array.isArray(P.demo && P.demo.sfx) ? P.demo.sfx : []).map((s) => ({ id: s.id, name: s.name || "효과음", cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, vol: s.vol != null ? s.vol : 100, result: (s.result && s.result.blob) || null })),   // 🔔 효과음(오디오 blob)
+      _palMusic: (P.demo && P.demo.musicSel) ? { id: P.demo.musicSel.id, name: P.demo.musicSel.name || "음악", _up: !!P.demo.musicSel._up, url: P.demo.musicSel.blob ? null : (P.demo.musicSel.url || null), result: P.demo.musicSel.blob || null } : null,   // 🎵 배경음악(업로드=blob / 라이브러리=url)
     };
   }
   function savePalette() {
@@ -5918,6 +5928,7 @@
         if (!_tStyle._palCaptions && _cm.palCaptions) _tStyle._palCaptions = _cm.palCaptions;
         if (!_tStyle._palStickers && _cm.palStickers) _tStyle._palStickers = _cm.palStickers;
         if (!_tStyle._palSfx && _cm.palSfx) _tStyle._palSfx = _cm.palSfx;
+        if (!_tStyle._palMusic && _cm.palMusic) _tStyle._palMusic = _cm.palMusic;
         await palApplySavedStyles(E.palette, _tStyle);
       } catch (_) {}
       return;
@@ -6195,9 +6206,11 @@
               const _sx = [];
               for (let i = 0; i < (t._palSfx || []).length; i++) { const s = t._palSfx[i]; const { result, ...meta } = s; let url = s.url || null; if (!url && result instanceof Blob) { try { toast("🔔 효과음 올리는 중…"); } catch (_) {} const ext = (result.type && result.type.indexOf("wav") >= 0) ? "wav" : (result.type && result.type.indexOf("mpeg") >= 0) ? "mp3" : "m4a"; url = await uploadMediaSigned(id, "sfx" + i + "." + ext, result, result.type || "audio/mpeg", key); } if (url) _sx.push(Object.assign(meta, { url })); }
               cur.palSfx = _sx.length ? _sx : null;
-            } catch (e) { console.warn("[easyshorts] 스티커/효과음 게시 업로드", e); try { toast("⚠️ 스티커/효과음 업로드 일부 실패 — 다시 게시해 보세요"); } catch (_) {} }
+              // 🎵 배경음악 — 업로드 음악은 스토리지에 올려 URL, 라이브러리 음악은 URL 그대로
+              const pm = t._palMusic; if (pm) { let mu = pm.url || null; if (!mu && pm.result instanceof Blob) { try { toast("🎵 음악 올리는 중…"); } catch (_) {} mu = await uploadMediaSigned(id, "bgmusic.mp3", pm.result, pm.result.type || "audio/mpeg", key); } cur.palMusic = mu ? { id: pm.id, name: pm.name || "음악", url: mu } : null; } else cur.palMusic = null;
+            } catch (e) { console.warn("[easyshorts] 스티커/효과음/음악 게시 업로드", e); try { toast("⚠️ 일부 업로드 실패 — 다시 게시해 보세요"); } catch (_) {} }
           }
-          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; delete cur.palStickers; delete cur.palSfx; }
+          else { delete cur.palette; delete cur.paletteSteps; delete cur.palTitles; delete cur.palCaptions; delete cur.palStickers; delete cur.palSfx; delete cur.palMusic; }
           m[t.id] = cur; clsMapSave(m);
           await clsServerSave();
         }
