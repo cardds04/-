@@ -1030,7 +1030,8 @@
       const g = off.createGain();
       const fade = Math.min(5, total);
       const mw = musicWin(total);   // 음악 인/아웃 범위
-      const duck = vBuf ? voiceDuckLevel() : 1;   // 나레이션 있으면 음악 줄임(덕킹)
+      const mvBase = (E.using && E.using.musicVol != null) ? Math.max(0, Math.min(1, E.using.musicVol)) : 0.35;   // 🔊 사용자가 정한 음악 볼륨(안 쓰면 100%로 나오던 버그)
+      const duck = vBuf ? Math.min(mvBase, voiceDuckLevel()) : mvBase;   // 나레이션 있으면 그 아래로 덕킹, 없으면 음악 볼륨 그대로
       g.gain.setValueAtTime(mw.start > 0 ? 0.0001 : duck, 0);
       g.gain.setValueAtTime(duck, mw.start);
       g.gain.setValueAtTime(duck, Math.max(mw.start, mw.end - fade));
@@ -3025,10 +3026,15 @@
     // ◀ 컷 타임라인은 항상 0초(왼쪽)부터 보이게 — 재생선 따라가다 멈춰도, 단계 들어와도 처음으로(재생 중일 때만 유지)
     $$(".es-pal-ct-scroll").forEach((sc) => { if (!(E._palPlay && E._palPlay.playing)) sc.scrollLeft = 0; });
     // 🎯 타임라인을 드래그(가로 스크롤)하면 안내선이 왼쪽 끝에 따라오며 미리보기가 그 지점으로 스크럽 — 화면 보면서 편집
-    $$(".es-pal-ct-scroll").forEach((sc) => sc.addEventListener("scroll", () => {
-      const c = E._palPlay; if (!c || c.playing) return;
-      const t = Math.max(0, Math.min(c.maxT, sc.scrollLeft / c.PPS)); c.base = t; c.render(t);
-    }, { passive: true }));
+    $$(".es-pal-ct-scroll").forEach((sc) => {
+      // ⏭ 마지막 클립 '끝 장면'까지 끌 수 있게 — 오른쪽에 한 화면만큼 빈 여백을 더해 스크롤이 끝(maxT)에 닿게(여백 없으면 끝부분이 안 밀림)
+      const inner = sc.querySelector(".es-pal-ct-inner");
+      if (inner && !inner._endPadded) { const cw = sc.clientWidth || 320; inner.style.boxSizing = "content-box"; inner.style.paddingRight = Math.max(80, cw - 16) + "px"; inner._endPadded = true; }
+      sc.addEventListener("scroll", () => {
+        const c = E._palPlay; if (!c || c.playing) return;
+        const t = Math.max(0, Math.min(c.maxT, sc.scrollLeft / c.PPS)); c.base = t; c.render(t);
+      }, { passive: true });
+    });
     // ▶ 타임라인 클릭 = 재생선을 그 위치로(seek) — 클립 선택 재렌더보다 먼저(capture). 손잡이·삭제·추가·재생선꽁다리는 제외.
     $$(".es-pal-ct-inner").forEach((inner) => inner.addEventListener("click", (e) => {
       if (e.target.closest(".es-pal-ct-h, [data-ctcut], [data-ctaddclip], .es-pal-ct-playgrab")) return;
