@@ -9278,62 +9278,111 @@ ${folderBtn}
       }
 
       function renderCustomerStatsDashboard() {
-        const customers = readStorageArray(STORAGE_CUSTOMERS);
-        const loginLogs = readStorageArray(STORAGE_CUSTOMER_LOGINS);
-        const totalCompanies = new Set(companies.map((item) => normalizeCompanyName(item.name).toLowerCase()).filter(Boolean)).size;
-        const todayKey = new Date().toISOString().slice(0, 10);
-        const todaySignupCount = customers.filter((item) => String(item.createdAt || "").slice(0, 10) === todayKey).length;
-        const todayVisitors = new Set(
-          loginLogs
-            .filter((item) => String(item.at || "").slice(0, 10) === todayKey)
-            .map((item) => String(item.customerId || item.company || "").trim())
-            .filter(Boolean)
+        if (!customerStatsBoxEl) return;
+        const totalCompanies = new Set(
+          companies.map((item) => normalizeCompanyName(item.name).toLowerCase()).filter(Boolean)
         ).size;
 
-        const dailyMap = new Map();
-        customers.forEach((item) => {
-          const dateKey = String(item.createdAt || "").slice(0, 10);
-          if (!dateKey) return;
-          if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { signup: 0, login: 0 });
-          dailyMap.get(dateKey).signup += 1;
-        });
-        loginLogs.forEach((item) => {
-          const dateKey = String(item.at || "").slice(0, 10);
-          if (!dateKey) return;
-          if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { signup: 0, login: 0 });
-          dailyMap.get(dateKey).login += 1;
+        // 일자별 집계: dayKey(YYYY-MM-DD) -> { received, canceled, changed }
+        const dayMap = new Map();
+        const bump = (rawKey, field) => {
+          const dayKey = String(rawKey || "").slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
+          if (!dayMap.has(dayKey)) dayMap.set(dayKey, { received: 0, canceled: 0, changed: 0 });
+          dayMap.get(dayKey)[field] += 1;
+        };
+
+        // 1) 접수·취소 — 접수 전용 원장(서버 백업·크로스디바이스). 소스로 분류:
+        //    *_create / customer / admin = 접수, *_cancel / *_delete = 취소.
+        const ledgerRows =
+          latestScheduleReceiptLedger && latestScheduleReceiptLedger.length
+            ? latestScheduleReceiptLedger
+            : readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER);
+        ledgerRows.forEach((row) => {
+          const src = String(row?.source || "").trim();
+          const dayRaw = row?.createdAt || row?.created_at || row?.date;
+          if (src.includes("cancel") || src.includes("delete")) bump(dayRaw, "canceled");
+          else if (src.endsWith("_create") || src === "customer" || src === "admin") bump(dayRaw, "received");
         });
 
-        const rows = [...dailyMap.entries()]
-          .sort((a, b) => b[0].localeCompare(a[0]))
-          .map(
-            ([dateKey, stat]) => `
+        // 2) 변경 — 관리자 날짜/시간 변경 알림(원장에는 변경 이벤트가 없음)
+        readStorageArray(STORAGE_CUSTOMER_ALERTS).forEach((row) => {
+          const type = String(row?.type || "").trim();
+          if (type === "admin_time_update" || type === "admin_date_update") bump(row?.createdAt, "changed");
+        });
+
+        // 월별 집계
+        const monthMap = new Map();
+        [...dayMap.entries()].forEach(([dayKey, stat]) => {
+          const monthKey = dayKey.slice(0, 7);
+          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { received: 0, canceled: 0, changed: 0 });
+          const m = monthMap.get(monthKey);
+          m.received += stat.received;
+          m.canceled += stat.canceled;
+          m.changed += stat.changed;
+        });
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const monthKeyNow = todayKey.slice(0, 7);
+        const todayStat = dayMap.get(todayKey) || { received: 0, canceled: 0, changed: 0 };
+        const monthStat = monthMap.get(monthKeyNow) || { received: 0, canceled: 0, changed: 0 };
+        const net = (s) => s.received - s.canceled;
+
+        const numCell = (value, color) =>
+          `<td style="color: ${value ? color : "#9aa0a6"}; font-weight: ${value ? 700 : 400};">${value}건</td>`;
+        const monthLabel = (key) => {
+          const [y, m] = key.split("-");
+          return `${y}년 ${Number(m)}월`;
+        };
+        const statRows = (entries) =>
+          entries
+            .map(
+              ([key, s]) => `
               <tr>
-                <td>${escapeHtml(dateKey)}</td>
-                <td>${stat.signup}명</td>
-                <td>${stat.login}건</td>
+                <td>${escapeHtml(key === todayKey ? `${key} (오늘)` : key)}</td>
+                ${numCell(s.received, "#1a73e8")}
+                ${numCell(s.canceled, "#d93025")}
+                ${numCell(s.changed, "#b8860b")}
+                <td style="font-weight: 700;">${net(s)}건</td>
               </tr>
             `
-          )
-          .join("");
+            )
+            .join("");
+
+        const monthRows = statRows(
+          [...monthMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(([k, s]) => [monthLabel(k), s])
+        );
+        const dayRows = statRows([...dayMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 31));
+        const hasData = dayMap.size > 0;
+        const tableHead = '<tr><th>기간</th><th>접수</th><th>취소</th><th>변경</th><th>순주문</th></tr>';
 
         customerStatsBoxEl.innerHTML = `
           <div class="customer-stats-head">
-            <strong>고객 현황</strong>
+            <strong>주문 통계</strong>
             <span>총업체수: ${totalCompanies}개</span>
-            <span>신규회원수(오늘): ${todaySignupCount}명</span>
-            <span>오늘 방문회원수: ${todayVisitors}명</span>
+            <span>오늘 접수: ${todayStat.received}건</span>
+            <span>이번 달 접수: ${monthStat.received}건</span>
+            <span>취소: ${monthStat.canceled}건</span>
+            <span>변경: ${monthStat.changed}건</span>
+            <span>순주문: ${net(monthStat)}건</span>
           </div>
-          <table class="payment-table" style="margin-top: 0;">
-            <thead>
-              <tr>
-                <th>일자</th>
-                <th>신규회원</th>
-                <th>로그인</th>
-              </tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="3">기록이 없습니다.</td></tr>'}</tbody>
-          </table>
+          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">접수=새로 들어온 주문 · 취소=취소된 주문 · 변경=날짜/시간 변경 · 순주문=접수−취소</div>
+          ${
+            hasData
+              ? `
+            <div style="font-weight: 700; margin: 6px 0 4px;">월별 통계</div>
+            <table class="payment-table" style="margin-top: 0;">
+              <thead>${tableHead}</thead>
+              <tbody>${monthRows}</tbody>
+            </table>
+            <div style="font-weight: 700; margin: 16px 0 4px;">일별 통계 (최근 31일)</div>
+            <table class="payment-table" style="margin-top: 0;">
+              <thead>${tableHead}</thead>
+              <tbody>${dayRows}</tbody>
+            </table>
+          `
+              : '<div>아직 주문 통계 데이터가 없습니다.</div>'
+          }
         `;
       }
 
