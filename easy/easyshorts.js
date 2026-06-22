@@ -1869,11 +1869,13 @@
         ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
       });
     };
-    if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
-    if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
-    if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
+    if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
+      if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
+      if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
+      if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
+    }
     let chips = "";
-    if (!playMode) {   // 실제 출력 재생 모드에선 안내 칩 숨김(자막 타이밍 표시 lite는 유지)
+    if (!playMode && !opts.noOverlay) {   // 실제 출력 재생 모드·시안(noOverlay)에선 안내 칩 숨김
       if (list.length > 1) chips += `<span class="es-pal-real-chip">🎬 ${list.length}컷</span>`;
       if (has("narrate")) chips += `<span class="es-pal-real-chip">🎙 나레이션</span>`;
       if (has("music")) chips += `<span class="es-pal-real-chip">🎵 배경음악</span>`;
@@ -2092,7 +2094,7 @@
   // ✋ 왼쪽 미리보기의 여러 칸을 각각 끌어 위치 / 핸들로 크기 / 클릭으로 그 칸 선택(편집).
   function palTitleDragInit() {
     const P = E.palette; if (!P) return; const d = P.demo || (P.demo = {});
-    const stage = document.querySelector(".es-pal-real-stage"); if (!stage) return;
+    const stage = document.querySelector("#esPalReal .es-pal-real-stage"); if (!stage) return;   // 2열(편집 가능한 작업 미리보기)만 — 1열 시안엔 박스 없음
     stage.querySelectorAll(".es-pal-real-titlebox[data-titleidx]").forEach((box) => {
       const idx = +box.getAttribute("data-titleidx");
       const kind = box.getAttribute("data-kind") || "title";
@@ -3420,7 +3422,7 @@
     const grid = list.length
       ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-uprm="${i}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
       : "";
-    return `<div class="es-pal-prev-tag es-pal-up-tag">📥 따라할 영상 — 넣고 똑같이 편집</div>
+    return `<div class="es-pal-prev-tag es-pal-up-tag">📥 따라할 영상 (시안) — 보고 따라 만들기 <span class="es-pal-tref-hint">(작업 적용 안 됨)</span></div>
       <button type="button" class="es-pal-up-btn" id="esPalUpBtn">＋ 영상·사진 넣기</button>
       ${grid}
       <input type="file" id="esPalUpFile" accept="image/*,video/*" multiple hidden>`;
@@ -3432,7 +3434,7 @@
     const grid = list.length
       ? `<div class="es-pal-up-grid es-pal-up-grid-sm">${list.map((mm, i) => `<div class="es-pal-up-cell"><span class="es-pal-up-n">${i + 1}</span><button type="button" class="es-pal-up-x" data-tprm="${i}" title="이 테스트 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${esc(mm.url)}" muted playsinline preload="metadata"${mm.poster ? ` poster="${esc(mm.poster)}"` : ""}></video>` : `<img src="${esc(mm.url)}" alt="">`}</div>`).join("")}</div>`
       : "";
-    return `<div class="es-pal-prev-tag">🎞 템플릿 미리보기 — <b>테스트 영상</b> 넣어보기</div>
+    return `<div class="es-pal-prev-tag">🎞 내 템플릿 (작업 적용됨) — <b>테스트 영상</b>에 확인</div>
       <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">＋ 테스트 영상 넣기</button>
       ${grid}
       <input type="file" id="esPalTestFile" accept="image/*,video/*" multiple hidden>`;
@@ -3507,16 +3509,18 @@
       ? `<div class="es-pal-prev">${E._palCustomerMode ? "" : `<div class="es-pal-prev-tag">👀 고객이 보는 화면 — ${isPrev ? "미리보기" : "단계 " + (P.sel + 1) + "/" + P.steps.length} · ${esc(showFn.label)} · <b>실제로 눌러보세요</b></div>`}<div class="es-pal-phone es-pal-phone-cust ${arc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-cust ${_showsLive ? "has-live" : ""}${_sheetUp ? " sheet-up" : ""}${showKey === "review" ? " es-cust-review" : ""}${["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey) ? " es-cust-cut" : ""}">${liveTop}<div class="es-pal-cust-scroll">${paletteStepScreen(showKey, P, stepNum, P.preview ? null : sel)}</div>${custNav}</div></div></div>`
       : `<div class="es-pal-screen is-empty"><div class="es-pal-screen-ico">👆</div><div class="es-pal-screen-t">기능을 한 번 누르면 화면이 보여요</div><div class="es-pal-screen-d">두 번 누르거나 끌어다 놓으면 단계에 추가돼요</div></div>`;
     const realArc = "ar-" + (P.aspect || "9:16").replace(":", "-");
-    const realHtml = `<div class="es-pal-prev es-pal-prev-editor">
-          <div class="es-pal-prev-tag es-pal-prev-tag-real">▶ 실제 결과 미리보기 — 끌어서 배치<button type="button" class="es-pal-insta-btn ${E._palInstaPreview ? "on" : ""}" id="esInstaToggle" title="인스타에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button></div>
-          <div class="es-pal-phone es-pal-phone-sm ${realArc}" id="esPalReal"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P)}</div></div>
+    // 🖼 1열 = '시안'(따라할 원본 영상만 — 작업한 타이틀/자막 적용 안 함, 읽기전용). 보고 따라 만들기용.
+    const _refEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎬</div><div class="es-pal-real-empty-t"><b>따라할 영상(시안)</b>을 넣으면<br>여기 떠요 — 보고 따라 만들어요</div></div>`;
+    const refHtml = `<div class="es-pal-prev es-pal-prev-editor">
+          <div class="es-pal-phone es-pal-phone-sm ${realArc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { readonly: true, noOverlay: true, emptyHtml: _refEmpty })}</div></div>
+        </div>`;
+    // 🎞 2열 = '내 템플릿' 미리보기 — 작업한 타이틀/자막이 여기 적용됨(편집·끌어서 배치). 테스트 영상(d.testMedia) 위에 보여줌.
+    const _testEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎞</div><div class="es-pal-real-empty-t">테스트 영상을 넣으면<br>그 위에 <b>작업한 게</b> 보여요</div></div>`;
+    const workHtml = `<div class="es-pal-prev es-pal-prev-editor">
+          <div class="es-pal-prev-tag es-pal-prev-tag-real">▶ 작업 적용된 미리보기 — 끌어서 배치<button type="button" class="es-pal-insta-btn ${E._palInstaPreview ? "on" : ""}" id="esInstaToggle" title="인스타에 올리면 이렇게 보여요(확인용)">📱 릴스로 보기</button></div>
+          <div class="es-pal-phone es-pal-phone-sm ${realArc}" id="esPalReal"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { media: (P.demo.testMedia || []), emptyHtml: _testEmpty })}</div></div>
           <div class="es-pal-tracks-h">🎬 편집 트랙 — 추가한 기능이 다 들어가요</div>
           <div class="es-pal-tracks">${paletteTracks(P)}</div>
-        </div>`;
-    // 🎞 2열 = 영상 뺀 '템플릿 미리보기'(읽기전용). 테스트 영상(d.testMedia) 넣으면 그 위에 템플릿이 어떻게 보이는지 확인.
-    const _testEmpty = `<div class="es-pal-real-empty"><div class="es-pal-real-empty-ic">🎞</div><div class="es-pal-real-empty-t">영상 없이 <b>템플릿만</b> 보여요<br>테스트 영상을 넣어보세요</div></div>`;
-    const testPreviewHtml = `<div class="es-pal-prev es-pal-prev-editor">
-          <div class="es-pal-phone es-pal-phone-sm ${realArc}"><div class="es-pal-phone-notch"></div><div class="es-pal-phone-screen es-pal-phone-screen-real">${paletteRealPreview(P, false, { media: (P.demo.testMedia || []), readonly: true, emptyHtml: _testEmpty })}</div></div>
         </div>`;
     // 가운데 '작업대' 칸 — 레이아웃 고정 위해 항상 자리 차지(3열 유지). 타이틀/자막 단계면 편집기, 아니면 '작업대 없음' 안내.
     // ✨ 자동세팅 작업대 — 타이틀/자막 탭일 때 위쪽에 '저장된 스타일 고르기'(자막참조·타이틀참조와 동일), 아래에 편집기
@@ -3563,8 +3567,8 @@
           </div>`}
         </div>
         <div class="es-pal-body es-pal-body-4 ${_isEditStep ? "has-editor" : ""}">
-          <div class="es-pal-zone es-pal-zone-upload es-pal-zone-src">${paletteUploadZone(P)}${realHtml}</div>
-          <div class="es-pal-zone es-pal-zone-real es-pal-zone-tmpl">${paletteTestZone(P)}${testPreviewHtml}</div>
+          <div class="es-pal-zone es-pal-zone-upload es-pal-zone-src">${paletteUploadZone(P)}${refHtml}</div>
+          <div class="es-pal-zone es-pal-zone-real es-pal-zone-tmpl">${paletteTestZone(P)}${workHtml}</div>
           ${editorZone}
           <div class="es-pal-zone es-pal-zone-canvas">${canvasHtml}</div>
         </div>
@@ -3851,9 +3855,9 @@
     if (_tgen) _tgen.addEventListener("click", () => { const r = demo.titleRef; if (r && r.kind === "font") palFontTitleFromRef(); else palTitleGenerate(); });   // ✍️글자체면 즉시 렌더, 아니면 ✨AI
     // ▶ 미리보기 재생/정지 — 결과 화면 아무 데나 클릭(영상·버튼) → 영상 재생 + 나레이션(자막을 AI 음성으로, 브라우저 TTS)
     const _play = $("#esPalRealPlay");
-    const _realScreen = $(".es-pal-phone-screen-real");
+    const _realScreen = $("#esPalReal .es-pal-phone-screen-real");
     if (_play && _realScreen) _realScreen.addEventListener("click", () => {
-      const stage = $(".es-pal-real-stage");
+      const stage = $("#esPalReal .es-pal-real-stage");
       const vid = stage ? stage.querySelector("video.es-pal-real-media") : null;
       const fns = P.steps.map((s) => s.fn);
       if (_play.classList.contains("playing")) {
