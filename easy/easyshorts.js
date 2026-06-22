@@ -1543,13 +1543,14 @@
     { key: "cuttrim", icon: "🔇", label: "빈 구간" },
     { key: "music",   icon: "🎵", label: "음악 고르기" },
     { key: "musicvol",icon: "🎚", label: "음악 소리조절" },
+    { key: "musicvolforce", icon: "🎛", label: "음악소리강제" },
     { key: "review",  icon: "✅", label: "최종본 확인" },
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "narrforce", "bgmusic", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "sfx", "nstyle", "narrforce", "bgmusic", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "musicvolforce", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
-  const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "musicvolforce", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
   const paletteFn = (k) => PALETTE_FNS.find((f) => f.key === (k === "title" ? "tgen" : k)) || null;   // 옛 'title'은 'tgen'으로
   // 🧩 기능 아이콘 순서 — 사장님이 끌어서 바꾼 순서(localStorage 영속). 새로 생긴 기능은 끝에, 없어진 키는 무시.
@@ -1604,6 +1605,7 @@
     cuttrim: { title: "음성 없는 부분 잘라내기",      note: "나레이션·자막 끝난 뒤 빈 곳 제거" },
     music:   { title: "배경음악을 골라요",          note: "분위기에 맞는 음악을 선택" },
     musicvol:{ title: "소리 크기를 맞춰요",          note: "원본·나레이션·음악 크기 조절(위 ▶로 들어봐요)" },
+    musicvolforce: { title: "소리 크기 강제 (관리자 전용)", note: "여기서 정한 크기로 고객 영상이 나와요 — 고객 화면엔 안 나와요" },
     review:  { title: "최종본 확인",                note: "완성된 영상을 위에서 보고, 고칠 단계로 바로 돌아가요" },
     done:    { title: "내보내기 📤",                note: "영상으로 만들어 저장해요" },
   };
@@ -1631,6 +1633,18 @@
     return "";
   }
   // 🎵 관리자 전용 '배경음악 깔기' — 빌더에 항상 보임(단계 무관). 정한 음악이 _palMusic로 영속되어 모든 고객 영상에 자동으로 깔림(고객은 안 고름). 끝 2초 페이드아웃은 이미 내보내기/미리보기에 있음.
+  // 🎚 음악소리강제 작업대 — 관리자가 원본·나레이션·음악 크기를 정함(고객 화면엔 없음, 이 크기로 고정). musicvol 슬라이더 재사용(같은 id → 기존 핸들러가 자동 연결).
+  function palMusicVolForceEditor(P) {
+    const d = (P && P.demo) || {};
+    const sel = d.musicSel;
+    const ov = d.origVol != null ? d.origVol : 100, vv = d.voiceVol != null ? d.voiceVol : 100, mv = d.musicVol != null ? d.musicVol : 35;
+    return `<div class="es-pal-mus-lb">🎚 소리 크기 강제 <span class="es-pal-tref-hint">(고객은 이 크기로 고정)</span></div>
+      ${sel ? `<div class="es-pal-mus-cur">🎵 ${esc(sel.name || "선택한 음악")}</div>` : `<div class="es-pal-mus-hint">음악을 안 깔아도 원본·나레이션 크기는 정할 수 있어요</div>`}
+      <div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎬 원본</span><input type="range" id="esPalVolOrig" min="0" max="100" value="${ov}"><b class="es-pal-mus-v">${ov}</b></div>
+      <div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎙 나레이션</span><input type="range" id="esPalVolVoice" min="0" max="100" value="${vv}"><b class="es-pal-mus-v">${vv}</b></div>
+      ${sel ? `<div class="es-pal-mus-row"><span class="es-pal-mus-rl">🎵 음악</span><input type="range" id="esPalVolMusic" min="0" max="100" value="${mv}"><b class="es-pal-mus-v">${mv}</b></div>` : ""}
+      <div class="es-pal-mus-hint">✅ 정한 크기로 고객 영상이 나와요 (고객은 이 단계를 안 봐요)</div>`;
+  }
   function palBgMusicAdmin(P) {
     const d = (P && P.demo) || {};
     const ms = d.musicSel;
@@ -1670,12 +1684,13 @@
     const br = (s) => esc(s).replace(/\n/g, "<br>");   // 저장된 줄바꿈(엔터)을 화면에 그대로
     const _custLike = (E._palCustomerMode || E._palTestMode);
     const _moveToBottom = _custLike && !editing && !!palCustGuide(fnKey, P, step);   // 고객 화면 = 제목을 하단 안내바로 옮김(중복 방지)
+    const _beatMin = (fnKey === "cutbeat") && !editing;   // 🥁 AI리듬 단계 = 제목·설명 숨겨 최소화(타임라인+드롭다운만, 요청)
     const head = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-t" id="esCopyTitle" rows="2" placeholder="제목 (엔터=줄바꿈)">${esc(T)}</textarea>`
-      : _moveToBottom ? "" : `<div class="es-pal-scr-title">${br(T)}</div>`;
+      : (_beatMin || _moveToBottom) ? "" : `<div class="es-pal-scr-title">${br(T)}</div>`;
     const noteEl = editing
       ? `<textarea class="es-pal-scr-cedit es-pal-scr-cedit-n" id="esCopyNote" rows="2" placeholder="작은 설명 글씨 (비워도 돼요 · 엔터=줄바꿈)">${esc(N)}</textarea>`
-      : (N ? `<div class="es-pal-scr-note">${br(N)}</div>` : "");
+      : (_beatMin || !N) ? "" : `<div class="es-pal-scr-note">${br(N)}</div>`;
     const editBtn = (E._palTestMode || E._palCustomerMode) ? "" : editing   // ✏️ 문구 고치기는 이지숏폼 생성기(관리자)에서만 — 고객·테스트 화면엔 안 보임
       ? `<div class="es-pal-scr-editwrap"><div class="es-pal-scr-edithint">📌 <b>저장해두기</b> = 오른쪽 기능상자 <b>${esc((paletteFn(fnKey) || {}).label || "")}</b> 아이콘에 붙여서 <b>다시 꺼내 써요</b></div><input type="text" class="es-pal-scr-cname" id="esCopyName" placeholder="📌 저장 이름 (비우면 문구 그대로)"><div class="es-pal-scr-editrow"><button type="button" class="es-pal-scr-copybtn save" id="esCopySave">📌 저장해두기</button><button type="button" class="es-pal-scr-copybtn done" id="esCopyDone">✓ 완료</button></div></div>`
       : `<button type="button" class="es-pal-scr-copybtn" id="esCopyEdit" data-fn="${esc(fnKey)}"${step ? ` data-step="${esc(step.id)}"` : ""}>✏️ 이 화면 문구 고치기</button>`;
@@ -1818,6 +1833,10 @@
           body = `<div class="es-pal-narr-lb">🎶 배경음악 (관리자 전용)</div><div class="es-pal-tgen-noref">이 단계는 <b>고객 화면엔 안 나와요</b>.<br>관리자가 정한 음악${_mn ? ` (🎵 ${esc(_mn)})` : ""}이 고객 영상에 <b>자동으로 깔려요</b>.<br><small>가운데 '음악 깔기' 작업대에서 음악을 올리세요.</small></div>`;
           break;
         }
+        case "musicvolforce": {   // 🎚 음악소리강제 = 관리자 전용(고객 단계엔 빠짐). 빌더 미리보기용 안내만.
+          body = `<div class="es-pal-narr-lb">🎚 소리 크기 강제 (관리자 전용)</div><div class="es-pal-tgen-noref">이 단계는 <b>고객 화면엔 안 나와요</b>.<br>관리자가 정한 <b>원본·나레이션·음악 크기</b>로 고객 영상이 <b>자동으로 나와요</b>.<br><small>가운데 '음악소리강제' 작업대에서 크기를 맞추세요.</small></div>`;
+          break;
+        }
         case "ngen": {   // 🔊 나레이션 생성·미리듣기 (단계 2)
           const caps = (d.captions || []).map((t) => (t.text || "").trim()).filter(Boolean);
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들어주세요 💬</div>`; break; }
@@ -1875,7 +1894,7 @@
           break;
         }
         case "cuteven": body = `<div class="es-pal-cut-lb">🟰 컷을 똑같은 길이로</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="even">🟰 컷 균등 맞추기</button><span class="es-pal-ct-evenbox"><input type="number" class="es-pal-ct-evensec" data-ctevensec min="0.5" max="15" step="0.5" value="${palEvenSec()}" aria-label="한 컷 길이(초)"><b>초</b></span></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
-        case "cutbeat": { const tsel = ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${curBeatTempo() === v ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-cut-lb">🥁 음악 리듬에 맞춰 끊기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="beat">🥁 AI 리듬 맞추기</button><select class="es-pal-ct-tempo" data-cttempo aria-label="리듬 빠르기">${tsel}</select><label class="es-pal-ct-fitcap" title="총 길이를 '자막 끝 + 3초'로 맞추고 그 안에서 리듬대로 컷을 나눠요"><input type="checkbox" data-ctfitcap${curBeatFit() ? " checked" : ""}>자막에 맞추기</label></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }
+        case "cutbeat": { const _fit = curBeatFit(); const tsel = `<option value="cap"${_fit ? " selected" : ""}>📝 자막에 맞추기</option>` + ["vfast:엄청 빠름", "fast:빠름", "mid:중간", "slow:느림", "vslow:엄청 느림"].map((o) => { const [v, l] = o.split(":"); return `<option value="${v}"${(!_fit && curBeatTempo() === v) ? " selected" : ""}>${l}</option>`; }).join(""); body = `<div class="es-pal-ct-tools es-pal-cut-beatonly"><select class="es-pal-ct-tempo" data-cttempo aria-label="자막에 맞추기 · 리듬 빠르기" title="자막에 맞추기 = 총 길이를 '자막 끝 + 3초'로 맞춰 그 안에서 리듬대로 컷을 나눠요">${tsel}</select></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break; }   // 🥁 AI리듬 단계 = 자막에맞추기 드롭다운 + 타임라인만. '맞추기' 버튼은 하단 nav로(요청)
         case "cuttrim": body = `<div class="es-pal-cut-lb">🔇 음성 없는 부분 잘라내기</div><div class="es-pal-ct-tools"><button type="button" class="es-pal-ct-tool" data-cttool="trim">🔇 빈 구간 잘라내기</button></div><div id="esPalCutWrap">${palCutTimeline(P, { noTools: 1 })}</div>`; break;
         case "music": {   // 🎵 배경음악 고르기(선택 전용) — 소리 조절은 다음 'musicvol' 단계
           const sel = d.musicSel;
@@ -3023,7 +3042,7 @@
     $$("[data-ctaddclip]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); palAddMediaPick(); }));   // 🎬 영상 추가(끝+ / 아래 버튼)
     $$(".es-pal-ct-h").forEach((h) => h.addEventListener("pointerdown", palCutDragStart));
     $$("[data-cttool]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.cttool; if (k === "even") palCutEven(); else if (k === "beat") palCutBeat(b); else if (k === "trim") palCutTrimSilence(); }));
-    { const tp = $("[data-cttempo]"); if (tp) tp.addEventListener("change", (e) => { try { setBeatTempo(e.target.value); } catch (_) {} }); }
+    { const tp = $("[data-cttempo]"); if (tp) tp.addEventListener("change", (e) => { try { const v = e.target.value; if (v === "cap") { setBeatFit(true); } else { setBeatTempo(v); if (e.target.querySelector('option[value="cap"]')) setBeatFit(false); } } catch (_) {} }); }   // 🥁 속도 + '자막에 맞추기'(cap) 한 드롭다운으로
     { const fc = $("[data-ctfitcap]"); if (fc) fc.addEventListener("change", (e) => { try { setBeatFit(e.target.checked); } catch (_) {} }); }   // 📝 자막에 맞추기 토글
     { const tg = $("[data-cttltoggle]"); if (tg) tg.addEventListener("click", () => { E._palCutTlOpen = !E._palCutTlOpen; const w = $("#esPalCutWrap"); if (w) w.classList.toggle("collapsed", !E._palCutTlOpen); tg.textContent = E._palCutTlOpen ? "▾ 타임라인 접기" : "▸ 타임라인 펼쳐서 자세히 편집"; }); }   // ▸ 타임라인 펼치기/접기(재렌더 없이 — 미리보기 안 튐)
     { const es = $("[data-ctevensec]"); if (es) es.addEventListener("change", (e) => { const v = setPalEvenSec(e.target.value); e.target.value = v; }); }   // 컷 균등 '초' 지정(기본 2)
@@ -3579,7 +3598,7 @@
   // 🧪 테스트해보기 — '고객이 보는 이지숏폼 화면' 그대로 실행(로그인·저장 없이 미리체험)
   function palTestTemplate(tid) {
     const t = (E.templates || []).find((x) => x.id === tid); if (!t) return;
-    const steps = (t._paletteSteps || []).filter((s) => s.fn !== "bgmusic").map((s) => ({ id: uid(), fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null }));   // 🎶 음악 깔기는 관리자 전용 → 테스트(고객 화면)엔 없음
+    const steps = (t._paletteSteps || []).filter((s) => s.fn !== "bgmusic" && s.fn !== "musicvolforce").map((s) => ({ id: uid(), fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null }));   // 🎶 음악 깔기·🎚 음악소리강제 = 관리자 전용 → 테스트(고객 화면)엔 없음
     if (steps.length) {   // 🎨 팔레트 템플릿 → 단계 플로우(고객 화면)를 전체화면 테스트로
       E._palTestBackup = E.palette;   // 작업 중이던 팔레트 보존(테스트 끝나면 복원)
       E._palCustSheetUp = null;
@@ -3875,7 +3894,7 @@
     if (voices == null) pick = `<div class="es-pal-tc-loading">목소리 불러오는 중…</div>`;
     else if (!voices.length) pick = `<div class="es-pal-tc-fail">목소리를 못 불러왔어요 (API 키 확인) <button type="button" class="es-pal-narr-reload" id="esPalTcReload">🔄 다시 시도</button></div>`;
     else pick = palTcVoicePicker();
-    return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}`;
+    return `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트 · 고객은 이걸로 고정)</span></div><div class="es-pal-tc-pick">${pick}</div>${curV ? `<button type="button" class="es-pal-narr-make" id="esPalNarrforceLock">✅ 이 목소리로 지정</button><div class="es-pal-mus-hint">✅ 이 목소리로 고객 나레이션이 만들어져요</div>` : `<div class="es-pal-narr-hint2">목소리를 고르면 고객은 그 목소리로만 나레이션을 만들어요</div>`}`;
   }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
@@ -3932,7 +3951,8 @@
     const _isSfxStep = !isPrev && _curFn === "sfx";
     const _isNarrforceStep = !isPrev && _curFn === "narrforce";
     const _isBgMusicStep = !isPrev && _curFn === "bgmusic";   // 🎶 음악 깔기 = 관리자 전용(고객 단계엔 없음)
-    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep || _isNarrforceStep || _isBgMusicStep;
+    const _isMusicVolForceStep = !isPrev && _curFn === "musicvolforce";   // 🎚 음악소리강제 = 관리자 전용(고객 단계엔 없음)
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep || _isSfxStep || _isNarrforceStep || _isBgMusicStep || _isMusicVolForceStep;
     E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : _isSfxStep ? "sfx" : (_isCaptionStep ? "caption" : "title");
     // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
     if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
@@ -3944,7 +3964,9 @@
     const _isLast = P.sel >= P.steps.length - 1;
     const _isCutStep = ["length", "cuteven", "cutbeat", "cuttrim"].includes(showKey);   // 컷 단계 = 기능버튼을 하단 nav 가운데로
     const _dotsHtml = P.steps.length > 10 ? `<span class="es-pal-cust-dots es-pal-cust-stepnum">${P.sel + 1} / ${P.steps.length}</span>` : `<span class="es-pal-cust-dots">${P.steps.map((s, i) => `<i class="${i === P.sel ? "on" : ""}"></i>`).join("")}</span>`;
-    const _navMid = _isCutStep
+    const _navMid = (showKey === "cutbeat")
+      ? `<div class="es-pal-cust-nav-tools es-pal-cust-nav-beat"><button type="button" class="es-pal-ct-tool es-pal-cust-beatbtn" data-cttool="beat">🥁 AI 리듬 맞추기</button></div>`   // 🥁 AI리듬 단계 = 4아이콘 대신 '맞추기' 버튼 하나(요청)
+      : _isCutStep
       ? `<div class="es-pal-cust-nav-tools">${palCutToolbar()}</div>`
       : `<div class="es-pal-cust-nav-mid">${_dotsHtml}</div>`;   // 가운데 — 렌더 후 주요 액션버튼이 여기로 옮겨짐(있으면 점 숨김)
     const custNav = !isPrev
@@ -3997,6 +4019,8 @@
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎤 나레이션강제 — 목소리 정하기 (고객은 '만들기'만)</div>${palNarrforceEditor(P)}</div></div>`
       : _isBgMusicStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎶 음악 깔기 — 여기서 정한 음악이 고객 영상에 자동으로 깔려요 (고객 화면엔 없음)</div>${palBgMusicAdmin(P)}</div></div>`
+      : _isMusicVolForceStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🎚 음악소리강제 — 여기서 정한 소리 크기로 고객 영상이 나와요 (고객 화면엔 없음)</div>${palMusicVolForceEditor(P)}</div></div>`
       : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
@@ -4314,6 +4338,7 @@
     $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
     { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
+    { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 목소리로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이걸로 지정' — 고른 목소리 확정
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
     { const ce = $("#esPalCapEditApply"); if (ce) ce.addEventListener("click", () => palCapEditApply(ce)); }   // ✏️ 자막 다듬기 적용(한 줄=한 블럭, 음성 있으면 타이밍 재싱크)
@@ -5978,7 +6003,7 @@
     }
     if (_palSteps && _palSteps.length) {
       await clearSession(); E.editing = null;
-      const steps = _palSteps.filter((s) => s.fn !== "bgmusic").map((s) => ({ id: uid(), fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null }));   // 🎶 음악 깔기는 관리자 전용 → 고객 단계엔 없음(음악은 _palMusic로 자동 적용)
+      const steps = _palSteps.filter((s) => s.fn !== "bgmusic" && s.fn !== "musicvolforce").map((s) => ({ id: uid(), fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null }));   // 🎶 음악 깔기·🎚 음악소리강제 = 관리자 전용 → 고객 단계엔 없음
       E._palTestBackup = E.palette || null; E._palCustSheetUp = null;
       E._palTestMode = false; E._palCustomerMode = true;   // 🙋 고객 풀스크린 깔끔 뷰(테스트 바·관리자 문구 없음) + 작업본(palDraft) 보호
       E.palette = { name: t.name || "", aspect: t.aspect || "9:16", steps, sel: 0, preview: null, _copyEdit: null, demo: { media: [], title: "", caption: "" } };
