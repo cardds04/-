@@ -9331,11 +9331,30 @@ ${folderBtn}
           const [y, m] = key.split("-");
           return `${y}년 ${Number(m)}월`;
         };
-        const monthLabelShort = (key) => `${Number(key.slice(5, 7))}월`;
-        const dayLabelShort = (key) => String(Number(key.slice(8, 10)));
+        const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+        // 월별 컬럼: 이번 달만 빨강 강조.
+        const monthDecorate = (key) => {
+          const hot = key === monthKeyNow;
+          return { label: `${Number(key.slice(5, 7))}월`, sub: "", textColor: hot ? "#d93025" : "#555", barColor: hot ? "#d93025" : "#3b82f6", bold: hot };
+        };
+        // 일별 컬럼: 요일 표기, 토·일은 빨강, 오늘은 막대까지 빨강.
+        const dayDecorate = (key) => {
+          const [y, m, d] = key.split("-").map(Number);
+          const dow = new Date(y, m - 1, d).getDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const isToday = key === todayKey;
+          const red = isWeekend || isToday;
+          return {
+            label: String(d),
+            sub: WEEKDAY_KO[dow],
+            textColor: red ? "#d93025" : "#555",
+            barColor: isToday ? "#d93025" : "#3b82f6",
+            bold: red
+          };
+        };
 
-        // 가로형 막대그래프 한 줄 — 컬럼마다 [라벨(위) / 막대 / 건수(아래)]. 막대 높이 ∝ 건수.
-        const renderBarStrip = (entries, labelFn, isHot) => {
+        // 가로형 막대그래프 한 줄 — 컬럼마다 [라벨·요일(위) / 막대 / 건수(아래)]. 막대 높이 ∝ 건수.
+        const renderBarStrip = (entries, decorate) => {
           if (!entries.length) {
             return '<div style="color:#888;font-size:13px;padding:10px 2px;">표시할 데이터가 없습니다.</div>';
           }
@@ -9343,13 +9362,13 @@ ${folderBtn}
           const cols = entries
             .map(([key, count]) => {
               const barH = Math.max(4, Math.round((count / maxCount) * 80));
-              const hot = isHot && isHot(key);
-              const color = hot ? "#d93025" : "#3b82f6";
+              const deco = decorate(key);
+              const subHtml = deco.sub ? `<br /><span style="font-size:10px;">${escapeHtml(deco.sub)}</span>` : "";
               return `
                 <div style="display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:42px;">
-                  <div style="font-size:11px;color:${hot ? "#d93025" : "#555"};${hot ? "font-weight:700;" : ""}margin-bottom:4px;white-space:nowrap;">${escapeHtml(labelFn(key))}</div>
+                  <div style="font-size:11px;line-height:1.25;text-align:center;color:${deco.textColor};${deco.bold ? "font-weight:700;" : ""}margin-bottom:4px;white-space:nowrap;">${escapeHtml(deco.label)}${subHtml}</div>
                   <div style="display:flex;align-items:flex-end;height:84px;">
-                    <div title="${count}건" style="width:20px;height:${barH}px;background:${color};border-radius:5px 5px 0 0;"></div>
+                    <div title="${count}건" style="width:20px;height:${barH}px;background:${deco.barColor};border-radius:5px 5px 0 0;"></div>
                   </div>
                   <div style="font-size:12px;font-weight:700;color:#1f3a6b;margin-top:4px;">${count}</div>
                 </div>`;
@@ -9383,11 +9402,11 @@ ${folderBtn}
               ? `
             <details open style="${detailsStyle}">
               <summary style="${summaryStyle}">📊 월별 예약 통계</summary>
-              ${renderBarStrip(monthEntries, monthLabelShort, (k) => k === monthKeyNow)}
+              ${renderBarStrip(monthEntries, monthDecorate)}
             </details>
             <details style="${detailsStyle}">
               <summary style="${summaryStyle}">📅 일별 예약 통계 (${escapeHtml(monthLabel(monthKeyNow))}) · 펼쳐보기</summary>
-              ${renderBarStrip(dayEntries, dayLabelShort, (k) => k === todayKey)}
+              ${renderBarStrip(dayEntries, dayDecorate)}
             </details>
           `
               : '<div>아직 예약 데이터가 없습니다.</div>'
