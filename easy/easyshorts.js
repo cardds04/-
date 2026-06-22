@@ -3538,13 +3538,13 @@
     const srcUI = aiMode
       ? `<div class="es-pal-stkr-airow">
           <div class="es-pal-stkr-reflbl">참조 사진 <small>(비슷한 느낌으로 만들어요)</small></div>
-          ${cur.refUrl ? `<div class="es-pal-stkr-refwrap"><img class="es-pal-stkr-ref" src="${esc(cur.refUrl)}"><button type="button" class="es-pal-stkr-refx" id="esStkrRefX">×</button></div>` : `<button type="button" class="es-pal-up-btn" id="esStkrRefBtn">＋ 참조 사진 넣기</button>`}
+          ${cur.refUrl ? `<div class="es-pal-stkr-refwrap"><img class="es-pal-stkr-ref" src="${esc(cur.refUrl)}"><button type="button" class="es-pal-stkr-refx" id="esStkrRefX">×</button></div>` : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrRefBtn">＋ 사진 고르기</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrRefPaste">📋 붙여넣기</button></div><div class="es-pal-stkr-pastehint">사진 복사한 뒤 📋 또는 ⌘V / Ctrl+V</div>`}
           <input type="file" id="esStkrRefFile" accept="image/*" hidden>
           <textarea class="es-pal-capm-prompt" id="esStkrText" rows="2" placeholder="스티커에 들어갈 글씨(선택) — 예: SALE / 신상 / 7월 한정">${esc(cur.text || "")}</textarea>
           <button type="button" class="es-pal-capm-go" id="esStkrGen">✨ AI로 스티커 만들기</button>
           <div id="esStkrStatus" class="es-pal-narr-status"></div>
         </div>`
-      : `<button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 스티커 이미지 올리기 (PNG 추천)</button><input type="file" id="esStkrUpFile" accept="image/*" hidden>`;
+      : `<div class="es-pal-stkr-refbtns"><button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 이미지 올리기 (PNG)</button><button type="button" class="es-pal-up-btn es-pal-stkr-paste" id="esStkrUpPaste">📋 붙여넣기</button></div><input type="file" id="esStkrUpFile" accept="image/*" hidden><div class="es-pal-stkr-pastehint">사진 복사한 뒤 📋 또는 ⌘V / Ctrl+V</div>`;
     return `<div class="es-pal-ted">
       <div class="es-pal-ted-tabs">${tabs}</div>
       <div class="es-pal-stkr-srcbtns"><button type="button" class="es-pal-capm-btn3 ${aiMode ? "on" : ""}" data-stkrsrc="ai">🤖 AI로 만들기</button><button type="button" class="es-pal-capm-btn3 ${!aiMode ? "on" : ""}" data-stkrsrc="up">📤 이미지 올리기</button></div>
@@ -3563,6 +3563,36 @@
       <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>✨ 효과</b></div><div class="es-pal-ted-rl2">나올 때</div><div class="es-pal-ted-anims">${animInBtns}</div><div class="es-pal-ted-rl2">사라질 때</div><div class="es-pal-ted-anims">${animOutBtns}</div></div>
       <div class="es-pal-ted-section es-pal-ted-savebox"><div class="es-pal-ted-sec-h"><b>✅ 적용</b><span>적용하면 고객 영상에 자동으로 나와요</span></div><button type="button" class="es-pal-ted-save ${img ? "" : "off"}" id="esStkrApply">✅ 이 스티커를 영상에 적용</button></div>
     </div>`;
+  }
+  // 🏷 스티커 이미지 지정 — target "ref"(AI 참조사진) / "img"(스티커 이미지 자체). 업로드·붙여넣기 공용.
+  function palStkrSetImage(cur, blob, target) {
+    if (!cur || !blob) return;
+    if (target === "ref") {
+      try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {}
+      cur.refUrl = URL.createObjectURL(blob); cur.refBlob = blob;
+    } else {
+      try { if (cur.result && cur.result.url && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {}
+      cur.result = { url: URL.createObjectURL(blob), blob };
+      try { palDraftSave(); } catch (_) {}
+    }
+    renderPalette();
+  }
+  // 📋 클립보드에서 이미지 붙여넣기(버튼) — navigator.clipboard.read 사용. 안 되면 ⌘V/Ctrl+V 안내.
+  async function palStkrPaste(target) {
+    const cur = palCurBlock("sticker"); if (!cur) return;
+    const status = $("#esStkrStatus");
+    const fail = (msg) => { if (status) status.textContent = "⚠️ " + msg; else { try { toast("⚠️ " + msg); } catch (_) {} } };
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) { fail("이 브라우저는 붙여넣기 버튼이 안 돼요. 키보드로 ⌘V(또는 Ctrl+V)를 눌러 보세요."); return; }
+      const items = await navigator.clipboard.read();
+      let blob = null;
+      for (const it of items) { const t = (it.types || []).find((x) => x.indexOf("image/") === 0); if (t) { blob = await it.getType(t); break; } }
+      if (!blob) { fail("클립보드에 이미지가 없어요. 사진을 복사한 뒤 다시 눌러 주세요."); return; }
+      palStkrSetImage(cur, blob, target);
+      try { toast(target === "ref" ? "📋 참조 사진을 붙여넣었어요" : "📋 스티커 이미지를 붙여넣었어요"); } catch (_) {}
+    } catch (e) {
+      fail(((e && e.message) || e) + " — 키보드로 ⌘V(Ctrl+V)를 눌러 보세요.");
+    }
   }
   // 🏷 AI 스티커 생성 — 참조사진(있으면) + 글씨(선택)로 gpt-image(easy-title sticker 모드) → 투명 키잉
   async function palStickerGen(btn) {
@@ -4186,6 +4216,23 @@
     { const b = $("#esStkrRefBtn"), f = $("#esStkrRefFile"); if (b && f) b.addEventListener("click", () => f.click()); }
     { const f = $("#esStkrRefFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = URL.createObjectURL(file); cur.refBlob = file; renderPalette(); }); }
     { const b = $("#esStkrRefX"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = null; cur.refBlob = null; renderPalette(); } }); }
+    { const b = $("#esStkrRefPaste"); if (b) b.addEventListener("click", () => palStkrPaste("ref")); }   // 📋 참조사진 붙여넣기
+    { const b = $("#esStkrUpPaste"); if (b) b.addEventListener("click", () => palStkrPaste("img")); }    // 📋 스티커 이미지 붙여넣기
+    if (!E._stkrPasteBound) {   // ⌘V / Ctrl+V — 스티커 단계에서 이미지 붙여넣기(한 번만 등록)
+      E._stkrPasteBound = true;
+      document.addEventListener("paste", (e) => {
+        if (E._palEditKind !== "sticker") return;
+        const cur = palCurBlock("sticker"); if (!cur) return;
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        let file = null;
+        for (let i = 0; i < items.length; i++) { const it = items[i]; if (it.type && it.type.indexOf("image/") === 0) { file = it.getAsFile(); break; } }
+        if (!file) return;
+        e.preventDefault();
+        const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
+        palStkrSetImage(cur, file, aiMode ? "ref" : "img");
+        try { toast(aiMode ? "📋 참조 사진을 붙여넣었어요" : "📋 스티커 이미지를 붙여넣었어요"); } catch (_) {}
+      });
+    }
     { const t = $("#esStkrText"); if (t) t.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (cur) cur.text = t.value; }); }
     { const b = $("#esStkrGen"); if (b) b.addEventListener("click", () => palStickerGen(b)); }
     { const b = $("#esStkrUpBtn"), f = $("#esStkrUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
