@@ -1489,6 +1489,7 @@
     { key: "cref",    icon: "🗨", label: "자막 참조" },
     { key: "caption", icon: "💬", label: "자막 생성" },
     { key: "cpos",    icon: "🔳", label: "자막 위치" },
+    { key: "sticker", icon: "🏷", label: "스티커" },
     { key: "nstyle",  icon: "🎙", label: "목소리 고르기" },
     { key: "ngen",    icon: "🔊", label: "나레이션 생성" },
     { key: "ncap",    icon: "📝", label: "음성맞춰 자막" },
@@ -1504,7 +1505,7 @@
     { key: "done",    icon: "📤", label: "내보내기" },
   ];
   // 위에 '실제 미리보기'가 뜨는 단계 = 본문을 컴팩트하게(고객화면 작업공간 최대 확보). 이 한 곳에서만 관리 → 미리보기/컴팩트 목록 항상 일치.
-  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
+  const PAL_LIVE_STEPS = ["setup", "tref", "tgen", "cref", "caption", "sticker", "nstyle", "ngen", "ncap", "cedit", "csync", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   // 본문 자체에 제목 라벨(🎵 배경음악 고르기 · 💬 자막을 어떻게 만들까요 등)이 있는 단계 → 위 큰 제목을 숨겨 '한 줄'로(중복 제거 = 공간 확보)
   const PAL_BODYHD_STEPS = ["setup", "caption", "cedit", "csync", "nstyle", "ngen", "ncap", "music", "musicvol", "length", "cuteven", "cutbeat", "cuttrim", "review"];
   const PAL_VOICE_DELAY = 1;   // 🎙 나레이션은 영상 시작 1초 뒤부터(첫 장면이 급하지 않게)
@@ -1662,6 +1663,11 @@
         }
         case "tpos":    body = palPosBody("title", P); break;     // 🔲 타이틀 위치·크기 조정
         case "cpos":    body = palPosBody("caption", P); break;    // 🔳 자막 위치·크기 조정
+        case "sticker": {   // 🏷 스티커 — 관리자가 작업대에서 다 정함. 고객은 자동으로 영상에 나옴(수정 X).
+          const _sn = (d.stickers || []).filter((s) => s && s.result && s.result.url).length;
+          body = `<div class="es-pal-tgen-noref">🏷 스티커는 자동으로 영상에 들어가요${_sn ? ` (${_sn}개)` : ""}<br><span class="es-pal-tref-hint">관리자가 정해둔 위치·시간·효과로 나옵니다</span></div>`;
+          break;
+        }
         case "cref": {   // 🗨 자막 참조 — 자막 글씨박스에서 스타일 골라 자막 칸에 적용(타이틀 참조와 동일, 자막 전용 글씨박스)
           const opts = palRefsArr("caption");
           const sel = d.captionRef;
@@ -1891,6 +1897,7 @@
     if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
       if (!onCaptionStep && (has("tgen") || has("tref") || has("tpos") || has("setup"))) { palBlocks("title"); _renderBlocks(d.titles || [], "title"); }   // 자막 단계에선 타이틀 숨김 (setup=자동세팅도 타이틀 세팅 단계)
       if (has("caption") || has("cref") || has("setup")) { palBlocks("caption"); _renderBlocks(d.captions || [], "caption"); }
+      if (has("sticker")) { palBlocks("sticker"); _renderBlocks(d.stickers || [], "sticker"); }   // 🏷 스티커 오버레이(이미지 + 위치·타이밍·효과)
       if (!anyRendered && !playMode && (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup"))) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     }
     let chips = "";
@@ -2205,6 +2212,12 @@
   // 종류별(타이틀/자막) 블록 배열 — kind: "title" | "caption". 둘 다 같은 구조·편집기 공유.
   function palBlocks(kind) {
     kind = kind || E._palEditKind || "title";
+    if (kind === "sticker") {   // 🏷 스티커 = 이미지 오버레이(위치·크기·타이밍·효과). 자동생성 X(명시적 추가).
+      const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
+      if (!Array.isArray(d.stickers)) { d.stickers = []; if (d.stickerSel == null) d.stickerSel = 0; }
+      d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
+      return d.stickers;
+    }
     const cap = kind === "caption", ak = cap ? "captions" : "titles", sk = cap ? "captionSel" : "titleSel";
     const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
     if (!Array.isArray(d[ak])) {
@@ -2220,13 +2233,14 @@
     d[ak].forEach((t) => { if (t.size == null || t.size > 35) t.size = minDef; if (t.bgPadX == null) t.bgPadX = 4; if (t.bgPadY == null) t.bgPadY = 2; if (t.bgStyle === "band") t.bgStyle = "box"; if (t.start == null) t.start = 0; if (t.dur === undefined) t.dur = null; if (t.letterSpacing == null) t.letterSpacing = 0; if (t.lineHeight == null) t.lineHeight = 1.22; if (t.italic == null) t.italic = false; if (t.bold == null) t.bold = false; if (t.shadow === undefined) t.shadow = null; if (t.animIn == null) t.animIn = "none"; if (t.animOut == null) t.animOut = "none"; });
     return d[ak];
   }
-  function palSel(kind) { const k = kind || E._palEditKind || "title"; return E.palette.demo[k === "caption" ? "captionSel" : "titleSel"] || 0; }
-  function palSetSel(i, kind) { const k = kind || E._palEditKind || "title"; E.palette.demo[k === "caption" ? "captionSel" : "titleSel"] = i; }
+  function _palSelKey(k) { return k === "caption" ? "captionSel" : k === "sticker" ? "stickerSel" : "titleSel"; }
+  function palSel(kind) { const k = kind || E._palEditKind || "title"; return E.palette.demo[_palSelKey(k)] || 0; }
+  function palSetSel(i, kind) { const k = kind || E._palEditKind || "title"; E.palette.demo[_palSelKey(k)] = i; }
   function palTitles() { return palBlocks(E._palEditKind || "title"); }   // 편집기·핸들러용 = 현재 종류
   function palCurBlock(kind) {
     kind = kind || E._palEditKind || "title";
-    const bs = palBlocks(kind); const d = E.palette.demo, sk = kind === "caption" ? "captionSel" : "titleSel";
-    if (!bs.length) bs.push(kind === "caption" ? palNewCaptionBlock(null, 0) : palNewTitleBlock(null, 0));
+    const bs = palBlocks(kind); const d = E.palette.demo, sk = _palSelKey(kind);
+    if (!bs.length) { if (kind === "sticker") return null; bs.push(kind === "caption" ? palNewCaptionBlock(null, 0) : palNewTitleBlock(null, 0)); }   // 스티커는 자동생성 X
     if (d[sk] == null || d[sk] < 0 || d[sk] >= bs.length) d[sk] = bs.length - 1;
     return bs[d[sk]];
   }
@@ -3338,6 +3352,7 @@
             titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             captionSel: d.captionSel || 0,
             captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
+            stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
           },
         };
         await idbSet("palDraft", snap);
@@ -3385,6 +3400,9 @@
       if (Array.isArray(sd.captions)) {   // 💬 자막 칸들 복원(타이틀과 동일 구조 — 하단 흰글씨 기본값)
         P.demo.captions = sd.captions.map((t) => ({ id: t.id || uid(), text: t.text || "", colorMap: Array.isArray(t.colorMap) ? t.colorMap.slice() : undefined, font: t.font || "bm-hanna-air", color: t.color || "#ffffff", stroke: (t.stroke != null && t.stroke !== "#111111") ? t.stroke : "", size: t.size != null ? t.size : 7, posX: t.posX != null ? t.posX : 50, posY: t.posY != null ? t.posY : 88, opacity: t.opacity != null ? t.opacity : 100, bg: t.bg || "", bgStyle: t.bgStyle || "box", align: t.align || "center", bgPadX: t.bgPadX != null ? t.bgPadX : 4, bgPadY: t.bgPadY != null ? t.bgPadY : 2, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: t.result ? (function () { try { return { url: URL.createObjectURL(t.result), blob: t.result }; } catch (_) { return null; } })() : null}));
         P.demo.captionSel = (typeof sd.captionSel === "number" && sd.captionSel >= 0 && sd.captionSel < P.demo.captions.length) ? sd.captionSel : 0;
+      }
+      if (Array.isArray(sd.stickers)) {   // 🏷 스티커 복원(이미지 blob → objectURL)
+        P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
@@ -3496,6 +3514,82 @@
       <button type="button" class="es-pal-up-btn es-pal-test-btn" id="esPalTestBtn">${has ? "🔄 테스트 영상 바꾸기" : "＋ 테스트 영상 넣기"}</button>
       <input type="file" id="esPalTestFile" accept="image/*,video/*" hidden>`;
   }
+  // 🏷 스티커 = 이미지 오버레이 블록(AI생성/업로드 + 위치·크기·타이밍·효과). 타이틀 오버레이 렌더 재사용(result.url=스티커 이미지).
+  function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
+  function paletteStickerEditor(P) {
+    const d = P.demo || {};
+    const stk = palBlocks("sticker");
+    const sel = palSel("sticker");
+    const cur = stk[sel] || null;
+    const tabs = stk.map((s, i) => `<button type="button" class="es-pal-ted-tab ${i === sel ? "sel" : ""}" data-stkrtab="${i}">🏷${i + 1}<span class="es-pal-ted-tabx" data-stkrdel="${i}" title="이 스티커 삭제">×</span></button>`).join("") + `<button type="button" class="es-pal-ted-tabadd" id="esStkrAdd">＋ 스티커</button>`;
+    if (!cur) {
+      return `<div class="es-pal-ted"><div class="es-pal-ted-tabs">${tabs}</div><div class="es-pal-stkr-empty"><div class="es-pal-stkr-empty-ic">🏷</div><div>영상 위에 붙일 스티커를 추가해요<br>AI로 만들거나 이미지를 올릴 수 있어요</div><button type="button" class="es-pal-up-btn" id="esStkrAdd2">＋ 스티커 추가</button></div></div>`;
+    }
+    const img = cur.result && cur.result.url;
+    const aiMode = E._palStkrAiMode == null ? true : !!E._palStkrAiMode;
+    const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    let acc = 0;
+    const cutBtns = clips.map((m, i) => { const s0 = acc; const du = palCutClipDur(m); acc += du; const lbl = clips.length === 1 ? "전체" : (i === 0 ? "첫 컷" : (i === clips.length - 1 ? "마지막 컷" : (i + 1) + "번 컷")); const on = Math.abs((cur.start || 0) - s0) < 0.06; return `<button type="button" class="es-pal-ted-stroke ${on ? "sel" : ""}" data-stkrcut="${s0.toFixed(2)}" data-stkrcutdur="${du.toFixed(2)}">${lbl}</button>`; }).join("");
+    const ANIM_IN = [["none", "✕ 없음"], ["fade", "페이드"], ["pop", "팝!"], ["zoom", "확대"], ["slideL", "← 밀기"], ["slideR", "밀기 →"], ["bounce", "통통"]];
+    const ANIM_OUT = [["none", "✕ 없음"], ["fade", "페이드"], ["zoom", "축소"], ["pop", "팝!"]];
+    const animInBtns = ANIM_IN.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animIn || "none") === a[0] ? "sel" : ""}" data-stkranimin="${a[0]}">${a[1]}</button>`).join("");
+    const animOutBtns = ANIM_OUT.map((a) => `<button type="button" class="es-pal-ted-animbtn ${(cur.animOut || "none") === a[0] ? "sel" : ""}" data-stkranimout="${a[0]}">${a[1]}</button>`).join("");
+    const tStart = cur.start || 0, tDur = cur.dur;
+    const srcUI = aiMode
+      ? `<div class="es-pal-stkr-airow">
+          <div class="es-pal-stkr-reflbl">참조 사진 <small>(비슷한 느낌으로 만들어요)</small></div>
+          ${cur.refUrl ? `<div class="es-pal-stkr-refwrap"><img class="es-pal-stkr-ref" src="${esc(cur.refUrl)}"><button type="button" class="es-pal-stkr-refx" id="esStkrRefX">×</button></div>` : `<button type="button" class="es-pal-up-btn" id="esStkrRefBtn">＋ 참조 사진 넣기</button>`}
+          <input type="file" id="esStkrRefFile" accept="image/*" hidden>
+          <textarea class="es-pal-capm-prompt" id="esStkrText" rows="2" placeholder="스티커에 들어갈 글씨(선택) — 예: SALE / 신상 / 7월 한정">${esc(cur.text || "")}</textarea>
+          <button type="button" class="es-pal-capm-go" id="esStkrGen">✨ AI로 스티커 만들기</button>
+          <div id="esStkrStatus" class="es-pal-narr-status"></div>
+        </div>`
+      : `<button type="button" class="es-pal-up-btn" id="esStkrUpBtn">📤 스티커 이미지 올리기 (PNG 추천)</button><input type="file" id="esStkrUpFile" accept="image/*" hidden>`;
+    return `<div class="es-pal-ted">
+      <div class="es-pal-ted-tabs">${tabs}</div>
+      <div class="es-pal-stkr-srcbtns"><button type="button" class="es-pal-capm-btn3 ${aiMode ? "on" : ""}" data-stkrsrc="ai">🤖 AI로 만들기</button><button type="button" class="es-pal-capm-btn3 ${!aiMode ? "on" : ""}" data-stkrsrc="up">📤 이미지 올리기</button></div>
+      ${srcUI}
+      ${img ? `<div class="es-pal-stkr-preview"><img src="${esc(img)}" alt=""><span>↔ 왼쪽 미리보기에서 끌어 위치를 정해요</span></div>` : `<div class="es-pal-stkr-hint">아직 스티커 이미지가 없어요 — 위에서 만들거나 올리세요</div>`}
+      <div class="es-pal-ted-section">
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">크기 <small>${cur.size || 22}</small></span><input type="range" class="es-pal-ted-size" id="esStkrSize" min="6" max="60" value="${cur.size || 22}"></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${cur.opacity != null ? cur.opacity : 100}</small></span><input type="range" class="es-pal-ted-size" id="esStkrOp" min="20" max="100" value="${cur.opacity != null ? cur.opacity : 100}"></div>
+      </div>
+      ${clips.length ? `<div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>그 컷 시작에 맞춰 나와요</span></div><div class="es-pal-ted-sw">${cutBtns}</div></div>` : ""}
+      <div class="es-pal-ted-section">
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">나오는 때 <small>${tStart > 0 ? tStart + "초 뒤" : "바로"}</small></span><input type="range" class="es-pal-ted-size" id="esStkrStart" min="0" max="15" step="0.5" value="${tStart}"></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">언제까지</span><div class="es-pal-ted-sw"><button type="button" class="es-pal-ted-stroke ${tDur == null ? "sel" : ""}" id="esStkrDurAll">♾ 끝까지</button><button type="button" class="es-pal-ted-stroke ${tDur != null ? "sel" : ""}" id="esStkrDurSet">⏱ 시간 정하기</button></div></div>
+        ${tDur != null ? `<div class="es-pal-ted-row"><span class="es-pal-ted-rl">⏱ <small>${tDur}초 동안</small></span><input type="range" class="es-pal-ted-size" id="esStkrDur" min="0.5" max="10" step="0.5" value="${tDur}"></div>` : ""}
+      </div>
+      <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>✨ 효과</b></div><div class="es-pal-ted-rl2">나올 때</div><div class="es-pal-ted-anims">${animInBtns}</div><div class="es-pal-ted-rl2">사라질 때</div><div class="es-pal-ted-anims">${animOutBtns}</div></div>
+      <div class="es-pal-ted-section es-pal-ted-savebox"><div class="es-pal-ted-sec-h"><b>✅ 적용</b><span>적용하면 고객 영상에 자동으로 나와요</span></div><button type="button" class="es-pal-ted-save ${img ? "" : "off"}" id="esStkrApply">✅ 이 스티커를 영상에 적용</button></div>
+    </div>`;
+  }
+  // 🏷 AI 스티커 생성 — 참조사진(있으면) + 글씨(선택)로 gpt-image(easy-title sticker 모드) → 투명 키잉
+  async function palStickerGen(btn) {
+    const cur = palCurBlock("sticker"); if (!cur) return;
+    const status = $("#esStkrStatus");
+    if (btn) { btn.disabled = true; btn._t = btn.textContent; btn.textContent = "✨ 만드는 중… (20~40초)"; }
+    if (status) status.textContent = "✨ 스티커를 만들고 있어요… (20~40초)";
+    try {
+      const body = { action: "generate", sticker: true, text: (cur.text || "").trim(), quality: "low" };
+      if (cur.refUrl) { try { body.refImage = cur.refBlob ? await tmBlobToDataUri(cur.refBlob) : null; } catch (_) {} }
+      const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok || !j.image) throw new Error(j.error || ("HTTP " + r.status));
+      let blob;
+      if (j.transparent) { blob = await (await fetch(j.image)).blob(); }
+      else { const im = new Image(); await new Promise((res, rej) => { im.onload = res; im.onerror = () => rej(new Error("이미지 로드 실패")); im.src = j.image; }); blob = await titleKeyBg(im, j.bg || "#ffffff"); }
+      if (!blob) throw new Error("배경 처리 실패");
+      if (cur.result && cur.result.url && String(cur.result.url).startsWith("blob:")) { try { URL.revokeObjectURL(cur.result.url); } catch (_) {} }
+      cur.result = { url: URL.createObjectURL(blob), blob };
+      try { palDraftSave(); } catch (_) {}
+      renderPalette();
+      try { toast("✨ 스티커를 만들었어요 — 위치·크기·시간을 정해보세요"); } catch (_) {}
+    } catch (e) {
+      if (status) status.textContent = "⚠️ 실패: " + ((e && e.message) || e) + " (관리자 이미지 API 키가 필요할 수 있어요)";
+      if (btn) { btn.disabled = false; btn.textContent = btn._t || "✨ AI로 스티커 만들기"; }
+    }
+  }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
     if (!E.palette) E.palette = { name: "", aspect: "9:16", steps: [{ id: uid(), fn: null }], sel: 0 };
@@ -3544,8 +3638,9 @@
     const _setupTab = E._palSetupTab || "title";   // ✨ 자동세팅 작업대 하위탭: title/caption/music
     const _isTitleStep = !isPrev && (_curFn === "tref" || _curFn === "tgen" || _curFn === "tpos");
     const _isCaptionStep = !isPrev && (_curFn === "cref" || _curFn === "caption");
-    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep;
-    E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : (_isCaptionStep ? "caption" : "title");
+    const _isStickerStep = !isPrev && _curFn === "sticker";
+    const _isEditStep = _isTitleStep || _isCaptionStep || _isSetupStep || _isStickerStep;
+    E._palEditKind = _isSetupStep ? (_setupTab === "caption" ? "caption" : "title") : _isStickerStep ? "sticker" : (_isCaptionStep ? "caption" : "title");
     // ✨ 자동세팅 — 타이틀/자막 탭 진입 시 첫 블록이 없으면 자동 생성(편집기·참조 갤러리가 즉시 작동)
     if (_isSetupStep && _setupTab !== "music") { try { const _arr = palBlocks(_setupTab); if (!_arr.length) { _arr.push(palNewBlock(null, 0)); palSetSel(0, _setupTab); } } catch (_) {} }
     // 고객화면 번호 = 그 기능의 '단계 순서'(1-based). 미리보기 중이고 아직 단계에 없으면 0(•).
@@ -3601,6 +3696,8 @@
     const _setupTabLb = _setupTab === "music" ? "🎵 음악 작업대" : _setupTab === "caption" ? "💬 자막 작업대" : "🔤 타이틀 작업대";
     const editorZone = _isSetupStep
       ? `<div class="es-pal-zone es-pal-zone-editor es-pal-zone-editor-setup"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-setup-tabs"><button type="button" class="es-pal-setup-tab ${_setupTab === "title" ? "on" : ""}" data-setuptab="title">🔤 타이틀</button><button type="button" class="es-pal-setup-tab ${_setupTab === "caption" ? "on" : ""}" data-setuptab="caption">💬 자막</button><button type="button" class="es-pal-setup-tab ${_setupTab === "music" ? "on" : ""}" data-setuptab="music">🎵 음악</button></div><div class="es-pal-prev-tag es-pal-setup-lb">${_setupTabLb}</div>${_setupTab === "music" ? `<div class="es-pal-setup-music">${palMusicPicker(P)}</div>` : `${_setupGallery}${paletteTitleEditor(P)}`}</div></div>`
+      : _isStickerStep
+      ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">🏷 스티커 작업대 — 만들고 위치·시간·효과 정한 뒤 적용</div>${paletteStickerEditor(P)}</div></div>`
       : _isEditStep
       ? `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor"><div class="es-pal-prev-tag">${_isCaptionStep ? "💬 자막 작업대" : "✍️ 타이틀 작업대"} — 왼쪽 화면 보면서 작업</div>${paletteTitleEditor(P)}</div></div>`
       : `<div class="es-pal-zone es-pal-zone-editor"><div class="es-pal-prev es-pal-mid-editor es-pal-mid-empty"><div class="es-pal-prev-tag">🛠 작업대</div><div class="es-pal-mid-emptybox"><div class="es-pal-mid-emptyico">🛠</div><div class="es-pal-mid-emptyt">이 단계는 작업대가 없어요</div><div class="es-pal-mid-emptyd">타이틀·자막 단계를 고르면<br>여기에 글자 편집 작업대가 나와요</div></div></div></div>`;
@@ -4080,6 +4177,27 @@
     $$("#esBody [data-setupcusttab]").forEach((b) => b.addEventListener("click", () => { if (b.disabled) return; E._palSetupCustTab = b.dataset.setupcusttab; renderPalette(); }));
     $$("#esBody [data-palcapm]").forEach((b) => b.addEventListener("click", () => { E._palCapMethod = b.dataset.palcapm; renderPalette(); }));   // 🤖AI / 🎤음성 / ✍️직접
     { const b = $("#esPalCapVoice"); if (b) b.addEventListener("click", () => palExtractVoiceCaptions(b)); }   // 🎤 영상 음성 → 자막
+    // 🏷 스티커 작업대 핸들러
+    { const _add = () => { const arr = palBlocks("sticker"); arr.push(palNewSticker()); palSetSel(arr.length - 1, "sticker"); if (E._palStkrAiMode == null) E._palStkrAiMode = true; renderPalette(); };
+      const a1 = $("#esStkrAdd"); if (a1) a1.addEventListener("click", _add); const a2 = $("#esStkrAdd2"); if (a2) a2.addEventListener("click", _add); }
+    $$("#esBody [data-stkrtab]").forEach((b) => b.addEventListener("click", () => { palSetSel(+b.dataset.stkrtab, "sticker"); renderPalette(); }));
+    $$("#esBody [data-stkrdel]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const arr = palBlocks("sticker"); const i = +b.dataset.stkrdel; if (arr[i]) { try { if (arr[i].result && String(arr[i].result.url).startsWith("blob:")) URL.revokeObjectURL(arr[i].result.url); } catch (_) {} arr.splice(i, 1); palSetSel(Math.max(0, i - 1), "sticker"); palDraftSave(); renderPalette(); } }));
+    $$("#esBody [data-stkrsrc]").forEach((b) => b.addEventListener("click", () => { E._palStkrAiMode = (b.dataset.stkrsrc === "ai"); renderPalette(); }));
+    { const b = $("#esStkrRefBtn"), f = $("#esStkrRefFile"); if (b && f) b.addEventListener("click", () => f.click()); }
+    { const f = $("#esStkrRefFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = URL.createObjectURL(file); cur.refBlob = file; renderPalette(); }); }
+    { const b = $("#esStkrRefX"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { try { if (cur.refUrl && String(cur.refUrl).startsWith("blob:")) URL.revokeObjectURL(cur.refUrl); } catch (_) {} cur.refUrl = null; cur.refBlob = null; renderPalette(); } }); }
+    { const t = $("#esStkrText"); if (t) t.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (cur) cur.text = t.value; }); }
+    { const b = $("#esStkrGen"); if (b) b.addEventListener("click", () => palStickerGen(b)); }
+    { const b = $("#esStkrUpBtn"), f = $("#esStkrUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
+    { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.result && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {} cur.result = { url: URL.createObjectURL(file), blob: file }; palDraftSave(); renderPalette(); }); }
+    const _stkrSlide = (id, prop, label) => { const s = $("#" + id); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (!cur) return; cur[prop] = +s.value; clearTimeout(E._stkrT); E._stkrT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); };
+    _stkrSlide("esStkrSize", "size"); _stkrSlide("esStkrOp", "opacity"); _stkrSlide("esStkrStart", "start"); _stkrSlide("esStkrDur", "dur");
+    $$("#esBody [data-stkrcut]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.start = +b.dataset.stkrcut; cur.dur = +b.dataset.stkrcutdur; palDraftSave(); renderPalette(); } }));
+    { const b = $("#esStkrDurAll"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.dur = null; palDraftSave(); renderPalette(); } }); }
+    { const b = $("#esStkrDurSet"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur && cur.dur == null) { cur.dur = 3; palDraftSave(); renderPalette(); } }); }
+    $$("#esBody [data-stkranimin]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animIn = b.dataset.stkranimin; palDraftSave(); renderPalette(); } }));
+    $$("#esBody [data-stkranimout]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.animOut = b.dataset.stkranimout; palDraftSave(); renderPalette(); } }));
+    { const b = $("#esStkrApply"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (!cur || !(cur.result && cur.result.url)) { try { toast("먼저 스티커를 만들거나 올려주세요"); } catch (_) {} return; } try { palDraftSave(); } catch (_) {} try { toast("✅ 스티커를 영상에 적용했어요 — 고객 영상에 자동으로 나와요"); } catch (_) {} }); }
     palDraftSave();   // 💾 변경될 때마다 자동 저장(디바운스) — 나갔다 와도 그대로
   }
   function paletteAssign(i, fnKey) { const P = E.palette; if (!P || !P.steps[i]) return; P.preview = null; E._palCustSheetUp = null; P.steps[i].fn = fnKey; P.sel = i; renderPalette(); }
@@ -4143,7 +4261,7 @@
     if (!P || !P.demo) return; let any = false;
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
-    if (!any) return;
+    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -4160,6 +4278,7 @@
       narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
+      _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
     };
   }
   function savePalette() {
