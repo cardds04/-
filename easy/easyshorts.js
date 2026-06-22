@@ -1929,9 +1929,9 @@
       } else if (editKind === "title") _renderTitles();   // ✏️ 편집 = 그 종류만
       else if (editKind === "caption") _renderCaptions();
       else if (editKind === "sticker") _renderStickers();
-      else if (editKind === "setup") { _renderTitles(); _renderCaptions(); }   // 자동세팅 = 타이틀+자막 같이
+      else if (editKind === "setup") { const _st = E._palSetupTab || "title"; if (_st === "caption") _renderCaptions(); else if (_st !== "music") _renderTitles(); }   // 자동세팅도 탭(타이틀/자막)만, 음악탭은 안 그림
       // editKind null(편집 단계 아님) → 아무것도 안 그림
-      const _phKinds = live ? (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup")) : (editKind === "title" || editKind === "caption" || editKind === "setup");
+      const _phKinds = live ? (has("tgen") || has("tref") || has("tpos") || has("caption") || has("cref") || has("setup")) : (editKind === "title" || editKind === "caption" || (editKind === "setup" && (E._palSetupTab || "title") !== "music"));
       if (!anyRendered && !playMode && _phKinds) ov += `<div class="es-pal-real-title is-ph">여기에 글자</div>`;
     }
     let chips = "";
