@@ -1897,11 +1897,13 @@
         const sz = (t.size != null ? t.size : (kind === "caption" ? 7 : 14)), py = (t.posY != null ? t.posY : (kind === "caption" ? 88 : 18)), px = (t.posX != null ? t.posX : 50), op = (t.opacity != null ? t.opacity : 100) / 100;
         const padX = t.bgPadX != null ? t.bgPadX : 4, padY = t.bgPadY != null ? t.bgPadY : 2;
         const bgS = t.bg ? `background:${hexToRgba(t.bg, op)}; border-radius:${_bgRadius(t.bgStyle)}; padding:${padY}cqh ${padX}cqw;` : "";
+        const rot = t.rotate || 0;   // 🔄 회전(도) — 박스 기본 transform(가운데정렬)에 합쳐 인라인으로 덮어씀
+        const rotS = rot ? `transform: translate(-50%,-50%) rotate(${rot}deg);` : "";
         const asTile = playMode || (kind === "caption" && timedCap);   // 타이밍 타일 = 시간 맞춰 하나씩(처음 숨김, tick이 켜고 끔)
         if (asTile) {
           const _st0 = eStart;
           const _liveAttr = live ? ` data-livekind="${kind}" data-liveidx="${i}"` : "";   // 위치 컨트롤이 타이밍 타일도 찾아 움직이게(자막 위치 조정)
-          ov += `<div class="es-pal-real-titlebox es-pal-play-tile" data-rt-start="${_st0}" data-rt-dur="${eDur != null ? eDur : ""}" data-rt-in="${t.animIn || "none"}" data-rt-out="${t.animOut || "none"}"${_liveAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt=""></div>`;
+          ov += `<div class="es-pal-real-titlebox es-pal-play-tile" data-rt-start="${_st0}" data-rt-dur="${eDur != null ? eDur : ""}" data-rt-in="${t.animIn || "none"}" data-rt-out="${t.animOut || "none"}"${_liveAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; opacity:0; transition:opacity .14s ease; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt=""></div>`;
           return;
         }
         const isSel = !live && !ro && (kind === E._palEditKind) && i === palSel(kind);
@@ -1909,7 +1911,7 @@
         const tinfo = (eDur == null) ? "♾ 쭉" : `⏱ ${_ts}–${_ts + eDur}초`;
         const tbadge = isSel ? `<span class="es-pal-real-tbadge" style="position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9px;line-height:1;background:#1ed6a5;color:#04231a;padding:2px 6px;border-radius:6px;white-space:nowrap;font-weight:800;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)">${tinfo}</span>` : "";
         const dataAttr = ro ? "" : (live ? ` data-livekind="${kind}" data-liveidx="${i}"` : ` data-kind="${kind}" data-titleidx="${i}"`);   // live는 드래그 안 붙는 별도 속성(입력 시 img만 부분갱신). ro(2열)는 아무 속성 없음=완전 정적
-        ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
+        ov += `<div class="es-pal-real-titlebox ${isSel ? "sel" : ""}"${dataAttr} style="left:${px}%; top:${py}%; height:${palBoxH(t, sz)}cqh; width:auto; ${bgS}${rotS}"><img class="es-pal-real-titleimg" src="${t.result.url}" alt="">${tbadge}${isSel ? `<span class="es-pal-real-thandle" data-thandle="${i}" title="끌어서 크기 조절"></span>` : ""}</div>`;
       });
     };
     if (!opts.noOverlay) {   // 🚫 noOverlay(1열 시안) = 작업한 타이틀/자막 안 그림, 원본 영상만
@@ -2233,7 +2235,7 @@
     if (kind === "sticker") {   // 🏷 스티커 = 이미지 오버레이(위치·크기·타이밍·효과). 자동생성 X(명시적 추가).
       const P = E.palette; if (!P) return []; const d = P.demo || (P.demo = {});
       if (!Array.isArray(d.stickers)) { d.stickers = []; if (d.stickerSel == null) d.stickerSel = 0; }
-      d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.cut == null) s.cut = 0; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
+      d.stickers.forEach((s) => { if (s.size == null) s.size = 22; if (s.posX == null) s.posX = 50; if (s.posY == null) s.posY = 50; if (s.opacity == null) s.opacity = 100; if (s.rotate == null) s.rotate = 0; if (s.cut == null) s.cut = 0; if (s.start == null) s.start = 0; if (s.dur === undefined) s.dur = null; if (s.animIn == null) s.animIn = "none"; if (s.animOut == null) s.animOut = "none"; });
       return d.stickers;
     }
     const cap = kind === "caption", ak = cap ? "captions" : "titles", sk = cap ? "captionSel" : "titleSel";
@@ -3370,7 +3372,7 @@
             titles: (Array.isArray(d.titles) ? d.titles : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
             captionSel: d.captionSel || 0,
             captions: (Array.isArray(d.captions) ? d.captions : []).map((t) => ({ id: t.id, text: t.text || "", colorMap: (Array.isArray(t.colorMap) && t.colorMap.some((c) => c)) ? t.colorMap.slice() : null, font: t.font || null, color: t.color || null, stroke: t.stroke != null ? t.stroke : null, size: t.size != null ? t.size : null, posX: t.posX != null ? t.posX : null, posY: t.posY != null ? t.posY : null, opacity: t.opacity != null ? t.opacity : null, bg: t.bg || null, bgStyle: t.bgStyle || null, align: t.align || null, bgPadX: t.bgPadX != null ? t.bgPadX : null, bgPadY: t.bgPadY != null ? t.bgPadY : null, start: t.start != null ? t.start : 0, dur: t.dur !== undefined ? t.dur : null, letterSpacing: t.letterSpacing || 0, lineHeight: t.lineHeight || 1.22, italic: !!t.italic, bold: !!t.bold, shadow: t.shadow ? Object.assign({}, t.shadow) : null, animIn: t.animIn || "none", animOut: t.animOut || "none", result: (t.result && t.result.blob) || null})),
-            stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
+            stickers: (Array.isArray(d.stickers) ? d.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob 포함)
           },
         };
         await idbSet("palDraft", snap);
@@ -3420,7 +3422,7 @@
         P.demo.captionSel = (typeof sd.captionSel === "number" && sd.captionSel >= 0 && sd.captionSel < P.demo.captions.length) ? sd.captionSel : 0;
       }
       if (Array.isArray(sd.stickers)) {   // 🏷 스티커 복원(이미지 blob → objectURL)
-        P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
+        P.demo.stickers = sd.stickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null }));
       }
       if (P.sel >= P.steps.length) P.sel = Math.max(0, P.steps.length - 1);
       return P;
@@ -3533,7 +3535,7 @@
       <input type="file" id="esPalTestFile" accept="image/*,video/*" hidden>`;
   }
   // 🏷 스티커 = 이미지 오버레이 블록(AI생성/업로드 + 위치·크기·타이밍·효과). 타이틀 오버레이 렌더 재사용(result.url=스티커 이미지).
-  function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, cut: 0, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
+  function palNewSticker() { return { id: uid(), result: null, blob: null, refUrl: null, refBlob: null, text: "", size: 22, posX: 50, posY: 50, opacity: 100, rotate: 0, cut: 0, start: 0, dur: null, animIn: "pop", animOut: "fade" }; }
   function paletteStickerEditor(P) {
     const d = P.demo || {};
     const stk = palBlocks("sticker");
@@ -3573,6 +3575,7 @@
       <div class="es-pal-ted-section">
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">크기 <small>${cur.size || 22}</small></span><input type="range" class="es-pal-ted-size" id="esStkrSize" min="6" max="60" value="${cur.size || 22}"></div>
         <div class="es-pal-ted-row"><span class="es-pal-ted-rl">투명도 <small>${cur.opacity != null ? cur.opacity : 100}</small></span><input type="range" class="es-pal-ted-size" id="esStkrOp" min="20" max="100" value="${cur.opacity != null ? cur.opacity : 100}"></div>
+        <div class="es-pal-ted-row"><span class="es-pal-ted-rl">🔄 회전 <small>${(cur.rotate || 0)}°</small></span><input type="range" class="es-pal-ted-size" id="esStkrRotate" min="-180" max="180" step="5" value="${cur.rotate || 0}">${(cur.rotate || 0) ? `<button type="button" class="es-pal-ted-stroke es-stkr-rot0" id="esStkrRot0">↩︎ 0°</button>` : ""}</div>
       </div>
       <div class="es-pal-ted-section"><div class="es-pal-ted-sec-h"><b>📍 어느 컷에</b><span>${curCut ? "그 컷에 나와요 · 영상에 그 컷이 없으면 자동으로 안 들어가요" : "전체 영상 기준 타이밍"}</span></div><div class="es-pal-ted-sw">${cutBtns}</div></div>
       <div class="es-pal-ted-section">
@@ -4282,7 +4285,8 @@
     { const b = $("#esStkrUpBtn"), f = $("#esStkrUpFile"); if (b && f) b.addEventListener("click", () => f.click()); }
     { const f = $("#esStkrUpFile"); if (f) f.addEventListener("change", (e) => { const file = (e.target.files || [])[0]; if (!file) return; const cur = palCurBlock("sticker"); if (!cur) return; try { if (cur.result && String(cur.result.url).startsWith("blob:")) URL.revokeObjectURL(cur.result.url); } catch (_) {} cur.result = { url: URL.createObjectURL(file), blob: file }; palDraftSave(); renderPalette(); }); }
     const _stkrSlide = (id, prop, label) => { const s = $("#" + id); if (s) s.addEventListener("input", () => { const cur = palCurBlock("sticker"); if (!cur) return; cur[prop] = +s.value; clearTimeout(E._stkrT); E._stkrT = setTimeout(() => { try { palDraftSave(); } catch (_) {} renderPalette(); }, 220); }); };
-    _stkrSlide("esStkrSize", "size"); _stkrSlide("esStkrOp", "opacity"); _stkrSlide("esStkrStart", "start"); _stkrSlide("esStkrDur", "dur");
+    _stkrSlide("esStkrSize", "size"); _stkrSlide("esStkrOp", "opacity"); _stkrSlide("esStkrStart", "start"); _stkrSlide("esStkrDur", "dur"); _stkrSlide("esStkrRotate", "rotate");
+    { const b = $("#esStkrRot0"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.rotate = 0; palDraftSave(); renderPalette(); } }); }   // 🔄 회전 0°로
     $$("#esBody [data-stkrcut]").forEach((b) => b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.cut = parseInt(b.dataset.stkrcut, 10) || 0; if (cur.cut) cur.start = 0; palDraftSave(); renderPalette(); } }));   // 컷 인덱스 지정(전체/첫/2번/…/마지막)
     { const b = $("#esStkrDurAll"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur) { cur.dur = null; palDraftSave(); renderPalette(); } }); }
     { const b = $("#esStkrDurSet"); if (b) b.addEventListener("click", () => { const cur = palCurBlock("sticker"); if (cur && cur.dur == null) { cur.dur = 3; palDraftSave(); renderPalette(); } }); }
@@ -4353,7 +4357,7 @@
     if (!P || !P.demo) return; let any = false;
     if (Array.isArray(t._palTitles) && t._palTitles.length) { P.demo.titles = t._palTitles.map((s) => Object.assign(palNewTitleBlock(null, 0), s, { result: null })); P.demo.titleSel = 0; any = true; }
     if (Array.isArray(t._palCaptions) && t._palCaptions.length) { P.demo.captions = t._palCaptions.map((s) => Object.assign(palNewCaptionBlock(null, 0), s, { result: null })); P.demo.captionSel = 0; any = true; }
-    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
+    if (Array.isArray(t._palStickers) && t._palStickers.length) { P.demo.stickers = t._palStickers.map((s) => ({ id: s.id || uid(), text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", refUrl: null, refBlob: null, result: s.result ? (function () { try { return { url: URL.createObjectURL(s.result), blob: s.result }; } catch (_) { return null; } })() : null })); P.demo.stickerSel = 0; }   // 🏷 스티커 복원(이미지 그대로 — 재렌더 불필요)
     try { for (const b of [...(P.demo.titles || []), ...(P.demo.captions || [])]) { if ((b.text || "").trim()) await palTitleRenderBlock(b); } if (E.view === "palette") renderPalette(); } catch (_) {}
   }
   // 팔레트 단계 → 실제 템플릿(makeBaseTemplate 과 같은 형태). 기능이 템플릿 속성으로 매핑됨.
@@ -4370,7 +4374,7 @@
       narrate: has("narrate"), _wantTitle: has("tgen") || has("title") || has("setup"), _palette: true,
       _paletteSteps: P.steps.filter((s) => s.fn).map((s) => ({ fn: s.fn, copy: s.copy ? JSON.parse(JSON.stringify(s.copy)) : null })),   // 📝 단계별 기능+문구(같은 기능도 단계마다 다름) — 다시 불러오기용
       _palTitles: palStyleSnap("title"), _palCaptions: palStyleSnap("caption"),   // 🎨 타이틀·자막 글씨체·스타일 사전설정(고객이 글자만 바꿔도 이 스타일로)
-      _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
+      _palStickers: (Array.isArray(P.demo && P.demo.stickers) ? P.demo.stickers : []).map((s) => ({ id: s.id, text: s.text || "", size: s.size != null ? s.size : 22, posX: s.posX != null ? s.posX : 50, posY: s.posY != null ? s.posY : 50, opacity: s.opacity != null ? s.opacity : 100, rotate: s.rotate != null ? s.rotate : 0, cut: s.cut != null ? s.cut : 0, start: s.start != null ? s.start : 0, dur: s.dur !== undefined ? s.dur : null, animIn: s.animIn || "none", animOut: s.animOut || "none", result: (s.result && s.result.blob) || null })),   // 🏷 스티커(이미지 blob + 위치·타이밍·효과)
     };
   }
   function savePalette() {
