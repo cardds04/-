@@ -1660,9 +1660,25 @@
           }).join("");
           if (cstep === "ai") {
             const LENS = [[100, "짧게", "10초"], [300, "보통", "30초"], [500, "길게", "50초"]];
+            const _at = E._palActiveTone, _ft = palGetFixedTone();   // 🗣 활성 말투 / 저장된 고정말투
+            const _toneCur = _at
+              ? `<b>${esc(_at.name)}</b> 적용 중 <span class="es-pal-tone-snip">“${esc((_at.sample || "").replace(/\s+/g, " ").slice(0, 34))}…”</span>`
+              : `기본 (부드러운 존댓말 독백)`;
+            const toneBlock = `<div class="es-pal-tone-box">
+                <div class="es-pal-tone-cur">🗣 말투 — ${_toneCur}</div>
+                <div class="es-pal-tone-hint">1열에 넣은 <b>따라할 영상</b>의 말투를 그대로 따라 자막을 만들어요</div>
+                <div class="es-pal-tone-btns">
+                  <button type="button" class="es-pal-tone-btn" id="esPalToneVideo">🎬 영상 말투 가져오기</button>
+                  ${_ft ? `<button type="button" class="es-pal-tone-btn" id="esPalToneFixed">📌 고정말투 적용</button>` : ""}
+                  ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-save" id="esPalToneSave">💾 고정말투로 저장</button>` : ""}
+                  ${_at ? `<button type="button" class="es-pal-tone-btn es-pal-tone-off" id="esPalToneOff">✖ 끄기</button>` : ""}
+                </div>
+                <div id="esPalToneStatus" class="es-pal-narr-status"></div>
+              </div>`;
             body = `<div class="es-pal-capm-lb">📖 AI로 자막(독백) 만들기</div>
-              <div class="es-pal-capm-hint">주제를 적으면 일기 쓰듯·말하듯 흐르는 자막을 만들어드려요</div>
+              <div class="es-pal-capm-hint">주제 + 말투를 정하면 그 말투로 흐르는 자막을 만들어드려요</div>
               <textarea id="esPalCapPrompt" class="es-pal-capm-prompt" rows="2" placeholder="예: 10년 살던 집을 떠나며 / 첫 가게를 오픈하던 날">${esc(E._palCapPrompt || "")}</textarea>
+              ${toneBlock}
               <div class="es-pal-capm-lensub">길이를 골라주세요 <span>(글자 수 · 예상 길이)</span></div>
               <div class="es-pal-caplen">${LENS.map((l) => `<button type="button" class="es-pal-caplen-btn" data-caplen="${l[0]}"><b>${l[1]}</b><span>${l[0]}자<br>약 ${l[2]}</span></button>`).join("")}</div>
               <div id="esPalCapStatus" class="es-pal-narr-status"></div>
@@ -3839,6 +3855,11 @@
     $$("#esBody [data-capmethod]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.capmethod; E._palCapStep = (v === "ai") ? "ai" : (v === "0") ? 0 : 1; renderPalette(); }));
     { const cp = $("#esPalCapPrompt"); if (cp) cp.addEventListener("input", () => { E._palCapPrompt = cp.value; }); }
     $$("#esBody [data-caplen]").forEach((b) => b.addEventListener("click", () => palCaptionAI(b, +b.dataset.caplen)));
+    // 🗣 말투 — 영상 말투 가져오기 / 고정말투 적용·저장 / 끄기
+    { const b = $("#esPalToneVideo"); if (b) b.addEventListener("click", () => palExtractVideoTone(b)); }
+    { const b = $("#esPalToneFixed"); if (b) b.addEventListener("click", () => { const ft = palGetFixedTone(); if (ft && ft.sample) { E._palActiveTone = ft; renderPalette(); try { toast("📌 고정말투를 적용했어요"); } catch (_) {} } else { try { toast("저장된 고정말투가 없어요"); } catch (_) {} } }); }
+    { const b = $("#esPalToneSave"); if (b) b.addEventListener("click", () => { if (E._palActiveTone && E._palActiveTone.sample) { palSaveFixedTone(E._palActiveTone); renderPalette(); try { toast("💾 고정말투로 저장됐어요 — 다른 영상에서 '고정말투 적용'으로 써요"); } catch (_) {} } }); }
+    { const b = $("#esPalToneOff"); if (b) b.addEventListener("click", () => { E._palActiveTone = null; renderPalette(); }); }
     // 🎵 배경음악 (저장음악 목록·고르지않기·미리듣기·볼륨 믹서)
     if ($("#esPalMusLoad") && !E._palMusicTracks && !E._palMusicLoading) { E._palMusicLoading = true; fetch(easyAudioEndpoint(), { cache: "no-store" }).then((r) => r.json()).then((j) => { E._palMusicTracks = (j && j.tracks) || []; E._palMusicLoading = false; renderPalette(); }).catch(() => { E._palMusicTracks = []; E._palMusicLoading = false; renderPalette(); }); }
     $$("#esBody [data-mustempo]").forEach((b) => b.addEventListener("click", () => { E._palMusicTempo = b.dataset.mustempo; renderPalette(); }));   // 🎵 빠르기 필터
@@ -11543,7 +11564,34 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       try { const a = new Audio(); a.preload = "metadata"; a.muted = true; a.src = t.url; a.addEventListener("loadedmetadata", () => { E._palMusDur[t.id] = isFinite(a.duration) ? a.duration : 0; clearTimeout(E._palMusDurT); E._palMusDurT = setTimeout(() => { if (E.view === "palette") renderPalette(); }, 350); }); a.addEventListener("error", () => {}); } catch (_) {}
     });
   }
-  // 🤖 팔레트 AI 자막 생성 — 주제 프롬프트 → Claude(easy-narration generate)로 칸 수만큼 자막 문구 → 각 칸에 채우고 입력화면으로
+  // 🗣 말투(고정말투) 저장소 — 기기별 localStorage. {name, sample}
+  function palGetFixedTone() { try { const s = localStorage.getItem("easy_fixed_tone"); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
+  function palSaveFixedTone(t) { try { localStorage.setItem("easy_fixed_tone", JSON.stringify({ name: "📌 고정말투", sample: String((t && t.sample) || "").slice(0, 1200) })); } catch (_) {} }
+  // 🎬 영상(1열 시안) 음성 → STT 전사 → 그 '말투'를 활성 말투로. AI 자막 생성 시 이 말투를 흉내냄.
+  async function palExtractVideoTone(btn) {
+    const P = E.palette; if (!P) return; const d = P.demo || {};
+    const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
+    const m = list.find((x) => x && x.blob && x.kind === "video") || (list[0] && list[0].blob ? list[0] : null);
+    if (!m || !m.blob) { try { toast("따라할 영상(1열)을 먼저 넣어주세요"); } catch (_) {} return; }
+    const status = $("#esPalToneStatus");
+    if (btn) { btn.disabled = true; btn._t = btn.textContent; btn.textContent = "🎤 듣는 중…"; }
+    if (status) status.textContent = "🎤 영상 음성을 듣고 말투를 분석하고 있어요… (10~30초)";
+    try {
+      const aud = await sttAudioUri(m.blob);
+      const r = await fetch(sttEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: aud.uri, mime: aud.mime, language: "ko" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const text = String(j.text || "").trim() || (j.words || []).map((w) => w.w || w.text || "").join(" ").trim();
+      if (!text) throw new Error("말소리를 못 알아들었어요 (음성이 없거나 너무 작아요)");
+      E._palActiveTone = { name: "🎬 영상 말투", sample: text.slice(0, 1200) };
+      renderPalette();
+      try { toast("🗣 영상 말투를 가져왔어요 — 이 말투로 자막을 만들어요"); } catch (_) {}
+    } catch (e) {
+      if (status) status.textContent = "⚠️ 말투 분석 실패: " + ((e && e.message) || e);
+      if (btn) { btn.disabled = false; btn.textContent = btn._t || "🎬 영상 말투 가져오기"; }
+    }
+  }
+  // 🤖 팔레트 AI 자막 생성 — 주제 프롬프트(+활성 말투) → Claude(easy-narration diary)로 독백 자막 → 첫 칸에 채우고 입력화면으로
   async function palCaptionAI(btn, maxChars) {
     const P = E.palette; if (!P) return;
     const prompt = (($("#esPalCapPrompt") || {}).value || "").trim();
@@ -11555,7 +11603,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     $$("#esBody [data-caplen]").forEach((b) => { b.disabled = true; });
     if (status) status.textContent = `🤖 약 ${maxChars}자 독백을 쓰고 있어요… (10~20초)`;
     try {
-      const res = await fetch(narrEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "diary", prompt, maxChars }) });
+      const tone = (E._palActiveTone && E._palActiveTone.sample) || "";   // 🗣 활성 말투(영상/고정) 있으면 흉내
+      const res = await fetch(narrEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "diary", prompt, maxChars, tone }) });
       const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { error: txt.slice(0, 200) }; }
       if (!res.ok || !j.ok) throw new Error(j.error || ("HTTP " + res.status));
       const text = String(j.text || "").trim();
