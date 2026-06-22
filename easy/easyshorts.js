@@ -3965,12 +3965,11 @@
     try {
       if (btn) { btn.disabled = true; btn.textContent = "✨ 만드는 중…"; }
       setS("AI가 얼굴을 그리는 중… (10~30초)");
-      const prompt = `Photorealistic portrait headshot of ${desc}. Front-facing, looking at camera, neutral background, sharp focus, natural lighting, high detail face. Single person.`;
-      const r = await fetch("https://sc-pink.vercel.app/api/fal-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "flux-pro-ultra", prompt, aspect_ratio: "1:1" }) });
+      // 🪄 얼굴 = 기존 gpt-image-2(타이틀/스티커와 같은 OpenAI 키) 인물 사진 모드 — 새 키(FAL) 불필요
+      const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", portrait: true, text: desc, quality: "low" }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.b64_json) throw new Error((j && (j.error || j.message)) || `HTTP ${r.status}`);
-      const dataUri = "data:" + (j.mime_type || "image/png") + ";base64," + j.b64_json;
-      const blob = await (await fetch(dataUri)).blob();
+      if (!r.ok || !j.image) throw new Error((j && (j.error || j.message)) || `HTTP ${r.status}`);
+      const blob = await (await fetch(j.image)).blob();
       try { if (fs.faceUrl && fs.faceUrl.startsWith("blob:")) URL.revokeObjectURL(fs.faceUrl); } catch (_) {}
       fs.faceBlob = blob; fs.faceUrl = URL.createObjectURL(blob); fs.faceRemoteUrl = null; fs.appliedAt = 0;
       try { palDraftSave(); } catch (_) {}
