@@ -5447,8 +5447,9 @@
     { const tb = ov.querySelector(".es-reels-tone"); if (tb) tb.addEventListener("click", palNarrToneOpen); }   // 🎙 전역 나레이션 말투
     document.addEventListener("keydown", _reelsKey);
 
-    var soundOn = false;
+    var soundOn = true;   // 🔊 릴스는 소리 켜진 상태로 시작(요청)
     var soundBtn = ov.querySelector(".es-reels-sound");
+    if (soundBtn) soundBtn.textContent = "🔊";
     soundBtn.addEventListener("click", function () {
       soundOn = !soundOn;
       soundBtn.textContent = soundOn ? "🔊" : "🔇";
@@ -5467,7 +5468,7 @@
           if (!vid.getAttribute("src") && page.dataset.src) vid.src = page.dataset.src;
           vid.muted = !soundOn;
           page.classList.add("cur");
-          vid.play().catch(function () {});
+          vid.play().catch(function () { if (!vid.muted) { vid.muted = true; vid.play().catch(function () {}); } });   // 소리 자동재생 막히면 음소거로라도 재생
         } else { page.classList.remove("cur"); try { vid.pause(); } catch (_) {} }
       });
     }, { threshold: [0, 0.6, 1] });
@@ -5475,7 +5476,7 @@
     ov._io = io;
 
     var first = ov.querySelector(".es-reels-page");   // 첫 영상 즉시 재생
-    if (first) { var fv = first.querySelector("video"); if (fv && first.dataset.src) { fv.src = first.dataset.src; fv.muted = true; first.classList.add("cur"); fv.play().catch(function () {}); } }
+    if (first) { var fv = first.querySelector("video"); if (fv && first.dataset.src) { fv.src = first.dataset.src; fv.muted = !soundOn; first.classList.add("cur"); fv.play().catch(function () { if (!fv.muted) { fv.muted = true; fv.play().catch(function () {}); } }); } }
   }
   // 💡 아이디어 상자 — 버튼 클릭 시 팝업으로 진짜 아이디어 생성기(업종 → AI 아이디어)
   function openIdeaBox() {
