@@ -9283,105 +9283,107 @@ ${folderBtn}
           companies.map((item) => normalizeCompanyName(item.name).toLowerCase()).filter(Boolean)
         ).size;
 
-        // 일자별 집계: dayKey(YYYY-MM-DD) -> { received, canceled, changed }
-        const dayMap = new Map();
-        const bump = (rawKey, field) => {
-          const dayKey = String(rawKey || "").slice(0, 10);
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
-          if (!dayMap.has(dayKey)) dayMap.set(dayKey, { received: 0, canceled: 0, changed: 0 });
-          dayMap.get(dayKey)[field] += 1;
+        // 달력과 동일 기준: 활성 스케줄(data)을 촬영일(item.date)로 세고, 취소건은 제외한다.
+        // (renderScheduleCalendarInto 의 monthSchedules/daySchedules 필터와 같은 로직)
+        const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
+        const canceledIdSet = new Set(
+          canceledRows.map((item) => String(item?.customerScheduleId || "").trim()).filter(Boolean)
+        );
+        const fallbackKey = (item) =>
+          [
+            String(item?.date || "").trim(),
+            String(item?.time || "").trim(),
+            normalizeCompanyName(item?.company).toLowerCase(),
+            normalizeCompanyName(item?.place).toLowerCase()
+          ].join("|");
+        const canceledFallbackSet = new Set(canceledRows.map(fallbackKey));
+        const isCanceled = (item) => {
+          const id = String(item?.customerScheduleId || "").trim();
+          return id ? canceledIdSet.has(id) : canceledFallbackSet.has(fallbackKey(item));
         };
 
-        // 1) 접수·취소 — 접수 전용 원장(서버 백업·크로스디바이스). 소스로 분류:
-        //    *_create / customer / admin = 접수, *_cancel / *_delete = 취소.
-        const ledgerRows =
-          latestScheduleReceiptLedger && latestScheduleReceiptLedger.length
-            ? latestScheduleReceiptLedger
-            : readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER);
-        ledgerRows.forEach((row) => {
-          const src = String(row?.source || "").trim();
-          const dayRaw = row?.createdAt || row?.created_at || row?.date;
-          if (src.includes("cancel") || src.includes("delete")) bump(dayRaw, "canceled");
-          else if (src.endsWith("_create") || src === "customer" || src === "admin") bump(dayRaw, "received");
+        // 촬영일별 예약 건수 집계 (달력 셀의 'N건'과 동일)
+        const dayMap = new Map(); // dayKey(YYYY-MM-DD) -> 건수
+        data.forEach((item) => {
+          if (isCanceled(item)) return;
+          const dayKey = String(item?.date || "").slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
+          dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1);
         });
 
-        // 2) 변경 — 관리자 날짜/시간 변경 알림(원장에는 변경 이벤트가 없음)
-        readStorageArray(STORAGE_CUSTOMER_ALERTS).forEach((row) => {
-          const type = String(row?.type || "").trim();
-          if (type === "admin_time_update" || type === "admin_date_update") bump(row?.createdAt, "changed");
-        });
-
-        // 월별 집계
-        const monthMap = new Map();
-        [...dayMap.entries()].forEach(([dayKey, stat]) => {
+        // 월별 집계 (달력 상단 '이번 달 총 예약 N건'과 동일)
+        const monthMap = new Map(); // monthKey(YYYY-MM) -> { total, days }
+        [...dayMap.entries()].forEach(([dayKey, count]) => {
           const monthKey = dayKey.slice(0, 7);
-          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { received: 0, canceled: 0, changed: 0 });
+          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { total: 0, days: 0 });
           const m = monthMap.get(monthKey);
-          m.received += stat.received;
-          m.canceled += stat.canceled;
-          m.changed += stat.changed;
+          m.total += count;
+          m.days += 1;
         });
 
         const todayKey = new Date().toISOString().slice(0, 10);
         const monthKeyNow = todayKey.slice(0, 7);
-        const todayStat = dayMap.get(todayKey) || { received: 0, canceled: 0, changed: 0 };
-        const monthStat = monthMap.get(monthKeyNow) || { received: 0, canceled: 0, changed: 0 };
-        const net = (s) => s.received - s.canceled;
+        const todayCount = dayMap.get(todayKey) || 0;
+        const monthNow = monthMap.get(monthKeyNow) || { total: 0, days: 0 };
+        const hasData = dayMap.size > 0;
 
-        const numCell = (value, color) =>
-          `<td style="color: ${value ? color : "#9aa0a6"}; font-weight: ${value ? 700 : 400};">${value}건</td>`;
         const monthLabel = (key) => {
           const [y, m] = key.split("-");
           return `${y}년 ${Number(m)}월`;
         };
-        const statRows = (entries) =>
-          entries
-            .map(
-              ([key, s]) => `
+        const avgPerDay = (m) => (m.days ? (m.total / m.days).toFixed(1) : "0");
+
+        const monthRows = [...monthMap.entries()]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .slice(0, 12)
+          .map(
+            ([key, m]) => `
               <tr>
-                <td>${escapeHtml(key === todayKey ? `${key} (오늘)` : key)}</td>
-                ${numCell(s.received, "#1a73e8")}
-                ${numCell(s.canceled, "#d93025")}
-                ${numCell(s.changed, "#b8860b")}
-                <td style="font-weight: 700;">${net(s)}건</td>
+                <td>${escapeHtml(monthLabel(key))}${key === monthKeyNow ? ' <span style="color:#1a73e8;">(이번 달)</span>' : ""}</td>
+                <td style="font-weight: 700;">${m.total}건</td>
+                <td>${avgPerDay(m)}건</td>
+                <td>${m.days}일</td>
               </tr>
             `
-            )
-            .join("");
+          )
+          .join("");
 
-        const monthRows = statRows(
-          [...monthMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(([k, s]) => [monthLabel(k), s])
-        );
-        const dayRows = statRows([...dayMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 31));
-        const hasData = dayMap.size > 0;
-        const tableHead = '<tr><th>기간</th><th>접수</th><th>취소</th><th>변경</th><th>순주문</th></tr>';
+        const dayRows = [...dayMap.entries()]
+          .filter(([dayKey]) => dayKey.slice(0, 7) === monthKeyNow)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(
+            ([dayKey, count]) => `
+              <tr>
+                <td>${escapeHtml(dayKey)}${dayKey === todayKey ? ' <span style="color:#1a73e8;">(오늘)</span>' : ""}</td>
+                <td style="font-weight: 700;">${count}건</td>
+              </tr>
+            `
+          )
+          .join("");
 
         customerStatsBoxEl.innerHTML = `
           <div class="customer-stats-head">
-            <strong>주문 통계</strong>
+            <strong>예약 통계</strong>
             <span>총업체수: ${totalCompanies}개</span>
-            <span>오늘 접수: ${todayStat.received}건</span>
-            <span>이번 달 접수: ${monthStat.received}건</span>
-            <span>취소: ${monthStat.canceled}건</span>
-            <span>변경: ${monthStat.changed}건</span>
-            <span>순주문: ${net(monthStat)}건</span>
+            <span>오늘 예약: ${todayCount}건</span>
+            <span>이번 달 예약: ${monthNow.total}건</span>
           </div>
-          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">접수=새로 들어온 주문 · 취소=취소된 주문 · 변경=날짜/시간 변경 · 순주문=접수−취소</div>
+          <div style="font-size: 12px; color: #666; margin: 2px 0 10px;">달력과 동일 — 촬영일 기준 실제 예약 건수(취소 제외). 일평균 = 예약 있는 날 기준.</div>
           ${
             hasData
               ? `
-            <div style="font-weight: 700; margin: 6px 0 4px;">월별 통계</div>
+            <div style="font-weight: 700; margin: 6px 0 4px;">월별 예약 통계</div>
             <table class="payment-table" style="margin-top: 0;">
-              <thead>${tableHead}</thead>
+              <thead><tr><th>월</th><th>예약 건수</th><th>일평균</th><th>예약일 수</th></tr></thead>
               <tbody>${monthRows}</tbody>
             </table>
-            <div style="font-weight: 700; margin: 16px 0 4px;">일별 통계 (최근 31일)</div>
+            <div style="font-weight: 700; margin: 16px 0 4px;">일별 예약 통계 (${escapeHtml(monthLabel(monthKeyNow))})</div>
             <table class="payment-table" style="margin-top: 0;">
-              <thead>${tableHead}</thead>
-              <tbody>${dayRows}</tbody>
+              <thead><tr><th>일자</th><th>예약 건수</th></tr></thead>
+              <tbody>${dayRows || '<tr><td colspan="2">이번 달 예약이 없습니다.</td></tr>'}</tbody>
             </table>
           `
-              : '<div>아직 주문 통계 데이터가 없습니다.</div>'
+              : '<div>아직 예약 데이터가 없습니다.</div>'
           }
         `;
       }
