@@ -2673,8 +2673,7 @@
     });
   }
   function palEnsureClipDurs() {
-    if (!document.getElementById("esPalCutWrap")) return;   // 컷 단계일 때만
-    const d = E.palette && E.palette.demo; if (!d) return;
+    const d = E.palette && E.palette.demo; if (!d) return;   // 컷 단계 아니어도 항상 원본 길이 측정(1초 영상=1초로 캡)
     const clips = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
     clips.forEach((m) => {
       if (!m || m.kind !== "video" || m.srcDur > 0 || m._durPend || !m.url || (m._durTries || 0) >= 3) return;   // 0(실패)·null 이면 재시도(최대 3회), 양수면 확정
@@ -2688,7 +2687,8 @@
           else if (m.dur > m.srcDur + 0.02) { m.dur = +m.srcDur.toFixed(2); changed = true; }   // 원본 초과분 잘라냄(반복 방지)
         }
         if (changed) { try { palDraftSave(); } catch (_) {} }
-        try { if (E.view === "palette" && document.getElementById("esPalCutWrap")) palCutReflow(); } catch (_) {}
+        try { if (E.view === "palette") { if (document.getElementById("esPalCutWrap")) palCutReflow(); else if (changed) renderPalette(); } } catch (_) {}   // 원본길이 반영(컷단계=타임라인만, 그 외=전체 갱신)
+
       }).catch(() => { m._durPend = false; });
     });
   }
