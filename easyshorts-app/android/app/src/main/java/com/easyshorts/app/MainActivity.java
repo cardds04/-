@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(GallerySaverPlugin.class);   // 갤러리 직접 저장
         registerPlugin(NativeExportPlugin.class);   // 🚀 네이티브 영상 내보내기(Media3)
+        registerPlugin(NativeVideoPlugin.class);    // 🎬 네이티브 비디오 표면(미리보기·스크럽)
         super.onCreate(savedInstanceState);
     }
 }

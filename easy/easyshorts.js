@@ -16518,5 +16518,93 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     }
   }
 
+  // 🎬 네이티브 비디오 표면 — #esVideo 의 픽셀을 ExoPlayer + TextureView 로 교체(WebView 위 정확히 같은 위치)
+  //    이유: 안드로이드 WebView <video> 가 컷편집 스크럽·미리보기에서 느린 문제 해결(캡컷급 즉시 반응).
+  //    웹 video 요소는 자리만 차지하고(보이지 않게) 시간·이벤트는 그대로 — 네이티브가 그걸 따라 그림.
+  function hasNativeVideo() { try { return isNativeApp() && !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeVideo); } catch (_) { return false; } }
+  (function nvSetup() {
+    if (typeof window === "undefined") return;
+    const NV_state = { el: null, raf: 0, lastBounds: "", attachedPath: "", pathCache: new Map(), seekT: 0 };
+    async function nvResolvePath(url) {
+      if (!url) return null;
+      if (!url.startsWith("blob:")) return url;
+      if (NV_state.pathCache.has(url)) return NV_state.pathCache.get(url);
+      try {
+        const blob = await (await fetch(url)).blob();
+        const name = "nv_" + Math.random().toString(36).slice(2) + ".mp4";
+        const p = await blobToCacheFile(blob, name);
+        NV_state.pathCache.set(url, p); return p;
+      } catch (_) { return null; }
+    }
+    async function nvOpenFromEl(el) {
+      if (!hasNativeVideo() || !el) return;
+      const NV = window.Capacitor.Plugins.NativeVideo;
+      const url = el.currentSrc || el.src; if (!url) return;
+      if (url === NV_state.attachedPath) return;
+      NV_state.attachedPath = url;
+      const path = await nvResolvePath(url); if (!path) return;
+      try { await NV.open({ path }); await NV.setVolume({ v: el.muted ? 0 : (el.volume != null ? el.volume : 1) }); } catch (_) {}
+    }
+    function nvScheduleSeek(el) {
+      if (!hasNativeVideo()) return; const NV = window.Capacitor.Plugins.NativeVideo;
+      clearTimeout(NV_state.seekT);
+      NV_state.seekT = setTimeout(() => { try { NV.seekTo({ ms: Math.round((el.currentTime || 0) * 1000) }); } catch (_) {} }, 8);
+    }
+    function nvAttach(el) {
+      if (!hasNativeVideo() || !el || NV_state.el === el) return;
+      nvDetach(true);
+      NV_state.el = el;
+      try { el.style.visibility = "hidden"; } catch (_) {}
+      const NV = window.Capacitor.Plugins.NativeVideo;
+      const syncBounds = () => {
+        if (!NV_state.el || NV_state.el !== el) return;
+        const r = el.getBoundingClientRect();
+        const k = Math.round(r.left) + "," + Math.round(r.top) + "," + Math.round(r.width) + "," + Math.round(r.height);
+        if (k !== NV_state.lastBounds && r.width > 0 && r.height > 0) { NV_state.lastBounds = k; try { NV.setBounds({ x: r.left, y: r.top, w: r.width, h: r.height }); } catch (_) {} }
+        NV_state.raf = requestAnimationFrame(syncBounds);
+      };
+      syncBounds();
+      const onSrc = () => nvOpenFromEl(el);
+      const onSeek = () => nvScheduleSeek(el);
+      const onPlay = () => { try { NV.play(); } catch (_) {} };
+      const onPause = () => { try { NV.pause(); } catch (_) {} };
+      const onVol = () => { try { NV.setVolume({ v: el.muted ? 0 : (el.volume != null ? el.volume : 1) }); } catch (_) {} };
+      el.addEventListener("loadstart", onSrc); el.addEventListener("loadedmetadata", onSrc);
+      el.addEventListener("seeking", onSeek); el.addEventListener("seeked", onSeek); el.addEventListener("timeupdate", onSeek);
+      el.addEventListener("play", onPlay); el.addEventListener("playing", onPlay); el.addEventListener("pause", onPause);
+      el.addEventListener("volumechange", onVol);
+      el._nvListeners = { onSrc, onSeek, onPlay, onPause, onVol };
+      onSrc();   // 현재 src 가 있으면 바로
+    }
+    function nvDetach(silent) {
+      if (NV_state.raf) cancelAnimationFrame(NV_state.raf);
+      const el = NV_state.el;
+      if (el) {
+        try { el.style.visibility = ""; } catch (_) {}
+        const L = el._nvListeners;
+        if (L) {
+          el.removeEventListener("loadstart", L.onSrc); el.removeEventListener("loadedmetadata", L.onSrc);
+          el.removeEventListener("seeking", L.onSeek); el.removeEventListener("seeked", L.onSeek); el.removeEventListener("timeupdate", L.onSeek);
+          el.removeEventListener("play", L.onPlay); el.removeEventListener("playing", L.onPlay); el.removeEventListener("pause", L.onPause);
+          el.removeEventListener("volumechange", L.onVol);
+          el._nvListeners = null;
+        }
+      }
+      NV_state.el = null; NV_state.lastBounds = ""; NV_state.attachedPath = "";
+      if (!silent && hasNativeVideo()) try { window.Capacitor.Plugins.NativeVideo.hide(); } catch (_) {}
+    }
+    // 주기 폴링 — 현재 화면에서 보이는 #esVideo 를 찾아 자동 attach/detach
+    function nvTick() {
+      if (!hasNativeVideo()) return;
+      const cand = document.getElementById("esVideo");
+      if (cand && cand.offsetParent !== null) { if (NV_state.el !== cand) nvAttach(cand); }
+      else { if (NV_state.el) nvDetach(); }
+    }
+    if (typeof document !== "undefined") {
+      const start = () => { try { nvTick(); } catch (_) {} setInterval(nvTick, 400); };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+    }
+  })();
+
   window.EasyShorts = { init, show, hide, renderSpec, openPalette };
 })();
