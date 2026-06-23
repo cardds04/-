@@ -2129,12 +2129,17 @@
     if (!clips.length) { palNVBadge("NV: 클립 0 (playClips 비었음)"); palNVUnbind(); return; }
     if (clips.some((m) => m.kind !== "video")) { palNVBadge("NV: 사진 섞임→웹"); palNVUnbind(); return; }
     const NV = window.Capacitor.Plugins.NativeVideo;
-    const items = [];
-    for (const m of clips) {
-      let path = m._nvPath;
-      if (!path) { try { const blob = m.blob || await (await fetch(m.url)).blob(); path = await blobToCacheFile(blob, "nv_" + uid() + ".mp4"); m._nvPath = path; } catch (e2) { palNVBadge("NV: 파일변환 실패 " + ((e2 && e2.message) || "")); return; } }
-      items.push({ path, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 });
-    }
+    const _needWrite = clips.filter((m) => !m._nvPath).length;
+    if (_needWrite) palNVBadge("NV: 영상 준비 중… (" + _needWrite + "개)");
+    // 🚀 클립 파일 복사를 병렬로(순차 await → Promise.all) — 시작 지연 단축
+    try {
+      await Promise.all(clips.map(async (m) => {
+        if (m._nvPath) return;
+        const blob = m.blob || await (await fetch(m.url)).blob();
+        m._nvPath = await blobToCacheFile(blob, "nv_" + uid() + ".mp4");
+      }));
+    } catch (e2) { palNVBadge("NV: 파일변환 실패 " + ((e2 && e2.message) || "")); return; }
+    const items = clips.map((m) => ({ path: m._nvPath, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 }));
     try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (e) { palNVBadge("⚠️NV setClips 실패 " + ((e && e.message) || "")); return; }   // 네이티브는 항상 음소거(소리는 웹)
     c._nv = true; _palNVCur = c; palNVBadge("⚡NV 켜짐 (" + items.length + "컷)");
     try { mediaEl.style.visibility = "hidden"; (c.bufs || []).forEach((v) => { try { v.style.visibility = "hidden"; } catch (_) {} }); } catch (_) {}
