@@ -4354,8 +4354,34 @@
     const _dFile = $("#esDemoMediaFile"), _dBtn = $("#esDemoMediaBtn"), _dClr = $("#esDemoMediaClear");
     if (_dBtn && _dFile) _dBtn.addEventListener("click", () => _dFile.click());   // 🎬 영상 첨부 = 파일 선택(기존)
     const _dShoot = $("#esDemoShootBtn");   // 📹 영상 찍기 = 카메라로 바로 촬영 → 목록에 더함
-    const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); };
+    const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); try { _warnUndecodable(items); } catch (_) {} };
     const _fileToMedia = (f) => ({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" });
+    // ⚠️ 이 폰에서 디코드(재생)가 안 되는 영상(주로 안드로이드 HEVC/고효율) 감지 → 까맣게 나오기 전에 안내. 중간 프레임을 검사(검정 인트로 오탐 방지).
+    const _warnUndecodable = async (items) => {
+      const vids = (items || []).filter((it) => it && it.kind === "video" && it.url);
+      for (const it of vids) {
+        const ok = await _probeVideoRenderable(it.url);
+        if (!ok) { try { alert("⚠️ 이 영상은 이 폰에서 재생이 안 되는 형식이에요 (고효율·HEVC 코덱).\n\n카메라 설정에서 \"고효율 동영상(HEVC)\"을 끄거나 \"동영상 코덱 = 호환성 우선\"으로 바꾸고 다시 촬영해 주세요. (삼성: 카메라 → 설정 → 고급 녹화 옵션)\n\n그대로 만들면 자막은 나오지만 영상이 까맣게 나옵니다."); } catch (_) {} break; }
+      }
+    };
+    const _probeVideoRenderable = (url) => new Promise((resolve) => {
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
+      let done = false; const fin = (ok) => { if (done) return; done = true; try { v.pause(); } catch (_) {} try { v.removeAttribute("src"); v.load(); } catch (_) {} resolve(ok); };
+      const to = setTimeout(() => fin(true), 7000);   // 판단 못 하면 통과(오탐 방지) — 못 막아도 기존과 동일
+      v.onerror = () => { clearTimeout(to); fin(false); };   // 디코드 자체 에러 = 불가
+      const sample = () => {
+        try {
+          if (!v.videoWidth) return fin(false);
+          const c = document.createElement("canvas"); c.width = 32; c.height = 32; const cx = c.getContext("2d");
+          cx.drawImage(v, 0, 0, 32, 32);
+          const d = cx.getImageData(0, 0, 32, 32).data; let s = 0, n = 0; for (let i = 0; i < d.length; i += 4) { s += d[i] + d[i + 1] + d[i + 2]; n++; }
+          clearTimeout(to); fin((n ? s / (n * 3) : 0) >= 6);   // 중간 프레임이 거의 검정 = 디코드 안 됨
+        } catch (_) { clearTimeout(to); fin(false); }   // drawImage 보안/디코드 실패 = 불가
+      };
+      v.onloadeddata = () => { const tgt = Math.min(0.5, (v.duration || 1) / 2); try { v.currentTime = tgt; } catch (_) { sample(); } };
+      v.onseeked = sample;
+      try { v.src = url; } catch (_) { clearTimeout(to); fin(true); }
+    });
     if (_dShoot) _dShoot.addEventListener("click", () => palOpenCamera((file) => { if (file) _addMedia([{ url: URL.createObjectURL(file), blob: file, kind: "video", name: file.name || "촬영영상" }]); }));
     if (_dFile) _dFile.addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (fs.length) _addMedia(fs.map(_fileToMedia)); });   // 🎬 첨부/더넣기 = 여러 개 한꺼번에
     if (_dClr) _dClr.addEventListener("click", () => { try { (demo.media || []).forEach((mm) => mm && mm.url && URL.revokeObjectURL(mm.url)); } catch (_) {} demo.media = []; renderPalette(); });
