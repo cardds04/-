@@ -1704,11 +1704,8 @@
         case "media": {
           const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
           const inner = list.length
-            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted autoplay loop playsinline preload="auto"></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoShootBtn">📹 찍기</button><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
-            : `<div class="es-pal-scr-twin">
-                 <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half" id="esDemoShootBtn"><span class="es-pal-scr-btn-ic">📹</span><span class="es-pal-scr-btn-t">영상 찍기</span><span class="es-pal-scr-btn-s">카메라로 바로 촬영</span></button>
-                 <button type="button" class="es-pal-scr-btn es-pal-scr-act es-pal-scr-half ghost" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 첨부</span><span class="es-pal-scr-btn-s">여러 개 한꺼번에 OK</span></button>
-               </div>`;
+            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted autoplay loop playsinline preload="auto"></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
+            : `<button type="button" class="es-pal-scr-btn es-pal-scr-act" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 넣기</span><span class="es-pal-scr-btn-s">사진·영상 여러 개 한꺼번에 OK</span></button>`;
           body = `<div class="es-pal-scr-drop" id="esDemoMediaDrop">${inner}</div><input type="file" id="esDemoMediaFile" accept="image/*,video/*" multiple hidden>`;
           break;
         }
