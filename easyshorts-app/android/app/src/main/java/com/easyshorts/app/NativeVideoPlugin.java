@@ -1,13 +1,20 @@
 package com.easyshorts.app;
 
+import android.content.ContentResolver;
+import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.provider.OpenableColumns;
 import android.util.DisplayMetrics;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import androidx.activity.result.ActivityResult;
 import androidx.annotation.OptIn;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
@@ -16,14 +23,17 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.SeekParameters;
 
 import com.getcapacitor.JSArray;
-
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 🎬 네이티브 비디오 표면 — WebView 위에 ExoPlayer + TextureView 를 띄워 미리보기·컷편집 스크럽을 캡컷처럼 즉각 반응시키는 하이브리드.
@@ -232,6 +242,68 @@ public class NativeVideoPlugin extends Plugin {
             } catch (Throwable t) { call.reject("seekToTimeline 실패: " + t.getMessage()); }
         });
     }
+
+    // 🎞 네이티브 영상 선택기 — 원본 content:// 주소를 그대로 받음(복사 0). 길이·해상도·첫프레임 썸네일도 같이.
+    @PluginMethod
+    public void pickVideos(final PluginCall call) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.setType("video/*");
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(call, i, "pickResult");
+    }
+
+    @ActivityCallback
+    private void pickResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSArray out = new JSArray();
+        try {
+            Intent data = result.getData();
+            List<Uri> uris = new ArrayList<>();
+            if (data != null) {
+                if (data.getClipData() != null) {
+                    int n = data.getClipData().getItemCount();
+                    for (int k = 0; k < n; k++) uris.add(data.getClipData().getItemAt(k).getUri());
+                } else if (data.getData() != null) {
+                    uris.add(data.getData());
+                }
+            }
+            ContentResolver cr = getContext().getContentResolver();
+            for (Uri u : uris) {
+                try { cr.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Throwable t) {}
+                JSObject o = new JSObject();
+                o.put("uri", u.toString());
+                o.put("name", queryName(cr, u));
+                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                try {
+                    mmr.setDataSource(getContext(), u);
+                    o.put("durationMs", parseL(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)));
+                    o.put("width", parseL(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)));
+                    o.put("height", parseL(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)));
+                    Bitmap bm = mmr.getFrameAtTime(0);
+                    if (bm != null) {
+                        // 썸네일 축소(가로 360 한도) 후 JPG 저장
+                        int tw = 360, th = Math.max(1, Math.round(bm.getHeight() * (360f / Math.max(1, bm.getWidth()))));
+                        Bitmap small = (bm.getWidth() > tw) ? Bitmap.createScaledBitmap(bm, tw, th, true) : bm;
+                        File tf = new File(getContext().getCacheDir(), "thumb_" + System.nanoTime() + ".jpg");
+                        FileOutputStream fos = new FileOutputStream(tf);
+                        small.compress(Bitmap.CompressFormat.JPEG, 80, fos); fos.flush(); fos.close();
+                        o.put("thumbPath", "file://" + tf.getAbsolutePath());
+                    }
+                } catch (Throwable t) {} finally { try { mmr.release(); } catch (Throwable t) {} }
+                out.put(o);
+            }
+        } catch (Throwable t) { call.reject("선택 처리 실패: " + t.getMessage()); return; }
+        JSObject ret = new JSObject(); ret.put("videos", out);
+        call.resolve(ret);
+    }
+
+    private String queryName(ContentResolver cr, Uri u) {
+        try { Cursor c = cr.query(u, null, null, null, null); if (c != null) { int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME); String nm = null; if (c.moveToFirst() && idx >= 0) nm = c.getString(idx); c.close(); if (nm != null) return nm; } } catch (Throwable t) {}
+        return "video.mp4";
+    }
+    private long parseL(String s) { try { return s == null ? 0 : Long.parseLong(s.trim()); } catch (Throwable t) { return 0; } }
 
     @PluginMethod
     public void close(final PluginCall call) {

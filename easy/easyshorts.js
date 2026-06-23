@@ -1708,7 +1708,7 @@
           const inner = list.length
             ? (function () {
                 // 🎞 썸네일 = 첫 프레임 JPG(한 번 캡처해 캐시) — 안드로이드 WebView 동시 디코드 한계로 ▶ 아이콘만 뜨던 문제 방지
-                const cellHtml = list.map((mm, idx) => { const tk = "thumb_" + (mm.blob ? (mm.blob.size + "_" + (mm.name || "")) : mm.url); const tu = (E._palThumbs && E._palThumbs[tk]) || ""; const visual = mm.kind === "video" ? (tu ? `<img src="${tu}" alt="" data-thumbidx="${idx}">` : `<img src="" alt="" data-thumbidx="${idx}" data-thumbkey="${esc(tk)}" data-thumbpending="1">`) : `<img src="${mm.url}" alt="">`; return `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${visual}</div>`; }).join("");
+                const cellHtml = list.map((mm, idx) => { const tk = "thumb_" + (mm.blob ? (mm.blob.size + "_" + (mm.name || "")) : mm.url); const tu = mm.thumb || (E._palThumbs && E._palThumbs[tk]) || ""; const visual = mm.kind === "video" ? (tu ? `<img src="${tu}" alt="" data-thumbidx="${idx}">` : `<img src="" alt="" data-thumbidx="${idx}" data-thumbkey="${esc(tk)}" data-thumbpending="1">`) : `<img src="${mm.url}" alt="">`; return `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${visual}</div>`; }).join("");
                 return `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${cellHtml}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`;
               })()
             : `<button type="button" class="es-pal-scr-btn es-pal-scr-act" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 넣기</span><span class="es-pal-scr-btn-s">사진·영상 여러 개 한꺼번에 OK</span></button>`;
@@ -3760,7 +3760,7 @@
     try {
       const slots = clips.map((m) => ({ id: uid(), dur: palCutClipDur(m) }));
       const fills = {};
-      slots.forEach((s, i) => { const m = clips[i]; fills[s.id] = { url: m.url, blob: m.blob, kind: (m.kind === "video" ? "video" : "image"), dur: palCutClipDur(m) }; });
+      slots.forEach((s, i) => { const m = clips[i]; fills[s.id] = { url: m.url, blob: m.blob, srcUri: m.srcUri || m._nvPath || null, kind: (m.kind === "video" ? "video" : "image"), dur: palCutClipDur(m) }; });
       const mkText = (b, isCap) => {
         // 🎨 자막/타이틀 블록은 bg=색·bgStyle=모양(box/pill/sharp)로 저장. 출력 텍스트 그리기는 bg=모양·bgColor=색·bgOpacity를 기대 → 여기서 올바로 변환(안 하면 bgColor 없어 검정 배경으로 나옴).
         const _bgCol = (b.bg && b.bg !== "none" && b.bg !== "") ? b.bg : null;
@@ -4416,7 +4416,8 @@
     // 🎮 고객 화면 = 실제 작동 — 여기서 넣은 사진/영상·타이틀·자막이 왼쪽 '실제 결과 미리보기'에 반영
     const demo = P.demo;
     const _dFile = $("#esDemoMediaFile"), _dBtn = $("#esDemoMediaBtn"), _dClr = $("#esDemoMediaClear");
-    if (_dBtn && _dFile) _dBtn.addEventListener("click", () => _dFile.click());   // 🎬 영상 첨부 = 파일 선택(기존)
+    // 🎬 영상 넣기 — 앱이면 네이티브 선택기(원본 주소 직접·복사 0), 웹이면 기존 파일 선택
+    if (_dBtn) _dBtn.addEventListener("click", () => { if (hasNativeVideo()) { palNativePick(); } else if (_dFile) _dFile.click(); });
     // 🎞 비어있는 비디오 썸네일(첫 프레임)을 백그라운드로 한 번씩 캡처해 채워넣기 — 한꺼번에 8개 이상 <video> 동시 디코드(WebView 한계로 ▶만 떠 보이던 문제) 방지
     try {
       E._palThumbs = E._palThumbs || {};
@@ -4438,8 +4439,18 @@
       if (_pending.length) _fillNext();
     } catch (_) {}
     const _dShoot = $("#esDemoShootBtn");   // 📹 영상 찍기 = 카메라로 바로 촬영 → 목록에 더함
-    const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); try { _warnUndecodable(items); } catch (_) {} };
+    const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); try { items.forEach((it) => { if (!it._native) _warnUndecodable([it]); }); } catch (_) {} };
     const _fileToMedia = (f) => ({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" });
+    // 🎞 네이티브 선택기 → 원본 content:// 주소 그대로(복사 0). _nvPath=원본주소라 미리보기가 즉시 연다. 썸네일·길이도 네이티브가 줌.
+    async function palNativePick() {
+      try {
+        const r = await window.Capacitor.Plugins.NativeVideo.pickVideos();
+        const vids = (r && r.videos) || [];
+        if (!vids.length) return;
+        const items = vids.map((v) => { const sd = v.durationMs ? v.durationMs / 1000 : 0; return { kind: "video", name: v.name || "video.mp4", srcUri: v.uri, _nvPath: v.uri, url: v.thumbPath || "", thumb: v.thumbPath || "", dur: sd, srcDur: sd, _w: v.width || 0, _h: v.height || 0, _native: true }; });
+        _addMedia(items);
+      } catch (e) { try { toast("영상 선택 취소/실패: " + ((e && e.message) || e)); } catch (_) {} }
+    }
     // ⚠️ 이 폰에서 디코드(재생)가 안 되는 영상(주로 안드로이드 HEVC/고효율) 감지 → 까맣게 나오기 전에 안내. 중간 프레임을 검사(검정 인트로 오탐 방지).
     const _warnUndecodable = async (items) => {
       const vids = (items || []).filter((it) => it && it.kind === "video" && it.url);
@@ -14221,8 +14232,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const clips = [];
       for (const seg of arr) {
         const f = u.fills[seg.slot.id]; if (!f || !f.url) continue;
-        const blob = f.blob || (f._fastBlob instanceof Blob ? f._fastBlob : await (await fetch(f.url)).blob());
-        const path = await blobToCacheFile(blob, "ne_in_" + uid() + ".mp4");
+        let path = f.srcUri || f._nvPath || null;   // 🎞 네이티브 원본 주소 그대로(복사 0)
+        if (!path) { const blob = f.blob || (f._fastBlob instanceof Blob ? f._fastBlob : await (await fetch(f.url)).blob()); path = await blobToCacheFile(blob, "ne_in_" + uid() + ".mp4"); }
         clips.push({ path, inSec: (seg.slot.in || 0), durSec: Math.max(0, seg.end - seg.start) });
       }
       if (!clips.length) return false;
