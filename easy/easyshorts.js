@@ -2149,7 +2149,7 @@
   }
   function palNVBadge(txt) {
     let b = document.getElementById("esNVBadge");
-    if (!b) { b = document.createElement("div"); b.id = "esNVBadge"; b.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.7);color:#1ed6a5;font:700 11px/1.3 monospace;padding:3px 7px;border-radius:8px;pointer-events:none;"; document.body.appendChild(b); }
+    if (!b) { b = document.createElement("div"); b.id = "esNVBadge"; b.style.cssText = "position:fixed;left:6px;bottom:28px;z-index:99999;background:rgba(0,0,0,.7);color:#7ad9ff;font:700 11px/1.3 monospace;padding:3px 7px;border-radius:8px;pointer-events:none;"; document.body.appendChild(b); }
     b.textContent = txt;
   }
   function palNVSeek(t) {
@@ -16656,6 +16656,25 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       const start = () => { try { nvTick(); } catch (_) {} setInterval(nvTick, 400); };
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
     }
+  })();
+
+  // 📛 상시 네이티브 상태 배지 — 어느 화면이든 좌하단에 'APK가 네이티브인지' 항상 표시(설치 확인용)
+  (function nvStatusBadge() {
+    if (typeof document === "undefined") return;
+    function paint() {
+      try {
+        const isApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        const P = (window.Capacitor && window.Capacitor.Plugins) || {};
+        const hasNV = !!P.NativeVideo, hasNE = !!P.NativeExport;
+        let b = document.getElementById("esNVStatus");
+        if (!isApp) { if (b) b.remove(); return; }   // 웹/PC 에선 표시 안 함
+        if (!b) { b = document.createElement("div"); b.id = "esNVStatus"; b.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99998;font:700 10px/1.3 monospace;padding:3px 7px;border-radius:8px;pointer-events:none;"; document.body.appendChild(b); }
+        if (hasNV && hasNE) { b.style.background = "rgba(0,40,20,.85)"; b.style.color = "#1ed6a5"; b.textContent = "📱 네이티브 APK ✓ (NV·NE)"; }
+        else { b.style.background = "rgba(60,0,0,.85)"; b.style.color = "#ff8a8a"; b.textContent = "📱 옛 APK — 새 버전 설치 필요 (네이티브 없음)"; }
+      } catch (_) {}
+    }
+    const start = () => { paint(); setInterval(paint, 1500); };   // 플러그인 로드가 늦을 수 있어 주기 갱신
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
   })();
 
   window.EasyShorts = { init, show, hide, renderSpec, openPalette };
