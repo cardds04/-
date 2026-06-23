@@ -13,6 +13,9 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.SeekParameters;
+
+import com.getcapacitor.JSArray;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -43,6 +46,8 @@ public class NativeVideoPlugin extends Plugin {
     private FrameLayout container;
     private float density = 1f;
     private String lastPath = null;
+    private long[] cumMs = null;   // 플레이리스트 각 클립 누적 끝(ms) — 전체 타임라인 시크용
+    private String lastClipsSig = null;
 
     private void ensureView() {
         if (container != null && surface != null && player != null) return;
@@ -50,6 +55,7 @@ public class NativeVideoPlugin extends Plugin {
         density = dm.density;
 
         player = new ExoPlayer.Builder(getContext()).build();
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC);   // 스크럽 = 가장 가까운 키프레임(빠름·끊김 없음)
         surface = new TextureView(getContext());
         surface.setOpaque(true);
         player.setVideoTextureView(surface);
@@ -161,13 +167,75 @@ public class NativeVideoPlugin extends Plugin {
         });
     }
 
+    // 🎬 컷편집 — 전체 타임라인을 플레이리스트(클립 N개·트림)로 세팅. 같은 구성이면 재세팅 안 함.
+    @PluginMethod
+    public void setClips(final PluginCall call) {
+        final JSArray arr = call.getArray("clips");
+        if (arr == null || arr.length() == 0) { call.reject("clips 필요"); return; }
+        getActivity().runOnUiThread(() -> {
+            try {
+                ensureView();
+                StringBuilder sigB = new StringBuilder();
+                java.util.List<MediaItem> items = new java.util.ArrayList<>();
+                java.util.List<Long> ends = new java.util.ArrayList<>();
+                long acc = 0;
+                for (int i = 0; i < arr.length(); i++) {
+                    JSObject c = JSObject.fromJSONObject(arr.getJSONObject(i));
+                    String p = c.getString("path"); if (p == null || p.isEmpty()) continue;
+                    double inSec = c.has("inSec") ? c.getDouble("inSec") : 0.0;
+                    double durSec = c.has("durSec") ? c.getDouble("durSec") : 0.0;
+                    Uri uri = p.startsWith("file://") || p.startsWith("content://") || p.startsWith("http") ? Uri.parse(p) : Uri.fromFile(new File(p));
+                    MediaItem.Builder mib = new MediaItem.Builder().setUri(uri);
+                    if (durSec > 0.01) {
+                        long s = (long) Math.max(0, inSec * 1000.0), e = (long) ((inSec + durSec) * 1000.0);
+                        mib.setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder().setStartPositionMs(s).setEndPositionMs(e).build());
+                        acc += (long) (durSec * 1000.0);
+                    }
+                    items.add(mib.build()); ends.add(acc);
+                    sigB.append(p).append('@').append(inSec).append('+').append(durSec).append('|');
+                }
+                if (items.isEmpty()) { call.reject("유효 클립 없음"); return; }
+                String sig = sigB.toString();
+                if (!sig.equals(lastClipsSig)) {
+                    cumMs = new long[ends.size()];
+                    for (int i = 0; i < ends.size(); i++) cumMs[i] = ends.get(i);
+                    player.setMediaItems(items);
+                    player.prepare();
+                    player.setPlayWhenReady(false);
+                    lastClipsSig = sig;
+                    lastPath = null;
+                }
+                surface.setVisibility(View.VISIBLE);
+                container.setVisibility(View.VISIBLE);
+                call.resolve();
+            } catch (Throwable t) { call.reject("setClips 실패: " + t.getMessage()); }
+        });
+    }
+
+    // 전체 타임라인 글로벌 ms → (클립 인덱스, 클립 내 오프셋)으로 즉시 시크
+    @PluginMethod
+    public void seekToTimeline(final PluginCall call) {
+        final long ms = call.getLong("ms", 0L);
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (player == null) { call.resolve(); return; }
+                if (cumMs == null || cumMs.length == 0) { player.seekTo(ms); call.resolve(); return; }
+                int idx = cumMs.length - 1; long base = 0;
+                for (int i = 0; i < cumMs.length; i++) { if (ms < cumMs[i]) { idx = i; base = (i > 0) ? cumMs[i - 1] : 0; break; } base = cumMs[i]; idx = i; }
+                long off = Math.max(0, ms - base);
+                player.seekTo(idx, off);
+                call.resolve();
+            } catch (Throwable t) { call.reject("seekToTimeline 실패: " + t.getMessage()); }
+        });
+    }
+
     @PluginMethod
     public void close(final PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
                 if (player != null) { player.stop(); player.release(); player = null; }
                 if (container != null) { ViewGroup p = (ViewGroup) container.getParent(); if (p != null) p.removeView(container); container = null; }
-                surface = null; lastPath = null;
+                surface = null; lastPath = null; cumMs = null; lastClipsSig = null;
                 call.resolve();
             } catch (Throwable t) { call.reject(t.getMessage()); }
         });

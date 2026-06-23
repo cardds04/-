@@ -2105,6 +2105,7 @@
     c.audios.forEach((a) => { if (a._kind === "voice") return;   // 🎙 음성은 tick이 1초 뒤에 켬(여기선 음악·기타만)
       try { a.currentTime = Math.max(0, Math.min(c.base, (a.duration || c.maxT) - 0.05)) || 0; } catch (_) {} try { const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} });
     if (c.vid) { try { const p = c.vid.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {} }
+    if (c._nv) palNVPlay(c.base);   // 🎬 네이티브 그림 연속재생(소리는 위 웹 audio)
     try { clearInterval(c.timer); } catch (_) {} c.timer = setInterval(c.tick, 60);
     palPlaySetBtn();
   }
@@ -2114,9 +2115,46 @@
     E._palPlayPaused = true; c.playing = false;
     try { clearInterval(c.timer); } catch (_) {} c.timer = 0;
     c.audios.forEach((a) => { try { a.pause(); } catch (_) {} }); if (c.vid) { try { c.vid.pause(); } catch (_) {} }
+    if (c._nv) palNVPause();   // 🎬 네이티브 그림 정지
     palPlaySetBtn();
   }
   function palPlayToggle() { const c = E._palPlay; if (!c) return; c.playing ? palPlayPause() : palPlayStart(); }
+  // 🎬 네이티브 미리보기(컷편집/리뷰) — .es-pal-real-media 위에 ExoPlayer 표면. 네이티브=그림만(음소거), 소리는 웹이 담당.
+  var _palNVRaf = 0, _palNVSeekT = 0, _palNVCur = null;
+  function palNVActive() { return !!_palNVCur; }
+  async function palNVBind(c, mediaEl) {
+    if (!hasNativeVideo() || !c || !mediaEl) return;
+    const clips = (c.playClips || []).filter(Boolean);
+    if (!clips.length || clips.some((m) => m.kind !== "video")) { palNVUnbind(); return; }   // 사진 섞이면 네이티브 패스(웹으로)
+    const NV = window.Capacitor.Plugins.NativeVideo;
+    const items = [];
+    for (const m of clips) {
+      let path = m._nvPath;
+      if (!path) { try { const blob = m.blob || await (await fetch(m.url)).blob(); path = await blobToCacheFile(blob, "nv_" + uid() + ".mp4"); m._nvPath = path; } catch (_) { return; } }
+      items.push({ path, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 });
+    }
+    try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (_) { return; }   // 네이티브는 항상 음소거(소리는 웹)
+    c._nv = true; _palNVCur = c;
+    try { mediaEl.style.visibility = "hidden"; (c.bufs || []).forEach((v) => { try { v.style.visibility = "hidden"; } catch (_) {} }); } catch (_) {}
+    if (_palNVRaf) cancelAnimationFrame(_palNVRaf);
+    let lastK = "";
+    const sync = () => {
+      if (!mediaEl.isConnected || _palNVCur !== c) { try { NV.hide(); } catch (_) {} _palNVRaf = 0; if (_palNVCur === c) _palNVCur = null; return; }
+      const r = mediaEl.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) { const k = [r.left, r.top, r.width, r.height].map(Math.round).join(","); if (k !== lastK) { lastK = k; try { NV.setBounds({ x: r.left, y: r.top, w: r.width, h: r.height }); } catch (_) {} } }
+      _palNVRaf = requestAnimationFrame(sync);
+    };
+    sync();
+    palNVSeek(c.base || 0);
+  }
+  function palNVSeek(t) {
+    if (!palNVActive() || !hasNativeVideo()) return;
+    clearTimeout(_palNVSeekT);
+    _palNVSeekT = setTimeout(() => { try { window.Capacitor.Plugins.NativeVideo.seekToTimeline({ ms: Math.round(Math.max(0, t) * 1000) }); } catch (_) {} }, 6);
+  }
+  function palNVPlay(t) { if (!palNVActive() || !hasNativeVideo()) return; const NV = window.Capacitor.Plugins.NativeVideo; try { NV.seekToTimeline({ ms: Math.round(Math.max(0, t) * 1000) }); NV.play(); } catch (_) {} }
+  function palNVPause() { if (!palNVActive() || !hasNativeVideo()) return; try { window.Capacitor.Plugins.NativeVideo.pause(); } catch (_) {} }
+  function palNVUnbind() { if (_palNVRaf) cancelAnimationFrame(_palNVRaf); _palNVRaf = 0; if (_palNVCur) { _palNVCur._nv = false; _palNVCur = null; } if (hasNativeVideo()) try { window.Capacitor.Plugins.NativeVideo.hide(); } catch (_) {} }
   // ▶ 2열(작업 적용 미리보기) 타이밍 재생 — 타이틀/자막을 각자 start·dur(나오는 때·머무는 시간)대로 보였다 숨김. 테스트영상 있으면 그 시간, 없으면 자체 시계.
   function palCol2Boxes() { return $$("#esPalReal .es-pal-real-titlebox[data-titleidx]"); }
   function palCol2Stop() {
@@ -2263,9 +2301,13 @@
         // 🎬 전환을 살짝 선행(LEAD초 전)으로 — 다음 컷 첫 프레임 디코드 지연을 가려 모바일에서 '컷 끝 멈칫'을 줄임. (스크럽은 정확한 컷)
         let swIdx = idx;
         if (!c.scrub && c.playClips.length > 1) { const LEAD = 0.12; let a2 = 0, look = c.playClips.length - 1; for (let i = 0; i < c.playClips.length; i++) { const dd = palCutClipDur(c.playClips[i]); if (t + LEAD < a2 + dd) { look = i; break; } a2 += dd; } swIdx = look; }
-        if (c.playClips.length > 1 && swIdx !== c.curClip) { c.curClip = swIdx; c.showClip(swIdx); }
-        if (c.scrub && c.mediaEl.tagName === "VIDEO") {   // 🎯 재생선 위치 프레임을 정지표시(스크럽) — 그 컷 안의 offset으로 seek
-          try { c.mediaEl.pause(); const _off = Math.max(0, t - acc); if (isFinite(c.mediaEl.duration) && c.mediaEl.duration > 0 && Math.abs((c.mediaEl.currentTime || 0) - _off) > 0.06) c.mediaEl.currentTime = Math.min(_off, Math.max(0, c.mediaEl.duration - 0.05)); } catch (_) {} }
+        if (c._nv) {   // 🎬 네이티브가 그림 담당 — 스크럽/정지일 때만 직접 시크(재생 중엔 네이티브가 연속재생)
+          if (!c.playing) palNVSeek(t);
+        } else {
+          if (c.playClips.length > 1 && swIdx !== c.curClip) { c.curClip = swIdx; c.showClip(swIdx); }
+          if (c.scrub && c.mediaEl.tagName === "VIDEO") {   // 🎯 재생선 위치 프레임을 정지표시(스크럽) — 그 컷 안의 offset으로 seek
+            try { c.mediaEl.pause(); const _off = Math.max(0, t - acc); if (isFinite(c.mediaEl.duration) && c.mediaEl.duration > 0 && Math.abs((c.mediaEl.currentTime || 0) - _off) > 0.06) c.mediaEl.currentTime = Math.min(_off, Math.max(0, c.mediaEl.duration - 0.05)); } catch (_) {} }
+        }
       }
       if (c.playhead) { c.playhead.style.left = (t * c.PPS) + "px"; c.playhead.style.opacity = "1"; }
       // 컷 편집 타임라인은 재생 중에도 0초(왼쪽)에 머무름 — 재생선 따라 스크롤 안 함(짤려 보이는 문제 방지). 진행은 위 영상·시계로 확인.
@@ -2295,6 +2337,7 @@
     else palPlaySetBtn();                                       // 🔇 소리(나레이션) 있는 미리보기는 자동재생 안 함 → ▶ 누를 때만 '한 번' 재생(나레이션 반복 방지). 재렌더로도 다시 안 켜짐.
     if (!lite) { const pb = palPlayBtnEl(); if (pb) pb.addEventListener("click", palPlayToggle); }
     palArmPlayheadGrab(c);   // ▍재생선 꽁다리 드래그 = 재생 위치 옮기기(모바일 touch 포함)
+    if (hasNativeVideo() && mediaEl) { try { palNVBind(c, mediaEl); } catch (_) {} }   // 🎬 네이티브 미리보기 표면 부착(앱에서만)
   }
   function palArmPlayheadGrab(c) {
     const grab = (c && c.playhead) ? c.playhead.querySelector(".es-pal-ct-playgrab") : null;
@@ -16596,6 +16639,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     // 주기 폴링 — 현재 화면에서 보이는 #esVideo 를 찾아 자동 attach/detach
     function nvTick() {
       if (!hasNativeVideo()) return;
+      if (typeof palNVActive === "function" && palNVActive()) { if (NV_state.el) nvDetach(true); return; }   // 팔레트 네이티브 미리보기가 표면을 쓰는 중이면 양보
       const cand = document.getElementById("esVideo");
       if (cand && cand.offsetParent !== null) { if (NV_state.el !== cand) nvAttach(cand); }
       else { if (NV_state.el) nvDetach(); }
