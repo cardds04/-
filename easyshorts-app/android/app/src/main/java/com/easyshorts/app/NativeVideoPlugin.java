@@ -60,17 +60,18 @@ public class NativeVideoPlugin extends Plugin {
         surface.setOpaque(true);
         player.setVideoTextureView(surface);
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
-        lp.leftMargin = 0; lp.topMargin = 0;
         container = new FrameLayout(getContext());
-        container.setLayoutParams(lp);
         container.setBackgroundColor(Color.BLACK);
         container.addView(surface, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // WebView 와 같은 부모(FrameLayout 루트)에 추가 → WebView 위에 오버레이(나중에 추가 = 위)
-        View root = getBridge().getWebView().getRootView();
+        // WebView 와 같은 부모에 추가 + 맨 위로(z-order). 부모 타입에 무관하게 크기는 LayoutParams, 위치는 translation 으로.
         ViewGroup parent = (ViewGroup) getBridge().getWebView().getParent();
-        if (parent != null) parent.addView(container);
+        if (parent != null) {
+            parent.addView(container, new ViewGroup.LayoutParams(1, 1));
+            try { container.setElevation(99999f); } catch (Throwable t) {}   // WebView 위로
+            container.bringToFront();
+            try { surface.setElevation(99999f); } catch (Throwable t) {}
+        }
     }
 
     @PluginMethod
@@ -107,10 +108,13 @@ public class NativeVideoPlugin extends Plugin {
                 int yp = (int) Math.round(y * density);
                 int wp = Math.max(1, (int) Math.round(w * density));
                 int hp = Math.max(1, (int) Math.round(h * density));
-                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) container.getLayoutParams();
-                if (lp == null) lp = new FrameLayout.LayoutParams(wp, hp);
-                lp.width = wp; lp.height = hp; lp.leftMargin = xp; lp.topMargin = yp;
+                ViewGroup.LayoutParams lp = container.getLayoutParams();
+                if (lp == null) lp = new ViewGroup.LayoutParams(wp, hp);
+                lp.width = wp; lp.height = hp;
                 container.setLayoutParams(lp);
+                container.setTranslationX(xp);   // 위치는 translation 으로(부모 타입 무관)
+                container.setTranslationY(yp);
+                container.setVisibility(View.VISIBLE);
                 container.requestLayout();
                 call.resolve();
             } catch (Throwable t) { call.reject("setBounds 실패: " + t.getMessage()); }
