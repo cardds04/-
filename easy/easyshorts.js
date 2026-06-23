@@ -4901,6 +4901,13 @@
             </div>
           </div>`; }).join("")}</div>`
       : `<div class="es-admin-empty">아직 없어요 — 위 <b>🎨 새 이지숏폼 만들기</b>로 첫 템플릿을 만들어보세요</div>`;
+    // 🗂 분류 카드(대분류 + 그 아래 소분류) — 깊은 템플릿 중첩 피하려 미리 문자열로 조립
+    const _taxList = TAX();
+    const bizCardsHtml = _taxList.map((c) => {
+      const sub = (c.formats || []).map((f) => `<span class="es-admin-sub">${esc(f.label)}<button type="button" class="es-admin-sub-x" data-subdel="${esc(c.key)}|${esc(f.id)}" title="이 소분류 빼기">×</button></span>`).join("");
+      const del = _taxList.length > 1 ? `<button type="button" class="es-admin-biz-x" data-bizdel="${esc(c.key)}" title="이 대분류 빼기">×</button>` : "";
+      return `<div class="es-admin-bizcard"><div class="es-admin-bizhd"><span class="es-admin-biz-lb">${(c.emoji || "")} ${esc(c.label)}</span>${del}</div><div class="es-admin-subrow">${sub}<button type="button" class="es-admin-sub-add" data-subadd="${esc(c.key)}">＋ 소분류</button></div></div>`;
+    }).join("");
     body.innerHTML = `
       <div class="es-admin">
         <div class="es-admin-head">🔧 관리자 페이지</div>
@@ -4910,10 +4917,10 @@
           <button type="button" class="es-admin-card" id="esAdmMusic"><span class="es-admin-ic">🎵</span><span class="es-admin-t">노래 올리기</span><span class="es-admin-d">내장 음악 업로드</span></button>
           <button type="button" class="es-admin-card" id="esAdmVideos"><span class="es-admin-ic">📹</span><span class="es-admin-t">고객 영상 확인</span><span class="es-admin-d">고객이 만든 영상 보관함</span></button>
         </div>
-        <div class="es-admin-sec">🏢 업종 분류 (대분류) <span class="es-hint">업종 아래에 영상유형 4가지(얼굴+음성·얼굴+무음·보이스오버·AI나레이션)가 자동으로 들어가요</span></div>
-        <div class="es-admin-bizrow">
-          ${TAX().map((c) => `<span class="es-admin-biz">${c.emoji || ""} ${esc(c.label)}${TAX().length > 1 ? `<button type="button" class="es-admin-biz-x" data-bizdel="${esc(c.key)}" title="이 업종 빼기">×</button>` : ""}</span>`).join("")}
-          <button type="button" class="es-admin-biz-add" id="esAdmBizAdd">＋ 분류 추가하기</button>
+        <div class="es-admin-sec">🗂 분류 관리 <span class="es-hint">대분류 아래에 소분류가 들어가요 · 대분류·소분류 둘 다 추가/삭제할 수 있어요</span></div>
+        <div class="es-admin-bizwrap">
+          ${bizCardsHtml}
+          <button type="button" class="es-admin-biz-add" id="esAdmBizAdd">＋ 대분류 추가</button>
         </div>
         <div class="es-admin-sec">📐 내가 만든 템플릿 <span class="es-hint">실제 게시 모습 그대로 · 🎬 영상 대체하기로 미리보기 영상 교체 · 🗂 분류 · ☁️ 게시/내리기</span></div>
         ${tplsHtml}
@@ -4923,8 +4930,10 @@
     el("esAdmDetail") && el("esAdmDetail").addEventListener("click", () => enterMode2("detail"));
     el("esAdmMusic") && el("esAdmMusic").addEventListener("click", () => { location.href = "admin-music.html"; });
     el("esAdmVideos") && el("esAdmVideos").addEventListener("click", () => { location.href = "admin-videos.html"; });
-    el("esAdmBizAdd") && el("esAdmBizAdd").addEventListener("click", () => { const nm = (prompt("추가할 업종 이름 (예: 헬스장, 카페, 병원)") || "").trim(); if (!nm) return; taxAddBucket("🏢", nm); try { toast("🏢 '" + nm + "' 업종 추가 — 영상유형 4가지가 자동으로 들어갔어요"); } catch (_) {} renderAdmin(); });   // 🏢 업종(대분류) 추가 → 4유형 자동
-    $$("[data-bizdel]", body).forEach((b) => b.addEventListener("click", () => { if (!confirm("이 업종 분류를 뺄까요? (이 업종으로 분류한 템플릿은 미분류가 돼요)")) return; taxDelBucket(b.dataset.bizdel); renderAdmin(); }));
+    el("esAdmBizAdd") && el("esAdmBizAdd").addEventListener("click", () => { const nm = (prompt("추가할 대분류 이름 (예: 헬스장, 카페, 병원)") || "").trim(); if (!nm) return; taxAddBucket("🏢", nm); try { toast("🗂 '" + nm + "' 대분류 추가됨"); } catch (_) {} renderAdmin(); });   // 🏢 대분류 추가
+    $$("[data-bizdel]", body).forEach((b) => b.addEventListener("click", () => { if (!confirm("이 대분류를 뺄까요? (안의 소분류도 같이 빠지고, 이 분류로 분류한 템플릿은 미분류가 돼요)")) return; taxDelBucket(b.dataset.bizdel); renderAdmin(); }));
+    $$("[data-subadd]", body).forEach((b) => b.addEventListener("click", () => { const nm = (prompt("추가할 소분류 이름 (예: 비포애프터, 후기, 이벤트)") || "").trim(); if (!nm) return; taxAddFormat(b.dataset.subadd, nm, 1); try { toast("🗂 소분류 '" + nm + "' 추가됨"); } catch (_) {} renderAdmin(); }));   // 🗂 소분류 추가(해당 대분류 아래)
+    $$("[data-subdel]", body).forEach((b) => b.addEventListener("click", () => { const parts = String(b.dataset.subdel).split("|"); if (parts.length < 2) return; if (!confirm("이 소분류를 뺄까요? (이 소분류로 분류한 템플릿은 미분류가 돼요)")) return; taxDelFormat(parts[0], parts[1]); renderAdmin(); }));   // 🗂 소분류 삭제
     $$(".es-admin-tpl-use, .es-admin-tpl-thumb", body).forEach((b) => b.addEventListener("click", () => startFromTemplate(b.dataset.tid, "easy")));
     $$(".es-admin-tpl-test", body).forEach((b) => b.addEventListener("click", () => palTestTemplate(b.dataset.tid)));   // 🧪 테스트해보기 — 고객 화면 그대로 실행
     $$(".es-admin-tpl-edit", body).forEach((b) => b.addEventListener("click", () => palEditTemplate(b.dataset.tid)));   // ✏️ 수정하기 — 생성기로 불러와 수정
