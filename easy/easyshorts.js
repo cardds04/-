@@ -4012,7 +4012,7 @@
         const vblob = m.blob || await (await fetch(m.url)).blob();
         const vurl = await uploadMediaSigned(tid, `in${i}.mp4`, vblob, vblob.type || "video/mp4", key);
         setS(`영상 ${done + 1}/${vids.length} 얼굴 바꾸는 중… (끝까지 기다릴게요)`);
-        const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0, mode: (fs.mode === "head" || fs.mode === "kling") ? fs.mode : "face", resolution: "720p" }) });
+        const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0, mode: "kling", resolution: "720p" }) });   // 🎬 클링으로 고정
         const cj = await cr.json().catch(() => ({}));
         if (!cr.ok || !cj.id) throw new Error((cj && (cj.error || cj.message)) || "교체 요청 실패");
         // 폴링 — ⏳ 시간제한 사실상 없음: 완료/실패가 나올 때까지 계속 기다림. 처음 2분은 3초, 이후 6초 간격. 일시적 네트워크 오류는 무시하고 계속.
