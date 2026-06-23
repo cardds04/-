@@ -2133,8 +2133,8 @@
       if (!path) { try { const blob = m.blob || await (await fetch(m.url)).blob(); path = await blobToCacheFile(blob, "nv_" + uid() + ".mp4"); m._nvPath = path; } catch (_) { return; } }
       items.push({ path, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 });
     }
-    try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (_) { return; }   // 네이티브는 항상 음소거(소리는 웹)
-    c._nv = true; _palNVCur = c;
+    try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (e) { palNVBadge("⚠️NV setClips 실패"); return; }   // 네이티브는 항상 음소거(소리는 웹)
+    c._nv = true; _palNVCur = c; palNVBadge("⚡NV 켜짐 (" + items.length + "컷)");
     try { mediaEl.style.visibility = "hidden"; (c.bufs || []).forEach((v) => { try { v.style.visibility = "hidden"; } catch (_) {} }); } catch (_) {}
     if (_palNVRaf) cancelAnimationFrame(_palNVRaf);
     let lastK = "";
@@ -2147,10 +2147,18 @@
     sync();
     palNVSeek(c.base || 0);
   }
+  function palNVBadge(txt) {
+    let b = document.getElementById("esNVBadge");
+    if (!b) { b = document.createElement("div"); b.id = "esNVBadge"; b.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.7);color:#1ed6a5;font:700 11px/1.3 monospace;padding:3px 7px;border-radius:8px;pointer-events:none;"; document.body.appendChild(b); }
+    b.textContent = txt;
+  }
   function palNVSeek(t) {
     if (!palNVActive() || !hasNativeVideo()) return;
     clearTimeout(_palNVSeekT);
-    _palNVSeekT = setTimeout(() => { try { window.Capacitor.Plugins.NativeVideo.seekToTimeline({ ms: Math.round(Math.max(0, t) * 1000) }); } catch (_) {} }, 6);
+    _palNVSeekT = setTimeout(() => {
+      const t0 = (performance && performance.now) ? performance.now() : Date.now();
+      try { const p = window.Capacitor.Plugins.NativeVideo.seekToTimeline({ ms: Math.round(Math.max(0, t) * 1000) }); if (p && p.then) p.then(() => { const dt = Math.round(((performance && performance.now) ? performance.now() : Date.now()) - t0); palNVBadge("⚡NV seek " + dt + "ms @" + t.toFixed(1) + "s"); }); } catch (_) {}
+    }, 6);
   }
   function palNVPlay(t) { if (!palNVActive() || !hasNativeVideo()) return; const NV = window.Capacitor.Plugins.NativeVideo; try { NV.seekToTimeline({ ms: Math.round(Math.max(0, t) * 1000) }); NV.play(); } catch (_) {} }
   function palNVPause() { if (!palNVActive() || !hasNativeVideo()) return; try { window.Capacitor.Plugins.NativeVideo.pause(); } catch (_) {} }
