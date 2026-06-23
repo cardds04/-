@@ -8771,6 +8771,7 @@
                 <button type="button" class="es-btn es-btn-primary" id="esAddCut" title="고른 종류의 컷을 추가">＋ 컷 추가</button>
               </span>
               <button type="button" class="es-btn ${narrateModeOn() ? "es-btn-primary" : ""}" id="esNarrToggle" title="켜면 손님 이지숏폼에 '나레이션' 단계가 생겨요 — 영상마다 문구를 적고 AI 음성으로 완성 (저장·게시에도 유지)">🎙 나레이션 ${narrateModeOn() ? "ON" : "OFF"}</button>
+              <button type="button" class="es-btn es-btn-primary" id="esNarrMake" title="타입캐스트 AI 목소리로 나레이션을 지금 만들어 영상에 깔아요 (목소리 30종)">🎙 나레이션 만들기${(E.using && E.using.voiceUrl) ? " ✓" : ""}</button>
               <button type="button" class="es-btn" id="esBulk" title="여러 파일을 한 번에 골라 순서대로 슬롯에 채웁니다 (인스타 자동싱크 방식)">⤵ 여러 개</button>
               <button type="button" class="es-btn es-btn-primary" id="esCutOpen" title="영상을 불러와 E키로 구간을 잘라 장면에 추가 (무손실)">✂ 영상컷팅</button>
             </div>
@@ -8906,6 +8907,7 @@
       try { toast(on ? "🎙 나레이션 모드 ON — 이지숏폼에 '나레이션' 단계가 생겨요 (저장·게시에도 유지)" : "나레이션 모드 OFF"); } catch (_) {}
       renderUse();
     }); }
+    { const nm = $("#esNarrMake"); if (nm) nm.addEventListener("click", ezNarrMakeOpen); }   // 🎙 타입캐스트 나레이션 만들기(디테일 편집기)
     { const ac = $("#esAddCut"); if (ac) ac.addEventListener("click", () => {
       const ty = (($("#esCutType") || {}).value) || "plain";
       if (ty === "detail") addDetailSlot(); else if (ty === "timelapse") addTimelapseSlot(); else if (ty === "auto") addAutoSlot(); else addSlotUse();
@@ -12063,6 +12065,59 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     try { const j = await (await fetch("tts_tones.json")).json(); ES_TONES = (j && j.tones) || []; ES_TONE_PREVIEW = (j && j.previewText) || ""; } catch (_) { ES_TONES = []; }
     return ES_TONES;
   }
+  // 🎙 디테일 편집기 — 타입캐스트 나레이션 만들기 팝업(목소리 30종). 만든 음성을 E.using.voiceUrl 로 깔아 미리보기·내보내기에 반영.
+  function ezNarrMakeOpen() {
+    if (!E.using) { try { toast("먼저 영상을 불러오세요"); } catch (_) {} return; }
+    var old = document.getElementById("esEzNarrOv"); if (old) old.remove();
+    var script = (E._ezNarrScript != null) ? E._ezNarrScript : (function () { try { return (E.using.texts || []).map(function (t) { return (t.text || "").trim(); }).filter(Boolean).join(" "); } catch (_) { return ""; } })();
+    var curV = E._ezNarrVoice || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id);
+    var opts = PAL_TC_CAT.map(function (v) { return '<option value="' + esc(v.id) + '"' + (v.id === curV ? " selected" : "") + ">" + (v.g === "m" ? "👨 " : "👩 ") + esc(v.name) + "</option>"; }).join("");
+    var ov = document.createElement("div"); ov.id = "esEzNarrOv"; ov.className = "es-narrtone-ov";
+    ov.innerHTML = '<div class="es-narrtone-box"><button type="button" class="es-narrtone-x" id="esEzNarrX">✕</button>'
+      + '<div class="es-narrtone-h">🎙 나레이션 만들기</div>'
+      + '<div class="es-narrtone-sub">대본을 적고 목소리를 골라 AI 음성으로 만들어요 (타입캐스트 · 목소리 ' + PAL_TC_CAT.length + '종)</div>'
+      + '<textarea id="esEzNarrScript" class="es-pal-face-prompt" style="min-height:90px" placeholder="읽어줄 대본을 입력하거나, 아래에서 자막을 가져오세요">' + esc(script || "") + "</textarea>"
+      + '<div class="es-pal-face-row"><button type="button" class="es-pal-up-btn" id="esEzNarrFromCap">⬇ 자막에서 대본 가져오기</button></div>'
+      + '<div class="es-ezn-vrow"><span class="es-ezn-vlb">목소리</span><select id="esEzNarrVoice" class="es-ezn-vsel">' + opts + '</select><button type="button" class="es-narrtone-sample" id="esEzNarrSample" title="이 목소리 들어보기">▶</button></div>'
+      + '<button type="button" class="es-pal-narr-make" id="esEzNarrGo" style="margin-top:12px">🎙 나레이션 만들기</button>'
+      + '<div id="esEzNarrStatus" class="es-pal-narr-status"></div>'
+      + (E.using.voiceUrl ? '<div class="es-pal-narr-hint2">✅ 지금 나레이션이 깔려 있어요' + (E.using.voiceDur ? " (" + E.using.voiceDur.toFixed(1) + "초)" : "") + " — 다시 만들면 교체돼요</div>" : "")
+      + "</div>";
+    document.body.appendChild(ov);
+    var close = function () { try { palStopVoiceSample(); } catch (_) {} try { ov.remove(); } catch (_) {} };
+    ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
+    ov.querySelector("#esEzNarrX").addEventListener("click", close);
+    var scEl = ov.querySelector("#esEzNarrScript"); scEl.addEventListener("input", function () { E._ezNarrScript = scEl.value; });
+    var vEl = ov.querySelector("#esEzNarrVoice"); vEl.addEventListener("change", function () { E._ezNarrVoice = vEl.value; });
+    ov.querySelector("#esEzNarrFromCap").addEventListener("click", function () { var t = (E.using.texts || []).map(function (x) { return (x.text || "").trim(); }).filter(Boolean).join(" "); scEl.value = t; E._ezNarrScript = t; if (!t) { var s = ov.querySelector("#esEzNarrStatus"); if (s) s.textContent = "가져올 자막이 없어요 — 직접 적어주세요"; } });
+    ov.querySelector("#esEzNarrSample").addEventListener("click", function (e) { e.preventDefault(); try { palVoiceSample(vEl.value, palTcModelOf(vEl.value), e.currentTarget); } catch (_) {} });
+    ov.querySelector("#esEzNarrGo").addEventListener("click", function () { ezNarrGenerate(scEl.value, vEl.value, ov); });
+  }
+  async function ezNarrGenerate(script, voiceId, ov) {
+    script = (script || "").trim();
+    var st = ov.querySelector("#esEzNarrStatus"); var setS = function (m) { if (st) st.textContent = m; };
+    if (!script) { setS("대본을 먼저 적어주세요"); return; }
+    if (!voiceId) { setS("목소리를 골라주세요"); return; }
+    var go = ov.querySelector("#esEzNarrGo"); if (go) { go.disabled = true; go.textContent = "🎙 만드는 중…"; }
+    try {
+      setS("AI 음성 만드는 중… (10~30초)");
+      var r = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: script, voiceId: voiceId, model: palTcModelOf(voiceId), language: "kor" }) });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.audioBase64) throw new Error(j.message || ("HTTP " + r.status));
+      var bin = atob(j.audioBase64), bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var blob = new Blob([bytes], { type: "audio/wav" }); var url = URL.createObjectURL(blob);
+      try { if (E.using.voiceUrl && E.using.voiceUrl.indexOf("blob:") === 0) URL.revokeObjectURL(E.using.voiceUrl); } catch (_) {}
+      E.using.voiceUrl = url; E.using.voiceBlob = blob;
+      var dur = await new Promise(function (res) { var a = document.createElement("audio"); a.preload = "metadata"; a.onloadedmetadata = function () { res(a.duration || 0); }; a.onerror = function () { res(0); }; a.src = url; setTimeout(function () { res(0); }, 6000); });
+      E.using.voiceDur = dur;
+      var ve = document.getElementById("esVoice"); if (ve) ve.src = url;
+      E._ezNarrScript = script; E._ezNarrVoice = voiceId;
+      setS("✅ 완성! " + (dur ? dur.toFixed(1) + "초" : "") + " — 영상에 깔렸어요");
+      try { scheduleSaveMeta(); } catch (_) {}
+      try { renderUse(); } catch (_) {}
+      setTimeout(function () { try { ov.remove(); } catch (_) {} }, 1300);
+    } catch (e) { setS("실패: " + ((e && e.message) || e)); if (go) { go.disabled = false; go.textContent = "🎙 나레이션 만들기"; } }
+  }
   // 🔊 선택한 성별·톤으로 짧은 샘플을 합성해 들려주기(만들기 전에 목소리 고르기)
   async function previewVoiceTone(btn) {
     await loadVoiceTones();
@@ -12213,6 +12268,25 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { id: "tc_6596849ea3ecaa12a8b13989", name: "봉규", g: "m", age: "young", types: ["short", "talk", "ad"], rec: 1 },
     { id: "tc_66596206b7bd6e89c3a2c54e", name: "아찌", g: "m", age: "mid", types: ["short", "talk"] },
     { id: "tc_5c547544fcfee90007fed455", name: "찬구", g: "m", age: "young", types: ["short"] },
+    // ── 추가 목소리(라이브 타입캐스트에서 확인된 실제 한국어 목소리, ssfm-v30) ──
+    { id: "tc_69fc0cff784968297fb45daa", name: "상현", g: "m", age: "young", types: ["talk", "doc", "short"] },
+    { id: "tc_69f2e455ea79fd197aa0476f", name: "서현", g: "f", age: "young", types: ["talk", "short", "ad"] },
+    { id: "tc_69e0462f3e5413d26878521e", name: "주완", g: "m", age: "young", types: ["talk", "short"] },
+    { id: "tc_69c1f8e4f8842d80fbe7fa4f", name: "우니", g: "f", age: "young", types: ["short", "ad"] },
+    { id: "tc_699d27b557c86e3f4249c051", name: "옥지", g: "f", age: "mid", types: ["talk", "doc"] },
+    { id: "tc_692799c46508f6b9468c54c7", name: "다은", g: "f", age: "young", types: ["talk", "short", "ad"] },
+    { id: "tc_691d49ccc47926d741f15913", name: "효은", g: "f", age: "young", types: ["talk", "short"] },
+    { id: "tc_68f9c6a72f0f04a417bb136f", name: "문정", g: "f", age: "mid", types: ["talk", "doc", "pod"] },
+    { id: "tc_68f0727fd62a5934102f7ec0", name: "민욱", g: "m", age: "young", types: ["talk", "short", "doc"] },
+    { id: "tc_68ddea1e462b169ddd20b74d", name: "이현", g: "m", age: "young", types: ["talk", "doc"] },
+    { id: "tc_68d4b115f0486108a7eefb37", name: "강일", g: "m", age: "mid", types: ["doc", "pod", "talk"] },
+    { id: "tc_686dc43ebd6351e06ee64d74", name: "원우", g: "m", age: "young", types: ["talk", "short"] },
+    { id: "tc_685cdfad4027aeec7d097a28", name: "철훈", g: "m", age: "mid", types: ["doc", "talk", "pod"] },
+    { id: "tc_68537c9420b646f2176890ba", name: "서진", g: "f", age: "young", types: ["talk", "short", "ad"] },
+    { id: "tc_684a7a1446e2a628b5b07230", name: "재선", g: "m", age: "mid", types: ["doc", "talk"] },
+    { id: "tc_68413e12459cfdf27b481183", name: "라연", g: "f", age: "young", types: ["short", "ad", "talk"] },
+    { id: "tc_6837dec48fc46637a9272b88", name: "소예", g: "f", age: "young", types: ["talk", "short"] },
+    { id: "tc_682e8798603b4e9ed84074f5", name: "형진", g: "m", age: "young", types: ["talk", "doc", "short"] },
   ];
   function palTcModelOf(id) { var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.model) || "ssfm-v30"; }
   function palTcNameOf(id) { var c = PAL_TC_CAT.find(function (v) { return v.id === id; }); if (c) return c.name; var vo = Array.isArray(E._tcVoices) ? E._tcVoices.find(function (v) { return v.voice_id === id; }) : null; return (vo && vo.voice_name) || ""; }
