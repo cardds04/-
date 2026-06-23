@@ -7,6 +7,8 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.os.Build;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.DisplayMetrics;
 import android.view.TextureView;
@@ -81,6 +83,8 @@ public class NativeVideoPlugin extends Plugin {
             try { container.setElevation(99999f); } catch (Throwable t) {}   // WebView 위로
             container.bringToFront();
             try { surface.setElevation(99999f); } catch (Throwable t) {}
+            // 👆 영상 탭하면 웹에 알림 → 재생/정지 토글(네이티브가 버튼을 덮어서 안 보이는 문제 해결)
+            container.setOnClickListener(v -> { try { notifyListeners("nvtap", new JSObject()); } catch (Throwable t) {} });
         }
     }
 
@@ -246,11 +250,18 @@ public class NativeVideoPlugin extends Plugin {
     // 🎞 네이티브 영상 선택기 — 원본 content:// 주소를 그대로 받음(복사 0). 길이·해상도·첫프레임 썸네일도 같이.
     @PluginMethod
     public void pickVideos(final PluginCall call) {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.setType("video/*");
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        Intent i;
+        if (Build.VERSION.SDK_INT >= 33) {   // 📷 안드 13+ 포토피커(갤러리 UI · 다중선택)
+            i = new Intent(MediaStore.ACTION_PICK_IMAGES);
+            i.setType("video/*");
+            i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 30);
+        } else {   // 그 이하 — 문서 선택기(다중)
+            i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.setType("video/*");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        }
         startActivityForResult(call, i, "pickResult");
     }
 

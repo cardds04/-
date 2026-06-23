@@ -2142,6 +2142,7 @@
     const items = clips.map((m) => ({ path: m._nvPath, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 }));
     try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (e) { palNVBadge("⚠️NV setClips 실패 " + ((e && e.message) || "")); return; }   // 네이티브는 항상 음소거(소리는 웹)
     c._nv = true; _palNVCur = c; palNVBadge("⚡NV 켜짐 (" + items.length + "컷)");
+    if (!E._nvTapWired) { E._nvTapWired = true; try { NV.addListener("nvtap", () => { try { palPlayToggle(); } catch (_) {} }); } catch (_) {} }   // 👆 영상 탭 → 재생/정지(버튼 가려짐 해결)
     try { mediaEl.style.visibility = "hidden"; (c.bufs || []).forEach((v) => { try { v.style.visibility = "hidden"; } catch (_) {} }); } catch (_) {}
     if (_palNVRaf) cancelAnimationFrame(_palNVRaf);
     let lastK = "";
@@ -2893,7 +2894,8 @@
       const clipEls = clips.map((m, i) => {
         const w = px(palCutClipDur(m)), on = isSel("vid", i);
         // 📱 모바일 WebView 는 재생 전 <video> 첫 프레임을 안 그림 → 포스터(있으면) 이미지로, 없으면 영상 폴백(palEnsureCutPosters 가 채움)
-        const media = m.kind === "video" ? (m.poster ? `<img src="${m.poster}" alt="">` : `<video src="${m.url}" muted playsinline preload="metadata"></video>`) : `<img src="${m.url}" alt="">`;
+        const _ps = m.poster || m.thumb;   // 🎞 네이티브 클립은 thumb 사용(웹이 프레임 못 뽑음)
+        const media = m.kind === "video" ? (_ps ? `<img src="${_ps}" alt="">` : `<video src="${m.url}" muted playsinline preload="metadata"></video>`) : `<img src="${m.url}" alt="">`;
         const hnd = on ? `<span class="es-pal-ct-h r" data-cth="r" data-lane="vid" data-idx="${i}"></span>` : "";
         return `<div class="es-pal-ct-clip ${on ? "sel" : ""}" data-ctsel="vid" data-idx="${i}" style="width:${w}px">${media}<span class="es-pal-ct-dur">${palCutClipDur(m).toFixed(1)}초</span>${hnd}</div>`;
       }).join("");
