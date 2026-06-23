@@ -2123,17 +2123,19 @@
   var _palNVRaf = 0, _palNVSeekT = 0, _palNVCur = null;
   function palNVActive() { return !!_palNVCur; }
   async function palNVBind(c, mediaEl) {
-    if (!hasNativeVideo() || !c || !mediaEl) return;
+    if (!hasNativeVideo() || !c) { palNVBadge("NV: 앱/플러그인 없음"); return; }
+    if (!mediaEl) { palNVBadge("NV: mediaEl 없음"); return; }
     const clips = (c.playClips || []).filter(Boolean);
-    if (!clips.length || clips.some((m) => m.kind !== "video")) { palNVUnbind(); return; }   // 사진 섞이면 네이티브 패스(웹으로)
+    if (!clips.length) { palNVBadge("NV: 클립 0 (playClips 비었음)"); palNVUnbind(); return; }
+    if (clips.some((m) => m.kind !== "video")) { palNVBadge("NV: 사진 섞임→웹"); palNVUnbind(); return; }
     const NV = window.Capacitor.Plugins.NativeVideo;
     const items = [];
     for (const m of clips) {
       let path = m._nvPath;
-      if (!path) { try { const blob = m.blob || await (await fetch(m.url)).blob(); path = await blobToCacheFile(blob, "nv_" + uid() + ".mp4"); m._nvPath = path; } catch (_) { return; } }
+      if (!path) { try { const blob = m.blob || await (await fetch(m.url)).blob(); path = await blobToCacheFile(blob, "nv_" + uid() + ".mp4"); m._nvPath = path; } catch (e2) { palNVBadge("NV: 파일변환 실패 " + ((e2 && e2.message) || "")); return; } }
       items.push({ path, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 });
     }
-    try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (e) { palNVBadge("⚠️NV setClips 실패"); return; }   // 네이티브는 항상 음소거(소리는 웹)
+    try { await NV.setClips({ clips: items }); await NV.setVolume({ v: 0 }); } catch (e) { palNVBadge("⚠️NV setClips 실패 " + ((e && e.message) || "")); return; }   // 네이티브는 항상 음소거(소리는 웹)
     c._nv = true; _palNVCur = c; palNVBadge("⚡NV 켜짐 (" + items.length + "컷)");
     try { mediaEl.style.visibility = "hidden"; (c.bufs || []).forEach((v) => { try { v.style.visibility = "hidden"; } catch (_) {} }); } catch (_) {}
     if (_palNVRaf) cancelAnimationFrame(_palNVRaf);
@@ -2345,7 +2347,7 @@
     else palPlaySetBtn();                                       // 🔇 소리(나레이션) 있는 미리보기는 자동재생 안 함 → ▶ 누를 때만 '한 번' 재생(나레이션 반복 방지). 재렌더로도 다시 안 켜짐.
     if (!lite) { const pb = palPlayBtnEl(); if (pb) pb.addEventListener("click", palPlayToggle); }
     palArmPlayheadGrab(c);   // ▍재생선 꽁다리 드래그 = 재생 위치 옮기기(모바일 touch 포함)
-    if (hasNativeVideo() && mediaEl) { try { palNVBind(c, mediaEl); } catch (_) {} }   // 🎬 네이티브 미리보기 표면 부착(앱에서만)
+    if (hasNativeVideo()) { try { palNVBind(c, mediaEl); } catch (e) { palNVBadge("NV bind 예외 " + ((e && e.message) || "")); } }   // 🎬 네이티브 미리보기 표면 부착(앱에서만)
   }
   function palArmPlayheadGrab(c) {
     const grab = (c && c.playhead) ? c.playhead.querySelector(".es-pal-ct-playgrab") : null;
