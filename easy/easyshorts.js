@@ -1839,7 +1839,7 @@
             ${_haveFace ? `<div class="es-pal-face-thumb"><img src="${fs.faceUrl || (fs.faceBlob ? URL.createObjectURL(fs.faceBlob) : "")}" alt="바꿀 얼굴"></div>` : ""}
             <button type="button" class="es-pal-narr-make es-pal-face-make" id="esPalFaceApply"${_haveFace ? "" : " disabled"}>${_done ? "🔄 다시 바꾸기" : "🪄 얼굴 바꾸기"}</button>
             <div id="esPalFaceStatus" class="es-pal-narr-status"></div>
-            <div class="es-pal-narr-hint2">${_haveFace ? (_done ? "✅ 바꿨어요! (1~3분 걸려요)" : "<b>🪄 얼굴 바꾸기</b>를 누르면 영상 속 얼굴이 위 얼굴로 바뀌어요 (1~3분)") : "관리자가 바꿀 얼굴을 정하면 여기서 바꿀 수 있어요"}</div>`;
+            <div class="es-pal-narr-hint2">${_haveFace ? (_done ? "✅ 바꿨어요! (보통 몇 분, 끝까지 기다려요)" : "<b>🪄 얼굴 바꾸기</b>를 누르면 영상 속 얼굴이 위 얼굴로 바뀌어요 (보통 몇 분 · 끝까지 기다려요)") : "관리자가 바꿀 얼굴을 정하면 여기서 바꿀 수 있어요"}</div>`;
           break;
         }
         case "bgmusic": {   // 🎶 음악 깔기 = 관리자 전용(고객 단계엔 빠짐). 여긴 빌더 미리보기용 안내만.
@@ -4007,21 +4007,26 @@
         setS(`영상 ${done + 1}/${vids.length} 올리는 중…`);
         const vblob = m.blob || await (await fetch(m.url)).blob();
         const vurl = await uploadMediaSigned(tid, `in${i}.mp4`, vblob, vblob.type || "video/mp4", key);
-        setS(`영상 ${done + 1}/${vids.length} 얼굴 바꾸는 중… (1~3분)`);
+        setS(`영상 ${done + 1}/${vids.length} 얼굴 바꾸는 중… (끝까지 기다릴게요)`);
         const cr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", video: vurl, face_image: faceUrl, target_index: fs.targetIndex || 0, mode: (fs.mode === "head" || fs.mode === "kling") ? fs.mode : "face", resolution: "720p" }) });
         const cj = await cr.json().catch(() => ({}));
         if (!cr.ok || !cj.id) throw new Error((cj && (cj.error || cj.message)) || "교체 요청 실패");
-        // 폴링 (최대 ~5분)
-        let outUrl = null;
-        for (let t = 0; t < 100; t++) {
-          await new Promise((rs) => setTimeout(rs, 3000));
-          const qr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "query", id: cj.id }) });
-          const qj = await qr.json().catch(() => ({}));
+        // 폴링 — ⏳ 시간제한 사실상 없음: 완료/실패가 나올 때까지 계속 기다림. 처음 2분은 3초, 이후 6초 간격. 일시적 네트워크 오류는 무시하고 계속.
+        let outUrl = null, _elapsed = 0;
+        for (let t = 0; t < 1400; t++) {   // 백스톱 ~2시간(정상은 1~5분 · 이 이상이면 상위 작업이 멈춘 것)
+          const _gap = t < 40 ? 3000 : 6000;
+          await new Promise((rs) => setTimeout(rs, _gap)); _elapsed += _gap / 1000;
+          let qj = {};
+          try {
+            const qr = await fetch(faceSwapEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "query", id: cj.id }) });
+            qj = await qr.json().catch(() => ({}));
+          } catch (_) { continue; }   // 일시적 네트워크 오류 → 실패로 끝내지 말고 계속 기다림
           if (qj.status === "completed" && qj.video_url) { outUrl = qj.video_url; break; }
-          if (qj.status === "failed") throw new Error(qj.error || "얼굴 교체 실패");
-          setS(`영상 ${done + 1}/${vids.length} 처리 중… (${(t + 1) * 3}초)`);
+          if (qj.status === "failed") throw new Error("AI 영상 서비스가 작업을 실패로 끝냈어요" + (qj.error ? (" — " + qj.error) : " (영상이 너무 길거나 얼굴 인식이 안 됐을 수 있어요)"));
+          const _mm = Math.floor(_elapsed / 60), _ss = Math.round(_elapsed % 60);
+          setS(`영상 ${done + 1}/${vids.length} 처리 중… (${_mm ? _mm + "분 " : ""}${_ss}초 — 끝까지 기다릴게요)`);
         }
-        if (!outUrl) throw new Error("시간이 너무 오래 걸려요 (나중에 다시 시도)");
+        if (!outUrl) throw new Error("너무 오래 걸려 멈췄어요(2시간 초과) — 상위 AI 작업이 멈춘 것 같아요. 다시 시도해 주세요");
         // 결과 영상 다운로드 → 미디어 교체
         const outBlob = await (await fetch(outUrl)).blob();
         try { if (m.url && m.url.startsWith("blob:")) URL.revokeObjectURL(m.url); } catch (_) {}
@@ -5618,13 +5623,24 @@
         if (en.isIntersecting && en.intersectionRatio >= 0.6) {
           if (!vid.getAttribute("src") && page.dataset.src) vid.src = page.dataset.src;
           vid.muted = !soundOn;
-          page.classList.add("cur");
+          page.classList.add("cur"); page.classList.remove("paused");
           vid.play().catch(function () { if (!vid.muted) { vid.muted = true; vid.play().catch(function () {}); } });   // 소리 자동재생 막히면 음소거로라도 재생
         } else { page.classList.remove("cur"); try { vid.pause(); } catch (_) {} }
       });
     }, { threshold: [0, 0.6, 1] });
     ov.querySelectorAll(".es-reels-page").forEach(function (p) { io.observe(p); });
     ov._io = io;
+
+    // 👆 영상 탭하면 재생/일시정지 토글 (요청)
+    ov.querySelectorAll(".es-reels-page").forEach(function (p) {
+      p.addEventListener("click", function (e) {
+        if (e.target.closest(".es-reels-make, .es-reels-x, .es-reels-sound, .es-reels-tone")) return;   // 버튼은 제외
+        var vid = p.querySelector("video"); if (!vid) return;
+        if (!vid.getAttribute("src") && p.dataset.src) vid.src = p.dataset.src;
+        if (vid.paused) { vid.muted = !soundOn; vid.play().catch(function () { if (!vid.muted) { vid.muted = true; vid.play().catch(function () {}); } }); p.classList.remove("paused"); }
+        else { try { vid.pause(); } catch (_) {} p.classList.add("paused"); }
+      });
+    });
 
     var first = ov.querySelector(".es-reels-page");   // 첫 영상 즉시 재생
     if (first) { var fv = first.querySelector("video"); if (fv && first.dataset.src) { fv.src = first.dataset.src; fv.muted = !soundOn; first.classList.add("cur"); fv.play().catch(function () { if (!fv.muted) { fv.muted = true; fv.play().catch(function () {}); } }); } }
