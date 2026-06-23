@@ -5551,7 +5551,21 @@
     }
     document.removeEventListener("keydown", _reelsKey);
   }
-  function openReels() {
+  // 🏠 릴스가 '앱 홈'으로 떠 있으면 ✕ 대신 로그인/회원가입(또는 계정) 영역, 아니면 ✕ 닫기버튼.
+  function reelsTopLeftHtml() {
+    if (!E._reelsHome) return '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>';
+    var li = !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn());
+    if (li) { var u = (window.EasyAuth.currentUser && window.EasyAuth.currentUser()) || {}; var nm = (u && (u.name || u.phone)) || "내 계정"; return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelsacct>👤 ' + esc(nm) + '</button></div>'; }
+    return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelslogin>로그인</button><button type="button" class="es-reels-authbtn pri" data-reelssignup>회원가입</button></div>';
+  }
+  function wireReelsTopLeft(ov) {
+    var x = ov.querySelector(".es-reels-x"); if (x) x.addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
+    var lg = ov.querySelector("[data-reelslogin]"); if (lg) lg.addEventListener("click", function () { try { window.EasyAuth.openModal(function () { renderReels(); }, "login"); } catch (_) {} });
+    var su = ov.querySelector("[data-reelssignup]"); if (su) su.addEventListener("click", function () { try { window.EasyAuth.openModal(function () { renderReels(); }, "signup"); } catch (_) {} });
+    var ac = ov.querySelector("[data-reelsacct]"); if (ac) ac.addEventListener("click", function () { if (confirm("로그아웃 할까요?")) { try { window.EasyAuth.logout(); } catch (_) {} renderReels(); } });
+  }
+  function openReels(opts) {
+    E._reelsHome = !!(opts && opts.asHome);   // 🏠 앱 홈으로 띄우면 ✕ 없애고 로그인/회원가입 표시
     if (E._reelsOpening || document.getElementById("esReelsOv")) return;   // 🚫 로딩 중·이미 열림이면 중복 클릭 무시(여러 개 뜨던 문제)
     try { stopPlay(); } catch (_) {}
     try { stopInline(); } catch (_) {}
@@ -5559,9 +5573,9 @@
     // 게시 목록 로딩 — 즉시 로딩 화면을 띄워 '몇 번씩 누르는' 일을 막고, 받아오면 교체
     E._reelsOpening = true;
     var ov = document.createElement("div"); ov.id = "esReelsOv"; ov.className = "es-reels-ov";
-    ov.innerHTML = '<button type="button" class="es-reels-x" aria-label="닫기">✕</button><div class="es-reels-empty es-reels-loading"><span class="es-reels-spin"></span><br>📱 영상 불러오는 중…</div>';
+    ov.innerHTML = reelsTopLeftHtml() + '<div class="es-reels-empty es-reels-loading"><span class="es-reels-spin"></span><br>📱 영상 불러오는 중…</div>';
     document.body.appendChild(ov);
-    ov.querySelector(".es-reels-x").addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
+    wireReelsTopLeft(ov);
     document.addEventListener("keydown", _reelsKey);
     var fin = function () { E._reelsOpening = false; if (document.getElementById("esReelsOv")) renderReels(); };   // 닫혔으면 안 그림
     try { loadPublished().then(fin, fin); } catch (_) { fin(); }
@@ -5572,10 +5586,10 @@
     var ov = document.createElement("div");
     ov.id = "esReelsOv"; ov.className = "es-reels-ov";
     if (!groups.size) {
-      ov.innerHTML = '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>' +
+      ov.innerHTML = reelsTopLeftHtml() +
         '<div class="es-reels-empty">아직 등록된 따라하기 영상이 없어요.<br><small>관리자에서 템플릿에 미리보기 영상을 올리면 여기에 릴스로 떠요.</small></div>';
       document.body.appendChild(ov);
-      ov.querySelector(".es-reels-x").addEventListener("click", closeReels);
+      wireReelsTopLeft(ov);
       document.addEventListener("keydown", _reelsKey);
       return;
     }
@@ -5593,13 +5607,13 @@
       colsHtml += '<div class="es-reels-col">' + pages + '</div>';
     });
     ov.innerHTML =
-      '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>' +
+      reelsTopLeftHtml() +
       '<button type="button" class="es-reels-tone" title="나레이션 말투 정하기">🎙 말투</button>' +
       '<button type="button" class="es-reels-sound" title="소리 켜기/끄기">🔇</button>' +
       '<div class="es-reels-h">' + colsHtml + '</div>' +
       '<div class="es-reels-hint">↕ 같은 분류 · ↔ 다른 분류</div>';
     document.body.appendChild(ov);
-    ov.querySelector(".es-reels-x").addEventListener("click", closeReels);
+    wireReelsTopLeft(ov);
     { const tb = ov.querySelector(".es-reels-tone"); if (tb) tb.addEventListener("click", palNarrToneOpen); }   // 🎙 전역 나레이션 말투
     document.addEventListener("keydown", _reelsKey);
 
@@ -5825,7 +5839,12 @@
   }
   function renderGallery() {
     const body = $("#esBody"); if (!body) return;
-    if (E.mode2 === "easy") { renderEasyCatalog(body); return; }
+    if (E.mode2 === "easy") {
+      renderEasyCatalog(body);
+      // 📱 앱·폰 = 들어오면 '릴스 만들기'가 홈(전체화면). 닫기 ✕ 없고 로그인/회원가입만. (데스크탑은 기존 홈 유지)
+      if ((isNativeApp() || isMobileInput()) && !document.getElementById("esReelsOv")) { try { openReels({ asHome: true }); } catch (_) {} }
+      return;
+    }
     renderDetailCatalog(body); return;
     const tplSection = "";   // '내 템플릿' 목록은 숨김 — 게시는 아래 '내 영상' 카드에서
     // ☁️ 게시된 영상(고객 페이지) — 서버 목록. 로컬 프로젝트가 지워져도 여기서 내릴 수 있음.
