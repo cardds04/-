@@ -5608,8 +5608,15 @@
     if (li) { var u = (window.EasyAuth.currentUser && window.EasyAuth.currentUser()) || {}; var nm = (u && (u.name || u.phone)) || "내 계정"; return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelsacct>👤 ' + esc(nm) + '</button></div>'; }
     return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelslogin>로그인</button><button type="button" class="es-reels-authbtn pri" data-reelssignup>회원가입</button></div>';
   }
+  // 상단바용 인라인 로그인/회원가입/계정 버튼(모두 같은 .es-reels-tbtn 크기)
+  function reelsAuthInlineHtml() {
+    var li = !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn());
+    if (li) { var u = (window.EasyAuth.currentUser && window.EasyAuth.currentUser()) || {}; var nm = (u && (u.name || u.phone)) || "내 계정"; return '<button type="button" class="es-reels-tbtn" data-reelsacct>👤 ' + esc(nm) + '</button>'; }
+    return '<button type="button" class="es-reels-tbtn" data-reelslogin>로그인</button><button type="button" class="es-reels-tbtn pri" data-reelssignup>회원가입</button>';
+  }
   function wireReelsTopLeft(ov) {
     var x = ov.querySelector(".es-reels-x"); if (x) x.addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
+    var cb = ov.querySelector("[data-reelsclose]"); if (cb) cb.addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
     var lg = ov.querySelector("[data-reelslogin]"); if (lg) lg.addEventListener("click", function () { try { window.EasyAuth.openModal(function () { renderReels(); }, "login"); } catch (_) {} });
     var su = ov.querySelector("[data-reelssignup]"); if (su) su.addEventListener("click", function () { try { window.EasyAuth.openModal(function () { renderReels(); }, "signup"); } catch (_) {} });
     var ac = ov.querySelector("[data-reelsacct]"); if (ac) ac.addEventListener("click", function () { if (confirm("로그아웃 할까요?")) { try { window.EasyAuth.logout(); } catch (_) {} renderReels(); } });
@@ -5657,16 +5664,20 @@
       colsHtml += '<div class="es-reels-col">' + pages + '</div>';
     });
     ov.innerHTML =
-      reelsTopLeftHtml() +
-      '<button type="button" class="es-reels-mychar" title="얼굴 바꾸기에 쓸 내 캐릭터 만들기">🪄 내 캐릭터</button>' +
-      '<button type="button" class="es-reels-tone" title="나레이션 말투 정하기">🎙 말투</button>' +
-      '<button type="button" class="es-reels-sound" title="소리 켜기/끄기">🔇</button>' +
+      '<div class="es-reels-topbar">' +
+        (E._reelsHome ? reelsAuthInlineHtml() : '<button type="button" class="es-reels-tbtn" data-reelsclose aria-label="닫기">✕</button>') +
+        '<button type="button" class="es-reels-tbtn es-reels-mychar" title="얼굴 바꾸기에 쓸 내 캐릭터 만들기">🪄 내 캐릭터</button>' +
+        '<button type="button" class="es-reels-tbtn es-reels-tone" title="나레이션 말투 정하기">🎙 말투</button>' +
+        '<button type="button" class="es-reels-tbtn es-reels-admin" title="관리자 페이지로">🔧 관리자</button>' +
+        '<button type="button" class="es-reels-tbtn es-reels-sound" title="소리 켜기/끄기">🔇</button>' +
+      '</div>' +
       '<div class="es-reels-h">' + colsHtml + '</div>' +
       '<div class="es-reels-hint">↕ 같은 분류 · ↔ 다른 분류</div>';
     document.body.appendChild(ov);
     wireReelsTopLeft(ov);
     { const tb = ov.querySelector(".es-reels-tone"); if (tb) tb.addEventListener("click", palNarrToneOpen); }   // 🎙 전역 나레이션 말투
     { const mc = ov.querySelector(".es-reels-mychar"); if (mc) mc.addEventListener("click", openMyCharacter); }   // 🪄 내 캐릭터(얼굴 바꾸기용)
+    { const ad = ov.querySelector(".es-reels-admin"); if (ad) ad.addEventListener("click", function () { closeReels(); try { openAdmin(); } catch (_) {} }); }   // 🔧 관리자 페이지(비번)
     if (!E._myCharLoaded) { E._myCharLoaded = true; try { myCharLoad(); } catch (_) {} }   // 내 캐릭터 미리 로드
     document.addEventListener("keydown", _reelsKey);
 
