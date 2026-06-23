@@ -1112,7 +1112,9 @@
     let ok = false;
     // 📱 폰에서 직접 내보낼 땐 1080p·16Mbps 로 제한 → 인코딩 빨라지고 파일도 작아짐(숏폼 표준). 데스크탑은 원본 그대로.
     const exOpts = optsOverride || ((isNativeApp() || isMobileInput()) ? { maxLong: 1920, bitrate: 12000000, fps: 24, latency: "realtime" } : {});   // 호출자 지정 옵션 우선(팔레트=1080p·24fps·작은용량)
-    if ((typeof VideoEncoder !== "undefined") && window.EasyMux) {
+    // 🚀 설치형 앱 + 네이티브 플러그인 있으면 우선 사용(캡컷식 빠른 길)
+    if (hasNativeExport()) { try { if (await nativeExportFull(exOpts)) ok = true; } catch (e) { console.warn("[native export] 실패", e); } }
+    if (!ok && (typeof VideoEncoder !== "undefined") && window.EasyMux) {
       try { if (await exportOffline("mp4", exOpts)) ok = true; } catch (e) { console.warn("[mp4] 실패", e); }
       if (!ok) { try { if (await exportOffline("webm", exOpts)) ok = true; } catch (e) { console.warn("[webm] 실패", e); } }
     }
@@ -1897,7 +1899,7 @@
           break;
         }
         case "review": {   // ✅ 최종본 확인 — 위 미리보기 크게, 아래 컨트롤 작게(▶로 확인 + 단계로 돌아가기)
-          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 고칠 단계로 돌아가기</button><div class="es-pal-export-prog" id="esPalExportProg" hidden><span class="es-pal-export-progt" id="esPalExportProgT">준비 중…</span><span class="es-pal-export-progbar"><i id="esPalExportProgI"></i></span></div><button type="button" class="es-pal-navbtn es-pal-export-btn" id="esPalExport">📤 영상 내보내기</button>${hasNativeExport() ? `<button type="button" class="es-pal-navbtn es-pal-export-beta" id="esPalExportNative">⚡ 빠른 만들기 테스트(베타)</button>` : ""}</div>`;
+          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 고칠 단계로 돌아가기</button><div class="es-pal-export-prog" id="esPalExportProg" hidden><span class="es-pal-export-progt" id="esPalExportProgT">준비 중…</span><span class="es-pal-export-progbar"><i id="esPalExportProgI"></i></span></div><button type="button" class="es-pal-navbtn es-pal-export-btn" id="esPalExport">${hasNativeExport() ? "⚡ 영상 내보내기" : "📤 영상 내보내기"}</button></div>`;
           break;
         }
         case "length": {
@@ -4575,7 +4577,6 @@
     { const gb = $("#esPalCapGrammar"); if (gb) gb.addEventListener("click", () => palFixCaptionGrammar(gb)); }   // ✏️ 자막 자동 문법 수정(타이밍 유지)
     { const sj = $("#esPalStepJump"); if (sj) sj.addEventListener("click", palStepJump); }   // ✅ 최종본 확인 → 단계로 돌아가기 팝업
     { const ex = $("#esPalExport"); if (ex) ex.addEventListener("click", () => palExportVideo(ex)); }   // 📤 내보내기 — 실제 영상 렌더
-    { const exn = $("#esPalExportNative"); if (exn) exn.addEventListener("click", () => { const dd = E.palette && E.palette.demo; const cl = (dd && dd.media) || []; nativeConcatTest(cl, dd && dd.origVol === 0); }); }   // ⚡ 네이티브 속도 테스트(베타)
     // 💬 자막 생성 방법(①AI ②직접) + AI 생성
     $$("#esBody [data-capmethod]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.capmethod; E._palCapStep = (v === "ai") ? "ai" : (v === "0") ? 0 : 1; renderPalette(); }));
     { const cp = $("#esPalCapPrompt"); if (cp) cp.addEventListener("input", () => { E._palCapPrompt = cp.value; }); }
@@ -14023,6 +14024,154 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (blob.size <= CHUNK) { const w = await Filesystem.writeFile({ path: name, data: await blobToBase64(blob), directory: dir, recursive: true }); uri = (w && w.uri) || ""; }
     else { let off = 0, first = true; while (off < blob.size) { const data = await blobToBase64(blob.slice(off, off + CHUNK)); if (first) { const w = await Filesystem.writeFile({ path: name, data, directory: dir, recursive: true }); uri = (w && w.uri) || ""; first = false; } else { await Filesystem.appendFile({ path: name, data, directory: dir }); } off += CHUNK; await new Promise((r) => setTimeout(r, 0)); } }
     if (!uri) throw new Error("임시 파일 저장 실패"); return uri;
+  }
+  // 🎨 오버레이용 — 자막/타이틀/스티커/로고를 '전체 프레임 투명 PNG' 한 장에 그려서 시간 윈도우별로 분할 (네이티브가 시간에 맞춰 알파블렌딩)
+  //    같은 시간대에 겹친 오버레이는 한 장에 합쳐 효율 ↑.
+  async function buildNativeOverlays(W, H) {
+    const u = E.using; if (!u) return [];
+    const items = [];
+    // 자막/타이틀 — 각 텍스트 블록을 단독 PNG로(시간 정확)
+    for (const tx of (u.texts || [])) {
+      const startMs = Math.round((tx.start || 0) * 1000);
+      const durMs = Math.round((tx.dur || 3) * 1000);
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d");
+      try { drawCaptionCanvas(ctx, Object.assign({}, tx, { fx: "none" }), tx.start || 0, W, H); } catch (_) {}
+      const blob = await new Promise((r) => cv.toBlob((b) => r(b), "image/png"));
+      if (blob) items.push({ blob, startMs, durMs });
+    }
+    // 스티커 — 위치·크기·회전·투명도·시간을 전체 프레임 PNG 안에 그대로 합성
+    const stk = u._palStickersResolved || [];
+    const imgCache = new Map();
+    const loadImg = (url) => new Promise((res) => { if (imgCache.has(url)) return res(imgCache.get(url)); const im = new Image(); try { im.crossOrigin = "anonymous"; } catch (_) {} im.onload = () => { imgCache.set(url, im); res(im); }; im.onerror = () => res(null); im.src = url; });
+    for (const s of stk) {
+      if (!s || !s.img && !s.url) continue;
+      const startMs = Math.round((s.start || 0) * 1000);
+      const durMs = Math.round(((s.dur != null ? s.dur : 9999)) * 1000);
+      const im = s.img || await loadImg(s.url); if (!im || !im.naturalWidth) continue;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d");
+      const sizePct = s.sizePct != null ? s.sizePct : 22;
+      const w = Math.round(Math.min(W, H) * sizePct / 100);
+      const ar = im.naturalWidth / im.naturalHeight;
+      const sw = w, sh = Math.round(w / ar);
+      const cx = (s.xPct != null ? s.xPct : 50) / 100 * W;
+      const cy = (s.yPct != null ? s.yPct : 50) / 100 * H;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, (s.opacity != null ? s.opacity : 100) / 100));
+      ctx.translate(cx, cy); if (s.rotate) ctx.rotate(s.rotate * Math.PI / 180);
+      ctx.drawImage(im, -sw / 2, -sh / 2, sw, sh);
+      ctx.restore();
+      const blob = await new Promise((r) => cv.toBlob((b) => r(b), "image/png"));
+      if (blob) items.push({ blob, startMs, durMs });
+    }
+    // 로고 — 전체 시간 표시
+    if (u.logo && (u.logoUrl || u._logoExportImg)) {
+      const im = u._logoExportImg || await loadImg(u.logoUrl);
+      if (im && im.naturalWidth) {
+        const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+        const ctx = cv.getContext("2d");
+        const lw = Math.round(Math.min(W, H) * 0.14), lh = Math.round(lw * im.naturalHeight / im.naturalWidth);
+        ctx.drawImage(im, W - lw - 16, 16, lw, lh);
+        const blob = await new Promise((r) => cv.toBlob((b) => r(b), "image/png"));
+        if (blob) items.push({ blob, startMs: 0, durMs: 9_999_000 });
+      }
+    }
+    return items;
+  }
+  // 🎵 네이티브용 오디오 트랙 — 기존 OfflineAudioContext 믹스 로직 일부를 빌려 WAV blob 생성(음악·나레이션·원본클립·효과음 전부 포함, origVol 반영).
+  async function buildNativeAudioWav(totalSec) {
+    const u = E.using; if (!u) return null;
+    const SR = 48000, CH = 2;
+    const fetchDecode = async (url) => { try { const ab = await (await fetch(url)).arrayBuffer(); const tmp = new (window.AudioContext || window.webkitAudioContext)(); let dec = null; try { dec = await tmp.decodeAudioData(ab.slice(0)); } catch (_) {} try { tmp.close(); } catch (_) {} return dec; } catch (_) { return null; } };
+    const hasMusic = !!u.musicUrl, hasVoice = !!u.voiceUrl;
+    const vidSegs = (curOrigVol() > 0.001) ? slotTimes().arr.filter((seg) => { const f = u.fills[seg.slot.id]; return f && f.kind === "video" && f.url && !seg.slot._muteAudio; }) : [];
+    const sfxList = u._palSfxResolved || [];
+    if (!hasMusic && !hasVoice && !vidSegs.length && !sfxList.length) return null;
+    const mBuf = hasMusic ? await fetchDecode(u.musicUrl) : null;
+    const vBuf = hasVoice ? await fetchDecode(u.voiceUrl) : null;
+    const segBufs = []; for (const seg of vidSegs) { const f = u.fills[seg.slot.id]; const buf = await fetchDecode(f.url); if (buf) segBufs.push({ seg, buf }); }
+    const sfxBufs = []; for (const s of sfxList) { if (!s || !s.url) continue; const buf = await fetchDecode(s.url); if (buf) sfxBufs.push({ at: s.at || 0, vol: (s.vol != null ? s.vol : 1), buf }); }
+    if (!mBuf && !vBuf && !segBufs.length && !sfxBufs.length) return null;
+    const off = new OfflineAudioContext(CH, Math.ceil(totalSec * SR), SR);
+    if (mBuf) { const src = off.createBufferSource(); src.buffer = mBuf; src.loop = mBuf.duration < totalSec; const g = off.createGain(); const mvBase = (u.musicVol != null) ? Math.max(0, Math.min(1, u.musicVol)) : 0.35; const duck = vBuf ? Math.min(mvBase, (u.voiceDuck != null ? u.voiceDuck : 0.35)) : mvBase; g.gain.setValueAtTime(duck, 0); const fade = Math.min(2, totalSec); g.gain.setValueAtTime(duck, Math.max(0, totalSec - fade)); g.gain.linearRampToValueAtTime(0.0001, totalSec); src.connect(g); g.connect(off.destination); src.start(0); }
+    if (vBuf) { const vsrc = off.createBufferSource(); vsrc.buffer = vBuf; const vg = off.createGain(); vg.gain.setValueAtTime(u.voiceVol != null ? u.voiceVol : 1, 0); vsrc.connect(vg); vg.connect(off.destination); vsrc.start(Math.max(0, +(u.voiceDelay) || 0)); }
+    for (const { seg, buf } of segBufs) { const inOff = seg.slot.in || 0; const playDur = Math.min(Math.max(0, seg.end - seg.start), Math.max(0, buf.duration - inOff)); if (playDur <= 0) continue; const vs = off.createBufferSource(); vs.buffer = buf; const vgn = off.createGain(); vgn.gain.setValueAtTime(curOrigVol(), seg.start); vs.connect(vgn); vgn.connect(off.destination); try { vs.start(seg.start, inOff, playDur); } catch (_) { try { vs.start(seg.start, inOff); } catch (__) {} } }
+    for (const { at, vol, buf } of sfxBufs) { const s = off.createBufferSource(); s.buffer = buf; const g = off.createGain(); g.gain.setValueAtTime(vol, 0); s.connect(g); g.connect(off.destination); try { s.start(at); } catch (_) {} }
+    const rendered = await off.startRendering();
+    return audioBufferToWavBlob(rendered);
+  }
+  // AudioBuffer → 16-bit PCM WAV blob (Media3가 잘 받음)
+  function audioBufferToWavBlob(buf) {
+    const ch = buf.numberOfChannels, sr = buf.sampleRate, len = buf.length;
+    const interleaved = new Float32Array(len * ch);
+    const tmp = new Float32Array(len);
+    for (let c = 0; c < ch; c++) { buf.copyFromChannel(tmp, c, 0); for (let i = 0; i < len; i++) interleaved[i * ch + c] = tmp[i]; }
+    const pcm = new ArrayBuffer(44 + interleaved.length * 2);
+    const dv = new DataView(pcm);
+    const wstr = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    wstr(0, "RIFF"); dv.setUint32(4, 36 + interleaved.length * 2, true); wstr(8, "WAVE"); wstr(12, "fmt ");
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, ch, true); dv.setUint32(24, sr, true);
+    dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+    wstr(36, "data"); dv.setUint32(40, interleaved.length * 2, true);
+    let off = 44; for (let i = 0; i < interleaved.length; i++) { let v = Math.max(-1, Math.min(1, interleaved[i])); dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7FFF, true); off += 2; }
+    return new Blob([pcm], { type: "audio/wav" });
+  }
+  // 🚀 네이티브 내보내기 본진 — 클립·오버레이·오디오 모두 네이티브로
+  async function nativeExportFull(opts) {
+    if (!hasNativeExport()) return false;
+    const u = E.using; if (!u) return false;
+    const NE = window.Capacitor.Plugins.NativeExport, Gallery = window.Capacitor.Plugins.GallerySaver;
+    const btn = (typeof dlBtn === "function") ? dlBtn() : null;
+    const setBtn = (t) => { if (btn) { btn.disabled = true; btn.textContent = t; } };
+    try {
+      setBtn("⚡ 준비 중…");
+      const { arr, total } = slotTimes();
+      if (total <= 0) { alert("내용이 없어요."); return true; }
+      // 출력 크기
+      const maxLong = (opts && opts.maxLong) || 1920;
+      const { W, H } = await bestOutputSize(maxLong);
+      // 클립 만들기 — 비디오만 네이티브로(이미지 슬롯은 webp/jpg로 보내야 함. 일단 비디오 우선)
+      // ⚠️ 첫 정식 버전: 비디오 전용. 이미지 슬롯은 기존 웹 경로로 폴백.
+      const hasImage = arr.some((seg) => { const f = u.fills[seg.slot.id]; return f && f.kind !== "video"; });
+      if (hasImage) return false;   // 사진이 섞이면 웹 경로로
+      setBtn("⚡ 입력 영상 옮기는 중…");
+      const clips = [];
+      for (const seg of arr) {
+        const f = u.fills[seg.slot.id]; if (!f || !f.url) continue;
+        const blob = f.blob || (f._fastBlob instanceof Blob ? f._fastBlob : await (await fetch(f.url)).blob());
+        const path = await blobToCacheFile(blob, "ne_in_" + uid() + ".mp4");
+        clips.push({ path, inSec: (seg.slot.in || 0), durSec: Math.max(0, seg.end - seg.start) });
+      }
+      if (!clips.length) return false;
+      // 오버레이
+      setBtn("⚡ 자막·스티커 그리는 중…");
+      const overlayBlobs = await buildNativeOverlays(W, H);
+      const overlays = [];
+      for (const ob of overlayBlobs) { const p = await blobToCacheFile(ob.blob, "ne_ov_" + uid() + ".png"); overlays.push({ path: p, startMs: ob.startMs, durMs: ob.durMs }); }
+      // 오디오
+      setBtn("⚡ 소리 합치는 중…");
+      let audioPath = null;
+      try { const wav = await buildNativeAudioWav(total); if (wav) audioPath = await blobToCacheFile(wav, "ne_audio_" + uid() + ".wav"); } catch (_) {}
+      // 인코딩
+      setBtn("⚡ 네이티브 인코딩 중…");
+      const t0 = (performance && performance.now) ? performance.now() : Date.now();
+      const res = await NE.export({ clips, overlays, audioPath: audioPath || undefined, shortSide: Math.min(W, H), removeOriginalAudio: !!audioPath });
+      const secs = ((((performance && performance.now) ? performance.now() : Date.now()) - t0) / 1000).toFixed(1);
+      if (res && res.path) {
+        const fname = ((u.template && u.template.name) || "easyshorts") + ".mp4";
+        if (Gallery && Gallery.saveVideo) { try { await Gallery.saveVideo({ path: res.path, fileName: fname }); } catch (_) {} }
+        try { toast("⚡ 완성! " + secs + "초 (갤러리 '이지숏폼' 앨범)"); } catch (_) {}
+        if (btn) { btn.disabled = false; btn.textContent = "✅ 다운로드 완료!"; setTimeout(() => { if (btn) btn.textContent = btn.dataset.base || "⬇ 다운로드"; }, 2800); }
+      }
+      return true;
+    } catch (e) {
+      console.warn("[nativeExportFull]", e);
+      try { toast("네이티브 실패 — 기존 방식으로 다시 시도해요"); } catch (_) {}
+      return false;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
   // 🚀 [베타·1단계] 네이티브로 클립 이어붙여 인코딩 — 속도 측정용(자막·음악 아직 미포함)
   async function nativeConcatTest(clips, removeAudio) {
