@@ -11,7 +11,6 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.audio.AudioProcessor;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.effect.OverlayEffect;
-import androidx.media3.effect.Presentation;
 import androidx.media3.effect.TextureOverlay;
 import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.EditedMediaItem;
@@ -87,7 +86,7 @@ public class NativeExportPlugin extends Plugin {
 
         // 2) 오버레이 비트맵들 → Composition 레벨 OverlayEffect (시간 윈도우 알파블렌딩, 좌표는 가운데/Identity)
         final List<Effect> composEffects = new ArrayList<>();
-        if (shortSide > 0) composEffects.add(Presentation.createForShortSide(shortSide));
+        // (해상도 정규화 Presentation 은 Media3 1.3.1 에 createForShortSide 가 없어 생략 — 클립 해상도 그대로)
         if (overlaysArr != null && overlaysArr.length() > 0) {
             List<TextureOverlay> overlays = new ArrayList<>();
             try {
