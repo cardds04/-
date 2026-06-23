@@ -5729,17 +5729,12 @@
   }
   // 🏠 릴스가 '앱 홈'으로 떠 있으면 ✕ 대신 로그인/회원가입(또는 계정) 영역, 아니면 ✕ 닫기버튼.
   function reelsTopLeftHtml() {
+    // 🔓 로그인 제거 — 홈이면 아무것도(로그인/회원가입 X), 아니면 닫기버튼만
     if (!E._reelsHome) return '<button type="button" class="es-reels-x" aria-label="닫기">✕</button>';
-    var li = !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn());
-    if (li) { var u = (window.EasyAuth.currentUser && window.EasyAuth.currentUser()) || {}; var nm = (u && (u.name || u.phone)) || "내 계정"; return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelsacct>👤 ' + esc(nm) + '</button></div>'; }
-    return '<div class="es-reels-auth"><button type="button" class="es-reels-authbtn" data-reelslogin>로그인</button><button type="button" class="es-reels-authbtn pri" data-reelssignup>회원가입</button></div>';
+    return '';
   }
-  // 상단바용 인라인 로그인/회원가입/계정 버튼(모두 같은 .es-reels-tbtn 크기)
-  function reelsAuthInlineHtml() {
-    var li = !!(window.EasyAuth && window.EasyAuth.isLoggedIn && window.EasyAuth.isLoggedIn());
-    if (li) { var u = (window.EasyAuth.currentUser && window.EasyAuth.currentUser()) || {}; var nm = (u && (u.name || u.phone)) || "내 계정"; return '<button type="button" class="es-reels-tbtn" data-reelsacct>👤 ' + esc(nm) + '</button>'; }
-    return '<button type="button" class="es-reels-tbtn" data-reelslogin>로그인</button><button type="button" class="es-reels-tbtn pri" data-reelssignup>회원가입</button>';
-  }
+  // 🔓 로그인 제거 — 상단바 로그인/회원가입/계정 버튼 없음
+  function reelsAuthInlineHtml() { return ''; }
   function wireReelsTopLeft(ov) {
     var x = ov.querySelector(".es-reels-x"); if (x) x.addEventListener("click", function () { E._reelsOpening = false; closeReels(); });
     var cb = ov.querySelector("[data-reelsclose]"); if (cb) cb.addEventListener("click", function () { E._reelsOpening = false; closeReels(); });

@@ -236,9 +236,9 @@
   // 로그인돼 있으면 true(호출자가 그대로 진행). 아니면 모달 띄우고 false 반환 →
   // 로그인 성공 후 cb 가 실행돼 원래 동작을 이어감. (로그인 상태에선 cb 호출 안 함 = 재귀 방지)
   function requireLogin(cb) {
-    if (isLoggedIn()) return true;
-    openModal(cb, "signup");
-    return false;
+    // 🔓 로그인 시스템 제거 — 항상 통과(모달 안 띄움)
+    if (typeof cb === "function") { try { cb(); } catch (_) {} }
+    return true;
   }
 
   function logout() { clearState(); }
@@ -252,11 +252,8 @@
     logout: logout,
   };
 
-  // 칩은 앱이 #easyRoot 를 채운 뒤 떠도 되도록, 약간 지연 후 렌더(잠금 화면 제외).
-  function boot() {
-    if (document.body.classList.contains("es-locked")) { setTimeout(boot, 300); return; }
-    renderChip();
-  }
+  // 🔓 로그인 시스템 제거 — 계정 칩 안 띄움
+  function boot() { try { var c = document.getElementById("eaChip"); if (c) c.remove(); } catch (_) {} }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
