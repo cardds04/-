@@ -1897,7 +1897,7 @@
           break;
         }
         case "review": {   // ✅ 최종본 확인 — 위 미리보기 크게, 아래 컨트롤 작게(▶로 확인 + 단계로 돌아가기)
-          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 고칠 단계로 돌아가기</button><div class="es-pal-export-prog" id="esPalExportProg" hidden><span class="es-pal-export-progt" id="esPalExportProgT">준비 중…</span><span class="es-pal-export-progbar"><i id="esPalExportProgI"></i></span></div><button type="button" class="es-pal-navbtn es-pal-export-btn" id="esPalExport">📤 영상 내보내기</button></div>`;
+          body = `<div class="es-pal-review-compact"><span class="es-pal-review-mini-hint">위에서 ▶로 확인 · 고칠 곳은 그 단계로</span><button type="button" class="es-pal-review-jump" id="esPalStepJump">↩ 고칠 단계로 돌아가기</button><div class="es-pal-export-prog" id="esPalExportProg" hidden><span class="es-pal-export-progt" id="esPalExportProgT">준비 중…</span><span class="es-pal-export-progbar"><i id="esPalExportProgI"></i></span></div><button type="button" class="es-pal-navbtn es-pal-export-btn" id="esPalExport">📤 영상 내보내기</button>${hasNativeExport() ? `<button type="button" class="es-pal-navbtn es-pal-export-beta" id="esPalExportNative">⚡ 빠른 만들기 테스트(베타)</button>` : ""}</div>`;
           break;
         }
         case "length": {
@@ -4575,6 +4575,7 @@
     { const gb = $("#esPalCapGrammar"); if (gb) gb.addEventListener("click", () => palFixCaptionGrammar(gb)); }   // ✏️ 자막 자동 문법 수정(타이밍 유지)
     { const sj = $("#esPalStepJump"); if (sj) sj.addEventListener("click", palStepJump); }   // ✅ 최종본 확인 → 단계로 돌아가기 팝업
     { const ex = $("#esPalExport"); if (ex) ex.addEventListener("click", () => palExportVideo(ex)); }   // 📤 내보내기 — 실제 영상 렌더
+    { const exn = $("#esPalExportNative"); if (exn) exn.addEventListener("click", () => { const dd = E.palette && E.palette.demo; const cl = (dd && dd.media) || []; nativeConcatTest(cl, dd && dd.origVol === 0); }); }   // ⚡ 네이티브 속도 테스트(베타)
     // 💬 자막 생성 방법(①AI ②직접) + AI 생성
     $$("#esBody [data-capmethod]").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.capmethod; E._palCapStep = (v === "ai") ? "ai" : (v === "0") ? 0 : 1; renderPalette(); }));
     { const cp = $("#esPalCapPrompt"); if (cp) cp.addEventListener("input", () => { E._palCapPrompt = cp.value; }); }
@@ -14012,6 +14013,36 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       fr.onerror = () => reject(fr.error || new Error("파일 읽기 실패"));
       fr.readAsDataURL(blob);
     });
+  }
+  // 🚀 네이티브 내보내기 사용 가능?(설치형 앱 + Media3 플러그인)
+  function hasNativeExport() { try { return isNativeApp() && !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeExport); } catch (_) { return false; } }
+  // blob → 캐시 파일(file:// uri) — 큰 영상은 3MB 조각으로 나눠 write/append (OOM 방지)
+  async function blobToCacheFile(blob, name) {
+    const Filesystem = window.Capacitor.Plugins.Filesystem; const dir = "CACHE", CHUNK = 3 * 1024 * 1024;
+    let uri = "";
+    if (blob.size <= CHUNK) { const w = await Filesystem.writeFile({ path: name, data: await blobToBase64(blob), directory: dir, recursive: true }); uri = (w && w.uri) || ""; }
+    else { let off = 0, first = true; while (off < blob.size) { const data = await blobToBase64(blob.slice(off, off + CHUNK)); if (first) { const w = await Filesystem.writeFile({ path: name, data, directory: dir, recursive: true }); uri = (w && w.uri) || ""; first = false; } else { await Filesystem.appendFile({ path: name, data, directory: dir }); } off += CHUNK; await new Promise((r) => setTimeout(r, 0)); } }
+    if (!uri) throw new Error("임시 파일 저장 실패"); return uri;
+  }
+  // 🚀 [베타·1단계] 네이티브로 클립 이어붙여 인코딩 — 속도 측정용(자막·음악 아직 미포함)
+  async function nativeConcatTest(clips, removeAudio) {
+    const NE = window.Capacitor.Plugins.NativeExport, Gallery = window.Capacitor.Plugins.GallerySaver;
+    const vids = (clips || []).filter((m) => m && m.kind === "video" && (m.blob || m.url));
+    if (!vids.length) { try { toast("영상 클립이 없어요"); } catch (_) {} return; }
+    try { toast("⚡ 네이티브 준비 중… 영상 옮기는 중"); } catch (_) {}
+    const items = [];
+    for (let i = 0; i < vids.length; i++) {
+      const m = vids[i]; const blob = m.blob || await (await fetch(m.url)).blob();
+      const path = await blobToCacheFile(blob, "ne_in" + i + ".mp4");
+      items.push({ path, inSec: m.in || 0, durSec: palCutClipDur(m) || 0 });
+    }
+    try { toast("⚡ 네이티브 인코딩 중…"); } catch (_) {}
+    const t0 = (performance && performance.now) ? performance.now() : Date.now();
+    let res; try { res = await NE.export({ clips: items, removeAudio: !!removeAudio, shortSide: 1080 }); }
+    catch (e) { try { alert("네이티브 인코딩 실패: " + ((e && e.message) || e)); } catch (_) {} return; }
+    const secs = ((((performance && performance.now) ? performance.now() : Date.now()) - t0) / 1000).toFixed(1);
+    if (res && res.path && Gallery && Gallery.saveVideo) { try { await Gallery.saveVideo({ path: res.path, fileName: "easyshorts_native_" + Date.now() + ".mp4" }); } catch (_) {} }
+    try { alert("⚡ 네이티브 완료!\n클립 " + items.length + "개 이어붙이기·인코딩: " + secs + "초\n(갤러리 '이지숏폼' 앨범에 저장 — 자막·음악은 아직 빠진 속도 테스트본)"); } catch (_) {}
   }
   // 완성 영상 저장: 설치형 앱이면 파일로 쓰고 공유 시트(갤러리·카톡 등) → 업로드 없이 폰에 바로. 웹이면 기존 다운로드.
   async function saveOrDownloadBlob(blob, filename, mime) {
