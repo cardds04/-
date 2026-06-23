@@ -1831,15 +1831,19 @@
             <div class="es-pal-narr-hint2">${_noVoice ? "관리자가 목소리를 정하면 여기서 만들 수 있어요" : (d.voiceUrl ? "✅ 만들었어요!" : "<b>🎙 나레이션 만들기</b>를 누르세요 (목소리는 정해져 있어요)")}</div>`;
           break;
         }
-        case "faceswap": {   // 🪄 얼굴 바꾸기 — 얼굴은 관리자가 작업대서 정함. 고객은 '바꾸기'만.
+        case "faceswap": {   // 🪄 얼굴 바꾸기 — 고객이 정한 '내 캐릭터' 우선, 없으면 관리자가 정한 얼굴.
           const fs = d.faceSwap || {};
-          const _haveFace = !!(fs.faceUrl || (fs.faceBlob instanceof Blob));
+          if (!E._myCharLoaded) { E._myCharLoaded = true; try { myCharLoad().then(() => { if (E.view === "palette") renderPalette(); }); } catch (_) {} }   // 내 캐릭터 1회 로드 후 갱신
+          const _myc = (typeof myCharGet === "function" && myCharGet()) || null;
+          const _faceSrc = (_myc && _myc.url) || fs.faceUrl || (fs.faceBlob instanceof Blob ? URL.createObjectURL(fs.faceBlob) : "");
+          const _haveFace = !!_faceSrc;
           const _done = !!fs.appliedAt;
           body = `<div class="es-pal-narr-lb">🪄 얼굴 바꾸기</div>
-            ${_haveFace ? `<div class="es-pal-face-thumb"><img src="${fs.faceUrl || (fs.faceBlob ? URL.createObjectURL(fs.faceBlob) : "")}" alt="바꿀 얼굴"></div>` : ""}
+            ${_haveFace ? `<div class="es-pal-face-thumb"><img src="${_faceSrc}" alt="바꿀 얼굴"></div>` : ""}
+            <button type="button" class="es-pal-narr-make es-pal-face-mychar" id="esPalFaceMyChar">🪄 내 캐릭터 정하기</button>
             <button type="button" class="es-pal-narr-make es-pal-face-make" id="esPalFaceApply"${_haveFace ? "" : " disabled"}>${_done ? "🔄 다시 바꾸기" : "🪄 얼굴 바꾸기"}</button>
             <div id="esPalFaceStatus" class="es-pal-narr-status"></div>
-            <div class="es-pal-narr-hint2">${_haveFace ? (_done ? "✅ 바꿨어요! (보통 몇 분, 끝까지 기다려요)" : "<b>🪄 얼굴 바꾸기</b>를 누르면 영상 속 얼굴이 위 얼굴로 바뀌어요 (보통 몇 분 · 끝까지 기다려요)") : "관리자가 바꿀 얼굴을 정하면 여기서 바꿀 수 있어요"}</div>`;
+            <div class="es-pal-narr-hint2">${_haveFace ? (_myc ? "✅ 내 캐릭터 얼굴로 바뀌어요" : (_done ? "✅ 바꿨어요!" : "이 얼굴로 바뀌어요 — 위 '내 캐릭터 정하기'로 내 얼굴을 만들 수도 있어요")) : "위 <b>🪄 내 캐릭터 정하기</b>로 바꿀 얼굴을 먼저 만들어 주세요"}</div>`;
           break;
         }
         case "bgmusic": {   // 🎶 음악 깔기 = 관리자 전용(고객 단계엔 빠짐). 여긴 빌더 미리보기용 안내만.
@@ -3986,7 +3990,10 @@
   // 🪄 얼굴 교체 실행 — 바꿀 얼굴 + 영상을 공개 URL로 올리고 WaveSpeed 로 교체, 결과로 미디어 교체. (관리자 키 사용)
   async function palFaceSwapApply(btn) {
     const P = E.palette; if (!P) return; const d = P.demo || {}; const fs = d.faceSwap || {};
-    if (!(fs.faceBlob instanceof Blob) && !fs.faceRemoteUrl) { try { toast("먼저 바꿀 얼굴을 만들어 주세요"); } catch (_) {} return; }
+    if (!E._myCharLoaded) { E._myCharLoaded = true; try { await myCharLoad(); } catch (_) {} }   // 🪄 '내 캐릭터' 준비
+    const myc = myCharGet();   // 🪄 고객이 정한 '내 캐릭터'가 있으면 그걸로 (관리자 얼굴보다 우선)
+    const charBlob = (myc && myc.blob instanceof Blob) ? myc.blob : fs.faceBlob;
+    if (!(charBlob instanceof Blob) && !(myc && myc.remoteUrl) && !fs.faceRemoteUrl) { try { toast("먼저 '내 캐릭터'를 정하거나 바꿀 얼굴을 만들어 주세요"); } catch (_) {} return; }
     // 어떤 영상에 적용? — 테스트영상(작업대) 우선, 없으면 고객이 넣은 media.
     const list = (Array.isArray(d.testMedia) && d.testMedia.length) ? d.testMedia : (Array.isArray(d.media) ? d.media : []);
     const vids = list.map((m, i) => ({ m, i })).filter((x) => x.m && x.m.kind === "video" && (x.m.blob || x.m.url));
@@ -3999,8 +4006,8 @@
       if (btn) { btn.disabled = true; btn.textContent = "🪄 바꾸는 중…"; }
       // 1) 바꿀 얼굴을 공개 URL 로
       setS("얼굴 올리는 중…");
-      let faceUrl = fs.faceRemoteUrl;
-      if (!faceUrl) { faceUrl = await uploadMediaSigned(tid, "face.png", fs.faceBlob, fs.faceBlob.type || "image/png", key); fs.faceRemoteUrl = faceUrl; }
+      let faceUrl = (myc && myc.remoteUrl) || fs.faceRemoteUrl;
+      if (!faceUrl) { faceUrl = await uploadMediaSigned(tid, "face.png", charBlob, charBlob.type || "image/png", key); if (myc) myc.remoteUrl = faceUrl; else fs.faceRemoteUrl = faceUrl; }
       // 2) 각 영상 클립을 올리고 → 교체 → 폴링 → 결과로 교체
       let done = 0;
       for (const { m, i } of vids) {
@@ -4041,6 +4048,48 @@
       setS("얼굴 교체 실패: " + (e.message || e));
       if (btn) { btn.disabled = false; btn.textContent = "🪄 얼굴 바꾸기"; }
     }
+  }
+  // 🪄 내 캐릭터 — 고객이 릴스 페이지에서 '얼굴 바꾸기에 쓸 얼굴'을 미리 만들어 전역 저장(IDB). 모든 템플릿 얼굴바꾸기에 자동 적용.
+  function myCharGet() { return E._myChar || null; }
+  async function myCharLoad() { try { const o = await idbGet("myCharacter"); if (o && o.blob instanceof Blob) { E._myChar = { blob: o.blob, url: URL.createObjectURL(o.blob), prompt: o.prompt || "", remoteUrl: null }; } } catch (_) {} return E._myChar || null; }
+  async function myCharSet(blob, prompt) { try { if (E._myChar && E._myChar.url && E._myChar.url.indexOf("blob:") === 0) URL.revokeObjectURL(E._myChar.url); } catch (_) {} E._myChar = { blob, url: URL.createObjectURL(blob), prompt: prompt || "", remoteUrl: null }; E._myCharLoaded = true; try { await idbSet("myCharacter", { blob, prompt: prompt || "" }); } catch (_) {} }
+  async function myCharClear() { try { if (E._myChar && E._myChar.url && E._myChar.url.indexOf("blob:") === 0) URL.revokeObjectURL(E._myChar.url); } catch (_) {} E._myChar = null; try { await idbSet("myCharacter", null); } catch (_) {} }
+  function openMyCharacter() {
+    const old = document.getElementById("esMyCharOv"); if (old) old.remove();
+    const myc = myCharGet();
+    const ov = document.createElement("div"); ov.id = "esMyCharOv"; ov.className = "es-mychar-ov";
+    ov.innerHTML = '<div class="es-mychar-box">'
+      + '<button type="button" class="es-mychar-x" id="esMyCharX">✕</button>'
+      + '<div class="es-mychar-h">🪄 내 캐릭터 정하기</div>'
+      + '<div class="es-mychar-sub">얼굴 바꾸기에 쓸 얼굴을 만들어 두면, 영상 속 인물이 이 얼굴로 바뀌어요. 한 번 정하면 모든 템플릿에 적용돼요.</div>'
+      + '<textarea id="esMyCharPrompt" class="es-mychar-prompt" placeholder="원하는 얼굴 설명 (예: 30대 한국 남성, 짧은 머리, 친근한 미소, 정면)">' + esc((myc && myc.prompt) || "") + '</textarea>'
+      + '<div class="es-mychar-row"><button type="button" class="es-mychar-gen" id="esMyCharGen">✨ AI 얼굴 만들기</button><button type="button" class="es-mychar-up" id="esMyCharUpBtn">＋ 사진 올리기</button><input type="file" id="esMyCharUpFile" accept="image/*" hidden></div>'
+      + '<div id="esMyCharStatus" class="es-mychar-status"></div>'
+      + '<div class="es-mychar-prev">' + (myc ? ('<img src="' + esc(myc.url) + '" alt="내 캐릭터"><div class="es-mychar-ok">✅ 이 얼굴로 적용돼요</div><button type="button" class="es-mychar-clear" id="esMyCharClear">캐릭터 지우기</button>') : '<div class="es-mychar-empty">아직 정한 캐릭터가 없어요</div>') + '</div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    const close = () => { try { ov.remove(); } catch (_) {} };
+    ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+    ov.querySelector("#esMyCharX").addEventListener("click", close);
+    ov.querySelector("#esMyCharGen").addEventListener("click", (e) => myCharGen(e.currentTarget));
+    const upb = ov.querySelector("#esMyCharUpBtn"), upf = ov.querySelector("#esMyCharUpFile");
+    if (upb && upf) { upb.addEventListener("click", () => upf.click()); upf.addEventListener("change", async (e) => { const f = (e.target.files || [])[0]; if (!f) return; await myCharSet(f, ""); openMyCharacter(); try { toast("🪄 내 캐릭터로 정했어요"); } catch (_) {} }); }
+    const cl = ov.querySelector("#esMyCharClear"); if (cl) cl.addEventListener("click", async () => { await myCharClear(); openMyCharacter(); });
+  }
+  async function myCharGen(btn) {
+    const ta = document.getElementById("esMyCharPrompt"); const desc = (ta && ta.value || "").trim();
+    if (!desc) { try { toast("바꿀 얼굴을 먼저 설명해 주세요"); } catch (_) {} return; }
+    const st = document.getElementById("esMyCharStatus"); const setS = (m) => { if (st) st.textContent = m; };
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "✨ 만드는 중…"; }
+      setS("AI가 얼굴을 고화질로 그리는 중… (30~60초)");
+      const r = await fetch(titleEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", portrait: true, text: desc, quality: "high" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.image) throw new Error((j && (j.error || j.message)) || ("HTTP " + r.status));
+      const blob = await (await fetch(j.image)).blob();
+      await myCharSet(blob, desc);
+      openMyCharacter(); try { toast("🪄 내 캐릭터로 정했어요"); } catch (_) {}
+    } catch (e) { setS("얼굴 생성 실패: " + (e.message || e)); if (btn) { btn.disabled = false; btn.textContent = "✨ AI 얼굴 만들기"; } }
   }
   function renderPalette() {
     const body = $("#esBody"); if (!body) return;
@@ -4490,6 +4539,7 @@
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
     { const fg = $("#esPalFaceGen"); if (fg) fg.addEventListener("click", () => palFaceGen(fg)); }   // 🪄 AI 얼굴 만들기
     { const fa = $("#esPalFaceApply"); if (fa) fa.addEventListener("click", () => palFaceSwapApply(fa)); }   // 🪄 얼굴 바꾸기 실행
+    { const fmc = $("#esPalFaceMyChar"); if (fmc) fmc.addEventListener("click", openMyCharacter); }   // 🪄 내 캐릭터 정하기(고객 단계서도)
     { const fu = $("#esPalFaceUpFile"); if (fu) fu.addEventListener("change", (e) => { const f = (e.target.files || [])[0]; if (!f) return; const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); try { if (fs.faceUrl && fs.faceUrl.startsWith("blob:")) URL.revokeObjectURL(fs.faceUrl); } catch (_) {} fs.faceBlob = f; fs.faceUrl = URL.createObjectURL(f); fs.faceRemoteUrl = null; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }); }   // 🪄 얼굴 사진 업로드
     { const fub = $("#esPalFaceUpBtn"), fuf = $("#esPalFaceUpFile"); if (fub && fuf) fub.addEventListener("click", () => fuf.click()); }
     $$("[data-facemode]").forEach((b) => b.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); const m = b.dataset.facemode; fs.mode = (m === "head" || m === "kling") ? m : "face"; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }));   // 🪄 얼굴만 / 머리까지 / 클링
@@ -5608,6 +5658,7 @@
     });
     ov.innerHTML =
       reelsTopLeftHtml() +
+      '<button type="button" class="es-reels-mychar" title="얼굴 바꾸기에 쓸 내 캐릭터 만들기">🪄 내 캐릭터</button>' +
       '<button type="button" class="es-reels-tone" title="나레이션 말투 정하기">🎙 말투</button>' +
       '<button type="button" class="es-reels-sound" title="소리 켜기/끄기">🔇</button>' +
       '<div class="es-reels-h">' + colsHtml + '</div>' +
@@ -5615,6 +5666,8 @@
     document.body.appendChild(ov);
     wireReelsTopLeft(ov);
     { const tb = ov.querySelector(".es-reels-tone"); if (tb) tb.addEventListener("click", palNarrToneOpen); }   // 🎙 전역 나레이션 말투
+    { const mc = ov.querySelector(".es-reels-mychar"); if (mc) mc.addEventListener("click", openMyCharacter); }   // 🪄 내 캐릭터(얼굴 바꾸기용)
+    if (!E._myCharLoaded) { E._myCharLoaded = true; try { myCharLoad(); } catch (_) {} }   // 내 캐릭터 미리 로드
     document.addEventListener("keydown", _reelsKey);
 
     var soundOn = true;   // 🔊 릴스는 소리 켜진 상태로 시작(요청)
