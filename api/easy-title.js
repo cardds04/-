@@ -32,3 +32,4 @@ module.exports = async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || "서버 오류" });
   }
 };
+module.exports.config = { maxDuration: 60 };   // ⏱ 이미지 생성(특히 인물 사진)이 기본 제한시간을 넘겨 504 나던 것 방지
