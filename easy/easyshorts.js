@@ -1706,7 +1706,11 @@
         case "media": {
           const list = Array.isArray(d.media) ? d.media : (d.media ? [d.media] : []);
           const inner = list.length
-            ? `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${list.map((mm, idx) => `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${mm.kind === "video" ? `<video src="${mm.url}" muted autoplay loop playsinline preload="auto"></video>` : `<img src="${mm.url}" alt="">`}</div>`).join("")}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`
+            ? (function () {
+                // 🎞 썸네일 = 첫 프레임 JPG(한 번 캡처해 캐시) — 안드로이드 WebView 동시 디코드 한계로 ▶ 아이콘만 뜨던 문제 방지
+                const cellHtml = list.map((mm, idx) => { const tk = "thumb_" + (mm.blob ? (mm.blob.size + "_" + (mm.name || "")) : mm.url); const tu = (E._palThumbs && E._palThumbs[tk]) || ""; const visual = mm.kind === "video" ? (tu ? `<img src="${tu}" alt="" data-thumbidx="${idx}">` : `<img src="" alt="" data-thumbidx="${idx}" data-thumbkey="${esc(tk)}" data-thumbpending="1">`) : `<img src="${mm.url}" alt="">`; return `<div class="es-pal-scr-mcell"><span class="es-pal-scr-mn">${idx + 1}</span><button type="button" class="es-pal-scr-mx" data-rmmedia="${idx}" title="이 영상 빼기">×</button>${visual}</div>`; }).join("");
+                return `<div class="es-pal-scr-media"><div class="es-pal-scr-mgrid">${cellHtml}</div><div class="es-pal-scr-media-name">✅ ${list.length}개 넣음</div><div class="es-pal-scr-media-acts"><button type="button" class="es-pal-scr-mini" id="esDemoMediaBtn">＋ 더 넣기</button><button type="button" class="es-pal-scr-mini ghost" id="esDemoMediaClear">다 빼기</button></div></div>`;
+              })()
             : `<button type="button" class="es-pal-scr-btn es-pal-scr-act" id="esDemoMediaBtn"><span class="es-pal-scr-btn-ic">🎬</span><span class="es-pal-scr-btn-t">영상 넣기</span><span class="es-pal-scr-btn-s">사진·영상 여러 개 한꺼번에 OK</span></button>`;
           body = `<div class="es-pal-scr-drop" id="esDemoMediaDrop">${inner}</div><input type="file" id="esDemoMediaFile" accept="image/*,video/*" multiple hidden>`;
           break;
@@ -4355,6 +4359,26 @@
     const demo = P.demo;
     const _dFile = $("#esDemoMediaFile"), _dBtn = $("#esDemoMediaBtn"), _dClr = $("#esDemoMediaClear");
     if (_dBtn && _dFile) _dBtn.addEventListener("click", () => _dFile.click());   // 🎬 영상 첨부 = 파일 선택(기존)
+    // 🎞 비어있는 비디오 썸네일(첫 프레임)을 백그라운드로 한 번씩 캡처해 채워넣기 — 한꺼번에 8개 이상 <video> 동시 디코드(WebView 한계로 ▶만 떠 보이던 문제) 방지
+    try {
+      E._palThumbs = E._palThumbs || {};
+      const _pending = $$("#esBody [data-thumbpending]");
+      let _idx = 0;
+      const _fillNext = async () => {
+        if (_idx >= _pending.length) return;
+        const el = _pending[_idx++]; if (!el) return _fillNext();
+        const key = el.getAttribute("data-thumbkey"); const i = +el.getAttribute("data-thumbidx");
+        if (E._palThumbs[key]) { el.src = E._palThumbs[key]; el.removeAttribute("data-thumbpending"); return _fillNext(); }
+        const m = demo.media && demo.media[i]; if (!m || m.kind !== "video") return _fillNext();
+        try {
+          const blob = m.blob || await (await fetch(m.url)).blob();
+          const jpg = await blobToPreviewJpeg(blob, "video", 360);
+          if (jpg) { const u = URL.createObjectURL(jpg); E._palThumbs[key] = u; el.src = u; el.removeAttribute("data-thumbpending"); }
+        } catch (_) {}
+        setTimeout(_fillNext, 30);   // 다음 칸은 살짝 텀 → WebView 디코더 한 번에 하나씩만 점유
+      };
+      if (_pending.length) _fillNext();
+    } catch (_) {}
     const _dShoot = $("#esDemoShootBtn");   // 📹 영상 찍기 = 카메라로 바로 촬영 → 목록에 더함
     const _addMedia = (items) => { if (!Array.isArray(demo.media)) demo.media = demo.media ? [demo.media] : []; items.forEach((it) => demo.media.push(it)); renderPalette(); try { _warnUndecodable(items); } catch (_) {} };
     const _fileToMedia = (f) => ({ url: URL.createObjectURL(f), blob: f, kind: /^video\//.test(f.type) ? "video" : "image", name: f.name || "" });
