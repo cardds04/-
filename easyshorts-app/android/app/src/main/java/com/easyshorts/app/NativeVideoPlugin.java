@@ -266,12 +266,12 @@ public class NativeVideoPlugin extends Plugin {
     }
 
     @ActivityCallback
-    private void pickResult(PluginCall call, ActivityResult result) {
+    private void pickResult(final PluginCall call, ActivityResult result) {
         if (call == null) return;
-        JSArray out = new JSArray();
+        // 1) URI는 콜백 즉시 수집(가벼움)
+        final List<Uri> uris = new ArrayList<>();
         try {
             Intent data = result.getData();
-            List<Uri> uris = new ArrayList<>();
             if (data != null) {
                 if (data.getClipData() != null) {
                     int n = data.getClipData().getItemCount();
@@ -280,12 +280,17 @@ public class NativeVideoPlugin extends Plugin {
                     uris.add(data.getData());
                 }
             }
+        } catch (Throwable t) {}
+        if (uris.isEmpty()) { JSObject ret = new JSObject(); ret.put("videos", new JSArray()); call.resolve(ret); return; }   // 취소/빈선택 = 빈 결과(즉시)
+        // 2) 메타데이터·썸네일 추출은 무거우니 백그라운드 스레드로 → 선택 결과가 막히지 않게
+        new Thread(() -> {
+            JSArray out = new JSArray();
             ContentResolver cr = getContext().getContentResolver();
             for (Uri u : uris) {
                 try { cr.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Throwable t) {}
                 JSObject o = new JSObject();
                 o.put("uri", u.toString());
-                o.put("name", queryName(cr, u));
+                try { o.put("name", queryName(cr, u)); } catch (Throwable t) { o.put("name", "video.mp4"); }
                 MediaMetadataRetriever mmr = new MediaMetadataRetriever();
                 try {
                     mmr.setDataSource(getContext(), u);
@@ -294,7 +299,6 @@ public class NativeVideoPlugin extends Plugin {
                     o.put("height", parseL(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)));
                     Bitmap bm = mmr.getFrameAtTime(0);
                     if (bm != null) {
-                        // 썸네일 축소(가로 360 한도) 후 JPG 저장
                         int tw = 360, th = Math.max(1, Math.round(bm.getHeight() * (360f / Math.max(1, bm.getWidth()))));
                         Bitmap small = (bm.getWidth() > tw) ? Bitmap.createScaledBitmap(bm, tw, th, true) : bm;
                         File tf = new File(getContext().getCacheDir(), "thumb_" + System.nanoTime() + ".jpg");
@@ -303,11 +307,11 @@ public class NativeVideoPlugin extends Plugin {
                         o.put("thumbPath", "file://" + tf.getAbsolutePath());
                     }
                 } catch (Throwable t) {} finally { try { mmr.release(); } catch (Throwable t) {} }
-                out.put(o);
+                out.put(o);   // 메타·썸네일 실패해도 uri는 항상 들어감(영상은 무조건 들어오게)
             }
-        } catch (Throwable t) { call.reject("선택 처리 실패: " + t.getMessage()); return; }
-        JSObject ret = new JSObject(); ret.put("videos", out);
-        call.resolve(ret);
+            JSObject ret = new JSObject(); ret.put("videos", out);
+            call.resolve(ret);
+        }).start();
     }
 
     private String queryName(ContentResolver cr, Uri u) {

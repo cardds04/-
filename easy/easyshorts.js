@@ -4446,12 +4446,19 @@
     // 🎞 네이티브 선택기 → 원본 content:// 주소 그대로(복사 0). _nvPath=원본주소라 미리보기가 즉시 연다. 썸네일·길이도 네이티브가 줌.
     async function palNativePick() {
       try {
-        const r = await window.Capacitor.Plugins.NativeVideo.pickVideos();
+        try { toast("📂 영상 가져오는 중…"); } catch (_) {}
+        // ⏱ 콜 유실(드물게 액티비티 재생성) 시 조용히 멈추지 않게 60초 가드
+        const pick = window.Capacitor.Plugins.NativeVideo.pickVideos();
+        const r = await Promise.race([pick, new Promise((_, rej) => setTimeout(() => rej(new Error("__nv_timeout")), 60000))]);
         const vids = (r && r.videos) || [];
-        if (!vids.length) return;
+        if (!vids.length) { try { toast("선택된 영상이 없어요"); } catch (_) {} return; }
         const items = vids.map((v) => { const sd = v.durationMs ? v.durationMs / 1000 : 0; return { kind: "video", name: v.name || "video.mp4", srcUri: v.uri, _nvPath: v.uri, url: v.thumbPath || "", thumb: v.thumbPath || "", dur: sd, srcDur: sd, _w: v.width || 0, _h: v.height || 0, _native: true }; });
         _addMedia(items);
-      } catch (e) { try { toast("영상 선택 취소/실패: " + ((e && e.message) || e)); } catch (_) {} }
+        try { toast("✅ 영상 " + items.length + "개 넣었어요"); } catch (_) {}
+      } catch (e) {
+        const m = (e && e.message) || String(e);
+        try { toast(m === "__nv_timeout" ? "영상 결과를 못 받았어요 — 다시 한 번 눌러주세요" : ("영상 선택 취소/실패: " + m)); } catch (_) {}
+      }
     }
     // ⚠️ 이 폰에서 디코드(재생)가 안 되는 영상(주로 안드로이드 HEVC/고효율) 감지 → 까맣게 나오기 전에 안내. 중간 프레임을 검사(검정 인트로 오탐 방지).
     const _warnUndecodable = async (items) => {
