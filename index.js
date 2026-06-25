@@ -4386,16 +4386,24 @@
           return { company: normalizedName, companyCode: "" };
         }
         /** 관리자 업체정보(companies) — 고유번호가 같으면 표시명은 항상 여기(저장 버튼으로 바꾼 이름)가 우선. 마스터 맵보다 먼저 적용 */
-        const adminRowByCode = companies.find(
+        const adminRowsByCode = companies.filter(
           (row) =>
             normalizeCompanyCode(row?.code || row?.companyCode) &&
             normalizeCompanyCode(row?.code || row?.companyCode).toLowerCase() === effectiveCode.toLowerCase()
         );
-        if (adminRowByCode) {
-          return {
-            company: normalizeCompanyName(adminRowByCode.name),
-            companyCode: effectiveCode
-          };
+        if (adminRowsByCode.length) {
+          const distinctNames = [
+            ...new Set(adminRowsByCode.map((row) => normalizeCompanyName(row?.name)).filter(Boolean))
+          ];
+          if (distinctNames.length > 1) {
+            // 같은 고유번호에 이름이 여러 개 = 이름변경으로 생긴 stale 중복(예: 메모리메종 + 메종트렌드).
+            // companies.find 가 그중 아무거나 잡아 옛↔새 이름이 깜빡이던 근본 원인.
+            // 공유 마스터맵(코드→표준명, 이름변경 시 갱신됨)으로 확정해 표시를 단일화한다.
+            const masterName = resolveMasterCompanyNameByCompanyCode(effectiveCode);
+            const chosen = masterName && distinctNames.includes(masterName) ? masterName : distinctNames[0];
+            return { company: chosen, companyCode: effectiveCode };
+          }
+          return { company: distinctNames[0] || normalizeCompanyName(adminRowsByCode[0]?.name), companyCode: effectiveCode };
         }
         const masterCompanyName = resolveMasterCompanyNameByCompanyCode(effectiveCode);
         if (masterCompanyName) {
