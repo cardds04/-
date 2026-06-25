@@ -5808,6 +5808,27 @@
         if (localActiveNotOnServer.length || localHoldNotOnServer.length || localRefundNotOnServer.length) {
           setTimeout(() => queueSchedulesSyncWithRetry(true), 500);
         }
+        // ★ 최종 통일: 업체정보관리(company_directory) 표준명으로 강제 덮어쓰기.
+        //   in-memory 디렉터리 맵이 이 pull 시점에 비어 있어도(스케줄 pull 이 디렉터리 pull 보다 먼저 와도)
+        //   localStorage 에 저장된 디렉터리 캐시를 직접 읽어 코드별 이름을 확정 → 갈색 바(스케줄 저장→재pull)
+        //   시 옛 이름으로 되돌아가던 깜빡임의 마지막 구멍을 막는다.
+        try {
+          let dirMap = directoryCompanyNameByCode;
+          if (!dirMap || dirMap.size === 0) {
+            const savedDir = JSON.parse(localStorage.getItem(STORAGE_DIRECTORY_NAME_BY_CODE) || "{}");
+            dirMap = new Map(Object.entries(savedDir).map(([k, v]) => [normalizeCompanyCode(k), normalizeCompanyName(v)]));
+          }
+          if (dirMap && dirMap.size) {
+            [nextActive, nextHold, nextRefund].forEach((arr) => {
+              arr.forEach((item) => {
+                const c = normalizeCompanyCode(item?.companyCode || item?.code);
+                if (!c) return;
+                const dn = dirMap.get(c);
+                if (dn && normalizeCompanyName(item.company) !== dn) item.company = dn;
+              });
+            });
+          }
+        } catch (_) {}
         isApplyingRemoteSchedules = true;
         try {
           data.splice(0, data.length, ...nextActive);
