@@ -6719,6 +6719,18 @@
             throw new Error(errText || `등록 실패 (${resp.status})`);
           }
         }
+        // 업체 이름이 바뀌면 마스터 맵(고유번호→표준 이름)도 함께 갱신한다.
+        // 안 하면 stale 맵이 resolveCanonicalCompanyIdentity 의 폴백으로 쓰여 스케줄 표시가
+        // 옛 이름↔새 이름 사이에서 깜빡인다(메모리메종↔메종트렌드 사례의 근본 원인).
+        const renamedCode = normalizeCompanyCode(normalizedCodeUsed);
+        const renamedName = normalizeCompanyName(nm);
+        if (renamedCode && renamedName) {
+          const masterMap = getLocalMasterAccountMap();
+          if (normalizeCompanyName(masterMap[renamedCode]) !== renamedName) {
+            masterMap[renamedCode] = renamedName;
+            void persistMasterAccountMap(masterMap, true);
+          }
+        }
         // 행 저장 후, 비밀번호 입력이 있으면 서버에서 해시로 설정 (login_id 기준)
         await adminSetCustomerPassword(loginTrim, passwordTrim);
         await pullCustomersFromSupabaseAndApply();
