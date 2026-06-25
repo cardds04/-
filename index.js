@@ -3,6 +3,9 @@
       const photographerPhones = {};
       const photographerCarNumbers = {};
       const companies = [];
+      // 업체정보관리(company_directory) 의 코드→표준 이름 직통 맵. 화면에 항상 정확히 뜨는 단일 출처로,
+      // resolveCanonicalCompanyIdentity 가 최우선으로 참조해 이름변경 깜빡임을 없앤다. (pull 때 새로 채움)
+      const directoryCompanyNameByCode = new Map();
       const data = [];
       const STORAGE_CUSTOMER_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_CUSTOMER_SCHEDULES = "scheduleSiteCustomerSchedules";
@@ -4385,6 +4388,12 @@
           }
           return { company: normalizedName, companyCode: "" };
         }
+        /** 최우선: 업체정보관리(company_directory) 표준명. 화면에 항상 정확히 뜨는 단일 출처라
+         *  중간 캐시(companies/마스터맵)가 옛 이름으로 흔들려도 여기서 확정 → 깜빡임 제거. */
+        const directoryName = directoryCompanyNameByCode.get(effectiveCode);
+        if (directoryName) {
+          return { company: directoryName, companyCode: effectiveCode };
+        }
         /** 관리자 업체정보(companies) — 고유번호가 같으면 표시명은 항상 여기(저장 버튼으로 바꾼 이름)가 우선. 마스터 맵보다 먼저 적용 */
         const adminRowsByCode = companies.filter(
           (row) =>
@@ -6161,6 +6170,14 @@
         const remoteRows = await fetchCompaniesFromSupabase();
         updateLastPullTime(STORAGE_LAST_COMPANY_PULL_AT, remoteRows, "updated_at");
         const normalized = normalizeCompanyRows(remoteRows);
+        // 업체정보관리(company_directory) 기준 코드→이름 직통 맵 갱신 — 최우선 표준 출처.
+        // (updated_at desc 정렬이라 같은 코드는 첫 항목=최신만 채택)
+        directoryCompanyNameByCode.clear();
+        normalized.forEach((row) => {
+          const dcCode = normalizeCompanyCode(row?.code || row?.companyCode);
+          const dcName = normalizeCompanyName(row?.name);
+          if (dcCode && dcName && !directoryCompanyNameByCode.has(dcCode)) directoryCompanyNameByCode.set(dcCode, dcName);
+        });
         // Supabase companies 테이블에는 defaultMemo 컬럼이 없으므로
         // 로컬에 저장된 defaultMemo를 병합하여 유실 방지
         const localCompanies = readStorageArray(STORAGE_ADMIN_COMPANIES);
@@ -6220,6 +6237,21 @@
         });
         companies.splice(0, companies.length, ...normalized);
         originalSetItem(STORAGE_ADMIN_COMPANIES, JSON.stringify(normalized));
+        // 이미 구워진 스케줄 표시명을 업체정보관리 기준으로 즉시 통일 — 옛 이름 잔재/깜빡임 제거.
+        let directoryRelinked = false;
+        [data, onHoldPayments, refundPayments].forEach((arr) => {
+          if (!Array.isArray(arr)) return;
+          arr.forEach((item) => {
+            const code = normalizeCompanyCode(item?.companyCode || item?.code);
+            if (!code) return;
+            const dirName = directoryCompanyNameByCode.get(code);
+            if (dirName && normalizeCompanyName(item?.company) !== dirName) {
+              item.company = dirName;
+              directoryRelinked = true;
+            }
+          });
+        });
+        if (directoryRelinked) localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
         renderCompanies();
         renderList(); // renderList 내부에서 renderScheduleDashboard 도 호출됨
         renderCustomerStatsDashboard();
