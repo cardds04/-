@@ -4448,6 +4448,34 @@
         if (direct) return direct;
         return resolveCanonicalCompanyIdentity(item?.company, item?.companyCode).company;
       }
+      /**
+       * 표시 직전 강제 통일 — data/onHold/refund 의 업체명을 업체정보관리(company_directory) 표준명으로 맞춘다.
+       * pull 타이밍·쿨다운·멀티탭 충돌과 무관하게 화면(렌더)마다 디렉터리 이름이 뜨도록 하는 최종 안전장치.
+       * (사장님 관찰: 업체정보관리 표는 항상 정확 → 그 데이터를 표시의 단일 진실로 강제)
+       */
+      function enforceDirectoryCompanyNames() {
+        let dirMap = directoryCompanyNameByCode;
+        if (!dirMap || dirMap.size === 0) {
+          try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_DIRECTORY_NAME_BY_CODE) || "{}");
+            dirMap = new Map(
+              Object.entries(saved).map(([k, v]) => [normalizeCompanyCode(k), normalizeCompanyName(v)])
+            );
+          } catch (_) {
+            dirMap = null;
+          }
+        }
+        if (!dirMap || !dirMap.size) return;
+        [data, onHoldPayments, refundPayments].forEach((arr) => {
+          if (!Array.isArray(arr)) return;
+          arr.forEach((item) => {
+            const c = normalizeCompanyCode(item?.companyCode || item?.code);
+            if (!c) return;
+            const dn = dirMap.get(c);
+            if (dn && normalizeCompanyName(item.company) !== dn) item.company = dn;
+          });
+        });
+      }
       function bootstrapMasterAccountsForExistingCompanies() {
         if (localStorage.getItem(STORAGE_MASTER_ACCOUNT_BOOTSTRAPPED) === "1") return false;
         const adminCompanies = normalizeCompanyRows(readStorageArray(STORAGE_ADMIN_COMPANIES));
@@ -10815,6 +10843,7 @@ ${folderBtn}
 
       function renderScheduleCalendarInto(titleEl, monthTotalEl, weekdayInputEl, holidayInputEl, gridEl, dayoffEl) {
         if (!titleEl || !monthTotalEl || !weekdayInputEl || !holidayInputEl || !gridEl) return;
+        enforceDirectoryCompanyNames();
         const now = new Date();
         const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
         const canceledRows = readStorageArray(STORAGE_CANCELED_SCHEDULES);
@@ -11937,6 +11966,8 @@ ${folderBtn}
       }
 
       function renderCompanies() {
+        // 표시 직전: 업체정보관리(디렉터리) 표준명으로 업체명 강제 통일 — 이름변경 깜빡임 차단.
+        enforceDirectoryCompanyNames();
         // 인라인 편집 중이면 background re-render 차단. 편집 상태가 바뀐 직후엔 통과.
         if (
           editingCompanyIndex !== null && editingCompanyIndex !== undefined &&
