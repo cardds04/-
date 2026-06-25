@@ -6,6 +6,8 @@
       // 업체정보관리(company_directory) 의 코드→표준 이름 직통 맵. 화면에 항상 정확히 뜨는 단일 출처로,
       // resolveCanonicalCompanyIdentity 가 최우선으로 참조해 이름변경 깜빡임을 없앤다. (pull 때 새로 채움)
       const directoryCompanyNameByCode = new Map();
+      const STORAGE_DIRECTORY_NAME_BY_CODE = "scheduleSiteDirectoryNameByCodeV1";
+      let directoryNameMapHydratedFromLocal = false;
       const data = [];
       const STORAGE_CUSTOMER_COMPANIES = "scheduleSiteCustomerCompanies";
       const STORAGE_CUSTOMER_SCHEDULES = "scheduleSiteCustomerSchedules";
@@ -4390,6 +4392,18 @@
         }
         /** 최우선: 업체정보관리(company_directory) 표준명. 화면에 항상 정확히 뜨는 단일 출처라
          *  중간 캐시(companies/마스터맵)가 옛 이름으로 흔들려도 여기서 확정 → 깜빡임 제거. */
+        // 디렉터리 pull 이 아직 안 돌았어도(스케줄 pull 이 먼저 와도) 지난 세션 맵을 즉시 복원해 사용.
+        if (!directoryNameMapHydratedFromLocal && directoryCompanyNameByCode.size === 0) {
+          directoryNameMapHydratedFromLocal = true;
+          try {
+            const savedDir = JSON.parse(localStorage.getItem(STORAGE_DIRECTORY_NAME_BY_CODE) || "{}");
+            Object.entries(savedDir).forEach(([k, v]) => {
+              const kc = normalizeCompanyCode(k);
+              const vn = normalizeCompanyName(v);
+              if (kc && vn) directoryCompanyNameByCode.set(kc, vn);
+            });
+          } catch (_) {}
+        }
         const directoryName = directoryCompanyNameByCode.get(effectiveCode);
         if (directoryName) {
           return { company: directoryName, companyCode: effectiveCode };
@@ -6178,6 +6192,13 @@
           const dcName = normalizeCompanyName(row?.name);
           if (dcCode && dcName && !directoryCompanyNameByCode.has(dcCode)) directoryCompanyNameByCode.set(dcCode, dcName);
         });
+        directoryNameMapHydratedFromLocal = true;
+        try {
+          localStorage.setItem(
+            STORAGE_DIRECTORY_NAME_BY_CODE,
+            JSON.stringify(Object.fromEntries(directoryCompanyNameByCode))
+          );
+        } catch (_) {}
         // Supabase companies 테이블에는 defaultMemo 컬럼이 없으므로
         // 로컬에 저장된 defaultMemo를 병합하여 유실 방지
         const localCompanies = readStorageArray(STORAGE_ADMIN_COMPANIES);
