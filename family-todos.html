@@ -3484,8 +3484,9 @@
           if (_walletSelfHealRan) return;
           _walletSelfHealRan = true;
           try {
+            console.log("[wallet self-heal] start, kids=", (state.kids || []).length);
             var kidIds = (state.kids || []).map(function (k) { return k.id; }).filter(Boolean);
-            if (!kidIds.length) return;
+            if (!kidIds.length) { console.log("[wallet self-heal] no kids, skip"); return; }
             var fixedAny = false;
             for (var i = 0; i < kidIds.length; i++) {
               var kid = kidIds[i];
@@ -3493,6 +3494,7 @@
                 var total = await computeKidStampTotal(kid);
                 var w = (state.wallets || []).find(function (x) { return x.kid_id === kid; });
                 var cur = w ? (w.stamps || 0) : 0;
+                console.log("[wallet self-heal] kid=", kid.slice(0,8), "cur=", cur, "total=", total);
                 if (cur !== total) {
                   var up = await supabase.from("family_kid_wallet").upsert(
                     { kid_id: kid, stamps: total, updated_at: new Date().toISOString() },
@@ -3502,7 +3504,7 @@
                     console.warn("[wallet self-heal upsert failed]", kid, up.error);
                   } else {
                     fixedAny = true;
-                    console.log("[wallet self-heal]", kid, cur, "→", total);
+                    console.log("[wallet self-heal] fixed", kid.slice(0,8), cur, "→", total);
                   }
                 }
               } catch (e) {
