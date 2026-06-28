@@ -4058,12 +4058,13 @@
         const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
         if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
         const prompt =
-          "아래 사자성어(또는 고사성어)들의 한국어 뜻을 짧게 알려줘.\n" +
-          "- 글자 하나하나의 뜻이 아니라 사자성어 전체가 가진 의미를 풀어서 적어줘.\n" +
-          "- 예: 一石二鳥 → \"한 가지 일로 두 가지 이익을 얻음\".\n" +
-          "- 예: 大器晩成 → \"크게 될 사람은 늦게 이루어진다\".\n" +
-          "- 한 줄로 30~50자 이내, 초등학생도 이해할 수 있게.\n" +
-          "응답은 반드시 JSON만: {\"items\":[{\"word\":\"一石二鳥\",\"meaning\":\"한 가지 일로 두 가지 이익을 얻음\"}, ...]}.\n" +
+          "아래 사자성어(또는 고사성어)들의 한국어 독음(reading)과 뜻(meaning)을 알려줘.\n" +
+          "- reading: 사자성어 전체의 한글 독음 (한 글자씩 정확하게, 공백 없이).\n" +
+          "- meaning: 글자 하나하나가 아니라 사자성어 전체가 가진 의미를 풀어서.\n" +
+          "- 예: 一石二鳥 → reading: \"일석이조\", meaning: \"한 가지 일로 두 가지 이익을 얻음\".\n" +
+          "- 예: 大器晩成 → reading: \"대기만성\", meaning: \"크게 될 사람은 늦게 이루어진다\".\n" +
+          "- meaning은 한 줄로 30~50자 이내, 초등학생도 이해할 수 있게.\n" +
+          "응답은 반드시 JSON만: {\"items\":[{\"word\":\"一石二鳥\",\"reading\":\"일석이조\",\"meaning\":\"한 가지 일로 두 가지 이익을 얻음\"}, ...]}.\n" +
           "사자성어 목록:\n" + idioms.map((c) => "- " + c).join("\n");
         const body = {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -4080,12 +4081,52 @@
           try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
         }
         if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        // 두 호출자(직접입력 자동채움 vs 사진 뜻채움)가 다 쓸 수 있도록
+        // 키별 객체에 reading도 함께 담아 반환. 뜻만 필요하면 .meaning 만 쓰면 됨.
         const out = {};
         parsed.items.forEach((it) => {
           if (!it || typeof it !== "object") return;
           const w = String(it.word || "").trim();
-          const k = String(it.meaning || "").trim();
-          if (w && k) out[w] = k;
+          const r = String(it.reading || "").trim();
+          const m = String(it.meaning || "").trim();
+          if (w && m) out[w] = { meaning: m, reading: r };
+        });
+        return out;
+      }
+
+      // 한자/사자성어의 한글 독음만 빠르게 받아오기 (기존 단원 backfill용).
+      // chars: ["一石二鳥", "塞翁之馬", ...]
+      async function fetchCJKReadingsFromGemini(chars) {
+        if (!Array.isArray(chars) || !chars.length) return {};
+        const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
+        const prompt =
+          "아래 한자(또는 사자성어)들의 한글 독음(Korean reading)만 알려줘.\n" +
+          "- 사자성어/한자어는 단어 전체의 한글 독음을 공백 없이 한 덩어리로 (예: 一石二鳥 → 일석이조, 塞翁之馬 → 새옹지마).\n" +
+          "- 한 글자 한자도 그 한 음절(예: 山 → 산, 友 → 우).\n" +
+          "응답은 반드시 JSON만: {\"items\":[{\"word\":\"一石二鳥\",\"reading\":\"일석이조\"}, ...]}.\n" +
+          "목록:\n" + chars.map((c) => "- " + c).join("\n");
+        const body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+        };
+        const data = await callGeminiAPI(apiKey, body);
+        let raw = "";
+        try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+        if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); }
+        catch (_) {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+        }
+        if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        const out = {};
+        parsed.items.forEach((it) => {
+          if (!it || typeof it !== "object") return;
+          const w = String(it.word || "").trim();
+          const r = String(it.reading || "").trim();
+          if (w && r) out[w] = r;
         });
         return out;
       }
@@ -4271,6 +4312,22 @@
         }
       }
 
+      // 한자/사자성어 항목에 한글 독음을 저장 (들어보기에서 lazy backfill용)
+      function saveReadingToActiveUnit(word, reading) {
+        if (!word || !reading) return;
+        const u = getActiveUnit();
+        if (!u || !Array.isArray(u.vocab)) return;
+        let changed = false;
+        const next = u.vocab.map((v) => {
+          if (v && v.word === word && !v.reading) {
+            changed = true;
+            return Object.assign({}, v, { reading: reading });
+          }
+          return v;
+        });
+        if (changed) saveActiveUnitField("vocab", next);
+      }
+
       // 활성 단원 데이터를 게임 전역 변수에 적용
       function applyActiveUnit() {
         const u = getActiveUnit();
@@ -4358,6 +4415,8 @@
               word: isCJK ? String(v.word).trim() : String(v.word).trim().toLowerCase(),
               meaning: String(v.meaning).trim(),
               en: typeof v.en === "string" ? String(v.en).trim() : "",
+              // 사자성어/한자: 한글 독음(있으면 들어보기에서 이걸 발음)
+              reading: typeof v.reading === "string" ? String(v.reading).trim() : "",
             }))
             .filter((v) => {
               if (!v.word || !v.meaning) return false;
@@ -4772,7 +4831,31 @@
         const isEnDef = opts.kind === "en_def";
 
         const parts = [];
-        const promptLines = isEnDef ? [
+        const promptLines = isIdiom ? [
+          "You are a kind 사자성어(four-character Chinese idiom) study assistant helping a Korean elementary/middle school student.",
+          "The attached photo(s) contain 사자성어 (four-character Chinese idioms / 고사성어) the student should memorize.",
+          "Extract EVERY 사자성어/idiom from the image(s) — usually four hanja characters, but sometimes 3~6 hanja idioms also count.",
+          "For EACH idiom, give BOTH:",
+          "  1) the Korean Hangul READING of the idiom (한글 독음, no spaces between syllables),",
+          "  2) the WHOLE-IDIOM Korean MEANING (NOT character-by-character meanings).",
+          "Examples:",
+          "  - 一石二鳥 → reading: \"일석이조\", meaning: \"한 가지 일로 두 가지 이익을 얻음\"",
+          "  - 大器晩成 → reading: \"대기만성\", meaning: \"크게 될 사람은 늦게 이루어진다\"",
+          "  - 塞翁之馬 → reading: \"새옹지마\", meaning: \"인생의 길흉화복은 변화무쌍하여 예측할 수 없음\"",
+          "Return a single valid JSON object ONLY:",
+          "{",
+          '  "vocab": [ {"word":"사자성어(한자)","reading":"한글 독음","meaning":"한글로 풀어 쓴 전체 뜻"} ]',
+          "}",
+          "Rules:",
+          "- 'word' MUST be the hanja characters of the idiom (no Korean reading, no romanization).",
+          "- 'reading' MUST be the Korean Hangul reading of the WHOLE idiom (한 글자씩 정확하게).",
+          "- 'meaning' MUST be Korean and describe the meaning of the WHOLE idiom, not each character.",
+          "- Every item MUST have non-empty reading AND meaning.",
+          "- Skip any text that is not a 사자성어/고사성어 (skip single hanja, plain Korean text, English).",
+          "- Each unique idiom only once.",
+          "- Do NOT include spell/sentences/prompts keys.",
+          "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
+        ] : isEnDef ? [
           "You are a kind English study assistant helping a Korean student who is memorizing English words paired with English definitions/example sentences.",
           "The attached photo(s) contain English vocabulary entries where each word has an ENGLISH meaning (definition or example sentence) — NOT a Korean meaning.",
           "Extract EVERY English vocabulary entry, with the ENGLISH definition or example sentence that goes with it.",
@@ -4786,26 +4869,6 @@
           "- 'meaning' MUST be an English sentence/definition (NOT Korean, NOT a translation).",
           "- Every item MUST have non-empty meaning.",
           "- Each unique word only once.",
-          "- Do NOT include spell/sentences/prompts keys.",
-          "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
-        ] : isIdiom ? [
-          "You are a kind 사자성어(four-character Chinese idiom) study assistant helping a Korean elementary/middle school student.",
-          "The attached photo(s) contain 사자성어 (four-character Chinese idioms / 고사성어) the student should memorize.",
-          "Extract EVERY 사자성어/idiom from the image(s) — usually four hanja characters, but sometimes 3~6 hanja idioms also count.",
-          "For EACH idiom, give the WHOLE-IDIOM Korean meaning (NOT character-by-character meanings):",
-          "- 예: 一石二鳥 → \"한 가지 일로 두 가지 이익을 얻음\"",
-          "- 예: 大器晩成 → \"큰 그릇은 늦게 만들어진다 — 크게 될 사람은 늦게 이루어진다\"",
-          "- 예: 塞翁之馬 → \"인생의 길흉화복은 변화무쌍하여 예측할 수 없음\"",
-          "Return a single valid JSON object ONLY:",
-          "{",
-          '  "vocab": [ {"word":"사자성어(한자)","meaning":"한글로 풀어 쓴 전체 뜻"} ]',
-          "}",
-          "Rules:",
-          "- 'word' MUST be the hanja characters of the idiom (no Korean reading, no romanization).",
-          "- 'meaning' MUST be Korean and describe the meaning of the WHOLE idiom, not each character.",
-          "- Every item MUST have non-empty meaning.",
-          "- Skip any text that is not a 사자성어/고사성어 (skip single hanja, plain Korean text, English).",
-          "- Each unique idiom only once.",
           "- Do NOT include spell/sentences/prompts keys.",
           "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
         ] : isHanja ? [
@@ -5172,7 +5235,7 @@
           const isEnDef = (kind === "en_def");
           const pairs = items.filter((p) => p.word && p.meaning);
           if (pairs.length < 2) return { ok: false, reason: "뜻이 있는 항목이 2개 이상 필요해요. 현재 " + pairs.length + "개." };
-          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "" })) };
+          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "", reading: p.reading || "" })) };
           const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab", kind: kind });
           const titleEl = $("vocabUnitTitleInput");
           const customTitle = String((titleEl && titleEl.value) || "").trim();
@@ -5301,7 +5364,14 @@
                 for (let i = 0; i < missing.length; i += 50) {
                   Object.assign(merged, await fetchFn(missing.slice(i, i + 50)));
                 }
-                items = items.map((it) => ({ word: it.word, meaning: it.meaning || merged[it.word] || "" }));
+                // fetchIdiomMeaningsFromGemini는 {meaning, reading} 객체를 반환,
+                // 다른 fetcher는 그냥 뜻 문자열을 반환 → 두 경우 모두 처리
+                items = items.map((it) => {
+                  const r = merged[it.word];
+                  if (it.meaning) return it;
+                  if (r && typeof r === "object") return { word: it.word, meaning: r.meaning || "", reading: r.reading || "" };
+                  return { word: it.word, meaning: r || "" };
+                });
                 renderVocabList(photoVocabPreview, items, "📷 ");
               } catch (e) { console.warn("뜻 자동생성 일부 실패", e); }
             }
@@ -5565,7 +5635,14 @@
                 for (let i = 0; i < missing.length; i += 50) {
                   Object.assign(merged, await fetchFn(missing.slice(i, i + 50)));
                 }
-                updated = items.map((it) => ({ word: it.word, meaning: it.meaning || merged[it.word] || "" }));
+                // fetchIdiomMeaningsFromGemini는 {meaning, reading} 객체를 반환,
+                // 다른 fetcher는 그냥 뜻 문자열을 반환 → 두 경우 모두 처리
+                updated = items.map((it) => {
+                  const r = merged[it.word];
+                  if (it.meaning) return it;
+                  if (r && typeof r === "object") return { word: it.word, meaning: r.meaning || "", reading: r.reading || "" };
+                  return { word: it.word, meaning: r || "" };
+                });
                 renderVocabList(textPreview, updated, "");
               } catch (e) {
                 console.warn(e);
@@ -6917,14 +6994,44 @@
         });
         if (showSpeak) {
           const sb = $("btnSay");
-          if (sb) sb.addEventListener("click", (e) => {
-            // 한자·사자성어: 영어 음성으로는 한자가 안 읽히므로 한국어 음성으로 뜻(훈음/풀이)을 읽어줌
+          if (sb) sb.addEventListener("click", async (e) => {
+            const targetBtn = e.currentTarget;
+            // 한자·사자성어: 한국어 음성으로 한글 독음을 읽어줌 (예: 一石二鳥 → "일석이조")
+            // item.reading 우선 사용 → 없으면 Gemini로 즉석 생성·캐시·발음. 마지막 폴백은 meaning.
             if (isCJKUnit()) {
-              try { flashButton(e.currentTarget); } catch (_) {}
+              try { flashButton(targetBtn); } catch (_) {}
               try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (_) {}
-              speakKo(item.meaning, { rate: 0.95 });
+              if (item.reading && String(item.reading).trim()) {
+                speakKo(item.reading, { rate: 1.0 });
+                return;
+              }
+              // 독음이 없으면 한 번만 Gemini로 받아서 단원에 저장
+              const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+              if (!apiKey) {
+                // API 키 없으면 어쩔 수 없이 meaning을 읽어줌 (이전 동작 폴백)
+                speakKo(item.meaning, { rate: 0.95 });
+                return;
+              }
+              try {
+                const oldLabel = targetBtn ? targetBtn.textContent : "";
+                if (targetBtn) targetBtn.textContent = "🤖 독음 만드는 중…";
+                const map = await fetchCJKReadingsFromGemini([item.word]);
+                const got = map[item.word] || "";
+                if (targetBtn) targetBtn.textContent = oldLabel || "🔊 들어보기";
+                if (got) {
+                  item.reading = got;
+                  // 단원에 영구 저장 (활성 단원의 vocab 배열에서 같은 word 항목을 찾아 reading 채움)
+                  try { saveReadingToActiveUnit(item.word, got); } catch (_) {}
+                  speakKo(got, { rate: 1.0 });
+                } else {
+                  speakKo(item.meaning, { rate: 0.95 });
+                }
+              } catch (err) {
+                console.warn("[reading lazy fetch] failed:", err);
+                speakKo(item.meaning, { rate: 0.95 });
+              }
             } else {
-              speak(item.word, { btn: e.currentTarget });
+              speak(item.word, { btn: targetBtn });
             }
           });
           // 🔊 영어 단어일 때만 자동 발음 (한자·사자성어는 발음 끔)
