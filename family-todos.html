@@ -2267,13 +2267,13 @@
           };
         }
 
-        function handleMainPraisePendingTap(card, armKey, pendingId) {
+        function handleMainPraisePendingTap(card, armKey, pendingId, kidId) {
           var hintNormal = "👆 두 번 눌러 오늘 한 일로 (+100원 💰)";
           var hintArmed = "👆 한 번 더 눌러 완료";
           if (mainCardArm && mainCardArm.key === armKey) {
             clearTimeout(mainCardArm.timer);
             mainCardArm = null;
-            supabase.rpc("family_consume_praise_pending", { p_pending_id: pendingId }).then(function (res) {
+            supabase.rpc("family_consume_praise_pending", { p_pending_id: pendingId }).then(async function (res) {
               if (res.error) {
                 console.error(res.error);
                 var em = res.error.message || String(res.error);
@@ -2290,6 +2290,8 @@
                 $("sbStatus").textContent = "";
                 playTodoCompleteDingDong();
               }
+              // 💰 트리거 누락 환경 대비 — 칭찬 클레임이 추가된 만큼 wallet 동기화
+              if (kidId) await reconcileKidWallet(kidId);
               refresh();
             });
             return;
@@ -2325,13 +2327,15 @@
                 supabase
                   .from("family_praise_pending")
                   .insert({ kid_id: kidId, for_date: dstr })
-                  .then(function (insRes) {
+                  .then(async function (insRes) {
                     if (insRes.error) {
                       console.error(insRes.error);
                       $("sbStatus").textContent = "Supabase 오류: " + (insRes.error.message || insRes.error);
                       return;
                     }
                     $("sbStatus").textContent = "";
+                    // 💰 클레임 1개가 사라졌으니 wallet 재동기화
+                    await reconcileKidWallet(kidId);
                     refresh();
                   });
               });
@@ -2400,7 +2404,7 @@
           hint.textContent = "👆 두 번 눌러 오늘 한 일로 (+100원 💰)";
           card.appendChild(hint);
           card.addEventListener("click", function () {
-            handleMainPraisePendingTap(card, armKey, row.id);
+            handleMainPraisePendingTap(card, armKey, row.id, row.kid_id);
           });
           container.appendChild(card);
         }
@@ -2920,6 +2924,9 @@
             renderKidList();
             renderCouponList();
             updateStampBadge();
+            // 💰 자동 자가복구 — 트리거 누락으로 wallet이 실제 완료 수와 어긋났으면 한 번 맞춰줌.
+            // 백그라운드로 실행, 보정되면 다음 refresh에서 최신 값이 보임.
+            try { selfHealWalletsInBackground(); } catch (e) {}
           } catch (e) {
             console.error(e);
             var msg = "Supabase 오류: " + (e.message || e);
@@ -3445,6 +3452,8 @@
               .eq("slot_id", slot.id)
               .eq("for_date", dstr);
           }
+          // 💰 트리거가 안 도는 환경 대비 — 실제 완료 행 개수로 wallet 재계산
+          await reconcileKidWallet(slot.kid_id);
           await refresh();
         }
 
@@ -3463,7 +3472,82 @@
               .eq("schedule_id", sched.id)
               .eq("for_date", dstr);
           }
+          await reconcileKidWallet(sched.kid_id);
           await refresh();
+        }
+
+        // 💰 모든 아이의 wallet을 실제 완료 수와 한 번 동기화.
+        // refresh가 끝난 직후 백그라운드로 1회만 실행. 어긋난 경우만 upsert해서 쓰기 부담 최소화.
+        // 단순 무한 루프 방지: 무한 새로고침 없이, 보정한 뒤 그 다음 사용자 동작에서 정확한 값이 보이게 함.
+        var _walletSelfHealRan = false;
+        async function selfHealWalletsInBackground() {
+          if (_walletSelfHealRan) return;
+          _walletSelfHealRan = true;
+          try {
+            var kidIds = (state.kids || []).map(function (k) { return k.id; }).filter(Boolean);
+            if (!kidIds.length) return;
+            var fixedAny = false;
+            for (var i = 0; i < kidIds.length; i++) {
+              var kid = kidIds[i];
+              try {
+                var [t, d, p] = await Promise.all([
+                  supabase.from("family_todo_completions").select("id", { count: "exact", head: true }).eq("kid_id", kid),
+                  supabase.from("family_day_schedule_completions").select("id", { count: "exact", head: true }).eq("kid_id", kid),
+                  supabase.from("family_praise_claim").select("id", { count: "exact", head: true }).eq("kid_id", kid),
+                ]);
+                var total = 0;
+                if (!t.error) total += (t.count || 0);
+                if (!d.error) total += (d.count || 0);
+                if (!p.error) total += (p.count || 0);
+                var w = (state.wallets || []).find(function (x) { return x.kid_id === kid; });
+                var cur = w ? (w.stamps || 0) : 0;
+                if (cur !== total) {
+                  await supabase.from("family_kid_wallet").upsert(
+                    { kid_id: kid, stamps: total, updated_at: new Date().toISOString() },
+                    { onConflict: "kid_id" },
+                  );
+                  fixedAny = true;
+                  console.log("[wallet self-heal]", kid, cur, "→", total);
+                }
+              } catch (e) { /* 한 아이 실패해도 나머지 진행 */ }
+            }
+            if (fixedAny) {
+              // 보정 결과를 화면에 반영
+              var w2 = await supabase.from("family_kid_wallet").select("*");
+              if (!w2.error) {
+                state.wallets = w2.data || [];
+                updateStampBadge();
+                if (typeof renderMainToday === "function") renderMainToday();
+                if (typeof renderKidList === "function") renderKidList();
+              }
+            }
+          } catch (e) {
+            console.warn("[selfHealWalletsInBackground] failed:", e);
+          }
+        }
+
+        // 💰 실제 완료(투두/날짜스케줄/칭찬 클레임) 행 개수의 합으로 wallet.stamps를 재계산.
+        // Supabase 트리거가 누락/실패해도 적립금이 항상 정확하게 유지됨. 멱등(idempotent).
+        async function reconcileKidWallet(kidId) {
+          if (!kidId) return;
+          try {
+            var [t, d, p] = await Promise.all([
+              supabase.from("family_todo_completions").select("id", { count: "exact", head: true }).eq("kid_id", kidId),
+              supabase.from("family_day_schedule_completions").select("id", { count: "exact", head: true }).eq("kid_id", kidId),
+              supabase.from("family_praise_claim").select("id", { count: "exact", head: true }).eq("kid_id", kidId),
+            ]);
+            var total = 0;
+            if (!t.error) total += (t.count || 0);
+            // 날짜 스케줄 / 칭찬 테이블이 없는 환경은 무시
+            if (!d.error) total += (d.count || 0);
+            if (!p.error) total += (p.count || 0);
+            await supabase.from("family_kid_wallet").upsert(
+              { kid_id: kidId, stamps: total, updated_at: new Date().toISOString() },
+              { onConflict: "kid_id" },
+            );
+          } catch (e) {
+            console.warn("[reconcileKidWallet] failed:", e);
+          }
         }
 
         function escapeHtml(s) {
