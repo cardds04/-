@@ -3042,8 +3042,21 @@
           wrap.classList.remove("hidden");
           var kid = state.selectedKidId;
           var owed = owedWonOf(kid);
+          var earned = earnedWonOf(kid);
           line1.textContent = "💰 " + wonText(owed);
-          if (line2) { line2.textContent = ""; line2.classList.add("hidden"); }
+          // 받을 돈이 0인데 이미 번 돈은 있으면 헷갈리니까(이미 다 지급함) 두 번째 줄에 안내
+          if (line2) {
+            if (owed === 0 && earned > 0) {
+              line2.textContent = "(번 돈 " + wonText(earned) + " · 이미 다 줬어요)";
+              line2.classList.remove("hidden");
+            } else if (earned > 0) {
+              line2.textContent = "(번 돈 " + wonText(earned) + ")";
+              line2.classList.remove("hidden");
+            } else {
+              line2.textContent = "";
+              line2.classList.add("hidden");
+            }
+          }
         }
 
         function slotsForDay(d) {
@@ -3484,9 +3497,8 @@
           if (_walletSelfHealRan) return;
           _walletSelfHealRan = true;
           try {
-            console.log("[wallet self-heal] start, kids=", (state.kids || []).length);
             var kidIds = (state.kids || []).map(function (k) { return k.id; }).filter(Boolean);
-            if (!kidIds.length) { console.log("[wallet self-heal] no kids, skip"); return; }
+            if (!kidIds.length) return;
             var fixedAny = false;
             for (var i = 0; i < kidIds.length; i++) {
               var kid = kidIds[i];
@@ -3494,7 +3506,6 @@
                 var total = await computeKidStampTotal(kid);
                 var w = (state.wallets || []).find(function (x) { return x.kid_id === kid; });
                 var cur = w ? (w.stamps || 0) : 0;
-                console.log("[wallet self-heal] kid=", kid.slice(0,8), "cur=", cur, "total=", total);
                 if (cur !== total) {
                   var up = await supabase.from("family_kid_wallet").upsert(
                     { kid_id: kid, stamps: total, updated_at: new Date().toISOString() },
@@ -3504,7 +3515,7 @@
                     console.warn("[wallet self-heal upsert failed]", kid, up.error);
                   } else {
                     fixedAny = true;
-                    console.log("[wallet self-heal] fixed", kid.slice(0,8), cur, "→", total);
+                    console.log("[wallet self-heal]", kid.slice(0,8), cur, "→", total);
                   }
                 }
               } catch (e) {
@@ -3553,7 +3564,6 @@
               { onConflict: "kid_id" },
             );
             if (up.error) console.warn("[reconcileKidWallet upsert failed]", kidId, up.error);
-            else console.log("[reconcileKidWallet]", kidId, "stamps →", total);
           } catch (e) {
             console.warn("[reconcileKidWallet] failed:", e);
           }
