@@ -5992,7 +5992,7 @@
             }
             continue;
           }
-          // 칩 텍스트: 1회/2회/0회 상태에 따라
+          // 칩 텍스트: 1회/2회/0회 상태에 따라 (벌금 메커니즘 제거됨)
           if (chip) {
             if (info.count >= 2) {
               chip.textContent = "🏆 완료! 다시 풀어보기";
@@ -6000,17 +6000,11 @@
             } else if (info.count === 1) {
               const passed = Date.now() - (info.firstAt || 0);
               const gapLeft = STAGE_GAP_MS - passed;
-              const penLeft = STAGE_PENALTY_MS - passed;
               if (gapLeft > 0) {
                 chip.textContent = "⏳ 2회 도전 " + fmtRemainMin(gapLeft) + " 뒤 (보류 " + (info.pendingPay || 0) + "원)";
                 chip.className = "vs-chip cooldown";
-              } else if (penLeft <= 0) {
-                // 곧 벌금 — checkAndApplyStagePenalty에서 처리됨
-                chip.textContent = "⚠ 벌금 -500원!";
-                chip.className = "vs-chip cooldown";
               } else {
-                const hLeft = Math.ceil(penLeft / 3600000);
-                chip.textContent = "🟢 지금 2회 도전! (" + hLeft + "h 안에)";
+                chip.textContent = "🟢 지금 2회 도전! (보류 " + (info.pendingPay || 0) + "원)";
                 chip.className = "vs-chip ready";
               }
             } else {
@@ -6023,8 +6017,6 @@
         renderSavings();
         renderPlayLog();
         if (typeof refreshHof === "function") refreshHof();
-        // ⚠️ 3일 경과한 1회 클리어가 있으면 벌금 자동 차감
-        try { checkAndApplyStagePenalty(); } catch (e) {}
       }
 
       // 단어 뜻 맞히기를 한 번이라도 끝까지 풀었는가(= 단어 게임 잠금 해제 조건)
@@ -6079,8 +6071,7 @@
       // 단원·단계 클리어 정보:
       // u.vocabStageCleared[stage] = { count: 1|2, firstAt, lastAt, pendingPay: 보류금원, penalized? }
       const STAGE_GAP_MS = 6 * 60 * 60 * 1000;       // 1차 → 2차 최소 간격: 6시간
-      const STAGE_PENALTY_MS = 3 * 24 * 60 * 60 * 1000; // 1차 후 2차 안 하면 벌금: 3일
-      const STAGE_PENALTY_WON = 500;                  // 벌금 금액
+      // (벌금 메커니즘 제거됨 — STAGE_PENALTY_* 상수 더는 사용 안 함)
       function getStageInfo(stage) {
         const u = getActiveUnit();
         const o = u.vocabStageCleared || {};
@@ -6120,39 +6111,8 @@
           return o;
         } catch (e) { console.warn(e); }
       };
-      // 단원·단계별 1회 클리어 후 3일 경과 시 벌금 자동 적용. 글로벌 적립금에서 차감.
-      function checkAndApplyStagePenalty() {
-        if (!getActiveUnitId) return;
-        const u = getActiveUnit();
-        const o = u.vocabStageCleared || {};
-        const now = Date.now();
-        let totalPenalty = 0;
-        let penalizedStages = [];
-        Object.keys(o).forEach((k) => {
-          const e = o[k];
-          if (!e || typeof e !== "object") return;
-          const cnt = typeof e.count === "number" ? e.count : (e.at ? 1 : 0);
-          if (cnt === 1 && e.firstAt && now - e.firstAt >= STAGE_PENALTY_MS && !e.penalized) {
-            totalPenalty += STAGE_PENALTY_WON;
-            penalizedStages.push(k);
-          }
-        });
-        if (!totalPenalty) return;
-        // 적립금 차감 (음수 방지: 0 이하로는 안 내림)
-        const cur = getSavings();
-        const newSavings = Math.max(0, cur - totalPenalty);
-        try {
-          localStorage.setItem(nsKey(SAVINGS_KEY), String(newSavings));
-          window.studyGameSync && window.studyGameSync.markDirty();
-        } catch (e) {}
-        // 해당 단계 기록 무효화 (1회 클리어 사라짐 + penalized 표시 — 다시 1회부터 시작)
-        const newO = Object.assign({}, o);
-        penalizedStages.forEach((k) => { delete newO[k]; });
-        saveActiveUnitField("vocabStageCleared", newO);
-        try {
-          alert("⚠️ " + penalizedStages.join("·") + "단계를 3일 안에 2회 클리어 안 해서 -" + totalPenalty + "원 차감됐어요. 다시 1회부터 도전!");
-        } catch (e) {}
-      }
+      // 2회 클리어 못해도 벌금 차감하지 않음(요청에 의해 비활성). 함수는 호환 위해 no-op 유지.
+      function checkAndApplyStagePenalty() { /* disabled: 2회 클리어 미달 벌금 제거 */ }
 
       /* ---------- 단어 뜻 맞히기 시험 기록 (시간 잠금 없이 횟수만 기록) ---------- */
       function getVocabPlayLog() {
@@ -6419,7 +6379,7 @@
           const isPerfect = wrongThisAttempt.length === 0 && state.score >= perfectMax;
 
           if (isPerfect) {
-            // 💰 100점 통과 — 1회/2회 분리 시스템 + 6시간 간격 + 3일 벌금
+            // 💰 100점 통과 — 1회/2회 분리 시스템 + 6시간 간격 (벌금 제거됨)
             const earned = !state.vocabNoMoney ? Math.max(0, state.vocabEarned || 0) : 0;
             const unitBefore = getActiveUnit();
             const info = getStageInfo(stageNo);
