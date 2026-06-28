@@ -6917,7 +6917,16 @@
         });
         if (showSpeak) {
           const sb = $("btnSay");
-          if (sb) sb.addEventListener("click", (e) => speak(item.word, { btn: e.currentTarget }));
+          if (sb) sb.addEventListener("click", (e) => {
+            // 한자·사자성어: 영어 음성으로는 한자가 안 읽히므로 한국어 음성으로 뜻(훈음/풀이)을 읽어줌
+            if (isCJKUnit()) {
+              try { flashButton(e.currentTarget); } catch (_) {}
+              try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (_) {}
+              speakKo(item.meaning, { rate: 0.95 });
+            } else {
+              speak(item.word, { btn: e.currentTarget });
+            }
+          });
           // 🔊 영어 단어일 때만 자동 발음 (한자·사자성어는 발음 끔)
           if (!isCJKUnit()) {
             setTimeout(() => { try { speak(item.word, { btn: sb }); } catch (e) {} }, 350);
