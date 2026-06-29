@@ -15743,7 +15743,6 @@ ${folderBtn}
                   ${adminSiteBtn}
                   ${detailBtn}
                   ${deliveryFolderBtn}
-                  ${folderNameCopyBtn}
                 </div>`;
         }
 
@@ -15931,6 +15930,56 @@ ${folderBtn}
         if (initialDayDetailHidden) {
           restoreDashboardDayDetailIfOpen();
         }
+        renderMissingFolderCompaniesBox(activeRows);
+      }
+
+      /**
+       * 15일간 스케줄 중 업체정보관리에 「폴더연결 주소」(naver_works_company_share_link, http URL)가
+       * 없는 업체를 카드에 나열한다. 업체정보관리에서 URL 저장 시 자동으로 사라진다.
+       */
+      function renderMissingFolderCompaniesBox(activeRows) {
+        const box = document.getElementById("missingFolderCompaniesBox");
+        if (!box) return;
+        if (!Array.isArray(activeRows) || !activeRows.length) {
+          box.innerHTML = '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>';
+          return;
+        }
+        // 업체정보관리(companies) 에서 폴더 URL 있는 업체 키(code + 이름) 모음
+        const normTight = (v) => {
+          let s = String(v || "");
+          try { if (typeof s.normalize === "function") s = s.normalize("NFKC"); } catch (_) {}
+          return s.replace(/[​-‍﻿]/g, "").replace(/\s+/g, "").toLowerCase();
+        };
+        const hasFolderByCode = new Map();
+        const hasFolderByName = new Map();
+        (companies || []).forEach((c) => {
+          const link = String(c?.naver_works_company_share_link || "").trim();
+          const ok = /^https?:\/\//i.test(link);
+          const code = normalizeCompanyCode(c?.code).toLowerCase();
+          const nameKey = normTight(c?.name);
+          if (code) hasFolderByCode.set(code, ok);
+          if (nameKey) hasFolderByName.set(nameKey, ok);
+        });
+        // activeRows 에서 폴더 없는 업체만 1회씩 모은다(이름 기준 중복 제거).
+        const missingMap = new Map();
+        activeRows.forEach((row) => {
+          const company = String(row?.company || "").trim();
+          if (!company) return;
+          const code = normalizeCompanyCode(row?.companyCode || row?.code).toLowerCase();
+          const nameKey = normTight(company);
+          let hasFolder = false;
+          if (code && hasFolderByCode.has(code)) hasFolder = hasFolderByCode.get(code);
+          else if (nameKey && hasFolderByName.has(nameKey)) hasFolder = hasFolderByName.get(nameKey);
+          if (hasFolder) return;
+          if (!missingMap.has(nameKey)) missingMap.set(nameKey, company);
+        });
+        const missing = [...missingMap.values()].sort((a, b) => a.localeCompare(b, "ko"));
+        if (!missing.length) {
+          box.innerHTML = '<div class="helper" style="margin:0;color:#16a34a;">15일간 스케줄의 모든 업체에 폴더가 등록되어 있습니다.</div>';
+          return;
+        }
+        box.innerHTML = `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${missing.length}개 업체 폴더 없음</div>` +
+          missing.map((name) => `<div class="customer-alert-row" style="padding:6px 8px;"><span><strong>${escapeHtml(name)}</strong></span><span style="color:#dc2626;font-weight:700;">폴더없음</span></div>`).join("");
       }
 
       function getDashboardScheduleKey(item) {
