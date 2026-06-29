@@ -15956,56 +15956,118 @@ ${folderBtn}
         if (initialDayDetailHidden) {
           restoreDashboardDayDetailIfOpen();
         }
-        renderMissingFolderCompaniesBox(activeRows);
+        renderMissingFolderCompaniesBox(activeRows, todayKey);
       }
 
       /**
-       * 15일간 스케줄 중 업체정보관리에 「폴더연결 주소」(naver_works_company_share_link, http URL)가
-       * 없는 업체를 카드에 나열한다. 업체정보관리에서 URL 저장 시 자동으로 사라진다.
+       * 15일간 스케줄(getDashboardFifteenDayWindow 윈도우) 중 업체정보관리에 「폴더연결 주소」
+       * (naver_works_company_share_link, http URL)가 없는 업체만 카드에 나열한다.
+       * 각 행에 URL 입력+저장 버튼이 있어 업체정보관리(company_directory) 와 동기화된다.
+       * 맨 위에는 마이박스 공용 폴더로 바로 이동하는 버튼.
        */
-      function renderMissingFolderCompaniesBox(activeRows) {
+      function renderMissingFolderCompaniesBox(activeRows, todayKey) {
         const box = document.getElementById("missingFolderCompaniesBox");
         if (!box) return;
+        const linkBtn = `<div style="margin:0 0 8px;"><a href="https://naver.me/GCJa9KWp" target="_blank" rel="noopener noreferrer" class="btn-sm" style="display:inline-block;text-decoration:none;background:#2f3e74;color:#fff;font-weight:700;padding:6px 12px;border-radius:8px;">📂 공용 납품 폴더(마이박스) 열기</a></div>`;
         if (!Array.isArray(activeRows) || !activeRows.length) {
-          box.innerHTML = '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>';
+          box.innerHTML = linkBtn + '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>';
           return;
         }
-        // 업체정보관리(companies) 에서 폴더 URL 있는 업체 키(code + 이름) 모음
+        // 15일 윈도우(15일 리스트와 동일 기준)로 필터.
+        const tKey = String(todayKey || new Date().toISOString().slice(0, 10));
+        let windowStart, windowEnd;
+        try {
+          ({ start: windowStart, end: windowEnd } = getDashboardFifteenDayWindow(tKey));
+        } catch (_) {
+          windowStart = ""; windowEnd = "";
+        }
+        const inWindow = (Array.isArray(activeRows) ? activeRows : []).filter((row) => {
+          const d = String(row?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+          if (!windowStart || !windowEnd) return true;
+          return d >= windowStart && d <= windowEnd;
+        });
+        // 업체정보관리(companies) 에서 코드/이름 → directory row 매핑(폴더 URL·dbId 보존)
         const normTight = (v) => {
           let s = String(v || "");
           try { if (typeof s.normalize === "function") s = s.normalize("NFKC"); } catch (_) {}
           return s.replace(/[​-‍﻿]/g, "").replace(/\s+/g, "").toLowerCase();
         };
-        const hasFolderByCode = new Map();
-        const hasFolderByName = new Map();
+        const dirByCode = new Map();
+        const dirByName = new Map();
         (companies || []).forEach((c) => {
-          const link = String(c?.naver_works_company_share_link || "").trim();
-          const ok = /^https?:\/\//i.test(link);
           const code = normalizeCompanyCode(c?.code).toLowerCase();
           const nameKey = normTight(c?.name);
-          if (code) hasFolderByCode.set(code, ok);
-          if (nameKey) hasFolderByName.set(nameKey, ok);
+          if (code && !dirByCode.has(code)) dirByCode.set(code, c);
+          if (nameKey && !dirByName.has(nameKey)) dirByName.set(nameKey, c);
         });
-        // activeRows 에서 폴더 없는 업체만 1회씩 모은다(이름 기준 중복 제거).
+        // 폴더 없는 업체 1회씩 (이름 기준 중복 제거), 디렉터리 dbId 동행.
         const missingMap = new Map();
-        activeRows.forEach((row) => {
+        inWindow.forEach((row) => {
           const company = String(row?.company || "").trim();
           if (!company) return;
           const code = normalizeCompanyCode(row?.companyCode || row?.code).toLowerCase();
           const nameKey = normTight(company);
-          let hasFolder = false;
-          if (code && hasFolderByCode.has(code)) hasFolder = hasFolderByCode.get(code);
-          else if (nameKey && hasFolderByName.has(nameKey)) hasFolder = hasFolderByName.get(nameKey);
-          if (hasFolder) return;
-          if (!missingMap.has(nameKey)) missingMap.set(nameKey, company);
+          const dir = (code && dirByCode.get(code)) || (nameKey && dirByName.get(nameKey)) || null;
+          const link = String(dir?.naver_works_company_share_link || "").trim();
+          if (/^https?:\/\//i.test(link)) return; // 폴더 있음
+          if (!missingMap.has(nameKey)) {
+            missingMap.set(nameKey, {
+              name: company,
+              dbId: String(dir?.dbId || dir?.id || "").trim()
+            });
+          }
         });
-        const missing = [...missingMap.values()].sort((a, b) => a.localeCompare(b, "ko"));
+        const missing = [...missingMap.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
         if (!missing.length) {
-          box.innerHTML = '<div class="helper" style="margin:0;color:#16a34a;">15일간 스케줄의 모든 업체에 폴더가 등록되어 있습니다.</div>';
+          box.innerHTML = linkBtn + '<div class="helper" style="margin:0;color:#16a34a;">15일간 스케줄의 모든 업체에 폴더가 등록되어 있습니다.</div>';
           return;
         }
-        box.innerHTML = `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${missing.length}개 업체 폴더 없음</div>` +
-          missing.map((name) => `<div class="customer-alert-row" style="padding:6px 8px;"><span><strong>${escapeHtml(name)}</strong></span><span style="color:#dc2626;font-weight:700;">폴더없음</span></div>`).join("");
+        const rows = missing.map((m) => {
+          const dbAttr = escapeHtml(m.dbId);
+          const idDisabled = m.dbId ? "" : "disabled";
+          const placeholder = m.dbId ? "폴더 공유 URL" : "업체정보관리에서 먼저 등록 필요";
+          return `<div class="customer-alert-row" style="padding:6px 8px;gap:6px;flex-wrap:wrap;">
+            <span style="flex:0 0 100px;"><strong>${escapeHtml(m.name)}</strong></span>
+            <input type="text" class="inline-input missing-folder-url-input" data-db-id="${dbAttr}" placeholder="${placeholder}" style="flex:1;min-width:160px;" ${idDisabled} />
+            <button type="button" class="btn-sm primary" data-action="missingFolderSaveUrl" data-db-id="${dbAttr}" ${idDisabled}>저장</button>
+          </div>`;
+        }).join("");
+        box.innerHTML =
+          linkBtn +
+          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${missing.length}개 업체 폴더 없음</div>` +
+          rows;
+        if (!box.dataset.boundMissingFolderHandler) {
+          box.dataset.boundMissingFolderHandler = "1";
+          box.addEventListener("click", async (event) => {
+            const btn = event.target.closest('button[data-action="missingFolderSaveUrl"]');
+            if (!btn || btn.disabled) return;
+            const dbId = String(btn.dataset.dbId || "").trim();
+            if (!dbId) {
+              alert("업체정보관리에 해당 업체가 없어 저장할 수 없습니다. 먼저 업체정보관리에서 등록해 주세요.");
+              return;
+            }
+            const inputEl = btn.parentElement?.querySelector('input.missing-folder-url-input');
+            const url = String(inputEl?.value || "").trim();
+            if (!url) {
+              alert("폴더 공유 URL 을 입력해 주세요.");
+              inputEl?.focus();
+              return;
+            }
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "저장 중…";
+            try {
+              await saveCompanyDirectoryNaverShareStandalone(dbId, url);
+              // 디렉터리 다시 받아 화면 재계산(폴더 URL 등록된 업체는 목록에서 사라짐)
+              await pullAdminCompaniesFromSupabaseAndRefresh();
+            } catch (e) {
+              alert("저장 실패: " + (e?.message || String(e)));
+              btn.disabled = false;
+              btn.textContent = originalText;
+            }
+          });
+        }
       }
 
       function getDashboardScheduleKey(item) {
