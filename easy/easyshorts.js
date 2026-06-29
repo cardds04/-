@@ -7672,6 +7672,7 @@
           ${hasVoice ? `
           <div class="es-narr2-after">
             <div class="es-narr2-listen"><span class="es-narr2-listen-lb">🎧 나레이션 미리듣기</span><audio src="${E.using.voiceUrl}" controls></audio></div>
+            <button type="button" class="es-btn es-btn-ghost es-narr-dl" id="esNarrVoiceDl" title="만든 나레이션 음성을 파일로 받기">⬇ 나레이션 파일 받기 (.wav)</button>
             <button type="button" class="es-btn es-btn-primary es-narr-cap" id="esNarrCap">${hasNarrCap ? "🔄 자막 다시 만들기" : "🎬 음성에 맞춰 자막 만들기"}</button>
             <div class="es-narr2-caphint">자막은 <b>나레이션 음성을 직접 듣고</b> 말하는 타이밍에 맞춰 들어가요</div>
           </div>` : ""}
@@ -8130,6 +8131,7 @@
       { const vs = $("#esNarrTcVoice"); if (vs) { if (!E.using._voiceTypecastId && PAL_TC_CAT[0]) E.using._voiceTypecastId = PAL_TC_CAT[0].id; vs.value = E.using._voiceTypecastId || ""; vs.addEventListener("change", () => { E.using._voiceTypecastId = vs.value; E.using._voiceModel = palTcModelOf(vs.value); scheduleSaveMeta(); }); } }   // 🎙 타입캐스트 목소리 선택
       { const pv = $("#esNarrPreview"); if (pv) pv.addEventListener("click", () => { const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id); palVoiceSample(vid, palTcModelOf(vid), pv); }); }   // 🔊 고른 타입캐스트 목소리 샘플
       { const mv = $("#esNarrMakeVoice"); if (mv) mv.addEventListener("click", async () => { await makeNarrationWhole(mv, false); if (E.using.voiceUrl) renderEasy(); }); }   // 나레이션(음성)만 → 끝나면 미리듣기+자막버튼 노출
+      { const dl = $("#esNarrVoiceDl"); if (dl) dl.addEventListener("click", () => downloadVoiceFile()); }   // ⬇ 생성된 나레이션 파일 받기
       { const cap = $("#esNarrCap"); if (cap) cap.addEventListener("click", async () => { await makeCaptionsFromVoice(cap); renderEasy(); }); }   // 음성에 맞춰 자막
     } else if (cur === "caption") {
       // 미리보기 플레이어(컷 길이 단계와 동일 경로)
@@ -12487,6 +12489,18 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function toneById(id) { return (ES_TONES || []).find((t) => t.id === id) || null; }
   // 자막 전체를 한 대본으로 모아 Gemini TTS 로 음성을 만들고, 🎙 음성 트랙에 넣음
+  // ⬇ 생성된 나레이션 음성을 파일로 저장(.wav)
+  function downloadVoiceFile() {
+    try {
+      const blob = E.using && E.using.voiceBlob;
+      const url = (E.using && E.using.voiceUrl) || (blob ? URL.createObjectURL(blob) : "");
+      if (!url) { try { toast("먼저 나레이션을 만들어 주세요"); } catch (_) {} return; }
+      const base = (E.using && E.using.template && E.using.template.name) ? String(E.using.template.name).replace(/[\\/:*?"<>|]/g, "_") : "나레이션";
+      const a = document.createElement("a"); a.href = url; a.download = base + "_나레이션.wav";
+      document.body.appendChild(a); a.click(); a.remove();
+      try { toast("⬇ 나레이션 파일을 받았어요"); } catch (_) {}
+    } catch (e) { try { toast("받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
+  }
   // 🎙 타입캐스트 TTS — 긴 대본은 자동으로 문장 단위로 쪼개 만들고 WAV를 이어붙임(타입캐스트 글자수 한계 우회). 반환=하나의 WAV Blob.
   async function ttsGenerateLong(script, voiceId, model) {
     const LIMIT = 1500;   // Typecast 단일요청 한계 ~2000자 → 안전 마진으로 분할
@@ -14142,6 +14156,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
             <button type="button" class="es-btn es-btn-ghost es-cap-vpreview" id="esCapVoicePreview" title="고른 목소리로 짧게 들어보기">🔊 미리듣기</button>
           </div>
           <button type="button" class="es-btn es-btn-primary es-mkvoice es-cap-mkvoice" id="esCapMakeVoice" title="작성한 자막 전체를 AI 음성으로 만들어 타임라인 🎙 트랙에 넣어요">🎙 나레이션 생성 → 타임라인</button>
+          ${(E.using && E.using.voiceUrl) ? `<button type="button" class="es-btn es-btn-ghost es-cap-vdl" id="esCapVoiceDl" style="margin-top:6px" title="만든 나레이션 음성을 파일로 받기">⬇ 나레이션 파일 받기 (.wav)</button>` : ""}
         </div>
       </div>`;
     if (multi) {
@@ -14157,6 +14172,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const cv = $("#esCapTcVoice"); if (cv) { if (!E.using._voiceTypecastId && PAL_TC_CAT[0]) E.using._voiceTypecastId = PAL_TC_CAT[0].id; cv.value = E.using._voiceTypecastId || ""; cv.addEventListener("change", () => { E.using._voiceTypecastId = cv.value; E.using._voiceModel = palTcModelOf(cv.value); scheduleSaveMeta(); }); } }   // 🎙 타입캐스트 목소리 선택
     { const cp = $("#esCapVoicePreview"); if (cp) cp.addEventListener("click", () => { const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id); palVoiceSample(vid, palTcModelOf(vid), cp); }); }   // 🔊 타입캐스트 샘플 미리듣기
     { const mk = $("#esCapMakeVoice"); if (mk) mk.addEventListener("click", () => makeVoiceFromSubs()); }
+    { const dl = $("#esCapVoiceDl"); if (dl) dl.addEventListener("click", () => downloadVoiceFile()); }   // ⬇ 생성된 나레이션 파일 받기
     if (!multi) {
       const inp = $("#esTextInput");
       inp.addEventListener("input", (e) => { ref.text = e.target.value; const el = $(`#esTextLayer .es-text[data-id="${ref.id}"]`); if (el) el.textContent = e.target.value || " "; scheduleSaveMeta(); });
