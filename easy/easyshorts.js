@@ -8525,7 +8525,7 @@
     }
     if (grpFx) {
       document.querySelectorAll(".es-fill-head .es-fxspeed").forEach((el) => grpFx.appendChild(el));   // 효과속도 + 선명하게
-      ["esFxRandom", "esFxClear", "esBeatFit", "esBeatTempo", "esDurAll", "esDurOrig"].forEach((id) => mv($("#" + id), grpFx));
+      ["esFxRandom", "esFxClear", "esBeatFit", "esBeatTempo", "esDurAll", "esDurOrig", "esTrimSilence"].forEach((id) => mv($("#" + id), grpFx));
       mv(document.querySelector(".es-fill-head .es-aimenu-wrap"), grpFx);   // ✨ AI 사진·영상 만들기 → 기능
     }
     if (audioSlot) {
@@ -8785,6 +8785,7 @@
             <div class="es-fill-head-row es-fill-actions">
               <button type="button" class="es-btn" id="esDurAll" title="모든 클립 길이를 같은 값으로 통일">⏱ 시간 통일</button>
               <button type="button" class="es-btn" id="esDurOrig" title="선택한 영상 클립을 원본 길이로 맞춥니다 (오른쪽 카드를 클릭해 선택 · 선택 없으면 전체 · 사진은 그대로)">📏 원본길이 맞춤</button>
+              <button type="button" class="es-btn" id="esTrimSilence" title="나레이션·자막이 끝난 뒤 음성 없는 빈 끝부분 컷을 잘라냅니다 (이지숏폼의 '무음 자르기')">🔇 무음 자르기</button>
               <button type="button" class="es-btn" id="esBeatFit" title="음악 비트를 분석해 클립을 비트에 맞춰 끊어줍니다">🥁 AI 리듬 맞추기</button>
               <select id="esBeatTempo" class="es-beat-tempo" title="리듬 맞추기 빠르기 — 빠를수록 사진이 비트마다 휙휙 넘어가요">
                 <option value="fast">⚡ 빠르게 (휙휙)</option>
@@ -8962,6 +8963,7 @@
       } finally { if (btn) { btn.disabled = false; btn.textContent = old || "📏 원본길이 맞춤"; } }
     });
     $("#esBeatFit").addEventListener("click", beatFit);
+    { const tb = $("#esTrimSilence"); if (tb) tb.addEventListener("click", esTrimSilence); }   // 🔇 무음 자르기(디테일)
     { const bt = $("#esBeatTempo"); if (bt) { bt.value = curBeatTempo(); bt.addEventListener("change", (e) => setBeatTempo(e.target.value)); } }
     $("#esClearClips").addEventListener("click", () => {
       const ids = Object.keys(E.using.fills);
@@ -10607,6 +10609,30 @@
     return bestLag * frameDur;
   }
   // AI 리듬 맞추기 — 비트에 맞춰 클립 컷 시점 스냅
+  // 🔇 무음 자르기 (디테일 편집기/E.using판) — 나레이션·자막이 끝난 뒤 음성 없는 빈 끝부분 컷을 잘라냄. 이지숏폼 palCutTrimSilence 의 E.using 버전.
+  function esTrimSilence() {
+    if (!E.using || !E.using.template) return;
+    const slots = E.using.template.slots || [];
+    if (!slots.length) { try { toast("컷이 없어요"); } catch (_) {} return; }
+    const voiceEnd = (E.using.voiceUrl && E.using.voiceDur) ? E.using.voiceDur : 0;
+    const capEnd = (E.using.texts || []).filter((c) => (c.text || "").trim()).reduce((mx, c) => Math.max(mx, (c.start || 0) + (c.dur != null ? c.dur : 3)), 0);
+    const content = Math.max(voiceEnd, capEnd);
+    const target = content ? content + 3 : 0;   // 🕒 끝에 3초 여유 남기고 자름(툭 끊김 방지)
+    if (!target) { try { toast("나레이션이나 자막이 있어야 음성 없는 공간을 찾아요"); } catch (_) {} return; }
+    const total = slots.reduce((a, s) => a + (s.dur || 0), 0);
+    if (total <= target + 0.05) { try { toast("이미 음성 길이에 맞아요 (자를 빈 공간 없음)"); } catch (_) {} return; }
+    pushSceneUndo();   // Ctrl+Z 되돌리기용
+    let acc = 0, removed = 0; const kept = [];
+    for (const s of slots) {
+      if (acc >= target - 0.05) { try { delete E.using.fills[s.id]; } catch (_) {} removed++; continue; }
+      const dr = s.dur || 0, room = target - acc;
+      if (dr > room + 0.05) s.dur = Math.max(0.3, +room.toFixed(2));
+      acc += Math.min(dr, room); kept.push(s);
+    }
+    E.using.template.slots = kept;
+    refreshSlots();
+    try { toast(`🔇 음성 없는 끝부분을 잘랐어요 (${(total - target).toFixed(1)}초${removed ? `, 컷 ${removed}개 제거` : ""})`); } catch (_) {}
+  }
   async function beatFit() {
     if (!E.using) return;
     if (!E.using.musicUrl) { alert("이 템플릿에는 음악이 없어요. 먼저 음악을 넣어 주세요."); return; }
@@ -16518,9 +16544,14 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const eb = $("#esNavExplore", root); if (eb) eb.addEventListener("click", openExplore); }
     { const cb = $("#esNavClassify", root); if (cb) cb.addEventListener("click", openClassify); }
     { const rb = $("#esNavRoad", root); if (rb) rb.addEventListener("click", openRoadmap); }
-    // 🔧 바탕화면 바로가기(?admin=1) → 게이트·비번 없이 '이지숏폼 생성기'(관리자)로 바로 진입. 고객 앱엔 관리자 버튼 없음.
+    // 🔧 바탕화면 바로가기 → 게이트·비번 없이 바로 진입. 고객 앱엔 관리자 버튼 없음.
     try {
-      if (/[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash)) {
+      if (/[?&]detail=1/i.test(location.search) || /#detail\b/i.test(location.hash)) {
+        // 🎬 ?detail=1 → 바로 디테일숏폼(편집기)로
+        E._adminUnlocked = true;
+        setTimeout(() => { try { enterMode2("detail"); } catch (_) {} }, 150);
+      } else if (/[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash)) {
+        // ⚡ ?admin=1 → 이지숏폼 생성기(관리자)
         E._adminUnlocked = true;
         setTimeout(() => { try { openAdmin(); } catch (_) {} }, 150);
       }
