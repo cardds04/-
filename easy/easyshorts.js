@@ -12497,18 +12497,13 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       .map((t) => (t.text || "").replace(/\n/g, " ").trim()).filter(Boolean);
     const script = bulk || existing.join(" ");
     if (!script) { alert("나레이션으로 만들 원문을 위 입력창(여러 줄 붙여넣기)에 넣거나, 텍스트를 먼저 입력해 주세요."); return; }
-    let gk = ""; try { gk = (localStorage.getItem("studio_gemini_key") || "").trim(); } catch (_) {}
-    if (!gk) { alert("Gemini 키가 필요해요. 상단 '🎬 스튜디오' 탭에서 키를 한 번 입력해 주세요."); return; }
     if (E.using.voiceUrl && !confirm("이미 만든 나레이션이 있어요. 다시 만들까요? (텍스트도 음성에 맞춰 새로 맞춰져요)")) return;
-    await loadVoiceTones();
-    const tone = toneById(E.using._voiceTone);
-    const styleHint = tone ? tone.style : "차분하고 신뢰감 있는 톤으로 한국어 나레이션을 읽어 주세요.";
+    const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id);   // 🎙 타입캐스트 목소리(이지숏폼과 동일)
     const btns = $$(".es-mkvoice"); btns.forEach((b) => { b._old = b.innerHTML; b.disabled = true; b.textContent = "🎤 음성 생성 중…"; });
     try {
-      const API_BASE = "https://sc-pink.vercel.app";
-      const res = await fetch(`${API_BASE}/api/gemini-tts`, {
+      const res = await fetch(ttsEndpoint(), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, voiceGender: E.using._voiceGender || "female", styleHint, apiKey: gk }),
+        body: JSON.stringify({ script, voiceId: vid, model: palTcModelOf(vid), language: "kor" }),
       });
       const txt = await res.text(); let j = {};
       try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
@@ -14124,8 +14119,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
         <div class="es-tg es-tg-narr">
           <div class="es-tg-h">🎙 나레이션 (작성한 자막을 AI 음성으로)</div>
           <div class="es-tg-row">
-            <select id="esCapVoiceGender" class="es-tb-sel" title="나레이션 목소리 성별"><option value="female">👩 여성</option><option value="male">👨 남성</option></select>
-            <select id="esCapVoiceTone" class="es-tb-sel" title="나레이션 음성 스타일"><option value="">🎭 기본</option></select>
+            <select id="esCapTcVoice" class="es-tb-sel" title="나레이션 목소리 (타입캐스트 · 30종)">${PAL_TC_CAT.map((v) => `<option value="${esc(v.id)}"${(E.using._voiceTypecastId === v.id) ? " selected" : ""}>${v.g === "m" ? "👨 " : "👩 "}${esc(v.name)}</option>`).join("")}</select>
+            <button type="button" class="es-btn es-btn-ghost es-cap-vpreview" id="esCapVoicePreview" title="고른 목소리로 짧게 들어보기">🔊 미리듣기</button>
           </div>
           <button type="button" class="es-btn es-btn-primary es-mkvoice es-cap-mkvoice" id="esCapMakeVoice" title="작성한 자막 전체를 AI 음성으로 만들어 타임라인 🎙 트랙에 넣어요">🎙 나레이션 생성 → 타임라인</button>
         </div>
@@ -14140,8 +14135,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
 
     const applyAll = (fn) => { sel.forEach(fn); renderTexts(); renderTextBar(); scheduleSaveMeta(); };
     // 🎙 나레이션 생성 — 작성한 자막 전체를 AI 음성으로 만들어 타임라인 음성 트랙에
-    { const cg = $("#esCapVoiceGender"); if (cg) { cg.value = E.using._voiceGender || "female"; cg.addEventListener("change", () => { E.using._voiceGender = cg.value; scheduleSaveMeta(); }); } }
-    { const ct = $("#esCapVoiceTone"); if (ct) { loadVoiceTones().then((tones) => { ct.innerHTML = `<option value="">🎭 기본 (차분·신뢰)</option>` + tones.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.gender === "male" ? "남" : "여"})</option>`).join(""); ct.value = E.using._voiceTone || ""; }); ct.addEventListener("change", () => { E.using._voiceTone = ct.value; const t = toneById(ct.value); if (t) { E.using._voiceGender = t.gender; const cg = $("#esCapVoiceGender"); if (cg) cg.value = t.gender; } scheduleSaveMeta(); }); } }
+    { const cv = $("#esCapTcVoice"); if (cv) { if (!E.using._voiceTypecastId && PAL_TC_CAT[0]) E.using._voiceTypecastId = PAL_TC_CAT[0].id; cv.value = E.using._voiceTypecastId || ""; cv.addEventListener("change", () => { E.using._voiceTypecastId = cv.value; E.using._voiceModel = palTcModelOf(cv.value); scheduleSaveMeta(); }); } }   // 🎙 타입캐스트 목소리 선택
+    { const cp = $("#esCapVoicePreview"); if (cp) cp.addEventListener("click", () => { const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id); palVoiceSample(vid, palTcModelOf(vid), cp); }); }   // 🔊 타입캐스트 샘플 미리듣기
     { const mk = $("#esCapMakeVoice"); if (mk) mk.addEventListener("click", () => makeVoiceFromSubs()); }
     if (!multi) {
       const inp = $("#esTextInput");
