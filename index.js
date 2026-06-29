@@ -5593,7 +5593,16 @@
           if (Number.isNaN(localMs) || Number.isNaN(remoteMs)) return false;
           return localMs > remoteMs;
         });
-        if (safeUpsertRows.length) {
+        // ON CONFLICT(id) 업서트는 같은 id 가 배치에 2번 이상 있으면 21000("cannot affect row a second time")
+        //  에러로 전체 실패한다. data/onHold/refund 합치는 과정 등에서 같은 id 가 중복될 수 있으므로
+        //  업서트 직전 id 기준으로 중복 제거(뒤엣것 우선)한다.
+        const upsertById = new Map();
+        safeUpsertRows.forEach((row) => {
+          const rid = String(row?.id || "").trim();
+          if (rid) upsertById.set(rid, row);
+        });
+        const dedupedUpsertRows = [...upsertById.values()];
+        if (dedupedUpsertRows.length) {
           const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
             method: "POST",
             headers: {
@@ -5602,7 +5611,7 @@
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
-            body: JSON.stringify(safeUpsertRows)
+            body: JSON.stringify(dedupedUpsertRows)
           });
           if (!upsertResponse.ok) {
             const errorText = await upsertResponse.text();
