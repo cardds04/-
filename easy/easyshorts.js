@@ -12487,6 +12487,39 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function toneById(id) { return (ES_TONES || []).find((t) => t.id === id) || null; }
   // 자막 전체를 한 대본으로 모아 Gemini TTS 로 음성을 만들고, 🎙 음성 트랙에 넣음
+  // 🎙 타입캐스트 TTS — 긴 대본은 자동으로 문장 단위로 쪼개 만들고 WAV를 이어붙임(타입캐스트 글자수 한계 우회). 반환=하나의 WAV Blob.
+  async function ttsGenerateLong(script, voiceId, model) {
+    const LIMIT = 3000;
+    const src = (script || "").trim(); if (!src) throw new Error("대본이 비었어요");
+    const chunks = [];
+    let s = src;
+    while (s.length > LIMIT) {
+      let cut = s.lastIndexOf(". ", LIMIT); if (cut < LIMIT * 0.5) cut = s.lastIndexOf("。", LIMIT);
+      if (cut < LIMIT * 0.5) cut = s.lastIndexOf("\n", LIMIT); if (cut < LIMIT * 0.5) cut = s.lastIndexOf(" ", LIMIT);
+      if (cut < LIMIT * 0.5) cut = LIMIT - 1;
+      chunks.push(s.slice(0, cut + 1).trim()); s = s.slice(cut + 1).trim();
+    }
+    if (s) chunks.push(s);
+    const blobs = [];
+    for (const c of chunks) {
+      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: c, voiceId, model, language: "kor" }) });
+      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch (_) { j = { message: txt.slice(0, 200) }; }
+      if (!res.ok || !j.audioBase64) throw new Error((j && j.message) || ("HTTP " + res.status));
+      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      blobs.push(new Blob([bytes], { type: "audio/wav" }));
+    }
+    if (blobs.length <= 1) return blobs[0];
+    // 여러 WAV → 디코드 후 이어붙여 하나의 WAV로
+    const AC = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const bufs = []; for (const b of blobs) { bufs.push(await AC.decodeAudioData(await b.arrayBuffer())); }
+      const sr = bufs[0].sampleRate, ch = Math.max.apply(null, bufs.map((b) => b.numberOfChannels));
+      const total = bufs.reduce((a, b) => a + b.length, 0);
+      const out = AC.createBuffer(ch, total, sr);
+      for (let c = 0; c < ch; c++) { const od = out.getChannelData(c); let off = 0; for (const b of bufs) { od.set(b.getChannelData(Math.min(c, b.numberOfChannels - 1)), off); off += b.length; } }
+      return audioBufferToWavBlob(out);
+    } finally { try { AC.close(); } catch (_) {} }
+  }
   async function makeVoiceFromSubs() {
     if (!E.using) return;
     // 원문 우선순위: ① 위 입력창(여러 줄 붙여넣기)에 글이 있으면 그것 → 음성+자막 새로 생성
@@ -12501,17 +12534,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id);   // 🎙 타입캐스트 목소리(이지숏폼과 동일)
     const btns = $$(".es-mkvoice"); btns.forEach((b) => { b._old = b.innerHTML; b.disabled = true; b.textContent = "🎤 음성 생성 중…"; });
     try {
-      const res = await fetch(ttsEndpoint(), {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, voiceId: vid, model: palTcModelOf(vid), language: "kor" }),
-      });
-      const txt = await res.text(); let j = {};
-      try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
-      if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
-      if (!j.audioBase64) throw new Error("음성 응답이 비어있어요");
-      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "audio/wav" });
+      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid));   // 긴 대본 자동 분할·합치기
+      if (!blob) throw new Error("음성 응답이 비어있어요");
       if (E.using.voiceUrl) { try { URL.revokeObjectURL(E.using.voiceUrl); } catch (_) {} }
       E.using.voiceUrl = URL.createObjectURL(blob);
       E.using.voiceBlob = blob;
@@ -12750,13 +12774,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (btn) { btn.disabled = true; btn.textContent = "🎤 음성 생성 중…"; }
     if (status) status.textContent = "🎤 AI가 나레이션을 읽고 있어요… (10~20초)";
     try {
-      const ttsBody = { script, voiceId: vid, model: palTcModelOf(vid), language: "kor" };   // 타입캐스트 voiceId 로 생성
-      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ttsBody) });
-      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
-      if (!res.ok) throw new Error(j.message || `HTTP ${res.status}`);
-      if (!j.audioBase64) throw new Error("음성 응답이 비어있어요");
-      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "audio/wav" });
+      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid));   // 긴 대본 자동 분할·합치기
+      if (!blob) throw new Error("음성 응답이 비어있어요");
       if (E.using.voiceUrl) { try { URL.revokeObjectURL(E.using.voiceUrl); } catch (_) {} }
       E.using.voiceUrl = URL.createObjectURL(blob); E.using.voiceBlob = blob; E.using._voiceChanged = true;
       E.using.voiceDur = await voiceDuration(E.using.voiceUrl);
