@@ -12489,7 +12489,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   // 자막 전체를 한 대본으로 모아 Gemini TTS 로 음성을 만들고, 🎙 음성 트랙에 넣음
   // 🎙 타입캐스트 TTS — 긴 대본은 자동으로 문장 단위로 쪼개 만들고 WAV를 이어붙임(타입캐스트 글자수 한계 우회). 반환=하나의 WAV Blob.
   async function ttsGenerateLong(script, voiceId, model) {
-    const LIMIT = 3000;
+    const LIMIT = 1500;   // Typecast 단일요청 한계 ~2000자 → 안전 마진으로 분할
     const src = (script || "").trim(); if (!src) throw new Error("대본이 비었어요");
     const chunks = [];
     let s = src;
