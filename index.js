@@ -4790,6 +4790,16 @@
         if (!USE_SUPABASE_SYNC) return false;
         const remoteRows = await fetchWritersFromSupabase();
         const nextRows = normalizeWriterRows(remoteRows);
+        // 빈값 가드: 서버가 일시적으로 0건을 반환(네트워크 일시 실패/RLS/타이밍/realtime 잘못된 이벤트)인데
+        // 로컬에 작가가 있으면 덮어쓰기 차단 → "작가 정보가 사라졌다 생겼다" 깜빡임 방지.
+        // 정상적인 전체 삭제는 admin UI 가 setWritersStorage 로 직접 처리하므로 영향 없음.
+        if (!nextRows.length) {
+          const localRows = readStorageArray(STORAGE_WRITERS);
+          if (Array.isArray(localRows) && localRows.length > 0) {
+            console.warn("[WRITERS] pull 결과 0건 — 로컬", localRows.length, "건 보존(빈값 덮어쓰기 차단)");
+            return false;
+          }
+        }
         setWritersStorage(nextRows, { sync: false });
         hydrateFromWriterPageStorage();
         renderPhotographers();
