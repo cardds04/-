@@ -1879,7 +1879,8 @@
             <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 자동 타이밍 · 칸 밖을 누르면 자동 적용)</span></div>
             <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="자막을 한 줄에 하나씩 — '음성씽크'를 누르면 말하는 타이밍에 맞춰져요">${esc(capJoined)}</textarea>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
-            ${(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl) ? `<button type="button" class="es-pal-narr-make" id="esPalCapGrammar">✏️ 자막 자동 문법 수정</button><button type="button" class="es-pal-cap-resync" id="esPalNarrCap">🎯 다시 음성씽크</button>` : `<button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`}`;
+            ${(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl) ? `<button type="button" class="es-pal-narr-make" id="esPalCapGrammar">✏️ 자막 자동 문법 수정</button><button type="button" class="es-pal-cap-resync" id="esPalNarrCap">🎯 다시 음성씽크</button>
+            <div class="es-pal-dlrow" style="display:flex;gap:6px;margin-top:8px"><button type="button" class="es-pal-cap-resync es-pal-dl" id="esPalDlCap" style="flex:1">⬇ 자막 받기 (.srt)</button><button type="button" class="es-pal-cap-resync es-pal-dl" id="esPalDlVoice" style="flex:1">⬇ 나레이션 받기 (.wav)</button></div>` : `<button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`}`;
           break;
         }
         case "cedit": {   // ✏️ 자막 다듬기 — 한 줄=자막 1개(엔터로 나누고, 줄 합치면 자막도 합쳐짐). 음성 있으면 말하는 타이밍에 다시 싱크
@@ -4678,6 +4679,8 @@
     { const _ceta = $("#esPalCapEditTa"); if (_ceta) { const _ov = _ceta.value; _ceta.addEventListener("blur", (e) => { const rt = e.relatedTarget; if (rt && /^(esPalNarrCap|esCustNext|esCustPrev|esPalCapEditApply)$/.test(rt.id || "")) return; if (_ceta.value !== _ov && _ceta.value.trim()) { try { palCapEditApply(null); } catch (_) {} } }); } }   // ✏️ 칸 밖 누르면 자동 적용(적용버튼 대체)
     { const cs = $("#esPalCapSync"); if (cs) cs.addEventListener("click", () => palCapSync(cs)); }   // 🎯 자막 씽크 — 글자 그대로, 타이밍만 음성에 재정렬
     { const gb = $("#esPalCapGrammar"); if (gb) gb.addEventListener("click", () => palFixCaptionGrammar(gb)); }   // ✏️ 자막 자동 문법 수정(타이밍 유지)
+    { const dc = $("#esPalDlCap"); if (dc) dc.addEventListener("click", () => palDownloadCaptions()); }   // ⬇ 자막(.srt) 받기
+    { const dv = $("#esPalDlVoice"); if (dv) dv.addEventListener("click", () => palDownloadNarration()); }   // ⬇ 나레이션(.wav) 받기
     { const sj = $("#esPalStepJump"); if (sj) sj.addEventListener("click", palStepJump); }   // ✅ 최종본 확인 → 단계로 돌아가기 팝업
     { const ex = $("#esPalExport"); if (ex) ex.addEventListener("click", () => palExportVideo(ex)); }   // 📤 내보내기 — 실제 영상 렌더
     // 💬 자막 생성 방법(①AI ②직접) + AI 생성
@@ -12489,6 +12492,31 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
   }
   function toneById(id) { return (ES_TONES || []).find((t) => t.id === id) || null; }
   // 자막 전체를 한 대본으로 모아 Gemini TTS 로 음성을 만들고, 🎙 음성 트랙에 넣음
+  // ⬇ 공통 파일 저장
+  function esSaveUrl(url, filename) { const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); }
+  function esSrtTime(sec) { const ms = Math.max(0, Math.round((sec || 0) * 1000)); const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000), mm = ms % 1000; const p = (n, l) => String(n).padStart(l || 2, "0"); return p(h) + ":" + p(m) + ":" + p(s) + "," + p(mm, 3); }
+  function palDlBase() { try { const P = E.palette; const nm = (P && P.name) || (P && P.demo && (P.demo.title || P.demo.caption)) || "이지숏폼"; return String(nm).slice(0, 30).replace(/[\\/:*?"<>|\n]/g, "_").trim() || "이지숏폼"; } catch (_) { return "이지숏폼"; } }
+  // ⬇ 팔레트(고객) — 만들어둔 자막을 .srt 파일로(타이밍 포함)
+  function palDownloadCaptions() {
+    try {
+      const caps = (palBlocks("caption") || []).filter((t) => (t.text || "").trim()).slice().sort((a, b) => (a.start || 0) - (b.start || 0));
+      if (!caps.length) { try { toast("받을 자막이 없어요"); } catch (_) {} return; }
+      const srt = caps.map((t, i) => { const st = t.start || 0; let en = st + (t.dur || 0); if (!(en > st)) en = caps[i + 1] ? (caps[i + 1].start || st + 2) : st + 2; return (i + 1) + "\n" + esSrtTime(st) + " --> " + esSrtTime(en) + "\n" + (t.text || "").replace(/\n/g, " ").trim(); }).join("\n\n") + "\n";
+      const url = URL.createObjectURL(new Blob([srt], { type: "text/plain;charset=utf-8" }));
+      esSaveUrl(url, palDlBase() + "_자막.srt"); setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 5000);
+      try { toast("⬇ 자막 파일(.srt)을 받았어요"); } catch (_) {}
+    } catch (e) { try { toast("자막 받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
+  }
+  // ⬇ 팔레트(고객) — 만들어둔 나레이션 음성을 .wav 로
+  function palDownloadNarration() {
+    try {
+      const P = E.palette; const d = (P && P.demo) || {};
+      const url = d.voiceUrl || (d.voiceBlob ? URL.createObjectURL(d.voiceBlob) : "");
+      if (!url) { try { toast("먼저 나레이션을 만들어 주세요"); } catch (_) {} return; }
+      esSaveUrl(url, palDlBase() + "_나레이션.wav");
+      try { toast("⬇ 나레이션 파일(.wav)을 받았어요"); } catch (_) {}
+    } catch (e) { try { toast("나레이션 받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
+  }
   // ⬇ 생성된 나레이션 음성을 파일로 저장(.wav)
   function downloadVoiceFile() {
     try {
