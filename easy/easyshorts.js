@@ -1818,6 +1818,7 @@
           else pick = palTcVoicePicker();
           body = `<div class="es-pal-narr-lb">🎙 나레이션 목소리 고르기 <span class="es-pal-tref-hint">(타입캐스트)</span></div>
             <div class="es-pal-tc-pick">${pick}</div>
+            ${palSpeedRow(d)}
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${(voices && voices.length && !curV) ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
@@ -1829,6 +1830,7 @@
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들면 AI 목소리로 읽어드려요 🎙</div>`; break; }
           const _noVoice = !d.voiceTypecastId && !(palNarrVoice() && palNarrVoice().id);   // 전역 목소리 있으면 활성
           body = `<div class="es-pal-narr-lb">🎙 나레이션 만들기</div>
+            ${palSpeedRow(d)}
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${_noVoice ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
@@ -1865,6 +1867,7 @@
           const hasVoice = !!d.voiceUrl;
           body = `<div class="es-pal-narr-lb">🔊 나레이션 만들기 · 미리듣기</div>
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
+            ${palSpeedRow(d)}
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake">${hasVoice ? "🔄 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
             ${hasVoice ? `<div class="es-pal-narr-hint2">✅ 완성! 다음 <b>📝 음성맞춰 자막</b> 단계로</div>` : ""}`;
@@ -4666,6 +4669,7 @@
     $$("#esBody [data-tctype]").forEach((b) => b.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = {}); f.type = b.dataset.tctype; f.page = 0; renderPalette(); }));
     { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
+    { const sp = $("#esPalNarrSpeed"); if (sp) sp.addEventListener("change", () => { const P = E.palette; if (P && P.demo) { P.demo.voiceTempo = +sp.value || 1; try { palDraftSave(); } catch (_) {} } }); }   // 🗣 말하기 속도
     { const fg = $("#esPalFaceGen"); if (fg) fg.addEventListener("click", () => palFaceGen(fg)); }   // 🪄 AI 얼굴 만들기
     { const fa = $("#esPalFaceApply"); if (fa) fa.addEventListener("click", () => palFaceSwapApply(fa)); }   // 🪄 얼굴 바꾸기 실행
     { const fmc = $("#esPalFaceMyChar"); if (fmc) fmc.addEventListener("click", openMyCharacter); }   // 🪄 내 캐릭터 정하기(고객 단계서도)
@@ -12517,6 +12521,12 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       try { toast("⬇ 나레이션 파일(.wav)을 받았어요"); } catch (_) {}
     } catch (e) { try { toast("나레이션 받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
   }
+  // 🗣 나레이션 말하기 속도 선택 줄(팔레트 나레이션 단계 공용)
+  function palSpeedRow(d) {
+    const cur = (d && +d.voiceTempo) || 1;
+    const opts = [[0.8, "🐢 천천히"], [0.9, "조금 느리게"], [1, "보통"], [1.1, "조금 빠르게"], [1.2, "빠르게"], [1.3, "🐇 더 빠르게"]];
+    return `<div class="es-pal-narr-speed" style="display:flex;align-items:center;gap:8px;margin:8px 0"><span class="es-pal-tref-hint">🗣 말하기 속도</span><select id="esPalNarrSpeed" class="es-tb-sel" style="flex:1">${opts.map(([v, l]) => `<option value="${v}"${(Math.abs(cur - v) < 0.001) ? " selected" : ""}>${l} (${v}x)</option>`).join("")}</select></div>`;
+  }
   // ⬇ 생성된 나레이션 음성을 파일로 저장(.wav)
   function downloadVoiceFile() {
     try {
@@ -12530,8 +12540,9 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     } catch (e) { try { toast("받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
   }
   // 🎙 타입캐스트 TTS — 긴 대본은 자동으로 문장 단위로 쪼개 만들고 WAV를 이어붙임(타입캐스트 글자수 한계 우회). 반환=하나의 WAV Blob.
-  async function ttsGenerateLong(script, voiceId, model) {
+  async function ttsGenerateLong(script, voiceId, model, tempo) {
     const LIMIT = 1500;   // Typecast 단일요청 한계 ~2000자 → 안전 마진으로 분할
+    const tp = (Number.isFinite(+tempo) && +tempo > 0) ? +tempo : 1;   // 🗣 말하기 속도
     const src = (script || "").trim(); if (!src) throw new Error("대본이 비었어요");
     const chunks = [];
     let s = src;
@@ -12544,7 +12555,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (s) chunks.push(s);
     const blobs = [];
     for (const c of chunks) {
-      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: c, voiceId, model, language: "kor" }) });
+      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: c, voiceId, model, language: "kor", tempo: tp }) });
       const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch (_) { j = { message: txt.slice(0, 200) }; }
       if (!res.ok || !j.audioBase64) throw new Error((j && j.message) || ("HTTP " + res.status));
       const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -12576,7 +12587,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const vid = E.using._voiceTypecastId || (PAL_TC_CAT[0] && PAL_TC_CAT[0].id);   // 🎙 타입캐스트 목소리(이지숏폼과 동일)
     const btns = $$(".es-mkvoice"); btns.forEach((b) => { b._old = b.innerHTML; b.disabled = true; b.textContent = "🎤 음성 생성 중…"; });
     try {
-      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid));   // 긴 대본 자동 분할·합치기
+      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid), (E.using && E.using._voiceTempo) || 1);   // 긴 대본 자동 분할·합치기
       if (!blob) throw new Error("음성 응답이 비어있어요");
       if (E.using.voiceUrl) { try { URL.revokeObjectURL(E.using.voiceUrl); } catch (_) {} }
       E.using.voiceUrl = URL.createObjectURL(blob);
@@ -12816,7 +12827,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (btn) { btn.disabled = true; btn.textContent = "🎤 음성 생성 중…"; }
     if (status) status.textContent = "🎤 AI가 나레이션을 읽고 있어요… (10~20초)";
     try {
-      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid));   // 긴 대본 자동 분할·합치기
+      const blob = await ttsGenerateLong(script, vid, palTcModelOf(vid), (E.using && E.using._voiceTempo) || 1);   // 긴 대본 자동 분할·합치기
       if (!blob) throw new Error("음성 응답이 비어있어요");
       if (E.using.voiceUrl) { try { URL.revokeObjectURL(E.using.voiceUrl); } catch (_) {} }
       E.using.voiceUrl = URL.createObjectURL(blob); E.using.voiceBlob = blob; E.using._voiceChanged = true;
@@ -12889,12 +12900,8 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     if (btn) { btn.disabled = true; btn.textContent = "🎤 만드는 중…"; }
     if (status) status.textContent = "🎤 타입캐스트가 자막을 읽고 있어요… (10~20초)";
     try {
-      const res = await fetch(ttsEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, voiceId: _useVoice, model: _useModel, language: "kor" }) });   // 🎙 전역 목소리 우선
-      const txt = await res.text(); let j = {}; try { j = txt ? JSON.parse(txt) : {}; } catch { j = { message: txt.slice(0, 200) }; }
-      if (!res.ok) throw new Error(j.message || ("HTTP " + res.status));
-      if (!j.audioBase64) throw new Error("음성 응답이 비어있어요");
-      const bin = atob(j.audioBase64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "audio/wav" });
+      const blob = await ttsGenerateLong(script, _useVoice, _useModel, d.voiceTempo || 1);   // 🎙 전역 목소리 우선 · 긴 대본 자동분할 · 속도 반영
+      if (!blob) throw new Error("음성 응답이 비어있어요");
       if (d.voiceUrl) { try { URL.revokeObjectURL(d.voiceUrl); } catch (_) {} }
       d.voiceUrl = URL.createObjectURL(blob); d.voiceBlob = blob;
       try { d.voiceDur = await voiceDuration(d.voiceUrl); } catch (_) {}   // 음성 길이(음성맞춰 자막 타이밍에 사용)
