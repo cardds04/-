@@ -940,18 +940,22 @@ function escapeHtml(s) {
 }
 
 async function loadImageCache() {
-  // 1) 인라인 JSON 먼저 로드 (내보낸 HTML에 박힌 사진/설명 — 일반 작가가 볼 때)
+  // 1) 인라인 JSON 먼저 로드 (내보낸 HTML에 박힌 사진/설명 — 다른 사람/디바이스가 볼 때)
   try {
     const inline = document.getElementById('storedImages');
     if (inline) Object.assign(imageCache, JSON.parse(inline.textContent || '{}'));
     const descInline = document.getElementById('storedDescs');
     if (descInline) Object.assign(descCache, JSON.parse(descInline.textContent || '{}'));
   } catch {}
-  // 2) 편집 모드라면 IndexedDB의 작업중 데이터로 덮어쓰기 (편집자가 볼 때)
-  if (editMode) {
+  // 2) IndexedDB(편집 작업중 저장소) 도 항상 덮어쓰기 — 편집 모드/일반 모드 모두.
+  //    같은 브라우저에서 사진을 올렸으면 '내보내기'를 안 했어도 일반 모드에서 즉시 보이도록.
+  //    (이전엔 editMode 분기로 일반 모드는 IndexedDB 무시 → 관리자엔 보이는데 일반엔 0장 버그)
+  try {
     Object.assign(imageCache, await dbAllImages());
     Object.assign(descCache, await dbAllDescs());
-    // 기존 localStorage에 있던 데이터 마이그레이션
+  } catch {}
+  // 3) 기존 localStorage 마이그레이션은 편집 모드에서만(쓰기 권한 필요)
+  if (editMode) {
     try {
       const legacy = JSON.parse(localStorage.getItem('photo-manual-images') || 'null');
       if (legacy) {
