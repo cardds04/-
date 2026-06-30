@@ -1830,6 +1830,7 @@
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들면 AI 목소리로 읽어드려요 🎙</div>`; break; }
           const _noVoice = !d.voiceTypecastId && !(palNarrVoice() && palNarrVoice().id);   // 전역 목소리 있으면 활성
           body = `<div class="es-pal-narr-lb">🎙 나레이션 만들기</div>
+            ${palVoiceNamePreview(d)}
             ${palSpeedRow(d)}
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake"${_noVoice ? " disabled" : ""}>${d.voiceUrl ? "🔄 나레이션 다시 만들기" : "🎙 나레이션 만들기"}</button>
             <div id="esPalNarrStatus" class="es-pal-narr-status"></div>
@@ -1866,6 +1867,7 @@
           if (!caps.length) { body = `<div class="es-pal-tgen-noref">먼저 '자막 생성'에서 자막을 만들어주세요 💬</div>`; break; }
           const hasVoice = !!d.voiceUrl;
           body = `<div class="es-pal-narr-lb">🔊 나레이션 만들기 · 미리듣기</div>
+            ${palVoiceNamePreview(d)}
             <div class="es-pal-narr-script"><b>읽을 자막</b><p>${esc(caps.join(" "))}</p></div>
             ${palSpeedRow(d)}
             <button type="button" class="es-pal-narr-make" id="esPalNarrMake">${hasVoice ? "🔄 다시 만들기" : "🎙 나레이션 만들기"}</button>
@@ -4674,6 +4676,7 @@
     { const mo = $("#esPalTcMore"); if (mo) mo.addEventListener("click", () => { const f = E._tcFlow || (E._tcFlow = { page: 0 }); f.page = (f.page || 0) + 1; renderPalette(); }); }
     { const mk = $("#esPalNarrMake"); if (mk) mk.addEventListener("click", () => palMakeNarration(mk)); }
     { const sp = $("#esPalNarrSpeed"); if (sp) sp.addEventListener("change", () => { const P = E.palette; if (P && P.demo) { P.demo.voiceTempo = +sp.value || 1; try { palDraftSave(); } catch (_) {} } }); }   // 🗣 말하기 속도
+    { const vs = $("#esPalVoiceSample"); if (vs) vs.addEventListener("click", () => { const id = vs.getAttribute("data-vid"); if (id) palVoiceSample(id, palTcModelOf(id), vs); }); }   // 🔊 정해진 목소리 미리듣기
     { const fg = $("#esPalFaceGen"); if (fg) fg.addEventListener("click", () => palFaceGen(fg)); }   // 🪄 AI 얼굴 만들기
     { const fa = $("#esPalFaceApply"); if (fa) fa.addEventListener("click", () => palFaceSwapApply(fa)); }   // 🪄 얼굴 바꾸기 실행
     { const fmc = $("#esPalFaceMyChar"); if (fmc) fmc.addEventListener("click", openMyCharacter); }   // 🪄 내 캐릭터 정하기(고객 단계서도)
@@ -12525,6 +12528,14 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
       esSaveUrl(url, palDlBase() + "_나레이션.wav");
       try { toast("⬇ 나레이션 파일(.wav)을 받았어요"); } catch (_) {}
     } catch (e) { try { toast("나레이션 받기 실패: " + ((e && e.message) || e)); } catch (_) {} }
+  }
+  // 🎙 나레이션 목소리(캐릭터) 이름 + 미리듣기 줄 — 목소리가 정해진 단계(narrforce/ngen)에서 보여줌
+  function palVoiceNamePreview(d) {
+    const gv = (typeof palNarrVoice === "function" && palNarrVoice()) || null;
+    const vid = (gv && gv.id) || (d && d.voiceTypecastId) || "";
+    if (!vid) return "";
+    const nm = (typeof palTcNameOf === "function" && palTcNameOf(vid)) || "목소리";
+    return `<div class="es-pal-voicename" style="display:flex;align-items:center;gap:8px;margin:6px 0;padding:8px 10px;background:rgba(120,200,160,.08);border-radius:10px"><span class="es-pal-tref-hint">🎙 목소리</span><b style="color:#cfeede">${esc(nm)}</b><button type="button" class="es-btn es-btn-ghost es-pal-voicesample" id="esPalVoiceSample" data-vid="${esc(vid)}" title="이 목소리 들어보기" style="margin-left:auto">🔊 미리듣기</button></div>`;
   }
   // 🗣 나레이션 말하기 속도 선택 줄(팔레트 나레이션 단계 공용)
   function palSpeedRow(d) {
