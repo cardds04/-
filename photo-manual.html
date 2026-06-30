@@ -1257,6 +1257,17 @@ function renderMenu() {
       </div>
     `;
   }
+  // 메뉴 최상단: 유튜브 영상으로 한 번 훑어볼 수 있는 카드
+  html += `<div class="menu-section-label">영상</div><div class="menu-list">
+    <button class="menu-item" onclick="openVideo()">
+      <div class="menu-icon">🎬</div>
+      <div class="menu-content">
+        <div class="menu-name">영상으로 보기</div>
+        <div class="menu-desc">전체 매뉴얼 영상 · YouTube</div>
+      </div>
+      <div class="menu-arrow">›</div>
+    </button>
+  </div>`;
   for (const group of menuGroups) {
     html += `<div class="menu-section-label">${group.label}</div><div class="menu-list">`;
     for (const id of group.items) {
@@ -1299,6 +1310,33 @@ function backToMenu() {
   state.view = 'menu';
   state.cardIndex = 0;
   renderMenu();
+  window.scrollTo(0, 0);
+}
+
+function openVideo() {
+  state.view = '__video';
+  app.innerHTML = `
+    <div class="menu">
+      <button class="back-btn" onclick="backToMenu()">‹ 메뉴</button>
+      <div class="menu-header">
+        <div class="menu-title">🎬 영상으로 보기</div>
+        <div class="menu-subtitle">전체 매뉴얼 영상</div>
+      </div>
+      <div style="padding:0 4px;">
+        <div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:12px; background:#000;">
+          <iframe
+            src="https://www.youtube.com/embed/_enBWt_qS5A?rel=0"
+            title="인테리어 촬영 매뉴얼 영상"
+            style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen></iframe>
+        </div>
+        <div style="text-align:center; margin-top:14px;">
+          <a href="https://youtu.be/_enBWt_qS5A" target="_blank" rel="noopener" style="color:#888; font-size:13px; text-decoration:none; border:1px solid #ddd; padding:8px 14px; border-radius:8px; display:inline-block;">▶ YouTube 앱에서 열기</a>
+        </div>
+      </div>
+    </div>
+  `;
   window.scrollTo(0, 0);
 }
 
