@@ -3706,10 +3706,11 @@
       return P;
     } catch (_) { return null; }
   }
-  function palDraftClear() { clearTimeout(E._palDraftT); try { idbSet("palDraft", null); } catch (_) {} }
+  function palDraftClear() { clearTimeout(E._palDraftT); try { idbSet("palDraft", null); } catch (_) {} try { if (localStorage.getItem("es_resume") === "palette") localStorage.removeItem("es_resume"); } catch (_) {} }
   async function openPalette() {
     E.mode2 = "easy"; try { stopPlay(); } catch (_) {}
     if (!E.palette) { try { const dr = await palDraftLoad(); if (dr) E.palette = dr; } catch (_) {} }   // 💾 작업 중이던 게 있으면 그대로 복원
+    try { localStorage.setItem("es_resume", "palette"); } catch (_) {}   // 💾 새로고침 시 이 작업화면으로 자동 복귀
     setView("palette");
   }
   // 🧪 테스트해보기 — '고객이 보는 이지숏폼 화면' 그대로 실행(로그인·저장 없이 미리체험)
@@ -5168,7 +5169,7 @@
     if (m === "detail" && !adminUnlock()) return;   // 관리자 모드는 비밀번호 통과해야 진입
     E.mode2 = m;
     if (m === "easy" && !E.easyPage) E.easyPage = "main";
-    try { localStorage.setItem("es_mode2", m); } catch (_) {}
+    try { localStorage.setItem("es_mode2", m); if (m === "detail") localStorage.setItem("es_resume", "detail"); } catch (_) {}   // 💾 새로고침 복귀지점
     const root = document.getElementById("easyRoot");
     $$(".es-modebtn", root).forEach((b) => b.classList.toggle("active", b.dataset.mode2 === m));
     stopPlay(); try { stopInline(); } catch (_) {}
@@ -16924,14 +16925,26 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     { const rb = $("#esNavRoad", root); if (rb) rb.addEventListener("click", openRoadmap); }
     // 🔧 바탕화면 바로가기 → 게이트·비번 없이 바로 진입. 고객 앱엔 관리자 버튼 없음.
     try {
-      if (/[?&]detail=1/i.test(location.search) || /#detail\b/i.test(location.hash)) {
-        // 🎬 ?detail=1 → 바로 디테일숏폼(편집기)로
-        E._adminUnlocked = true;
-        setTimeout(() => { try { enterMode2("detail"); } catch (_) {} }, 150);
-      } else if (/[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash)) {
+      const _explicitAdmin = /[?&](admin|make|build|palette)=1/i.test(location.search) || /#(admin|make|build|palette)\b/i.test(location.hash);
+      const _explicitDetail = /[?&]detail=1/i.test(location.search) || /#detail\b/i.test(location.hash);
+      let _resume = ""; try { _resume = localStorage.getItem("es_resume") || ""; } catch (_) {}
+      if (_explicitAdmin) {
         // ⚡ ?admin=1 → 이지숏폼 생성기(관리자)
         E._adminUnlocked = true;
         setTimeout(() => { try { openAdmin(); } catch (_) {} }, 150);
+      } else if (_resume === "palette") {
+        // 💾 마지막에 이지숏폼(팔레트) 작업 중이었으면 → 새로고침 시 그 작업화면으로 자동 복귀
+        setTimeout(async () => {
+          try {
+            const dr = await idbGet("palDraft");
+            if (dr && Array.isArray(dr.steps) && dr.steps.length) { E._adminUnlocked = true; await openPalette(); }
+            else if (_explicitDetail) { E._adminUnlocked = true; enterMode2("detail"); }   // 작업본 없으면 바로가기 기본대로
+          } catch (_) { try { if (_explicitDetail) { E._adminUnlocked = true; enterMode2("detail"); } } catch (e2) {} }
+        }, 150);
+      } else if (_explicitDetail || _resume === "detail") {
+        // 🎬 ?detail=1(바로가기) 또는 마지막이 디테일 편집기 → 디테일숏폼으로
+        E._adminUnlocked = true;
+        setTimeout(() => { try { enterMode2("detail"); } catch (_) {} }, 150);
       }
     } catch (_) {}
     try { const m = localStorage.getItem("es_mode2"); if (m === "easy") E.mode2 = m; } catch (_) {}   // 새로고침 시 관리자(detail) 자동복원 안 함 → 항상 이지숏폼으로 시작(비번 재입력)
