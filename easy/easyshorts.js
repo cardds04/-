@@ -3628,7 +3628,7 @@
           steps: (P.steps || []).map((s) => ({ id: s.id, fn: s.fn || null, copy: s.copy || null, titleRefs: (s.titleRefs || []).map((r) => ({ dataUrl: r.dataUrl, name: r.name || "" })) })),
           demo: {
             title: d.title || "", caption: d.caption || "", captionStyle: d.captionStyle || "clean",
-            voiceBlob: d.voiceBlob || null, voiceDur: d.voiceDur != null ? d.voiceDur : null, voiceTone: d.voiceTone || null, voiceGender: d.voiceGender || null, voiceTypecastId: d.voiceTypecastId || null, voiceModel: d.voiceModel || null,   // 🎙 나레이션 음성·타입캐스트 목소리도 저장
+            voiceBlob: d.voiceBlob || null, voiceDur: d.voiceDur != null ? d.voiceDur : null, voiceTone: d.voiceTone || null, voiceGender: d.voiceGender || null, voiceTypecastId: d.voiceTypecastId || null, voiceModel: d.voiceModel || null, voiceTempo: d.voiceTempo != null ? d.voiceTempo : null,   // 🎙 나레이션 음성·타입캐스트 목소리·말하기속도도 저장
             media: (Array.isArray(d.media) ? d.media : []).filter((m) => m && m.blob).map((m) => ({ blob: m.blob, kind: m.kind, name: m.name || "", dur: m.dur != null ? m.dur : null })),
             titleRef: d.titleRef ? { dataUrl: d.titleRef.dataUrl || null, id: d.titleRef.id || null, name: d.titleRef.name || "", font: d.titleRef.font || null, color: d.titleRef.color || null, stroke: d.titleRef.stroke || null, kind: d.titleRef.kind || null, posX: d.titleRef.posX != null ? d.titleRef.posX : null, posY: d.titleRef.posY != null ? d.titleRef.posY : null, size: d.titleRef.size != null ? d.titleRef.size : null } : null,
             captionRef: d.captionRef ? { dataUrl: d.captionRef.dataUrl || null, id: d.captionRef.id || null, name: d.captionRef.name || "", font: d.captionRef.font || null, color: d.captionRef.color || null, stroke: d.captionRef.stroke || null, kind: d.captionRef.kind || null, posX: d.captionRef.posX != null ? d.captionRef.posX : null, posY: d.captionRef.posY != null ? d.captionRef.posY : null, size: d.captionRef.size != null ? d.captionRef.size : null } : null,
@@ -3665,6 +3665,7 @@
       if (sd.voiceBlob) { try { P.demo.voiceUrl = URL.createObjectURL(sd.voiceBlob); P.demo.voiceBlob = sd.voiceBlob; P.demo.voiceDur = sd.voiceDur || 0; } catch (_) {} }   // 🎙 나레이션 음성 복원
       if (sd.voiceTone) P.demo.voiceTone = sd.voiceTone; if (sd.voiceGender) P.demo.voiceGender = sd.voiceGender;
       if (sd.voiceTypecastId) P.demo.voiceTypecastId = sd.voiceTypecastId; if (sd.voiceModel) P.demo.voiceModel = sd.voiceModel;
+      if (sd.voiceTempo != null) P.demo.voiceTempo = sd.voiceTempo;   // 🗣 말하기 속도 복원
       if (sd.titleRef) {   // 문자열(옛) 또는 객체(글자체 메타 포함) 둘 다 복원
         const t = sd.titleRef;
         if (typeof t === "string") P.demo.titleRef = { url: t, dataUrl: t };
