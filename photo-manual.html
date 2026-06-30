@@ -826,6 +826,85 @@ const app = document.getElementById('app');
 const editMode = new URLSearchParams(location.search).has('edit');
 if (editMode) document.body.classList.add('edit-mode');
 
+/* ====================================================================
+   Supabase 동기화 — 사진은 Storage(inlog_home/photo-manual/<slotId>.<ext>),
+   설명·이미지 URL 매핑은 app_state.global.payload.photo_manual_v1 에 모은다.
+   모든 디바이스가 같은 행/같은 Storage 를 읽어 사진·설명이 즉시 공유된다.
+   ==================================================================== */
+const SUPABASE_URL = 'https://pidfkrxsgffoqstogmli.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW';
+const SUPABASE_STORAGE_BUCKET = 'inlog_home';
+const SUPABASE_STORAGE_PREFIX = 'photo-manual';
+const APP_STATE_FIELD = 'photo_manual_v1';
+
+async function uploadSlotImageToStorage(slotId, file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  // slotId 에 시간 stamp 를 붙여 같은 슬롯에 새 사진 올렸을 때 캐시(공용 URL) 가 즉시 갱신되도록.
+  const safeSlot = encodeURIComponent(slotId);
+  const path = `${SUPABASE_STORAGE_PREFIX}/${safeSlot}-${Date.now()}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'x-upsert': 'true',
+      'Content-Type': file.type || 'image/jpeg'
+    },
+    body: file
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Storage 업로드 실패 (${res.status}): ${t}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
+}
+
+async function loadSharedPhotoManualMeta() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.global&select=payload&limit=1`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      cache: 'no-store'
+    });
+    if (!res.ok) return { images: {}, descs: {} };
+    const rows = await res.json();
+    const payload = (Array.isArray(rows) && rows[0]?.payload) || {};
+    const v = payload[APP_STATE_FIELD] || {};
+    return { images: v.images || {}, descs: v.descs || {} };
+  } catch (_) {
+    return { images: {}, descs: {} };
+  }
+}
+
+// 동시 PATCH 직렬화 — 여러 사진/설명을 빠르게 저장해도 read-modify-write 충돌 방지.
+let _saveMetaQueue = Promise.resolve();
+function saveSharedPhotoManualMeta(updater) {
+  _saveMetaQueue = _saveMetaQueue.then(async () => {
+    const getRes = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.global&select=payload&limit=1`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      cache: 'no-store'
+    });
+    if (!getRes.ok) return;
+    const rows = await getRes.json();
+    const payload = (Array.isArray(rows) && rows[0]?.payload && typeof rows[0].payload === 'object') ? rows[0].payload : {};
+    const cur = payload[APP_STATE_FIELD] && typeof payload[APP_STATE_FIELD] === 'object' ? payload[APP_STATE_FIELD] : { images: {}, descs: {} };
+    if (!cur.images || typeof cur.images !== 'object') cur.images = {};
+    if (!cur.descs || typeof cur.descs !== 'object') cur.descs = {};
+    updater(cur);
+    payload[APP_STATE_FIELD] = cur;
+    await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.global`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ payload })
+    }).catch(() => {});
+  }).catch(() => {});
+  return _saveMetaQueue;
+}
+
 // ----- IndexedDB 래퍼 -----
 const DB_NAME = 'photo-manual-db';
 const STORE = 'images';
@@ -934,6 +1013,11 @@ async function saveDesc(slotId, text) {
   const trimmed = (text || '').replace(/\s+$/g, '');
   descCache[slotId] = trimmed;
   await dbPutDesc(slotId, trimmed);
+  // 공유 메타에도 반영 — 모든 디바이스에서 즉시 보이도록.
+  saveSharedPhotoManualMeta((meta) => {
+    if (trimmed) meta.descs[slotId] = trimmed;
+    else delete meta.descs[slotId];
+  });
 }
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -953,6 +1037,13 @@ async function loadImageCache() {
   try {
     Object.assign(imageCache, await dbAllImages());
     Object.assign(descCache, await dbAllDescs());
+  } catch {}
+  // 3) Supabase 공유 메타 — 다른 디바이스에서 업로드한 사진/설명을 즉시 로드.
+  //    Storage 공용 URL(images) + 설명(descs). 가장 최신 출처라 IndexedDB 위에 덮어쓴다.
+  try {
+    const shared = await loadSharedPhotoManualMeta();
+    Object.assign(imageCache, shared.images || {});
+    Object.assign(descCache, shared.descs || {});
   } catch {}
   // 3) 기존 localStorage 마이그레이션은 편집 모드에서만(쓰기 권한 필요)
   if (editMode) {
@@ -991,9 +1082,21 @@ async function handleFileForSlot(file, slotId) {
     return;
   }
   try {
-    const dataUrl = await fileToDataUrl(file);
+    // 1) Storage 업로드 → 공용 URL 확보. 실패 시 로컬 dataUrl 폴백.
+    let publicUrl = '';
+    try {
+      publicUrl = await uploadSlotImageToStorage(slotId, file);
+    } catch (e) {
+      console.warn('[photo-manual] Storage 업로드 실패, 로컬만 저장', e);
+    }
+    // 2) 화면·로컬 캐시는 즉시 반영(오프라인/네트워크 지연에도 보이게).
+    const dataUrl = publicUrl || await fileToDataUrl(file);
     imageCache[slotId] = dataUrl;
     await dbPut(slotId, dataUrl);
+    // 3) 공유 메타에 URL 매핑 저장(다른 디바이스에서 즉시 보임).
+    if (publicUrl) {
+      saveSharedPhotoManualMeta((meta) => { meta.images[slotId] = publicUrl; });
+    }
     if (state.view !== 'menu') renderSection();
     else renderMenu();
   } catch (err) {
@@ -1005,6 +1108,8 @@ async function deleteSlotImage(slotId) {
   if (!confirm('이 사진을 삭제할까요?')) return;
   delete imageCache[slotId];
   await dbDel(slotId);
+  // 공유 메타에서도 제거(다른 디바이스에서 즉시 사라짐). Storage 파일 자체는 anon 권한상 남겨둠 — 메타 제거만으로 화면엔 안 보임.
+  saveSharedPhotoManualMeta((meta) => { delete meta.images[slotId]; });
   if (state.view !== 'menu') renderSection();
   else renderMenu();
 }
@@ -1013,6 +1118,8 @@ async function clearAllImages() {
   if (!confirm('저장된 모든 사진을 삭제할까요? 되돌릴 수 없습니다.')) return;
   imageCache = {};
   await dbClearAll();
+  // 공유 메타의 이미지도 모두 비움(설명은 보존). Storage 파일은 남겨둠.
+  saveSharedPhotoManualMeta((meta) => { meta.images = {}; });
   if (state.view !== 'menu') renderSection();
   else renderMenu();
 }
