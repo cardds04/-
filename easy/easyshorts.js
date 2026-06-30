@@ -1881,6 +1881,7 @@
           body = `<div class="es-pal-narr-lb">📝 음성에 맞춰 자막 만들기</div>
             <div class="es-pal-capm-hint">✏️ <b>자막 다듬기</b> — 한 줄=자막 하나, 엔터로 나누고 합쳐요 <span class="es-pal-tref-hint">(나레이션 ${vd}에 맞춰 자동 타이밍 · 칸 밖을 누르면 자동 적용)</span></div>
             <textarea id="esPalCapEditTa" class="es-pal-capedit-ta" rows="6" placeholder="자막을 한 줄에 하나씩 — '음성씽크'를 누르면 말하는 타이밍에 맞춰져요">${esc(capJoined)}</textarea>
+            <div class="es-pal-capmax" style="display:flex;align-items:center;gap:8px;margin:8px 0"><span class="es-pal-tref-hint">✂️ 한 줄 최대</span><input type="number" id="esPalCapMax" class="es-num" min="4" max="40" step="1" value="${(+d.capMaxChars) || 10}" style="width:60px"><span class="es-pal-tref-hint">글자 — 이 안에서 단어 단위로 끊어요 (바꾸면 '음성씽크' 다시)</span></div>
             <div id="esPalNarrCapStatus" class="es-pal-narr-status"></div>
             ${(d.capSyncedVoice && d.capSyncedVoice === d.voiceUrl) ? `<button type="button" class="es-pal-narr-make" id="esPalCapGrammar">✏️ 자막 자동 문법 수정</button><button type="button" class="es-pal-cap-resync" id="esPalNarrCap">🎯 다시 음성씽크</button>
             <div class="es-pal-dlrow" style="display:flex;gap:6px;margin-top:8px"><button type="button" class="es-pal-cap-resync es-pal-dl" id="esPalDlCap" style="flex:1">⬇ 자막 받기 (.srt)</button><button type="button" class="es-pal-cap-resync es-pal-dl" id="esPalDlVoice" style="flex:1">⬇ 나레이션 받기 (.wav)</button></div>` : `<button type="button" class="es-pal-narr-make" id="esPalNarrCap">🎯 음성씽크</button>`}`;
@@ -3628,7 +3629,7 @@
           steps: (P.steps || []).map((s) => ({ id: s.id, fn: s.fn || null, copy: s.copy || null, titleRefs: (s.titleRefs || []).map((r) => ({ dataUrl: r.dataUrl, name: r.name || "" })) })),
           demo: {
             title: d.title || "", caption: d.caption || "", captionStyle: d.captionStyle || "clean",
-            voiceBlob: d.voiceBlob || null, voiceDur: d.voiceDur != null ? d.voiceDur : null, voiceTone: d.voiceTone || null, voiceGender: d.voiceGender || null, voiceTypecastId: d.voiceTypecastId || null, voiceModel: d.voiceModel || null, voiceTempo: d.voiceTempo != null ? d.voiceTempo : null,   // 🎙 나레이션 음성·타입캐스트 목소리·말하기속도도 저장
+            voiceBlob: d.voiceBlob || null, voiceDur: d.voiceDur != null ? d.voiceDur : null, voiceTone: d.voiceTone || null, voiceGender: d.voiceGender || null, voiceTypecastId: d.voiceTypecastId || null, voiceModel: d.voiceModel || null, voiceTempo: d.voiceTempo != null ? d.voiceTempo : null, capMaxChars: d.capMaxChars != null ? d.capMaxChars : null,   // 🎙 나레이션 음성·타입캐스트 목소리·말하기속도도 저장
             media: (Array.isArray(d.media) ? d.media : []).filter((m) => m && m.blob).map((m) => ({ blob: m.blob, kind: m.kind, name: m.name || "", dur: m.dur != null ? m.dur : null })),
             titleRef: d.titleRef ? { dataUrl: d.titleRef.dataUrl || null, id: d.titleRef.id || null, name: d.titleRef.name || "", font: d.titleRef.font || null, color: d.titleRef.color || null, stroke: d.titleRef.stroke || null, kind: d.titleRef.kind || null, posX: d.titleRef.posX != null ? d.titleRef.posX : null, posY: d.titleRef.posY != null ? d.titleRef.posY : null, size: d.titleRef.size != null ? d.titleRef.size : null } : null,
             captionRef: d.captionRef ? { dataUrl: d.captionRef.dataUrl || null, id: d.captionRef.id || null, name: d.captionRef.name || "", font: d.captionRef.font || null, color: d.captionRef.color || null, stroke: d.captionRef.stroke || null, kind: d.captionRef.kind || null, posX: d.captionRef.posX != null ? d.captionRef.posX : null, posY: d.captionRef.posY != null ? d.captionRef.posY : null, size: d.captionRef.size != null ? d.captionRef.size : null } : null,
@@ -3666,6 +3667,7 @@
       if (sd.voiceTone) P.demo.voiceTone = sd.voiceTone; if (sd.voiceGender) P.demo.voiceGender = sd.voiceGender;
       if (sd.voiceTypecastId) P.demo.voiceTypecastId = sd.voiceTypecastId; if (sd.voiceModel) P.demo.voiceModel = sd.voiceModel;
       if (sd.voiceTempo != null) P.demo.voiceTempo = sd.voiceTempo;   // 🗣 말하기 속도 복원
+      if (sd.capMaxChars != null) P.demo.capMaxChars = sd.capMaxChars;   // ✂ 한 줄 글자수 복원
       if (sd.titleRef) {   // 문자열(옛) 또는 객체(글자체 메타 포함) 둘 다 복원
         const t = sd.titleRef;
         if (typeof t === "string") P.demo.titleRef = { url: t, dataUrl: t };
@@ -4680,6 +4682,7 @@
     $$("[data-facemode]").forEach((b) => b.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (!d) return; const fs = d.faceSwap || (d.faceSwap = {}); const m = b.dataset.facemode; fs.mode = (m === "head" || m === "kling") ? m : "face"; fs.appliedAt = 0; try { palDraftSave(); } catch (_) {} renderPalette(); }));   // 🪄 얼굴만 / 머리까지 / 클링
     { const lk = $("#esPalNarrforceLock"); if (lk) lk.addEventListener("click", () => { const d = E.palette && E.palette.demo; if (d && d.voiceTypecastId) { try { palDraftSave(); } catch (_) {} try { toast("✅ 이 나레이션으로 지정됐어요 — 고객은 이 목소리로만 나레이션을 만들어요"); } catch (_) {} } else { try { toast("먼저 위에서 목소리를 골라주세요"); } catch (_) {} } }); }   // 🎤 나레이션강제 '이 나레이션으로 지정' — 고른 목소리 확정
     { const nc = $("#esPalNarrCap"); if (nc) nc.addEventListener("click", () => palBuildNarrCaptions(nc)); }
+    { const cm = $("#esPalCapMax"); if (cm) cm.addEventListener("change", () => { const d = E.palette && E.palette.demo; if (d) { d.capMaxChars = Math.min(40, Math.max(4, parseInt(cm.value, 10) || 10)); cm.value = d.capMaxChars; try { palDraftSave(); } catch (_) {} } }); }   // ✂️ 한 줄 최대 글자수(음성씽크 분할 기준)
     { const ca = $("#esPalCapApply"); if (ca) ca.addEventListener("click", palCapApplyMulti); }   // ✍️ 직접 자막 적용(한 줄=한 블럭)
     { const ce = $("#esPalCapEditApply"); if (ce) ce.addEventListener("click", () => palCapEditApply(ce)); }   // ✏️ 자막 다듬기 적용(한 줄=한 블럭, 음성 있으면 타이밍 재싱크)
     { const _ceta = $("#esPalCapEditTa"); if (_ceta) { const _ov = _ceta.value; _ceta.addEventListener("blur", (e) => { const rt = e.relatedTarget; if (rt && /^(esPalNarrCap|esCustNext|esCustPrev|esPalCapEditApply)$/.test(rt.id || "")) return; if (_ceta.value !== _ov && _ceta.value.trim()) { try { palCapEditApply(null); } catch (_) {} } }); } }   // ✏️ 칸 밖 누르면 자동 적용(적용버튼 대체)
@@ -12953,7 +12956,7 @@ Style: photorealistic photograph, NOT cartoon/illustration. A real before-photo 
     const status = $("#esPalNarrCapStatus"); const old = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "🎤 음성 분석 중…"; }
     if (status) status.textContent = "🎤 나레이션을 듣고 말하는 타이밍에 자막을 맞추는 중… (10~20초)";
-    const MAX = 10;   // 한 자막(=한 줄) 최대 글자 — 사장님 요청: 10자에서 끊기(STT 청크·폴백·강제분할 모두 이 값 사용)
+    const MAX = Math.min(40, Math.max(4, (+d.capMaxChars) || 10));   // 한 자막(=한 줄) 최대 글자 — 사장님이 정함(기본 10, 4~40). 그 안에서 단어 단위로 끊음
     // 🎤 1순위: STT 단어 타임스탬프로 '말하는 타이밍'에 정확히 싱크 (원래 잘 되던 방식). 실패 시 음성 길이에 균등 분배 폴백.
     let chunks = null, synced = false;
     const words = await palVoiceWords();
