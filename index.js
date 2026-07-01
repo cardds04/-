@@ -15641,7 +15641,11 @@ ${folderBtn}
                     ? `기한 ${daysPassed - 7}일 경과`
                     : `${daysPassed}일 지남`;
           const passedClass =
-            daysPassed > 7 ? "schedule-days-passed schedule-days-passed-over" : "schedule-days-passed schedule-days-passed-within";
+            daysPassed > 7
+              ? "schedule-days-passed schedule-days-passed-over"
+              : daysPassed === 6 || daysPassed === 7
+                ? "schedule-days-passed schedule-days-passed-soon" // 오늘 기한 마감·내일 마감 노랑
+                : "schedule-days-passed schedule-days-passed-within";
           const company = normalizeCompanyName(item?.company) || "-";
           const compRaw = compositionForItemRaw(item);
           const compHint = compRaw || "(구성 미선택)";
@@ -16520,7 +16524,12 @@ ${folderBtn}
                 : daysPassed === 6
                   ? "내일 마감"
                   : `${daysPassed}일 지남`;
-          const passedClass = daysPassed > 7 ? "schedule-days-passed schedule-days-passed-over" : "schedule-days-passed schedule-days-passed-within";
+          const passedClass =
+            daysPassed > 7
+              ? "schedule-days-passed schedule-days-passed-over"
+              : daysPassed === 6 || daysPassed === 7
+                ? "schedule-days-passed schedule-days-passed-soon" // 오늘 기한 마감·내일 마감 노랑
+                : "schedule-days-passed schedule-days-passed-within";
           const company = normalizeCompanyName(item?.company) || "-";
           const isShootToday = dateStr === todayKey;
           const sk = getDashboardScheduleKey(item);
