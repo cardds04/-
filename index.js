@@ -15766,7 +15766,6 @@ ${folderBtn}
                   <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
                   ${shootTodayBadge}
                   ${strip}
-                  ${adminSiteBtn}
                   ${detailBtn}
                   ${deliveryFolderBtn}
                 </div>`;
