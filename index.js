@@ -15657,7 +15657,7 @@ ${folderBtn}
           const bothNeededHint = np && nv;
           if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid, bothNeededHint, vDone));
           if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid, bothNeededHint, pDone));
-          badgeParts.push(dashDeliverySiteFieldBadge(siteOk, siteOk ? "작가 현장 확인완료" : "작가 현장 확인 대기"));
+          // 현장확인('현') 배지 제거 — 사용자 요청.
           const strip = `<span class="dash-del-badges">${badgeParts.join("")}</span>`;
           const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
 
