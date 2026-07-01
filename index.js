@@ -15608,20 +15608,17 @@ ${folderBtn}
           return String(item?.composition || "").trim();
         }
 
-        /** 사진/영상 납품 미완 또는 현장 미완(작가 앱 등) 행 */
+        /** 사진/영상 납품 미완 행만 표시 — 현장확인('현') 은 UI에서 제거돼 필터에서도 무시.
+         *  사진만 필요한 업체가 사진 완료되면 즉시 리스트에서 사라진다(사장님 요청). */
         const pendingItems = inWin.filter((item) => {
           const comp = compositionForItemRaw(item);
           const np = dashDeliveryNeedsPhotoComposition(comp);
           const nv = dashDeliveryNeedsVideoComposition(comp);
+          if (!np && !nv) return false; // 사진/영상 필요 없는 스케줄은 대기 목록에서 제외
           const tr = rowForSchedule(item);
-          const dateStr = String(item?.date || "").trim();
           const pDone = tr && tr.photo_notified_at;
           const vDone = tr && tr.video_notified_at;
-          const oweDelivery = (np && !pDone) || (nv && !vDone);
-          const sid = dashCanonScheduleRpcId(item?.customerScheduleId);
-          const oweSite = /^[0-9a-f-]{36}$/i.test(sid) && !dashSiteDoneForDashboardRow(tr, dateStr);
-          if (!np && !nv) return oweSite;
-          return oweDelivery || oweSite;
+          return (np && !pDone) || (nv && !vDone);
         }).filter((item) => !deliveryManualDoneKeys.has(getDashboardScheduleKey(item)));
 
         function renderPendingRow(item, rowNum) {
