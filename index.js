@@ -15968,6 +15968,15 @@ ${folderBtn}
       function renderMissingFolderCompaniesBox(activeRows, todayKey) {
         const box = document.getElementById("missingFolderCompaniesBox");
         if (!box) return;
+        // 사용자가 URL 입력 중이면 재렌더 건너뜀 — 실시간 동기화 재렌더가 1초도 안 돼
+        // 입력값을 지워버려 저장을 못 하던 문제 방지.
+        if (document.activeElement && box.contains(document.activeElement)) return;
+        // 입력해 둔(포커스는 벗어난) 값도 재렌더 후 복원한다.
+        const typedByDbId = new Map();
+        box.querySelectorAll("input.missing-folder-url-input").forEach((el) => {
+          const v = String(el.value || "").trim();
+          if (v && el.dataset.dbId) typedByDbId.set(el.dataset.dbId, v);
+        });
         const linkBtn = `<div style="margin:0 0 8px;"><a href="https://naver.me/GCJa9KWp" target="_blank" rel="noopener noreferrer" class="btn-sm" style="display:inline-block;text-decoration:none;background:#2f3e74;color:#fff;font-weight:700;padding:6px 12px;border-radius:8px;">📂 공용 납품 폴더(마이박스) 열기</a></div>`;
         if (!Array.isArray(activeRows) || !activeRows.length) {
           box.innerHTML = linkBtn + '<div class="helper" style="margin:0;">표시할 일정이 없습니다.</div>';
@@ -16037,6 +16046,13 @@ ${folderBtn}
           linkBtn +
           `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${missing.length}개 업체 폴더 없음</div>` +
           rows;
+        // 재렌더 전에 입력해 뒀던 URL 복원
+        if (typedByDbId.size) {
+          box.querySelectorAll("input.missing-folder-url-input").forEach((el) => {
+            const saved = typedByDbId.get(el.dataset.dbId);
+            if (saved && !el.value) el.value = saved;
+          });
+        }
         if (!box.dataset.boundMissingFolderHandler) {
           box.dataset.boundMissingFolderHandler = "1";
           box.addEventListener("click", async (event) => {
