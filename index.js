@@ -16058,7 +16058,33 @@ ${folderBtn}
             btn.disabled = true;
             btn.textContent = "저장 중…";
             try {
-              await saveCompanyDirectoryNaverShareStandalone(dbId, url);
+              // saveCompanyDirectoryNaverShareStandalone 은 업체정보관리 탭 캐시(companyDirectoryAdminRows)
+              // 에서 행을 찾는데, 메인 화면에선 그 캐시가 비어 "행을 찾을 수 없습니다"가 뜬다.
+              // → 여기서는 dbId 로 company_directory 에 직접 PATCH (캐시 무관).
+              const patchBody = buildNaverWorksSharePatchBody(url);
+              if (patchBody === null) {
+                alert("올바른 URL 형식인지 확인해 주세요. (https://... 또는 naver.me 주소)");
+                btn.disabled = false;
+                btn.textContent = originalText;
+                return;
+              }
+              const resp = await fetch(
+                `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=eq.${encodeURIComponent(dbId)}`,
+                {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Prefer: "return=minimal",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                  },
+                  body: JSON.stringify(patchBody)
+                }
+              );
+              if (!resp.ok) {
+                const t = await resp.text().catch(() => "");
+                throw new Error(t || `저장 실패 (${resp.status})`);
+              }
               // 디렉터리 다시 받아 화면 재계산(폴더 URL 등록된 업체는 목록에서 사라짐)
               await pullAdminCompaniesFromSupabaseAndRefresh();
             } catch (e) {
