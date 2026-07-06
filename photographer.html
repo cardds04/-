@@ -2775,6 +2775,35 @@
         return normalize(matched?.driveCompanyFolderLink) || "";
       }
 
+      /** 업체정보관리(company_directory)의 폴더연결 주소 실시간 조회 — 렌더 시점에 박힌 옛 링크(stale) 방지 */
+      async function fetchCompanyFolderUrlFromDirectory(companyName, companyCode) {
+        if (!USE_SUPABASE_SYNC) return "";
+        const name = normalize(companyName);
+        const code = normalize(companyCode);
+        if (!name && !code) return "";
+        const hdr = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+        const fetchRows = async (qs) => {
+          try {
+            const res = await fetch(
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=naver_works_company_share_link&${qs}`,
+              { headers: hdr, cache: "no-store" }
+            );
+            if (!res.ok) return [];
+            const json = await res.json();
+            return Array.isArray(json) ? json : [];
+          } catch (_) {
+            return [];
+          }
+        };
+        let rows = code ? await fetchRows(`code=eq.${encodeURIComponent(code)}`) : [];
+        if (!rows.length && name) rows = await fetchRows(`name=eq.${encodeURIComponent(name)}`);
+        for (const row of rows) {
+          const link = normalize(row?.naver_works_company_share_link);
+          if (/^https?:\/\//i.test(link)) return link;
+        }
+        return "";
+      }
+
       function escapeTextForHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;")
@@ -3855,6 +3884,8 @@
             const companyDriveLine = companyDriveLink
               ? `${folderNameHint}업체 납품 폴더: <a href="#" data-action="openDeliveryFolderAndCopyFolderName" data-delivery-url="${encodeURIComponent(
                   companyDriveLink
+                )}" data-company="${encodeURIComponent(normalize(item?.company))}" data-company-code="${encodeURIComponent(
+                  normalize(item?.companyCode)
                 )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" title="만들 폴더명 복사 후 납품 폴더 열기" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
               : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">마이박스 납품 폴더가 아직 없습니다. 관리자에게 폴더 생성을 요청하세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
@@ -3917,21 +3948,19 @@
         const deliveryFolderOpenLink = event.target.closest("a[data-action='openDeliveryFolderAndCopyFolderName']");
         if (deliveryFolderOpenLink) {
           event.preventDefault();
-          let url = "";
-          try {
-            url = decodeURIComponent(String(deliveryFolderOpenLink.getAttribute("data-delivery-url") || ""));
-          } catch (_) {
-            url = "";
-          }
-          url = normalize(url);
-          if (!url) return;
-          let folderName = "";
-          try {
-            folderName = decodeURIComponent(String(deliveryFolderOpenLink.getAttribute("data-copy-folder-name") || ""));
-          } catch (_) {
-            folderName = "";
-          }
-          folderName = String(folderName || "").trim();
+          const dec = (attr) => {
+            try {
+              return decodeURIComponent(String(deliveryFolderOpenLink.getAttribute(attr) || ""));
+            } catch (_) {
+              return "";
+            }
+          };
+          const fallbackUrl = normalize(dec("data-delivery-url"));
+          const compName = normalize(dec("data-company"));
+          const compCode = normalize(dec("data-company-code"));
+          const folderName = String(dec("data-copy-folder-name") || "").trim();
+          // 팝업 차단 회피: 클릭 제스처 안에서 창을 먼저 열고, 최신 주소 조회 후 이동.
+          const win = window.open("about:blank", "_blank");
           void (async () => {
             if (folderName) {
               const ok = await copyTextSmart(folderName);
@@ -3939,7 +3968,24 @@
                 alert("폴더 이름 자동 복사에 실패했습니다. 드라이브만 엽니다. 위 「만들 폴더명」 옆 복사를 눌러 주세요.");
               }
             }
-            window.open(url, "_blank", "noopener,noreferrer");
+            // 업체정보관리(company_directory) 주소가 유일한 진실 — 렌더 시점에 박힌 옛 링크 대신
+            // 항상 서버 최신 주소로 연다. 서버 조회 실패 시에만 렌더 시점 링크로 폴백.
+            let url = await fetchCompanyFolderUrlFromDirectory(compName, compCode);
+            if (!url) url = fallbackUrl;
+            if (!url) {
+              if (win) win.close();
+              alert("납품 폴더 링크를 찾을 수 없습니다. 관리자에게 「업체정보관리」 폴더연결 주소 등록을 요청해 주세요.");
+              return;
+            }
+            if (win) {
+              try {
+                win.location.replace(url);
+              } catch (_) {
+                window.open(url, "_blank", "noopener,noreferrer");
+              }
+            } else {
+              window.open(url, "_blank", "noopener,noreferrer");
+            }
           })();
           return;
         }

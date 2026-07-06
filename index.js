@@ -15340,6 +15340,41 @@ ${folderBtn}
         return "";
       }
 
+      /**
+       * 「폴더」 열기 — 업체정보관리(company_directory)의 폴더연결 주소가 유일한 진실.
+       * 로컬 캐시가 stale(만료된 옛 공유링크)이어도 항상 서버의 최신 주소로 연다.
+       * 클릭 제스처 안에서 창을 먼저 열어 팝업 차단을 피하고, 조회 완료 후 이동시킨다.
+       */
+      function openCompanyDeliveryFolderFromDirectory(comp, code) {
+        const win = window.open("about:blank", "_blank");
+        void (async () => {
+          let url = "";
+          try {
+            url = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
+          } catch (_) {
+            url = "";
+          }
+          // 서버 조회 실패(오프라인 등) 시에만 로컬 캐시 폴백
+          if (!url) url = getCompanyDeliveryFolderUrlFromLocal(comp, code);
+          if (!url) {
+            if (win) win.close();
+            alert(
+              "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체의 폴더연결 주소를 저장한 뒤 다시 시도해 주세요."
+            );
+            return;
+          }
+          if (win) {
+            try {
+              win.location.replace(url);
+            } catch (_) {
+              window.open(url, "_blank", "noopener,noreferrer");
+            }
+          } else {
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
+        })();
+      }
+
       // 폴더명 정책: 「MMDD + 한글 위주 6글자 이하 suffix」.
       // 옛 규칙(15자, 숫자 포함) 은 가독성 떨어지는 폴더명(예: "06011271", "0601미사강변효성해링턴플레이스엔에이")
       // 을 양산해 사용자 클레임. 이제는 ① 날짜 이외의 숫자 전면 금지 ② suffix 6글자 컷.
@@ -17369,25 +17404,9 @@ ${folderBtn}
         if (deliveryFolderBtn) {
           const comp = String(deliveryFolderBtn.dataset.company || "").trim();
           const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
-          // 즉시 열기: 1순위 로컬 companies 캐시 (in-memory, 0ms). 폴더 생성은 작가가 하므로
-          // 클립보드 복사 단계는 제거해 클릭 반응 지연을 없앤다. 다중 클릭으로 창이
-          // 여러 개 열리던 회귀도 자연스럽게 해결.
-          const cached = getCompanyDeliveryFolderUrlFromLocal(comp, code);
-          if (cached) {
-            window.open(cached, "_blank", "noopener,noreferrer");
-            return;
-          }
-          // 캐시 미스 — 최초 1회만 supabase 조회 후 열기.
-          void (async () => {
-            const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
-            if (!u) {
-              alert(
-                "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
-              );
-              return;
-            }
-            window.open(u, "_blank", "noopener,noreferrer");
-          })();
+          // 업체정보관리(company_directory) 주소가 유일한 진실 — 캐시가 stale(만료된 옛 링크)
+          // 이어도 항상 서버의 최신 주소로 연다. (뚝딱 사례: 캐시의 옛 공유링크가 열려 '접근 불가')
+          openCompanyDeliveryFolderFromDirectory(comp, code);
           return;
         }
         const copyShootFolderBtn = event.target.closest("button[data-action='dashboardCopyShootFolderName']");
@@ -18693,21 +18712,8 @@ ${folderBtn}
         event.stopPropagation();
         const comp = String(deliveryFolderBtn.dataset.company || "").trim();
         const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
-        const cached = getCompanyDeliveryFolderUrlFromLocal(comp, code);
-        if (cached) {
-          window.open(cached, "_blank", "noopener,noreferrer");
-          return;
-        }
-        void (async () => {
-          const u = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
-          if (!u) {
-            alert(
-              "납품 폴더 링크를 찾을 수 없습니다. 「업체정보관리」에서 해당 업체를 「폴더 연결」로 마이박스 폴더 주소를 저장한 뒤 다시 시도해 주세요."
-            );
-            return;
-          }
-          window.open(u, "_blank", "noopener,noreferrer");
-        })();
+        // 업체정보관리(company_directory) 주소가 유일한 진실 — 항상 서버의 최신 주소로 연다.
+        openCompanyDeliveryFolderFromDirectory(comp, code);
       });
 
       /** 주문 기록 모달「계정저장」— 업체명 변경 시 목록·스케줄·고객 데이터와 동기화 (업체 목록 편집과 동일 규칙) */
