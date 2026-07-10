@@ -15215,21 +15215,51 @@ ${folderBtn}
        * @param {boolean} bothNeeded — 사진·영상 둘 다 필요한 업체인가
        * @param {boolean} otherDone — 반대편 항목이 이미 완료됐는가
        */
-      function dashDeliverySmsBadge(notifyKind, label, done, scheduleId, bothNeeded, otherDone) {
-        const cls = done ? "dash-del-icon dash-del-icon--ok" : "dash-del-icon dash-del-icon--wait";
+      // ── 납품 「검수전」 수동 상태 (2026-07-10 사장님) — client_kv 동기화 키. 마이박스와 무관, 순수 수동 클릭. ──
+      //   기본(노랑 "사진") → 클릭 → 노랑 "사진검수전"(업로드 검수대기) → 클릭+확인 → 초록 완료(notified_at).
+      const STORAGE_DELIVERY_REVIEW_READY = "scheduleSiteDeliveryReviewReadyV1";
+      function readDeliveryReviewReadyMap() {
+        try {
+          const raw = localStorage.getItem(STORAGE_DELIVERY_REVIEW_READY);
+          const o = raw ? JSON.parse(raw) : {};
+          return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+        } catch (e) { return {}; }
+      }
+      function isDeliveryReviewReady(scheduleId, kind) {
+        const sid = String(scheduleId || "").trim().toLowerCase();
+        if (!sid) return false;
+        const m = readDeliveryReviewReadyMap();
+        const k = kind === "video" ? "video" : "photo";
+        return !!(m[sid] && m[sid][k]);
+      }
+      function setDeliveryReviewReady(scheduleId, kind, on) {
+        const sid = String(scheduleId || "").trim().toLowerCase();
+        if (!/^[0-9a-f-]{36}$/i.test(sid)) return;
+        const k = kind === "video" ? "video" : "photo";
+        const m = readDeliveryReviewReadyMap();
+        if (on) { if (!m[sid]) m[sid] = {}; m[sid][k] = new Date().toISOString(); }
+        else if (m[sid]) { delete m[sid][k]; if (!m[sid].photo && !m[sid].video) delete m[sid]; }
+        try { localStorage.setItem(STORAGE_DELIVERY_REVIEW_READY, JSON.stringify(m)); } catch (e) {}
+      }
+
+      function dashDeliverySmsBadge(notifyKind, label, done, scheduleId, bothNeeded, otherDone, reviewReady) {
         const sid = String(scheduleId || "").trim();
-        const idleTit = `${label} 납품 완료 처리 — 클릭하면 확인 다이얼로그가 뜹니다.`;
-        if (!done && /^[0-9a-f-]{36}$/i.test(sid)) {
-          return `<button type="button" class="${cls} dash-del-icon--btn" title="${escapeHtml(
-            idleTit
-          )}" data-action="dashSmsTwostep" data-dash-label="${escapeHtml(
-            label
-          )}" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}" data-both-needed="${bothNeeded ? "1" : "0"}" data-other-done="${otherDone ? "1" : "0"}">${escapeHtml(label)}</button>`;
+        const hasSid = /^[0-9a-f-]{36}$/i.test(sid);
+        // 완료(초록) — 라벨 그대로.
+        if (done) {
+          return `<span class="dash-del-icon dash-del-icon--ok" title="${escapeHtml(label + " 납품 완료")}">${escapeHtml(label)}</span>`;
         }
-        const spanTitle = done
-          ? `${label} 납품 안내 문자 발송 완료`
-          : `${label} 납품 대기 (목록 행의 스케줄 UUID가 연결되어 있어야 문자를 보낼 수 있습니다)`;
-        return `<span class="${cls}" title="${escapeHtml(spanTitle)}">${escapeHtml(label)}</span>`;
+        if (!hasSid) {
+          return `<span class="dash-del-icon dash-del-icon--wait" title="${escapeHtml(label + " 납품 대기 (스케줄 UUID 없음)")}">${escapeHtml(label)}</span>`;
+        }
+        if (reviewReady) {
+          // 검수전(노랑) — 클릭하면 기존 완료 처리(확인 다이얼로그 + 문자). 라벨 "○○검수전".
+          const t = `${label} 검수전 — 검수 후 클릭하면 완료 처리됩니다 (확인 다이얼로그).`;
+          return `<button type="button" class="dash-del-icon dash-del-icon--wait dash-del-icon--btn dash-del-icon--review" title="${escapeHtml(t)}" data-action="dashSmsTwostep" data-dash-label="${escapeHtml(label)}" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}" data-both-needed="${bothNeeded ? "1" : "0"}" data-other-done="${otherDone ? "1" : "0"}">${escapeHtml(label + "검수전")}</button>`;
+        }
+        // 기본(노랑) — 클릭하면 「○○검수전」으로 표시(편집본 업로드 후 수동 표시).
+        const t2 = `${label} — 편집본 업로드 후 클릭하면 「${label}검수전」으로 바뀝니다.`;
+        return `<button type="button" class="dash-del-icon dash-del-icon--wait dash-del-icon--btn" title="${escapeHtml(t2)}" data-action="dashReviewMark" data-notify-kind="${notifyKind}" data-schedule-id="${escapeHtml(sid)}">${escapeHtml(label)}</button>`;
       }
 
       function dashDeliverySiteFieldBadge(done, titleNote) {
@@ -15691,8 +15721,10 @@ ${folderBtn}
           const badgeParts = [];
           // bothNeeded 정보를 confirm 다이얼로그에서 사용하도록 button data-* 에 실어준다.
           const bothNeededHint = np && nv;
-          if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid, bothNeededHint, vDone));
-          if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid, bothNeededHint, pDone));
+          const pReview = isDeliveryReviewReady(sid, "photo");
+          const vReview = isDeliveryReviewReady(sid, "video");
+          if (np) badgeParts.push(dashDeliverySmsBadge("photo", "사진", pDone, sid, bothNeededHint, vDone, pReview));
+          if (nv) badgeParts.push(dashDeliverySmsBadge("video", "영상", vDone, sid, bothNeededHint, pDone, vReview));
           // 현장확인('현') 배지 제거 — 사용자 요청.
           const strip = `<span class="dash-del-badges">${badgeParts.join("")}</span>`;
           const shootTodayBadge = dateStr === todayKey ? '<span class="dashboard-today-badge">촬영일</span>' : "";
@@ -17436,6 +17468,14 @@ ${folderBtn}
         const dashLogRevertBtn = event.target.closest("button[data-action='dashboardRevertDeliveryLog']");
         if (dashLogRevertBtn) {
           void handleDashboardRevertDeliveryLog(dashLogRevertBtn.dataset.scheduleId, dashLogRevertBtn.dataset.revertKind);
+          return;
+        }
+        const dashReviewMarkBtn = event.target.closest("button[data-action='dashReviewMark']");
+        if (dashReviewMarkBtn) {
+          const rsid = String(dashReviewMarkBtn.dataset.scheduleId || "").trim();
+          const rkind = String(dashReviewMarkBtn.dataset.notifyKind || "").trim();
+          setDeliveryReviewReady(rsid, rkind, true);
+          renderList();
           return;
         }
         const dashTwostepBtn = event.target.closest("button[data-action='dashSmsTwostep']");
