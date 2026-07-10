@@ -1866,3 +1866,98 @@
       .inlog-cinema-item .inline-input {
         width: 100%;
       }
+
+      /* ============================================================
+         모바일 가독성 패스 (760px 이하)
+         원인: #dateFilterRow(연/월/일 필터 nowrap·select 최소폭 130px 합계 652px),
+               #viewTabs(nowrap), 예약통계 그래프(min-width 미지정)가 카드 폭을 밀어
+               페이지 전체가 686px로 늘어나 모바일에서 가로 스크롤·축소 발생.
+         ============================================================ */
+      @media (max-width: 760px) {
+        .wrap {
+          width: 100%;
+          padding: 0 10px;
+          box-sizing: border-box;
+          margin: 16px auto 32px;
+        }
+        .board {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .card {
+          min-width: 0;
+          padding: 12px;
+        }
+        .card h2 {
+          font-size: 1.25rem;
+        }
+        /* 상단 메뉴 탭: 한 줄 가로 스와이프 */
+        .top-tabs {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          gap: 14px;
+          padding-bottom: 6px;
+          margin: 14px 2px 8px;
+        }
+        .top-tabs button {
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+        /* 목록 필터(연/월/일/업체검색): 줄바꿈 허용 + 최소폭 완화 — 652px 오버플로 해소 */
+        .filter-row {
+          flex-wrap: wrap;
+        }
+        .filter-row select {
+          min-width: 0;
+          flex: 1 1 30%;
+        }
+        .filter-row input {
+          min-width: 0;
+          flex: 1 1 46%;
+        }
+        /* 보기 탭(월간달력/리스트 등): 줄바꿈 */
+        .view-tabs {
+          flex-wrap: wrap;
+        }
+        /* 예약 통계: 그래프는 박스 안 가로 스크롤(페이지를 밀지 않게) */
+        #customerStatsBox,
+        #customerStatsBox details,
+        #customerStatsBox details > div {
+          min-width: 0;
+          max-width: 100%;
+        }
+        /* 넓은 표(입금관리·업체정보관리 등): 표 안 가로 스크롤 */
+        .payment-table {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        /* 달력: 셀 압축 — 날짜·건수 위주로 보이고 상세는 탭해서 모달로 */
+        .calendar-grid {
+          gap: 3px;
+        }
+        .calendar-day {
+          min-height: 58px;
+          padding: 4px;
+          font-size: 0.68rem;
+        }
+        .calendar-company {
+          display: none; /* 모바일: 일정 요약 텍스트 숨김(탭하면 상세) */
+        }
+        .calendar-day-count {
+          font-size: 0.66rem;
+        }
+        /* 터치 타깃 확보 */
+        .btn-sm {
+          padding: 6px 10px;
+          font-size: 0.82rem;
+        }
+        /* 달력 모달·일정상세: 여백 줄여 화면 활용 */
+        .calendar-modal {
+          padding: 6px;
+        }
+        .calendar-panel {
+          max-height: 94vh;
+          padding: 10px;
+        }
+      }
