@@ -196,6 +196,7 @@ const dom = {
   npcWorldCaptionToggle: $("#npcWorldCaptionToggle"),
   playerWorldBubble: $("#playerWorldBubble"),
   playerBubbleText: $("#playerBubbleText"),
+  playerBubbleHeard: $("#playerBubbleHeard"),
   worldHintPopup: $("#worldHintPopup"),
   worldHintText: $("#worldHintText"),
   worldReplyInput: $("#worldReplyInput"),
@@ -233,6 +234,8 @@ const dom = {
   evaluationProgress: $("#evaluationProgress"),
   heardBox: $("#heardBox"),
   heardText: $("#heardText"),
+  heardLiteralRow: $("#heardLiteralRow"),
+  heardLiteralText: $("#heardLiteralText"),
   correctionCard: $("#correctionCard"),
   correctionStatus: $("#correctionStatus"),
   correctedSentence: $("#correctedSentence"),
@@ -427,6 +430,7 @@ const exploreCameraTarget = new THREE.Vector3();
 const dialogueCameraPosition = new THREE.Vector3();
 const dialogueCameraTarget = new THREE.Vector3();
 const dialogueMidpoint = new THREE.Vector3();
+const firstPersonForward = new THREE.Vector3();
 const movement = new THREE.Vector3();
 const projectedPoint = new THREE.Vector3();
 const wayfinderTarget = new THREE.Vector3();
@@ -1383,16 +1387,26 @@ function updateCamera(delta) {
   const blendTarget = npc ? 1 : 0;
   dialogueCameraBlend = THREE.MathUtils.lerp(dialogueCameraBlend, blendTarget, 1 - Math.exp(-delta * 4.5));
   if (npc) {
-    dialogueMidpoint.copy(player.position).lerp(npc.position, .5);
+    // First-person conversation: stand in the traveler's eyes and face the
+    // NPC directly, like talking to a real person across the counter.
+    firstPersonForward.copy(npc.position).sub(player.position);
+    firstPersonForward.y = 0;
+    if (firstPersonForward.lengthSq() < 1e-4) firstPersonForward.set(0, 0, 1);
+    const npcDistance = firstPersonForward.length();
+    firstPersonForward.normalize();
+    // Keep a natural conversation distance even when the player walked right
+    // up to the counter — these big-headed characters need ~3m to frame the
+    // face and upper body together.
+    const eyeDistance = THREE.MathUtils.clamp(npcDistance - .42, 2.7, 3.6);
     dialogueCameraPosition.set(
-      dialogueMidpoint.x + 7.1,
-      dialogueMidpoint.y + 6.7,
-      dialogueMidpoint.z + 8.5,
+      npc.position.x - firstPersonForward.x * eyeDistance,
+      player.position.y + 1.5,
+      npc.position.z - firstPersonForward.z * eyeDistance,
     );
     dialogueCameraTarget.set(
-      dialogueMidpoint.x,
-      dialogueMidpoint.y + 1.1 + cameraLookOffset,
-      dialogueMidpoint.z,
+      npc.position.x,
+      npc.position.y + 1.3 + cameraLookOffset * .5,
+      npc.position.z,
     );
     dialogueCameraReady = true;
   } else if (!dialogueCameraReady) {
@@ -1404,6 +1418,12 @@ function updateCamera(delta) {
   cameraTarget.copy(exploreCameraTarget).lerp(dialogueCameraTarget, dialogueCameraBlend);
   camera.position.lerp(cameraDesired, 1 - Math.exp(-delta * 4.3));
   camera.lookAt(cameraTarget);
+  // Hide my own body during the face-to-face view — the camera flies through
+  // and past the player, so any visible frame of it reads as a glitch.
+  if (playerActor) playerActor.visible = !npc;
+  // Bystanders queue between me and the counter and would fill the whole
+  // first-person frame; step them out of the shot while we talk.
+  ambientActors.forEach((actor) => { actor.visible = !npc; });
   if (!npc && dialogueCameraBlend < .005) dialogueCameraReady = false;
 }
 
@@ -1545,11 +1565,32 @@ function placeWorldBubble(element, actor, yOffset = 2, horizontalOffset = 0) {
   applyBubbleLayout(makeBubbleLayout(element, actor, yOffset, horizontalOffset, safe));
 }
 
+function makeFirstPersonPlayerLayout(element, safe) {
+  if (!element || element.classList.contains("is-hidden")) return null;
+  const availableWidth = Math.max(120, safe.right - safe.left);
+  element.style.maxWidth = `${Math.min(310, availableWidth)}px`;
+  const width = Math.min(availableWidth, element.offsetWidth || 310);
+  const height = element.offsetHeight || 72;
+  const centerX = (safe.left + safe.right) / 2;
+  return {
+    element,
+    actorX: centerX,
+    left: THREE.MathUtils.clamp(centerX - width / 2, safe.left, Math.max(safe.left, safe.right - width)),
+    top: Math.max(safe.top, safe.bottom - height),
+    width,
+    height,
+  };
+}
+
 function updateWorldConversationPositions() {
   if (!activeLocation || dom.worldConversation.classList.contains("is-hidden")) return;
   const safe = getConversationSafeRect();
   const npcLayout = makeBubbleLayout(dom.npcWorldBubble, npcActors.get(activeLocation.id), 2.18, 22, safe);
-  const playerLayout = makeBubbleLayout(dom.playerWorldBubble, playerActor, 2.22, -22, safe);
+  // In first person my own body is behind the camera, so my words appear as a
+  // subtitle at the bottom instead of floating over an invisible character.
+  const playerLayout = dialogueCameraBlend > .6
+    ? makeFirstPersonPlayerLayout(dom.playerWorldBubble, safe)
+    : makeBubbleLayout(dom.playerWorldBubble, playerActor, 2.22, -22, safe);
   if (bubbleLayoutsOverlap(npcLayout, playerLayout)) {
     const latest = dom.npcWorldBubble.classList.contains("is-latest") ? npcLayout : playerLayout;
     const previous = latest === npcLayout ? playerLayout : npcLayout;
@@ -1765,10 +1806,17 @@ function syncWorldConversationUi() {
   dom.npcWorldReplay.disabled = npcSpeaking || !activeLocation || Boolean(activeResult?.canAdvance);
 }
 
-function showPlayerBubble(text) {
+function showPlayerBubble(text, { heardAs = "" } = {}) {
   window.clearTimeout(playerBubbleTimer);
   const value = String(text || "").trim();
   dom.playerBubbleText.textContent = value;
+  // When the raw sounds differed from the delivered sentence, show the
+  // conversion right in my bubble so "왜 못 알아듣지?"를 추측할 필요가 없다.
+  const literal = String(heardAs || "").trim();
+  const comparable = (input) => input.toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+  const showLiteral = Boolean(value) && Boolean(literal) && comparable(literal) !== comparable(value);
+  dom.playerBubbleHeard.textContent = showLiteral ? `🎧 들린 소리: ${literal}` : "";
+  dom.playerBubbleHeard.classList.toggle("is-hidden", !showLiteral);
   dom.playerWorldBubble.classList.toggle("is-hidden", !value);
   if (value) markLatestSpeaker("player");
 }
@@ -1806,6 +1854,19 @@ function showCurrentMissionHint() {
   return true;
 }
 
+// Show exactly what will reach (or reached) the NPC. When the raw sounds were
+// interpreted into a different sentence, the literal hearing appears above it
+// so the child can see the conversion instead of guessing why it failed.
+function setHeardDisplay(finalText, literalText = "") {
+  const comparable = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+  const literal = String(literalText || "").trim();
+  const differs = Boolean(literal) && comparable(literal) !== comparable(finalText);
+  dom.heardText.textContent = String(finalText || "");
+  dom.heardLiteralText.textContent = differs ? literal : "";
+  dom.heardLiteralRow.classList.toggle("is-hidden", !differs);
+  dom.heardBox.classList.remove("is-hidden");
+}
+
 function clearWorldReply() {
   if (!activeLocation || evaluationPending || npcSpeaking || !learnerTurnReady || activeResult?.canAdvance) return;
   discardAudioCapture();
@@ -1813,6 +1874,8 @@ function clearWorldReply() {
   dom.worldReplyInput.value = "";
   dom.answerInput.value = "";
   dom.heardText.textContent = "";
+  dom.heardLiteralText.textContent = "";
+  dom.heardLiteralRow.classList.add("is-hidden");
   dom.heardBox.classList.add("is-hidden");
   showPlayerBubble("");
   if (!dom.npcWorldBubble.classList.contains("is-hidden")) markLatestSpeaker("npc");
@@ -2177,7 +2240,7 @@ function applyEvaluationResult(result, answer, questionText, { recordHistory = t
   const turn = currentTurn();
   if (!turn || !activeLocation || !activeMission) return;
   activeResult = result;
-  showPlayerBubble(answer);
+  showPlayerBubble(answer, { heardAs: result.literalHeardText });
   if (Array.isArray(result.completedGoalIds)) activeMissionGoalIds = new Set(result.completedGoalIds);
   renderMissionGoals();
   if (result.canAdvance) hideWorldHint();
@@ -2187,8 +2250,7 @@ function applyEvaluationResult(result, answer, questionText, { recordHistory = t
     conversationHistory = conversationHistory.slice(-6);
     renderConversationTrail();
   }
-  dom.heardText.textContent = answer;
-  dom.heardBox.classList.remove("is-hidden");
+  setHeardDisplay(answer, result.literalHeardText);
   dom.correctionCard.className = `correction-card is-${result.status}`;
   dom.correctionStatus.textContent = feedbackLabel(result);
   dom.correctedSentence.textContent = result.corrected || answer;
@@ -2200,6 +2262,13 @@ function applyEvaluationResult(result, answer, questionText, { recordHistory = t
   const corrected = String(result.corrected || "").trim();
   const normalizedAnswer = String(answer || "").trim().replace(/[.!?]+$/, "").toLowerCase();
   const normalizedCorrection = corrected.replace(/[.!?]+$/, "").toLowerCase();
+  // On a clarification the "corrected" sentence is just what the child said —
+  // repeating it back as a model to imitate reads as "you were wrong". Hide it.
+  const correctionRedundant = !result.canAdvance &&
+    (result.decision === "clarify" || result.status === "uncertain") &&
+    (!corrected || normalizedCorrection === normalizedAnswer);
+  dom.correctedSentence.classList.toggle("is-hidden", correctionRedundant);
+  dom.correctedReplay.classList.toggle("is-hidden", correctionRedundant);
   if (corrected && normalizedCorrection && normalizedCorrection !== normalizedAnswer) {
     dom.worldCoach.textContent = `✨ 더 자연스럽게 말하면: ${corrected}${result.explanationKo ? ` · ${result.explanationKo}` : ""}`;
     dom.worldCoach.classList.remove("is-hidden");
@@ -2367,8 +2436,7 @@ async function evaluateAnswer(answer, confidence = null, alternatives = []) {
   evaluationController?.abort();
   evaluationController = new AbortController();
   const timeout = window.setTimeout(() => evaluationController?.abort(), 10500);
-  dom.heardText.textContent = spoken;
-  dom.heardBox.classList.remove("is-hidden");
+  setHeardDisplay(spoken);
   dom.correctionCard.classList.add("is-hidden");
   setEvaluationPending(true);
 
