@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#18204b" />
+    <meta
+      name="description"
+      content="실제 3D 캐릭터와 여행지를 돌아다니며 NPC와 영어로 말하고, 틀린 문장을 바로 고쳐 배우는 생활형 영어 여행 게임"
+    />
+    <title>Speak &amp; Trip 3D · 여행 영어 생활 게임</title>
+    <link rel="stylesheet" href="english-travel-3d.css?v=20260716-3" />
+  </head>
+  <body>
+    <a class="skip-link" href="#gameStage">3D 여행 게임으로 바로 가기</a>
+
+    <main class="game-shell" id="gameApp">
+      <section
+        class="game-stage"
+        id="gameStage"
+        aria-label="캐릭터를 움직여 여행지를 둘러보고 NPC와 영어로 대화하는 3D 공간"
+      >
+        <div class="sky-glow" aria-hidden="true"></div>
+        <canvas id="gameCanvas" tabindex="0"></canvas>
+
+        <header class="top-hud" aria-label="여행 상태">
+          <a class="home-button" href="study-game.html" aria-label="공부방으로 돌아가기">← 공부방</a>
+          <div class="brand-lockup" aria-label="Speak and Trip 3D">
+            <span class="brand-mark" aria-hidden="true">✈️</span>
+            <span><strong>SPEAK &amp; TRIP</strong><small>3D Travel English</small></span>
+          </div>
+          <div class="hud-counters">
+            <button class="hud-chip" id="passportButton" type="button" aria-label="여권 도장 보기">
+              <span aria-hidden="true">🛂</span><b id="stampCount">0</b><small>/ 8</small>
+            </button>
+            <button class="hud-chip life-button" id="lifeButton" type="button" aria-label="여행 코인으로 음식, 옷, 활동, 숙소 이용하기"><span aria-hidden="true">🪙</span><b id="coinCount">0</b><small>생활</small></button>
+            <span class="hud-chip" aria-label="현재 레벨"><span aria-hidden="true">⭐</span><b>Lv.<span id="levelCount">1</span></b></span>
+          </div>
+          <aside class="mission-card" id="missionCard" aria-label="현재 여행 미션">
+            <div class="mission-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span id="missionBadge">미션 1 / 24</span></div>
+            <strong id="missionTitle">항공사 체크인을 완료하라!</strong>
+            <p id="missionGoal"></p>
+            <div class="mission-progress" aria-label="전체 미션 진행률">
+              <span id="missionProgressBar"></span>
+            </div>
+            <small><b id="missionDoneCount">0</b> / 24 미션 완료</small>
+            <div class="toast" id="toast" role="status" aria-live="polite"></div>
+          </aside>
+          <button class="sound-toggle" id="soundToggle" type="button" aria-label="NPC 음성 끄기" aria-pressed="false">🔊</button>
+        </header>
+
+        <aside class="needs-card" aria-label="캐릭터 생활 상태">
+          <h2>오늘의 컨디션</h2>
+          <div class="need-row"><span aria-hidden="true">🍽️</span><span>배부름</span><i><b id="needFood"></b></i></div>
+          <div class="need-row"><span aria-hidden="true">⚡</span><span>에너지</span><i><b id="needEnergy"></b></i></div>
+          <div class="need-row"><span aria-hidden="true">💬</span><span>말하기 자신감</span><i><b id="needConfidence"></b></i></div>
+        </aside>
+
+        <aside class="mini-map" aria-label="여행 도시 지도">
+          <div class="mini-map-head"><strong>TRAVEL MAP</strong><span id="areaName">공항 거리</span></div>
+          <div class="mini-map-grid" id="miniMapGrid" aria-hidden="true"></div>
+        </aside>
+
+        <div class="mission-wayfinder is-hidden" id="missionWayfinder" aria-hidden="true">
+          <span class="wayfinder-arrow" id="wayfinderArrow" aria-hidden="true">➤</span>
+          <span class="wayfinder-copy"><b id="wayfinderName">공항 거리</b><small id="wayfinderDistance">약 4m</small></span>
+        </div>
+
+        <div class="ambient-bubble is-hidden" id="ambientBubble" aria-hidden="true">
+          <span>공항 여행객의 잡담</span>
+          <b id="ambientBubbleEn">Is this the check-in line?</b>
+          <small id="ambientBubbleKo">여기가 체크인 줄인가요?</small>
+        </div>
+
+        <div class="camera-help" id="cameraHelp">
+          <span class="desktop-help">WASD / 방향키로 이동 · NPC 가까이에서 E 또는 말 걸기</span>
+          <span class="mobile-help">조이스틱: 이동 · NPC 가까이에서 말 걸기</span>
+        </div>
+
+        <div class="joystick-wrap" id="joystickWrap" aria-label="캐릭터 이동 조이스틱">
+          <div class="joystick-base" id="joystickBase"><span id="joystickKnob"></span></div>
+        </div>
+
+        <button class="interact-button is-hidden" id="interactButton" type="button" aria-label="NPC에게 말 걸기" aria-keyshortcuts="E">
+          <span aria-hidden="true">💬</span>
+          <span><small id="interactHint">NPC가 가까이 있어요</small><b id="interactLabel">말 걸기</b></span>
+          <kbd>E</kbd>
+        </button>
+
+        <section class="world-conversation is-hidden" id="worldConversation" aria-label="NPC와 실시간 영어 대화">
+          <div class="world-speech-bubble npc-world-bubble is-hidden" id="npcWorldBubble" aria-live="polite">
+            <div class="npc-bubble-head">
+              <small id="npcBubbleName">Emma</small>
+              <span class="npc-audio-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            </div>
+            <p class="npc-caption-text" id="npcBubbleText" aria-hidden="true">May I see your passport?</p>
+            <div class="npc-bubble-tools">
+              <button class="npc-replay-button" id="npcWorldReplay" type="button">↻ 다시 듣기</button>
+              <button class="npc-caption-toggle" id="npcWorldCaptionToggle" type="button" aria-expanded="false">👀 자막 보기</button>
+            </div>
+          </div>
+          <div class="world-speech-bubble player-world-bubble is-hidden" id="playerWorldBubble" aria-live="polite">
+            <small>ME</small>
+            <p id="playerBubbleText"></p>
+          </div>
+          <div class="conversation-composer" id="conversationComposer">
+            <div class="world-hint-popup is-hidden" id="worldHintPopup" role="note" aria-live="polite">
+              <span>💡 말할 내용</span>
+              <strong id="worldHintText">목적지: 써니 시티</strong>
+              <small>영어 문장은 직접 만들어 말해요</small>
+            </div>
+            <div class="world-voice-state" id="worldVoiceState" role="status" aria-live="polite">
+              <span aria-hidden="true"></span><b>상대방의 말을 듣고 있어요…</b>
+            </div>
+            <label class="world-reply-field">
+              <span class="sr-only">영어로 말한 문장</span>
+              <input id="worldReplyInput" type="text" maxlength="240" autocomplete="off" placeholder="버튼을 누르고 영어로 말해요" />
+            </label>
+            <div class="world-action-buttons">
+              <button class="world-clear-button is-hidden" id="worldClearButton" type="button">🗑️ 지우기</button>
+              <button class="world-send-button" id="worldSendButton" type="button">🎙️ 말하기</button>
+            </div>
+            <p class="world-coach is-hidden" id="worldCoach"></p>
+          </div>
+        </section>
+
+        <section class="loading-screen" id="loadingScreen" aria-live="polite">
+          <div class="loading-card">
+            <div class="loading-plane" aria-hidden="true">✈️</div>
+            <p class="loading-kicker">여행 준비 중</p>
+            <h1>3D 도시와 친구들을 불러오고 있어요</h1>
+            <div class="loading-track"><span id="loadingBar"></span></div>
+            <p id="loadingText">캐릭터 가방을 챙기는 중… 0%</p>
+          </div>
+        </section>
+
+        <section class="welcome-screen is-hidden" id="welcomeScreen" aria-labelledby="welcomeTitle">
+          <div class="welcome-copy">
+            <span class="season-tag">SEASON 1 · SUNNY CITY</span>
+            <h1 id="welcomeTitle">영어로 살아보는<br /><em>나의 첫 해외여행</em></h1>
+            <p>
+              출국 수속부터 비행기, 입국심사, 택시, 호텔, 식당을 거쳐 귀국할 때까지,<br />
+              24개의 미션을 시간 순서대로 여행하며 NPC와 실제처럼 영어로 이야기해 보세요.
+            </p>
+            <ul class="feature-pills" aria-label="게임 특징">
+              <li>실제 3D 캐릭터</li>
+              <li>24개 순서 여행 미션</li>
+              <li>출국부터 귀국까지</li>
+              <li>자유로운 음성 대화</li>
+              <li>공항·기내·호텔·식당</li>
+            </ul>
+          </div>
+          <div class="traveler-picker">
+            <h2>내 여행 캐릭터를 골라요</h2>
+            <div class="avatar-options" id="avatarOptions"></div>
+            <label class="name-field">
+              <span>여권에 쓸 영어 이름</span>
+              <input id="travelerName" type="text" maxlength="16" value="Jin" autocomplete="off" inputmode="text" />
+            </label>
+            <button class="start-button" id="startButton" type="button">여행 출발하기 <span aria-hidden="true">→</span></button>
+            <small>NPC 가까이에서 말 걸기 버튼을 누르세요. 무전기 버튼을 눌러 말하고, 다시 눌러 전송하세요.</small>
+            <small class="privacy-note">🔒 대답은 AI가 뜻을 이해할 때만 사용하고 저장하지 않아요. 이름·학교·주소·전화번호 같은 개인정보는 말하지 마세요.</small>
+          </div>
+        </section>
+
+        <section class="dialogue-sheet is-hidden" id="dialogueSheet" aria-label="NPC 영어 대화" aria-live="polite">
+          <div class="npc-identity">
+            <span class="npc-avatar" id="npcAvatar" aria-hidden="true">👩</span>
+            <span><small id="npcRole">Airport Officer</small><strong id="npcName">Emma</strong></span>
+            <span class="turn-count" id="turnCount">0 / 3</span>
+            <button class="dialogue-close" id="dialogueClose" type="button" aria-label="대화 닫기">×</button>
+          </div>
+          <div class="dialogue-mission-brief" id="dialogueMissionBrief">
+            <span id="dialogueMissionBadge">미션 1 / 24</span>
+            <strong id="dialogueMissionTitle">공항 체크인을 완료하라!</strong>
+            <p id="dialogueMissionGoal">필요한 내용을 어떤 순서로 말해도 괜찮아요.</p>
+            <div class="mission-goal-list" id="missionGoalList" aria-label="미션 목표 진행 상황"></div>
+          </div>
+          <div class="npc-speech">
+            <span class="speech-label">NPC</span>
+            <div class="npc-listen-cue" id="npcListenCue">
+              <span class="listen-pulse" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <span><b>먼저 귀로 들어보세요</b><small>잘 안 들리면 다시 듣거나 영어 문장을 열어도 괜찮아요.</small></span>
+            </div>
+            <p class="is-hidden" id="npcLine">May I see your passport?</p>
+            <div class="npc-speech-actions">
+              <button class="line-audio" id="npcReplay" type="button" aria-label="NPC 문장 다시 듣기">🔊 다시 듣기</button>
+              <button class="line-reveal-toggle" id="lineRevealToggle" type="button" aria-expanded="false">👀 영어 문장 보기</button>
+              <button class="translation-toggle" id="translationToggle" type="button" aria-expanded="false">한국어 뜻 보기</button>
+            </div>
+            <p class="npc-translation is-hidden" id="npcTranslation"></p>
+          </div>
+
+          <button class="history-toggle is-hidden" id="historyToggle" type="button" aria-expanded="false">💬 지난 대화 보기</button>
+          <div class="conversation-trail is-hidden" id="conversationTrail" aria-label="방금 나눈 대화">
+            <strong>방금 나눈 대화</strong>
+            <div id="conversationTrailList"></div>
+          </div>
+
+          <div class="answer-zone" id="answerZone">
+            <div class="open-answer-note">
+              <span aria-hidden="true">✨</span>
+              <span><b>정답은 하나가 아니에요</b><small>예시와 달라도 질문에 맞는 대답이면 NPC가 알아듣고 대화를 이어가요.</small></span>
+            </div>
+            <div class="answer-head">
+              <span><b>내가 영어로 대답할 차례!</b><small id="answerHint">물건을 건네며 하는 말을 해 보세요.</small></span>
+              <button class="hint-toggle" id="hintToggle" type="button" aria-expanded="false">문장 도움</button>
+            </div>
+            <div class="phrase-chips is-hidden" id="phraseChips" aria-label="쓸 수 있는 문장 예시"></div>
+            <div class="speech-capture" id="speechCapture">
+              <button class="mic-button" id="micButton" type="button" aria-label="마이크로 영어 말하기">
+                <span class="mic-rings" aria-hidden="true"></span><span aria-hidden="true">🎙️</span><b>눌러서 말하기</b>
+              </button>
+              <div class="or-divider"><span>또는</span></div>
+              <label class="text-answer">
+                <span class="sr-only">영어 문장 직접 입력</span>
+                <input id="answerInput" type="text" maxlength="180" autocomplete="off" placeholder="영어 문장을 직접 적어도 돼요" />
+                <button id="answerSubmit" type="button">말하기 확인</button>
+              </label>
+            </div>
+
+            <div class="evaluation-progress is-hidden" id="evaluationProgress" role="status" aria-live="polite">
+              <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span><b>NPC가 대답의 뜻을 이해하는 중…</b><small>정해진 문장과 비교하지 않고 상황에 맞는지 보고 있어요.</small></span>
+            </div>
+
+            <div class="heard-box is-hidden" id="heardBox">
+              <span>🎧 이렇게 들었어요</span><strong id="heardText"></strong>
+            </div>
+            <div class="correction-card is-hidden" id="correctionCard" tabindex="-1">
+              <div class="correction-status" id="correctionStatus"></div>
+              <p class="corrected-sentence" id="correctedSentence"></p>
+              <p class="correction-reason" id="correctionReason"></p>
+              <div class="correction-actions">
+                <button id="correctedReplay" type="button">🔊 고친 문장 듣기</button>
+                <button id="retryButton" type="button">🎙️ 다시 말해 보기</button>
+                <button class="offline-continue-button is-hidden" id="offlineContinueButton" type="button">연결 없이 연습 끝내기</button>
+                <button class="next-turn-button is-hidden" id="nextTurnButton" type="button">다음 대화 →</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="passport-panel is-hidden" id="passportPanel" aria-labelledby="passportTitle">
+          <div class="passport-book">
+            <button class="panel-close" id="passportClose" type="button" aria-label="여권 닫기">×</button>
+            <span class="passport-mark" aria-hidden="true">✦</span>
+            <p>REPUBLIC OF ENGLISH TRAVEL</p>
+            <h2 id="passportTitle">MY TRAVEL PASSPORT</h2>
+            <div class="passport-owner"><span>TRAVELER</span><strong id="passportName">JIN</strong></div>
+            <div class="stamp-grid" id="stampGrid"></div>
+            <small>8개 도장을 모으면 진짜 여행 영어 자신감이 완성돼요.</small>
+          </div>
+        </section>
+
+        <section class="life-panel is-hidden" id="lifePanel" aria-labelledby="lifePanelTitle">
+          <div class="life-sheet">
+            <header>
+              <span><small>SUNNY CITY LIFE</small><strong id="lifePanelTitle">여행 생활</strong></span>
+              <span class="life-balance">🪙 <b id="lifeCoinCount">0</b></span>
+              <button class="panel-close" id="lifeClose" type="button" aria-label="여행 생활 닫기">×</button>
+            </header>
+            <div class="life-current" id="lifeCurrent"></div>
+            <nav class="life-tabs" aria-label="여행 생활 종류">
+              <button class="is-active" type="button" data-life-tab="food">🍽️ 먹기</button>
+              <button type="button" data-life-tab="outfits">🧥 스타일</button>
+              <button type="button" data-life-tab="activities">🎟️ 즐기기</button>
+              <button type="button" data-life-tab="lodgings">🏨 숙소</button>
+            </nav>
+            <div class="life-catalog" id="lifeCatalog"></div>
+            <p class="life-help" id="lifeHelp">미션으로 번 코인을 써서 여행 생활을 즐겨 보세요.</p>
+          </div>
+        </section>
+
+        <section class="surprise-alert is-hidden" id="surpriseAlert" aria-labelledby="surpriseTitle" aria-modal="true" role="dialog">
+          <div class="surprise-card">
+            <span class="surprise-bolt" aria-hidden="true">⚡</span>
+            <p>MISSION NOTICE</p>
+            <h2 id="surpriseTitle">미션 안내</h2>
+            <strong id="surpriseMissionTitle">하우스키퍼가 찾아왔다</strong>
+            <span id="surpriseMissionGoal">상황에 맞게 영어로 대응하세요.</span>
+            <small id="surpriseReward">성공 보상 · 🪙 55 · ⭐ 85 XP</small>
+            <div>
+              <button id="surpriseStart" type="button">지금 대응하기 →</button>
+              <button class="surprise-later" id="surpriseLater" type="button">도시에 표시해 두기</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="reward-screen is-hidden" id="rewardScreen" aria-labelledby="rewardTitle">
+          <div class="reward-card">
+            <div class="stamp-burst" id="rewardIcon" aria-hidden="true">✈️</div>
+            <p>MISSION COMPLETE</p>
+            <h2 id="rewardTitle">공항 미션 완료!</h2>
+            <strong id="rewardPhrase">영어로 당당하게 말했어요.</strong>
+            <div class="reward-list">
+              <span>⭐ <b id="rewardXp">+120 XP</b></span>
+              <span>🪙 <b id="rewardCoins">+40</b></span>
+              <span>🎁 <b id="rewardExtra">여권 도장</b></span>
+            </div>
+            <button id="rewardContinue" type="button">도시에 돌아가기 →</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="english-travel-3d.bundle.js?v=20260716-5" defer></script>
+  </body>
+</html>

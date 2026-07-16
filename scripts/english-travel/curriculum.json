@@ -1,0 +1,877 @@
+{
+  "AVATARS": [
+    {
+      "id": "female-a",
+      "nameKo": "여행자 미나",
+      "nameEn": "Mina",
+      "model": "assets/english-travel-3d/models/characters/character-female-a.glb",
+      "voice": "en-US"
+    },
+    {
+      "id": "male-a",
+      "nameKo": "여행자 준",
+      "nameEn": "Joon",
+      "model": "assets/english-travel-3d/models/characters/character-male-a.glb",
+      "voice": "en-US"
+    }
+  ],
+  "LOCATIONS": [
+    {
+      "id": "airport",
+      "titleKo": "공항",
+      "titleEn": "Airport",
+      "icon": "✈️",
+      "color": "#70B7FF",
+      "descriptionKo": "입국 심사를 통과하고 잃어버린 여행 가방을 찾아요.",
+      "npc": {
+        "name": "Officer Emma",
+        "role": "입국 심사관",
+        "model": "assets/english-travel-3d/models/characters/character-female-b.glb",
+        "voice": "en-US",
+        "position": [
+          0,
+          4
+        ]
+      },
+      "mission": {
+        "id": "airport-arrival",
+        "titleKo": "두근두근 첫 입국",
+        "goalKo": "여권을 보여 주고 여행 기간을 말한 뒤 잃어버린 짐을 설명해요.",
+        "reward": {
+          "xp": 100,
+          "coins": 40,
+          "need": "confidence"
+        },
+        "turns": [
+          {
+            "id": "airport-passport",
+            "npc": "Welcome! May I see your passport?",
+            "npcKo": "어서 오세요! 여권을 보여 주시겠어요?",
+            "target": "Here you are.",
+            "accepts": [
+              "Here you are.",
+              "Sure, here you are.",
+              "Of course. Here you are."
+            ],
+            "keywords": [
+              "here",
+              "you",
+              "are"
+            ],
+            "hintKo": "물건을 건네며 '여기 있습니다'라고 말해 보세요.",
+            "correctionKo": "물건을 건넬 때는 Here you are.라고 말해요.",
+            "success": "Thank you. Everything looks good.",
+            "successKo": "고마워요. 모두 확인됐어요."
+          },
+          {
+            "id": "airport-purpose",
+            "npc": "Are you here on vacation?",
+            "npcKo": "휴가 여행을 왔나요?",
+            "target": "Yes, I am. I'm here on vacation.",
+            "accepts": [
+              "Yes, I am. I'm here on vacation.",
+              "Yes. I'm here on vacation.",
+              "Yes, I'm on vacation."
+            ],
+            "keywords": [
+              "yes",
+              "vacation"
+            ],
+            "hintKo": "Yes로 대답하고 on vacation을 사용해요.",
+            "correctionKo": "휴가 중이라는 말은 I'm here on vacation.이라고 해요.",
+            "success": "Wonderful. I hope you enjoy your trip.",
+            "successKo": "좋아요. 즐거운 여행이 되길 바라요."
+          },
+          {
+            "id": "airport-duration",
+            "npc": "How long are you staying?",
+            "npcKo": "얼마 동안 머물 예정인가요?",
+            "target": "I'm staying for five days.",
+            "accepts": [
+              "I'm staying for five days.",
+              "For five days.",
+              "I will stay for five days."
+            ],
+            "keywords": [
+              "five",
+              "days"
+            ],
+            "hintKo": "five days를 넣어 머무는 기간을 말해요.",
+            "correctionKo": "숫자가 2 이상이면 day 뒤에 s를 붙여 five days라고 해요.",
+            "success": "Five days. Got it!",
+            "successKo": "5일이군요. 확인했어요!"
+          },
+          {
+            "id": "airport-luggage",
+            "npc": "You look worried. How can I help you?",
+            "npcKo": "걱정스러워 보여요. 무엇을 도와드릴까요?",
+            "target": "I can't find my blue suitcase.",
+            "accepts": [
+              "I can't find my blue suitcase.",
+              "I can't find my suitcase. It's blue.",
+              "My blue suitcase is missing."
+            ],
+            "keywords": [
+              "suitcase",
+              "blue",
+              "find"
+            ],
+            "hintKo": "못 찾겠다는 I can't find와 물건의 색을 함께 말해요.",
+            "correctionKo": "내 가방은 my suitcase, 못 찾겠다는 I can't find라고 말해요.",
+            "success": "Don't worry. We'll help you find it.",
+            "successKo": "걱정하지 마세요. 함께 찾아드릴게요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "hotel",
+      "titleKo": "호텔",
+      "titleEn": "Hotel",
+      "icon": "🏨",
+      "color": "#8D7BFF",
+      "descriptionKo": "호텔에 체크인하고 필요한 물건과 시간을 정중하게 물어봐요.",
+      "npc": {
+        "name": "Mr. Oliver",
+        "role": "호텔 프런트 직원",
+        "model": "assets/english-travel-3d/models/characters/character-male-c.glb",
+        "voice": "en-US",
+        "position": [
+          -15,
+          -4
+        ]
+      },
+      "mission": {
+        "id": "hotel-check-in",
+        "titleKo": "내 방을 찾아서",
+        "goalKo": "예약을 확인하고 숙박 기간과 필요한 물건을 말해요.",
+        "reward": {
+          "xp": 100,
+          "coins": 40,
+          "need": "energy"
+        },
+        "turns": [
+          {
+            "id": "hotel-reservation",
+            "npc": "Welcome to Sunrise Hotel. How can I help you?",
+            "npcKo": "선라이즈 호텔에 오신 것을 환영해요. 무엇을 도와드릴까요?",
+            "target": "I have a reservation.",
+            "accepts": [
+              "I have a reservation.",
+              "I have a room reservation.",
+              "I'd like to check in."
+            ],
+            "keywords": [
+              "reservation",
+              "check",
+              "in"
+            ],
+            "hintKo": "예약이 있다는 표현 I have a reservation.을 사용해요.",
+            "correctionKo": "예약이 있다고 할 때는 have를 넣어 I have a reservation.이라고 해요.",
+            "success": "Great. I found your reservation.",
+            "successKo": "좋아요. 예약을 찾았어요."
+          },
+          {
+            "id": "hotel-nights",
+            "npc": "How many nights will you stay?",
+            "npcKo": "몇 박을 머물 건가요?",
+            "target": "Two nights, please.",
+            "accepts": [
+              "Two nights, please.",
+              "I'll stay for two nights.",
+              "I'm staying for two nights."
+            ],
+            "keywords": [
+              "two",
+              "nights"
+            ],
+            "hintKo": "숫자와 nights를 함께 말해요.",
+            "correctionKo": "2박 이상이면 night 뒤에 s를 붙여 two nights라고 해요.",
+            "success": "Perfect. Here is your room key.",
+            "successKo": "좋아요. 여기 객실 카드 키가 있어요."
+          },
+          {
+            "id": "hotel-towel",
+            "npc": "Is there anything you need for your room?",
+            "npcKo": "객실에 필요한 것이 있나요?",
+            "target": "Could I have an extra towel, please?",
+            "accepts": [
+              "Could I have an extra towel, please?",
+              "Can I have an extra towel, please?",
+              "I'd like an extra towel, please."
+            ],
+            "keywords": [
+              "extra",
+              "towel"
+            ],
+            "hintKo": "Could I have와 please를 사용해 정중하게 부탁해요.",
+            "correctionKo": "부탁할 때는 Could I have an extra towel, please?라고 하면 자연스러워요.",
+            "success": "Of course. I'll send one to your room.",
+            "successKo": "물론이죠. 객실로 보내드릴게요."
+          },
+          {
+            "id": "hotel-breakfast",
+            "npc": "Do you have any questions about the hotel?",
+            "npcKo": "호텔에 관해 궁금한 점이 있나요?",
+            "target": "What time is breakfast?",
+            "accepts": [
+              "What time is breakfast?",
+              "When is breakfast?",
+              "What time does breakfast start?"
+            ],
+            "keywords": [
+              "breakfast",
+              "time"
+            ],
+            "hintKo": "아침 식사의 시간을 What time으로 물어봐요.",
+            "correctionKo": "시간을 물을 때는 What time is breakfast?라고 해요.",
+            "success": "Breakfast is from seven to ten.",
+            "successKo": "아침 식사는 7시부터 10시까지예요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "restaurant",
+      "titleKo": "레스토랑",
+      "titleEn": "Restaurant",
+      "icon": "🍽️",
+      "color": "#FF8E72",
+      "descriptionKo": "자리를 부탁하고 음식과 음료를 주문하며 알레르기와 계산 방법을 말해요.",
+      "npc": {
+        "name": "Chef Sofia",
+        "role": "레스토랑 직원",
+        "model": "assets/english-travel-3d/models/characters/character-female-d.glb",
+        "voice": "en-US",
+        "position": [
+          14,
+          -5
+        ]
+      },
+      "mission": {
+        "id": "restaurant-dinner",
+        "titleKo": "맛있는 저녁 주문",
+        "goalKo": "인원수와 주문을 말하고 알레르기를 확인한 뒤 계산해요.",
+        "reward": {
+          "xp": 110,
+          "coins": 45,
+          "need": "hunger"
+        },
+        "turns": [
+          {
+            "id": "restaurant-table",
+            "npc": "Good evening! How many people?",
+            "npcKo": "안녕하세요! 몇 분이신가요?",
+            "target": "A table for two, please.",
+            "accepts": [
+              "A table for two, please.",
+              "Table for two, please.",
+              "There are two of us."
+            ],
+            "keywords": [
+              "table",
+              "two"
+            ],
+            "hintKo": "table for two를 사용해 두 명 자리라고 말해요.",
+            "correctionKo": "두 명 자리를 부탁할 때는 A table for two, please.라고 해요.",
+            "success": "Right this way. Here is your table.",
+            "successKo": "이쪽으로 오세요. 여기 앉으시면 돼요."
+          },
+          {
+            "id": "restaurant-order",
+            "npc": "Are you ready to order?",
+            "npcKo": "주문하시겠어요?",
+            "target": "I'd like the chicken sandwich and some water, please.",
+            "accepts": [
+              "I'd like the chicken sandwich and some water, please.",
+              "Can I have the chicken sandwich and water, please?",
+              "The chicken sandwich and water, please."
+            ],
+            "keywords": [
+              "chicken",
+              "sandwich",
+              "water"
+            ],
+            "hintKo": "I'd like로 음식과 물을 함께 주문해요.",
+            "correctionKo": "지금 주문할 때는 I like보다 I'd like가 더 자연스러워요.",
+            "success": "Excellent choice. I'll bring them soon.",
+            "successKo": "좋은 선택이에요. 곧 가져다드릴게요."
+          },
+          {
+            "id": "restaurant-allergy",
+            "npc": "Your meal comes with a cookie. Is that okay?",
+            "npcKo": "식사에 쿠키가 함께 나오는데 괜찮나요?",
+            "target": "Does it have nuts? I'm allergic to nuts.",
+            "accepts": [
+              "Does it have nuts? I'm allergic to nuts.",
+              "Are there nuts in it? I'm allergic to nuts.",
+              "I can't eat nuts. Does the cookie have nuts?"
+            ],
+            "keywords": [
+              "nuts",
+              "allergic"
+            ],
+            "hintKo": "견과류가 있는지 묻고 알레르기가 있다고 말해요.",
+            "correctionKo": "Does 뒤에는 has가 아니라 have를 쓰고, I'm allergic to nuts.라고 말해요.",
+            "success": "Thanks for telling me. I'll bring fruit instead.",
+            "successKo": "말해 줘서 고마워요. 대신 과일을 드릴게요."
+          },
+          {
+            "id": "restaurant-payment",
+            "npc": "Did you enjoy your meal? Is there anything else?",
+            "npcKo": "식사는 맛있었나요? 더 필요한 것이 있나요?",
+            "target": "Can I have the bill, please? Can I pay by card?",
+            "accepts": [
+              "Can I have the bill, please? Can I pay by card?",
+              "The bill, please. I'd like to pay by card.",
+              "Could I get the bill and pay by card?"
+            ],
+            "keywords": [
+              "bill",
+              "card",
+              "pay"
+            ],
+            "hintKo": "bill과 pay by card를 사용해 계산을 부탁해요.",
+            "correctionKo": "카드로 계산한다는 말은 pay with card보다 pay by card가 자연스러워요.",
+            "success": "Certainly. I'll bring the card machine.",
+            "successKo": "물론이죠. 카드 단말기를 가져올게요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "shop",
+      "titleKo": "상점",
+      "titleEn": "Shop",
+      "icon": "🛍️",
+      "color": "#F6C85F",
+      "descriptionKo": "원하는 옷의 색과 크기를 말하고 입어 본 뒤 가격을 물어봐요.",
+      "npc": {
+        "name": "Mr. Leo",
+        "role": "상점 직원",
+        "model": "assets/english-travel-3d/models/characters/character-male-e.glb",
+        "voice": "en-US",
+        "position": [
+          15,
+          10
+        ]
+      },
+      "mission": {
+        "id": "shop-souvenir",
+        "titleKo": "나만의 여행 기념품",
+        "goalKo": "찾는 물건과 색·크기를 말하고 착용과 가격을 물어봐요.",
+        "reward": {
+          "xp": 110,
+          "coins": 45,
+          "need": "style"
+        },
+        "turns": [
+          {
+            "id": "shop-looking",
+            "npc": "Hello! Can I help you find something?",
+            "npcKo": "안녕하세요! 찾는 물건이 있나요?",
+            "target": "I'm looking for a T-shirt.",
+            "accepts": [
+              "I'm looking for a T-shirt.",
+              "I'm looking for a shirt.",
+              "I'd like a T-shirt, please."
+            ],
+            "keywords": [
+              "looking",
+              "shirt"
+            ],
+            "hintKo": "I'm looking for를 사용해 찾는 물건을 말해요.",
+            "correctionKo": "찾는 물건은 I'm looking for a T-shirt.라고 말해요.",
+            "success": "We have several T-shirts over here.",
+            "successKo": "이쪽에 티셔츠가 여러 벌 있어요."
+          },
+          {
+            "id": "shop-color-size",
+            "npc": "What color and size would you like?",
+            "npcKo": "어떤 색과 크기를 원하나요?",
+            "target": "Do you have it in blue, size medium?",
+            "accepts": [
+              "Do you have it in blue, size medium?",
+              "Blue in a medium, please.",
+              "I'd like a blue one in medium."
+            ],
+            "keywords": [
+              "blue",
+              "medium"
+            ],
+            "hintKo": "blue와 medium을 넣어 색과 크기를 함께 말해요.",
+            "correctionKo": "색은 in blue, 크기는 size medium 또는 in medium으로 말할 수 있어요.",
+            "success": "Yes, here is a blue medium.",
+            "successKo": "네, 여기 파란색 중간 크기가 있어요."
+          },
+          {
+            "id": "shop-try-on",
+            "npc": "Here it is. What would you like to do?",
+            "npcKo": "여기 있어요. 어떻게 해 볼까요?",
+            "target": "Can I try it on?",
+            "accepts": [
+              "Can I try it on?",
+              "Could I try this on?",
+              "May I try it on?"
+            ],
+            "keywords": [
+              "try",
+              "on"
+            ],
+            "hintKo": "옷을 입어 보는 표현 try it on을 사용해요.",
+            "correctionKo": "옷을 입어 본다는 말은 try it on이라고 해요. it은 try와 on 사이에 와요.",
+            "success": "Of course. The fitting room is over there.",
+            "successKo": "물론이죠. 탈의실은 저쪽에 있어요."
+          },
+          {
+            "id": "shop-price",
+            "npc": "It looks great on you. Do you have a question?",
+            "npcKo": "아주 잘 어울려요. 궁금한 점이 있나요?",
+            "target": "How much is it?",
+            "accepts": [
+              "How much is it?",
+              "How much does it cost?",
+              "What's the price?"
+            ],
+            "keywords": [
+              "how",
+              "much"
+            ],
+            "hintKo": "How much를 사용해 가격을 물어봐요.",
+            "correctionKo": "가격을 물을 때는 is를 넣어 How much is it?이라고 해요.",
+            "success": "It's twelve dollars.",
+            "successKo": "12달러예요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "transit",
+      "titleKo": "교통역",
+      "titleEn": "Transit Station",
+      "icon": "🚉",
+      "color": "#4FC3A1",
+      "descriptionKo": "목적지까지 가는 표를 사고 승강장과 길을 물어봐요.",
+      "npc": {
+        "name": "Mr. James",
+        "role": "역무원",
+        "model": "assets/english-travel-3d/models/characters/character-male-b.glb",
+        "voice": "en-US",
+        "position": [
+          1,
+          15
+        ]
+      },
+      "mission": {
+        "id": "transit-city-trip",
+        "titleKo": "도시를 가로질러",
+        "goalKo": "왕복 표를 사고 승강장과 박물관까지 가는 길을 물어봐요.",
+        "reward": {
+          "xp": 120,
+          "coins": 50,
+          "need": "confidence"
+        },
+        "turns": [
+          {
+            "id": "transit-ticket",
+            "npc": "Hello. Where would you like to go?",
+            "npcKo": "안녕하세요. 어디로 가고 싶나요?",
+            "target": "One ticket to City Museum, please.",
+            "accepts": [
+              "One ticket to City Museum, please.",
+              "I'd like one ticket to City Museum.",
+              "A ticket to City Museum, please."
+            ],
+            "keywords": [
+              "ticket",
+              "museum"
+            ],
+            "hintKo": "one ticket to와 목적지를 함께 말해요.",
+            "correctionKo": "목적지로 가는 표는 a ticket to City Museum이라고 말해요.",
+            "success": "Certainly. One ticket to City Museum.",
+            "successKo": "네. 시립 박물관행 표 한 장이에요."
+          },
+          {
+            "id": "transit-round-trip",
+            "npc": "Would you like a one-way ticket or a round-trip ticket?",
+            "npcKo": "편도 표와 왕복 표 중 어떤 것을 원하나요?",
+            "target": "A round-trip ticket, please.",
+            "accepts": [
+              "A round-trip ticket, please.",
+              "Round trip, please.",
+              "I'd like a round-trip ticket."
+            ],
+            "keywords": [
+              "round",
+              "trip"
+            ],
+            "hintKo": "왕복은 round trip이라고 해요.",
+            "correctionKo": "왕복 표는 a round-trip ticket이라고 말해요.",
+            "success": "All right. You can use this ticket to come back too.",
+            "successKo": "좋아요. 이 표로 돌아올 때도 이용할 수 있어요."
+          },
+          {
+            "id": "transit-platform",
+            "npc": "Your train leaves at ten thirty. Do you have another question?",
+            "npcKo": "기차는 10시 30분에 출발해요. 다른 질문이 있나요?",
+            "target": "Which platform is it?",
+            "accepts": [
+              "Which platform is it?",
+              "What platform is it?",
+              "Which platform does it leave from?"
+            ],
+            "keywords": [
+              "platform"
+            ],
+            "hintKo": "Which platform으로 승강장 번호를 물어봐요.",
+            "correctionKo": "승강장을 물을 때는 Which platform is it?이라고 해요.",
+            "success": "Platform three, just past the stairs.",
+            "successKo": "3번 승강장이에요. 계단을 지나면 있어요."
+          },
+          {
+            "id": "transit-directions",
+            "npc": "You look a little lost. Can I help?",
+            "npcKo": "길을 찾고 있는 것 같네요. 도와드릴까요?",
+            "target": "Excuse me, how do I get to the museum?",
+            "accepts": [
+              "Excuse me, how do I get to the museum?",
+              "How can I get to the museum?",
+              "Could you tell me the way to the museum?"
+            ],
+            "keywords": [
+              "get",
+              "museum"
+            ],
+            "hintKo": "How do I get to와 목적지를 사용해 길을 물어요.",
+            "correctionKo": "목적지까지 가는 길은 How do I get to the museum?이라고 물어요.",
+            "success": "Go straight and turn right at the bank.",
+            "successKo": "곧장 가다가 은행에서 오른쪽으로 도세요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "museum",
+      "titleKo": "박물관",
+      "titleEn": "Museum",
+      "icon": "🏛️",
+      "color": "#B38B62",
+      "descriptionKo": "입장권과 관람 시간을 묻고 사진 규칙과 좋아하는 전시를 이야기해요.",
+      "npc": {
+        "name": "Guide Grace",
+        "role": "박물관 안내원",
+        "model": "assets/english-travel-3d/models/characters/character-female-e.glb",
+        "voice": "en-US",
+        "position": [
+          -14,
+          10
+        ]
+      },
+      "mission": {
+        "id": "museum-discovery",
+        "titleKo": "공룡 전시의 비밀",
+        "goalKo": "입장권을 사고 관람 규칙을 확인한 뒤 좋아하는 전시를 설명해요.",
+        "reward": {
+          "xp": 120,
+          "coins": 50,
+          "need": "fun"
+        },
+        "turns": [
+          {
+            "id": "museum-tickets",
+            "npc": "Welcome to City Museum. How many tickets do you need?",
+            "npcKo": "시립 박물관에 오신 것을 환영해요. 표가 몇 장 필요한가요?",
+            "target": "Two child tickets, please.",
+            "accepts": [
+              "Two child tickets, please.",
+              "I'd like two child tickets.",
+              "Two tickets for children, please."
+            ],
+            "keywords": [
+              "two",
+              "tickets",
+              "child"
+            ],
+            "hintKo": "숫자와 child tickets를 함께 말해요.",
+            "correctionKo": "표가 두 장이므로 ticket 뒤에 s를 붙여 two child tickets라고 해요.",
+            "success": "Here are your two tickets.",
+            "successKo": "여기 표 두 장이 있어요."
+          },
+          {
+            "id": "museum-closing",
+            "npc": "Do you have a question before you go in?",
+            "npcKo": "들어가기 전에 궁금한 점이 있나요?",
+            "target": "What time does the museum close?",
+            "accepts": [
+              "What time does the museum close?",
+              "What time does it close?",
+              "When does the museum close?"
+            ],
+            "keywords": [
+              "time",
+              "close"
+            ],
+            "hintKo": "What time does와 close를 사용해요.",
+            "correctionKo": "질문에서는 does가 앞으로 오고 동사는 원래 모양 close를 써요.",
+            "success": "It closes at five o'clock.",
+            "successKo": "오후 5시에 문을 닫아요."
+          },
+          {
+            "id": "museum-photos",
+            "npc": "Please enjoy the exhibits. Anything you'd like to ask?",
+            "npcKo": "전시를 즐겨 주세요. 물어볼 것이 있나요?",
+            "target": "Can I take pictures?",
+            "accepts": [
+              "Can I take pictures?",
+              "May I take pictures?",
+              "Is it okay to take pictures?"
+            ],
+            "keywords": [
+              "take",
+              "pictures"
+            ],
+            "hintKo": "Can I로 사진 촬영이 가능한지 물어봐요.",
+            "correctionKo": "사진을 찍다는 take pictures 또는 take a picture라고 해요.",
+            "success": "Yes, but please don't use the flash.",
+            "successKo": "네, 하지만 플래시는 사용하지 마세요."
+          },
+          {
+            "id": "museum-favorite",
+            "npc": "Which exhibit do you like best?",
+            "npcKo": "어떤 전시가 가장 마음에 드나요?",
+            "target": "I like the dinosaur because it's exciting.",
+            "accepts": [
+              "I like the dinosaur because it's exciting.",
+              "The dinosaur is my favorite because it's exciting.",
+              "I like the dinosaur. It's exciting."
+            ],
+            "keywords": [
+              "dinosaur",
+              "exciting"
+            ],
+            "hintKo": "좋아하는 대상과 because를 사용해 이유를 말해요.",
+            "correctionKo": "because 뒤에 주어와 동사를 넣어 because it's exciting이라고 해요.",
+            "success": "Me too! The dinosaur is amazing.",
+            "successKo": "저도 그래요! 공룡은 정말 놀랍죠."
+          }
+        ]
+      }
+    },
+    {
+      "id": "park",
+      "titleKo": "공원 축제",
+      "titleEn": "Park Festival",
+      "icon": "🎡",
+      "color": "#67C96B",
+      "descriptionKo": "현지 친구와 인사하고 출신을 말하며 놀이와 사진을 부탁해요.",
+      "npc": {
+        "name": "Noah",
+        "role": "공원에서 만난 친구",
+        "model": "assets/english-travel-3d/models/characters/character-male-a.glb",
+        "voice": "en-US",
+        "position": [
+          -15,
+          -16
+        ]
+      },
+      "mission": {
+        "id": "park-new-friend",
+        "titleKo": "축제에서 만난 새 친구",
+        "goalKo": "새 친구와 인사하고 함께 놀기로 한 뒤 사진을 부탁해요.",
+        "reward": {
+          "xp": 130,
+          "coins": 55,
+          "need": "social"
+        },
+        "turns": [
+          {
+            "id": "park-greeting",
+            "npc": "Hi, I'm Noah. It's nice to meet you!",
+            "npcKo": "안녕, 나는 노아야. 만나서 반가워!",
+            "target": "Nice to meet you, too.",
+            "accepts": [
+              "Nice to meet you, too.",
+              "It's nice to meet you, too.",
+              "Nice to meet you."
+            ],
+            "keywords": [
+              "nice",
+              "meet",
+              "you"
+            ],
+            "hintKo": "상대방의 인사에 Nice to meet you, too.라고 답해요.",
+            "correctionKo": "상대방도 만나서 반갑다고 답할 때 문장 끝에 too를 붙일 수 있어요.",
+            "success": "I'm glad you're here at the festival.",
+            "successKo": "축제에 와서 정말 반가워."
+          },
+          {
+            "id": "park-country",
+            "npc": "Where are you from?",
+            "npcKo": "어느 나라에서 왔어?",
+            "target": "I'm from Korea.",
+            "accepts": [
+              "I'm from Korea.",
+              "I am from Korea.",
+              "Korea. I'm from Korea."
+            ],
+            "keywords": [
+              "from",
+              "korea"
+            ],
+            "hintKo": "I'm from과 나라 이름을 사용해요.",
+            "correctionKo": "출신지를 말할 때는 be동사를 넣어 I'm from Korea.라고 해요.",
+            "success": "That's wonderful. Welcome to our city!",
+            "successKo": "멋지다. 우리 도시에 온 걸 환영해!"
+          },
+          {
+            "id": "park-invitation",
+            "npc": "Would you like to play badminton with me?",
+            "npcKo": "나와 배드민턴을 칠래?",
+            "target": "Yes, I'd love to.",
+            "accepts": [
+              "Yes, I'd love to.",
+              "Yes, I'd like to.",
+              "Sure, that sounds fun."
+            ],
+            "keywords": [
+              "yes",
+              "love"
+            ],
+            "hintKo": "초대를 기쁘게 받아들이는 I'd love to를 사용해요.",
+            "correctionKo": "초대를 받아들일 때는 Yes, I'd love to.라고 하면 자연스러워요.",
+            "success": "Great! Let's play after we see the fountain.",
+            "successKo": "좋아! 분수를 본 뒤에 같이 놀자."
+          },
+          {
+            "id": "park-photo",
+            "npc": "This fountain is a great photo spot.",
+            "npcKo": "이 분수는 사진 찍기 정말 좋은 곳이야.",
+            "target": "Could you take a picture of me, please?",
+            "accepts": [
+              "Could you take a picture of me, please?",
+              "Can you take my picture, please?",
+              "Would you take a photo of me, please?"
+            ],
+            "keywords": [
+              "picture",
+              "me",
+              "take"
+            ],
+            "hintKo": "Could you와 please를 사용해 사진을 부탁해요.",
+            "correctionKo": "내 사진을 찍어 달라는 말은 take a picture of me라고 해요.",
+            "success": "Of course! Stand by the fountain and smile.",
+            "successKo": "물론이지! 분수 옆에 서서 웃어 봐."
+          }
+        ]
+      }
+    },
+    {
+      "id": "help",
+      "titleKo": "건강·도움 센터",
+      "titleEn": "Health & Help Center",
+      "icon": "🩺",
+      "color": "#F06D91",
+      "descriptionKo": "아픈 곳을 설명하고 약 먹는 방법을 확인하며 길을 잃었을 때 도움을 청해요.",
+      "npc": {
+        "name": "Nurse Lily",
+        "role": "간호사 겸 여행자 도움 직원",
+        "model": "assets/english-travel-3d/models/characters/character-female-f.glb",
+        "voice": "en-US",
+        "position": [
+          15,
+          -16
+        ]
+      },
+      "mission": {
+        "id": "help-health-safety",
+        "titleKo": "아플 때와 길을 잃었을 때",
+        "goalKo": "증상과 열이 있는지 말하고 복약 방법과 안전한 도움 요청을 연습해요.",
+        "reward": {
+          "xp": 140,
+          "coins": 60,
+          "need": "health"
+        },
+        "turns": [
+          {
+            "id": "help-symptom",
+            "npc": "Hello. What's wrong?",
+            "npcKo": "안녕하세요. 어디가 아픈가요?",
+            "target": "I have a stomachache.",
+            "accepts": [
+              "I have a stomachache.",
+              "My stomach hurts.",
+              "I have a bad stomachache."
+            ],
+            "keywords": [
+              "stomach",
+              "stomachache",
+              "hurts"
+            ],
+            "hintKo": "I have와 아픈 증상을 함께 말해요.",
+            "correctionKo": "아픈 증상은 I am이 아니라 I have a stomachache.라고 말해요.",
+            "success": "I'm sorry to hear that. Let me check you.",
+            "successKo": "많이 불편했겠네요. 상태를 확인할게요."
+          },
+          {
+            "id": "help-fever",
+            "npc": "Do you have a fever?",
+            "npcKo": "열도 있나요?",
+            "target": "No, I don't have a fever.",
+            "accepts": [
+              "No, I don't have a fever.",
+              "No, I don't.",
+              "No, I have no fever."
+            ],
+            "keywords": [
+              "no",
+              "fever"
+            ],
+            "hintKo": "No로 답하고 don't have를 사용해요.",
+            "correctionKo": "열이 없다는 말은 I don't have a fever.라고 해요.",
+            "success": "That's good. Please drink water and get some rest.",
+            "successKo": "다행이에요. 물을 마시고 푹 쉬세요."
+          },
+          {
+            "id": "help-medicine",
+            "npc": "Take this medicine after meals. Do you have a question?",
+            "npcKo": "이 약을 식후에 드세요. 궁금한 점이 있나요?",
+            "target": "How often should I take it?",
+            "accepts": [
+              "How often should I take it?",
+              "How many times a day should I take it?",
+              "When should I take the medicine?"
+            ],
+            "keywords": [
+              "take",
+              "often"
+            ],
+            "hintKo": "How often으로 하루에 몇 번인지 물어봐요.",
+            "correctionKo": "횟수를 물을 때는 How often should I take it?이라고 해요.",
+            "success": "Take it twice a day after meals.",
+            "successKo": "하루 두 번, 식후에 드세요."
+          },
+          {
+            "id": "help-lost",
+            "npc": "You are safe here. How can I help you?",
+            "npcKo": "여기는 안전해요. 무엇을 도와드릴까요?",
+            "target": "I'm lost. I need help getting to the Sunrise Hotel.",
+            "accepts": [
+              "I'm lost. I need help getting to the Sunrise Hotel.",
+              "I can't find my way to the Sunrise Hotel.",
+              "Can you help me get to the Sunrise Hotel? I'm lost."
+            ],
+            "keywords": [
+              "lost",
+              "help",
+              "hotel"
+            ],
+            "hintKo": "I'm lost와 I need help를 사용해 안전하게 도움을 요청해요.",
+            "correctionKo": "길을 잃은 상태는 lose가 아니라 lost를 써서 I'm lost.라고 해요.",
+            "success": "I'll call the hotel. Please wait here with me.",
+            "successKo": "호텔에 연락할게요. 이곳에서 저와 함께 기다려요."
+          }
+        ]
+      }
+    }
+  ]
+}

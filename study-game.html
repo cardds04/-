@@ -612,6 +612,34 @@
       .grade4-quest-banner strong { display: block; font-size: 1.02rem; }
       .grade4-quest-banner small { display: block; margin-top: 3px; color: #cffafe; font-weight: 700; line-height: 1.35; }
       .grade4-quest-banner .quest-go { position: relative; z-index: 1; font-weight: 900; white-space: nowrap; }
+      .grade4-quest-banner.english-travel-banner {
+        border-color: #fde68a;
+        background: linear-gradient(135deg,#075985 0%,#2563eb 43%,#7c3aed 72%,#db2777 100%);
+        box-shadow: 0 10px 24px rgba(37,99,235,.3);
+      }
+      .grade4-quest-banner.english-travel-banner:hover {
+        box-shadow: 0 14px 30px rgba(124,58,237,.36);
+      }
+      .grade4-quest-banner.english-travel-banner::before {
+        content: "✦  ·  ✈  ·  ✦";
+        position: absolute;
+        z-index: 0;
+        right: 58px;
+        top: 5px;
+        color: rgba(255,255,255,.23);
+        font-size: 1.15rem;
+        letter-spacing: .35rem;
+        transform: rotate(-7deg);
+        pointer-events: none;
+      }
+      .english-travel-banner .quest-planet {
+        position: relative;
+        z-index: 1;
+        filter: drop-shadow(0 0 11px rgba(253,230,138,.9));
+      }
+      .english-travel-banner .quest-copy,
+      .english-travel-banner .quest-go { position: relative; z-index: 1; }
+      .english-travel-banner small { color: #fef3c7 !important; }
       .school-stage-section {
         margin-bottom: 16px;
         padding: 16px;
@@ -3315,11 +3343,20 @@
           <button type="button" class="study-category-tab" id="categorySchool" data-category="school">🎒 학교</button>
         </nav>
 
-        <a class="grade4-quest-banner" id="grade4StudyBanner" href="grade4-quest-3d.html" aria-label="4학년 사회 과학 그림 문제 학습 시작">
+        <a class="grade4-quest-banner english-travel-banner" id="englishTravel3dBanner" href="english-travel-3d.html" aria-label="영어 여행 3D 시작: 실제 3D 캐릭터, NPC 음성 대화, 문장 교정, 8개 여행 미션">
+          <span class="quest-planet" aria-hidden="true">🌍</span>
+          <span class="quest-copy">
+            <strong>NEW · 영어 여행 3D</strong>
+            <small>실제 3D 캐릭터 · NPC 음성 대화 · 문장 교정 · 8개 여행 미션</small>
+          </span>
+          <span class="quest-go">여행 시작 →</span>
+        </a>
+
+        <a class="grade4-quest-banner" id="grade4StudyBanner" href="grade4-quest-3d.html" aria-label="4학년 사회 과학 시각 참고자료 문제 학습 시작">
           <span class="quest-planet">🐻</span>
           <span class="quest-copy">
             <strong>NEW · 4학년 사회·과학 차근차근 공부</strong>
-            <small>1·2학기 38개 개념 · 귀여운 그림 · 114문제 · 바로 해설</small>
+            <small>1·2학기 38개 개념 · 266개 시각 참고자료 · 114문제 · 바로 해설</small>
           </span>
           <span class="quest-go">공부하기 →</span>
         </a>
@@ -6025,7 +6062,7 @@
         document.querySelectorAll(".study-category-tab").forEach((btn) => {
           btn.classList.toggle("is-active", btn.dataset.category === category);
         });
-        const academyOnly = ["aiPanel", "vstageSection", "playLogSection"];
+        const academyOnly = ["englishTravel3dBanner", "aiPanel", "vstageSection", "playLogSection"];
         academyOnly.forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.classList.toggle("hidden", category === "school");
@@ -10294,7 +10331,7 @@
        */
       (function setupStudyGameSync() {
         const SYNC_TABLE = "study_game_state_kv";
-        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, SCHOOL_PERSIST_KEY, STUDY_CATEGORY_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY];
+        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, SCHOOL_PERSIST_KEY, STUDY_CATEGORY_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY, "grade4_subject_study_v1", "english_travel_3d_v1"];
         const LOCAL_AT_KEY = "study_game_local_saved_at_v1";
         let pushTimer = null;
         let pulling = false;
@@ -10309,6 +10346,7 @@
             try {
               const v = localStorage.getItem(nsKey(k));
               if (v != null) obj[k] = v;
+              else if (k === "grade4_subject_study_v1" || k === "english_travel_3d_v1") obj[k] = null;
             } catch (e) {}
           }
           return obj;
@@ -10406,13 +10444,16 @@
           if (r.applied) {
             try { refreshActiveKidView(); } catch (e) {}
           }
+          return r;
         }
 
         // 전역 핸들 — 저장 함수들이 호출함
         window.studyGameSync = { markDirty: markDirty, pullNow: pullAndRefresh, pushNow: push };
 
         // 1) 첫 로드: 클라우드 → 로컬
-        pullAndRefresh();
+        pullAndRefresh().then((r) => {
+          if (!r.applied && getLocalSavedAt()) push();
+        });
 
         // 2) 페이지가 다시 보일 때(폰 백그라운드 → 포그라운드) 자동 pull
         document.addEventListener("visibilitychange", () => {

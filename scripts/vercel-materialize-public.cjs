@@ -10,6 +10,7 @@ const path = require("path");
 
 const root = path.join(__dirname, "..");
 const destDir = path.join(root, "public");
+const buildMarker = path.join(destDir, ".vercel-materialized-once");
 
 const SKIP_TOP_DIR = new Set([
   "node_modules",
@@ -54,7 +55,24 @@ function rmRf(p) {
   fs.rmSync(p, { recursive: true, force: true });
 }
 
+function shouldCopy(sourcePath) {
+  const parts = path.relative(root, sourcePath).split(path.sep);
+  if (parts[0] === "easyshorts-app" && parts.includes("android")) return false;
+  if (parts.some((part) => ["node_modules", ".git", ".vercel", ".venv", "__pycache__"].includes(part))) return false;
+  // Nested package manifests make Vercel treat static subfolders as additional
+  // projects and recursively run this repository's build while `public/` is
+  // being materialized. Browser assets do not need these build manifests.
+  return !["package.json", "package-lock.json", "vercel.json"].includes(path.basename(sourcePath));
+}
+
 function main() {
+  // Vercel can invoke the project build again while its output collector is
+  // already reading `public/`. Reusing the first complete materialization
+  // prevents the second pass from deleting files underneath that collector.
+  if (process.env.VERCEL && fs.existsSync(buildMarker)) {
+    console.log("[vercel-materialize-public] 기존 빌드 결과 재사용", destDir);
+    return;
+  }
   rmRf(destDir);
   fs.mkdirSync(destDir, { recursive: true });
 
@@ -64,8 +82,10 @@ function main() {
     const st = fs.lstatSync(src);
     if (st.isFile() && isSkipRootFile(name)) continue;
     const dst = path.join(destDir, name);
-    fs.cpSync(src, dst, { recursive: true });
+    fs.cpSync(src, dst, { recursive: true, filter: shouldCopy });
   }
+
+  fs.writeFileSync(buildMarker, "materialized\n");
 
   console.log("[vercel-materialize-public]", destDir);
 }
