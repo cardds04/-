@@ -199,6 +199,9 @@ const dom = {
   playerBubbleHeard: $("#playerBubbleHeard"),
   worldHintPopup: $("#worldHintPopup"),
   worldHintText: $("#worldHintText"),
+  worldHintButton: $("#worldHintButton"),
+  worldHintSentences: $("#worldHintSentences"),
+  worldHintSentenceList: $("#worldHintSentenceList"),
   worldReplyInput: $("#worldReplyInput"),
   worldClearButton: $("#worldClearButton"),
   worldSendButton: $("#worldSendButton"),
@@ -1843,6 +1846,38 @@ function hideWorldHint() {
   dom.worldHintPopup.classList.add("is-hidden");
 }
 
+function renderWorldHintSentences() {
+  const sentences = (activeMission?.hints || []).length
+    ? activeMission.hints
+    : [currentTurn()?.target].filter(Boolean);
+  dom.worldHintSentenceList.innerHTML = "";
+  sentences.slice(0, 4).forEach((sentence) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "world-hint-sentence";
+    button.textContent = sentence;
+    button.addEventListener("click", () => {
+      if (["starting", "listening", "stopping", "transcribing"].includes(capturePhase)) discardAudioCapture();
+      dom.worldReplyInput.value = sentence;
+      dom.answerInput.value = sentence;
+      capturePhase = "captured";
+      showPlayerBubble(sentence);
+      setWorldVoiceState("📡 전송 버튼을 누르거나, 문장을 보고 직접 말해 보세요.");
+      setWorldHintSentencesVisible(false);
+      updateWorldSendState();
+      dom.worldReplyInput.focus();
+    });
+    dom.worldHintSentenceList.appendChild(button);
+  });
+  return sentences.length > 0;
+}
+
+function setWorldHintSentencesVisible(visible) {
+  const show = Boolean(visible) && renderWorldHintSentences();
+  dom.worldHintSentences.classList.toggle("is-hidden", !show);
+  dom.worldHintButton.setAttribute("aria-expanded", String(show));
+}
+
 function showCurrentMissionHint() {
   if (!activeMission || !currentMissingGoal()) {
     hideWorldHint();
@@ -2136,6 +2171,7 @@ function openDialogue(location, missionOverride = null) {
   conversationHistory = Array.isArray(cachedSession?.history) ? cachedSession.history.slice(-8) : [];
   conversationTrailVisible = false;
   pendingClarify = null;
+  setWorldHintSentencesVisible(false);
   dynamicPrompts.clear();
   if (cachedSession?.prompt?.en) dynamicPrompts.set(mission.id, cachedSession.prompt);
   followUpCounts.clear();
@@ -2201,6 +2237,7 @@ function closeDialogue({ discardSession = false } = {}) {
   activeTurnIndex = 0;
   activeResult = null;
   pendingClarify = null;
+  setWorldHintSentencesVisible(false);
   conversationHistory = [];
   conversationTrailVisible = false;
   dynamicPrompts.clear();
@@ -2425,6 +2462,7 @@ async function evaluateAnswer(answer, confidence = null, alternatives = []) {
   }
 
   discardAudioCapture();
+  setWorldHintSentencesVisible(false);
   capturePhase = "sending";
   showPlayerBubble(spoken);
 
@@ -2711,6 +2749,7 @@ async function startListening() {
   }
 
   discardAudioCapture();
+  setWorldHintSentencesVisible(false);
   const context = {
     captureId: ++audioCaptureId,
     dialogueSession,
@@ -2965,6 +3004,9 @@ function bindUi() {
   dom.npcWorldReplay.addEventListener("click", replayWorldNpcLine);
   dom.npcWorldCaptionToggle.addEventListener("click", () => {
     setWorldNpcCaptionVisible(!dom.npcWorldBubble.classList.contains("is-caption-visible"));
+  });
+  dom.worldHintButton.addEventListener("click", () => {
+    setWorldHintSentencesVisible(dom.worldHintSentences.classList.contains("is-hidden"));
   });
   dom.worldReplyInput.addEventListener("input", () => {
     if (["starting", "listening", "stopping", "transcribing"].includes(capturePhase)) discardAudioCapture();
