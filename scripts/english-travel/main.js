@@ -423,6 +423,35 @@ const npcActors = new Map();
 const locationRings = new Map();
 const locationLabels = new Map();
 const locationGroups = new Map();
+const stagePropGroups = new Map();
+let cabinGroup = null;
+let airportBaseHidden = false;
+let activeStageMissionId = "";
+let stageLabelSprite = null;
+
+// 미션을 깰 때마다 "다음 상황"에 맞는 자리로 옮겨 가도록, 같은 로케이션
+// 안에서도 미션별 무대(NPC 위치·소품·라벨)를 분리한다. spot=NPC 위치,
+// playerOffset=플레이어가 내리는 곳(NPC 기준), cabin=비행기 내부 씬 사용.
+const MISSION_STAGES = {
+  "journey-02": { spot: [-5.2, -1.6], labelKo: "보안 검색대", props: "security", playerOffset: [0, -3.1] },
+  "journey-03": { cabin: true, spot: [0, -17.4], labelKo: "기내 · 좌석 안내", playerOffset: [0, 3.2] },
+  "journey-04": { cabin: true, spot: [0, -17.4], labelKo: "기내 · 식사 서비스", playerOffset: [0, 3.2] },
+  "journey-05": { spot: [6.4, 1.0], labelKo: "입국 심사대", props: "immigration", playerOffset: [0, -3.1] },
+  "journey-06": { spot: [-6.6, -5.6], labelKo: "수하물 찾는 곳", props: "baggage", playerOffset: [0, -3.1] },
+  "journey-24": { spot: [5.6, -5.8], labelKo: "탑승구 12", props: "gate", playerOffset: [-3.1, 0] },
+  "journey-10": { spot: [-17.6, -11.8], labelKo: "객실 · 룸서비스", props: "hotelRoom", playerOffset: [3.1, 0] },
+  "journey-21": { spot: [-17.6, -11.8], labelKo: "객실 앞", props: "hotelRoom", playerOffset: [3.1, 0] },
+};
+
+function stageForMission(mission) {
+  return (mission && MISSION_STAGES[mission.id]) || null;
+}
+
+function missionNpcSpot(mission, location) {
+  const stage = stageForMission(mission);
+  if (stage?.spot) return stage.spot;
+  return location ? location.npc.position : [0, 0];
+}
 const ambientActors = [];
 const keys = new Set();
 const joystick = new THREE.Vector2();
@@ -612,6 +641,9 @@ function requiredAssetPaths() {
   });
   ["road-straight", "road-crossroad", "road-crossing", "road-bend", "light-square"].forEach((file) => paths.add(path("roads", file)));
   ["tree_default", "tree_oak", "plant_bush", "grass_large", "flower_yellowA"].forEach((file) => paths.add(path("nature", file)));
+  // 미션별 무대(기내·검색대·수하물·객실) 소품
+  ["chairCushion", "bench", "bedDouble", "lampRoundFloor", "pottedPlant", "desk"].forEach((file) => paths.add(path("furniture", file)));
+  paths.add(path("market", "shopping-cart"));
   return [...paths];
 }
 
@@ -1020,35 +1052,253 @@ function buildLocations() {
   });
 }
 
+function buildCabin() {
+  cabinGroup = new THREE.Group();
+  cabinGroup.name = "Stage: airplane cabin";
+  cabinGroup.visible = false;
+  scene.add(cabinGroup);
+  const centerX = 0;
+  const frontZ = -18.6;
+  const rearZ = -9.8;
+  const centerZ = (frontZ + rearZ) / 2;
+  const length = rearZ - frontZ + 1.6;
+
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(7.2, .14, length),
+    new THREE.MeshStandardMaterial({ color: 0x5d6b83, roughness: .9 }),
+  );
+  floor.position.set(centerX, .07, centerZ);
+  floor.receiveShadow = true;
+  cabinGroup.add(floor);
+
+  const aisle = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, .02, length - .4),
+    new THREE.MeshStandardMaterial({ color: 0x8ea0bd, roughness: .85 }),
+  );
+  aisle.position.set(centerX, .155, centerZ);
+  cabinGroup.add(aisle);
+
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf2f5f9, roughness: .6 });
+  [-3.75, 3.75].forEach((x) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(.35, 2.7, length), wallMaterial);
+    wall.position.set(centerX + x, 1.45, centerZ);
+    wall.castShadow = true;
+    cabinGroup.add(wall);
+    for (let z = frontZ + 1; z <= rearZ - .6; z += 1.55) {
+      const window = new THREE.Mesh(
+        new THREE.BoxGeometry(.1, .52, .78),
+        new THREE.MeshStandardMaterial({ color: 0x9fd8ff, roughness: .25, emissive: 0x9fd8ff, emissiveIntensity: .35 }),
+      );
+      window.position.set(centerX + x + (x > 0 ? -.2 : .2), 1.72, z);
+      cabinGroup.add(window);
+    }
+  });
+
+  const noseWall = new THREE.Mesh(new THREE.BoxGeometry(7.2, 2.7, .3), wallMaterial);
+  noseWall.position.set(centerX, 1.45, frontZ - .65);
+  cabinGroup.add(noseWall);
+
+  for (let row = 0; row < 4; row += 1) {
+    const z = rearZ - 1.7 - row * 1.65;
+    [-2.6, -1.55, 1.55, 2.6].forEach((x) => {
+      placeStatic(path("furniture", "chairCushion"), centerX + x, z, {
+        height: 1.16,
+        rotation: Math.PI,
+        y: .14,
+        parent: cabinGroup,
+      });
+    });
+  }
+
+  placeStatic(path("market", "shopping-cart"), centerX + 1.35, frontZ + 1.3, {
+    height: 1.05,
+    rotation: Math.PI / 2,
+    y: .14,
+    parent: cabinGroup,
+  });
+
+  const label = createLabel("✈️ 기내", "써니 시티행 비행기 안", "#70B7FF");
+  label.position.set(centerX, 3.15, frontZ + 1.2);
+  cabinGroup.add(label);
+}
+
+const STAGE_PROP_BUILDERS = {
+  security(group, [x, z]) {
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x44608f, roughness: .5, metalness: .3 });
+    [-1, 1].forEach((side) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(.24, 2.25, .34), frameMaterial);
+      post.position.set(x + side * .95, 1.12, z);
+      post.castShadow = true;
+      group.add(post);
+    });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(2.14, .3, .34), frameMaterial);
+    beam.position.set(x, 2.3, z);
+    group.add(beam);
+    placeStatic(path("furniture", "desk"), x - 2.5, z + .4, { height: 1.0, rotation: Math.PI / 2, parent: group });
+    [0, 1].forEach((index) => {
+      const tray = new THREE.Mesh(
+        new THREE.BoxGeometry(.62, .12, .44),
+        new THREE.MeshStandardMaterial({ color: 0x9aa7bd, roughness: .8 }),
+      );
+      tray.position.set(x - 2.5 + index * .05, 1.06 + index * .14, z + .4);
+      group.add(tray);
+    });
+  },
+  immigration(group, [x, z]) {
+    placeStatic(path("furniture", "desk"), x, z - .5, { height: 1.1, rotation: Math.PI, parent: group });
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(2.1, 1.15, .08),
+      new THREE.MeshStandardMaterial({ color: 0xbfe2ff, roughness: .15, transparent: true, opacity: .42 }),
+    );
+    glass.position.set(x, 1.75, z - .5);
+    group.add(glass);
+    const lineMaterial = new THREE.MeshStandardMaterial({ color: 0xd9b23a, roughness: .6 });
+    [-1.4, 0, 1.4].forEach((offset) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.06, .08, .92, 10), lineMaterial);
+      post.position.set(x + offset, .46, z - 2.5);
+      group.add(post);
+    });
+  },
+  baggage(group, [x, z]) {
+    const belt = new THREE.Mesh(
+      new THREE.TorusGeometry(2.35, .55, 12, 40),
+      new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: .85 }),
+    );
+    belt.rotation.x = Math.PI / 2;
+    belt.position.set(x, .38, z - 1.2);
+    belt.scale.y = 1;
+    group.add(belt);
+    const bagColors = [0xe4685d, 0x5f8ff0, 0x67c96b];
+    bagColors.forEach((color, index) => {
+      const angle = index * (Math.PI * 2 / 3) + .7;
+      const bag = new THREE.Mesh(
+        new THREE.BoxGeometry(.52, .68, .34),
+        new THREE.MeshStandardMaterial({ color, roughness: .72 }),
+      );
+      bag.position.set(x + Math.cos(angle) * 2.35, 1.0, z - 1.2 + Math.sin(angle) * 2.35);
+      bag.rotation.y = angle;
+      bag.castShadow = true;
+      group.add(bag);
+    });
+    placeStatic(path("market", "shopping-cart"), x + 3.1, z + .8, { height: 1.05, rotation: -.5, parent: group });
+  },
+  gate(group, [x, z]) {
+    placeStatic(path("furniture", "bench"), x - 1.3, z + 2.1, { height: .92, rotation: Math.PI, parent: group });
+    placeStatic(path("furniture", "bench"), x + 1.3, z + 2.1, { height: .92, rotation: Math.PI, parent: group });
+    const sign = createLabel("🛫 GATE 12", "탑승구 12", "#70B7FF");
+    sign.position.set(x, 3.05, z - .6);
+    group.add(sign);
+  },
+  hotelRoom(group, [x, z]) {
+    const rug = new THREE.Mesh(
+      new THREE.CircleGeometry(3.1, 26),
+      new THREE.MeshStandardMaterial({ color: 0xf3e6d5, roughness: .95 }),
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(x, .02, z);
+    group.add(rug);
+    placeStatic(path("furniture", "bedDouble"), x - 1.4, z - .9, { height: 1.15, rotation: Math.PI / 2, parent: group });
+    placeStatic(path("furniture", "lampRoundFloor"), x - 1.3, z + 1.6, { height: 1.5, parent: group });
+    placeStatic(path("furniture", "pottedPlant"), x + 1.4, z - 1.6, { height: .95, parent: group });
+  },
+};
+
+function ensureStagePropGroup(stage, targetLocation) {
+  if (!stage?.props || !STAGE_PROP_BUILDERS[stage.props]) return null;
+  const key = `${targetLocation.id}:${stage.props}`;
+  if (stagePropGroups.has(key)) return stagePropGroups.get(key);
+  const parent = locationGroups.get(targetLocation.id);
+  if (!parent) return null;
+  const group = new THREE.Group();
+  group.name = `Stage props: ${key}`;
+  STAGE_PROP_BUILDERS[stage.props](group, stage.spot);
+  parent.add(group);
+  stagePropGroups.set(key, group);
+  return group;
+}
+
+function setAirportBaseHidden(hidden) {
+  airportBaseHidden = hidden;
+  const group = locationGroups.get("airport");
+  const actor = npcActors.get("airport");
+  if (!group) return;
+  group.children.forEach((child) => {
+    if (child === actor) return;
+    child.visible = !hidden;
+  });
+}
+
+function refreshStageLabel(targetLocation, stage, spot) {
+  if (stageLabelSprite?.parent) stageLabelSprite.parent.remove(stageLabelSprite);
+  stageLabelSprite = null;
+  if (!stage || stage.cabin) return;
+  const group = locationGroups.get(targetLocation.id);
+  if (!group) return;
+  stageLabelSprite = createLabel(`${targetLocation.icon} ${stage.labelKo}`, targetLocation.titleKo, targetLocation.color);
+  stageLabelSprite.position.set(spot[0], 3.25, spot[1]);
+  group.add(stageLabelSprite);
+  const baseLabel = locationLabels.get(targetLocation.id);
+  if (baseLabel) baseLabel.visible = false;
+}
+
+function applyMissionStage(targetLocation, mission) {
+  const stage = stageForMission(mission);
+  const spot = missionNpcSpot(mission, targetLocation);
+  const cabinActive = Boolean(stage?.cabin) && targetLocation.id === "airport";
+  if (cabinActive && !cabinGroup) buildCabin();
+  if (cabinGroup) cabinGroup.visible = cabinActive;
+  setAirportBaseHidden(cabinActive);
+  const currentPropsKey = stage?.props ? `${targetLocation.id}:${stage.props}` : "";
+  ensureStagePropGroup(stage, targetLocation);
+  stagePropGroups.forEach((group, key) => {
+    group.visible = key === currentPropsKey;
+  });
+  refreshStageLabel(targetLocation, stage, spot);
+  const baseLabel = locationLabels.get(targetLocation.id);
+  if (baseLabel && !stage) baseLabel.visible = !activeLocation;
+  const actor = npcActors.get(targetLocation.id);
+  if (actor) actor.position.set(spot[0], 0, spot[1]);
+  const ring = locationRings.get(targetLocation.id);
+  if (ring) ring.position.set(spot[0], .08, spot[1]);
+  dom.areaName.textContent = stage?.labelKo || targetLocation.titleKo;
+}
+
 function syncMissionScene({ reposition = false } = {}) {
   const targetLocation = missionLocation();
   if (!targetLocation || !locationGroups.size) return;
-  if (activeSceneLocationId === targetLocation.id && !reposition) return;
+  const mission = currentMission();
+  const stageMissionId = mission?.id || "";
+  if (activeSceneLocationId === targetLocation.id && activeStageMissionId === stageMissionId && !reposition) return;
   const changed = activeSceneLocationId !== targetLocation.id;
   activeSceneLocationId = targetLocation.id;
+  activeStageMissionId = stageMissionId;
   locationGroups.forEach((group, locationId) => {
     group.visible = locationId === targetLocation.id;
   });
   const airportScene = targetLocation.id === "airport";
   if (roadsGroup) roadsGroup.visible = !airportScene;
   if (sceneryGroup) sceneryGroup.visible = !airportScene;
-  if (worldGround?.material?.color) worldGround.material.color.set(airportScene ? 0xaab7c2 : 0x83c96d);
-  if (worldBorder?.material?.color) worldBorder.material.color.set(airportScene ? 0x426681 : 0x68a7c8);
+  applyMissionStage(targetLocation, mission);
+  const cabinScene = airportBaseHidden;
+  if (worldGround?.material?.color) worldGround.material.color.set(cabinScene ? 0x76839c : airportScene ? 0xaab7c2 : 0x83c96d);
+  if (worldBorder?.material?.color) worldBorder.material.color.set(cabinScene ? 0x3c4a63 : airportScene ? 0x426681 : 0x68a7c8);
   if (!airportScene) {
     ambientSpeaker = null;
     dom.ambientBubble.classList.add("is-hidden");
   }
 
+  const spot = missionNpcSpot(mission, targetLocation);
   if (player && (reposition || (changed && Math.hypot(
-    player.position.x - targetLocation.npc.position[0],
-    player.position.z - targetLocation.npc.position[1],
+    player.position.x - spot[0],
+    player.position.z - spot[1],
   ) > 13))) {
-    const direction = outwardDirection(targetLocation);
-    player.position.set(
-      targetLocation.npc.position[0] - direction.x * 7.2,
-      0,
-      targetLocation.npc.position[1] - direction.y * 7.2,
-    );
+    const stage = stageForMission(mission);
+    if (stage?.playerOffset) {
+      player.position.set(spot[0] + stage.playerOffset[0], 0, spot[1] + stage.playerOffset[1]);
+    } else {
+      const direction = outwardDirection(targetLocation);
+      player.position.set(spot[0] - direction.x * 3.0, 0, spot[1] - direction.y * 3.0);
+    }
     state.position.x = Number(player.position.x.toFixed(2));
     state.position.z = Number(player.position.z.toFixed(2));
     saveState();
@@ -1056,7 +1306,7 @@ function syncMissionScene({ reposition = false } = {}) {
 }
 
 function updateAmbientChat() {
-  const canShow = activeSceneLocationId === "airport" && started && player && camera && renderer &&
+  const canShow = activeSceneLocationId === "airport" && !airportBaseHidden && started && player && camera && renderer &&
     !activeLocation && dom.worldConversation.classList.contains("is-hidden") && !isBlockingOverlayOpen();
   if (!canShow || !ambientActors.length) {
     ambientSpeaker = null;
@@ -1152,9 +1402,13 @@ function updateNearestLocation() {
   }
 
   if (activeLocation) {
+    const activeActor = npcActors.get(activeLocation.id);
+    const activeSpot = activeActor
+      ? [activeActor.position.x, activeActor.position.z]
+      : activeLocation.npc.position;
     const distance = Math.hypot(
-      player.position.x - activeLocation.npc.position[0],
-      player.position.z - activeLocation.npc.position[1],
+      player.position.x - activeSpot[0],
+      player.position.z - activeSpot[1],
     );
     nearestLocation = activeLocation;
     if (distance > 5.35 && !activeResult?.canAdvance) {
@@ -1166,8 +1420,9 @@ function updateNearestLocation() {
   }
 
   const nearest = missionLocation();
-  const nearestDistance = nearest
-    ? Math.hypot(player.position.x - nearest.npc.position[0], player.position.z - nearest.npc.position[1])
+  const nearestSpot = nearest ? missionNpcSpot(currentMission(), nearest) : null;
+  const nearestDistance = nearestSpot
+    ? Math.hypot(player.position.x - nearestSpot[0], player.position.z - nearestSpot[1])
     : Infinity;
   const interactionRange = nearestLocation?.id === nearest?.id ? 3.8 : 3.35;
   if (nearestDistance < interactionRange) {
@@ -1253,8 +1508,9 @@ function updateMissionWayfinder() {
     return;
   }
 
-  const dxWorld = targetLocation.npc.position[0] - player.position.x;
-  const dzWorld = targetLocation.npc.position[1] - player.position.z;
+  const missionSpot = missionNpcSpot(mission, targetLocation);
+  const dxWorld = missionSpot[0] - player.position.x;
+  const dzWorld = missionSpot[1] - player.position.z;
   const distance = Math.hypot(dxWorld, dzWorld);
   if (distance < 3.2) {
     hideMissionWayfinder();
@@ -1264,7 +1520,8 @@ function updateMissionWayfinder() {
   if (wayfinderMissionId !== mission.id) {
     wayfinderMissionId = mission.id;
     wayfinderMeters = -1;
-    dom.wayfinderName.textContent = `${targetLocation.icon} ${targetLocation.titleKo}`;
+    const stage = stageForMission(mission);
+    dom.wayfinderName.textContent = `${targetLocation.icon} ${stage?.labelKo || targetLocation.titleKo}`;
     dom.missionWayfinder.classList.remove("is-hidden");
     refreshWayfinderBounds();
   } else {
@@ -1279,7 +1536,7 @@ function updateMissionWayfinder() {
 
   const targetActor = npcActors.get(targetLocation.id);
   if (targetActor) targetActor.getWorldPosition(wayfinderTarget);
-  else wayfinderTarget.set(targetLocation.npc.position[0], 0, targetLocation.npc.position[1]);
+  else wayfinderTarget.set(missionSpot[0], 0, missionSpot[1]);
   wayfinderTarget.y += 2.05;
   camera.updateMatrixWorld(true);
   wayfinderView.copy(wayfinderTarget).applyMatrix4(camera.matrixWorldInverse);
@@ -1425,8 +1682,9 @@ function updateCamera(delta) {
   // and past the player, so any visible frame of it reads as a glitch.
   if (playerActor) playerActor.visible = !npc;
   // Bystanders queue between me and the counter and would fill the whole
-  // first-person frame; step them out of the shot while we talk.
-  ambientActors.forEach((actor) => { actor.visible = !npc; });
+  // first-person frame; step them out of the shot while we talk. In the
+  // cabin stage the whole airport base (crowd included) stays hidden.
+  ambientActors.forEach((actor) => { actor.visible = !npc && !airportBaseHidden; });
   if (!npc && dialogueCameraBlend < .005) dialogueCameraReady = false;
 }
 
@@ -2068,7 +2326,7 @@ function renderMissionGoals() {
     dom.missionBadge.textContent = `미션 ${missionNumber(activeMission)} / ${MISSION_SEQUENCE.length}`;
     dom.missionTitle.textContent = displayMissionTitle(activeMission);
     dom.missionGoal.textContent = "";
-    dom.areaName.textContent = activeLocation.titleKo;
+    dom.areaName.textContent = stageForMission(activeMission)?.labelKo || activeLocation.titleKo;
   }
 }
 
@@ -3109,7 +3367,6 @@ function bindUi() {
   });
   dom.rewardContinue.addEventListener("click", () => {
     dom.rewardScreen.classList.add("is-hidden");
-    const previousMission = missionAtStep(Math.max(0, state.missionStep - 1));
     const nextMission = currentMission();
     const next = missionLocation(nextMission);
     setMissionCard();
@@ -3118,13 +3375,13 @@ function bindUi() {
       showToast(`🎉 ${MISSION_SEQUENCE.length}개 여행 미션을 모두 해결했어요! 출국부터 귀국까지 완주했어요.`, 5600);
       return;
     }
-    if (previousMission?.locationId === nextMission.locationId) {
-      nearestLocation = null;
-      showToast(`새 미션이에요. ${nextMission.npcOverride?.name || next.npc.name}에게 다시 말 걸어 주세요.`, 3900);
-      return;
-    }
+    // 미션을 깰 때마다 다음 상황의 장소로 바로 옮겨 준다 — 같은 건물 안이라도
+    // 무대(검색대→기내→입국심사…)가 바뀌므로 항상 재배치.
+    nearestLocation = null;
     syncMissionScene({ reposition: true });
-    showToast(`미션 ${missionNumber(nextMission)}: ${next.titleKo}로 이동하세요.`, 4200);
+    const stage = stageForMission(nextMission);
+    const placeName = stage?.labelKo || next.titleKo;
+    showToast(`미션 ${missionNumber(nextMission)} · ${placeName}에 도착했어요. ${nextMission.npcOverride?.name || next.npc.name}에게 말 걸어 보세요.`, 4200);
   });
   dom.soundToggle.addEventListener("click", () => {
     soundEnabled = !soundEnabled;
