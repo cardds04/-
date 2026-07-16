@@ -14,6 +14,7 @@ const {
   findMission,
   handleEnglishTravelDialogue,
   normalizeMissionAssessment,
+  repeatedReplyStreak,
 } = require("../lib/english-travel-dialogue-logic.cjs");
 
 function audioDataUri(size = 900, mime = "audio/wav") {
@@ -351,6 +352,126 @@ test("a bare yes after a confirmation question adopts the confirmed sentence wit
   }, { confirmedSentence: "I have one bag." });
   assert.equal(understanding.needsConfirmation, false);
   assert.equal(understanding.interpretedTranscript, "I have one bag.");
+});
+
+test("repeated near-identical attempts are counted from the dialogue history", () => {
+  assert.equal(repeatedReplyStreak("I have one bag.", [
+    { npc: "How many bags?", learner: "I have one back." },
+    { npc: "Sorry, could you say that again?", learner: "I have one bak." },
+  ]), 2);
+  assert.equal(repeatedReplyStreak("I have one bag.", [
+    { npc: "How many bags?", learner: "Sunny City, please." },
+    { npc: "Pardon?", learner: "I have one bag." },
+  ]), 1);
+  assert.equal(repeatedReplyStreak("I have one bag.", [
+    { npc: "Where are you flying?", learner: "Sunny City, please." },
+  ]), 0);
+});
+
+test("the third identical attempt trusts the model's semantic claim without the strict validator", () => {
+  const mission = findMission("journey-01");
+  const raw = modelClaim("boarding_pass", "give me the paper");
+  const strict = normalizeMissionAssessment(raw, mission, {
+    reply: "Give me the paper, please.",
+    alternatives: [],
+    speechConfidence: 0.6,
+    completedGoalIds: [],
+    repeatStreak: 1,
+  });
+  assert.deepEqual(strict.completedGoalIds, []);
+  const lenient = normalizeMissionAssessment(raw, mission, {
+    reply: "Give me the paper, please.",
+    alternatives: [],
+    speechConfidence: 0.6,
+    completedGoalIds: [],
+    repeatStreak: 2,
+  });
+  assert.deepEqual(lenient.completedGoalIds, ["boarding_pass"]);
+});
+
+test("after three failed repeats the NPC lets the traveler through", () => {
+  const mission = findMission("journey-01");
+  const raw = {
+    understood: false,
+    relevant: false,
+    languageQuality: "needs_clarification",
+    safety: "safe",
+    newlyCompletedGoals: [],
+    revokedGoalIds: [],
+    correctedReply: "",
+    feedbackKo: "",
+    npcReplyEn: "Sorry, could you say that again?",
+    npcReplyKo: "",
+    followUpEn: "",
+    followUpKo: "",
+  };
+  const result = normalizeMissionAssessment(raw, mission, {
+    reply: "flurble wam took",
+    alternatives: [],
+    speechConfidence: 0.4,
+    completedGoalIds: [],
+    repeatStreak: 2,
+  });
+  assert.equal(result.decision, "progress");
+  assert.deepEqual(result.newlyCompletedGoalIds, ["destination_city"]);
+  assert.doesNotMatch(result.npcReplyEn, /say that again/i);
+  assert.match(result.explanationKo, /통과할게요/);
+});
+
+test("a repeated sentence skips the confirmation loop and goes straight to evaluation", async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "test-key";
+  let geminiCalls = 0;
+  try {
+    const result = await handleEnglishTravelDialogue({
+      v: 2,
+      mode: "mission",
+      missionId: "journey-01",
+      locationId: "airport",
+      reply: "I have one bag.",
+      alternatives: [],
+      history: [{ npc: "Did you say one bag?", learner: "I have one back." }],
+    }, {
+      missionStateSecret: "test-secret",
+      trustedAudioUnderstanding: {
+        needsConfirmation: true,
+        confirmationKind: "specific",
+        confirmationQuestionEn: "Did you say one bag?",
+        confirmationQuestionKo: "가방이 한 개라고 말했나요?",
+      },
+      fetchImpl: async () => {
+        geminiCalls += 1;
+        return new Response(JSON.stringify({
+          candidates: [{
+            content: {
+              parts: [{
+                text: JSON.stringify({
+                  understood: true,
+                  relevant: true,
+                  languageQuality: "natural",
+                  safety: "safe",
+                  newlyCompletedGoals: [{ id: "baggage_count", evidence: "one bag" }],
+                  revokedGoalIds: [],
+                  correctedReply: "I have one bag.",
+                  feedbackKo: "좋아요!",
+                  npcReplyEn: "One bag, perfect.",
+                  npcReplyKo: "가방 하나, 좋아요.",
+                  followUpEn: "Where are you flying today?",
+                  followUpKo: "오늘 어디로 가시나요?",
+                }),
+              }],
+            },
+          }],
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+    });
+    assert.equal(geminiCalls, 1);
+    assert.equal(result.json.decision, "progress");
+    assert.deepEqual(result.json.newlyCompletedGoalIds, ["baggage_count"]);
+  } finally {
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
+  }
 });
 
 test("clarification wording varies between repeated attempts", async () => {
