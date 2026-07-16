@@ -1643,7 +1643,11 @@
             STORAGE_ADMIN_SCHEDULES,
             STORAGE_CUSTOMER_SCHEDULES,
             STORAGE_WRITER_SCHEDULES,
-            STORAGE_AUTO_BACKUP_ENTRIES
+            STORAGE_AUTO_BACKUP_ENTRIES,
+            // ↓ 작가 2종은 전용 writers 테이블로 동기화 — client_kv 옛 스냅샷(4명)이
+            //   방금 등록한 작가(5명)를 주기적으로 덮어 "5명↔4명 깜빡임" 을 만들던 원인.
+            STORAGE_WRITERS,
+            STORAGE_PHOTOGRAPHER_PROFILES
           ]);
           const kvFilteredLocal = Object.fromEntries(
             [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -4564,20 +4568,24 @@
           }))
           .filter((item) => item.name);
 
-        // profiles 저장소가 비어 있어도 STORAGE_WRITERS(서버 동기화 작가 저장소)에 작가가 있으면 거기서 폴백.
-        // photographer_profiles 와 writers 가 분리 저장돼 있어, 빈 profiles 가 writers 4명을 무시하던
-        // 작가 깜빡임("등록 인원 0명/4명" 번갈아) 의 근본 차단. (둘 다 비면 옛 동작대로 0명 유지)
-        if (!profiles.length) {
-          const writerRows = readStorageArray(STORAGE_WRITERS);
-          if (writerRows.length) {
-            profiles = writerRows
-              .map((w) => ({
-                name: String(w?.name || "").trim(),
-                phone: String(w?.phone || "").trim(),
-                carNumber: String(w?.carNumber || w?.car_number || "").trim()
-              }))
-              .filter((item) => item.name);
-          }
+        // 작가의 단일 진실 = STORAGE_WRITERS(전용 writers 테이블 동기화 저장소).
+        // profiles 는 표시용 캐시일 뿐 — 옛 스냅샷(예: 4명)이 남아 있으면 방금 등록한
+        // 작가(5명)와 번갈아 그려져 "5명↔4명 깜빡임" 이 났다. writers 가 있으면 항상
+        // writers 를 쓰고, profiles 는 phone/차량번호 보강 폴백으로만 사용한다.
+        const writerRows = readStorageArray(STORAGE_WRITERS);
+        if (writerRows.length) {
+          const profileByName = new Map(profiles.map((p) => [p.name.toLowerCase(), p]));
+          profiles = writerRows
+            .map((w) => {
+              const name = String(w?.name || "").trim();
+              const cached = profileByName.get(name.toLowerCase());
+              return {
+                name,
+                phone: String(w?.phone || "").trim() || cached?.phone || "",
+                carNumber: String(w?.carNumber || w?.car_number || "").trim() || cached?.carNumber || ""
+              };
+            })
+            .filter((item) => item.name);
         }
 
         // 저장된 값이 빈 배열이어도 그대로 반영해야 기본값 부활을 막을 수 있음.
