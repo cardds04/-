@@ -3801,6 +3801,7 @@
       const companyDirectoryCodeInputEl = document.getElementById("companyDirectoryCodeInput");
       const companyDirectorySiteSelectEl = document.getElementById("companyDirectorySiteSelect");
       const companyDirectoryCompositionSelectEl = document.getElementById("companyDirectoryCompositionSelect");
+      const companyDirectoryDefaultMemoInputEl = document.getElementById("companyDirectoryDefaultMemoInput");
       const companyDirectorySaveBtnEl = document.getElementById("companyDirectorySaveBtn");
       const companyDirectoryNewBtnEl = document.getElementById("companyDirectoryNewBtn");
       const companyDirectorySaveHintEl = document.getElementById("companyDirectorySaveHint");
@@ -7118,6 +7119,7 @@
         if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = "";
         if (companyDirectorySiteSelectEl) companyDirectorySiteSelectEl.value = "inlog";
         if (companyDirectoryCompositionSelectEl) companyDirectoryCompositionSelectEl.value = "사진만";
+        if (companyDirectoryDefaultMemoInputEl) companyDirectoryDefaultMemoInputEl.value = "";
       }
 
       function fillCompanyDirectoryAdminFormFromRow(row) {
@@ -7136,6 +7138,17 @@
           companyDirectorySiteSelectEl.value = st === "shopick" ? "shopick" : st === "thefeeling" ? "thefeeling" : "inlog";
         }
         presetCompanyDirectoryCompositionSelect(row);
+        // 기본요청사항: 업체명+고유번호 기준 canonical 키로 조회 (STORAGE_COMPANY_DEFAULT_MEMOS)
+        if (companyDirectoryDefaultMemoInputEl) {
+          try {
+            companyDirectoryDefaultMemoInputEl.value = getCompanyDefaultMemoByName(
+              String(row?.name ?? "").trim(),
+              String(row?.code ?? "").trim()
+            );
+          } catch (_) {
+            companyDirectoryDefaultMemoInputEl.value = "";
+          }
+        }
       }
 
       function renderCompanyDirectoryAdminTable() {
@@ -7983,6 +7996,16 @@ ${folderBtn}
                 companyDirectorySaveBtnEl.disabled = false;
                 return;
               }
+            }
+          }
+          // 기본요청사항(공통메모): company_directory 에 컬럼이 없어 STORAGE_COMPANY_DEFAULT_MEMOS
+          // (canonical 업체명 키) 로 저장. 스케줄 메모에 자동 삽입되는 값 — 업체명/고유번호
+          // 기준이라 디렉터리 저장 전에 반영해도 동일 키로 들어간다.
+          if (companyDirectoryDefaultMemoInputEl) {
+            try {
+              setCompanyDefaultMemoByName(nm, companyDirectoryDefaultMemoInputEl.value || "", codeTrim);
+            } catch (memoErr) {
+              console.warn("[업체정보관리] 기본요청사항 저장 실패", memoErr);
             }
           }
           await persistCompanyDirectoryToSupabase({
