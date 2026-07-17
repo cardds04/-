@@ -7250,6 +7250,16 @@
 <td><select class="inline-select" data-dir-field="composition" style="width:100%;max-width:140px"><option value="사진만"${compPreset === "사진만" ? " selected" : ""}>사진만</option><option value="사진영상 둘다"${compPreset === "사진영상 둘다" ? " selected" : ""}>사진영상 둘다</option></select></td>
 <td><input type="text" class="inline-input" data-dir-field="naver_share" value="${escapeHtml(naverLink)}" placeholder="마이박스 폴더 URL" style="width:100%;min-width:130px;box-sizing:border-box;font-size:12px" /></td>
 <td style="white-space:nowrap;font-size:11px"><button type="button" class="btn-sm primary" data-cda-act="inline-save" data-cda-id="${rowAttr}">저장</button> <button type="button" class="btn-sm" data-cda-act="inline-cancel" data-cda-id="${rowAttr}">취소</button> <button type="button" class="btn-sm" data-cda-act="inline-delete" data-cda-id="${rowAttr}">삭제</button><br /><button type="button" class="btn-sm" style="margin-top:4px" data-cda-act="open-nw-folder" data-cda-id="${rowAttr}">폴더열기</button></td>
+</tr>
+<tr${rowBg} data-cda-inline-memo="1" data-cda-row-id="${rowAttr}">
+<td colspan="8" style="padding-top:0">
+  <div style="display:flex;align-items:flex-start;gap:8px">
+    <span style="font-size:0.78rem;font-weight:700;color:#4a5568;white-space:nowrap;padding-top:6px">기본요청사항</span>
+    <textarea class="inline-input" data-dir-field="default_memo" rows="2" placeholder="이 업체의 모든 스케줄 메모에 자동으로 따라붙는 공통 요청사항 (비우고 저장하면 삭제)" style="flex:1;min-width:0;resize:vertical;font-size:0.82rem;box-sizing:border-box">${escapeHtml(
+    getCompanyDefaultMemoByName(nm, code)
+  )}</textarea>
+  </div>
+</td>
 </tr>`;
                     }
 
@@ -7913,6 +7923,11 @@ ${folderBtn}
         const compositionPreset =
           normalize(tr.querySelector('[data-dir-field="composition"]')?.value || "") || "사진만";
         const naverShareRaw = normalize(tr.querySelector('[data-dir-field="naver_share"]')?.value ?? "");
+        // 기본요청사항은 colspan 으로 붙인 별도 <tr data-cda-inline-memo> 에 있음 (같은 row-id).
+        const memoTr = companyDirectoryTabListBodyEl?.querySelector(
+          `tr[data-cda-inline-memo="1"][data-cda-row-id="${CSS.escape(rowId)}"]`
+        );
+        const defaultMemoRaw = memoTr?.querySelector('[data-dir-field="default_memo"]')?.value ?? null;
         if (loginTrim && !passwordTrim) {
           const prev = companyDirectoryAdminRows.find((x) => normalize(String(x?.id ?? "")) === rowId);
           const prevLogin = normalize(String(prev?.login_id || ""));
@@ -7922,6 +7937,15 @@ ${folderBtn}
           }
         }
         try {
+          // 기본요청사항(공통메모): company_directory 컬럼이 아니라 STORAGE_COMPANY_DEFAULT_MEMOS
+          // (canonical 업체명 키). 스케줄 메모에 자동 삽입되는 값.
+          if (defaultMemoRaw !== null) {
+            try {
+              setCompanyDefaultMemoByName(nm, defaultMemoRaw, codeTrim);
+            } catch (memoErr) {
+              console.warn("[업체정보관리] 인라인 기본요청사항 저장 실패", memoErr);
+            }
+          }
           await persistCompanyDirectoryToSupabase({
             rowId,
             nm,
