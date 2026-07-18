@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1920px; overflow:hidden; background:#ffffff; }
+  body { font-family:'NanumGothic','Noto Color Emoji',sans-serif; font-weight:800; }
+  .scene { position:absolute; inset:0; display:none; }
+  svg { position:absolute; inset:0; width:1080px; height:1920px; overflow:visible; }
+  .htext { position:absolute; text-align:center; color:#111; font-weight:800; }
+
+  /* 하단 내레이션 자막 (썰 나레이션) */
+  #narr { position:absolute; left:40px; right:40px; top:1560px; text-align:center;
+    font-size:64px; line-height:1.35; color:#111; font-weight:800; display:none;
+    text-shadow:3px 3px 0 #fff,-3px 3px 0 #fff,3px -3px 0 #fff,-3px -3px 0 #fff; }
+  #narr em { font-style:normal; color:#d00; }
+
+  /* HOOK: 썰 제목 카드 */
+  #hook { background:#fff; }
+  #hk-pre { top:560px; left:0; width:100%; font-size:64px; color:#666; }
+  #hk-t1 { top:680px; left:0; width:100%; font-size:118px; line-height:1.3; }
+  #hk-t1 em { font-style:normal; color:#d00; }
+  #hk-sub { top:1180px; left:0; width:100%; font-size:54px; color:#999; }
+
+  /* 말풍선 */
+  #bub { position:absolute; width:820px; height:300px; display:none; }
+  #bub .btxt { position:absolute; inset:20px 30px 60px; display:flex; align-items:center; justify-content:center;
+    font-size:74px; line-height:1.2; text-align:center; color:#111; font-weight:800; }
+
+  #sit-title { top:90px; left:0; width:100%; font-size:54px; color:#888; }
+
+  /* bridge */
+  #bridge-q { position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:30; }
+  #bridge-q .box { background:#111; color:#fff; font-size:104px; line-height:1.35; padding:56px 80px;
+    text-align:center; transform:rotate(-2deg); font-weight:800; }
+  #bridge-q .box em { font-style:normal; color:#ffd400; }
+
+  /* explain */
+  .wbtext { position:absolute; left:110px; width:860px; text-align:center; color:#111; display:none; font-weight:800; }
+  #wb1 { top:560px; font-size:88px; line-height:1.45; }
+  #wb1 em { font-style:normal; color:#d00; }
+  #wb2 { top:430px; }
+  #wb2 .big { font-size:130px; color:#036; }
+  #wb2 .eng { font-size:46px; color:#888; letter-spacing:4px; margin-top:12px; }
+  #wb2 .desc { margin-top:70px; font-size:66px; line-height:1.5; }
+  #wb3 { top:420px; font-size:70px; line-height:1.5; }
+  #wb3 .warn { display:inline-block; margin-top:26px; color:#d00; font-size:80px; }
+  #src { position:absolute; bottom:90px; left:0; width:100%; text-align:center; font-size:38px; color:#999; display:none; font-weight:400; }
+
+  /* end */
+  #end { background:#fff; }
+  #end-t0 { top:520px; left:0; width:100%; font-size:60px; color:#888; display:none; }
+  #end-t05 { top:620px; left:0; width:100%; font-size:80px; line-height:1.4; display:none; }
+  #end-t05 em { font-style:normal; color:#d00; }
+  #end-t1 { top:900px; left:0; width:100%; font-size:110px; line-height:1.4; display:none; }
+  #end-t2 { top:1270px; left:0; width:100%; font-size:56px; color:#666; display:none; }
+  #end-t3 { top:1370px; left:0; width:100%; font-size:46px; color:#999; display:none; }
+</style>
+</head>
+<body>
+
+<div class="scene" id="hook">
+  <svg id="hook-svg"></svg>
+  <div class="htext" id="hk-pre">[ 심리학 썰풀이 EP.01 ]</div>
+  <div class="htext" id="hk-t1">내가 <em>"국밥"</em> 말했다가<br>죽을 뻔한 썰</div>
+  <div class="htext" id="hk-sub">↓ 실화임 ↓</div>
+</div>
+
+<div class="scene" id="sit">
+  <svg id="sit-svg"></svg>
+  <div class="htext" id="sit-title">- 어제, 저녁 메뉴 고르던 중 -</div>
+  <div id="bub"><svg id="bub-svg" style="width:820px;height:300px;"></svg><div class="btxt" id="bub-text"></div></div>
+  <div id="bridge-q"><div class="box">대체 <em>무슨 일이</em><br>일어난 걸까?</div></div>
+</div>
+
+<div class="scene" id="explain">
+  <svg id="exp-svg"></svg>
+  <div class="wbtext" id="wb1">"아무거나"는 사실<br><em>아무거나가 아니었다</em></div>
+  <div class="wbtext" id="wb2">
+    <div class="big">독심술 기대</div>
+    <div class="eng">MIND - READING</div>
+    <div class="desc">말 안 해도 내 마음을<br>알아줬으면 하는 기대</div>
+  </div>
+  <div class="wbtext" id="wb3">상대가 못 맞추면?<br><span class="warn">"나한테 관심이 없구나"</span><br>로 해석된다</div>
+  <div class="htext" id="src">아론 벡(Aaron Beck) · 인지 왜곡(Cognitive Distortion)</div>
+</div>
+
+<div class="scene" id="sol">
+  <svg id="sol-svg"></svg>
+  <div id="bub2" style="position:absolute;width:820px;height:300px;display:none;">
+    <svg id="bub2-svg" style="width:820px;height:300px;"></svg>
+    <div class="btxt" style="position:absolute;inset:20px 30px 60px;display:flex;align-items:center;justify-content:center;font-size:70px;line-height:1.2;text-align:center;font-weight:800;" id="bub2-text"></div>
+  </div>
+</div>
+
+<div class="scene" id="end">
+  <svg id="end-svg"></svg>
+  <div class="htext" id="end-t0">- 오늘의 교훈 -</div>
+  <div class="htext" id="end-t05">"아무거나"는<br><em>아무거나가 아니다</em></div>
+  <div class="htext" id="end-t1">오늘도 한 커플<br>살렸습니다 🙏</div>
+  <div class="htext" id="end-t2">구독하면 다음 커플도 삽니다</div>
+  <div class="htext" id="end-t3">다음 썰 : "나 화 안 났어" (화가 나 있음) 편</div>
+</div>
+
+<div id="narr"></div>
+
+<script>
+/* ---------- 유틸 ---------- */
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const easeOut=x=>1-Math.pow(1-clamp(x,0,1),3);
+const back=x=>{x=clamp(x,0,1);const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2);};
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* 더 대충 그린 도형 (병맛재판소풍: 마우스로 그린 느낌) */
+function wobEllipse(cx,cy,rx,ry,seed,mag=12,pts=11){
+  const r=rng(seed);let d='';
+  const off=[];for(let i=0;i<pts;i++)off.push((r()-0.5)*2*mag);
+  for(let i=0;i<=pts;i++){
+    const a=i/pts*Math.PI*2;const o=off[i%pts];
+    const x=cx+Math.cos(a)*(rx+o),y=cy+Math.sin(a)*(ry+o);
+    d+=(i===0?'M':'L')+x.toFixed(1)+' '+y.toFixed(1);
+  }
+  return d+'Z';
+}
+function wobLine(x1,y1,x2,y2,seed,mag=9,segs=6){
+  const r=rng(seed);let d='M'+x1+' '+y1;
+  for(let i=1;i<=segs;i++){
+    const t=i/segs;
+    const x=x1+(x2-x1)*t+(i<segs?(r()-0.5)*2*mag:0);
+    const y=y1+(y2-y1)*t+(i<segs?(r()-0.5)*2*mag:0);
+    d+='L'+x.toFixed(1)+' '+y.toFixed(1);
+  }
+  return d;
+}
+function wobRect(x,y,w,h,seed,mag=10){
+  return wobLine(x,y,x+w,y,seed,mag)+wobLine(x+w,y,x+w,y+h,seed+1,mag).replace('M','L')
+    +wobLine(x+w,y+h,x,y+h,seed+2,mag).replace('M','L')+wobLine(x,y+h,x,y,seed+3,mag).replace('M','L')+'Z';
+}
+const P=(d,fill,stroke='#111',sw=5)=>`<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+/* ---------- 짤툰풍 캐릭터 (매끈한 선, 점눈, 데드팬) ---------- */
+function charSVG(id,who,sc,x,y,flip){
+  const F=flip?-1:1;
+  const SW=6;
+  let s=`<g id="${id}" transform="translate(${x},${y}) scale(${F*sc},${sc})">`;
+  // 다리 (짧은 막대)
+  s+=P(wobLine(-42,300,-46,425,id.length+1,3),'none','#111',SW);
+  s+=P(wobLine(42,300,48,425,id.length+2,3),'none','#111',SW);
+  // 몸통 (통짜 튜브)
+  const shirt=who==='bf'?'#8fc1ee':who==='dr'?'#f4f4f4':'#f9a8c9';
+  s+=P(wobEllipse(0,225,88,100,id.length+5,4,20),shirt,'#111',SW);
+  // 팔 (짧은 곡선 + 벙어리손)
+  s+=`<g class="arms-down">`
+    +P(wobLine(-80,180,-118,300,id.length+6,4),'none','#111',SW)
+    +P(wobLine(80,180,118,300,id.length+7,4),'none','#111',SW)
+    +`<circle cx="-120" cy="308" r="14" fill="#ffe3c9" stroke="#111" stroke-width="5"/>`
+    +`<circle cx="120" cy="308" r="14" fill="#ffe3c9" stroke="#111" stroke-width="5"/></g>`;
+  s+=`<g class="arms-up" style="display:none">`
+    +P(wobLine(-80,185,-140,55,id.length+8,4),'none','#111',SW)
+    +P(wobLine(80,185,140,55,id.length+9,4),'none','#111',SW)
+    +`<circle cx="-143" cy="46" r="14" fill="#ffe3c9" stroke="#111" stroke-width="5"/>`
+    +`<circle cx="143" cy="46" r="14" fill="#ffe3c9" stroke="#111" stroke-width="5"/></g>`;
+  // 머리 (매끈한 살구색 타원)
+  s+=P(wobEllipse(0,0,132,122,id.length+10,4,22),'#ffe3c9','#111',SW);
+  // 헤어
+  if(who==='bf'){ // 검정 헬멧 바가지
+    s+=P('M-130,-18 C-135,-155 135,-155 130,-18 C90,-40 60,-34 30,-46 C0,-34 -40,-46 -70,-36 C-95,-44 -115,-30 -130,-18 Z','#222','#111',SW);
+  }else if(who==='gf'){ // 갈색 단발 + 낮은 양갈래
+    s+=P('M-132,-8 C-140,-155 140,-155 132,-8 C110,-30 80,-40 40,-44 C0,-36 -50,-46 -90,-34 C-110,-28 -125,-18 -132,-8 Z','#7a4a2b','#111',SW);
+    s+=P(wobEllipse(-148,60,34,52,77,4,16),'#7a4a2b','#111',SW);
+    s+=P(wobEllipse(148,60,34,52,78,4,16),'#7a4a2b','#111',SW);
+  }else{ // 박사: 대머리 + 옆머리
+    s+=P(wobEllipse(-112,30,24,34,79,4,14),'#cfcfcf','#111',5);
+    s+=P(wobEllipse(112,30,24,34,80,4,14),'#cfcfcf','#111',5);
+  }
+  /* 표정: 가까이 붙은 점눈이 기본 (데드팬) */
+  const dotEyes='<circle cx="-32" cy="6" r="10" fill="#111"/><circle cx="34" cy="6" r="10" fill="#111"/>';
+  const lazyLids='<path d="M-48,-8 L-16,-8 M18,-8 L50,-8" stroke="#111" stroke-width="5"/>';
+  const E=(cls,inner,show)=>`<g class="face ${cls}" style="display:${show?'inline':'none'}">${inner}</g>`;
+  if(who==='bf'){
+    s+=E('f-norm',dotEyes+'<path d="M-14,64 L18,64" stroke="#111" stroke-width="5" fill="none"/>',true);
+    s+=E('f-sweat',dotEyes+lazyLids
+      +'<path d="M-16,66 Q2,58 20,66" stroke="#111" stroke-width="5" fill="none"/>'
+      +P(wobEllipse(112,-44,12,19,85,3),'#aee2ff','#3399cc',4));
+    s+=E('f-conf','<circle cx="-34" cy="0" r="24" fill="#fff" stroke="#111" stroke-width="5"/><circle cx="-34" cy="0" r="5" fill="#111"/>'
+      +'<circle cx="38" cy="0" r="24" fill="#fff" stroke="#111" stroke-width="5"/><circle cx="38" cy="0" r="5" fill="#111"/>'
+      +P(wobEllipse(2,74,26,30,87,4,14),'#5c2f2f','#111',5)
+      +P(wobEllipse(112,-44,12,19,88,3),'#aee2ff','#3399cc',4));
+    s+=E('f-happy','<path d="M-46,4 Q-32,-12 -18,4" stroke="#111" stroke-width="6" fill="none"/>'
+      +'<path d="M20,4 Q34,-12 48,4" stroke="#111" stroke-width="6" fill="none"/>'
+      +P(wobEllipse(2,66,30,20,89,4,14),'#5c2f2f','#111',5));
+  }else if(who==='gf'){
+    s+=E('f-smile',dotEyes+'<path d="M-14,62 Q2,72 18,62" stroke="#111" stroke-width="5" fill="none"/>',true);
+    s+=E('f-flat','<path d="M-48,4 L-16,4" stroke="#111" stroke-width="7"/><path d="M18,4 L50,4" stroke="#111" stroke-width="7"/>'
+      +'<path d="M-12,66 L20,66" stroke="#111" stroke-width="5"/>'
+      +'<path d="M-70,-70 L-88,-30 M-48,-76 L-62,-36 M-26,-80 L-36,-42" stroke="#8899bb" stroke-width="4"/>');
+    s+=E('f-angry','<path d="M-56,-18 L-20,-6 M58,-18 L22,-6" stroke="#111" stroke-width="8"/>'
+      +dotEyes
+      +'<path d="M-20,74 Q2,58 24,74" stroke="#111" stroke-width="6" fill="none"/>'
+      +P(wobEllipse(-86,50,18,10,97,3),'#ff9d9d','none',0)+P(wobEllipse(90,48,18,10,98,3),'#ff9d9d','none',0));
+    s+=E('f-happy','<path d="M-46,4 Q-32,-12 -18,4" stroke="#111" stroke-width="6" fill="none"/>'
+      +'<path d="M20,4 Q34,-12 48,4" stroke="#111" stroke-width="6" fill="none"/>'
+      +P(wobEllipse(2,64,28,18,99,4,14),'#5c2f2f','#111',5));
+  }else{
+    s+=E('f-norm','<circle cx="-40" cy="4" r="28" fill="none" stroke="#111" stroke-width="5"/>'
+      +'<circle cx="44" cy="4" r="28" fill="none" stroke="#111" stroke-width="5"/>'
+      +'<path d="M-12,4 L16,4" stroke="#111" stroke-width="5"/>'
+      +'<circle cx="-40" cy="6" r="7" fill="#111"/><circle cx="44" cy="6" r="7" fill="#111"/>'
+      +'<path d="M-10,66 L18,66" stroke="#111" stroke-width="5"/>'
+      +'<path d="M-40,-70 Q0,-84 40,-72" stroke="#cfcfcf" stroke-width="5" fill="none"/>',true);
+  }
+  s+='</g>';
+  return s;
+}
+
+function bubblePath(seed){
+  return P(wobRect(14,14,792,210,seed,7),'#fff','#111',6)
+    + P('M 390 222 L 355 292 L 452 226','#fff','#111',6);
+}
+
+const $=id=>document.getElementById(id);
+
+/* HOOK: 화난 커플 + 벼락 낙서 */
+$('hook-svg').innerHTML =
+  charSVG('hkbf','bf',0.8,320,1500,false) + charSVG('hkgf','gf',0.8,760,1500,true)
+  + P('M540,1290 L495,1370 L548,1362 L500,1455','none','#e6a817',9)
+  + `<text x="410" y="1310" font-size="90" font-family="Noto Color Emoji">💢</text>`
+  + `<text x="610" y="1310" font-size="90" font-family="Noto Color Emoji">💢</text>`;
+
+/* SIT */
+$('sit-svg').innerHTML =
+  P(wobLine(60,1500,1020,1510,301,10,12),'none','#bbb',5)
+  + charSVG('sbf','bf',1.05,300,1180,false)
+  + charSVG('sgf','gf',1.05,780,1180,true)
+  + `<g id="soul" style="display:none">${P(wobEllipse(0,0,80,95,302,12),'rgba(255,255,255,0.95)','#999',5)}
+     <path d="M-30,-10 L-10,10 M-10,-10 L-30,10" stroke="#777" stroke-width="6"/>
+     <path d="M14,-10 L34,10 M34,-10 L14,10" stroke="#777" stroke-width="6"/></g>`
+  + `<g id="food-doodle" style="display:none"></g>`
+  + `<g id="anger-marks" style="display:none">
+      <text x="810" y="940" font-size="110" font-family="Noto Color Emoji">💢</text>
+      <text x="950" y="1050" font-size="80" font-family="Noto Color Emoji">💢</text></g>`
+  + `<g id="q-marks" style="display:none"><text x="330" y="920" font-size="120" font-family="NanumGothic" font-weight="800" fill="#555">?</text>
+      <text x="210" y="1000" font-size="90" font-family="NanumGothic" font-weight="800" fill="#888">??</text></g>`;
+
+/* EXPLAIN */
+$('exp-svg').innerHTML =
+  P(wobRect(110,300,860,900,306,12),'#fff','#111',7)
+  + P(wobRect(90,1200,900,34,307,7),'#c9a227','#111',5)
+  + charSVG('sdr','dr',0.95,300,1520,false)
+  + P(wobLine(420,1410,600,1290,308,7),'none','#8a5a2b',8)
+  + `<g id="brain-doodle" style="display:none" transform="translate(770,1060)">
+      ${P(wobEllipse(0,0,100,78,309,14),'#ffb8d5','#c2557e',6)}
+      ${P('M-55,-28 q18,-24 38,0 q18,-24 38,0 q18,-18 32,6','none','#c2557e',5)}
+      ${P('M-64,14 q22,18 46,2 q22,16 46,0','none','#c2557e',5)}
+      <text x="105" y="-55" font-size="80" font-family="Noto Color Emoji">💭</text></g>`
+  + `<g id="heartbreak" style="display:none"><text x="470" y="1100" font-size="120" font-family="Noto Color Emoji">💔</text></g>`;
+
+/* SOL: 남친이 말하고 여친 해피 */
+$('sol-svg').innerHTML =
+  P(wobLine(60,1500,1020,1510,310,10,12),'none','#bbb',5)
+  + charSVG('lbf','bf',1.05,300,1180,false)
+  + charSVG('lgf','gf',1.05,780,1180,true)
+  + `<g id="sol-hearts"><text id="sh1" x="470" y="1000" font-size="110" font-family="Noto Color Emoji" style="opacity:0">💕</text>
+      <text id="sh2" x="620" y="930" font-size="80" font-family="Noto Color Emoji" style="opacity:0">💕</text></g>`;
+
+/* END */
+$('end-svg').innerHTML =
+  charSVG('ebf','bf',0.85,380,1620,false) + charSVG('egf','gf',0.85,700,1620,true)
+  + P(wobLine(120,1830,960,1838,313,8,10),'none','#ccc',4);
+
+function face(gid,cls){
+  document.querySelectorAll('#'+gid+' .face').forEach(f=>f.style.display='none');
+  const el=document.querySelector('#'+gid+' .face.'+cls);
+  if(el)el.style.display='inline';
+}
+function arms(gid,up){
+  const d=document.querySelector('#'+gid+' .arms-down'),u=document.querySelector('#'+gid+' .arms-up');
+  if(d)d.style.display=up?'none':'inline';
+  if(u)u.style.display=up?'inline':'none';
+}
+
+/* ---------- 썰 타임라인 ---------- */
+/* 내레이션 (1인칭 썰) */
+const NARR=[
+  {t0:3.3, t1:5.7,  txt:'어제 여자친구랑 밥을 먹으러 갔습니다'},
+  {t0:5.9, t1:8.3,  txt:'메뉴를 물어봤더니 이렇게 말하더군요'},
+  {t0:10.5,t1:12.3, txt:'그래서 저는 <em>정직하게</em> 대답했습니다'},
+  {t0:14.5,t1:16.3, txt:'그 순간… <em>공기가 달라졌습니다</em>'},
+  {t0:18.3,t1:20.4, txt:'저는 아직도 제가 <em>뭘 잘못했는지</em> 모릅니다'},
+  {t0:23.7,t1:26.5, txt:'알고 보니, 심리학에 답이 있었습니다'},
+  {t0:40.8,t1:43.3, txt:'그 뒤로 저는 이렇게 말합니다'},
+  {t0:46.0,t1:47.4, txt:'우리는 <em>평화</em>를 되찾았습니다'},
+];
+/* 말풍선 (회상 장면 대사) */
+const LINES=[
+  {t:8.5,  d:1.9, sp:'gf', txt:'아무거나~ 😊'},
+  {t:12.5, d:1.8, sp:'bf', txt:'그럼 국밥?', food:'gukbap'},
+  {t:16.5, d:1.6, sp:'gf', txt:'…국밥?'},
+];
+
+const scenes={hook:$('hook'),sit:$('sit'),explain:$('explain'),sol:$('sol'),end:$('end')};
+function show(el,on,d){el.style.display=on?(d||'block'):'none';}
+function jitter(t,mag){
+  const b=Math.floor(t*8);
+  const r=rng(b*7919+13);
+  return {x:(r()-0.5)*2*mag, y:(r()-0.5)*2*mag, r:(r()-0.5)*1.2};
+}
+
+window.seek=function(t){
+  show(scenes.hook, t<3.0);
+  show(scenes.sit, t>=3.0 && t<23.5);
+  show(scenes.explain, t>=23.5 && t<40.5);
+  show(scenes.sol, t>=40.5 && t<47.5);
+  show(scenes.end, t>=47.5);
+  const J=jitter(t,4);
+  document.body.style.background=(t>=14.5&&t<20.5)?'#e9e9ef':'#ffffff';
+
+  /* 내레이션 자막 */
+  const narr=$('narr');
+  let n=null;
+  for(const N of NARR) if(t>=N.t0&&t<N.t1) n=N;
+  if(n){
+    narr.style.display='block';
+    narr.innerHTML=n.txt;
+    narr.style.opacity=clamp((t-n.t0)/0.15,0,1);
+  }else narr.style.display='none';
+
+  if(t<3.0){ // HOOK 썰 제목
+    $('hook-svg').style.transform=`translate(${J.x}px,${J.y}px)`;
+    const st=(id,t0)=>{const a=t-t0;const el=$(id);
+      el.style.opacity=a<0?0:1;
+      el.style.transform=`scale(${a<0?2:2-1*easeOut(a/0.25)})`;};
+    st('hk-pre',0.2); st('hk-t1',0.7);
+    $('hk-sub').style.opacity=(t>1.8&&Math.floor(t*3)%2===0)?1:(t>1.8?0.25:0); // 깜빡임
+  }
+
+  if(t>=3.0&&t<23.5){ // 회상 상황극
+    const svg=$('sit-svg');
+    svg.style.transform=`translate(${J.x}px,${J.y}px) rotate(${J.r*0.3}deg)`;
+    $('sit-title').style.opacity=t<8.0?1:0.35;
+    let cur=null;
+    for(const L of LINES) if(t>=L.t&&t<L.t+L.d) cur=L;
+    const bub=$('bub');
+    if(cur){
+      bub.style.display='block';
+      const a=t-cur.t;
+      bub.style.left=(cur.sp==='bf'?70:200)+'px';
+      bub.style.top='560px';
+      bub.style.transform=`scale(${a<0.25?0.5+0.5*back(a/0.25):1}) rotate(${cur.sp==='bf'?-1.5:1.5}deg)`;
+      bub.style.transformOrigin=cur.sp==='bf'?'30% 100%':'70% 100%';
+      $('bub-svg').innerHTML=bubblePath(1000+Math.floor(t*4)%2*7);
+      $('bub-text').innerHTML=cur.txt;
+    }else bub.style.display='none';
+    // 국밥 낙서
+    const fd=$('food-doodle');
+    if(t>=12.5&&t<14.4){fd.style.display='inline';
+      fd.innerHTML='<g transform="translate(270,950)">'
+        +P(wobEllipse(0,20,90,45,201,10),'#fff')
+        +P('M-90,20 C-85,90 85,90 90,20','#d9c6a5','#111',6)
+        +P(wobLine(-30,-30,-38,-70,202,8),'none','#999',4)+P(wobLine(20,-28,15,-72,203,8),'none','#999',4)
+        +'<text x="-56" y="36" font-size="46" font-family="NanumGothic" font-weight="800">국밥</text></g>';}
+    else fd.style.display='none';
+    // 표정
+    if(t<14.5) face('sgf','f-smile');
+    else if(t<16.5) face('sgf','f-flat');
+    else face('sgf','f-angry');
+    if(t<14.5) face('sbf','f-norm');
+    else if(t<18.3) face('sbf','f-sweat');
+    else face('sbf','f-conf');
+    // 공기 어두워짐 (14.5~)
+    document.body.style.background=(t>=14.5&&t<20.5)?'#e9e9ef':'#ffffff';
+    // 분노/혼란 이펙트
+    $('anger-marks').style.display=(t>=16.5&&t<20.5)?'inline':'none';
+    $('q-marks').style.display=(t>=18.3&&t<20.5)?'inline':'none';
+    // 흔들림 (16.5 정색 순간)
+    if(t>=16.5&&t<17.0){const s=jitter(t*3,12);svg.style.transform=`translate(${s.x}px,${s.y}px)`;}
+    // 영혼 가출
+    const soul=$('soul');
+    if(t>=18.5&&t<20.5){
+      soul.style.display='inline';
+      const a=t-18.5;
+      soul.setAttribute('transform',`translate(${300+Math.sin(a*2)*20},${1030-easeOut(a/2.0)*240})`);
+      soul.style.opacity=clamp(a/0.4,0,1);
+    }else soul.style.display='none';
+    // 브릿지
+    const bq=$('bridge-q');
+    if(t>=20.5){
+      show(bq,true,'flex');
+      svg.style.filter='grayscale(1)';
+      const a=t-20.9;
+      bq.style.opacity=t>=20.9?1:0;
+      if(a>0)bq.querySelector('.box').style.transform=`rotate(-2deg) scale(${a<0.3?0.5+0.5*back(a/0.3):1})`;
+    }else{show(bq,false);svg.style.filter='none';}
+  }
+
+  if(t>=23.5&&t<40.5){ // 해설
+    $('exp-svg').style.transform=`translate(${J.x}px,${J.y}px)`;
+    const seg=(el,t0,t1)=>{el.style.display=(t>=t0&&t<t1)?'block':'none';};
+    seg($('wb1'),23.7,27.0); seg($('wb2'),27.2,32.5); seg($('wb3'),32.7,40.5);
+    $('brain-doodle').style.display=(t>=27.2&&t<32.5)?'inline':'none';
+    $('heartbreak').style.display=(t>=34.5&&t<40.5)?'inline':'none';
+    $('src').style.display=t>=34.5?'block':'none';
+    if(t>=27.2&&t<32.5){const a=t-27.2;$('wb2').style.transform=`scale(${a<0.3?0.6+0.4*back(a/0.3):1})`;}
+  }
+
+  if(t>=40.5&&t<47.5){ // 해결 (썰의 결말)
+    $('sol-svg').style.transform=`translate(${J.x}px,${J.y}px)`;
+    face('lbf','f-happy');
+    face('lgf', t>=45.0?'f-happy':'f-smile');
+    arms('lgf', t>=45.0);
+    const b2=$('bub2');
+    if(t>=43.5&&t<45.9){
+      b2.style.display='block';
+      const a=t-43.5;
+      b2.style.left='70px'; b2.style.top='560px';
+      b2.style.transform=`scale(${a<0.25?0.5+0.5*back(a/0.25):1}) rotate(-1.5deg)`;
+      b2.style.transformOrigin='30% 100%';
+      $('bub2-svg').innerHTML=bubblePath(2000+Math.floor(t*4)%2*7);
+      $('bub2-text').innerHTML='국밥, 떡볶이, 초밥 중에<br>뭐 먹을래?';
+    }else b2.style.display='none';
+    $('sh1').style.opacity=t>=45.2?1:0;
+    $('sh2').style.opacity=t>=45.6?1:0;
+    if(t>=45.2){const h=t-45.2;$('sol-hearts').setAttribute('transform',`translate(0,${-easeOut(h/1.2)*80})`);}
+  }
+
+  if(t>=47.5){ // 엔딩
+    $('end-svg').style.transform=`translate(${J.x}px,${J.y}px)`;
+    face('ebf','f-happy'); face('egf','f-happy');
+    arms('ebf',true); arms('egf',true);
+    $('end-t0').style.display=t>=47.7?'block':'none';
+    $('end-t05').style.display=t>=48.0?'block':'none';
+    $('end-t1').style.display=t>=49.3?'block':'none';
+    $('end-t2').style.display=t>=50.6?'block':'none';
+    $('end-t3').style.display=t>=51.1?'block':'none';
+    const a=t-49.3;
+    if(a>0)$('end-t1').style.transform=`scale(${a<0.35?0.6+0.4*back(a/0.35):1})`;
+  }
+};
+window.seek(0);
+</script>
+</body>
+</html>
