@@ -423,7 +423,11 @@
               k === STORAGE_DAYOFF_REQUESTS || // dayoff_requests 전용 테이블로 관리 — 서버 KV 의 옛 스냅샷이
                                             // 신규 휴무 등록 직후 hydrate 되면서 다시 사라져 보이던 버그.
               k === STORAGE_WRITERS || // writers 전용 테이블로 관리 — 옛 KV 스냅샷(4명)이 신규 작가(5명)를
-              k === STORAGE_PHOTOGRAPHER_PROFILES // 덮어 "5명↔4명 깜빡임" 을 만들던 버그. KV 복원 금지.
+              k === STORAGE_PHOTOGRAPHER_PROFILES || // 덮어 "5명↔4명 깜빡임" 을 만들던 버그. KV 복원 금지.
+              k === STORAGE_COUPON_PASSES || // coupon_passes 전용 테이블이 정본 — KV 속 4개월 묵은(3/24)
+                                             // 쿠폰 스냅샷이 hydrate 로 현행값을 덮어 "남은쿠폰 깜빡임" 유발. 복원 금지.
+              k === STORAGE_ADMIN_SESSION_TOKEN // 관리자 토큰은 기기별 — KV 왕복으로 옛/타기기 토큰이 덮으면
+                                                // 401→토큰삭제→비밀번호 재프롬프트 루프. 복원 금지.
             )
               return;
             /** 신규업체 「비우기」: 서버 빈값이 로컬 날짜를 지우면 목록이 부활함 — 빈값은 무시하고, 양쪽 날짜면 최신(cal) 문자열 채택 */
@@ -1649,7 +1653,11 @@
             // ↓ 작가 2종은 전용 writers 테이블로 동기화 — client_kv 옛 스냅샷(4명)이
             //   방금 등록한 작가(5명)를 주기적으로 덮어 "5명↔4명 깜빡임" 을 만들던 원인.
             STORAGE_WRITERS,
-            STORAGE_PHOTOGRAPHER_PROFILES
+            STORAGE_PHOTOGRAPHER_PROFILES,
+            // ↓ 쿠폰은 coupon_passes 전용 테이블이 정본 — KV 이중 저장이 "남은쿠폰 깜빡임" 원인.
+            //   관리자 토큰은 기기별 값이라 공유 KV 에 실으면 안 됨(옛 토큰 전파→401→재프롬프트).
+            STORAGE_COUPON_PASSES,
+            STORAGE_ADMIN_SESSION_TOKEN
           ]);
           const kvFilteredLocal = Object.fromEntries(
             [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -21389,10 +21397,10 @@ ${folderBtn}
         // 이렇게 하면 "스케줄로 잠깐 보였다가 저장된 탭으로 점프"하던 깜빡임이 사라진다.
         // (렌더는 데이터 로드 후 아래 switchMainTab 에서 수행)
         try { applyAdminMainTabVisibility(getRestoredAdminMainTab()); } catch (_) {}
-        // B-3: 첫 민감 테이블 읽기 전에 관리자 토큰 확보(없으면 1회 로그인).
-        // 취소하면 토큰 "" → 기존 anon 경로로 계속 동작(B-4 잠금 전까지 무중단).
+        // B-3: 관리자 토큰이 이미 있으면 프록시 사용, 없어도 비밀번호를 묻지 않는다(사장님 요청 — 비번 프롬프트 제거).
+        // 토큰 없이도 기존 anon 경로로 전 기능 동작(B-4 잠금 전까지 무중단).
         try {
-          await ensureAdminSessionToken(true);
+          await ensureAdminSessionToken(false);
         } catch (_) {}
         const clientKvPullDone = pullScheduleSiteClientKvFromSupabase();
         // 대시보드 GET과 스케줄 GET을 순차(await)하지 않음 — 초기 체감 지연(합산 시간) 방지
