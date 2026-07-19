@@ -56,9 +56,25 @@
     .back{display:inline-block}
   }
   .back{display:none;background:none;border:none;color:var(--sub);font-weight:800;cursor:pointer;font-size:14px}
+  .lock{position:fixed;inset:0;background:#0f1512;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+  .lock .dot{width:44px;height:44px;border-radius:11px;background:var(--accent);display:grid;place-items:center;color:#04231a;font-weight:900;font-size:16px}
+  .lock h1{color:#eafff5;font-size:18px;margin:4px 0 2px}
+  .lock p{color:#8fdcc0;font-size:13px;margin:0 0 8px}
+  .lock input{width:220px;border:none;border-radius:12px;padding:14px 16px;font-size:18px;text-align:center;letter-spacing:6px;font-family:inherit}
+  .lock input:focus{outline:2px solid var(--accent)}
+  .lock button{width:220px;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:800;background:var(--accent);color:#04231a;cursor:pointer}
+  .lock .err{color:#ff9d7a;font-size:12.5px;height:14px}
 </style>
 </head>
 <body>
+<div class="lock" id="lock">
+  <div class="dot">IN</div>
+  <h1>인로그 실시간 상담</h1>
+  <p>관리자 비밀번호를 입력하세요</p>
+  <input id="lockPw" type="password" inputmode="numeric" placeholder="••••" autocomplete="off" />
+  <button id="lockBtn">입장</button>
+  <div class="err" id="lockErr"></div>
+</div>
 <div class="top"><span class="dot">IN</span><b>실시간 상담</b>
   <span class="stat"><span>AI <b id="cAi">0</b></span><span>사람연결 <b id="cHot" style="color:#ff9d7a">0</b></span><span>내응대 <b id="cHuman">0</b></span></span>
 </div>
@@ -214,8 +230,26 @@ document.getElementById('cSend').addEventListener('click',sendHuman);
 document.getElementById('cInput').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); sendHuman(); } });
 document.getElementById('back').addEventListener('click',()=>{ document.getElementById('list').classList.remove('hide'); document.getElementById('pane').classList.remove('show'); if(msgTimer)clearInterval(msgTimer); cur=null; });
 
-renderList();
-listTimer=setInterval(renderList,5000);
+// ── 관리자 비밀번호 잠금 (6315) ──
+const ADMIN_PW='6315';
+function startApp(){
+  document.getElementById('lock').style.display='none';
+  renderList();
+  listTimer=setInterval(renderList,5000);
+}
+function tryUnlock(){
+  const v=document.getElementById('lockPw').value.trim();
+  if(v===ADMIN_PW){ try{ sessionStorage.setItem('inlog_chat_admin_ok','1'); }catch(_){}
+    startApp();
+  } else {
+    document.getElementById('lockErr').textContent='비밀번호가 올바르지 않아요';
+    document.getElementById('lockPw').value=''; document.getElementById('lockPw').focus();
+  }
+}
+document.getElementById('lockBtn').addEventListener('click',tryUnlock);
+document.getElementById('lockPw').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); tryUnlock(); } });
+if(sessionStorage.getItem('inlog_chat_admin_ok')==='1'){ startApp(); }
+else { document.getElementById('lockPw').focus(); }
 </script>
 </body>
 </html>
