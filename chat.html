@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>인로그 촬영 상담</title>
+<style>
+  :root{ --accent:#12b886; --accent-ink:#0b7a58; --ink:#1b241f; --sub:#6b7a72; --line:#e6ece9;
+    --bg:#eef3f1; --ai:#ffffff; --me:#12b886; --me-ink:#04231a; --human:#eaf4ff; --human-ink:#0b4a7a; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--ink); display:flex; justify-content:center}
+  .app{width:100%; max-width:480px; height:100dvh; display:flex; flex-direction:column; background:var(--bg)}
+  header{background:#0f1512; color:#eafff5; padding:12px 16px calc(12px + env(safe-area-inset-top)); flex:0 0 auto}
+  header .row{display:flex; align-items:center; gap:9px}
+  header .dot{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#04231a;font-size:13px;font-weight:900}
+  header b{font-size:16px;letter-spacing:.3px}
+  header .sub{font-size:12px;color:#8fdcc0;margin-top:5px;line-height:1.5}
+  header .status{font-size:11.5px;margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:#1b3a2d;color:#8fdcc0;border-radius:999px;padding:3px 10px}
+  header .status.human{background:#12324f;color:#8fc8ff}
+  header .status i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+  main{flex:1 1 auto; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:10px}
+  .msg{max-width:82%; padding:11px 14px; border-radius:16px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:break-word; animation:pop .2s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.ai{align-self:flex-start; background:var(--ai); border:1px solid var(--line); border-bottom-left-radius:5px}
+  .msg.human{align-self:flex-start; background:var(--human); color:var(--human-ink); border-bottom-left-radius:5px; border:1px solid #cfe4fa}
+  .msg.user{align-self:flex-end; background:var(--me); color:var(--me-ink); border-bottom-right-radius:5px; font-weight:500}
+  .who{font-size:11px;font-weight:800;margin:0 4px 3px;color:var(--sub)}
+  .who.human{color:var(--human-ink)}
+  .typing{align-self:flex-start;background:var(--ai);border:1px solid var(--line);border-radius:16px;border-bottom-left-radius:5px;padding:13px 16px;display:flex;gap:4px}
+  .typing span{width:7px;height:7px;border-radius:50%;background:#b8c6c0;animation:bl 1s infinite}
+  .typing span:nth-child(2){animation-delay:.2s} .typing span:nth-child(3){animation-delay:.4s}
+  @keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  footer{flex:0 0 auto; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:#fff; border-top:1px solid var(--line); display:flex; gap:8px; align-items:flex-end}
+  textarea{flex:1; border:1.5px solid var(--line); border-radius:20px; padding:11px 15px; font-size:16px; font-family:inherit; resize:none; max-height:120px; line-height:1.4; color:var(--ink)}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .send{flex:0 0 auto; width:44px; height:44px; border:none; border-radius:50%; background:var(--accent); color:#04231a; font-size:19px; cursor:pointer; display:grid; place-items:center}
+  .send:disabled{background:#c9d6d0}
+  .sysline{align-self:center; font-size:11.5px; color:var(--sub); background:#dfe8e4; padding:4px 12px; border-radius:999px; margin:2px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="row"><span class="dot">IN</span><b>인로그 촬영 상담</b></div>
+    <div class="sub">AI 도우미가 먼저 상황을 확인하고, 필요하면 촬영 담당자가 직접 이어서 도와드려요.</div>
+    <div class="status" id="status"><i></i> AI 도우미 응대 중</div>
+  </header>
+  <main id="log"></main>
+  <footer>
+    <textarea id="input" rows="1" placeholder="메시지를 입력하세요…" autocomplete="off"></textarea>
+    <button class="send" id="send" aria-label="보내기">↑</button>
+  </footer>
+</div>
+<script>
+const SUPA='https://pidfkrxsgffoqstogmli.supabase.co';
+const ANON='sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW';
+// 세션 토큰: URL ?t= 우선, 없으면 localStorage, 그래도 없으면 새로 생성
+function getToken(){
+  const u=new URLSearchParams(location.search).get('t');
+  if(u){ localStorage.setItem('inlog_chat_token', u.replace(/[^a-zA-Z0-9_-]/g,'').slice(0,48)); }
+  let t=localStorage.getItem('inlog_chat_token');
+  if(!t){ t='w'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem('inlog_chat_token', t); }
+  return t;
+}
+const TOKEN=getToken();
+const log=document.getElementById('log'), input=document.getElementById('input'), sendBtn=document.getElementById('send');
+let seen=new Set(), mode='ai', busy=false, pendingUser=[];
+
+function bubble(role, text){
+  if(role==='user'){ const d=document.createElement('div'); d.className='msg user'; d.textContent=text; log.appendChild(d); }
+  else {
+    const who=document.createElement('div'); who.className='who'+(role==='human'?' human':''); who.textContent = role==='human'?'인로그 담당자':'AI 도우미';
+    const d=document.createElement('div'); d.className='msg '+(role==='human'?'human':'ai'); d.textContent=text;
+    log.appendChild(who); log.appendChild(d);
+  }
+  scrollDown();
+}
+function sysline(t){ const d=document.createElement('div'); d.className='sysline'; d.textContent=t; log.appendChild(d); scrollDown(); }
+function scrollDown(){ requestAnimationFrame(()=>{ log.scrollTop=log.scrollHeight; }); }
+function showTyping(on){
+  let el=document.getElementById('typing');
+  if(on){ if(!el){ el=document.createElement('div'); el.className='typing'; el.id='typing'; el.innerHTML='<span></span><span></span><span></span>'; log.appendChild(el); scrollDown(); } }
+  else if(el){ el.remove(); }
+}
+function render(messages){
+  let added=false;
+  for(const m of messages){
+    if(seen.has(m.id)) continue;
+    // 낙관적으로 이미 그린 내 메시지면(같은 텍스트) 서버본은 표시만 생략(중복 방지)
+    if(m.role==='user'){ const i=pendingUser.indexOf(m.text); if(i>=0){ pendingUser.splice(i,1); seen.add(m.id); continue; } }
+    seen.add(m.id); added=true;
+    bubble(m.role, m.text);
+  }
+  return added;
+}
+function setMode(m){
+  if(m===mode) return;
+  const wasAi = mode==='ai';
+  mode=m;
+  const s=document.getElementById('status');
+  if(m==='human'){ s.className='status human'; s.innerHTML='<i></i> 담당자가 직접 응대 중이에요'; if(wasAi) sysline('촬영 담당자가 대화에 참여했어요'); }
+  else if(m==='closed'){ s.className='status'; s.innerHTML='<i></i> 상담이 종료되었어요'; }
+  else { s.className='status'; s.innerHTML='<i></i> AI 도우미 응대 중'; }
+}
+
+async function poll(){
+  try{
+    const r=await fetch(`${SUPA}/rest/v1/app_state?id=like.chatm_${encodeURIComponent(TOKEN)}_%25&select=id,payload`,{headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
+    if(r.ok){ const rows=await r.json();
+      const msgs=rows.map(x=>({id:x.id,...(x.payload||{})})).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+      render(msgs);
+    }
+    const c=await fetch(`${SUPA}/rest/v1/app_state?id=eq.chatc_${encodeURIComponent(TOKEN)}&select=payload`,{headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
+    if(c.ok){ const cr=await c.json(); const p=cr[0]&&cr[0].payload; if(p&&p.mode) setMode(p.mode); }
+  }catch(e){}
+}
+
+async function send(){
+  const text=input.value.trim();
+  if(!text||busy) return;
+  busy=true; sendBtn.disabled=true;
+  bubble('user', text); pendingUser.push(text);   // 낙관적 표시 → 서버본은 render에서 dedup
+  input.value=''; input.style.height='auto';
+  if(mode==='ai') showTyping(true);
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,text})});
+    const d=await r.json();
+    showTyping(false);
+    if(d&&d.mode) setMode(d.mode);
+    if(d&&d.ok&&Array.isArray(d.messages)){ render(d.messages); }
+    else if(d&&!d.ok){ sysline('일시적인 오류가 있었어요. 잠시 후 다시 시도해 주세요.'); }
+  }catch(e){ showTyping(false); sysline('연결이 불안정해요. 잠시 후 다시 시도해 주세요.'); }
+  busy=false; sendBtn.disabled=false; input.focus();
+}
+
+sendBtn.addEventListener('click', send);
+input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); send(); } });
+input.addEventListener('input', ()=>{ input.style.height='auto'; input.style.height=Math.min(120,input.scrollHeight)+'px'; });
+
+// 시작: init(첫인사) + 폴링
+(async ()=>{
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,action:'init'})});
+    const d=await r.json();
+    if(d&&d.mode) setMode(d.mode);
+    if(d&&Array.isArray(d.messages)) render(d.messages);
+  }catch(e){ sysline('연결이 불안정해요. 새로고침해 주세요.'); }
+  setInterval(poll, 3000);
+})();
+</script>
+</body>
+</html>
