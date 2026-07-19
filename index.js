@@ -16089,7 +16089,95 @@ ${folderBtn}
           restoreDashboardDayDetailIfOpen();
         }
         renderMissingFolderCompaniesBox(activeRows, todayKey);
+        renderKakaoPendingBox();
       }
+
+      /**
+       * 카톡방 오픈 대기 — DM 봇이 아이디·비번을 발급한 업체(app_state id='kakao_pending').
+       * 관리자가 실제 카톡방 개설 후 「개설완료」를 누르면 목록에서 제거된다.
+       */
+      const KAKAO_PENDING_STATE_ID = "kakao_pending";
+      let kakaoPendingLastJson = "";
+      async function fetchKakaoPendingList() {
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(KAKAO_PENDING_STATE_ID)}&select=payload&limit=1`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+          );
+          if (!res.ok) return [];
+          const rows = await res.json();
+          const list = rows && rows[0] && rows[0].payload && rows[0].payload.list;
+          return Array.isArray(list) ? list : [];
+        } catch (_) {
+          return [];
+        }
+      }
+      async function saveKakaoPendingList(list) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify([{ id: KAKAO_PENDING_STATE_ID, payload: { list } }])
+        });
+        return res.ok;
+      }
+      async function renderKakaoPendingBox() {
+        const box = document.getElementById("kakaoPendingBox");
+        if (!box) return;
+        const list = await fetchKakaoPendingList();
+        // 변화 없으면 재렌더 생략(버튼 클릭 도중 깜빡임 방지)
+        const sig = JSON.stringify(list);
+        if (sig === kakaoPendingLastJson && box.dataset.rendered === "1") return;
+        kakaoPendingLastJson = sig;
+        box.dataset.rendered = "1";
+        if (!list.length) {
+          box.innerHTML = '<div class="helper" style="margin:0;color:#16a34a;">카톡방 오픈 대기 중인 업체가 없습니다.</div>';
+          return;
+        }
+        box.innerHTML =
+          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${list.length}개 업체 카톡방 개설 대기</div>` +
+          list.map((m) => {
+            const nm = escapeHtml(String(m && m.name || ""));
+            const ph = escapeHtml(String(m && m.phone || ""));
+            const ts = escapeHtml(String(m && m.ts || ""));
+            return `<div class="customer-alert-row" style="padding:6px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
+              <span style="flex:0 0 110px;"><strong>${nm}</strong></span>
+              <span style="flex:1;min-width:120px;color:#334; font-variant-numeric:tabular-nums;">${ph}</span>
+              <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${ts}</span>
+              <button type="button" class="btn-sm primary" data-action="kakaoPendingDone" data-name="${nm}">개설완료</button>
+            </div>`;
+          }).join("");
+        if (!box.dataset.boundKakaoHandler) {
+          box.dataset.boundKakaoHandler = "1";
+          box.addEventListener("click", async (event) => {
+            const btn = event.target.closest('button[data-action="kakaoPendingDone"]');
+            if (!btn || btn.disabled) return;
+            const name = String(btn.dataset.name || "").trim();
+            if (!name) return;
+            btn.disabled = true;
+            btn.textContent = "처리 중…";
+            try {
+              const cur = await fetchKakaoPendingList();
+              const next = cur.filter((e) => String(e && e.name || "") !== name);
+              const ok = await saveKakaoPendingList(next);
+              if (!ok) throw new Error("save failed");
+              kakaoPendingLastJson = "";
+              box.dataset.rendered = "";
+              await renderKakaoPendingBox();
+            } catch (_) {
+              btn.disabled = false;
+              btn.textContent = "개설완료";
+              alert("처리에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            }
+          });
+        }
+      }
+      // 주기적 갱신 — DM 봇이 새 업체를 등재하면 30초 내 화면에 반영
+      try { setInterval(() => { renderKakaoPendingBox().catch(() => {}); }, 30000); } catch (_) {}
 
       /**
        * 15일간 스케줄(getDashboardFifteenDayWindow 윈도우) 중 업체정보관리에 「폴더연결 주소」
