@@ -8,10 +8,12 @@
   :root{ --accent:#12b886; --accent-ink:#0b7a58; --ink:#1b241f; --sub:#6b7a72; --line:#e6ece9;
     --bg:#eef3f1; --ai:#ffffff; --me:#12b886; --me-ink:#04231a; --human:#eaf4ff; --human-ink:#0b4a7a; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* ‼️키보드 대응: --apph = '지금 실제로 보이는 높이'. JS가 갱신한다.
+     크롬은 visualViewport 로 정확히 알려주지만, 인스타 인앱 브라우저는 안 알려줘서
+     그때는 추정 키보드 높이로 직접 줄인다. 페이지는 잠그지 않는다(브라우저 기본 대응 유지). */
   html,body{margin:0;height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
     background:var(--bg); color:var(--ink); display:flex; justify-content:center}
-  /* --apph: 키보드가 올라오면 JS가 실제 보이는 높이로 갱신 (키보드에 입력창이 덮이는 문제 방지) */
   .app{width:100%; max-width:480px; height:var(--apph, 100dvh); display:flex; flex-direction:column; background:var(--bg); overflow:hidden}
   header{background:#0f1512; color:#eafff5; padding:12px 16px calc(12px + env(safe-area-inset-top)); flex:0 0 auto}
   header .row{display:flex; align-items:center; gap:9px}
@@ -140,22 +142,45 @@ async function send(){
 // 키보드가 올라오면 visualViewport 높이가 줄어든다. 그 높이를 .app 에 그대로 반영해
 // 입력창이 키보드 위로 올라오게 하고, 대화 마지막을 계속 보이게 유지한다.
 const vv = window.visualViewport;
-function fitViewport(){
-  const h = vv ? vv.height : window.innerHeight;
-  document.documentElement.style.setProperty('--apph', h + 'px');
-  // iOS에서 페이지 자체가 밀려 올라가는 것 방지
-  if (window.scrollY !== 0) window.scrollTo(0, 0);
+let baseH = 0;      // 키보드 없을 때 보이는 높이
+let kbGuess = 0;    // 인앱 브라우저용 추정 키보드 높이 (0이면 미사용)
+const visibleH = () => Math.round(vv ? vv.height : window.innerHeight);
+function applyH(h){
+  document.documentElement.style.setProperty('--apph', Math.max(240, Math.round(h)) + 'px');
   scrollDown();
 }
+function fitViewport(){
+  const h = visibleH();
+  if (!kbGuess) baseH = Math.max(baseH, h);
+  applyH(kbGuess ? baseH - kbGuess : h);
+  if (window.scrollY !== 0) window.scrollTo(0, 0);
+}
+// 크롬 등: 키보드가 뜨면 visualViewport 가 실제로 줄어든다 → 그대로 반영
 if (vv) {
-  vv.addEventListener('resize', fitViewport);
+  vv.addEventListener('resize', () => { kbGuess = 0; fitViewport(); });
   vv.addEventListener('scroll', fitViewport);
 }
-window.addEventListener('orientationchange', () => setTimeout(fitViewport, 300));
+window.addEventListener('resize', () => { kbGuess = 0; fitViewport(); });
+window.addEventListener('orientationchange', () => { kbGuess = 0; baseH = 0; setTimeout(fitViewport, 350); });
 fitViewport();
-// 입력창을 누르면(키보드 등장) 잠깐 뒤 다시 맞춰준다 — 기기별 등장 타이밍 편차 대응
-input.addEventListener('focus', () => { [120, 350, 700].forEach(t => setTimeout(fitViewport, t)); });
-input.addEventListener('blur', () => setTimeout(fitViewport, 200));
+
+// ‼️인스타 인앱 브라우저 대응: 키보드가 떴는데도 보이는 높이가 그대로면
+// 브라우저가 키보드 높이를 안 알려주는 것 → 추정치(화면의 46%)로 직접 줄인다.
+// 터치 기기에서만 적용 (데스크톱은 키보드가 화면을 안 가리므로 제외)
+const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+input.addEventListener('focus', () => {
+  if (!isTouch) return;
+  [150, 400, 800, 1300].forEach(t => setTimeout(() => {
+    if (document.activeElement !== input) return;
+    if (visibleH() >= baseH - 40) {           // 안 줄어들었다 = 인앱 브라우저
+      kbGuess = Math.round(baseH * 0.46);
+      applyH(baseH - kbGuess);
+    } else {                                   // 정상 보고 = 실제 값 사용
+      kbGuess = 0; fitViewport();
+    }
+  }, t));
+});
+input.addEventListener('blur', () => { kbGuess = 0; setTimeout(fitViewport, 150); });
 
 sendBtn.addEventListener('click', send);
 input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); send(); } });
