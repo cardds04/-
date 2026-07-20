@@ -10260,7 +10260,6 @@ ${folderBtn}
           .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
       }
       function saveAutoBackupSnapshot(reason = "auto") {
-        const { keepCount } = getAutoBackupConfig();
         const entries = getAutoBackupEntries();
         entries.unshift({
           id: `auto-backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -15008,7 +15007,7 @@ ${folderBtn}
         // (date_key 변경은 아래 queueSchedulesSyncWithRetry 스냅샷 업서트로 반영됨)
         void directPatchScheduleSource(holdItem.customerScheduleId, "active");
 
-        saveAdminSchedulesToStorage();
+        localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data));
         renderList();
         renderPaymentList();
 
