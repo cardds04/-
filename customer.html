@@ -4000,47 +4000,67 @@
           </section>
 
           <section id="shortformSection" class="hidden">
+            <style>
+              #shortformSection .card{padding:20px 18px;}
+              #shortformSection h2{margin:0 0 6px;font-size:1.15rem;}
+              #shortformSection .sf-lead{margin:0 0 16px;color:var(--muted);font-size:0.9rem;line-height:1.5;}
+              #shortformSection .sf-step{font-weight:700;font-size:0.9rem;margin:0 0 8px;color:var(--text);display:block;}
+              #shortformSection select,#shortformSection input,#shortformSection textarea{
+                display:block;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;
+                background:#fff;padding:13px 14px;font-size:0.95rem;font-family:inherit;color:var(--text);appearance:auto;}
+              #shortformSection select:focus,#shortformSection input:focus,#shortformSection textarea:focus{
+                outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(60,120,255,.12);}
+              #shortformSection textarea{resize:vertical;min-height:76px;}
+              #shortformSection .sf-radio{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;
+                padding:13px 14px;background:#fff;cursor:pointer;font-size:0.95rem;margin-bottom:8px;}
+              #shortformSection .sf-radio input{width:auto;display:inline;padding:0;border:0;box-shadow:none;}
+              #shortformSection .sf-note{margin:0 0 10px;padding:12px 14px;border:1px solid #ffd9c9;border-radius:12px;
+                background:#fff6f2;color:#c2410c;font-size:0.88rem;line-height:1.55;}
+              #shortformSection .sf-toggle{width:100%;margin-top:10px;background:#fff;border:1px solid var(--line);
+                border-radius:12px;padding:12px;font-weight:600;color:var(--muted);cursor:pointer;font-size:0.9rem;}
+              #shortformSection .sf-submit{width:100%;margin-top:16px;background:var(--blue);color:#fff;border:0;
+                border-radius:14px;padding:15px;font-weight:800;font-size:1rem;cursor:pointer;}
+              #shortformSection .sf-divider{border:0;border-top:1px solid var(--line);margin:20px 0 14px;}
+              #shortformSection label.sf-fieldlabel{display:block;font-size:0.85rem;color:var(--muted);margin:10px 0 6px;}
+            </style>
             <article class="card">
-              <h2 style="margin:0 0 4px;">스토리형 숏폼 제작</h2>
-              <p class="hint" style="margin:0 0 12px;">인로그 촬영 현장은 자료 없이 바로 신청, 그 외 현장은 자료를 메일로 보내주시면 제작해드려요.</p>
+              <h2>스토리형 숏폼 제작</h2>
+              <p class="sf-lead">인로그로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
 
-              <div class="form">
-                <div id="sfPlaceGroup">
-                  <label class="hint" style="margin:0 0 6px;display:block;">1. 촬영한 곳을 선택해주세요</label>
-                  <select id="sfPlaceSelect" class="row" style="width:100%;">
-                    <option value="">— 인로그로 촬영한 현장 선택 —</option>
-                  </select>
-                </div>
-                <button id="sfExternalToggle" class="btn outline small" type="button" style="margin-top:8px;">인로그 촬영 현장이 아니에요</button>
+              <div id="sfPlaceGroup">
+                <span class="sf-step">1. 촬영한 곳을 선택해주세요</span>
+                <select id="sfPlaceSelect">
+                  <option value="">— 인로그로 촬영한 현장 선택 —</option>
+                </select>
               </div>
+              <button id="sfExternalToggle" class="sf-toggle" type="button">인로그 촬영 현장이 아니에요</button>
 
               <!-- 인로그 촬영 현장: 내용 방식 선택 -->
-              <div id="sfInternalBox" class="form hidden" style="margin-top:14px;">
-                <label class="hint" style="margin:0;">2. 어떻게 만들까요?</label>
-                <label class="row" style="cursor:pointer;"><input type="radio" name="sfMode" value="auto" checked style="width:auto;margin-right:8px;" /> 알아서 만들어 주세요</label>
-                <label class="row" style="cursor:pointer;"><input type="radio" name="sfMode" value="custom" style="width:auto;margin-right:8px;" /> 원하는 내용 넣기</label>
-                <textarea id="sfCustomText" class="row hidden" rows="4" placeholder="원하시는 내용을 적어주세요 (강조하고 싶은 공간, 문구, 분위기 등)" style="width:100%;resize:vertical;"></textarea>
+              <div id="sfInternalBox" class="hidden" style="margin-top:16px;">
+                <span class="sf-step">2. 어떻게 만들까요?</span>
+                <label class="sf-radio"><input type="radio" name="sfMode" value="auto" checked /> 알아서 만들어 주세요</label>
+                <label class="sf-radio"><input type="radio" name="sfMode" value="custom" /> 원하는 내용 넣기</label>
+                <textarea id="sfCustomText" class="hidden" rows="4" placeholder="원하시는 내용을 적어주세요 (강조하고 싶은 공간, 문구, 분위기 등)"></textarea>
               </div>
 
               <!-- 외부 현장: 장소정보 + 메일 안내 -->
-              <div id="sfExternalBox" class="form hidden" style="margin-top:14px;">
-                <div class="hint danger" style="margin:0 0 4px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff8f6;">
-                  📧 영상/사진 자료를 <b>cardds04@naver.com</b> 으로 보내주셔야 제작이 시작돼요.<br>메일 제목에 아래 상호를 적어주시면 빠르게 확인됩니다.
-                </div>
-                <label class="hint" style="margin:0;">아파트명 / 상가명</label>
-                <input id="sfExtName" class="row" style="width:100%;" placeholder="예: OO아파트 / OO상가" />
-                <label class="hint" style="margin:6px 0 0;">지역</label>
-                <input id="sfExtRegion" class="row" style="width:100%;" placeholder="예: 서울 강남구" />
-                <label class="hint" style="margin:6px 0 0;">주소</label>
-                <input id="sfExtAddress" class="row" style="width:100%;" placeholder="상세 주소" />
-                <label class="hint" style="margin:6px 0 0;">추가로 넣고 싶은 내용 (선택)</label>
-                <textarea id="sfExtMemo" class="row" rows="3" placeholder="추가로 넣었으면 하는 내용을 적어주세요" style="width:100%;resize:vertical;"></textarea>
+              <div id="sfExternalBox" class="hidden" style="margin-top:16px;">
+                <div class="sf-note">📧 영상/사진 자료를 <b>cardds04@naver.com</b> 으로 보내주셔야 제작이 시작돼요.<br>메일 제목에 아래 상호를 적어주시면 빠르게 확인됩니다.</div>
+                <label class="sf-fieldlabel" style="margin-top:0;">아파트명 / 상가명</label>
+                <input id="sfExtName" placeholder="예: OO아파트 / OO상가" />
+                <label class="sf-fieldlabel">지역</label>
+                <input id="sfExtRegion" placeholder="예: 서울 강남구" />
+                <label class="sf-fieldlabel">주소</label>
+                <input id="sfExtAddress" placeholder="상세 주소" />
+                <label class="sf-fieldlabel">추가로 넣고 싶은 내용 (선택)</label>
+                <textarea id="sfExtMemo" rows="3" placeholder="추가로 넣었으면 하는 내용을 적어주세요"></textarea>
               </div>
 
-              <button id="sfSubmitBtn" class="btn" type="button" style="width:100%;margin-top:14px;">숏폼 제작 신청하기</button>
-              <div id="sfResult" class="hint" style="margin-top:8px;"></div>
+              <button id="sfSubmitBtn" class="sf-submit" type="button">숏폼 제작 신청하기</button>
+              <div id="sfResult" class="hint" style="margin-top:10px;"></div>
 
-              <h3 class="sub-title" style="margin:18px 0 8px;">내 신청 내역</h3>
+              <hr class="sf-divider" />
+              <h3 class="sub-title" style="margin:0 0 8px;">내 신청 내역</h3>
               <div id="sfMyList" class="status-list"></div>
             </article>
           </section>
@@ -7009,15 +7029,27 @@
       // ── 스토리형 숏폼 신청 ─────────────────────────────
       let sfInited = false;
       function sfEl(id) { return document.getElementById(id); }
+      // 긴 촬영지 주소에서 알아볼 수 있는 현장명만 10글자 이내로 뽑는다
+      function shortPlaceName(p) {
+        let raw = String(p || "").split("/")[0].trim(); // 메모(/ 뒤) 제거
+        const nameRe = /([가-힣A-Za-z0-9]{1,10}(?:단지|아파트|빌라|빌딩|타워|커피|카페|스튜디오|힐스|캐슬|자이|래미안|푸르지오|더샵|편한세상|파크|하우스|상가|오피스텔|플라자|스퀘어|센터))/;
+        let name = (raw.match(nameRe) || [])[1] || "";
+        if (!name) {
+          const roadRe = /([가-힣A-Za-z0-9]*(?:대?로|길)\s?\d*[-\d]*)/;
+          name = (raw.match(roadRe) || [])[1] || raw.replace(/^(서울특별시|서울시|서울|경기도|경기|인천|부산|대구|대전|광주|울산|세종|충남|충북|전남|전북|경남|경북|강원|제주)\S*\s*/, "");
+        }
+        name = name.replace(/\s+/g, " ").trim();
+        return name.length > 10 ? name.slice(0, 10) + "…" : (name || raw.slice(0, 10));
+      }
       async function initShortformTab() {
-        // 촬영한 곳(내 과거+예정 스케줄의 장소) 드롭다운 채우기
+        // 촬영한 곳(내 과거+예정 스케줄의 장소) 드롭다운 채우기 (날짜 앞 + 현장명 축약)
         const sel = sfEl("sfPlaceSelect");
         if (sel && sel.options.length <= 1) {
           const places = [];
           try {
             const scheds = getUserSchedules() || [];
             scheds.forEach((s) => { const p = String(s.place || "").trim(); const d = String(s.date || "").trim();
-              if (p) places.push({ label: `${p}${d ? " (" + d + ")" : ""}`, place: p, date: d }); });
+              if (p) places.push({ label: `${d ? d + " · " : ""}${shortPlaceName(p)}`, place: p, date: d }); });
           } catch (_) {}
           // 최신순, 중복 장소 제거
           const seen = new Set();
