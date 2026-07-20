@@ -4031,10 +4031,36 @@
                 border-radius:14px;padding:15px;font-weight:800;font-size:1rem;cursor:pointer;}
               #shortformSection .sf-divider{border:0;border-top:1px solid var(--line);margin:20px 0 14px;}
               #shortformSection label.sf-fieldlabel{display:block;font-size:0.85rem;color:var(--muted);margin:10px 0 6px;}
+              #shortformSection .sf-balance{display:flex;align-items:center;justify-content:space-between;gap:10px;
+                background:#0f1512;color:#eafff5;border-radius:14px;padding:14px 16px;margin:0 0 16px;}
+              #shortformSection .sf-balance .n{font-size:1.5rem;font-weight:800;color:#c6f24a;}
+              #shortformSection .sf-balance .lbl{font-size:0.85rem;color:#8fdcc0;}
+              #shortformSection .sf-count{display:flex;align-items:center;gap:12px;margin-top:14px;}
+              #shortformSection .sf-count .cbtn{width:44px;height:44px;border:1px solid var(--line);border-radius:12px;
+                background:#fff;font-size:1.3rem;font-weight:700;color:var(--text);cursor:pointer;line-height:1;}
+              #shortformSection .sf-count .cnum{flex:1;text-align:center;font-size:1.15rem;font-weight:800;}
+              #shortformSection .sf-count .cbtn:disabled{opacity:.35;cursor:not-allowed;}
+              #shortformSection .sf-pkg{display:flex;align-items:center;justify-content:space-between;gap:10px;
+                border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff;cursor:pointer;margin-bottom:9px;}
+              #shortformSection .sf-pkg.on{border-color:var(--blue);background:#f5f8ff;}
+              #shortformSection .sf-pkg .pq{font-weight:800;font-size:1rem;}
+              #shortformSection .sf-pkg .pu{font-size:0.78rem;color:var(--muted);margin-top:2px;}
+              #shortformSection .sf-pkg .pp{font-weight:800;color:var(--blue);font-size:1.05rem;}
+              #shortformSection .sf-pay-opt{border:1px solid var(--line);border-radius:12px;padding:15px 16px;margin-bottom:10px;background:#fff;}
+              #shortformSection .sf-pay-opt h4{margin:0 0 8px;font-size:0.95rem;}
+              #shortformSection .sf-bank{font-size:0.92rem;line-height:1.7;color:var(--text);}
+              #shortformSection .sf-bank b{color:var(--blue);}
+              #shortformSection .sf-taxrow{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:0.88rem;cursor:pointer;}
+              #shortformSection .sf-taxrow input{width:18px!important;height:18px;flex:0 0 18px;accent-color:var(--blue);}
             </style>
             <article class="card">
               <h2>스토리형 숏폼 제작</h2>
               <p class="sf-lead">인로그로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
+
+              <div class="sf-balance">
+                <div><div class="lbl">숏폼 진행 남은 횟수</div><span class="lbl" id="sfBalHint" style="display:none;">충전이 필요해요</span></div>
+                <div><span class="n" id="sfBalNum">0</span><span class="lbl"> 회</span></div>
+              </div>
 
               <div id="sfPlaceGroup">
                 <span class="sf-step">1. 촬영한 곳을 선택해주세요</span>
@@ -4065,12 +4091,45 @@
                 <textarea id="sfExtMemo" rows="3" placeholder="추가로 넣었으면 하는 내용을 적어주세요"></textarea>
               </div>
 
+              <div id="sfCountBox" style="margin-top:16px;">
+                <span class="sf-step">몇 개 만들까요?</span>
+                <div class="sf-count">
+                  <button id="sfCountMinus" class="cbtn" type="button">−</button>
+                  <span class="cnum"><span id="sfCountNum">1</span> 개</span>
+                  <button id="sfCountPlus" class="cbtn" type="button">＋</button>
+                </div>
+                <div class="hint" style="margin:6px 2px 0;font-size:0.8rem;">신청 시 남은 횟수에서 차감돼요.</div>
+              </div>
+
               <button id="sfSubmitBtn" class="sf-submit" type="button">숏폼 제작 신청하기</button>
               <div id="sfResult" class="hint" style="margin-top:10px;"></div>
 
               <hr class="sf-divider" />
               <h3 class="sub-title" style="margin:0 0 8px;">내 신청 내역</h3>
               <div id="sfMyList" class="status-list"></div>
+
+              <hr class="sf-divider" />
+              <h3 class="sub-title" style="margin:0 0 4px;">숏폼 횟수 충전</h3>
+              <p class="sf-lead" style="margin:0 0 12px;">필요한 횟수를 충전하면 그만큼 숏폼을 신청할 수 있어요.</p>
+              <div id="sfPkgList"></div>
+              <button id="sfPayBtn" class="sf-submit" type="button" disabled style="background:#c9d6d0;">결제 진행하기</button>
+
+              <!-- 결제 수단 (패키지 선택 후 펼침) -->
+              <div id="sfPayBox" class="hidden" style="margin-top:14px;">
+                <div class="sf-pay-opt">
+                  <h4>💳 카드 결제</h4>
+                  <div class="hint" style="margin:0;">카드 결제는 카카오톡 상담방을 통해 도와드려요. 담당자에게 카드결제를 요청해 주세요.</div>
+                </div>
+                <div class="sf-pay-opt">
+                  <h4>🏦 무통장 입금</h4>
+                  <div class="sf-bank">농협은행 <b>302-15111-69151</b><br>예금주: 김진영</div>
+                  <label class="sf-taxrow"><input type="checkbox" id="sfTax" /> 세금계산서 발행 (10% 추가)</label>
+                  <div class="hint" style="margin:2px 0 0;font-size:0.85rem;">입금하실 금액: <b id="sfPayAmount" style="color:var(--text);"></b></div>
+                  <button id="sfBankSubmit" class="sf-submit" type="button" style="margin-top:12px;">입금 완료 · 충전 신청</button>
+                  <div class="hint" style="margin:6px 2px 0;font-size:0.8rem;">입금이 확인되면 담당자가 횟수를 충전해드려요.</div>
+                </div>
+              </div>
+              <div id="sfPayResult" class="hint" style="margin-top:8px;"></div>
             </article>
           </section>
 
@@ -7050,6 +7109,63 @@
         name = name.replace(/\s+/g, " ").trim();
         return name.length > 10 ? name.slice(0, 10) + "…" : (name || raw.slice(0, 10));
       }
+      // 숏폼 결제 패키지 (price=총액, unit=회당 단가)
+      const SF_PACKAGES = [
+        { qty: 1, price: 50000, unit: 50000 },
+        { qty: 10, price: 350000, unit: 35000 },
+        { qty: 50, price: 1500000, unit: 30000 },
+        { qty: 100, price: 2500000, unit: 25000 },
+        { qty: 150, price: 3000000, unit: 20000 },
+      ];
+      let sfBalance = 0, sfCount = 1, sfPickedPkg = null;
+      const sfWon = (n) => Number(n || 0).toLocaleString("ko-KR");
+      const sfHdr = { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY };
+      async function sfLoadBalance() {
+        const user = getCurrentSessionUser(); if (!user) { sfBalance = 0; return 0; }
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(user.id)}&select=payload`, { headers: sfHdr });
+          if (r.ok) { const j = await r.json(); sfBalance = Math.max(0, parseInt((j[0] && j[0].payload && j[0].payload.balance) || 0, 10)); }
+        } catch (_) {}
+        return sfBalance;
+      }
+      async function sfSetBalance(n) {
+        const user = getCurrentSessionUser(); if (!user) return;
+        sfBalance = Math.max(0, n);
+        await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+          headers: { ...sfHdr, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ id: `sfbal_${user.id}`, payload: { balance: sfBalance, updatedAt: new Date().toISOString() } }]) });
+      }
+      function sfRenderBalance() {
+        sfEl("sfBalNum").textContent = sfBalance;
+        sfEl("sfBalHint").style.display = sfBalance > 0 ? "none" : "inline";
+        if (sfCount > sfBalance) sfCount = sfBalance;
+        if (sfCount < 1) sfCount = 1;
+        sfEl("sfCountNum").textContent = sfCount;
+        sfEl("sfCountMinus").disabled = sfCount <= 1;
+        sfEl("sfCountPlus").disabled = sfCount >= sfBalance;
+        const sub = sfEl("sfSubmitBtn");
+        if (sfBalance <= 0) { sub.disabled = true; sub.style.background = "#c9d6d0"; sub.textContent = "남은 횟수가 없어요 · 아래에서 충전"; sfEl("sfCountBox").style.opacity = ".5"; }
+        else { sub.disabled = false; sub.style.background = ""; sub.textContent = "숏폼 제작 신청하기"; sfEl("sfCountBox").style.opacity = "1"; }
+      }
+      function sfRenderPackages() {
+        const box = sfEl("sfPkgList"); if (!box) return;
+        box.innerHTML = SF_PACKAGES.map((p, i) => `<div class="sf-pkg" data-i="${i}">
+          <div><div class="pq">${p.qty}회</div><div class="pu">회당 ${sfWon(p.unit)}원</div></div>
+          <div class="pp">${sfWon(p.price)}원</div></div>`).join("");
+        box.querySelectorAll(".sf-pkg").forEach((el) => el.addEventListener("click", () => {
+          sfPickedPkg = SF_PACKAGES[+el.dataset.i];
+          box.querySelectorAll(".sf-pkg").forEach((x) => x.classList.toggle("on", x === el));
+          const pb = sfEl("sfPayBtn"); pb.disabled = false; pb.style.background = "";
+          if (!sfEl("sfPayBox").classList.contains("hidden")) sfUpdatePayAmount();
+        }));
+      }
+      function sfUpdatePayAmount() {
+        if (!sfPickedPkg) return;
+        const tax = sfEl("sfTax").checked;
+        const amt = tax ? Math.round(sfPickedPkg.price * 1.1) : sfPickedPkg.price;
+        sfEl("sfPayAmount").textContent = sfWon(amt) + "원" + (tax ? " (세금계산서 포함)" : "");
+      }
+
       async function initShortformTab() {
         // 촬영한 곳(내 과거+예정 스케줄의 장소) 드롭다운 채우기 (날짜 앞 + 현장명 축약)
         const sel = sfEl("sfPlaceSelect");
@@ -7087,15 +7203,55 @@
           // 초기 선택 반영
           document.querySelectorAll('#shortformSection .sf-radio').forEach((lb) => lb.classList.toggle("on", lb.querySelector("input")?.checked));
           sfEl("sfSubmitBtn")?.addEventListener("click", submitShortformRequest);
+          // 개수 선택
+          sfEl("sfCountMinus")?.addEventListener("click", () => { if (sfCount > 1) { sfCount--; sfRenderBalance(); } });
+          sfEl("sfCountPlus")?.addEventListener("click", () => { if (sfCount < sfBalance) { sfCount++; sfRenderBalance(); } });
+          // 충전(결제)
+          sfEl("sfPayBtn")?.addEventListener("click", () => {
+            if (!sfPickedPkg) return;
+            sfEl("sfPayBox").classList.remove("hidden"); sfUpdatePayAmount();
+            sfEl("sfPayBox").scrollIntoView({ block: "center" });
+          });
+          sfEl("sfTax")?.addEventListener("change", sfUpdatePayAmount);
+          sfEl("sfBankSubmit")?.addEventListener("click", submitTopupRequest);
         }
+        sfRenderPackages();
+        await sfLoadBalance();
+        sfRenderBalance();
         renderShortformMyList();
+      }
+      async function submitTopupRequest() {
+        const user = getCurrentSessionUser(); if (!user || !sfPickedPkg) return;
+        const btn = sfEl("sfBankSubmit"); btn.disabled = true; btn.textContent = "신청 중…";
+        const tax = sfEl("sfTax").checked;
+        const amt = tax ? Math.round(sfPickedPkg.price * 1.1) : sfPickedPkg.price;
+        const rid = "sfpay_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        const payload = { customerId: user.id, company: user.company, companyCode: user.companyCode || "", phone: user.phone || "",
+          qty: sfPickedPkg.qty, price: sfPickedPkg.price, tax, amount: amt, method: "bank", status: "submitted",
+          ts: new Date().toISOString().slice(0, 16).replace("T", " ") };
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+            headers: { ...sfHdr, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify([{ id: rid, payload }]) });
+          if (!r.ok) throw new Error("save");
+        } catch (e) { btn.disabled = false; btn.textContent = "입금 완료 · 충전 신청"; alert("일시적인 오류가 있었어요. 다시 시도해주세요."); return; }
+        sfEl("sfPayResult").innerHTML = `✅ 충전 신청이 접수됐어요! <b>${sfPickedPkg.qty}회 · ${sfWon(amt)}원</b><br>입금이 확인되면 담당자가 횟수를 충전해드려요.`;
+        sfEl("sfPayBox").classList.add("hidden");
+        sfEl("sfPayBtn").disabled = true; sfEl("sfPayBtn").style.background = "#c9d6d0";
+        sfPickedPkg = null; sfEl("sfPkgList").querySelectorAll(".sf-pkg").forEach((x) => x.classList.remove("on"));
+        sfEl("sfTax").checked = false;
+        btn.disabled = false; btn.textContent = "입금 완료 · 충전 신청";
       }
       async function submitShortformRequest() {
         const user = getCurrentSessionUser();
         if (!user) { alert("로그인이 필요해요."); return; }
+        await sfLoadBalance();
+        if (sfBalance <= 0) { alert("남은 숏폼 횟수가 없어요. 아래에서 충전 후 신청해 주세요."); sfRenderBalance(); return; }
+        if (sfCount > sfBalance) { sfCount = sfBalance; sfRenderBalance(); }
+        const count = sfCount;
         const btn = sfEl("sfSubmitBtn"); btn.disabled = true; btn.textContent = "신청 중…";
         const external = !sfEl("sfExternalBox").classList.contains("hidden");
-        let payload = { customerId: user.id, company: user.company, companyCode: user.companyCode || "",
+        let payload = { customerId: user.id, company: user.company, companyCode: user.companyCode || "", count,
           phone: user.phone || "", ts: new Date().toISOString().slice(0, 16).replace("T", " "), status: "submitted" };
         if (external) {
           const nm = sfEl("sfExtName").value.trim(), rg = sfEl("sfExtRegion").value.trim(), ad = sfEl("sfExtAddress").value.trim();
@@ -7115,15 +7271,17 @@
             body: JSON.stringify([{ id: rid, payload }]) });
           if (!r.ok) throw new Error("save " + r.status);
         } catch (e) { btn.disabled = false; btn.textContent = "숏폼 제작 신청하기"; alert("일시적인 오류가 있었어요. 잠시 후 다시 시도해주세요."); return; }
+        // 잔여 차감 (신청 시 바로)
+        await sfSetBalance(sfBalance - count);
         sfEl("sfResult").innerHTML = external
-          ? "✅ 신청이 접수됐어요! <b>cardds04@naver.com</b> 으로 영상/사진 자료를 꼭 보내주세요."
-          : "✅ 신청이 접수됐어요! 담당자가 확인 후 제작해드립니다.";
+          ? `✅ 숏폼 ${count}개 신청 접수! <b>cardds04@naver.com</b> 으로 영상/사진 자료를 꼭 보내주세요.`
+          : `✅ 숏폼 ${count}개 신청 접수! 담당자가 확인 후 제작해드립니다.`;
         // 폼 초기화
         sfEl("sfExtName") && (sfEl("sfExtName").value = ""); sfEl("sfExtRegion") && (sfEl("sfExtRegion").value = "");
         sfEl("sfExtAddress") && (sfEl("sfExtAddress").value = ""); sfEl("sfExtMemo") && (sfEl("sfExtMemo").value = "");
         sfEl("sfCustomText") && (sfEl("sfCustomText").value = ""); sfEl("sfPlaceSelect") && (sfEl("sfPlaceSelect").value = "");
         sfEl("sfInternalBox").classList.add("hidden");
-        btn.disabled = false; btn.textContent = "숏폼 제작 신청하기";
+        sfCount = 1; sfRenderBalance();
         setTimeout(renderShortformMyList, 600);
       }
       async function renderShortformMyList() {
@@ -7139,7 +7297,8 @@
         const label = { submitted: "접수", confirmed: "확인", making: "제작중", done: "완료" };
         box.innerHTML = rows.length ? rows.map((x) => {
           const where = x.kind === "external" ? `외부현장 · ${x.placeName || ""}` : `${x.place || ""} · ${x.mode === "custom" ? "원하는내용" : "알아서"}`;
-          return `<div class="status-card"><div class="status-head"><span>${where}</span><span>${label[x.status] || "접수"}</span></div>
+          const cnt = x.count && x.count > 1 ? ` · ${x.count}개` : "";
+          return `<div class="status-card"><div class="status-head"><span>${where}${cnt}</span><span>${label[x.status] || "접수"}</span></div>
             <div class="status-meta">${x.ts || ""}${x.customText ? "<br>내용: " + x.customText : ""}${x.memo ? "<br>추가: " + x.memo : ""}</div></div>`;
         }).join("") : '<p class="hint" style="margin:0;">아직 신청 내역이 없어요.</p>';
       }

@@ -9135,9 +9135,10 @@ ${folderBtn}
       }
       function shortformReqCardHtml(m) {
         const cur = String(m.status || "submitted");
-        const where = m.kind === "external"
+        const qty = m.count && Number(m.count) > 1 ? ` · <b style="color:#2f3e74;">${Number(m.count)}개</b>` : "";
+        const where = (m.kind === "external"
           ? `<b>외부현장</b> · ${escapeHtml(m.placeName || "")}${m.region ? " · " + escapeHtml(m.region) : ""}`
-          : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`;
+          : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`) + qty;
         const detail = [];
         detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
         if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
@@ -9164,24 +9165,88 @@ ${folderBtn}
         if (!shortformReqSectionEl?.dataset.bound) {
           shortformReqSectionEl.dataset.bound = "1";
           shortformReqSectionEl.addEventListener("click", async (event) => {
-            const btn = event.target.closest('button[data-action="shortformSetStatus"]');
-            if (!btn || btn.disabled) return;
-            const id = String(btn.dataset.id || ""), status = String(btn.dataset.status || "");
-            if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
-            btn.disabled = true;
-            try {
-              const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
-              const j = r.ok ? await r.json() : [];
-              const payload = (j[0] && j[0].payload) || {};
-              payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
-              const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-                headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-                body: JSON.stringify([{ id, payload }]) });
-              if (!up.ok) throw new Error("save");
-              await renderShortformRequests();
-            } catch (_) { btn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
+            const stBtn = event.target.closest('button[data-action="shortformSetStatus"]');
+            if (stBtn && !stBtn.disabled) {
+              const id = String(stBtn.dataset.id || ""), status = String(stBtn.dataset.status || "");
+              if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
+              stBtn.disabled = true;
+              try {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
+                const j = r.ok ? await r.json() : [];
+                const payload = (j[0] && j[0].payload) || {};
+                payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
+                const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+                  headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                  body: JSON.stringify([{ id, payload }]) });
+                if (!up.ok) throw new Error("save");
+                await renderShortformRequests();
+              } catch (_) { stBtn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
+              return;
+            }
+            // 충전 입금확인
+            const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
+            if (payBtn && !payBtn.disabled) {
+              await approveShortformTopup(payBtn);
+            }
           });
         }
+        await renderShortformPays();
+      }
+      function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
+      async function fetchShortformPays() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfpay_%25&select=id,payload`, { headers: SHORTFORM_HDR });
+          if (!r.ok) return [];
+          return (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) })).sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+        } catch (_) { return []; }
+      }
+      function shortformPayCardHtml(m) {
+        const paid = String(m.status || "") === "paid";
+        const detail = `업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""} · ${escapeHtml(m.ts || "")}`;
+        const btn = paid
+          ? `<span class="count" style="color:#16a34a;">충전완료</span>`
+          : `<button class="btn-sm primary" type="button" data-action="shortformPayConfirm" data-id="${escapeHtml(m.id)}" data-cust="${escapeHtml(m.customerId || "")}" data-qty="${Number(m.qty) || 0}">입금확인·충전</button>`;
+        return `<div class="customer-alert-row" style="flex-wrap:wrap;gap:6px;padding:9px 8px;align-items:flex-start;">
+          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${Number(m.qty) || 0}회 · ${won0(m.amount)}원${m.tax ? " <span style='color:#c2410c;'>(세금계산서)</span>" : ""}</div>
+          <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail}</div></div>
+          <div>${btn}</div></div>`;
+      }
+      async function renderShortformPays() {
+        const pend = document.getElementById("shortformPayPendingList");
+        const arch = document.getElementById("shortformPayArchiveList");
+        const cnt = document.getElementById("shortformPayCount");
+        if (!pend || !arch) return;
+        const rows = await fetchShortformPays();
+        const pending = rows.filter((r) => String(r.status || "") !== "paid");
+        const paid = rows.filter((r) => String(r.status || "") === "paid");
+        pend.innerHTML = pending.length ? pending.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">대기 중인 충전 신청이 없습니다.</div>';
+        arch.innerHTML = paid.length ? paid.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">충전 완료 기록이 없습니다.</div>';
+        if (cnt) cnt.textContent = `대기 ${pending.length}건`;
+      }
+      async function approveShortformTopup(btn) {
+        const id = String(btn.dataset.id || ""), cust = String(btn.dataset.cust || ""), qty = Number(btn.dataset.qty) || 0;
+        if (!id || !cust || qty <= 0) return;
+        if (!confirm(`${cust} 업체에 숏폼 ${qty}회를 충전할까요? (입금 확인 완료)`)) return;
+        btn.disabled = true; btn.textContent = "충전 중…";
+        try {
+          // 1) 현재 잔여 읽고 +qty
+          const br = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(cust)}&select=payload`, { headers: SHORTFORM_HDR });
+          const bj = br.ok ? await br.json() : [];
+          const cur = Math.max(0, parseInt((bj[0] && bj[0].payload && bj[0].payload.balance) || 0, 10));
+          const bu = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+            headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+            body: JSON.stringify([{ id: `sfbal_${cust}`, payload: { balance: cur + qty, updatedAt: new Date().toISOString() } }]) });
+          if (!bu.ok) throw new Error("balance");
+          // 2) 충전요청 paid 처리
+          const pr = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
+          const pj = pr.ok ? await pr.json() : [];
+          const pl = (pj[0] && pj[0].payload) || {};
+          pl.status = "paid"; pl.paidAt = new Date().toISOString();
+          await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+            headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+            body: JSON.stringify([{ id, payload: pl }]) });
+          await renderShortformPays();
+        } catch (_) { btn.disabled = false; btn.textContent = "입금확인·충전"; alert("충전 처리에 실패했습니다. 다시 시도해 주세요."); }
       }
 
       function renderThefeelingEditRequests() {
