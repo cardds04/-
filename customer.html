@@ -4069,7 +4069,7 @@
             </style>
             <article class="card">
               <h2>스토리형 숏폼 제작</h2>
-              <p class="sf-lead">인로그로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
+              <p class="sf-lead" id="sfLead">인로그로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
 
               <div class="sf-balance">
                 <div><div class="lbl">숏폼 진행 남은 횟수</div><span class="lbl" id="sfBalHint" style="display:none;">충전이 필요해요</span></div>
@@ -4221,6 +4221,7 @@
     <script>
       const customerPageMode = new URLSearchParams(window.location.search).get("mode");
       const isLiteCustomerMode = customerPageMode === "lite";
+      const SF_BRAND = isLiteCustomerMode ? "쇼픽" : "인로그";  // 숏폼 폼 브랜드 표기: 인로그 사이트=인로그, 쇼픽(lite)=쇼픽
       const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "inlog";
       const CUSTOMER_PAGE_STORAGE_TAG = isLiteCustomerMode ? "shopick" : "inlog";
 
@@ -7232,6 +7233,13 @@
         });
       }
       async function initShortformTab() {
+        // 브랜드명(인로그/쇼픽) 모드에 맞게 표기
+        const _lead = sfEl("sfLead");
+        if (_lead) _lead.innerHTML = `${SF_BRAND}로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.`;
+        const _psel0 = sfEl("sfPlaceSelect");
+        if (_psel0 && _psel0.options[0]) _psel0.options[0].textContent = `— ${SF_BRAND}로 촬영한 현장 선택 —`;
+        const _tog = sfEl("sfExternalToggle");
+        if (_tog && sfEl("sfExternalBox") && sfEl("sfExternalBox").classList.contains("hidden")) _tog.textContent = `${SF_BRAND} 촬영 현장이 아니에요`;
         // 촬영한 곳(내 과거+예정 스케줄의 장소) 드롭다운 채우기 (날짜 앞 + 현장명 축약)
         const sel = sfEl("sfPlaceSelect");
         if (sel && sel.options.length <= 1) {
@@ -7254,7 +7262,7 @@
             sfEl("sfExternalBox").classList.toggle("hidden", !goExternal);
             sfEl("sfPlaceGroup").classList.toggle("hidden", goExternal);   // 외부모드면 촬영지 선택 숨김
             sfEl("sfInternalBox").classList.add("hidden");
-            sfEl("sfExternalToggle").textContent = goExternal ? "← 인로그로 촬영한 현장에서 신청할게요" : "인로그 촬영 현장이 아니에요";
+            sfEl("sfExternalToggle").textContent = goExternal ? `← ${SF_BRAND}로 촬영한 현장에서 신청할게요` : `${SF_BRAND} 촬영 현장이 아니에요`;
           });
           sfEl("sfPlaceSelect")?.addEventListener("change", () => {
             const has = !!sfEl("sfPlaceSelect").value;
