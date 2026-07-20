@@ -9139,6 +9139,9 @@ ${folderBtn}
         const where = (m.kind === "external"
           ? `<b>외부현장</b> · ${escapeHtml(m.placeName || "")}${m.region ? " · " + escapeHtml(m.region) : ""}`
           : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`) + qty;
+        const styleTag = m.styleNo
+          ? ` <span style="background:#eaf0fb;color:#2f4f86;font-weight:800;font-size:0.82em;padding:1px 8px;border-radius:999px;white-space:nowrap;">🎬 ${Number(m.styleNo)}번${m.styleName ? " " + escapeHtml(m.styleName) : ""}</span>`
+          : ` <span style="color:#8a94a6;font-size:0.8em;font-weight:600;">🎬 스타일 미지정(담당자 선택)</span>`;
         const detail = [];
         detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
         if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
@@ -9147,7 +9150,7 @@ ${folderBtn}
         const btns = SHORTFORM_STATUS.map(({ key, label }) =>
           `<button class="btn-sm${cur === key ? " primary" : ""}" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="${key}">${label}</button>`).join("");
         return `<div class="customer-alert-row" style="flex-wrap:wrap;gap:6px;padding:9px 8px;align-items:flex-start;">
-          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${where}</div>
+          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${where}${styleTag}</div>
           <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail.join(" · ")} · ${escapeHtml(m.ts || "")}</div></div>
           <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;">${btns}</div></div>`;
       }
