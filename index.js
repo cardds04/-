@@ -110,7 +110,6 @@
         "coupon",
         "receiptLedger",
         "thefeelingEdit",
-        "shortformReq",
         "inlogPhoto",
         "grokTool"
       ];
@@ -3809,7 +3808,6 @@
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
-      const tabShortformReqEl = document.getElementById("tabShortformReq");
       const tabShortformPayEl = document.getElementById("tabShortformPay");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const tabGrokToolEl = document.getElementById("tabGrokTool");
@@ -3854,7 +3852,6 @@
       const thefeelingEditPendingListEl = document.getElementById("thefeelingEditPendingList");
       const thefeelingEditArchiveListEl = document.getElementById("thefeelingEditArchiveList");
       const thefeelingEditPendingCountEl = document.getElementById("thefeelingEditPendingCount");
-      const shortformReqSectionEl = document.getElementById("shortformReqSection");
       const shortformPaySectionEl = document.getElementById("shortformPaySection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const grokToolSectionEl = document.getElementById("grokToolSection");
@@ -9154,39 +9151,6 @@ ${folderBtn}
           <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail.join(" · ")} · ${escapeHtml(m.ts || "")}</div></div>
           <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;">${btns}</div></div>`;
       }
-      async function renderShortformRequests() {
-        const pend = document.getElementById("shortformReqPendingList");
-        const arch = document.getElementById("shortformReqArchiveList");
-        const cnt = document.getElementById("shortformReqCount");
-        if (!pend || !arch) return;
-        const rows = await fetchShortformReqs();
-        const pending = rows.filter((r) => String(r.status || "submitted") !== "done");
-        const done = rows.filter((r) => String(r.status || "") === "done");
-        pend.innerHTML = pending.length ? pending.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">진행 중인 신청이 없습니다.</div>';
-        arch.innerHTML = done.length ? done.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">완료 기록이 없습니다.</div>';
-        if (cnt) cnt.textContent = `진행 중 ${pending.length}건`;
-        if (!shortformReqSectionEl?.dataset.bound) {
-          shortformReqSectionEl.dataset.bound = "1";
-          shortformReqSectionEl.addEventListener("click", async (event) => {
-            const stBtn = event.target.closest('button[data-action="shortformSetStatus"]');
-            if (!stBtn || stBtn.disabled) return;
-            const id = String(stBtn.dataset.id || ""), status = String(stBtn.dataset.status || "");
-            if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
-            stBtn.disabled = true;
-            try {
-              const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
-              const j = r.ok ? await r.json() : [];
-              const payload = (j[0] && j[0].payload) || {};
-              payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
-              const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-                headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-                body: JSON.stringify([{ id, payload }]) });
-              if (!up.ok) throw new Error("save");
-              await renderShortformRequests();
-            } catch (_) { stBtn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
-          });
-        }
-      }
       function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
       async function fetchShortformPays() {
         try {
@@ -9236,6 +9200,18 @@ ${folderBtn}
         pend.innerHTML = pending.length ? pending.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">대기 중인 충전 신청이 없습니다.</div>';
         arch.innerHTML = paid.length ? paid.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">충전 완료 기록이 없습니다.</div>';
         if (cnt) cnt.textContent = `대기 ${pending.length}건`;
+        // 🎬 만들어야 할 숏폼(제작 신청, status!=done) + ✅ 납품 완료(기록, status==done)
+        const reqBox = document.getElementById("shortformMakeList");
+        const doneBox = document.getElementById("shortformDoneList");
+        if (reqBox && doneBox) {
+          const reqs = await fetchShortformReqs();
+          const toMake = reqs.filter((r) => String(r.status || "submitted") !== "done");
+          const delivered = reqs.filter((r) => String(r.status || "") === "done");
+          reqBox.innerHTML = toMake.length ? toMake.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">아직 제작할 숏폼 신청이 없습니다.</div>';
+          doneBox.innerHTML = delivered.length ? delivered.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">납품 완료 기록이 없습니다.</div>';
+          const mkCnt = document.getElementById("shortformMakeCount"); if (mkCnt) mkCnt.textContent = `${toMake.length}건`;
+          const dnCnt = document.getElementById("shortformDoneCount"); if (dnCnt) dnCnt.textContent = `${delivered.length}건`;
+        }
         // 업체별 남은 횟수 + 수동조정 datalist
         const bals = await fetchShortformBalances();
         const balBox = document.getElementById("shortformBalanceList");
@@ -9265,6 +9241,25 @@ ${folderBtn}
           shortformPaySectionEl.addEventListener("click", async (event) => {
             const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
             if (payBtn && !payBtn.disabled) { await approveShortformTopup(payBtn); return; }
+            // 제작 신청 상태 변경(접수확인·제작중·완료)
+            const stBtn = event.target.closest('button[data-action="shortformSetStatus"]');
+            if (stBtn && !stBtn.disabled) {
+              const id = String(stBtn.dataset.id || ""), status = String(stBtn.dataset.status || "");
+              if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
+              stBtn.disabled = true;
+              try {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
+                const j = r.ok ? await r.json() : [];
+                const payload = (j[0] && j[0].payload) || {};
+                payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
+                const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+                  headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                  body: JSON.stringify([{ id, payload }]) });
+                if (!up.ok) throw new Error("save");
+                await renderShortformPay();
+              } catch (_) { stBtn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
+              return;
+            }
           });
           document.getElementById("sfBalRefresh")?.addEventListener("click", () => renderShortformPay());
           document.getElementById("sfAdjCompany")?.addEventListener("input", showCur);
@@ -18058,7 +18053,6 @@ ${folderBtn}
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
-        const isShortformReq = tab === "shortformReq";
         const isShortformPay = tab === "shortformPay";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
@@ -18070,7 +18064,6 @@ ${folderBtn}
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabThefeelingEditEl?.classList.toggle("active", isThefeelingEdit);
-        tabShortformReqEl?.classList.toggle("active", isShortformReq);
         tabShortformPayEl?.classList.toggle("active", isShortformPay);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
@@ -18082,7 +18075,6 @@ ${folderBtn}
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         thefeelingEditSectionEl?.classList.toggle("hidden", !isThefeelingEdit);
-        shortformReqSectionEl?.classList.toggle("hidden", !isShortformReq);
         shortformPaySectionEl?.classList.toggle("hidden", !isShortformPay);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
@@ -18106,7 +18098,6 @@ ${folderBtn}
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
-        const isShortformReq = tab === "shortformReq";
         const isShortformPay = tab === "shortformPay";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
@@ -18118,7 +18109,6 @@ ${folderBtn}
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isThefeelingEdit) renderThefeelingEditRequests();
-        if (isShortformReq) renderShortformRequests();
         if (isShortformPay) renderShortformPay();
         if (isInlogPhoto) {
           // 편집 중에는 서버 pull로 DOM을 덮어쓰지 않음 · Supabase 반영은 저장/일치 확인/탭 재진입(저장 완료 후)에만
@@ -18331,7 +18321,6 @@ ${folderBtn}
       });
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
-      tabShortformReqEl?.addEventListener("click", () => switchMainTab("shortformReq"));
       tabShortformPayEl?.addEventListener("click", () => switchMainTab("shortformPay"));
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
