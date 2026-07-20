@@ -91,6 +91,7 @@
       <div class="top-tabs">
         <button id="tabSchedule" class="active" data-tab="schedule" type="button">스케줄 관리</button>
         <button id="tabPayment" data-tab="payment" type="button">입금 관리</button>
+        <button id="tabShortformPay" data-tab="shortformPay" type="button">숏폼관리</button>
         <button id="tabPayroll" data-tab="payroll" type="button">작가 급여</button>
         <button id="tabCompanyDirectory" data-tab="companyDirectory" type="button">업체정보관리</button>
         <button id="tabBlogCompanies" data-tab="blogCompanies" type="button">블로그 업체</button>
@@ -754,17 +755,42 @@
           <h3 class="sub-title" style="margin: 0 0 8px;">진행 중 (접수 → 접수확인 → 제작중 → 완료)</h3>
           <div id="shortformReqPendingList" class="customer-alert-history" style="max-height: 46vh; margin-bottom: 16px;"></div>
           <h3 class="sub-title" style="margin: 0 0 8px;">완료(기록)</h3>
-          <div id="shortformReqArchiveList" class="customer-alert-history" style="max-height: 28vh;"></div>
+          <div id="shortformReqArchiveList" class="customer-alert-history" style="max-height: 32vh;"></div>
         </article>
-        <article class="card" style="margin-top:12px;">
+      </section>
+
+      <section id="shortformPaySection" class="hidden">
+        <article class="card">
           <div class="schedule-head">
             <h2>숏폼 횟수 충전 (무통장 입금)</h2>
             <div class="head-right"><span id="shortformPayCount" class="count">대기 0건</span></div>
           </div>
           <div class="helper" style="margin-bottom: 8px;">고객이 무통장 입금 후 충전 신청한 건입니다. 입금 확인 후 「입금확인·충전」을 누르면 해당 업체에 횟수가 즉시 충전됩니다. 계좌: 농협 302-15111-69151 김진영</div>
-          <div id="shortformPayPendingList" class="customer-alert-history" style="max-height: 40vh; margin-bottom: 14px;"></div>
+          <div id="shortformPayPendingList" class="customer-alert-history" style="max-height: 34vh; margin-bottom: 14px;"></div>
           <h3 class="sub-title" style="margin: 0 0 8px;">충전 완료(기록)</h3>
-          <div id="shortformPayArchiveList" class="customer-alert-history" style="max-height: 24vh;"></div>
+          <div id="shortformPayArchiveList" class="customer-alert-history" style="max-height: 22vh;"></div>
+        </article>
+
+        <article class="card" style="margin-top:12px;">
+          <div class="schedule-head"><h2>수동 횟수 조정</h2></div>
+          <div class="helper" style="margin-bottom: 8px;">계좌 이체를 직접 확인했거나 조정이 필요할 때, 업체의 남은 횟수를 직접 더하거나 뺄 수 있어요.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input id="sfAdjCompany" list="sfAdjCompanyList" placeholder="업체명(로그인 아이디)" style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;" />
+            <datalist id="sfAdjCompanyList"></datalist>
+            <input id="sfAdjQty" type="number" value="1" min="1" style="width:80px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;text-align:center;" />
+            <span id="sfAdjCurrent" class="helper" style="margin:0;">현재: -</span>
+            <button id="sfAdjPlus" class="btn-sm primary" type="button">＋ 추가</button>
+            <button id="sfAdjMinus" class="btn-sm" type="button">－ 차감</button>
+          </div>
+          <div id="sfAdjResult" class="helper" style="margin-top:6px;"></div>
+        </article>
+
+        <article class="card" style="margin-top:12px;">
+          <div class="schedule-head">
+            <h2>업체별 남은 횟수</h2>
+            <div class="head-right"><button id="sfBalRefresh" class="btn-sm" type="button">새로고침</button></div>
+          </div>
+          <div id="shortformBalanceList" class="customer-alert-history" style="max-height: 40vh;"></div>
         </article>
       </section>
 

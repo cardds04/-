@@ -103,6 +103,7 @@
       const ADMIN_MAIN_TAB_KEYS = [
         "schedule",
         "payment",
+        "shortformPay",
         "payroll",
         "companyDirectory",
         "blogCompanies",
@@ -3809,6 +3810,7 @@
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
       const tabShortformReqEl = document.getElementById("tabShortformReq");
+      const tabShortformPayEl = document.getElementById("tabShortformPay");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const tabGrokToolEl = document.getElementById("tabGrokTool");
       const scheduleSectionEl = document.getElementById("scheduleSection");
@@ -3853,6 +3855,7 @@
       const thefeelingEditArchiveListEl = document.getElementById("thefeelingEditArchiveList");
       const thefeelingEditPendingCountEl = document.getElementById("thefeelingEditPendingCount");
       const shortformReqSectionEl = document.getElementById("shortformReqSection");
+      const shortformPaySectionEl = document.getElementById("shortformPaySection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const grokToolSectionEl = document.getElementById("grokToolSection");
       const grokWebToolBaseInputEl = document.getElementById("grokWebToolBaseInput");
@@ -9166,31 +9169,23 @@ ${folderBtn}
           shortformReqSectionEl.dataset.bound = "1";
           shortformReqSectionEl.addEventListener("click", async (event) => {
             const stBtn = event.target.closest('button[data-action="shortformSetStatus"]');
-            if (stBtn && !stBtn.disabled) {
-              const id = String(stBtn.dataset.id || ""), status = String(stBtn.dataset.status || "");
-              if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
-              stBtn.disabled = true;
-              try {
-                const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
-                const j = r.ok ? await r.json() : [];
-                const payload = (j[0] && j[0].payload) || {};
-                payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
-                const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-                  headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-                  body: JSON.stringify([{ id, payload }]) });
-                if (!up.ok) throw new Error("save");
-                await renderShortformRequests();
-              } catch (_) { stBtn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
-              return;
-            }
-            // 충전 입금확인
-            const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
-            if (payBtn && !payBtn.disabled) {
-              await approveShortformTopup(payBtn);
-            }
+            if (!stBtn || stBtn.disabled) return;
+            const id = String(stBtn.dataset.id || ""), status = String(stBtn.dataset.status || "");
+            if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
+            stBtn.disabled = true;
+            try {
+              const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
+              const j = r.ok ? await r.json() : [];
+              const payload = (j[0] && j[0].payload) || {};
+              payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
+              const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+                headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                body: JSON.stringify([{ id, payload }]) });
+              if (!up.ok) throw new Error("save");
+              await renderShortformRequests();
+            } catch (_) { stBtn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
           });
         }
-        await renderShortformPays();
       }
       function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
       async function fetchShortformPays() {
@@ -9211,7 +9206,26 @@ ${folderBtn}
           <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail}</div></div>
           <div>${btn}</div></div>`;
       }
-      async function renderShortformPays() {
+      async function fetchShortformBalances() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfbal_%25&select=id,payload`, { headers: SHORTFORM_HDR });
+          if (!r.ok) return [];
+          return (await r.json()).map((x) => ({ login: decodeURIComponent(String(x.id).replace(/^sfbal_/, "")), balance: Math.max(0, parseInt((x.payload && x.payload.balance) || 0, 10)), updatedAt: (x.payload && x.payload.updatedAt) || "" }))
+            .sort((a, b) => b.balance - a.balance);
+        } catch (_) { return []; }
+      }
+      async function adjustShortformBalance(login, delta) {
+        const nm = String(login || "").trim(); if (!nm) return null;
+        const br = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(nm)}&select=payload`, { headers: SHORTFORM_HDR });
+        const bj = br.ok ? await br.json() : [];
+        const cur = Math.max(0, parseInt((bj[0] && bj[0].payload && bj[0].payload.balance) || 0, 10));
+        const next = Math.max(0, cur + delta);
+        const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+          headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ id: `sfbal_${nm}`, payload: { balance: next, updatedAt: new Date().toISOString() } }]) });
+        return up.ok ? next : null;
+      }
+      async function renderShortformPay() {
         const pend = document.getElementById("shortformPayPendingList");
         const arch = document.getElementById("shortformPayArchiveList");
         const cnt = document.getElementById("shortformPayCount");
@@ -9222,6 +9236,53 @@ ${folderBtn}
         pend.innerHTML = pending.length ? pending.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">대기 중인 충전 신청이 없습니다.</div>';
         arch.innerHTML = paid.length ? paid.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">충전 완료 기록이 없습니다.</div>';
         if (cnt) cnt.textContent = `대기 ${pending.length}건`;
+        // 업체별 남은 횟수 + 수동조정 datalist
+        const bals = await fetchShortformBalances();
+        const balBox = document.getElementById("shortformBalanceList");
+        if (balBox) balBox.innerHTML = bals.length
+          ? bals.map((b) => `<div class="customer-alert-row" style="padding:8px;gap:8px;align-items:center;">
+              <span style="flex:1;font-weight:700;">${escapeHtml(b.login)}</span>
+              <span style="font-weight:800;color:#2f3e74;">${b.balance}회</span>
+              <span class="helper" style="margin:0;font-size:0.78em;">${escapeHtml(String(b.updatedAt).slice(0, 16).replace("T", " "))}</span></div>`).join("")
+          : '<div class="helper" style="margin:0;">아직 잔여 기록이 있는 업체가 없습니다.</div>';
+        const dl = document.getElementById("sfAdjCompanyList");
+        if (dl) {
+          const names = new Set(bals.map((b) => b.login));
+          try { (companies || []).forEach((c) => { const id = String(c?.login_id || c?.code || "").trim(); if (id) names.add(id); }); } catch (_) {}
+          dl.innerHTML = [...names].map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+        }
+        // 현재 입력된 업체 잔여 미리보기
+        const showCur = async () => {
+          const el = document.getElementById("sfAdjCompany"); const out = document.getElementById("sfAdjCurrent");
+          const nm = String(el?.value || "").trim();
+          if (!nm) { if (out) out.textContent = "현재: -"; return; }
+          const hit = bals.find((b) => b.login === nm);
+          if (out) out.textContent = `현재: ${hit ? hit.balance + "회" : "0회(신규)"}`;
+        };
+        if (!shortformPaySectionEl?.dataset.bound) {
+          shortformPaySectionEl.dataset.bound = "1";
+          // 입금확인·충전
+          shortformPaySectionEl.addEventListener("click", async (event) => {
+            const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
+            if (payBtn && !payBtn.disabled) { await approveShortformTopup(payBtn); return; }
+          });
+          document.getElementById("sfBalRefresh")?.addEventListener("click", () => renderShortformPay());
+          document.getElementById("sfAdjCompany")?.addEventListener("input", showCur);
+          const doAdjust = async (sign) => {
+            const el = document.getElementById("sfAdjCompany"); const qEl = document.getElementById("sfAdjQty");
+            const nm = String(el?.value || "").trim(); const q = Math.max(1, parseInt(qEl?.value || "0", 10) || 0);
+            if (!nm) { alert("업체명(로그인 아이디)을 입력해 주세요."); return; }
+            if (sign < 0 && !confirm(`${nm} 업체의 남은 횟수에서 ${q}회를 차감할까요?`)) return;
+            const res = document.getElementById("sfAdjResult");
+            const next = await adjustShortformBalance(nm, sign * q);
+            if (next === null) { if (res) res.textContent = "처리에 실패했어요. 다시 시도해 주세요."; return; }
+            if (res) res.innerHTML = `✅ ${escapeHtml(nm)} — 남은 횟수 <b>${next}회</b>로 조정됐어요.`;
+            await renderShortformPay();
+          };
+          document.getElementById("sfAdjPlus")?.addEventListener("click", () => doAdjust(1));
+          document.getElementById("sfAdjMinus")?.addEventListener("click", () => doAdjust(-1));
+        }
+        showCur();
       }
       async function approveShortformTopup(btn) {
         const id = String(btn.dataset.id || ""), cust = String(btn.dataset.cust || ""), qty = Number(btn.dataset.qty) || 0;
@@ -9245,7 +9306,7 @@ ${folderBtn}
           await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
             headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
             body: JSON.stringify([{ id, payload: pl }]) });
-          await renderShortformPays();
+          await renderShortformPay();
         } catch (_) { btn.disabled = false; btn.textContent = "입금확인·충전"; alert("충전 처리에 실패했습니다. 다시 시도해 주세요."); }
       }
 
@@ -17998,6 +18059,7 @@ ${folderBtn}
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
         const isShortformReq = tab === "shortformReq";
+        const isShortformPay = tab === "shortformPay";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         const isCompanyDirectory = tab === "companyDirectory";
@@ -18009,6 +18071,7 @@ ${folderBtn}
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabThefeelingEditEl?.classList.toggle("active", isThefeelingEdit);
         tabShortformReqEl?.classList.toggle("active", isShortformReq);
+        tabShortformPayEl?.classList.toggle("active", isShortformPay);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
         tabCompanyDirectoryEl?.classList.toggle("active", isCompanyDirectory);
@@ -18020,6 +18083,7 @@ ${folderBtn}
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         thefeelingEditSectionEl?.classList.toggle("hidden", !isThefeelingEdit);
         shortformReqSectionEl?.classList.toggle("hidden", !isShortformReq);
+        shortformPaySectionEl?.classList.toggle("hidden", !isShortformPay);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         companyDirectorySectionEl?.classList.toggle("hidden", !isCompanyDirectory);
@@ -18054,6 +18118,7 @@ ${folderBtn}
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isThefeelingEdit) renderThefeelingEditRequests();
         if (isShortformReq) renderShortformRequests();
+        if (isShortformPay) renderShortformPay();
         if (isInlogPhoto) {
           // 편집 중에는 서버 pull로 DOM을 덮어쓰지 않음 · Supabase 반영은 저장/일치 확인/탭 재진입(저장 완료 후)에만
           if (!inlogEditorDirty) {
@@ -18266,6 +18331,7 @@ ${folderBtn}
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
       tabShortformReqEl?.addEventListener("click", () => switchMainTab("shortformReq"));
+      tabShortformPayEl?.addEventListener("click", () => switchMainTab("shortformPay"));
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
         if (!btn) return;
