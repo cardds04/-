@@ -18107,6 +18107,7 @@ ${folderBtn}
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
         const isShortformReq = tab === "shortformReq";
+        const isShortformPay = tab === "shortformPay";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         const isCompanyDirectory = tab === "companyDirectory";
