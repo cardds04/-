@@ -4538,6 +4538,43 @@
           )
         );
         if (!Object.keys(kv).length) return;
+        // ‼️검수전 배지 키는 로컬-우선 덮어쓰기 금지(2026-07-20, index.js와 동일 규칙):
+        //   push 직전 서버의 해당 키만 조회해 항목(스케줄id×photo/video) 단위 union 병합.
+        //   조회 실패 시엔 기존 동작 유지(로컬 값 그대로).
+        try {
+          const RRK = "scheduleSiteDeliveryReviewReadyV1";
+          const rrRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?id=eq.${encodeURIComponent(SUPABASE_CLIENT_KV_ROW_ID)}&select=rr:kv->>${RRK}&limit=1`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }, cache: "no-store" }
+          );
+          if (rrRes.ok) {
+            const rrRows = await rrRes.json();
+            const parseRR = (s) => {
+              try {
+                const o = typeof s === "string" ? JSON.parse(s) : null;
+                return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+              } catch (e) { return {}; }
+            };
+            const sv = parseRR(Array.isArray(rrRows) && rrRows[0] ? rrRows[0].rr : null);
+            const lc = parseRR(kv[RRK]);
+            if (Object.keys(sv).length || Object.keys(lc).length) {
+              const out = {};
+              for (const sid of new Set([...Object.keys(sv), ...Object.keys(lc)])) {
+                const a = sv[sid] && typeof sv[sid] === "object" ? sv[sid] : {};
+                const b = lc[sid] && typeof lc[sid] === "object" ? lc[sid] : {};
+                const e = {};
+                for (const f of ["photo", "video"]) {
+                  const va = typeof a[f] === "string" ? a[f] : "";
+                  const vb = typeof b[f] === "string" ? b[f] : "";
+                  const v = va && vb ? (vb >= va ? vb : va) : (vb || va);
+                  if (v) e[f] = v;
+                }
+                if (e.photo || e.video) out[sid] = e;
+              }
+              kv[RRK] = JSON.stringify(out);
+            }
+          }
+        } catch (_) {}
         scheduleSiteClientKvPushInFlight = true;
         const ac = new AbortController();
         const pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);

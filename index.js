@@ -1685,6 +1685,37 @@
           // 로컬이 서버를 덮어씀 — 단, includeInlogData=false 시 인로그 키는 로컬에 없으므로
           // 서버의 인로그 데이터가 그대로 유지된다.
           const kvFiltered = { ...serverKvFiltered, ...kvFilteredLocal };
+          // ‼️검수전 배지 키(scheduleSiteDeliveryReviewReadyV1)는 로컬-우선 덮어쓰기 금지 (2026-07-20).
+          //   다른 탭/기기의 stale 로컬이 서버에 새로 기록된 배지를 통째로 지우던 버그(7/14·7/19 재발).
+          //   항목(스케줄id×photo/video) 단위 union — 양쪽에 있으면 최신 ISO 승, 한쪽에만 있으면 보존.
+          //   삭제(완료 처리 시 로컬 delete)는 전파되지 않지만 완료(초록, notified_at)가 표시 우선이라 무해.
+          {
+            const RRK = "scheduleSiteDeliveryReviewReadyV1";
+            const parseRR = (s) => {
+              try {
+                const o = typeof s === "string" ? JSON.parse(s) : null;
+                return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+              } catch (e) { return {}; }
+            };
+            const sv = parseRR(serverKvRaw[RRK]);
+            const lc = parseRR(kvFilteredLocal[RRK]);
+            if (Object.keys(sv).length || Object.keys(lc).length) {
+              const out = {};
+              for (const sid of new Set([...Object.keys(sv), ...Object.keys(lc)])) {
+                const a = sv[sid] && typeof sv[sid] === "object" ? sv[sid] : {};
+                const b = lc[sid] && typeof lc[sid] === "object" ? lc[sid] : {};
+                const e = {};
+                for (const f of ["photo", "video"]) {
+                  const va = typeof a[f] === "string" ? a[f] : "";
+                  const vb = typeof b[f] === "string" ? b[f] : "";
+                  const v = va && vb ? (vb >= va ? vb : va) : (vb || va);
+                  if (v) e[f] = v;
+                }
+                if (e.photo || e.video) out[sid] = e;
+              }
+              kvFiltered[RRK] = JSON.stringify(out);
+            }
+          }
           if (!Object.keys(kvFiltered).length) return false;
           pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
@@ -16098,29 +16129,37 @@ ${folderBtn}
        */
       const KAKAO_PENDING_STATE_ID = "kakao_pending";
       let kakaoPendingLastJson = "";
-      async function fetchKakaoPendingList() {
+      const KAKAO_HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+      // 봇 등록(리스트 1행 kakao_pending) + 웹 견적 리드(개별 행 klead_*) 를 함께 읽어 통합.
+      async function fetchKakaoPendingItems() {
+        const items = [];
         try {
           const res = await fetch(
             `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(KAKAO_PENDING_STATE_ID)}&select=payload&limit=1`,
-            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-          );
-          if (!res.ok) return [];
-          const rows = await res.json();
-          const list = rows && rows[0] && rows[0].payload && rows[0].payload.list;
-          return Array.isArray(list) ? list : [];
-        } catch (_) {
-          return [];
-        }
+            { headers: KAKAO_HDR });
+          if (res.ok) {
+            const rows = await res.json();
+            const list = rows && rows[0] && rows[0].payload && rows[0].payload.list;
+            (Array.isArray(list) ? list : []).forEach((e) => items.push({ ...e, __src: "list" }));
+          }
+        } catch (_) {}
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=like.klead_%25&select=id,payload`,
+            { headers: KAKAO_HDR });
+          if (res.ok) {
+            const rows = await res.json();
+            (rows || []).forEach((r) => items.push({ ...(r.payload || {}), __src: "row", __id: r.id }));
+          }
+        } catch (_) {}
+        // 최신순 (ts 문자열 내림차순)
+        items.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+        return items;
       }
       async function saveKakaoPendingList(list) {
         const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
           method: "POST",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-            Prefer: "resolution=merge-duplicates,return=minimal"
-          },
+          headers: { ...KAKAO_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
           body: JSON.stringify([{ id: KAKAO_PENDING_STATE_ID, payload: { list } }])
         });
         return res.ok;
@@ -16128,43 +16167,70 @@ ${folderBtn}
       async function renderKakaoPendingBox() {
         const box = document.getElementById("kakaoPendingBox");
         if (!box) return;
-        const list = await fetchKakaoPendingList();
-        // 변화 없으면 재렌더 생략(버튼 클릭 도중 깜빡임 방지)
-        const sig = JSON.stringify(list);
+        const items = await fetchKakaoPendingItems();
+        const sig = JSON.stringify(items);
         if (sig === kakaoPendingLastJson && box.dataset.rendered === "1") return;
         kakaoPendingLastJson = sig;
         box.dataset.rendered = "1";
-        if (!list.length) {
+        if (!items.length) {
           box.innerHTML = '<div class="helper" style="margin:0;color:#16a34a;">카톡방 오픈 대기 중인 업체가 없습니다.</div>';
           return;
         }
         box.innerHTML =
-          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${list.length}개 업체 카톡방 개설 대기</div>` +
-          list.map((m) => {
-            const nm = escapeHtml(String(m && m.name || ""));
-            const ph = escapeHtml(String(m && m.phone || ""));
-            const ts = escapeHtml(String(m && m.ts || ""));
-            return `<div class="customer-alert-row" style="padding:6px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
-              <span style="flex:0 0 110px;"><strong>${nm}</strong></span>
-              <span style="flex:1;min-width:120px;color:#334; font-variant-numeric:tabular-nums;">${ph}</span>
-              <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${ts}</span>
-              <button type="button" class="btn-sm primary" data-action="kakaoPendingDone" data-name="${nm}">개설완료</button>
+          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${items.length}건 카톡방 개설 대기</div>` +
+          items.map((m, i) => {
+            const nm = escapeHtml(String(m.name || ""));
+            const ph = escapeHtml(String(m.phone || ""));
+            const ts = escapeHtml(String(m.ts || ""));
+            // 웹 견적 리드면 상세(지역·구성·평수·견적·희망일·메모) 한 줄 추가
+            const bits = [];
+            if (m.region) bits.push(escapeHtml(m.region));
+            if (m.composition) bits.push(escapeHtml(m.composition));
+            if (m.area) bits.push(escapeHtml(String(m.area)) + "평");
+            if (m.quote_label) bits.push("견적 " + escapeHtml(m.quote_label));
+            if (m.date) bits.push("희망 " + escapeHtml(m.date));
+            const detail = bits.length
+              ? `<div class="helper" style="flex-basis:100%;margin:2px 0 0;font-size:0.82em;color:#2f3e74;">${bits.join(" · ")}${m.memo ? " · " + escapeHtml(m.memo) : ""}</div>`
+              : "";
+            const src = m.__src === "row" ? "웹" : "DM";
+            return `<div class="customer-alert-row" data-idx="${i}" style="padding:7px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
+              <span style="flex:0 0 auto;font-size:0.7em;font-weight:800;color:#fff;background:${m.__src === "row" ? "#12b886" : "#2f3e74"};border-radius:6px;padding:2px 6px;">${src}</span>
+              <span style="flex:0 0 96px;"><strong>${nm}</strong></span>
+              <span style="flex:1;min-width:110px;color:#334;font-variant-numeric:tabular-nums;">${ph}</span>
+              <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.78em;">${ts}</span>
+              <button type="button" class="btn-sm primary" data-action="kakaoPendingDone" data-idx="${i}">개설완료</button>
+              ${detail}
             </div>`;
           }).join("");
+        box.__kakaoItems = items;
         if (!box.dataset.boundKakaoHandler) {
           box.dataset.boundKakaoHandler = "1";
           box.addEventListener("click", async (event) => {
             const btn = event.target.closest('button[data-action="kakaoPendingDone"]');
             if (!btn || btn.disabled) return;
-            const name = String(btn.dataset.name || "").trim();
-            if (!name) return;
+            const idx = parseInt(btn.dataset.idx, 10);
+            const item = (box.__kakaoItems || [])[idx];
+            if (!item) return;
             btn.disabled = true;
             btn.textContent = "처리 중…";
             try {
-              const cur = await fetchKakaoPendingList();
-              const next = cur.filter((e) => String(e && e.name || "") !== name);
-              const ok = await saveKakaoPendingList(next);
-              if (!ok) throw new Error("save failed");
+              let ok = false;
+              if (item.__src === "row") {
+                // 웹 리드 = 개별 행 삭제
+                const res = await fetch(
+                  `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(item.__id)}`,
+                  { method: "DELETE", headers: { ...KAKAO_HDR, Prefer: "return=minimal" } });
+                ok = res.ok;
+              } else {
+                // 봇 등록 = 공유 리스트에서 이름으로 제거
+                const res = await fetch(
+                  `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(KAKAO_PENDING_STATE_ID)}&select=payload&limit=1`,
+                  { headers: KAKAO_HDR });
+                const rows = res.ok ? await res.json() : [];
+                const cur = (rows[0] && rows[0].payload && rows[0].payload.list) || [];
+                ok = await saveKakaoPendingList(cur.filter((e) => String(e && e.name || "") !== String(item.name || "")));
+              }
+              if (!ok) throw new Error("done failed");
               kakaoPendingLastJson = "";
               box.dataset.rendered = "";
               await renderKakaoPendingBox();
