@@ -3866,6 +3866,7 @@
             <div class="side-menu-title">메뉴</div>
             <button class="side-menu-item active" type="button" data-tab="register">＋ 스케줄등록</button>
             <button class="side-menu-item" type="button" data-tab="status">☰ 내등록현황</button>
+            <button class="side-menu-item" type="button" data-tab="shortform">🎬 숏폼신청</button>
             <button class="side-menu-item" type="button" data-tab="info">○ 내정보</button>
           </div>
         </div>
@@ -3998,9 +3999,56 @@
             <div id="phoneMgrBox" class="status-card hidden" style="margin-bottom:8px;"></div>
           </section>
 
+          <section id="shortformSection" class="hidden">
+            <article class="card">
+              <h2 style="margin:0 0 4px;">스토리형 숏폼 제작</h2>
+              <p class="hint" style="margin:0 0 12px;">인로그 촬영 현장은 자료 없이 바로 신청, 그 외 현장은 자료를 메일로 보내주시면 제작해드려요.</p>
+
+              <div class="form">
+                <div id="sfPlaceGroup">
+                  <label class="hint" style="margin:0 0 6px;display:block;">1. 촬영한 곳을 선택해주세요</label>
+                  <select id="sfPlaceSelect" class="row" style="width:100%;">
+                    <option value="">— 인로그로 촬영한 현장 선택 —</option>
+                  </select>
+                </div>
+                <button id="sfExternalToggle" class="btn outline small" type="button" style="margin-top:8px;">인로그 촬영 현장이 아니에요</button>
+              </div>
+
+              <!-- 인로그 촬영 현장: 내용 방식 선택 -->
+              <div id="sfInternalBox" class="form hidden" style="margin-top:14px;">
+                <label class="hint" style="margin:0;">2. 어떻게 만들까요?</label>
+                <label class="row" style="cursor:pointer;"><input type="radio" name="sfMode" value="auto" checked style="width:auto;margin-right:8px;" /> 알아서 만들어 주세요</label>
+                <label class="row" style="cursor:pointer;"><input type="radio" name="sfMode" value="custom" style="width:auto;margin-right:8px;" /> 원하는 내용 넣기</label>
+                <textarea id="sfCustomText" class="row hidden" rows="4" placeholder="원하시는 내용을 적어주세요 (강조하고 싶은 공간, 문구, 분위기 등)" style="width:100%;resize:vertical;"></textarea>
+              </div>
+
+              <!-- 외부 현장: 장소정보 + 메일 안내 -->
+              <div id="sfExternalBox" class="form hidden" style="margin-top:14px;">
+                <div class="hint danger" style="margin:0 0 4px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff8f6;">
+                  📧 영상/사진 자료를 <b>cardds04@naver.com</b> 으로 보내주셔야 제작이 시작돼요.<br>메일 제목에 아래 상호를 적어주시면 빠르게 확인됩니다.
+                </div>
+                <label class="hint" style="margin:0;">아파트명 / 상가명</label>
+                <input id="sfExtName" class="row" style="width:100%;" placeholder="예: OO아파트 / OO상가" />
+                <label class="hint" style="margin:6px 0 0;">지역</label>
+                <input id="sfExtRegion" class="row" style="width:100%;" placeholder="예: 서울 강남구" />
+                <label class="hint" style="margin:6px 0 0;">주소</label>
+                <input id="sfExtAddress" class="row" style="width:100%;" placeholder="상세 주소" />
+                <label class="hint" style="margin:6px 0 0;">추가로 넣고 싶은 내용 (선택)</label>
+                <textarea id="sfExtMemo" class="row" rows="3" placeholder="추가로 넣었으면 하는 내용을 적어주세요" style="width:100%;resize:vertical;"></textarea>
+              </div>
+
+              <button id="sfSubmitBtn" class="btn" type="button" style="width:100%;margin-top:14px;">숏폼 제작 신청하기</button>
+              <div id="sfResult" class="hint" style="margin-top:8px;"></div>
+
+              <h3 class="sub-title" style="margin:18px 0 8px;">내 신청 내역</h3>
+              <div id="sfMyList" class="status-list"></div>
+            </article>
+          </section>
+
           <nav class="app-bottom-nav" aria-label="고객 메뉴">
             <button id="registerTabBtn" class="active" type="button"><span class="bottom-nav-icon" aria-hidden="true">＋</span><span class="bottom-nav-label">스케줄등록</span></button>
             <button id="statusTabBtn" type="button"><span class="bottom-nav-icon" aria-hidden="true">☰</span><span class="bottom-nav-label">내등록현황</span></button>
+            <button id="shortformTabBtn" type="button"><span class="bottom-nav-icon" aria-hidden="true">🎬</span><span class="bottom-nav-label">숏폼신청</span></button>
             <button id="infoTabBtn" type="button"><span class="bottom-nav-icon" aria-hidden="true">○</span><span class="bottom-nav-label">내정보</span></button>
           </nav>
         </div>
@@ -5083,10 +5131,12 @@
       const registerTabBtnEl = document.getElementById("registerTabBtn");
       const statusTabBtnEl = document.getElementById("statusTabBtn");
       const infoTabBtnEl = document.getElementById("infoTabBtn");
+      const shortformTabBtnEl = document.getElementById("shortformTabBtn");
       const appBottomNavEl = document.querySelector("nav.app-bottom-nav");
       const registerSectionEl = document.getElementById("registerSection");
       const statusSectionEl = document.getElementById("statusSection");
       const infoSectionEl = document.getElementById("infoSection");
+      const shortformSectionEl = document.getElementById("shortformSection");
       const statusListEl = document.getElementById("statusList");
       const orderHistoryBtnEl = document.getElementById("orderHistoryBtn");
       const orderHistoryModalEl = document.getElementById("orderHistoryModal");
@@ -6931,18 +6981,22 @@
         const isRegister = tab === "register";
         const isStatus = tab === "status";
         const isInfo = tab === "info";
-        currentCustomerTab = isInfo ? "info" : isStatus ? "status" : "register";
+        const isShortform = tab === "shortform";
+        currentCustomerTab = isInfo ? "info" : isStatus ? "status" : isShortform ? "shortform" : "register";
         registerTabBtnEl.classList.toggle("active", isRegister);
         statusTabBtnEl.classList.toggle("active", isStatus);
         infoTabBtnEl?.classList.toggle("active", isInfo);
+        shortformTabBtnEl?.classList.toggle("active", isShortform);
         sideMenuEl?.querySelectorAll(".side-menu-item[data-tab]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.tab === currentCustomerTab);
         });
         registerSectionEl.classList.toggle("hidden", !isRegister);
         statusSectionEl.classList.toggle("hidden", !isStatus);
         infoSectionEl?.classList.toggle("hidden", !isInfo);
+        shortformSectionEl?.classList.toggle("hidden", !isShortform);
         if (isRegister) renderClosedDatesNotice();
         if (isStatus) renderStatusList();
+        if (isShortform) initShortformTab();
         if (isInfo) {
           const user = getCurrentSessionUser();
           myInfoOpen = true;
@@ -6950,6 +7004,100 @@
           renderMyInfo(user);
           renderPhoneManager(user);
         }
+      }
+
+      // ── 스토리형 숏폼 신청 ─────────────────────────────
+      let sfInited = false;
+      function sfEl(id) { return document.getElementById(id); }
+      async function initShortformTab() {
+        // 촬영한 곳(내 과거+예정 스케줄의 장소) 드롭다운 채우기
+        const sel = sfEl("sfPlaceSelect");
+        if (sel && sel.options.length <= 1) {
+          const places = [];
+          try {
+            const scheds = getUserSchedules() || [];
+            scheds.forEach((s) => { const p = String(s.place || "").trim(); const d = String(s.date || "").trim();
+              if (p) places.push({ label: `${p}${d ? " (" + d + ")" : ""}`, place: p, date: d }); });
+          } catch (_) {}
+          // 최신순, 중복 장소 제거
+          const seen = new Set();
+          places.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+          places.forEach((x) => { if (seen.has(x.place)) return; seen.add(x.place);
+            const o = document.createElement("option"); o.value = x.place; o.textContent = x.label; sel.appendChild(o); });
+        }
+        if (!sfInited) {
+          sfInited = true;
+          sfEl("sfExternalToggle")?.addEventListener("click", () => {
+            const goExternal = sfEl("sfExternalBox").classList.contains("hidden"); // 현재 숨겨져 있으면 외부모드로 전환
+            sfEl("sfExternalBox").classList.toggle("hidden", !goExternal);
+            sfEl("sfPlaceGroup").classList.toggle("hidden", goExternal);   // 외부모드면 촬영지 선택 숨김
+            sfEl("sfInternalBox").classList.add("hidden");
+            sfEl("sfExternalToggle").textContent = goExternal ? "← 인로그로 촬영한 현장에서 신청할게요" : "인로그 촬영 현장이 아니에요";
+          });
+          sfEl("sfPlaceSelect")?.addEventListener("change", () => {
+            const has = !!sfEl("sfPlaceSelect").value;
+            sfEl("sfInternalBox").classList.toggle("hidden", !has);
+            sfEl("sfExternalBox").classList.add("hidden");
+          });
+          document.querySelectorAll('input[name="sfMode"]').forEach((r) => r.addEventListener("change", () => {
+            sfEl("sfCustomText").classList.toggle("hidden", document.querySelector('input[name="sfMode"]:checked')?.value !== "custom");
+          }));
+          sfEl("sfSubmitBtn")?.addEventListener("click", submitShortformRequest);
+        }
+        renderShortformMyList();
+      }
+      async function submitShortformRequest() {
+        const user = getCurrentSessionUser();
+        if (!user) { alert("로그인이 필요해요."); return; }
+        const btn = sfEl("sfSubmitBtn"); btn.disabled = true; btn.textContent = "신청 중…";
+        const external = !sfEl("sfExternalBox").classList.contains("hidden");
+        let payload = { customerId: user.id, company: user.company, companyCode: user.companyCode || "",
+          phone: user.phone || "", ts: new Date().toISOString().slice(0, 16).replace("T", " "), status: "submitted" };
+        if (external) {
+          const nm = sfEl("sfExtName").value.trim(), rg = sfEl("sfExtRegion").value.trim(), ad = sfEl("sfExtAddress").value.trim();
+          if (!nm || !ad) { alert("아파트명(상가명)과 주소를 입력해주세요."); btn.disabled = false; btn.textContent = "숏폼 제작 신청하기"; return; }
+          payload.kind = "external"; payload.placeName = nm; payload.region = rg; payload.address = ad; payload.memo = sfEl("sfExtMemo").value.trim();
+        } else {
+          const place = sfEl("sfPlaceSelect").value;
+          if (!place) { alert("촬영한 곳을 선택하거나, 아래 버튼으로 외부 현장을 선택해주세요."); btn.disabled = false; btn.textContent = "숏폼 제작 신청하기"; return; }
+          const mode = document.querySelector('input[name="sfMode"]:checked')?.value || "auto";
+          payload.kind = "internal"; payload.place = place; payload.mode = mode;
+          payload.customText = mode === "custom" ? sfEl("sfCustomText").value.trim() : "";
+        }
+        const rid = "sfreq_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+            body: JSON.stringify([{ id: rid, payload }]) });
+          if (!r.ok) throw new Error("save " + r.status);
+        } catch (e) { btn.disabled = false; btn.textContent = "숏폼 제작 신청하기"; alert("일시적인 오류가 있었어요. 잠시 후 다시 시도해주세요."); return; }
+        sfEl("sfResult").innerHTML = external
+          ? "✅ 신청이 접수됐어요! <b>cardds04@naver.com</b> 으로 영상/사진 자료를 꼭 보내주세요."
+          : "✅ 신청이 접수됐어요! 담당자가 확인 후 제작해드립니다.";
+        // 폼 초기화
+        sfEl("sfExtName") && (sfEl("sfExtName").value = ""); sfEl("sfExtRegion") && (sfEl("sfExtRegion").value = "");
+        sfEl("sfExtAddress") && (sfEl("sfExtAddress").value = ""); sfEl("sfExtMemo") && (sfEl("sfExtMemo").value = "");
+        sfEl("sfCustomText") && (sfEl("sfCustomText").value = ""); sfEl("sfPlaceSelect") && (sfEl("sfPlaceSelect").value = "");
+        sfEl("sfInternalBox").classList.add("hidden");
+        btn.disabled = false; btn.textContent = "숏폼 제작 신청하기";
+        setTimeout(renderShortformMyList, 600);
+      }
+      async function renderShortformMyList() {
+        const box = sfEl("sfMyList"); const user = getCurrentSessionUser();
+        if (!box || !user) return;
+        let rows = [];
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfreq_%25&select=id,payload`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY } });
+          if (r.ok) rows = (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) })).filter((x) => x.customerId === user.id);
+        } catch (_) {}
+        rows.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+        const label = { submitted: "접수", confirmed: "확인", making: "제작중", done: "완료" };
+        box.innerHTML = rows.length ? rows.map((x) => {
+          const where = x.kind === "external" ? `외부현장 · ${x.placeName || ""}` : `${x.place || ""} · ${x.mode === "custom" ? "원하는내용" : "알아서"}`;
+          return `<div class="status-card"><div class="status-head"><span>${where}</span><span>${label[x.status] || "접수"}</span></div>
+            <div class="status-meta">${x.ts || ""}${x.customText ? "<br>내용: " + x.customText : ""}${x.memo ? "<br>추가: " + x.memo : ""}</div></div>`;
+        }).join("") : '<p class="hint" style="margin:0;">아직 신청 내역이 없어요.</p>';
       }
 
       function getCurrentSessionUser() {
@@ -8713,6 +8861,7 @@
       registerTabBtnEl.addEventListener("click", () => switchCustomerTab("register"));
       statusTabBtnEl.addEventListener("click", () => switchCustomerTab("status"));
       infoTabBtnEl?.addEventListener("click", () => switchCustomerTab("info"));
+      shortformTabBtnEl?.addEventListener("click", () => switchCustomerTab("shortform"));
       orderHistoryBtnEl.addEventListener("click", () => {
         renderOrderHistorySummary();
         orderHistoryModalEl.classList.remove("hidden");

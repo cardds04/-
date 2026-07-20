@@ -109,6 +109,7 @@
         "coupon",
         "receiptLedger",
         "thefeelingEdit",
+        "shortformReq",
         "inlogPhoto",
         "grokTool"
       ];
@@ -3807,6 +3808,7 @@
       const tabCouponEl = document.getElementById("tabCoupon");
       const tabReceiptLedgerEl = document.getElementById("tabReceiptLedger");
       const tabThefeelingEditEl = document.getElementById("tabThefeelingEdit");
+      const tabShortformReqEl = document.getElementById("tabShortformReq");
       const tabInlogPhotoEl = document.getElementById("tabInlogPhoto");
       const tabGrokToolEl = document.getElementById("tabGrokTool");
       const scheduleSectionEl = document.getElementById("scheduleSection");
@@ -3850,6 +3852,7 @@
       const thefeelingEditPendingListEl = document.getElementById("thefeelingEditPendingList");
       const thefeelingEditArchiveListEl = document.getElementById("thefeelingEditArchiveList");
       const thefeelingEditPendingCountEl = document.getElementById("thefeelingEditPendingCount");
+      const shortformReqSectionEl = document.getElementById("shortformReqSection");
       const inlogPhotoSectionEl = document.getElementById("inlogPhotoSection");
       const grokToolSectionEl = document.getElementById("grokToolSection");
       const grokWebToolBaseInputEl = document.getElementById("grokWebToolBaseInput");
@@ -9114,6 +9117,73 @@ ${folderBtn}
           )
           .join("")}</div>`;
       }
+      // ── 스토리형 숏폼 신청 (고객 사이트 → app_state sfreq_* 행) ──
+      const SHORTFORM_HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+      const SHORTFORM_STATUS = [
+        { key: "submitted", label: "접수" },
+        { key: "confirmed", label: "접수확인" },
+        { key: "making", label: "제작중" },
+        { key: "done", label: "완료" }
+      ];
+      async function fetchShortformReqs() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfreq_%25&select=id,payload`, { headers: SHORTFORM_HDR });
+          if (!r.ok) return [];
+          return (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) }))
+            .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+        } catch (_) { return []; }
+      }
+      function shortformReqCardHtml(m) {
+        const cur = String(m.status || "submitted");
+        const where = m.kind === "external"
+          ? `<b>외부현장</b> · ${escapeHtml(m.placeName || "")}${m.region ? " · " + escapeHtml(m.region) : ""}`
+          : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`;
+        const detail = [];
+        detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
+        if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
+        if (m.customText) detail.push("내용: " + escapeHtml(m.customText));
+        if (m.memo) detail.push("추가: " + escapeHtml(m.memo));
+        const btns = SHORTFORM_STATUS.map(({ key, label }) =>
+          `<button class="btn-sm${cur === key ? " primary" : ""}" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="${key}">${label}</button>`).join("");
+        return `<div class="customer-alert-row" style="flex-wrap:wrap;gap:6px;padding:9px 8px;align-items:flex-start;">
+          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${where}</div>
+          <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail.join(" · ")} · ${escapeHtml(m.ts || "")}</div></div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;">${btns}</div></div>`;
+      }
+      async function renderShortformRequests() {
+        const pend = document.getElementById("shortformReqPendingList");
+        const arch = document.getElementById("shortformReqArchiveList");
+        const cnt = document.getElementById("shortformReqCount");
+        if (!pend || !arch) return;
+        const rows = await fetchShortformReqs();
+        const pending = rows.filter((r) => String(r.status || "submitted") !== "done");
+        const done = rows.filter((r) => String(r.status || "") === "done");
+        pend.innerHTML = pending.length ? pending.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">진행 중인 신청이 없습니다.</div>';
+        arch.innerHTML = done.length ? done.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">완료 기록이 없습니다.</div>';
+        if (cnt) cnt.textContent = `진행 중 ${pending.length}건`;
+        if (!shortformReqSectionEl?.dataset.bound) {
+          shortformReqSectionEl.dataset.bound = "1";
+          shortformReqSectionEl.addEventListener("click", async (event) => {
+            const btn = event.target.closest('button[data-action="shortformSetStatus"]');
+            if (!btn || btn.disabled) return;
+            const id = String(btn.dataset.id || ""), status = String(btn.dataset.status || "");
+            if (!id || !SHORTFORM_STATUS.some((s) => s.key === status)) return;
+            btn.disabled = true;
+            try {
+              const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
+              const j = r.ok ? await r.json() : [];
+              const payload = (j[0] && j[0].payload) || {};
+              payload.status = status; payload.statusUpdatedAt = new Date().toISOString();
+              const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+                headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                body: JSON.stringify([{ id, payload }]) });
+              if (!up.ok) throw new Error("save");
+              await renderShortformRequests();
+            } catch (_) { btn.disabled = false; alert("처리에 실패했습니다. 다시 시도해 주세요."); }
+          });
+        }
+      }
+
       function renderThefeelingEditRequests() {
         if (!thefeelingEditPendingListEl || !thefeelingEditArchiveListEl) return;
         consolidateThefeelingEditRequestsStorage();
@@ -17862,6 +17932,7 @@ ${folderBtn}
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
+        const isShortformReq = tab === "shortformReq";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         const isCompanyDirectory = tab === "companyDirectory";
@@ -17872,6 +17943,7 @@ ${folderBtn}
         tabCouponEl.classList.toggle("active", isCoupon);
         tabReceiptLedgerEl?.classList.toggle("active", isReceiptLedger);
         tabThefeelingEditEl?.classList.toggle("active", isThefeelingEdit);
+        tabShortformReqEl?.classList.toggle("active", isShortformReq);
         tabInlogPhotoEl?.classList.toggle("active", isInlogPhoto);
         tabGrokToolEl?.classList.toggle("active", isGrokTool);
         tabCompanyDirectoryEl?.classList.toggle("active", isCompanyDirectory);
@@ -17882,6 +17954,7 @@ ${folderBtn}
         couponSectionEl.classList.toggle("hidden", !isCoupon);
         receiptLedgerSectionEl?.classList.toggle("hidden", !isReceiptLedger);
         thefeelingEditSectionEl?.classList.toggle("hidden", !isThefeelingEdit);
+        shortformReqSectionEl?.classList.toggle("hidden", !isShortformReq);
         inlogPhotoSectionEl?.classList.toggle("hidden", !isInlogPhoto);
         grokToolSectionEl?.classList.toggle("hidden", !isGrokTool);
         companyDirectorySectionEl?.classList.toggle("hidden", !isCompanyDirectory);
@@ -17904,6 +17977,7 @@ ${folderBtn}
         const isCoupon = tab === "coupon";
         const isReceiptLedger = tab === "receiptLedger";
         const isThefeelingEdit = tab === "thefeelingEdit";
+        const isShortformReq = tab === "shortformReq";
         const isInlogPhoto = tab === "inlogPhoto";
         const isGrokTool = tab === "grokTool";
         const isCompanyDirectory = tab === "companyDirectory";
@@ -17914,6 +17988,7 @@ ${folderBtn}
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isThefeelingEdit) renderThefeelingEditRequests();
+        if (isShortformReq) renderShortformRequests();
         if (isInlogPhoto) {
           // 편집 중에는 서버 pull로 DOM을 덮어쓰지 않음 · Supabase 반영은 저장/일치 확인/탭 재진입(저장 완료 후)에만
           if (!inlogEditorDirty) {
@@ -18125,6 +18200,7 @@ ${folderBtn}
       });
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
+      tabShortformReqEl?.addEventListener("click", () => switchMainTab("shortformReq"));
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
         if (!btn) return;
