@@ -2286,6 +2286,8 @@
       let lastCouponPassesSignature = "";
       let couponPassesSchemaMode = "";
       let lastScheduleSyncSignature = "";
+      /** 마지막 전체 pull 시점의 서버 지문("행수|최신updated_at"). 같으면 전체 조회를 생략한다. */
+      let lastSchedulesPullSignature = "";
       let hasLoadedSchedulesFromServer = false;
       /** 다른 탭이 STORAGE_ADMIN_SCHEDULES 를 연속 갱신할 때 pull 이 과도하게 도는 것 완화 */
       let storagePullSchedulesDebounceTimer = null;
@@ -2383,6 +2385,36 @@
         if (!response.ok) return "";
         const rows = await response.json();
         return String((Array.isArray(rows) ? rows[0]?.updated_at : "") || "").trim();
+      }
+      /**
+       * 전체 조회 전에 "서버가 바뀌었는지"만 확인하는 가벼운 지문.
+       * 최신 updated_at 만으로는 중간 행 삭제를 못 잡으므로 총 행수(count=exact)를 함께 본다.
+       * 실패하면 "" 를 돌려주고, 호출부는 안전하게 전체 조회로 넘어간다.
+       */
+      async function fetchRemoteTableSignature(tableName) {
+        if (!USE_SUPABASE_SYNC) return "";
+        try {
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/${tableName}?select=updated_at&order=updated_at.desc&limit=1`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "count=exact"
+              },
+              cache: "no-store"
+            }
+          );
+          if (!response.ok) return "";
+          const rows = await response.json();
+          const newest = String((Array.isArray(rows) ? rows[0]?.updated_at : "") || "").trim();
+          const total = String(response.headers.get("content-range") || "").split("/")[1] || "";
+          if (!newest && !total) return "";
+          return `${total}|${newest}`;
+        } catch (_) {
+          return "";
+        }
       }
       async function guardUploadWithRemoteFreshness({ tableName, label, lastPullStorageKey }) {
         if (!USE_SUPABASE_SYNC) return;
@@ -3541,7 +3573,8 @@
             pinMs: 120000,
             force: true
           });
-          await pullWithRetryUntilSuccess(() => pullSchedulesFromSupabaseAndApply());
+          // 사용자가 직접 누른 동기화 → 지문이 같아도 무조건 전체를 다시 받는다
+          await pullWithRetryUntilSuccess(() => pullSchedulesFromSupabaseAndApply(0, { force: true }));
           setSyncStatus("동기화: 입금·회차권·기타 불러오는 중…", "warn", { pinMs: 120000, force: true });
           await pullWithRetryUntilSuccess(() => pullPaymentsFromSupabaseAndApply());
           await pullCouponPassesFromSupabaseAndApply();
@@ -5763,13 +5796,21 @@
         }
         queuePaymentsSync();
       }
-      async function pullSchedulesFromSupabaseAndApply(retryAttempt = 0) {
+      async function pullSchedulesFromSupabaseAndApply(retryAttempt = 0, options = {}) {
         if (!USE_SUPABASE_SYNC) return false;
         // push 진행 중이거나 완료 직후 쿨다운 중이면 pull 차단 (쿨다운 중엔 재시도 스킵)
         if (scheduleSyncPromise || scheduleSyncQueued || Date.now() < scheduleSyncCooldownUntil) {
           if ((scheduleSyncPromise || scheduleSyncQueued) && retryAttempt < 40) {
-            setTimeout(() => void pullSchedulesFromSupabaseAndApply(retryAttempt + 1), 120);
+            setTimeout(() => void pullSchedulesFromSupabaseAndApply(retryAttempt + 1, options), 120);
           }
+          return false;
+        }
+        // 서버가 안 바뀌었으면 전체 조회(1,140행 · 약 1.2MB)를 생략한다.
+        // 포커스/탭전환마다 전량을 받아 egress 가 크게 낭비되던 문제(2026-07 청구 사고) 대응.
+        // 지문 조회 실패 시엔 "" 가 와서 비교가 성립하지 않으므로 그대로 전체 조회로 진행한다.
+        // 지문은 전체 조회 "직전" 값을 쓴다 — 조회 후에 다시 읽으면 그 사이 변경을 놓칠 수 있다.
+        const signatureBeforePull = await fetchRemoteTableSignature("schedules");
+        if (!options.force && signatureBeforePull && signatureBeforePull === lastSchedulesPullSignature) {
           return false;
         }
         let rows;
@@ -5777,10 +5818,12 @@
           rows = await fetchSchedulesFromSupabase();
         } catch (error) {
           console.error("[SCHEDULES] 서버에서 스케줄을 불러오지 못했습니다.", error);
+          lastSchedulesPullSignature = "";   // 실패 시 다음 호출은 반드시 전체 조회
           renderList();
           renderPaymentList();
           return false;
         }
+        lastSchedulesPullSignature = signatureBeforePull;
         updateLastPullTime(STORAGE_LAST_SCHEDULE_PULL_AT, rows, "updated_at");
         // pull 직전에 서버에 아직 반영 안 된 로컬 항목을 기억해둔다.
         // 동기화 실패 후 realtime pull이 이 항목들을 지우는 것을 방지하기 위해 pull 후 다시 추가한다.
