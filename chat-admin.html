@@ -126,7 +126,9 @@ async function fetchMsgs(token){
   return (await r.json()).map(x=>({id:x.id,...(x.payload||{})})).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
 }
 function leadName(c){
-  const L=c.lead||{}; const bits=[L.region,L.space,L.area].filter(Boolean);
+  const L=c.lead||{};
+  if(L.name) return L.name;
+  const bits=[L.region,L.space,L.area].filter(Boolean);
   return bits.length?bits.join(' '):'상담 '+String(c.token||'').slice(0,8);
 }
 function lastPrev(c){ return c._prev||'…'; }
