@@ -7384,13 +7384,41 @@
         } catch (_) {}
         rows.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
         const label = { submitted: "접수", confirmed: "확인", making: "제작중", done: "완료" };
+        // 아직 제작 착수 전(접수·확인 단계)에만 취소 가능 — 제작중·완료 건은 취소 버튼 숨김.
+        const cancelable = (status) => !status || status === "submitted" || status === "confirmed";
         box.innerHTML = rows.length ? rows.map((x) => {
           const where = x.kind === "external" ? `외부현장 · ${x.placeName || ""}` : `${x.place || ""} · ${x.mode === "custom" ? "원하는내용" : "알아서"}`;
           const cnt = x.count && x.count > 1 ? ` · ${x.count}개` : "";
           const style = x.styleNo ? `🎬 숏폼 ${x.styleNo}번${x.styleName ? " " + x.styleName : ""}` : "🎬 스타일: 담당자 선택";
+          const cancelBtn = cancelable(x.status)
+            ? `<button type="button" class="sf-cancel-btn" data-sf-cancel-id="${x.id}" data-sf-cancel-count="${Number(x.count) || 1}" style="margin-top:8px;border:1px solid #e0a0a0;background:#fff5f5;color:#c92a2a;border-radius:8px;padding:5px 10px;font-size:0.82rem;cursor:pointer;">신청 취소</button>`
+            : "";
           return `<div class="status-card"><div class="status-head"><span>${where}${cnt}</span><span>${label[x.status] || "접수"}</span></div>
-            <div class="status-meta">${style}<br>${x.ts || ""}${x.customText ? "<br>내용: " + x.customText : ""}${x.memo ? "<br>추가: " + x.memo : ""}</div></div>`;
+            <div class="status-meta">${style}<br>${x.ts || ""}${x.customText ? "<br>내용: " + x.customText : ""}${x.memo ? "<br>추가: " + x.memo : ""}</div>${cancelBtn}</div>`;
         }).join("") : '<p class="hint" style="margin:0;">아직 신청 내역이 없어요.</p>';
+        if (!box.dataset.sfCancelBound) {
+          box.dataset.sfCancelBound = "1";
+          box.addEventListener("click", async (event) => {
+            const btn = event.target.closest("button[data-sf-cancel-id]");
+            if (!btn) return;
+            const id = btn.getAttribute("data-sf-cancel-id");
+            const count = Number(btn.getAttribute("data-sf-cancel-count")) || 1;
+            if (!confirm("이 숏폼 신청을 취소할까요? 차감된 횟수는 다시 채워드려요.")) return;
+            btn.disabled = true; btn.textContent = "취소 중…";
+            try {
+              const delRes = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}`,
+                { method: "DELETE", headers: sfHdr });
+              if (!delRes.ok) throw new Error("delete " + delRes.status);
+              await sfLoadBalance();
+              await sfSetBalance(sfBalance + count);
+              sfRenderBalance();
+              await renderShortformMyList();
+            } catch (_) {
+              btn.disabled = false; btn.textContent = "신청 취소";
+              alert("취소 처리 중 오류가 있었어요. 잠시 후 다시 시도해주세요.");
+            }
+          });
+        }
       }
 
       function getCurrentSessionUser() {
