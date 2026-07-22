@@ -7150,28 +7150,36 @@
         const user = getCurrentSessionUser(); if (!user) { sfBalance = 0; return 0; }
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(user.id)}&select=payload`, { headers: sfHdr });
-          if (r.ok) { const j = await r.json(); sfBalance = Math.max(0, parseInt((j[0] && j[0].payload && j[0].payload.balance) || 0, 10)); }
+          // 음수 허용: 선결제 없이 신청하면 잔액이 -1, -2 … 로 내려가고 그대로 표시(후불 표시).
+          if (r.ok) { const j = await r.json(); sfBalance = parseInt((j[0] && j[0].payload && j[0].payload.balance) || 0, 10) || 0; }
         } catch (_) {}
         return sfBalance;
       }
       async function sfSetBalance(n) {
         const user = getCurrentSessionUser(); if (!user) return;
-        sfBalance = Math.max(0, n);
+        sfBalance = Math.floor(Number(n) || 0); // 음수 허용 (후불 신청 시 -1, -2 …)
         await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
           headers: { ...sfHdr, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
           body: JSON.stringify([{ id: `sfbal_${user.id}`, payload: { balance: sfBalance, updatedAt: new Date().toISOString() } }]) });
       }
+      // 한 번에 신청 가능한 최대 개수(잔액과 무관 — 선결제 없이도 신청 가능).
+      const SF_MAX_PER_REQUEST = 20;
       function sfRenderBalance() {
-        sfEl("sfBalNum").textContent = sfBalance;
+        const balEl = sfEl("sfBalNum");
+        balEl.textContent = sfBalance;
+        balEl.style.color = sfBalance < 0 ? "#d93025" : ""; // 음수(후불) 빨강 표시
         sfEl("sfBalHint").style.display = sfBalance > 0 ? "none" : "inline";
-        if (sfCount > sfBalance) sfCount = sfBalance;
+        if (sfCount > SF_MAX_PER_REQUEST) sfCount = SF_MAX_PER_REQUEST;
         if (sfCount < 1) sfCount = 1;
         sfEl("sfCountNum").textContent = sfCount;
         sfEl("sfCountMinus").disabled = sfCount <= 1;
-        sfEl("sfCountPlus").disabled = sfCount >= sfBalance;
+        sfEl("sfCountPlus").disabled = sfCount >= SF_MAX_PER_REQUEST;
+        // 선결제 없이도 신청 가능 — 잔액이 0/음수여도 버튼 활성 유지.
         const sub = sfEl("sfSubmitBtn");
-        if (sfBalance <= 0) { sub.disabled = true; sub.style.background = "#c9d6d0"; sub.textContent = "남은 횟수가 없어요 · 아래에서 충전"; sfEl("sfCountBox").style.opacity = ".5"; }
-        else { sub.disabled = false; sub.style.background = ""; sub.textContent = "숏폼 제작 신청하기"; sfEl("sfCountBox").style.opacity = "1"; }
+        sub.disabled = false;
+        sub.style.background = "";
+        sub.textContent = "숏폼 제작 신청하기";
+        sfEl("sfCountBox").style.opacity = "1";
       }
       function sfRenderPackages() {
         const box = sfEl("sfPkgList"); if (!box) return;
@@ -7280,7 +7288,7 @@
           sfEl("sfSubmitBtn")?.addEventListener("click", submitShortformRequest);
           // 개수 선택
           sfEl("sfCountMinus")?.addEventListener("click", () => { if (sfCount > 1) { sfCount--; sfRenderBalance(); } });
-          sfEl("sfCountPlus")?.addEventListener("click", () => { if (sfCount < sfBalance) { sfCount++; sfRenderBalance(); } });
+          sfEl("sfCountPlus")?.addEventListener("click", () => { if (sfCount < SF_MAX_PER_REQUEST) { sfCount++; sfRenderBalance(); } });
           // 충전(결제)
           sfEl("sfPayBtn")?.addEventListener("click", () => {
             if (!sfPickedPkg) return;
@@ -7322,8 +7330,9 @@
         const user = getCurrentSessionUser();
         if (!user) { alert("로그인이 필요해요."); return; }
         await sfLoadBalance();
-        if (sfBalance <= 0) { alert("남은 숏폼 횟수가 없어요. 아래에서 충전 후 신청해 주세요."); sfRenderBalance(); return; }
-        if (sfCount > sfBalance) { sfCount = sfBalance; sfRenderBalance(); }
+        // 선결제(충전) 없이도 신청 가능 — 잔액 부족 차단 제거. 신청 시 잔액이 음수(-1, -2…)로 내려가며 후불 처리.
+        if (sfCount > SF_MAX_PER_REQUEST) { sfCount = SF_MAX_PER_REQUEST; sfRenderBalance(); }
+        if (sfCount < 1) { sfCount = 1; sfRenderBalance(); }
         const count = sfCount;
         const btn = sfEl("sfSubmitBtn"); btn.disabled = true; btn.textContent = "신청 중…";
         const external = !sfEl("sfExternalBox").classList.contains("hidden");
