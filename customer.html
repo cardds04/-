@@ -7373,6 +7373,8 @@
         sfCount = 1; sfRenderBalance();
         setTimeout(renderShortformMyList, 600);
       }
+      // id -> 신청 원본 payload 캐시(취소 시 상태만 바꿔 다시 저장하기 위해 보관).
+      const sfMyRowsCache = {};
       async function renderShortformMyList() {
         const box = sfEl("sfMyList"); const user = getCurrentSessionUser();
         if (!box || !user) return;
@@ -7383,8 +7385,9 @@
           if (r.ok) rows = (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) })).filter((x) => x.customerId === user.id);
         } catch (_) {}
         rows.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
-        const label = { submitted: "접수", confirmed: "확인", making: "제작중", done: "완료" };
-        // 아직 제작 착수 전(접수·확인 단계)에만 취소 가능 — 제작중·완료 건은 취소 버튼 숨김.
+        rows.forEach((x) => { sfMyRowsCache[x.id] = x; });
+        const label = { submitted: "접수", confirmed: "확인", making: "제작중", done: "완료", canceled: "취소됨" };
+        // 아직 제작 착수 전(접수·확인 단계)에만 취소 가능 — 제작중·완료·이미취소 건은 취소 버튼 숨김.
         const cancelable = (status) => !status || status === "submitted" || status === "confirmed";
         box.innerHTML = rows.length ? rows.map((x) => {
           const where = x.kind === "external" ? `외부현장 · ${x.placeName || ""}` : `${x.place || ""} · ${x.mode === "custom" ? "원하는내용" : "알아서"}`;
@@ -7406,9 +7409,18 @@
             if (!confirm("이 숏폼 신청을 취소할까요? 차감된 횟수는 다시 채워드려요.")) return;
             btn.disabled = true; btn.textContent = "취소 중…";
             try {
-              const delRes = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}`,
-                { method: "DELETE", headers: sfHdr });
-              if (!delRes.ok) throw new Error("delete " + delRes.status);
+              // anon 키로 app_state 행을 실제로 DELETE 하는 것은 RLS 에 막혀 있어(200/204를 반환하지만
+              // 실제로는 0행 삭제) 대신 상태만 "canceled" 로 바꿔 다시 저장한다(upsert 는 정상 반영됨을 확인).
+              const original = sfMyRowsCache[id] || {};
+              const { id: _skip, ...payloadOnly } = original;
+              payloadOnly.status = "canceled";
+              payloadOnly.canceledAt = new Date().toISOString();
+              const upRes = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
+                headers: { ...sfHdr, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=representation" },
+                body: JSON.stringify([{ id, payload: payloadOnly }]) });
+              if (!upRes.ok) throw new Error("update " + upRes.status);
+              const upBody = await upRes.json().catch(() => null);
+              if (!Array.isArray(upBody) || !upBody.length) throw new Error("no row updated");
               await sfLoadBalance();
               await sfSetBalance(sfBalance + count);
               sfRenderBalance();
