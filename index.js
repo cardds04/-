@@ -9178,24 +9178,34 @@ ${folderBtn}
       }
       function shortformReqCardHtml(m) {
         const cur = String(m.status || "submitted");
-        const qty = m.count && Number(m.count) > 1 ? ` · <b style="color:#2f3e74;">${Number(m.count)}개</b>` : "";
+        const curIndex = Math.max(0, SHORTFORM_STATUS.findIndex(({ key }) => key === cur));
+        const qty = m.count && Number(m.count) > 1 ? `<span class="shortform-qty-badge">${Number(m.count)}개</span>` : "";
         const where = (m.kind === "external"
           ? `<b>외부현장</b> · ${escapeHtml(m.placeName || "")}${m.region ? " · " + escapeHtml(m.region) : ""}`
-          : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`) + qty;
+          : `${escapeHtml(m.place || "")} · ${m.mode === "custom" ? "원하는내용" : "알아서"}`);
         const styleTag = m.styleNo
-          ? ` <span style="background:#eaf0fb;color:#2f4f86;font-weight:800;font-size:0.82em;padding:1px 8px;border-radius:999px;white-space:nowrap;">🎬 ${Number(m.styleNo)}번${m.styleName ? " " + escapeHtml(m.styleName) : ""}</span>`
-          : ` <span style="color:#8a94a6;font-size:0.8em;font-weight:600;">🎬 스타일 미지정(담당자 선택)</span>`;
+          ? `<span class="shortform-style-badge">${Number(m.styleNo)}번${m.styleName ? " · " + escapeHtml(m.styleName) : ""}</span>`
+          : `<span class="shortform-style-badge shortform-style-badge--empty">스타일 미지정</span>`;
         const detail = [];
         detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
         if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
         if (m.customText) detail.push("내용: " + escapeHtml(m.customText));
         if (m.memo) detail.push("추가: " + escapeHtml(m.memo));
-        const btns = SHORTFORM_STATUS.map(({ key, label }) =>
-          `<button class="btn-sm${cur === key ? " primary" : ""}" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="${key}">${label}</button>`).join("");
-        return `<div class="customer-alert-row" style="flex-wrap:wrap;gap:6px;padding:9px 8px;align-items:flex-start;">
-          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${where}${styleTag}</div>
-          <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail.join(" · ")} · ${escapeHtml(m.ts || "")}</div></div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;">${btns}</div></div>`;
+        const btns = SHORTFORM_STATUS.map(({ key, label }, index) => {
+          const stateClass = cur === key ? " is-current" : index < curIndex ? " is-past" : "";
+          return `<button class="shortform-status-btn${stateClass}" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="${key}" aria-label="진행 상태를 ${label}(으)로 변경"><span>${index + 1}</span>${label}</button>`;
+        }).join("");
+        return `<div class="customer-alert-row shortform-request-card" data-current-status="${escapeHtml(cur)}">
+          <div class="shortform-request-main">
+            <div class="shortform-request-topline">
+              <div class="shortform-request-tags"><span class="shortform-kind-badge">${m.kind === "external" ? "외부 현장" : "사이트 신청"}</span>${styleTag}${qty}</div>
+              <time>${escapeHtml(m.ts || "")}</time>
+            </div>
+            <h3 class="shortform-request-title">${where}</h3>
+            <div class="shortform-request-meta">${detail.map((item) => `<span>${item}</span>`).join("")}</div>
+          </div>
+          <div class="shortform-status-control"><span class="shortform-status-label">진행 상태</span><div class="shortform-status-steps">${btns}</div></div>
+        </div>`;
       }
       function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
       async function fetchShortformPays() {
@@ -9207,14 +9217,18 @@ ${folderBtn}
       }
       function shortformPayCardHtml(m) {
         const paid = String(m.status || "") === "paid";
-        const detail = `업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""} · ${escapeHtml(m.ts || "")}`;
+        const detail = `업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`;
         const btn = paid
-          ? `<span class="count" style="color:#16a34a;">충전완료</span>`
-          : `<button class="btn-sm primary" type="button" data-action="shortformPayConfirm" data-id="${escapeHtml(m.id)}" data-cust="${escapeHtml(m.customerId || "")}" data-qty="${Number(m.qty) || 0}">입금확인·충전</button>`;
-        return `<div class="customer-alert-row" style="flex-wrap:wrap;gap:6px;padding:9px 8px;align-items:flex-start;">
-          <div style="flex:1;min-width:180px;"><div style="font-weight:700;">${Number(m.qty) || 0}회 · ${won0(m.amount)}원${m.tax ? " <span style='color:#c2410c;'>(세금계산서)</span>" : ""}</div>
-          <div class="helper" style="margin:3px 0 0;font-size:0.82em;">${detail}</div></div>
-          <div>${btn}</div></div>`;
+          ? `<span class="shortform-paid-badge">✓ 충전완료</span>`
+          : `<button class="btn-sm primary shortform-confirm-button" type="button" data-action="shortformPayConfirm" data-id="${escapeHtml(m.id)}" data-cust="${escapeHtml(m.customerId || "")}" data-qty="${Number(m.qty) || 0}">입금확인 · 충전</button>`;
+        return `<div class="customer-alert-row shortform-payment-card${paid ? " is-paid" : " is-pending"}">
+          <div class="shortform-payment-amount"><strong>${Number(m.qty) || 0}</strong><span>회</span></div>
+          <div class="shortform-payment-main">
+            <div class="shortform-payment-title">${won0(m.amount)}원 ${m.tax ? "<span>(세금계산서)</span>" : ""}</div>
+            <div class="shortform-payment-meta"><span>${detail}</span><time>${escapeHtml(m.ts || "")}</time></div>
+          </div>
+          <div class="shortform-payment-action">${btn}</div>
+        </div>`;
       }
       async function fetchShortformBalances() {
         try {
@@ -9261,12 +9275,20 @@ ${folderBtn}
         // 업체별 남은 횟수 + 수동조정 datalist
         const bals = await fetchShortformBalances();
         const balBox = document.getElementById("shortformBalanceList");
-        if (balBox) balBox.innerHTML = bals.length
-          ? bals.map((b) => `<div class="customer-alert-row" style="padding:8px;gap:8px;align-items:center;">
-              <span style="flex:1;font-weight:700;">${escapeHtml(b.login)}</span>
-              <span style="font-weight:800;color:#2f3e74;">${b.balance}회</span>
-              <span class="helper" style="margin:0;font-size:0.78em;">${escapeHtml(String(b.updatedAt).slice(0, 16).replace("T", " "))}</span></div>`).join("")
-          : '<div class="helper" style="margin:0;">아직 잔여 기록이 있는 업체가 없습니다.</div>';
+        const balSearch = document.getElementById("sfBalSearch");
+        const drawBalances = () => {
+          if (!balBox) return;
+          const query = String(balSearch?.value || "").trim().toLowerCase();
+          const visible = query ? bals.filter((b) => String(b.login || "").toLowerCase().includes(query)) : bals;
+          balBox.innerHTML = visible.length
+            ? visible.map((b) => `<div class="customer-alert-row shortform-balance-row">
+                <span class="shortform-balance-company">${escapeHtml(b.login)}</span>
+                <span class="shortform-balance-value">${b.balance}<small>회</small></span>
+                <time>${escapeHtml(String(b.updatedAt).slice(0, 16).replace("T", " "))}</time></div>`).join("")
+            : `<div class="shortform-empty-state">${query ? "검색 결과가 없습니다." : "아직 잔여 기록이 있는 업체가 없습니다."}</div>`;
+        };
+        drawBalances();
+        if (balSearch) balSearch.oninput = drawBalances;
         const dl = document.getElementById("sfAdjCompanyList");
         if (dl) {
           const names = new Set(bals.map((b) => b.login));
@@ -9277,9 +9299,9 @@ ${folderBtn}
         const showCur = async () => {
           const el = document.getElementById("sfAdjCompany"); const out = document.getElementById("sfAdjCurrent");
           const nm = String(el?.value || "").trim();
-          if (!nm) { if (out) out.textContent = "현재: -"; return; }
+          if (!nm) { if (out) out.textContent = "-"; return; }
           const hit = bals.find((b) => b.login === nm);
-          if (out) out.textContent = `현재: ${hit ? hit.balance + "회" : "0회(신규)"}`;
+          if (out) out.textContent = hit ? hit.balance + "회" : "0회 (신규)";
         };
         if (!shortformPaySectionEl?.dataset.bound) {
           shortformPaySectionEl.dataset.bound = "1";

@@ -1868,6 +1868,968 @@
       }
 
       /* ============================================================
+         숏폼 관리 대시보드
+         ============================================================ */
+      .shortform-dashboard {
+        --sf-navy: #15213b;
+        --sf-blue: #315ee7;
+        --sf-blue-soft: #edf2ff;
+        --sf-green: #15936d;
+        --sf-green-soft: #e9f8f2;
+        --sf-orange: #d97706;
+        --sf-orange-soft: #fff5df;
+        --sf-violet: #7654d6;
+        --sf-violet-soft: #f3efff;
+        position: relative;
+        left: 50%;
+        width: min(1380px, calc(100vw - 40px));
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding-bottom: 28px;
+      }
+
+      .shortform-dashboard.hidden {
+        display: none;
+      }
+
+      .shortform-hero {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 28px;
+        overflow: hidden;
+        padding: 28px 30px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at 90% 10%, rgba(101, 133, 255, 0.28), transparent 31%),
+          linear-gradient(135deg, #121c32 0%, #1a2c53 62%, #263d75 100%);
+        box-shadow: 0 18px 42px rgba(20, 35, 70, 0.18);
+        color: #fff;
+      }
+
+      .shortform-hero::after {
+        content: "";
+        position: absolute;
+        right: -75px;
+        bottom: -120px;
+        width: 290px;
+        height: 290px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 50%;
+      }
+
+      .shortform-hero-copy,
+      .shortform-flow {
+        position: relative;
+        z-index: 1;
+      }
+
+      .shortform-eyebrow,
+      .shortform-panel-kicker {
+        display: block;
+        margin-bottom: 5px;
+        color: #9fb4ff;
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+      }
+
+      .shortform-hero h2 {
+        margin: 0;
+        font-size: clamp(1.8rem, 2.3vw, 2.55rem);
+        letter-spacing: -0.045em;
+      }
+
+      .shortform-hero p {
+        margin: 8px 0 0;
+        color: #ccd7f4;
+        font-size: 0.96rem;
+      }
+
+      .shortform-flow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.075);
+        backdrop-filter: blur(8px);
+      }
+
+      .shortform-flow span {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #edf2ff;
+        font-size: 0.78rem;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .shortform-flow span b {
+        display: inline-grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.13);
+        color: #fff;
+        font-size: 0.72rem;
+      }
+
+      .shortform-flow i {
+        color: rgba(255, 255, 255, 0.35);
+        font-size: 0.78rem;
+        font-style: normal;
+      }
+
+      .shortform-work-grid,
+      .shortform-account-grid {
+        display: grid;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .shortform-work-grid {
+        grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.85fr);
+      }
+
+      .shortform-account-grid {
+        grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+      }
+
+      .shortform-account-side {
+        display: grid;
+        gap: 18px;
+      }
+
+      .shortform-panel {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        padding: 22px;
+        border-color: #e3e8f2;
+        border-radius: 18px;
+        box-shadow: 0 10px 28px rgba(36, 51, 83, 0.075);
+      }
+
+      .shortform-panel::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        left: 0;
+        height: 4px;
+        background: var(--sf-blue);
+      }
+
+      .shortform-panel--done::before,
+      .shortform-panel--balance::before {
+        background: var(--sf-green);
+      }
+
+      .shortform-panel--payment::before {
+        background: var(--sf-orange);
+      }
+
+      .shortform-panel--adjust::before {
+        background: var(--sf-violet);
+      }
+
+      .shortform-panel-heading {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 11px;
+      }
+
+      .shortform-panel-heading h2,
+      .shortform-panel .schedule-head h2 {
+        margin: 0;
+        color: var(--sf-navy);
+        font-size: 1.35rem;
+        letter-spacing: -0.035em;
+      }
+
+      .shortform-panel-icon {
+        display: inline-grid;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--sf-blue-soft);
+        color: var(--sf-blue);
+        font-size: 1rem;
+        font-weight: 900;
+      }
+
+      .shortform-panel--done .shortform-panel-icon,
+      .shortform-panel--balance .shortform-panel-icon {
+        background: var(--sf-green-soft);
+        color: var(--sf-green);
+      }
+
+      .shortform-panel--payment .shortform-panel-icon {
+        background: var(--sf-orange-soft);
+        color: var(--sf-orange);
+      }
+
+      .shortform-panel--adjust .shortform-panel-icon {
+        background: var(--sf-violet-soft);
+        color: var(--sf-violet);
+      }
+
+      .shortform-panel .count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--sf-blue-soft);
+        color: var(--sf-blue);
+        font-size: 0.85rem;
+        font-weight: 900;
+      }
+
+      .shortform-panel--done .count {
+        background: var(--sf-green-soft);
+        color: var(--sf-green);
+      }
+
+      .shortform-panel--payment .count {
+        background: var(--sf-orange-soft);
+        color: #a95800;
+      }
+
+      .shortform-panel-description {
+        margin: 14px 0 12px;
+        color: #68738a;
+        font-size: 0.88rem;
+        line-height: 1.55;
+      }
+
+      .shortform-panel .customer-alert-history {
+        display: grid;
+        gap: 10px;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-size: 0.88rem;
+      }
+
+      .shortform-panel--make #shortformMakeList {
+        max-height: 58vh;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      .shortform-panel--done #shortformDoneList {
+        max-height: 58vh;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      .shortform-notice,
+      .shortform-bank-info {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+      }
+
+      .shortform-notice {
+        border: 1px solid #dbe4ff;
+        background: #f5f7ff;
+        color: #586680;
+      }
+
+      .shortform-notice strong {
+        color: var(--sf-blue);
+      }
+
+      .shortform-notice span {
+        padding-left: 9px;
+        border-left: 1px solid #ced8f4;
+      }
+
+      .shortform-notice b {
+        color: #263b75;
+      }
+
+      .shortform-bank-info {
+        flex-wrap: wrap;
+        border: 1px solid #fde2ae;
+        background: #fff9eb;
+        color: #80643a;
+      }
+
+      .shortform-bank-info > span {
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: #f7e8c9;
+        color: #8b590a;
+        font-size: 0.7rem;
+        font-weight: 900;
+      }
+
+      .shortform-bank-info strong {
+        color: #563b12;
+        font-size: 0.9rem;
+      }
+
+      .shortform-bank-info b {
+        color: #9b6b22;
+        font-size: 0.78rem;
+      }
+
+      .shortform-request-card,
+      .shortform-payment-card,
+      .shortform-balance-row {
+        border-bottom: 0;
+      }
+
+      .shortform-request-card {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) auto;
+        align-items: center;
+        gap: 18px;
+        padding: 15px !important;
+        border: 1px solid #e0e6f1;
+        border-left: 4px solid #8199e9;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 12px rgba(31, 48, 87, 0.045);
+      }
+
+      .shortform-request-card[data-current-status="submitted"] {
+        border-left-color: #7b63d9;
+      }
+
+      .shortform-request-card[data-current-status="confirmed"] {
+        border-left-color: #3970df;
+      }
+
+      .shortform-request-card[data-current-status="making"] {
+        border-left-color: #dd8a18;
+      }
+
+      .shortform-request-card[data-current-status="done"] {
+        border-left-color: var(--sf-green);
+        background: #fbfefd;
+      }
+
+      .shortform-panel--done .shortform-request-card {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .shortform-panel--done .shortform-status-control {
+        min-width: 0;
+        padding-top: 11px;
+        border-top: 1px solid #edf0f5;
+      }
+
+      .shortform-request-main {
+        min-width: 0;
+      }
+
+      .shortform-request-topline {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .shortform-request-tags {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .shortform-kind-badge,
+      .shortform-style-badge,
+      .shortform-qty-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 23px;
+        padding: 3px 8px;
+        border-radius: 7px;
+        font-size: 0.68rem;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      .shortform-kind-badge {
+        background: #edf2ff;
+        color: #385ab3;
+      }
+
+      .shortform-style-badge {
+        background: #eef8f5;
+        color: #187c61;
+      }
+
+      .shortform-style-badge--empty {
+        background: #f2f4f8;
+        color: #7b8496;
+      }
+
+      .shortform-qty-badge {
+        background: #fff1dc;
+        color: #a55c06;
+      }
+
+      .shortform-request-topline time {
+        flex: 0 0 auto;
+        color: #949daf;
+        font-size: 0.68rem;
+        white-space: nowrap;
+      }
+
+      .shortform-request-title {
+        margin: 9px 0 7px;
+        color: #1d2a45;
+        font-size: 1rem;
+        line-height: 1.35;
+        letter-spacing: -0.025em;
+      }
+
+      .shortform-request-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px 10px;
+        color: #69748a;
+        font-size: 0.76rem;
+        line-height: 1.45;
+      }
+
+      .shortform-request-meta span {
+        overflow-wrap: anywhere;
+      }
+
+      .shortform-request-meta span:not(:last-child)::after {
+        content: "·";
+        margin-left: 10px;
+        color: #c3c9d5;
+      }
+
+      .shortform-status-control {
+        min-width: 315px;
+      }
+
+      .shortform-status-label {
+        display: block;
+        margin: 0 2px 6px;
+        color: #8a94a7;
+        font-size: 0.65rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+      }
+
+      .shortform-status-steps {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .shortform-status-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-height: 34px;
+        padding: 6px 8px;
+        border: 1px solid #d8deea;
+        border-radius: 9px;
+        background: #fff;
+        color: #68748a;
+        font-family: inherit;
+        font-size: 0.7rem;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .shortform-status-btn:hover {
+        border-color: #aab9e8;
+        background: #f7f9ff;
+        color: #304f9d;
+      }
+
+      .shortform-status-btn span {
+        display: inline-grid;
+        width: 17px;
+        height: 17px;
+        place-items: center;
+        border-radius: 50%;
+        background: #eef1f6;
+        color: #7b8497;
+        font-size: 0.6rem;
+      }
+
+      .shortform-status-btn.is-past {
+        border-color: #d7e2ff;
+        background: #f3f6ff;
+        color: #6075a8;
+      }
+
+      .shortform-status-btn.is-past span::before {
+        content: "✓";
+      }
+
+      .shortform-status-btn.is-past span {
+        color: transparent;
+      }
+
+      .shortform-status-btn.is-past span::before {
+        color: #6075a8;
+      }
+
+      .shortform-status-btn.is-current {
+        border-color: var(--sf-blue);
+        background: var(--sf-blue);
+        box-shadow: 0 4px 10px rgba(49, 94, 231, 0.2);
+        color: #fff;
+      }
+
+      .shortform-status-btn.is-current span {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+      }
+
+      .shortform-request-card[data-current-status="done"] .shortform-status-btn.is-current {
+        border-color: var(--sf-green);
+        background: var(--sf-green);
+        box-shadow: 0 4px 10px rgba(21, 147, 109, 0.19);
+      }
+
+      .shortform-payment-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 13px;
+        padding: 14px 15px;
+        border: 1px solid #e4e8f0;
+        border-radius: 13px;
+        background: #fff;
+      }
+
+      .shortform-payment-card.is-pending {
+        border-color: #f0d8aa;
+        background: #fffdfa;
+      }
+
+      .shortform-payment-card.is-paid {
+        background: #fbfefd;
+      }
+
+      .shortform-payment-amount {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 2px;
+        min-width: 58px;
+        padding: 8px 9px;
+        border-radius: 10px;
+        background: var(--sf-orange-soft);
+        color: #b96800;
+        text-align: center;
+      }
+
+      .shortform-payment-card.is-paid .shortform-payment-amount {
+        background: var(--sf-green-soft);
+        color: var(--sf-green);
+      }
+
+      .shortform-payment-amount strong {
+        font-size: 1.25rem;
+      }
+
+      .shortform-payment-amount span {
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+
+      .shortform-payment-main {
+        min-width: 0;
+      }
+
+      .shortform-payment-title {
+        color: #25324d;
+        font-size: 0.93rem;
+        font-weight: 850;
+      }
+
+      .shortform-payment-title > span {
+        margin-left: 5px;
+        color: #c25a14;
+        font-size: 0.7rem;
+      }
+
+      .shortform-payment-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px 9px;
+        margin-top: 4px;
+        color: #7a8496;
+        font-size: 0.72rem;
+      }
+
+      .shortform-payment-meta time {
+        color: #a0a8b6;
+      }
+
+      .shortform-confirm-button {
+        min-height: 36px;
+        padding: 7px 12px;
+        border-radius: 9px;
+        border-color: #bd7412;
+        background: #c77912;
+        font-weight: 850;
+        cursor: pointer;
+      }
+
+      .shortform-paid-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: var(--sf-green-soft);
+        color: var(--sf-green);
+        font-size: 0.72rem;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+
+      .shortform-archive-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 17px 0 8px;
+        padding-top: 14px;
+        border-top: 1px solid #e8ecf3;
+      }
+
+      .shortform-archive-heading .sub-title {
+        margin: 0;
+        color: #33405a;
+        font-size: 0.95rem;
+      }
+
+      .shortform-archive-heading > span {
+        color: #929bab;
+        font-size: 0.7rem;
+      }
+
+      .shortform-panel--payment #shortformPayPendingList {
+        max-height: 36vh;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      .shortform-panel--payment #shortformPayArchiveList {
+        max-height: 24vh;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      .shortform-adjust-form {
+        display: grid;
+        grid-template-columns: minmax(160px, 1fr) 90px 105px;
+        gap: 10px;
+        align-items: end;
+      }
+
+      .shortform-field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .shortform-field > span,
+      .shortform-current-balance > span {
+        color: #788297;
+        font-size: 0.7rem;
+        font-weight: 850;
+      }
+
+      .shortform-field input,
+      .shortform-balance-tools input {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        padding: 8px 11px;
+        border: 1px solid #dbe0ea;
+        border-radius: 10px;
+        outline: 0;
+        background: #fff;
+        color: #27334c;
+        font: inherit;
+        font-size: 0.83rem;
+      }
+
+      .shortform-field input:focus,
+      .shortform-balance-tools input:focus {
+        border-color: #8aa1e8;
+        box-shadow: 0 0 0 3px rgba(49, 94, 231, 0.1);
+      }
+
+      .shortform-field--qty input {
+        text-align: center;
+        font-weight: 800;
+      }
+
+      .shortform-current-balance {
+        display: grid;
+        gap: 6px;
+      }
+
+      .shortform-current-balance strong {
+        display: flex;
+        align-items: center;
+        height: 40px;
+        padding: 8px 10px;
+        border: 1px solid #e2e5eb;
+        border-radius: 10px;
+        background: #f7f8fb;
+        color: #4a5872;
+        font-size: 0.82rem;
+      }
+
+      .shortform-adjust-actions {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .shortform-adjust-actions .btn-sm {
+        min-height: 39px;
+        border-radius: 10px;
+        font-weight: 850;
+        cursor: pointer;
+      }
+
+      .shortform-adjust-actions #sfAdjMinus {
+        border-color: #eccdcd;
+        background: #fffafa;
+        color: #b44949;
+      }
+
+      .shortform-adjust-result {
+        min-height: 17px;
+        margin-top: 8px;
+        color: #55705f;
+        font-size: 0.78rem;
+      }
+
+      .shortform-balance-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        margin: 15px 0 9px;
+      }
+
+      .shortform-balance-tools .btn-sm {
+        min-height: 40px;
+        padding: 7px 13px;
+        border-radius: 10px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .shortform-balance-labels {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 8px 6px;
+        color: #949cad;
+        font-size: 0.65rem;
+        font-weight: 800;
+      }
+
+      .shortform-panel--balance #shortformBalanceList {
+        max-height: 42vh;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      .shortform-balance-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 3px 10px;
+        padding: 10px 11px;
+        border: 1px solid #e4e9f0;
+        border-radius: 11px;
+        background: #fbfcfe;
+      }
+
+      .shortform-balance-company {
+        min-width: 0;
+        overflow: hidden;
+        color: #2c3953;
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .shortform-balance-value {
+        grid-row: span 2;
+        align-self: center;
+        color: var(--sf-green);
+        font-size: 1.12rem;
+        font-weight: 900;
+      }
+
+      .shortform-balance-value small {
+        margin-left: 2px;
+        font-size: 0.68rem;
+      }
+
+      .shortform-balance-row time {
+        color: #9aa2b0;
+        font-size: 0.68rem;
+      }
+
+      .shortform-empty-state,
+      .shortform-panel .customer-alert-history > .helper {
+        margin: 0 !important;
+        padding: 22px 14px;
+        border: 1px dashed #d9dfe9;
+        border-radius: 12px;
+        background: #fafbfc;
+        color: #8790a1;
+        text-align: center;
+        font-size: 0.8rem;
+      }
+
+      .shortform-visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      @media (max-width: 1200px) {
+        .shortform-work-grid,
+        .shortform-account-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .shortform-account-side {
+          grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+        }
+      }
+
+      @media (max-width: 900px) {
+        .shortform-hero {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .shortform-flow {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .shortform-account-side {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .shortform-request-card {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .shortform-status-control {
+          min-width: 0;
+          padding-top: 11px;
+          border-top: 1px solid #edf0f5;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .shortform-dashboard {
+          left: auto;
+          width: 100%;
+          transform: none;
+          gap: 12px;
+        }
+
+        .shortform-hero,
+        .shortform-panel {
+          padding: 17px;
+          border-radius: 15px;
+        }
+
+        .shortform-flow {
+          gap: 4px;
+          padding: 8px;
+        }
+
+        .shortform-flow span {
+          flex-direction: column;
+          gap: 4px;
+          font-size: 0.62rem;
+        }
+
+        .shortform-flow i {
+          margin-top: -17px;
+        }
+
+        .shortform-panel .schedule-head {
+          align-items: flex-start;
+        }
+
+        .shortform-notice {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .shortform-notice span {
+          padding: 0;
+          border-left: 0;
+        }
+
+        .shortform-status-steps {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .shortform-payment-card {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .shortform-payment-action {
+          grid-column: 1 / -1;
+        }
+
+        .shortform-payment-action .shortform-confirm-button {
+          width: 100%;
+        }
+
+        .shortform-adjust-form {
+          grid-template-columns: minmax(0, 1fr) 90px;
+        }
+
+        .shortform-current-balance {
+          grid-column: 1 / -1;
+        }
+      }
+
+      /* ============================================================
          모바일 가독성 패스 (760px 이하)
          원인: #dateFilterRow(연/월/일 필터 nowrap·select 최소폭 130px 합계 652px),
                #viewTabs(nowrap), 예약통계 그래프(min-width 미지정)가 카드 폭을 밀어
