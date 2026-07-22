@@ -9207,6 +9207,25 @@ ${folderBtn}
           <div class="shortform-status-control"><span class="shortform-status-label">진행 상태</span><div class="shortform-status-steps">${btns}</div></div>
         </div>`;
       }
+      function shortformDoneCardHtml(m) {
+        const external = m.kind === "external";
+        const location = external
+          ? [m.placeName, m.region].map((v) => String(v || "").trim()).filter(Boolean).join(" · ")
+          : [m.place, m.mode === "custom" ? "원하는내용" : "알아서"].map((v) => String(v || "").trim()).filter(Boolean).join(" · ");
+        const company = String(m.company || "업체 미지정").trim();
+        const extras = [];
+        if (Number(m.count) > 1) extras.push(`${Number(m.count)}개`);
+        if (Number(m.styleNo) > 0) extras.push(`${Number(m.styleNo)}번 스타일`);
+        const completedMeta = [company, ...extras, String(m.ts || "").trim()].filter(Boolean).map(escapeHtml).join(" · ");
+        return `<div class="customer-alert-row shortform-done-card">
+          <span class="shortform-done-kind">${external ? "외부" : "사이트"}</span>
+          <div class="shortform-done-main">
+            <strong>${escapeHtml(location || "현장명 없음")}</strong>
+            <span>${completedMeta}</span>
+          </div>
+          <button class="shortform-done-restore" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="making" aria-label="${escapeHtml(location || "해당 현장")}을 제작중으로 되돌리기">↩ <span>다시 제작</span></button>
+        </div>`;
+      }
       function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
       async function fetchShortformPays() {
         try {
@@ -9268,7 +9287,7 @@ ${folderBtn}
           const toMake = reqs.filter((r) => String(r.status || "submitted") !== "done");
           const delivered = reqs.filter((r) => String(r.status || "") === "done");
           reqBox.innerHTML = toMake.length ? toMake.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">아직 제작할 숏폼 신청이 없습니다.</div>';
-          doneBox.innerHTML = delivered.length ? delivered.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">납품 완료 기록이 없습니다.</div>';
+          doneBox.innerHTML = delivered.length ? delivered.map(shortformDoneCardHtml).join("") : '<div class="helper" style="margin:0;">납품 완료 기록이 없습니다.</div>';
           const mkCnt = document.getElementById("shortformMakeCount"); if (mkCnt) mkCnt.textContent = `${toMake.length}건`;
           const dnCnt = document.getElementById("shortformDoneCount"); if (dnCnt) dnCnt.textContent = `${delivered.length}건`;
         }
@@ -18389,6 +18408,17 @@ ${folderBtn}
       tabReceiptLedgerEl?.addEventListener("click", () => switchMainTab("receiptLedger"));
       tabThefeelingEditEl?.addEventListener("click", () => switchMainTab("thefeelingEdit"));
       tabShortformPayEl?.addEventListener("click", () => switchMainTab("shortformPay"));
+      document.getElementById("shortformDoneToggle")?.addEventListener("click", (event) => {
+        const button = event.currentTarget;
+        const body = document.getElementById("shortformDoneBody");
+        const panel = document.getElementById("shortformDonePanel");
+        if (!body || !panel) return;
+        const willOpen = body.classList.contains("hidden");
+        body.classList.toggle("hidden", !willOpen);
+        panel.classList.toggle("is-collapsed", !willOpen);
+        button.setAttribute("aria-expanded", String(willOpen));
+        button.textContent = willOpen ? "숨기기" : "보기";
+      });
       thefeelingEditSectionEl?.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-action='thefeelingEditSetStatus']");
         if (!btn) return;
