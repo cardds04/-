@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1920px; overflow:hidden; background:#000; }
+  body { font-family:'NanumGothic','Noto Color Emoji',sans-serif; }
+  .scene { position:absolute; inset:0; display:none; }
+
+  /* ---------- S1 HOOK ---------- */
+  #hook { background:radial-gradient(ellipse at 50% 42%, #2a0d0d 0%, #000 70%); }
+  .hook-line { position:absolute; left:0; width:100%; text-align:center; color:#fff; font-weight:800; }
+  #hk1 { top:640px; font-size:92px; letter-spacing:6px; }
+  #hk2 { top:790px; font-size:126px; letter-spacing:4px; }
+  #hk3 { top:970px; font-size:170px; color:#ff2d2d; text-shadow:0 0 60px rgba(255,45,45,.55); }
+  #hk-sub { position:absolute; top:1230px; width:100%; text-align:center; color:#888; font-size:44px; letter-spacing:14px; }
+
+  /* ---------- S2 CHAT ---------- */
+  #chat-wrap { background:#b2c7d9; }
+  #chat-inner { position:absolute; inset:0; }
+  #chat-header { position:absolute; top:0; left:0; right:0; height:150px; background:#a6bccf;
+    display:flex; align-items:center; padding:0 44px; z-index:5; }
+  #chat-header .back { font-size:56px; color:#333; margin-right:36px; }
+  #chat-header .name { font-size:56px; font-weight:800; color:#222; }
+  #chat-header .icons { margin-left:auto; font-size:48px; color:#444; letter-spacing:24px; }
+  #ep-tag { position:absolute; top:170px; left:0; right:0; text-align:center; z-index:5; }
+  #ep-tag span { display:inline-block; background:rgba(0,0,0,.45); color:#fff; font-size:38px;
+    padding:12px 34px; border-radius:40px; font-weight:700; }
+  #msgs { position:absolute; left:0; right:0; top:150px; bottom:60px;
+    display:flex; flex-direction:column; justify-content:flex-end; padding:40px 36px; gap:34px; }
+  .row { display:none; align-items:flex-end; gap:20px; }
+  .row.L { justify-content:flex-start; }
+  .row.R { justify-content:flex-end; }
+  .avatar { width:104px; height:104px; border-radius:42px; background:#fdd9e5;
+    display:flex; align-items:center; justify-content:center; font-size:64px; flex:0 0 auto; }
+  .bubble { max-width:660px; padding:30px 40px; border-radius:8px 26px 26px 26px; background:#fff;
+    font-size:52px; line-height:1.4; color:#111; box-shadow:0 3px 6px rgba(0,0,0,.08);
+    transform-origin:bottom left; }
+  .row.R .bubble { background:#fee500; border-radius:26px 8px 26px 26px; transform-origin:bottom right; }
+  .tstamp { font-size:30px; color:#667; flex:0 0 auto; padding-bottom:6px; }
+
+  /* error overlay */
+  #err { position:absolute; inset:0; background:rgba(6,8,18,.94); z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; }
+  #err .spin { font-size:170px; }
+  #err .t1 { margin-top:60px; color:#ff5252; font-size:78px; font-weight:800; }
+  #err .t2 { margin-top:34px; color:#dfe6f0; font-size:52px; font-weight:700; }
+  #err .bar { margin-top:70px; width:620px; height:20px; background:#222c3f; border-radius:10px; overflow:hidden; }
+  #err .bar i { display:block; height:100%; width:40%; background:#4da3ff; border-radius:10px; }
+
+  /* bridge */
+  #bridge-q { position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; opacity:0; }
+  #bridge-q .box { background:#000; color:#fff; font-size:96px; font-weight:800; line-height:1.45;
+    padding:56px 70px; text-align:center; box-shadow:0 0 0 14px #ffd400; transform:rotate(-2deg); }
+  #vignette { position:absolute; inset:0; z-index:25; pointer-events:none; opacity:0;
+    background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.75) 100%); }
+
+  /* ---------- S4 EXPLAIN ---------- */
+  #explain { background:radial-gradient(ellipse at 50% 30%, #141c33 0%, #0a0e1c 75%); }
+  .deco { position:absolute; color:rgba(120,140,200,.10); font-weight:800; }
+  .card { position:absolute; left:0; width:100%; text-align:center; opacity:0; }
+  #c1 { top:820px; color:#e8ecf6; font-size:82px; font-weight:800; line-height:1.55; }
+  #c1 em { font-style:normal; color:#ffd400; }
+  #c2 { top:640px; }
+  #c2 .emo { font-size:150px; }
+  #c2 .big { margin-top:50px; font-size:128px; font-weight:800;
+    background:linear-gradient(90deg,#7cc0ff,#c78bff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #c2 .eng { margin-top:30px; color:#8fa3c8; font-size:46px; letter-spacing:8px; font-weight:700; }
+  #c2 .desc { margin-top:80px; color:#dfe6f4; font-size:66px; font-weight:700; line-height:1.6; }
+  #c3 { top:700px; color:#e8ecf6; font-size:76px; font-weight:800; line-height:1.6; }
+  #c3 .warn { display:inline-block; margin-top:70px; background:#3a1420; color:#ff8097;
+    font-size:70px; padding:34px 54px; border-radius:20px; border:3px solid #ff4d6d; }
+  #c3 .arrow { display:block; margin:40px 0 0; font-size:80px; color:#ffd400; }
+  #src { position:absolute; bottom:150px; width:100%; text-align:center; color:#5c6c8f; font-size:36px; opacity:0; }
+
+  /* ---------- S5 SOLUTION ---------- */
+  #sol { background:#ffd400; }
+  .solcard { position:absolute; left:0; width:100%; text-align:center; opacity:0; }
+  #s5a { top:880px; color:#111; font-size:104px; font-weight:800; }
+  #s5b { top:700px; color:#111; font-weight:800; }
+  #s5b .no { font-size:88px; }
+  #s5b .no b { background:#111; color:#ffd400; padding:14px 36px; border-radius:16px; }
+  #s5b .yes { margin-top:90px; font-size:96px; }
+  #s5b .yes b { background:#fff; padding:14px 44px; border-radius:16px; box-shadow:0 8px 0 rgba(0,0,0,.15); }
+  #s5chat { top:640px; }
+  #s5chat .mini { display:flex; align-items:flex-end; gap:20px; margin:30px 60px; }
+  #s5chat .mini.R { justify-content:flex-end; }
+  #s5chat .bubble { font-size:56px; }
+  #s5chat .heart { margin-top:60px; font-size:130px; }
+
+  /* ---------- S6 END ---------- */
+  #end { background:#000; }
+  #end .main { position:absolute; top:830px; width:100%; text-align:center; color:#fff;
+    font-size:98px; font-weight:800; line-height:1.55; opacity:0; }
+  #end .sub { position:absolute; top:1240px; width:100%; text-align:center; color:#9aa; font-size:46px; opacity:0; }
+  #end .next { position:absolute; top:1360px; width:100%; text-align:center; color:#665; font-size:40px; opacity:0; }
+  #end .ep { position:absolute; top:560px; width:100%; text-align:center; color:#555; font-size:42px; letter-spacing:10px; opacity:0; }
+</style>
+</head>
+<body>
+
+<div class="scene" id="hook">
+  <div class="hook-line" id="hk1">대한민국</div>
+  <div class="hook-line" id="hk2">커플 싸움</div>
+  <div class="hook-line" id="hk3">원인 1위</div>
+  <div id="hk-sub">— 심리학이 밝혀냄 —</div>
+</div>
+
+<div class="scene" id="chat-wrap">
+  <div id="chat-inner">
+    <div id="chat-header">
+      <div class="back">〈</div><div class="name">여자친구 ❤️</div><div class="icons">🔍 ☰</div>
+    </div>
+    <div id="ep-tag"><span>EP.01 — '아무거나' 사건</span></div>
+    <div id="msgs"></div>
+    <div id="err">
+      <div class="spin">⏳</div>
+      <div class="t1">⚠️ 시스템 오류</div>
+      <div class="t2">남자친구.exe가 응답하지 않습니다</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div id="vignette"></div>
+    <div id="bridge-q"><div class="box">지금 무슨 일이<br>일어난 걸까?</div></div>
+  </div>
+</div>
+
+<div class="scene" id="explain">
+  <div class="deco" style="top:200px;left:80px;font-size:300px;">?</div>
+  <div class="deco" style="top:1350px;right:90px;font-size:380px;">?</div>
+  <div class="deco" style="top:900px;left:-60px;font-size:220px;">?</div>
+  <div class="card" id="c1">"아무거나"는 사실<br><em>아무거나가 아닙니다</em></div>
+  <div class="card" id="c2">
+    <div class="emo">🧠💭</div>
+    <div class="big">독심술 기대</div>
+    <div class="eng">MIND - READING</div>
+    <div class="desc">말 안 해도 내 마음을<br>알아줬으면 하는 기대</div>
+  </div>
+  <div class="card" id="c3">
+    문제는, 상대가 못 맞추면
+    <span class="arrow">▼</span>
+    <span class="warn">"나한테 관심이 없구나"</span>
+  </div>
+  <div id="src">아론 벡(Aaron Beck) · 인지 왜곡(Cognitive Distortion) 中</div>
+</div>
+
+<div class="scene" id="sol">
+  <div class="solcard" id="s5a">💡 해결책은 단 하나</div>
+  <div class="solcard" id="s5b">
+    <div class="no"><b>"아무거나" 금지</b> ❌</div>
+    <div class="yes"><b>선택지 3개의 법칙</b> ⭕</div>
+  </div>
+  <div class="solcard" id="s5chat">
+    <div class="mini L" id="m5a" style="display:none;">
+      <div class="avatar">👧</div>
+      <div class="bubble">국밥 · 떡볶이 · 초밥<br>중에 골라!</div>
+    </div>
+    <div class="mini R" id="m5b" style="display:none;">
+      <div class="bubble" style="background:#fee500;">떡볶이!! 🤤</div>
+    </div>
+    <div class="heart" id="m5h" style="opacity:0;">💕</div>
+  </div>
+</div>
+
+<div class="scene" id="end">
+  <div class="ep">— EP.01 아무거나 편 —</div>
+  <div class="main">오늘도 한 커플<br>살렸습니다 🙏</div>
+  <div class="sub">구독하면 다음 커플도 삽니다</div>
+  <div class="next">다음 화 예고 : "나 화 안 났어" (화가 나 있음) 편</div>
+</div>
+
+<script>
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const smooth=x=>{x=clamp(x,0,1);return x*x*(3-2*x);};
+const easeOut=x=>1-Math.pow(1-clamp(x,0,1),3);
+const back=x=>{x=clamp(x,0,1);const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2);};
+
+const MSGS=[
+  {t:3.4,  side:'R', text:'뭐 먹을래?'},
+  {t:5.0,  side:'L', text:'아무거나~ 😊'},
+  {t:6.6,  side:'R', text:'그럼 국밥?'},
+  {t:8.4,  side:'L', text:'…국밥?'},
+  {t:10.2, side:'R', text:'그럼… 마라탕?'},
+  {t:11.8, side:'L', text:'어제 먹었잖아.'},
+  {t:13.6, side:'R', text:'그럼 뭐 먹고 싶은데?'},
+  {t:15.6, side:'L', text:'아무거나 먹자니까<br>왜 화를 내? 🙂'},
+  {t:17.8, side:'R', text:'내가… 화를 냈다고…?'},
+];
+
+const msgsEl=document.getElementById('msgs');
+MSGS.forEach(m=>{
+  const row=document.createElement('div');
+  row.className='row '+m.side;
+  if(m.side==='L'){
+    row.innerHTML=`<div class="avatar">👧</div><div class="bubble">${m.text}</div><div class="tstamp">오후 6:0${Math.floor(m.t/2)}</div>`;
+  }else{
+    row.innerHTML=`<div class="tstamp">오후 6:0${Math.floor(m.t/2)}</div><div class="bubble">${m.text}</div>`;
+  }
+  msgsEl.appendChild(row);
+  m.el=row;
+});
+
+const $=id=>document.getElementById(id);
+const scenes={hook:$('hook'),chat:$('chat-wrap'),explain:$('explain'),sol:$('sol'),end:$('end')};
+
+function show(el,on){el.style.display=on?(el.classList.contains('scene')?'block':'flex'):'none';}
+
+window.seek=function(t){
+  // scene switching
+  show(scenes.hook, t<3.0);
+  show(scenes.chat, t>=3.0 && t<24.5);
+  show(scenes.explain, t>=24.5 && t<41.5);
+  show(scenes.sol, t>=41.5 && t<48.0);
+  show(scenes.end, t>=48.0);
+
+  if(t<3.0){ // HOOK
+    const st=(el,t0)=>{const a=t-t0;
+      el.style.opacity=clamp(a/0.15,0,1);
+      el.style.transform=`scale(${a<0?3:3-2*easeOut(a/0.25)})`;};
+    st($('hk1'),0.3); st($('hk2'),0.75); st($('hk3'),1.4);
+    $('hk-sub').style.opacity=clamp((t-2.0)/0.3,0,1);
+    scenes.hook.style.opacity= t>2.7 ? 1-smooth((t-2.7)/0.3) : 1;
+  }
+
+  if(t>=3.0 && t<24.5){ // CHAT + BRIDGE
+    // messages
+    MSGS.forEach(m=>{
+      const age=t-m.t;
+      if(age<0){m.el.style.display='none';return;}
+      m.el.style.display='flex';
+      const b=m.el.querySelector('.bubble');
+      const s=age<0.35 ? 0.6+0.4*back(age/0.35) : 1;
+      b.style.transform=`scale(${s})`;
+      b.style.opacity=clamp(age/0.12,0,1);
+    });
+    // camera: push-in impulse at m4 (8.4), shake at 15.6 & during error
+    let tx=0,ty=0,sc=1;
+    const p4=t-8.4; if(p4>0&&p4<1.0) sc+=0.05*Math.exp(-p4*3);
+    const sh=t-15.6; if(sh>0&&sh<0.6){const d=1-sh/0.6; tx=Math.sin(sh*85)*16*d; ty=Math.cos(sh*70)*10*d;}
+    const eh=t-19.3; if(eh>0&&eh<0.4){const d=1-eh/0.4; tx+=Math.sin(eh*95)*8*d;}
+    // bridge zoom & grayscale
+    let filter='none';
+    if(t>=21.5){
+      const bz=smooth((t-21.5)/3.0);
+      sc=1+0.12*bz;
+      filter=`grayscale(${clamp((t-21.5)/0.5,0,1)}) contrast(1.05)`;
+    }
+    const inner=$('chat-inner');
+    inner.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;
+    inner.style.filter=filter;
+    // error overlay 19.3–21.5
+    const err=$('err');
+    if(t>=19.3&&t<21.5){
+      err.style.opacity=clamp((t-19.3)/0.25,0,1);
+      err.querySelector('.spin').style.transform=`rotate(${(t-19.3)*300}deg)`;
+      const g=Math.sin((t-19.3)*40);
+      err.querySelector('.t1').style.textShadow=`${3+3*g}px 0 #00e5ff, ${-3-3*g}px 0 #ff2d78`;
+      err.querySelector('.bar i').style.width=`${clamp((t-19.3)/2.2,0,1)*38+2}%`;
+    }else if(t>=21.5){ err.style.opacity=1-clamp((t-21.5)/0.3,0,1); }
+    else err.style.opacity=0;
+    // bridge question
+    $('vignette').style.opacity=clamp((t-21.5)/0.6,0,1);
+    const bq=$('bridge-q');
+    if(t>=21.9){
+      bq.style.opacity=1;
+      const a=t-21.9;
+      bq.querySelector('.box').style.transform=`rotate(-2deg) scale(${a<0.3?0.5+0.5*back(a/0.3):1})`;
+    }else bq.style.opacity=0;
+  }
+
+  if(t>=24.5 && t<41.5){ // EXPLAIN
+    const card=(el,t0,t1)=>{
+      const aIn=(t-t0)/0.45, aOut=(t1-t)/0.35;
+      const o=Math.min(clamp(aIn,0,1),clamp(aOut,0,1));
+      el.style.opacity=o;
+      el.style.transform=`translateY(${(1-easeOut(aIn))*60}px)`;
+    };
+    card($('c1'),24.7,28.0);
+    card($('c2'),28.2,33.2);
+    card($('c3'),33.4,41.3);
+    if(t>=28.2&&t<33.2){
+      const a=t-28.2;
+      $('c2').querySelector('.big').style.transform=`scale(${a<0.4?0.7+0.3*back(a/0.4):1})`;
+      $('c2').querySelector('.desc').style.opacity=clamp((a-1.2)/0.4,0,1);
+    }
+    if(t>=33.4){
+      const a=t-33.4;
+      $('c3').querySelector('.arrow').style.opacity=clamp((a-1.0)/0.3,0,1);
+      const w=$('c3').querySelector('.warn');
+      w.style.opacity=clamp((a-1.6)/0.3,0,1);
+      const wa=a-1.6; w.style.transform=`scale(${wa>0&&wa<0.35?0.7+0.3*back(wa/0.35):wa>=0.35?1:0.7})`;
+    }
+    $('src').style.opacity=clamp((t-35.5)/0.5,0,1)*0.9;
+    // drifting decos
+    document.querySelectorAll('.deco').forEach((d,i)=>{
+      d.style.transform=`translateY(${Math.sin(t*0.5+i*2)*24}px) rotate(${Math.sin(t*0.3+i)*6}deg)`;
+    });
+  }
+
+  if(t>=41.5 && t<48.0){ // SOLUTION
+    const a1=t-41.5;
+    $('s5a').style.opacity= t<43.3 ? clamp(a1/0.3,0,1) : 1-clamp((t-43.3)/0.25,0,1);
+    $('s5a').style.transform=`scale(${a1<0.35?0.6+0.4*back(a1/0.35):1})`;
+    const a2=t-43.6;
+    $('s5b').style.opacity= t<45.4 ? clamp(a2/0.3,0,1) : 1-clamp((t-45.4)/0.25,0,1);
+    const a3=t-45.7;
+    $('s5chat').style.opacity=clamp(a3/0.2,0,1);
+    const ma=$('m5a'), mb=$('m5b'), mh=$('m5h');
+    ma.style.display = a3>0?'flex':'none';
+    if(a3>0){const x=clamp(a3/0.35,0,1);ma.querySelector('.bubble').style.transform=`scale(${0.6+0.4*back(x)})`;}
+    const b3=t-46.6;
+    mb.style.display = b3>0?'flex':'none';
+    if(b3>0){const x=clamp(b3/0.35,0,1);mb.querySelector('.bubble').style.transform=`scale(${0.6+0.4*back(x)})`;}
+    const h3=t-47.1;
+    mh.style.opacity=clamp(h3/0.2,0,1);
+    if(h3>0) mh.style.transform=`translateY(${-easeOut(h3/0.9)*70}px) scale(${1+0.15*Math.sin(h3*10)})`;
+  }
+
+  if(t>=48.0){ // END
+    $('end').querySelector('.ep').style.opacity=clamp((t-48.2)/0.4,0,1);
+    const m=$('end').querySelector('.main');
+    const a=t-48.5;
+    m.style.opacity=clamp(a/0.5,0,1);
+    m.style.transform=`translateY(${(1-easeOut(a/0.7))*40}px)`;
+    $('end').querySelector('.sub').style.opacity=clamp((t-50.0)/0.4,0,1);
+    $('end').querySelector('.next').style.opacity=clamp((t-50.7)/0.4,0,1)*0.9;
+  }
+};
+window.seek(0);
+</script>
+</body>
+</html>
