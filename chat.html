@@ -3,24 +3,21 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-<title>인로그 촬영 상담</title>
+<title>인로그 AI 상담</title>
 <style>
   :root{ --accent:#12b886; --accent-ink:#0b7a58; --ink:#1b241f; --sub:#6b7a72; --line:#e6ece9;
     --bg:#eef3f1; --ai:#ffffff; --me:#12b886; --me-ink:#04231a; --human:#eaf4ff; --human-ink:#0b4a7a; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  /* ‼️키보드 대응: --apph = '지금 실제로 보이는 높이'. JS가 갱신한다.
-     크롬은 visualViewport 로 정확히 알려주지만, 인스타 인앱 브라우저는 안 알려줘서
-     그때는 추정 키보드 높이로 직접 줄인다. 페이지는 잠그지 않는다(브라우저 기본 대응 유지). */
+  /* 키보드 대응: --apph = 지금 실제로 보이는 높이. JS가 갱신한다. */
   html,body{margin:0;height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
     background:var(--bg); color:var(--ink); display:flex; justify-content:center}
   .app{width:100%; max-width:480px; height:var(--apph, 100dvh); display:flex; flex-direction:column; background:var(--bg); overflow:hidden}
-  header{background:#0f1512; color:#eafff5; padding:12px 16px calc(12px + env(safe-area-inset-top)); flex:0 0 auto}
-  header .row{display:flex; align-items:center; gap:9px}
-  header .dot{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#04231a;font-size:13px;font-weight:900}
-  header b{font-size:16px;letter-spacing:.3px}
-  header .sub{font-size:12px;color:#8fdcc0;margin-top:5px;line-height:1.5}
-  header .status{font-size:11.5px;margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:#1b3a2d;color:#8fdcc0;border-radius:999px;padding:3px 10px}
+  header{background:#0f1512; color:#eafff5; padding:8px 14px calc(8px + env(safe-area-inset-top)); flex:0 0 auto}
+  header .row{display:flex; align-items:center; gap:8px; min-width:0; white-space:nowrap}
+  header .dot{width:28px;height:28px;flex:0 0 28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#04231a;font-size:12px;font-weight:900}
+  header b{font-size:15px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis}
+  header .status{font-size:11px;margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#1b3a2d;color:#8fdcc0;border-radius:999px;padding:3px 8px;flex:0 0 auto}
   header .status.human{background:#12324f;color:#8fc8ff}
   header .status i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
   main{flex:1 1 auto; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:10px}
@@ -46,9 +43,11 @@
 <body>
 <div class="app">
   <header>
-    <div class="row"><span class="dot">IN</span><b>인로그 촬영 상담</b></div>
-    <div class="sub">AI 도우미가 먼저 상황을 확인하고, 필요하면 촬영 담당자가 직접 이어서 도와드려요.</div>
-    <div class="status" id="status"><i></i> AI 도우미 응대 중</div>
+    <div class="row">
+      <span class="dot">IN</span>
+      <b>인로그 AI 상담</b>
+      <span class="status" id="status" aria-live="polite"><i></i><span>AI 상담 중</span></span>
+    </div>
   </header>
   <main id="log"></main>
   <footer>
@@ -103,9 +102,9 @@ function setMode(m){
   const wasAi = mode==='ai';
   mode=m;
   const s=document.getElementById('status');
-  if(m==='human'){ s.className='status human'; s.innerHTML='<i></i> 담당자가 직접 응대 중이에요'; if(wasAi) sysline('촬영 담당자가 대화에 참여했어요'); }
-  else if(m==='closed'){ s.className='status'; s.innerHTML='<i></i> 상담이 종료되었어요'; }
-  else { s.className='status'; s.innerHTML='<i></i> AI 도우미 응대 중'; }
+  if(m==='human'){ s.className='status human'; s.innerHTML='<i></i><span>담당자 상담 중</span>'; if(wasAi) sysline('촬영 담당자가 대화에 참여했어요'); }
+  else if(m==='closed'){ s.className='status'; s.innerHTML='<i></i><span>상담 종료</span>'; }
+  else { s.className='status'; s.innerHTML='<i></i><span>AI 상담 중</span>'; }
 }
 
 async function poll(){
@@ -142,45 +141,57 @@ async function send(){
 // 키보드가 올라오면 visualViewport 높이가 줄어든다. 그 높이를 .app 에 그대로 반영해
 // 입력창이 키보드 위로 올라오게 하고, 대화 마지막을 계속 보이게 유지한다.
 const vv = window.visualViewport;
-let baseH = 0;      // 키보드 없을 때 보이는 높이
-let kbGuess = 0;    // 인앱 브라우저용 추정 키보드 높이 (0이면 미사용)
-const visibleH = () => Math.round(vv ? vv.height : window.innerHeight);
+let baseH = 0;          // 키보드 없을 때 보이는 높이
+let fallbackKbH = 0;    // 인앱 브라우저가 높이를 숨길 때만 쓰는 보정값
+
+// 인앱 브라우저마다 갱신하는 값이 다르므로 한 가지만 믿지 않고,
+// visualViewport / innerHeight / clientHeight 중 실제로 가장 작은 값을 쓴다.
+function reportedH(){
+  const values=[window.innerHeight, document.documentElement.clientHeight];
+  if(vv && Number.isFinite(vv.height)) values.push(vv.height);
+  return Math.round(Math.min(...values.filter(h=>Number.isFinite(h)&&h>0)));
+}
 function applyH(h){
   document.documentElement.style.setProperty('--apph', Math.max(240, Math.round(h)) + 'px');
   scrollDown();
 }
 function fitViewport(){
-  const h = visibleH();
-  if (!kbGuess) baseH = Math.max(baseH, h);
-  applyH(kbGuess ? baseH - kbGuess : h);
+  const h = reportedH();
+  const focused = document.activeElement === input;
+  if(!focused) baseH = Math.max(baseH, h);
+  const browserReportedKeyboard = focused && baseH - h > 80;
+  if(browserReportedKeyboard) fallbackKbH = 0;
+  applyH(browserReportedKeyboard ? h : (focused && fallbackKbH ? baseH - fallbackKbH : h));
   if (window.scrollY !== 0) window.scrollTo(0, 0);
 }
-// 크롬 등: 키보드가 뜨면 visualViewport 가 실제로 줄어든다 → 그대로 반영
+// 크롬 등: 키보드가 뜨면 브라우저가 알려주는 실제 높이를 그대로 반영
 if (vv) {
-  vv.addEventListener('resize', () => { kbGuess = 0; fitViewport(); });
+  vv.addEventListener('resize', fitViewport);
   vv.addEventListener('scroll', fitViewport);
 }
-window.addEventListener('resize', () => { kbGuess = 0; fitViewport(); });
-window.addEventListener('orientationchange', () => { kbGuess = 0; baseH = 0; setTimeout(fitViewport, 350); });
+window.addEventListener('resize', fitViewport);
+window.addEventListener('orientationchange', () => { fallbackKbH = 0; baseH = 0; setTimeout(fitViewport, 350); });
 fitViewport();
 
-// ‼️인스타 인앱 브라우저 대응: 키보드가 떴는데도 보이는 높이가 그대로면
-// 브라우저가 키보드 높이를 안 알려주는 것 → 추정치(화면의 46%)로 직접 줄인다.
-// 터치 기기에서만 적용 (데스크톱은 키보드가 화면을 안 가리므로 제외)
+// 인스타 인앱 브라우저 대응: 어떤 높이 값도 줄지 않을 때만 보정한다.
+// 사진 속 한국어 키보드가 차지하는 실제 영역(약 38%)에 맞춰 과한 위쪽 여백을 없앤다.
 const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 input.addEventListener('focus', () => {
   if (!isTouch) return;
   [150, 400, 800, 1300].forEach(t => setTimeout(() => {
     if (document.activeElement !== input) return;
-    if (visibleH() >= baseH - 40) {           // 안 줄어들었다 = 인앱 브라우저
-      kbGuess = Math.round(baseH * 0.46);
-      applyH(baseH - kbGuess);
-    } else {                                   // 정상 보고 = 실제 값 사용
-      kbGuess = 0; fitViewport();
+    if (reportedH() >= baseH - 40) {
+      fallbackKbH = Math.round(baseH * 0.38);
+    } else {
+      fallbackKbH = 0;
     }
+    fitViewport();
   }, t));
 });
-input.addEventListener('blur', () => { kbGuess = 0; setTimeout(fitViewport, 150); });
+input.addEventListener('blur', () => {
+  fallbackKbH = 0;
+  [150, 400, 800].forEach(t => setTimeout(fitViewport, t));
+});
 
 sendBtn.addEventListener('click', send);
 input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); send(); } });
