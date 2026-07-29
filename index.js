@@ -15450,6 +15450,9 @@ ${folderBtn}
             const { res, body } = await postSms(pendingPhoneArg || "");
             if (res.ok && body.ok) {
               sendSucceeded = true;
+              // 완료됐으니 「검수전」 배지도 해제 — 안 지우면 RPC 맵 누락 등으로 done 이
+              // 안 보일 때 배지가 남아 "클릭해도 이미 납품 409" 루프가 됨(2026-07-29 이레나키친).
+              try { setDeliveryReviewReady(sid, kind, false); } catch (_) {}
               kickDashDeliveryRpcRefresh(true);
               if (body.sms_waiting_other_kind) {
                 // 사진·영상 둘 다 필요한 업체의 첫 항목 완료 — 문자는 보내지 않고 다음 항목 대기.
@@ -15465,6 +15468,9 @@ ${folderBtn}
               return;
             }
             if (res.status === 409 || String(body.message || "").includes("이미")) {
+              // 서버가 "이미 납품 완료"라면 검수전 배지는 낡은 잔재 — 여기서 해제해야
+              // 초록(done) 대신 노랑 배지가 계속 남는 사고가 재발하지 않는다(2026-07-29).
+              try { setDeliveryReviewReady(sid, kind, false); } catch (_) {}
               kickDashDeliveryRpcRefresh(true);
               alert(body.message || "이미 발송된 건입니다.");
               revertDashSmsBadgeToIdle(btn);
@@ -15509,7 +15515,20 @@ ${folderBtn}
           if (!stale) return;
         }
         dashDeliveryRpcInFlight = true;
-        void fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_SHOOT_DELIVERY_PROGRESS}`, {
+        // ‼️무필터 호출 금지(2026-07-29 실사고): 전체 행이 1,000개를 넘으면서 PostgREST
+        //   max-rows(1000) 캡에서 조용히 잘려 최근 스케줄 13건이 응답에서 빠졌음(전체 1,027행).
+        //   RPC SQL에 ORDER BY가 없어 어떤 행이 잘릴지도 비결정적. 잘린 행은 맵에 없어
+        //   납품완료 건이 미완(노랑)으로 보이고, 「검수전」 클릭은 서버 409("이미 납품")로
+        //   튕긴다(07-23 이레나키친 실사고). 대시보드가 실제로 쓰는 범위(15일 목록+완료 로그)만
+        //   날짜 필터로 가져온다(여유 60일 — 수백 행 수준이라 캡과 무관).
+        let dashRpcQuery = "";
+        try {
+          const dashRpcCutoff = addDaysToYmd(dashTodayYmdKst(), -60);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dashRpcCutoff)) {
+            dashRpcQuery = `?shoot_date_key=gte.${dashRpcCutoff}&order=shoot_date_key.desc`;
+          }
+        } catch (_) {}
+        void fetch(`${SUPABASE_URL}/rest/v1/rpc/${SUPABASE_RPC_SHOOT_DELIVERY_PROGRESS}${dashRpcQuery}`, {
           method: "POST",
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -15527,6 +15546,10 @@ ${folderBtn}
               rows = txt ? JSON.parse(txt) : [];
             } catch (_) {
               rows = [];
+            }
+            if (Array.isArray(rows) && rows.length >= 1000) {
+              // 필터가 있는데도 1000행이면 max-rows 잘림 재발 신호 — 조용히 넘어가지 않는다.
+              console.warn("[DASHBOARD][delivery.rpc] 1000행 응답 — PostgREST max-rows 잘림 의심, 날짜 필터 범위를 재검토할 것");
             }
             const nextMap = new Map();
             for (const r of Array.isArray(rows) ? rows : []) {
