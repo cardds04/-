@@ -3453,7 +3453,7 @@
           });
           localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
           renderMyDayoffRequests();
-          alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시부터 촬영 가능)` : "휴무요청이 반영되었습니다");
+          alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시 이후 촬영 가능)` : "휴무요청이 반영되었습니다");
           return;
         }
         const wid = String(writer.id || "").trim() || null;
@@ -3481,7 +3481,7 @@
           return;
         }
         queueWriterTablePull();
-        alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시부터 촬영 가능)` : "휴무요청이 반영되었습니다");
+        alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시 이후 촬영 가능)` : "휴무요청이 반영되었습니다");
       }
 
       async function cancelMyDayoffRequest(requestId) {
@@ -3557,7 +3557,7 @@
             const requestId = normalize(item?.id);
             const fromHour = normalize(item?.fromHour);
             const kindLabel = fromHour
-              ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.78rem;font-weight:700;">${Number(fromHour)}시부터 가능</span>`
+              ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.78rem;font-weight:700;">${Number(fromHour)}시 이후 가능</span>`
               : `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#ffe7e7;color:#7a1d1d;font-size:0.78rem;font-weight:700;">종일</span>`;
             return `
               <div class="dayoff-item">
@@ -3610,11 +3610,11 @@
             </label>
             <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:0.92rem;">
               <input type="radio" name="dayoffKind" value="from" style="width:16px;height:16px;" />
-              <span>이 시각<b>부터 촬영 가능</b> (앞시간 휴무)</span>
+              <span>이 시각 <b>이후 촬영 가능</b> (앞시간 휴무)</span>
             </label>
             <div id="dayoffFromWrap" style="display:none;align-items:center;gap:8px;margin-bottom:14px;padding-left:4px;">
               <select id="dayoffPickHour" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
-              <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">부터 가능</span>
+              <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">이후 가능</span>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
               <button id="dayoffPickCancel" type="button" style="padding:10px 18px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;font-weight:600;cursor:pointer;">취소</button>

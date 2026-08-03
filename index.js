@@ -8530,7 +8530,7 @@ ${folderBtn}
             const nm = String(item?.writerName || "").trim();
             if (!nm) return "";
             const fh = String(item?.fromHour || "").trim();
-            return fh ? `${nm} ${Number(fh)}시~` : nm;
+            return fh ? `${nm} ${Number(fh)}시 이후` : nm;
           })
           .filter(Boolean);
         return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
@@ -9643,7 +9643,7 @@ ${folderBtn}
           const writerId = item.writerId || "-";
           const amount = Math.max(0, Number(item.amount) || 0);
           const fh = String(item.fromHour || "").trim();
-          const kindText = fh ? `${Number(fh)}시부터 촬영가능` : "종일";
+          const kindText = fh ? `${Number(fh)}시 이후 촬영가능` : "종일";
           return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, ${kindText}, 차감 ${amount})`;
         }
         if (item.type === "customer_submission_receipt") {
@@ -11249,7 +11249,7 @@ ${folderBtn}
                 // 부분휴무(〇시부터 촬영 가능)는 배지로 구분 — 종일 휴무와 한도 차감량이 다르다(4 vs 2).
                 const fh = String(item?.fromHour || "").trim();
                 const kindBadge = fh
-                  ? `<span style="margin-left:4px;padding:0 6px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.72rem;font-weight:700;">${Number(fh)}시~ 가능</span>`
+                  ? `<span style="margin-left:4px;padding:0 6px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.72rem;font-weight:700;">${Number(fh)}시 이후 가능</span>`
                   : "";
                 const cancelBtn = id
                   ? `<button type="button" class="btn-sm" data-action="adminCancelDayoffRequest" data-request-id="${escapeHtml(id)}" style="margin-left:4px;padding:0 6px;font-size:0.72rem;color:#b91c1c;border-color:#fca5a5;" title="이 휴무요청 취소">취소</button>`
