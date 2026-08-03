@@ -64,6 +64,9 @@
       const STORAGE_EMERGENCY_LIMIT_ADDITIONS = "scheduleSiteEmergencyLimitAdditions";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
+      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 4건, 부분(〇시부터 가능) 은 절반인 2건 */
+      const DAYOFF_FULL_AMOUNT = 4;
+      const DAYOFF_PARTIAL_AMOUNT = 2;
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
       const STORAGE_COUPON_LOWLIST_EXCLUDED = "scheduleSiteCouponLowlistExcluded";
       const STORAGE_PAYMENT_MONTH_MEMOS = "scheduleSitePaymentMonthMemos";
@@ -6044,7 +6047,7 @@
       async function fetchDayoffRequestsFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc`,
+          `${SUPABASE_URL}/rest/v1/dayoff_requests?select=id,writer_id,writer_name,dayoff_date,reason,created_at&order=created_at.desc`,
           {
             method: "GET",
             headers: {
@@ -6063,14 +6066,19 @@
       async function pullDayoffRequestsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         const rows = await fetchDayoffRequestsFromSupabase();
-        const nextRows = (Array.isArray(rows) ? rows : []).map((row) => ({
-          id: String(row?.id || "").trim(),
-          writerId: String(row?.writer_id || "").trim(),
-          writerName: String(row?.writer_name || "").trim(),
-          date: String(row?.dayoff_date || "").trim(),
-          amount: 4,
-          requestedAt: String(row?.created_at || "").trim()
-        }));
+        const nextRows = (Array.isArray(rows) ? rows : []).map((row) => {
+          // 부분휴무: reason 이 `from:HH` 면 그 시각부터 촬영 가능 — 한도 차감은 종일의 절반.
+          const fromHour = (String(row?.reason || "").match(/^from:(\d{2})$/) || [])[1] || "";
+          return {
+            id: String(row?.id || "").trim(),
+            writerId: String(row?.writer_id || "").trim(),
+            writerName: String(row?.writer_name || "").trim(),
+            date: String(row?.dayoff_date || "").trim(),
+            amount: fromHour ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
+            fromHour,
+            requestedAt: String(row?.created_at || "").trim()
+          };
+        });
         const nextSerialized = JSON.stringify(nextRows);
         const currentSerialized = JSON.stringify(readStorageArray(STORAGE_DAYOFF_REQUESTS));
         if (nextSerialized === currentSerialized) return false;
@@ -8515,9 +8523,15 @@ ${folderBtn}
       function getDayoffWriterNamesByDate(dateKey) {
         const normalizedDate = String(dateKey || "").trim();
         if (!normalizedDate) return [];
+        // 부분휴무(〇시부터 가능)는 이름 뒤에 시각을 붙여 달력에서 바로 구분되게 한다.
         const names = readStorageArray(STORAGE_DAYOFF_REQUESTS)
           .filter((item) => String(item?.date || "").trim() === normalizedDate)
-          .map((item) => String(item?.writerName || "").trim())
+          .map((item) => {
+            const nm = String(item?.writerName || "").trim();
+            if (!nm) return "";
+            const fh = String(item?.fromHour || "").trim();
+            return fh ? `${nm} ${Number(fh)}시~` : nm;
+          })
           .filter(Boolean);
         return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
       }
@@ -9507,6 +9521,7 @@ ${folderBtn}
             writerId: String(item?.writerId || "").trim(),
             date: String(item?.date || "").trim(),
             amount: Math.max(0, Number(item?.amount) || 0),
+            fromHour: String(item?.fromHour || "").trim(),
             read: dayoffId ? readDayoffIds.has(dayoffId) : false,
             createdAt: item?.requestedAt || ""
           };
@@ -9627,7 +9642,9 @@ ${folderBtn}
           const writerName = item.writerName || "작가미상";
           const writerId = item.writerId || "-";
           const amount = Math.max(0, Number(item.amount) || 0);
-          return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, 차감 ${amount})`;
+          const fh = String(item.fromHour || "").trim();
+          const kindText = fh ? `${Number(fh)}시부터 촬영가능` : "종일";
+          return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, ${kindText}, 차감 ${amount})`;
         }
         if (item.type === "customer_submission_receipt") {
           const receiptId = item.receiptId || "-";
@@ -11229,10 +11246,15 @@ ${folderBtn}
                 const date = escapeHtml(String(item?.date || "-"));
                 const requestedAt = escapeHtml(String(item?.requestedAt || "").slice(0, 16).replace("T", " "));
                 const id = String(item?.id || "").trim();
+                // 부분휴무(〇시부터 촬영 가능)는 배지로 구분 — 종일 휴무와 한도 차감량이 다르다(4 vs 2).
+                const fh = String(item?.fromHour || "").trim();
+                const kindBadge = fh
+                  ? `<span style="margin-left:4px;padding:0 6px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.72rem;font-weight:700;">${Number(fh)}시~ 가능</span>`
+                  : "";
                 const cancelBtn = id
                   ? `<button type="button" class="btn-sm" data-action="adminCancelDayoffRequest" data-request-id="${escapeHtml(id)}" style="margin-left:4px;padding:0 6px;font-size:0.72rem;color:#b91c1c;border-color:#fca5a5;" title="이 휴무요청 취소">취소</button>`
                   : "";
-                return `<span style="white-space:nowrap;">${date}${requestedAt ? ` (${requestedAt})` : ""}${cancelBtn}</span>`;
+                return `<span style="white-space:nowrap;">${date}${requestedAt ? ` (${requestedAt})` : ""}${kindBadge}${cancelBtn}</span>`;
               })
               .join(" · ");
             return `

@@ -824,6 +824,9 @@
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
+      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 4건, 부분(〇시부터 가능) 은 절반인 2건 */
+      const DAYOFF_FULL_AMOUNT = 4;
+      const DAYOFF_PARTIAL_AMOUNT = 2;
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG = "scheduleSitePhotographerPayrollConfigV1";
       const STORAGE_PHOTOGRAPHER_PAYROLL_MONTHLY = "scheduleSitePhotographerPayrollMonthlyV1";
@@ -2065,7 +2068,7 @@
           fetchWriterJsonRows(
             `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,customer_phone,code,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
-          fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,created_at&order=created_at.desc")
+          fetchWriterJsonRows("dayoff_requests?select=id,writer_id,writer_name,dayoff_date,reason,created_at&order=created_at.desc")
         ]);
         const __rowsOf = (i) =>
           __settled[i] && __settled[i].status === "fulfilled" && Array.isArray(__settled[i].value)
@@ -2136,14 +2139,19 @@
             };
           })
           .filter((row) => row.name);
-        const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => ({
-          id: normalize(row?.id),
-          writerId: normalize(row?.writer_id),
-          writerName: normalize(row?.writer_name),
-          date: normalize(row?.dayoff_date),
-          amount: 4,
-          requestedAt: normalize(row?.created_at)
-        }));
+        const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => {
+          // 부분휴무: reason 에 `from:HH` 로 저장돼 있으면 그 시각부터 촬영 가능(한도는 절반만 차감).
+          const fromHour = (String(row?.reason || "").match(/^from:(\d{2})$/) || [])[1] || "";
+          return {
+            id: normalize(row?.id),
+            writerId: normalize(row?.writer_id),
+            writerName: normalize(row?.writer_name),
+            date: normalize(row?.dayoff_date),
+            amount: fromHour ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
+            fromHour,
+            requestedAt: normalize(row?.created_at)
+          };
+        });
         // 각 저장소는 해당 fetch 가 성공(non-null)했을 때만 갱신. 실패한 테이블은 기존 값 유지
         // (빈 배열로 덮어써서 데이터가 사라지는 것 방지).
         if (writersRows) writeStorageArraySilently(STORAGE_WRITERS, writers);
@@ -3389,7 +3397,14 @@
         renderMonthlyShotCount();
       }
 
-      async function requestDayOffReduction(selectedDate) {
+      /**
+       * 휴무요청 등록.
+       * @param {string} selectedDate YYYY-MM-DD
+       * @param {{kind?: "full"|"from", fromHour?: string}} [opts]
+       *   kind="from" 이면 부분휴무(그 시각부터 촬영 가능) — 한도는 종일의 절반만 차감.
+       *   시간 정보는 dayoff_requests.reason 컬럼에 `from:HH` 로 저장한다(스키마 변경 불필요).
+       */
+      async function requestDayOffReduction(selectedDate, opts) {
         const writer = getCurrentWriter();
         if (!writer) {
           alert("로그인이 필요합니다.");
@@ -3401,9 +3416,18 @@
           alert("휴무요청 날짜를 선택해주세요.");
           return;
         }
+        const kind = opts && opts.kind === "from" ? "from" : "full";
+        const fromHour = kind === "from" ? String((opts && opts.fromHour) || "").trim() : "";
+        if (kind === "from" && !/^\d{2}$/.test(fromHour)) {
+          alert("촬영 가능 시작 시각을 선택해주세요.");
+          return;
+        }
+        // 종일=4건, 부분(〇시부터 가능)=절반인 2건 차감 (사장님 확정 2026-08-03)
+        const amount = kind === "from" ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT;
+        const reasonText = kind === "from" ? `from:${fromHour}` : "";
         const currentLimit = getEffectiveDailyLimit(dateKey);
         const bookedCount = getBookedCountForDate(dateKey);
-        if (currentLimit - 4 < bookedCount) {
+        if (currentLimit - amount < bookedCount) {
           alert("예약이 이미 차있어 어렵습니다. 관리자에게 요청해주세요.");
           return;
         }
@@ -3421,14 +3445,15 @@
           requests.unshift({
             id: `dayoff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             date: dateKey,
-            amount: 4,
+            amount,
+            fromHour,
             writerId: "",
             writerName: String(writer.name || "").trim(),
             requestedAt: new Date().toISOString()
           });
           localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
           renderMyDayoffRequests();
-          alert("휴무요청이 반영되었습니다");
+          alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시부터 촬영 가능)` : "휴무요청이 반영되었습니다");
           return;
         }
         const wid = String(writer.id || "").trim() || null;
@@ -3437,6 +3462,7 @@
           writer_name: String(writer.name || "").trim(),
           dayoff_date: dateKey
         };
+        if (reasonText) row.reason = reasonText;
         const result = await writerDbWrite("POST", "dayoff_requests", {
           body: JSON.stringify([row]),
           prefer: "return=minimal"
@@ -3455,7 +3481,7 @@
           return;
         }
         queueWriterTablePull();
-        alert("휴무요청이 반영되었습니다");
+        alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시부터 촬영 가능)` : "휴무요청이 반영되었습니다");
       }
 
       async function cancelMyDayoffRequest(requestId) {
@@ -3529,10 +3555,14 @@
             const date = normalize(item?.date) || "-";
             const requestedAt = normalize(item?.requestedAt).slice(0, 16).replace("T", " ") || "-";
             const requestId = normalize(item?.id);
+            const fromHour = normalize(item?.fromHour);
+            const kindLabel = fromHour
+              ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.78rem;font-weight:700;">${Number(fromHour)}시부터 가능</span>`
+              : `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#ffe7e7;color:#7a1d1d;font-size:0.78rem;font-weight:700;">종일</span>`;
             return `
               <div class="dayoff-item">
                 <div class="dayoff-item-head">
-                  <strong>휴무요청일: ${date}</strong>
+                  <strong>휴무요청일: ${date}</strong>${kindLabel}
                   <button class="btn outline small" type="button" data-action="cancelDayoffRequest" data-request-id="${requestId}">취소</button>
                 </div>
                 요청시간: ${requestedAt}
@@ -3568,10 +3598,23 @@
         modal.innerHTML = `
           <div style="background:#fff;border-radius:14px;max-width:340px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
             <div style="font-weight:800;font-size:1.05rem;margin-bottom:14px;color:#1f3a6b;">휴무요청 날짜 선택</div>
-            <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
               <select id="dayoffPickY" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;">${yearOpts}</select>
               <select id="dayoffPickM" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;">${monthOpts}</select>
               <select id="dayoffPickD" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+            </div>
+            <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#334155;">휴무 방식</div>
+            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.92rem;">
+              <input type="radio" name="dayoffKind" value="full" checked style="width:16px;height:16px;" />
+              <span><b>하루 종일</b> 쉽니다</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:0.92rem;">
+              <input type="radio" name="dayoffKind" value="from" style="width:16px;height:16px;" />
+              <span>이 시각<b>부터 촬영 가능</b> (앞시간 휴무)</span>
+            </label>
+            <div id="dayoffFromWrap" style="display:none;align-items:center;gap:8px;margin-bottom:14px;padding-left:4px;">
+              <select id="dayoffPickHour" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">부터 가능</span>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
               <button id="dayoffPickCancel" type="button" style="padding:10px 18px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;font-weight:600;cursor:pointer;">취소</button>
@@ -3598,15 +3641,30 @@
         rebuildDays();
         // 초기 일자 반영
         if ([...dEl.options].some((o) => o.value === presetD)) dEl.value = presetD;
+        // 부분휴무(〇시부터 가능) 시간 선택 — 촬영 가능 시간대(8~19시)
+        const hourEl = modal.querySelector("#dayoffPickHour");
+        hourEl.innerHTML = Array.from({ length: 12 }, (_, i) => i + 8)
+          .map((h) => `<option value="${pad2(h)}" ${h === 13 ? "selected" : ""}>${h}시</option>`)
+          .join("");
+        const fromWrap = modal.querySelector("#dayoffFromWrap");
+        const kindRadios = [...modal.querySelectorAll('input[name="dayoffKind"]')];
+        const syncKind = () => {
+          const kind = kindRadios.find((r) => r.checked)?.value || "full";
+          fromWrap.style.display = kind === "from" ? "flex" : "none";
+        };
+        kindRadios.forEach((r) => r.addEventListener("change", syncKind));
+        syncKind();
         const close = () => modal.remove();
         modal.querySelector("#dayoffPickCancel").addEventListener("click", close);
         modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
         modal.querySelector("#dayoffPickOk").addEventListener("click", () => {
           const picked = `${yEl.value}-${mEl.value}-${dEl.value}`;
           if (!/^\d{4}-\d{2}-\d{2}$/.test(picked)) { alert("날짜를 다시 선택해주세요."); return; }
+          const kind = kindRadios.find((r) => r.checked)?.value || "full";
+          const fromHour = kind === "from" ? String(hourEl.value || "") : "";
           dayOffDateEl.value = picked;
           close();
-          requestDayOffReduction(picked);
+          requestDayOffReduction(picked, { kind, fromHour });
         });
       }
 
