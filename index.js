@@ -15643,6 +15643,12 @@ ${folderBtn}
         const hasSid = /^[0-9a-f-]{36}$/i.test(sid);
         // 완료(초록) — 라벨 그대로.
         if (done) {
+          // ‼️서버가 완료로 보는 건의 「검수전」 수동 표시는 낡은 잔재 — 렌더 시점에 즉시 정리한다.
+          //   (2026-08-03 실측: 표시 180건 중 144건이 이런 잔재였음. 예전 수정은 '클릭했을 때'만
+          //    지워서, 이미 쌓인 건 사장님이 하나하나 눌러야만 사라졌고 그때마다 409 알림이 떴다.)
+          if (reviewReady && hasSid) {
+            try { setDeliveryReviewReady(sid, notifyKind, false); } catch (_) {}
+          }
           return `<span class="dash-del-icon dash-del-icon--ok" title="${escapeHtml(label + " 납품 완료")}">${escapeHtml(label)}</span>`;
         }
         if (!hasSid) {
