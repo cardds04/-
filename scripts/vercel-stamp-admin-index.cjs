@@ -54,19 +54,27 @@ let any = false;
 for (const [rel, spanId] of FILES) {
   const fp = path.join(root, rel);
   let html = fs.readFileSync(fp, "utf8");
-  const re = new RegExp(
-    `<span id="${spanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}">\\s*__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__\\s*</span>`
-  );
-  if (!re.test(html)) {
-    console.warn("[vercel-stamp] 슬롯 없음 → 스킵:", rel);
+  const idEsc = spanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // 슬롯 내용은 무엇이든(플레이스홀더 또는 이전 빌드가 남긴 "업데이트시각:MMDD hh:mm") 새 스탬프로 교체한다.
+  // ‼️예전에는 플레이스홀더만 매칭했는데, 빌드 산출물(치환된 HTML)이 실수로 커밋되면 슬롯이 사라져
+  //   이후 모든 빌드가 "슬롯 없음 → 스킵"이 되고 표시가 옛 날짜에 영구히 굳었다(2026-07-15 → 08-03 발견).
+  //   내용 무관 매칭으로 바꿔 그 상황에서도 자동 복구되게 한다.
+  const re = new RegExp(`(<span id="${idEsc}">)([\\s\\S]*?)(</span>)`);
+  const m = html.match(re);
+  if (!m) {
+    console.warn("[vercel-stamp] 슬롯 span 자체가 없음 → 스킵:", rel, `(#${spanId})`);
     continue;
   }
+  const prev = m[2].trim();
   html = html.replace(re, `<span id="${spanId}">${stampedInner}</span>`);
   fs.writeFileSync(fp, html, "utf8");
   any = true;
-  console.log("[vercel-stamp] 적용됨", rel, stampTextRaw);
+  const note = prev === "__SCHEDULE_SITE_ADMIN_UPDATE_LABEL__" ? "" : ` (이전 값 복구: "${prev}")`;
+  console.log("[vercel-stamp] 적용됨", rel, stampTextRaw + note);
 }
 
 if (!any) {
-  console.warn("[vercel-stamp] 처리된 HTML 없음");
+  // 슬롯이 하나도 없으면 배포 시각 표시가 멈춘다 — 빌드를 실패시켜 즉시 알아차리게 한다.
+  console.error("[vercel-stamp] 처리된 HTML 없음 — 스탬프 슬롯(span)을 찾지 못했습니다.");
+  process.exit(1);
 }
