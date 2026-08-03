@@ -15558,6 +15558,8 @@ ${folderBtn}
             }
             dashDeliveryRpcMap = nextMap;
             dashDeliveryRpcFailed = false;
+            // 서버가 완료로 보는 건의 「검수전」 잔재를 응답 즉시 일괄 정리(목록에 없는 과거 건까지).
+            try { pruneDeliveryReviewReadyByRpcMap(nextMap); } catch (_) {}
           })
           .catch((err) => {
             console.warn("[DASHBOARD][delivery.rpc]", err);
@@ -15636,6 +15638,35 @@ ${folderBtn}
         if (on) { if (!m[sid]) m[sid] = {}; m[sid][k] = new Date().toISOString(); }
         else if (m[sid]) { delete m[sid][k]; if (!m[sid].photo && !m[sid].video) delete m[sid]; }
         try { localStorage.setItem(STORAGE_DELIVERY_REVIEW_READY, JSON.stringify(m)); } catch (e) {}
+      }
+      /**
+       * 서버(RPC)가 완료로 보는 건의 「검수전」 수동 표시를 일괄 정리한다.
+       * 배지 렌더 시점 정리만으로는 15일 목록에 그려지는 건만 처리돼 나머지가 계속 쌓인다
+       * (2026-08-03 실측: 144건 잔재 중 화면에 뜬 11건만 정리됨). RPC 응답을 받을 때마다
+       * 맵 전체를 훑어 완료건 표시를 제거해, 목록에 없던 과거 건까지 한 번에 없앤다.
+       * @returns {number} 정리한 표시 수
+       */
+      function pruneDeliveryReviewReadyByRpcMap(rpcMap) {
+        if (!rpcMap || typeof rpcMap.get !== "function") return 0;
+        const m = readDeliveryReviewReadyMap();
+        const sids = Object.keys(m);
+        if (!sids.length) return 0;
+        let removed = 0;
+        for (const sid of sids) {
+          const row = rpcMap.get(sid);
+          if (!row) continue; // RPC 범위 밖(60일 이전 등)은 판단 불가 → 보존
+          for (const k of ["photo", "video"]) {
+            if (!m[sid] || !m[sid][k]) continue;
+            const done = k === "photo" ? row.photo_notified_at : row.video_notified_at;
+            if (done) { delete m[sid][k]; removed++; }
+          }
+          if (m[sid] && !m[sid].photo && !m[sid].video) delete m[sid];
+        }
+        if (removed) {
+          try { localStorage.setItem(STORAGE_DELIVERY_REVIEW_READY, JSON.stringify(m)); } catch (e) {}
+          console.info(`[DASHBOARD][review] 완료건 「검수전」 잔재 ${removed}건 정리`);
+        }
+        return removed;
       }
 
       function dashDeliverySmsBadge(notifyKind, label, done, scheduleId, bothNeeded, otherDone, reviewReady) {
