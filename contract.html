@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>촬영 계약서 | 쑈픽 인테리어촬영</title>
+    <meta name="theme-color" content="#e8a48c" />
+    <style>
+      :root {
+        --peach: #f7e3da;
+        --peach-line: #e6cfc5;
+        --salmon: #e8a48c;
+        --line: #d2d2d2;
+        --text: #333333;
+        --muted: #8b8b8b;
+        --sheet-w: 794px;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+        color: var(--text);
+        background: #ebebeb;
+        background-image: linear-gradient(#ebebeb 0%, #ebebeb 68%, #3b4048 68%, #3b4048 100%);
+        background-attachment: fixed;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* 시트를 화면 폭에 맞춰 통째로 축소 — 원본 양식 비율을 그대로 유지 */
+      #stage { display: flex; justify-content: center; padding: 26px 0 120px; }
+      #scaler { transform-origin: top center; }
+      .sheet {
+        width: var(--sheet-w);
+        background: #fff;
+        border-radius: 20px;
+        padding: 34px 32px 26px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      }
+
+      /* 헤더 */
+      .doc-head { display: grid; grid-template-columns: 190px 1fr 190px; align-items: flex-end; margin-bottom: 20px; }
+      .brand-mark { line-height: 1.15; }
+      .brand-mark .small { font-size: 12px; color: #9b9b9b; font-weight: 700; letter-spacing: -0.3px; }
+      .brand-mark .big { font-size: 20px; color: #222; font-weight: 800; letter-spacing: -0.8px; }
+      .doc-title { text-align: center; }
+      .doc-title .ko { font-size: 27px; font-weight: 800; color: var(--salmon); letter-spacing: 1px; }
+      .doc-title .en { font-size: 10.5px; color: #a9a9a9; letter-spacing: 0.6px; margin-top: 2px; }
+
+      /* 표 공통 */
+      table.f { width: 100%; border-collapse: collapse; margin-bottom: 9px; table-layout: fixed; }
+      table.f th, table.f td { border: 1px solid var(--line); padding: 7px 9px; font-size: 12.5px; font-weight: 500; }
+      table.f th {
+        background: var(--peach);
+        border-color: var(--peach-line);
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 3px;
+        color: #4a4a4a;
+        white-space: nowrap;
+      }
+      table.f th.tight { letter-spacing: 0; }
+      table.f th .en { display: block; font-size: 8.5px; letter-spacing: 0.4px; color: #9a8a83; font-weight: 600; margin-top: 1px; }
+      td.center { text-align: center; }
+      .cell-h { height: 30px; }
+
+      /* 입력 */
+      input.line, textarea.line {
+        width: 100%; border: none; outline: none; background: transparent;
+        font: inherit; color: #1c2c4a; font-weight: 600; padding: 0;
+      }
+      input.line::placeholder, textarea.line::placeholder { color: #c3c3c3; font-weight: 500; }
+      textarea.line { resize: none; height: 46px; line-height: 1.5; }
+      input.line:disabled, textarea.line:disabled { color: #1c2c4a; -webkit-text-fill-color: #1c2c4a; opacity: 1; }
+
+      /* 체크박스 */
+      .opts { display: flex; gap: 34px; justify-content: center; align-items: center; }
+      .chk { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; font-size: 12.5px; }
+      .chk input { position: absolute; opacity: 0; width: 0; height: 0; }
+      .chk .box {
+        width: 12px; height: 12px; border: 1.4px solid #7c7c7c; display: inline-block; position: relative; flex-shrink: 0; background: #fff;
+      }
+      .chk input:checked + .box { background: var(--salmon); border-color: var(--salmon); }
+      .chk input:checked + .box::after {
+        content: ""; position: absolute; left: 3px; top: 0px; width: 4px; height: 8px;
+        border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(42deg);
+      }
+      .chk input:focus-visible + .box { outline: 2px solid #7aa7ff; outline-offset: 2px; }
+      .chk.sel { color: #b4553a; font-weight: 700; }
+      .locked .chk { cursor: default; }
+
+      /* 가격표 */
+      .price td { text-align: center; font-size: 12px; letter-spacing: -0.2px; }
+
+      /* 합계 */
+      .total-amt { display: flex; align-items: center; gap: 6px; }
+      .total-amt .won-l { font-weight: 700; }
+      .total-amt input { text-align: right; font-size: 13px; }
+
+      /* 약관 */
+      .terms { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 16px; font-size: 10.4px; line-height: 1.85; color: #4a4a4a; }
+      .terms p { margin: 0 0 9px; }
+      .terms .h { font-weight: 700; color: #2b2b2b; margin-bottom: 2px; }
+      .terms .indent { padding-left: 11px; }
+      .terms .indent2 { padding-left: 20px; }
+      .terms ol { margin: 0; padding-left: 16px; }
+      .terms ol li { margin-bottom: 8px; }
+
+      /* 동의·서명 */
+      .agree-row { margin-top: 6px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: 10.6px; }
+      .agree-row .chk { font-size: 10.6px; }
+      .sign-row { display: flex; justify-content: flex-end; align-items: flex-start; gap: 10px; margin-top: 8px; }
+      .sign-name { border-bottom: 1px solid #9a9a9a; width: 110px; text-align: center; }
+      .sign-name input { text-align: center; font-size: 12px; }
+      .sign-pad-wrap { text-align: right; }
+      .sign-pad {
+        width: 250px; height: 92px; border: 1px dashed #b9b9b9; border-radius: 6px; background: #fcfcfc;
+        touch-action: none; display: block;
+      }
+      .sign-hint { font-size: 9.5px; color: #a5a5a5; margin-top: 3px; }
+      .sign-img { width: 250px; height: 92px; object-fit: contain; }
+      .sign-clear {
+        border: 1px solid var(--line); background: #fff; border-radius: 5px; font-size: 10px; padding: 2px 8px; cursor: pointer; color: #666; margin-top: 3px;
+      }
+
+      /* 푸터 */
+      .doc-foot { margin-top: 16px; border-top: 1.6px solid #3d3d3d; padding-top: 7px; display: flex; align-items: center; font-size: 10px; color: #6a6a6a; }
+      .doc-foot .b { font-weight: 800; color: #333; letter-spacing: -0.3px; }
+      .doc-foot .c { flex: 1; text-align: center; }
+
+      /* 하단 액션바 */
+      #actionBar {
+        position: fixed; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.97);
+        border-top: 1px solid #dcdcdc; padding: 11px 14px calc(11px + env(safe-area-inset-bottom));
+        display: flex; gap: 9px; justify-content: center; align-items: center; flex-wrap: wrap; z-index: 30;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.07);
+      }
+      .btn {
+        border: 1px solid var(--line); background: #fff; color: #333; border-radius: 9px;
+        padding: 11px 18px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+      }
+      .btn.primary { background: var(--salmon); border-color: var(--salmon); color: #fff; }
+      .btn.primary:disabled { background: #e2c7bd; border-color: #e2c7bd; cursor: default; }
+      .btn.ghost { background: #f6f6f6; }
+      .status-badge {
+        display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #2f7a4d;
+        background: #e7f6ed; border: 1px solid #bfe4cd; border-radius: 8px; padding: 9px 14px;
+      }
+
+      /* 관리자 */
+      #adminView { width: min(920px, 94vw); margin: 26px auto 60px; }
+      .a-card { background: #fff; border: 1px solid #dcdcdc; border-radius: 14px; padding: 18px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.06); }
+      .a-card h2 { margin: 0 0 12px; font-size: 1.05rem; }
+      .a-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .a-row input, .a-row select {
+        border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; min-width: 150px; flex: 1;
+      }
+      .a-item { border: 1px solid #e6e6e6; border-radius: 10px; padding: 11px 12px; margin-bottom: 8px; font-size: 13.5px; }
+      .a-item .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .a-item .nm { font-weight: 800; font-size: 14.5px; }
+      .a-item .meta { color: #8b8b8b; font-size: 12px; margin-top: 3px; line-height: 1.6; }
+      .pill { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 9px; }
+      .pill.wait { background: #fff3e0; color: #b26a00; border: 1px solid #f2d5aa; }
+      .pill.done { background: #e7f6ed; color: #2f7a4d; border: 1px solid #bfe4cd; }
+      .a-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+      .a-actions .btn { padding: 7px 11px; font-size: 12.5px; border-radius: 7px; }
+      .linkbox { background: #f7f9ff; border: 1px solid #dbe4f7; border-radius: 8px; padding: 9px 10px; font-size: 12.5px; word-break: break-all; color: #2d4373; margin-top: 8px; }
+      .hint { color: #8b8b8b; font-size: 12.5px; line-height: 1.7; }
+      .hidden { display: none !important; }
+
+      @media (max-width: 860px) {
+        body { background-image: linear-gradient(#ebebeb 0%, #ebebeb 78%, #3b4048 78%, #3b4048 100%); }
+        #stage { padding: 12px 0 130px; }
+      }
+      @media print {
+        body { background: #fff; }
+        #actionBar, .sign-clear, .sign-hint, #printHideNote { display: none !important; }
+        #stage { padding: 0; }
+        #scaler { transform: none !important; }
+        .sheet { box-shadow: none; border-radius: 0; padding: 12px 10px; width: 100%; }
+        @page { size: A4 portrait; margin: 10mm; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ────────── 계약서(고객·서명본 공용) ────────── -->
+    <div id="stage" class="hidden">
+      <div id="scaler">
+        <div class="sheet" id="sheet">
+          <div class="doc-head">
+            <div class="brand-mark">
+              <div class="small">쑈픽</div>
+              <div class="big">인테리어촬영</div>
+            </div>
+            <div class="doc-title">
+              <div class="ko">촬영 계약서</div>
+              <div class="en">Membership Agreement</div>
+            </div>
+            <div></div>
+          </div>
+
+          <table class="f">
+            <colgroup><col style="width: 105px" /><col /><col style="width: 92px" /><col style="width: 190px" /></colgroup>
+            <tbody>
+              <tr class="cell-h">
+                <th>업 체 명</th>
+                <td><input class="line" data-f="company_name" maxlength="60" placeholder="업체명" /></td>
+                <th class="tight">대표자명</th>
+                <td><input class="line" data-f="ceo_name" maxlength="30" placeholder="대표자명" /></td>
+              </tr>
+              <tr class="cell-h">
+                <th>휴 대 폰</th>
+                <td colspan="3"><input class="line" data-f="phone" maxlength="20" inputmode="tel" placeholder="010-0000-0000" /></td>
+              </tr>
+              <tr class="cell-h">
+                <th>이메일주소</th>
+                <td colspan="3"><input class="line" data-f="email" maxlength="80" inputmode="email" placeholder="example@email.com" /></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="f">
+            <colgroup><col style="width: 105px" /><col /><col /></colgroup>
+            <tbody>
+              <tr class="cell-h">
+                <th>계약기간안내</th>
+                <td class="center">
+                  <label class="chk" data-group="period_type" data-value="end_date">
+                    <input type="checkbox" /><span class="box"></span>촬영종료일 명시
+                  </label>
+                </td>
+                <td class="center">
+                  <label class="chk" data-group="period_type" data-value="until_used">
+                    <input type="checkbox" /><span class="box"></span>다회권 소진시까지
+                  </label>
+                </td>
+              </tr>
+              <tr>
+                <th>사진만촬영<span class="en">PHOTO</span></th>
+                <td colspan="2">
+                  <div class="opts">
+                    <label class="chk" data-group="plan_photo" data-value="5"><input type="checkbox" /><span class="box"></span>5회권</label>
+                    <label class="chk" data-group="plan_photo" data-value="10"><input type="checkbox" /><span class="box"></span>10회권</label>
+                    <label class="chk" data-group="plan_photo" data-value="20"><input type="checkbox" /><span class="box"></span>20회권</label>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <th>사진영상촬영<span class="en">PHOTO+VIDEO</span></th>
+                <td colspan="2">
+                  <div class="opts">
+                    <label class="chk" data-group="plan_photo_video" data-value="5"><input type="checkbox" /><span class="box"></span>5회권</label>
+                    <label class="chk" data-group="plan_photo_video" data-value="10"><input type="checkbox" /><span class="box"></span>10회권</label>
+                    <label class="chk" data-group="plan_photo_video" data-value="20"><input type="checkbox" /><span class="box"></span>20회권</label>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <th>메모사항</th>
+                <td colspan="2"><textarea class="line" data-f="memo" maxlength="300" placeholder="요청사항이 있으면 적어주세요"></textarea></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="f price">
+            <colgroup><col style="width: 105px" /><col /><col /><col /></colgroup>
+            <tbody>
+              <tr class="cell-h">
+                <th rowspan="2">가격표</th>
+                <th>3회권</th>
+                <th>10회권</th>
+                <th>20회권</th>
+              </tr>
+              <tr class="cell-h">
+                <td>350,000원/회당(105만)</td>
+                <td>280,000원/회당(280만)</td>
+                <td>270,000원/회당(540만)</td>
+              </tr>
+              <tr class="cell-h">
+                <th>사진만</th>
+                <td>200,000원/회당(100만)</td>
+                <td>170,000원/회당(170만)</td>
+                <td>150,000원/회당(300만)</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="f">
+            <colgroup><col style="width: 105px" /><col /><col style="width: 250px" /></colgroup>
+            <tbody>
+              <tr class="cell-h">
+                <th class="tight">합 계 (Total Price)</th>
+                <td>
+                  <div class="opts" style="gap: 40px">
+                    <label class="chk" data-group="payment_method" data-value="cash"><input type="checkbox" /><span class="box"></span>현 금</label>
+                    <label class="chk" data-group="payment_method" data-value="card"><input type="checkbox" /><span class="box"></span>카 드</label>
+                    <label class="chk" data-group="payment_method" data-value="account"><input type="checkbox" /><span class="box"></span>계 좌</label>
+                  </div>
+                </td>
+                <td>
+                  <div class="total-amt">
+                    <span class="won-l">₩</span>
+                    <input class="line" data-f="total_amount" inputmode="numeric" maxlength="15" placeholder="0" />
+                    <span>원</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="terms">
+            <div>
+              <p>본 계약은 당사자 간에 체결계약입니다.</p>
+              <p class="h">1. 목적</p>
+              <p class="indent">갑은 인테리어 시공이 완료된 공간에 대해 사진 및 영상 촬영을 을에게 의뢰하고, 을은 이에 따라 기획·촬영·편집 후 결과물을 납품하기로 한다.</p>
+              <p class="h">2. 유형 및 기간</p>
+              <p class="indent">인테리어 현장의 연출세팅은 의뢰사가 주도적으로 준비</p>
+              <p class="h">3. 수정 보완</p>
+              <p class="indent">
+                납품 후 1회 무상 수정 가능<br />
+                추가 수정은 건당 5만 원<br />
+                클라이언트 귀책으로 인한 재촬영은 을의 책임이 아님
+              </p>
+            </div>
+            <div>
+              <p class="h">4. 환불약관</p>
+              <ol>
+                <li>계약 체결 후 단순 변심에 의한 환불 요청 시, 총 계약금액의 50%를 위약금으로 공제하고 잔액을 환불합니다. 총 금액의 위약금 50% + 정상 금액(1회당 45만원/무료촬영포함 ×이용 횟수)를 제외한 금액</li>
+                <li>계약금은 반드시 쑈픽(김진영)의 명시된 공식 계좌로 입금되어야 하며, 제3자 명의의 계좌 또는 타인 명의의 계좌로 입금된 경우 계약은 무효로 간주됩니다.</li>
+                <li>환불은 환불신청 완료 후, 그 달의 마지막 일에 계좌로 입금해 드립니다. (현금 결제의 경우)<br />카드는 카드회사에 따라 처리 기간이 상이합니다.</li>
+                <li>본 계약서에 기재되지 않은 구두 약속 및 비공식 합의사항은 법적 효력을 인정하지 않으며, 양 당사자는 서면에 명시된 조건만을 기준으로 계약을 이행합니다.</li>
+                <li>본 계약은 서면 서명 또는 전자 서명과 동시에 효력을 발생하며, 그 이후의 일방적 철회는 위약 조항에 따릅니다.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="agree-row">
+            <label class="chk" id="agreeChk"><input type="checkbox" /><span class="box"></span>*본 환불약관에 동의합니다.</label>
+            <span>신청자 :</span>
+            <span class="sign-name"><input class="line" data-f="signer_name" maxlength="20" placeholder="성함" /></span>
+            <span>(서명)</span>
+          </div>
+          <div class="sign-row">
+            <div class="sign-pad-wrap">
+              <canvas class="sign-pad" id="signPad" width="500" height="184"></canvas>
+              <img class="sign-img hidden" id="signImg" alt="서명" />
+              <div>
+                <button type="button" class="sign-clear" id="signClearBtn">서명 지우기</button>
+              </div>
+              <div class="sign-hint">위 칸에 손가락 또는 마우스로 서명해 주세요</div>
+              <div class="sign-hint hidden" id="signedAtText"></div>
+            </div>
+          </div>
+
+          <div class="doc-foot">
+            <span class="b">쑈픽스튜디오 &nbsp;|</span>
+            <span class="c">서울 동대문구 한천로 165 201호 &nbsp;&nbsp; 전화 : 070-8015-7526</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="actionBar" class="hidden"></div>
+
+    <!-- ────────── 관리자 ────────── -->
+    <div id="adminView" class="hidden">
+      <div class="a-card">
+        <h2>전자 촬영계약서 관리</h2>
+        <p class="hint">계약서 링크를 만들어 업체에 보내면, 업체가 직접 체크·서명하고 결과가 아래 목록에 쌓입니다.</p>
+        <div class="a-row" style="margin-top: 10px">
+          <input id="newCompanyInput" type="text" placeholder="업체명 (미리 채워두기 · 비워도 됩니다)" />
+          <button class="btn primary" id="createContractBtn" type="button">계약서 링크 만들기</button>
+        </div>
+        <div id="newLinkBox" class="linkbox hidden"></div>
+      </div>
+      <div class="a-card">
+        <div class="a-row" style="justify-content: space-between">
+          <h2 style="margin: 0">계약서 목록 <span id="contractCount" class="hint"></span></h2>
+          <button class="btn ghost" id="reloadListBtn" type="button">새로고침</button>
+        </div>
+        <div id="contractList" style="margin-top: 12px"><p class="hint">불러오는 중…</p></div>
+      </div>
+    </div>
+
+    <!-- ────────── 안내(토큰 없음) ────────── -->
+    <div id="noticeView" class="hidden">
+      <div class="a-card" style="width: min(560px, 92vw); margin: 60px auto">
+        <h2 id="noticeTitle">계약서 주소가 올바르지 않습니다</h2>
+        <p class="hint" id="noticeBody">받으신 계약서 링크로 다시 접속해 주세요. 링크가 없으시면 담당자에게 문의 부탁드립니다.</p>
+        <p class="hint">쑈픽스튜디오 · 070-8015-7526</p>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+        const SUPABASE_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+        const TABLE = "photo_contracts";
+        const HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+        const ADMIN_PASSWORD = "6315";
+        const ADMIN_SESSION_KEY = "contractAdminOkV1";
+
+        const $ = (sel) => document.querySelector(sel);
+        const stageEl = $("#stage");
+        const scalerEl = $("#scaler");
+        const sheetEl = $("#sheet");
+        const actionBarEl = $("#actionBar");
+        const adminViewEl = $("#adminView");
+        const noticeViewEl = $("#noticeView");
+
+        const params = new URLSearchParams(location.search);
+        const token = String(params.get("c") || "").trim();
+        const isAdminMode = params.get("admin") === "1";
+
+        /* ── 시트 스케일: 화면이 좁으면 통째로 축소해 원본 비율 유지 ── */
+        function fitSheet() {
+          if (stageEl.classList.contains("hidden")) return;
+          const available = document.documentElement.clientWidth - 20;
+          const scale = Math.min(1, available / 794);
+          scalerEl.style.transform = `scale(${scale})`;
+          scalerEl.style.height = `${sheetEl.offsetHeight * scale}px`;
+          scalerEl.style.width = "794px";
+        }
+        window.addEventListener("resize", fitSheet);
+
+        /* ── 서명 패드 ── */
+        const padEl = $("#signPad");
+        const padCtx = padEl.getContext("2d");
+        let padDirty = false;
+        let drawing = false;
+        function padPoint(ev) {
+          const rect = padEl.getBoundingClientRect();
+          const src = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+          return {
+            x: ((src.clientX - rect.left) / rect.width) * padEl.width,
+            y: ((src.clientY - rect.top) / rect.height) * padEl.height
+          };
+        }
+        function padStart(ev) {
+          if (padEl.dataset.locked === "1") return;
+          ev.preventDefault();
+          drawing = true;
+          padDirty = true;
+          const p = padPoint(ev);
+          padCtx.beginPath();
+          padCtx.moveTo(p.x, p.y);
+        }
+        function padMove(ev) {
+          if (!drawing) return;
+          ev.preventDefault();
+          const p = padPoint(ev);
+          padCtx.lineTo(p.x, p.y);
+          padCtx.stroke();
+        }
+        function padEnd() { drawing = false; }
+        function padReset() {
+          padCtx.clearRect(0, 0, padEl.width, padEl.height);
+          padCtx.lineWidth = 2.6;
+          padCtx.lineCap = "round";
+          padCtx.lineJoin = "round";
+          padCtx.strokeStyle = "#1b2a4a";
+          padDirty = false;
+        }
+        padReset();
+        padEl.addEventListener("mousedown", padStart);
+        padEl.addEventListener("mousemove", padMove);
+        window.addEventListener("mouseup", padEnd);
+        padEl.addEventListener("touchstart", padStart, { passive: false });
+        padEl.addEventListener("touchmove", padMove, { passive: false });
+        padEl.addEventListener("touchend", padEnd);
+        $("#signClearBtn").addEventListener("click", padReset);
+
+        /* ── 체크박스 그룹(한 줄에 하나만 선택) ── */
+        document.querySelectorAll(".chk[data-group]").forEach((label) => {
+          label.addEventListener("click", (ev) => {
+            if (sheetEl.classList.contains("locked")) { ev.preventDefault(); return; }
+            const group = label.dataset.group;
+            setTimeout(() => {
+              const checked = label.querySelector("input").checked;
+              document.querySelectorAll(`.chk[data-group="${group}"]`).forEach((other) => {
+                if (other !== label) other.querySelector("input").checked = false;
+                other.classList.toggle("sel", other === label && checked);
+              });
+              label.classList.toggle("sel", checked);
+            }, 0);
+          });
+        });
+
+        /* ── 금액 콤마 ── */
+        const amountEl = document.querySelector('[data-f="total_amount"]');
+        amountEl.addEventListener("input", () => {
+          const digits = amountEl.value.replace(/[^\d]/g, "").slice(0, 12);
+          amountEl.value = digits ? Number(digits).toLocaleString("ko-KR") : "";
+        });
+
+        /* ── 폼 읽기/쓰기 ── */
+        function readForm() {
+          const out = {};
+          document.querySelectorAll("[data-f]").forEach((el) => { out[el.dataset.f] = String(el.value || "").trim(); });
+          document.querySelectorAll(".chk[data-group]").forEach((label) => {
+            const group = label.dataset.group;
+            if (!(group in out)) out[group] = "";
+            if (label.querySelector("input").checked) out[group] = label.dataset.value;
+          });
+          return out;
+        }
+        function writeForm(row) {
+          document.querySelectorAll("[data-f]").forEach((el) => { el.value = String(row?.[el.dataset.f] ?? ""); });
+          document.querySelectorAll(".chk[data-group]").forEach((label) => {
+            const on = String(row?.[label.dataset.group] || "") === label.dataset.value;
+            label.querySelector("input").checked = on;
+            label.classList.toggle("sel", on);
+          });
+        }
+        function lockForm(row) {
+          sheetEl.classList.add("locked");
+          document.querySelectorAll("[data-f]").forEach((el) => { el.disabled = true; });
+          document.querySelectorAll(".chk input").forEach((el) => { el.disabled = true; });
+          padEl.dataset.locked = "1";
+          padEl.classList.add("hidden");
+          $("#signClearBtn").parentElement.classList.add("hidden");
+          document.querySelectorAll(".sign-hint")[0].classList.add("hidden");
+          const agreeInput = $("#agreeChk").querySelector("input");
+          agreeInput.checked = Boolean(row?.agreed);
+          $("#agreeChk").classList.toggle("sel", Boolean(row?.agreed));
+          if (row?.signature_data_url) {
+            const img = $("#signImg");
+            img.src = row.signature_data_url;
+            img.classList.remove("hidden");
+          }
+          if (row?.signed_at) {
+            const when = new Date(row.signed_at);
+            const text = Number.isNaN(when.getTime())
+              ? ""
+              : `전자서명 완료 ${when.getFullYear()}. ${when.getMonth() + 1}. ${when.getDate()}. ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+            const el = $("#signedAtText");
+            el.textContent = text;
+            el.classList.remove("hidden");
+          }
+          setTimeout(fitSheet, 60);
+        }
+
+        function escapeHtml(text) {
+          return String(text ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+        }
+        function fmtWhen(value) {
+          const d = new Date(String(value || ""));
+          if (Number.isNaN(d.getTime())) return "-";
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        }
+        function planLabel(row) {
+          const parts = [];
+          if (row?.plan_photo) parts.push(`사진만 ${row.plan_photo}회권`);
+          if (row?.plan_photo_video) parts.push(`사진영상 ${row.plan_photo_video}회권`);
+          return parts.join(" · ") || "-";
+        }
+        /** 문자용 짧은 주소 — vercel.json 의 `/c/:token` → contract.html?c=:token 리라이트.
+         *  SMS 90바이트 한도 때문에 주소를 최대한 짧게 유지한다(전체 주소 41바이트). */
+        function contractUrl(tk) { return `${location.origin}/c/${encodeURIComponent(tk)}`; }
+        function makeToken() {
+          const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+          const buf = new Uint32Array(12);
+          (window.crypto || window.msCrypto).getRandomValues(buf);
+          return Array.from(buf, (n) => chars[n % chars.length]).join("");
+        }
+
+        /* ── 문자 발송(솔라피) ── */
+        const ADMIN_NOTIFY_PHONE = "01028692443";
+        const SMS_SKIP = params.get("nosms") === "1"; // 내부 점검용 — 실제 발송 없이 화면 흐름만 확인
+        function onlyDigits(value) { return String(value || "").replace(/[^\d]/g, ""); }
+        function isKoreanMobile(value) { return /^01[016789]\d{7,8}$/.test(onlyDigits(value)); }
+        async function sendSms(to, text) {
+          if (SMS_SKIP) return { ok: false, skipped: true };
+          const res = await fetch("/api/solapi-send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: onlyDigits(to), text })
+          });
+          const out = await res.json().catch(() => ({}));
+          if (!res.ok || out?.ok === false) throw new Error(out?.message || `HTTP ${res.status}`);
+          return { ok: true };
+        }
+        /** 고객용 — 단문(SMS) 90바이트 안에 들어가도록 고정 문구. 예: 76바이트 */
+        function buildCustomerSmsText(tk) {
+          return `[쑈픽] 촬영계약 체결완료\n${contractUrl(tk)}`;
+        }
+        /** 관리자용 — 업체명 길이에 따라 LMS 가 될 수 있으나 계약 건수가 적어 무해 */
+        function buildAdminSmsText(row, tk) {
+          const plan = planLabel(row);
+          return `[쑈픽] 계약체결 ${row.company_name || "-"}\n${plan} / ${row.total_amount || "-"}원\n${contractUrl(tk)}`;
+        }
+        async function notifyContractSigned(row, tk) {
+          const results = { customer: false, admin: false };
+          const customerPhone = onlyDigits(row?.phone);
+          if (isKoreanMobile(customerPhone)) {
+            try { await sendSms(customerPhone, buildCustomerSmsText(tk)); results.customer = true; } catch (_) {}
+          }
+          try { await sendSms(ADMIN_NOTIFY_PHONE, buildAdminSmsText(row, tk)); results.admin = true; } catch (_) {}
+          return results;
+        }
+
+        /* ── 고객 화면 ── */
+        async function fetchContract(tk) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}&select=*`, { headers: HDR, cache: "no-store" });
+          if (!res.ok) throw new Error(`불러오기 실패 (${res.status})`);
+          const rows = await res.json();
+          return Array.isArray(rows) && rows.length ? rows[0] : null;
+        }
+        function showNotice(title, body) {
+          noticeViewEl.classList.remove("hidden");
+          $("#noticeTitle").textContent = title;
+          $("#noticeBody").textContent = body;
+        }
+        function renderActionBar(html) {
+          actionBarEl.innerHTML = html;
+          actionBarEl.classList.remove("hidden");
+        }
+
+        async function submitContract() {
+          const values = readForm();
+          const agreed = $("#agreeChk").querySelector("input").checked;
+          const missing = [];
+          if (!values.company_name) missing.push("업체명");
+          if (!values.ceo_name) missing.push("대표자명");
+          if (!values.phone) missing.push("휴대폰");
+          if (!values.plan_photo && !values.plan_photo_video) missing.push("촬영 회권 선택");
+          if (!values.payment_method) missing.push("결제방법");
+          if (!values.total_amount) missing.push("합계 금액");
+          if (!values.signer_name) missing.push("신청자 성함");
+          if (!agreed) missing.push("환불약관 동의");
+          if (!padDirty) missing.push("서명");
+          if (missing.length) {
+            alert(`아래 항목을 확인해 주세요.\n\n· ${missing.join("\n· ")}`);
+            return;
+          }
+          if (!confirm("작성하신 내용으로 계약을 체결할까요?\n체결 후에는 수정할 수 없습니다.")) return;
+
+          const btn = $("#submitBtn");
+          if (btn) { btn.disabled = true; btn.textContent = "처리 중…"; }
+          try {
+            const current = await fetchContract(token);
+            if (!current) throw new Error("계약서를 찾지 못했습니다");
+            if (current.status === "signed") {
+              alert("이미 서명이 완료된 계약서입니다.");
+              location.reload();
+              return;
+            }
+            const payload = {
+              ...values,
+              agreed: true,
+              status: "signed",
+              signed_at: new Date().toISOString(),
+              signed_user_agent: String(navigator.userAgent || "").slice(0, 300),
+              signature_data_url: padEl.toDataURL("image/png"),
+              updated_at: new Date().toISOString()
+            };
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(token)}`, {
+              method: "PATCH",
+              headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
+              body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error(`저장 실패 (${res.status})`);
+            const rows = await res.json();
+            if (!Array.isArray(rows) || !rows.length) throw new Error("저장 결과를 확인하지 못했습니다");
+            if (btn) btn.textContent = "문자 발송 중…";
+            const sent = await notifyContractSigned(rows[0], token);
+            alert(
+              sent.customer
+                ? "계약이 체결되었습니다. 감사합니다!\n계약서 링크를 문자로 보내드렸습니다."
+                : "계약이 체결되었습니다. 감사합니다!"
+            );
+            location.reload();
+          } catch (error) {
+            if (btn) { btn.disabled = false; btn.textContent = "동의하고 계약 체결하기"; }
+            alert(`전송에 실패했습니다.\n${error?.message || ""}\n\n잠시 후 다시 시도해 주세요.`);
+          }
+        }
+
+        async function startCustomer() {
+          stageEl.classList.remove("hidden");
+          fitSheet();
+          let row = null;
+          try {
+            row = await fetchContract(token);
+          } catch (error) {
+            stageEl.classList.add("hidden");
+            showNotice("계약서를 불러오지 못했습니다", "인터넷 연결을 확인하고 새로고침해 주세요.");
+            return;
+          }
+          if (!row) {
+            stageEl.classList.add("hidden");
+            showNotice("계약서를 찾을 수 없습니다", "링크가 만료되었거나 주소가 잘못되었습니다. 담당자에게 문의 부탁드립니다.");
+            return;
+          }
+          writeForm(row);
+          if (row.status === "signed") {
+            lockForm(row);
+            renderActionBar(`<span class="status-badge">✅ 서명이 완료된 계약서입니다</span><button class="btn" id="printBtn" type="button">인쇄 / PDF 저장</button>`);
+            $("#printBtn").addEventListener("click", () => window.print());
+          } else {
+            renderActionBar(`<button class="btn primary" id="submitBtn" type="button">동의하고 계약 체결하기</button>`);
+            $("#submitBtn").addEventListener("click", submitContract);
+          }
+          setTimeout(fitSheet, 120);
+        }
+
+        /* ── 관리자 화면 ── */
+        async function loadList() {
+          const listEl = $("#contractList");
+          listEl.innerHTML = '<p class="hint">불러오는 중…</p>';
+          try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?select=*&order=created_at.desc&limit=300`, { headers: HDR, cache: "no-store" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const rows = await res.json();
+            $("#contractCount").textContent = `총 ${rows.length}건 · 서명완료 ${rows.filter((r) => r.status === "signed").length}건`;
+            if (!rows.length) { listEl.innerHTML = '<p class="hint">아직 만든 계약서가 없습니다.</p>'; return; }
+            listEl.innerHTML = rows
+              .map((row) => {
+                const signed = row.status === "signed";
+                return `
+                  <div class="a-item">
+                    <div class="top">
+                      <span class="nm">${escapeHtml(row.company_name || "(업체명 미기재)")}</span>
+                      <span class="pill ${signed ? "done" : "wait"}">${signed ? "서명완료" : "서명대기"}</span>
+                    </div>
+                    <div class="meta">
+                      ${signed ? `${escapeHtml(planLabel(row))} · 합계 ${escapeHtml(row.total_amount || "-")}원 · ${escapeHtml(row.signer_name || "-")} 서명<br />서명 ${escapeHtml(fmtWhen(row.signed_at))}` : `만든 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
+                    </div>
+                    <div class="a-actions">
+                      <button class="btn" data-act="copy" data-token="${escapeHtml(row.token)}">링크 복사</button>
+                      <button class="btn" data-act="open" data-token="${escapeHtml(row.token)}">${signed ? "계약서 보기" : "미리보기"}</button>
+                      <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}" data-name="${escapeHtml(row.company_name || "")}">문자 보내기</button>
+                      <button class="btn" data-act="del" data-token="${escapeHtml(row.token)}" data-name="${escapeHtml(row.company_name || "")}">삭제</button>
+                    </div>
+                  </div>`;
+              })
+              .join("");
+          } catch (error) {
+            listEl.innerHTML = `<p class="hint">목록을 불러오지 못했습니다 (${escapeHtml(error?.message || "")})</p>`;
+          }
+        }
+
+        async function copyLink(tk) {
+          const url = contractUrl(tk);
+          try {
+            await navigator.clipboard.writeText(url);
+            alert(`계약서 링크를 복사했습니다.\n\n${url}\n\n카톡·문자에 붙여넣어 보내세요.`);
+          } catch (error) {
+            prompt("아래 링크를 복사해서 보내세요", url);
+          }
+        }
+
+        function startAdmin() {
+          const ok = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+          if (!ok) {
+            const input = String(prompt("관리자 비밀번호를 입력하세요") || "").trim();
+            if (input !== ADMIN_PASSWORD) {
+              showNotice("접근 권한이 없습니다", "관리자 비밀번호가 올바르지 않습니다.");
+              return;
+            }
+            sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+          }
+          adminViewEl.classList.remove("hidden");
+          document.body.style.backgroundImage = "none";
+          document.body.style.background = "#f2f4f8";
+          loadList();
+
+          $("#createContractBtn").addEventListener("click", async () => {
+            const btn = $("#createContractBtn");
+            const company = String($("#newCompanyInput").value || "").trim();
+            btn.disabled = true;
+            btn.textContent = "만드는 중…";
+            try {
+              const newToken = makeToken();
+              const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}`, {
+                method: "POST",
+                headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
+                body: JSON.stringify([{ token: newToken, company_name: company }])
+              });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const url = contractUrl(newToken);
+              const box = $("#newLinkBox");
+              box.innerHTML = `<b>${escapeHtml(company || "새 계약서")}</b> 링크가 만들어졌습니다.<br />${escapeHtml(url)}<div class="a-actions"><button class="btn primary" data-act="copy" data-token="${escapeHtml(newToken)}">링크 복사</button><button class="btn" data-act="open" data-token="${escapeHtml(newToken)}">열어보기</button></div>`;
+              box.classList.remove("hidden");
+              $("#newCompanyInput").value = "";
+              loadList();
+            } catch (error) {
+              alert(`계약서 만들기에 실패했습니다.\n${error?.message || ""}`);
+            } finally {
+              btn.disabled = false;
+              btn.textContent = "계약서 링크 만들기";
+            }
+          });
+          $("#reloadListBtn").addEventListener("click", loadList);
+
+          adminViewEl.addEventListener("click", async (event) => {
+            const btn = event.target.closest("button[data-act]");
+            if (!btn) return;
+            const act = btn.dataset.act;
+            const tk = btn.dataset.token;
+            if (act === "copy") { copyLink(tk); return; }
+            if (act === "open") { window.open(contractUrl(tk), "_blank", "noopener"); return; }
+            if (act === "sms") {
+              const target = String(prompt("문자를 보낼 휴대폰 번호", btn.dataset.phone || "") || "").trim();
+              if (!target) return;
+              if (!isKoreanMobile(target)) { alert("휴대폰 번호를 다시 확인해 주세요."); return; }
+              let row = null;
+              try { row = await fetchContract(tk); } catch (_) {}
+              const signed = row?.status === "signed";
+              const text = signed ? buildCustomerSmsText(tk) : `[쑈픽] 촬영계약서 서명요청\n${contractUrl(tk)}`;
+              if (!confirm(`아래 내용으로 보낼까요?\n\n${text}`)) return;
+              btn.disabled = true;
+              try {
+                await sendSms(target, text);
+                alert("문자를 보냈습니다.");
+              } catch (error) {
+                alert(`문자 발송 실패: ${error?.message || ""}`);
+              } finally {
+                btn.disabled = false;
+              }
+              return;
+            }
+            if (act === "del") {
+              if (!confirm(`${btn.dataset.name || "이 계약서"}를 삭제할까요?\n서명된 계약서라면 기록도 함께 사라집니다.`)) return;
+              try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}`, {
+                  method: "DELETE",
+                  headers: { ...HDR, Prefer: "return=representation" }
+                });
+                const rows = await res.json();
+                if (!res.ok || !Array.isArray(rows) || !rows.length) throw new Error("삭제된 항목이 없습니다");
+                loadList();
+              } catch (error) {
+                alert(`삭제 실패: ${error?.message || ""}`);
+              }
+            }
+          });
+        }
+
+        /* ── 진입 ── */
+        if (isAdminMode) startAdmin();
+        else if (token) startCustomer();
+        else showNotice("계약서 주소가 올바르지 않습니다", "받으신 계약서 링크로 다시 접속해 주세요. 링크가 없으시면 담당자에게 문의 부탁드립니다.");
+      })();
+    </script>
+  </body>
+</html>
