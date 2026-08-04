@@ -48,16 +48,17 @@
       /* 표 공통 */
       table.f { width: 100%; border-collapse: collapse; margin-bottom: 9px; table-layout: fixed; }
       table.f th, table.f td { border: 1px solid var(--line); padding: 7px 9px; font-size: 12.5px; font-weight: 500; }
+      /* 원본 양식은 「업 체 명」「휴 대 폰」처럼 일부 라벨만 자간을 벌려 놓았다 → 전역 자간은 0,
+         벌릴 라벨은 HTML 에 공백을 직접 넣어 원본과 같은 모양을 유지한다. */
       table.f th {
         background: var(--peach);
         border-color: var(--peach-line);
         font-weight: 700;
         text-align: center;
-        letter-spacing: 3px;
+        letter-spacing: 0;
         color: #4a4a4a;
         white-space: nowrap;
       }
-      table.f th.tight { letter-spacing: 0; }
       table.f th .en { display: block; font-size: 8.5px; letter-spacing: 0.4px; color: #9a8a83; font-weight: 600; margin-top: 1px; }
       td.center { text-align: center; }
       .cell-h { height: 30px; }
@@ -585,10 +586,20 @@
         function buildCustomerSmsText(tk) {
           return `[쑈픽] 촬영계약 체결완료\n${contractUrl(tk)}`;
         }
-        /** 관리자용 — 업체명 길이에 따라 LMS 가 될 수 있으나 계약 건수가 적어 무해 */
+        /** 관리자용 — 90바이트를 넘으면 LMS(3배 요금)라 회권·금액 줄을 떼고, 그래도 넘치면 업체명을 줄인다 */
+        function smsBytes(text) { return new TextEncoder().encode(String(text || "")).length; }
         function buildAdminSmsText(row, tk) {
-          const plan = planLabel(row);
-          return `[쑈픽] 계약체결 ${row.company_name || "-"}\n${plan} / ${row.total_amount || "-"}원\n${contractUrl(tk)}`;
+          const link = contractUrl(tk);
+          const name = String(row?.company_name || "-").trim();
+          const full = `[쑈픽] 계약체결 ${name}\n${planLabel(row)} / ${row?.total_amount || "-"}원\n${link}`;
+          if (smsBytes(full) <= 90) return full;
+          let short = `[쑈픽] 계약체결 ${name}\n${link}`;
+          let cut = name;
+          while (smsBytes(short) > 90 && cut.length > 2) {
+            cut = cut.slice(0, -1);
+            short = `[쑈픽] 계약체결 ${cut}\n${link}`;
+          }
+          return short;
         }
         async function notifyContractSigned(row, tk) {
           const results = { customer: false, admin: false };
