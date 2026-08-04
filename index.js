@@ -20993,8 +20993,12 @@ ${folderBtn}
       function saveInlineEdit(index, itemEl) {
         const item = data[index];
         if (!item || !itemEl) return;
-        const previousTime = item.time || "";
-        const previousDate = item.date || "";
+        // bindInlineEditPersist 가 select change 시점에 item.time/date 를 먼저 바꿔버리므로,
+        // 변경 감지용 이전값은 편집 시작 시점 스탬프(__timeAtEditStart)를 우선 사용한다.
+        const previousTime = item.__timeAtEditStart !== undefined ? String(item.__timeAtEditStart || "") : (item.time || "");
+        const previousDate = item.__dateAtEditStart !== undefined ? String(item.__dateAtEditStart || "") : (item.date || "");
+        delete item.__timeAtEditStart;
+        delete item.__dateAtEditStart;
 
         const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
         const hour = itemEl.querySelector(".edit-hour")?.value;
@@ -21066,8 +21070,10 @@ ${folderBtn}
       function saveDateEdit(index, itemEl) {
         const item = data[index];
         if (!item || !itemEl) return;
-        const previousTime = item.time || "";
-        const previousDate = item.date || "";
+        const previousTime = item.__timeAtEditStart !== undefined ? String(item.__timeAtEditStart || "") : (item.time || "");
+        const previousDate = item.__dateAtEditStart !== undefined ? String(item.__dateAtEditStart || "") : (item.date || "");
+        delete item.__timeAtEditStart;
+        delete item.__dateAtEditStart;
         const hour = itemEl.querySelector(".edit-hour")?.value;
         const minute = itemEl.querySelector(".edit-minute")?.value;
         if (!hour || !minute) {
@@ -21581,6 +21587,10 @@ ${folderBtn}
         }
 
         if (action === "startDateEdit" && !Number.isNaN(index)) {
+          if (item) {
+            item.__timeAtEditStart = item.time || "";
+            item.__dateAtEditStart = item.date || "";
+          }
           editingDateIndex = index;
           editingIndex = null;
           quickPhotographerPickerIndex = null;
@@ -21588,6 +21598,16 @@ ${folderBtn}
           return;
         }
         if (action === "cancelDateEdit") {
+          // 편집 중 select change 로 이미 바뀐 item.time/date 를 원래 값으로 복원
+          const editItem = editingDateIndex !== null ? data[editingDateIndex] : null;
+          if (editItem && editItem.__timeAtEditStart !== undefined) {
+            editItem.time = editItem.__timeAtEditStart || editItem.time;
+            delete editItem.__timeAtEditStart;
+          }
+          if (editItem && editItem.__dateAtEditStart !== undefined) {
+            editItem.date = editItem.__dateAtEditStart || editItem.date;
+            delete editItem.__dateAtEditStart;
+          }
           editingDateIndex = null;
           renderList();
           return;
@@ -21621,6 +21641,10 @@ ${folderBtn}
         }
 
         if (action === "startEdit" && !Number.isNaN(index)) {
+          if (item) {
+            item.__timeAtEditStart = item.time || "";
+            item.__dateAtEditStart = item.date || "";
+          }
           editingIndex = index;
           editingDateIndex = null;
           quickPhotographerPickerIndex = null;
@@ -21628,6 +21652,15 @@ ${folderBtn}
           return;
         }
         if (action === "cancelEdit") {
+          const editItem = editingIndex !== null ? data[editingIndex] : null;
+          if (editItem && editItem.__timeAtEditStart !== undefined) {
+            editItem.time = editItem.__timeAtEditStart || editItem.time;
+            delete editItem.__timeAtEditStart;
+          }
+          if (editItem && editItem.__dateAtEditStart !== undefined) {
+            editItem.date = editItem.__dateAtEditStart || editItem.date;
+            delete editItem.__dateAtEditStart;
+          }
           editingIndex = null;
           renderList();
           return;
