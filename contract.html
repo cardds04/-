@@ -26,7 +26,8 @@
         -webkit-text-size-adjust: 100%;
       }
       /* 시트를 화면 폭에 맞춰 통째로 축소 — 원본 양식 비율을 그대로 유지 */
-      #stage { display: flex; justify-content: center; padding: 26px 0 120px; }
+      #stage { display: flex; justify-content: center; padding: 26px 0 120px; overflow-x: auto; }
+      #stage.zoomed { justify-content: flex-start; }
       #scaler { transform-origin: top center; }
       .sheet {
         width: var(--sheet-w);
@@ -415,14 +416,17 @@
         const isAdminMode = params.get("admin") === "1";
 
         /* ── 시트 스케일: 화면이 좁으면 통째로 축소해 원본 비율 유지 ── */
+        let zoomMode = false; // true = 원본 크기(가로 스크롤), false = 화면 폭 맞춤
         function fitSheet() {
           if (stageEl.classList.contains("hidden")) return;
           const available = document.documentElement.clientWidth - 20;
-          const scale = Math.min(1, available / 794);
+          const scale = zoomMode ? 1 : Math.min(1, available / 794);
           scalerEl.style.transform = `scale(${scale})`;
           scalerEl.style.height = `${sheetEl.offsetHeight * scale}px`;
           scalerEl.style.width = "794px";
+          stageEl.classList.toggle("zoomed", zoomMode && available < 794);
         }
+        function isNarrowScreen() { return document.documentElement.clientWidth < 794; }
         window.addEventListener("resize", fitSheet);
 
         /* ── 서명 패드 ── */
@@ -705,13 +709,24 @@
             return;
           }
           writeForm(row);
+          // 휴대폰 화면에선 양식이 작게 축소되므로 원본 크기로 키워 보는 버튼을 함께 제공
+          const zoomBtnHtml = isNarrowScreen() ? `<button class="btn ghost" id="zoomBtn" type="button">🔍 크게 보기</button>` : "";
           if (row.status === "signed") {
             lockForm(row);
-            renderActionBar(`<span class="status-badge">✅ 서명이 완료된 계약서입니다</span><button class="btn" id="printBtn" type="button">인쇄 / PDF 저장</button>`);
+            renderActionBar(`<span class="status-badge">✅ 서명이 완료된 계약서입니다</span>${zoomBtnHtml}<button class="btn" id="printBtn" type="button">인쇄 / PDF 저장</button>`);
             $("#printBtn").addEventListener("click", () => window.print());
           } else {
-            renderActionBar(`<button class="btn primary" id="submitBtn" type="button">동의하고 계약 체결하기</button>`);
+            renderActionBar(`${zoomBtnHtml}<button class="btn primary" id="submitBtn" type="button">동의하고 계약 체결하기</button>`);
             $("#submitBtn").addEventListener("click", submitContract);
+          }
+          const zoomBtn = $("#zoomBtn");
+          if (zoomBtn) {
+            zoomBtn.addEventListener("click", () => {
+              zoomMode = !zoomMode;
+              zoomBtn.textContent = zoomMode ? "🔍 전체 보기" : "🔍 크게 보기";
+              fitSheet();
+              window.scrollTo({ top: 0 });
+            });
           }
           setTimeout(fitSheet, 120);
         }
