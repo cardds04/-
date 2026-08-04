@@ -430,8 +430,10 @@
               k === STORAGE_PHOTOGRAPHER_PROFILES || // 덮어 "5명↔4명 깜빡임" 을 만들던 버그. KV 복원 금지.
               k === STORAGE_COUPON_PASSES || // coupon_passes 전용 테이블이 정본 — KV 속 4개월 묵은(3/24)
                                              // 쿠폰 스냅샷이 hydrate 로 현행값을 덮어 "남은쿠폰 깜빡임" 유발. 복원 금지.
-              k === STORAGE_ADMIN_SESSION_TOKEN // 관리자 토큰은 기기별 — KV 왕복으로 옛/타기기 토큰이 덮으면
+              k === STORAGE_ADMIN_SESSION_TOKEN || // 관리자 토큰은 기기별 — KV 왕복으로 옛/타기기 토큰이 덮으면
                                                 // 401→토큰삭제→비밀번호 재프롬프트 루프. 복원 금지.
+              k === STORAGE_SCHEDULE_RECEIPT_LEDGER || // 접수원장은 customer_submission_receipts 전용 테이블이 정본 —
+              k === STORAGE_CUSTOMER_SUBMISSION_LOGS   // 옛 KV 스냅샷이 hydrate 로 덮으면 「최초 -」·이력 증발. 복원 금지.
             )
               return;
             /** 신규업체 「비우기」: 서버 빈값이 로컬 날짜를 지우면 목록이 부활함 — 빈값은 무시하고, 양쪽 날짜면 최신(cal) 문자열 채택 */
@@ -1661,7 +1663,11 @@
             // ↓ 쿠폰은 coupon_passes 전용 테이블이 정본 — KV 이중 저장이 "남은쿠폰 깜빡임" 원인.
             //   관리자 토큰은 기기별 값이라 공유 KV 에 실으면 안 됨(옛 토큰 전파→401→재프롬프트).
             STORAGE_COUPON_PASSES,
-            STORAGE_ADMIN_SESSION_TOKEN
+            STORAGE_ADMIN_SESSION_TOKEN,
+            // ↓ 접수원장 2종은 customer_submission_receipts 전용 테이블로 관리 —
+            //   KV 이중 저장 시 옛 스냅샷이 원장을 덮어 「최초 -」·접수/변경 이력 증발.
+            STORAGE_SCHEDULE_RECEIPT_LEDGER,
+            STORAGE_CUSTOMER_SUBMISSION_LOGS
           ]);
           const kvFilteredLocal = Object.fromEntries(
             [...scheduleSiteClientKvState.memoryStore.entries()].filter(([k]) => {
@@ -8961,7 +8967,7 @@ ${folderBtn}
         });
         return merged
           .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime())
-          .slice(0, 2000);
+          .slice(0, 5000);
       }
       function getLocalScheduleReceiptLedgerRows() {
         const newRows = readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER).map(normalizeScheduleReceiptLedgerEntry);
@@ -8987,7 +8993,7 @@ ${folderBtn}
           seen.add(id);
           deduped.push(item);
         });
-        latestScheduleReceiptLedger = deduped.slice(0, 2000);
+        latestScheduleReceiptLedger = deduped.slice(0, 5000);
         localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(latestScheduleReceiptLedger));
         if (!receiptLedgerSectionEl?.classList.contains("hidden")) {
           renderScheduleReceiptLedger();
@@ -9047,8 +9053,15 @@ ${folderBtn}
           if (!byScheduleId.has(key)) byScheduleId.set(key, []);
           byScheduleId.get(key).push(item);
         });
-        receiptLedgerListEl.innerHTML = rows.length
-          ? rows
+        // 전량 보관하되 화면은 최신 600건만 — 수천 행 innerHTML 렌더로 화면이 멈추는 것 방지
+        const RECEIPT_LEDGER_RENDER_MAX = 600;
+        const renderRows = rows.slice(0, RECEIPT_LEDGER_RENDER_MAX);
+        const truncatedNote =
+          rows.length > RECEIPT_LEDGER_RENDER_MAX
+            ? `<div class="company-item" style="color:#6b7a99;">최신 ${RECEIPT_LEDGER_RENDER_MAX}건만 표시 중 (전체 ${rows.length}건은 서버에 보관)</div>`
+            : "";
+        receiptLedgerListEl.innerHTML = renderRows.length
+          ? renderRows
               .map((item) => {
                 const key = String(item?.scheduleId || "").trim() || `${item.date}|${item.time}|${normalizeCompanyName(item.company)}|${item.place}`;
                 const group = byScheduleId.get(key) || [];
@@ -9091,7 +9104,7 @@ ${folderBtn}
                   </div>
                 `;
               })
-              .join("")
+              .join("") + truncatedNote
           : '<div class="company-item">접수기록이 없습니다.</div>';
       }
 
@@ -9475,19 +9488,33 @@ ${folderBtn}
       async function pullSubmissionReceiptsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         try {
-          const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,payload,created_at&order=created_at.desc&limit=2000`,
-            {
-              method: "GET",
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              cache: "no-store"
+          // PostgREST 는 요청 limit 과 무관하게 한 번에 최대 1000행만 반환(max-rows 캡).
+          // 원장이 1000행을 넘으면(2026-08 현재 1,300+) 옛 접수 기록이 잘려 「최초 -」가 되므로
+          // Range 헤더로 1000행씩 이어받는다. 상한 5페이지(5,000행).
+          const rows = [];
+          for (let page = 0; page < 5; page += 1) {
+            const from = page * 1000;
+            const response = await fetch(
+              `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?select=receipt_id,schedule_id,customer_id,company_name,schedule_date,schedule_time,place,source,payload,created_at&order=created_at.desc`,
+              {
+                method: "GET",
+                headers: {
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                  Range: `${from}-${from + 999}`
+                },
+                cache: "no-store"
+              }
+            );
+            if (!response.ok) {
+              if (page === 0) return false;
+              break;
             }
-          );
-          if (!response.ok) return false;
-          const rows = await response.json();
+            const chunk = await response.json();
+            if (!Array.isArray(chunk) || chunk.length === 0) break;
+            rows.push(...chunk);
+            if (chunk.length < 1000) break;
+          }
           const normalizedRows = (Array.isArray(rows) ? rows : []).map(normalizeScheduleReceiptLedgerEntry);
           const localRows = getLocalScheduleReceiptLedgerRows();
           const mergedRows = mergeScheduleReceiptLedgerRows(normalizedRows, localRows);
