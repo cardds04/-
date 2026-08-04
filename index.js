@@ -17987,20 +17987,6 @@ ${folderBtn}
                                       <span class="request-time-label">${escapeHtml(formatRequestedAtLabel(item.requestedAt))}</span>
                                     </div>
                                     <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
-                                    ${(() => {
-                                      // 변경·취소·삭제가 있는 스케줄은 카드 겉면에 이력 스택을 바로 보여준다 (사장님 요청: 아래로 쌓이기)
-                                      const trail = getScheduleAuditTrailRows(item);
-                                      if (!trail.some((row) => row.isChange || row.label.endsWith("취소") || row.label.endsWith("삭제"))) return "";
-                                      return `<div style="margin:2px 0 4px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
-                                        .map((row) => {
-                                          const removable = Boolean(row.receiptId || row.alertId);
-                                          const removeBtn = removable
-                                            ? `<button type="button" data-action="hideAuditTrailRow" data-receipt-id="${escapeHtml(row.receiptId || "")}" data-alert-id="${escapeHtml(row.alertId || "")}" data-row-source="${escapeHtml(row.source || "")}" title="이 기록 한 줄 지우기" style="border:none;background:none;color:#9aa7c2;font-size:0.78rem;line-height:1.45;padding:0 2px;cursor:pointer;flex-shrink:0;">✕</button>`
-                                            : "";
-                                          return `<div style="display:flex;align-items:flex-start;gap:4px;"><span style="flex:1;min-width:0;font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</span>${removeBtn}</div>`;
-                                        })
-                                        .join("")}</div>`;
-                                    })()}
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}<br />
                                     <div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;">
@@ -18048,7 +18034,21 @@ ${folderBtn}
                                         String(item.customerScheduleId || "")
                                       )}">기록</button>
                                       <button class="btn-sm ${item.paymentStatus === "입금완료" ? "neon" : "danger"}" type="button" disabled>${item.paymentStatus === "입금완료" ? "입금확인" : "미결"}</button>
-                                     </span>`
+                                     </span>
+                                    ${(() => {
+                                      // 변경·취소·삭제가 있는 스케줄은 카드 맨 아래에 이력 스택 표시 (사장님 요청: 맨아래 배치)
+                                      const trail = getScheduleAuditTrailRows(item);
+                                      if (!trail.some((row) => row.isChange || row.label.endsWith("취소") || row.label.endsWith("삭제"))) return "";
+                                      return `<div style="margin-top:6px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
+                                        .map((row) => {
+                                          const removable = Boolean(row.receiptId || row.alertId);
+                                          const removeBtn = removable
+                                            ? `<button type="button" data-action="hideAuditTrailRow" data-receipt-id="${escapeHtml(row.receiptId || "")}" data-alert-id="${escapeHtml(row.alertId || "")}" data-row-source="${escapeHtml(row.source || "")}" title="이 기록 한 줄 지우기" style="border:none;background:none;color:#9aa7c2;font-size:0.78rem;line-height:1.45;padding:0 2px;cursor:pointer;flex-shrink:0;">✕</button>`
+                                            : "";
+                                          return `<div style="display:flex;align-items:flex-start;gap:4px;"><span style="flex:1;min-width:0;font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</span>${removeBtn}</div>`;
+                                        })
+                                        .join("")}</div>`;
+                                    })()}`
                               }
                             </span>
                           `;
