@@ -9039,6 +9039,7 @@ ${folderBtn}
           : getLocalScheduleReceiptLedgerRows()
         )
           .filter((item) => String(item?.receiptId || "").trim())
+          .filter((item) => !String(item?.source || "").startsWith("hidden_"))
           .sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
         if (receiptLedgerCountTextEl) {
           receiptLedgerCountTextEl.textContent = `총 ${rows.length}건`;
@@ -9806,7 +9807,7 @@ ${folderBtn}
         const rows = [];
         ledgerRows.forEach((row) => {
           const label = getAuditTrailSourceLabel(row?.source);
-          if (!label) return;
+          if (!label) return; // hidden_* 등 미지정 source 는 표시 안 함 (한 줄 지우기 = source 에 hidden_ 프리픽스)
           rows.push({
             at: String(row?.createdAt || "").trim(),
             label,
@@ -9815,7 +9816,10 @@ ${folderBtn}
             time: String(row?.time || "").trim(),
             timePreference: row?.timePreference,
             previousDate: String(row?.previousDate || "").trim(),
-            previousTime: String(row?.previousTime || "").trim()
+            previousTime: String(row?.previousTime || "").trim(),
+            receiptId: String(row?.receiptId || "").trim(),
+            source: String(row?.source || "").trim(),
+            alertId: ""
           });
         });
         // 원장 도입 전의 관리자 변경 이력(알림 저장소) 보강 — 원장 기록과 5초 이내 중복이면 제외
@@ -9837,7 +9841,10 @@ ${folderBtn}
             time: String(alert?.time || "").trim(),
             timePreference: "exact",
             previousDate: String(alert?.previousDate || "").trim(),
-            previousTime: String(alert?.previousTime || "").trim()
+            previousTime: String(alert?.previousTime || "").trim(),
+            receiptId: "",
+            source: "",
+            alertId: String(alert?.id || "").trim()
           });
         });
         rows.sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime());
@@ -9859,7 +9866,10 @@ ${folderBtn}
             time: initialTime,
             timePreference: "exact",
             previousDate: "",
-            previousTime: ""
+            previousTime: "",
+            receiptId: "",
+            source: "",
+            alertId: ""
           });
         }
         return rows;
@@ -9873,6 +9883,41 @@ ${folderBtn}
         if (row.previousDate && /^\d{4}-\d{2}-\d{2}$/.test(row.previousDate)) fromParts.push(formatScheduleDateWithoutYear(row.previousDate));
         if (row.previousTime) fromParts.push(formatScheduleTimeWithPreference(row.previousTime, "exact"));
         return fromParts.length ? `${base} (이전 ${fromParts.join(" ")})` : base;
+      }
+      /** 이력 한 줄 지우기 = 서버 원장 행 source 에 hidden_ 프리픽스(영구삭제 아님, 다른 기기에도 전파).
+       *  ‼️anon PATCH 는 RLS 정책 필요(20260804110000 마이그레이션) — 0행이면 실패로 처리. */
+      async function hideAuditTrailReceiptOnServer(receiptId, currentSource) {
+        const hiddenSource = `hidden_${String(currentSource || "").replace(/^hidden_/, "") || "entry"}`;
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/${SUBMISSION_RECEIPT_TABLE}?receipt_id=eq.${encodeURIComponent(receiptId)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ source: hiddenSource })
+          }
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const rows = await response.json();
+        if (!Array.isArray(rows) || rows.length === 0) throw new Error("서버에서 대상 기록을 찾지 못했습니다");
+        return true;
+      }
+      function applyAuditTrailRowHiddenLocally(receiptId) {
+        const target = String(receiptId || "").trim();
+        if (!target) return;
+        const mark = (arr) =>
+          (Array.isArray(arr) ? arr : []).map((row) =>
+            String(row?.receiptId || row?.receipt_id || "").trim() === target
+              ? { ...row, source: `hidden_${String(row?.source || "").replace(/^hidden_/, "") || "entry"}` }
+              : row
+          );
+        latestScheduleReceiptLedger = mark(latestScheduleReceiptLedger);
+        try { localStorage.setItem(STORAGE_SCHEDULE_RECEIPT_LEDGER, JSON.stringify(mark(readStorageArray(STORAGE_SCHEDULE_RECEIPT_LEDGER)))); } catch (_) {}
+        try { localStorage.setItem(STORAGE_CUSTOMER_SUBMISSION_LOGS, JSON.stringify(mark(readStorageArray(STORAGE_CUSTOMER_SUBMISSION_LOGS)))); } catch (_) {}
       }
       function getScheduleHistoryTimelineText(scheduleItem) {
         if (!scheduleItem) return "주문 정보를 찾지 못했습니다.";
@@ -17947,7 +17992,13 @@ ${folderBtn}
                                       const trail = getScheduleAuditTrailRows(item);
                                       if (!trail.some((row) => row.isChange || row.label.endsWith("취소") || row.label.endsWith("삭제"))) return "";
                                       return `<div style="margin:2px 0 4px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
-                                        .map((row) => `<div style="font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</div>`)
+                                        .map((row) => {
+                                          const removable = Boolean(row.receiptId || row.alertId);
+                                          const removeBtn = removable
+                                            ? `<button type="button" data-action="hideAuditTrailRow" data-receipt-id="${escapeHtml(row.receiptId || "")}" data-alert-id="${escapeHtml(row.alertId || "")}" data-row-source="${escapeHtml(row.source || "")}" title="이 기록 한 줄 지우기" style="border:none;background:none;color:#9aa7c2;font-size:0.78rem;line-height:1.45;padding:0 2px;cursor:pointer;flex-shrink:0;">✕</button>`
+                                            : "";
+                                          return `<div style="display:flex;align-items:flex-start;gap:4px;"><span style="flex:1;min-width:0;font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</span>${removeBtn}</div>`;
+                                        })
                                         .join("")}</div>`;
                                     })()}
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
@@ -17964,13 +18015,6 @@ ${folderBtn}
                                         ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                                         구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                         쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
-                                        ${(() => {
-                                          const trail = getScheduleAuditTrailRows(item);
-                                          if (!trail.length) return "";
-                                          return `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);"><span style="color:#3a4a6b;font-weight:600;">접수·변경 기록</span><br />${trail
-                                            .map((row) => `<span style="color:${row.isChange ? "#b8860b" : "#6b7a99"};font-size:0.83rem;">${escapeHtml(formatAuditTrailLine(row))}</span>`)
-                                            .join("<br />")}</div>`;
-                                        })()}
                                       </details>
                                       <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(마이박스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
                                     </div>
@@ -21672,6 +21716,31 @@ ${folderBtn}
         }
         if (action === "showScheduleHistory" && !Number.isNaN(index) && item) {
           alert(getScheduleHistoryTimelineText(item));
+          return;
+        }
+        if (action === "hideAuditTrailRow") {
+          const receiptId = String(button.dataset.receiptId || "").trim();
+          const alertId = String(button.dataset.alertId || "").trim();
+          const rowSource = String(button.dataset.rowSource || "").trim();
+          if (!receiptId && !alertId) return;
+          if (!confirm("이 기록 한 줄을 지울까요?")) return;
+          if (alertId) {
+            // 원장 도입 전 알림 기반 이력 — 알림 저장소에서 제거(KV 동기화로 전파)
+            const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS).filter((a) => String(a?.id || "").trim() !== alertId);
+            localStorage.setItem(STORAGE_CUSTOMER_ALERTS, JSON.stringify(alerts));
+            renderList();
+            return;
+          }
+          button.disabled = true;
+          void hideAuditTrailReceiptOnServer(receiptId, rowSource)
+            .then(() => {
+              applyAuditTrailRowHiddenLocally(receiptId);
+              renderList();
+            })
+            .catch((error) => {
+              button.disabled = false;
+              alert(`기록 지우기 실패: ${error?.message || "잠시 후 다시 시도해주세요"}`);
+            });
           return;
         }
 
