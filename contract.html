@@ -339,10 +339,12 @@
                 </td>
                 <td>
                   <div class="total-amt"><span class="won-l">₩</span><input class="line" data-f="total_amount" disabled /><span>원</span></div>
+                  <div id="sheetVatLine" style="font-size: 9.5px; color: #8b6b5a; text-align: right; margin-top: 2px;"></div>
                 </td>
               </tr>
             </tbody>
           </table>
+          <div id="sheetAccountLine" style="font-size: 11px; color: #333; font-weight: 700; margin: -3px 0 6px 2px;"></div>
 
           <div class="terms">
             <div>
@@ -423,8 +425,9 @@
           </div>
         </div>
         <div class="opt-line">
-          <div class="lb">합계 금액 <span id="amtHint" style="font-weight:400"></span></div>
+          <div class="lb">합계 금액 (부가세 별도) <span id="amtHint" style="font-weight:400"></span></div>
           <div class="amt-line">₩ <input id="newAmountInput" inputmode="numeric" maxlength="15" /> 원</div>
+          <div class="hint" id="vatPreview" style="margin-top: 5px"></div>
         </div>
         <div class="a-row" style="margin-top: 14px">
           <button class="btn primary wide" id="createContractBtn" type="button">계약서 링크 만들기</button>
@@ -488,6 +491,12 @@
           const digits = onlyDigits(value).slice(0, 12);
           return digits ? Number(digits).toLocaleString("ko-KR") : "";
         }
+        /** 부가세 10% 포함 금액(콤마) — 계약 금액은 부가세 별도가 기준 */
+        function vatIncludedAmount(value) {
+          const digits = onlyDigits(value).slice(0, 12);
+          if (!digits) return "";
+          return Math.round(Number(digits) * 1.1).toLocaleString("ko-KR");
+        }
         function fmtWhen(value) {
           const d = new Date(String(value || ""));
           if (Number.isNaN(d.getTime())) return "-";
@@ -536,14 +545,16 @@
         }
         /** 고객용 — 계좌·카드 안내 포함 장문(LMS). 사장님 지시로 장문 허용. */
         function buildCustomerSmsText(row, tk) {
+          const vat = vatIncludedAmount(row?.total_amount);
           return [
             "[쑈픽 인테리어촬영] 촬영계약이 체결되었습니다. 감사합니다!",
             "",
-            `▶ 계약 내용: ${planLabel(row)} / ${commaAmount(row?.total_amount) || "-"}원`,
+            `▶ 계약 내용: ${planLabel(row)} / ${commaAmount(row?.total_amount) || "-"}원 (부가세 별도)`,
             `▶ 계약서 확인: ${contractUrl(tk)}`,
             "",
             "■ 결제 안내",
             `계좌번호 : ${ACCOUNT_LINE}`,
+            vat ? `부가세 10% 포함 입금액 : ${vat}원` : "부가세 10% 별도입니다.",
             "입금자명은 사업자명으로 반드시 입금 바랍니다.",
             "카드결제를 원하시면 관리자(070-8015-7526)에게 문의해 주세요."
           ].join("\n");
@@ -598,6 +609,10 @@
             label.querySelector("input").checked = on;
             label.classList.toggle("sel", on);
           });
+          const vat = vatIncludedAmount(row?.total_amount);
+          $("#sheetVatLine").textContent = vat ? `부가세(VAT) 10% 별도 · 부가세 포함 시 ₩${vat}원` : "부가세(VAT) 10% 별도";
+          $("#sheetAccountLine").textContent =
+            String(row?.payment_method || "") === "account" ? `입금계좌 : ${ACCOUNT_LINE} (입금자명은 사업자명으로)` : "";
           const agreeInput = $("#sheetAgreeChk").querySelector("input");
           agreeInput.checked = Boolean(agreed);
           $("#sheetAgreeChk").classList.toggle("sel", Boolean(agreed));
@@ -724,7 +739,10 @@
           if (row.ceo_name) rows.push(["대표자명", row.ceo_name]);
           rows.push(["촬영형태", planLabel(row)]);
           rows.push(["결제방법", payLabel(row.payment_method)]);
-          rows.push(["합계 금액", `${commaAmount(row.total_amount) || "-"}원`, "amt"]);
+          rows.push(["합계 금액", `${commaAmount(row.total_amount) || "-"}원 (부가세 별도)`, "amt"]);
+          const vat = vatIncludedAmount(row.total_amount);
+          if (vat) rows.push(["부가세 10% 포함 시", `${vat}원`]);
+          if (String(row.payment_method || "") === "account") rows.push(["입금 계좌", ACCOUNT_LINE]);
           if (row.memo) rows.push(["메모", row.memo]);
           $("#sumRows").innerHTML = rows
             .map(([k, v, cls]) => `<div class="sum-row"><span class="k">${escapeHtml(k)}</span><span class="v ${cls || ""}">${escapeHtml(v)}</span></div>`)
@@ -865,6 +883,10 @@
             if (key !== "pay") applyAutoAmount();
           });
         }
+        function updateVatPreview() {
+          const vat = vatIncludedAmount($("#newAmountInput").value);
+          $("#vatPreview").textContent = vat ? `부가세 10% 포함 시 ₩${vat}원 · 계약서와 문자에 함께 표기됩니다` : "";
+        }
         function applyAutoAmount() {
           const amountEl = $("#newAmountInput");
           const auto = AUTO_PRICE[adminSel.planType]?.[Number(adminSel.planCount)];
@@ -873,6 +895,7 @@
             ? `(가격표 기준 자동 계산 — 수정 가능)`
             : `(5회권은 가격표에 없어 직접 입력해 주세요)`;
           if (!auto && !amountTouched) amountEl.value = "";
+          updateVatPreview();
         }
 
         async function copyLink(tk) {
@@ -940,6 +963,7 @@
           amountEl.addEventListener("input", () => {
             amountTouched = true;
             amountEl.value = commaAmount(amountEl.value);
+            updateVatPreview();
           });
           applyAutoAmount();
           loadList();
