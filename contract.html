@@ -683,13 +683,13 @@
         modalPadEl.addEventListener("touchend", padEnd);
         function openSignModal() {
           signModalEl.classList.remove("hidden");
-          // 화면 크기에 맞춰 캔버스 해상도 재설정(선명한 서명)
-          requestAnimationFrame(() => {
-            const rect = modalPadEl.getBoundingClientRect();
+          // 화면 크기에 맞춰 캔버스 해상도 재설정(선명한 서명) — rAF 는 백그라운드 탭에서 안 돌므로 동기로
+          const rect = modalPadEl.getBoundingClientRect();
+          if (rect.width > 0) {
             modalPadEl.width = Math.round(rect.width * 2);
             modalPadEl.height = Math.round(rect.height * 2);
-            padReset();
-          });
+          }
+          padReset();
         }
         function closeSignModal() { signModalEl.classList.add("hidden"); }
         $("#smClearBtn").addEventListener("click", padReset);
