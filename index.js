@@ -17942,6 +17942,14 @@ ${folderBtn}
                                       <span class="request-time-label">${escapeHtml(formatRequestedAtLabel(item.requestedAt))}</span>
                                     </div>
                                     <div class="request-time-label">${escapeHtml(formatInitialRequestedDateTimeLabel(item))}</div>
+                                    ${(() => {
+                                      // 변경·취소·삭제가 있는 스케줄은 카드 겉면에 이력 스택을 바로 보여준다 (사장님 요청: 아래로 쌓이기)
+                                      const trail = getScheduleAuditTrailRows(item);
+                                      if (!trail.some((row) => row.isChange || row.label.endsWith("취소") || row.label.endsWith("삭제"))) return "";
+                                      return `<div style="margin:2px 0 4px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
+                                        .map((row) => `<div style="font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</div>`)
+                                        .join("")}</div>`;
+                                    })()}
                                     ${escapeHtml(extractAreaLabel(item.place) || "-")}<br />
                                     ${escapeHtml(item.company || "-")}<br />
                                     <div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;">
