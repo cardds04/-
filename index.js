@@ -8943,7 +8943,10 @@ ${folderBtn}
           timePreference: normalizeTimePreference(row?.timePreference || payload?.timePreference),
           place: String(row?.place || "").trim(),
           source: String(row?.source || "customer_create").trim() || "customer_create",
-          createdAt: String(row?.createdAt || row?.created_at || "").trim()
+          createdAt: String(row?.createdAt || row?.created_at || "").trim(),
+          // 변경(update) 기록의 이전 일시 — 서버 컬럼은 없고 payload(jsonb)로만 왕복
+          previousDate: String(row?.previousDate || payload?.previousDate || "").trim(),
+          previousTime: String(row?.previousTime || payload?.previousTime || "").trim()
         };
       }
       function mergeScheduleReceiptLedgerRows(remoteRows, localRows) {
@@ -9744,78 +9747,123 @@ ${folderBtn}
         return `${year}-${month}-${day} ${hour}:${minute}`;
       }
 
+      function formatAuditTrailAt(value) {
+        const text = String(value || "").trim();
+        if (!text) return "-";
+        const date = new Date(text);
+        if (Number.isNaN(date.getTime())) return "-";
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${month}/${day} ${hour}:${minute}`;
+      }
+      function getAuditTrailSourceLabel(source) {
+        const s = String(source || "").trim();
+        if (s === "customer_create" || s === "customer") return "고객접수";
+        if (s === "admin_create" || s === "admin") return "관리자접수";
+        if (s === "admin_update") return "관리자변경";
+        if (s === "customer_update") return "고객변경";
+        if (s === "admin_delete") return "관리자삭제";
+        if (s === "customer_cancel") return "고객취소";
+        return "";
+      }
+      /** 스케줄 1건의 접수·변경 이력(오래된 순). 원장(서버 영구 저장) + 원장 도입 전 알림 기록 보강. */
+      function getScheduleAuditTrailRows(scheduleItem) {
+        const scheduleId = String(scheduleItem?.customerScheduleId || "").trim();
+        if (!scheduleId) return [];
+        const ledgerRows = (latestScheduleReceiptLedger.length
+          ? latestScheduleReceiptLedger
+          : getLocalScheduleReceiptLedgerRows()
+        ).filter((row) => String(row?.scheduleId || "").trim() === scheduleId);
+        const rows = [];
+        ledgerRows.forEach((row) => {
+          const label = getAuditTrailSourceLabel(row?.source);
+          if (!label) return;
+          rows.push({
+            at: String(row?.createdAt || "").trim(),
+            label,
+            isChange: label.endsWith("변경"),
+            date: String(row?.date || "").trim(),
+            time: String(row?.time || "").trim(),
+            timePreference: row?.timePreference,
+            previousDate: String(row?.previousDate || "").trim(),
+            previousTime: String(row?.previousTime || "").trim()
+          });
+        });
+        // 원장 도입 전의 관리자 변경 이력(알림 저장소) 보강 — 원장 기록과 5초 이내 중복이면 제외
+        const ledgerChangeTimes = rows
+          .filter((row) => row.isChange)
+          .map((row) => new Date(row.at || 0).getTime())
+          .filter((ts) => Number.isFinite(ts));
+        readStorageArray(STORAGE_CUSTOMER_ALERTS).forEach((alert) => {
+          const type = String(alert?.type || "").trim();
+          if (!["admin_time_update", "admin_date_update"].includes(type)) return;
+          if (String(alert?.scheduleId || alert?.customerScheduleId || "").trim() !== scheduleId) return;
+          const ts = new Date(String(alert?.createdAt || "")).getTime();
+          if (Number.isFinite(ts) && ledgerChangeTimes.some((lt) => Math.abs(lt - ts) < 5000)) return;
+          rows.push({
+            at: String(alert?.createdAt || "").trim(),
+            label: "관리자변경",
+            isChange: true,
+            date: String(alert?.date || "").trim(),
+            time: String(alert?.time || "").trim(),
+            timePreference: "exact",
+            previousDate: String(alert?.previousDate || "").trim(),
+            previousTime: String(alert?.previousTime || "").trim()
+          });
+        });
+        rows.sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime());
+        // 접수 기록이 원장에 없는 옛 스케줄 — requestedAt 로 접수 행을 합성(최초 일시는 이전값 체인으로 복원)
+        const hasCreateRow = rows.some((row) => row.label.endsWith("접수"));
+        if (!hasCreateRow) {
+          let initialDate = String(scheduleItem?.date || "").trim();
+          let initialTime = String(scheduleItem?.time || "").trim();
+          for (let i = rows.length - 1; i >= 0; i -= 1) {
+            if (!rows[i].isChange) continue;
+            if (rows[i].previousDate) initialDate = rows[i].previousDate;
+            if (rows[i].previousTime) initialTime = rows[i].previousTime;
+          }
+          rows.unshift({
+            at: String(scheduleItem?.requestedAt || "").trim(),
+            label: "접수",
+            isChange: false,
+            date: initialDate,
+            time: initialTime,
+            timePreference: "exact",
+            previousDate: "",
+            previousTime: ""
+          });
+        }
+        return rows;
+      }
+      function formatAuditTrailLine(row) {
+        const dateText = /^\d{4}-\d{2}-\d{2}$/.test(row?.date || "") ? formatScheduleDateWithoutYear(row.date) : (row?.date || "-");
+        const timeText = formatScheduleTimeWithPreference(row?.time || "-", row?.timePreference);
+        const base = `${row.label} ${formatAuditTrailAt(row.at)} → ${dateText} ${timeText}`;
+        if (!row?.isChange) return base;
+        const fromParts = [];
+        if (row.previousDate && /^\d{4}-\d{2}-\d{2}$/.test(row.previousDate)) fromParts.push(formatScheduleDateWithoutYear(row.previousDate));
+        if (row.previousTime) fromParts.push(formatScheduleTimeWithPreference(row.previousTime, "exact"));
+        return fromParts.length ? `${base} (이전 ${fromParts.join(" ")})` : base;
+      }
       function getScheduleHistoryTimelineText(scheduleItem) {
         if (!scheduleItem) return "주문 정보를 찾지 못했습니다.";
         const scheduleId = String(scheduleItem?.customerScheduleId || "").trim();
-        const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS)
-          .filter((alert) => {
-            const type = String(alert?.type || "").trim();
-            if (!["admin_time_update", "admin_date_update", "schedule_create", "new_company_schedule"].includes(type)) {
-              return false;
-            }
-            const alertScheduleId = String(alert?.scheduleId || alert?.customerScheduleId || "").trim();
-            return Boolean(scheduleId) && alertScheduleId === scheduleId;
-          })
-          .sort((a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime());
-
         const currentDate = String(scheduleItem?.date || "").trim();
         const currentTime = String(scheduleItem?.time || "").trim();
-        let initialDate = currentDate;
-        let initialTime = currentTime;
-        alerts
-          .slice()
-          .reverse()
-          .forEach((alert) => {
-            const type = String(alert?.type || "").trim();
-            if (type === "admin_date_update") {
-              const previousDate = String(alert?.previousDate || "").trim();
-              if (previousDate) initialDate = previousDate;
-              const previousTime = String(alert?.previousTime || "").trim();
-              if (previousTime) initialTime = previousTime;
-            }
-            if (type === "admin_time_update") {
-              const previousTime = String(alert?.previousTime || "").trim();
-              if (previousTime) initialTime = previousTime;
-            }
-          });
-
         const lines = [];
         lines.push(`[주문번호] ${scheduleId || "-"}`);
         lines.push(`[업체] ${scheduleItem?.company || "-"}`);
         lines.push("");
-        lines.push(
-          `[접수] ${formatHistoryTimelineAt(scheduleItem?.requestedAt)} | ${initialDate || "-"} ${formatScheduleTimeWithPreference(
-            initialTime || "-",
-            "exact"
-          )} | ${extractAreaLabel(scheduleItem?.place) || scheduleItem?.place || "-"}`
-        );
-
-        const changeAlerts = alerts.filter((alert) => ["admin_time_update", "admin_date_update"].includes(String(alert?.type || "").trim()));
-        if (changeAlerts.length === 0) {
+        const trail = getScheduleAuditTrailRows(scheduleItem);
+        if (trail.length === 0) {
+          lines.push(`[접수] ${formatHistoryTimelineAt(scheduleItem?.requestedAt)} | ${currentDate || "-"} ${formatScheduleTimeWithPreference(currentTime || "-", scheduleItem?.timePreference)}`);
           lines.push("[변경] 변경 이력 없음");
         } else {
-          changeAlerts.forEach((alert) => {
-            const changedAt = formatHistoryTimelineAt(alert?.createdAt);
-            const type = String(alert?.type || "").trim();
-            const changedDate = String(alert?.date || "").trim() || "-";
-            const changedTime = String(alert?.time || "").trim() || "-";
-            if (type === "admin_date_update") {
-              const previousDate = String(alert?.previousDate || "").trim() || "?";
-              lines.push(
-                `[변경] ${changedAt} | 날짜 ${previousDate} -> ${changedDate}, 시간 ${formatScheduleTimeWithPreference(changedTime, "exact")}`
-              );
-              return;
-            }
-            const previousTime = String(alert?.previousTime || "").trim() || "?";
-            lines.push(
-              `[변경] ${changedAt} | 시간 ${formatScheduleTimeWithPreference(previousTime, "exact")} -> ${formatScheduleTimeWithPreference(
-                changedTime,
-                "exact"
-              )} (${changedDate})`
-            );
-          });
+          trail.forEach((row) => lines.push(formatAuditTrailLine(row)));
+          if (!trail.some((row) => row.isChange)) lines.push("변경 이력 없음");
         }
-
         lines.push("");
         lines.push(
           `[현재] ${currentDate || "-"} ${formatScheduleTimeWithPreference(currentTime || "-", scheduleItem?.timePreference)} | ${
@@ -9987,6 +10035,35 @@ ${folderBtn}
       function syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate = "") {
         if (!item?.customerScheduleId) return;
         markScheduleRowDirty(item, "schedule_mutation");
+        // ── 접수·변경 이력 원장 기록 ──
+        // 날짜/시간이 실제로 바뀐 경우에만 admin_update 로 원장에 남긴다.
+        // 고객 저장소(target)에 없는 관리자 전용 스케줄도 기록되어야 하므로 early-return 앞에서 처리.
+        {
+          const changedTime = Boolean(item.time) && item.time !== previousTime;
+          const prevDateText = String(previousDate || "").trim();
+          const curDateText = String(item.date || "").trim();
+          const changedDate = Boolean(prevDateText) && Boolean(curDateText) && prevDateText !== curDateText;
+          if (changedTime || changedDate) {
+            const updateReceipt = {
+              receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              scheduleId: String(item.customerScheduleId || "").trim(),
+              customerId: "",
+              company: String(item.company || "").trim(),
+              date: curDateText,
+              time: String(item.time || "").trim(),
+              timePreference: normalizeTimePreference(item.timePreference),
+              place: String(item.place || "").trim(),
+              source: "admin_update",
+              createdAt: new Date().toISOString(),
+              previousDate: changedDate ? prevDateText : "",
+              previousTime: changedTime ? String(previousTime || "").trim() : ""
+            };
+            appendScheduleReceiptLedgerLocal(updateReceipt);
+            void appendScheduleReceiptLedgerToSupabase(updateReceipt).catch((error) => {
+              console.error("[SUBMISSION_RECEIPT][index] 관리자 변경기록 저장 실패", error);
+            });
+          }
+        }
         const schedules = readStorageArray(STORAGE_CUSTOMER_SCHEDULES);
         const target = schedules.find((row) => row.customerScheduleId === item.customerScheduleId);
         if (!target) return;
@@ -17852,6 +17929,13 @@ ${folderBtn}
                                         ${(() => { const dm = getCompanyDefaultMemo(item.company, item.companyCode, memoCanonicalCtx); return dm ? `<span style="color:#3a4a6b;font-weight:600;">기본요청사항:</span> ${escapeHtml(dm)}<br />` : ""; })()}
                                         구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                         쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
+                                        ${(() => {
+                                          const trail = getScheduleAuditTrailRows(item);
+                                          if (!trail.length) return "";
+                                          return `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);"><span style="color:#3a4a6b;font-weight:600;">접수·변경 기록</span><br />${trail
+                                            .map((row) => `<span style="color:${row.isChange ? "#b8860b" : "#6b7a99"};font-size:0.83rem;">${escapeHtml(formatAuditTrailLine(row))}</span>`)
+                                            .join("<br />")}</div>`;
+                                        })()}
                                       </details>
                                       <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(마이박스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
                                     </div>
