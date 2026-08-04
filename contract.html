@@ -408,7 +408,9 @@
         const noticeViewEl = $("#noticeView");
 
         const params = new URLSearchParams(location.search);
-        const token = String(params.get("c") || "").trim();
+        // 문자용 짧은주소 `/c/<토큰>` 은 Vercel 리라이트라 주소창에 ?c= 가 없다 → 경로에서도 토큰을 읽는다.
+        const pathToken = (location.pathname.match(/^\/c\/([A-Za-z0-9]{6,40})\/?$/) || [])[1] || "";
+        const token = String(params.get("c") || pathToken || "").trim();
         const isAdminMode = params.get("admin") === "1";
 
         /* ── 시트 스케일: 화면이 좁으면 통째로 축소해 원본 비율 유지 ── */
