@@ -10,6 +10,7 @@
         --peach: #f7e3da;
         --peach-line: #e6cfc5;
         --salmon: #e8a48c;
+        --salmon-deep: #d98868;
         --line: #d2d2d2;
         --text: #333333;
         --muted: #8b8b8b;
@@ -20,24 +21,74 @@
       body {
         font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
         color: var(--text);
-        background: #ebebeb;
-        background-image: linear-gradient(#ebebeb 0%, #ebebeb 68%, #3b4048 68%, #3b4048 100%);
-        background-attachment: fixed;
+        background: #f1ede9;
         -webkit-text-size-adjust: 100%;
       }
-      /* 시트를 화면 폭에 맞춰 통째로 축소 — 원본 양식 비율을 그대로 유지 */
-      #stage { display: flex; justify-content: center; padding: 26px 0 120px; overflow-x: auto; }
+
+      /* ────────── 고객: 모바일 카드형 ────────── */
+      #custView { width: min(560px, 100%); margin: 0 auto; padding: 14px 14px 130px; }
+      .cust-brand { display: flex; align-items: flex-end; justify-content: space-between; padding: 8px 4px 14px; }
+      .cust-brand .bm .small { font-size: 12px; color: #9b9b9b; font-weight: 700; }
+      .cust-brand .bm .big { font-size: 20px; color: #222; font-weight: 800; letter-spacing: -0.8px; }
+      .cust-brand .tt { text-align: right; }
+      .cust-brand .tt .ko { font-size: 22px; font-weight: 800; color: var(--salmon-deep); }
+      .cust-brand .tt .en { font-size: 10px; color: #b3a79f; letter-spacing: 0.5px; }
+      .c-card { background: #fff; border: 1px solid #e4ddd7; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(80, 60, 45, 0.06); }
+      .c-card h3 { margin: 0 0 10px; font-size: 15px; color: #6b5b50; display: flex; align-items: center; gap: 6px; }
+      .sum-row { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 2px; border-bottom: 1px dashed #eee3da; font-size: 15px; gap: 12px; }
+      .sum-row:last-child { border-bottom: none; }
+      .sum-row .k { color: #9b8d82; font-size: 13px; flex-shrink: 0; }
+      .sum-row .v { font-weight: 700; text-align: right; word-break: break-all; }
+      .sum-row .v.amt { font-size: 19px; color: var(--salmon-deep); }
+      .in-row { margin-bottom: 10px; }
+      .in-row label { display: block; font-size: 12.5px; color: #9b8d82; margin-bottom: 5px; }
+      .in-row input {
+        width: 100%; border: 1.5px solid #e4ddd7; border-radius: 11px; padding: 13px 13px; font: inherit; font-size: 16px; font-weight: 600; color: #1c2c4a; background: #fffdfb;
+      }
+      .in-row input:focus { outline: none; border-color: var(--salmon); }
+      .terms-box {
+        max-height: 190px; overflow-y: auto; border: 1px solid #eee3da; border-radius: 10px; background: #fffdfb;
+        padding: 12px 13px; font-size: 12.5px; line-height: 1.8; color: #5c5c5c;
+      }
+      .terms-box p { margin: 0 0 8px; }
+      .terms-box .h { font-weight: 800; color: #333; }
+      .agree-big {
+        display: flex; align-items: center; gap: 11px; margin-top: 12px; padding: 14px; border: 1.5px solid #e4ddd7; border-radius: 12px;
+        cursor: pointer; user-select: none; font-size: 15px; font-weight: 700; background: #fffdfb;
+      }
+      .agree-big input { position: absolute; opacity: 0; width: 0; height: 0; }
+      .agree-big .box { width: 24px; height: 24px; border: 2px solid #b9aca2; border-radius: 7px; position: relative; flex-shrink: 0; background: #fff; }
+      .agree-big input:checked + .box { background: var(--salmon); border-color: var(--salmon); }
+      .agree-big input:checked + .box::after {
+        content: ""; position: absolute; left: 7px; top: 2.5px; width: 6px; height: 12px; border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(42deg);
+      }
+      .agree-big.on { border-color: var(--salmon); background: #fdf3ee; }
+      .sign-cta {
+        width: 100%; border: 2px dashed #d8bfb1; background: #fffaf7; border-radius: 14px; padding: 26px 12px;
+        font-size: 17px; font-weight: 800; color: #b4785d; cursor: pointer; font-family: inherit;
+      }
+      .sign-cta .s { display: block; font-size: 12px; color: #c0a493; font-weight: 600; margin-top: 5px; }
+      .sign-done-wrap { text-align: center; }
+      .sign-done-img { max-width: 78%; height: 84px; object-fit: contain; display: block; margin: 0 auto; }
+      .sign-redo { border: 1px solid #e4ddd7; background: #fff; border-radius: 8px; padding: 7px 13px; font-size: 12.5px; color: #8b7a6e; cursor: pointer; margin-top: 6px; font-family: inherit; }
+      .view-sheet-btn { width: 100%; border: 1px solid #e4ddd7; background: #fff; border-radius: 11px; padding: 12px; font-size: 13.5px; font-weight: 700; color: #8b7a6e; cursor: pointer; font-family: inherit; }
+      .cust-foot { text-align: center; font-size: 11px; color: #b3a79f; margin-top: 16px; line-height: 1.8; }
+
+      /* ────────── 서명 모달 ────────── */
+      #signModal { position: fixed; inset: 0; background: rgba(30, 22, 17, 0.55); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 12px; }
+      .sm-box { background: #fff; border-radius: 18px; padding: 16px; width: min(640px, 100%); }
+      .sm-box h3 { margin: 0 0 4px; font-size: 16px; }
+      .sm-box .hint2 { font-size: 12px; color: #a09488; margin-bottom: 10px; }
+      #modalPad { width: 100%; height: 240px; border: 2px dashed #d8bfb1; border-radius: 12px; background: #fffdfb; touch-action: none; display: block; }
+      .sm-actions { display: flex; gap: 8px; margin-top: 12px; }
+      .sm-actions .btn { flex: 1; }
+
+      /* ────────── A4 시트(미리보기·완성본) ────────── */
+      #stage { display: none; justify-content: center; padding: 26px 0 120px; overflow-x: auto; background: #ebebeb; }
+      #stage.show { display: flex; }
       #stage.zoomed { justify-content: flex-start; }
       #scaler { transform-origin: top center; }
-      .sheet {
-        width: var(--sheet-w);
-        background: #fff;
-        border-radius: 20px;
-        padding: 34px 32px 26px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-      }
-
-      /* 헤더 */
+      .sheet { width: var(--sheet-w); background: #fff; border-radius: 20px; padding: 34px 32px 26px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12); }
       .doc-head { display: grid; grid-template-columns: 190px 1fr 190px; align-items: flex-end; margin-bottom: 20px; }
       .brand-mark { line-height: 1.15; }
       .brand-mark .small { font-size: 12px; color: #9b9b9b; font-weight: 700; letter-spacing: -0.3px; }
@@ -45,116 +96,72 @@
       .doc-title { text-align: center; }
       .doc-title .ko { font-size: 27px; font-weight: 800; color: var(--salmon); letter-spacing: 1px; }
       .doc-title .en { font-size: 10.5px; color: #a9a9a9; letter-spacing: 0.6px; margin-top: 2px; }
-
-      /* 표 공통 */
       table.f { width: 100%; border-collapse: collapse; margin-bottom: 9px; table-layout: fixed; }
       table.f th, table.f td { border: 1px solid var(--line); padding: 7px 9px; font-size: 12.5px; font-weight: 500; }
-      /* 원본 양식은 「업 체 명」「휴 대 폰」처럼 일부 라벨만 자간을 벌려 놓았다 → 전역 자간은 0,
-         벌릴 라벨은 HTML 에 공백을 직접 넣어 원본과 같은 모양을 유지한다. */
-      table.f th {
-        background: var(--peach);
-        border-color: var(--peach-line);
-        font-weight: 700;
-        text-align: center;
-        letter-spacing: 0;
-        color: #4a4a4a;
-        white-space: nowrap;
-      }
+      table.f th { background: var(--peach); border-color: var(--peach-line); font-weight: 700; text-align: center; letter-spacing: 0; color: #4a4a4a; white-space: nowrap; }
       table.f th .en { display: block; font-size: 8.5px; letter-spacing: 0.4px; color: #9a8a83; font-weight: 600; margin-top: 1px; }
       td.center { text-align: center; }
       .cell-h { height: 30px; }
-
-      /* 입력 */
-      input.line, textarea.line {
-        width: 100%; border: none; outline: none; background: transparent;
-        font: inherit; color: #1c2c4a; font-weight: 600; padding: 0;
-      }
-      input.line::placeholder, textarea.line::placeholder { color: #c3c3c3; font-weight: 500; }
+      input.line, textarea.line { width: 100%; border: none; outline: none; background: transparent; font: inherit; color: #1c2c4a; font-weight: 600; padding: 0; }
       textarea.line { resize: none; height: 46px; line-height: 1.5; }
       input.line:disabled, textarea.line:disabled { color: #1c2c4a; -webkit-text-fill-color: #1c2c4a; opacity: 1; }
-
-      /* 체크박스 */
       .opts { display: flex; gap: 34px; justify-content: center; align-items: center; }
-      .chk { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; font-size: 12.5px; }
+      .chk { display: inline-flex; align-items: center; gap: 7px; user-select: none; font-size: 12.5px; }
       .chk input { position: absolute; opacity: 0; width: 0; height: 0; }
-      .chk .box {
-        width: 12px; height: 12px; border: 1.4px solid #7c7c7c; display: inline-block; position: relative; flex-shrink: 0; background: #fff;
-      }
+      .chk .box { width: 12px; height: 12px; border: 1.4px solid #7c7c7c; display: inline-block; position: relative; flex-shrink: 0; background: #fff; }
       .chk input:checked + .box { background: var(--salmon); border-color: var(--salmon); }
-      .chk input:checked + .box::after {
-        content: ""; position: absolute; left: 3px; top: 0px; width: 4px; height: 8px;
-        border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(42deg);
-      }
-      .chk input:focus-visible + .box { outline: 2px solid #7aa7ff; outline-offset: 2px; }
+      .chk input:checked + .box::after { content: ""; position: absolute; left: 3px; top: 0px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(42deg); }
       .chk.sel { color: #b4553a; font-weight: 700; }
-      .locked .chk { cursor: default; }
-
-      /* 가격표 */
       .price td { text-align: center; font-size: 12px; letter-spacing: -0.2px; }
-
-      /* 합계 */
       .total-amt { display: flex; align-items: center; gap: 6px; }
       .total-amt .won-l { font-weight: 700; }
       .total-amt input { text-align: right; font-size: 13px; }
-
-      /* 약관 */
       .terms { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 16px; font-size: 10.4px; line-height: 1.85; color: #4a4a4a; }
       .terms p { margin: 0 0 9px; }
       .terms .h { font-weight: 700; color: #2b2b2b; margin-bottom: 2px; }
       .terms .indent { padding-left: 11px; }
-      .terms .indent2 { padding-left: 20px; }
       .terms ol { margin: 0; padding-left: 16px; }
       .terms ol li { margin-bottom: 8px; }
-
-      /* 동의·서명 */
       .agree-row { margin-top: 6px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: 10.6px; }
       .agree-row .chk { font-size: 10.6px; }
       .sign-row { display: flex; justify-content: flex-end; align-items: flex-start; gap: 10px; margin-top: 8px; }
       .sign-name { border-bottom: 1px solid #9a9a9a; width: 110px; text-align: center; }
       .sign-name input { text-align: center; font-size: 12px; }
       .sign-pad-wrap { text-align: right; }
-      .sign-pad {
-        width: 250px; height: 92px; border: 1px dashed #b9b9b9; border-radius: 6px; background: #fcfcfc;
-        touch-action: none; display: block;
-      }
-      .sign-hint { font-size: 9.5px; color: #a5a5a5; margin-top: 3px; }
       .sign-img { width: 250px; height: 92px; object-fit: contain; }
-      .sign-clear {
-        border: 1px solid var(--line); background: #fff; border-radius: 5px; font-size: 10px; padding: 2px 8px; cursor: pointer; color: #666; margin-top: 3px;
-      }
-
-      /* 푸터 */
+      .sign-hint { font-size: 9.5px; color: #a5a5a5; margin-top: 3px; }
       .doc-foot { margin-top: 16px; border-top: 1.6px solid #3d3d3d; padding-top: 7px; display: flex; align-items: center; font-size: 10px; color: #6a6a6a; }
       .doc-foot .b { font-weight: 800; color: #333; letter-spacing: -0.3px; }
       .doc-foot .c { flex: 1; text-align: center; }
+      .hidden { display: none !important; }
 
-      /* 하단 액션바 */
+      /* ────────── 하단 액션바 ────────── */
       #actionBar {
         position: fixed; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.97);
-        border-top: 1px solid #dcdcdc; padding: 11px 14px calc(11px + env(safe-area-inset-bottom));
+        border-top: 1px solid #e2dad2; padding: 11px 14px calc(11px + env(safe-area-inset-bottom));
         display: flex; gap: 9px; justify-content: center; align-items: center; flex-wrap: wrap; z-index: 30;
         box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.07);
       }
-      .btn {
-        border: 1px solid var(--line); background: #fff; color: #333; border-radius: 9px;
-        padding: 11px 18px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-      }
+      .btn { border: 1px solid var(--line); background: #fff; color: #333; border-radius: 11px; padding: 13px 20px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
       .btn.primary { background: var(--salmon); border-color: var(--salmon); color: #fff; }
       .btn.primary:disabled { background: #e2c7bd; border-color: #e2c7bd; cursor: default; }
       .btn.ghost { background: #f6f6f6; }
-      .status-badge {
-        display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #2f7a4d;
-        background: #e7f6ed; border: 1px solid #bfe4cd; border-radius: 8px; padding: 9px 14px;
-      }
+      .btn.wide { flex: 1; max-width: 420px; }
+      .status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #2f7a4d; background: #e7f6ed; border: 1px solid #bfe4cd; border-radius: 8px; padding: 9px 14px; }
 
-      /* 관리자 */
+      /* ────────── 관리자 ────────── */
       #adminView { width: min(920px, 94vw); margin: 26px auto 60px; }
-      .a-card { background: #fff; border: 1px solid #dcdcdc; border-radius: 14px; padding: 18px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.06); }
+      .a-card { background: #fff; border: 1px solid #dcdcdc; border-radius: 14px; padding: 18px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06); }
       .a-card h2 { margin: 0 0 12px; font-size: 1.05rem; }
       .a-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .a-row input, .a-row select {
-        border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; min-width: 150px; flex: 1;
-      }
+      .a-row input { border: 1px solid var(--line); border-radius: 8px; padding: 11px 11px; font: inherit; font-size: 15px; min-width: 150px; flex: 1; }
+      .opt-line { margin-top: 12px; }
+      .opt-line .lb { font-size: 12.5px; color: #8b8b8b; font-weight: 700; margin-bottom: 6px; }
+      .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+      .chip { border: 1.5px solid #ddd; background: #fff; border-radius: 999px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; color: #666; font-family: inherit; }
+      .chip.on { background: var(--salmon); border-color: var(--salmon); color: #fff; }
+      .amt-line { display: flex; align-items: center; gap: 7px; }
+      .amt-line input { border: 1px solid var(--line); border-radius: 8px; padding: 11px; font: inherit; font-size: 16px; font-weight: 800; text-align: right; width: 170px; color: #1c2c4a; }
       .a-item { border: 1px solid #e6e6e6; border-radius: 10px; padding: 11px 12px; margin-bottom: 8px; font-size: 13.5px; }
       .a-item .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
       .a-item .nm { font-weight: 800; font-size: 14.5px; }
@@ -163,39 +170,94 @@
       .pill.wait { background: #fff3e0; color: #b26a00; border: 1px solid #f2d5aa; }
       .pill.done { background: #e7f6ed; color: #2f7a4d; border: 1px solid #bfe4cd; }
       .a-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-      .a-actions .btn { padding: 7px 11px; font-size: 12.5px; border-radius: 7px; }
-      .linkbox { background: #f7f9ff; border: 1px solid #dbe4f7; border-radius: 8px; padding: 9px 10px; font-size: 12.5px; word-break: break-all; color: #2d4373; margin-top: 8px; }
+      .a-actions .btn { padding: 8px 12px; font-size: 12.5px; border-radius: 8px; }
+      .linkbox { background: #f7f9ff; border: 1px solid #dbe4f7; border-radius: 8px; padding: 9px 10px; font-size: 12.5px; word-break: break-all; color: #2d4373; margin-top: 10px; }
       .hint { color: #8b8b8b; font-size: 12.5px; line-height: 1.7; }
-      .hidden { display: none !important; }
 
-      @media (max-width: 860px) {
-        body { background-image: linear-gradient(#ebebeb 0%, #ebebeb 78%, #3b4048 78%, #3b4048 100%); }
-        #stage { padding: 12px 0 130px; }
-      }
       @media print {
         body { background: #fff; }
-        #actionBar, .sign-clear, .sign-hint, #printHideNote { display: none !important; }
-        #stage { padding: 0; }
-        #scaler { transform: none !important; }
+        #actionBar, #custView, .sign-hint { display: none !important; }
+        #stage { display: flex !important; padding: 0; background: #fff; }
+        #scaler { transform: none !important; height: auto !important; }
         .sheet { box-shadow: none; border-radius: 0; padding: 12px 10px; width: 100%; }
         @page { size: A4 portrait; margin: 10mm; }
       }
     </style>
   </head>
   <body>
-    <!-- ────────── 계약서(고객·서명본 공용) ────────── -->
-    <div id="stage" class="hidden">
+    <!-- ────────── 고객: 모바일 카드형 ────────── -->
+    <div id="custView" class="hidden">
+      <div class="cust-brand">
+        <div class="bm"><div class="small">쑈픽</div><div class="big">인테리어촬영</div></div>
+        <div class="tt"><div class="ko">촬영 계약서</div><div class="en">Membership Agreement</div></div>
+      </div>
+
+      <div class="c-card">
+        <h3>📋 계약 내용</h3>
+        <div id="sumRows"></div>
+      </div>
+
+      <div class="c-card hidden" id="fillCard">
+        <h3>✍️ 확인이 필요한 정보</h3>
+        <div id="fillRows"></div>
+      </div>
+
+      <div class="c-card">
+        <h3>📄 환불약관</h3>
+        <div class="terms-box">
+          <p class="h">1. 목적</p>
+          <p>갑은 인테리어 시공이 완료된 공간에 대해 사진 및 영상 촬영을 을에게 의뢰하고, 을은 이에 따라 기획·촬영·편집 후 결과물을 납품하기로 한다.</p>
+          <p class="h">2. 유형 및 기간</p>
+          <p>인테리어 현장의 연출세팅은 의뢰사가 주도적으로 준비</p>
+          <p class="h">3. 수정 보완</p>
+          <p>납품 후 1회 무상 수정 가능 · 추가 수정은 건당 5만 원 · 클라이언트 귀책으로 인한 재촬영은 을의 책임이 아님</p>
+          <p class="h">4. 환불약관</p>
+          <p>① 계약 체결 후 단순 변심에 의한 환불 요청 시, 총 계약금액의 50%를 위약금으로 공제하고 잔액을 환불합니다. 총 금액의 위약금 50% + 정상 금액(1회당 45만원/무료촬영포함 ×이용 횟수)를 제외한 금액</p>
+          <p>② 계약금은 반드시 쑈픽(김진영)의 명시된 공식 계좌로 입금되어야 하며, 제3자 명의의 계좌 또는 타인 명의의 계좌로 입금된 경우 계약은 무효로 간주됩니다.</p>
+          <p>③ 환불은 환불신청 완료 후, 그 달의 마지막 일에 계좌로 입금해 드립니다. (현금 결제의 경우) 카드는 카드회사에 따라 처리 기간이 상이합니다.</p>
+          <p>④ 본 계약서에 기재되지 않은 구두 약속 및 비공식 합의사항은 법적 효력을 인정하지 않으며, 양 당사자는 서면에 명시된 조건만을 기준으로 계약을 이행합니다.</p>
+          <p>⑤ 본 계약은 서면 서명 또는 전자 서명과 동시에 효력을 발생하며, 그 이후의 일방적 철회는 위약 조항에 따릅니다.</p>
+        </div>
+        <label class="agree-big" id="agreeBig"><input type="checkbox" /><span class="box"></span>본 환불약관에 동의합니다</label>
+      </div>
+
+      <div class="c-card">
+        <h3>🖋 전자서명</h3>
+        <button type="button" class="sign-cta" id="signCtaBtn">
+          👆 여기를 눌러 서명하기
+          <span class="s">손가락으로 서명하실 수 있어요</span>
+        </button>
+        <div class="sign-done-wrap hidden" id="signDoneWrap">
+          <img class="sign-done-img" id="signDoneImg" alt="서명" />
+          <button type="button" class="sign-redo" id="signRedoBtn">다시 서명하기</button>
+        </div>
+      </div>
+
+      <button type="button" class="view-sheet-btn" id="viewSheetBtn">📑 계약서 양식으로 확인하기</button>
+      <div class="cust-foot">쑈픽스튜디오 · 서울 동대문구 한천로 165 201호 · 070-8015-7526</div>
+    </div>
+
+    <!-- ────────── 서명 모달 ────────── -->
+    <div id="signModal" class="hidden">
+      <div class="sm-box">
+        <h3>전자서명</h3>
+        <div class="hint2">아래 칸에 손가락(또는 마우스)으로 서명해 주세요</div>
+        <canvas id="modalPad"></canvas>
+        <div class="sm-actions">
+          <button type="button" class="btn ghost" id="smClearBtn">지우기</button>
+          <button type="button" class="btn" id="smCancelBtn">취소</button>
+          <button type="button" class="btn primary" id="smOkBtn">서명 완료</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────── A4 시트 (미리보기·완성본·인쇄) ────────── -->
+    <div id="stage">
       <div id="scaler">
         <div class="sheet" id="sheet">
           <div class="doc-head">
-            <div class="brand-mark">
-              <div class="small">쑈픽</div>
-              <div class="big">인테리어촬영</div>
-            </div>
-            <div class="doc-title">
-              <div class="ko">촬영 계약서</div>
-              <div class="en">Membership Agreement</div>
-            </div>
+            <div class="brand-mark"><div class="small">쑈픽</div><div class="big">인테리어촬영</div></div>
+            <div class="doc-title"><div class="ko">촬영 계약서</div><div class="en">Membership Agreement</div></div>
             <div></div>
           </div>
 
@@ -204,17 +266,17 @@
             <tbody>
               <tr class="cell-h">
                 <th>업 체 명</th>
-                <td><input class="line" data-f="company_name" maxlength="60" placeholder="업체명" /></td>
-                <th class="tight">대표자명</th>
-                <td><input class="line" data-f="ceo_name" maxlength="30" placeholder="대표자명" /></td>
+                <td><input class="line" data-f="company_name" disabled /></td>
+                <th>대표자명</th>
+                <td><input class="line" data-f="ceo_name" disabled /></td>
               </tr>
               <tr class="cell-h">
                 <th>휴 대 폰</th>
-                <td colspan="3"><input class="line" data-f="phone" maxlength="20" inputmode="tel" placeholder="010-0000-0000" /></td>
+                <td colspan="3"><input class="line" data-f="phone" disabled /></td>
               </tr>
               <tr class="cell-h">
                 <th>이메일주소</th>
-                <td colspan="3"><input class="line" data-f="email" maxlength="80" inputmode="email" placeholder="example@email.com" /></td>
+                <td colspan="3"><input class="line" data-f="email" disabled /></td>
               </tr>
             </tbody>
           </table>
@@ -224,24 +286,16 @@
             <tbody>
               <tr class="cell-h">
                 <th>계약기간안내</th>
-                <td class="center">
-                  <label class="chk" data-group="period_type" data-value="end_date">
-                    <input type="checkbox" /><span class="box"></span>촬영종료일 명시
-                  </label>
-                </td>
-                <td class="center">
-                  <label class="chk" data-group="period_type" data-value="until_used">
-                    <input type="checkbox" /><span class="box"></span>다회권 소진시까지
-                  </label>
-                </td>
+                <td class="center"><label class="chk" data-group="period_type" data-value="end_date"><input type="checkbox" disabled /><span class="box"></span>촬영종료일 명시</label></td>
+                <td class="center"><label class="chk" data-group="period_type" data-value="until_used"><input type="checkbox" disabled /><span class="box"></span>다회권 소진시까지</label></td>
               </tr>
               <tr>
                 <th>사진만촬영<span class="en">PHOTO</span></th>
                 <td colspan="2">
                   <div class="opts">
-                    <label class="chk" data-group="plan_photo" data-value="5"><input type="checkbox" /><span class="box"></span>5회권</label>
-                    <label class="chk" data-group="plan_photo" data-value="10"><input type="checkbox" /><span class="box"></span>10회권</label>
-                    <label class="chk" data-group="plan_photo" data-value="20"><input type="checkbox" /><span class="box"></span>20회권</label>
+                    <label class="chk" data-group="plan_photo" data-value="5"><input type="checkbox" disabled /><span class="box"></span>5회권</label>
+                    <label class="chk" data-group="plan_photo" data-value="10"><input type="checkbox" disabled /><span class="box"></span>10회권</label>
+                    <label class="chk" data-group="plan_photo" data-value="20"><input type="checkbox" disabled /><span class="box"></span>20회권</label>
                   </div>
                 </td>
               </tr>
@@ -249,15 +303,15 @@
                 <th>사진영상촬영<span class="en">PHOTO+VIDEO</span></th>
                 <td colspan="2">
                   <div class="opts">
-                    <label class="chk" data-group="plan_photo_video" data-value="5"><input type="checkbox" /><span class="box"></span>5회권</label>
-                    <label class="chk" data-group="plan_photo_video" data-value="10"><input type="checkbox" /><span class="box"></span>10회권</label>
-                    <label class="chk" data-group="plan_photo_video" data-value="20"><input type="checkbox" /><span class="box"></span>20회권</label>
+                    <label class="chk" data-group="plan_photo_video" data-value="5"><input type="checkbox" disabled /><span class="box"></span>5회권</label>
+                    <label class="chk" data-group="plan_photo_video" data-value="10"><input type="checkbox" disabled /><span class="box"></span>10회권</label>
+                    <label class="chk" data-group="plan_photo_video" data-value="20"><input type="checkbox" disabled /><span class="box"></span>20회권</label>
                   </div>
                 </td>
               </tr>
               <tr>
                 <th>메모사항</th>
-                <td colspan="2"><textarea class="line" data-f="memo" maxlength="300" placeholder="요청사항이 있으면 적어주세요"></textarea></td>
+                <td colspan="2"><textarea class="line" data-f="memo" disabled></textarea></td>
               </tr>
             </tbody>
           </table>
@@ -265,23 +319,9 @@
           <table class="f price">
             <colgroup><col style="width: 105px" /><col /><col /><col /></colgroup>
             <tbody>
-              <tr class="cell-h">
-                <th rowspan="2">가격표</th>
-                <th>3회권</th>
-                <th>10회권</th>
-                <th>20회권</th>
-              </tr>
-              <tr class="cell-h">
-                <td>350,000원/회당(105만)</td>
-                <td>280,000원/회당(280만)</td>
-                <td>270,000원/회당(540만)</td>
-              </tr>
-              <tr class="cell-h">
-                <th>사진만</th>
-                <td>200,000원/회당(100만)</td>
-                <td>170,000원/회당(170만)</td>
-                <td>150,000원/회당(300만)</td>
-              </tr>
+              <tr class="cell-h"><th rowspan="2">가격표</th><th>3회권</th><th>10회권</th><th>20회권</th></tr>
+              <tr class="cell-h"><td>350,000원/회당(105만)</td><td>280,000원/회당(280만)</td><td>270,000원/회당(540만)</td></tr>
+              <tr class="cell-h"><th>사진만</th><td>200,000원/회당(100만)</td><td>170,000원/회당(170만)</td><td>150,000원/회당(300만)</td></tr>
             </tbody>
           </table>
 
@@ -289,20 +329,16 @@
             <colgroup><col style="width: 105px" /><col /><col style="width: 250px" /></colgroup>
             <tbody>
               <tr class="cell-h">
-                <th class="tight">합 계 (Total Price)</th>
+                <th>합 계 (Total Price)</th>
                 <td>
                   <div class="opts" style="gap: 40px">
-                    <label class="chk" data-group="payment_method" data-value="cash"><input type="checkbox" /><span class="box"></span>현 금</label>
-                    <label class="chk" data-group="payment_method" data-value="card"><input type="checkbox" /><span class="box"></span>카 드</label>
-                    <label class="chk" data-group="payment_method" data-value="account"><input type="checkbox" /><span class="box"></span>계 좌</label>
+                    <label class="chk" data-group="payment_method" data-value="cash"><input type="checkbox" disabled /><span class="box"></span>현 금</label>
+                    <label class="chk" data-group="payment_method" data-value="card"><input type="checkbox" disabled /><span class="box"></span>카 드</label>
+                    <label class="chk" data-group="payment_method" data-value="account"><input type="checkbox" disabled /><span class="box"></span>계 좌</label>
                   </div>
                 </td>
                 <td>
-                  <div class="total-amt">
-                    <span class="won-l">₩</span>
-                    <input class="line" data-f="total_amount" inputmode="numeric" maxlength="15" placeholder="0" />
-                    <span>원</span>
-                  </div>
+                  <div class="total-amt"><span class="won-l">₩</span><input class="line" data-f="total_amount" disabled /><span>원</span></div>
                 </td>
               </tr>
             </tbody>
@@ -316,11 +352,7 @@
               <p class="h">2. 유형 및 기간</p>
               <p class="indent">인테리어 현장의 연출세팅은 의뢰사가 주도적으로 준비</p>
               <p class="h">3. 수정 보완</p>
-              <p class="indent">
-                납품 후 1회 무상 수정 가능<br />
-                추가 수정은 건당 5만 원<br />
-                클라이언트 귀책으로 인한 재촬영은 을의 책임이 아님
-              </p>
+              <p class="indent">납품 후 1회 무상 수정 가능<br />추가 수정은 건당 5만 원<br />클라이언트 귀책으로 인한 재촬영은 을의 책임이 아님</p>
             </div>
             <div>
               <p class="h">4. 환불약관</p>
@@ -335,19 +367,14 @@
           </div>
 
           <div class="agree-row">
-            <label class="chk" id="agreeChk"><input type="checkbox" /><span class="box"></span>*본 환불약관에 동의합니다.</label>
+            <label class="chk" id="sheetAgreeChk"><input type="checkbox" disabled /><span class="box"></span>*본 환불약관에 동의합니다.</label>
             <span>신청자 :</span>
-            <span class="sign-name"><input class="line" data-f="signer_name" maxlength="20" placeholder="성함" /></span>
+            <span class="sign-name"><input class="line" data-f="signer_name" disabled /></span>
             <span>(서명)</span>
           </div>
           <div class="sign-row">
             <div class="sign-pad-wrap">
-              <canvas class="sign-pad" id="signPad" width="500" height="184"></canvas>
               <img class="sign-img hidden" id="signImg" alt="서명" />
-              <div>
-                <button type="button" class="sign-clear" id="signClearBtn">서명 지우기</button>
-              </div>
-              <div class="sign-hint">위 칸에 손가락 또는 마우스로 서명해 주세요</div>
               <div class="sign-hint hidden" id="signedAtText"></div>
             </div>
           </div>
@@ -365,11 +392,42 @@
     <!-- ────────── 관리자 ────────── -->
     <div id="adminView" class="hidden">
       <div class="a-card">
-        <h2>전자 촬영계약서 관리</h2>
-        <p class="hint">계약서 링크를 만들어 업체에 보내면, 업체가 직접 체크·서명하고 결과가 아래 목록에 쌓입니다.</p>
-        <div class="a-row" style="margin-top: 10px">
-          <input id="newCompanyInput" type="text" placeholder="업체명 (미리 채워두기 · 비워도 됩니다)" />
-          <button class="btn primary" id="createContractBtn" type="button">계약서 링크 만들기</button>
+        <h2>전자 촬영계약서 만들기</h2>
+        <p class="hint">계약 내용을 여기서 전부 정한 뒤 링크를 보내면, 업체는 <b>내용 확인 후 서명만</b> 하면 됩니다.</p>
+        <div class="a-row" style="margin-top: 12px">
+          <input id="newCompanyInput" type="text" placeholder="업체명" />
+          <input id="newCeoInput" type="text" placeholder="대표자명 (선택)" />
+          <input id="newPhoneInput" type="text" inputmode="tel" placeholder="휴대폰 번호 (문자 발송용)" />
+        </div>
+        <div class="opt-line">
+          <div class="lb">촬영형태</div>
+          <div class="chips" id="planTypeChips">
+            <button type="button" class="chip" data-v="photo">사진만</button>
+            <button type="button" class="chip on" data-v="photo_video">사진 + 영상</button>
+          </div>
+        </div>
+        <div class="opt-line">
+          <div class="lb">회권</div>
+          <div class="chips" id="planCountChips">
+            <button type="button" class="chip" data-v="5">5회권</button>
+            <button type="button" class="chip on" data-v="10">10회권</button>
+            <button type="button" class="chip" data-v="20">20회권</button>
+          </div>
+        </div>
+        <div class="opt-line">
+          <div class="lb">결제방법</div>
+          <div class="chips" id="payChips">
+            <button type="button" class="chip" data-v="cash">현금</button>
+            <button type="button" class="chip" data-v="card">카드</button>
+            <button type="button" class="chip on" data-v="account">계좌</button>
+          </div>
+        </div>
+        <div class="opt-line">
+          <div class="lb">합계 금액 <span id="amtHint" style="font-weight:400"></span></div>
+          <div class="amt-line">₩ <input id="newAmountInput" inputmode="numeric" maxlength="15" /> 원</div>
+        </div>
+        <div class="a-row" style="margin-top: 14px">
+          <button class="btn primary wide" id="createContractBtn" type="button">계약서 링크 만들기</button>
         </div>
         <div id="newLinkBox" class="linkbox hidden"></div>
       </div>
@@ -400,12 +458,17 @@
         const HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
         const ADMIN_PASSWORD = "6315";
         const ADMIN_SESSION_KEY = "contractAdminOkV1";
+        const ADMIN_NOTIFY_PHONE = "01028692443";
+        const ACCOUNT_LINE = "농협 3021511169151 김진영";
+        /** 가격표 기준 자동 금액(원) — 5회권은 가격표에 없어 직접 입력 */
+        const AUTO_PRICE = { photo: { 10: 1700000, 20: 3000000 }, photo_video: { 10: 2800000, 20: 5400000 } };
 
         const $ = (sel) => document.querySelector(sel);
         const stageEl = $("#stage");
         const scalerEl = $("#scaler");
         const sheetEl = $("#sheet");
         const actionBarEl = $("#actionBar");
+        const custViewEl = $("#custView");
         const adminViewEl = $("#adminView");
         const noticeViewEl = $("#noticeView");
 
@@ -414,140 +477,16 @@
         const pathToken = (location.pathname.match(/^\/c\/([A-Za-z0-9]{6,40})\/?$/) || [])[1] || "";
         const token = String(params.get("c") || pathToken || "").trim();
         const isAdminMode = params.get("admin") === "1";
-
-        /* ── 시트 스케일: 화면이 좁으면 통째로 축소해 원본 비율 유지 ── */
-        let zoomMode = false; // true = 원본 크기(가로 스크롤), false = 화면 폭 맞춤
-        function fitSheet() {
-          if (stageEl.classList.contains("hidden")) return;
-          const available = document.documentElement.clientWidth - 20;
-          const scale = zoomMode ? 1 : Math.min(1, available / 794);
-          scalerEl.style.transform = `scale(${scale})`;
-          scalerEl.style.height = `${sheetEl.offsetHeight * scale}px`;
-          scalerEl.style.width = "794px";
-          stageEl.classList.toggle("zoomed", zoomMode && available < 794);
-        }
-        function isNarrowScreen() { return document.documentElement.clientWidth < 794; }
-        window.addEventListener("resize", fitSheet);
-
-        /* ── 서명 패드 ── */
-        const padEl = $("#signPad");
-        const padCtx = padEl.getContext("2d");
-        let padDirty = false;
-        let drawing = false;
-        function padPoint(ev) {
-          const rect = padEl.getBoundingClientRect();
-          const src = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
-          return {
-            x: ((src.clientX - rect.left) / rect.width) * padEl.width,
-            y: ((src.clientY - rect.top) / rect.height) * padEl.height
-          };
-        }
-        function padStart(ev) {
-          if (padEl.dataset.locked === "1") return;
-          ev.preventDefault();
-          drawing = true;
-          padDirty = true;
-          const p = padPoint(ev);
-          padCtx.beginPath();
-          padCtx.moveTo(p.x, p.y);
-        }
-        function padMove(ev) {
-          if (!drawing) return;
-          ev.preventDefault();
-          const p = padPoint(ev);
-          padCtx.lineTo(p.x, p.y);
-          padCtx.stroke();
-        }
-        function padEnd() { drawing = false; }
-        function padReset() {
-          padCtx.clearRect(0, 0, padEl.width, padEl.height);
-          padCtx.lineWidth = 2.6;
-          padCtx.lineCap = "round";
-          padCtx.lineJoin = "round";
-          padCtx.strokeStyle = "#1b2a4a";
-          padDirty = false;
-        }
-        padReset();
-        padEl.addEventListener("mousedown", padStart);
-        padEl.addEventListener("mousemove", padMove);
-        window.addEventListener("mouseup", padEnd);
-        padEl.addEventListener("touchstart", padStart, { passive: false });
-        padEl.addEventListener("touchmove", padMove, { passive: false });
-        padEl.addEventListener("touchend", padEnd);
-        $("#signClearBtn").addEventListener("click", padReset);
-
-        /* ── 체크박스 그룹(한 줄에 하나만 선택) ── */
-        document.querySelectorAll(".chk[data-group]").forEach((label) => {
-          label.addEventListener("click", (ev) => {
-            if (sheetEl.classList.contains("locked")) { ev.preventDefault(); return; }
-            const group = label.dataset.group;
-            setTimeout(() => {
-              const checked = label.querySelector("input").checked;
-              document.querySelectorAll(`.chk[data-group="${group}"]`).forEach((other) => {
-                if (other !== label) other.querySelector("input").checked = false;
-                other.classList.toggle("sel", other === label && checked);
-              });
-              label.classList.toggle("sel", checked);
-            }, 0);
-          });
-        });
-
-        /* ── 금액 콤마 ── */
-        const amountEl = document.querySelector('[data-f="total_amount"]');
-        amountEl.addEventListener("input", () => {
-          const digits = amountEl.value.replace(/[^\d]/g, "").slice(0, 12);
-          amountEl.value = digits ? Number(digits).toLocaleString("ko-KR") : "";
-        });
-
-        /* ── 폼 읽기/쓰기 ── */
-        function readForm() {
-          const out = {};
-          document.querySelectorAll("[data-f]").forEach((el) => { out[el.dataset.f] = String(el.value || "").trim(); });
-          document.querySelectorAll(".chk[data-group]").forEach((label) => {
-            const group = label.dataset.group;
-            if (!(group in out)) out[group] = "";
-            if (label.querySelector("input").checked) out[group] = label.dataset.value;
-          });
-          return out;
-        }
-        function writeForm(row) {
-          document.querySelectorAll("[data-f]").forEach((el) => { el.value = String(row?.[el.dataset.f] ?? ""); });
-          document.querySelectorAll(".chk[data-group]").forEach((label) => {
-            const on = String(row?.[label.dataset.group] || "") === label.dataset.value;
-            label.querySelector("input").checked = on;
-            label.classList.toggle("sel", on);
-          });
-        }
-        function lockForm(row) {
-          sheetEl.classList.add("locked");
-          document.querySelectorAll("[data-f]").forEach((el) => { el.disabled = true; });
-          document.querySelectorAll(".chk input").forEach((el) => { el.disabled = true; });
-          padEl.dataset.locked = "1";
-          padEl.classList.add("hidden");
-          $("#signClearBtn").parentElement.classList.add("hidden");
-          document.querySelectorAll(".sign-hint")[0].classList.add("hidden");
-          const agreeInput = $("#agreeChk").querySelector("input");
-          agreeInput.checked = Boolean(row?.agreed);
-          $("#agreeChk").classList.toggle("sel", Boolean(row?.agreed));
-          if (row?.signature_data_url) {
-            const img = $("#signImg");
-            img.src = row.signature_data_url;
-            img.classList.remove("hidden");
-          }
-          if (row?.signed_at) {
-            const when = new Date(row.signed_at);
-            const text = Number.isNaN(when.getTime())
-              ? ""
-              : `전자서명 완료 ${when.getFullYear()}. ${when.getMonth() + 1}. ${when.getDate()}. ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
-            const el = $("#signedAtText");
-            el.textContent = text;
-            el.classList.remove("hidden");
-          }
-          setTimeout(fitSheet, 60);
-        }
+        const SMS_SKIP = params.get("nosms") === "1";
 
         function escapeHtml(text) {
           return String(text ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+        }
+        function onlyDigits(value) { return String(value || "").replace(/[^\d]/g, ""); }
+        function isKoreanMobile(value) { return /^01[016789]\d{7,8}$/.test(onlyDigits(value)); }
+        function commaAmount(value) {
+          const digits = onlyDigits(value).slice(0, 12);
+          return digits ? Number(digits).toLocaleString("ko-KR") : "";
         }
         function fmtWhen(value) {
           const d = new Date(String(value || ""));
@@ -557,11 +496,10 @@
         function planLabel(row) {
           const parts = [];
           if (row?.plan_photo) parts.push(`사진만 ${row.plan_photo}회권`);
-          if (row?.plan_photo_video) parts.push(`사진영상 ${row.plan_photo_video}회권`);
+          if (row?.plan_photo_video) parts.push(`사진+영상 ${row.plan_photo_video}회권`);
           return parts.join(" · ") || "-";
         }
-        /** 문자용 짧은 주소 — vercel.json 의 `/c/:token` → contract.html?c=:token 리라이트.
-         *  SMS 90바이트 한도 때문에 주소를 최대한 짧게 유지한다(전체 주소 41바이트). */
+        function payLabel(value) { return { cash: "현금", card: "카드", account: "계좌이체" }[String(value || "")] || "-"; }
         function contractUrl(tk) { return `${location.origin}/c/${encodeURIComponent(tk)}`; }
         function makeToken() {
           const chars = "abcdefghijkmnpqrstuvwxyz23456789";
@@ -569,12 +507,22 @@
           (window.crypto || window.msCrypto).getRandomValues(buf);
           return Array.from(buf, (n) => chars[n % chars.length]).join("");
         }
+        async function fetchContract(tk) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}&select=*`, { headers: HDR, cache: "no-store" });
+          if (!res.ok) throw new Error(`불러오기 실패 (${res.status})`);
+          const rows = await res.json();
+          return Array.isArray(rows) && rows.length ? rows[0] : null;
+        }
+        function showNotice(title, body) {
+          custViewEl.classList.add("hidden");
+          stageEl.classList.remove("show");
+          noticeViewEl.classList.remove("hidden");
+          $("#noticeTitle").textContent = title;
+          $("#noticeBody").textContent = body;
+        }
+        function renderActionBar(html) { actionBarEl.innerHTML = html; actionBarEl.classList.remove("hidden"); }
 
-        /* ── 문자 발송(솔라피) ── */
-        const ADMIN_NOTIFY_PHONE = "01028692443";
-        const SMS_SKIP = params.get("nosms") === "1"; // 내부 점검용 — 실제 발송 없이 화면 흐름만 확인
-        function onlyDigits(value) { return String(value || "").replace(/[^\d]/g, ""); }
-        function isKoreanMobile(value) { return /^01[016789]\d{7,8}$/.test(onlyDigits(value)); }
+        /* ── 문자(솔라피) ── */
         async function sendSms(to, text) {
           if (SMS_SKIP) return { ok: false, skipped: true };
           const res = await fetch("/api/solapi-send", {
@@ -586,71 +534,229 @@
           if (!res.ok || out?.ok === false) throw new Error(out?.message || `HTTP ${res.status}`);
           return { ok: true };
         }
-        /** 고객용 — 단문(SMS) 90바이트 안에 들어가도록 고정 문구. 예: 76바이트 */
-        function buildCustomerSmsText(tk) {
-          return `[쑈픽] 촬영계약 체결완료\n${contractUrl(tk)}`;
+        /** 고객용 — 계좌·카드 안내 포함 장문(LMS). 사장님 지시로 장문 허용. */
+        function buildCustomerSmsText(row, tk) {
+          return [
+            "[쑈픽 인테리어촬영] 촬영계약이 체결되었습니다. 감사합니다!",
+            "",
+            `▶ 계약 내용: ${planLabel(row)} / ${commaAmount(row?.total_amount) || "-"}원`,
+            `▶ 계약서 확인: ${contractUrl(tk)}`,
+            "",
+            "■ 결제 안내",
+            `계좌번호 : ${ACCOUNT_LINE}`,
+            "입금자명은 사업자명으로 반드시 입금 바랍니다.",
+            "카드결제를 원하시면 관리자(070-8015-7526)에게 문의해 주세요."
+          ].join("\n");
         }
-        /** 관리자용 — 90바이트를 넘으면 LMS(3배 요금)라 회권·금액 줄을 떼고, 그래도 넘치면 업체명을 줄인다 */
         function smsBytes(text) { return new TextEncoder().encode(String(text || "")).length; }
+        /** 관리자용 — 90바이트 넘으면 줄여서 단문 유지 */
         function buildAdminSmsText(row, tk) {
           const link = contractUrl(tk);
           const name = String(row?.company_name || "-").trim();
-          const full = `[쑈픽] 계약체결 ${name}\n${planLabel(row)} / ${row?.total_amount || "-"}원\n${link}`;
+          const full = `[쑈픽] 계약체결 ${name}\n${planLabel(row)} / ${commaAmount(row?.total_amount) || "-"}원\n${link}`;
           if (smsBytes(full) <= 90) return full;
-          let short = `[쑈픽] 계약체결 ${name}\n${link}`;
           let cut = name;
+          let short = `[쑈픽] 계약체결 ${cut}\n${link}`;
           while (smsBytes(short) > 90 && cut.length > 2) {
             cut = cut.slice(0, -1);
             short = `[쑈픽] 계약체결 ${cut}\n${link}`;
           }
           return short;
         }
+        function buildRequestSmsText(tk) { return `[쑈픽] 촬영계약서 서명요청\n${contractUrl(tk)}`; }
         async function notifyContractSigned(row, tk) {
           const results = { customer: false, admin: false };
           const customerPhone = onlyDigits(row?.phone);
           if (isKoreanMobile(customerPhone)) {
-            try { await sendSms(customerPhone, buildCustomerSmsText(tk)); results.customer = true; } catch (_) {}
+            try { await sendSms(customerPhone, buildCustomerSmsText(row, tk)); results.customer = true; } catch (_) {}
           }
           try { await sendSms(ADMIN_NOTIFY_PHONE, buildAdminSmsText(row, tk)); results.admin = true; } catch (_) {}
           return results;
         }
 
-        /* ── 고객 화면 ── */
-        async function fetchContract(tk) {
-          const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}&select=*`, { headers: HDR, cache: "no-store" });
-          if (!res.ok) throw new Error(`불러오기 실패 (${res.status})`);
-          const rows = await res.json();
-          return Array.isArray(rows) && rows.length ? rows[0] : null;
+        /* ── A4 시트: 스케일·미리보기·완성본 ── */
+        let zoomMode = false;
+        function fitSheet() {
+          if (!stageEl.classList.contains("show")) return;
+          const available = document.documentElement.clientWidth - 20;
+          const scale = zoomMode ? 1 : Math.min(1, available / 794);
+          scalerEl.style.transform = `scale(${scale})`;
+          scalerEl.style.height = `${sheetEl.offsetHeight * scale}px`;
+          scalerEl.style.width = "794px";
+          stageEl.classList.toggle("zoomed", zoomMode && available < 794);
         }
-        function showNotice(title, body) {
-          noticeViewEl.classList.remove("hidden");
-          $("#noticeTitle").textContent = title;
-          $("#noticeBody").textContent = body;
+        function isNarrowScreen() { return document.documentElement.clientWidth < 794; }
+        window.addEventListener("resize", fitSheet);
+
+        function writeSheet(row, signatureDataUrl, agreed) {
+          document.querySelectorAll("[data-f]").forEach((el) => {
+            const key = el.dataset.f;
+            el.value = key === "total_amount" ? commaAmount(row?.[key]) : String(row?.[key] ?? "");
+          });
+          document.querySelectorAll(".chk[data-group]").forEach((label) => {
+            const on = String(row?.[label.dataset.group] || "") === label.dataset.value;
+            label.querySelector("input").checked = on;
+            label.classList.toggle("sel", on);
+          });
+          const agreeInput = $("#sheetAgreeChk").querySelector("input");
+          agreeInput.checked = Boolean(agreed);
+          $("#sheetAgreeChk").classList.toggle("sel", Boolean(agreed));
+          const img = $("#signImg");
+          if (signatureDataUrl) {
+            img.src = signatureDataUrl;
+            img.classList.remove("hidden");
+          } else {
+            img.classList.add("hidden");
+          }
+          const atEl = $("#signedAtText");
+          if (row?.signed_at) {
+            const when = new Date(row.signed_at);
+            atEl.textContent = Number.isNaN(when.getTime())
+              ? ""
+              : `전자서명 완료 ${when.getFullYear()}. ${when.getMonth() + 1}. ${when.getDate()}. ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+            atEl.classList.remove("hidden");
+          } else {
+            atEl.classList.add("hidden");
+          }
         }
-        function renderActionBar(html) {
-          actionBarEl.innerHTML = html;
-          actionBarEl.classList.remove("hidden");
+        function showSheet() {
+          custViewEl.classList.add("hidden");
+          stageEl.classList.add("show");
+          setTimeout(fitSheet, 60);
+        }
+        function zoomBtnHtml() { return isNarrowScreen() ? `<button class="btn ghost" id="zoomBtn" type="button">🔍 크게 보기</button>` : ""; }
+        function bindZoomBtn() {
+          const zoomBtn = $("#zoomBtn");
+          if (!zoomBtn) return;
+          zoomBtn.addEventListener("click", () => {
+            zoomMode = !zoomMode;
+            zoomBtn.textContent = zoomMode ? "🔍 전체 보기" : "🔍 크게 보기";
+            fitSheet();
+            window.scrollTo({ top: 0 });
+          });
+        }
+
+        /* ── 서명 모달 ── */
+        const signModalEl = $("#signModal");
+        const modalPadEl = $("#modalPad");
+        const modalCtx = modalPadEl.getContext("2d");
+        let modalDirty = false;
+        let drawing = false;
+        let signatureDataUrl = "";
+        function padPoint(ev) {
+          const rect = modalPadEl.getBoundingClientRect();
+          const src = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+          return {
+            x: ((src.clientX - rect.left) / rect.width) * modalPadEl.width,
+            y: ((src.clientY - rect.top) / rect.height) * modalPadEl.height
+          };
+        }
+        function padStart(ev) {
+          ev.preventDefault();
+          drawing = true;
+          modalDirty = true;
+          const p = padPoint(ev);
+          modalCtx.beginPath();
+          modalCtx.moveTo(p.x, p.y);
+        }
+        function padMove(ev) {
+          if (!drawing) return;
+          ev.preventDefault();
+          const p = padPoint(ev);
+          modalCtx.lineTo(p.x, p.y);
+          modalCtx.stroke();
+        }
+        function padEnd() { drawing = false; }
+        function padReset() {
+          modalCtx.clearRect(0, 0, modalPadEl.width, modalPadEl.height);
+          modalCtx.lineWidth = 4;
+          modalCtx.lineCap = "round";
+          modalCtx.lineJoin = "round";
+          modalCtx.strokeStyle = "#1b2a4a";
+          modalDirty = false;
+        }
+        modalPadEl.addEventListener("mousedown", padStart);
+        modalPadEl.addEventListener("mousemove", padMove);
+        window.addEventListener("mouseup", padEnd);
+        modalPadEl.addEventListener("touchstart", padStart, { passive: false });
+        modalPadEl.addEventListener("touchmove", padMove, { passive: false });
+        modalPadEl.addEventListener("touchend", padEnd);
+        function openSignModal() {
+          signModalEl.classList.remove("hidden");
+          // 화면 크기에 맞춰 캔버스 해상도 재설정(선명한 서명)
+          requestAnimationFrame(() => {
+            const rect = modalPadEl.getBoundingClientRect();
+            modalPadEl.width = Math.round(rect.width * 2);
+            modalPadEl.height = Math.round(rect.height * 2);
+            padReset();
+          });
+        }
+        function closeSignModal() { signModalEl.classList.add("hidden"); }
+        $("#smClearBtn").addEventListener("click", padReset);
+        $("#smCancelBtn").addEventListener("click", closeSignModal);
+        $("#smOkBtn").addEventListener("click", () => {
+          if (!modalDirty) { alert("서명을 먼저 그려주세요."); return; }
+          signatureDataUrl = modalPadEl.toDataURL("image/png");
+          closeSignModal();
+          const wrap = $("#signDoneWrap");
+          $("#signDoneImg").src = signatureDataUrl;
+          wrap.classList.remove("hidden");
+          $("#signCtaBtn").classList.add("hidden");
+        });
+        $("#signCtaBtn").addEventListener("click", openSignModal);
+        $("#signRedoBtn").addEventListener("click", openSignModal);
+
+        /* ── 고객 흐름 ── */
+        let contractRow = null;
+        const fillState = {}; // 관리자가 비워둔 필수값을 고객이 채우는 칸
+
+        function mergedRow() {
+          const merged = { ...contractRow };
+          Object.entries(fillState).forEach(([key, el]) => { merged[key] = String(el.value || "").trim(); });
+          if (!merged.period_type) merged.period_type = "until_used";
+          if (!merged.signer_name) merged.signer_name = merged.ceo_name || merged.company_name || "";
+          return merged;
+        }
+
+        function renderSummary(row) {
+          const rows = [];
+          rows.push(["업체명", row.company_name || "-"]);
+          if (row.ceo_name) rows.push(["대표자명", row.ceo_name]);
+          rows.push(["촬영형태", planLabel(row)]);
+          rows.push(["결제방법", payLabel(row.payment_method)]);
+          rows.push(["합계 금액", `${commaAmount(row.total_amount) || "-"}원`, "amt"]);
+          if (row.memo) rows.push(["메모", row.memo]);
+          $("#sumRows").innerHTML = rows
+            .map(([k, v, cls]) => `<div class="sum-row"><span class="k">${escapeHtml(k)}</span><span class="v ${cls || ""}">${escapeHtml(v)}</span></div>`)
+            .join("");
+        }
+
+        function renderFillCard(row) {
+          const fillRowsEl = $("#fillRows");
+          const need = [];
+          if (!String(row.ceo_name || "").trim()) need.push(["ceo_name", "대표자명", "성함을 입력해 주세요", "text"]);
+          if (!isKoreanMobile(row.phone)) need.push(["phone", "휴대폰 번호", "010-0000-0000", "tel"]);
+          if (!need.length) { $("#fillCard").classList.add("hidden"); return; }
+          fillRowsEl.innerHTML = need
+            .map(([key, label, ph, mode]) => `<div class="in-row"><label>${escapeHtml(label)}</label><input data-fill="${escapeHtml(key)}" inputmode="${mode === "tel" ? "tel" : "text"}" maxlength="40" placeholder="${escapeHtml(ph)}" /></div>`)
+            .join("");
+          fillRowsEl.querySelectorAll("input[data-fill]").forEach((el) => { fillState[el.dataset.fill] = el; });
+          $("#fillCard").classList.remove("hidden");
         }
 
         async function submitContract() {
-          const values = readForm();
-          const agreed = $("#agreeChk").querySelector("input").checked;
+          const merged = mergedRow();
+          const agreed = $("#agreeBig").querySelector("input").checked;
           const missing = [];
-          if (!values.company_name) missing.push("업체명");
-          if (!values.ceo_name) missing.push("대표자명");
-          if (!values.phone) missing.push("휴대폰");
-          if (!values.plan_photo && !values.plan_photo_video) missing.push("촬영 회권 선택");
-          if (!values.payment_method) missing.push("결제방법");
-          if (!values.total_amount) missing.push("합계 금액");
-          if (!values.signer_name) missing.push("신청자 성함");
+          if (!String(merged.ceo_name || "").trim()) missing.push("대표자명");
+          if (!isKoreanMobile(merged.phone)) missing.push("휴대폰 번호");
           if (!agreed) missing.push("환불약관 동의");
-          if (!padDirty) missing.push("서명");
+          if (!signatureDataUrl) missing.push("전자서명");
           if (missing.length) {
             alert(`아래 항목을 확인해 주세요.\n\n· ${missing.join("\n· ")}`);
             return;
           }
-          if (!confirm("작성하신 내용으로 계약을 체결할까요?\n체결 후에는 수정할 수 없습니다.")) return;
-
+          if (!confirm("이 내용으로 계약을 체결할까요?\n체결 후에는 수정할 수 없습니다.")) return;
           const btn = $("#submitBtn");
           if (btn) { btn.disabled = true; btn.textContent = "처리 중…"; }
           try {
@@ -662,12 +768,16 @@
               return;
             }
             const payload = {
-              ...values,
+              ceo_name: String(merged.ceo_name || "").trim(),
+              phone: String(merged.phone || "").trim(),
+              email: String(merged.email || "").trim(),
+              period_type: merged.period_type,
+              signer_name: String(merged.signer_name || "").trim(),
               agreed: true,
               status: "signed",
               signed_at: new Date().toISOString(),
               signed_user_agent: String(navigator.userAgent || "").slice(0, 300),
-              signature_data_url: padEl.toDataURL("image/png"),
+              signature_data_url: signatureDataUrl,
               updated_at: new Date().toISOString()
             };
             const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(token)}`, {
@@ -682,7 +792,7 @@
             const sent = await notifyContractSigned(rows[0], token);
             alert(
               sent.customer
-                ? "계약이 체결되었습니다. 감사합니다!\n계약서 링크를 문자로 보내드렸습니다."
+                ? "계약이 체결되었습니다. 감사합니다!\n계약서 링크와 결제 안내를 문자로 보내드렸습니다."
                 : "계약이 체결되었습니다. 감사합니다!"
             );
             location.reload();
@@ -692,46 +802,89 @@
           }
         }
 
+        function renderCustomerForm() {
+          custViewEl.classList.remove("hidden");
+          stageEl.classList.remove("show");
+          renderActionBar(`<button class="btn primary wide" id="submitBtn" type="button">동의하고 계약 체결하기</button>`);
+          $("#submitBtn").addEventListener("click", submitContract);
+        }
+
         async function startCustomer() {
-          stageEl.classList.remove("hidden");
-          fitSheet();
           let row = null;
           try {
             row = await fetchContract(token);
           } catch (error) {
-            stageEl.classList.add("hidden");
             showNotice("계약서를 불러오지 못했습니다", "인터넷 연결을 확인하고 새로고침해 주세요.");
             return;
           }
           if (!row) {
-            stageEl.classList.add("hidden");
             showNotice("계약서를 찾을 수 없습니다", "링크가 만료되었거나 주소가 잘못되었습니다. 담당자에게 문의 부탁드립니다.");
             return;
           }
-          writeForm(row);
-          // 휴대폰 화면에선 양식이 작게 축소되므로 원본 크기로 키워 보는 버튼을 함께 제공
-          const zoomBtnHtml = isNarrowScreen() ? `<button class="btn ghost" id="zoomBtn" type="button">🔍 크게 보기</button>` : "";
+          contractRow = row;
+
           if (row.status === "signed") {
-            lockForm(row);
-            renderActionBar(`<span class="status-badge">✅ 서명이 완료된 계약서입니다</span>${zoomBtnHtml}<button class="btn" id="printBtn" type="button">인쇄 / PDF 저장</button>`);
+            // 완성본: A4 양식으로 표시
+            writeSheet(row, row.signature_data_url, true);
+            showSheet();
+            renderActionBar(`<span class="status-badge">✅ 서명이 완료된 계약서입니다</span>${zoomBtnHtml()}<button class="btn" id="printBtn" type="button">인쇄 / PDF 저장</button>`);
             $("#printBtn").addEventListener("click", () => window.print());
-          } else {
-            renderActionBar(`${zoomBtnHtml}<button class="btn primary" id="submitBtn" type="button">동의하고 계약 체결하기</button>`);
-            $("#submitBtn").addEventListener("click", submitContract);
+            bindZoomBtn();
+            return;
           }
-          const zoomBtn = $("#zoomBtn");
-          if (zoomBtn) {
-            zoomBtn.addEventListener("click", () => {
-              zoomMode = !zoomMode;
-              zoomBtn.textContent = zoomMode ? "🔍 전체 보기" : "🔍 크게 보기";
-              fitSheet();
+
+          renderSummary(row);
+          renderFillCard(row);
+          $("#agreeBig").addEventListener("click", () => {
+            setTimeout(() => $("#agreeBig").classList.toggle("on", $("#agreeBig").querySelector("input").checked), 0);
+          });
+          $("#viewSheetBtn").addEventListener("click", () => {
+            writeSheet(mergedRow(), signatureDataUrl, $("#agreeBig").querySelector("input").checked);
+            showSheet();
+            renderActionBar(`<button class="btn wide" id="backToFormBtn" type="button">← 돌아가서 서명하기</button>${zoomBtnHtml()}`);
+            $("#backToFormBtn").addEventListener("click", () => {
+              stageEl.classList.remove("show");
+              renderCustomerForm();
               window.scrollTo({ top: 0 });
             });
-          }
-          setTimeout(fitSheet, 120);
+            bindZoomBtn();
+          });
+          renderCustomerForm();
         }
 
-        /* ── 관리자 화면 ── */
+        /* ── 관리자 ── */
+        const adminSel = { planType: "photo_video", planCount: "10", pay: "account" };
+        let amountTouched = false;
+        function bindChips(rootId, key) {
+          const root = document.getElementById(rootId);
+          root.addEventListener("click", (ev) => {
+            const chip = ev.target.closest("button.chip");
+            if (!chip) return;
+            root.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === chip));
+            adminSel[key] = chip.dataset.v;
+            if (key !== "pay") applyAutoAmount();
+          });
+        }
+        function applyAutoAmount() {
+          const amountEl = $("#newAmountInput");
+          const auto = AUTO_PRICE[adminSel.planType]?.[Number(adminSel.planCount)];
+          if (auto && !amountTouched) amountEl.value = Number(auto).toLocaleString("ko-KR");
+          $("#amtHint").textContent = auto
+            ? `(가격표 기준 자동 계산 — 수정 가능)`
+            : `(5회권은 가격표에 없어 직접 입력해 주세요)`;
+          if (!auto && !amountTouched) amountEl.value = "";
+        }
+
+        async function copyLink(tk) {
+          const url = contractUrl(tk);
+          try {
+            await navigator.clipboard.writeText(url);
+            alert(`계약서 링크를 복사했습니다.\n\n${url}\n\n카톡·문자에 붙여넣어 보내세요.`);
+          } catch (error) {
+            prompt("아래 링크를 복사해서 보내세요", url);
+          }
+        }
+
         async function loadList() {
           const listEl = $("#contractList");
           listEl.innerHTML = '<p class="hint">불러오는 중…</p>';
@@ -751,12 +904,13 @@
                       <span class="pill ${signed ? "done" : "wait"}">${signed ? "서명완료" : "서명대기"}</span>
                     </div>
                     <div class="meta">
-                      ${signed ? `${escapeHtml(planLabel(row))} · 합계 ${escapeHtml(row.total_amount || "-")}원 · ${escapeHtml(row.signer_name || "-")} 서명<br />서명 ${escapeHtml(fmtWhen(row.signed_at))}` : `만든 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
+                      ${escapeHtml(planLabel(row))} · ${escapeHtml(payLabel(row.payment_method))} · ${escapeHtml(commaAmount(row.total_amount) || "-")}원<br />
+                      ${signed ? `${escapeHtml(row.signer_name || "-")} 서명 · ${escapeHtml(fmtWhen(row.signed_at))}` : `만든 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
                     </div>
                     <div class="a-actions">
                       <button class="btn" data-act="copy" data-token="${escapeHtml(row.token)}">링크 복사</button>
                       <button class="btn" data-act="open" data-token="${escapeHtml(row.token)}">${signed ? "계약서 보기" : "미리보기"}</button>
-                      <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}" data-name="${escapeHtml(row.company_name || "")}">문자 보내기</button>
+                      <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}">문자 보내기</button>
                       <button class="btn" data-act="del" data-token="${escapeHtml(row.token)}" data-name="${escapeHtml(row.company_name || "")}">삭제</button>
                     </div>
                   </div>`;
@@ -764,16 +918,6 @@
               .join("");
           } catch (error) {
             listEl.innerHTML = `<p class="hint">목록을 불러오지 못했습니다 (${escapeHtml(error?.message || "")})</p>`;
-          }
-        }
-
-        async function copyLink(tk) {
-          const url = contractUrl(tk);
-          try {
-            await navigator.clipboard.writeText(url);
-            alert(`계약서 링크를 복사했습니다.\n\n${url}\n\n카톡·문자에 붙여넣어 보내세요.`);
-          } catch (error) {
-            prompt("아래 링크를 복사해서 보내세요", url);
           }
         }
 
@@ -788,28 +932,57 @@
             sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
           }
           adminViewEl.classList.remove("hidden");
-          document.body.style.backgroundImage = "none";
           document.body.style.background = "#f2f4f8";
+          bindChips("planTypeChips", "planType");
+          bindChips("planCountChips", "planCount");
+          bindChips("payChips", "pay");
+          const amountEl = $("#newAmountInput");
+          amountEl.addEventListener("input", () => {
+            amountTouched = true;
+            amountEl.value = commaAmount(amountEl.value);
+          });
+          applyAutoAmount();
           loadList();
 
           $("#createContractBtn").addEventListener("click", async () => {
             const btn = $("#createContractBtn");
             const company = String($("#newCompanyInput").value || "").trim();
+            const ceo = String($("#newCeoInput").value || "").trim();
+            const phone = String($("#newPhoneInput").value || "").trim();
+            const amount = onlyDigits($("#newAmountInput").value);
+            if (!company) { alert("업체명을 입력해 주세요."); return; }
+            if (!amount) { alert("합계 금액을 입력해 주세요.\n(5회권은 자동 계산이 없어 직접 입력합니다)"); return; }
+            if (phone && !isKoreanMobile(phone)) { alert("휴대폰 번호를 다시 확인해 주세요."); return; }
             btn.disabled = true;
             btn.textContent = "만드는 중…";
             try {
               const newToken = makeToken();
+              const record = {
+                token: newToken,
+                company_name: company,
+                ceo_name: ceo,
+                phone: onlyDigits(phone),
+                period_type: "until_used",
+                plan_photo: adminSel.planType === "photo" ? adminSel.planCount : "",
+                plan_photo_video: adminSel.planType === "photo_video" ? adminSel.planCount : "",
+                payment_method: adminSel.pay,
+                total_amount: amount
+              };
               const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}`, {
                 method: "POST",
                 headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
-                body: JSON.stringify([{ token: newToken, company_name: company }])
+                body: JSON.stringify([record])
               });
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               const url = contractUrl(newToken);
               const box = $("#newLinkBox");
-              box.innerHTML = `<b>${escapeHtml(company || "새 계약서")}</b> 링크가 만들어졌습니다.<br />${escapeHtml(url)}<div class="a-actions"><button class="btn primary" data-act="copy" data-token="${escapeHtml(newToken)}">링크 복사</button><button class="btn" data-act="open" data-token="${escapeHtml(newToken)}">열어보기</button></div>`;
+              box.innerHTML = `<b>${escapeHtml(company)}</b> · ${escapeHtml(planLabel(record))} · ${escapeHtml(commaAmount(amount))}원<br />${escapeHtml(url)}<div class="a-actions"><button class="btn primary" data-act="copy" data-token="${escapeHtml(newToken)}">링크 복사</button><button class="btn" data-act="sms" data-token="${escapeHtml(newToken)}" data-phone="${escapeHtml(onlyDigits(phone))}">문자 보내기</button><button class="btn" data-act="open" data-token="${escapeHtml(newToken)}">열어보기</button></div>`;
               box.classList.remove("hidden");
+              amountTouched = false;
               $("#newCompanyInput").value = "";
+              $("#newCeoInput").value = "";
+              $("#newPhoneInput").value = "";
+              applyAutoAmount();
               loadList();
             } catch (error) {
               alert(`계약서 만들기에 실패했습니다.\n${error?.message || ""}`);
@@ -834,7 +1007,7 @@
               let row = null;
               try { row = await fetchContract(tk); } catch (_) {}
               const signed = row?.status === "signed";
-              const text = signed ? buildCustomerSmsText(tk) : `[쑈픽] 촬영계약서 서명요청\n${contractUrl(tk)}`;
+              const text = signed ? buildCustomerSmsText(row, tk) : buildRequestSmsText(tk);
               if (!confirm(`아래 내용으로 보낼까요?\n\n${text}`)) return;
               btn.disabled = true;
               try {
