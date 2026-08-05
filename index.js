@@ -5694,6 +5694,10 @@
             .filter(([id]) => Boolean(id))
         );
         const localUpdatedAtMap = buildLocalScheduleUpdatedAtMap();
+        // 업체명·코드만 서버와 다른 행은 「그 두 필드만」 PATCH 한다.
+        // ‼️예전에는 이름/코드가 다르면 최신성 검사를 건너뛰고 행 전체를 업서트했다 →
+        //   옛 데이터를 든 브라우저가 다른 기기의 최신 시간·작가까지 통째로 덮어썼다(2026-08-05 사고).
+        const identityPatchRows = [];
         const safeUpsertRows = nextRows.filter((row) => {
           const id = String(row?.id || "").trim();
           if (!id) return false;
@@ -5701,18 +5705,21 @@
           // 서버가 소프트삭제(source=deleted)인 행은 upsert로 source=active 를 보내며 덮어쓰면 안 됨(고스트 로컬 복구 시 재발)
           if (remote && remote.source === "deleted") return false;
           if (!remote) return true;
-          const builtName = String(row?.company_name || "").trim();
-          if (builtName !== remote.company_name) return true;
-          const builtCode = String(row?.code || "").trim();
-          if (builtCode !== String(remote.code || "").trim()) return true;
           const remoteUpdatedAt = remote.updated_at;
-          if (!remoteUpdatedAt) return true;
           const localUpdatedAt = String(localUpdatedAtMap.get(id) || "").trim();
-          if (!localUpdatedAt) return false;
-          const localMs = new Date(localUpdatedAt).getTime();
-          const remoteMs = new Date(remoteUpdatedAt).getTime();
-          if (Number.isNaN(localMs) || Number.isNaN(remoteMs)) return false;
-          return localMs > remoteMs;
+          const localMs = localUpdatedAt ? new Date(localUpdatedAt).getTime() : NaN;
+          const remoteMs = remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : NaN;
+          const localNewer = !remoteUpdatedAt
+            ? true
+            : Number.isFinite(localMs) && Number.isFinite(remoteMs) && localMs > remoteMs;
+          if (localNewer) return true;
+          // 로컬이 더 최신이 아니면 행 전체를 덮지 않는다. 업체명·코드 차이만 따로 반영.
+          const builtName = String(row?.company_name || "").trim();
+          const builtCode = String(row?.code || "").trim();
+          if (builtName && (builtName !== remote.company_name || builtCode !== String(remote.code || "").trim())) {
+            identityPatchRows.push({ id, company_name: builtName, code: builtCode });
+          }
+          return false;
         });
         // ON CONFLICT(id) 업서트는 같은 id 가 배치에 2번 이상 있으면 21000("cannot affect row a second time")
         //  에러로 전체 실패한다. data/onHold/refund 합치는 과정 등에서 같은 id 가 중복될 수 있으므로
@@ -5737,6 +5744,23 @@
           if (!upsertResponse.ok) {
             const errorText = await upsertResponse.text();
             throw new Error(`schedules 업서트 실패 (${upsertResponse.status}): ${errorText}`);
+          }
+        }
+        // 업체명·코드만 반영(시간·작가 등 다른 필드는 서버 값을 그대로 둔다). 한 번에 20건까지만.
+        for (const patch of identityPatchRows.slice(0, 20)) {
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(patch.id)}`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify({ company_name: patch.company_name, code: patch.code })
+            });
+          } catch (error) {
+            console.warn("[SCHEDULES][index] 업체명 동기화 실패", patch.id, error);
           }
         }
       }
@@ -20983,13 +21007,28 @@ ${folderBtn}
         }
         setWritersStorage(writers);
 
-        data.forEach((item) => {
-          if (item.name !== oldName) return;
-          item.name = newName;
-          item.writerPhone = newPhone;
-          item.writerCarNumber = newCarNumber;
-          syncCustomerScheduleFromAdminEdit(item, item.time || "");
-        });
+        // ‼️작가 정보 저장은 「이름이 실제로 바뀐 경우」에만 스케줄 행을 건드린다(2026-08-05 사고 수정).
+        //   예전에는 이름이 그대로여도 그 작가의 전 기간 스케줄에 localUpdatedAt 도장을 찍었고,
+        //   그 순간 이 브라우저가 "가장 최신"이 되어 ①다른 기기의 새 수정을 pull 에서 무시하고
+        //   ②옛 값을 서버로 되밀어 덮어썼다(어제 저녁 시간수정 4건이 오늘 아침 원복된 사고).
+        const writerNameChanged = newName !== oldName;
+        if (writerNameChanged) {
+          data.forEach((item) => {
+            if (item.name !== oldName) return;
+            item.name = newName;
+            item.writerPhone = newPhone;
+            item.writerCarNumber = newCarNumber;
+            syncCustomerScheduleFromAdminEdit(item, item.time || "");
+          });
+        } else {
+          // 연락처·차량번호만 바뀐 경우: 화면 표시용 값만 갱신하고 dirty 표시는 하지 않는다.
+          // (연락처는 photographerPhones/writers 가 정본이라 서버 스케줄 행을 고칠 필요가 없다)
+          data.forEach((item) => {
+            if (item.name !== oldName) return;
+            item.writerPhone = newPhone;
+            item.writerCarNumber = newCarNumber;
+          });
+        }
 
         if (currentPhotographerFilter === oldName) {
           currentPhotographerFilter = newName;
@@ -21046,15 +21085,23 @@ ${folderBtn}
         }
         setWritersStorage(writers);
 
+        // ‼️예전에는 syncCustomerScheduleFromAdminEdit 를 필터 없이 전체 스케줄에 호출해
+        //   모든 행에 localUpdatedAt 도장을 찍었다 → 이 브라우저가 "가장 최신"이 되어 다른 기기의
+        //   수정을 무시하고 옛 값으로 되밀어버림(2026-08-05 시간수정 원복 사고). 이름이 실제로
+        //   바뀐 해당 작가 행에만 적용한다.
+        const writerNameChangedFromHistory = normalizedNew !== normalizedOld;
         const updateRow = (row) => {
-          if (String(row?.name || "").trim().toLowerCase() !== oldLower) return;
+          if (String(row?.name || "").trim().toLowerCase() !== oldLower) return false;
           row.name = normalizedNew;
           row.writerPhone = nextPhone;
           row.writerCarNumber = nextCarNumber;
+          return true;
         };
         data.forEach((item) => {
-          updateRow(item);
-          syncCustomerScheduleFromAdminEdit(item, item.time || "");
+          const matched = updateRow(item);
+          if (matched && writerNameChangedFromHistory) {
+            syncCustomerScheduleFromAdminEdit(item, item.time || "");
+          }
         });
         onHoldPayments.forEach(updateRow);
         refundPayments.forEach(updateRow);
