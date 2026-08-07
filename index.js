@@ -159,6 +159,10 @@
         syncConfig.supabaseAnonKey ||
         FALLBACK_SUPABASE_ANON_KEY;
       const USE_SUPABASE_SYNC = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+      /** ‼️schedules 쓰기 버전 게이트(2026-08-07) — 서버 RLS(UPDATE 정책)가 이 헤더를 요구한다.
+       *  배포 전 옛 코드 탭이 기존 행을 덮어써 스케줄이 원복되던 사고의 최종 차단.
+       *  값 변경 시 supabase/migrations/20260807110000_schedules_write_version_gate.sql 도 함께. */
+      const SCHED_WRITE_VERSION = "v20260807";
 
       // ── 관리자 세션 토큰 + DB 프록시 (B-3) ────────────────────────────────
       // 관리자 비밀번호로 서버(/api/admin-auth)에서 { adm:1 } 토큰을 발급받아
@@ -5123,6 +5127,7 @@
             {
               method: "PATCH",
               headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
                 "Content-Type": "application/json",
                 Prefer: "return=minimal",
                 apikey: SUPABASE_ANON_KEY,
@@ -5734,6 +5739,7 @@
           const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?on_conflict=id`, {
             method: "POST",
             headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
               "Content-Type": "application/json",
               Prefer: "resolution=merge-duplicates,return=minimal",
               apikey: SUPABASE_ANON_KEY,
@@ -5752,6 +5758,7 @@
             await fetch(`${SUPABASE_URL}/rest/v1/schedules?id=eq.${encodeURIComponent(patch.id)}`, {
               method: "PATCH",
               headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
                 "Content-Type": "application/json",
                 Prefer: "return=minimal",
                 apikey: SUPABASE_ANON_KEY,
@@ -14928,6 +14935,7 @@ ${folderBtn}
             {
               method: "PATCH",
               headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
                 "Content-Type": "application/json",
                 Prefer: "return=minimal",
                 apikey: SUPABASE_ANON_KEY,
@@ -15069,6 +15077,7 @@ ${folderBtn}
               {
                 method: "PATCH",
                 headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
                   "Content-Type": "application/json",
                   Prefer: "return=minimal",
                   apikey: SUPABASE_ANON_KEY,
@@ -15132,6 +15141,7 @@ ${folderBtn}
               {
                 method: "PATCH",
                 headers: {
+              "x-sched-client": SCHED_WRITE_VERSION,
                   "Content-Type": "application/json",
                   Prefer: "return=minimal",
                   apikey: SUPABASE_ANON_KEY,
