@@ -19,3 +19,17 @@ CREATE POLICY "anon_update_schedules" ON public.schedules
   WITH CHECK (
     coalesce(current_setting('request.headers', true)::json ->> 'x-sched-client', '') = 'v20260807'
   );
+
+-- ‼️발견: schedules 는 RLS 자체가 꺼져 있었다(relrowsecurity=false) — 정책이 있어도 전부 무시.
+--   (= 애초에 어떤 anon 클라이언트든 무제한 UPDATE 가능했던 상태)
+-- RLS 를 켜면 모든 명령에 정책이 필요하므로 SELECT/DELETE 도 명시한다.
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_select_schedules" ON public.schedules;
+CREATE POLICY "anon_select_schedules" ON public.schedules
+  FOR SELECT TO anon, authenticated USING (true);
+
+-- 삭제는 사용자 액션(확인창)이라 원복 사고와 무관 — 기존 흐름 보존
+DROP POLICY IF EXISTS "anon_delete_schedules" ON public.schedules;
+CREATE POLICY "anon_delete_schedules" ON public.schedules
+  FOR DELETE TO anon, authenticated USING (true);
