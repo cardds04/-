@@ -429,6 +429,10 @@
           <div class="amt-line">₩ <input id="newAmountInput" inputmode="numeric" maxlength="15" /> 원</div>
           <div class="hint" id="vatPreview" style="margin-top: 5px"></div>
         </div>
+        <div class="opt-line">
+          <div class="lb">메모사항 (선택 — 계약서의 「메모사항」 칸에 표시됩니다)</div>
+          <textarea id="newMemoInput" maxlength="300" rows="2" placeholder="예: 무료촬영 1회 포함 / 나레이션 3회 포함" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:11px;font:inherit;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
         <div class="a-row" style="margin-top: 14px">
           <button class="btn primary wide" id="createContractBtn" type="button">계약서 링크 만들기</button>
         </div>
@@ -929,12 +933,21 @@
                     <div class="meta">
                       ${escapeHtml(planLabel(row))} · ${escapeHtml(payLabel(row.payment_method))} · ${escapeHtml(commaAmount(row.total_amount) || "-")}원<br />
                       ${signed ? `${escapeHtml(row.signer_name || "-")} 서명 · ${escapeHtml(fmtWhen(row.signed_at))}` : `만든 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
+                      ${row.memo ? `<br />📝 ${escapeHtml(row.memo)}` : ""}
                     </div>
                     <div class="a-actions">
                       <button class="btn" data-act="copy" data-token="${escapeHtml(row.token)}">링크 복사</button>
                       <button class="btn" data-act="open" data-token="${escapeHtml(row.token)}">${signed ? "계약서 보기" : "미리보기"}</button>
                       <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}">문자 보내기</button>
+                      <button class="btn" data-act="memo" data-token="${escapeHtml(row.token)}">메모</button>
                       <button class="btn" data-act="del" data-token="${escapeHtml(row.token)}" data-name="${escapeHtml(row.company_name || "")}">삭제</button>
+                    </div>
+                    <div class="memo-editor hidden" data-memo-editor="${escapeHtml(row.token)}" style="margin-top:8px;">
+                      <textarea maxlength="300" rows="2" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:13.5px;resize:vertical;box-sizing:border-box;">${escapeHtml(row.memo || "")}</textarea>
+                      <div class="a-actions" style="margin-top:6px;">
+                        <button class="btn primary" data-act="memoSave" data-token="${escapeHtml(row.token)}">메모 저장</button>
+                        <button class="btn" data-act="memoCancel" data-token="${escapeHtml(row.token)}">취소</button>
+                      </div>
                     </div>
                   </div>`;
               })
@@ -990,7 +1003,8 @@
                 plan_photo: adminSel.planType === "photo" ? adminSel.planCount : "",
                 plan_photo_video: adminSel.planType === "photo_video" ? adminSel.planCount : "",
                 payment_method: adminSel.pay,
-                total_amount: amount
+                total_amount: amount,
+                memo: String($("#newMemoInput").value || "").trim()
               };
               const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}`, {
                 method: "POST",
@@ -1006,6 +1020,7 @@
               $("#newCompanyInput").value = "";
               $("#newCeoInput").value = "";
               $("#newPhoneInput").value = "";
+              $("#newMemoInput").value = "";
               applyAutoAmount();
               loadList();
             } catch (error) {
@@ -1024,6 +1039,33 @@
             const tk = btn.dataset.token;
             if (act === "copy") { copyLink(tk); return; }
             if (act === "open") { window.open(contractUrl(tk), "_blank", "noopener"); return; }
+            if (act === "memo" || act === "memoCancel") {
+              const editor = adminViewEl.querySelector(`[data-memo-editor="${CSS.escape(tk)}"]`);
+              if (editor) {
+                editor.classList.toggle("hidden", act === "memoCancel" ? true : !editor.classList.contains("hidden") ? true : false);
+                if (!editor.classList.contains("hidden")) editor.querySelector("textarea")?.focus();
+              }
+              return;
+            }
+            if (act === "memoSave") {
+              const editor = adminViewEl.querySelector(`[data-memo-editor="${CSS.escape(tk)}"]`);
+              const memoText = String(editor?.querySelector("textarea")?.value || "").trim();
+              btn.disabled = true;
+              try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}`, {
+                  method: "PATCH",
+                  headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
+                  body: JSON.stringify({ memo: memoText, updated_at: new Date().toISOString() })
+                });
+                const rows = await res.json();
+                if (!res.ok || !Array.isArray(rows) || !rows.length) throw new Error(`저장 실패 (${res.status})`);
+                loadList();
+              } catch (error) {
+                btn.disabled = false;
+                alert(`메모 저장 실패: ${error?.message || ""}`);
+              }
+              return;
+            }
             if (act === "sms") {
               const target = String(prompt("문자를 보낼 휴대폰 번호", btn.dataset.phone || "") || "").trim();
               if (!target) return;
