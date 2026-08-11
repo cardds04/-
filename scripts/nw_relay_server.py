@@ -133,23 +133,37 @@ def _createfolder_mybox(folder_name: str, parent: str):
         s = _mybox_session()
     except Exception as e:
         return 500, json.dumps({"ok": False, "message": f"크롬 마이박스 쿠키 로드 실패: {e}"})
-    parent_key, err = _mybox_resolve_parent(s, parent)
-    if not parent_key:
-        return 400, json.dumps({"ok": False, "message": err})
-    out = _mybox_mkdir(s, parent_key, folder_name)
-    if out.get("ok"):
-        return 200, json.dumps({"ok": True, "fileId": out["fileId"], "reused": out.get("reused", False)})
-    return 502, json.dumps({"ok": False, "message": out.get("message", "mkdir 실패")})
+    try:
+        parent_key, err = _mybox_resolve_parent(s, parent)
+        if not parent_key:
+            return 400, json.dumps({"ok": False, "message": err})
+        out = _mybox_mkdir(s, parent_key, folder_name)
+        if out.get("ok"):
+            return 200, json.dumps({"ok": True, "fileId": out["fileId"], "reused": out.get("reused", False)})
+        return 502, json.dumps({"ok": False, "message": out.get("message", "mkdir 실패")})
+    finally:
+        # ‼️세션을 닫지 않으면 fd 누수 → 밤새 Too many open files 로 릴레이가 죽는다(2026-08-12 실사고)
+        try:
+            s.close()
+        except Exception:
+            pass
 
 
 def _check_cookie_valid():
     """마이박스 루트 목록 조회로 세션 판정(quota 엔드포인트는 404)."""
+    s = None
     try:
         s = _mybox_session()
         r = s.get(f"{MYBOX_API}/service/v2/file/list?resourceKey=root&fileOption=all&sort=name&order=asc&startNum=0&pagingRow=1", timeout=10)
         return r.status_code == 200 and str(r.json().get("code")) == "0"
     except Exception:
         return False
+    finally:
+        try:
+            if s is not None:
+                s.close()
+        except Exception:
+            pass
 
 
 class RelayHandler(BaseHTTPRequestHandler):

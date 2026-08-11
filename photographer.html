@@ -3973,16 +3973,14 @@
                   companyDriveLink
                 )}" data-company="${encodeURIComponent(normalize(item?.company))}" data-company-code="${encodeURIComponent(
                   normalize(item?.companyCode)
-                )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" data-schedule-id="${encodeURIComponent(
-                  scheduleId || ""
-                )}" title="촬영일 폴더와 사진·영상원본 폴더를 만들고(있으면 그대로) 납품 폴더를 엽니다" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">폴더생성후열기 ↗</a>${deliveryLinkKind}<br />`
+                )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" title="만들 폴더명 복사 후 납품 폴더 열기 (촬영일 폴더는 매일 아침 자동 생성)" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
               : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">마이박스 납품 폴더가 아직 없습니다. 관리자에게 폴더 생성을 요청하세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
             if (USE_SUPABASE_SYNC) {
               if (!hasServerId) {
                 shootBlock =
-                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. 촬영일 폴더는 「폴더생성후열기」를 누르면 자동으로 만들어집니다(사진·영상원본 폴더 포함).</div>';
+                  '<div class="shoot-complete-row" style="font-size:12px;color:#64748b;">현장확인은 고객 안내 문자만 보냅니다. 촬영일 폴더(사진·영상원본 포함)는 매일 아침 자동으로 만들어져 있습니다 — 「열기」 후 위 「만들 폴더명」 폴더에 원본을 넣어주세요.</div>';
               } else {
                 const d = photographerShootDeliveryById[scheduleId] || {};
                 const shootLink = normalize(d?.shoot_folder_web_link);
@@ -4048,44 +4046,13 @@
           const compName = normalize(dec("data-company"));
           const compCode = normalize(dec("data-company-code"));
           const folderName = String(dec("data-copy-folder-name") || "").trim();
-          const folderScheduleId = String(dec("data-schedule-id") || "").trim();
           // 팝업 차단 회피: 클릭 제스처 안에서 창을 먼저 열고, 최신 주소 조회 후 이동.
+          // ‼️폴더 생성은 여기서 하지 않는다(2026-08-12 사장님 지시) — 작가 컴엔 마이박스 로그인이 없다.
+          //   촬영일 폴더 트리는 매일 아침 10시 사장님 맥의 자동 작업(daily_delivery_folders.cjs)이 만들어 둔다.
           const win = window.open("about:blank", "_blank");
           void (async () => {
             if (folderName) {
               await copyTextSmart(folderName);
-            }
-            // ── 폴더생성후열기(2026-08-07): 서버가 업체 납품 폴더 안에
-            //    {만들폴더명}/{MMDD}{업체명}사진원본·영상원본 트리를 만든다(있으면 재사용만).
-            //    업체 폴더 자체가 없으면 업체 폴더 생성+공유링크 발급+폴더연결 주소 저장까지.
-            //    실패해도 폴더 열기는 계속한다(작가가 수동으로 만들 수 있게 안내만).
-            let ensureFailedMessage = "";
-            if (folderScheduleId) {
-              try {
-                const writer = getCurrentWriter();
-                const ensureRes = await fetch("/api/photographer-delivery-subfolders", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    scheduleId: folderScheduleId,
-                    folderName,
-                    writerLoginId: String(writer?.id || ""),
-                    writerPassword: String(writer?.password || "")
-                  })
-                });
-                const ensureData = await ensureRes.json().catch(() => ({}));
-                if (!ensureRes.ok || !ensureData.ok) {
-                  ensureFailedMessage = String(ensureData.message || `폴더 자동 생성 실패 (${ensureRes.status})`);
-                }
-              } catch (e) {
-                ensureFailedMessage = "네트워크 오류로 폴더 자동 생성에 실패했습니다.";
-              }
-            }
-            if (ensureFailedMessage) {
-              alert(
-                `폴더 자동 생성에 실패해 납품 폴더만 엽니다.\n(${ensureFailedMessage})\n\n` +
-                  `복사된 「만들 폴더명」(${folderName})으로 직접 만들어 주세요.`
-              );
             }
             // 업체정보관리(company_directory) 주소가 유일한 진실 — 렌더 시점에 박힌 옛 링크 대신
             // 항상 서버 최신 주소로 연다. 서버 조회 실패 시에만 렌더 시점 링크로 폴백.
