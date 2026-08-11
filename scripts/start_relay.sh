@@ -12,8 +12,13 @@ cd "$ROOT"
 
 echo "=== 네이버웍스 릴레이 서버 시작 ==="
 
-# 릴레이 서버 백그라운드 실행
-python3 scripts/nw_relay_server.py --port "$PORT" &
+# 릴레이 서버 백그라운드 실행 — launchd 의 python3 에는 pycookiecheat 가 없어
+# 모듈이 설치된 파이썬을 우선 사용(2026-08-11: 마이박스 쿠키 기반으로 개조).
+PYBIN="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+if ! "$PYBIN" -c "import pycookiecheat, requests" 2>/dev/null; then
+  PYBIN="$(command -v python3)"
+fi
+"$PYBIN" scripts/nw_relay_server.py --port "$PORT" &
 RELAY_PID=$!
 sleep 2
 
@@ -26,7 +31,8 @@ fi
 echo "✅ 릴레이 서버 실행 중 (포트 $PORT)"
 
 # ngrok 고정 도메인으로 터널 시작
-ngrok http "${PORT}" --domain="${NGROK_DOMAIN}" --log=stdout > /tmp/ngrok_relay.log 2>&1 &
+NGROK_BIN="$(command -v ngrok || echo /opt/homebrew/bin/ngrok)"
+"$NGROK_BIN" http "${PORT}" --domain="${NGROK_DOMAIN}" --log=stdout > /tmp/ngrok_relay.log 2>&1 &
 NGROK_PID=$!
 sleep 3
 echo "✅ ngrok 터널: $RELAY_URL"

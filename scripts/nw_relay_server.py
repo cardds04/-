@@ -31,8 +31,24 @@ import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from create_folder import _load_dotenv, _e
 import requests
+
+
+def _load_dotenv():
+    """루트 .env 를 환경변수로 로드(자체 구현 — create_folder.py 의 jwt 의존을 피한다)."""
+    envp = ROOT / ".env"
+    if not envp.is_file():
+        return
+    for line in envp.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def _e(key: str) -> str:
+    return str(os.environ.get(key, "") or "")
 
 _load_dotenv()
 
@@ -52,37 +68,86 @@ def _rl():
     return _e("NAVER_WORKS_RESOURCE_LOCATION").strip() or "24101"
 
 
-def _createfolder(folder_name: str, parent_file_id: str, resource_location: str):
-    pid = (parent_file_id or "root").strip()
-    if not pid or pid.lower() == "루트":
-        pid = "root"
-    url = (
-        f"https://api.drive.worksmobile.com/rl/{resource_location}"
-        f"/v1/files/{requests.utils.quote(pid, safe='')}/createfolder?service=drive"
-    )
-    cookie = _cookie()
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Cookie": cookie,
-    }
-    resp = requests.post(url, headers=headers, json={"fileName": folder_name}, timeout=30)
-    return resp.status_code, resp.text
+def _mybox_session():
+    """크롬 쿠키(pycookiecheat)로 마이박스 세션 — .env 쿠키 만료 문제 없음(크롬 로그인만 유지되면 됨)."""
+    from pycookiecheat import chrome_cookies
+    ck = chrome_cookies("https://mybox.naver.com")
+    s = requests.Session()
+    s.headers.update({"User-Agent": "Mozilla/5.0", "Referer": "https://mybox.naver.com/"})
+    s.cookies.update(ck)
+    return s
+
+
+MYBOX_API = "https://api.mybox.naver.com"
+MYBOX_FS = "https://fs.mybox.naver.com/file"
+
+
+def _mybox_resolve_parent(s, parent: str):
+    """부모 지정: http(s) 공유링크(naver.me/…)면 shareKey→resourceKey 해석, 아니면 resourceKey 그대로."""
+    p = (parent or "").strip()
+    if not p:
+        return None, "부모 폴더가 비어 있습니다"
+    if p.lower().startswith("http"):
+        try:
+            r = s.get(p, allow_redirects=True, timeout=30)
+            from urllib.parse import urlparse, parse_qs
+            sk = parse_qs(urlparse(r.url).query).get("shareKey", [None])[0]
+            if not sk:
+                import re as _re
+                m = _re.search(r"shareKey=([A-Za-z0-9_\-]+)", r.url)
+                sk = m.group(1) if m else None
+            if not sk:
+                return None, "공유링크에서 shareKey 를 찾지 못했습니다"
+            pr = s.get(f"{MYBOX_API}/service/v2/link/property?shareKey={sk}", timeout=30).json()
+            rk = (pr.get("result") or {}).get("resourceKey")
+            if not rk:
+                return None, f"공유링크 해석 실패: {str(pr)[:200]}"
+            return rk, ""
+        except Exception as e:
+            return None, f"공유링크 해석 오류: {e}"
+    return p, ""
+
+
+def _mybox_mkdir(s, parent_key: str, name: str):
+    """마이박스 폴더 생성. code 0=신규, 1008=이미 존재(기존 resourceKey 반환) → 둘 다 성공 취급."""
+    r = s.get(
+        f"{MYBOX_FS}/mkdir.api",
+        params={"svcType": "MYBOX-WEB", "resourceKey": parent_key, "resourceName": name},
+        timeout=30,
+    ).json()
+    code = r.get("code")
+    if code == 0:
+        return {"ok": True, "fileId": r["result"]["resourceKey"], "reused": False}
+    if code == 1008:
+        rk = (r.get("result") or {}).get("resourceKey")
+        if rk:
+            return {"ok": True, "fileId": rk, "reused": True}
+    return {"ok": False, "message": f"mybox mkdir 실패 code={code} {str(r)[:200]}"}
+
+
+def _createfolder_mybox(folder_name: str, parent: str):
+    """마이박스(공유폴더) 폴더 생성 — 2026-08-11 사장님 확인: 납품 폴더의 실체는
+    네이버웍스 드라이브가 아니라 사장님 마이박스의 「공유폴더」다(naver.me 링크 → mybox.naver.com).
+    웍스 내부 API 경로는 드라이브 서비스 권한이 없어 401 — 마이박스 API 가 정답."""
+    try:
+        s = _mybox_session()
+    except Exception as e:
+        return 500, json.dumps({"ok": False, "message": f"크롬 마이박스 쿠키 로드 실패: {e}"})
+    parent_key, err = _mybox_resolve_parent(s, parent)
+    if not parent_key:
+        return 400, json.dumps({"ok": False, "message": err})
+    out = _mybox_mkdir(s, parent_key, folder_name)
+    if out.get("ok"):
+        return 200, json.dumps({"ok": True, "fileId": out["fileId"], "reused": out.get("reused", False)})
+    return 502, json.dumps({"ok": False, "message": out.get("message", "mkdir 실패")})
 
 
 def _check_cookie_valid():
-    rl = _rl()
-    cookie = _cookie()
-    if not cookie:
-        return False
+    """마이박스 루트 목록 조회로 세션 판정(quota 엔드포인트는 404)."""
     try:
-        r = requests.post(
-            f"https://api.drive.worksmobile.com/rl/{rl}/v1/files/root/createfolder?service=drive",
-            headers={"Cookie": cookie, "Content-Type": "application/json"},
-            json={"fileName": "__relay_health_check_delete_me__"},
-            timeout=10,
-        )
-        return r.status_code == 200
+        s = _mybox_session()
+        r = s.get(f"{MYBOX_API}/service/v2/file/list?resourceKey=root&fileOption=all&sort=name&order=asc&startNum=0&pagingRow=1", timeout=10)
+        return r.status_code == 200 and str(r.json().get("code")) == "0"
     except Exception:
         return False
 
@@ -142,18 +207,17 @@ class RelayHandler(BaseHTTPRequestHandler):
             # .env 재로드 (쿠키 갱신 후 서버 재시작 없이 반영)
             _load_dotenv()
 
-            status, text = _createfolder(folder_name, parent_file_id, resource_location)
+            status, text = _createfolder_mybox(folder_name, parent_file_id)
             try:
                 data = json.loads(text)
             except Exception:
                 data = {"rawText": text[:2000]}
 
-            if status == 200:
-                file_id = data.get("fileId", "")
-                self._send_json(200, {"ok": True, "fileId": file_id, "body": data})
+            if status == 200 and data.get("ok"):
+                self._send_json(200, {"ok": True, "fileId": data.get("fileId", ""), "reused": data.get("reused", False), "body": data})
             else:
-                msg = data.get("message") or data.get("error") or f"HTTP {status}"
-                self._send_json(status, {"ok": False, "status": status, "message": msg, "body": data})
+                msg = data.get("message") or f"HTTP {status}"
+                self._send_json(status if status != 200 else 502, {"ok": False, "status": status, "message": msg, "body": data})
         else:
             self._send_json(404, {"ok": False, "message": "Not found"})
 
