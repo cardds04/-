@@ -125,6 +125,43 @@ def _mybox_mkdir(s, parent_key: str, name: str):
     return {"ok": False, "message": f"mybox mkdir 실패 code={code} {str(r)[:200]}"}
 
 
+def _share_deep_link(s, parent, child_key: str):
+    """작가가 로그인 없이 그 촬영일 폴더로 바로 들어가는 마이박스 딥링크.
+       형식: /share/list?shareKey=<공유키>&resourceKey=<base64(owner|resourceNo|D|공유번호)>
+       ‼️자식 키는 목록 API 가 `|D|0` 으로 주므로, 부모(공유 루트)의 공유번호로 갈아끼워야 열린다."""
+    import base64
+    from urllib.parse import urlparse, parse_qs
+    p = (parent or "").strip()
+    if not p.lower().startswith("http"):
+        return ""
+    try:
+        r = s.get(p, allow_redirects=True, timeout=30)
+        sk = parse_qs(urlparse(r.url).query).get("shareKey", [None])[0]
+        if not sk:
+            import re as _re
+            m = _re.search(r"shareKey=([A-Za-z0-9_\-]+)", r.url)
+            sk = m.group(1) if m else None
+        if not sk:
+            return ""
+        pr = s.get(f"{MYBOX_API}/service/v2/link/property?shareKey={sk}", timeout=30).json()
+        root_key = ((pr.get("result") or {}).get("resourceKey") or "").strip()
+        if not root_key:
+            return ""
+
+        def _dec(k):
+            return base64.b64decode(k + "=" * (-len(k) % 4)).decode("utf-8", "replace")
+
+        def _enc(t):
+            return base64.b64encode(t.encode("utf-8")).decode("ascii").rstrip("=")
+
+        share_no = _dec(root_key).split("|")[3]
+        cp = _dec(child_key).split("|")
+        child_with_share = _enc(f"{cp[0]}|{cp[1]}|D|{share_no}")
+        return f"https://mybox.naver.com/share/list?shareKey={sk}&resourceKey={child_with_share}"
+    except Exception:
+        return ""
+
+
 def _createfolder_mybox(folder_name: str, parent: str):
     """마이박스(공유폴더) 폴더 생성 — 2026-08-11 사장님 확인: 납품 폴더의 실체는
     네이버웍스 드라이브가 아니라 사장님 마이박스의 「공유폴더」다(naver.me 링크 → mybox.naver.com).
@@ -139,7 +176,10 @@ def _createfolder_mybox(folder_name: str, parent: str):
             return 400, json.dumps({"ok": False, "message": err})
         out = _mybox_mkdir(s, parent_key, folder_name)
         if out.get("ok"):
-            return 200, json.dumps({"ok": True, "fileId": out["fileId"], "reused": out.get("reused", False)})
+            deep = _share_deep_link(s, parent, out["fileId"])
+            return 200, json.dumps(
+                {"ok": True, "fileId": out["fileId"], "reused": out.get("reused", False), "webLink": deep}
+            )
         return 502, json.dumps({"ok": False, "message": out.get("message", "mkdir 실패")})
     finally:
         # ‼️세션을 닫지 않으면 fd 누수 → 밤새 Too many open files 로 릴레이가 죽는다(2026-08-12 실사고)
@@ -228,7 +268,7 @@ class RelayHandler(BaseHTTPRequestHandler):
                 data = {"rawText": text[:2000]}
 
             if status == 200 and data.get("ok"):
-                self._send_json(200, {"ok": True, "fileId": data.get("fileId", ""), "reused": data.get("reused", False), "body": data})
+                self._send_json(200, {"ok": True, "fileId": data.get("fileId", ""), "reused": data.get("reused", False), "webLink": data.get("webLink", ""), "body": data})
             else:
                 msg = data.get("message") or f"HTTP {status}"
                 self._send_json(status if status != 200 else 502, {"ok": False, "status": status, "message": msg, "body": data})

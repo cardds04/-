@@ -2813,6 +2813,32 @@
       }
 
       /** 업체정보관리(company_directory)의 폴더연결 주소 실시간 조회 — 렌더 시점에 박힌 옛 링크(stale) 방지 */
+      /** 그 스케줄의 촬영일 폴더 딥링크(아침 자동생성이 저장). 없으면 "" → 업체 상위 폴더로 폴백.
+       *  ‼️딥링크는 로그인 없이 열린다 — 작가 환경에서 그대로 동작(2026-08-12 검증). */
+      async function fetchShootFolderLinkForSchedule(scheduleId) {
+        const sid = normalize(scheduleId);
+        if (!USE_SUPABASE_SYNC || !sid) return "";
+        try {
+          // shoot_delivery_drive_state 는 클라이언트 직접 조회가 막혀 있어(고객 연락처 포함)
+          // 링크 한 건만 돌려주는 전용 함수를 쓴다.
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/shoot_folder_link`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ p_schedule_id: sid }),
+            cache: "no-store"
+          });
+          if (!res.ok) return "";
+          const link = normalize(await res.json());
+          return /^https?:\/\//i.test(link) ? link : "";
+        } catch (_) {
+          return "";
+        }
+      }
+
       async function fetchCompanyFolderUrlFromDirectory(companyName, companyCode) {
         if (!USE_SUPABASE_SYNC) return "";
         const name = normalize(companyName);
@@ -3973,7 +3999,9 @@
                   companyDriveLink
                 )}" data-company="${encodeURIComponent(normalize(item?.company))}" data-company-code="${encodeURIComponent(
                   normalize(item?.companyCode)
-                )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" title="만들 폴더명 복사 후 납품 폴더 열기 (촬영일 폴더는 매일 아침 자동 생성)" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
+                )}" data-copy-folder-name="${encodeURIComponent(shootFolderSuggestName)}" data-schedule-id="${encodeURIComponent(
+                  scheduleId || ""
+                )}" title="이 촬영건의 폴더 열기 (없으면 업체 폴더)" style="color:#1d4ed8;font-weight:600;text-decoration:underline;cursor:pointer;">열기 ↗</a>${deliveryLinkKind}<br />`
               : `${folderNameHint}업체 납품 폴더: <span style="color:#b45309;font-size:12px;">마이박스 납품 폴더가 아직 없습니다. 관리자에게 폴더 생성을 요청하세요.</span><br />`;
             const shootDone = hasServerId && photographerShootDoneIds.has(scheduleId);
             let shootBlock = "";
@@ -4046,6 +4074,7 @@
           const compName = normalize(dec("data-company"));
           const compCode = normalize(dec("data-company-code"));
           const folderName = String(dec("data-copy-folder-name") || "").trim();
+          const openScheduleId = String(dec("data-schedule-id") || "").trim();
           // 팝업 차단 회피: 클릭 제스처 안에서 창을 먼저 열고, 최신 주소 조회 후 이동.
           // ‼️폴더 생성은 여기서 하지 않는다(2026-08-12 사장님 지시) — 작가 컴엔 마이박스 로그인이 없다.
           //   촬영일 폴더 트리는 매일 아침 10시 사장님 맥의 자동 작업(daily_delivery_folders.cjs)이 만들어 둔다.
@@ -4054,9 +4083,10 @@
             if (folderName) {
               await copyTextSmart(folderName);
             }
-            // 업체정보관리(company_directory) 주소가 유일한 진실 — 렌더 시점에 박힌 옛 링크 대신
-            // 항상 서버 최신 주소로 연다. 서버 조회 실패 시에만 렌더 시점 링크로 폴백.
-            let url = await fetchCompanyFolderUrlFromDirectory(compName, compCode);
+            // 1순위: 이 촬영건의 폴더로 바로 가는 딥링크(아침 자동생성이 저장).
+            // 2순위: 업체정보관리(company_directory) 상위 폴더 주소 — 아직 폴더가 없거나 옛 건일 때.
+            let url = await fetchShootFolderLinkForSchedule(openScheduleId);
+            if (!url) url = await fetchCompanyFolderUrlFromDirectory(compName, compCode);
             if (!url) url = fallbackUrl;
             if (!url) {
               if (win) win.close();

@@ -95,7 +95,32 @@ async function relayMkdir(folderName, parent) {
   if (!res.ok || !data.ok || !data.fileId) {
     throw new Error(String(data?.message || `릴레이 HTTP ${res.status}`));
   }
-  return data; // {fileId, reused}
+  return data; // {fileId, reused, webLink}
+}
+
+/** 작가 「열기」가 그 촬영일 폴더로 바로 가도록 딥링크를 저장(shoot_delivery_drive_state). */
+async function saveShootFolderLink(scheduleId, row, folderName, shoot) {
+  const body = {
+    schedule_id: scheduleId,
+    company_name: row.company_name || "",
+    company_code: row.code || "",
+    shoot_date_key: row.date_key,
+    composition: row.composition || "",
+    shoot_folder_id: shoot.fileId,
+    shoot_folder_web_link: shoot.webLink || "",
+    updated_at: new Date().toISOString()
+  };
+  const res = await fetch(`${SB}/rest/v1/shoot_delivery_drive_state?on_conflict=schedule_id`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      Authorization: `Bearer ${KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal"
+    },
+    body: JSON.stringify([body])
+  });
+  if (!res.ok) throw new Error(`딥링크 저장 실패 ${res.status}: ${(await res.text()).slice(0, 160)}`);
 }
 
 async function main() {
@@ -181,8 +206,15 @@ async function main() {
         await relayMkdir(`${mmdd}${compForName}영상원본`, shoot.fileId);
         subs.push("영상원본");
       }
+      let linkNote = "";
+      try {
+        await saveShootFolderLink(r.id, { ...r, date_key: dateKey }, folderName, shoot);
+        linkNote = shoot.webLink ? " · 링크저장" : " · ⚠️딥링크 계산 실패(상위 폴더로 열림)";
+      } catch (e) {
+        linkNote = ` · ⚠️링크저장 실패(${e.message})`;
+      }
       okCount++;
-      console.log(`✅ ${label} → ${folderName} (${shoot.reused ? "기존 재사용" : "새로 생성"}) + ${subs.join("·")}`);
+      console.log(`✅ ${label} → ${folderName} (${shoot.reused ? "기존 재사용" : "새로 생성"}) + ${subs.join("·")}${linkNote}`);
     } catch (e) {
       failures.push(`${label}: ${e.message}`);
     }
