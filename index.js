@@ -16013,14 +16013,43 @@ ${folderBtn}
        * 로컬 캐시가 stale(만료된 옛 공유링크)이어도 항상 서버의 최신 주소로 연다.
        * 클릭 제스처 안에서 창을 먼저 열어 팝업 차단을 피하고, 조회 완료 후 이동시킨다.
        */
-      function openCompanyDeliveryFolderFromDirectory(comp, code) {
+      /** 그 촬영건 폴더 딥링크(아침 자동생성이 저장). 없으면 "" → 업체 상위 폴더로 폴백. */
+      async function fetchShootFolderLinkForSchedule(scheduleId) {
+        const sid = String(scheduleId || "").trim();
+        if (!USE_SUPABASE_SYNC || !sid) return "";
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/shoot_folder_link`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ p_schedule_id: sid }),
+            cache: "no-store"
+          });
+          if (!res.ok) return "";
+          const link = String((await res.json()) || "").trim();
+          return /^https?:\/\//i.test(link) ? link : "";
+        } catch (_) {
+          return "";
+        }
+      }
+
+      function openCompanyDeliveryFolderFromDirectory(comp, code, scheduleId) {
         const win = window.open("about:blank", "_blank");
         void (async () => {
           let url = "";
+          // 1순위: 이 촬영건 폴더 딥링크 / 2순위: 업체 상위 폴더
           try {
-            url = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
+            url = await fetchShootFolderLinkForSchedule(scheduleId);
           } catch (_) {
             url = "";
+          }
+          try {
+            if (!url) url = await fetchCompanyDeliveryFolderUrlFromDirectory(comp, code);
+          } catch (_) {
+            url = url || "";
           }
           // 서버 조회 실패(오프라인 등) 시에만 로컬 캐시 폴백
           if (!url) url = getCompanyDeliveryFolderUrlFromLocal(comp, code);
@@ -16381,9 +16410,9 @@ ${folderBtn}
             company
           )}" data-company-code="${escapeHtml(
             codeForDelivery
-          )}" data-folder-name="${encodeURIComponent(
+          )}" data-schedule-id="${escapeHtml(sid)}" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
-          )}" title="만들 폴더명 복사 후 업체 납품 폴더(마이박스) 열기">폴더</button>`;
+          )}" title="이 촬영건의 폴더 열기(없으면 업체 폴더)">폴더</button>`;
           const folderShortDisplay = escapeHtml(String(shootFolderSuggestName || "").slice(0, 6));
           const fullFolderTitle = escapeHtml(String(shootFolderSuggestName || ""));
           // 회사 catalog (companies, Supabase company_directory 동기화) 의 phone 우선 조회
@@ -16507,9 +16536,11 @@ ${folderBtn}
           const shootFolderSuggestName = buildShootFolderNameForDashboard(dateStr, place);
           return `<button type="button" class="btn-sm dashboard-revert-btn" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(
             company
-          )}" data-company-code="${escapeHtml(code)}" data-folder-name="${encodeURIComponent(
+          )}" data-company-code="${escapeHtml(code)}" data-schedule-id="${escapeHtml(
+            String(scheduleRow?.schedule_id || scheduleRow?.id || "")
+          )}" data-folder-name="${encodeURIComponent(
             shootFolderSuggestName
-          )}" title="업체 납품 폴더(마이박스) 열기">폴더</button>`;
+          )}" title="이 촬영건의 폴더 열기(없으면 업체 폴더)">폴더</button>`;
         }
         const eventsRaw = [];
         for (const [mapScheduleKey, r] of map.entries()) {
@@ -17915,7 +17946,7 @@ ${folderBtn}
                   <button class="btn-sm" type="button" data-action="startEdit" data-index="${index}">수정</button>
                   <button class="btn-sm" type="button" data-action="deleteSchedule" data-index="${index}" data-schedule-id="${escapeHtml(sid)}">삭제</button>
                   <button class="btn-sm" type="button" data-action="showScheduleHistory" data-schedule-id="${escapeHtml(sid)}">기록</button>
-                  <button class="btn-sm" type="button" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(item.company || "")}" data-company-code="${escapeHtml(code)}" title="업체 납품 폴더 열기">📁 폴더</button>
+                  <button class="btn-sm" type="button" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(item.company || "")}" data-company-code="${escapeHtml(code)}" data-schedule-id="${escapeHtml(String(item.customerScheduleId || ""))}" title="이 촬영건의 폴더 열기(없으면 업체 폴더)">📁 폴더</button>
                 </span>
               </div>
             </details>
@@ -18036,7 +18067,7 @@ ${folderBtn}
                                         구성/작가: ${escapeHtml(item.composition || "-")} / ${escapeHtml(item.name || "-")}<br />
                                         쿠폰사용: ${item.couponUsed ? "사용" : "미사용"}<br />
                                       </details>
-                                      <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" title="업체 납품 폴더(마이박스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
+                                      <button type="button" class="btn-sm" data-action="openCompanyDeliveryFolder" data-company="${escapeHtml(String(item.company || ""))}" data-company-code="${escapeHtml(normalizeCompanyCode(item.companyCode || item.code || ""))}" data-schedule-id="${escapeHtml(String(item.customerScheduleId || ""))}" title="업체 납품 폴더(마이박스) 열기" style="flex-shrink:0;padding:2px 8px;font-size:0.8rem;">📁</button>
                                     </div>
                                     <div class="quick-writer-row">
                                       ${["작가미정", ...photographers]
@@ -18211,9 +18242,10 @@ ${folderBtn}
         if (deliveryFolderBtn) {
           const comp = String(deliveryFolderBtn.dataset.company || "").trim();
           const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
+          const sidForFolder = String(deliveryFolderBtn.dataset.scheduleId || "").trim();
           // 업체정보관리(company_directory) 주소가 유일한 진실 — 캐시가 stale(만료된 옛 링크)
           // 이어도 항상 서버의 최신 주소로 연다. (뚝딱 사례: 캐시의 옛 공유링크가 열려 '접근 불가')
-          openCompanyDeliveryFolderFromDirectory(comp, code);
+          openCompanyDeliveryFolderFromDirectory(comp, code, sidForFolder);
           return;
         }
         const copyShootFolderBtn = event.target.closest("button[data-action='dashboardCopyShootFolderName']");
@@ -19544,8 +19576,9 @@ ${folderBtn}
         event.stopPropagation();
         const comp = String(deliveryFolderBtn.dataset.company || "").trim();
         const code = String(deliveryFolderBtn.dataset.companyCode || "").trim();
+        const sidForFolder2 = String(deliveryFolderBtn.dataset.scheduleId || "").trim();
         // 업체정보관리(company_directory) 주소가 유일한 진실 — 항상 서버의 최신 주소로 연다.
-        openCompanyDeliveryFolderFromDirectory(comp, code);
+        openCompanyDeliveryFolderFromDirectory(comp, code, sidForFolder2);
       });
 
       /** 주문 기록 모달「계정저장」— 업체명 변경 시 목록·스케줄·고객 데이터와 동기화 (업체 목록 편집과 동일 규칙) */

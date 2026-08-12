@@ -162,6 +162,51 @@ def _share_deep_link(s, parent, child_key: str):
         return ""
 
 
+def _findfolder_mybox(folder_name: str, parent: str, mmdd: str):
+    """만들지 않고 「이미 있는」 촬영일 폴더를 찾아 딥링크만 돌려준다(소급 연결용).
+    매칭: ① 이름 완전일치 ② MMDD 로 시작하는 폴더가 딱 하나면 그것(옛 이름 규칙 흡수)."""
+    try:
+        s = _mybox_session()
+    except Exception as e:
+        return 500, json.dumps({"ok": False, "message": f"크롬 마이박스 쿠키 로드 실패: {e}"})
+    try:
+        parent_key, err = _mybox_resolve_parent(s, parent)
+        if not parent_key:
+            return 400, json.dumps({"ok": False, "message": err})
+        r = s.get(
+            f"{MYBOX_API}/service/v2/file/list?resourceKey={parent_key}&fileOption=all&sort=name&order=asc&startNum=0&pagingRow=1000",
+            timeout=40,
+        ).json()
+        items = (r.get("result") or {}).get("list") or []
+        # ‼️목록 API 응답에는 resourceName 이 없다 — 이름은 resourcePath 의 마지막 조각,
+        #   폴더 판별은 resourceType == "folder" (mkdir 응답의 "D" 와 다름). 2026-08-12 실사고.
+        folders = [i for i in items if str(i.get("resourceType") or "").lower() in ("folder", "d")]
+
+        def nm(i):
+            return str(i.get("resourceName") or "").strip() or str(i.get("resourcePath") or "").rstrip("/").split("/")[-1]
+
+        hit = next((i for i in folders if nm(i) == folder_name), None)
+        how = "exact"
+        if hit is None and mmdd:
+            cands = [i for i in folders if nm(i).startswith(mmdd)]
+            if len(cands) == 1:
+                hit = cands[0]
+                how = "mmdd"
+            elif len(cands) > 1:
+                return 200, json.dumps(
+                    {"ok": False, "ambiguous": [nm(i) for i in cands], "message": f"{mmdd} 로 시작하는 폴더가 {len(cands)}개"}
+                )
+        if hit is None:
+            return 200, json.dumps({"ok": False, "message": "일치하는 폴더 없음"})
+        deep = _share_deep_link(s, parent, hit.get("resourceKey"))
+        return 200, json.dumps({"ok": True, "fileId": hit.get("resourceKey"), "name": nm(hit), "how": how, "webLink": deep})
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
 def _createfolder_mybox(folder_name: str, parent: str):
     """마이박스(공유폴더) 폴더 생성 — 2026-08-11 사장님 확인: 납품 폴더의 실체는
     네이버웍스 드라이브가 아니라 사장님 마이박스의 「공유폴더」다(naver.me 링크 → mybox.naver.com).
@@ -246,6 +291,21 @@ class RelayHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "message": "Not found"})
 
     def do_POST(self):
+        if self.path == "/findfolder":
+            if not self._check_auth():
+                return
+            b = self._read_body()
+            status, text = _findfolder_mybox(
+                str(b.get("folderName") or "").strip(),
+                str(b.get("parentFileId") or "").strip(),
+                str(b.get("mmdd") or "").strip(),
+            )
+            try:
+                data = json.loads(text)
+            except Exception:
+                data = {"ok": False, "rawText": text[:1000]}
+            self._send_json(status, data)
+            return
         if self.path == "/createfolder":
             if not self._check_auth():
                 return

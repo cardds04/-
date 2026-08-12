@@ -123,10 +123,88 @@ async function saveShootFolderLink(scheduleId, row, folderName, shoot) {
   if (!res.ok) throw new Error(`딥링크 저장 실패 ${res.status}: ${(await res.text()).slice(0, 160)}`);
 }
 
+/** 소급 연결용 — 이미 있는 폴더를 찾아 딥링크만 얻는다(생성 안 함). */
+async function relayFind(folderName, parent, mmdd) {
+  const res = await fetch(`${RELAY}/findfolder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folderName, parentFileId: parent, mmdd })
+  });
+  return res.json().catch(() => ({ ok: false, message: `릴레이 HTTP ${res.status}` }));
+}
+
+/** --link-only: 폴더를 만들지 않고, 기간 내 스케줄의 기존 폴더를 찾아 딥링크만 저장(소급). */
+async function runLinkOnly(days) {
+  const today = kstTodayYmd();
+  const from = new Date(new Date(`${today}T00:00:00Z`).getTime() - days * 86400000).toISOString().slice(0, 10);
+  console.log(`[link-only] ${from} ~ ${today} 스케줄의 기존 폴더 딥링크 소급 연결`);
+  const rows = await sbJson(
+    `schedules?date_key=gte.${from}&date_key=lte.${today}&source=eq.active&select=id,company_name,code,writer_name,date_key,time_key,place,composition&order=date_key.asc,time_key.asc`
+  );
+  const directory = await sbJson(`company_directory?select=name,code,naver_works_company_share_link&limit=2000`);
+  const norm = (v) => String(v || "").trim();
+  const linkByName = new Map(directory.map((d) => [norm(d.name), norm(d.naver_works_company_share_link)]));
+  const linkByCode = new Map(directory.filter((d) => norm(d.code)).map((d) => [norm(d.code), norm(d.naver_works_company_share_link)]));
+  const existing = await sbJson(`shoot_delivery_drive_state?select=schedule_id,shoot_folder_web_link&limit=5000`);
+  const haveLink = new Set(existing.filter((e) => norm(e.shoot_folder_web_link)).map((e) => e.schedule_id));
+
+  // 날짜별·작가별 순번(작가 화면 규칙)
+  const timeMin = (t) => { const m = /(\d{1,2}):(\d{2})/.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : 9999; };
+  const slotById = new Map();
+  const grouped = new Map();
+  for (const r of rows) {
+    const k = `${r.date_key}|${norm(r.writer_name) || "작가미정"}`;
+    if (!grouped.has(k)) grouped.set(k, []);
+    grouped.get(k).push(r);
+  }
+  for (const list of grouped.values()) {
+    list.sort((a, b) => timeMin(a.time_key) - timeMin(b.time_key) || norm(a.place).localeCompare(norm(b.place), "ko") || norm(a.company_name).localeCompare(norm(b.company_name), "ko"));
+    list.forEach((r, i) => slotById.set(r.id, i + 1));
+  }
+
+  let linked = 0, skipped = 0;
+  const misses = [];
+  for (const r of rows) {
+    if (haveLink.has(r.id)) { skipped++; continue; }
+    const share = linkByCode.get(norm(r.code)) || linkByName.get(norm(r.company_name)) || "";
+    if (!share) { misses.push(`${r.date_key} ${r.company_name}: 폴더연결 주소 없음`); continue; }
+    const mmdd2 = r.date_key.replace(/-/g, "").slice(4, 8);
+    const want = buildShootFolderNameJS(r.date_key, r.place, slotById.get(r.id) || 1);
+    try {
+      const found = await relayFind(want, share, mmdd2);
+      if (!found.ok || !found.webLink) {
+        misses.push(`${r.date_key} ${r.company_name}: ${found.ambiguous ? `후보 ${found.ambiguous.length}개(${found.ambiguous.slice(0, 3).join(",")})` : found.message || "못 찾음"}`);
+        continue;
+      }
+      await saveShootFolderLink(r.id, r, found.name, { fileId: found.fileId, webLink: found.webLink });
+      linked++;
+      console.log(`  🔗 ${r.date_key} ${r.company_name} → ${found.name}${found.how === "mmdd" ? " (날짜로 매칭)" : ""}`);
+    } catch (e) {
+      misses.push(`${r.date_key} ${r.company_name}: ${e.message}`);
+    }
+  }
+  console.log(`\n[link-only] 새로 연결 ${linked}건 · 이미 연결됨 ${skipped}건 · 미해결 ${misses.length}건`);
+  misses.slice(0, 40).forEach((m) => console.log(`  · ${m}`));
+}
+
 async function main() {
   const argDate = (process.argv.find((a, i) => process.argv[i - 1] === "--date") || "").trim();
+  const linkOnlyArg = process.argv.find((a, i) => process.argv[i - 1] === "--link-only");
   const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(argDate) ? argDate : kstTodayYmd();
   const mmdd = dateKey.replace(/-/g, "").slice(4, 8);
+  if (process.argv.includes("--link-only")) {
+    const days = Number(linkOnlyArg) > 0 ? Number(linkOnlyArg) : 15;
+    // 릴레이 확인
+    try {
+      const h = await (await fetch(`${RELAY}/health`)).json();
+      if (!h.ok) throw new Error("health not ok");
+    } catch (e) {
+      console.error(`❌ 로컬 릴레이(9337) 응답 없음: ${e.message}`);
+      process.exit(2);
+    }
+    await runLinkOnly(days);
+    return;
+  }
   console.log(`[daily-folders] 대상 촬영일: ${dateKey}`);
 
   // 릴레이 헬스 먼저 — 죽어 있으면 명확히 알림
