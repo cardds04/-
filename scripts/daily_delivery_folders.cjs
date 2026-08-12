@@ -123,6 +123,35 @@ async function saveShootFolderLink(scheduleId, row, folderName, shoot) {
   if (!res.ok) throw new Error(`딥링크 저장 실패 ${res.status}: ${(await res.text()).slice(0, 160)}`);
 }
 
+/** 신규 업체: 공유폴더에 업체 폴더 생성 + 공유링크(편집허용) 발급 + 업체정보관리에 저장. */
+async function provisionCompanyFolder(companyName, directoryId) {
+  const res = await fetch(`${RELAY}/provisioncompany`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companyName })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok || !data.shareLink) {
+    throw new Error(String(data?.message || `릴레이 HTTP ${res.status}`));
+  }
+  if (directoryId) {
+    const patch = await fetch(`${SB}/rest/v1/company_directory?id=eq.${encodeURIComponent(directoryId)}`, {
+      method: "PATCH",
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({
+        naver_works_company_folder_id: data.folderId,
+        naver_works_company_share_link: data.shareLink,
+        updated_at: new Date().toISOString()
+      })
+    });
+    const rows = await patch.json().catch(() => []);
+    if (!patch.ok || !Array.isArray(rows) || !rows.length) {
+      throw new Error(`폴더연결 주소 저장 실패 (${patch.status})`);
+    }
+  }
+  return data;
+}
+
 /** 소급 연결용 — 이미 있는 폴더를 찾아 딥링크만 얻는다(생성 안 함). */
 async function relayFind(folderName, parent, mmdd) {
   const res = await fetch(`${RELAY}/findfolder`, {
@@ -253,9 +282,11 @@ async function main() {
   }
   rows.sort((a, b) => timeMin(a.time_key) - timeMin(b.time_key));
 
-  const directory = await sbJson(`company_directory?select=name,code,naver_works_company_share_link&limit=2000`);
+  const directory = await sbJson(`company_directory?select=id,name,code,naver_works_company_share_link&limit=2000`);
   const linkByName = new Map(directory.map((d) => [norm(d.name), norm(d.naver_works_company_share_link)]));
   const linkByCode = new Map(directory.filter((d) => norm(d.code)).map((d) => [norm(d.code), norm(d.naver_works_company_share_link)]));
+  const dirByName = new Map(directory.map((d) => [norm(d.name), d]));
+  const dirByCode = new Map(directory.filter((d) => norm(d.code)).map((d) => [norm(d.code), d]));
 
   let okCount = 0;
   const failures = [];
@@ -263,10 +294,24 @@ async function main() {
     const r = rows[i];
     const company = norm(r.company_name);
     const label = `${r.time_key} ${company}`;
-    const shareLink = linkByCode.get(norm(r.code)) || linkByName.get(company) || "";
+    let shareLink = linkByCode.get(norm(r.code)) || linkByName.get(company) || "";
     if (!shareLink) {
-      failures.push(`${label}: 폴더연결 주소 없음(업체정보관리에서 등록 필요)`);
-      continue;
+      // 신규 업체 — 공유폴더에 업체 폴더를 만들고 편집허용 공유링크를 발급해 저장한다.
+      const dirRow = dirByCode.get(norm(r.code)) || dirByName.get(company);
+      if (!dirRow?.id) {
+        failures.push(`${label}: 업체정보관리에 업체가 없음(등록 필요)`);
+        continue;
+      }
+      try {
+        const prov = await provisionCompanyFolder(company, dirRow.id);
+        shareLink = prov.shareLink;
+        linkByName.set(company, shareLink);
+        if (norm(r.code)) linkByCode.set(norm(r.code), shareLink);
+        console.log(`🆕 ${company} 업체 폴더 ${prov.reused ? "재사용" : "생성"} + 공유링크 발급${prov.editable ? "(편집허용)" : "(⚠️편집허용 실패)"} → 폴더연결 주소 저장`);
+      } catch (e) {
+        failures.push(`${label}: 업체 폴더 자동 발급 실패 — ${e.message}`);
+        continue;
+      }
     }
     const daySlot = slotById.get(r.id) || 1;
     const folderName = buildShootFolderNameJS(dateKey, r.place, daySlot);

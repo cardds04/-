@@ -162,6 +162,65 @@ def _share_deep_link(s, parent, child_key: str):
         return ""
 
 
+def _provision_company_mybox(company_name: str):
+    """신규 업체 폴더 자동 발급(2026-08-12): 「공유폴더」 안에 업체명 폴더 생성 →
+       공유링크 발급(/service/link/create) → 편집허용(ownership=W) → 짧은주소 반환.
+       이미 있으면 폴더 재사용하고 링크도 기존 것을 그대로 쓴다."""
+    name = (company_name or "").strip()
+    if not name:
+        return 400, json.dumps({"ok": False, "message": "업체명이 비어 있습니다"})
+    try:
+        s = _mybox_session()
+    except Exception as e:
+        return 500, json.dumps({"ok": False, "message": f"크롬 마이박스 쿠키 로드 실패: {e}"})
+    try:
+        # 「공유폴더」 루트 찾기
+        r = s.get(
+            f"{MYBOX_API}/service/v2/file/list?resourceKey=root&fileOption=all&sort=name&order=asc&startNum=0&pagingRow=1000",
+            timeout=40,
+        ).json()
+        items = (r.get("result") or {}).get("list") or []
+
+        def nm(i):
+            return str(i.get("resourceName") or "").strip() or str(i.get("resourcePath") or "").rstrip("/").split("/")[-1]
+
+        share_root = next((i for i in items if nm(i) == "공유폴더"), None)
+        if not share_root:
+            return 502, json.dumps({"ok": False, "message": "마이박스 루트에서 「공유폴더」를 찾지 못했습니다"})
+
+        made = _mybox_mkdir(s, share_root.get("resourceKey"), name)
+        if not made.get("ok"):
+            return 502, json.dumps({"ok": False, "message": made.get("message", "업체 폴더 생성 실패")})
+        folder_key = made["fileId"]
+
+        prop_url = f"{MYBOX_API}/service/v2/share/link/{folder_key}/property"
+        cur = (s.get(prop_url, timeout=25).json() or {}).get("result") or {}
+        short = str(cur.get("shortUrl") or "").strip()
+        if not short:
+            cr = s.get(f"{MYBOX_API}/service/link/create?resourceKey={folder_key}", timeout=25).json()
+            short = str(((cr.get("result") or {}).get("shortUrl")) or "").strip()
+            if not short:
+                return 502, json.dumps({"ok": False, "message": f"공유링크 발급 실패: {str(cr)[:200]}"})
+        # 편집 허용
+        if str(cur.get("ownership") or "") != "W":
+            s.patch(prop_url, json={"ownership": "W"}, timeout=25)
+        after = (s.get(prop_url, timeout=25).json() or {}).get("result") or {}
+        return 200, json.dumps(
+            {
+                "ok": True,
+                "folderId": folder_key,
+                "shareLink": short,
+                "editable": str(after.get("ownership") or "") == "W",
+                "reused": bool(made.get("reused")),
+            }
+        )
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
 def _findfolder_mybox(folder_name: str, parent: str, mmdd: str):
     """만들지 않고 「이미 있는」 촬영일 폴더를 찾아 딥링크만 돌려준다(소급 연결용).
     매칭: ① 이름 완전일치 ② MMDD 로 시작하는 폴더가 딱 하나면 그것(옛 이름 규칙 흡수)."""
@@ -291,6 +350,17 @@ class RelayHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "message": "Not found"})
 
     def do_POST(self):
+        if self.path == "/provisioncompany":
+            if not self._check_auth():
+                return
+            b = self._read_body()
+            status, text = _provision_company_mybox(str(b.get("companyName") or "").strip())
+            try:
+                data = json.loads(text)
+            except Exception:
+                data = {"ok": False, "rawText": text[:1000]}
+            self._send_json(status, data)
+            return
         if self.path == "/findfolder":
             if not self._check_auth():
                 return
