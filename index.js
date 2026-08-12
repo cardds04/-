@@ -6179,7 +6179,13 @@
                 item?.naver_works_company_folder_id || ""
               ).trim()
             };
-            if (
+            if (item?.shopick_photo !== undefined && item?.shopick_photo !== null) {
+              // ‼️서버(company_directory) 플래그가 정본(2026-08-12) — 로컬/kv 옛 값보다 항상 우선.
+              row.shopickPhoto = Boolean(item.shopick_photo);
+              row.shopickVideo = Boolean(item.shopick_video);
+              row.shopickBlog = Boolean(item.shopick_blog);
+              row.__shopickFromServer = true;
+            } else if (
               siteType === "shopick" ||
               item.shopickPhoto !== undefined ||
               item.shopickVideo !== undefined ||
@@ -6233,7 +6239,7 @@
         // naver_works_company_share_link 도 함께 받아서 「폴더」 버튼 클릭 시 즉시 열도록
         // 로컬 캐시에 저장한다 (per-click 네트워크 fetch 제거 → 다중 클릭 시 창 여러 개 뜨던 문제 해결).
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -6457,7 +6463,8 @@
           if (!c.defaultComposition && localDefaultCompositionMap.has(key)) {
             c.defaultComposition = localDefaultCompositionMap.get(key);
           }
-          if (localShopickMap.has(key)) {
+          if (!c.__shopickFromServer && localShopickMap.has(key)) {
+            // 서버 정본이 없는 행만 로컬 값 보존 — 서버값이 있으면 그대로 둔다(되돌아감 사고 차단)
             const f = localShopickMap.get(key);
             c.shopickPhoto = f.photo;
             c.shopickVideo = f.video;
@@ -6944,6 +6951,14 @@
           site: normalize(siteRaw || ""),
           composition: compositionSnapPreset
         };
+        // ‼️쇼픽 촬영구성 플래그는 company_directory 가 정본(2026-08-12) — client_kv 로만 두면
+        //   옛 스냅샷을 든 다른 탭/기기가 "사진만"을 "사진영상"으로 되돌린다(골든 사고).
+        if (siteType === "shopick") {
+          const both = compositionSnapPreset === "사진영상 둘다";
+          basePayload.shopick_photo = true;
+          basePayload.shopick_video = both;
+          basePayload.shopick_blog = false;
+        }
         if (normalizedRowId) {
           const patchBody = { ...basePayload };
           if (naverShareRaw !== undefined) {
@@ -7078,6 +7093,41 @@
         }
       }
 
+      /** 쇼픽 촬영구성 플래그를 정본(company_directory)에 저장 — code 우선, 없으면 name 매칭.
+       *  실패해도 로컬 저장은 유지(다음 저장·pull 에서 재시도). */
+      async function persistShopickFlagsToDirectory(name, code, flags) {
+        if (!USE_SUPABASE_SYNC) return;
+        const body = JSON.stringify({
+          shopick_photo: Boolean(flags?.photo),
+          shopick_video: Boolean(flags?.video),
+          shopick_blog: Boolean(flags?.blog)
+        });
+        const headers = {
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        };
+        const tryOne = async (qs) => {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, {
+            method: "PATCH",
+            headers,
+            body
+          });
+          if (!res.ok) return false;
+          const rows = await res.json().catch(() => []);
+          return Array.isArray(rows) && rows.length > 0;
+        };
+        try {
+          const cod = normalizeCompanyCode(code || "");
+          if (cod && (await tryOne(`code=eq.${encodeURIComponent(cod)}`))) return;
+          const nm = normalizeCompanyName(name || "");
+          if (nm) await tryOne(`name=eq.${encodeURIComponent(nm)}`);
+        } catch (error) {
+          console.warn("[업체정보] 쇼픽 구성 서버 저장 실패(다음 저장에서 재시도)", error);
+        }
+      }
+
       function applyCompanyDirectorySavedComposition({ name, code, site, composition }) {
         const nm = normalizeCompanyName(name || "");
         const cod = normalizeCompanyCode(code || "");
@@ -7120,7 +7170,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id&order=updated_at.asc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog&order=updated_at.asc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {
@@ -19883,6 +19933,8 @@ ${folderBtn}
                 company.shopickPhoto = flags.photo;
                 company.shopickVideo = flags.video;
                 company.shopickBlog = flags.blog;
+                // 정본(company_directory)에도 저장 — kv 옛 스냅샷이 못 되돌리게(2026-08-12)
+                void persistShopickFlagsToDirectory(company?.name, company?.code, flags);
               } else if (
                 company.shopickPhoto === undefined &&
                 company.shopickVideo === undefined &&
@@ -20681,6 +20733,8 @@ ${folderBtn}
                 c.shopickBlog = nextShopickFlags.blog;
               }
             });
+            // 정본(company_directory)에도 저장 — kv 옛 스냅샷이 못 되돌리게(2026-08-12)
+            void persistShopickFlagsToDirectory(newName, newCode, nextShopickFlags);
           }
           setCompanyDefaultMemoByName(newName, newDefaultMemo, newCode);
           syncMasterAccountMapForCompanyIdentity(newName, oldCode, newCode, oldName);
