@@ -4069,7 +4069,7 @@
             </style>
             <article class="card">
               <h2>스토리형 숏폼 제작</h2>
-              <p class="sf-lead" id="sfLead">인로그로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
+              <p class="sf-lead" id="sfLead">인픽으로 촬영한 현장은 자료 없이 바로 신청할 수 있어요.<br>그 외 현장은 자료를 메일로 보내주시면 제작해드립니다.</p>
 
               <div class="sf-balance">
                 <div><div class="lbl">숏폼 진행 남은 횟수</div><span class="lbl" id="sfBalHint" style="display:none;color:#d93025;">결제 없이도 신청 가능해요</span></div>
@@ -4079,12 +4079,12 @@
               <div id="sfPlaceGroup">
                 <span class="sf-step">1. 촬영한 곳을 선택해주세요</span>
                 <select id="sfPlaceSelect">
-                  <option value="">— 인로그로 촬영한 현장 선택 —</option>
+                  <option value="">— 인픽으로 촬영한 현장 선택 —</option>
                 </select>
               </div>
-              <button id="sfExternalToggle" class="sf-toggle" type="button">인로그 촬영 현장이 아니에요</button>
+              <button id="sfExternalToggle" class="sf-toggle" type="button">인픽 촬영 현장이 아니에요</button>
 
-              <!-- 인로그 촬영 현장: 내용 방식 선택 -->
+              <!-- 인픽 촬영 현장: 내용 방식 선택 -->
               <div id="sfInternalBox" class="hidden" style="margin-top:16px;">
                 <span class="sf-step">2. 어떻게 만들까요?</span>
                 <label class="sf-radio"><input type="radio" name="sfMode" value="auto" checked /> 알아서 만들어 주세요</label>
@@ -4221,8 +4221,8 @@
     <script>
       const customerPageMode = new URLSearchParams(window.location.search).get("mode");
       const isLiteCustomerMode = customerPageMode === "lite";
-      const SF_BRAND = isLiteCustomerMode ? "쇼픽" : "인로그";  // 숏폼 폼 브랜드 표기: 인로그 사이트=인로그, 쇼픽(lite)=쇼픽
-      // 조사 로/으로 자동(받침 없음·ㄹ=로, 그 외=으로): 인로그로 / 쇼픽으로
+      const SF_BRAND = isLiteCustomerMode ? "쇼픽" : "인픽";  // 숏폼 폼 브랜드 표기: 인로그(inlog) 사이트=인픽으로 리브랜딩(2026-08), 쇼픽(lite)=쇼픽
+      // 조사 로/으로 자동(받침 없음·ㄹ=로, 그 외=으로): 인픽으로 / 쇼픽으로
       const SF_BRAND_RO = (function (w) { const c = w.charCodeAt(w.length - 1); if (c < 0xAC00 || c > 0xD7A3) return w + "로"; const j = (c - 0xAC00) % 28; return w + (j === 0 || j === 8 ? "로" : "으로"); })(SF_BRAND);
       const requiredCustomerSiteType = isLiteCustomerMode ? "shopick" : "inlog";
       const CUSTOMER_PAGE_STORAGE_TAG = isLiteCustomerMode ? "shopick" : "inlog";
@@ -8906,7 +8906,7 @@
           // ── 솔라피 SMS 알림 (사이트별 표기) ──
           // 접수 확인 모달 OK → 스케줄 등록 성공 직후. 알림 실패해도 등록은 유효.
           try {
-            const __siteLabel = isLiteCustomerMode ? "쇼픽" : "인로그";
+            const __siteLabel = isLiteCustomerMode ? "쇼픽" : "인픽";
             await window.SolapiNotify?.sendScheduleSubmitNotice({
               siteLabel: __siteLabel,
               company: scheduleCompanyName,
