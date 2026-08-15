@@ -1,0 +1,405 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>아이 나들이 브리핑 2026-08-15</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #F4F7F5; --surface: #FFFFFF; --ink: #1C2A2E; --muted: #5A6B6E; --line: #DCE5E1;
+    --accent: #0E6B58; --on-accent: #FFFFFF; --accent-soft: #E3F0EB;
+    --warn: #B54A2E; --warn-soft: #F7E7E0; --amber: #8F6512; --amber-soft: #F4ECD7;
+    --sky: #1F5F8B; --sky-soft: #E1EDF6; --pink: #9B2C6E; --pink-soft: #F6E3EE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1517; --surface: #172023; --ink: #E4ECE9; --muted: #94A6A3; --line: #263335;
+      --accent: #58B89F; --on-accent: #0C1A16; --accent-soft: #1C312A;
+      --warn: #E27A5D; --warn-soft: #3A211A; --amber: #D9A94E; --amber-soft: #322910;
+      --sky: #6FB0DF; --sky-soft: #172837; --pink: #E08AC0; --pink-soft: #35202D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1517; --surface: #172023; --ink: #E4ECE9; --muted: #94A6A3; --line: #263335;
+    --accent: #58B89F; --on-accent: #0C1A16; --accent-soft: #1C312A;
+    --warn: #E27A5D; --warn-soft: #3A211A; --amber: #D9A94E; --amber-soft: #322910;
+    --sky: #6FB0DF; --sky-soft: #172837; --pink: #E08AC0; --pink-soft: #35202D;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif; font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 18px 48px; }
+  .tabs { display: flex; gap: 6px; margin: 0 0 22px; border-bottom: 1px solid var(--line); }
+  .tabs a { text-decoration: none; font-size: 13.5px; font-weight: 700; color: var(--muted); padding: 8px 14px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs a:focus-visible, a.btn:focus-visible, a.link:focus-visible, .jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent); margin: 0 0 6px; }
+  h1 { font-size: 23px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px; text-wrap: balance; }
+  .stamp { font-size: 13px; color: var(--muted); margin: 0 0 14px; font-variant-numeric: tabular-nums; }
+  .notice { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 13.5px; margin: 0 0 18px; }
+  .notice.weather { background: var(--sky-soft); border-left-color: var(--sky); }
+  .jump { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 26px; }
+  .jump a { text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  h2.sec { font-size: 15px; font-weight: 800; margin: 34px 0 4px; display: flex; align-items: center; gap: 10px; }
+  h2.sec::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  p.secdesc { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 14px; margin: 0 0 14px; }
+  .card .chips { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
+  .chip { font-size: 11.5px; font-weight: 700; border-radius: 4px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); }
+  .chip.gray { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .chip.drive { background: var(--sky-soft); color: var(--sky); }
+  .chip.hot { background: var(--pink-soft); color: var(--pink); }
+  .chip.sale { background: var(--warn-soft); color: var(--warn); }
+  .chip.free { background: var(--accent); color: var(--on-accent); }
+  .chip.end { margin-left: auto; background: var(--warn-soft); color: var(--warn); border-radius: 999px; }
+  .card h3 { font-size: 16.5px; font-weight: 700; margin: 0 0 2px; line-height: 1.42; text-wrap: balance; }
+  .card .meta { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+  .price { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; font-variant-numeric: tabular-nums; }
+  .price .now { font-size: 22px; font-weight: 800; letter-spacing: -.01em; color: var(--warn); }
+  .price .now.free { color: var(--accent); }
+  .price .was { font-size: 13px; color: var(--muted); text-decoration: line-through; }
+  .price .sub { font-size: 12.5px; color: var(--muted); }
+  .rows { display: grid; grid-template-columns: 56px 1fr; row-gap: 5px; column-gap: 12px; font-size: 13.5px; margin: 0 0 12px; }
+  .rows dt { color: var(--muted); font-weight: 600; font-size: 12.5px; padding-top: 1px; }
+  .rows dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .rows dd em { font-style: normal; color: var(--warn); font-weight: 700; }
+  a.btn { display: block; text-align: center; text-decoration: none; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 700; border-radius: 8px; padding: 10px 0; }
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { font-size: 13px; color: var(--muted); padding: 8px 2px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  ul.plain li:last-child { border-bottom: 0; }
+  ul.plain .d { color: var(--ink); font-weight: 600; }
+  ol.top { margin: 0 0 8px; padding-left: 20px; font-size: 14px; }
+  ol.top li { margin: 0 0 8px; }
+  ol.top b { color: var(--ink); }
+  footer { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 12.5px; color: var(--muted); }
+  footer p { margin: 0 0 8px; }
+  a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+</style>
+
+<div class="wrap">
+  <nav class="tabs"><a href="./2026-08-15.html">채용 브리핑</a><a class="on" href="./kids-2026-08-15.html">아이 나들이</a></nav>
+  <p class="eyebrow">7세·11세 주말 나들이 브리핑 · 의정부 출발</p>
+  <h1>2026년 8월 15일 (토) 광복절 연휴</h1>
+  <p class="stamp">공식 홈페이지·지자체·언론 확인분 · 🚗 이동시간은 의정부 출발 자가용 주말 낮 기준 대략치</p>
+
+  <p class="notice weather">🌦 <b>연휴 날씨</b> — 15(토) 흐리고 밤 곳곳 소나기 · 16(일) 새벽부터 비 · 17(월) 오전 비, 오후 소나기 → <b>토요일 낮에 물놀이, 일요일은 실내</b>. 19일부터 맑고 31~34℃ 폭염 재개.</p>
+  <p class="notice">📌 놓치면 아까운 것 3개 — ① <b>과천과학관 8/22 '달과 별 관측회' 접수가 오늘 10시 시작</b> ② 노원 꿀잼 워터파크(2,000원)는 <b>내일(16일)이 마지막</b> ③ 8/18(화) 하루만 받을 수 있는 <b>아쿠아필드 U+ 40% 쿠폰</b></p>
+
+  <div class="jump"><a href="#free">🆓 무료</a><a href="#sale">🔥 대폭할인</a><a href="#hot">✨ 핫한 곳</a><a href="#fest">🎪 축제·이벤트</a><a href="#top">🏆 이번 주말 TOP5</a></div>
+
+  <h2 class="sec" id="free">🆓 무료</h2>
+  <p class="secdesc">지자체 물놀이장·무료 과학관·박물관 — 가까운 순</p>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 15분 · 의정부 신곡동</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8.31까지</span></div>
+    <h3>추동웰빙공원 물놀이장</h3>
+    <p class="meta">의정부 4곳 중 최대 · 유일하게 저녁 7시까지 · 동시 350명</p>
+    <div class="price"><span class="now free">무료</span><span class="sub">아쿠아슈즈 필수</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>월·목·금·토·일 11~19시 (12~13시 점검) · <em>화·수 휴장 · 우천 미운영</em></dd>
+      <dt>대상</dt><dd>만 13세 미만 + 보호자</dd>
+      <dt>참고</dt><dd>낙양물사랑공원 물놀이장은 2029년까지 운영 중단(공식)</dd>
+    </dl>
+    <a class="btn" href="https://www.ui4u.go.kr/portal/bbs/view.do?mId=0301010000&amp;bIdx=363691&amp;ptIdx=35">의정부시 공지 보기</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 25~30분 · 노원 하계동</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+    <h3>서울시립과학관</h3>
+    <p class="meta">2025년 7월부터 관람료 전면 무료 · 기획전 '지구의 맥박'</p>
+    <div class="price"><span class="now free">무료</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>09:30~17:30 · 월 휴관 (8/17 개관 시 8/18 휴관 가능성)</dd>
+      <dt>조합</dt><dd>바로 옆 <b>노원 JUMP</b>(핫한 곳 참조)와 반나절 코스</dd>
+    </dl>
+    <a class="btn" href="https://science.seoul.go.kr/main">공식 홈페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 25분 · 도봉 창동</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8.22~23 2주년</span></div>
+    <h3>서울로봇인공지능과학관 (RAIM)</h3>
+    <p class="meta">전 프로그램 무료 · 100% 사전예약(서울공공서비스예약) · 8/22~23 개관 2주년 상설전 자유관람(세부 공지 확인)</p>
+    <div class="price"><span class="now free">무료</span><span class="sub">예약 필수</span></div>
+    <dl class="rows">
+      <dt>휴관</dt><dd>8/18(화) · 8/24 · 8/31</dd>
+    </dl>
+    <a class="btn" href="https://science.seoul.go.kr/RAIM/bbsctt/view.do?bbscttSn=2607290001&amp;key=2304100032">공지 보기</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 35분 · 동두천</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">물놀이 8.30까지</span></div>
+    <h3>경기북부어린이박물관 + 소요산 물놀이장</h3>
+    <p class="meta">상설전 5개(자연숲·공룡숲) 회차제 10/13/15:30 · 소요산 물놀이장 연결통로 개방(~8/30) · 8/29 '만물미술트럭' 무료</p>
+    <div class="price"><span class="now free">무료</span><span class="sub">토요교육 '숲의 향기' 6,000원 (8/15~9/5)</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>월 휴관(공휴일이면 개관) · 소요산 물놀이장 화 휴장</dd>
+    </dl>
+    <a class="btn" href="https://ngcm.ggcf.kr/">공식 홈페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 10분 · 의정부 경기도청 북부청사</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">토·일 8.30까지</span></div>
+    <h3>경기평화광장 잔디밭영화제 &amp; 문화예술공연</h3>
+    <p class="meta">공연 17:30(마술·버블·국악 등) → 500인치 영화 19:00 ('겨울왕국2'·'탑건' 등) · 돗자리 지참</p>
+    <div class="price"><span class="now free">무료</span></div>
+    <dl class="rows">
+      <dt>일정</dt><dd>8/15·16·17·22·23·29·30 · <em>소나기 시 취소 가능성 — 당일 확인</em></dd>
+    </dl>
+    <a class="btn" href="https://www.newscammp.co.kr/news/articleView.html?idxno=6640">안내 기사</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 20~40분 · 남양주·구리·양주</span><span class="chip gray">7세 ✅ 11세 △</span><span class="chip end">8.17~8.30</span></div>
+    <h3>남양주 물놀이장 23곳 · 구리 6곳 · 양주 발물놀이터 7곳</h3>
+    <p class="meta">남양주 별내 아쿠아가든(2026 신설)·도농시민공원(최대) ~8/30 · 구리 에어바운스 4곳 추가 ~8/30(8/17 정상) · 양주 나리·선돌공원 ~8/17(수심 30cm, 7세용)</p>
+    <div class="price"><span class="now free">무료</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>대체로 11~17시 · 월 휴무 · 8/17 운영 여부는 시별 상이</dd>
+    </dl>
+    <a class="btn" href="https://www.nyj.go.kr/www/contents.do?key=3177">남양주 물놀이장 안내</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 1시간 · 용산</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+    <h3>국립중앙박물관 어린이박물관</h3>
+    <p class="meta">7/27 새 상설전 '밥상 위의 문화유산' · 회차 예약(14일 전 00시 오픈) · 8월 휴관 없음</p>
+    <div class="price"><span class="now free">무료</span><span class="sub">회차 예약</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>~8/17 09:10~18:00 6회차 · 8/18부터 09:30~17:20</dd>
+    </dl>
+    <a class="btn" href="https://www.museum.go.kr/site/child/home">예약 페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 1시간 · 남양주 조안</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">10월까지</span></div>
+    <h3>실학박물관 《똑딱똑딱! 해, 달, 별》 · 《이십사》</h3>
+    <p class="meta">천문·절기 과학+역사 특별전 2개 · 정약용유적지 산책 연계</p>
+    <div class="price"><span class="now free">무료</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>화~일 10~18시</dd>
+    </dl>
+    <a class="btn" href="https://silhak.ggcf.kr">공식 홈페이지</a>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">한강 수영장·물놀이장 6곳</span> (40~60분) 어린이 3,000·성인 5,000 / 물놀이장 1,000~3,000 · 광나루 자연형 물놀이장 신규 · 야간 22시 · <b>8/30까지 무휴</b> · <a class="link" href="https://hangang.seoul.go.kr/www/eventMng/detail.do?srchType=list&amp;mid=538&amp;evntSn=432">안내</a></li>
+    <li><span class="d">국립어린이청소년도서관(역삼, 1시간20분)</span> 8/18 로보마스터·드론·혼합현실 체험 · 8/22 실감형 동화구연 15·16시 · 무료 예약 · <a class="link" href="https://www.nlcy.go.kr/NLCY/main/index.do">홈페이지</a></li>
+    <li><span class="d">서울어린이대공원(광진, 1시간)</span> 동물원·놀이터 무료 + 물놀이장(대형 슬라이드·에어바운스) 8/20까지 09~17시 · <a class="link" href="https://www.segye.com/newsView/20260717508505">기사</a></li>
+    <li><span class="d">국립항공박물관(강서, 1시간10분)</span> 입장 무료 · 매일 8회 무료 항공탐구교육 · 어린이공항(7세)·조종관제(11세) 유료 체험 · <a class="link" href="https://www.aviation.or.kr/index.do">홈페이지</a></li>
+    <li><span class="d">문화요일 8/19·8/26(수)</span> 국립박물관·미술관·궁·휴양림 무료·연장 · 8/26 영화 성인 1만원 · <a class="link" href="https://www.korea.kr/news/policyNewsView.do?newsId=148969629">정책브리핑</a></li>
+    <li><span class="d">고양 돗자리영화제(어울림누리)</span> 8/21 '트롤: 밴드 투게더' · 8/22 '와일드 로봇' 19:15 · 무료</li>
+    <li><span class="d">서울숲 '한여름밤의 정원극장'</span> 8/15·22·29(토) 19시 야외 가족영화 · 무료 · 16시 팔찌 선착순 800명</li>
+  </ul>
+
+  <h2 class="sec" id="sale">🔥 대폭 할인</h2>
+  <p class="secdesc">정가 대비 40~60% — 카드·통신사·기간 조건 확인 필수</p>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">50%↓ 신한카드</span><span class="chip drive">🚗 1시간 40분 · 홍천</span><span class="chip gray">7세 △(120cm) 11세 ✅</span><span class="chip end">8.15 페스티벌 마지막</span></div>
+    <h3>소노 오션월드 — 20주년 블루 스플래시</h3>
+    <p class="meta">키즈풀 로봇물고기·버블파티·16시 블루웨이브 콘서트(오늘까지) · 07:30 얼리파크인(~8/30) · 나이트오션 18~20시(~8/17)</p>
+    <div class="price"><span class="now">37,000~39,500원</span><span class="was">79,000~89,000</span><span class="sub">성인 · 신한카드 온라인 50% (8/18~30 주중/주말) · 소인 32,000~34,500</span></div>
+    <dl class="rows">
+      <dt>조건</dt><dd>ID당 2매 · 전날 17시까지 예매 · 지역주민(남양주·구리·가평) 현장 30%</dd>
+      <dt>아이</dt><dd>몬스터블라스터 120cm 미만 불가 → 7세는 키즈풀·유수풀 위주</dd>
+      <dt>운영</dt><dd>8/18~30 실내 09~19시 · 야외 09~18시</dd>
+    </dl>
+    <a class="btn" href="https://www.sonohotelsresorts.com/oceanWorld/discount">할인 안내 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">50%↓ 카드 + 에버랜드 무료</span><span class="chip drive">🚗 1시간 30분 · 용인</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">2파크 8.30까지</span></div>
+    <h3>캐리비안베이 — 이용 당일 에버랜드 무료 입장</h3>
+    <p class="meta">산리오 '헬로 썸머 파티'(~9/6) · 에버랜드 신규 물놀이 '워터팡팡 어드벤처' · 하루에 워터파크+놀이공원</p>
+    <div class="price"><span class="now">39,500원</span><span class="was">79,000</span><span class="sub">성인 종일 · 삼성·KB Pay·하나카드 (8/18~30; 8/15~17은 43,400) · 소인 스마트예약 43,000 · 오후권(14:30~) 37,000</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>8/15 08~20시(날짜별 변동) · 골드시즌 ~8/30</dd>
+    </dl>
+    <a class="btn" href="https://www.everland.com/caribbeanbay/promotion/usage-fee">요금·프로모션 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">57%↓ 예매특가</span><span class="chip drive">🚗 1시간 · 부천</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8.18~9.6</span></div>
+    <h3>웅진플레이도시 — 가장 가까운 대형 실내+야외 워터파크</h3>
+    <p class="meta">워터파크+온천스파 · 8/18부터 하이시즌 요금 대폭 하락 · 회원가입 웰컴쿠폰 50%</p>
+    <div class="price"><span class="now">32,000~36,000원</span><span class="was">75,000</span><span class="sub">1인 종일 예매특가 주중/주말 · 패밀리 4인 142,000 · 대·소 공통</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>8/18~9/6 워터파크 10:00~17:30 · 야외 주말만 12~17시 · <em>8/24·8/31 휴장</em> · 8/17 정상</dd>
+      <dt>이번주</dt><dd>~8/17 골드시즌 예매특가 42,000</dd>
+    </dl>
+    <a class="btn" href="https://www.playdoci.com/water/info_charge.aspx">요금 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">키즈 40% · U+ 40%</span><span class="chip drive">🚗 50분 · 고양 삼송 / 하남</span><span class="chip gray">7세 ✅(40%) 11세 ✅</span><span class="chip end">8.18 하루 쿠폰</span></div>
+    <h3>아쿠아필드 고양·하남 (스타필드) — 실내 워터파크+찜질스파</h3>
+    <p class="meta">8/15~31 미취학(36개월~7세) 40% · <b>LG U+ 8/18(화) 하루 쿠폰 다운로드 → 8/31까지 전 권종 40%(2인)</b> · 8/17까지 17시 이후 19,000</p>
+    <div class="price"><span class="now">48,000 / 38,000원</span><span class="was">58,000 / 48,000</span><span class="sub">8/18~ 평수기 성인/소인 정가 · 여기서 통신3사·해피포인트 주중 30% 추가</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>8/18~ 실내 10~19시 · 실외 11~18시</dd>
+    </dl>
+    <a class="btn" href="https://www.aquafield.co.kr/board/event/read.html?no=1334&amp;board_no=8">이벤트 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">2인 반일권 50% BC페이북</span><span class="chip drive">🚗 1시간 · 잠실</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8.17~9.30</span></div>
+    <h3>키자니아 서울 — 직업체험</h3>
+    <p class="meta">BC페이북 특별감사제: 2인 가족 반일권 50%(QR결제·계정당 1회·한정수량) · 키캉스 PKG(반일권+BBQ 73,000/65,000)</p>
+    <div class="price"><span class="now">반일권 50%</span><span class="was">어린이 1부 57,000 · 2부 46,000</span><span class="sub">보호자 20,000/17,000 · 3시간권 27,000</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>~8/23·8/29~30 1부 10~15시·2부 15~19:30 · 8/24~28 통합 10~18시</dd>
+    </dl>
+    <a class="btn" href="https://www.kidzania.co.kr/benefit/event.do?tabIdx=0&amp;condition=ING">이벤트 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">종일권 21,900 신한 2인</span><span class="chip drive">🚗 1시간 · 과천</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">워터워즈 8.30까지</span></div>
+    <h3>서울랜드 — 워터워즈: 해적왕 (물총싸움 페스티벌)</h3>
+    <p class="meta">K-썸머 도파민 페스티벌 물총싸움·K-뮤직 워터팝 · 크라켄아일랜드 물놀이 · 썸머 불꽃축제 ~8/17 · 백일홍가든 8/1 오픈</p>
+    <div class="price"><span class="now">21,900원</span><span class="was">52,000</span><span class="sub">신한카드 종일권 더블할인(본인+동반1) · BC 1+1 · SKT 50% · KT 40% · U+ 최대 50%</span></div>
+    <dl class="rows">
+      <dt>조합</dt><dd>바로 옆 <b>국립과천과학관</b>(어른 4,000·아이 2,000)과 묶으면 교육+재미 최상</dd>
+    </dl>
+    <a class="btn" href="https://seoulland.co.kr/?p=14">요금·할인 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip sale">타임딜 45%↓</span><span class="chip drive">🚗 1시간 · 잠실</span><span class="chip gray">7세 △(기구 100~130cm) 11세 ✅</span><span class="chip end">8.14~17 After4</span></div>
+    <h3>롯데월드 어드벤처 — 광복절 타임딜</h3>
+    <p class="meta">1Day 37,000(매일 선착순 1천매) · After4 27,500(8/14~17) · 제휴카드 After4 1+1 27,500(8월 내내) · 삼바 카니발 퍼레이드 · 콩X고질라 PKG</p>
+    <div class="price"><span class="now">37,000 / 27,500원</span><span class="was">67,000 / 55,000</span><span class="sub">1Day / After4(16시~) · 네이버페이 최대 36% · 멜론 44%</span></div>
+    <a class="btn" href="https://adventure.lotteworld.com/price/price">요금 (공식)</a>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">원마운트 워터파크(고양, 50분)</span> 공식 티켓몰 종일 32,900·오후 25,900(정가 75,000) ~8/17 · <em>8/18 이후 미게시(회생절차 보도) — 전화 1566-2232 확인</em></li>
+    <li><span class="d">테르메덴(이천, 1시간50분)</span> 8/18~ 골드시즌 54,000/44,000 · 오후 28,000 · 야간 22,000 · 서머페스타 버블 8/15~17·22 · 이천시민 40%</li>
+    <li><span class="d">레고랜드(춘천, 1시간30분)</span> 온라인 1일권 47,000~(정가 66,000) · 신규 워터 어트랙션 · <b>8/15~16 야간개장·불꽃 20:30</b></li>
+    <li><span class="d">알펜시아 오션700(평창, 2시간20분)</span> 신한카드 종일 3+1=102,000(4인) 8월 내내 · 8/18~ 화·수 휴장</li>
+    <li><span class="d">설악 워터피아(속초, 2시간30분)</span> 온라인 38%↓ · 8/24~ 미들시즌 38,000/32,500</li>
+  </ul>
+
+  <h2 class="sec" id="hot">✨ 핫한 곳 (할인 없어도 갈 만한)</h2>
+  <p class="secdesc">신규 오픈·리뉴얼·교육 가치 — 가까운 순</p>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">2026.6 신규 오픈</span><span class="chip drive">🚗 25~30분 · 노원 하계동</span><span class="chip gray">7세 ✅(키즈) 11세 ✅(액티비티)</span><span class="chip end">프리뷰 30%↓ 8월</span></div>
+    <h3>노원구립 어드벤처 테마파크 JUMP</h3>
+    <p class="meta">국내 최대 공공형 실내 어드벤처(약 3,000평) — 스카이트레일·클립앤클라임·레이저태그·인터랙티브 게임 10종(초1↑·120cm↑) + 키즈그라운드(미취학) · 8/29 그랜드오픈(스카이글라이더·드리프트카트 추가)</p>
+    <div class="price"><span class="now">2시간 17,500 / 11,200원</span><span class="was">25,000 / 16,000</span><span class="sub">액티비티(11세) / 키즈(7세) · 보호자 5,000~13,300 · 1시간 10,500·종일 49,000</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>10~18시(입장 17시) · 월 휴무 · <b>8/17(월) 영업·8/18(화) 휴무</b></dd>
+      <dt>예약</dt><dd>온라인은 2시간권만(네이버예약) · 나머지 현장 · 주차 협소 → 7호선 하계역 도보 7분</dd>
+      <dt>조합</dt><dd>비 오는 일요일 최적 · 옆 서울시립과학관(무료)과 반나절</dd>
+    </dl>
+    <a class="btn" href="https://xn--xy5by0v.com/main.html">공식 홈페이지 (점프.com)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">숲+물놀이+실내 어드벤처</span><span class="chip drive">🚗 35분 · 동두천</span><span class="chip gray">7세 △(물놀이 130cm) 11세 ✅</span></div>
+    <h3>동두천 놀자숲</h3>
+    <p class="meta">실내 네트어드벤처·펀클라임·에어리얼로프 + 실외 익스트림슬라이드·하늘네트 + 물놀이장(12~16시) — 비 오면 실내존만으로도 하루</p>
+    <div class="price"><span class="now">통합 50,000원</span><span class="sub">입장 10,000 · 실내 30,000 · 실외 20,000 · 주니어(120cm 미만) 25,000 · 동두천시민 20%</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>화~일 10~18시(실외 ~17시) · 월 휴관</dd>
+    </dl>
+    <a class="btn" href="https://noljasoop.com/">공식 홈페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">케이블카+망원경+플라네타륨</span><span class="chip drive">🚗 30분 · 양주 장흥</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8월 토요일만</span></div>
+    <h3>송암스페이스센터 '별빛패키지'</h3>
+    <p class="meta">60cm 망원경 천체관측 + 천문대 케이블카 · 8월은 토요일만(13~19시 발권) → 8/15·22·29</p>
+    <div class="price"><span class="now">33,000 / 38,000원</span><span class="sub">소인 / 대인 별빛패키지 · 천체관측만 25,000/27,000 · 플라네타륨 13,000/15,000 · 양주시민 소인요금</span></div>
+    <a class="btn" href="http://www.songamspacecenter.com">공식 홈페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">구석기 교육 · 실내</span><span class="chip drive">🚗 45분 · 연천</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">주말교육 8.30까지</span></div>
+    <h3>전곡선사박물관 8월 주말교육 + 한탄강 지질공원</h3>
+    <p class="meta">'구석기인들은 어떤 집에 살았을까?'·'매머드 이야기'(주말) · 15주년 특별전 · '아트 스테이지 전곡: 원시인이 나타났다!'(8/14~10/11) · 재인폭포 지질 해설·화산폭발 체험</p>
+    <div class="price"><span class="now">저렴</span><span class="sub">입장·교육비 프로그램별(members.ggcf.kr 예약) · 비와 무관한 실내</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>화~일 10~18시</dd>
+    </dl>
+    <a class="btn" href="https://jgpm.ggcf.kr">공식 홈페이지</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">얼음공룡 · 달과 별 관측회</span><span class="chip drive">🚗 1시간~1시간 20분 · 과천</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">관측회 접수 오늘 10시</span></div>
+    <h3>국립과천과학관</h3>
+    <p class="meta"><b>8/22(토) 19:30 '달과 별 관측회'</b>(블랙홀 강연+천체투영관+망원경, 접수 8/15 10:00~8/21) · 얼음공룡 대축제 ~8/16 · 기획전 '양자세대' ~8/23 · 사이캉스 56개 여름 프로그램</p>
+    <div class="price"><span class="now">4,000 / 2,000원</span><span class="sub">어른 / 7~19세 상설 · 천체투영관 2,000/1,000</span></div>
+    <dl class="rows">
+      <dt>운영</dt><dd>화~일 09:30~17:30 · <b>8/17 개관</b></dd>
+    </dl>
+    <a class="btn" href="https://www.sciencecenter.go.kr/gnsm/reservation/personal-services">예약 (공식)</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip hot">1m 망원경 · 야간</span><span class="chip drive">🚗 1시간 40분~2시간 · 화천 광덕산</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">~8.17 22:30 연장</span></div>
+    <h3>화천 조경철천문대</h3>
+    <p class="meta">시민천문대 최대 1m 망원경 · 천체투영실 재개관 · 8/19 이후 맑은 밤 추천</p>
+    <div class="price"><span class="now">3,000 / 1,000원</span><span class="sub">어른 / 초등 · 청소년 2,000 · 14~22시</span></div>
+    <a class="btn" href="http://www.apollostar.kr">공식 홈페이지</a>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">노원천문우주과학관(30분)</span> 금·토 야간관측 19:30(8/12~31) · 8/23(일) 14시 명왕성 재분류 20주년 강연 · 8/26 '문화가 있는 천문대'</li>
+    <li><span class="d">남이섬 섬머 스플래시(가평, 1시간10분)</span> 나미워터파크·워터가든(영수증 45%↓)·초등 동반 수상레저 보너스 · <b>8/17까지</b> · 입장 19,000·패밀리 48,500(왕복 배 포함)</li>
+    <li><span class="d">스포츠몬스터 하남·고양(50분)</span> 30m 짚라인·클라이밍·AI골키퍼 · 26,000~30,000 · <em>입장 120cm↑(일부 150cm) — 7세 키 확인</em></li>
+    <li><span class="d">아쿠아플라넷 일산(50분)</span> 바다코끼리 · 39,000 · 연중무휴 10~18시</li>
+    <li><span class="d">국립수목원 광릉숲(포천, 35분)</span> 어린이정원 키즈아카데미 무료 · 어른 1,000·어린이 500 · <em>주차 100% 사전예약</em> · 월 휴원</li>
+    <li><span class="d">양주 회암사지박물관(25분)</span> 여름 특별프로그램 8/1~23 화~금 '회암사지 탐정단'·'발굴탐험대'(6세↑) · 031-8082-4173</li>
+    <li><span class="d">파주 임진각 평화곤돌라·캠프그리브스(1시간)</span> 대인 12,000·소인 10,000 · 만3세↑ · 캠프그리브스 월 휴관</li>
+    <li><span class="d">아침고요수목원(가평, 1시간10분)</span> 여름피크닉 ~8/30 · 11,000/7,500 · 08:30~19:00 · 포천 허브아일랜드 야간 불빛동화축제 12,000/10,000(수 휴무)</li>
+    <li><span class="d">포천 어메이징파크(50분)</span> 서스펜션브릿지·짚라인·과학관·여름 야외수영장 · 입장 8,000·과학관 패키지 13,000 · <em>2026 8월 세부 미확인</em></li>
+  </ul>
+
+  <h2 class="sec" id="fest">🎪 축제·이벤트</h2>
+  <p class="secdesc">날짜 있는 행사 — 마감 임박순 · 축제 전용 리서치가 도착하면 이 섹션이 보강됩니다</p>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 25분 · 노원 공릉동</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">내일(8.16) 마지막</span></div>
+    <h3>노원 '2026 꿀잼 워터파크' (화랑대 철도공원)</h3>
+    <p class="meta">50m 에어바운스 슬라이드·유수풀·클라이밍풀 · 올해 슬라이드 무료화</p>
+    <div class="price"><span class="now">2,000원</span><span class="sub">타지역 · 노원구민 무료 · 36개월 미만 무료 · 10~17시(13~14시 휴식)</span></div>
+    <a class="btn" href="https://www.sedaily.com/article/20063285">안내 기사</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip free">무료</span><span class="chip drive">🚗 1시간 · 서대문</span><span class="chip gray">7세 △(부스) 11세 ✅</span><span class="chip end">8.15~16</span></div>
+    <h3>2026 서대문독립민주축제 (서대문형무소역사관)</h3>
+    <p class="meta">역사관 무료 개방 09:30~19:00 · 30여 체험부스·광복 스탬프랠리 · 15일 19시 기념공연 — 광복절 당일 역사교육</p>
+    <div class="price"><span class="now free">무료</span></div>
+    <a class="btn" href="https://www.cnbizm.com/news/articleView.html?idxno=310960">안내 기사</a>
+  </article>
+
+  <article class="card">
+    <div class="chips"><span class="chip gray">역사 야행</span><span class="chip drive">🚗 1시간 30분 · 수원 화성</span><span class="chip gray">7세 ✅ 11세 ✅</span><span class="chip end">8.14~16 야간</span></div>
+    <h3>2026 수원 국가유산 야행 '열 번째 밤, 수원연향'</h3>
+    <p class="meta">18~22시 야경·역사체험극·전통등·마켓 8야 · 8/8~29 무예뮤지컬 〈1790〉 · 화성어차 어른 6,000·어린이 2,000</p>
+    <div class="price"><span class="now free">대부분 무료</span><span class="sub">일부 유료·네이버 예약</span></div>
+    <a class="btn" href="https://www.swcf.or.kr/?p=207">공식 안내</a>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">8/15~17 유명산자연휴양림(가평)</span> 광복절 산림문화프로그램(무궁화 이야기·화분 만들기) 무료 · 화 휴무</li>
+    <li><span class="d">8/15~17 국립어린이과학관(종로) 'AI 로봇놀이터'</span> AI 창작·로봇 월드컵·미로 · 입장료 별도</li>
+    <li><span class="d">8/15 한탄강 지질공원 '화산 키즈 워터풀'</span> · 8/16까지 과천과학관 얼음공룡 · 8/17까지 서울랜드 썸머 불꽃축제·남이섬 스플래시·세미원 연꽃문화제·안성팜랜드 스파클링팜(2시간)</li>
+    <li><span class="d">8/22(토)</span> 과천과학관 달과 별 관측회 19:30 · 서울숲 정원극장 · 국립어린이청소년도서관 동화구연 · 고양 돗자리영화제 '와일드 로봇' · 강화역사박물관 블록 키링 만들기</li>
+    <li><span class="d">8/29(토)</span> 노원 JUMP 그랜드오픈 · 경기북부어린이박물관 만물미술트럭(무료) · 서울숲 정원극장 마지막</li>
+  </ul>
+
+  <h2 class="sec" id="top">🏆 이번 연휴 TOP 5 (교육 + 재미 + 가성비, 날씨 반영)</h2>
+  <ol class="top">
+    <li><b>노원 JUMP + 서울시립과학관</b> (25~30분) — 신규 대형 실내 어드벤처 프리뷰 30%↓, <b>비 오는 일요일(16일) 최적</b>. 온라인 2시간권 선점, 주차 협소.</li>
+    <li><b>노원 꿀잼 워터파크</b> (25분, 2,000원) — 토요일 낮에 마지막 물놀이 → 저녁 의정부 경기평화광장 무료 영화</li>
+    <li><b>국립과천과학관 + 서울랜드</b> (1시간) — 얼음공룡(~16일)·양자세대전 + 워터워즈 물총싸움 신한 21,900. <b>8/22 관측회 접수 오늘 10시 시작</b></li>
+    <li><b>전곡선사박물관 주말교육 + 한탄강 재인폭포</b> (45분) — 7·11세 둘 다 맞는 구석기·매머드 실내 교육, 저렴</li>
+    <li><b>서대문독립민주축제</b> (1시간, 무료) — 광복절 당일 역사교육 · 물놀이 대안은 남이섬 스플래시(~17일)</li>
+  </ol>
+  <p class="notice">🗓 <b>다음 2주 캘린더</b> — 8/18(화) 아쿠아필드 U+ 40% 쿠폰 다운 · 웅진플레이도시 32,000 특가 시작 · 8/17~ 키자니아 BC 50% · 8/22~23 RAIM 2주년 · 8/29 JUMP 그랜드오픈 · 8/30 한강·남양주·구리 물놀이장 종료</p>
+
+  <footer>
+    <p>출처 우선순위 — 공식 홈페이지·지자체 공지 &gt; 언론 &gt; SNS. '미확인'은 공식 확인이 안 된 항목이니 방문 전 전화 확인 권장. 이동시간은 의정부(신곡동) 출발 자가용 주말 낮 대략치.</p>
+    <p>이 탭은 채용 브리핑과 함께 매일 아침 갱신됩니다 · <a class="link" href="./2026-08-15.html">채용 브리핑으로</a></p>
+  </footer>
+</div>
