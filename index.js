@@ -9284,9 +9284,53 @@ ${folderBtn}
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfreq_%25&select=id,payload`, { headers: SHORTFORM_HDR });
           if (!r.ok) return [];
-          return (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) }))
+          const rows = (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) }))
             .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+          await attachShortformScheduleMatches(rows);
+          return rows;
         } catch (_) { return []; }
+      }
+      // 숏폼 신청이 실제로 우리가 촬영한 스케줄(사이트 신청=업체+장소 일치)인지 대조.
+      const sfMatchMap = new Map(); // reqId -> 매칭된 schedules 행 (없으면 null)
+      async function attachShortformScheduleMatches(rows) {
+        const internalRows = rows.filter((r) => r.kind !== "external");
+        if (!internalRows.length) return;
+        const companies = [...new Set(internalRows.map((r) => String(r.company || "").trim()).filter(Boolean))];
+        if (!companies.length) return;
+        try {
+          const inList = companies.map((c) => encodeURIComponent(c)).join(",");
+          const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,writer_name,date_key,time_key,place,composition,status,payment_status&company_name=in.(${inList})&source=neq.deleted&order=date_key.desc`,
+            { headers: SHORTFORM_HDR }
+          );
+          const sched = r.ok ? await r.json() : [];
+          const byKey = new Map();
+          sched.forEach((s) => {
+            const key = `${String(s.company_name || "").trim()}|||${String(s.place || "").trim()}`;
+            if (!byKey.has(key)) byKey.set(key, s); // date_key desc 정렬이므로 최신 건 우선
+          });
+          internalRows.forEach((r0) => {
+            const key = `${String(r0.company || "").trim()}|||${String(r0.place || "").trim()}`;
+            const hit = byKey.get(key) || null;
+            r0.__matched = hit;
+            sfMatchMap.set(r0.id, hit);
+          });
+        } catch (_) { /* 매칭 실패해도 카드 표시는 계속 진행 */ }
+      }
+      function openSfMatchModal(hit) {
+        const modal = document.getElementById("sfMatchModal");
+        const body = document.getElementById("sfMatchBody");
+        if (!modal || !body || !hit) return;
+        const payStatus = hit.payment_status || (hit.status === "paid" ? "입금완료" : hit.status === "hold" ? "보류" : "미입금");
+        body.innerHTML = `<dl>
+          <dt>날짜</dt><dd>${escapeHtml(hit.date_key || "-")} ${escapeHtml(hit.time_key || "")}</dd>
+          <dt>업체</dt><dd>${escapeHtml(hit.company_name || "-")}</dd>
+          <dt>작가</dt><dd>${escapeHtml(hit.writer_name || "-")}</dd>
+          <dt>장소</dt><dd>${escapeHtml(hit.place || "-")}</dd>
+          <dt>구성</dt><dd>${escapeHtml(hit.composition || "-")}</dd>
+          <dt>입금상태</dt><dd>${escapeHtml(payStatus)}</dd>
+        </dl>`;
+        modal.classList.remove("hidden");
       }
       function shortformReqCardHtml(m) {
         const cur = String(m.status || "submitted");
@@ -9298,6 +9342,11 @@ ${folderBtn}
         const styleTag = m.styleNo
           ? `<span class="shortform-style-badge">${Number(m.styleNo)}번${m.styleName ? " · " + escapeHtml(m.styleName) : ""}</span>`
           : `<span class="shortform-style-badge shortform-style-badge--empty">스타일 미지정</span>`;
+        const matchTag = m.kind === "external"
+          ? `<span class="shortform-match-badge shortform-match-badge--external">🆕 진행하지않은 현장</span>`
+          : (m.__matched
+              ? `<button type="button" class="shortform-match-badge shortform-match-badge--yes" data-action="shortformViewMatch" data-id="${escapeHtml(m.id)}">✓ 진행한 현장 · ${escapeHtml(m.__matched.date_key || "")}</button>`
+              : `<span class="shortform-match-badge shortform-match-badge--no">⚠ 확인 필요</span>`);
         const detail = [];
         detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
         if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
@@ -9310,7 +9359,7 @@ ${folderBtn}
         return `<div class="customer-alert-row shortform-request-card" data-current-status="${escapeHtml(cur)}">
           <div class="shortform-request-main">
             <div class="shortform-request-topline">
-              <div class="shortform-request-tags"><span class="shortform-kind-badge">${m.kind === "external" ? "외부 현장" : "사이트 신청"}</span>${styleTag}${qty}</div>
+              <div class="shortform-request-tags"><span class="shortform-kind-badge">${m.kind === "external" ? "외부 현장" : "사이트 신청"}</span>${matchTag}${styleTag}${qty}</div>
               <time>${escapeHtml(m.ts || "")}</time>
             </div>
             <h3 class="shortform-request-title">${where}</h3>
@@ -9440,6 +9489,8 @@ ${folderBtn}
           shortformPaySectionEl.addEventListener("click", async (event) => {
             const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
             if (payBtn && !payBtn.disabled) { await approveShortformTopup(payBtn); return; }
+            const matchBtn = event.target.closest('button[data-action="shortformViewMatch"]');
+            if (matchBtn) { openSfMatchModal(sfMatchMap.get(String(matchBtn.dataset.id || ""))); return; }
             // 제작 신청 상태 변경(접수확인·제작중·완료)
             const stBtn = event.target.closest('button[data-action="shortformSetStatus"]');
             if (stBtn && !stBtn.disabled) {
@@ -19346,6 +19397,15 @@ ${folderBtn}
       staleCleanupModalEl?.addEventListener("click", (event) => {
         if (event.target === staleCleanupModalEl) {
           staleCleanupModalEl.classList.add("hidden");
+        }
+      });
+      const sfMatchModalEl = document.getElementById("sfMatchModal");
+      document.getElementById("sfMatchCloseBtn")?.addEventListener("click", () => {
+        sfMatchModalEl?.classList.add("hidden");
+      });
+      sfMatchModalEl?.addEventListener("click", (event) => {
+        if (event.target === sfMatchModalEl) {
+          sfMatchModalEl.classList.add("hidden");
         }
       });
       staleCleanupSummaryEl?.addEventListener("click", (event) => {
