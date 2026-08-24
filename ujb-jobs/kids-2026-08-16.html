@@ -103,6 +103,32 @@
   footer { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 12.5px; color: var(--muted); }
   footer p { margin: 0 0 8px; }
   a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+  /* ── 상단 고정바 · 필터 · 맨위로 (add_ui.py 주입) */
+  .topbar { position: sticky; top: 0; z-index: 50; background: var(--bg);
+            margin: 0 -18px 16px; padding: 10px 18px 0; border-bottom: 1px solid var(--line);
+            box-shadow: 0 6px 14px -12px rgba(0,0,0,.5); }
+  .topbar .tabs { margin-bottom: 0; border-bottom: 0; }
+  .filters { display: flex; gap: 6px; overflow-x: auto; padding: 9px 0 10px;
+             scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button { flex: 0 0 auto; font: inherit; font-size: 13px; font-weight: 700;
+             padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line);
+             background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .filters button .n { color: var(--muted); font-weight: 700; margin-left: 5px; }
+  .filters button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .filters button[aria-pressed="true"] .n { color: var(--on-accent); opacity: .8; }
+  .filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .is-hidden { display: none !important; }
+  .noresult { display: none; padding: 26px 4px; font-size: 14px; color: var(--muted); }
+  .totop { position: fixed; right: 16px; bottom: 16px; width: 52px; height: 52px; border: 0;
+           border-radius: 50%; background: var(--accent); color: var(--on-accent);
+           font-size: 22px; line-height: 1; font-weight: 800; cursor: pointer; z-index: 60;
+           box-shadow: 0 8px 22px rgba(0,0,0,.24); opacity: 0; pointer-events: none;
+           transition: opacity .18s ease; }
+  .totop.show { opacity: .94; pointer-events: auto; }
+  .totop:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .totop { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -114,12 +140,12 @@
   <p class="notice weather">🌧 <b>오늘 종일 비</b> — 내일(17일) 오전까지 이어집니다(수도권 20~60mm). <b>야외 물놀이장은 우천 시 운영 안 하니 실내로 잡으세요.</b> 19일(화)부터 맑고 31~34℃ 폭염 재개 — 물놀이는 다음 주 중반이 좋습니다.</p>
   <p class="notice">📌 <b>오늘이 마지막</b> — ① 노원 꿀잼 워터파크(2,000원) ② 서대문독립민주축제 ③ 둔내토마토축제 ④ 수원·강릉 국가유산 야행. <b>내일(17일)까지</b>는 남이섬 스플래시·세미원 연꽃·양주 발물놀이터·철원 페스티벌·서울랜드 불꽃축제. ‼️8/18(화) 하루만 받는 <b>아쿠아필드 U+ 40% 쿠폰</b> 잊지 마세요.</p>
 
-  <div class="jump"><a href="#free">🆓 무료</a><a href="#sale">🔥 대폭할인</a><a href="#hot">✨ 핫한 곳</a><a href="#fest">🎪 축제·이벤트</a><a href="#top">🏆 TOP5</a><a href="#glance">🗺 한눈에</a></div>
+  <div class="jump"><a href="#top">🏆 TOP5</a><a href="#glance">🗺 한눈에</a></div>
 
   <h2 class="sec" id="free">🆓 무료</h2>
   <p class="secdesc">지자체 물놀이장·무료 과학관·박물관 — 가까운 순</p>
 
-  <article class="card">
+  <article class="card" data-drive="15"
     <img class="thumb" src="./img/kids/cn/01_chudong_pool.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -141,7 +167,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="25"
     <img class="thumb" src="./img/kids/cn/02_seoul_science.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -162,7 +188,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="25"
     <img class="thumb" src="./img/kids/cn/03_raim_robot.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -182,7 +208,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="35"
     <img class="thumb" src="./img/kids/cn/04_ngcm_dino.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -202,7 +228,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="15"
     <img class="thumb" src="./img/kids/cn/05_town_pools.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 △</span></div>
@@ -223,7 +249,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/06_nmk_kids.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -244,7 +270,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/07_silhak_astro.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -276,7 +302,7 @@
   <h2 class="sec" id="sale">🔥 대폭 할인</h2>
   <p class="secdesc">정가 대비 40~60% — 카드·통신사·기간 조건 확인 필수</p>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/08_ocean_world.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">50%↓ 신한카드</span><span class="chip gray">7세 △(120cm 제한) 11세 ✅</span></div>
@@ -297,7 +323,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/09_caribbean.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">50%↓ + 에버랜드 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -318,7 +344,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/10_playdoci.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">57%↓ 예매특가</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -339,7 +365,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="50"
     <img class="thumb" src="./img/kids/cn/11_aquafield.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">키즈 40% · U+ 40%</span><span class="chip gray">7세 ✅(40%) 11세 ✅</span></div>
@@ -360,7 +386,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/12_kidzania.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">2인 반일권 50%</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -380,7 +406,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/13_waterwar.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">종일권 21,900 (신한 2인)</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -401,7 +427,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/14_lotte_world.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">타임딜 45%↓</span><span class="chip gray">7세 △(기구 키제한) 11세 ✅</span></div>
@@ -430,7 +456,7 @@
   <h2 class="sec" id="hot">✨ 핫한 곳 (할인 없어도 갈 만한)</h2>
   <p class="secdesc">신규 오픈·리뉴얼·교육 가치 — 가까운 순</p>
 
-  <article class="card">
+  <article class="card" data-drive="25"
     <img class="thumb" src="./img/kids/cn/15_jump_adventure.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">2026.6 신규 오픈</span><span class="chip gray">7세 ✅(키즈) 11세 ✅(액티비티)</span></div>
@@ -452,7 +478,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="35"
     <img class="thumb" src="./img/kids/cn/16_noljasoop.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">숲+물놀이+실내</span><span class="chip gray">7세 △(물놀이 130cm) 11세 ✅</span></div>
@@ -472,7 +498,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="30"
     <img class="thumb" src="./img/kids/cn/17_songam_space.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">케이블카+망원경</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -492,7 +518,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="45"
     <img class="thumb" src="./img/kids/cn/18_jeongok_prehistory.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">구석기 교육 · 실내</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -513,7 +539,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/19_gwacheon_science.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">얼음공룡 · 별 관측회</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -534,7 +560,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="100"
     <img class="thumb" src="./img/kids/cn/20_cheonmundae.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip">1m 망원경 · 야간</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -566,7 +592,7 @@
   <h2 class="sec" id="fest">🎪 축제·이벤트</h2>
   <p class="secdesc">날짜 있는 행사 — 오늘·연휴 먼저, 그다음 8월 말까지</p>
 
-  <article class="card">
+  <article class="card" data-drive="10"
     <img class="thumb" src="./img/kids/cn/21_lawn_cinema.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -586,7 +612,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="60"
     <img class="thumb" src="./img/kids/cn/22_independence_fest.jpg" alt="" loading="lazy">
     <p class="credit">📷 실제 사진 · 서대문형무소 역사전시관 · Wikimedia Commons, CC BY-SA 4.0</p>
     <div class="body">
@@ -608,7 +634,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="25"
     <img class="thumb" src="./img/kids/cn/24_nowon_water.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">2,000원</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -625,7 +651,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="80"
     <img class="thumb" src="./img/kids/cn/25_cheorwon_fest.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">입장 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -642,7 +668,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="45"
     <img class="thumb" src="./img/kids/cn/26_hangang_cinema.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -659,7 +685,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="90"
     <img class="thumb" src="./img/kids/cn/27_night_heritage.jpg" alt="" loading="lazy">
     <p class="credit">📷 실제 사진 · 수원화성 야간 · Wikimedia Commons, CC BY 3.0</p>
     <div class="body">
@@ -677,7 +703,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="120"
     <img class="thumb" src="./img/kids/cn/28_tomato_fest.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">입장 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -694,7 +720,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="25"
     <img class="thumb" src="./img/kids/cn/29_yangju_hanok.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -710,7 +736,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="40"
     <img class="thumb" src="./img/kids/cn/30_goyang_cinema.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -726,7 +752,7 @@
     </div>
   </article>
 
-  <article class="card">
+  <article class="card" data-drive="120"
     <img class="thumb" src="./img/kids/cn/31_yanggu_fest.jpg" alt="" loading="lazy">
     <div class="body">
       <div class="chips"><span class="chip free">입장 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
@@ -797,3 +823,120 @@
     <p>카드 그림은 대부분 코덱스 내장 image_gen 일러스트이며, 📷 표시가 있는 것만 실제 사진(위키미디어 커먼즈 CC 라이선스·출처 표기)입니다. 블로그·홈페이지 사진은 저작권 문제로 쓰지 않습니다 · <a class="link" href="./2026-08-16.html">채용 브리핑으로</a></p>
   </footer>
 </div>
+
+<script>
+(function () {
+  var MODE = 'kids';
+  var cards = [].slice.call(document.querySelectorAll('article.card'));
+  if (!cards.length) return;
+
+  /* 카드마다 분류 태그를 심는다 */
+  cards.forEach(function (c) {
+    var tags = [];
+    var chips = [].slice.call(c.querySelectorAll('.chip'));
+    if (MODE === 'jobs') {
+      chips.forEach(function (ch) {
+        var m = (ch.textContent || '').trim().match(/^([ABCD])급/);
+        if (m) tags.push('tier-' + m[1]);
+      });
+      if (c.querySelector('.dot.g')) tags.push('zone-in');
+      if (c.querySelector('.dot.r')) tags.push('zone-out');
+    } else {
+      var sec = c.previousElementSibling;
+      while (sec && sec.tagName !== 'H2') sec = sec.previousElementSibling;
+      if (sec && sec.id) tags.push('cat-' + sec.id);
+      var drv = c.getAttribute('data-drive');
+      if (drv) tags.push(parseInt(drv, 10) <= 40 ? 'near' : 'far');
+    }
+    c.setAttribute('data-tags', tags.join(' '));
+  });
+
+  var DEFS = MODE === 'jobs'
+    ? [['tier-A', 'A급 정규·무기'], ['tier-B', 'B급 1년+'], ['tier-C', 'C급 고시급'],
+       ['tier-D', 'D급 단기'], ['zone-in', '🟢 통근권'], ['zone-out', '🔴 통근권 밖']]
+    : [['cat-free', '🆓 무료'], ['cat-sale', '🔥 대폭할인'], ['cat-hot', '✨ 핫한 곳'],
+       ['cat-fest', '🎪 축제'], ['near', '🚗 40분 이내']];
+
+  function count(key) {
+    return cards.filter(function (c) {
+      return (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+    }).length;
+  }
+
+  var bar = document.createElement('div');
+  bar.className = 'filters';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', '분류 필터');
+  var btns = [];
+  function mk(key, label, n) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-key', key);
+    b.setAttribute('aria-pressed', key === 'all' ? 'true' : 'false');
+    b.innerHTML = label + (n != null ? ' <span class="n">' + n + '</span>' : '');
+    b.addEventListener('click', function () { apply(key); });
+    bar.appendChild(b); btns.push(b);
+  }
+  mk('all', '전체', cards.length);
+  DEFS.forEach(function (d) { var n = count(d[0]); if (n) mk(d[0], d[1], n); });
+
+  var empty = document.createElement('p');
+  empty.className = 'noresult';
+  empty.textContent = '이 분류에 해당하는 항목이 없습니다.';
+
+  function apply(key) {
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-key') === key)); });
+    var shown = 0;
+    cards.forEach(function (c) {
+      var ok = key === 'all' || (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+      c.classList.toggle('is-hidden', !ok);
+      if (ok) shown++;
+    });
+    /* 섹션 제목·설명·목록은 그 섹션에 보이는 카드가 없으면 숨긴다 */
+    [].slice.call(document.querySelectorAll('h2.sec')).forEach(function (h) {
+      var el = h.nextElementSibling, has = false, buf = [h];
+      while (el && el.tagName !== 'H2') {
+        buf.push(el);
+        if (el.matches && el.matches('article.card') && !el.classList.contains('is-hidden')) has = true;
+        el = el.nextElementSibling;
+      }
+      var keep = key === 'all' || has;
+      buf.forEach(function (n) {
+        if (n.matches && n.matches('article.card')) return;      /* 카드는 위에서 처리 */
+        n.classList.toggle('is-hidden', !keep);
+      });
+    });
+    empty.style.display = shown ? 'none' : 'block';
+    if (window.scrollY > 300) window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* 상단 고정바에 탭 + 필터를 넣는다 */
+  var tabs = document.querySelector('nav.tabs');
+  var top = document.createElement('div');
+  top.className = 'topbar';
+  if (tabs && tabs.parentNode) {
+    tabs.parentNode.insertBefore(top, tabs);
+    top.appendChild(tabs);
+  } else {
+    var wrap = document.querySelector('.wrap');
+    wrap.insertBefore(top, wrap.firstChild);
+  }
+  top.appendChild(bar);
+  (cards[0].parentNode).insertBefore(empty, cards[0]);
+
+  /* 맨 위로 */
+  var up = document.createElement('button');
+  up.className = 'totop'; up.type = 'button';
+  up.setAttribute('aria-label', '맨 위로');
+  up.textContent = '↑';
+  up.addEventListener('click', function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+  document.body.appendChild(up);
+  function onScroll() { up.classList.toggle('show', window.scrollY > 420); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+

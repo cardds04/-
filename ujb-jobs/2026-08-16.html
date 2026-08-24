@@ -140,6 +140,32 @@
   footer { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 12.5px; color: var(--muted); }
   footer p { margin: 0 0 8px; }
   a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+  /* ── 상단 고정바 · 필터 · 맨위로 (add_ui.py 주입) */
+  .topbar { position: sticky; top: 0; z-index: 50; background: var(--bg);
+            margin: 0 -18px 16px; padding: 10px 18px 0; border-bottom: 1px solid var(--line);
+            box-shadow: 0 6px 14px -12px rgba(0,0,0,.5); }
+  .topbar .tabs { margin-bottom: 0; border-bottom: 0; }
+  .filters { display: flex; gap: 6px; overflow-x: auto; padding: 9px 0 10px;
+             scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button { flex: 0 0 auto; font: inherit; font-size: 13px; font-weight: 700;
+             padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line);
+             background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .filters button .n { color: var(--muted); font-weight: 700; margin-left: 5px; }
+  .filters button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .filters button[aria-pressed="true"] .n { color: var(--on-accent); opacity: .8; }
+  .filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .is-hidden { display: none !important; }
+  .noresult { display: none; padding: 26px 4px; font-size: 14px; color: var(--muted); }
+  .totop { position: fixed; right: 16px; bottom: 16px; width: 52px; height: 52px; border: 0;
+           border-radius: 50%; background: var(--accent); color: var(--on-accent);
+           font-size: 22px; line-height: 1; font-weight: 800; cursor: pointer; z-index: 60;
+           box-shadow: 0 8px 22px rgba(0,0,0,.24); opacity: 0; pointer-events: none;
+           transition: opacity .18s ease; }
+  .totop.show { opacity: .94; pointer-events: auto; }
+  .totop:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .totop { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -421,3 +447,120 @@
     <p>포함: 전산·ICT / 행정·교무 / 돌봄·늘봄·도서 / AI·튜터·에듀테크 / 기초학력·학습지원튜터 / 특수교육(교육공무직) — 조리·영양·미화·시설·통학·교과 교원은 제외. 이 페이지는 매일 09:03 자동 생성됩니다.</p>
   </footer>
 </div>
+
+<script>
+(function () {
+  var MODE = 'jobs';
+  var cards = [].slice.call(document.querySelectorAll('article.card'));
+  if (!cards.length) return;
+
+  /* 카드마다 분류 태그를 심는다 */
+  cards.forEach(function (c) {
+    var tags = [];
+    var chips = [].slice.call(c.querySelectorAll('.chip'));
+    if (MODE === 'jobs') {
+      chips.forEach(function (ch) {
+        var m = (ch.textContent || '').trim().match(/^([ABCD])급/);
+        if (m) tags.push('tier-' + m[1]);
+      });
+      if (c.querySelector('.dot.g')) tags.push('zone-in');
+      if (c.querySelector('.dot.r')) tags.push('zone-out');
+    } else {
+      var sec = c.previousElementSibling;
+      while (sec && sec.tagName !== 'H2') sec = sec.previousElementSibling;
+      if (sec && sec.id) tags.push('cat-' + sec.id);
+      var drv = c.getAttribute('data-drive');
+      if (drv) tags.push(parseInt(drv, 10) <= 40 ? 'near' : 'far');
+    }
+    c.setAttribute('data-tags', tags.join(' '));
+  });
+
+  var DEFS = MODE === 'jobs'
+    ? [['tier-A', 'A급 정규·무기'], ['tier-B', 'B급 1년+'], ['tier-C', 'C급 고시급'],
+       ['tier-D', 'D급 단기'], ['zone-in', '🟢 통근권'], ['zone-out', '🔴 통근권 밖']]
+    : [['cat-free', '🆓 무료'], ['cat-sale', '🔥 대폭할인'], ['cat-hot', '✨ 핫한 곳'],
+       ['cat-fest', '🎪 축제'], ['near', '🚗 40분 이내']];
+
+  function count(key) {
+    return cards.filter(function (c) {
+      return (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+    }).length;
+  }
+
+  var bar = document.createElement('div');
+  bar.className = 'filters';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', '분류 필터');
+  var btns = [];
+  function mk(key, label, n) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-key', key);
+    b.setAttribute('aria-pressed', key === 'all' ? 'true' : 'false');
+    b.innerHTML = label + (n != null ? ' <span class="n">' + n + '</span>' : '');
+    b.addEventListener('click', function () { apply(key); });
+    bar.appendChild(b); btns.push(b);
+  }
+  mk('all', '전체', cards.length);
+  DEFS.forEach(function (d) { var n = count(d[0]); if (n) mk(d[0], d[1], n); });
+
+  var empty = document.createElement('p');
+  empty.className = 'noresult';
+  empty.textContent = '이 분류에 해당하는 항목이 없습니다.';
+
+  function apply(key) {
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-key') === key)); });
+    var shown = 0;
+    cards.forEach(function (c) {
+      var ok = key === 'all' || (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+      c.classList.toggle('is-hidden', !ok);
+      if (ok) shown++;
+    });
+    /* 섹션 제목·설명·목록은 그 섹션에 보이는 카드가 없으면 숨긴다 */
+    [].slice.call(document.querySelectorAll('h2.sec')).forEach(function (h) {
+      var el = h.nextElementSibling, has = false, buf = [h];
+      while (el && el.tagName !== 'H2') {
+        buf.push(el);
+        if (el.matches && el.matches('article.card') && !el.classList.contains('is-hidden')) has = true;
+        el = el.nextElementSibling;
+      }
+      var keep = key === 'all' || has;
+      buf.forEach(function (n) {
+        if (n.matches && n.matches('article.card')) return;      /* 카드는 위에서 처리 */
+        n.classList.toggle('is-hidden', !keep);
+      });
+    });
+    empty.style.display = shown ? 'none' : 'block';
+    if (window.scrollY > 300) window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* 상단 고정바에 탭 + 필터를 넣는다 */
+  var tabs = document.querySelector('nav.tabs');
+  var top = document.createElement('div');
+  top.className = 'topbar';
+  if (tabs && tabs.parentNode) {
+    tabs.parentNode.insertBefore(top, tabs);
+    top.appendChild(tabs);
+  } else {
+    var wrap = document.querySelector('.wrap');
+    wrap.insertBefore(top, wrap.firstChild);
+  }
+  top.appendChild(bar);
+  (cards[0].parentNode).insertBefore(empty, cards[0]);
+
+  /* 맨 위로 */
+  var up = document.createElement('button');
+  up.className = 'totop'; up.type = 'button';
+  up.setAttribute('aria-label', '맨 위로');
+  up.textContent = '↑';
+  up.addEventListener('click', function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+  document.body.appendChild(up);
+  function onScroll() { up.classList.toggle('show', window.scrollY > 420); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
