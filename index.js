@@ -162,7 +162,8 @@
       /** ‼️schedules 쓰기 버전 게이트(2026-08-07) — 서버 RLS(UPDATE 정책)가 이 헤더를 요구한다.
        *  배포 전 옛 코드 탭이 기존 행을 덮어써 스케줄이 원복되던 사고의 최종 차단.
        *  값 변경 시 supabase/migrations/20260807110000_schedules_write_version_gate.sql 도 함께. */
-      const SCHED_WRITE_VERSION = "v20260807";
+      // v20260824: 1000행 캡 페이지네이션 수정 — 옛 탭(전량 미수집 코드)의 쓰기를 서버에서 차단
+      const SCHED_WRITE_VERSION = "v20260824";
 
       // ── 관리자 세션 토큰 + DB 프록시 (B-3) ────────────────────────────────
       // 관리자 비밀번호로 서버(/api/admin-auth)에서 { adm:1 } 토큰을 발급받아
@@ -5645,24 +5646,51 @@
         }));
         return JSON.stringify(rows);
       }
+      // ‼️PostgREST 는 기본적으로 최대 1000행만 반환한다. schedules 가 1000행을 넘으면(2026-08-24 실측 1301행)
+      //   단발 GET 은 일부만 받는다 → 푸시 가드가 "서버에 없는 행"으로 오판해 최신성 검사 없이 통째 업서트
+      //   → 옛 탭이 최신 수정을 되미는 원복 사고(2026-08-24 18:20, 12행). 반드시 Range 페이지네이션으로 전량 수집.
+      //   안정적인 페이지 경계를 위해 order=id.asc 고정. 전량 수집 검증(Content-Range 총계 대조) 포함.
+      async function fetchAllScheduleRowsPaginated(selectColumns) {
+        const pageSize = 1000;
+        const collected = [];
+        let expectedTotal = null;
+        for (let offset = 0; ; offset += pageSize) {
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/schedules?select=${selectColumns}&order=id.asc`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Range: `${offset}-${offset + pageSize - 1}`,
+                Prefer: "count=exact"
+              },
+              cache: "no-store"
+            }
+          );
+          if (!response.ok && response.status !== 206) {
+            const errorText = await response.text();
+            throw new Error(`schedules 조회 실패 (${response.status}): ${errorText}`);
+          }
+          const contentRange = String(response.headers.get("content-range") || "");
+          const totalMatch = contentRange.match(/\/(\d+)\s*$/);
+          if (totalMatch) expectedTotal = Number(totalMatch[1]);
+          const page = await response.json();
+          if (Array.isArray(page)) collected.push(...page);
+          if (!Array.isArray(page) || page.length < pageSize) break;
+        }
+        // 총계를 아는데 수집 수가 모자라면(네트워크 절단 등) 부분 데이터로 진행하지 않는다 —
+        // 부분 목록은 곧 "없는 행 오판 → 통째 업서트" 사고로 이어지므로 실패가 안전하다.
+        if (Number.isFinite(expectedTotal) && collected.length < expectedTotal) {
+          throw new Error(`schedules 전량 수집 실패 (${collected.length}/${expectedTotal}행)`);
+        }
+        return collected;
+      }
       async function fetchSchedulesFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
-        const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at&order=updated_at.desc`,
-          {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store"
-          }
+        return await fetchAllScheduleRowsPaginated(
+          "id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,status,source,created_at,updated_at"
         );
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`schedules 조회 실패 (${response.status}): ${errorText}`);
-        }
-        return await response.json();
       }
       async function syncSchedulesToSupabase() {
         if (!USE_SUPABASE_SYNC || isApplyingRemoteSchedules) return;
@@ -5672,19 +5700,9 @@
           lastPullStorageKey: STORAGE_LAST_SCHEDULE_PULL_AT
         });
         const nextRows = buildSchedulesSnapshotRows();
-        const remoteIdResponse = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,company_name,code,updated_at,source`, {
-          method: "GET",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          cache: "no-store"
-        });
-        if (!remoteIdResponse.ok) {
-          const errorText = await remoteIdResponse.text();
-          throw new Error(`schedules id 조회 실패 (${remoteIdResponse.status}): ${errorText}`);
-        }
-        const remoteRows = await remoteIdResponse.json();
+        // ‼️전량 페이지네이션 필수 — 1000행 캡으로 일부만 받으면 나머지 행이 "신규"로 오판되어
+        //   최신성 검사를 건너뛰고 통째 업서트된다(2026-08-24 원복 사고의 직접 원인).
+        const remoteRows = await fetchAllScheduleRowsPaginated("id,company_name,code,updated_at,source");
         const remoteMetaById = new Map(
           (Array.isArray(remoteRows) ? remoteRows : [])
             .map((row) => [
