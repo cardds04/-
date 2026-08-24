@@ -9051,7 +9051,10 @@ ${folderBtn}
           createdAt: String(row?.createdAt || row?.created_at || "").trim(),
           // 변경(update) 기록의 이전 일시 — 서버 컬럼은 없고 payload(jsonb)로만 왕복
           previousDate: String(row?.previousDate || payload?.previousDate || "").trim(),
-          previousTime: String(row?.previousTime || payload?.previousTime || "").trim()
+          previousTime: String(row?.previousTime || payload?.previousTime || "").trim(),
+          // 작가 배정 변경 기록(2026-08-24 추가) — 서버 컬럼 없이 payload 로만 왕복
+          writer: String(row?.writer || payload?.writer || "").trim(),
+          previousWriter: String(row?.previousWriter || payload?.previousWriter || "").trim()
         };
       }
       function mergeScheduleReceiptLedgerRows(remoteRows, localRows) {
@@ -9175,12 +9178,17 @@ ${folderBtn}
                     :
                   source === "admin_delete"
                     ? "관리자삭제기록"
+                    : source === "admin_writer_update"
+                    ? "작가변경"
                     : source === "customer_cancel"
                     ? "고객취소기록"
                     : source.startsWith("admin_")
                     ? "관리자접수"
                     : "고객접수";
-                const scheduleText = item?.date || item?.time ? `${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}` : "업체 등록";
+                const scheduleText =
+                  source === "admin_writer_update"
+                    ? `${escapeHtml(item.date || "-")} · ${escapeHtml(item.previousWriter || "작가미정")} → ${escapeHtml(item.writer || "작가미정")}`
+                    : item?.date || item?.time ? `${escapeHtml(item.date || "-")} ${escapeHtml(item.time || "-")}` : "업체 등록";
                 const actionButtons = [
                   source.includes("delete") || (!source.includes("cancel") && hasDelete)
                     ? '<button class="btn-sm danger" type="button" disabled>삭제</button>'
@@ -9941,6 +9949,7 @@ ${folderBtn}
         if (s === "customer_create" || s === "customer") return "고객접수";
         if (s === "admin_create" || s === "admin") return "관리자접수";
         if (s === "admin_update") return "관리자변경";
+        if (s === "admin_writer_update") return "작가변경";
         if (s === "customer_update") return "고객변경";
         if (s === "admin_delete") return "관리자삭제";
         if (s === "customer_cancel") return "고객취소";
@@ -9967,6 +9976,8 @@ ${folderBtn}
             timePreference: row?.timePreference,
             previousDate: String(row?.previousDate || "").trim(),
             previousTime: String(row?.previousTime || "").trim(),
+            writer: String(row?.writer || "").trim(),
+            previousWriter: String(row?.previousWriter || "").trim(),
             receiptId: String(row?.receiptId || "").trim(),
             source: String(row?.source || "").trim(),
             alertId: ""
@@ -10025,6 +10036,11 @@ ${folderBtn}
         return rows;
       }
       function formatAuditTrailLine(row) {
+        // 작가 배정 변경 — 일시 대신 작가 이름으로 표기
+        if (String(row?.source || "") === "admin_writer_update") {
+          const base = `${row.label} ${formatAuditTrailAt(row.at)} → ${row.writer || "작가미정"}`;
+          return row.previousWriter ? `${base} (이전 ${row.previousWriter})` : base;
+        }
         const dateText = /^\d{4}-\d{2}-\d{2}$/.test(row?.date || "") ? formatScheduleDateWithoutYear(row.date) : (row?.date || "-");
         const timeText = formatScheduleTimeWithPreference(row?.time || "-", row?.timePreference);
         const base = `${row.label} ${formatAuditTrailAt(row.at)} → ${dateText} ${timeText}`;
@@ -10254,6 +10270,31 @@ ${folderBtn}
         `;
       }
 
+      // 작가 배정 변경을 원장(customer_submission_receipts)에 남긴다.
+      // 2026-08-24 원복 사고 때 작가 이력이 서버 어디에도 없어 복구 불가였던 교훈 — 시간·날짜와 동급으로 기록.
+      function recordWriterChangeReceipt(item, previousWriter) {
+        const prev = String(previousWriter || "").trim() || "작가미정";
+        const next = String(item?.name || "").trim() || "작가미정";
+        if (!item?.customerScheduleId || prev === next) return;
+        const receipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          scheduleId: String(item.customerScheduleId || "").trim(),
+          customerId: "",
+          company: String(item.company || "").trim(),
+          date: String(item.date || "").trim(),
+          time: String(item.time || "").trim(),
+          timePreference: normalizeTimePreference(item.timePreference),
+          place: String(item.place || "").trim(),
+          source: "admin_writer_update",
+          createdAt: new Date().toISOString(),
+          writer: next,
+          previousWriter: prev
+        };
+        appendScheduleReceiptLedgerLocal(receipt);
+        void appendScheduleReceiptLedgerToSupabase(receipt).catch((error) => {
+          console.error("[SUBMISSION_RECEIPT][index] 작가 변경기록 저장 실패", error);
+        });
+      }
       function syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate = "") {
         if (!item?.customerScheduleId) return;
         markScheduleRowDirty(item, "schedule_mutation");
@@ -21082,6 +21123,7 @@ ${folderBtn}
           item.name = "작가미정";
           item.writerPhone = "";
           item.writerCarNumber = "";
+          recordWriterChangeReceipt(item, name);
         });
 
         savePhotographerProfilesToStorage();
@@ -21100,11 +21142,14 @@ ${folderBtn}
         delete photographerPhones[targetName];
         delete photographerCarNumbers[targetName];
 
+        const deleteTodayKey = (() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; })();
         data.forEach((item) => {
           if (item.name === targetName) {
             item.name = "작가미정";
             item.writerPhone = "";
             item.writerCarNumber = "";
+            // 원장 기록은 오늘 이후 스케줄만(과거 수백 건 스팸 방지) — 복구가 필요한 건 미래 배정뿐
+            if (String(item?.date || "") >= deleteTodayKey) recordWriterChangeReceipt(item, targetName);
           }
         });
 
@@ -21298,8 +21343,11 @@ ${folderBtn}
         // 변경 감지용 이전값은 편집 시작 시점 스탬프(__timeAtEditStart)를 우선 사용한다.
         const previousTime = item.__timeAtEditStart !== undefined ? String(item.__timeAtEditStart || "") : (item.time || "");
         const previousDate = item.__dateAtEditStart !== undefined ? String(item.__dateAtEditStart || "") : (item.date || "");
+        // .edit-name select 도 change 즉시 item.name 을 바꿔버리므로(같은 함정), 작가 이전값도 시작 스냅샷 사용.
+        const previousWriterAtStart = item.__writerAtEditStart !== undefined ? String(item.__writerAtEditStart || "") : (item.name || "");
         delete item.__timeAtEditStart;
         delete item.__dateAtEditStart;
+        delete item.__writerAtEditStart;
 
         const date = itemEl.querySelector(".edit-date-only")?.value?.trim();
         const hour = itemEl.querySelector(".edit-hour")?.value;
@@ -21353,6 +21401,7 @@ ${folderBtn}
           item.name = name;
           item.writerPhone = photographerPhones[name] || "";
           item.writerCarNumber = photographerCarNumbers[name] || "";
+          recordWriterChangeReceipt(item, previousWriterAtStart);
         }
         markScheduleRowDirty(item, "schedule_mutation");
         syncCustomerScheduleFromAdminEdit(item, previousTime, previousDate);
@@ -21855,9 +21904,11 @@ ${folderBtn}
         if (action === "saveQuickPhotographer" && !Number.isNaN(index) && item) {
           const selected = itemEl?.querySelector(".quick-photographer-select")?.value;
           if (selected) {
+            const previousWriter = String(item.name || "").trim();
             item.name = selected;
             item.writerPhone = photographerPhones[selected] || "";
             item.writerCarNumber = photographerCarNumbers[selected] || "";
+            recordWriterChangeReceipt(item, previousWriter);
             markScheduleRowDirty(item, "schedule_mutation");
             syncCustomerScheduleFromAdminEdit(item, item.time || "");
             try { localStorage.setItem(STORAGE_ADMIN_SCHEDULES, JSON.stringify(data)); } catch (_) {}
@@ -21873,9 +21924,11 @@ ${folderBtn}
         if (action === "setQuickWriter" && !Number.isNaN(index) && item) {
           const writerName = String(button.dataset.writerName || "").trim();
           if (!writerName) return;
+          const previousWriter = String(item.name || "").trim();
           item.name = writerName;
           item.writerPhone = photographerPhones[writerName] || "";
           item.writerCarNumber = photographerCarNumbers[writerName] || "";
+          recordWriterChangeReceipt(item, previousWriter);
           markScheduleRowDirty(item, "schedule_mutation");
           syncCustomerScheduleFromAdminEdit(item, item.time || "");
           renderList();
@@ -21891,6 +21944,7 @@ ${folderBtn}
           if (item) {
             item.__timeAtEditStart = item.time || "";
             item.__dateAtEditStart = item.date || "";
+            item.__writerAtEditStart = item.name || "";
           }
           editingDateIndex = index;
           editingIndex = null;
@@ -21908,6 +21962,10 @@ ${folderBtn}
           if (editItem && editItem.__dateAtEditStart !== undefined) {
             editItem.date = editItem.__dateAtEditStart || editItem.date;
             delete editItem.__dateAtEditStart;
+          }
+          if (editItem && editItem.__writerAtEditStart !== undefined) {
+            editItem.name = editItem.__writerAtEditStart || editItem.name;
+            delete editItem.__writerAtEditStart;
           }
           editingDateIndex = null;
           renderList();
@@ -21970,6 +22028,7 @@ ${folderBtn}
           if (item) {
             item.__timeAtEditStart = item.time || "";
             item.__dateAtEditStart = item.date || "";
+            item.__writerAtEditStart = item.name || "";
           }
           editingIndex = index;
           editingDateIndex = null;
@@ -21986,6 +22045,10 @@ ${folderBtn}
           if (editItem && editItem.__dateAtEditStart !== undefined) {
             editItem.date = editItem.__dateAtEditStart || editItem.date;
             delete editItem.__dateAtEditStart;
+          }
+          if (editItem && editItem.__writerAtEditStart !== undefined) {
+            editItem.name = editItem.__writerAtEditStart || editItem.name;
+            delete editItem.__writerAtEditStart;
           }
           editingIndex = null;
           renderList();
