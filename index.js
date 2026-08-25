@@ -14342,6 +14342,86 @@ ${folderBtn}
         `;
       }
 
+      // ── 무료촬영 관리 (입금 관리 탭 안, app_state freeshoot_* 행이 정본) ──
+      // 안내 전(pending) → 안내완료(informed) → 계약성공(success, 회차권 등록) / 계약실패(fail, 기록만 남기고 목록 제외)
+      let freeShootRows = [];
+      let freeShootShowFail = false;
+      const FREESHOOT_HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+      async function fetchFreeShootRows() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.freeshoot_%25&select=id,payload`, { headers: FREESHOOT_HDR });
+          if (!r.ok) return null;
+          return (await r.json())
+            .map((x) => ({ id: x.id, ...(x.payload || {}) }))
+            .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        } catch (_) { return null; }
+      }
+      async function refreshFreeShootRows() {
+        const rows = await fetchFreeShootRows();
+        if (rows === null) return;
+        freeShootRows = rows;
+        if (currentPaymentFilter === "free") renderPaymentList();
+      }
+      async function saveFreeShootRow(row) {
+        const { id, ...payload } = row;
+        payload.updatedAt = new Date().toISOString();
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+          method: "POST",
+          headers: { ...FREESHOOT_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ id, payload }])
+        });
+        return r.ok;
+      }
+      function renderFreeShootList(keyword) {
+        paymentMonthNavigatorEl?.classList.add("hidden");
+        paymentMonthAllToggleBtnEl?.classList.add("hidden");
+        paymentMonthMemoBoxEl?.classList.add("hidden");
+        const visible = freeShootRows
+          .filter((row) => (freeShootShowFail ? row.status === "fail" : row.status !== "fail"))
+          .filter((row) => {
+            if (!keyword) return true;
+            return normalizeCompanyName(row.company).toLowerCase().includes(keyword);
+          });
+        const failCount = freeShootRows.filter((row) => row.status === "fail").length;
+        const statusCell = (row) => {
+          if (row.status === "success") return `<span style="color:#116b3e;font-weight:800;">계약성공${row.couponCount ? ` · ${Number(row.couponCount)}회권` : ""}</span>`;
+          if (row.status === "fail") return `<span style="color:#b23b3b;font-weight:800;">계약실패</span>`;
+          if (row.status === "informed") return "안내완료";
+          return "안내 전";
+        };
+        const manageCell = (row) => {
+          const fsid = escapeHtml(row.id);
+          if (row.status === "fail") {
+            return `<button class="btn-sm" type="button" data-action="freeShootRestore" data-fsid="${fsid}">되돌리기</button>`;
+          }
+          if (row.status === "success") {
+            return `<span style="color:#116b3e;">✓ 회차권 ${Number(row.couponCount) || 0}회 등록됨</span>`;
+          }
+          const informBtn = row.status === "informed"
+            ? `<button class="btn-sm" type="button" data-action="freeShootToggleInform" data-fsid="${fsid}" style="background:#dcfce7;border-color:#22a35f;color:#116b3e;font-weight:800;">안내완료</button>`
+            : `<button class="btn-sm" type="button" data-action="freeShootToggleInform" data-fsid="${fsid}" style="background:#fde68a;border-color:#f59e0b;color:#7c4a03;font-weight:800;">안내하기</button>`;
+          return `${informBtn}
+            <button class="btn-sm primary" type="button" data-action="freeShootSuccess" data-fsid="${fsid}">계약성공</button>
+            <button class="btn-sm" type="button" data-action="freeShootFail" data-fsid="${fsid}" style="border-color:#e0a0a0;color:#b23b3b;">계약실패</button>`;
+        };
+        const bodyRows = visible.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.date || "-")}</td>
+            <td>${escapeHtml(row.company || "-")}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>무료</td>
+            <td>${statusCell(row)}</td>
+            <td>${manageCell(row)}</td>
+          </tr>`).join("");
+        const emptyRow = visible.length
+          ? ""
+          : `<tr><td colspan="7">${freeShootShowFail ? "계약실패 기록이 없습니다." : "무료촬영 업체가 없습니다. 미입금 목록의 「무료촬영」 버튼으로 추가하세요."}</td></tr>`;
+        const failToggleRow = failCount
+          ? `<tr><td colspan="7" style="text-align:right;"><button class="btn-sm" type="button" data-action="freeShootToggleFailView">${freeShootShowFail ? "← 진행 목록 보기" : `계약실패 기록 ${failCount}건 보기`}</button></td></tr>`
+          : "";
+        paymentListBodyEl.innerHTML = bodyRows + emptyRow + failToggleRow;
+      }
       function renderPaymentList() {
         // 인라인 편집 중이면 background re-render 차단. 편집 상태가 바뀐 직후엔 통과.
         if (
@@ -14400,6 +14480,10 @@ ${folderBtn}
           return /^\d{4}-\d{2}-\d{2}$/.test(full) ? full.slice(0, 7) : "";
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
+        if (currentPaymentFilter === "free") {
+          renderFreeShootList(keyword);
+          return;
+        }
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
         const canonicalIdentityCtxPayment = {
           customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
@@ -14720,9 +14804,11 @@ ${folderBtn}
                            : couponApplyIndex === index
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>
+                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
                            : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>`
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>
+                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
                        }`
                 }
               </td>
@@ -19127,6 +19213,10 @@ ${folderBtn}
         [...paymentFilterTabsEl.querySelectorAll("button")].forEach((btn) => {
           btn.classList.toggle("active", btn === button);
         });
+        if (currentPaymentFilter === "free") {
+          freeShootShowFail = false;
+          void refreshFreeShootRows();
+        }
         renderPaymentList();
       });
       paymentSortRowEl?.addEventListener("click", (event) => {
@@ -19207,9 +19297,85 @@ ${folderBtn}
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         const action = button.dataset.action;
+        // ── 무료촬영 탭 액션(행 인덱스 대신 app_state id 사용 — isNaN 가드보다 앞에 있어야 함) ──
+        if (action === "freeShootToggleFailView") {
+          freeShootShowFail = !freeShootShowFail;
+          renderPaymentList();
+          return;
+        }
+        if (action === "freeShootToggleInform" || action === "freeShootSuccess" || action === "freeShootFail" || action === "freeShootRestore") {
+          const fsid = String(button.dataset.fsid || "");
+          const row = freeShootRows.find((r) => r.id === fsid);
+          if (!row) return;
+          if (action === "freeShootToggleInform") {
+            row.status = row.status === "informed" ? "pending" : "informed";
+          } else if (action === "freeShootSuccess") {
+            const raw = prompt(`「${row.company}」 몇 회권으로 계약했나요? (숫자)`, "10");
+            if (raw === null) return;
+            const n = Math.floor(Number(String(raw).trim()));
+            if (!Number.isFinite(n) || n < 1 || n > 20) { alert("1~20 사이 숫자로 입력해주세요."); return; }
+            button.disabled = true;
+            void (async () => {
+              const ok = await registerCouponPass(row.company, n);
+              if (!ok) { button.disabled = false; return; }
+              row.status = "success"; row.couponCount = n;
+              renderPaymentList();
+              if (!(await saveFreeShootRow(row))) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요.");
+            })();
+            return;
+          } else if (action === "freeShootFail") {
+            if (!confirm(`「${row.company}」 을(를) 계약실패로 기록하고 목록에서 뺄까요?\n(기록은 남고, 실패 기록 보기에서 되돌릴 수 있어요)`)) return;
+            row.prevStatus = row.status;
+            row.status = "fail";
+          } else if (action === "freeShootRestore") {
+            row.status = row.prevStatus === "informed" ? "informed" : "pending";
+            freeShootShowFail = false; // 복구했으면 진행 목록으로 돌아가 바로 보이게
+          }
+          renderPaymentList();
+          void saveFreeShootRow(row).then((ok) => { if (!ok) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요."); });
+          return;
+        }
         const index = Number(button.dataset.index);
         if (Number.isNaN(index)) return;
         const rowEl = button.closest("tr");
+        if (action === "moveToFreeShoot") {
+          const item = data[index];
+          if (!item) return;
+          const id = resolveCanonicalCompanyIdentity(item?.company, item?.companyCode, {
+            customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
+            customers: readStorageArray(STORAGE_CUSTOMERS)
+          });
+          const fsid = `freeshoot_${String(item.customerScheduleId || "").trim() || Date.now()}`;
+          button.disabled = true;
+          void (async () => {
+            const existing = (await fetchFreeShootRows()) || [];
+            if (!existing.some((r) => r.id === fsid)) {
+              const row = {
+                id: fsid,
+                company: String(id.company || item.company || "").trim(),
+                companyCode: String(id.companyCode || item.companyCode || "").trim(),
+                scheduleId: String(item.customerScheduleId || "").trim(),
+                date: String(item.date || "").trim(),
+                place: String(item.place || "").trim(),
+                status: "pending",
+                createdAt: new Date().toISOString()
+              };
+              if (!(await saveFreeShootRow(row))) {
+                alert("무료촬영 등록에 실패했어요. 잠시 후 다시 시도해주세요.");
+                button.disabled = false;
+                return;
+              }
+            }
+            freeShootRows = (await fetchFreeShootRows()) || freeShootRows;
+            currentPaymentFilter = "free";
+            freeShootShowFail = false;
+            [...paymentFilterTabsEl.querySelectorAll("button")].forEach((btn) => {
+              btn.classList.toggle("active", btn.dataset.paymentFilter === "free");
+            });
+            renderPaymentList();
+          })();
+          return;
+        }
 
         if (action === "editPaymentRow") {
           editPaymentFromTable(index);
