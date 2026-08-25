@@ -14360,8 +14360,10 @@ ${folderBtn}
         const rows = await fetchFreeShootRows();
         if (rows === null) return;
         freeShootRows = rows;
-        if (currentPaymentFilter === "free") renderPaymentList();
+        // 무료촬영 탭 표시뿐 아니라 미입금 목록 제외에도 쓰이므로 항상 재렌더
+        renderPaymentList();
       }
+      void refreshFreeShootRows(); // 시작 시 1회 — 첫 렌더부터 미입금 목록 제외 반영
       async function saveFreeShootRow(row) {
         const { id, ...payload } = row;
         payload.updatedAt = new Date().toISOString();
@@ -14435,7 +14437,14 @@ ${folderBtn}
           persistSchedulesAfterCompanyCatalogSync();
         }
         if (paymentUnpaidCompanyCountTextEl) {
-          const unpaidScheduleCount = data.filter((item) => String(item?.paymentStatus || "").trim() !== "입금완료").length;
+          const freeShootIdsForCount = new Set(
+            freeShootRows.map((row) => String(row?.scheduleId || "").trim()).filter(Boolean)
+          );
+          const unpaidScheduleCount = data.filter(
+            (item) =>
+              String(item?.paymentStatus || "").trim() !== "입금완료" &&
+              !freeShootIdsForCount.has(String(item?.customerScheduleId || "").trim())
+          ).length;
           paymentUnpaidCompanyCountTextEl.textContent = `미입금총 스케줄수 ${unpaidScheduleCount}건`;
         }
         const padPaymentDatePart = (value) => String(Math.max(0, Number(value) || 0)).padStart(2, "0");
@@ -14527,6 +14536,10 @@ ${folderBtn}
           if (total <= 0) return "";
           return `남은쿠폰 ${remaining}/${total}`;
         };
+        // 무료촬영으로 보낸 스케줄은 미입금 목록(및 미수금 합계·일괄적용·요약복사)에서 제외
+        const freeShootScheduleIds = new Set(
+          freeShootRows.map((row) => String(row?.scheduleId || "").trim()).filter(Boolean)
+        );
         const filtered =
           currentPaymentFilter === "hold"
             ? onHoldPayments.map((item, index) => ({ item, index, source: "hold" }))
@@ -14535,7 +14548,12 @@ ${folderBtn}
             : data
                 .map((item, index) => ({ item, index, source: "active" }))
                 .filter(({ item }) => {
-                  if (currentPaymentFilter === "unpaid") return item.paymentStatus !== "입금완료";
+                  if (currentPaymentFilter === "unpaid") {
+                    return (
+                      item.paymentStatus !== "입금완료" &&
+                      !freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim())
+                    );
+                  }
                   return item.paymentStatus === "입금완료";
                 });
         const isPaidTab = currentPaymentFilter === "paid";
@@ -19367,11 +19385,7 @@ ${folderBtn}
               }
             }
             freeShootRows = (await fetchFreeShootRows()) || freeShootRows;
-            currentPaymentFilter = "free";
-            freeShootShowFail = false;
-            [...paymentFilterTabsEl.querySelectorAll("button")].forEach((btn) => {
-              btn.classList.toggle("active", btn.dataset.paymentFilter === "free");
-            });
+            // 탭 전환 없이 미입금 목록에서만 빠진다 — 무료촬영 탭에 들어가면 거기서 보임
             renderPaymentList();
           })();
           return;
