@@ -2339,6 +2339,22 @@
         return `${h}:${m}:${s}`;
       }
 
+      // ── 옛 코드 탭 게이트(42501) 자동 복구 ──
+      // 서버 버전 게이트에 막힌 저장 실패는 "새 코드로 새로고침"이 유일한 해법.
+      // 미저장 수정분은 localStorage 에 있으므로 새로고침 후 새 코드가 그대로 이어서 저장한다.
+      // sessionStorage 가드로 새로고침 루프 방지(새 코드에서도 42501 이 나는 진짜 장애면 일반 안내로 폴백).
+      function handleStaleClientGateError(error) {
+        const msg = String((error && error.message) || "");
+        if (!msg.includes("42501") && !msg.includes("row-level security")) return false;
+        try {
+          const last = Number(sessionStorage.getItem("schedGateReloadedAt") || 0);
+          if (Date.now() - last < 60 * 1000) return false; // 방금 새로고침했는데도 실패 → 루프 방지, 일반 안내로
+          sessionStorage.setItem("schedGateReloadedAt", String(Date.now()));
+        } catch (_) {}
+        alert("새 버전이 배포되어 저장이 잠시 중단됐어요.\n확인을 누르면 자동으로 새로고침되고, 수정하신 내용은 이어서 저장됩니다.");
+        window.location.reload();
+        return true;
+      }
       function setSyncStatus(text, tone = "info", options = {}) {
         const now = Date.now();
         const force = Boolean(options && options.force);
@@ -5424,6 +5440,7 @@
         })()
           .catch((error) => {
             console.error("[PAYMENTS][index] 저장 실패(재시도 모두 소진)", error);
+            if (handleStaleClientGateError(error)) return;
             setSyncStatus("입금 저장 실패 · 네트워크 확인 후 동기화 버튼을 눌러주세요", "error");
             alert(`입금 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}\n\n네트워크 연결을 확인하고 '동기화' 버튼을 눌러주세요.`);
           })
@@ -5822,6 +5839,7 @@
         })()
           .catch((error) => {
             console.error("[SCHEDULES][index] 저장 실패(재시도 모두 소진)", error);
+            if (handleStaleClientGateError(error)) return;
             setSyncStatus("스케줄 저장 실패 · 네트워크 확인 후 동기화 버튼을 눌러주세요", "error");
             alert(`스케줄 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}\n\n네트워크 연결을 확인하고 '동기화' 버튼을 눌러주세요.`);
           })
