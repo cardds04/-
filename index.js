@@ -6232,7 +6232,14 @@
               row.shopickVideo = f.video;
               row.shopickBlog = f.blog;
             }
-            if (item?.isBlogVendor === true) row.isBlogVendor = true;
+            if (item?.is_blog_vendor !== undefined && item?.is_blog_vendor !== null) {
+              // ‼️블로그 업체 플래그도 서버 컬럼이 정본(2026-08-27) — kv 리스트는 옛 탭이 되밀어
+              //   해제한 업체가 부활하던 사고(얌숲). 쇼픽 플래그와 같은 패턴.
+              row.isBlogVendor = Boolean(item.is_blog_vendor);
+              row.__blogVendorFromServer = true;
+              const blogKey = normalizeCompanyName(row.name || "").toLowerCase();
+              if (blogKey) blogVendorServerByKey.set(blogKey, Boolean(item.is_blog_vendor));
+            } else if (item?.isBlogVendor === true) row.isBlogVendor = true;
             return row;
           })
           // 테스트 패턴 이름은 어떤 경로(서버 pull / client_kv 동기화 / 다른 브라우저
@@ -6275,7 +6282,7 @@
         // naver_works_company_share_link 도 함께 받아서 「폴더」 버튼 클릭 시 즉시 열도록
         // 로컬 캐시에 저장한다 (per-click 네트워크 fetch 제거 → 다중 클릭 시 창 여러 개 뜨던 문제 해결).
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -7206,7 +7213,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog&order=updated_at.asc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor&order=updated_at.asc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {
@@ -7575,6 +7582,10 @@
         if (on) set.add(lowerKey);
         else set.delete(lowerKey);
         writeBlogVendorNameSet(set);
+        // 정본 = company_directory.is_blog_vendor (kv 는 옛 탭 호환용 캐시).
+        blogVendorServerByKey.set(lowerKey, Boolean(on));
+        if (co) { co.isBlogVendor = Boolean(on); co.__blogVendorFromServer = true; }
+        void persistBlogVendorFlagToDirectory(co?.name || target, co?.code, on);
         if (blogCompaniesSaveHintEl) {
           const displayName = co?.name || target;
           blogCompaniesSaveHintEl.textContent = `「${displayName}」 ${on ? "블로그 업체로 등록" : "블로그 업체 해제"} 완료 · 저장됨 (모든 관리자 공유)`;
@@ -7722,16 +7733,23 @@ ${folderBtn}
          scheduleSiteAdminCompanies 행은 Supabase company_directory 로 push 되지만 isBlogVendor 컬럼이 없어
          별도 키 scheduleSiteBlogVendorList = [normalizedLowerName, ...] 로 동기화한다.
          companies[i].isBlogVendor 는 이 리스트에서 파생되는 표시용 플래그. */
+      // 서버(company_directory.is_blog_vendor) 값 캐시 — pull 시 채워지고 kv 옛 값을 항상 이긴다(2026-08-27).
+      const blogVendorServerByKey = new Map();
       function readBlogVendorNameSet() {
+        let set;
         try {
           const raw = localStorage.getItem(STORAGE_BLOG_VENDOR_LIST);
-          if (!raw) return new Set();
-          const arr = JSON.parse(raw);
-          if (!Array.isArray(arr)) return new Set();
-          return new Set(arr.map((s) => String(s || "").toLowerCase()).filter(Boolean));
+          const arr = raw ? JSON.parse(raw) : [];
+          set = new Set((Array.isArray(arr) ? arr : []).map((s) => String(s || "").toLowerCase()).filter(Boolean));
         } catch {
-          return new Set();
+          set = new Set();
         }
+        // 서버 플래그가 있는 업체는 서버값으로 강제 — 옛 kv 스냅샷이 해제 업체를 되살리지 못하게.
+        blogVendorServerByKey.forEach((on, key) => {
+          if (on) set.add(key);
+          else set.delete(key);
+        });
+        return set;
       }
       function writeBlogVendorNameSet(setOrArr) {
         try {
@@ -7751,6 +7769,31 @@ ${folderBtn}
             requestClientKvPushWhenReady?.(false);
           } catch (_) {}
         } catch (_) {}
+      }
+      /** 블로그 업체 플래그를 서버(company_directory.is_blog_vendor)에 기록 — code 우선, name 폴백 */
+      async function persistBlogVendorFlagToDirectory(name, code, on) {
+        if (!USE_SUPABASE_SYNC) return;
+        const body = JSON.stringify({ is_blog_vendor: Boolean(on) });
+        const headers = {
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        };
+        const tryOne = async (qs) => {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, { method: "PATCH", headers, body });
+          if (!res.ok) return false;
+          const rows = await res.json().catch(() => []);
+          return Array.isArray(rows) && rows.length > 0;
+        };
+        try {
+          const cod = normalizeCompanyCode(code || "");
+          if (cod && (await tryOne(`code=eq.${encodeURIComponent(cod)}`))) return;
+          const nm = normalizeCompanyName(name || "");
+          if (nm) await tryOne(`name=eq.${encodeURIComponent(nm)}`);
+        } catch (error) {
+          console.warn("[블로그업체] 서버 저장 실패(다음 토글에서 재시도)", error);
+        }
       }
       /** companies 배열의 isBlogVendor 를 동기화된 리스트로부터 복원 */
       function applyBlogVendorListToCompanies() {
