@@ -14641,7 +14641,7 @@ ${folderBtn}
           const override = getCouponTotalOverride(id.company) || getCouponTotalOverride(normalizedCompany);
           const total = override > 0 ? override : remaining + used;
           if (total <= 0) return "";
-          return `쿠폰 ${total}회중 ${remaining}회`;
+          return `쿠폰 ${remaining}/${total}회`; // 앞=남은 횟수, 뒤=총 등록 횟수
         };
         // 무료촬영으로 보낸 스케줄은 미입금 목록(및 미수금 합계·일괄적용·요약복사)에서 제외
         const freeShootScheduleIds = new Set(
@@ -20949,7 +20949,7 @@ ${folderBtn}
         // 총 회수(표시 「N회중 M회」의 N)도 직접 지정 — 0이면 자동(남은+사용) 계산
         const curTotal = getCouponTotalOverride(companyName);
         const totalRaw = prompt(
-          `총 몇 회권인지 입력해주세요. (표시: 「N회중 ${Math.floor(Number(nextRaw) || 0)}회」의 N)\n0 을 입력하면 자동 계산으로 돌아갑니다.`,
+          `총 등록 횟수를 입력해주세요. (표시: 「${Math.floor(Number(nextRaw) || 0)}/N회」의 N)\n0 을 입력하면 자동 계산으로 돌아갑니다.`,
           String(curTotal || Math.floor(Number(nextRaw) || 0))
         );
         if (totalRaw !== null) {
@@ -20958,7 +20958,7 @@ ${folderBtn}
           renderPaymentList();
         }
         const t = totalRaw !== null ? Math.floor(Number(totalRaw) || 0) : 0;
-        alert(`${companyName} 업체 쿠폰: ${t > 0 ? `${t}회중 ` : ""}${Math.floor(Number(nextRaw) || 0)}회로 수정되었습니다.`);
+        alert(`${companyName} 업체 쿠폰: ${Math.floor(Number(nextRaw) || 0)}${t > 0 ? `/${t}회` : "회"} 로 수정되었습니다.`);
       });
 
       couponListBodyEl.addEventListener("click", async (event) => {
