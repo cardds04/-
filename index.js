@@ -11430,6 +11430,47 @@ ${folderBtn}
         setCompanyDefaultMemoByName(sourceName, "", sourceCode);
       }
 
+      // ── 쿠폰 총 회수 수동 지정 (app_state cpntotal_<업체소문자> 행, 업체당 1행이라 스냅샷 원복 없음) ──
+      // 표시 "N회중 M회"의 N을 사장님이 직접 정한다. 0 또는 미지정 = 예전처럼 자동(남은+사용) 계산.
+      const couponTotalOverrides = new Map();
+      async function refreshCouponTotalOverrides() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.cpntotal_%25&select=id,payload`, {
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+          });
+          if (!r.ok) return;
+          const rows = await r.json();
+          couponTotalOverrides.clear();
+          (Array.isArray(rows) ? rows : []).forEach((x) => {
+            const key = decodeURIComponent(String(x.id).replace(/^cpntotal_/, ""));
+            const total = Math.max(0, Math.floor(Number(x?.payload?.total) || 0));
+            if (key) couponTotalOverrides.set(key, total);
+          });
+          renderPaymentList();
+        } catch (_) {}
+      }
+      void refreshCouponTotalOverrides(); // 시작 시 1회
+      async function saveCouponTotalOverride(primaryName, total) {
+        const key = normalizeCompanyName(primaryName || "").toLowerCase();
+        if (!key) return false;
+        const val = Math.max(0, Math.floor(Number(total) || 0));
+        couponTotalOverrides.set(key, val);
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal"
+            },
+            body: JSON.stringify([{ id: `cpntotal_${encodeURIComponent(key)}`, payload: { company: normalizeCompanyName(primaryName), total: val, updatedAt: new Date().toISOString() } }])
+          });
+          return r.ok;
+        } catch (_) { return false; }
+      }
+      function getCouponTotalOverride(primaryName) {
+        const key = normalizeCompanyName(primaryName || "").toLowerCase();
+        return key ? Number(couponTotalOverrides.get(key)) || 0 : 0;
+      }
       function getCouponRemaining(companyName, companyCode = "", ctx) {
         const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const primary = normalizeCompanyName(id.company);
@@ -11594,7 +11635,10 @@ ${folderBtn}
         }
         const companyRow = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === companyName.toLowerCase());
         const companyRowCode = normalizeCompanyCode(companyRow?.code);
-        setCouponRemaining(companyName, Math.max(1, Math.min(20, selectedCount)), companyRowCode);
+        const grantCount = Math.max(1, Math.min(20, selectedCount));
+        setCouponRemaining(companyName, grantCount, companyRowCode);
+        // 새 회차권 등록 = 총 회수도 그 값으로 (표시 「N회중 N회」부터 시작)
+        void saveCouponTotalOverride(companyName, grantCount);
         renderCouponPassList();
         renderPaymentList();
         return true;
@@ -14593,9 +14637,11 @@ ${folderBtn}
               : resolveCanonicalCompanyIdentity(normalizedCompany, companyCode, ctx);
           const gk = getCompanyGroupKey(id.company, id.companyCode);
           const used = gk ? couponUsedByGroupKey.get(gk) || 0 : 0;
-          const total = remaining + used;
+          // 사장님이 정한 총 회수가 있으면 그 값을, 없으면 예전처럼 자동(남은+사용) 계산
+          const override = getCouponTotalOverride(id.company) || getCouponTotalOverride(normalizedCompany);
+          const total = override > 0 ? override : remaining + used;
           if (total <= 0) return "";
-          return `남은쿠폰 ${remaining}/${total}`;
+          return `쿠폰 ${total}회중 ${remaining}회`;
         };
         // 무료촬영으로 보낸 스케줄은 미입금 목록(및 미수금 합계·일괄적용·요약복사)에서 제외
         const freeShootScheduleIds = new Set(
@@ -20900,7 +20946,19 @@ ${folderBtn}
         if (nextRaw === null) return;
         const success = await updateCouponPass(companyName, nextRaw);
         if (!success) return;
-        alert(`${companyName} 업체 쿠폰이 ${Math.floor(Number(nextRaw) || 0)}회로 수정되었습니다.`);
+        // 총 회수(표시 「N회중 M회」의 N)도 직접 지정 — 0이면 자동(남은+사용) 계산
+        const curTotal = getCouponTotalOverride(companyName);
+        const totalRaw = prompt(
+          `총 몇 회권인지 입력해주세요. (표시: 「N회중 ${Math.floor(Number(nextRaw) || 0)}회」의 N)\n0 을 입력하면 자동 계산으로 돌아갑니다.`,
+          String(curTotal || Math.floor(Number(nextRaw) || 0))
+        );
+        if (totalRaw !== null) {
+          const okTotal = await saveCouponTotalOverride(companyName, totalRaw);
+          if (!okTotal) alert("총 회수 저장에 실패했어요. 잠시 후 쿠폰수정을 다시 눌러주세요.");
+          renderPaymentList();
+        }
+        const t = totalRaw !== null ? Math.floor(Number(totalRaw) || 0) : 0;
+        alert(`${companyName} 업체 쿠폰: ${t > 0 ? `${t}회중 ` : ""}${Math.floor(Number(nextRaw) || 0)}회로 수정되었습니다.`);
       });
 
       couponListBodyEl.addEventListener("click", async (event) => {
