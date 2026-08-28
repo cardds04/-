@@ -14856,9 +14856,18 @@ ${folderBtn}
               source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
             const payerIsBusinessName =
               normalizeCompanyName(item.paymentPayer).toLowerCase() === normalizeCompanyName(payId.company).toLowerCase();
+            // 촬영구성 배지 — 영상 포함 여부를 한눈에 (사진만=회색 / 영상 포함=보라)
+            const compRaw = String(item.composition || "").trim();
+            const compHasVideo = compRaw.includes("영상");
+            const compLabel = !compRaw ? "" : compHasVideo ? (compRaw.includes("블로그") ? "사진+영상+블로그" : "사진+영상") : "사진만";
+            const compBadge = compLabel
+              ? `<div style="margin-top:3px;"><span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:0.72rem;font-weight:800;${
+                  compHasVideo ? "background:#efe7fd;color:#6b3fd4;border:1px solid #d8c8f7;" : "background:#f1f3f7;color:#6b7a99;border:1px solid #e0e5ee;"
+                }">${compLabel}</span></div>`
+              : "";
             return `
             <tr>
-              <td>${item.date || item.paymentDate || "-"}</td>
+              <td>${item.date || item.paymentDate || "-"}${compBadge}</td>
               <td>${escapeHtml(companyDisplay)}</td>
               <td>${
                 isEditing
