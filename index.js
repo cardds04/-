@@ -7843,25 +7843,33 @@ ${folderBtn}
       async function pullBlogSendLogFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
         try {
-          const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/${SUPABASE_BLOG_SEND_LOG_TABLE}?select=schedule_key,sent_at`,
-            {
-              method: "GET",
-              headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              cache: "no-store"
+          // ‼️PostgREST 1000행 캡 — 발송 기록이 1000건을 넘으면 단발 GET은 일부만 받아
+          //   나머지 발송완료가 미발송으로 보인다(schedules 원복 사고와 같은 계열). Range 페이지네이션 필수.
+          const rows = [];
+          for (let offset = 0; ; offset += 1000) {
+            const res = await fetch(
+              `${SUPABASE_URL}/rest/v1/${SUPABASE_BLOG_SEND_LOG_TABLE}?select=schedule_key,sent_at&order=schedule_key.asc`,
+              {
+                method: "GET",
+                headers: {
+                  apikey: SUPABASE_ANON_KEY,
+                  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                  Range: `${offset}-${offset + 999}`
+                },
+                cache: "no-store"
+              }
+            );
+            if (!res.ok && res.status !== 206) {
+              const txt = await res.text().catch(() => "");
+              console.warn("[blog_send_log] pull 실패", res.status, txt);
+              return false;
             }
-          );
-          if (!res.ok) {
-            const txt = await res.text().catch(() => "");
-            console.warn("[blog_send_log] pull 실패", res.status, txt);
-            return false;
+            const page = await res.json();
+            if (Array.isArray(page)) rows.push(...page);
+            if (!Array.isArray(page) || page.length < 1000) break;
           }
-          const rows = await res.json();
           const map = {};
-          (Array.isArray(rows) ? rows : []).forEach((row) => {
+          rows.forEach((row) => {
             const sk = String(row?.schedule_key || "").trim();
             const at = String(row?.sent_at || "").trim();
             if (sk && at) map[sk] = { sentAt: at };
