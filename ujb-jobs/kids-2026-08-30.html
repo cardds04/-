@@ -1,0 +1,1213 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>아이 나들이 브리핑 2026-08-30</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #F4F7F5; --surface: #FFFFFF; --ink: #1C2A2E; --muted: #5A6B6E; --line: #DCE5E1;
+    --accent: #0E6B58; --on-accent: #FFFFFF; --accent-soft: #E3F0EB;
+    --warn: #B54A2E; --warn-soft: #F7E7E0; --amber: #8F6512; --amber-soft: #F4ECD7;
+    --sky: #1F5F8B; --sky-soft: #E1EDF6; --pink: #9B2C6E; --pink-soft: #F6E3EE;
+    --violet: #5B4B9B; --violet-soft: #EAE6F7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1517; --surface: #172023; --ink: #E4ECE9; --muted: #94A6A3; --line: #263335;
+      --accent: #58B89F; --on-accent: #0C1A16; --accent-soft: #1C312A;
+      --warn: #E27A5D; --warn-soft: #3A211A; --amber: #D9A94E; --amber-soft: #322910;
+      --sky: #6FB0DF; --sky-soft: #172837; --pink: #E08AC0; --pink-soft: #35202D;
+      --violet: #A99BE4; --violet-soft: #241F3A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1517; --surface: #172023; --ink: #E4ECE9; --muted: #94A6A3; --line: #263335;
+    --accent: #58B89F; --on-accent: #0C1A16; --accent-soft: #1C312A;
+    --warn: #E27A5D; --warn-soft: #3A211A; --amber: #D9A94E; --amber-soft: #322910;
+    --sky: #6FB0DF; --sky-soft: #172837; --pink: #E08AC0; --pink-soft: #35202D;
+    --violet: #A99BE4; --violet-soft: #241F3A;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif; font-size: 15px; line-height: 1.62; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 26px 18px 48px; }
+  .tabs { display: flex; gap: 6px; margin: 0 0 22px; border-bottom: 1px solid var(--line); }
+  .tabs a { text-decoration: none; font-size: 13.5px; font-weight: 700; color: var(--muted); padding: 8px 14px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs a:focus-visible, a.btn:focus-visible, a.link:focus-visible, .jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent); margin: 0 0 6px; }
+  h1 { font-size: 23px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px; text-wrap: balance; }
+  .stamp { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .notice { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 13.5px; margin: 0 0 12px; }
+  .notice.weather { background: var(--sky-soft); border-left-color: var(--sky); }
+  .jump { display: flex; gap: 7px; flex-wrap: wrap; margin: 18px 0 8px; }
+  .jump a { text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+
+  .glance { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 10px; margin: 0 0 8px; }
+  .glance h2 { font-size: 15px; font-weight: 800; margin: 0 0 3px; }
+  .glance .lede { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; font-weight: 700; margin: 0 0 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+  .legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .band { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px dashed var(--line); }
+  .band:first-of-type { border-top: 0; }
+  .band .t { font-size: 12px; font-weight: 800; color: var(--sky); padding-top: 3px; }
+  .band .items { display: flex; gap: 5px; flex-wrap: wrap; }
+  .pin { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+  .pin.s { background: var(--warn-soft); color: var(--warn); }
+  .pin.h { background: var(--pink-soft); color: var(--pink); }
+  .pin.f { background: var(--violet-soft); color: var(--violet); }
+
+  h2.sec { font-size: 16px; font-weight: 800; margin: 34px 0 4px; display: flex; align-items: center; gap: 10px; }
+  h2.sec::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  p.secdesc { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin: 0 0 14px; overflow: hidden; }
+  .card .thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--accent-soft); }
+  .card .body { padding: 15px 16px 14px; }
+  .card .chips:empty { display: none; }
+  .card .credit { font-size: 10.5px; color: var(--muted); padding: 5px 16px 0; margin: 0; }
+  .card .chips { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
+  .chip { font-size: 11.5px; font-weight: 700; border-radius: 5px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); }
+  .chip.gray { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .chip.drive { background: var(--sky-soft); color: var(--sky); }
+  .chip.free { background: var(--accent); color: var(--on-accent); }
+  .chip.end { margin-left: auto; background: var(--warn-soft); color: var(--warn); border-radius: 999px; }
+  .card h3 { font-size: 16px; font-weight: 800; margin: 0 0 3px; line-height: 1.38; text-wrap: balance; }
+  .card .meta { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+  .price { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin: 0 0 12px; padding: 9px 12px; background: var(--bg); border-radius: 8px; font-variant-numeric: tabular-nums; }
+  .price .now { font-size: 21px; font-weight: 800; letter-spacing: -.01em; color: var(--warn); }
+  .price .now.free { color: var(--accent); }
+  .price .was { font-size: 13px; color: var(--muted); text-decoration: line-through; }
+  .price .sub { font-size: 12.5px; color: var(--muted); }
+  .play { margin: 0 0 12px; }
+  .play .lab { font-size: 11.5px; font-weight: 800; letter-spacing: .04em; color: var(--pink); margin: 0 0 5px; }
+  .play ul { margin: 0; padding-left: 17px; font-size: 13.5px; }
+  .play li { margin: 0 0 4px; }
+  .rows { display: grid; grid-template-columns: 58px 1fr; row-gap: 5px; column-gap: 12px; font-size: 13.5px; margin: 0 0 12px; }
+  .rows dt { color: var(--muted); font-weight: 600; font-size: 12.5px; padding-top: 1px; }
+  .rows dd { margin: 0; }
+  .rows dd em { font-style: normal; color: var(--warn); font-weight: 700; }
+  .reviews { margin: 10px 0 0; padding: 10px 12px 8px; background: var(--bg); border-radius: 8px; }
+  .reviews .lab { font-size: 11px; font-weight: 800; color: var(--sky); margin: 0 0 5px; letter-spacing: .03em; }
+  .reviews ul { margin: 0; padding: 0; list-style: none; }
+  .reviews li { font-size: 12.5px; margin: 0 0 5px; line-height: 1.5; }
+  .reviews li:last-child { margin-bottom: 0; }
+  .reviews a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .reviews .tip { color: var(--muted); }
+  a.btn { display: block; text-align: center; text-decoration: none; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 700; border-radius: 8px; padding: 10px 0; }
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { font-size: 13px; color: var(--muted); padding: 9px 2px; border-bottom: 1px solid var(--line); }
+  ul.plain li:last-child { border-bottom: 0; }
+  ul.plain .d { color: var(--ink); font-weight: 700; }
+  ol.top { margin: 0 0 8px; padding-left: 20px; font-size: 14px; }
+  ol.top li { margin: 0 0 9px; }
+  ol.top b { color: var(--ink); }
+  footer { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 12.5px; color: var(--muted); }
+  footer p { margin: 0 0 8px; }
+  a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+
+  /* ── 상단 고정바 · 필터 · 맨위로 (add_ui.py 주입) */
+  .topbar { position: sticky; top: 0; z-index: 50; background: var(--bg);
+            margin: 0 -18px 16px; padding: 10px 18px 0; border-bottom: 1px solid var(--line);
+            box-shadow: 0 6px 14px -12px rgba(0,0,0,.5); }
+  .topbar .tabs { margin-bottom: 0; border-bottom: 0; }
+  .filters { display: flex; gap: 6px; overflow-x: auto; padding: 9px 0 10px;
+             scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button { flex: 0 0 auto; font: inherit; font-size: 13px; font-weight: 700;
+             padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line);
+             background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .filters button .n { color: var(--muted); font-weight: 700; margin-left: 5px; }
+  .filters button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .filters button[aria-pressed="true"] .n { color: var(--on-accent); opacity: .8; }
+  .filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .is-hidden { display: none !important; }
+  .noresult { display: none; padding: 26px 4px; font-size: 14px; color: var(--muted); }
+  .totop { position: fixed; right: 16px; bottom: 16px; width: 52px; height: 52px; border: 0;
+           border-radius: 50%; background: var(--accent); color: var(--on-accent);
+           font-size: 22px; line-height: 1; font-weight: 800; cursor: pointer; z-index: 60;
+           box-shadow: 0 8px 22px rgba(0,0,0,.24); opacity: 0; pointer-events: none;
+           transition: opacity .18s ease; }
+  .totop.show { opacity: .94; pointer-events: auto; }
+  .totop:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .totop { transition: none; } }
+</style>
+
+<div class="wrap">
+  <nav class="tabs"><a href="./2026-08-30.html">채용 브리핑</a><a class="on" href="./kids-2026-08-30.html">아이 나들이</a><a href="./new-2026-08-30.html">🆕 NEW</a></nav>
+  <p class="eyebrow">7세·11세 나들이 브리핑 · 의정부 출발</p>
+  <h1>2026년 8월 30일 (일)</h1>
+  <p class="stamp">09:30 갱신 · 직전 목록 승계 + 오늘·내일 운영 여부와 날씨 반영 · 공식 홈페이지·지자체·기상청 확인 · 🚗 이동시간은 의정부 출발 자가용 기준</p>
+
+  <p class="notice weather">☀️ <b>오늘(일) 21~27℃ · 낮 강수확률 10~14% · 비 거의 없음</b> — <b>어제 말씀드린 대로 이번 주말에 가장 좋은 날이 오늘입니다.</b> <u>오전 9시 12% → 낮 12시 10% → 오후 3시 12% → 저녁 6시 14%</u>로 하루 종일 비가 없고, 낮 기온이 27~30℃까지 올라 <b>물놀이에는 어제보다 좋습니다.</b> 다만 <b>밤 9시부터 확률이 39%로 오르니</b> 야외 저녁 일정에는 우산을 챙기세요.<br>🌧 <b>내일(8/31 월)부터 다시 비입니다.</b> 예보 모델이 갈리지만(한쪽 20mm·확률 100%, 다른 쪽 흐림) <u>어제 기상청 예보도 8/31 비 확률 85%</u>였습니다 — <b>셋 중 둘이 비를 가리키니 야외 계획을 내일로 미루지 마세요.</b> 9/1(화)도 11~13mm짜리 비입니다.<br>💦 <b>그래서 오늘이 올여름 마지막 물놀이 날입니다.</b> 하필 오늘이 <u>소요산 물놀이장·한강 수영장·별내 아쿠아가든·구리 물놀이장의 마지막 운영일</u>이고, 추동웰빙공원·도봉 다락원은 내일 8/31까지지만 그날은 비 예보입니다. <b>오늘 안 가면 내년입니다.</b></p>
+  <p class="notice">📌 <b>지금 챙길 것 — 오늘의 정답은 「낮에 물놀이, 저녁에 잔디밭」 한 줄입니다.</b><br>💦 <b>오늘 가장 값어치 있는 한 곳은 경기북부어린이박물관 + 소요산 물놀이장</b>(동두천·40분)입니다. 물놀이장이 <u>수·목·금·일만 운영</u>이라 어제(토)는 쉬었고, <b>「실내 전시 → 연결통로 → 야외 물놀이」 코스가 성립하는 날은 오늘이 올해 마지막</b>입니다. ‼️박물관은 1일 4회 회차제(10·12·14·16시)이니 <b>출발 전에 회차부터 예약</b>하세요.<br>🏊 <b>가까이서 끝내려면 추동웰빙공원 물놀이장</b>(무료·10분·11~19시, 12~13시 점검). 내일 8/31이 올해 마지막 운영일이지만 <u>내일은 비 예보</u>라 <b>맑은 날에 갈 수 있는 건 오늘뿐</b>입니다.<br>🌙 <b>저녁은 집 앞 잔디밭영화제 — 이번 시즌 마지막 밤입니다.</b> 경기평화광장(10분·무료), 18:30 문화예술공연 → <b>19:30 「스즈메의 문단속」</b> 500인치 야외 상영. 7세·11세가 함께 볼 수 있는 <u>유일하게 남은 회차</u>였고 오늘로 끝납니다. ‼️밤 9시 강수확률이 39%로 오르니 <b>돗자리와 함께 우산도</b> 챙기고, 우천 취소는 인스타 @ggpeaceplaza 로 당일 확인하세요.<br>🏯 <b>멀리 갈 수 있으면 수원 국가유산 야행이 오늘 폐막</b>입니다(1시간30분). 당초 8/14~16 사흘이었는데 호평으로 <u>8/30까지 17일간 연장</u>됐고 <b>오늘이 마지막 밤</b>입니다 — 화성어차(어린이 2,000원)·전통등·야시장.<br>🎢 <b>더위를 피하려면 노원 3종</b> — 노원 JUMP는 <u>어제 그랜드오픈</u>해 스카이글라이더·드리프트카트 라이드존이 막 열렸습니다. 도보권 <b>서울시립과학관에서 오늘 「일상실험실」 무료 프로그램</b>이 있고, RAIM 상설전은 <u>100% 사전예약</u>입니다.<br>⏳ <b>오늘로 끝나는 것</b> — 소요산 물놀이장 · 한강 수영장 · 별내 아쿠아가든·구리 물놀이장 · 잔디밭영화제(시즌 마지막) · 수원 국가유산 야행 · 국립중앙박물관 극장 용 「할머니의 여름휴가」 · 국립민속박물관 《가나다락》 · 키자니아 골드시즌 · 캐리비안베이 골드시즌·반딧불이 축제 · 소노 오션월드 얼리파크인 · 아쿠아필드 고양 쿨탠다드 팝업(40% 이용권) · 어울림누리 유아극 「사과가 쿵!」 · 양구 배꼽축제 폐막.<br>⏳ <b>내일(8/31 월)로 끝나는 것</b> — 추동웰빙공원·도봉 다락원 물놀이장. 다만 <em>내일은 비 예보 + 서울시립과학관·RAIM·경기북부어린이박물관 월 휴관 + 웅진플레이도시 휴장</em>입니다.<br>⛔ <b>어제 브리핑 정정</b> — 고양돗자리영화제는 <u>8/21~22 이틀로 이미 끝난 행사</u>였습니다(8/29 회차 없음). 해당 카드는 오늘 목록에서 뺐습니다.<br>✅ <b>오늘 정상 개관</b> — 서울시립과학관 · RAIM · 노원 JUMP · 경기북부어린이박물관 · 실학박물관 · 전곡선사박물관 · 동두천 놀자숲 · 국립과천과학관 · 국립중앙박물관 · 웅진플레이도시(10:00~17:30). 월요일 휴관과 무관한 날입니다.</p>
+
+  <div class="jump"><a href="#free">🆓 무료</a><a href="#sale">🔥 대폭할인</a><a href="#hot">✨ 핫한 곳</a><a href="#fest">🎪 축제·이벤트</a><a href="#soon">🔜 예정</a><a href="#top">🏆 TOP5</a><a href="#glance">🗺 한눈에</a></div>
+
+  <h2 class="sec" id="free">🆓 무료</h2>
+  <p class="secdesc">지자체 물놀이장·무료 과학관·박물관 — 가까운 순</p>
+  <article class="card" data-drive="15">
+    <img class="thumb" src="./img/kids/cn/01_chudong_pool.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>추동웰빙공원 물놀이장</h3>
+      <p class="meta">의정부 4곳 중 최대 · 유일하게 저녁 7시까지 · 동시 350명</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>오두막 모양 <b>조합놀이대</b>에서 미끄럼틀 타며 물맞기</li>
+        <li>머리 위 <b>대형 워터버킷</b>이 가득 차면 쏟아지는 물폭탄 — 아이들이 제일 좋아하는 포인트</li>
+        <li>45분 가동 → 15분 휴식 사이클이라 중간 간식·휴식 타이밍이 자연스럽다</li>
+        <li>공원 산책로·잔디밭이 붙어 있어 돗자리 펴고 반나절 가능</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>월·목·금·토·일 11~19시 (12~13시 점검) · <b>오늘(일) 정상 운영</b> — 오늘은 <u>낮 강수확률이 10~14%</u>로 하루 종일 비가 없고 낮 기온이 27~30℃까지 오릅니다. 올해 운영은 <b>내일 8/31(월)에 끝나는데 내일은 비 예보</b>입니다 — <b>맑은 날에 물놀이할 수 있는 건 오늘이 마지막</b>입니다</dd>
+        <dt>대상</dt><dd>만 13세 미만 + 보호자 동반 · <em>물총 반입 금지</em></dd>
+        <dt>참고</dt><dd>낙양물사랑공원 물놀이장은 <b>2029년까지 운영 중단</b>(공사) — 인터넷의 '무료 운영' 글은 옛 정보</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/cloudcandy817/224332394533">주차 3시간 200원·휴무 화·수</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/90_93_23/224342301038">‼️아쿠아슈즈 없으면 입장 불가(어른 대여 안 됨)</a> <span class="tip">· 2026-07</span></li></ul></div>
+      <a class="btn" href="https://www.ui4u.go.kr/portal/bbs/view.do?mId=0301010000&amp;bIdx=363691&amp;ptIdx=35">의정부시 공지 보기</a>
+    </div>
+  </article>
+  <article class="card" data-drive="25">
+    <img class="thumb" src="./img/kids/cn/02_seoul_science.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>서울시립과학관</h3>
+      <p class="meta">2025년 7월부터 관람료 전면 무료 · 기획전 '지구의 맥박'</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>4개 상설 전시실을 <b>직접 만지고 돌려보는</b> 체험형 — 읽는 과학관이 아니라 하는 과학관</li>
+        <li>기획전 '지구의 맥박' — 지진·화산·기후를 데이터로 보여준다 (11세에게 딱)</li>
+        <li>7세는 소리·빛·자석 같은 감각형 코너, 11세는 원리 패널까지 — <b>두 아이 난이도가 자연스럽게 갈린다</b></li>
+        <li>‼️<b>오늘(8/30) '일상실험실' 무료 프로그램</b></li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd><b>오늘(일) 정상 개관</b> — 09:30~17:30, <b>매주 월 휴관</b>. ‼️<b>오늘 「일상실험실」 무료 프로그램</b>이 있습니다. 도보권 <b>로봇AI과학관·노원 JUMP도 오늘 함께 열려</b> <u>노원 3종 코스가 그대로 살아 있습니다</u>. <u>내일 8/31(월)은 휴관</u>입니다</dd>
+        <dt>묶어서</dt><dd>도보권에 <b>노원 JUMP</b> — 오전 과학관 → 오후 어드벤처 반나절 코스</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/guribobo/224338058918">전관 무료·주차는 9:30~10시가 여유, 만차면 한글비 공영주차장</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/kirbylove1/223971655833">주차 1시간 1,800원(1일 최대 14,400원)·체험 예약법</a> <span class="tip">· 2025-08</span></li></ul></div>
+      <a class="btn" href="https://science.seoul.go.kr/main">공식 홈페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="25">
+    <img class="thumb" src="./img/kids/cn/03_raim_robot.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>서울로봇인공지능과학관 (RAIM)</h3>
+      <p class="meta">전 프로그램 무료 · 100% 사전예약(서울공공서비스예약)</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>로봇과 <b>직접 대화·상호작용</b>하는 전시 — 아이가 말을 걸면 반응한다</li>
+        <li>AI 원리를 게임처럼 배우는 체험 코너 (11세 학교 수업과 바로 연결)</li>
+        <li>개관 2주년 자유관람(8/22~23)은 끝났습니다 — 이제 다시 <b>100% 사전예약제</b>입니다</li>
+        <li>건물 자체가 로봇이 시공한 3D 프린팅 구조 — 밖에서 보는 것도 볼거리</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd><b>오늘(일) 정상 개관</b> · <u>내일 8/31(월) 휴관</u> — 다만 상설전이 <u>100% 사전예약</u>(서울공공서비스예약)으로 돌아왔으니 <b>출발 전에 회차를 잡아야</b> 합니다. 도보권 서울시립과학관·노원 JUMP도 오늘 함께 엽니다</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/yunjung1022/224366139142">기획전시 예약 방법·주차</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/ssh3303/224368661212">예약 실패했을 때 현장예매로 들어간 경로</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://science.seoul.go.kr/RAIM/bbsctt/view.do?bbscttSn=2607290001&amp;key=2304100032">공지 보기</a>
+    </div>
+  </article>
+  <article class="card" data-drive="35">
+    <img class="thumb" src="./img/kids/cn/04_ngcm_dino.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>경기북부어린이박물관 + 소요산 물놀이장</h3>
+      <p class="meta">상설전 5개 · 회차제(10·12·14·16시) · 물놀이장과 연결통로 개방</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>공룡숲</b> — 공룡 발굴 놀이와 대형 모형, 7세가 가장 오래 머무는 곳</li>
+        <li><b>자연숲</b> — 나무·물·바람을 몸으로 체험하는 대형 놀이 구조물</li>
+        <li>박물관 보고 <b>연결통로로 바로 소요산 물놀이장</b>으로 (한 번에 두 가지)</li>
+        <li>‼️<b>일요일은 물놀이장이 함께 여는 날</b> — 「실내 전시 → 연결통로 → 야외 물놀이」 코스가 완성됩니다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd><b>오늘(일)은 박물관과 물놀이장이 함께 엽니다</b>(박물관 매주 월 휴관 · 10~18시, <b>1일 4회 회차제 10·12·14·16시</b>, 입장마감 17시). 소요산 물놀이장은 <em>수·목·금·일만 운영</em>이라 ‼️<u>「실내 → 연결통로 → 물놀이」 코스가 성립하는 날은 오늘이 올해 마지막</u>입니다. 낮 강수확률 10~14%로 조건도 가장 좋으니 <b>출발 전에 박물관 회차부터 예약</b>하세요</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/duedoe/224357224937">무료입장 조건·주차 요령</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/sujinhome/224313351652">회차 예약 방법 정리</a> <span class="tip">· 2026-06</span></li></ul></div>
+      <a class="btn" href="https://ngcm.ggcf.kr/">공식 홈페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="15">
+    <img class="thumb" src="./img/kids/cn/05_town_pools.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 △</span></div>
+      <h3>동네 물놀이장 40여 곳 — 남양주 23 · 구리 6 · 양주 7 · 도봉 5</h3>
+      <p class="meta">멀리 안 가고 30분 안에 물놀이 · 대부분 주차 무료</p>
+      <div class="play"><p class="lab">▸ 어디가 뭐가 좋나</p><ul>
+        <li><b>도봉 다락원체육공원</b>(의정부 경계, 15분) — 가장 가깝고 <b>8/31까지</b> 가장 늦게까지</li>
+        <li><b>남양주 별내 아쿠아가든</b>(2026 신설) — 올해 새로 만들어 시설이 가장 깨끗 · ‼️<b>오늘 8/30이 마지막</b></li>
+        <li><b>남양주 도농시민공원</b> — 23곳 중 최대 규모, 10:30 개장으로 가장 일찍 연다</li>
+        <li><b>구리 갈매중앙·토평공원</b> — 올해 4곳에 <b>에어바운스 추가</b> · ‼️<b>오늘 8/30이 마지막</b></li>
+        </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>대체로 11~17시 · <b>월 휴무 — 오늘(일)은 소요산까지 포함해 대부분 정상 운영합니다</b> · <em>시별로 휴무일이 달라 출발 전 전화 확인 필수</em>. <b>별내 아쿠아가든·구리 물놀이장·소요산은 오늘이 마지막 날</b>이고 추동웰빙·도봉 다락원은 내일 8/31까지인데 <u>내일은 비 예보</u>입니다 — <b>맑은 물놀이 날은 오늘 하루뿐</b>입니다</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/meansay17/224339051074">별내 아쿠아가든 — 주차는 별내행정복지센터(육교 연결)·자이더스타 3블럭 무료</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/zzi_h_/224364291962">도농 — 매일 새 물 교체·안전요원 상주, 주차장이 바로 옆이라 짐 많아도 편함</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/jjin_chuu/223929973969">갈매중앙 — 45분 운영/15분 휴식·탈의실·물품보관소</a> <span class="tip">· 2025-07</span></li></ul></div>
+      <a class="btn" href="https://www.nyj.go.kr/www/contents.do?key=3177">남양주 물놀이장 안내</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/06_nmk_kids.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>국립중앙박물관 어린이박물관</h3>
+      <p class="meta">7/27 새 상설전 '밥상 위의 문화유산' · 회차 예약(14일 전 00시 오픈)</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>새 상설전 <b>'밥상 위의 문화유산'</b> — 옛날 밥상 차리기, 그릇 만져보기 등 <b>손으로 하는</b> 전시</li>
+        <li>'새롭게 관찰해요' 코너에서 유물을 확대경으로 뜯어보기</li>
+        <li>본관 특별전 <b>'우리들의 밥상'</b>(~10/25)과 주제가 이어져 7세는 어린이관, 11세는 본관까지</li>
+        <li>극장 용 가족공연 '할머니의 여름휴가: 씨씨상점' — ‼️<b>오늘 8/30이 마지막</b></li>
+        <li>규모가 커서 <b>하루 종일</b> 버틸 수 있다 — <b>휴관이 거의 없어 비 오는 날의 기본 카드</b></li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd><b>09:30~17:20 · 오늘(일)도 정상 개관</b> — 연중 휴관이 거의 없는 무료 실내입니다. <em>8/27 「문화가 있는 날」 야간 연장 개관(18~21시)은 끝났습니다</em> — 다음은 9월 마지막 수요일이니 <u>비 오는 주말에는 낮 관람으로</u> 잡으세요 · <b>어린이박물관 회차 예약은 14일 전 00시 오픈</b>이라 당일 자리는 <u>취소표를 노려야</u> 합니다</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/silver_11/224371515253">예약 실패 시 취소표 잡는 요령</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/pjy-0211/224369012399">평일 오픈런 하루 코스 동선</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.museum.go.kr/site/child/home">예약 페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/07_silhak_astro.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>실학박물관 《똑딱똑딱! 해, 달, 별》 · 《이십사》</h3>
+      <p class="meta">천문·절기 특별전 2개 동시 · 정약용 유적지와 한 자리</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>《똑딱똑딱! 해, 달, 별》</b> — 해시계·물시계로 옛날 사람들이 시간을 어떻게 쟀는지 체험</li>
+        <li><b>《이십사》</b> — 24절기가 농사·날씨와 어떻게 연결되는지 (11세 사회·과학 교과 직결)</li>
+        <li>바로 옆 <b>정약용 유적지</b> 생가·묘소 산책 — 실학이 뭔지 자연스럽게 이야기가 나온다</li>
+        <li>한강 두물머리 방향이라 오가는 길 풍경이 좋다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>화~일 10~18시 · <b>오늘(일) 정상 관람 가능합니다</b>(월 휴관)</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/pani48/224359702179">주차 정보 + 전시 관람 흐름</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/chfhddl924/224322330264">초등 역사체험으로 활용한 사례</a> <span class="tip">· 2026-06</span></li></ul></div>
+      <a class="btn" href="https://silhak.ggcf.kr">공식 홈페이지</a>
+    </div>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">한강 수영장·물놀이장 6곳</span> (45~60분) 어린이 3,000·성인 5,000 / 물놀이장 1,000~3,000 · <b>뚝섬 유수풀·잠실 인피니티월·광나루 자연형 물놀이장(2026 신규)</b> · 야간 18~22시(뚝섬·여의도·잠실·난지), 주말 얼음탕 · <b>8/30까지 무휴</b></li>
+    <li><span class="d">국립항공박물관(강서, 1시간10분)</span> <b>오늘(일)도 정상 개관</b>(매주 월 휴관) · 입장 무료 · <b>매일 8회 무료 항공탐구교육</b>(풍선헬리콥터 만들기 등) · 유료 체험은 7세 '어린이공항' 역할놀이, 11세 '조종관제'·기내훈련·VR패러글라이딩</li>
+    <li><span class="d">국립어린이청소년도서관(1시간20분)</span> 실감형 동화구연 <b>토요일 회차는 8/22로 끝났습니다</b> · 다음 회차는 도서관 공지 확인 — 열람실·어린이자료실은 <b>휴관일 없이 무료 개방</b>합니다</li>
+    <li><span class="d">서울어린이대공원(광진, 1시간)</span> <em>물놀이장(8/20)과 '물결정원'(8/23)이 모두 끝났습니다.</em> 남은 것은 <b>동물원·놀이터 — 연중무휴 무료</b>라 <b>월요일 휴관과 무관하게</b> 쓸 수 있는 몇 안 되는 야외 카드입니다</li>
+    <li><span class="d">국립민속박물관 《가나다락—글놀이 말놀이》</span> (1시간, ‼️<b>오늘 8/30이 마지막 날 · 정상 개관</b>) 자음·모음을 조립해 <b>나만의 글자 만들기</b>·소리체험·암호해독 게임 — 7세는 놀이로, 11세는 한글 원리로 · 무료. <em>오늘이 마지막입니다</em></li>
+    <li><span class="d">문화가 있는 날 — 어제 8/26(수) 지났습니다</span> 국립박물관·미술관·궁·휴양림 무료·야간 연장 · 영화 성인 1만원 혜택은 <b>매달 마지막 수요일</b>에만 열립니다. <b>다음은 9/30(수)</b> — 달력에 미리 적어 두세요</li>
+  </ul>
+
+  <h2 class="sec" id="sale">🔥 대폭 할인</h2>
+  <p class="secdesc">정가 대비 40~60% — 카드·통신사·기간 조건 확인 필수</p>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/08_ocean_world.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">50%↓ 신한카드</span><span class="chip gray">7세 △(120cm 제한) 11세 ✅</span></div>
+      <h3>소노 오션월드 — 20주년 블루 스플래시</h3>
+      <p class="meta">국내 최대급 워터파크 · 07:30 얼리파크인(‼️<b>오늘 8/30까지</b>) · <em>나이트오션(18~20시)은 8/17로 종료</em></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>키즈풀 로봇물고기</b>·버블파티 — 20주년 페스티벌 특별 연출(7세용)</li>
+        <li>11세는 대형 슬라이드존 — 단 <b>몬스터블라스터는 120cm 미만 불가</b>라 7세는 유수풀·파도풀 위주</li>
+        <li><b>얼리파크인 07:30</b> — 개장 전 입장해 인기 슬라이드를 줄 없이 타는 게 핵심 전략</li>
+        <li>실내존이 커서 비가 와도 하루가 유지된다 — <b>비 오는 금·토에도 살아남는 워터파크</b></li>
+      </ul></div>
+      <dl class="rows">
+        <dt>조건</dt><dd>신한 ID당 2매 · <em>전날 17시까지 예매</em> · 지역주민(남양주·구리·가평) 현장 30%</dd>
+        <dt>운영</dt><dd>8/18~30 실내 09~19시 · 야외 09~18시</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/ajoadomom/224367677077">놀이기구별 실제 대기시간·카바나 가격까지</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/syk_sy/224317727463">초등 아이와 입장료·준비물 체크리스트</a> <span class="tip">· 2026-06</span></li></ul></div>
+      <a class="btn" href="https://www.sonohotelsresorts.com/oceanWorld/discount">할인 안내 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/09_caribbean.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">50%↓ + 에버랜드 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>캐리비안베이 — 이용 당일 에버랜드 무료 입장</h3>
+      <p class="meta">하루에 워터파크 + 놀이공원 두 곳 · 산리오 '헬로 썸머 파티'(~9/6)</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>파도풀·유수풀 끝판왕</b> — 처음 가는 아이도 실패 없는 규모</li>
+        <li>산리오 캐릭터 '헬로 썸머 파티' 포토존·퍼레이드(7세 취향 저격)</li>
+        <li>‼️<b>같은 날 에버랜드 무료 입장</b> — 물놀이 하고 저녁엔 놀이공원·야간 사파리까지</li>
+        <li>에버랜드 신규 물놀이 <b>'워터팡팡 어드벤처'</b>(830㎡ 워터 카니발 게임·자이언트 워터버킷)</li>
+        <li><b>'한여름밤의 반딧불이 축제'</b> 매일 17~21시 선착순 무료 체험 — ‼️<b>오늘 8/30이 마지막</b></li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>8/15 08~20시(날짜별 변동) · 골드시즌 <b>오늘 8/30 종료</b></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/soul417/224346367931">7살·6살과 다녀온 준비물 후기</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/dpwldi88/224373514883">음식물 반입·비치체어 스마트예약 꿀팁</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.everland.com/caribbeanbay/promotion/usage-fee">요금·프로모션 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/10_playdoci.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">57%↓ 예매특가</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>웅진플레이도시 — 가장 가까운 대형 실내+야외 워터파크</h3>
+      <p class="meta">워터파크 + 온천스파 한 건물 · <b>8/18부터 요금 대폭 하락 적용 중</b></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>실내 워터파크라 <b>비 오는 날·폭염 모두 안전</b> — 8월 하순 더위 대비 1순위</li>
+        <li>야외존은 주말만 12~17시 개방 (야외 물놀이 + 실내 슬라이드 조합)</li>
+        <li>부모는 <b>온천스파</b>에서 쉬고 아이는 물놀이 — 체력 배분이 되는 구조</li>
+        <li>회원가입 웰컴쿠폰 50%와 예매특가를 비교해 유리한 쪽 선택</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd><b>8/18~9/6 10:00~17:30</b> · <b>오늘 정상 운영</b> · <em>내일 8/31(월) 휴장</em></dd>
+        <dt>요금</dt><dd><b>8/18 인하 요금 적용 중</b> — 직전 골드시즌 예매특가 42,000원이 기준선이니, 예매 화면에서 그보다 얼마나 내려갔는지 확인하고 결제하세요</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/hyoju231/224369816301">5세와 11시간 체류 동선 + 할인·주차</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/hyerim_kk/224370024895">필수 준비물 총정리(누락 방지)</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.playdoci.com/water/info_charge.aspx">요금 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="50">
+    <img class="thumb" src="./img/kids/cn/11_aquafield.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">키즈 40% · 무신사 40%</span><span class="chip gray">7세 ✅(40%) 11세 ✅</span></div>
+      <h3>아쿠아필드 고양·하남 (스타필드)</h3>
+      <p class="meta">실내 워터파크 + 찜질스파 · 쇼핑몰 안이라 식사·쇼핑까지 한 번에</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>지금 살아 있는 40% 경로는 <b>고양점 무신사 스탠다드 「쿨탠다드」 팝업</b>의 <b>아쿠아필드 40% 이용권</b>인데 ‼️<b>오늘 8/30이 마지막</b>입니다(팝업존 SNS 인증 시 굿즈 증정도 함께). <em>LG U+ 쿠폰(8/18 하루)은 끝났습니다</em></li>
+        <li>8/15~31 <b>미취학(36개월~7세) 40%</b> — 7세면 자동 적용</li>
+        <li>물놀이 후 찜질스파에서 온 가족 휴식, 아이는 키즈존</li>
+        <li>같은 건물 <b>스포츠몬스터</b>(30m 짚라인·클라이밍)로 11세 액티비티 이어가기</li>
+        <li>고양점은 <b>8/14~26 '무림페이퍼가든'</b> 종이 채소 수확 체험 무료 진행 중</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>실내 10~19시 · 실외 11~18시 · 고양점 쿨탠다드 팝업 <b>오늘까지</b></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/capturetoday/224370273451">고양 — 주차·요금·주말 혼잡도(내돈내산)</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/seohyun_9088/224375178196">하남 — 할인 경로·준비물</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.aquafield.co.kr/board/event/read.html?no=1334&amp;board_no=8">이벤트 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/12_kidzania.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">2인 반일권 50%</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>키자니아 서울 — 직업체험 도시</h3>
+      <p class="meta">아이가 직접 일하고 돈(키조) 버는 미니 도시 · BC페이북 반일권 50%</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>소방관·의사·파일럿·기자 등 <b>90여 개 직업</b>을 실제 유니폼 입고 체험</li>
+        <li>일하면 <b>키자니아 화폐(키조)</b>를 벌고, 그 돈으로 다른 체험을 사거나 상품 구입 — 경제 개념 학습</li>
+        <li>11세는 혼자 직업을 골라 다니고, 7세는 보호자 동반 체험 위주로 <b>둘 다 만족</b></li>
+        <li>키캉스 PKG(반일권+BBQ 플래터 73,000/65,000)로 식사까지 묶을 수 있다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>통합 운영(10~18시)은 8/28로 끝났고 8/29부터 <b>분할 운영</b>(1부 10~15시 · 2부 15~19:30)입니다 — ‼️<u>골드시즌은 오늘 8/30로 끝납니다</u></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/wntjs1990/224364060730">7세가 종일권으로 체험 8개 소화한 동선</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/iinnhh/224373346071">주말 기준 주차·체험 팁</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.kidzania.co.kr/benefit/event.do?tabIdx=0&amp;condition=ING">이벤트 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/13_waterwar.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">종일권 21,900 (신한 2인)</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>서울랜드 — 워터워즈: 해적왕 (물총싸움 페스티벌)</h3>
+      <p class="meta">놀이공원 + 물놀이 축제를 한 번에 · 과천과학관 바로 옆</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>물 100톤 규모 물총싸움</b> '워터워즈: 해적왕' — 갈아입을 옷 필수</li>
+        <li><b>크라켄 아일랜드</b> 물놀이존 + K-뮤직 워터팝 공연</li>
+        <li>놀이기구는 <b>기구별 키 제한</b>이 있어 7세가 탈 수 있는 것 미리 확인</li>
+        <li>8/1 오픈한 <b>백일홍 가든</b> 산책 · <em>썸머 불꽃축제는 8/22 밤으로 종료</em></li>
+        <li>⚠️ 주말 심야 '데드퍼레이드' 공포 콘텐츠는 <b>아이 비권장</b> — 낮~초저녁에 마무리</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>묶어서</dt><dd>옆 <b>국립과천과학관</b>(어른 4,000·아이 2,000)과 오전·오후로 분할</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/sujinhome/224363295922">물총싸움 할인 + 준비물 총정리</a> <span class="tip">· 2026-07</span></li><li><a href="https://blog.naver.com/oomhahaha1/224350365028">주차·자리 맡기 요령이 구체적</a> <span class="tip">· 2026-07</span></li></ul></div>
+      <a class="btn" href="https://seoulland.co.kr/?p=14">요금·할인 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/14_lotte_world.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">실내 · 비와 무관</span><span class="chip gray">7세 △(기구 키제한) 11세 ✅</span></div>
+      <h3>롯데월드 어드벤처 — 비 오는 날 실내 대안</h3>
+      <p class="meta">실내 테마파크라 비와 무관 · 삼바 카니발 퍼레이드 매일 14시·19시</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>2026 삼바 카니발</b> 퍼레이드 — 하루 2회, 아이 눈높이에서 임팩트가 가장 큰 볼거리</li>
+        <li><em>광복절 타임딜(8/14~17)은 종료됐습니다</em> — 지금은 할인보다 <b>「비·폭염과 무관한 실내」</b>가 이 카드의 값어치입니다. 금요일 새벽 비·토요일 아침 비 시간대의 대안으로 두세요</li>
+        <li>기구별 100~130cm 제한이 있어 7세는 어린이존 위주, 11세는 대부분 탑승 가능</li>
+        <li>같은 건물 <b>롯데월드 아쿠아리움</b> '캡틴 핑구와 대항해'(~8/31), 주말 핑구 그리팅 10:30·14:30·17:10</li>
+        <li>⚠️ K-호러 '봉인해제: 요괴 대소동'(<b>오늘까지</b>)은 <b>7세 비권장</b> — 동선 피할 것</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/myslowarchive/224371335973">‼️키 110cm 기준 탑승 가능 기구 + 여름방학 실측 대기시간</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/repitapat/224301438905">120cm 이하 아이용 평일 동선</a> <span class="tip">· 2026-05</span></li></ul></div>
+      <a class="btn" href="https://adventure.lotteworld.com/price/price">요금 (공식)</a>
+    </div>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">원마운트 워터파크(고양, 50분)</span> <em>특가는 8/17로 종료 · 8/18 이후 운영 일정이 아직 게시되지 않았습니다(회생절차 보도)</em> — 가시려면 1566-2232로 운영 여부부터 확인하세요</li>
+    <li><span class="d">테르메덴(이천, 1시간50분)</span> 8/18~ 골드시즌 <b>54,000/44,000</b>·오후 28,000·야간 22,000 · 독일식 온천수 풀·스파, 서머페스타 <b>버블이벤트는 8/22 회차로 종료</b>(8/15~17분도 종료) · 온천수 풀·스파는 상시 · 이천시민 40%</li>
+    <li><span class="d">레고랜드(춘천, 1시간30분)</span> 온라인 1일권 <b>47,000~</b>(정가 66,000) · 신규 워터 어트랙션 <b>마리나 제트 베이·워터버킷</b>, 유료 워터메이즈(5,000원) · 8월 <b>토요일 21시까지 야간 운영</b>(8/15~16 야간개장·불꽃놀이는 종료)</li>
+    <li><span class="d">알펜시아 오션700(평창, 2시간20분)</span> 신한카드 <b>종일 3+1 = 4인 102,000</b>(8월 내내) · <b>8/18부터</b> 주중 50,000/39,000 · <em>8/18부터 화·수 휴장</em></li>
+    <li><span class="d">설악 워터피아(속초, 2시간30분)</span> 온라인 38%↓ · 8/24~ 미들시즌 <b>38,000/32,500</b> · 온천수라 8월 말 선선해져도 따뜻</li>
+  </ul>
+
+  <h2 class="sec" id="hot">✨ 핫한 곳 (할인 없어도 갈 만한)</h2>
+  <p class="secdesc">신규 오픈·리뉴얼·교육 가치 — 가까운 순</p>
+  <article class="card" data-drive="25">
+    <img class="thumb" src="./img/kids/cn/15_jump_adventure.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">2026.6 신규 오픈</span><span class="chip gray">7세 ✅(키즈) 11세 ✅(액티비티)</span></div>
+      <h3>노원구립 어드벤처 테마파크 JUMP</h3>
+      <p class="meta">6/27 개관 · <b>국내 최대 규모 공공형 실내 어드벤처</b>(약 3,000평) · <b>어제 8/29 그랜드오픈</b></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>11세 — 액티비티존</b>(초1↑·120cm↑): 공중 로프코스 <b>스카이트레일</b>, 클립앤클라임·발로클라임 <b>클라이밍</b>, <b>레이저태그</b>, 인터랙티브 게임 10종</li>
+        <li><b>7세 — 키즈그라운드</b>: 미취학 전용 실내 놀이터 (120cm 넘으면 액티비티존 선택 가능)</li>
+        <li><b>RC플레이존</b> 별도 운영 · 푸드라운지 있어 식사까지 안에서 해결</li>
+        <li><b>어제 8/29 그랜드오픈</b>으로 스카이글라이더·드리프트카트 라이드존이 새로 열렸습니다</li>
+        <li>공공시설이라 민간 키즈카페보다 <b>싸고 규모가 크다</b> — 비 오는 날 최고 카드</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>10~18시(입장 17시) · <b>월 휴무 — 오늘(일) 정상 운영</b>합니다. ‼️<b>어제 그랜드오픈</b>해 <u>스카이글라이더·드리프트카트 라이드존이 막 열렸습니다</u> — <b>개장 직후 첫 일요일이라 붐빌 수 있으니 오픈 시간에 맞춰</b> 가세요. 더위를 피할 실내 카드로도 좋습니다</dd>
+        <dt>예약</dt><dd>온라인은 2시간권만(네이버예약) · 1시간·종일권은 현장 · <em>주차 협소 → 7호선 하계역 도보 7분</em></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/totemmom10/224366905012">초등이 가장 좋아한 건 레이저태그</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/dmvmfj456/224333204560">내돈내산 후기 + 주차 정보</a> <span class="tip">· 2026-07</span></li></ul></div>
+      <a class="btn" href="https://xn--xy5by0v.com/main.html">공식 홈페이지 (점프.com)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="35">
+    <img class="thumb" src="./img/kids/cn/16_noljasoop.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">숲+물놀이+실내</span><span class="chip gray">7세 △(물놀이 130cm) 11세 ✅</span></div>
+      <h3>동두천 놀자숲</h3>
+      <p class="meta">숲 테마파크 안에 실내 어드벤처 + 실외 익스트림 + 물놀이장</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>실내</b> — 네트어드벤처(그물 위를 기어다니는 3층 구조), 펀클라임, 에어리얼로프, 실내 슬라이드</li>
+        <li><b>실외</b> — 익스트림슬라이드, 하늘네트(나무 사이 그물길)</li>
+        <li><b>물놀이장</b> 12~16시 — <em>130cm 이상·36개월 이상, 115cm 미만 보호자 동반</em> → 7세는 키 확인</li>
+        <li>비가 와도 <b>실내존만으로 반나절</b>이 되는 게 강점</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>화~일 10~18시(실외 ~17시) · 월 휴관 — <b>오늘(일) 정상 운영</b>합니다. 실외 물놀이장 12~16시 — <u>오늘은 낮에 비가 없어 실외까지 그대로 쓸 수 있습니다</u></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/raenavely/224366388014">여름 물놀이장 포함·오픈런 요령</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/do-won1/224320980631">‼️놀이기구 키 제한 사전 확인용</a> <span class="tip">· 2026-06</span></li></ul></div>
+      <a class="btn" href="https://noljasoop.com/">공식 홈페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="30">
+    <img class="thumb" src="./img/kids/cn/17_songam_space.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">케이블카+망원경</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>송암스페이스센터 '별빛패키지'</h3>
+      <p class="meta">천문대 + 케이블카 + 플라네타륨을 한 번에 · 8월은 토요일만 운영</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>60cm 대형 망원경</b>으로 달 크레이터·토성 고리를 직접 눈으로 관측</li>
+        <li><b>케이블카</b>를 타고 천문대까지 올라가는 것 자체가 아이들에겐 큰 이벤트</li>
+        <li><b>플라네타륨</b>(돔 영상관)에서 누워서 별자리 해설 — 7세도 지루하지 않다</li>
+        <li>흐리면 실제 관측이 어려우니 출발 전 당일 하늘을 보고 결정할 것 (환불 규정 확인 필수)</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><em>토요일만 운영</em> · ‼️<b>여름 별빛패키지는 어제 8/29(토) 회차로 끝났습니다</b> · 13~19시 발권. ⏳<u>9월 이후 회차는 아직 공식 확인이 안 됐습니다</u> — 가시려면 먼저 전화(031-894-6000)로 회차를 확인하세요. 낮 시간 천문대 전시·플라네타리움 관람은 계속 가능합니다</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/wonderer100/224312526410">케이블카 + 천체관측 아이 동반 코스</a> <span class="tip">· 2026-06</span></li><li><a href="https://blog.naver.com/rlawkdrn85/224237813143">교외체험학습으로 활용한 사례</a> <span class="tip">· 2026-04</span></li></ul></div>
+      <a class="btn" href="http://www.songamspacecenter.com">공식 홈페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="45">
+    <img class="thumb" src="./img/kids/cn/18_jeongok_prehistory.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">구석기 교육 · 실내</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>전곡선사박물관 + 한탄강 지질공원</h3>
+      <p class="meta">8월 주말마다 교육 프로그램 · 15주년 특별전 진행 중</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>주말교육 <b>'구석기인들은 어떤 집에 살았을까?'</b>·<b>'매머드 이야기'</b> (8/1~30 주말)</li>
+        <li><b>'아트 스테이지 전곡: 원시인이 나타났다!'</b>(8/14~10/11) — 배우가 원시인으로 등장하는 체험형 공연</li>
+        <li>15주년 특별전 <b>'땅속의 땅, 전곡'</b>은 계속 · <em>'화분 한 알, 30만 년의 풍경'은 8/22로 종료</em></li>
+        <li>차로 15분 <b>한탄강 지질공원</b> — 재인폭포 해설, 화산폭발 체험, 현무암 화분 만들기</li>
+        <li>세계적 구석기 유적지라 <b>11세 한국사와 직결</b>, 7세는 매머드·발굴놀이로 재미</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>화~일 10~18시 · <b>오늘(일)도 정상 운영</b> — 실내라 날씨와 무관합니다. 오늘은 밖이 좋으니 <u>한탄강 지질공원 산책과 묶어서</u> 쓰세요</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/travel_btmc/224368269164">관람 순서와 주차</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/2005_01_08/224326633084">무료인데 만족도 높았던 초등 코스</a> <span class="tip">· 2026-06</span></li></ul></div>
+      <a class="btn" href="https://jgpm.ggcf.kr">공식 홈페이지</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/19_gwacheon_science.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">얼음공룡 · 별 관측회</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>국립과천과학관</h3>
+      <p class="meta">국내 최대 과학관 · 여름 프로그램 56종 '사이캉스@과학관' 운영 중</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><em>기획전 '양자세대'는 8/23로 끝났습니다</em> — 8/22 '달과 별 관측회'도 종료됐습니다(다음 회차 공지 대기)</li>
+        <li>얼음공룡 대축제는 8/16 종료 — 상설 전시관·천체투영관·야외 곤충생태관은 계속 운영</li>
+        <li>기획전 <b>'양자세대'</b> — <em>8/23로 종료됐습니다</em>. 남은 것은 상설 전시관·천체투영관·야외 곤충생태관입니다</li>
+        <li>상설 <b>천체투영관</b>·태양관측·별바라기 야간관측(예약제)</li>
+        <li>야외 전시장·곤충생태관·생태공원이 넓어 뛰어놀기도 좋다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>운영</dt><dd>화~일 09:30~17:30 · <b>오늘(일) 정상 관람 가능</b>(월 휴관) — 실내 전시가 넓어 하루를 통째로 쓸 수 있습니다. <u>내일부터 비가 이어지니</u> 이번 주 실내 대안으로 기억해 두세요</dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/goodji_hyun/224366754763">‼️반나절로는 부족 — 하루 통으로 잡으라는 경고</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/fhelria/224369068368">다자녀 할인 + 유아체험관 예약</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.sciencecenter.go.kr/gnsm/reservation/personal-services">관측회 예약 (공식)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="100">
+    <img class="thumb" src="./img/kids/cn/20_cheonmundae.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">1m 망원경 · 야간</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>화천 조경철천문대</h3>
+      <p class="meta">해발 1,010m 광덕산 정상 · 시민천문대 최대 <b>1m 망원경</b></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>국내 시민천문대 중 <b>최대급 1m 망원경</b>으로 성운·성단까지 관측</li>
+        <li>재개관한 <b>천체투영실</b>에서 돔 영상으로 별자리 학습</li>
+        <li>고도가 높고 광공해가 적어 <b>맨눈으로도 은하수</b>가 보이는 날이 있다</li>
+        <li>19일 이후 맑은 밤이 예보되니 <b>8월 하순 주말</b>을 노릴 것 (구름 끼면 관측 불가)</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/zzk0020/224373864361">입장료·운영시간 최신 확인</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/amazing_eva/224332818400">아이 눈높이 별자리 관측</a> <span class="tip">· 2026-07</span></li></ul></div>
+      <a class="btn" href="http://www.apollostar.kr">공식 홈페이지</a>
+    </div>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">노원천문우주과학관(30분)</span> 금·토 <b>야간관측 19:30~21:00</b>(8/12~31)·주말 태양관측 — ‼️<b>야간관측은 8/29(토) 회차로 끝났고, 오늘 8/30(일)은 태양관측만</b> 남았습니다. <em>8/26 '문화가 있는 천문대'는 종료</em>. 낮에 비가 없어 태양관측 조건은 좋지만 <u>출발 전 운영 여부는 확인</u>하세요</li>
+    <li><span class="d">스포츠몬스터 하남·고양(50분)</span> <b>30m 짚라인</b>·클라이밍·버티컬슬라이드·AI골키퍼 등 실내 스포츠 30여 종 · 26,000~30,000 · <em>입장 120cm↑(일부 150cm↑) — 7세는 키 확인 필수</em></li>
+    <li><span class="d">아쿠아플라넷 일산(50분)</span> 수도권 최대급 아쿠아리움 · <b>바다코끼리</b> 보유 · '2026 물멍' 전시 · 39,000원 · 연중무휴 10~18시</li>
+    <li><span class="d">국립수목원 광릉숲(포천, 35분)</span> 어린이정원 <b>'숲이오래 키즈아카데미'</b> 무료 예약제 · 유네스코 생물권보전지역 숲길 · 어른 1,000·어린이 500 · <em>주차 100% 사전예약</em>·월 휴원</li>
+    <li><span class="d">양주 회암사지박물관(25분)</span> 여름 특별프로그램 8/1~23 화~금 — <b>'회암사지 탐정단'·'발굴탐험대'</b>(6세↑, 유물 발굴 역할놀이) · 031-8082-4173</li>
+    <li><span class="d">파주 임진각 평화곤돌라(1시간)</span> 민통선을 넘어가는 곤돌라 + <b>캠프그리브스</b>(미군 반환기지) 관람 — 11세 현대사 교육 · 대인 12,000·소인 10,000 · <em>신분증·보안서약서 필요</em>·월 휴관</li>
+    <li><span class="d">아침고요수목원(가평, 1시간10분)</span> 여름피크닉 ~8/30 · 주말 <b>무료 플레이존</b> · 11,000/7,500 · 08:30~19:00 / <b>포천 허브아일랜드</b> 2026 신규 놀이동산 + <b>야간 불빛동화축제</b> 12,000/10,000(수 휴무)</li>
+    <li><span class="d">포천 어메이징파크(50분)</span> <b>서스펜션브릿지</b>(출렁다리)·짚라인·과학관·솔라시스템 + 여름 야외수영장 · 입장 8,000·과학관 패키지 13,000 · <em>2026 8월 세부 미확인 — 전화 확인</em></li>
+  </ul>
+
+  <h2 class="sec" id="fest">🎪 축제·이벤트</h2>
+  <p class="secdesc">날짜 있는 행사 — 임박순. ‼️<b>여름 행사가 오늘 하루에 몰려 끝납니다</b> — 잔디밭영화제 마지막 회차(「스즈메의 문단속」), 수원 국가유산 야행 폐막, 한강 수영장·소요산 물놀이장 마지막 날, 양구 배꼽축제 폐막이 전부 오늘입니다</p>
+  <article class="card" data-drive="10">
+    <img class="thumb" src="./img/kids/cn/21_lawn_cinema.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>경기평화광장 잔디밭영화제 &amp; 문화예술공연</h3>
+      <p class="meta"><b>‼️오늘 8/30(일)이 이번 시즌 마지막 밤</b>입니다 · 집에서 10분 · 공연 18:30~19:30 → 500인치 야외영화 19:30~ · <u>저녁 6시 강수확률 14%, 밤 9시부터 39%</u>라 우산은 챙기세요</p>
+      <div class="play"><p class="lab">▸ 언제 뭘 하나</p><ul>
+        <li>‼️<b>오늘 8/30(일) — '스즈메의 문단속'</b> 19:30~ · 앞서 18:30부터 문화예술공연. <b>7세·11세 둘 다 볼 수 있는 마지막 회차</b>입니다. 낮에 물놀이를 마치고 저녁에 그대로 붙이는 동선이 오늘의 정답입니다</li>
+        <li><b>지난 회차 8/29(토)</b> — 아기자기·프롬디스트링 음악 공연</li>
+        <li>그 앞 회차 — 8/22 매직버블쇼(우천 불투명) · 8/23 '탑건: 매버릭'. <b>이번 시즌은 오늘로 끝납니다</b></li>
+        <li>잔디밭에 돗자리 펴고 저녁 도시락 — 가장 부담 없는 나들이</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>주의</dt><dd><em>우천 시 취소 — 인스타 @ggpeaceplaza 당일 확인 · 12세 관람가는 보호자 동반</em></dd>
+      </dl>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/dazzlingyoo/224365897637">2026 현장 방문 — 공연이 18시로 변경된 점 기록</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/pmr2410-/223608888875">500인치 LED·의자/돗자리 선착순 무료 대여</a> <span class="tip">· 2024-10</span></li></ul></div>
+      <a class="btn" href="https://www.gg.go.kr/peaceplaza/bbs/boardView.do?bsIdx=791&amp;bIdx=110903653&amp;menuId=3674">경기도 공식 안내</a>
+    </div>
+  </article>
+
+  
+  <article class="card" data-drive="25">
+    <img class="thumb" src="./img/kids/cn/24_nowon_water.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">2,000원</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>노원 '2026 꿀잼 워터파크' (화랑대 철도공원)</h3>
+      <p class="meta">폐철도 공원에 여름 한정으로 세운 팝업 워터파크 · 올해 슬라이드 무료화</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>50m 에어바운스 슬라이드</b> — 올해부터 추가 요금 없이 무료</li>
+        <li><b>유수풀 + 클라이밍풀</b> — 2,000원에 이 구성은 수도권에서 유일</li>
+        <li>같은 공원의 <b>노원불빛정원</b>(일몰~22시 상시 무료) — 물놀이 후 저녁 산책</li>
+        <li>노원 공원 물놀이장 6곳도 무료 운영(11:00~16:45)</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/yye81/224377364264">‼️평상 배치도 있음 — 자리 선점에 유용</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/ekwjddl0805/224371080830">2천원에 6살과 이틀 연속 간 이유</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://www.nowon.kr/www/summer-nowon_2026.jsp">노원구 공식</a>
+    </div>
+  </article>
+
+  
+  <article class="card" data-drive="45">
+    <img class="thumb" src="./img/kids/cn/26_hangang_cinema.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>한강 수영장 (다리밑 영화관은 종료)</h3>
+      <p class="meta"><b>다리밑 영화관은 8/8~22로 끝났습니다</b> · ‼️<b>한강 수영장은 오늘 8/30(일)이 올해 마지막 날</b> — <u>낮 강수확률 10~14%로 날씨는 더할 나위 없습니다</u>. 편도 1시간이 부담이 아니라면 <b>오늘이 마지막 기회</b>입니다</p>
+      <div class="play"><p class="lab">▸ 어디서 뭘 보나</p><ul>
+        <li><em>다리밑 영화관(여의도·뚝섬·광나루)은 8/22 회차로 올해 운영이 끝났습니다</em></li>
+        <li><b>한강 수영장은 휴무 없이 8/30까지 매일</b> 운영 · 매시 45분~정각 휴식 · 주차 50% 할인. 다만 <u>의정부에서 편도 1시간</u>이라, 양주관아(25분)보다 우선할 이유는 크지 않습니다</li>
+        
+        <li>같은 기간 <b>한강 밤핑</b>(~8/31 매일 17시~, 여의도·뚝섬 각 100동 선착순 무료 예약) — 텐트 치고 한강 야경</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/100vs100328/224366012879">한강 수영장 6곳 총정리 — 매시 45분~정각 휴식·반입금지·주차 50% 할인</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/simplelifenote/224372423617">천호대교 남단 — 역에서 걸어가는 길과 현장 분위기</a> <span class="tip">· 2026-08</span></li></ul></div>
+      <a class="btn" href="https://mediahub.seoul.go.kr/archives/2018952">서울시 안내</a>
+    </div>
+  </article>
+  <article class="card" data-drive="90">
+    <img class="thumb" src="./img/kids/cn/27_night_heritage.jpg" alt="" loading="lazy">
+    <p class="credit">📷 실제 사진 · 수원화성 야간 · Wikimedia Commons, CC BY 3.0</p>
+    <div class="body">
+      <div class="chips"><span class="chip">역사 야행 · 드론쇼</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>국가유산 야행 — 수원 &amp; 강릉</h3>
+      <p class="meta">밤에 여는 문화재 축제 · 낮보다 시원하고 조명이 예쁘다</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>수원</b> '열 번째 밤, 수원연향' 18~22시 — 야경·역사체험극·전통등 전시·야시장, <b>8야(夜) 프로그램</b></li>
+        <li>수원 <b>화성어차</b>를 타고 성곽 한 바퀴 (어린이 2,000원)</li>
+        <li><b>강릉</b> 대도호부관아 18~23시 — <b>매일 21:30 드론 1,000대 라이트쇼</b>가 하이라이트</li>
+        <li>‼️<b>수원 야행은 오늘 8/30(일)이 마지막 밤</b>입니다 — 당초 8/14~16 사흘이었는데 호평으로 <u>8/30까지 17일간 연장</u>됐고 오늘로 끝납니다. 무예뮤지컬 〈1790〉(8/8~29)·야간 프리마켓(8/14~16)은 이미 종료</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/woonis_/224379163425">2026 수원 야행 — 거리 관람 무료·장안문/화홍문 공영주차장</a> <span class="tip">· 2026-08</span></li><li><a href="https://blog.naver.com/kikili002/224341970715">낮 성곽길→행궁→야행으로 이어진 가족 하루 동선</a> <span class="tip">· 2026-07</span></li></ul></div>
+      <a class="btn" href="https://www.swcf.or.kr/?p=207">수원 공식 안내</a>
+    </div>
+  </article>
+
+  
+
+  
+    <article class="card" data-drive="120">
+    <img class="thumb" src="./img/kids/cn/31_yanggu_fest.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">입장 무료</span><span class="chip gray">7세 ✅ 11세 ✅</span></div>
+      <h3>국토정중앙 청춘양구 배꼽축제</h3>
+      <p class="meta"><b>8/28(금)~30(일) · ‼️<b>오늘이 마지막 날</b> 서천레포츠공원 · 강원 대표 가족축제 · 10~22시 — <u>오늘 폐막</u>, 밤 불꽃쇼가 마지막 순서입니다</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>워터건 물놀이</b> — 여름 마지막 물싸움</li>
+        <li><b>거리 퍼레이드</b>와 요일별 콘서트·군장병 콘서트</li>
+        <li>밤에는 <b>불꽃쇼</b> — 축제의 하이라이트</li>
+        <li><b>곰취 키트 체험</b> 등 양구 특산물 체험</li>
+      </ul></div>
+      <div class="reviews"><p class="lab">📝 실제 방문 후기</p><ul><li><a href="https://blog.naver.com/cmzero/223994918559">아이 동반 실제 동선(작년)</a> <span class="tip">· 2025-09</span></li><li><a href="https://blog.naver.com/hjbreaks/223990279344">무료 글램핑 등 신청 꿀팁</a> <span class="tip">· 2025-09</span></li></ul></div>
+      <a class="btn" href="https://ygcf.or.kr/Festival/F30000/index">공식 홈페이지</a>
+    </div>
+  </article>
+
+  <ul class="plain">
+    <li><span class="d">의정부예술의전당(🚗5분)</span> <em>어린이극 '개굴개굴 고래고래'는 8/28로 끝났습니다</em> / <em>8/29 북토크·시립합창단 공연은 종료</em> · 9/19 시립소년소녀합창단 정기공연(대극장)</li>
+    <li><span class="d">8/21~30 노원 발레 페스티벌</span> (30분) 가족용 <b>'한여름 밤의 호두까기 인형' 오늘 8/29 17:00</b>(6세+, R 5만·S 3만) — <u>마지막 가족 회차</u></li>
+    <li><span class="d">8/11~9/12 노원 상계예술마당</span> <b>방탈출 체험전시 '1926, 종로에 울린 만세'</b> — 회차당 6명, 구글폼 예약 (11세 강추)</li>
+    <li><span class="d"><s>8/26(수)</s> 포천반월아트홀 — 어제 공연으로 끝났습니다</span> 클래식 뮤지컬 <b>'이원복의 먼나라 이웃나라, 영국여행'</b>(R 20,000·S 10,000, 48개월+) · 🚗40분</li>
+    <li><span class="d">8/28~29 연천수레울아트홀</span> 창작뮤지컬 <b>'쿵짝'</b>(사랑손님과 어머니·동백꽃·운수 좋은 날, 7세+, 2~3만) — ‼️<u>오늘이 마지막 공연</u> · 11세 국어 교과 작품 · 🚗45분</li>
+    <li><span class="d">서울 '문화로 야금야금'</span> 8곳 야간개방(18~21시)은 어제 8/28로 끝났고, <b>오늘 8/29(토)은 나이트 보신각 타종 18:40~21:10</b> — <u>밤 강수확률 14%</u>라 야외로 좋습니다</li>
+    <li><span class="d">서울숲</span> <b>'한여름밤의 정원극장'</b> — <b>남은 회차는 8/29(토) 하나뿐</b> · 19~21시 야외 가족영화(16시부터 팔찌 배부, 선착순 800명) · <b>서울숲 퀴즈</b>도 8/29 18시(1인 3,000원, 경품) <em>(내일 토요일 하루뿐 — 그날 비 1.3mm·81%로 이슬비 수준이나 우천 여부 확인 필수)</em></li>
+    <li><span class="d">강릉·속초 해수욕장 — <b>8/26으로 폐장했습니다</b></span> (2시간30분) <em>동해·삼척·고성은 8/17에 이미 폐장</em> — <b>올여름 동해 바다는 끝났습니다</b>. 물놀이는 이제 <u>추동웰빙·소요산 등 무료 물놀이장(8/30~31 종료)</u>과 실내 워터파크만 남았습니다</li>
+    <li><span class="d">8/29(토)~8/30(일) 서초 뮤직앤아트페스티벌</span> (45분) 서초구 일대 <b>무료</b> 음악·예술 축제 — <em>이번 주 새로 확인된 행사</em>. 토요일 비 예보라 <b>8/30(일)</b>이 안전합니다</li>
+    <li><span class="d">9월 미리보기</span> 춘천인형극제 9/10~16 · 동두천 락페 9/11~13 · 부천국제만화축제 9/18~20 · 서울국제어린이영화제 9/10~15 · 경복궁 별빛야행 9/2~</li>
+  </ul>
+
+  <h2 class="sec" id="soon">🔜 예정 행사 — 9~10월</h2>
+  <p class="secdesc">물놀이가 끝나는 8월 말부터 <b>축제 시즌이 시작</b>됩니다. 관광공사 축제 DB에서 <b>의정부 90km 이내로 추린 41건</b> + 의정부시 연간 행사표에서 골랐고, <b>아이가 직접 할 게 있는 것</b>을 카드로 올렸습니다 · 날짜순</p>
+  <article class="card" data-drive="50">
+    <img class="thumb" src="./img/kids/cn/s3_upcycle.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">업사이클 체험</span></div>
+      <h3>새활용 페스티벌</h3>
+      <p class="meta">서울새활용플라자(성동구) · 버려진 것으로 만드는 체험 축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>폐자원으로 <b>직접 만들어 가져오는</b> 워크숍이 여러 개 — 11세 환경 수업과 바로 연결</li>
+        <li>7세도 참여 가능한 간단한 만들기 부스가 따로 있다</li>
+        <li>건물 자체가 재활용 주제 전시관이라 <b>비가 와도 실내에서 다 소화</b>된다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/4(금)~9/6(일)</b></dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="45">
+    <img class="thumb" src="./img/kids/cn/s12_jamsu_bridge.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">7주간 주말</span></div>
+      <h3>차 없는 잠수교 뚜벅뚜벅축제</h3>
+      <p class="meta">서울 잠수교 · 다리에서 차를 빼고 사람만 걸어다니는 축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>한강 다리 한복판을 차 없이 걸어본다</b> — 아이들이 제일 신기해하는 포인트</li>
+        <li>기간이 <b>7주로 길어서</b> 날씨 보고 아무 주말이나 고르면 된다</li>
+        <li>반포한강공원과 붙어 있어 <b>돗자리 + 자전거</b>로 하루를 채울 수 있다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/6(일)~10/25(일)</b> · 주말마다 · 7주간</dd>
+        <dt>요금</dt><dd>무료 (일부 프로그램 유료)</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="70">
+    <img class="thumb" src="./img/kids/cn/s4_flower.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">7,000원</span><span class="chip gray">24일간 열림</span></div>
+      <h3>Colorful Garden 자라섬 꽃 페스타</h3>
+      <p class="meta">가평 자라섬 · 섬 전체가 꽃정원 · <b>기간이 길어 날 잡기 쉽다</b></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>넓은 잔디·꽃밭이라 <b>아이가 마음껏 뛰어다닐 수 있다</b> — 유모차·킥보드도 무난</li>
+        <li>가을 억새·코스모스 배경 <b>가족사진</b> 찍기 좋은 시기</li>
+        <li>가는 길에 <b>남이섬·아침고요수목원</b>이 있어 하루 코스로 묶기 좋다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/12(토)~10/5(월)</b> · 24일간</dd>
+        <dt>요금</dt><dd><b>7,000원</b> · 가평군민 무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/s9_bucheon_comics.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">5,000원</span><span class="chip gray">11세 강추</span></div>
+      <h3>부천국제만화축제 (BICOF)</h3>
+      <p class="meta">한국만화박물관 일원 · 국내 최대 만화 축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>한국만화박물관</b>이 축제장 한복판 — 만화 원화 전시·애니 상영관·체험존이 통째로 열린다</li>
+        <li>만화가 <b>실시간 드로잉·사인회</b>가 상시로 돌아간다 — 11세가 가장 좋아할 대목</li>
+        <li><b>사전신청이 40% 싸다</b>(5,000→3,000) — 9월 초에 홈페이지 열리면 미리 결제</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/18(금)~9/20(일)</b></dd>
+        <dt>요금</dt><dd><b>5,000원</b> · <b>사전신청하면 3,000원</b></dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="45">
+    <img class="thumb" src="./img/kids/cn/s10_goyang_lake.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">가까움</span></div>
+      <h3>고양호수예술축제</h3>
+      <p class="meta">일산호수공원 + 일산문화광장 일원 · 거리예술 축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>거리극·서커스·인형극</b>이 공원 곳곳에서 동시에 벌어진다 — 표를 안 사도 다 볼 수 있다</li>
+        <li>일산호수공원은 <b>자전거·킥보드 대여</b>가 되고 놀이터가 여러 개라 축제와 별개로도 하루가 간다</li>
+        <li>의정부에서 <b>45분</b> — 이 목록에서 손에 꼽게 가깝다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/18(금)~9/20(일)</b></dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="70">
+    <img class="thumb" src="./img/kids/cn/s11_siheung_getgol.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">갯벌 체험</span></div>
+      <h3>시흥갯골축제</h3>
+      <p class="meta">시흥갯골생태공원 · 내륙 갯벌 + 옛 소금밭</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>소금 만들기(천일염 채취)</b> 체험 — 교과서에서만 보던 염전을 직접 밟는다</li>
+        <li><b>갯벌 생물 관찰</b>과 흙길 걷기 — 여벌 옷·장화는 필수</li>
+        <li><b>22m 흔들전망대</b>에 올라가면 갯골 전체가 내려다보인다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/18(금)~9/20(일)</b></dd>
+        <dt>요금</dt><dd>무료 (일부 체험 유료)</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="90">
+    <img class="thumb" src="./img/kids/cn/s6_media.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">입장 무료</span><span class="chip gray">야간 18일간</span></div>
+      <h3>수원화성 미디어아트</h3>
+      <p class="meta">수원화성 성곽 일원 · 성벽에 빛을 쏘는 야간 전시</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>성벽·성문에 <b>대형 프로젝션 맵핑</b> — 아이들이 "우와" 하는 스케일</li>
+        <li>8월에 갔던 <b>수원 국가유산 야행</b>과 같은 장소, 다른 연출</li>
+        <li>낮에 <b>화성어차</b>(어린이 2,000원) 타고 성곽 돌고 저녁에 미디어아트로 이어가면 하루 코스</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/19(토)~10/6(화)</b> · 18일간</dd>
+        <dt>요금</dt><dd>입장료 무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="25">
+    <img class="thumb" src="./img/kids/cn/s7_yangju_flower.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip">개장료 확인</span><span class="chip gray">🚗 25분</span></div>
+      <h3>양주 천일홍 가을페스타 (나리농원)</h3>
+      <p class="meta">양주 나리농원(광사동) · <b>천만송이 천일홍 + 핑크뮬리</b> · 이 목록에서 가장 가까운 대형 꽃축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>천일홍 천만송이</b>가 밭 단위로 깔린다 — 핑크뮬리·댑싸리까지 이어져 사진이 잘 나온다</li>
+        <li>평평한 산책로라 <b>7세도 한 바퀴를 걸어서 돈다</b> · 유모차 가능</li>
+        <li><b>25분</b>이라 오후에 잠깐 다녀오기 좋다 · <b>10/5(월) 마라톤</b> 날은 주차가 막히니 피할 것</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/26(토)~10/18(일)</b> · 23일간</dd>
+        <dt>요금</dt><dd><em>개장료·주차 미확인 — 9월 중 양주시 공지 확인</em></dd>
+        <dt>주의</dt><dd><em>일정 9/26~10/18은 <b>블로그·지역 매체 다수 일치분</b>이며 양주시 공식 공지로는 아직 미확인입니다</em></dd>
+      </dl>
+      <a class="btn" href="https://www.yangju.go.kr/">양주시청</a>
+    </div>
+  </article>
+  <article class="card" data-drive="70">
+    <img class="thumb" src="./img/kids/cn/s13_sorae.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">바다·수산시장</span></div>
+      <h3>소래포구축제</h3>
+      <p class="meta">인천 소래포구 일원 · 항구 전체가 축제장</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>맨손 물고기 잡기</b>가 대표 프로그램 — 7세·11세 둘 다 몰입한다</li>
+        <li><b>소래철교</b>(옛 협궤열차 다리) 위를 걸어서 건너본다</li>
+        <li>가는 길 <b>소래습지생태공원</b>의 풍차·염전을 붙이면 반나절이 더 나온다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/2(금)~10/4(일)</b></dd>
+        <dt>요금</dt><dd>무료 (일부 체험 유료)</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="100">
+    <img class="thumb" src="./img/kids/cn/s16_baudeogi.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">줄타기 공연</span></div>
+      <h3>안성맞춤 남사당 바우덕이축제</h3>
+      <p class="meta">안성 남사당전수관 일원 · <b>유네스코 등재</b> 남사당놀이</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>줄타기(어름)</b>를 코앞에서 본다 — 남사당 여섯 마당을 매일 공연</li>
+        <li><b>버나(접시돌리기)·상모돌리기 체험</b> 부스가 아이 대상으로 따로 있다</li>
+        <li>11세 사회·국악 단원과 바로 연결 · <b>1시간40분</b>이라 아침 일찍 출발할 것</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/2(금)~10/5(월)</b> · 4일간</dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="80">
+    <img class="thumb" src="./img/kids/cn/s8_chuncheon_toy.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">아이 최적</span></div>
+      <h3>춘천애니토이페스티벌</h3>
+      <p class="meta">춘천 애니메이션박물관·토이로봇관 일원 · <b>이 목록에서 아이 적합도 1위</b></p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>애니메이션박물관 + 토이로봇관</b>이 축제 기간 통째로 무료 개방된다</li>
+        <li><b>로봇 조종·코딩 체험</b>과 장난감 전시 — 7세는 장난감, 11세는 로봇으로 갈린다</li>
+        <li>축제장이 <b>의암호 옆</b>이라 끝나고 물가 산책·레일바이크로 이어진다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/3(토)~10/5(월)</b> · 추석 연휴</dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="90">
+    <img class="thumb" src="./img/kids/cn/s14_suwon_hwaseong.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">8일간</span></div>
+      <h3>수원화성문화제</h3>
+      <p class="meta">수원화성 + 행궁광장 · 정조대왕 능행차 재현</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>정조대왕 능행차</b> — 수백 명 규모의 행렬이 도심을 지나간다</li>
+        <li>무예24기 시범·야간 성곽 개방 등 <b>프로그램이 8일 내내</b> 다르다</li>
+        <li>9월 <b>수원화성 미디어아트</b>와 같은 장소 — 둘 중 하나만 골라도 된다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/4(일)~10/11(일)</b> · 8일간</dd>
+        <dt>요금</dt><dd>무료 (일부 사전예약 프로그램 유료)</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="10">
+    <img class="thumb" src="./img/kids/cn/s1_hoeryong.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">우리 동네</span></div>
+      <h3>제41회 회룡문화제</h3>
+      <p class="meta">의정부 대표 문화축제 · 개막행사 + 체험 부스 · 장소는 추후 공지</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li>의정부에서 가장 큰 지역 축제 — <b>체험 부스가 대규모</b>로 깔린다</li>
+        <li>집에서 10분이라 <b>오후에 잠깐 다녀오기</b> 좋은 규모</li>
+        <li>같은 주 <b>10/9 한글한복 패션쇼</b>(상설야외무대)도 무료</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/9(금)~10/10(토)</b> · 장소 미정 — 9월 중 시청 공지 확인</dd>
+        <dt>요금</dt><dd>무료</dd>
+        <dt>문의</dt><dd>의정부시 문화예술과 031-828-4332</dd>
+      </dl>
+      <a class="btn" href="https://www.ui4u.go.kr/portal/contents.do?mId=0301170000">의정부시 연간 행사표</a>
+    </div>
+  </article>
+  <article class="card" data-drive="70">
+    <img class="thumb" src="./img/kids/cn/s15_incheon_yahaeng.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">야간</span></div>
+      <h3>인천개항장 국가유산야행</h3>
+      <p class="meta">인천 개항장(제물포) 일원 · 100년 된 서양식 건물들의 야간 개방</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>근대 건축물이 밤에 통째로 열린다</b> — 낮에는 못 들어가는 곳까지</li>
+        <li><b>등불 들고 걷는 야행 코스</b>가 정해져 있어 아이가 지루해하지 않는다</li>
+        <li>차이나타운·월미도와 붙어 있어 <b>낮부터 붙여서</b> 하루 코스</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/9(금)~10/11(일)</b> · 밤 행사</dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="60">
+    <img class="thumb" src="./img/kids/cn/s5_prehistory.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">교육형</span></div>
+      <h3>강동선사문화축제</h3>
+      <p class="meta">서울 강동구 암사동 유적 일원 · 문화관광축제 지정</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>암사동 선사유적</b>에서 열려 움집·토기·불피우기 같은 <b>선사 체험</b>이 축제 규모로 펼쳐진다</li>
+        <li>연천 전곡선사박물관을 좋아했다면 <b>같은 결의 상위 버전</b></li>
+        <li>11세 한국사(신석기) 단원과 직결 · 7세는 만들기 부스 위주</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/16(금)~10/18(일)</b></dd>
+        <dt>요금</dt><dd>무료 (먹거리는 개별 구매)</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="90">
+    <img class="thumb" src="./img/kids/cn/s17_yeoju_ogok.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">수확 체험</span></div>
+      <h3>여주오곡나루축제</h3>
+      <p class="meta">여주 신륵사 관광지 남한강변 · 가을 수확 축제</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>고구마·밤·땅콩 캐기</b>와 탈곡 체험 — 손으로 하는 게 많다</li>
+        <li><b>가마솥 밥짓기·떡메치기</b> 같은 옛날 방식 체험이 축제의 축</li>
+        <li><b>신륵사</b>와 강변 산책로가 붙어 있어 체험 뒤 쉬어 가기 좋다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/23(금)~10/25(일)</b></dd>
+        <dt>요금</dt><dd>무료</dd>
+      </dl>
+      <a class="btn" href="https://korean.visitkorea.or.kr/kfes/list/wntyFstvlList.do">축제 정보 (관광공사)</a>
+    </div>
+  </article>
+  <article class="card" data-drive="10">
+    <img class="thumb" src="./img/kids/cn/s2_budae.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료시식</span><span class="chip gray">우리 동네</span></div>
+      <h3>제19회 의정부부대찌개축제</h3>
+      <p class="meta">부대찌개거리 일원 · 공연 + 무료시식회 + 상권 이벤트</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>무료시식회</b>가 메인 — 점심 시간대를 노려서 가면 줄이 짧다</li>
+        <li>공연·이벤트가 이어져 <b>아이 데리고 한 바퀴 돌기</b> 좋다</li>
+        <li>같은 날 <b>모잇나?! 가을운동회</b>(세대통합 운동회)·<b>녹양평 문화축제</b>도 열린다 — 하루씩 나눠도 된다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>10/24(토)~10/25(일)</b></dd>
+        <dt>요금</dt><dd>무료 (시식 무료)</dd>
+        <dt>문의</dt><dd>의정부시 일자리경제과 031-928-6528</dd>
+      </dl>
+      <a class="btn" href="https://www.ui4u.go.kr/portal/contents.do?mId=0301170000">의정부시 연간 행사표</a>
+    </div>
+  </article>
+  <article class="card" data-drive="15">
+    <img class="thumb" src="./img/kids/cn/s18_ujb_stamp.jpg" alt="" loading="lazy">
+    <div class="body">
+      <div class="chips"><span class="chip free">무료</span><span class="chip gray">두 달 내내</span></div>
+      <h3>의정부8경 스탬프투어</h3>
+      <p class="meta">망월사 외 7개소 · <b>9~10월 두 달 내내</b> · 우리 동네를 도장 찍으며 도는 놀이</p>
+      <div class="play"><p class="lab">▸ 뭘 할 수 있나</p><ul>
+        <li><b>8곳을 도장 찍으며 도는 방식</b> — 목표가 생기니 아이가 걷는 걸 덜 지루해한다</li>
+        <li>한 번에 다 안 돌아도 된다 — <b>주말마다 한두 곳씩</b> 두 달에 걸쳐 채운다</li>
+        <li>망월사·회룡사처럼 <b>차 대고 20분 오르는 코스</b>부터 평지까지 섞여 있어 컨디션 따라 고르면 된다</li>
+      </ul></div>
+      <dl class="rows">
+        <dt>일정</dt><dd><b>9/1~10/31</b> · 두 달 상시</dd>
+        <dt>요금</dt><dd>무료</dd>
+        <dt>문의</dt><dd>의정부시 문화예술과 031-828-4353</dd>
+      </dl>
+      <a class="btn" href="https://www.ui4u.go.kr/portal/contents.do?mId=0301170000">의정부시 연간 행사표</a>
+    </div>
+  </article>
+
+  <p class="lab" style="margin:26px 0 8px">🏠 의정부 시내 — 차로 10분 안 (시청 연간 행사표)</p>
+  <ul class="plain">
+    <li><span class="d">9/2~3</span> <b>송산2동 나눔장터</b> — 다리목근린공원 · 나눔장터 + 자원회수 캠페인</li>
+    <li><span class="d">9/11~12</span> <b>제5회 민락맥주축제</b> — 민락2지구 로데오광장 · 공연 + 상권 이벤트</li>
+    <li><span class="d">9/19</span> <b>시립소년소녀합창단 정기공연</b> — 의정부예술의전당 대극장</li>
+    <li><span class="d">9/30</span> <b>제10회 영유아 체험전</b> — 의정부종합운동장 · <b>미니운동회 + 놀이 체험 부스</b></li>
+    <li><span class="d">10/3</span> <b>제9회 동오마을축제</b> — 신곡2동 동오마을 · 공연 + 체험 부스</li>
+    <li><span class="d">10/16</span> <b>업사이클링 페스티벌 「폐자원의 인공호흡」</b> — 다리목근린공원 · <b>탄소중립 체험 + 플리마켓</b></li>
+    <li><span class="d">10/16~17</span> <b>제8회 BMF</b> — 의정부예술의전당 · 힙합 페스티벌 (11세용)</li>
+    <li><span class="d">10/17</span> <b>2026 물길마라톤 / 송3 어울림 한마당</b> — 중랑천 일원 / 민락2지구 로데오광장</li>
+    <li><span class="d">10/24</span> <b>모잇나?! 가을운동회</b> — 의정부도시교육재단 · <b>세대통합 시민참여 운동회</b></li>
+    <li><span class="d">10/24</span> <b>2026 녹양평 문화축제</b> — 녹양역 서부광장 · 공연·체험·플리마켓</li>
+    <li><span class="d">10/31</span> <b>2026 어울림 하천 걷기대회</b> — 백석천 일원 · 장애인·비장애인 함께 걷기</li>
+  </ul>
+
+  <p class="lab" style="margin:26px 0 8px">🚗 그 밖의 90km 이내 축제 — 관광공사 축제 DB 확인분</p>
+  <ul class="plain">
+    <li><span class="d">9/2~10/24</span> <b>경복궁 별빛야행</b> <span class="tip">🚗 45분</span> — <b>유료 60,000원</b> · 성인 대상</li>
+    <li><span class="d">9/5~6</span> <b>화성송산포도축제</b> <span class="tip">🚗 1시간50분</span> — 무료 · 포도따기 체험</li>
+    <li><span class="d">9/9~10/18</span> <b>덕수궁 밤의 석조전</b> <span class="tip">🚗 45분</span> — <b>유료 35,000원</b></li>
+    <li><span class="d">9/12~13</span> <b>노원수제맥주축제</b> <span class="tip">🚗 25분</span> — 무료 · <b>가장 가까움(25분)</b></li>
+    <li><span class="d">9/12</span> <b>동대문구 북 페스티벌</b> <span class="tip">🚗 45분</span> — 무료 · 책 축제</li>
+    <li><span class="d">9/12~13</span> <b>처인성문화제(용인)</b> <span class="tip">🚗 1시간30분</span> — 무료 · 일부 체험 유료</li>
+    <li><span class="d">9/18~20</span> <b>광주시 남한산성문화제</b> <span class="tip">🚗 1시간</span> — 무료 · <b>성곽 + 역사 체험</b></li>
+    <li><span class="d">9/18~20</span> <b>과천공연예술축제</b> <span class="tip">🚗 1시간</span> — 무료 · <b>거리공연 중심</b></li>
+    <li><span class="d">9/18~20</span> <b>안양춤축제</b> <span class="tip">🚗 1시간</span> — 무료</li>
+    <li><span class="d">9/19~20</span> <b>인천 독서대전</b> <span class="tip">🚗 1시간10분</span> — 무료</li>
+    <li><span class="d">9/19~20</span> <b>안산 대부포도축제</b> <span class="tip">🚗 1시간30분</span> — 무료 · 포도따기</li>
+    <li><span class="d">9/19~20</span> <b>서리풀뮤직페스티벌 / 청춘 커피페스티벌</b> <span class="tip">🚗 45분</span> — 서초 / 송파 · 무료</li>
+    <li><span class="d">9/24~10/4</span> <b>창경궁 야연</b> <span class="tip">🚗 45분</span> — 유료 · 일부 공연 무료</li>
+    <li><span class="d">10/2~5</span> <b>강남페스티벌</b> <span class="tip">🚗 45분</span> — 무료</li>
+    <li><span class="d">10/2~4</span> <b>부평풍물대축제</b> <span class="tip">🚗 1시간</span> — 무료 · 풍물 퍼레이드</li>
+    <li><span class="d">10/3~4</span> <b>정조효문화제(화성)</b> <span class="tip">🚗 1시간30분</span> — 무료</li>
+    <li><span class="d">10/4</span> <b>금천시흥행궁문화제</b> <span class="tip">🚗 1시간</span> — 무료</li>
+    <li><span class="d">10/7~11</span> <b>횡성한우축제</b> <span class="tip">🚗 1시간50분</span> — 무료 입장 · 먹거리 별도</li>
+    <li><span class="d">10/9~11</span> <b>시흥월곶포구축제</b> <span class="tip">🚗 1시간10분</span> — 무료</li>
+    <li><span class="d">10/14~18</span> <b>춘천막국수닭갈비축제</b> <span class="tip">🚗 1시간30분</span> — 무료</li>
+    <li><span class="d">10/16~18</span> <b>관악강감찬축제</b> <span class="tip">🚗 1시간</span> — 무료</li>
+    <li><span class="d">10/17</span> <b>금천하모니축제</b> <span class="tip">🚗 1시간</span> — 무료</li>
+    <li><span class="d">10/31~11/1</span> <b>고양행주한우 숯불구이축제</b> <span class="tip">🚗 45분</span> — 무료 입장</li>
+  </ul>
+  <p class="notice">🔎 위 목록은 <b>관광공사 「대한민국 구석구석」 축제 DB 8~11월 410건</b>을 받아 의정부 시청 좌표에서 <b>직선 90km(≒ 차로 2시간30분)</b> 안으로 자른 <b>41건</b>이 원본입니다. 요금·일정은 DB 등록값이며 <b>개막 직전에 바뀌는 경우가 있어 출발 전 공식 공지를 한 번 더 보세요</b>. <em>⏳ 아직 공식 발표 전이라 못 넣은 것 — 구리 코스모스축제(2025년은 9/26~28) · 남양주 슬로라이프페스티벌 · 동두천 가을축제</em></p>
+
+
+  <h2 class="sec" id="top">🏆 오늘 TOP 5 (일요일 · 27℃ · 낮에 비 없음)</h2>
+<ol class="top">
+<li>💦 <b>오늘이 올여름 마지막 물놀이 날입니다 — 경기북부어린이박물관 + 소요산 물놀이장</b>(동두천·40분). 물놀이장이 <u>수·목·금·일만 운영</u>이라 <b>「실내 전시 → 연결통로 → 야외 물놀이」 코스가 성립하는 날은 오늘이 마지막</b>입니다. ‼️박물관은 1일 4회 회차제(10·12·14·16시) — <b>출발 전에 회차부터 예약</b>하세요.</li>
+<li>🏊 <b>가까이서 끝내려면 추동웰빙공원 물놀이장</b>(무료·10분·11~19시, 12~13시 점검). 올해 운영은 내일 8/31까지지만 <u>내일은 비 예보</u>라 <b>맑은 날 물놀이는 오늘이 마지막</b>입니다. 별내 아쿠아가든·구리 물놀이장·한강 수영장도 모두 오늘이 마지막 날입니다.</li>
+<li>🌙 <b>저녁은 집 앞 잔디밭영화제 — 시즌 마지막 밤</b>(경기평화광장·무료·10분). 18:30 문화예술공연 → <b>19:30 「스즈메의 문단속」</b> 500인치 야외 상영. 7세·11세가 함께 볼 수 있는 마지막 회차입니다. ‼️<u>밤 9시 강수확률 39%</u> — 돗자리와 우산을 함께.</li>
+<li>🏯 <b>수원 국가유산 야행이 오늘 폐막</b>(1시간30분). 당초 8/14~16 사흘이었는데 호평으로 <u>8/30까지 17일간 연장</u>됐고 오늘이 마지막 밤입니다 — 18~22시, 화성어차(어린이 2,000원)·전통등·야시장.</li>
+<li>🎢 <b>더위를 피하려면 노원 3종</b> — 노원 JUMP는 <u>어제 그랜드오픈</u>해 스카이글라이더·드리프트카트 라이드존이 막 열렸습니다(붐빌 수 있으니 오픈 시간에). 도보권 <b>서울시립과학관에서 오늘 「일상실험실」 무료 프로그램</b>, RAIM 상설전은 100% 사전예약. <em>내일부터 셋 다 월 휴관</em>입니다.</li>
+</ol>
+  <p class="notice">🗓 <b>다음 2주</b> — <b>8/30(일·오늘)</b> 21~27℃·<u>낮 강수확률 10~14%, 밤 9시부터 39%</u> · 잔디밭영화제 '스즈메의 문단속'(시즌 마지막) · 서울시립과학관 '일상실험실' 무료 프로그램 · 수원 국가유산 야행 폐막 · <em>오늘 종료 — 소요산 물놀이장·한강 수영장·별내 아쿠아가든·구리 물놀이장·국립민속박물관 《가나다락》·극장 용 「할머니의 여름휴가」·키자니아 골드시즌·캐리비안베이 골드시즌·양구 배꼽축제</em> · <b>8/31(월)</b> 21~23℃·<b>비 예보(모델에 따라 최대 20mm·확률 100%)</b> — 추동웰빙·도봉 다락원 물놀이장 마지막 날이지만 비 · <em>웅진플레이도시 휴장 · 서울시립과학관·RAIM·경기북부어린이박물관·노원 JUMP 월 휴관</em> · <b>9/1(화)</b> 21~27℃·<b>비 11~13mm</b> — 실내만 · <b>9/2(수)</b> 21~28℃·비 1.6mm·55% · <b>9월 미리보기</b> 경복궁 별빛야행 9/2~ · <b>송산2동 나눔장터 9/2~3</b>(다리목근린공원) · 새활용 페스티벌 9/4~6 · 의정부 AI 혁신 포럼 9/5 · 차 없는 잠수교 9/6~ · 춘천인형극제 9/10~16 · 서울국제어린이영화제 9/10~15 · <b>의정부 민락맥주축제 9/11~12</b> · 동두천 락페 9/11~13 · 자라섬 꽃 페스타 9/12~ · 부천국제만화축제·고양호수예술축제·시흥갯골축제 9/18~20 · <b>의정부시립소년소녀합창단 정기공연 9/19</b>(예술의전당 대극장) · 수원화성 미디어아트 9/19~ · 양주 천일홍 가을페스타 9/26~ · <b>문화가 있는 날 9/30(수)</b> — 국립중앙박물관 본관 21시까지 · <b>제10회 영유아 체험전 9/30</b>(의정부종합운동장).</p>
+
+  <div class="glance" id="glance">
+    <h2>🗺 한눈에 보기 — 의정부에서 얼마나 걸리나</h2>
+    <p class="lede">가까운 순서대로 · 색은 분류(무료·할인·핫플·축제)</p>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>무료</span>
+      <span><i style="background:var(--warn)"></i>대폭할인</span>
+      <span><i style="background:var(--pink)"></i>핫한 곳</span>
+      <span><i style="background:var(--violet)"></i>축제</span>
+    </div>
+    <div class="band"><div class="t">~15분</div><div class="items">
+      <span class="pin">추동웰빙 물놀이장 <b>(오늘 재개장)</b></span><span class="pin f">경기평화광장 영화제</span><span class="pin h">의정부예당 체험전</span><span class="pin">도봉 다락원</span>
+    </div></div>
+    <div class="band"><div class="t">25~35분</div><div class="items">
+      <span class="pin f">노원 꿀잼워터파크</span><span class="pin h">노원 JUMP</span><span class="pin">서울시립과학관</span><span class="pin">로봇AI과학관</span><span class="pin f">양주 유유·관아</span><span class="pin h">송암스페이스센터</span><span class="pin">경기북부어린이박물관</span><span class="pin h">동두천 놀자숲</span><span class="pin">남양주·구리 물놀이장 <b>(오늘 운영)</b></span><span class="pin">소요산 물놀이장 <b>(오늘 운영)</b></span><span class="pin h">국립수목원</span><span class="pin h">회암사지박물관</span>
+    </div></div>
+    <div class="band"><div class="t">45분~<br>1시간</div><div class="items">
+      <span class="pin h">전곡선사박물관</span><span class="pin s">아쿠아필드 고양</span><span class="pin s">웅진플레이도시</span><span class="pin">한강 수영장</span><span class="pin">국립중앙박물관</span><span class="pin">실학박물관</span><span class="pin s">서울랜드</span><span class="pin h">과천과학관</span><span class="pin s">키자니아</span><span class="pin s">롯데월드</span><span class="pin h">임진각 곤돌라</span><span class="pin h">아쿠아플라넷</span>
+    </div></div>
+    <div class="band"><div class="t">1시간~<br>1시간30분</div><div class="items">
+      <span class="pin h">남이섬</span><span class="pin h">아침고요수목원</span><span class="pin s">캐리비안베이</span><span class="pin s">레고랜드</span><span class="pin f">수원 야행</span>
+    </div></div>
+    <div class="band"><div class="t">1시간40분<br>~2시간30분</div><div class="items">
+      <span class="pin s">오션월드</span><span class="pin h">조경철천문대</span><span class="pin s">테르메덴</span><span class="pin f">양구 배꼽축제</span><span class="pin s">알펜시아 오션700</span><span class="pin s">설악 워터피아</span><span class="pin f">강릉 야행</span>
+    </div></div>
+  </div>
+
+  <footer>
+    <p>📝 방문 후기는 개인 블로그 글로, 전부 접속 확인했습니다(협찬·업체 홍보글은 제외). 후기 속 요금·운영시간은 방문 시점 기준이라 <b>공식 링크로 재확인</b>하세요. 출처 우선순위 — 공식 홈페이지·지자체 공지 &gt; 언론 &gt; 블로그. '미확인'은 공식 확인이 안 된 항목이니 방문 전 전화 확인 권장. 이동시간은 의정부(신곡동) 출발 자가용 주말 낮 대략치(±20분).</p>
+    <p>카드 그림은 대부분 코덱스 내장 image_gen 일러스트이며, 📷 표시가 있는 것만 실제 사진(위키미디어 커먼즈 CC 라이선스·출처 표기)입니다. 블로그·홈페이지 사진은 저작권 문제로 쓰지 않습니다 · <a class="link" href="./2026-08-28.html">채용 브리핑으로</a></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var MODE = 'kids';
+  var cards = [].slice.call(document.querySelectorAll('article.card'));
+  if (!cards.length) return;
+
+  /* 카드마다 분류 태그를 심는다 */
+  cards.forEach(function (c) {
+    var tags = [];
+    var chips = [].slice.call(c.querySelectorAll('.chip'));
+    if (MODE === 'jobs') {
+      chips.forEach(function (ch) {
+        var m = (ch.textContent || '').trim().match(/^([ABCD])급/);
+        if (m) tags.push('tier-' + m[1]);
+      });
+      if (c.querySelector('.dot.g')) tags.push('zone-in');
+      if (c.querySelector('.dot.r')) tags.push('zone-out');
+    } else {
+      var sec = c.previousElementSibling;
+      while (sec && sec.tagName !== 'H2') sec = sec.previousElementSibling;
+      if (sec && sec.id) tags.push('cat-' + sec.id);
+      var drv = c.getAttribute('data-drive');
+      if (drv) tags.push(parseInt(drv, 10) <= 40 ? 'near' : 'far');
+    }
+    c.setAttribute('data-tags', tags.join(' '));
+  });
+
+  var DEFS = MODE === 'jobs'
+    ? [['tier-A', 'A급 정규·무기'], ['tier-B', 'B급 1년+'], ['tier-C', 'C급 고시급'],
+       ['tier-D', 'D급 단기'], ['zone-in', '🟢 통근권'], ['zone-out', '🔴 통근권 밖']]
+    : MODE === 'new'
+    ? [['cat-njobs', '🧾 채용'], ['cat-nkids', '🎒 아이 나들이'], ['near', '🚗 40분 이내']]
+    : [['cat-free', '🆓 무료'], ['cat-sale', '🔥 대폭할인'], ['cat-hot', '✨ 핫한 곳'],
+       ['cat-fest', '🎪 축제'], ['cat-soon', '🔜 예정'], ['near', '🚗 40분 이내']];
+
+  function count(key) {
+    return cards.filter(function (c) {
+      return (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+    }).length;
+  }
+
+  var bar = document.createElement('div');
+  bar.className = 'filters';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', '분류 필터');
+  var btns = [];
+  function mk(key, label, n) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-key', key);
+    b.setAttribute('aria-pressed', key === 'all' ? 'true' : 'false');
+    b.innerHTML = label + (n != null ? ' <span class="n">' + n + '</span>' : '');
+    b.addEventListener('click', function () { apply(key); });
+    bar.appendChild(b); btns.push(b);
+  }
+  mk('all', '전체', cards.length);
+  DEFS.forEach(function (d) { var n = count(d[0]); if (n) mk(d[0], d[1], n); });
+
+  var empty = document.createElement('p');
+  empty.className = 'noresult';
+  empty.textContent = '이 분류에 해당하는 항목이 없습니다.';
+
+  function apply(key) {
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-key') === key)); });
+    var shown = 0;
+    cards.forEach(function (c) {
+      var ok = key === 'all' || (' ' + c.getAttribute('data-tags') + ' ').indexOf(' ' + key + ' ') > -1;
+      c.classList.toggle('is-hidden', !ok);
+      if (ok) shown++;
+    });
+    /* 섹션 제목·설명·목록은 그 섹션에 보이는 카드가 없으면 숨긴다 */
+    [].slice.call(document.querySelectorAll('h2.sec')).forEach(function (h) {
+      var el = h.nextElementSibling, has = false, buf = [h];
+      while (el && el.tagName !== 'H2') {
+        buf.push(el);
+        if (el.matches && el.matches('article.card') && !el.classList.contains('is-hidden')) has = true;
+        el = el.nextElementSibling;
+      }
+      var keep = key === 'all' || has;
+      buf.forEach(function (n) {
+        if (n.matches && n.matches('article.card')) return;      /* 카드는 위에서 처리 */
+        n.classList.toggle('is-hidden', !keep);
+      });
+    });
+    empty.style.display = shown ? 'none' : 'block';
+    if (window.scrollY > 300) window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* 상단 고정바에 탭 + 필터를 넣는다 */
+  var tabs = document.querySelector('nav.tabs');
+  var top = document.createElement('div');
+  top.className = 'topbar';
+  if (tabs && tabs.parentNode) {
+    tabs.parentNode.insertBefore(top, tabs);
+    top.appendChild(tabs);
+  } else {
+    var wrap = document.querySelector('.wrap');
+    wrap.insertBefore(top, wrap.firstChild);
+  }
+  top.appendChild(bar);
+  (cards[0].parentNode).insertBefore(empty, cards[0]);
+
+  /* 맨 위로 */
+  var up = document.createElement('button');
+  up.className = 'totop'; up.type = 'button';
+  up.setAttribute('aria-label', '맨 위로');
+  up.textContent = '↑';
+  up.addEventListener('click', function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+  document.body.appendChild(up);
+  function onScroll() { up.classList.toggle('show', window.scrollY > 420); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
