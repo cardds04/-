@@ -3366,7 +3366,7 @@
           <div class="ai-head">
             <div>
               <h3>➕ 새 단어장 만들기</h3>
-              <p><b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요.</p>
+              <p id="aiPanelSub"><b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요.</p>
             </div>
             <button type="button" class="ai-toggle" id="aiToggle" aria-expanded="false" aria-controls="aiBody">열기 ▾</button>
           </div>
@@ -5594,8 +5594,17 @@
           const units = getUnits();
           units.push(newUnit);
           saveUnits(units);
+          // 새로 만든 단어장은 '학원(내 단원)' 쪽 자료 — 학교 카테고리에서 만들었더라도
+          // 학원으로 전환해야 showMenu가 학교 단원을 다시 활성화하지 않고 새 단원이 보인다.
+          try {
+            if (getStudyCategory() === "school") {
+              localStorage.setItem(nsKey(STUDY_CATEGORY_KEY), "academy");
+              window.studyGameSync && window.studyGameSync.markDirty();
+            }
+          } catch (e) {}
           setActiveUnitId(newUnit.id);
           applyActiveUnit();
+          renderStudyCategory();
           renderMenuDataInfo();
           renderUnitsRow();
           renderMenuCardsState();
@@ -6062,11 +6071,19 @@
         document.querySelectorAll(".study-category-tab").forEach((btn) => {
           btn.classList.toggle("is-active", btn.dataset.category === category);
         });
-        const academyOnly = ["englishTravel3dBanner", "aiPanel", "vstageSection", "playLogSection"];
+        // aiPanel(사진으로 단어장 만들기)은 학교 화면에서도 보이게 유지 (새 단어장 추가용)
+        const academyOnly = ["englishTravel3dBanner", "vstageSection", "playLogSection"];
         academyOnly.forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.classList.toggle("hidden", category === "school");
         });
+        // 학교 화면에서는 "만들면 내 단원으로 간다"는 걸 알려준다
+        const aiSub = document.getElementById("aiPanelSub");
+        if (aiSub) {
+          aiSub.innerHTML = category === "school"
+            ? '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요. <small>(만들면 🏫 학원 → 내 단원에 담겨요)</small>'
+            : '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요.';
+        }
         const school = document.getElementById("schoolStageSection");
         if (school) school.classList.toggle("hidden", category !== "school");
         // 🎒 학교 카테고리로 전환할 때 클리어 뱃지 최신화
