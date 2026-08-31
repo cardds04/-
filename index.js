@@ -8709,6 +8709,38 @@ ${folderBtn}
           .filter(Boolean);
         return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
       }
+      // ── 스케줄 카드 작가 배지용 휴무 표시 ──
+      // 그 날짜에 휴무인 작가는 배지를 「이름 휴무」(빨강)로, 부분휴무(fromHour=그 시각부터 가능)는
+      // 「이름 N시~」(주황)로 바꾼다. 렌더마다 localStorage 파싱을 피하려고 원문 문자열 기준 캐시.
+      let dayoffQuickCacheSrc = null;
+      let dayoffQuickCache = new Map();
+      function getDayoffQuickMap() {
+        let raw = "[]";
+        try { raw = localStorage.getItem(STORAGE_DAYOFF_REQUESTS) || "[]"; } catch (_) {}
+        if (raw === dayoffQuickCacheSrc) return dayoffQuickCache;
+        dayoffQuickCacheSrc = raw;
+        dayoffQuickCache = new Map();
+        try {
+          JSON.parse(raw).forEach((r) => {
+            const d = String(r?.date || "").trim();
+            const n = String(r?.writerName || "").trim();
+            if (!d || !n) return;
+            const key = `${d}|${n}`;
+            const fh = String(r?.fromHour || "").trim();
+            if (!dayoffQuickCache.has(key) || !fh) dayoffQuickCache.set(key, fh); // 전일휴무가 부분휴무보다 우선
+          });
+        } catch (_) {}
+        return dayoffQuickCache;
+      }
+      function quickWriterBadgeParts(writerName, dateKey) {
+        const wn = String(writerName || "").trim();
+        const label = wn === "작가미정" ? "미정" : wn;
+        if (!wn || wn === "작가미정") return { label, style: "" };
+        const fh = getDayoffQuickMap().get(`${String(dateKey || "").trim()}|${wn}`);
+        if (fh === undefined) return { label, style: "" };
+        if (fh) return { label: `${label} ${Number(fh)}시~`, style: "background:#fff4e0;border-color:#e8b56b;color:#a05a00;font-weight:800;" };
+        return { label: `${label} 휴무`, style: "background:#fdecec;border-color:#e79a9a;color:#c92a2a;font-weight:800;" };
+      }
 
       /** 관리자가 등록된 휴무요청을 취소(삭제). 작가가 직접 취소하지 못하거나 잘못 등록한 경우 사용.
        *  대시보드/달력 두 곳에 표시되는 휴무요청 목록의 「취소」 버튼이 모두 이 함수로 들어온다. */
@@ -18321,8 +18353,10 @@ ${folderBtn}
                   ${["작가미정", ...photographers]
                     .slice(0, 8)
                     .map(
-                      (wn) =>
-                        `<button class="btn-sm ${item.name === wn ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" data-writer-name="${escapeHtml(wn)}" title="작가 바로 변경">${escapeHtml(wn === "작가미정" ? "미정" : wn)}</button>`
+                      (wn) => {
+                        const b = quickWriterBadgeParts(wn, item.date);
+                        return `<button class="btn-sm ${item.name === wn ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" data-writer-name="${escapeHtml(wn)}" title="작가 바로 변경"${b.style ? ` style="${b.style}"` : ""}>${escapeHtml(b.label)}</button>`;
+                      }
                     )
                     .join("")}
                 </div>
@@ -18461,12 +18495,14 @@ ${folderBtn}
                                       ${["작가미정", ...photographers]
                                         .slice(0, 8)
                                         .map(
-                                          (writerName) =>
-                                            `<button class="btn-sm ${item.name === writerName ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(
+                                          (writerName) => {
+                                            const b = quickWriterBadgeParts(writerName, item.date);
+                                            return `<button class="btn-sm ${item.name === writerName ? "primary" : ""}" type="button" data-action="setQuickWriter" data-index="${index}" data-schedule-id="${escapeHtml(
                                               String(item.customerScheduleId || "")
                                             )}" data-writer-name="${escapeHtml(
                                               writerName
-                                            )}" title="작가 바로 변경">${escapeHtml(writerName === "작가미정" ? "미정" : writerName)}</button>`
+                                            )}" title="작가 바로 변경"${b.style ? ` style="${b.style}"` : ""}>${escapeHtml(b.label)}</button>`;
+                                          }
                                         )
                                         .join("")}
                                     </div>
