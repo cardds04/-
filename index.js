@@ -14555,7 +14555,7 @@ ${folderBtn}
           <tr>
             <td>${escapeHtml(row.date || "-")}</td>
             <td>${escapeHtml(row.company || "-")}</td>
-            <td>-</td>
+            <td>${escapeHtml(String(row.phone || "").trim() || "-")}</td>
             <td>-</td>
             <td>무료</td>
             <td>${statusCell(row)}</td>
@@ -22788,6 +22788,7 @@ ${folderBtn}
         const pickedDate = String(document.getElementById("fsRegDate")?.value || "").trim();
         const pickedTime = String(document.getElementById("fsRegTime")?.value || "10:00").trim();
         const companyRaw = String(document.getElementById("fsRegCompany")?.value || "").trim();
+        const phoneRaw = String(document.getElementById("fsRegPhone")?.value || "").trim();
         const placeRaw = String(document.getElementById("fsRegPlace")?.value || "").trim();
         const memoRaw = String(document.getElementById("fsRegMemo")?.value || "").trim();
         const normalizedCompany = normalizeCompanyName(companyRaw);
@@ -22797,16 +22798,37 @@ ${folderBtn}
         if (btn) { btn.disabled = true; btn.textContent = "등록 중…"; }
         void (async () => {
           try {
-            // 1) 미등록 업체면 자동 등록(쇼픽·사진만 — 계약성공 시 쇼픽 편입과 같은 방향)
+            // 1) 미등록 업체면 자동 등록(쇼픽·사진만 — 계약성공 시 쇼픽 편입과 같은 방향). 연락처도 함께 저장.
             if (!isRegisteredCompanyName(normalizedCompany)) {
               try {
                 await persistCompanyDirectoryToSupabase({
-                  rowId: "", nm: normalizedCompany, telRaw: "", loginTrim: "", passwordTrim: "",
+                  rowId: "", nm: normalizedCompany, telRaw: phoneRaw, loginTrim: "", passwordTrim: "",
                   codeTrim: "", siteRaw: "shopick", compositionPreset: "사진만", suppressHintRefresh: true
                 });
               } catch (e) {
                 alert(`업체 자동 등록 실패: ${e?.message || e}\n업체정보관리에서 먼저 등록 후 다시 시도해주세요.`);
                 return;
+              }
+            } else if (phoneRaw) {
+              // 기존 업체인데 연락처를 적었으면: 디렉터리에 연락처가 비어있을 때만 채워준다(기존 값 보호).
+              const existing = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === normalizedCompany.toLowerCase());
+              const curPhone = String(existing?.customer_phone || existing?.phone || "").replace(/[^\d]/g, "");
+              if (existing && curPhone.length < 8) {
+                try {
+                  const qs = normalizeCompanyCode(existing?.code)
+                    ? `code=eq.${encodeURIComponent(normalizeCompanyCode(existing.code))}`
+                    : `name=eq.${encodeURIComponent(normalizedCompany)}`;
+                  await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json", Prefer: "return=minimal",
+                      apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    body: JSON.stringify({ customer_phone: normalizeCompanyPhonesInput(phoneRaw) })
+                  });
+                  existing.customer_phone = phoneRaw;
+                  if (!String(existing.phone || "").trim() || existing.phone === "-") existing.phone = phoneRaw;
+                } catch (_) {}
               }
             }
             // 2) 정상 스케줄 생성 (submitScheduleFromForm 과 동일 파이프라인)
@@ -22861,6 +22883,7 @@ ${folderBtn}
               scheduleId: sid,
               date: pickedDate,
               place: placeRaw,
+              phone: phoneRaw,
               status: "pending",
               createdAt: new Date().toISOString()
             };
@@ -22874,6 +22897,8 @@ ${folderBtn}
             renderPaymentList();
             queuePaymentsSync();
             document.getElementById("fsRegCompany").value = "";
+            const fsPhoneEl = document.getElementById("fsRegPhone");
+            if (fsPhoneEl) fsPhoneEl.value = "";
             document.getElementById("fsRegPlace").value = "";
             document.getElementById("fsRegMemo").value = "";
             alert(`무료촬영 등록 완료: ${item.company} · ${pickedDate} ${pickedTime}\n무료촬영 탭과 15일 목록에서 안내→계약을 관리하세요.`);
