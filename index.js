@@ -14938,21 +14938,24 @@ ${folderBtn}
               <td>${
                 isEditing
                   ? `<span>완료/반만입금 버튼으로 처리</span>`
-                  : `${
-                      couponProgressText
-                        ? couponProgressText
-                        : source === "hold"
-                        ? "보류"
-                        : source === "refund"
-                        ? item.refundChecked
-                          ? "환불완료"
-                          : "미환불"
-                        : item.partialPaid
-                        ? `${escapeHtml(item.paymentAmount || "-")} 반만`
-                        : item.paymentStatus === "입금완료"
-                        ? "입금완료"
-                        : "미입금"
-                    }`
+                  : (() => {
+                      // 실제 입금상태를 먼저, 쿠폰 잔량은 뒤에 — 쿠폰 표시가 미입금 여부를 가리던 문제(09-02) 수정
+                      const baseStatus =
+                        source === "hold"
+                          ? "보류"
+                          : source === "refund"
+                          ? (item.refundChecked ? "환불완료" : "미환불")
+                          : item.partialPaid
+                          ? `${escapeHtml(item.paymentAmount || "-")} 반만`
+                          : item.paymentStatus === "입금완료"
+                          ? "입금완료"
+                          : "미입금";
+                      if (!couponProgressText || source !== "active") return baseStatus;
+                      const statusHtml = baseStatus === "미입금"
+                        ? `<span style="color:#b23b3b;font-weight:700;">미입금</span>`
+                        : baseStatus;
+                      return `${statusHtml} · ${couponProgressText}`;
+                    })()
               }</td>
               <td>
                 ${
