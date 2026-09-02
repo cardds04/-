@@ -16910,6 +16910,26 @@ ${folderBtn}
 
           const rowDoneBtn = `<button type="button" class="dashboard-pending-row-done" data-action="dashboardMarkDeliveryPendingDone" data-data-index="${dataIndex}" title="대기 목록에서 제거(스케줄 삭제·납품 문자 없음)" aria-label="납품 대기 완료">완료</button>`;
 
+          // 무료촬영 업체(입금관리→무료촬영으로 보낸 스케줄)는 여기서도 안내/계약 상태를 관리 — 무료촬영 탭과 동일 데이터
+          const fsRow = freeShootRows.find(
+            (r) => String(r?.scheduleId || "").trim() && String(r?.scheduleId || "").trim() === String(item?.customerScheduleId || "").trim()
+          );
+          let freeShootStrip = "";
+          if (fsRow) {
+            const fsid = escapeHtml(fsRow.id);
+            if (fsRow.status === "success") {
+              freeShootStrip = `<span style="color:#116b3e;font-weight:800;font-size:0.8rem;white-space:nowrap;">✓ 계약성공${fsRow.couponCount ? ` ${Number(fsRow.couponCount)}회권` : ""}</span>`;
+            } else if (fsRow.status === "fail") {
+              freeShootStrip = `<span style="color:#b23b3b;font-weight:800;font-size:0.8rem;white-space:nowrap;">계약실패</span>`;
+            } else {
+              const informBtn = fsRow.status === "informed"
+                ? `<button class="btn-sm" type="button" data-action="freeShootToggleInform" data-fsid="${fsid}" style="background:#dcfce7;border-color:#22a35f;color:#116b3e;font-weight:800;">안내완료</button>`
+                : `<button class="btn-sm" type="button" data-action="freeShootToggleInform" data-fsid="${fsid}" style="background:#fde68a;border-color:#f59e0b;color:#7c4a03;font-weight:800;">안내하기</button>`;
+              freeShootStrip = `${informBtn}<button class="btn-sm primary" type="button" data-action="freeShootSuccess" data-fsid="${fsid}">계약성공</button><button class="btn-sm" type="button" data-action="freeShootFail" data-fsid="${fsid}" style="border-color:#e0a0a0;color:#b23b3b;">계약실패</button>`;
+            }
+            freeShootStrip = `<span class="dash-del-badges" style="gap:3px;">${freeShootStrip}</span>`;
+          }
+
           const n = typeof rowNum === "number" && rowNum >= 1 ? rowNum : 0;
           const numLbl = n ? `<span class="schedule-dashboard-row-num">${escapeHtml(String(n))}.</span>` : "";
 
@@ -16920,6 +16940,7 @@ ${folderBtn}
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
                   <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
                   ${shootTodayBadge}
+                  ${freeShootStrip}
                   ${strip}
                   ${detailBtn}
                   ${deliveryFolderBtn}
@@ -18638,6 +18659,9 @@ ${folderBtn}
       });
 
       scheduleSectionEl.addEventListener("click", (event) => {
+        // 15일 스케줄 목록의 무료촬영 상태 버튼(무료촬영 탭과 같은 데이터·같은 동작)
+        const fsBtn = event.target.closest("button[data-action^='freeShoot']");
+        if (fsBtn && handleFreeShootActionButton(fsBtn.dataset.action, fsBtn)) return;
         const dashDeliveryDoneBtn = event.target.closest("button[data-action='dashboardMarkDeliveryPendingDone']");
         if (dashDeliveryDoneBtn) {
           const idx = Number(dashDeliveryDoneBtn.dataset.dataIndex);
@@ -19471,48 +19495,81 @@ ${folderBtn}
         if (paymentMonthMemoInputEl) paymentMonthMemoInputEl.value = "";
       });
 
+      // ── 무료촬영 액션 공용 처리 (입금관리 무료촬영 탭 + 15일 스케줄 목록 양쪽에서 호출) ──
+      // 계약성공 = 회차권 등록 + 업체를 쇼픽 소속으로 편입(이후 스케줄은 정상 쇼픽 흐름).
+      async function assignCompanyToShopickAfterFreeShoot(companyName) {
+        const nm = normalizeCompanyName(companyName || "");
+        if (!nm) return;
+        const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nm.toLowerCase());
+        if (co) co.siteType = "shopick";
+        try {
+          const headers = {
+            "Content-Type": "application/json", Prefer: "return=representation",
+            apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          };
+          const body = JSON.stringify({ site_type: "shopick" });
+          const cod = normalizeCompanyCode(co?.code || "");
+          const tryOne = async (qs) => {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, { method: "PATCH", headers, body });
+            if (!res.ok) return false;
+            const rows = await res.json().catch(() => []);
+            return Array.isArray(rows) && rows.length > 0;
+          };
+          if (cod && (await tryOne(`code=eq.${encodeURIComponent(cod)}`))) return;
+          await tryOne(`name=eq.${encodeURIComponent(nm)}`);
+        } catch (error) {
+          console.warn("[무료촬영] 쇼픽 편입 서버 저장 실패", error);
+        }
+      }
+      function handleFreeShootActionButton(action, button) {
+        if (action === "freeShootToggleFailView") {
+          freeShootShowFail = !freeShootShowFail;
+          renderPaymentList();
+          return true;
+        }
+        if (action !== "freeShootToggleInform" && action !== "freeShootSuccess" && action !== "freeShootFail" && action !== "freeShootRestore") {
+          return false;
+        }
+        const fsid = String(button.dataset.fsid || "");
+        const row = freeShootRows.find((r) => r.id === fsid);
+        if (!row) return true;
+        if (action === "freeShootToggleInform") {
+          row.status = row.status === "informed" ? "pending" : "informed";
+        } else if (action === "freeShootSuccess") {
+          const raw = prompt(`「${row.company}」 몇 회권으로 계약했나요? (숫자)\n등록 후 이 업체는 쇼픽 소속으로 들어갑니다.`, "10");
+          if (raw === null) return true;
+          const n = Math.floor(Number(String(raw).trim()));
+          if (!Number.isFinite(n) || n < 1 || n > 20) { alert("1~20 사이 숫자로 입력해주세요."); return true; }
+          button.disabled = true;
+          void (async () => {
+            const ok = await registerCouponPass(row.company, n);
+            if (!ok) { button.disabled = false; return; }
+            row.status = "success"; row.couponCount = n;
+            await assignCompanyToShopickAfterFreeShoot(row.company);
+            renderPaymentList();
+            try { renderList(); } catch (_) {}
+            if (!(await saveFreeShootRow(row))) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요.");
+          })();
+          return true;
+        } else if (action === "freeShootFail") {
+          if (!confirm(`「${row.company}」 을(를) 계약실패로 기록하고 목록에서 뺄까요?\n(기록은 남고, 실패 기록 보기에서 되돌릴 수 있어요)`)) return true;
+          row.prevStatus = row.status;
+          row.status = "fail";
+        } else if (action === "freeShootRestore") {
+          row.status = row.prevStatus === "informed" ? "informed" : "pending";
+          freeShootShowFail = false; // 복구했으면 진행 목록으로 돌아가 바로 보이게
+        }
+        renderPaymentList();
+        try { renderList(); } catch (_) {}
+        void saveFreeShootRow(row).then((ok) => { if (!ok) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요."); });
+        return true;
+      }
       paymentListBodyEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         const action = button.dataset.action;
-        // ── 무료촬영 탭 액션(행 인덱스 대신 app_state id 사용 — isNaN 가드보다 앞에 있어야 함) ──
-        if (action === "freeShootToggleFailView") {
-          freeShootShowFail = !freeShootShowFail;
-          renderPaymentList();
-          return;
-        }
-        if (action === "freeShootToggleInform" || action === "freeShootSuccess" || action === "freeShootFail" || action === "freeShootRestore") {
-          const fsid = String(button.dataset.fsid || "");
-          const row = freeShootRows.find((r) => r.id === fsid);
-          if (!row) return;
-          if (action === "freeShootToggleInform") {
-            row.status = row.status === "informed" ? "pending" : "informed";
-          } else if (action === "freeShootSuccess") {
-            const raw = prompt(`「${row.company}」 몇 회권으로 계약했나요? (숫자)`, "10");
-            if (raw === null) return;
-            const n = Math.floor(Number(String(raw).trim()));
-            if (!Number.isFinite(n) || n < 1 || n > 20) { alert("1~20 사이 숫자로 입력해주세요."); return; }
-            button.disabled = true;
-            void (async () => {
-              const ok = await registerCouponPass(row.company, n);
-              if (!ok) { button.disabled = false; return; }
-              row.status = "success"; row.couponCount = n;
-              renderPaymentList();
-              if (!(await saveFreeShootRow(row))) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요.");
-            })();
-            return;
-          } else if (action === "freeShootFail") {
-            if (!confirm(`「${row.company}」 을(를) 계약실패로 기록하고 목록에서 뺄까요?\n(기록은 남고, 실패 기록 보기에서 되돌릴 수 있어요)`)) return;
-            row.prevStatus = row.status;
-            row.status = "fail";
-          } else if (action === "freeShootRestore") {
-            row.status = row.prevStatus === "informed" ? "informed" : "pending";
-            freeShootShowFail = false; // 복구했으면 진행 목록으로 돌아가 바로 보이게
-          }
-          renderPaymentList();
-          void saveFreeShootRow(row).then((ok) => { if (!ok) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요."); });
-          return;
-        }
+        // ── 무료촬영 액션(행 인덱스 대신 app_state id 사용 — isNaN 가드보다 앞에 있어야 함) ──
+        if (handleFreeShootActionButton(action, button)) return;
         const index = Number(button.dataset.index);
         if (Number.isNaN(index)) return;
         const rowEl = button.closest("tr");
@@ -22703,6 +22760,117 @@ ${folderBtn}
       formEl.addEventListener("submit", (event) => {
         event.preventDefault();
         submitScheduleFromForm(false);
+      });
+
+      // ── 무료촬영 등록 (스케줄 등록 카드 하단) ──
+      // 정상 스케줄 생성 + freeshoot_ 추적 행 동시 등록. 미등록 업체는 쇼픽(사진만)으로 자동 등록.
+      const freeShootRegisterFormEl = document.getElementById("freeShootRegisterForm");
+      (() => {
+        const dateInput = document.getElementById("fsRegDate");
+        if (dateInput && !dateInput.value) {
+          const now = new Date();
+          dateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        }
+      })();
+      freeShootRegisterFormEl?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const btn = freeShootRegisterFormEl.querySelector('button[type="submit"]');
+        const pickedDate = String(document.getElementById("fsRegDate")?.value || "").trim();
+        const pickedTime = String(document.getElementById("fsRegTime")?.value || "10:00").trim();
+        const companyRaw = String(document.getElementById("fsRegCompany")?.value || "").trim();
+        const placeRaw = String(document.getElementById("fsRegPlace")?.value || "").trim();
+        const memoRaw = String(document.getElementById("fsRegMemo")?.value || "").trim();
+        const normalizedCompany = normalizeCompanyName(companyRaw);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) { alert("촬영일을 선택해주세요."); return; }
+        if (!normalizedCompany) { alert("업체명을 입력해주세요."); return; }
+        if (!placeRaw) { alert("촬영장소를 입력해주세요."); return; }
+        if (btn) { btn.disabled = true; btn.textContent = "등록 중…"; }
+        void (async () => {
+          try {
+            // 1) 미등록 업체면 자동 등록(쇼픽·사진만 — 계약성공 시 쇼픽 편입과 같은 방향)
+            if (!isRegisteredCompanyName(normalizedCompany)) {
+              try {
+                await persistCompanyDirectoryToSupabase({
+                  rowId: "", nm: normalizedCompany, telRaw: "", loginTrim: "", passwordTrim: "",
+                  codeTrim: "", siteRaw: "shopick", compositionPreset: "사진만", suppressHintRefresh: true
+                });
+              } catch (e) {
+                alert(`업체 자동 등록 실패: ${e?.message || e}\n업체정보관리에서 먼저 등록 후 다시 시도해주세요.`);
+                return;
+              }
+            }
+            // 2) 정상 스케줄 생성 (submitScheduleFromForm 과 동일 파이프라인)
+            const canonicalIdentity = resolveCanonicalCompanyIdentity(normalizedCompany, "");
+            const item = {
+              customerScheduleId: buildClientUuid(),
+              date: pickedDate,
+              time: pickedTime,
+              timePreference: "exact",
+              requestedAt: new Date().toISOString(),
+              localUpdatedAt: new Date().toISOString(),
+              name: "작가미정",
+              writerPhone: "",
+              writerCarNumber: "",
+              company: canonicalIdentity.company || normalizedCompany,
+              companyCode: canonicalIdentity.companyCode || "",
+              place: placeRaw,
+              pyeong: "",
+              jointCode: "",
+              doorCode: "",
+              memo: memoRaw,
+              composition: "사진만",
+              paymentStatus: "미입금",
+              paymentPayer: "",
+              paymentAmount: "",
+              paymentDate: "",
+              couponUsed: false
+            };
+            data.unshift(item);
+            const sid = String(item.customerScheduleId || "").trim();
+            const submissionReceipt = {
+              receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              scheduleId: sid,
+              customerId: "",
+              company: String(item.company || "").trim(),
+              date: pickedDate,
+              time: pickedTime,
+              timePreference: "exact",
+              place: placeRaw,
+              source: "admin_create",
+              createdAt: new Date().toISOString()
+            };
+            appendScheduleReceiptLedgerLocal(submissionReceipt);
+            void appendScheduleReceiptLedgerToSupabase(submissionReceipt).catch((error) => {
+              console.error("[SUBMISSION_RECEIPT][index] 무료촬영 접수기록 저장 실패", error);
+            });
+            // 3) 무료촬영 추적 행 생성 (무료촬영 탭·15일 목록 연동 + 미입금 제외)
+            const fsRow = {
+              id: `freeshoot_${sid}`,
+              company: String(item.company || "").trim(),
+              companyCode: String(item.companyCode || "").trim(),
+              scheduleId: sid,
+              date: pickedDate,
+              place: placeRaw,
+              status: "pending",
+              createdAt: new Date().toISOString()
+            };
+            if (!(await saveFreeShootRow(fsRow))) {
+              alert("무료촬영 추적 등록에 실패했어요. 스케줄은 생성됐으니 입금 관리의 「무료촬영」 버튼으로 다시 올려주세요.");
+            } else {
+              freeShootRows = [fsRow, ...freeShootRows.filter((r) => r.id !== fsRow.id)];
+            }
+            if (USE_SUPABASE_SYNC) queueSchedulesSync(true);
+            renderList();
+            renderPaymentList();
+            queuePaymentsSync();
+            document.getElementById("fsRegCompany").value = "";
+            document.getElementById("fsRegPlace").value = "";
+            document.getElementById("fsRegMemo").value = "";
+            alert(`무료촬영 등록 완료: ${item.company} · ${pickedDate} ${pickedTime}\n무료촬영 탭과 15일 목록에서 안내→계약을 관리하세요.`);
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = "+ 무료촬영 등록"; }
+          }
+        })();
       });
 
       /** 등록 업체의 기본 촬영구성을 반환. 업체정보관리 표시와 동일한 우선순위:
