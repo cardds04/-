@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
       scheduleId,
       kind: kindNorm,
       ...(customerPhone ? { customerPhoneOverride: customerPhone } : {}),
+      ...(body.skipSms === true ? { skipSms: true } : {}),
     });
     if (!out.ok) {
       const payload = { ok: false, message: out.message || "처리 실패" };

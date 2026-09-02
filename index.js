@@ -16034,8 +16034,14 @@ ${folderBtn}
         const bothNeeded = String(btn?.dataset?.bothNeeded || "") === "1";
         const otherDone = String(btn?.dataset?.otherDone || "") === "1";
         const otherLabel = kind === "video" ? "사진" : "영상";
+        // 무료촬영 건은 어떤 경우에도 고객 문자를 보내지 않는다(완료 표시만).
+        const isFreeShootSchedule = freeShootRows.some(
+          (r) => String(r?.scheduleId || "").trim().toLowerCase() === sid.toLowerCase()
+        );
         let confirmMsg;
-        if (!bothNeeded) {
+        if (isFreeShootSchedule) {
+          confirmMsg = `무료촬영 건 — 「${label}」 납품 완료로 표시할까요?\n(무료촬영 업체에는 문자가 발송되지 않습니다.)`;
+        } else if (!bothNeeded) {
           confirmMsg = `「${label}」 납품 완료 + 「촬영본 편집완료」 문자 발송할까요?`;
         } else if (otherDone) {
           confirmMsg = `「${label}」 까지 완료 — 사진·영상 모두 끝남.\n「촬영본 편집완료」 문자 1통 발송할까요?`;
@@ -16056,6 +16062,7 @@ ${folderBtn}
             scheduleId: sid,
             kind,
           };
+          if (isFreeShootSchedule) payload.skipSms = true;
           const ph = String(customerPhoneTrimmed || "").trim();
           if (ph) payload.customerPhone = ph;
           return fetch("/api/dashboard-delivery-notify", {
