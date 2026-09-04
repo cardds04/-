@@ -162,11 +162,21 @@ def _share_deep_link(s, parent, child_key: str):
         return ""
 
 
+def _company_folder_name(name: str) -> str:
+    """업체명 → 마이박스 폴더명(‼️lib/company-folder-name.cjs 와 같은 규칙).
+       무료촬영 표식 「/무」를 떼고 폴더 금지문자를 제거한다. 예: 디자인담/무 → 디자인담."""
+    import re as _re
+    s = str(name or "").strip()
+    s = _re.sub(r"\s*/\s*무\s*$", "", s)
+    s = _re.sub(r'[\\/:*?"<>|]', "", s).strip()
+    return s
+
+
 def _provision_company_mybox(company_name: str):
     """신규 업체 폴더 자동 발급(2026-08-12): 「공유폴더」 안에 업체명 폴더 생성 →
        공유링크 발급(/service/link/create) → 편집허용(ownership=W) → 짧은주소 반환.
        이미 있으면 폴더 재사용하고 링크도 기존 것을 그대로 쓴다."""
-    name = (company_name or "").strip()
+    name = _company_folder_name(company_name)
     if not name:
         return 400, json.dumps({"ok": False, "message": "업체명이 비어 있습니다"})
     try:

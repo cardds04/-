@@ -25,6 +25,7 @@ for (const line of fs.readFileSync(path.join(ROOT, ".env"), "utf8").split("\n"))
 }
 
 const { needsPhotoFolder, needsVideoFolder } = require(path.join(ROOT, "lib", "delivery-drive-logic.cjs"));
+const { companyFolderName } = require(path.join(ROOT, "lib", "company-folder-name.cjs"));
 
 /**
  * ‼️만들폴더명은 작가 화면(photographer.html)의 buildShootFolderNameJS 와 100% 같아야 한다
@@ -303,7 +304,7 @@ async function main() {
         continue;
       }
       try {
-        const prov = await provisionCompanyFolder(company, dirRow.id);
+        const prov = await provisionCompanyFolder(companyFolderName(company), dirRow.id);
         shareLink = prov.shareLink;
         linkByName.set(company, shareLink);
         if (norm(r.code)) linkByCode.set(norm(r.code), shareLink);
@@ -315,7 +316,7 @@ async function main() {
     }
     const daySlot = slotById.get(r.id) || 1;
     const folderName = buildShootFolderNameJS(dateKey, r.place, daySlot);
-    const compForName = company.replace(/[\/\\:*?"<>|]/g, "").trim();
+    const compForName = companyFolderName(company);
     try {
       const shoot = await relayMkdir(folderName, shareLink);
       const subs = [];
