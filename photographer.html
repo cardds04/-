@@ -1915,10 +1915,14 @@
       function writeStorageArraySilently(key, items) {
         try {
           localStorage.setItem(key, JSON.stringify(items));
+          return true;
         } catch (error) {
           try {
             originalSetItem(key, JSON.stringify(items));
-          } catch (_) {}
+            return true;
+          } catch (_) {
+            return false;
+          }
         }
       }
       function getWriterTableSyncClient() {
@@ -2018,6 +2022,30 @@
         }
         return await response.json();
       }
+      // ‼️PostgREST 는 한 번에 최대 1000행만 준다. schedules 가 1000행을 넘으면(2026-09-04 실측 1372행)
+      //   단발 조회는 일부만 받아 작가 화면에서 스케줄이 조용히 빠진다. limit/offset 으로 전량 수집.
+      async function fetchWriterJsonRowsAllPages(pathBase) {
+        const pageSize = 1000;
+        const all = [];
+        for (let offset = 0; ; offset += pageSize) {
+          const sep = pathBase.includes("?") ? "&" : "?";
+          const page = await fetchWriterJsonRows(`${pathBase}${sep}limit=${pageSize}&offset=${offset}`);
+          if (!Array.isArray(page)) break;
+          all.push(...page);
+          if (page.length < pageSize) break;
+        }
+        return all;
+      }
+      // 저장 실패(폰 저장공간 부족·비공개 모드 등) 대비 메모리 사본 — 화면은 이걸로라도 그린다.
+      let writerMemSchedules = null;
+      let writerMemWriterMirror = null;
+      function readScheduleRowsWithMemFallback(key) {
+        const arr = readStorageArray(key);
+        if (arr.length) return arr;
+        if (key === STORAGE_ADMIN_WRITER_SCHEDULES) return Array.isArray(writerMemWriterMirror) ? writerMemWriterMirror : [];
+        if (key === STORAGE_SCHEDULES || key === STORAGE_ADMIN_SCHEDULES) return Array.isArray(writerMemSchedules) ? writerMemSchedules : [];
+        return arr;
+      }
       /** 작가 쓰기(휴무요청 생성/취소 등)를 서버 프록시(service_role)로 보낸다.
        *  토큰이 있으면 /api/writer-db 로 POST/DELETE 포워드, 없거나 실패 시 레거시 anon 으로 폴백.
        *  반환: { ok:boolean, status:number, errorText:string }. */
@@ -2064,7 +2092,7 @@
         //    옛 상태로 남는 버그가 있었음. 실패한 테이블은 null → 해당 저장소는 손대지 않음.
         const __settled = await Promise.allSettled([
           fetchWriterJsonRows("writers?select=name,login_id,phone,car_number,created_at&order=updated_at.desc"),
-          fetchWriterJsonRows("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=updated_at.desc"),
+          fetchWriterJsonRowsAllPages("schedules?select=id,company_name,code,writer_name,date_key,time_key,place,pyeong,composition,memo,joint_code,door_code,payment_status,payment_payer,payment_amount,payment_date,coupon_used,source,status&order=id.asc"),
           fetchWriterJsonRows(
             `${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=name,customer_phone,code,naver_works_company_folder_id,naver_works_company_share_link&order=updated_at.desc`
           ),
@@ -2078,6 +2106,10 @@
         const schedulesRows = __rowsOf(1);
         const companiesRows = __rowsOf(2);
         const dayoffRows = __rowsOf(3);
+        if (!schedulesRows) {
+          const why = (__settled[1] && __settled[1].reason && __settled[1].reason.message) || "응답 없음";
+          try { setSyncStatus(`스케줄 불러오기 실패: ${String(why).slice(0, 70)}`, "error"); } catch (_) {}
+        }
         const writers = (Array.isArray(writersRows) ? writersRows : [])
           .map((row) => ({
             id: normalize(row?.login_id),
@@ -2156,7 +2188,8 @@
         // (빈 배열로 덮어써서 데이터가 사라지는 것 방지).
         if (writersRows) writeStorageArraySilently(STORAGE_WRITERS, writers);
         if (schedulesRows) {
-          writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, schedules.map((row) => ({
+          writerMemSchedules = schedules;
+          const writerMirrorRows = schedules.map((row) => ({
             writerMirrorId: row.writerMirrorId,
             customerScheduleId: row.customerScheduleId,
             date: row.date,
@@ -2171,9 +2204,14 @@
             //    화면에 비번이 늘 "-"로만 보이는 회귀 버그가 발생한다. 반드시 함께 저장.
             jointCode: row.jointCode,
             doorCode: row.doorCode
-          })));
-          writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
-          writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
+          }));
+          writerMemWriterMirror = writerMirrorRows;
+          const w1 = writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, writerMirrorRows);
+          const w2 = writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
+          const w3 = writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
+          if (!(w1 && w2 && w3)) {
+            try { setSyncStatus(`저장공간 부족 — 스케줄 ${schedules.length}건은 서버값으로 표시 중(앱 저장 실패)`, "warn"); } catch (_) {}
+          }
         }
         if (companiesRows) writeStorageArraySilently(STORAGE_COMPANIES, companies);
         if (dayoffRows) writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
@@ -2688,12 +2726,12 @@
 
       function getBookedCountForDate(dateKey) {
         const targetDate = String(dateKey || "").trim();
-        const adminSourceRows = readStorageArray(STORAGE_ADMIN_SCHEDULES);
-        const customerRows = readStorageArray(STORAGE_SCHEDULES);
+        const adminSourceRows = readScheduleRowsWithMemFallback(STORAGE_ADMIN_SCHEDULES);
+        const customerRows = readScheduleRowsWithMemFallback(STORAGE_SCHEDULES);
         if (adminSourceRows.length > 0) {
           return adminSourceRows.filter((row) => String(row?.date || "").trim() === targetDate).length;
         }
-        const adminRows = readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES);
+        const adminRows = readScheduleRowsWithMemFallback(STORAGE_ADMIN_WRITER_SCHEDULES);
         const customerIds = new Set(
           customerRows
             .map((row) => String(row?.customerScheduleId || "").trim())
@@ -2991,7 +3029,7 @@
         const writerName = normalize(writer.name).toLowerCase();
         if (!writerName) return [];
         // 고객 로컬(STORAGE_SCHEDULES) 후 서버·관리자 미러를 덮어써 동일 id 에서 서버가 우선(삭제 반영)
-        const merged = [...readStorageArray(STORAGE_SCHEDULES), ...readStorageArray(STORAGE_ADMIN_WRITER_SCHEDULES)];
+        const merged = [...readScheduleRowsWithMemFallback(STORAGE_SCHEDULES), ...readScheduleRowsWithMemFallback(STORAGE_ADMIN_WRITER_SCHEDULES)];
         const dedupedMap = new Map();
         merged.forEach((row) => {
           const keyBase = normalize(row?.writerMirrorId || row?.customerScheduleId);
