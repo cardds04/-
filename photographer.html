@@ -793,6 +793,12 @@
             <div class="dayoff-title">휴무요청일</div>
             <div id="dayoffList" class="dayoff-list"></div>
           </div>
+
+          <details id="writerDiagWrap" style="margin-top:14px;font-size:12px;color:#5f6b7a;">
+            <summary style="cursor:pointer;">앱 진단 정보 (스케줄이 안 보이면 「진단 복사」를 눌러 보내주세요)</summary>
+            <pre id="writerDiagText" style="white-space:pre-wrap;word-break:break-all;background:#f6f7f9;border-radius:10px;padding:10px;margin:8px 0;font-size:11px;line-height:1.55;">(동기화 후 표시됩니다)</pre>
+            <button id="writerDiagCopyBtn" class="btn outline small" type="button">진단 복사</button>
+          </details>
         </div>
       </div>
     </main>
@@ -821,6 +827,7 @@
       const STORAGE_SCHEDULES = "scheduleSiteCustomerSchedules";
       const STORAGE_ADMIN_WRITER_SCHEDULES = "scheduleSiteWriterSchedules";
       const STORAGE_ADMIN_SCHEDULES = "scheduleSiteAdminSchedules";
+      const WRITER_SNAPSHOT_EXCLUDED_KEYS = new Set([STORAGE_SCHEDULES, STORAGE_ADMIN_WRITER_SCHEDULES, STORAGE_ADMIN_SCHEDULES]);
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
@@ -922,6 +929,8 @@
         "scheduleSiteCustomerRememberedLogin_shopick",
         "scheduleSiteCustomerRememberedLogin_thefeeling"
       ]);
+      // 작가 폰 "스케줄 0건" 원격 진단용 — 화면 하단 「앱 진단 정보」에 표시·복사
+      window.__writerDiag = { pulledAt: "", path: "", schedulesRows: null, writersRows: null, mapped: null, myName: "", myRows: null, myUpcoming: null, storeOk: null, snapshotOk: null, snapshotBytes: null, lastError: "" };
       const scheduleSiteClientKvState = {
         memoryStore: new Map(),
         snapshotStorageKey: "__scheduleSiteSnapshotV1",
@@ -972,7 +981,8 @@
             if (
               String(k) === STORAGE_DAYOFF_REQUESTS ||
               String(k) === STORAGE_ADMIN_SCHEDULES ||
-              String(k) === STORAGE_SCHEDULES
+              String(k) === STORAGE_SCHEDULES ||
+              String(k) === STORAGE_ADMIN_WRITER_SCHEDULES
             ) {
               return;
             }
@@ -1009,8 +1019,15 @@
           if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
           this.snapshotTimer = setTimeout(() => {
             try {
-              this.nativeSetItem(this.snapshotStorageKey, JSON.stringify(Object.fromEntries(this.memoryStore.entries())));
-            } catch (error) {}
+              // 스케줄 키 3종은 schedules 테이블이 권위·매 로드 재조회 → 스냅샷에서 제외(아이폰 localStorage 5MB 보호, 실측 3.9MB→소폭)
+              const snapJson = JSON.stringify(Object.fromEntries(
+                [...this.memoryStore.entries()].filter(([k]) => !WRITER_SNAPSHOT_EXCLUDED_KEYS.has(k))
+              ));
+              this.nativeSetItem(this.snapshotStorageKey, snapJson);
+              try { window.__writerDiag.snapshotOk = true; window.__writerDiag.snapshotBytes = snapJson.length; } catch (_) {}
+            } catch (error) {
+              try { window.__writerDiag.snapshotOk = false; window.__writerDiag.lastError = "스냅샷 저장 실패: " + (error && error.message || error); } catch (_) {}
+            }
             this.setNativeLastScopedWriteAt(new Date().toISOString());
             this.queueSupabaseKvPush();
           }, 10);
@@ -1215,7 +1232,7 @@
         ]);
         const localKv = Object.fromEntries(
           [...scheduleSiteClientKvState.memoryStore.entries()].filter(
-            ([k]) => !PRIVATE_LOCAL_KEYS.has(k) && !PHOTOGRAPHER_READONLY_KEYS.has(k)
+            ([k]) => !PRIVATE_LOCAL_KEYS.has(k) && !PHOTOGRAPHER_READONLY_KEYS.has(k) && !WRITER_SNAPSHOT_EXCLUDED_KEYS.has(k)
           )
         );
         if (!Object.keys(localKv).length) return;
@@ -2000,14 +2017,17 @@
               });
               const data = await res.json().catch(() => null);
               if (res.ok && data && data.ok && Number(data.status) >= 200 && Number(data.status) < 300) {
+                window.__writerDiag.path = "proxy";
                 try { return JSON.parse(data.body || "[]"); } catch (_) { return []; }
               }
+              window.__writerDiag.lastError = "proxy 응답 이상: " + (data && (data.reason || data.status) || res.status);
               if (data && data.reason === "invalid_token") writeWriterSessionToken("");
               // 그 외(권한/서버 문제)는 anon 폴백으로 진행
             } catch (_) { /* anon 폴백 */ }
           }
         }
         // 폴백(토큰 없음/서버 장애, B-6 잠금 전): 레거시 anon 조회.
+        window.__writerDiag.path = "anon";
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
           method: "GET",
           headers: {
@@ -2106,8 +2126,11 @@
         const schedulesRows = __rowsOf(1);
         const companiesRows = __rowsOf(2);
         const dayoffRows = __rowsOf(3);
+        window.__writerDiag.schedulesRows = Array.isArray(schedulesRows) ? schedulesRows.length : null;
+        window.__writerDiag.writersRows = Array.isArray(writersRows) ? writersRows.length : null;
         if (!schedulesRows) {
           const why = (__settled[1] && __settled[1].reason && __settled[1].reason.message) || "응답 없음";
+          window.__writerDiag.lastError = "스케줄 조회 실패: " + String(why).slice(0, 120);
           try { setSyncStatus(`스케줄 불러오기 실패: ${String(why).slice(0, 70)}`, "error"); } catch (_) {}
         }
         const writers = (Array.isArray(writersRows) ? writersRows : [])
@@ -2209,13 +2232,53 @@
           const w1 = writeStorageArraySilently(STORAGE_ADMIN_WRITER_SCHEDULES, writerMirrorRows);
           const w2 = writeStorageArraySilently(STORAGE_SCHEDULES, schedules);
           const w3 = writeStorageArraySilently(STORAGE_ADMIN_SCHEDULES, schedules);
+          window.__writerDiag.mapped = schedules.length;
+          window.__writerDiag.storeOk = !!(w1 && w2 && w3);
           if (!(w1 && w2 && w3)) {
             try { setSyncStatus(`저장공간 부족 — 스케줄 ${schedules.length}건은 서버값으로 표시 중(앱 저장 실패)`, "warn"); } catch (_) {}
           }
         }
         if (companiesRows) writeStorageArraySilently(STORAGE_COMPANIES, companies);
         if (dayoffRows) writeStorageArraySilently(STORAGE_DAYOFF_REQUESTS, dayoffRequests);
+        try {
+          const d = window.__writerDiag;
+          d.pulledAt = new Date().toLocaleString("ko-KR");
+          const cw = getCurrentWriter();
+          d.myName = cw ? String(cw.name || "") : "(로그인 작가 없음)";
+          const mine = cw ? getMySchedules() : [];
+          d.myRows = mine.length;
+          const todayKey = new Date().toISOString().slice(0, 10);
+          d.myUpcoming = mine.filter((r) => String(r?.date || "") >= todayKey).length;
+          renderWriterDiag();
+        } catch (e) { try { window.__writerDiag.lastError = "진단 계산 실패: " + (e && e.message || e); } catch (_) {} }
       }
+      function renderWriterDiag() {
+        const el = document.getElementById("writerDiagText");
+        if (!el) return;
+        const d = window.__writerDiag || {};
+        const stamp = (document.getElementById("writerUpdateStampInner") || {}).textContent || "";
+        let nativeSnapLen = null;
+        try { const raw = scheduleSiteClientKvState.nativeGetItem(scheduleSiteClientKvState.snapshotStorageKey); nativeSnapLen = raw ? raw.length : 0; } catch (_) {}
+        const lines = [
+          `앱 버전: ${String(stamp).trim() || "-"}`,
+          `마지막 동기화: ${d.pulledAt || "(아직 없음)"}`,
+          `조회 경로: ${d.path || "-"}`,
+          `서버 스케줄 받은 수: ${d.schedulesRows == null ? "실패/없음" : d.schedulesRows} (유효 ${d.mapped == null ? "-" : d.mapped})`,
+          `작가 목록 받은 수: ${d.writersRows == null ? "실패/없음" : d.writersRows}`,
+          `로그인 작가: ${d.myName || "-"}`,
+          `내 스케줄 매칭: ${d.myRows == null ? "-" : d.myRows}건 (오늘 이후 ${d.myUpcoming == null ? "-" : d.myUpcoming}건)`,
+          `앱 저장: ${d.storeOk == null ? "-" : d.storeOk ? "성공" : "실패"} / 스냅샷: ${d.snapshotOk == null ? "-" : d.snapshotOk ? "성공" : "실패"} (${nativeSnapLen == null ? "?" : Math.round(nativeSnapLen / 1024)}KB)`,
+          `마지막 오류: ${d.lastError || "없음"}`,
+          `기기: ${navigator.userAgent.slice(0, 90)}`
+        ];
+        el.textContent = lines.join("\n");
+      }
+      document.getElementById("writerDiagCopyBtn")?.addEventListener("click", async () => {
+        try { renderWriterDiag(); } catch (_) {}
+        const txt = (document.getElementById("writerDiagText") || {}).textContent || "";
+        try { await navigator.clipboard.writeText(txt); alert("진단 정보를 복사했어요. 카톡에 붙여넣어 보내주세요."); }
+        catch (_) { alert("복사가 안 되면 아래 진단 글자를 길게 눌러 복사해주세요."); }
+      });
       function queueWriterTablePull() {
         if (!USE_SUPABASE_SYNC) return;
         if (writerTablePullTimer) clearTimeout(writerTablePullTimer);
@@ -2235,6 +2298,7 @@
             renderAuthState();
           } catch (error) {
             console.error("[TABLE][photographer] pull 실패", error);
+            try { window.__writerDiag.lastError = "pull 실패: " + (error && error.message || error); renderWriterDiag(); } catch (_) {}
           } finally {
             writerTablePullRunning = false;
           }
