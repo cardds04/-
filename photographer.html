@@ -1930,17 +1930,25 @@
       }
       /** 테이블 pull 결과를 반드시 프록시 메모리에도 반영해야 함(originalSetItem만 쓰면 읽기가 []로 깨짐). */
       function writeStorageArraySilently(key, items) {
+        const json = JSON.stringify(items);
         try {
-          localStorage.setItem(key, JSON.stringify(items));
+          localStorage.setItem(key, json);
           return true;
         } catch (error) {
           try {
-            originalSetItem(key, JSON.stringify(items));
+            originalSetItem(key, json);
             return true;
-          } catch (_) {
-            return false;
-          }
+          } catch (_) {}
         }
+        // 용량 초과 추정: 옛 사본과 큰 스냅샷 덩어리를 비우고 한 번 더 시도
+        try {
+          const st = scheduleSiteClientKvState;
+          try { st.nativeRemoveItem(key); } catch (_) {}
+          try { st.nativeRemoveItem(st.snapshotStorageKey); } catch (_) {}
+          try { localStorage.setItem(key, json); return true; } catch (_) {}
+          try { originalSetItem(key, json); return true; } catch (_) {}
+        } catch (_) {}
+        return false;
       }
       function getWriterTableSyncClient() {
         if (!USE_SUPABASE_SYNC) return null;
@@ -2060,11 +2068,11 @@
       let writerMemSchedules = null;
       let writerMemWriterMirror = null;
       function readScheduleRowsWithMemFallback(key) {
-        const arr = readStorageArray(key);
-        if (arr.length) return arr;
-        if (key === STORAGE_ADMIN_WRITER_SCHEDULES) return Array.isArray(writerMemWriterMirror) ? writerMemWriterMirror : [];
-        if (key === STORAGE_SCHEDULES || key === STORAGE_ADMIN_SCHEDULES) return Array.isArray(writerMemSchedules) ? writerMemSchedules : [];
-        return arr;
+        // ‼️이번 세션에 서버에서 받은 사본이 있으면 그것이 항상 최신 — 저장소는 쓰기 실패 시 옛 사본이
+        //   남아 "저장 실패인데 옛 147건만 보이는" 사고(09-06 박명훈)가 났으므로 메모리를 우선한다.
+        if (key === STORAGE_ADMIN_WRITER_SCHEDULES && Array.isArray(writerMemWriterMirror)) return writerMemWriterMirror;
+        if ((key === STORAGE_SCHEDULES || key === STORAGE_ADMIN_SCHEDULES) && Array.isArray(writerMemSchedules)) return writerMemSchedules;
+        return readStorageArray(key);
       }
       /** 작가 쓰기(휴무요청 생성/취소 등)를 서버 프록시(service_role)로 보낸다.
        *  토큰이 있으면 /api/writer-db 로 POST/DELETE 포워드, 없거나 실패 시 레거시 anon 으로 폴백.
