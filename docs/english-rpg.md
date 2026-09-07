@@ -39,3 +39,11 @@ Progress is stored locally in `english_starword_rpg_v1`, optionally suffixed wit
 Dialogue now separates the NPC and player into two equally weighted turns. Both English lines use 24px type on phones and 26px on desktop; translations use 15px. Each speaker has a listen button. Fine brass double borders and a compact reward crest replace oversized modal decoration. Reward windows show gold, XP and level-up status without the repeated shopping instruction. Shop, inventory and action text are larger too.
 
 Battle questions and taught answers use the same type size. The arena reserves space for the actual text panel, keeping the hero and HP clear when answer choices wrap. The next action scrolls into view after a hit. Mobile portrait and landscape were checked through actual dialogue, purchases and victory; the existing 39 progression, movement and speech tests pass.
+
+## Parchment panels and automatic English voice — 2026-09-08
+
+The new fantasy theme adds light parchment, walnut title strips, original SVG brass corners, orange action buttons and framed reward tiles. Large, equal-size English lines and compact portrait/landscape layouts remain. Theme styles are in `english-travel-fantasy.css`.
+
+NPC dialogue lines and each new battle prompt now play automatically when sound is enabled. Speaker buttons replay or stop the specific line; manual playback turns sound on when muted. The dialogue and battle headers also provide a sound toggle. Starting recall, closing a panel, changing maps, muting or leaving the tab cancels speech. A guarded speech controller ignores delayed events from canceled lines and retains the current utterance. It prefers an English US voice, with a default English-language fallback, at rate 0.82. Voice quality depends on the device. Autoplay restrictions show a retry hint instead of pretending playback succeeded.
+
+References: [Web Speech speak](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis/speak), [speech errors](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/error_event). The speech cancellation, stale callback, language, paused-engine and unavailable-engine cases are covered by the existing RPG test command.

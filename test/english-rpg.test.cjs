@@ -15,3 +15,15 @@ test('every map entrance and reachable quest interaction has a valid path withou
 const Iso=require('../scripts/english-rpg/isometric.cjs');
 test('isometric projection round-trips tile and pointer coordinates',()=>{for(const [x,y]of[[0,0],[12.3,7.5],[-5,2],[26,24]]){const screen=Iso.toIso(x,y),p=Iso.fromIso(screen.x,screen.y);a.ok(Math.abs(x-p.x)<1e-9);a.ok(Math.abs(y-p.y)<1e-9)}});
 test('isometric joystick points in screen direction at equal horizontal and vertical speed',()=>{const right=Iso.toIso(...Object.values(Iso.screenMovement(1,0))),down=Iso.toIso(...Object.values(Iso.screenMovement(0,1)));a.ok(right.x>0);a.equal(right.y,0);a.equal(down.x,0);a.ok(down.y>0);a.ok(Math.abs(right.x-down.y)<1e-9);a.equal(Iso.screenDirection(1,-1),'right');a.equal(Iso.screenDirection(-1,-1),'up');a.equal(Iso.screenDirection(1,0),'down-right');a.equal(Iso.screenDirection(0,-1),'up-right');a.equal(Iso.screenDirection(-1,0),'up-left')});
+
+const {EnglishSpeaker}=require('../scripts/english-rpg/speech.cjs');
+function fixture(voices=[{lang:'ko-KR'},{lang:'en-US'}]){
+ const calls=[],states=[],errors=[];
+ const synth={paused:false,getVoices:()=>voices,cancel:()=>calls.push('cancel'),resume:()=>calls.push('resume'),speak:u=>calls.push(u)};
+ class Utterance{constructor(text){this.text=text}}
+ return {calls,states,errors,synth,speaker:new EnglishSpeaker({synth,Utterance,onState:(...s)=>states.push(s),onError:(...e)=>errors.push(e)})};
+}
+test('English speech uses an English voice and a learner-friendly rate',()=>{const f=fixture();a.equal(f.speaker.speak(' Can you help me? ','npc'),true);const u=f.speaker.current.utterance;a.equal(u.text,'Can you help me?');a.equal(u.voice.lang,'en-US');a.equal(u.lang,'en-US');a.equal(u.rate,.82);a.equal(u.volume,1);u.onstart();a.deepEqual(f.states.at(-1),['npc','speaking']);u.onend();a.equal(f.speaker.current,null)});
+test('changing a line cancels old speech and ignores late completion and error events',()=>{const f=fixture();f.speaker.speak('Hello!','npc');const old=f.speaker.current.utterance;f.speaker.speak('Here you are.','monster');const next=f.speaker.current;old.onstart();old.onerror({error:'audio-busy'});old.onend();a.equal(f.speaker.current,next);a.deepEqual(f.states.at(-1),['monster','pending']);a.equal(f.errors.length,0);a.equal(f.calls.filter(x=>x==='cancel').length,2)});
+test('mute, close and page changes stop speech with no stale indicator',()=>{const f=fixture();f.speaker.speak('Hello!','npc');const u=f.speaker.current.utterance;f.speaker.stop();u.onstart();a.equal(f.speaker.current,null);a.deepEqual(f.states.at(-1),[null,'idle'])});
+test('empty voice list still requests English; paused speech resumes; unavailable audio reports failure',()=>{const f=fixture([]);f.synth.paused=true;f.speaker.speak('Hi!');a.equal(f.speaker.current.utterance.lang,'en-US');a.ok(f.calls.includes('resume'));f.speaker.current.utterance.onerror({error:'not-allowed'});a.equal(f.speaker.current,null);a.equal(f.errors[0][0],'not-allowed');let error;const absent=new EnglishSpeaker({onError:e=>error=e});a.equal(absent.speak('Hello'),false);a.equal(error,'unavailable')});
