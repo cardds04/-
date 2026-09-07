@@ -22803,7 +22803,7 @@ ${folderBtn}
               try {
                 await persistCompanyDirectoryToSupabase({
                   rowId: "", nm: normalizedCompany, telRaw: phoneRaw, loginTrim: "", passwordTrim: "",
-                  codeTrim: "", siteRaw: "shopick", compositionPreset: "사진만", suppressHintRefresh: true
+                  codeTrim: "", siteRaw: "shopick", compositionPreset: "사진영상 둘다", suppressHintRefresh: true
                 });
               } catch (e) {
                 alert(`업체 자동 등록 실패: ${e?.message || e}\n업체정보관리에서 먼저 등록 후 다시 시도해주세요.`);
@@ -22850,7 +22850,7 @@ ${folderBtn}
               jointCode: "",
               doorCode: "",
               memo: memoRaw,
-              composition: "사진만",
+              composition: "사진영상 둘다", // 무료촬영은 무조건 사진+영상(09-07 사장님 지시)
               paymentStatus: "미입금",
               paymentPayer: "",
               paymentAmount: "",
