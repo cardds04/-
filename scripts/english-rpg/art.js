@@ -1,0 +1,31 @@
+// Layered, original pixel sprites. Equipment is drawn on the walking and battle sprites.
+export const rect=(c,color,x,y,w,h)=>{c.fillStyle=color;c.fillRect(Math.round(x),Math.round(y),w,h)};
+export function ellipse(c,color,x,y,rx,ry){c.fillStyle=color;c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fill()}
+export function star(c,x,y,color='#ffe6a0',size=7){c.fillStyle=color;c.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?size*.44:size;c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r)}c.closePath();c.fill()}
+export function hero(c,x,y,{outfit,weapon,avatar='mina',direction='down',walk=0,scale=1,attack=0,shadow=true}={}){c.save();c.translate(Math.round(x),Math.round(y));c.scale(scale,scale);const R=(color,x,y,w,h)=>rect(c,color,x,y,w,h);const coat=outfit?.color||'#728caf',trim=outfit?.trim||'#dfbf81',style=outfit?.style||'tunic',back=direction==='up',side=direction==='left'||direction==='right',hair=avatar==='jun'?'#533e40':'#725145',swing=Math.round(Math.sin(walk)*2);
+ if(shadow)ellipse(c,'#253e4936',0,-1,14,5);
+ // Cape silhouette, dark hems, boots, shirt, belt, and independently colored equipment.
+ if(['cape','mage','hero','ranger'].includes(style)){R('#34334e',-14,-28,28,24);R(coat,-12,-28,24,21);R(trim,-12,-8,24,2)}
+ R('#303b4d',-9,-12,7,11+swing);R('#303b4d',3,-12,7,11-swing);R('#6a4f48',-10,-4+swing,9,5);R('#6a4f48',2,-4-swing,10,5);R('#bfa57c',-10,-4+swing,8,1);R('#bfa57c',2,-4-swing,8,1);
+ R('#343b51',-12,-30,25,20);R(coat,-10,-29,21,16);R('#ffffff24',-8,-27,6,13);R(trim,-10,-16,21,3);R('#f2d791',-1,-17,4,5);
+ if(style==='armor'){R('#dce9df',-13,-29,9,7);R('#dce9df',6,-29,9,7);R('#dce9df',-7,-26,16,8);R('#7d91a2',-2,-24,2,10)}
+ const arm=attack?7:0;R('#343b51',-16,-28,6,14);R(coat,-15,-27,5,9);R('#efbb91',-15,-18,5,6);R('#343b51',11+arm,-28-arm,6,14);R(coat,11+arm,-27-arm,5,9);R('#efbb91',11+arm,-18-arm,5,6);
+ // Hair and face, a slight three-quarter view in side directions.
+ R('#463e48',-8,-50,16,2);R('#463e48',-11,-48,22,2);R('#463e48',-13,-46,26,17);R(hair,-8,-49,16,4);R(hair,-11,-46,22,18);if(avatar==='mina'){R(hair,-15,-39,5,15);R('#ab7660',-14,-37,2,11);R(hair,11,-39,5,15)}
+ R('#f3c6a0',-9,-41,19,15);R('#ddaa85',-10,-38,2,10);R('#ffddbb',-6,-39,12,7);R(hair,-10,-47,20,8);R(hair,-12,-44,24,5);R(hair,-10,-41,7,4);R(hair,7,-42,5,6);
+ if(!back){const dx=direction==='left'?-3:direction==='right'?3:0;R('#443f48',-6+dx,-35,3,4);R('#443f48',4+dx,-35,3,4);R('#fff5db',-6+dx,-35,1,1);R('#fff5db',4+dx,-35,1,1);R('#d88c80',-9,-30,4,2);R('#d88c80',7,-30,3,2);R('#a86867',0+dx,-28,3,1)}else{R(hair,-10,-40,21,13);R('#ad7d61',-7,-38,2,10)}
+ if(avatar==='mina'&&style==='tunic'){R('#eebf79',-14,-38,5,4);R('#eebf79',12,-38,5,4)}
+ if(style==='mage'){R('#45395e',-18,-44,36,5);R(coat,-15,-46,29,5);R(coat,-10,-54,20,10);R(coat,-6,-62,12,9);R(coat,-2,-66,6,6);R(trim,-12,-48,23,3);star(c,1,-55,trim,4)}
+ if(style==='ranger'){R('#304b47',-16,-44,31,4);R(coat,-12,-52,24,9);R(trim,-12,-46,24,3);R('#efe6bc',8,-59,3,13);R('#efe6bc',11,-57,3,6)}
+ if(style==='hero'){R(trim,-13,-47,25,4);R(trim,-11,-53,4,6);R(trim,-2,-56,4,9);R(trim,7,-53,4,6);R('#b95875',-1,-48,3,3)}
+ if(weapon){c.save();c.translate(17+arm,-17-arm);c.rotate(attack?-.75:.16);R('#4a4053',-2,-1,4,13);R('#956f57',-1,0,2,12);if(weapon.style==='wand'){R(weapon.color,-2,-24,4,31);star(c,0,-24,'#4e416b',10);star(c,0,-24,weapon.color,8);star(c,-1,-25,'#fff0ae',4)}else{R('#4a4053',-3,-26,6,28);R(weapon.color,-2,-25,4,25);R('#ffffffaa',-1,-24,1,23);R(trim,-7,-3,14,3);if(weapon.style==='star')star(c,0,-9,'#fff0ae',6)}c.restore()}
+ c.restore();}
+export function monster(c,x,y,m,t=0,scale=1,hurt=0){c.save();c.translate(x,y+Math.sin(t*2)*2);c.scale(scale,scale);if(hurt)c.globalAlpha=.55+.45*Math.sin(t*40);const R=(co,a,b,w,h)=>rect(c,co,a,b,w,h),col=m.color;
+ ellipse(c,'#26344332',0,0,m.boss?31:22,6);
+ if(m.kind==='slime'){R('#334f5955',-22,-21,44,20);R(col,-20,-25,40,23);R(col,-14,-32,28,8);R(col,-8,-36,16,6);R('#ffffff50',-12,-27,10,4);R('#ffffff70',-15,-21,4,6);R('#36515a',-8,-17,4,6);R('#36515a',7,-17,4,6);R('#fff7d6',-8,-17,2,2);R('#fff7d6',7,-17,2,2);R('#50666a',-1,-8,4,2)}
+ else if(m.kind==='crab'){for(const s of[-1,1]){R('#a45a56',s*19-3,-9,8,5);R('#a45a56',s*23-3,-2,9,4);R(col,s*28-6,-23,12,13);R(col,s*31-7,-30,6,10);R(col,s*31+1,-30,5,10)}R('#a85456',-19,-23,38,22);R(col,-17,-26,34,22);R('#f2b897',-13,-23,24,4);R('#eee2c1',-10,-32,5,9);R('#eee2c1',6,-32,5,9);R('#434a54',-9,-31,3,4);R('#434a54',7,-31,3,4)}
+ else if(m.kind==='bat'){for(const s of[-1,1]){R('#544666',s*18-12,-26,24,7);R(col,s*25-7,-33+Math.sin(t*8)*4,18,7);R('#79648f',s*20-7,-19,15,5)}R(col,-10,-29,20,25);R(col,-11,-38,6,13);R(col,5,-38,6,13);R('#f3d39b',-6,-22,3,5);R('#f3d39b',4,-22,3,5);R('#fff4d3',-3,-11,3,4);R('#fff4d3',3,-11,3,4)}
+ else if(m.kind==='guardian'){R('#5d537a',-23,-22,17,22);R('#5d537a',7,-22,17,22);R(col,-28,-59,56,41);R('#7d719b',-34,-53,13,30);R('#7d719b',22,-53,13,30);R('#dbd0e3',-24,-57,49,8);R('#867794',-17,-85,35,28);R(col,-20,-81,41,22);R('#ebe2ce',-14,-84,29,7);R('#ffdf90',-11,-71,8,4);R('#ffdf90',5,-71,8,4);star(c,0,-40,'#ffdf99',13);R('#665c7b',-3,-23,6,9)}
+ else{R(col,-15,-25,30,23);R('#a9d29a',-12,-28,24,8);R('#394f4e',-7,-17,3,4);R('#394f4e',5,-17,3,4);R('#416d51',-2,-44,4,19);R('#6aab66',-15,-46,14,9);R('#8fc77c',1,-50,15,10)}c.restore();}
+export function tree(c,x,y,tone=0){ellipse(c,'#203f4330',x+4,y+5,26,9);rect(c,'#6e554c',x-5,y-31,10,35);rect(c,'#977558',x-4,y-24,3,24);const colors=tone===2?['#4d5f73','#607d83','#7a9895']:tone===1?['#29594e','#3b7659','#659469']:['#366b55','#518b64','#7fac78'];for(const [dx,dy,w,h,color]of[[-26,-49,51,18,colors[0]],[-22,-65,44,24,colors[1]],[-13,-76,27,16,colors[1]],[-17,-65,27,8,colors[2]],[-25,-48,19,6,colors[1]],[-7,-74,13,5,colors[2]]])rect(c,color,x+dx,y+dy,w,h);}
+export function chest(c,x,y,open=false){rect(c,'#604e4b',x-14,y-21,28,21);rect(c,'#bd885d',x-12,y-20,24,17);rect(c,'#725245',x-12,y-12,24,3);rect(c,'#e8c686',x-11,y-20,3,19);rect(c,'#e8c686',x+8,y-20,3,19);rect(c,'#edce8c',x-3,y-13,6,6);if(open){rect(c,'#392f43',x-10,y-18,20,7);rect(c,'#bd885d',x-14,y-30,28,9)}}

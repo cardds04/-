@@ -1,58 +1,13 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#edf0df"><meta name="description" content="마을을 걷고 쉬운 영어를 세 번 따라 말해요.">
-<title>여행 영어</title><link rel="stylesheet" href="english-travel-village.css?v=20260908-2">
-</head>
-<body>
-<a class="skip" href="#talkButton">가까운 친구에게 말 걸기</a>
-<main id="travelApp">
-<canvas id="villageCanvas" tabindex="0" aria-label="여행 마을. 방향키 또는 WASD로 이동. 땅이나 NPC를 누르면 걸어갑니다."></canvas>
-<div id="npcMarkers" aria-label="대화 가능한 친구"></div>
-<header class="topbar">
-<button id="regionButton" class="region-button" aria-label="여행지 선택"><span id="regionIcon">🌿</span><b id="regionName">햇살 마을</b><span aria-hidden="true">⌄</span></button>
-<button id="nextStopButton" class="mission-button"><span class="mission-label">미션</span><span id="missionText">☕ Mia 만나기</span><span id="missionProgress" aria-hidden="true">→</span></button>
-<nav class="top-actions" aria-label="여행 도구">
-<button id="mapToggle" class="icon-button" aria-label="장소 지도 열기" aria-expanded="false" aria-controls="mapPanel">🧭</button>
-<button id="bookButton" class="icon-button" aria-label="문장 수첩 열기">📒</button>
-<button id="soundButton" class="icon-button" aria-label="소리 끄기" aria-pressed="true">🔊</button>
-</nav>
-</header>
-<aside id="mapPanel" class="map-panel" aria-label="장소 지도" hidden>
-<div class="panel-heading"><b>장소</b><button id="closeMap" class="close" aria-label="장소 지도 닫기">×</button></div>
-<div id="miniMap" class="mini-map"><svg viewBox="0 0 120 120" aria-hidden="true"><rect x="55" y="4" width="10" height="112" rx="5"/><rect x="6" y="62" width="108" height="9" rx="4"/><circle cx="60" cy="67" r="10"/></svg><span id="mapPlayer" class="map-player" aria-hidden="true"></span></div>
-<div id="stopList" class="stop-list"></div>
-</aside>
-<div id="joystick" class="joystick" aria-label="이동 조이스틱"><div id="joystickKnob"></div></div>
-<div class="interaction-dock"><button id="talkButton" class="talk-button" hidden>💬 대화</button><button id="terminalButton" class="terminal-button" hidden>✈️ 출발</button></div>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<section id="loading" class="loading"><div><h2>불러오는 중…</h2><div class="load-track"><span id="loadProgress"></span></div><p id="loadingNote"></p></div></section>
-<section id="welcome" class="welcome" hidden aria-labelledby="welcomeTitle"><div class="welcome-card">
-<h2 id="welcomeTitle">여행 영어</h2><p>듣고, 세 번 따라 말해요.</p>
-<div class="avatar-picker" aria-label="캐릭터 선택"><button data-avatar="female-a" aria-pressed="true">👧🏻 미나</button><button data-avatar="male-a" aria-pressed="false">👦🏻 준</button></div>
-<button id="startButton" class="primary">시작 →</button>
-</div></section>
-<section id="lesson" class="lesson-layer" hidden aria-label="쉬운 영어 따라 말하기">
-<div class="lesson-card" role="dialog" aria-modal="true" aria-labelledby="lessonTitle">
-<header class="lesson-header"><h2 id="lessonTitle">Mia</h2><button id="closeLesson" class="close" aria-label="연습 닫기">×</button></header>
-<div class="npc-line"><div><p id="npcEnglish">Hello!</p><small id="npcKorean">안녕하세요!</small></div><button id="npcListen" class="listen-icon" aria-label="친구 말 듣기">🔊</button></div>
-<div class="answer-card"><div class="answer-copy"><p id="answerEnglish">Hi!</p><p id="answerKorean">안녕하세요!</p></div><button id="answerListen" class="listen-icon" aria-label="답 천천히 듣기">🔊</button></div>
-<div class="repeat-row"><span id="phraseNumber">1 / 3 문장</span><div id="repeatDots" class="repeat-dots" aria-label="세 번 반복"></div><span id="repeatLabel" class="sr-only"></span></div>
-<p id="speechFeedback" class="speech-feedback" role="status" aria-live="polite" hidden></p>
-<div id="practiceActions" class="practice-actions"><button id="speakButton" class="primary">🎙 따라 말하기</button><button id="readButton" class="secondary" title="소리 내어 읽은 뒤 직접 확인">읽었어요 ✓</button></div>
-<button id="nextPhrase" class="primary" hidden>다음 →</button>
-<details id="typingPractice"><summary>직접 입력</summary><form id="answerForm"><label class="sr-only" for="typedAnswer">보이는 영어 답 입력</label><input id="typedAnswer" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="답을 그대로 입력"><button type="submit">확인</button></form></details>
-</div></section>
-<section id="completion" class="overlay completion-layer" hidden><div class="modal completion" role="dialog" aria-modal="true" aria-labelledby="completeTitle">
-<h2 id="completeTitle">연습 완료 ✓</h2><button id="continueWalk" class="primary">계속 걷기 →</button><button id="completeTravel" class="secondary" hidden>여행 출발 →</button><button id="repeatLesson" class="text-button">한 번 더</button>
-</div></section>
-<section id="travelPanel" class="overlay" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="travelTitle">
-<div class="panel-heading"><h2 id="travelTitle">어디로 갈까요?</h2><button id="closeTravel" class="close" aria-label="여행지 선택 닫기">×</button></div><p id="travelExplanation"></p><div id="destinationList" class="destinations"></div><button id="walkTerminal" class="primary">공항으로 →</button>
-</div></section>
-<section id="bookPanel" class="overlay" hidden><div class="modal phrasebook" role="dialog" aria-modal="true" aria-labelledby="bookTitle">
-<div class="panel-heading"><h2 id="bookTitle">문장 수첩</h2><button id="closeBook" class="close" aria-label="문장 수첩 닫기">×</button></div><p id="bookSummary"></p><div class="book-tabs"><button data-book-tab="review" aria-pressed="true">복습</button><button data-book-tab="all" aria-pressed="false">전체</button></div><div id="bookList" class="book-list"></div>
-</div></section>
-<section id="travelTransition" class="travel-transition" hidden aria-live="polite"><div class="trip-pill"><span id="tripVehicle">✈️</span><h2 id="tripTitle">바다 마을로 이동</h2><div class="trip-track"><span id="tripProgress"></span></div></div></section>
-</main><script src="english-travel-3d.bundle.js?v=20260908-2" defer></script>
-</body></html>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#292d44"><meta name="description" content="영어로 싸우고, 별빛을 되찾는 2D 모험. 퀘스트 보상으로 옷과 무기를 장착하세요."><title>별빛 원정대 · 영어 RPG</title><link rel="stylesheet" href="english-travel-rpg.css?v=20260908-4"></head><body>
+<main id="game"><canvas id="world" tabindex="0" aria-label="2D 모험 지도. 방향키 또는 WASD로 이동, E로 상호작용. 장소를 누르면 걸어갑니다."></canvas><div id="markers" aria-label="사람과 장소"></div>
+<header class="hud"><button id="heroButton" class="hero-status" aria-label="캐릭터 장비 열기"><canvas id="portrait" width="52" height="60" aria-hidden="true"></canvas><span><b id="heroLevel">Lv.1 미나</b><span class="hp-track"><i id="hudHp"></i></span></span></button><div class="hud-right"><span class="gold"><span aria-hidden="true">◈</span> <b id="gold">0</b></span><button id="bagButton" class="square" aria-label="모험 가방 열기">▣</button><button id="soundButton" class="square" aria-label="소리 끄기">♪</button></div></header>
+<button id="missionButton" class="mission"><span id="chapter">CH.01</span><b id="missionText">Mia에게 축제의 편지 받기</b><span aria-hidden="true">›</span></button>
+<div class="location"><span class="location-dot"></span><span id="location">햇살 마을</span></div>
+<div id="joystick" class="joystick" aria-label="이동 조이스틱"><i></i><span id="knob"></span></div><button id="interactButton" class="interact" hidden>대화하기 <span>E</span></button><button id="guideButton" class="guide">목적지로 ↗</button><div id="toast" role="status" aria-live="polite" hidden></div>
+<section id="welcome" class="layer welcome" aria-labelledby="welcomeTitle"><div class="welcome-card"><span class="eyebrow">A LITTLE WORD, A BIG ADVENTURE</span><div class="title-star" aria-hidden="true">✦</div><h1 id="welcomeTitle">별빛 원정대</h1><p>영어로 싸우고, 잃어버린 별빛을 되찾자.</p><div class="choose-hero"><button data-avatar="mina" aria-pressed="true"><canvas width="90" height="100"></canvas><span>미나</span></button><button data-avatar="jun" aria-pressed="false"><canvas width="90" height="100"></canvas><span>준</span></button></div><button id="startButton" class="primary">모험 시작 →</button><small>말을 익혀 공격 · 보상으로 옷과 무기 구입</small></div></section>
+<section id="dialog" class="layer bottom-layer" hidden><div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialogName"><header><b id="dialogName">Mia</b><span id="dialogStep"></span><button class="close" data-close aria-label="대화 닫기">×</button></header><p id="dialogContext" class="context"></p><p id="dialogEnglish" class="npc-en"></p><p id="dialogKorean" class="translation"></p><div class="taught-answer"><div><strong id="dialogAnswer"></strong><small id="dialogMeaning"></small></div><button id="dialogListen" class="listen" aria-label="대답 듣기">♪</button></div><div class="dialog-actions"><button id="dialogMic" class="secondary" aria-label="대답 따라 말하기">🎙 따라 말하기</button><button id="dialogNext" class="primary">읽고 대답하기 →</button></div><p id="dialogFeedback" class="feedback" role="status" hidden></p></div></section>
+<section id="shop" class="layer shaded" hidden><div class="panel shop-panel" role="dialog" aria-modal="true" aria-labelledby="shopTitle"><header><div><span class="eyebrow">TOWN SHOP</span><h2 id="shopTitle">Ben의 무기점</h2></div><button class="close" data-close aria-label="상점 닫기">×</button></header><div class="shop-preview"><canvas id="shopHero" width="150" height="135" aria-label="장착 모습"></canvas><div><b id="previewName"></b><small id="previewStats"></small><span class="gold">◈ <b id="shopGold"></b> G</span></div></div><div id="shopItems" class="shop-items"></div><p class="tiny">모험으로 얻은 골드만 사용해요.</p></div></section>
+<section id="bag" class="layer shaded" hidden><div class="panel bag-panel" role="dialog" aria-modal="true" aria-labelledby="bagTitle"><header><h2 id="bagTitle">모험 가방</h2><button class="close" data-close aria-label="가방 닫기">×</button></header><nav class="tabs"><button data-tab="gear" aria-pressed="true">캐릭터</button><button data-tab="journal">퀘스트</button><button data-tab="words">영어 수첩</button><button data-tab="map">지도</button></nav><div id="bagContent"></div></div></section>
+<section id="battle" class="battle" hidden aria-label="영어 전투"><canvas id="battleCanvas" aria-hidden="true"></canvas><header class="battle-hud"><div><span class="eyebrow">WORD BATTLE</span><h2 id="enemyName"></h2><div class="enemy-hp"><i id="enemyHp"></i></div><small id="enemyHpText"></small></div><button id="fleeButton" class="secondary">물러나기</button></header><div class="fighter-status"><b id="battleLevel"></b><span id="battleHpText"></span><div class="hp-track"><i id="battleHp"></i></div></div><div id="battleFloat" class="battle-float" aria-live="polite"></div><div class="battle-card"><div class="battle-question-head"><span id="battleTier"></span><span id="battleCombo"></span></div><p id="battleCue"></p><p id="battlePrompt"></p><div id="study"><div class="taught-answer"><div><strong id="studyAnswer"></strong><small id="studyMeaning"></small></div><button id="studyListen" class="listen" aria-label="정답 듣기">♪</button></div><button id="recallButton" class="primary">읽고 기억했어요 · 공격 →</button></div><div id="answerChoices" class="answer-choices" hidden></div><button id="hintButton" class="hint" hidden>답 다시 보기</button><div id="battleFeedback" class="battle-feedback" role="status" hidden></div><button id="battleNext" class="primary" hidden>다음 공격 →</button></div></section>
+<section id="result" class="layer shaded" hidden><div class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><span id="resultIcon" class="result-icon">✦</span><span id="resultKicker" class="eyebrow">QUEST COMPLETE</span><h2 id="resultTitle"></h2><p id="resultCopy"></p><div id="resultRewards" class="reward-pills"></div><button id="resultNext" class="primary">계속 모험하기 →</button></div></section>
+<div id="transition" class="transition" hidden><span>✦</span><b id="transitionName"></b></div></main><script src="english-travel-3d.bundle.js?v=20260908-4" defer></script></body></html>
