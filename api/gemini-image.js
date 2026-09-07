@@ -1,3 +1,4 @@
+const { guard } = require("../lib/origin-guard.cjs");
 /**
  * Vercel Serverless — Gemini 이미지 생성 (나노바나나2 / Flash Image)
  *
@@ -95,7 +96,8 @@ async function fetchUrlToPart(imageUrl) {
 }
 
 module.exports = async (req, res) => {
-  cors(res);
+  // ‼️09-08 — 인증 없이 열려 있어 남의 호출이 사장님 키로 과금됐다(origin-guard.cjs)
+  if (!guard(req, res)) return;
   if (req.method === "OPTIONS") {
     res.status(204).end();
     return;

@@ -1,8 +1,9 @@
+const { guard } = require("../lib/origin-guard.cjs");
 /**
  * Vercel Serverless — Gemini로 이미지 분위기 캡션(텍스트) 생성
  *
  * POST JSON: { gemini_api_key?, image_data_url: "data:image/png;base64,...", author_notes?: string }
- * 환경: GEMINI_API_KEY, GEMINI_CAPTION_MODEL (기본 gemini-2.0-flash)
+ * 환경: GEMINI_API_KEY, GEMINI_CAPTION_MODEL (기본 gemini-flash-latest — 자동 최신, thinking off)
  */
 
 function cors(res) {
@@ -50,7 +51,8 @@ function extractTextFromGeminiJson(data) {
 }
 
 module.exports = async (req, res) => {
-  cors(res);
+  // ‼️09-08 — 인증 없이 열려 있어 남의 호출이 사장님 키로 과금됐다(origin-guard.cjs)
+  if (!guard(req, res)) return;
   if (req.method === "OPTIONS") {
     res.status(204).end();
     return;
@@ -95,7 +97,7 @@ module.exports = async (req, res) => {
 
     const authorNotes = String(body.author_notes || "").trim();
     const model =
-      (process.env.GEMINI_CAPTION_MODEL || "").trim() || "gemini-2.0-flash";
+      (process.env.GEMINI_CAPTION_MODEL || "").trim() || "gemini-flash-latest";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model,
     )}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -122,6 +124,7 @@ module.exports = async (req, res) => {
         generationConfig: {
           maxOutputTokens: 768,
           temperature: 0.85,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });

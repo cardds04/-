@@ -3,9 +3,12 @@
  * 환경변수 GEMINI_API_KEY 또는 요청 본문 apiKey
  */
 const { handleGeminiTtsRequest } = require("../lib/gemini-tts-logic.cjs");
+const { guard } = require("../lib/origin-guard.cjs");
 
 module.exports = async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // ‼️09-08 — 인증 없이 열려 있어 남의 호출이 사장님 키로 과금됐다(origin-guard.cjs)
+  if (!guard(req, res)) return;
+res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
