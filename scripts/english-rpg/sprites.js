@@ -1,0 +1,9 @@
+import atlas from './atlas.json';
+const loaded={};
+function load(name){return new Promise(resolve=>{const image=new Image();image.decoding='async';let done=false;const finish=ok=>{if(done)return;done=true;clearTimeout(timer);if(ok)loaded[name]=image;resolve(ok)};const timer=setTimeout(()=>finish(false),15000);image.onload=()=>{loaded[name]=image;finish(true);window.dispatchEvent(new Event('rpg-art-updated'));};image.onerror=()=>finish(false);image.src=`assets/english-rpg/${name}-atlas.png?v=20260908-5`;});}
+export const artReady=Promise.all([load('environment'),load('character'),load('monster')]);
+export function spriteBox(atlasName,id){return atlas[atlasName]?.[id]||null}
+export function sprite(c,atlasName,id,x,y,{height,width,flip=false,alpha=1,anchor=.5}={}){const img=loaded[atlasName],b=spriteBox(atlasName,id);if(!img||!b)return false;const w=width||height*b[2]/b[3],h=height||width*b[3]/b[2];c.save();c.globalAlpha*=alpha;c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.translate(x,y);if(flip)c.scale(-1,1);c.drawImage(img,...b,-w*anchor,-h,w,h);c.restore();return true;}
+export function character(c,x,y,{column,row,height=64,walk=0,flip=false}){const img=loaded.character,b=spriteBox('character',row*6+column);if(!img||!b)return false;const w=height*b[2]/b[3],cut=.73,swing=Math.sin(walk)*1.6;c.save();c.translate(x,y);if(flip)c.scale(-1,1);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';
+ if(!walk){c.drawImage(img,...b,-w/2,-height,w,height)}else{c.drawImage(img,b[0],b[1],b[2],b[3]*cut,-w/2,-height,w,height*cut);for(let i=0;i<2;i++){c.save();const dx=(i?1:-1)*Math.sin(walk)*.65,dy=(i?1:-1)*swing;c.translate(dx,dy);c.drawImage(img,b[0]+i*b[2]/2,b[1]+b[3]*cut,b[2]/2,b[3]*(1-cut),-w/2+i*w/2,-height*(1-cut),w/2,height*(1-cut));c.restore()}}
+ c.restore();return true;}

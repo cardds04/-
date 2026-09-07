@@ -12,6 +12,10 @@ The existing `/english-travel-3d.html` URL now serves an original 2D canvas RPG.
 - The 60 battle situations span 10 difficulty tiers. The current and preceding tier form the pool; missed phrases are prioritized among unused questions. This is a learning game, not a validated proficiency assessment.
 - Houses, shops, an inn and a mountain lodge are separate walkable interiors. Resting restores all HP for free. Defeat returns the player home without removing gold.
 
+## Isometric art update
+
+The scene now uses a 2:1 isometric projection, detailed original raster character/prop atlases, screen-relative controls, and textured ground. Buildings fade when they cover the player. See `english-rpg-art.md` for the asset inventory and generation prompts. Story and saved progress are unchanged.
+
 ## Source
 
 - `scripts/english-rpg/data.cjs`: authored story, items, questions and monsters.
