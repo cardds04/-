@@ -33,3 +33,9 @@ Progress is stored locally in `english_starword_rpg_v1`, optionally suffixed wit
 ## Validation
 
 `npm run test:english-travel` includes complete-story tests through both first-weapon choices, quest ordering, travel gates, no duplicate purchases/rewards, one response per battle round, correct/incorrect combat damage, defeat/rest, equipment stats, save restoration, difficulty scaling, and walkable routes to every interaction. Mobile browser playtesting covers walking, interiors, the full quest story, purchase/equip, wrong answers, victories and reload/resume.
+
+## Readable, minimal RPG panels — 2026-09-08
+
+Dialogue now separates the NPC and player into two equally weighted turns. Both English lines use 24px type on phones and 26px on desktop; translations use 15px. Each speaker has a listen button. Fine brass double borders and a compact reward crest replace oversized modal decoration. Reward windows show gold, XP and level-up status without the repeated shopping instruction. Shop, inventory and action text are larger too.
+
+Battle questions and taught answers use the same type size. The arena reserves space for the actual text panel, keeping the hero and HP clear when answer choices wrap. The next action scrolls into view after a hit. Mobile portrait and landscape were checked through actual dialogue, purchases and victory; the existing 39 progression, movement and speech tests pass.
