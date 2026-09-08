@@ -1,0 +1,108 @@
+(function(root,factory){const data=factory();if(typeof module==='object'&&module.exports)module.exports=data;else root.KittyData=data;})(typeof globalThis!=='undefined'?globalThis:this,()=>{
+const art='assets/animal-town/';
+const goods=[
+ {id:'kibble',name:'Daily Crunch',type:'food',price:8,cell:0,food:24,stress:-2,description:'A simple, filling meal.'},
+ {id:'fish',name:'Salmon Bowl',type:'food',price:22,cell:1,food:42,stress:-9,description:'Tori’s favorite. A happy, full tummy.'},
+ {id:'soup',name:'Warm Chicken Soup',type:'food',price:16,cell:2,food:30,stress:-7,description:'A warm, gentle meal.'},
+ {id:'treat',name:'Little Cat Treats',type:'food',price:12,cell:3,food:10,stress:-15,description:'A small treat after a big day.'},
+ {id:'ball',name:'Patchwork Ball',type:'toy',price:45,cell:4,relief:20,description:'Play catch. Stress −20.'},
+ {id:'wand',name:'Feather Wand',type:'toy',price:90,cell:5,relief:32,description:'A favorite game. Stress −32.'},
+ {id:'bed',name:'Cloud Bed',type:'furniture',price:120,cell:6,slot:'bed',description:'A cozy bed. Better sleep and a calmer morning.'},
+ {id:'quilt',name:'Strawberry Quilt',type:'furniture',price:65,cell:7,slot:'quilt',description:'A soft quilt. Less stress after sleep.'},
+ {id:'room',name:'Sunny Garden Room',type:'furniture',price:260,cell:8,slot:'room',description:'A bright new room. More comfort every morning.'},
+ {id:'mint',name:'Mint Overalls',type:'outfit',price:0,outfit:0,description:'A little everyday adventure.'},
+ {id:'rain',name:'Sunny Raincoat',type:'outfit',price:75,outfit:1,description:'Dress for a rainy-day walk.'},
+ {id:'princess',name:'Peach Princess',type:'outfit',price:180,outfit:2,description:'A special outfit for a special friend.'}
+];
+const locations=[
+ {id:'school',name:'Little Oak School',subtitle:'Make friends. Learn together.',level:1,photo:art+'rewards/kindergarten/02-table-close.png',npc:'Miss Lily',movie:'kindergarten'},
+ {id:'cafe',name:'Paws & Plates',subtitle:'A table for you and your cat.',level:1,photo:art+'rewards/restaurant/04-counter.png',npc:'Momo',movie:'restaurant'},
+ {id:'clinic',name:'Sunny Vet Clinic',subtitle:'Tell Dr. Pip how your pet feels.',level:1,photo:art+'life/places.png',npc:'Dr. Pip',movie:null},
+ {id:'airport',name:'Cloud Airport',subtitle:'A first journey, side by side.',level:2,photo:art+'rewards/airport/02-checkin-close.png',npc:'Captain Roo',movie:'airport'},
+ {id:'hotel',name:'Moonlight Hotel',subtitle:'A cozy stop on your journey.',level:3,photo:art+'rewards/hotel/02-desk-close.png',npc:'Coco',movie:'hotel'}
+];
+// choices use semantic IDs, not display positions. Multiple natural replies may be valid.
+const q=(id,line,answer,wrong,context,extra={})=>({id,line,context,choices:[{text:answer,ok:true},...wrong.map(text=>({text,ok:false}))],...extra});
+const pick=(id,line,context,choices)=>({id,line,context,choices:choices.map(([text,value])=>({text,ok:true,value})),preference:true});
+const episodes=[
+ {id:'school-first',location:'school',title:'The First School Day',level:1,reward:38,skill:'confidence',story:'Your little cat is shy. Help {cat} make a first friend.',ending:'A name tag, a new friend, and a brave little smile.',nodes:[
+ q('school-hello','Good morning!','Good morning!',['Good night!','One ticket, please.'],'Miss Lily welcomes you and {cat}.'),
+ q('school-name','What is your cat’s name?','My cat’s name is {cat}.',['My cat is a bag.','It is a ticket.'],'Introduce your little friend.'),
+ q('school-age','How old is your cat?','My cat is {age} months old.',['My cat is at home.','My cat is yellow.'],'The name tag needs an age.'),
+ pick('school-seat','Who would you like to sit with?','Choose a new classroom friend.',[['With Momo, please.','Momo'],['With Coco, please.','Coco'],['With you, please.','Miss Lily']]),
+ q('school-block','Can you give me the red block?','Here is the red block.',['Here is a towel.','Here is my passport.'],'Build a little tower with your friend.',{prop:'block'}),
+ q('school-tidy','Can you help me clean up?','Yes, I can help.',['I would like fish.','My room is upstairs.'],'Your friend {school-seat} needs a hand.'),
+ q('school-bye','See you tomorrow!','See you tomorrow!',['My ticket is blue.','A key, please.'],'Your cat has made a first friend.')
+ ]},
+ {id:'cafe-lunch',location:'cafe',title:'Lunch with My Cat',level:1,reward:42,skill:'kindness',story:'A little table by the window. Order a lovely lunch together.',ending:'A full tummy and a happy lunch memory.',effect:'meal',nodes:[
+ q('cafe-table','A table for how many?','A table for two, please.',['I am two tables.','Two passports, please.'],'You and {cat} are having lunch.'),
+ q('cafe-pet','Is your cat coming in too?','Yes, my cat is with me.',['No, it is a school.','I have a room key.'],'Let Momo know who is with you.'),
+ pick('cafe-food','What would your cat like to eat?','Choose your cat’s meal.',[['Fish, please.','fish'],['Chicken soup, please.','soup'],['Cat food, please.','kibble']]),
+ q('cafe-water','Would your cat like some water?','Yes, some water, please.',['Yes, a red block.','Yes, Gate Two.'],'Your cat looks thirsty.'),
+ q('cafe-serve','Here is your food.','Thank you!',['Where is my ticket?','I am a window.'],'Momo brings {cafe-food}.', {prop:'meal'}),
+ q('cafe-check','Is everything okay?','Yes, it is lovely.',['No, it is a passport.','My cat is a ticket.'],'Your cat is enjoying lunch.'),
+ q('cafe-bill','Are you ready for the bill?','Yes, the bill, please.',['Yes, a school bag.','Yes, turn left.'],'Finish your lunch politely.')
+ ]},
+ {id:'clinic-checkup',location:'clinic',title:'A Visit to Dr. Pip',level:1,reward:40,skill:'kindness',story:'{cat} has {symptom}. Explain the problem and help your little friend feel safe.',ending:'A brave patient sticker. Your cat is feeling better.',effect:'care',nodes:[
+ q('clinic-name','What is your cat’s name?','My cat’s name is {cat}.',['My cat is a ticket.','I want a table.'],'Dr. Pip is making a patient card.'),
+ q('clinic-problem','What is wrong with your cat?','My cat has {symptom}.',['My cat is a hotel.','My cat needs a ticket.'],'Patient card: {symptom}.'),
+ q('clinic-fever','Does your cat have a fever?','{feverAnswer}',['My cat is three tickets.','We want a window seat.'],'The patient card shows: {feverStatus}.'),
+ q('clinic-food','Has your cat eaten today?','{eatenAnswer}',['My cat eats passports.','At Gate Two.'],'Food meter: {foodStatus}.'),
+ q('clinic-exam','May I check your cat?','Yes. Please be gentle.',['Two chicken sandwiches.','Here is my room key.'],'Help your cat stay calm.'),
+ q('clinic-rest','Your cat needs a quiet rest.','Okay. We will rest at home.',['Okay. Where is Gate Two?','Okay. A table for two.'],'Dr. Pip has finished the checkup.'),
+ q('clinic-bye','Please come back if your cat feels worse.','Thank you for your help.',['My boarding pass is green.','Can I have a block?'],'Time to go home and rest.')
+ ]},
+ {id:'airport-first',location:'airport',title:'Our Very First Flight',level:2,reward:60,skill:'confidence',story:'Your bag is packed. Check in with {cat}, choose your seats, and find your plane.',ending:'Together above the clouds. Your first flight stamp!',nodes:[
+ q('air-passport','May I see your passport?','Here is my passport.',['Here is my lunch.','Here is a red block.'],'Captain Roo checks your travel documents.',{prop:'passport'}),
+ q('air-cat-name','What is your cat’s name?','My cat’s name is {cat}.',['My cat is a boarding pass.','My cat is a room key.'],'Your cat needs a name on the booking.'),
+ q('air-cat-age','How old is your cat?','My cat is {age} months old.',['My cat is near the door.','Two bags, please.'],'Confirm your cat’s age.'),
+ pick('air-together','Would you like to sit together or separately?','Choose the seating plan for your story.',[['Together, please.','together'],['Separate seats, please.','separately'],['Can we sit together?','together']]),
+ pick('air-seat','Would you like a window seat or an aisle seat?','Choose the view you would like.',[['A window seat, please.','window'],['An aisle seat, please.','aisle'],['Any seat is fine.','any']]),
+ q('air-bag','How many bags do you have?','I have one bag.',['I am one bag.','I have one fever.'],'Your packing list shows one bag.',{prop:'bag'}),
+ q('air-gate','Your flight leaves from Gate Two.','Where is Gate Two?',['Where is my soup?','What color is this block?'],'Your seats are {air-together}. Find the gate.'),
+ q('air-board','Are you ready to board?','Yes, we are ready.',['Yes, my bed is tasty.','Yes, a towel is hungry.'],'Your {air-seat} seat is waiting.')
+ ]},
+ {id:'hotel-night',location:'hotel',title:'A Bed Under the Stars',level:3,reward:65,skill:'kindness',story:'After the journey, find a quiet room where your cat can sleep.',ending:'A soft bed, a good night, and a new hotel stamp.',effect:'rest',nodes:[
+ q('hotel-booking','Do you have a reservation?','Yes, under my cat’s name.',['Yes, a red block.','Yes, I have a fever.'],'Coco greets you at the front desk.'),
+ q('hotel-name','What name is the reservation under?','It is under {cat}.',['It is under chicken soup.','It is under Gate Two.'],'Use the name on your booking.'),
+ q('hotel-pet','Is your cat staying with you?','Yes, my cat is staying with me.',['Yes, my cat is a towel.','No, this is my sandwich.'],'Ask for a cat-friendly room.'),
+ pick('hotel-room','Would you like a garden room or a quiet room?','Choose a place to sleep.',[['A garden room, please.','garden'],['A quiet room, please.','quiet'],['Either room is fine.','any']]),
+ q('hotel-blanket','Does your cat need a blanket?','Yes, a soft blanket, please.',['Yes, a passport, please.','Yes, a blue block.'],'Your cat is getting sleepy.',{prop:'quilt'}),
+ q('hotel-key','Here is your key. Room Two.', 'Thank you. Where is the room?',['Thank you. I am a fish.','Good morning, sandwich.'],'Coco has prepared your {hotel-room} room.',{prop:'key'}),
+ q('hotel-night','Have a good night!','Good night. Thank you!',['Two tickets, please.','I need a red block.'],'Time to tuck your cat in.')
+ ]},
+ {id:'school-show',location:'school',title:'Show and Tell',level:3,reward:55,skill:'confidence',story:'Your cat is ready to speak in front of friends.',ending:'A proud little speaker. Everyone claps!',nodes:[
+ q('show-intro','Can you introduce your cat?','This is {cat}, my cat.',['This is my fever.','Here is your bill.'],'Stand beside your cat.'),
+ q('show-age','How old is your cat now?','My cat is {age} months old.',['My cat is on the menu.','My cat is a ticket.'],'Your cat is growing up.'),
+ pick('show-favorite','What does your cat like doing?','Tell the class something about your cat.',[['My cat likes playing.','playing'],['My cat likes sleeping.','sleeping'],['My cat likes eating.','eating']]),
+ q('show-care','How do you look after your cat?','I give my cat food and water.',['I give my cat a flight gate.','My cat is my passport.'],'Share how you care for your friend.'),
+ q('show-stress','What do you do when your cat is upset?','I play gently with my cat.',['I order a window seat.','I put my cat on a menu.'],'Think about your cat’s feelings.'),
+ q('show-thanks','That was a lovely story.','Thank you for listening.',['A room for two, please.','It is at Gate Two.'],'Your friends clap for you.')
+ ]},
+ {id:'cafe-shift',location:'cafe',title:'My First Cafe Shift',level:3,reward:65,skill:'kindness',story:'Momo needs a helper. Listen to the guests and serve their lunch.',ending:'Your first cafe badge. Momo would love your help again.',nodes:[
+ q('shift-welcome','Hello. Can we have a table for two?','Of course. This way, please.',['Of course. My cat has a fever.','Here is a school block.'],'Welcome two guests.'),
+ q('shift-order','Chicken, please.','Chicken. Would you like some water?',['Here is a window seat.','My cat is sleeping.'],'Take the guest’s order.'),
+ q('shift-water','Yes, water, please.','Here is your water.',['Here is your passport.','Good night, Captain.'],'Bring a glass of water.'),
+ q('shift-food','Is our food ready?','Yes. Here you are.',['No, I am a boarding pass.','It is under your school.'],'The sandwich is ready.',{prop:'meal'}),
+ q('shift-extra','Could we have one more spoon?','Of course. I will bring one.',['Of course. Gate Two.','I have a fever.'],'A guest needs something extra.'),
+ q('shift-pay','Can we have the bill, please?','Certainly. Here is your bill.',['Certainly. Here is your cat’s bed.','A red block, please.'],'Finish your first shift.')
+ ]}
+];
+locations.push({id:'forest',name:'Whispering Woods',subtitle:'An English spell, a little courage.',level:2,photo:art+'life/places.png',npc:'Jelly Slime',movie:null});
+episodes.push({id:'forest-slime',location:'forest',title:'The Jelly Slime Trail',level:2,reward:55,skill:'confidence',battle:true,story:'A jelly slime is blocking the trail. Use five English spells to clear the way.',ending:'The slime pops into sparkles. A brave little explorer!',nodes:[
+ q('slime-water','What do you need?','I need water.',['I am a water.','I need sleeping.'],'First spell: ask for water.'),
+ q('slime-shield','Are you ready?','Yes, I am ready.',['Yes, I is ready.','Yes, ready is me.'],'Raise a shield with a clear reply.'),
+ q('slime-help','Can you help me?','Yes, I can help.',['Yes, I can helps.','Yes, me can help.'],'Your pet needs a helping spell.'),
+ q('slime-together','Shall we go together?','Yes, let’s go together.',['Yes, let go together.','Yes, together goes.'],'Cast a teamwork spell.'),
+ q('slime-home','Where are you going?','I am going home.',['I am go home.','I going to home.'],'One last spell to clear the trail.')
+]});
+const photos={
+ school:['kindergarten/01-school-exterior','kindergarten/03-tower-low','kindergarten/05-playground'],
+ cafe:['restaurant/01-street','restaurant/02-overhead-prep','restaurant/05-patio'],
+ airport:['airport/02-checkin-close','airport/04-jetbridge','airport/05-cabin'],
+ hotel:['hotel/02-desk-close','hotel/04-hallway','hotel/05-room'],
+ clinic:['home/02-indoor-ready','home/05-window-cocoa','home/01-wide-cottage'],
+ forest:['home/01-wide-cottage','home/03-puddle-low','home/04-overhead-chase']
+};
+return {goods,locations,episodes,photos};
+});

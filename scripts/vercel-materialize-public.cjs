@@ -85,6 +85,8 @@ function main() {
     fs.cpSync(src, dst, { recursive: true, filter: shouldCopy });
   }
 
+  // The pet game loads these browser modules directly (not the legacy bundle).
+  fs.cpSync(path.join(root, "scripts", "kitty-life"), path.join(destDir, "scripts", "kitty-life"), { recursive: true });
   fs.writeFileSync(buildMarker, "materialized\n");
 
   console.log("[vercel-materialize-public]", destDir);
