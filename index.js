@@ -9401,6 +9401,7 @@ ${folderBtn}
       }
       // ── 스토리형 숏폼 신청 (고객 사이트 → app_state sfreq_* 행) ──
       const SHORTFORM_HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+      const SHORTFORM_ORDER_EMAIL = "showpic6315@gmail.com"; // 2026-09-08 이메일 접수 정본 주소
       const SHORTFORM_STATUS = [
         { key: "submitted", label: "접수" },
         { key: "confirmed", label: "접수확인" },
@@ -9476,7 +9477,7 @@ ${folderBtn}
               : `<span class="shortform-match-badge shortform-match-badge--no">⚠ 확인 필요</span>`);
         const detail = [];
         detail.push(`업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`);
-        if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push("📧 cardds04@naver.com 메일 자료 확인"); }
+        if (m.kind === "external") { detail.push(`주소: ${escapeHtml(m.address || "")}`); detail.push(`📧 ${SHORTFORM_ORDER_EMAIL} 메일 자료 확인`); }
         if (m.customText) detail.push("내용: " + escapeHtml(m.customText));
         if (m.memo) detail.push("추가: " + escapeHtml(m.memo));
         const btns = SHORTFORM_STATUS.map(({ key, label }, index) => {
@@ -9514,59 +9515,34 @@ ${folderBtn}
           <button class="shortform-done-restore" type="button" data-action="shortformSetStatus" data-id="${escapeHtml(m.id)}" data-status="making" aria-label="${escapeHtml(location || "해당 현장")}을 제작중으로 되돌리기">↩ <span>다시 제작</span></button>
         </div>`;
       }
-      function won0(n) { return Number(n || 0).toLocaleString("ko-KR"); }
-      async function fetchShortformPays() {
+      // 2026-09-08 개편: 다회권·충전·잔여횟수(sfpay_/sfbal_) UI 폐지. 신규 접수는 이메일 → ~/shortform-expert 정본.
+      // 아래는 사이트 신청(sfreq_) 잔여분의 진행 상태 관리만 담당한다.
+      async function copyShortformEmail(btn) {
+        const text = String(btn?.dataset?.email || SHORTFORM_ORDER_EMAIL).trim();
+        if (!text) return;
         try {
-          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfpay_%25&select=id,payload`, { headers: SHORTFORM_HDR });
-          if (!r.ok) return [];
-          return (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) })).sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
-        } catch (_) { return []; }
-      }
-      function shortformPayCardHtml(m) {
-        const paid = String(m.status || "") === "paid";
-        const detail = `업체: ${escapeHtml(m.company || "")}${m.phone ? " (" + escapeHtml(m.phone) + ")" : ""}`;
-        const btn = paid
-          ? `<span class="shortform-paid-badge">✓ 충전완료</span>`
-          : `<button class="btn-sm primary shortform-confirm-button" type="button" data-action="shortformPayConfirm" data-id="${escapeHtml(m.id)}" data-cust="${escapeHtml(m.customerId || "")}" data-qty="${Number(m.qty) || 0}">입금확인 · 충전</button>`;
-        return `<div class="customer-alert-row shortform-payment-card${paid ? " is-paid" : " is-pending"}">
-          <div class="shortform-payment-amount"><strong>${Number(m.qty) || 0}</strong><span>회</span></div>
-          <div class="shortform-payment-main">
-            <div class="shortform-payment-title">${won0(m.amount)}원 ${m.tax ? "<span>(세금계산서)</span>" : ""}</div>
-            <div class="shortform-payment-meta"><span>${detail}</span><time>${escapeHtml(m.ts || "")}</time></div>
-          </div>
-          <div class="shortform-payment-action">${btn}</div>
-        </div>`;
-      }
-      async function fetchShortformBalances() {
-        try {
-          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfbal_%25&select=id,payload`, { headers: SHORTFORM_HDR });
-          if (!r.ok) return [];
-          return (await r.json()).map((x) => ({ login: decodeURIComponent(String(x.id).replace(/^sfbal_/, "")), balance: Math.max(0, parseInt((x.payload && x.payload.balance) || 0, 10)), updatedAt: (x.payload && x.payload.updatedAt) || "" }))
-            .sort((a, b) => b.balance - a.balance);
-        } catch (_) { return []; }
-      }
-      async function adjustShortformBalance(login, delta) {
-        const nm = String(login || "").trim(); if (!nm) return null;
-        const br = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(nm)}&select=payload`, { headers: SHORTFORM_HDR });
-        const bj = br.ok ? await br.json() : [];
-        const cur = Math.max(0, parseInt((bj[0] && bj[0].payload && bj[0].payload.balance) || 0, 10));
-        const next = Math.max(0, cur + delta);
-        const up = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-          headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-          body: JSON.stringify([{ id: `sfbal_${nm}`, payload: { balance: next, updatedAt: new Date().toISOString() } }]) });
-        return up.ok ? next : null;
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          const orig = btn.textContent;
+          btn.textContent = "✓ 복사됨";
+          btn.disabled = true;
+          setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1400);
+        } catch (_) {
+          alert("복사에 실패했습니다. 주소를 직접 선택해 복사해 주세요.");
+        }
       }
       async function renderShortformPay() {
-        const pend = document.getElementById("shortformPayPendingList");
-        const arch = document.getElementById("shortformPayArchiveList");
-        const cnt = document.getElementById("shortformPayCount");
-        if (!pend || !arch) return;
-        const rows = await fetchShortformPays();
-        const pending = rows.filter((r) => String(r.status || "") !== "paid");
-        const paid = rows.filter((r) => String(r.status || "") === "paid");
-        pend.innerHTML = pending.length ? pending.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">대기 중인 충전 신청이 없습니다.</div>';
-        arch.innerHTML = paid.length ? paid.map(shortformPayCardHtml).join("") : '<div class="helper" style="margin:0;">충전 완료 기록이 없습니다.</div>';
-        if (cnt) cnt.textContent = `대기 ${pending.length}건`;
         // 🎬 만들어야 할 숏폼(제작 신청, status!=done) + ✅ 납품 완료(기록, status==done)
         const reqBox = document.getElementById("shortformMakeList");
         const doneBox = document.getElementById("shortformDoneList");
@@ -9574,48 +9550,18 @@ ${folderBtn}
           const reqs = await fetchShortformReqs();
           const toMake = reqs.filter((r) => String(r.status || "submitted") !== "done");
           const delivered = reqs.filter((r) => String(r.status || "") === "done");
-          reqBox.innerHTML = toMake.length ? toMake.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">아직 제작할 숏폼 신청이 없습니다.</div>';
+          reqBox.innerHTML = toMake.length ? toMake.map(shortformReqCardHtml).join("") : '<div class="helper" style="margin:0;">사이트 신청 잔여분이 없습니다. 신규 주문은 이메일(showpic6315@gmail.com) 대장에서 확인하세요.</div>';
           doneBox.innerHTML = delivered.length ? delivered.map(shortformDoneCardHtml).join("") : '<div class="helper" style="margin:0;">납품 완료 기록이 없습니다.</div>';
           const mkCnt = document.getElementById("shortformMakeCount"); if (mkCnt) mkCnt.textContent = `${toMake.length}건`;
           const dnCnt = document.getElementById("shortformDoneCount"); if (dnCnt) dnCnt.textContent = `${delivered.length}건`;
         }
-        // 업체별 남은 횟수 + 수동조정 datalist
-        const bals = await fetchShortformBalances();
-        const balBox = document.getElementById("shortformBalanceList");
-        const balSearch = document.getElementById("sfBalSearch");
-        const drawBalances = () => {
-          if (!balBox) return;
-          const query = String(balSearch?.value || "").trim().toLowerCase();
-          const visible = query ? bals.filter((b) => String(b.login || "").toLowerCase().includes(query)) : bals;
-          balBox.innerHTML = visible.length
-            ? visible.map((b) => `<div class="customer-alert-row shortform-balance-row">
-                <span class="shortform-balance-company">${escapeHtml(b.login)}</span>
-                <span class="shortform-balance-value">${b.balance}<small>회</small></span>
-                <time>${escapeHtml(String(b.updatedAt).slice(0, 16).replace("T", " "))}</time></div>`).join("")
-            : `<div class="shortform-empty-state">${query ? "검색 결과가 없습니다." : "아직 잔여 기록이 있는 업체가 없습니다."}</div>`;
-        };
-        drawBalances();
-        if (balSearch) balSearch.oninput = drawBalances;
-        const dl = document.getElementById("sfAdjCompanyList");
-        if (dl) {
-          const names = new Set(bals.map((b) => b.login));
-          try { (companies || []).forEach((c) => { const id = String(c?.login_id || c?.code || "").trim(); if (id) names.add(id); }); } catch (_) {}
-          dl.innerHTML = [...names].map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
-        }
-        // 현재 입력된 업체 잔여 미리보기
-        const showCur = async () => {
-          const el = document.getElementById("sfAdjCompany"); const out = document.getElementById("sfAdjCurrent");
-          const nm = String(el?.value || "").trim();
-          if (!nm) { if (out) out.textContent = "-"; return; }
-          const hit = bals.find((b) => b.login === nm);
-          if (out) out.textContent = hit ? hit.balance + "회" : "0회 (신규)";
-        };
-        if (!shortformPaySectionEl?.dataset.bound) {
+        if (shortformPaySectionEl && !shortformPaySectionEl.dataset.bound) {
           shortformPaySectionEl.dataset.bound = "1";
-          // 입금확인·충전
           shortformPaySectionEl.addEventListener("click", async (event) => {
-            const payBtn = event.target.closest('button[data-action="shortformPayConfirm"]');
-            if (payBtn && !payBtn.disabled) { await approveShortformTopup(payBtn); return; }
+            // 접수 이메일 복사
+            const copyBtn = event.target.closest('button[data-action="shortformCopyEmail"]');
+            if (copyBtn && !copyBtn.disabled) { await copyShortformEmail(copyBtn); return; }
+            // 진행한 현장 매칭 상세
             const matchBtn = event.target.closest('button[data-action="shortformViewMatch"]');
             if (matchBtn) { openSfMatchModal(sfMatchMap.get(String(matchBtn.dataset.id || ""))); return; }
             // 제작 신청 상태 변경(접수확인·제작중·완료)
@@ -9638,48 +9584,7 @@ ${folderBtn}
               return;
             }
           });
-          document.getElementById("sfBalRefresh")?.addEventListener("click", () => renderShortformPay());
-          document.getElementById("sfAdjCompany")?.addEventListener("input", showCur);
-          const doAdjust = async (sign) => {
-            const el = document.getElementById("sfAdjCompany"); const qEl = document.getElementById("sfAdjQty");
-            const nm = String(el?.value || "").trim(); const q = Math.max(1, parseInt(qEl?.value || "0", 10) || 0);
-            if (!nm) { alert("업체명(로그인 아이디)을 입력해 주세요."); return; }
-            if (sign < 0 && !confirm(`${nm} 업체의 남은 횟수에서 ${q}회를 차감할까요?`)) return;
-            const res = document.getElementById("sfAdjResult");
-            const next = await adjustShortformBalance(nm, sign * q);
-            if (next === null) { if (res) res.textContent = "처리에 실패했어요. 다시 시도해 주세요."; return; }
-            if (res) res.innerHTML = `✅ ${escapeHtml(nm)} — 남은 횟수 <b>${next}회</b>로 조정됐어요.`;
-            await renderShortformPay();
-          };
-          document.getElementById("sfAdjPlus")?.addEventListener("click", () => doAdjust(1));
-          document.getElementById("sfAdjMinus")?.addEventListener("click", () => doAdjust(-1));
         }
-        showCur();
-      }
-      async function approveShortformTopup(btn) {
-        const id = String(btn.dataset.id || ""), cust = String(btn.dataset.cust || ""), qty = Number(btn.dataset.qty) || 0;
-        if (!id || !cust || qty <= 0) return;
-        if (!confirm(`${cust} 업체에 숏폼 ${qty}회를 충전할까요? (입금 확인 완료)`)) return;
-        btn.disabled = true; btn.textContent = "충전 중…";
-        try {
-          // 1) 현재 잔여 읽고 +qty
-          const br = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.sfbal_${encodeURIComponent(cust)}&select=payload`, { headers: SHORTFORM_HDR });
-          const bj = br.ok ? await br.json() : [];
-          const cur = Math.max(0, parseInt((bj[0] && bj[0].payload && bj[0].payload.balance) || 0, 10));
-          const bu = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-            headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-            body: JSON.stringify([{ id: `sfbal_${cust}`, payload: { balance: cur + qty, updatedAt: new Date().toISOString() } }]) });
-          if (!bu.ok) throw new Error("balance");
-          // 2) 충전요청 paid 처리
-          const pr = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}&select=payload`, { headers: SHORTFORM_HDR });
-          const pj = pr.ok ? await pr.json() : [];
-          const pl = (pj[0] && pj[0].payload) || {};
-          pl.status = "paid"; pl.paidAt = new Date().toISOString();
-          await fetch(`${SUPABASE_URL}/rest/v1/app_state`, { method: "POST",
-            headers: { ...SHORTFORM_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-            body: JSON.stringify([{ id, payload: pl }]) });
-          await renderShortformPay();
-        } catch (_) { btn.disabled = false; btn.textContent = "입금확인·충전"; alert("충전 처리에 실패했습니다. 다시 시도해 주세요."); }
       }
 
       function renderThefeelingEditRequests() {
