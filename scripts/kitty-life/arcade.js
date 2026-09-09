@@ -23,7 +23,7 @@ function background(){const g=ctx.createLinearGradient(0,0,0,400);g.addColorStop
 function draw(dt){if(!alive||ended)return;clock+=dt;background();
  if(type==='plane'){
   spawn-=dt;if(spawn<=0){spawn=.9;const hazard=Math.random()<.45;things.push({x:35+Math.random()*290,y:-20,word:words[target],hazard});}
-  for(const o of things){o.y+=95*dt;ctx.fillStyle=o.hazard?'#46516b':'#fff0b5';ctx.beginPath();ctx.roundRect(o.x-32,o.y-15,64,30,12);ctx.fill();label(o.hazard?'STORM':o.word,o.x,o.y+5,12,o.hazard?'#fff':'#624a28');if(Math.abs(o.y-337)<25&&Math.abs(o.x-x)<33&&!o.hit){o.hit=true;if(o.hazard){lives--;api.wrong();}else{points++;target=points%words.length;things=things.filter(t=>t.hazard||t===o);hint.textContent='Catch “'+words[target]+'”. Avoid STORM.';api.speak(words[target]);}}}
+  for(const o of things){o.y+=95*dt;ctx.fillStyle=o.hazard?'#46516b':'#fff0b5';ctx.beginPath();ctx.roundRect(o.x-32,o.y-15,64,30,12);ctx.fill();label(o.hazard?'먹구름':o.word,o.x,o.y+5,12,o.hazard?'#fff':'#624a28');if(Math.abs(o.y-337)<25&&Math.abs(o.x-x)<33&&!o.hit){o.hit=true;if(o.hazard){lives--;api.wrong();}else{points++;target=points%words.length;things=things.filter(t=>t.hazard||t===o);hint.textContent='Catch “'+words[target]+'”. Avoid STORM.';api.speak(words[target]);}}}
   things=things.filter(o=>o.y<430&&!o.hit);ctx.save();ctx.translate(x,337);ctx.fillStyle='#fff3d5';ctx.beginPath();ctx.moveTo(0,-26);ctx.lineTo(8,-4);ctx.lineTo(29,11);ctx.lineTo(29,17);ctx.lineTo(7,10);ctx.lineTo(5,24);ctx.lineTo(13,29);ctx.lineTo(-13,29);ctx.lineTo(-5,24);ctx.lineTo(-7,10);ctx.lineTo(-29,17);ctx.lineTo(-29,11);ctx.lineTo(-8,-4);ctx.closePath();ctx.fill();ctx.fillStyle='#ef8d58';ctx.fillRect(-3,-11,6,16);ctx.restore();score.textContent=points+' / 5 · '+lives+' lives';if(points>=5)finish(true);else if(lives<=0)finish(false);
  }else{
   ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;if(ball.x<7){ball.x=7;ball.vx=Math.abs(ball.vx)}if(ball.x>353){ball.x=353;ball.vx=-Math.abs(ball.vx)}if(ball.y<8){ball.y=8;ball.vy=Math.abs(ball.vy)}
@@ -32,7 +32,7 @@ function draw(dt){if(!alive||ended)return;clock+=dt;background();
   ctx.fillStyle='#fff0c7';ctx.beginPath();ctx.roundRect(x-40,359,80,12,6);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ball.x,ball.y,7,0,7);ctx.fill();if(ball.y>400){lives--;api.wrong();ball={x,y:300,vx:115,vy:-170}}score.textContent=points+' / 15 · '+lives+' lives';if(points>=15)finish(true);else if(lives<=0)finish(false);
  }
 }
-function loop(t){if(!alive||ended)return;const dt=last?Math.min((t-last)/1000,.035):0;last=t;draw(dt);if(!ended)frame=requestAnimationFrame(loop)}background();label('Ready for an adventure?',180,190,21);
+function loop(t){if(!alive||ended)return;const dt=last?Math.min((t-last)/1000,.035):0;last=t;draw(dt);if(!ended)frame=requestAnimationFrame(loop)}background();label('모험할 준비 됐나요?',180,190,21);
 find('#arcadeStart').onclick=()=>{if(started)return;started=true;find('#arcadeStart').hidden=true;if(type==='plane')api.speak('Catch the apple.');frame=requestAnimationFrame(loop)};
 }
 window.KittyArcade={start,stop};})();
