@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {asset} from './world-assets.js';
-export const homeRooms={all:{name:'집 전체',x:4.5,z:-3.8},living:{name:'거실',x:0,z:0},kitchen:{name:'주방·식탁',x:9,z:0,entry:[6,0]},bedroom:{name:'안방',x:0,z:-7.5,entry:[0,-5]},bathroom:{name:'욕실',x:9,z:-7.5,entry:[9,-5]}};
+export const homeRooms={follow:{name:'따라보기',x:0,z:0},all:{name:'집 전체',x:4.5,z:-3.8},living:{name:'거실',x:0,z:0},kitchen:{name:'주방·식탁',x:9,z:0,entry:[6,0]},bedroom:{name:'안방',x:0,z:-7.5,entry:[0,-5]},bathroom:{name:'욕실',x:9,z:-7.5,entry:[9,-5]}};
 export function buildHouseWings(scene,alive){const blocks=[];function box(w,h,d,c,x,y,z,solid=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.88}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;scene.add(m);if(solid)blocks.push({x,z,w,d});return m;}
  function put(model,width,x,z,{y=0,r=0,use,solid=true}={}){const h=asset(model,scene,{width,x,z,y,rotation:r,alive,onReady:root=>root.traverse(o=>{if(o.isMesh)for(const m of [].concat(o.material)){if(m.name==='wood')m.color.set('#b9814e');if(m.name==='plant')m.color.set('#57916c');}})});if(use)h.userData.homeUse=use;if(y===0&&solid&&!model.startsWith('rug'))blocks.push({x,z,w:width*.8,d:width*.7});}
  for(const[x,z,w,d,c]of [[9,0,8,7,'#ceae83'],[0,-7.5,8,8,'#d3b28c'],[9,-7.5,8,8,'#c9d8d2'],[4.5,-3.7,1,15,'#d8bd99'],[4.5,-3.75,17,.5,'#d8bd99']]){const f=box(w,.18,d,c,x,-.1,z);f.userData.walkFloor=true;}

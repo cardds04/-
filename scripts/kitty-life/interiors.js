@@ -1,12 +1,13 @@
 import * as T from 'three';
+import {SPACE} from './pointer-travel.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {asset} from './world-assets.js';
 export function buildInterior(group,id,alive){
  const blocks=[];const palette={cafe:'#94b4a0',hotel:'#4d8279',clinic:'#a6cdd5',school:'#ecc582',library:'#8ca387',shop:'#d5a194',airport:'#9eb8ce'};
  const trim=palette[id]||'#8dae88',outdoor=['park','forest'].includes(id);
  function box(w,h,d,color,x,y,z){const m=new T.Mesh(new RoundedBoxGeometry(w,h,d,2,Math.min(.035,w/10,h/10,d/10)),new T.MeshStandardMaterial({color,roughness:.9}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;group.add(m);return m;}
- function put(model,width,x,z,{y=0,r=0,action,solid=true}={}){const h=asset(model,group,{width,x,z,y,rotation:r,alive,onReady:root=>root.traverse(o=>{if(!o.isMesh)return;for(const m of [].concat(o.material)){if(m.name==='wood')m.color.set('#b9814e');if(m.name==='plant')m.color.set('#57916c');if(m.name==='carpet')m.color.set(({clinic:'#92bccc',library:'#86a68a',hotel:'#c5a887',school:'#dbb163'})[id]||'#d08c7c');}})});if(action!==undefined)h.userData.action=action;if(solid&&y===0&&!model.startsWith('rug'))blocks.push({x,z,w:width*.85,d:width*.65});return h;}
- function table(x,z){put('tableRound',1.5,x,z,{action:0});put('chairCushion',.7,x-.95,z,{r:Math.PI/2});put('chairCushion',.7,x+.95,z,{r:-Math.PI/2});put('mug',.2,x-.25,z,{y:.83});put('croissant',.3,x+.25,z,{y:.82});put('plantSmall1',.27,x,z-.2,{y:.83});}
+ function put(model,width,x,z,{y=0,r=0,action,solid=true}={}){const h=asset(model,group,{width,x,z,y,rotation:r,alive,onReady:root=>root.traverse(o=>{if(!o.isMesh)return;for(const m of [].concat(o.material)){if(m.name==='wood')m.color.set('#b9814e');if(m.name==='plant')m.color.set('#57916c');if(m.name==='carpet')m.color.set(({clinic:'#92bccc',library:'#86a68a',hotel:'#c5a887',school:'#dbb163'})[id]||'#d08c7c');}})});if(action!==undefined)h.userData.action=action;if(solid&&y===0&&!model.startsWith('rug'))blocks.push({x,z,w:width*.85/SPACE,d:width*.65/SPACE});return h;}
+ function table(x,z){put('tableRound',1.5,x,z,{action:0});put('chairCushion',.7,x-.95/SPACE,z,{r:Math.PI/2});put('chairCushion',.7,x+.95/SPACE,z,{r:-Math.PI/2});put('mug',.2,x-.25/SPACE,z,{y:.83});put('croissant',.3,x+.25/SPACE,z,{y:.82});put('plantSmall1',.27,x,z-.2/SPACE,{y:.83});}
  function shelf(x,z,width=1.7,r=0){put('bookcaseClosedWide',width,x,z,{r,action:0});put('books',width*.66,x,z,{y:.65,r});put('plantSmall2',.45,x,z,{y:1.8});}
  function counter(){box(3,1.05,.75,trim,0,.52,-2.55);box(3.12,.12,.87,'#f0dfbd',0,1.1,-2.55);blocks.push({x:0,z:-2.55,w:3.1,d:.9});for(const x of [-1,0,1])box(.85,.65,.035,'#e1d1ae',x,.55,-2.15);put('computerScreen',.5,.75,-2.55,{y:1.17,action:2});put('plantSmall1',.35,-1.1,-2.55,{y:1.17});}
  const floor=box(12,.16,10,outdoor?'#a7c98b':'#cfaa77',0,-.1,0);floor.userData.ground=true;
