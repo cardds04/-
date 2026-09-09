@@ -16,3 +16,21 @@
 
 Other free source considered: Kenney Cube Pets, https://kenney.nl/assets/cube-pets (CC0).
 No paid assets were purchased.
+
+## Town & Build Mode update
+- Buildings: Kenney City Kit (Suburban), https://kenney.nl/assets/city-kit-suburban
+- Shops/public buildings: Kenney City Kit (Commercial), https://kenney.nl/assets/city-kit-commercial
+- Furniture: Kenney Furniture Kit, https://kenney.nl/assets/furniture-kit
+- Trees/flowers: Kenney Nature Kit, https://kenney.nl/assets/nature-kit
+- Food objects: Kenney Food Kit, https://kenney.nl/assets/food-kit
+  All five packs are CC0. Their original license files are in licenses/.
+  48 selected models are embedded in world.js, including external palette images.
+  Runtime material roughness/metalness adjusted for the pastel scene.
+- Pug, German Shepherd: Quaternius Zombie Apocalypse Kit (March 2024), CC0.
+  Official: https://quaternius.com/packs/zombieapocalypsekit.html
+  Retrieved from agentkaerf/FreeModels / Zombie Apocalypse Kit - March 2024 / Characters / glTF.
+- Walking guardian: Quaternius Cube World Kit, CC0, Character_Female_1.gltf.
+- Corgi: Gobkit free animal pack, CC0.
+  Creator repository: https://github.com/ariescar0326-sketch/gobkit-free-assets
+  Source: animal/Corgi.glb. Idle/Walk animations split from the source clip at 24 fps.
+  Runtime proportions and animation blending adjusted. No paid assets purchased.
