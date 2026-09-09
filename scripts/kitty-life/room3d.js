@@ -1,7 +1,9 @@
 import * as T from 'three';
+import {attachPet} from './pet-model.js';
+import './town3d.js';
 
-let shutdown=()=>{},decorate=()=>{};
-function open(host,{state,save,onClose,main=false}){
+let shutdown=()=>{},decorate=()=>{},fetchBall=()=>{};
+function open(host,{state,save,onClose,main=false,onPlay=()=>{},speak=()=>{}}){
  shutdown();let running=true,raf=0,selection=null,decorating=false,last=0,wander=3;
  host.hidden=false;host.classList.toggle('main-room',main);host.classList.remove('arranging');host.innerHTML='<div class="room-canvas"></div><header class="room-header"><div><b>My 3D Room</b><small>Tap the floor to call your pet</small></div><button class="secondary room-close">Done</button></header><div class="room-tools"><button class="secondary" id="decorateRoom">Arrange furniture</button><button class="secondary" id="turnItem" hidden>Rotate</button></div><div class="room-items" hidden></div><p class="room-message" role="status"></p>';
  const el=s=>host.querySelector(s),message=t=>el('.room-message').textContent=t;
@@ -38,6 +40,8 @@ function open(host,{state,save,onClose,main=false}){
  const tail=new T.Group();tail.position.set(0,.87,-.61);pet.add(tail);const tailmesh=ball(.16,.19,.45,fur,0,.11,-.22,tail);tailmesh.rotation.x=-.4;
  // Instanced tufts add a soft silhouette without a separate mesh per strand.
  const tufts=new T.InstancedMesh(new T.SphereGeometry(1,5,4),fur,220),dummy=new T.Object3D();for(let i=0;i<220;i++){const a=i*2.39996,y=1-2*(i+.5)/220,r=Math.sqrt(1-y*y);dummy.position.set(Math.cos(a)*r*.49,.7+y*.5,Math.sin(a)*r*.72);dummy.scale.set(.018,.027,.018);dummy.updateMatrix();tufts.setMatrixAt(i,dummy.matrix)}tufts.castShadow=true;pet.add(tufts);
+ const rig=attachPet(pet,state,()=>running);
+ const expansion=Math.min(2,state.homeLevel||0),extra=expansion*1.6;if(extra){box(8,.18,extra,wood,0,-.1,3.5+extra/2).userData.walkFloor=true;for(let z=3.6;z<3.5+extra;z+=.44)box(7.97,.012,.015,wood,0,.002,z);}
  const defaults={bed:{x:2.45,z:-1.9,r:0},quilt:{x:-2.3,z:1.4,r:0},ball:{x:1.8,z:1.5,r:0},wand:{x:-1.8,z:-.8,r:0}};
  state.roomLayout=state.roomLayout||{};const placed=new Map();const owned=['bed','quilt','ball','wand'].filter(id=>state.owned.includes(id));
  const bounds={bed:[1.65,1.3],quilt:[1.45,1.15],ball:[.5,.5],wand:[.9,.5]};
@@ -53,24 +57,30 @@ function open(host,{state,save,onClose,main=false}){
  const ring=mesh(new T.RingGeometry(.3,.36,40),new T.MeshBasicMaterial({color:'#ffe7a1',side:T.DoubleSide}),0,.045,0);ring.rotation.x=-Math.PI/2;ring.visible=false;
  const halo=mesh(new T.RingGeometry(.78,.83,48),new T.MeshBasicMaterial({color:'#ffd76d',side:T.DoubleSide}),0,.045,0);halo.rotation.x=-Math.PI/2;halo.visible=false;
  function blocked(x,z,skip=null){if(x<-1.9&&z<-2.05)return true;for(const [id,g]of placed){if(id===skip)continue;const dims=bounds[id],rot=Math.abs(Math.sin(g.rotation.y))>.7,w=rot?dims[1]:dims[0],d=rot?dims[0]:dims[1];if(Math.abs(x-g.position.x)<w/2+.3&&Math.abs(z-g.position.z)<d/2+.3)return true}return false}
- function valid(id,x,z,r){const dims=bounds[id],rot=Math.abs(Math.sin(r))>.7,w=rot?dims[1]:dims[0],d=rot?dims[0]:dims[1];if(Math.abs(x)+w/2>3.8||Math.abs(z)+d/2>3.3)return false;for(const [other,g]of placed){if(other===id)continue;const ds=bounds[other],rr=Math.abs(Math.sin(g.rotation.y))>.7;if(Math.abs(x-g.position.x)<(w+(rr?ds[1]:ds[0]))/2+.1&&Math.abs(z-g.position.z)<(d+(rr?ds[0]:ds[1]))/2+.1)return false;}return !(x<-2&&z<-2);}
+ function valid(id,x,z,r){const dims=bounds[id],rot=Math.abs(Math.sin(r))>.7,w=rot?dims[1]:dims[0],d=rot?dims[0]:dims[1];if(Math.abs(x)+w/2>3.8||(z+d/2>3.3+extra||z-d/2< -3.3))return false;for(const [other,g]of placed){if(other===id)continue;const ds=bounds[other],rr=Math.abs(Math.sin(g.rotation.y))>.7;if(Math.abs(x-g.position.x)<(w+(rr?ds[1]:ds[0]))/2+.1&&Math.abs(z-g.position.z)<(d+(rr?ds[0]:ds[1]))/2+.1)return false;}return !(x<-2&&z<-2);}
  function choose(id){selection=id;halo.visible=true;halo.position.set(placed.get(id).position.x,.045,placed.get(id).position.z);el('#turnItem').hidden=false;message('Tap a free floor spot to place your '+id+'.');}
- renderer.domElement.addEventListener('pointerdown',e=>{const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);const hit=ray.intersectObject(floor)[0];if(!hit)return;const x=hit.point.x,z=hit.point.z;
+ renderer.domElement.addEventListener('pointerdown',e=>{const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);const hit=ray.intersectObjects(scene.children.filter(o=>o.name==='floor'||o.userData.walkFloor))[0];if(!hit)return;const x=hit.point.x,z=hit.point.z;
+  if(fetching){if(!blocked(x,z)&&Math.abs(x)<3.6&&z<3.1+extra&&z> -3.1&&!chasing){toy.position.set(pet.position.x,.5,pet.position.z+.7);toss={from:toy.position.clone(),to:new T.Vector3(x,.22,z),t:0};toy.visible=true;target.set(x,0,z);wander=99;chasing=true;speak('Fetch the ball!');}return;}
   if(decorating&&selection){const g=placed.get(selection);if(!valid(selection,x,z,g.rotation.y)){message('Choose an empty spot inside the room.');return}g.position.set(x,0,z);state.roomLayout[selection]={x,z,r:g.rotation.y};halo.position.set(x,.045,z);save();message('Saved! Tap another spot to move it again.');return;}
   if(decorating){const hits=ray.intersectObjects([...placed.values()],true);if(hits.length){let g=hits[0].object;while(g&&!g.userData.item)g=g.parent;if(g)choose(g.userData.item);}return;}
-  if(!blocked(x,z)&&Math.abs(x)<3.6&&Math.abs(z)<3.1){target.set(x,0,z);wander=4;ring.position.set(x,.045,z);ring.visible=true;}
+  if(!blocked(x,z)&&Math.abs(x)<3.6&&z<3.1+extra&&z> -3.1){target.set(x,0,z);wander=4;ring.position.set(x,.045,z);ring.visible=true;}
  });
  decorate=el('#decorateRoom').onclick=()=>{decorating=!decorating;host.classList.toggle('arranging',decorating);el('.room-items').hidden=!decorating;el('#decorateRoom').textContent=decorating?'Finish arranging':'Arrange furniture';if(!decorating){selection=null;halo.visible=false;el('#turnItem').hidden=true;}message(decorating?(owned.length?'Select an item, then tap the floor.':'Buy a bed, quilt, or toy in the shop first.'):'Tap the floor to call your pet.');};
  for(const id of owned){const b=document.createElement('button');b.className='secondary';b.textContent=id[0].toUpperCase()+id.slice(1);b.onclick=()=>choose(id);el('.room-items').append(b)}
  el('#turnItem').onclick=()=>{if(!selection)return;const g=placed.get(selection),r=g.rotation.y+Math.PI/2;if(!valid(selection,g.position.x,g.position.z,r)){message('Move this item to a larger space first.');return}g.rotation.y=r;state.roomLayout[selection].r=r;save();};
- const resize=()=>{const r=host.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.position.set(8.3,10.5,camera.aspect<.65?15.8:12.8);camera.lookAt(0,.3,0);camera.updateProjectionMatrix()};const observer=new ResizeObserver(resize);observer.observe(host);resize();
+ let fetching=false,chasing=false,catches=0,toss=null;const toy=ball(.18,.18,.18,pink,0,.2,0);toy.visible=false;
+ const fetchPanel=document.createElement('div');fetchPanel.className='fetch-panel';fetchPanel.hidden=true;fetchPanel.innerHTML='<b>Fetch · <span>0 / 3</span></b><button>Finish</button>';host.append(fetchPanel);fetchPanel.querySelector('button').onclick=()=>{fetching=false;chasing=false;toy.visible=false;host.classList.remove('fetching');fetchPanel.hidden=true;wander=2;};
+ fetchBall=()=>{fetching=true;chasing=false;catches=0;fetchPanel.querySelector('span').textContent='0 / 3';fetchPanel.hidden=false;host.classList.add('fetching');message('Tap an empty floor spot to throw the ball.');speak('Let’s play fetch!');};
+ const resize=()=>{const r=host.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.position.set(8.3,10.5,camera.aspect<.65?15.8:12.8);camera.lookAt(0,.3,extra*.5);camera.position.z+=extra*.55;camera.updateProjectionMatrix()};const observer=new ResizeObserver(resize);observer.observe(host);resize();
  function animate(t){if(!running)return;if(host.hidden||document.hidden){last=0;raf=requestAnimationFrame(animate);return;}const dt=last?Math.min((t-last)/1000,.04):0;last=t;wander-=dt;
-  if(wander<0&&!decorating){for(let i=0;i<20;i++){const x=(Math.random()-.5)*6,z=(Math.random()-.5)*5;if(!blocked(x,z)){target.set(x,0,z);break}}wander=4+Math.random()*3;}
+  if(wander<0&&!decorating&&!fetching){for(let i=0;i<20;i++){const x=(Math.random()-.5)*6,z=(Math.random()-.5)*5;if(!blocked(x,z)){target.set(x,0,z);break}}wander=4+Math.random()*3;}
   const delta=target.clone().sub(pet.position),distance=delta.length(),moving=distance>.12&&!decorating;
-  if(moving){delta.normalize();let nx=pet.position.x+delta.x*dt*1.25,nz=pet.position.z+delta.z*dt*1.25;if(blocked(nx,nz)){nx=pet.position.x+delta.z*dt*1.3;nz=pet.position.z-delta.x*dt*1.3;if(blocked(nx,nz)||Math.abs(nx)>3.6||Math.abs(nz)>3.1){target.copy(pet.position);wander=.2;nx=pet.position.x;nz=pet.position.z;}}heading=Math.atan2(nx-pet.position.x,nz-pet.position.z);pet.position.set(nx,Math.abs(Math.sin(t*.012))*.045,nz);pet.rotation.y+=Math.atan2(Math.sin(heading-pet.rotation.y),Math.cos(heading-pet.rotation.y))*Math.min(1,dt*9);}else{pet.position.y=0;ring.visible=false;}
+  if(moving){delta.normalize();let nx=pet.position.x+delta.x*dt*(chasing?2.7:1.25),nz=pet.position.z+delta.z*dt*(chasing?2.7:1.25);if(blocked(nx,nz)){nx=pet.position.x+delta.z*dt*1.3;nz=pet.position.z-delta.x*dt*1.3;if(blocked(nx,nz)||Math.abs(nx)>3.6||(nz>3.1+extra||nz< -3.1)){target.copy(pet.position);wander=.2;nx=pet.position.x;nz=pet.position.z;}}heading=Math.atan2(nx-pet.position.x,nz-pet.position.z);pet.position.set(nx,Math.abs(Math.sin(t*.012))*.045,nz);pet.rotation.y+=Math.atan2(Math.sin(heading-pet.rotation.y),Math.cos(heading-pet.rotation.y))*Math.min(1,dt*9);}else{pet.position.y=0;ring.visible=false;}
+  if(chasing){if(toss&&toss.t<1){toss.t=Math.min(1,toss.t+dt*1.5);toy.position.lerpVectors(toss.from,toss.to,toss.t);toy.position.y+=Math.sin(toss.t*Math.PI)*1.3;}else toy.position.y=.22;toy.rotation.x+=dt*4;if(distance<.32&&(!toss||toss.t>=1)){chasing=false;toy.visible=false;catches++;fetchPanel.querySelector('span').textContent=catches+' / 3';if(catches>=3){fetching=false;host.classList.remove('fetching');fetchPanel.hidden=true;onPlay();message('Great catch!');}else message('Good catch! Throw again.');}}
+  rig.update(dt,moving,chasing);host.dataset.petAsset=rig.ready?'ready':'loading';
   legs.forEach((leg,i)=>leg.position.y=.25+(moving?Math.sin(t*.013+(i%2)*Math.PI)*.09:0));tail.rotation.y=Math.sin(t*.009)*.4;head.rotation.z=Math.sin(t*.0014)*.045;renderer.render(scene,camera);raf=requestAnimationFrame(animate);
  }
  shutdown=()=>{running=false;cancelAnimationFrame(raf);observer.disconnect();scene.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of [].concat(o.material))m.dispose();}});renderer.dispose();renderer.forceContextLoss();host.hidden=true;};
  el('.room-close').onclick=()=>{shutdown();onClose()};message('Your pet can run around. Tap the floor to call them.');raf=requestAnimationFrame(animate);save();return true;
 }
-window.KittyRoom={open,close:()=>shutdown(),decorate:()=>decorate()};
+window.KittyRoom={open,close:()=>shutdown(),decorate:()=>decorate(),fetchBall:()=>fetchBall()};
