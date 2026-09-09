@@ -32,6 +32,8 @@ function open(host,{state,save,onClose,main=false,onPlay=()=>{},speak=()=>{},onC
  asset('bookcaseOpenLow',starter,{width:1.5,x:2.6,z:-3,alive:()=>running});
  asset('books',starter,{width:.75,x:2.6,z:-3,y:.7,alive:()=>running});
  asset('lampRoundTable',starter,{width:.4,x:3.1,z:-3,y:.7,alive:()=>running});
+ asset('plantSmall3',starter,{width:.7,x:-3.4,z:2.4,alive:()=>running});
+ asset('bear',starter,{width:.55,x:3.3,z:2.7,alive:()=>running});
  asset('rugRounded',starter,{width:3.2,x:.2,z:.4,alive:()=>running});rug.visible=false;
  const pet=new T.Group();scene.add(pet);const scale=state.species==='dog'?.9:.85;pet.scale.setScalar(scale*(.9+Math.min((state.day||1)/40,.22)));pet.position.set(.3,0,1.6);
  const body=ball(.48,.53,.75,fur,0,.7,0,pet);ball(.4,.4,.45,white,0,.65,.48,pet);
@@ -86,7 +88,7 @@ function open(host,{state,save,onClose,main=false,onPlay=()=>{},speak=()=>{},onC
  let fetching=false,chasing=false,catches=0,toss=null;const toy=ball(.18,.18,.18,pink,0,.2,0);toy.visible=false;
  const fetchPanel=document.createElement('div');fetchPanel.className='fetch-panel';fetchPanel.hidden=true;fetchPanel.innerHTML='<b>Fetch · <span>0 / 3</span></b><button>Finish</button>';host.append(fetchPanel);fetchPanel.querySelector('button').onclick=()=>{fetching=false;chasing=false;toy.visible=false;host.classList.remove('fetching');fetchPanel.hidden=true;wander=2;};
  fetchBall=()=>{fetching=true;chasing=false;catches=0;fetchPanel.querySelector('span').textContent='0 / 3';fetchPanel.hidden=false;host.classList.add('fetching');message('Tap an empty floor spot to throw the ball.');speak('Let’s play fetch!');};
- const resize=()=>{const r=host.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.position.set(8.3,10.5,camera.aspect<.65?15.8:12.8);camera.lookAt(0,.3,extra*.5);camera.position.z+=extra*.55;camera.zoom=decorating?1:1.28;camera.updateProjectionMatrix()};const observer=new ResizeObserver(resize);observer.observe(host);resize();
+ const resize=()=>{const r=host.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.position.set(8.3,10.5,camera.aspect<.65?15.8:12.8);camera.lookAt(0,.3,extra*.5);camera.position.z+=extra*.55;camera.zoom=decorating?.95:1.05;camera.updateProjectionMatrix()};const observer=new ResizeObserver(resize);observer.observe(host);resize();
  function animate(t){if(!running)return;if(host.hidden||document.hidden){last=0;raf=requestAnimationFrame(animate);return;}const dt=last?Math.min((t-last)/1000,.04):0;last=t;wander-=dt;
   if(wander<0&&!decorating&&!fetching){for(let i=0;i<20;i++){const x=(Math.random()-.5)*6,z=(Math.random()-.5)*5;if(!blocked(x,z)){target.set(x,0,z);break}}wander=4+Math.random()*3;}
   const delta=target.clone().sub(pet.position),distance=delta.length(),moving=distance>.12&&!decorating;

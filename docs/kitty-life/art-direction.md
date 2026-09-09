@@ -7,3 +7,11 @@ For substantial screen changes, capture the actual mobile game, use image genera
 Questions belong above NPCs; answers belong to the player's bubble. Both use similarly large English typography. Korean translations remain behind the translation control. Correct answers advance only after spoken audio and any associated animation complete. Audio errors offer replay, never silently advance. Gold and XP rise above the pet with a short chime.
 
 Minigames retain the existing town instance and return to the originating location. The home furnishings added here are fixed starter decor; purchased furniture and saved layouts are preserved.
+
+## Spacious rooms and daily story, version 16
+
+The six-room design board guides distinct functional zones rather than one generic room with swapped furniture. Rooms now use 12 by 10 scene units, a clear center aisle, perimeter furniture, a cutaway entrance, and a smaller pet scale. The hotel lobby has no bed; the clinic has a partitioned exam bay. Indoor movement routes around furniture.
+
+A scenario review recommended morning kindergarten, a daytime errand or rest, then home; airports/hotels belong to separate outings rather than an obligatory daily circuit. The implemented daily guide uses completed outings as time steps, not real clock time. Every third day starting day 2, after one outing, a fictional sore-tummy event can direct the player to the vet. It supplies known symptoms, never asks children to diagnose or select medication, and routes home after the checkup. Incorrect English does not worsen illness. The existing episode reward applies; there is no duplicate mission reward.
+
+Eight new three-turn visits have context, translated hints and generated audio. Visit selection rotates whole episodes, preserves unfinished conversations, and excludes the café work shift from automatic customer visits. The expansive park-town image is a concept only; it is not the currently implemented outdoor map.
