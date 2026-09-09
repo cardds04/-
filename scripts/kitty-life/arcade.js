@@ -1,7 +1,7 @@
 /* Short, touch-friendly arcade rounds. No network or third-party game embeds. */
 (()=>{'use strict';let dispose=()=>{};
 function stop(){dispose();dispose=()=>{}}
-function start(type,mount,api){stop();let alive=true,frame=0,timers=[],started=false,ended=false;
+function start(type,mount,api){stop();if(['sentence','vocabulary'].includes(type)){dispose=window.KittyWordGames.start(type,mount,api);return;}let alive=true,frame=0,timers=[],started=false,ended=false;
 const later=(fn,ms)=>{timers.push(setTimeout(()=>{if(alive)fn()},ms))};
 dispose=()=>{alive=false;cancelAnimationFrame(frame);timers.forEach(clearTimeout);window.removeEventListener('keydown',key);};
 const titles={plane:'Sky Pilot',bricks:'Word Breaker',pairs:'Word Pairs'};
