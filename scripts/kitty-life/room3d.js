@@ -25,11 +25,14 @@ function open(host,{state,save,onClose,main=false,onPlay=()=>{},speak=()=>{},onC
  const sky=mat('#b8dcdf');sky.emissive.set('#b6d5d9');sky.emissiveIntensity=.25;
  box(2.45,1.85,.05,wood,.1,2.25,-3.42);box(2.2,1.6,.07,sky,.1,2.25,-3.37);box(.09,1.6,.1,cream,.1,2.25,-3.3);box(2.2,.08,.1,cream,.1,2.25,-3.3);box(2.6,.12,.4,cream,.1,1.29,-3.2);
  const rug=mesh(new T.CylinderGeometry(1.55,1.55,.025,64),mat('#c8b296'),.2,.025,.4);rug.scale.z=.78;
- // A little entry table, plant, and framed portrait make the room lived-in.
- box(1.25,.12,.65,wood,-2.8,1,-2.8);for(const x of [-3.3,-2.3])for(const z of [-3,-2.6])box(.09,1,.09,wood,x,.5,z);
- mesh(new T.CylinderGeometry(.22,.15,.4,24),mat('#b96e52'),-2.8,1.27,-2.8);
- for(let i=0;i<7;i++){const leaf=ball(.17,.4,.055,mint,-2.8+Math.sin(i)*.16,1.62,-2.8+Math.cos(i)*.15);leaf.rotation.z=Math.sin(i)*.6;}
- box(1,1,.09,wood,2.6,2.4,-3.4);box(.83,.83,.11,mat('#f3d89e'),2.6,2.4,-3.33);ball(.22,.25,.08,fur,2.6,2.4,-3.22);for(const x of [2.44,2.76])ball(.09,.12,.08,fur,x,2.61,-3.22);
+ // Furnished starter corner using the same real assets as the catalogue.
+ const starter=new T.Group();scene.add(starter);
+ asset('sideTable',starter,{width:1.15,x:-2.9,z:-2.7,alive:()=>running});
+ asset('pottedPlant',starter,{width:.6,x:-2.9,z:-2.7,y:.95,alive:()=>running});
+ asset('bookcaseOpenLow',starter,{width:1.5,x:2.6,z:-3,alive:()=>running});
+ asset('books',starter,{width:.75,x:2.6,z:-3,y:.7,alive:()=>running});
+ asset('lampRoundTable',starter,{width:.4,x:3.1,z:-3,y:.7,alive:()=>running});
+ asset('rugRounded',starter,{width:3.2,x:.2,z:.4,alive:()=>running});rug.visible=false;
  const pet=new T.Group();scene.add(pet);const scale=state.species==='dog'?.9:.85;pet.scale.setScalar(scale*(.9+Math.min((state.day||1)/40,.22)));pet.position.set(.3,0,1.6);
  const body=ball(.48,.53,.75,fur,0,.7,0,pet);ball(.4,.4,.45,white,0,.65,.48,pet);
  const head=new T.Group();head.position.set(0,1.2,.57);pet.add(head);ball(.55,.52,.49,fur,0,0,0,head);ball(.43,.31,.29,white,0,-.15,.34,head);
