@@ -1,0 +1,3 @@
+const test=require('node:test'),assert=require('node:assert/strict'),C=require('../scripts/kitty-life/core.js');
+test('discoveries award once per location per day and persist after reload',()=>{let s=C.init();const g=s.gold,x=s.xp;assert.equal(C.discover(s,'cafe').ok,true);assert.equal(s.gold,g+25);assert.equal(s.xp,x+5);s=C.normalize(JSON.parse(JSON.stringify(s)));assert.equal(C.discover(s,'cafe').ok,false);assert.equal(s.gold,g+25);s.day++;assert.equal(C.discover(s,'cafe').ok,true);assert.equal(s.gold,g+50);assert.equal(C.discover(s,'unknown').ok,false);});
+test('furniture in new rooms survives loading',()=>{const s=C.init();s.roomLayout={bed:{x:9,z:-7,r:0}};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(s))).roomLayout.bed,s.roomLayout.bed);});
