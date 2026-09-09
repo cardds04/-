@@ -34,3 +34,15 @@ No paid assets were purchased.
   Creator repository: https://github.com/ariescar0326-sketch/gobkit-free-assets
   Source: animal/Corgi.glb. Idle/Walk animations split from the source clip at 24 fps.
   Runtime proportions and animation blending adjusted. No paid assets purchased.
+
+## Adoption & furnishing expansion (September 2026)
+- Husky and Fox: Quaternius Ultimate Animated Animal Pack (CC0), creator page:
+  https://quaternius.com/packs/ultimateanimatedanimals.html
+  Embedded glTF retrieved from agentkaerf/FreeModels, Ultimate Animated Animals - July 2021/glTF.
+- Duck: Gobkit CC0 Animal Pack, https://github.com/Ariescar/gobkit-free-assets/tree/main/animal
+  Original license is included as licenses/Gobkit-CC0.txt.
+- Added 63 selected Kenney models from the already licensed Furniture, Food, Nature and Suburban kits.
+  world.js now contains 111 models. Catalogue: 73 furniture/decor items, 10 foods and 10 houses.
+- All selection thumbnails are rendered from the same model used in the game.
+  The selection preview is a live Three.js model with idle/walk controls. No generated character artwork is used there.
+- Safe animation allowlist retained; Gobkit Duck uses only idle 0–29 and walk 90–119 at 24 fps.
