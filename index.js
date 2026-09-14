@@ -14515,7 +14515,7 @@ ${folderBtn}
         paymentMonthNavigatorEl?.classList.add("hidden");
         paymentMonthAllToggleBtnEl?.classList.add("hidden");
         paymentMonthMemoBoxEl?.classList.add("hidden");
-        paymentBulkApplyBarEl?.classList.add("hidden");
+        if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = "none"; // 인라인 display:flex 가 .hidden 을 이긴다
         document.getElementById("copyUnpaidSummaryBtn")?.classList.add("hidden");
         const won = (n) => `${(Number(n) || 0).toLocaleString("ko-KR")}원`;
         const visible = shortformInvRows.filter((row) => !keyword || normalizeCompanyName(row.company).toLowerCase().includes(keyword));
@@ -14666,6 +14666,7 @@ ${folderBtn}
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         if (currentPaymentFilter === "free") {
+          if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = "none";
           renderFreeShootList(keyword);
           return;
         }
@@ -14837,7 +14838,7 @@ ${folderBtn}
         latestUnpaidSummaryRows = isUnpaidTab ? visibleRows.map(({ item }) => item) : [];
         copyUnpaidSummaryBtnEl?.classList.toggle("hidden", !isUnpaidTab);
         // 일괄 입력 바: 미입금 탭에서만 노출 + 검색된 건수 표시.
-        paymentBulkApplyBarEl?.classList.toggle("hidden", !isUnpaidTab);
+        if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = isUnpaidTab ? "flex" : "none"; // 인라인 display:flex 가 .hidden 을 이겨 다른 탭에도 보이던 문제
         if (paymentBulkCountTextEl) paymentBulkCountTextEl.textContent = String(latestUnpaidSummaryRows.length);
         if (paymentMonthTotalTextEl) {
           const monthTotalAmount = isPaidTab
