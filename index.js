@@ -14478,6 +14478,7 @@ ${folderBtn}
       // 숏폼 제작비 청구 건. 쇼픽 구글메일로 결제 안내를 보낸 뒤 Claude 가 행을 올리고, 사장님이 카카오뱅크 입금 확인 후 「입금확인」.
       // ‼️sfpay_ 는 옛 숏폼 충전신청 키라 쓰지 않는다.
       let shortformInvRows = [];
+      let shortformInvView = "unpaid"; // 숏폼 미입금업체 / 숏폼 입금업체 — 촬영 입금 탭(미입금·입금 업체)과 완전히 별개
       async function fetchShortformInvRows() {
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfinv_%25&select=id,payload`, { headers: FREESHOOT_HDR });
@@ -14511,20 +14512,34 @@ ${folderBtn}
         const d = new Date();
         return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       }
+      const SHORTFORM_INV_HIDE_IDS = ["paymentCouponForm", "paymentSortRow", "paymentMonthNavigator", "paymentMonthMemoBox", "paymentBulkApplyBar", "copyUnpaidSummaryBtn", "paymentPayerSearchInput"];
+      /** 숏폼입금관리 탭에서만 촬영 입금용 도구(회차권·정렬·월 이동·미수금·일괄입력)를 숨긴다. 다른 탭으로 가면 원래대로. */
+      function setShortformInvChrome(on) {
+        SHORTFORM_INV_HIDE_IDS.forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          if (on) { if (el.dataset.sfinvPrevDisplay === undefined) el.dataset.sfinvPrevDisplay = el.style.display || ""; el.style.display = "none"; }
+          else if (el.dataset.sfinvPrevDisplay !== undefined) { el.style.display = el.dataset.sfinvPrevDisplay; delete el.dataset.sfinvPrevDisplay; }
+        });
+        const bar = document.getElementById("shortformInvBar");
+        if (bar) bar.style.display = on ? "flex" : "none";
+      }
       function renderShortformInvList(keyword) {
-        paymentMonthNavigatorEl?.classList.add("hidden");
-        paymentMonthAllToggleBtnEl?.classList.add("hidden");
-        paymentMonthMemoBoxEl?.classList.add("hidden");
-        if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = "none"; // 인라인 display:flex 가 .hidden 을 이긴다
-        document.getElementById("copyUnpaidSummaryBtn")?.classList.add("hidden");
+        setShortformInvChrome(true);
         const won = (n) => `${(Number(n) || 0).toLocaleString("ko-KR")}원`;
-        const visible = shortformInvRows.filter((row) => !keyword || normalizeCompanyName(row.company).toLowerCase().includes(keyword));
-        const due = shortformInvRows.filter((r) => !r.paid), done = shortformInvRows.filter((r) => r.paid);
         const sum = (arr) => arr.reduce((a, r) => a + (Number(r.amount) || 0), 0);
-        if (paymentUnpaidCompanyCountTextEl) {
-          paymentUnpaidCompanyCountTextEl.textContent = `숏폼 미입금 ${due.length}건 · ${won(sum(due))}  /  입금완료 ${done.length}건 · ${won(sum(done))}  (입금계좌 카카오뱅크 3333-13-5170244 엠프로)`;
-        }
-        const addRow = `
+        const due = shortformInvRows.filter((r) => !r.paid), done = shortformInvRows.filter((r) => r.paid);
+        document.querySelectorAll("#shortformInvBar [data-sfinv-view]").forEach((b) => {
+          const on = b.dataset.sfinvView === shortformInvView;
+          b.classList.toggle("primary", on);
+          b.textContent = b.dataset.sfinvView === "paid" ? `숏폼 입금업체 ${done.length}` : `숏폼 미입금업체 ${due.length}`;
+        });
+        const totalEl = document.getElementById("shortformInvTotalText");
+        if (totalEl) totalEl.textContent = shortformInvView === "paid" ? `숏폼 입금 총액: ${won(sum(done))}` : `숏폼 전체 미수금: ${won(sum(due))}`;
+        if (paymentUnpaidCompanyCountTextEl) paymentUnpaidCompanyCountTextEl.textContent = "입금계좌 카카오뱅크 3333-13-5170244 (예금주 엠프로)";
+        const base = shortformInvView === "paid" ? done : due;
+        const visible = base.filter((row) => !keyword || normalizeCompanyName(row.company).toLowerCase().includes(keyword));
+        const addRow = shortformInvView === "paid" ? "" : `
           <tr style="background:#f6f8fb;">
             <td><input id="sfInvDate" class="inline-input" type="date" value="${shortformTodayYmd()}" style="width:132px;" /></td>
             <td><input id="sfInvCompany" class="inline-input" type="text" placeholder="업체명" style="width:120px;" />
@@ -14556,9 +14571,15 @@ ${folderBtn}
             <td>${manage} <button class="btn-sm" type="button" data-action="sfInvDelete" data-sfid="${sid}" style="border-color:#e0a0a0;color:#b23b3b;">삭제</button></td>
           </tr>`;
         }).join("");
-        const emptyRow = visible.length ? "" : `<tr><td colspan="7">숏폼 청구 건이 없습니다.</td></tr>`;
+        const emptyRow = visible.length ? "" : `<tr><td colspan="7">${shortformInvView === "paid" ? "숏폼 입금업체가 없습니다." : "숏폼 미입금업체가 없습니다."}</td></tr>`;
         paymentListBodyEl.innerHTML = addRow + bodyRows + emptyRow;
       }
+      document.getElementById("shortformInvBar")?.addEventListener("click", (event) => {
+        const b = event.target.closest("button[data-sfinv-view]");
+        if (!b) return;
+        shortformInvView = b.dataset.sfinvView === "paid" ? "paid" : "unpaid";
+        renderPaymentList();
+      });
       function handleShortformInvActionButton(action, button) {
         if (!String(action || "").startsWith("sfInv")) return false;
         if (action === "sfInvAdd") {
@@ -14666,6 +14687,7 @@ ${folderBtn}
         };
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         if (currentPaymentFilter === "free") {
+          setShortformInvChrome(false);
           if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = "none";
           renderFreeShootList(keyword);
           return;
@@ -14674,6 +14696,7 @@ ${folderBtn}
           renderShortformInvList(keyword);
           return;
         }
+        setShortformInvChrome(false);
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
         const canonicalIdentityCtxPayment = {
           customerCompanies: readStorageArray(STORAGE_CUSTOMER_COMPANIES),
