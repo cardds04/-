@@ -14488,10 +14488,19 @@ ${folderBtn}
             .sort((a, b) => String(b.invoicedAt || "").localeCompare(String(a.invoicedAt || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         } catch (_) { return null; }
       }
+      let shortformDepRows = []; // 카카오뱅크 입금 푸시 기록(app_state sfdep_*, /api/sfinv-deposit 가 씀)
+      async function fetchShortformDepRows() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfdep_%25&select=id,payload&order=id.desc&limit=15`, { headers: FREESHOOT_HDR });
+          if (!r.ok) return null;
+          return (await r.json()).map((x) => ({ id: x.id, ...(x.payload || {}) }));
+        } catch (_) { return null; }
+      }
       async function refreshShortformInvRows() {
-        const rows = await fetchShortformInvRows();
+        const [rows, deps] = await Promise.all([fetchShortformInvRows(), fetchShortformDepRows()]);
         if (rows === null) return;
         shortformInvRows = rows;
+        if (deps) shortformDepRows = deps;
         if (currentPaymentFilter === "shortform") renderPaymentList();
       }
       async function saveShortformInvRow(row) {
@@ -14572,7 +14581,21 @@ ${folderBtn}
           </tr>`;
         }).join("");
         const emptyRow = visible.length ? "" : `<tr><td colspan="7">${shortformInvView === "paid" ? "숏폼 입금업체가 없습니다." : "숏폼 미입금업체가 없습니다."}</td></tr>`;
-        paymentListBodyEl.innerHTML = addRow + bodyRows + emptyRow;
+        const depLabel = { matched: ["자동 입금확인", "#116b3e"], ambiguous: ["확인 필요(같은 금액 여러 건)", "#b45309"], unmatched: ["확인 필요(맞는 청구 없음)", "#b45309"], ignored: ["입금 아님", "#6b7280"], error: ["저장 실패", "#b23b3b"] };
+        const depRows = shortformDepRows.length ? `
+          <tr><td colspan="7" style="background:#f6f8fb;font-weight:800;">최근 카카오뱅크 입금 알림</td></tr>` + shortformDepRows.map((d) => {
+            const [lab, col] = depLabel[d.status] || [d.status || "-", "#6b7280"];
+            const matched = d.matchedId ? shortformInvRows.find((r) => r.id === d.matchedId) : null;
+            const when = d.receivedAt ? new Date(d.receivedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-";
+            return `<tr>
+              <td>${escapeHtml(when)}</td>
+              <td colspan="2" class="hint" style="white-space:normal;">${escapeHtml(d.raw || "")}</td>
+              <td>${escapeHtml(d.name || "-")}</td>
+              <td>${escapeHtml(String(d.amount || "-"))}</td>
+              <td colspan="2"><span style="color:${col};font-weight:800;">${escapeHtml(lab)}</span>${matched ? ` <span class="hint">→ ${escapeHtml(matched.company || "")}</span>` : ""}</td>
+            </tr>`;
+          }).join("") : "";
+        paymentListBodyEl.innerHTML = addRow + bodyRows + emptyRow + depRows;
       }
       document.getElementById("shortformInvBar")?.addEventListener("click", (event) => {
         const b = event.target.closest("button[data-sfinv-view]");
