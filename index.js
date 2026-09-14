@@ -14474,6 +14474,132 @@ ${folderBtn}
           : "";
         paymentListBodyEl.innerHTML = bodyRows + emptyRow + failToggleRow;
       }
+      // ── 숏폼입금관리 (입금 관리 탭 안, app_state sfinv_* 행이 정본) ──
+      // 숏폼 제작비 청구 건. 쇼픽 구글메일로 결제 안내를 보낸 뒤 Claude 가 행을 올리고, 사장님이 카카오뱅크 입금 확인 후 「입금확인」.
+      // ‼️sfpay_ 는 옛 숏폼 충전신청 키라 쓰지 않는다.
+      let shortformInvRows = [];
+      async function fetchShortformInvRows() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.sfinv_%25&select=id,payload`, { headers: FREESHOOT_HDR });
+          if (!r.ok) return null;
+          return (await r.json())
+            .map((x) => ({ id: x.id, ...(x.payload || {}) }))
+            .sort((a, b) => String(b.invoicedAt || "").localeCompare(String(a.invoicedAt || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        } catch (_) { return null; }
+      }
+      async function refreshShortformInvRows() {
+        const rows = await fetchShortformInvRows();
+        if (rows === null) return;
+        shortformInvRows = rows;
+        if (currentPaymentFilter === "shortform") renderPaymentList();
+      }
+      async function saveShortformInvRow(row) {
+        const { id, ...payload } = row;
+        payload.updatedAt = new Date().toISOString();
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+          method: "POST",
+          headers: { ...FREESHOOT_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ id, payload }])
+        });
+        return r.ok;
+      }
+      async function deleteShortformInvRow(id) {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: FREESHOOT_HDR });
+        return r.ok;
+      }
+      function shortformTodayYmd() {
+        const d = new Date();
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      }
+      function renderShortformInvList(keyword) {
+        paymentMonthNavigatorEl?.classList.add("hidden");
+        paymentMonthAllToggleBtnEl?.classList.add("hidden");
+        paymentMonthMemoBoxEl?.classList.add("hidden");
+        paymentBulkApplyBarEl?.classList.add("hidden");
+        document.getElementById("copyUnpaidSummaryBtn")?.classList.add("hidden");
+        const won = (n) => `${(Number(n) || 0).toLocaleString("ko-KR")}원`;
+        const visible = shortformInvRows.filter((row) => !keyword || normalizeCompanyName(row.company).toLowerCase().includes(keyword));
+        const due = shortformInvRows.filter((r) => !r.paid), done = shortformInvRows.filter((r) => r.paid);
+        const sum = (arr) => arr.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+        if (paymentUnpaidCompanyCountTextEl) {
+          paymentUnpaidCompanyCountTextEl.textContent = `숏폼 미입금 ${due.length}건 · ${won(sum(due))}  /  입금완료 ${done.length}건 · ${won(sum(done))}  (입금계좌 카카오뱅크 3333-13-5170244 엠프로)`;
+        }
+        const addRow = `
+          <tr style="background:#f6f8fb;">
+            <td><input id="sfInvDate" class="inline-input" type="date" value="${shortformTodayYmd()}" style="width:132px;" /></td>
+            <td><input id="sfInvCompany" class="inline-input" type="text" placeholder="업체명" style="width:120px;" />
+                <input id="sfInvItems" class="inline-input" type="text" placeholder="내용 (예: 숏폼 2편)" style="width:160px;margin-top:4px;" /></td>
+            <td><input id="sfInvCustomer" class="inline-input" type="text" placeholder="담당자" style="width:90px;" /></td>
+            <td>-</td>
+            <td><input id="sfInvAmount" class="inline-input" type="text" inputmode="numeric" placeholder="금액" style="width:90px;" /></td>
+            <td>-</td>
+            <td><button class="btn-sm primary" type="button" data-action="sfInvAdd">청구 추가</button></td>
+          </tr>`;
+        const bodyRows = visible.map((row) => {
+          const sid = escapeHtml(row.id);
+          const status = row.paid
+            ? `<span style="color:#116b3e;font-weight:800;">입금완료</span>`
+            : `<span style="color:#b45309;font-weight:800;">미입금</span>`;
+          const manage = row.paid
+            ? `<button class="btn-sm" type="button" data-action="sfInvUnpay" data-sfid="${sid}">되돌리기</button>`
+            : `<button class="btn-sm primary" type="button" data-action="sfInvPay" data-sfid="${sid}">입금확인</button>`;
+          return `
+          <tr>
+            <td>${escapeHtml(row.invoicedAt || "-")}</td>
+            <td><strong>${escapeHtml(row.company || "-")}</strong>${row.customer ? ` <span class="hint">${escapeHtml(row.customer)}</span>` : ""}
+              <div class="hint" style="white-space:pre-line;margin-top:2px;">${escapeHtml(row.items || "")}</div>
+              ${row.memo ? `<div class="hint" style="margin-top:2px;">${escapeHtml(row.memo)}</div>` : ""}</td>
+            <td>${escapeHtml(row.payer || "-")}</td>
+            <td>${escapeHtml(row.paidAt ? String(row.paidAt).slice(5) : "-")}</td>
+            <td>${escapeHtml(String(Number(row.amount) || 0))}</td>
+            <td>${status}</td>
+            <td>${manage} <button class="btn-sm" type="button" data-action="sfInvDelete" data-sfid="${sid}" style="border-color:#e0a0a0;color:#b23b3b;">삭제</button></td>
+          </tr>`;
+        }).join("");
+        const emptyRow = visible.length ? "" : `<tr><td colspan="7">숏폼 청구 건이 없습니다.</td></tr>`;
+        paymentListBodyEl.innerHTML = addRow + bodyRows + emptyRow;
+      }
+      function handleShortformInvActionButton(action, button) {
+        if (!String(action || "").startsWith("sfInv")) return false;
+        if (action === "sfInvAdd") {
+          const company = String(document.getElementById("sfInvCompany")?.value || "").trim();
+          const items = String(document.getElementById("sfInvItems")?.value || "").trim();
+          const customer = String(document.getElementById("sfInvCustomer")?.value || "").trim();
+          const amount = Number(String(document.getElementById("sfInvAmount")?.value || "").replace(/[^\d]/g, ""));
+          const invoicedAt = String(document.getElementById("sfInvDate")?.value || "").trim() || shortformTodayYmd();
+          if (!company || !amount) { alert("업체명과 금액을 입력해주세요."); return true; }
+          const row = { id: `sfinv_${invoicedAt.replace(/-/g, "")}_${Date.now()}`, company, customer, items, amount, invoicedAt,
+            paid: false, paidAt: "", payer: "", memo: "", createdAt: new Date().toISOString() };
+          button.disabled = true;
+          void (async () => {
+            if (!(await saveShortformInvRow(row))) { alert("저장에 실패했어요. 잠시 후 다시 시도해주세요."); button.disabled = false; return; }
+            await refreshShortformInvRows();
+          })();
+          return true;
+        }
+        const sfid = String(button.dataset.sfid || "");
+        const row = shortformInvRows.find((r) => r.id === sfid);
+        if (!row) return true;
+        if (action === "sfInvPay") {
+          const payer = prompt(`「${row.company}」 ${(Number(row.amount) || 0).toLocaleString("ko-KR")}원 입금 확인\n입금자명 (모르면 비워두세요)`, row.customer || row.company || "");
+          if (payer === null) return true;
+          row.paid = true; row.paidAt = shortformTodayYmd(); row.payer = String(payer).trim();
+        } else if (action === "sfInvUnpay") {
+          if (!confirm(`「${row.company}」 입금확인을 취소할까요?`)) return true;
+          row.paid = false; row.paidAt = ""; row.payer = "";
+        } else if (action === "sfInvDelete") {
+          if (!confirm(`「${row.company}」 ${(Number(row.amount) || 0).toLocaleString("ko-KR")}원 청구를 삭제할까요?`)) return true;
+          shortformInvRows = shortformInvRows.filter((r) => r.id !== sfid);
+          renderPaymentList();
+          void deleteShortformInvRow(sfid).then((ok) => { if (!ok) { alert("삭제에 실패했어요. 새로고침 후 다시 시도해주세요."); void refreshShortformInvRows(); } });
+          return true;
+        } else {
+          return true;
+        }
+        renderPaymentList();
+        void saveShortformInvRow(row).then((ok) => { if (!ok) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요."); });
+        return true;
+      }
       function renderPaymentList() {
         // 인라인 편집 중이면 background re-render 차단. 편집 상태가 바뀐 직후엔 통과.
         if (
@@ -14541,6 +14667,10 @@ ${folderBtn}
         const keyword = normalizeCompanyName(paymentCompanyKeyword).toLowerCase();
         if (currentPaymentFilter === "free") {
           renderFreeShootList(keyword);
+          return;
+        }
+        if (currentPaymentFilter === "shortform") {
+          renderShortformInvList(keyword);
           return;
         }
         const payerKeyword = String(paymentPayerKeyword || "").trim().toLowerCase();
@@ -19334,6 +19464,9 @@ ${folderBtn}
           freeShootShowFail = false;
           void refreshFreeShootRows();
         }
+        if (currentPaymentFilter === "shortform") {
+          void refreshShortformInvRows();
+        }
         renderPaymentList();
       });
       paymentSortRowEl?.addEventListener("click", (event) => {
@@ -19485,6 +19618,7 @@ ${folderBtn}
         const action = button.dataset.action;
         // ── 무료촬영 액션(행 인덱스 대신 app_state id 사용 — isNaN 가드보다 앞에 있어야 함) ──
         if (handleFreeShootActionButton(action, button)) return;
+        if (handleShortformInvActionButton(action, button)) return;
         const index = Number(button.dataset.index);
         if (Number.isNaN(index)) return;
         const rowEl = button.closest("tr");
