@@ -12216,6 +12216,62 @@ ${folderBtn}
         });
         return [...dedupedMap.values()];
       }
+      function listMonthDoneShotsForWriterName(writerName, monthKey) {
+        const base = new Date();
+        base.setHours(0, 0, 0, 0);
+        const nameKey = normalize(writerName).toLowerCase();
+        return dedupeCustomerAndWriterScheduleRowsForPayroll()
+          .filter((row) => normalize(row?.name).toLowerCase() === nameKey)
+          .filter((item) => {
+            if (!String(item.date || "").startsWith(monthKey)) return false;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "")) return false;
+            const target = new Date(`${item.date}T00:00:00`);
+            target.setHours(0, 0, 0, 0);
+            return target.getTime() <= base.getTime();
+          })
+          .sort((a, b) => `${a.date} ${a.time || ""}`.localeCompare(`${b.date} ${b.time || ""}`));
+      }
+      // 급여 요약 표의 작가별 「복사」 버튼이 쓸 상세 내역 텍스트(렌더 때마다 갱신)
+      const payrollDetailCopyTextByName = new Map();
+      if (!window.__payrollDetailCopyListenerInstalled) {
+        window.__payrollDetailCopyListenerInstalled = true;
+        document.addEventListener("click", async (event) => {
+          const btn = event.target?.closest?.(".payroll-admin-copy-detail");
+          if (!btn) return;
+          event.preventDefault();
+          const name = btn.getAttribute("data-writer-name") || "";
+          const text = payrollDetailCopyTextByName.get(name) || "";
+          if (!text) {
+            alert("복사할 급여 내역이 없습니다.");
+            return;
+          }
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(text);
+            } else {
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+            const prev = btn.textContent;
+            btn.textContent = "복사됨";
+            btn.style.background = "#16a34a";
+            btn.style.color = "#fff";
+            setTimeout(() => {
+              btn.textContent = prev;
+              btn.style.background = "";
+              btn.style.color = "";
+            }, 1500);
+          } catch (_) {
+            alert("복사에 실패했습니다. 다시 시도해주세요.");
+          }
+        });
+      }
       function countMonthDoneShotsForWriterName(writerName, monthKey) {
         const base = new Date();
         base.setHours(0, 0, 0, 0);
@@ -12341,13 +12397,45 @@ ${folderBtn}
             const final =
               salaryType === "tax_invoice" ? Math.round(gross * 1.1) : Math.round(gross * (1 - 0.033));
             const typeLabel = salaryType === "tax_invoice" ? "세금계산서 포함" : "프리랜서 3.3%";
+            try {
+              const won = (n) => `${Number(n || 0).toLocaleString("ko-KR")}원`;
+              const [yy, mm] = monthKey.split("-");
+              const shotRows = listMonthDoneShotsForWriterName(name, monthKey);
+              const shotLines = shotRows.map((r, i) => {
+                const d = String(r.date || "").slice(5).replace("-", "/");
+                const t = normalize(r.time) ? ` ${normalize(r.time)}` : "";
+                const c = normalize(r.company) || "업체미정";
+                const pl = normalize(r.place) ? ` (${normalize(r.place)})` : "";
+                return `${i + 1}. ${d}${t} ${c}${pl}`;
+              });
+              const taxLine =
+                salaryType === "tax_invoice"
+                  ? `부가세 10% (세금계산서): +${won(final - gross)}`
+                  : `원천징수 3.3% (프리랜서): -${won(gross - final)}`;
+              const detail = [
+                `[${yy}년 ${Number(mm)}월 급여 내역] ${name} 작가님`,
+                "",
+                `촬영 ${shots}회 × ${won(PAYROLL_SHOOT_WON_ADMIN)} = ${won(basePay)}`,
+                `유류비: ${won(fuelWon)}`,
+                ...(lines.length
+                  ? [`추가요금: ${won(extraSum)}`, ...lines.map((ln) => `  · ${normalize(ln?.memo) || "항목"} ${won(Math.max(0, Number(ln?.amountWon) || 0))}`)]
+                  : [`추가요금: ${won(0)}`]),
+                `세전 합계: ${won(gross)}`,
+                taxLine,
+                `최종 지급액: ${won(final)}`,
+                "",
+                `[촬영 내역 ${shots}건]`,
+                ...(shotLines.length ? shotLines : ["(없음)"])
+              ].join("\n");
+              payrollDetailCopyTextByName.set(name, detail);
+            } catch (_) {}
             totalShots += shots;
             totalBase += basePay;
             totalFuel += fuelWon;
             totalExtra += extraSum;
             totalGross += gross;
             totalFinal += final;
-            return `<tr><td>${escapeHtml(name)}</td><td>${shots}회</td><td>${basePay.toLocaleString("ko-KR")}원</td><td>${fuelWon.toLocaleString(
+            return `<tr><td style="white-space:nowrap;">${escapeHtml(name)} <button type="button" class="btn-sm payroll-admin-copy-detail" data-writer-name="${escapeHtml(name)}" title="급여 상세내역 복사" style="padding:0 7px;font-size:0.72rem;margin-left:4px;">복사</button></td><td>${shots}회</td><td>${basePay.toLocaleString("ko-KR")}원</td><td>${fuelWon.toLocaleString(
               "ko-KR"
             )}원</td><td>${extraSum.toLocaleString("ko-KR")}원</td><td>${gross.toLocaleString("ko-KR")}원</td><td>${typeLabel}</td><td><strong>${final.toLocaleString(
               "ko-KR"
