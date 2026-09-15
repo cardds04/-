@@ -6738,7 +6738,44 @@
       function normalizeCompanyCode(value) {
         return String(value || "").trim();
       }
+      // 촬영구성 정본=서버 company_directory.shopick_*. 옛 kv 사본(STORAGE_ADMIN_COMPANIES)은
+      // 플래그가 없거나 낡으면 기본값 「사진영상」으로 떨어져 사진만 업체도 사진영상으로 접수됐다(09-15 맨션큐).
+      let shopickDirectoryFlagsCache = null; // { key, flags }
+      async function refreshShopickFlagsFromDirectory(user) {
+        if (!user) return null;
+        const code = normalize(getEffectiveUserCompanyCode(user));
+        const names = [
+          normalize(resolveRegisteredCompanyNameForUser(user, code)),
+          normalize(user?.company)
+        ].filter(Boolean);
+        const cacheKey = `${code}|${names.join("|")}`;
+        const sel = "select=name,code,shopick_photo,shopick_video,shopick_blog";
+        let row = null;
+        if (code) {
+          const rows = await fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?code=eq.${encodeURIComponent(code)}&${sel}&limit=1`);
+          row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+        }
+        for (const nm of names) {
+          if (row) break;
+          const rows = await fetchJsonRows(`${SUPABASE_COMPANY_DIRECTORY_TABLE}?name=eq.${encodeURIComponent(nm)}&${sel}&limit=1`);
+          row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+        }
+        if (!row) return null;
+        const flags = normalizeShopickServiceFlagsLite(row.shopick_photo, row.shopick_video, row.shopick_blog);
+        shopickDirectoryFlagsCache = { key: cacheKey, flags };
+        return flags;
+      }
       function getShopickLiteCompositionString(user) {
+        if (shopickDirectoryFlagsCache && user) {
+          const code = normalize(getEffectiveUserCompanyCode(user));
+          const names = [
+            normalize(resolveRegisteredCompanyNameForUser(user, code)),
+            normalize(user?.company)
+          ].filter(Boolean);
+          if (shopickDirectoryFlagsCache.key === `${code}|${names.join("|")}`) {
+            return formatShopickCompositionLabelLite(shopickDirectoryFlagsCache.flags);
+          }
+        }
         const row = findAdminCompanyRowForShopickLite(user);
         return formatShopickCompositionLabelLite(getShopickFlagsFromAdminCompanyRowLite(row));
       }
@@ -8447,6 +8484,7 @@
           // STORAGE_ADMIN_COMPANIES 의 최신 쇼픽 플래그(사진/영상/블로그)를 반영한다.
           if (isLiteCustomerMode) {
             try { await withSubmitTimeout(pullScheduleSiteClientKvFromSupabase(), 2000); } catch (_) {}
+            try { await withSubmitTimeout(refreshShopickFlagsFromDirectory(user), 3000); } catch (_) {}
           }
           const _wdNames = ["일","월","화","수","목","금","토"];
           const _dateObj = new Date(`${date}T00:00:00`);

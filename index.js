@@ -12400,14 +12400,6 @@ ${folderBtn}
             try {
               const won = (n) => `${Number(n || 0).toLocaleString("ko-KR")}원`;
               const [yy, mm] = monthKey.split("-");
-              const shotRows = listMonthDoneShotsForWriterName(name, monthKey);
-              const shotLines = shotRows.map((r, i) => {
-                const d = String(r.date || "").slice(5).replace("-", "/");
-                const t = normalize(r.time) ? ` ${normalize(r.time)}` : "";
-                const c = normalize(r.company) || "업체미정";
-                const pl = normalize(r.place) ? ` (${normalize(r.place)})` : "";
-                return `${i + 1}. ${d}${t} ${c}${pl}`;
-              });
               const taxLine =
                 salaryType === "tax_invoice"
                   ? `부가세 10% (세금계산서): +${won(final - gross)}`
@@ -12422,10 +12414,7 @@ ${folderBtn}
                   : [`추가요금: ${won(0)}`]),
                 `세전 합계: ${won(gross)}`,
                 taxLine,
-                `최종 지급액: ${won(final)}`,
-                "",
-                `[촬영 내역 ${shots}건]`,
-                ...(shotLines.length ? shotLines : ["(없음)"])
+                `최종 지급액: ${won(final)}`
               ].join("\n");
               payrollDetailCopyTextByName.set(name, detail);
             } catch (_) {}
