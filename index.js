@@ -1731,6 +1731,22 @@
               kvFiltered[RRK] = JSON.stringify(out);
             }
           }
+          // ‼️급여 설정은 작가별 updatedAt 병합(로컬 통째 덮어쓰기 금지) — 09-15 급여형태 원복 사고.
+          {
+            const PK = STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG;
+            if (serverKvRaw[PK] !== undefined || kvFilteredLocal[PK] !== undefined) {
+              const merged = mergePayrollConfigJsonStrings(serverKvRaw[PK], kvFilteredLocal[PK]);
+              if (merged) {
+                kvFiltered[PK] = merged;
+                try {
+                  if (scheduleSiteClientKvState.memoryStore.get(PK) !== merged) {
+                    scheduleSiteClientKvState.memoryStore.set(PK, merged);
+                    originalSetItem(PK, merged);
+                  }
+                } catch (_) {}
+              }
+            }
+          }
           if (!Object.keys(kvFiltered).length) return false;
           pushTid = setTimeout(() => ac.abort(), CLIENT_KV_PUSH_TIMEOUT_MS);
           const response = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_CLIENT_KV_TABLE}?on_conflict=id`, {
@@ -3106,6 +3122,53 @@
         }
         return `json:${JSON.stringify(row)}`;
       }
+      // 급여 설정(유류비·급여형태)은 작가별 항목 단위로 updatedAt 이 최신인 쪽이 이긴다.
+      // 예전엔 로컬 키가 통째로 서버를 덮어써, 옛 값을 든 다른 탭/기기가 아무 저장이나 하면
+      // 방금 바꾼 급여형태가 되돌아갔다(09-15 윤기상 프리랜서→세금계산서 원복).
+      // 시각이 없는 옛 항목끼리는 서버 값을 유지한다(정본에 더 가까움).
+      function mergePayrollConfigObjects(serverObj, localObj) {
+        const srv = serverObj && typeof serverObj === "object" && !Array.isArray(serverObj) ? serverObj : {};
+        const loc = localObj && typeof localObj === "object" && !Array.isArray(localObj) ? localObj : {};
+        const ts = (e) => {
+          const t = Date.parse(e && typeof e === "object" ? e.updatedAt || "" : "");
+          return Number.isNaN(t) ? 0 : t;
+        };
+        const mergeMap = (a, b) => {
+          const A = a && typeof a === "object" ? a : {};
+          const B = b && typeof b === "object" ? b : {};
+          const out = {};
+          new Set([...Object.keys(A), ...Object.keys(B)]).forEach((k) => {
+            const ea = A[k];
+            const eb = B[k];
+            if (ea === undefined) out[k] = eb;
+            else if (eb === undefined) out[k] = ea;
+            else out[k] = ts(eb) > ts(ea) ? eb : ea;
+          });
+          return out;
+        };
+        return {
+          ...srv,
+          ...loc,
+          byWriterId: mergeMap(srv.byWriterId, loc.byWriterId),
+          byWriterNameKey: mergeMap(srv.byWriterNameKey, loc.byWriterNameKey)
+        };
+      }
+      function mergePayrollConfigJsonStrings(serverRaw, localRaw) {
+        const parse = (v) => {
+          try {
+            const o = typeof v === "string" ? JSON.parse(v) : v;
+            return o && typeof o === "object" && !Array.isArray(o) ? o : null;
+          } catch (_) {
+            return null;
+          }
+        };
+        const srv = parse(serverRaw);
+        const loc = parse(localRaw);
+        if (!srv && !loc) return null;
+        if (!srv) return JSON.stringify(loc);
+        if (!loc) return JSON.stringify(srv);
+        return JSON.stringify(mergePayrollConfigObjects(srv, loc));
+      }
       function mergeStorageValue(remoteValue, localValue, keyHint) {
         if (localValue === null || localValue === undefined) {
           return remoteValue === undefined ? null : remoteValue;
@@ -3134,12 +3197,7 @@
           // 급여 설정은 byWriterId/byWriterNameKey 중첩 맵을 깊게 병합해야
           // 한 작가만 저장해도 다른 작가 엔트리가 지워지지 않는다.
           if (keyHint === STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG) {
-            return JSON.stringify({
-              ...remoteJson,
-              ...localJson,
-              byWriterId: { ...(remoteJson.byWriterId || {}), ...(localJson.byWriterId || {}) },
-              byWriterNameKey: { ...(remoteJson.byWriterNameKey || {}), ...(localJson.byWriterNameKey || {}) }
-            });
+            return JSON.stringify(mergePayrollConfigObjects(remoteJson, localJson));
           }
           return JSON.stringify({ ...remoteJson, ...localJson });
         }
@@ -11988,7 +12046,8 @@ ${folderBtn}
         if (!cfg.byWriterNameKey) cfg.byWriterNameKey = {};
         const payload = {
           fuelWon: Math.max(0, Number(fuelWon) || 0),
-          salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
+          salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer",
+          updatedAt: new Date().toISOString() // 작가별 최신 저장이 이기도록(09-15 급여형태 원복 사고)
         };
         if (wid) cfg.byWriterId[wid] = payload;
         nameKeys.forEach((k) => {
