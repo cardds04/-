@@ -14545,7 +14545,7 @@ ${folderBtn}
         });
         const totalEl = document.getElementById("shortformInvTotalText");
         if (totalEl) totalEl.textContent = shortformInvView === "paid" ? `숏폼 입금 총액: ${won(sum(done))}` : `숏폼 전체 미수금: ${won(sum(due))}`;
-        if (paymentUnpaidCompanyCountTextEl) paymentUnpaidCompanyCountTextEl.textContent = "입금계좌 카카오뱅크 3333-13-5170244 (예금주 엠프로)";
+        if (paymentUnpaidCompanyCountTextEl) paymentUnpaidCompanyCountTextEl.textContent = "입금계좌 카카오뱅크 3333-13-5170244 (예금주 김진영)";
         const base = shortformInvView === "paid" ? done : due;
         const visible = base.filter((row) => !keyword || normalizeCompanyName(row.company).toLowerCase().includes(keyword));
         const addRow = shortformInvView === "paid" ? "" : `
