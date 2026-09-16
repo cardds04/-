@@ -3651,6 +3651,20 @@
         return Number.isFinite(n) && n >= 1 ? n : 1;
       }
       /** 더필링 촬영 스케줄 가격 (사진/사진+영상). 편집만 단가는 별도 편집신청 탭에서 처리. */
+      // ── 촬영장소에 지역(동 이름 또는 도로명)이 들어갔는지 검사 (09-16 사장님 지시) ──
+      // 아파트 이름만 적는 접수가 많아, 「○○동」(행정동 — 건물 동수 101동은 제외) 또는
+      // 「○○로/○○길」(도로명, 민락로211·김포한강11로 227) 또는 읍·면 이 없으면 접수를 막는다.
+      function placeHasRegionHint(place) {
+        const s = String(place || "").replace(/\s+/g, " ").trim();
+        if (!s) return false;
+        if (/[가-힣]\d{0,2}동/.test(s)) return true; // 민락동·정자2동·휘경동브라운스톤 (101동은 숫자 3자리라 제외)
+        if (/(?![으])[가-힣]\s?\d*로(?![가-힣])/.test(s)) return true; // 민락로211·마곡중앙5로 81·불당 25로 (…으로 제외)
+        if (/[가-힣]\s?\d*길(?![가-힣])/.test(s)) return true; // 다리간2길 6
+        if (/[가-힣](읍|면)(?![가-힣])/.test(s)) return true;
+        return false;
+      }
+      const PLACE_REGION_REQUIRED_MSG =
+        "촬영장소에 지역이 빠져 있어요.\n동 이름이나 도로명까지 함께 적어주세요.\n예) 의정부시 민락동 ○○아파트 101동 1203호\n예) 의정부시 민락로211";
       function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false) {
         const areaRaw = normalize(pyeong);
         const area =
@@ -5955,6 +5969,11 @@
             alert("주소를 입력해주세요.");
             return;
           }
+          if (!placeHasRegionHint(place)) {
+            alert(PLACE_REGION_REQUIRED_MSG);
+            document.getElementById("schedulePlace")?.focus?.();
+            return;
+          }
           if (!isLiteCustomerMode && schedulePyeongEl.value === "미선택") {
             alert("평수를 선택해주세요.");
             return;
@@ -6268,6 +6287,13 @@
           }
           item.date = editDate;
           item.time = `${cardEl.querySelector(".edit-hour")?.value || "09"}:${cardEl.querySelector(".edit-minute")?.value || "00"}`;
+          {
+            const editedPlace = normalize(cardEl.querySelector(".edit-place")?.value);
+            if (editedPlace && !placeHasRegionHint(editedPlace)) {
+              alert(PLACE_REGION_REQUIRED_MSG);
+              return;
+            }
+          }
           item.place = normalize(cardEl.querySelector(".edit-place")?.value);
           const nextComp = normalize(cardEl.querySelector(".edit-composition")?.value) || "사진만";
           if (nextComp === "편집만") {
