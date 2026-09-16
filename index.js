@@ -3681,6 +3681,7 @@
           renderScheduleCalendar();
           renderInlineScheduleCalendarFromFilters();
           renderCouponPassList();
+          void refreshFreeShootRows(); // 업체·스케줄 로드 후 무료촬영 업체 스케줄 자동 추적(09-16)
           if (typeof updateFullBackupInfoText === "function") updateFullBackupInfoText();
 
           pendingLocalSyncKeys.clear();
@@ -3963,6 +3964,7 @@
       const companyDirectoryCodeInputEl = document.getElementById("companyDirectoryCodeInput");
       const companyDirectorySiteSelectEl = document.getElementById("companyDirectorySiteSelect");
       const companyDirectoryCompositionSelectEl = document.getElementById("companyDirectoryCompositionSelect");
+      const companyDirectoryFreeShootSelectEl = document.getElementById("companyDirectoryFreeShootSelect");
       const companyDirectoryDefaultMemoInputEl = document.getElementById("companyDirectoryDefaultMemoInput");
       const companyDirectorySaveBtnEl = document.getElementById("companyDirectorySaveBtn");
       const companyDirectoryNewBtnEl = document.getElementById("companyDirectoryNewBtn");
@@ -6298,6 +6300,8 @@
               const blogKey = normalizeCompanyName(row.name || "").toLowerCase();
               if (blogKey) blogVendorServerByKey.set(blogKey, Boolean(item.is_blog_vendor));
             } else if (item?.isBlogVendor === true) row.isBlogVendor = true;
+            // 무료촬영 업체 구분 — 정본 company_directory.is_free_shoot (09-16)
+            row.isFreeShoot = Boolean(item?.is_free_shoot ?? item?.isFreeShoot);
             return row;
           })
           // 테스트 패턴 이름은 어떤 경로(서버 pull / client_kv 동기화 / 다른 브라우저
@@ -6340,7 +6344,7 @@
         // naver_works_company_share_link 도 함께 받아서 「폴더」 버튼 클릭 시 즉시 열도록
         // 로컬 캐시에 저장한다 (per-click 네트워크 fetch 제거 → 다중 클릭 시 창 여러 개 뜨던 문제 해결).
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor&order=updated_at.desc`,
+          `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,site_type,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor,is_free_shoot&order=updated_at.desc`,
           {
             method: "GET",
             headers: {
@@ -7014,6 +7018,7 @@
         siteRaw,
         compositionPreset,
         naverShareRaw,
+        freeShoot,
         suppressHintRefresh = false
       }) {
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -7032,6 +7037,8 @@
           login_id: loginTrim || null
           // password 는 anon 으로 쓰지 않음 — 저장 성공 후 서버 set_password 로 해시 저장
         };
+        // 무료촬영 구분(09-16): 명시된 경우에만 기록 — 다른 경로의 저장이 플래그를 건드리지 않게
+        if (typeof freeShoot === "boolean") basePayload.is_free_shoot = freeShoot;
         const tryPatch = async (body, idEq) =>
           fetch(
             `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?id=eq.${encodeURIComponent(idEq)}`,
@@ -7271,7 +7278,7 @@
         if (!USE_SUPABASE_SYNC || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error("Supabase 동기화가 꺼져 있거나 URL/API 키가 없습니다.");
         }
-        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor&order=updated_at.asc`;
+        const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?select=id,name,customer_phone,code,login_id,site_type,created_at,updated_at,naver_works_company_share_link,naver_works_company_folder_id,shopick_photo,shopick_video,shopick_blog,is_blog_vendor,is_free_shoot&order=updated_at.asc`;
         const ac = new AbortController();
         const tid = window.setTimeout(() => ac.abort(), COMPANY_DIRECTORY_FETCH_TIMEOUT_MS);
         try {
@@ -7400,6 +7407,7 @@
         if (companyDirectoryCodeInputEl) companyDirectoryCodeInputEl.value = "";
         if (companyDirectorySiteSelectEl) companyDirectorySiteSelectEl.value = "inlog";
         if (companyDirectoryCompositionSelectEl) companyDirectoryCompositionSelectEl.value = "사진만";
+        if (companyDirectoryFreeShootSelectEl) companyDirectoryFreeShootSelectEl.value = "paid";
         if (companyDirectoryDefaultMemoInputEl) companyDirectoryDefaultMemoInputEl.value = "";
       }
 
@@ -7419,6 +7427,7 @@
           companyDirectorySiteSelectEl.value = st === "shopick" ? "shopick" : st === "thefeeling" ? "thefeeling" : "inlog";
         }
         presetCompanyDirectoryCompositionSelect(row);
+        if (companyDirectoryFreeShootSelectEl) companyDirectoryFreeShootSelectEl.value = row?.is_free_shoot ? "free" : "paid";
         // 기본요청사항: 업체명+고유번호 기준 canonical 키로 조회 (STORAGE_COMPANY_DEFAULT_MEMOS)
         if (companyDirectoryDefaultMemoInputEl) {
           try {
@@ -7545,7 +7554,7 @@
                     }
 
                     return `<tr${rowBg} data-cda-pick="${rowAttr}" title="클릭하여 바로 수정" style="cursor:pointer">
-<td style="white-space:nowrap"><button type="button" class="btn-sm" data-cda-act="copy-company-name" data-cda-id="${rowAttr}">복사</button> <span style="vertical-align:middle">${escapeHtml(nm || "—")}</span></td>
+<td style="white-space:nowrap"><button type="button" class="btn-sm" data-cda-act="copy-company-name" data-cda-id="${rowAttr}">복사</button> <span style="vertical-align:middle">${escapeHtml(nm || "—")}</span>${r?.is_free_shoot ? '<span class="free-shoot-badge">무료촬영</span>' : ""}</td>
 <td>${escapeHtml(lid || "—")}</td>
 <td>${escapeHtml(pwd || "—")}</td>
 <td>${escapeHtml(tel || "—")}</td>
@@ -8366,6 +8375,7 @@ ${folderBtn}
             codeTrim,
             siteRaw,
             compositionPreset,
+            freeShoot: normalize(companyDirectoryFreeShootSelectEl?.value || "") === "free",
             suppressHintRefresh: false
           });
         } catch (error) {
@@ -14546,8 +14556,11 @@ ${folderBtn}
         const rows = await fetchFreeShootRows();
         if (rows === null) return;
         freeShootRows = rows;
+        // 업체정보 「무료촬영」 업체의 새 스케줄은 추적 행을 자동 생성(09-16)
+        const added = await ensureFreeShootRowsForFlaggedCompanies();
         // 무료촬영 탭 표시뿐 아니라 미입금 목록 제외에도 쓰이므로 항상 재렌더
         renderPaymentList();
+        if (added) { try { renderList(); } catch (_) {} }
       }
       void refreshFreeShootRows(); // 시작 시 1회 — 첫 렌더부터 미입금 목록 제외 반영
       async function saveFreeShootRow(row) {
@@ -17166,7 +17179,7 @@ ${folderBtn}
                   ${rowDoneBtn}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
-                  <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>
+                  <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>${freeShootBadgeHtmlForSchedule(item)}
                   ${shootTodayBadge}
                   ${freeShootStrip}
                   ${strip}
@@ -18589,7 +18602,7 @@ ${folderBtn}
           const paid = item.paymentStatus === "입금완료";
           return `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" style="display:block;border:none;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:6px 2px;margin:0;">
             <details class="schedule-extra-detail" style="margin:0;">
-              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;cursor:pointer;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong> · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
+              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;cursor:pointer;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong>${freeShootBadgeHtmlForSchedule(item)} · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
               <div style="margin-top:5px;font-size:0.86rem;line-height:1.55;">
                 장소(전체): ${formatPlaceForDisplay(item.place)}<br />
                 연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
@@ -19728,17 +19741,110 @@ ${folderBtn}
 
       // ── 무료촬영 액션 공용 처리 (입금관리 무료촬영 탭 + 15일 스케줄 목록 양쪽에서 호출) ──
       // 계약성공 = 회차권 등록 + 업체를 쇼픽 소속으로 편입(이후 스케줄은 정상 쇼픽 흐름).
-      async function assignCompanyToShopickAfterFreeShoot(companyName) {
+      /** 업체정보의 무료촬영 구분(company_directory.is_free_shoot) — code 우선, name 폴백 */
+      async function patchCompanyDirectoryFreeShootFlag(companyName, on) {
         const nm = normalizeCompanyName(companyName || "");
-        if (!nm) return;
+        if (!nm) return false;
         const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nm.toLowerCase());
-        if (co) co.siteType = "shopick";
+        if (co) co.isFreeShoot = Boolean(on);
         try {
           const headers = {
             "Content-Type": "application/json", Prefer: "return=representation",
             apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           };
-          const body = JSON.stringify({ site_type: "shopick" });
+          const body = JSON.stringify({ is_free_shoot: Boolean(on) });
+          const cod = normalizeCompanyCode(co?.code || "");
+          const tryOne = async (qs) => {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, { method: "PATCH", headers, body });
+            if (!res.ok) return false;
+            const rows = await res.json().catch(() => []);
+            return Array.isArray(rows) && rows.length > 0;
+          };
+          if (cod && (await tryOne(`code=eq.${encodeURIComponent(cod)}`))) return true;
+          return await tryOne(`name=eq.${encodeURIComponent(nm)}`);
+        } catch (error) {
+          console.warn("[무료촬영] 업체 구분 저장 실패", error);
+          return false;
+        }
+      }
+      function isFreeShootCompanyName(companyName, companyCode = "") {
+        const nm = normalizeCompanyName(companyName || "").toLowerCase();
+        const cod = normalizeCompanyCode(companyCode || "");
+        if (cod) {
+          const byCode = companies.find((c) => normalizeCompanyCode(c?.code || "") === cod);
+          if (byCode) return Boolean(byCode.isFreeShoot);
+        }
+        if (!nm) return false;
+        const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nm);
+        return Boolean(co?.isFreeShoot);
+      }
+      function freeShootBadgeHtmlForSchedule(item) {
+        const sid = String(item?.customerScheduleId || "").trim();
+        if (!sid) return "";
+        const r = freeShootRows.find((x) => String(x?.scheduleId || "").trim() === sid);
+        if (!r) return "";
+        if (r.status === "success") return '<span class="free-shoot-badge is-success">무료→계약</span>';
+        if (r.status === "fail") return '<span class="free-shoot-badge is-fail">무료·실패</span>';
+        return '<span class="free-shoot-badge">무료촬영</span>';
+      }
+      /** 업체정보에서 「무료촬영」으로 둔 업체의 스케줄은 등록 경로(관리자·고객·작가)와 무관하게
+       *  freeshoot_ 추적 행을 자동 생성 — 무료촬영 탭·15일 목록·미입금 제외·문자 차단이 한 번에 적용된다.
+       *  최근 30일~미래 스케줄만 본다(옛 기록 소급 금지). */
+      async function ensureFreeShootRowsForFlaggedCompanies() {
+        try {
+          if (!companies.some((c) => c?.isFreeShoot)) return false;
+          const t = new Date(); t.setHours(0, 0, 0, 0);
+          const fromKey = new Date(t.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+          const have = new Set(freeShootRows.map((r) => String(r?.scheduleId || "").trim()).filter(Boolean));
+          let added = false;
+          for (const item of Array.isArray(data) ? data : []) {
+            const sid = String(item?.customerScheduleId || "").trim();
+            const dk = String(item?.date || "").trim();
+            if (!sid || have.has(sid) || !/^\d{4}-\d{2}-\d{2}$/.test(dk) || dk < fromKey) continue;
+            const src = String(item?.source || "").toLowerCase();
+            if (src === "deleted" || src === "hold" || src === "refund") continue;
+            if (!isFreeShootCompanyName(item?.company, item?.companyCode)) continue;
+            const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === normalizeCompanyName(item?.company).toLowerCase());
+            const row = {
+              id: `freeshoot_${sid}`,
+              company: normalizeCompanyName(item?.company || ""),
+              companyCode: normalizeCompanyCode(item?.companyCode || co?.code || ""),
+              scheduleId: sid,
+              date: dk,
+              place: String(item?.place || "").trim(),
+              phone: String(co?.customer_phone || co?.phone || "").trim(),
+              status: "pending",
+              autoFromDirectory: true,
+              createdAt: new Date().toISOString()
+            };
+            if (await saveFreeShootRow(row)) {
+              freeShootRows = [row, ...freeShootRows];
+              have.add(sid);
+              added = true;
+              if (item.composition !== "사진영상 둘다") {
+                item.composition = "사진영상 둘다";
+                if (USE_SUPABASE_SYNC) queueSchedulesSync(true);
+              }
+            }
+          }
+          return added;
+        } catch (error) {
+          console.warn("[무료촬영] 업체 구분 기반 자동 등록 실패", error);
+          return false;
+        }
+      }
+      async function assignCompanyToShopickAfterFreeShoot(companyName) {
+        const nm = normalizeCompanyName(companyName || "");
+        if (!nm) return;
+        const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nm.toLowerCase());
+        if (co) { co.siteType = "shopick"; co.isFreeShoot = false; }
+        try {
+          const headers = {
+            "Content-Type": "application/json", Prefer: "return=representation",
+            apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          };
+          // 계약성공 = 쇼픽 편입 + 무료촬영 구분 해제(이후 스케줄은 유료로)
+          const body = JSON.stringify({ site_type: "shopick", is_free_shoot: false });
           const cod = normalizeCompanyCode(co?.code || "");
           const tryOne = async (qs) => {
             const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?${qs}`, { method: "PATCH", headers, body });
@@ -19786,6 +19892,7 @@ ${folderBtn}
           if (!confirm(`「${row.company}」 을(를) 계약실패로 기록하고 목록에서 뺄까요?\n(기록은 남고, 실패 기록 보기에서 되돌릴 수 있어요)`)) return true;
           row.prevStatus = row.status;
           row.status = "fail";
+          void patchCompanyDirectoryFreeShootFlag(row.company, false); // 실패 후 새 스케줄은 유료로
         } else if (action === "freeShootRestore") {
           row.status = row.prevStatus === "informed" ? "informed" : "pending";
           freeShootShowFail = false; // 복구했으면 진행 목록으로 돌아가 바로 보이게
@@ -22941,7 +23048,30 @@ ${folderBtn}
           couponUsed: false
         };
 
+        // 업체정보에서 「무료촬영」으로 둔 업체면 무료촬영으로 등록(사진영상·추적 행 자동 생성)
+        const registerAsFreeShoot = isFreeShootCompanyName(item.company, item.companyCode);
+        if (registerAsFreeShoot) item.composition = "사진영상 둘다";
         data.unshift(item);
+        if (registerAsFreeShoot) {
+          const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === normalizeCompanyName(item.company).toLowerCase());
+          const fsRow = {
+            id: `freeshoot_${String(item.customerScheduleId || "").trim()}`,
+            company: String(item.company || "").trim(),
+            companyCode: String(item.companyCode || co?.code || "").trim(),
+            scheduleId: String(item.customerScheduleId || "").trim(),
+            date: String(item.date || "").trim(),
+            place: String(item.place || "").trim(),
+            phone: String(co?.customer_phone || co?.phone || "").trim(),
+            status: "pending",
+            autoFromDirectory: true,
+            createdAt: new Date().toISOString()
+          };
+          freeShootRows = [fsRow, ...freeShootRows.filter((r) => r.id !== fsRow.id)];
+          void saveFreeShootRow(fsRow).then((ok) => {
+            if (!ok) alert("무료촬영 추적 등록에 실패했어요. 입금 관리의 「무료촬영」 버튼으로 다시 올려주세요.");
+            renderPaymentList();
+          });
+        }
         const alerts = readStorageArray(STORAGE_CUSTOMER_ALERTS);
         alerts.unshift({
           id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -23025,13 +23155,17 @@ ${folderBtn}
               try {
                 await persistCompanyDirectoryToSupabase({
                   rowId: "", nm: normalizedCompany, telRaw: phoneRaw, loginTrim: "", passwordTrim: "",
-                  codeTrim: "", siteRaw: "shopick", compositionPreset: "사진영상 둘다", suppressHintRefresh: true
+                  codeTrim: "", siteRaw: "shopick", compositionPreset: "사진영상 둘다", freeShoot: true, suppressHintRefresh: true
                 });
               } catch (e) {
                 alert(`업체 자동 등록 실패: ${e?.message || e}\n업체정보관리에서 먼저 등록 후 다시 시도해주세요.`);
                 return;
               }
-            } else if (phoneRaw) {
+            } else {
+              // 기존 업체: 무료촬영 업체로 표시(업체정보관리 「촬영 구분」과 동일 플래그).
+              void patchCompanyDirectoryFreeShootFlag(normalizedCompany, true);
+            }
+            if (isRegisteredCompanyName(normalizedCompany) && phoneRaw) {
               // 기존 업체인데 연락처를 적었으면: 디렉터리에 연락처가 비어있을 때만 채워준다(기존 값 보호).
               const existing = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === normalizedCompany.toLowerCase());
               const curPhone = String(existing?.customer_phone || existing?.phone || "").replace(/[^\d]/g, "");
