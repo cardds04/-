@@ -14541,7 +14541,7 @@ ${folderBtn}
       // ── 무료촬영 관리 (입금 관리 탭 안, app_state freeshoot_* 행이 정본) ──
       // 안내 전(pending) → 안내완료(informed) → 계약성공(success, 회차권 등록) / 계약실패(fail, 기록만 남기고 목록 제외)
       let freeShootRows = [];
-      let freeShootShowFail = false;
+      let freeShootView = "active"; // active(진행) | success(계약성공 기록) | fail(계약실패 기록)
       const FREESHOOT_HDR = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
       async function fetchFreeShootRows() {
         try {
@@ -14577,13 +14577,20 @@ ${folderBtn}
         paymentMonthNavigatorEl?.classList.add("hidden");
         paymentMonthAllToggleBtnEl?.classList.add("hidden");
         paymentMonthMemoBoxEl?.classList.add("hidden");
+        // 진행 목록 = 안내 전/안내완료만. 계약성공·계약실패는 각각 기록 보기로 빠진다(09-16). 촬영일 오름차순.
+        const inView = (row) =>
+          freeShootView === "fail" ? row.status === "fail"
+          : freeShootView === "success" ? row.status === "success"
+          : row.status !== "fail" && row.status !== "success";
         const visible = freeShootRows
-          .filter((row) => (freeShootShowFail ? row.status === "fail" : row.status !== "fail"))
+          .filter(inView)
           .filter((row) => {
             if (!keyword) return true;
             return normalizeCompanyName(row.company).toLowerCase().includes(keyword);
-          });
+          })
+          .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.company || "").localeCompare(String(b.company || ""), "ko"));
         const failCount = freeShootRows.filter((row) => row.status === "fail").length;
+        const successCount = freeShootRows.filter((row) => row.status === "success").length;
         const statusCell = (row) => {
           if (row.status === "success") return `<span style="color:#116b3e;font-weight:800;">계약성공${row.couponCount ? ` · ${Number(row.couponCount)}회권` : ""}</span>`;
           if (row.status === "fail") return `<span style="color:#b23b3b;font-weight:800;">계약실패</span>`;
@@ -14617,9 +14624,13 @@ ${folderBtn}
           </tr>`).join("");
         const emptyRow = visible.length
           ? ""
-          : `<tr><td colspan="7">${freeShootShowFail ? "계약실패 기록이 없습니다." : "무료촬영 업체가 없습니다. 미입금 목록의 「무료촬영」 버튼으로 추가하세요."}</td></tr>`;
-        const failToggleRow = failCount
-          ? `<tr><td colspan="7" style="text-align:right;"><button class="btn-sm" type="button" data-action="freeShootToggleFailView">${freeShootShowFail ? "← 진행 목록 보기" : `계약실패 기록 ${failCount}건 보기`}</button></td></tr>`
+          : `<tr><td colspan="7">${freeShootView === "fail" ? "계약실패 기록이 없습니다." : freeShootView === "success" ? "계약성공 기록이 없습니다." : "진행 중인 무료촬영 업체가 없습니다. 미입금 목록의 「무료촬영」 버튼으로 추가하세요."}</td></tr>`;
+        const viewBtns = [];
+        if (freeShootView !== "active") viewBtns.push(`<button class="btn-sm" type="button" data-action="freeShootSetView" data-view="active">← 진행 목록 보기</button>`);
+        if (freeShootView !== "success" && successCount) viewBtns.push(`<button class="btn-sm" type="button" data-action="freeShootSetView" data-view="success" style="border-color:#22a35f;color:#116b3e;">계약성공 기록 ${successCount}건 보기</button>`);
+        if (freeShootView !== "fail" && failCount) viewBtns.push(`<button class="btn-sm" type="button" data-action="freeShootSetView" data-view="fail" style="border-color:#e0a0a0;color:#b23b3b;">계약실패 기록 ${failCount}건 보기</button>`);
+        const failToggleRow = viewBtns.length
+          ? `<tr><td colspan="7" style="text-align:right;"><span style="display:inline-flex;gap:6px;flex-wrap:wrap;">${viewBtns.join("")}</span></td></tr>`
           : "";
         paymentListBodyEl.innerHTML = bodyRows + emptyRow + failToggleRow;
       }
@@ -19657,7 +19668,7 @@ ${folderBtn}
           btn.classList.toggle("active", btn === button);
         });
         if (currentPaymentFilter === "free") {
-          freeShootShowFail = false;
+          freeShootView = "active";
           void refreshFreeShootRows();
         }
         if (currentPaymentFilter === "shortform") {
@@ -19859,8 +19870,9 @@ ${folderBtn}
         }
       }
       function handleFreeShootActionButton(action, button) {
-        if (action === "freeShootToggleFailView") {
-          freeShootShowFail = !freeShootShowFail;
+        if (action === "freeShootSetView" || action === "freeShootToggleFailView") {
+          const v = String(button.dataset.view || "");
+          freeShootView = v === "fail" || v === "success" ? v : "active";
           renderPaymentList();
           return true;
         }
@@ -19895,7 +19907,7 @@ ${folderBtn}
           void patchCompanyDirectoryFreeShootFlag(row.company, false); // 실패 후 새 스케줄은 유료로
         } else if (action === "freeShootRestore") {
           row.status = row.prevStatus === "informed" ? "informed" : "pending";
-          freeShootShowFail = false; // 복구했으면 진행 목록으로 돌아가 바로 보이게
+          freeShootView = "active"; // 복구했으면 진행 목록으로 돌아가 바로 보이게
         }
         renderPaymentList();
         try { renderList(); } catch (_) {}
