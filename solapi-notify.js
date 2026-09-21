@@ -27,6 +27,17 @@
 
   const SOLAPI_ENDPOINT = "/api/solapi-send";
   const ADMIN_NOTIFY_PHONE = "01028692443";
+  // 접수 확인 문자를 함께 받는 번호(09-21 사장님 지시로 8912 추가). 한 번호 실패가 다른 번호를 막지 않게 각각 보낸다.
+  const ADMIN_NOTIFY_PHONES = [ADMIN_NOTIFY_PHONE, "01074518912"];
+  async function sendToAllAdminPhones(text) {
+    for (const to of ADMIN_NOTIFY_PHONES) {
+      try {
+        await postSolapiSend({ to, text, type: "SMS" });
+      } catch (error) {
+        console.warn("[SolapiNotify] admin notify failed", to, error);
+      }
+    }
+  }
   const ACCOUNT_LINE = "계좌번호 : 농협 3021511169151 김진영";
   const TAIL_NOTICE =
     "입금자명은 사업자명으로 반드시 입금바랍니다.\n" +
@@ -275,7 +286,7 @@
   async function sendAdminShortNotice({ company, schedule }) {
     try {
       const text = buildAdminShortSmsText({ company, schedule });
-      await postSolapiSend({ to: ADMIN_NOTIFY_PHONE, text, type: "SMS" });
+      await sendToAllAdminPhones(text);
     } catch (error) {
       console.warn("[SolapiNotify] admin notify failed", error);
     }
@@ -589,11 +600,7 @@
 
     // 관리자 통보 — 고객 문자 성공 여부와 무관하게 항상 시도(1회).
     try {
-      await postSolapiSend({
-        to: ADMIN_NOTIFY_PHONE,
-        text: buildEditRequestAdminSms({ company, types, sheetCount, memo }),
-        type: "SMS",
-      });
+      await sendToAllAdminPhones(buildEditRequestAdminSms({ company, types, sheetCount, memo }));
     } catch (error) {
       console.warn("[SolapiNotify] edit-request admin notify failed", error);
     }
