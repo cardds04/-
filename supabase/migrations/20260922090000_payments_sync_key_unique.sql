@@ -10,4 +10,4 @@ begin
   return nullif(btrim((memo::jsonb)->>'syncKey'),'');
 exception when others then return null; end $$;
 alter table public.payments add column if not exists sync_key text generated always as (public.payments_sync_key(memo)) stored;
-create unique index if not exists payments_sync_key_uniq on public.payments (sync_key) where sync_key is not null;
+create unique index if not exists payments_sync_key_uniq on public.payments (sync_key); -- 부분 인덱스(where)면 PostgREST on_conflict 가 400
