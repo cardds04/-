@@ -18801,7 +18801,9 @@ ${folderBtn}
                                       // 변경·취소·삭제가 있는 스케줄은 카드 맨 아래에 이력 스택 표시 (사장님 요청: 맨아래 배치)
                                       const trail = getScheduleAuditTrailRows(item);
                                       if (!trail.some((row) => row.isChange || row.label.endsWith("취소") || row.label.endsWith("삭제"))) return "";
-                                      return `<div style="margin-top:6px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
+                                      // 기본은 접어두고 눌러서 펼침(09-22 사장님: 너무 길다). 펼친 상태는 재렌더 후에도 유지.
+                                      const changeCount = trail.filter((row) => row.isChange).length;
+                                      return `<details class="schedule-audit-trail" style="margin-top:6px;"><summary style="cursor:pointer;font-size:0.76rem;color:#6b7a99;user-select:none;list-style:none;display:flex;align-items:center;gap:4px;"><span class="schedule-audit-trail-caret" style="display:inline-block;transition:transform .15s;">▸</span>변경 기록 ${trail.length}건${changeCount ? ` (변경 ${changeCount})` : ""}</summary><div style="margin-top:4px;padding:4px 6px;background:#f6f8fc;border:1px solid var(--line);border-radius:8px;">${trail
                                         .map((row) => {
                                           const removable = Boolean(row.receiptId || row.alertId);
                                           const removeBtn = removable
@@ -18809,7 +18811,7 @@ ${folderBtn}
                                             : "";
                                           return `<div style="display:flex;align-items:flex-start;gap:4px;"><span style="flex:1;min-width:0;font-size:0.76rem;line-height:1.45;color:${row.isChange ? "#b8860b" : "#6b7a99"};">${escapeHtml(formatAuditTrailLine(row))}</span>${removeBtn}</div>`;
                                         })
-                                        .join("")}</div>`;
+                                        .join("")}</div></details>`;
                                     })()}`
                               }
                             </span>
@@ -18832,6 +18834,8 @@ ${folderBtn}
             const sid = String(card.dataset.scheduleId || "").trim();
             const details = card.querySelector("details.schedule-extra-detail");
             if (sid && details && details.open) ids.add(sid);
+            const trail = card.querySelector("details.schedule-audit-trail");
+            if (sid && trail && trail.open) ids.add(`trail:${sid}`);
           });
           return ids;
         }
@@ -18839,7 +18843,12 @@ ${folderBtn}
           if (!root || !openIds || openIds.size === 0) return;
           root.querySelectorAll("[data-schedule-card='true']").forEach((card) => {
             const sid = String(card.dataset.scheduleId || "").trim();
-            if (!sid || !openIds.has(sid)) return;
+            if (!sid) return;
+            if (openIds.has(`trail:${sid}`)) {
+              const trail = card.querySelector("details.schedule-audit-trail");
+              if (trail) trail.open = true;
+            }
+            if (!openIds.has(sid)) return;
             const details = card.querySelector("details.schedule-extra-detail");
             if (details) details.open = true;
           });
