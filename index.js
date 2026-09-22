@@ -5065,24 +5065,43 @@
         refundPayments.forEach((item) => rows.push({ source: "refund", item }));
         return rows;
       }
+      // ‼️09-22 사고: payments 조회가 1000행 캡에 걸려(1,370건) 뒤쪽 행이 "없는 행"으로 오판 →
+      //   동기화마다 통째 재INSERT → 53만 행·494MB 로 폭발 → 조회 3초 타임아웃(57014).
+      //   schedules 와 같은 전량 페이지네이션 + 총계 검증. 부족하면 실패가 안전하다.
       async function fetchPaymentsFromSupabase() {
         if (!USE_SUPABASE_SYNC) return null;
-        const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/payments?select=id,company_name,code,payer_name,amount,paid_at,status,is_half_paid,memo,created_at,updated_at&order=updated_at.desc`,
-          {
-            method: "GET",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            cache: "no-store"
+        const pageSize = 1000;
+        const collected = [];
+        let expectedTotal = null;
+        for (let offset = 0; ; offset += pageSize) {
+          const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/payments?select=id,company_name,code,payer_name,amount,paid_at,status,is_half_paid,memo,created_at,updated_at&order=id.asc`,
+            {
+              method: "GET",
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Range: `${offset}-${offset + pageSize - 1}`,
+                Prefer: "count=exact"
+              },
+              cache: "no-store"
+            }
+          );
+          if (!response.ok && response.status !== 206) {
+            const errorText = await response.text();
+            throw new Error(`payments 조회 실패 (${response.status}): ${errorText}`);
           }
-        );
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`payments 조회 실패 (${response.status}): ${errorText}`);
+          const contentRange = String(response.headers.get("content-range") || "");
+          const totalMatch = contentRange.match(/\/(\d+)\s*$/);
+          if (totalMatch) expectedTotal = Number(totalMatch[1]);
+          const page = await response.json();
+          if (Array.isArray(page)) collected.push(...page);
+          if (!Array.isArray(page) || page.length < pageSize) break;
         }
-        return await response.json();
+        if (Number.isFinite(expectedTotal) && collected.length < expectedTotal) {
+          throw new Error(`payments 전량 수집 실패 (${collected.length}/${expectedTotal}행)`);
+        }
+        return collected;
       }
       async function deleteRelatedPaymentsFromSupabaseBySchedule(item) {
         if (!USE_SUPABASE_SYNC || !item) return false;
@@ -5423,12 +5442,18 @@
             throw new Error(`payments 수정 실패 (${patchResponse.status}): ${errorText}`);
           }
         }
+        // 안전판(09-22): 서버에 행이 있는데 한 번에 100건 넘게 "새 행"으로 판정되면 조회 오판일 가능성이
+        //   압도적 — 폭발 재발 방지를 위해 INSERT 를 중단한다(정상 운영은 한 번에 몇 건).
+        if (insertRows.length > 100 && Array.isArray(remoteRows) && remoteRows.length > 0) {
+          throw new Error(`payments 등록 중단: 새 행 ${insertRows.length}건은 비정상(서버 ${remoteRows.length}행) — 새로고침 후 다시 시도해주세요.`);
+        }
         if (insertRows.length) {
-          const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments`, {
+          // sync_key 유니크 인덱스와 짝: 같은 키가 이미 있으면 조용히 건너뛴다(중복 행 절대 금지).
+          const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?on_conflict=sync_key`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Prefer: "return=minimal",
+              Prefer: "return=minimal,resolution=ignore-duplicates",
               apikey: SUPABASE_ANON_KEY,
               Authorization: `Bearer ${SUPABASE_ANON_KEY}`
             },
@@ -5440,11 +5465,16 @@
           }
         }
         const deleteIds = [...duplicateRemoteIds];
+        const orphanIds = [];
         remoteBySyncKey.forEach((remote, syncKey) => {
-          if (!localSyncKeySet.has(syncKey)) {
-            deleteIds.push(remote.id);
-          }
+          if (!localSyncKeySet.has(syncKey)) orphanIds.push(remote.id);
         });
+        // 안전판(09-22): 로컬이 부분 데이터일 때 서버 행을 대량 삭제하지 않는다.
+        if (orphanIds.length > 100) {
+          console.warn(`[PAYMENT][index] 서버 고아 행 ${orphanIds.length}건 — 대량 삭제 보류(로컬 부분 데이터 의심)`);
+        } else {
+          deleteIds.push(...orphanIds);
+        }
         if (deleteIds.length) {
           const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=in.(${deleteIds.join(",")})`, {
             method: "DELETE",
