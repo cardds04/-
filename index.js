@@ -12053,7 +12053,61 @@ ${folderBtn}
         if (legacy && legacy !== canon) keys.add(legacy);
         return { canon, legacy, keys: [...keys] };
       }
+      // ‼️09-23 유류비 사라짐: 급여 설정이 client_kv 한 덩어리로만 왕복해 기기 간 덮어쓰기에 취약했다.
+      //   정본 = app_state 작가별 행 `payrollcfg_<이름키>` (무료촬영·쿠폰총수와 같은 패턴). kv 는 옛 탭 호환 캐시.
+      const payrollCfgServerByName = new Map();
+      const payrollCfgRowId = (name) => `payrollcfg_${encodeURIComponent(normalizePayrollPersonName(name).toLowerCase())}`;
+      async function refreshPayrollCfgFromServer() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.payrollcfg_%25&select=id,payload`, {
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+            cache: "no-store"
+          });
+          if (!r.ok) return false;
+          const rows = await r.json();
+          payrollCfgServerByName.clear();
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const p = row?.payload || {};
+            const nk = normalizePayrollPersonName(p.name || "").toLowerCase();
+            if (nk) payrollCfgServerByName.set(nk, p);
+          });
+          try { renderPhotographerPayrollAdmin(); } catch (_) {}
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+      async function savePayrollCfgToServer(name, fuelWon, salaryType) {
+        const payload = {
+          name: normalizePayrollPersonName(name),
+          fuelWon: Math.max(0, Number(fuelWon) || 0),
+          salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer",
+          updatedAt: new Date().toISOString()
+        };
+        payrollCfgServerByName.set(payload.name.toLowerCase(), payload);
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal"
+            },
+            body: JSON.stringify([{ id: payrollCfgRowId(name), payload }])
+          });
+          return r.ok;
+        } catch (_) {
+          return false;
+        }
+      }
+      void refreshPayrollCfgFromServer();
       function getPhotographerPayrollConfigForWriter(writerId, photographerDisplayName) {
+        const serverCfg = payrollCfgServerByName.get(normalizePayrollPersonName(photographerDisplayName || "").toLowerCase());
+        if (serverCfg) {
+          return {
+            fuelWon: Math.max(0, Number(serverCfg.fuelWon) || 0),
+            salaryType: serverCfg.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
+          };
+        }
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
         const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
@@ -12089,6 +12143,10 @@ ${folderBtn}
           salaryType: salaryType === "tax_invoice" ? "tax_invoice" : "freelancer",
           updatedAt: new Date().toISOString() // 작가별 최신 저장이 이기도록(09-15 급여형태 원복 사고)
         };
+        // 정본(app_state 작가별 행) 저장 — 실패하면 알린다(조용히 사라지는 일 방지)
+        void savePayrollCfgToServer(photographerDisplayName || "", payload.fuelWon, payload.salaryType).then((ok) => {
+          if (!ok) alert(`「${photographerDisplayName}」 유류비·급여형태 서버 저장에 실패했어요. 새로고침 후 다시 저장해주세요.`);
+        });
         if (wid) cfg.byWriterId[wid] = payload;
         nameKeys.forEach((k) => {
           if (k) cfg.byWriterNameKey[k] = payload;
@@ -19241,7 +19299,10 @@ ${folderBtn}
         const isBlogCompanies = tab === "blogCompanies";
         applyAdminMainTabVisibility(tab);
         if (isPayment) renderPaymentList();
-        if (isPayroll) renderPhotographerPayrollAdmin();
+        if (isPayroll) {
+          renderPhotographerPayrollAdmin();
+          void refreshPayrollCfgFromServer();
+        }
         if (isCoupon) renderCouponPassList();
         if (isReceiptLedger) renderScheduleReceiptLedger();
         if (isThefeelingEdit) renderThefeelingEditRequests();

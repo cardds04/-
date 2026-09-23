@@ -3358,7 +3358,38 @@
         });
       }
 
+      // 정본 = app_state 작가별 행 payrollcfg_* (관리자 저장, 09-23). kv 는 폴백.
+      const writerPayrollCfgServer = new Map();
+      async function refreshWriterPayrollCfgFromServer() {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.payrollcfg_%25&select=id,payload`, {
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+            cache: "no-store"
+          });
+          if (!r.ok) return;
+          const rows = await r.json();
+          writerPayrollCfgServer.clear();
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const p = row?.payload || {};
+            const nk = String(p.name || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+            if (nk) writerPayrollCfgServer.set(nk, p);
+          });
+          try { if (typeof renderPhotographerPayroll === "function") renderPhotographerPayroll(); } catch (_) {}
+        } catch (_) {}
+      }
+      setTimeout(() => void refreshWriterPayrollCfgFromServer(), 0);
+      window.addEventListener("focus", () => void refreshWriterPayrollCfgFromServer());
       function getPayrollWriterConfig(writerId, writerDisplayName) {
+        {
+          const nk0 = String(writerDisplayName || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+          const sc = writerPayrollCfgServer.get(nk0);
+          if (sc) {
+            return {
+              fuelWon: Math.max(0, Number(sc.fuelWon) || 0),
+              salaryType: sc.salaryType === "tax_invoice" ? "tax_invoice" : "freelancer"
+            };
+          }
+        }
         const cfg = readStorageObject(STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG);
         const byId = cfg.byWriterId && typeof cfg.byWriterId === "object" ? cfg.byWriterId : {};
         const byName = cfg.byWriterNameKey && typeof cfg.byWriterNameKey === "object" ? cfg.byWriterNameKey : {};
