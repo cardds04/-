@@ -86,17 +86,26 @@ async function sbJson(pathq) {
   return res.json();
 }
 
-async function relayMkdir(folderName, parent) {
+// ‼️09-24 폴더 생성은 이 루틴만 — 릴레이가 로컬 토큰 파일을 아는 호출만 받는다.
+const FOLDER_TOKEN = (() => {
+  try {
+    return require("fs").readFileSync(require("path").join(require("os").homedir(), ".config/schedule-site/folder_create_token"), "utf8").trim();
+  } catch (_) {
+    return "";
+  }
+})();
+const FOLDER_HEADERS = { "Content-Type": "application/json", "X-Folder-Create-Token": FOLDER_TOKEN };
+async function relayMkdir(folderName, parent, opts = {}) {
   const res = await fetch(`${RELAY}/createfolder`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folderName, parentFileId: parent })
+    headers: FOLDER_HEADERS,
+    body: JSON.stringify({ folderName, parentFileId: parent, ...opts })
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok || !data.fileId) {
+  if (!res.ok || !data.ok || (!data.fileId && !data.skipped)) {
     throw new Error(String(data?.message || `릴레이 HTTP ${res.status}`));
   }
-  return data; // {fileId, reused, webLink}
+  return data; // {fileId, reused, skipped, webLink}
 }
 
 /** 작가 「열기」가 그 촬영일 폴더로 바로 가도록 딥링크를 저장(shoot_delivery_drive_state). */
@@ -128,7 +137,7 @@ async function saveShootFolderLink(scheduleId, row, folderName, shoot) {
 async function provisionCompanyFolder(companyName, directoryId) {
   const res = await fetch(`${RELAY}/provisioncompany`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: FOLDER_HEADERS,
     body: JSON.stringify({ companyName })
   });
   const data = await res.json().catch(() => ({}));
@@ -169,7 +178,7 @@ async function runLinkOnly(days) {
   const from = new Date(new Date(`${today}T00:00:00Z`).getTime() - days * 86400000).toISOString().slice(0, 10);
   console.log(`[link-only] ${from} ~ ${today} 스케줄의 기존 폴더 딥링크 소급 연결`);
   const rows = await sbJson(
-    `schedules?date_key=gte.${from}&date_key=lte.${today}&source=eq.active&select=id,company_name,code,writer_name,date_key,time_key,place,composition&order=date_key.asc,time_key.asc`
+    `schedules?date_key=gte.${from}&date_key=lte.${today}&source=not.in.(hold,refund,deleted)&select=id,company_name,code,writer_name,date_key,time_key,place,composition&order=date_key.asc,time_key.asc`
   );
   const directory = await sbJson(`company_directory?select=name,code,naver_works_company_share_link&limit=2000`);
   const norm = (v) => String(v || "").trim();
@@ -249,7 +258,7 @@ async function main() {
   }
 
   const rows = await sbJson(
-    `schedules?date_key=eq.${dateKey}&source=eq.active&select=id,company_name,code,writer_name,time_key,place,composition&order=time_key.asc`
+    `schedules?date_key=eq.${dateKey}&source=not.in.(hold,refund,deleted)&select=id,company_name,code,writer_name,time_key,place,composition&order=time_key.asc`
   );
   if (!rows.length) {
     console.log("오늘 촬영 스케줄이 없습니다. 종료.");
@@ -322,13 +331,17 @@ async function main() {
       const subs = [];
       const wantPhoto = needsPhotoFolder(r.composition);
       const wantVideo = needsVideoFolder(r.composition);
+      // 이미 있던 촬영일 폴더에 작가가 자기 폴더로 올려 둔 게 있으면 원본 폴더를 덧붙이지 않는다
+      //   (09-24 용디자인: 「0923용디자인사진」 옆에 「0923용디자인사진원본」 중복).
+      const stdNames = [`${mmdd}${compForName}사진원본`, `${mmdd}${compForName}영상원본`];
+      const subOpts = shoot.reused ? { onlyIfParentEmpty: true, allowedNames: stdNames } : {};
       if (wantPhoto || !wantVideo) {
-        await relayMkdir(`${mmdd}${compForName}사진원본`, shoot.fileId);
-        subs.push("사진원본");
+        const x = await relayMkdir(stdNames[0], shoot.fileId, subOpts);
+        subs.push(x.skipped ? "사진원본(작가 폴더 있어 생략)" : "사진원본");
       }
       if (wantVideo) {
-        await relayMkdir(`${mmdd}${compForName}영상원본`, shoot.fileId);
-        subs.push("영상원본");
+        const x = await relayMkdir(stdNames[1], shoot.fileId, subOpts);
+        subs.push(x.skipped ? "영상원본(작가 폴더 있어 생략)" : "영상원본");
       }
       let linkNote = "";
       try {

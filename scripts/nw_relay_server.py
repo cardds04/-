@@ -56,6 +56,35 @@ DEFAULT_PORT = 9337
 RELAY_SECRET = None  # .env에 NAVER_WORKS_RELAY_SECRET 이 있으면 Bearer 인증
 
 
+# ‼️09-24 사장님 「폴더 생성은 매일 아침 루틴만」 — 폴더를 만드는 두 경로(/createfolder·/provisioncompany)는
+#   이 맥의 로컬 토큰 파일을 아는 호출(= scripts/daily_delivery_folders.cjs)만 통과시킨다.
+#   ngrok 으로 열려 있어 Vercel 서버 함수·옛 작가 화면 코드도 부를 수 있었고, 그게 촬영일마다 빈 폴더를 만들었다.
+FOLDER_TOKEN_FILE = os.path.expanduser("~/.config/schedule-site/folder_create_token")
+
+
+def _folder_token_ok(headers) -> bool:
+    try:
+        with open(FOLDER_TOKEN_FILE, encoding="utf-8") as f:
+            tok = f.read().strip()
+    except Exception:
+        return False
+    return bool(tok) and headers.get("X-Folder-Create-Token", "") == tok
+
+
+def _mybox_has_other_children(s, parent_key: str, allowed_names) -> bool:
+    """부모 폴더에 루틴 표준 이름(allowed_names) 말고 다른 항목이 있으면 True(작가가 이미 자기 폴더로 올린 경우)."""
+    r = s.get(
+        f"{MYBOX_API}/service/v2/file/list",
+        params={"resourceKey": parent_key, "fileOption": "all", "sort": "name", "order": "asc", "startNum": 0, "pagingRow": 200},
+        timeout=30,
+    ).json()
+    for it in ((r.get("result") or {}).get("list") or []):
+        nm = str(it.get("resourcePath", "")).rstrip("/").split("/")[-1]
+        if nm and nm not in allowed_names:
+            return True
+    return False
+
+
 def _get_relay_secret():
     return _e("NAVER_WORKS_RELAY_SECRET").strip()
 
@@ -68,10 +97,25 @@ def _rl():
     return _e("NAVER_WORKS_RESOURCE_LOCATION").strip() or "24101"
 
 
+_CK_CACHE = {"t": 0.0, "ck": None}
+
+
 def _mybox_session():
-    """크롬 쿠키(pycookiecheat)로 마이박스 세션 — .env 쿠키 만료 문제 없음(크롬 로그인만 유지되면 됨)."""
-    from pycookiecheat import chrome_cookies
-    ck = chrome_cookies("https://mybox.naver.com")
+    """크롬 쿠키(pycookiecheat)로 마이박스 세션 — .env 쿠키 만료 문제 없음(크롬 로그인만 유지되면 됨).
+
+    ‼️2026-09-21 fd 누수의 진짜 원인: `chrome_cookies()` 가 부를 때마다 크롬 `Cookies` sqlite 를 열고 **닫지 않는다**
+       (lsof 실측: 같은 파일 247개). launchd 아래 파일 한도는 256 이라 요청 250번쯤에 `Too many open files` 로 죽었고,
+       그게 매일 아침 납품폴더 생성이 `fetch failed` 로 실패하던 이유다(9/18 은 폴더가 통째로 안 만들어져 작가들이 올릴 곳이 없었다).
+       → 쿠키를 5분간 재사용한다(요청 250번에 파일 1~2개). 재로그인 직후 최대 5분은 옛 쿠키를 쓸 수 있다.
+    """
+    import gc
+    import time as _t
+    if not _CK_CACHE["ck"] or _t.time() - _CK_CACHE["t"] > 300:
+        from pycookiecheat import chrome_cookies
+        _CK_CACHE["ck"] = chrome_cookies("https://mybox.naver.com")
+        _CK_CACHE["t"] = _t.time()
+        gc.collect()
+    ck = _CK_CACHE["ck"]
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0", "Referer": "https://mybox.naver.com/"})
     s.cookies.update(ck)
@@ -276,7 +320,7 @@ def _findfolder_mybox(folder_name: str, parent: str, mmdd: str):
             pass
 
 
-def _createfolder_mybox(folder_name: str, parent: str):
+def _createfolder_mybox(folder_name: str, parent: str, only_if_parent_empty: bool = False, allowed_names=None):
     """마이박스(공유폴더) 폴더 생성 — 2026-08-11 사장님 확인: 납품 폴더의 실체는
     네이버웍스 드라이브가 아니라 사장님 마이박스의 「공유폴더」다(naver.me 링크 → mybox.naver.com).
     웍스 내부 API 경로는 드라이브 서비스 권한이 없어 401 — 마이박스 API 가 정답."""
@@ -288,6 +332,8 @@ def _createfolder_mybox(folder_name: str, parent: str):
         parent_key, err = _mybox_resolve_parent(s, parent)
         if not parent_key:
             return 400, json.dumps({"ok": False, "message": err})
+        if only_if_parent_empty and _mybox_has_other_children(s, parent_key, set(allowed_names or []) | {folder_name}):
+            return 200, json.dumps({"ok": True, "skipped": True, "fileId": "", "message": "상위 폴더에 이미 다른 폴더/파일이 있어 만들지 않음"})
         out = _mybox_mkdir(s, parent_key, folder_name)
         if out.get("ok"):
             deep = _share_deep_link(s, parent, out["fileId"])
@@ -360,6 +406,9 @@ class RelayHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "message": "Not found"})
 
     def do_POST(self):
+        if self.path in ("/provisioncompany", "/createfolder") and not _folder_token_ok(self.headers):
+            self._send_json(403, {"ok": False, "message": "폴더 생성은 매일 아침 폴더 루틴만 할 수 있습니다"})
+            return
         if self.path == "/provisioncompany":
             if not self._check_auth():
                 return
@@ -401,14 +450,16 @@ class RelayHandler(BaseHTTPRequestHandler):
             # .env 재로드 (쿠키 갱신 후 서버 재시작 없이 반영)
             _load_dotenv()
 
-            status, text = _createfolder_mybox(folder_name, parent_file_id)
+            status, text = _createfolder_mybox(
+                folder_name, parent_file_id, bool(body.get("onlyIfParentEmpty")), body.get("allowedNames") or []
+            )
             try:
                 data = json.loads(text)
             except Exception:
                 data = {"rawText": text[:2000]}
 
             if status == 200 and data.get("ok"):
-                self._send_json(200, {"ok": True, "fileId": data.get("fileId", ""), "reused": data.get("reused", False), "webLink": data.get("webLink", ""), "body": data})
+                self._send_json(200, {"ok": True, "fileId": data.get("fileId", ""), "reused": data.get("reused", False), "skipped": data.get("skipped", False), "webLink": data.get("webLink", ""), "body": data})
             else:
                 msg = data.get("message") or f"HTTP {status}"
                 self._send_json(status if status != 200 else 502, {"ok": False, "status": status, "message": msg, "body": data})
