@@ -258,7 +258,37 @@
    *   주소: …
    *   촬영: 사진만
    */
-  function buildAdminShortSmsText({ company, schedule }) {
+  // 오늘(한국시간) 몇 번째 고객 접수인지 — 관리자 문자 맨 끝에 숫자로 붙인다(10-07 사장님: 하루 주문 수 파악용).
+  //   기준 = customer_submission_receipts 의 customer_create(고객이 직접 접수한 건)를 스케줄 단위로 센다.
+  //   방금 접수 건의 원장 기록이 아직 안 올라갔어도 이번 건을 포함해 센다. 조회 실패 시 숫자 없이 보낸다.
+  const ORDER_COUNT_SB_URL = "https://pidfkrxsgffoqstogmli.supabase.co";
+  const ORDER_COUNT_SB_KEY = "sb_publishable_0JHUt_yXZx78FwoqO8XCDg_s319cLiW";
+  async function fetchTodayOrderSeq(currentScheduleId) {
+    try {
+      const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+      const startUtc = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate()) - 9 * 3600 * 1000);
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 4000);
+      const res = await fetch(
+        `${ORDER_COUNT_SB_URL}/rest/v1/customer_submission_receipts?source=eq.customer_create&created_at=gte.${encodeURIComponent(startUtc.toISOString())}&select=schedule_id,receipt_id&limit=1000`,
+        { headers: { apikey: ORDER_COUNT_SB_KEY, Authorization: `Bearer ${ORDER_COUNT_SB_KEY}` }, cache: "no-store", signal: ac.signal }
+      );
+      clearTimeout(tid);
+      if (!res.ok) return 0;
+      const rows = await res.json();
+      const ids = new Set(
+        (Array.isArray(rows) ? rows : []).map((r) => String(r?.schedule_id || r?.receipt_id || "").trim()).filter(Boolean)
+      );
+      const cur = String(currentScheduleId || "").trim();
+      if (cur) ids.add(cur);
+      else ids.add(`__current_${Date.now()}`);
+      return ids.size;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function buildAdminShortSmsText({ company, schedule, orderSeq }) {
     const companyLabel = String(company || "").trim() || "(업체명없음)";
     const dateLabel = formatShortDateLabel(schedule?.date) || "-";
     const placeRaw = formatPlaceForSms(schedule?.place);
@@ -266,7 +296,9 @@
     const header = `[${companyLabel}]`;
     const dateLine = `촬영일: ${dateLabel}`;
     const compLine = `촬영: ${composition}`;
+    const seqLine = orderSeq > 0 ? String(orderSeq) : "";
     const fixedBytes =
+      (seqLine ? 1 + estimateEucKrBytes(seqLine) : 0) +
       estimateEucKrBytes(header) +
       1 +
       estimateEucKrBytes(dateLine) +
@@ -277,7 +309,7 @@
     const SMS_LIMIT = 88;
     const placeBudget = Math.max(10, SMS_LIMIT - fixedBytes);
     const placeShort = truncateToBytes(placeRaw, placeBudget);
-    return `${header}\n${dateLine}\n주소: ${placeShort}\n${compLine}`;
+    return `${header}\n${dateLine}\n주소: ${placeShort}\n${compLine}${seqLine ? `\n${seqLine}` : ""}`;
   }
 
   /**
@@ -285,7 +317,8 @@
    */
   async function sendAdminShortNotice({ company, schedule }) {
     try {
-      const text = buildAdminShortSmsText({ company, schedule });
+      const orderSeq = await fetchTodayOrderSeq(schedule?.customerScheduleId || schedule?.id || schedule?.scheduleId);
+      const text = buildAdminShortSmsText({ company, schedule, orderSeq });
       await sendToAllAdminPhones(text);
     } catch (error) {
       console.warn("[SolapiNotify] admin notify failed", error);
