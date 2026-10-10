@@ -4109,6 +4109,9 @@
         if (mergeWriterShootLocalIntoGlobals(writer, scheduleIds)) renderScheduleList();
       }
 
+      function writerSchedulesFetchedOnce() {
+        try { return writerMemSchedules !== null; } catch (_) { return true; }
+      }
       function renderScheduleList() {
         const year = Number(filterYearEl.value);
         const month = Number(filterMonthEl.value);
@@ -4139,7 +4142,11 @@
         renderMonthlyShotCount();
 
         if (rows.length === 0) {
-          scheduleListEl.innerHTML = `<div class="status-card">${modeLabel} 기준 스케줄이 없습니다.</div>`;
+          // 새로고침 직후 서버에서 아직 못 받았으면 「없습니다」 대신 불러오는 중으로(10-10 박명훈 「사라졌다 생김」)
+          scheduleListEl.innerHTML =
+            !writerSchedulesFetchedOnce()
+              ? `<div class="status-card">스케줄 불러오는 중…</div>`
+              : `<div class="status-card">${modeLabel} 기준 스케줄이 없습니다.</div>`;
           return;
         }
 
@@ -4510,7 +4517,10 @@
           .sort((a, b) => toTimeValue(a) - toTimeValue(b));
 
         if (upcomingRows.length === 0) {
-          upcomingListEl.innerHTML = '<div class="upcoming-item">앞으로 촬영 예정 장소가 없습니다.</div>';
+          upcomingListEl.innerHTML =
+            !writerSchedulesFetchedOnce()
+              ? '<div class="upcoming-item">불러오는 중…</div>'
+              : '<div class="upcoming-item">앞으로 촬영 예정 장소가 없습니다.</div>';
           return;
         }
 
