@@ -7374,8 +7374,9 @@
         renderRegisterMonthOptions(currentYearValue, currentMonth);
         scheduleMonthEl.value = String(currentMonth);
 
-        scheduleHourEl.innerHTML = Array.from({ length: 10 }, (_, idx) => idx + 9)
-          .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시</option>`)
+        // 09~20시 · 18시 이상은 야간요금 안내(10-11)
+        scheduleHourEl.innerHTML = Array.from({ length: 12 }, (_, idx) => idx + 9)
+          .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시${hour >= 18 ? " (야간요금 5만원)" : ""}</option>`)
           .join("") + '<option value="any-time">시간상관없음</option>';
         scheduleMinuteEl.innerHTML = `
           <option value="exact">정시</option>
@@ -7883,11 +7884,11 @@
                     <div class="pair">
                       <div class="row"><span>⏰</span>
                         <select class="edit-hour">
-                          ${Array.from({ length: 10 }, (_, idx) => idx + 9)
+                          ${Array.from({ length: 12 }, (_, idx) => idx + 9)
                             .map((hour) => {
                               const value = pad2(hour);
                               const [currentHour = "09"] = String(item.time || "09:00").split(":");
-                              return `<option value="${value}" ${value === currentHour ? "selected" : ""}>${value}시</option>`;
+                              return `<option value="${value}" ${value === currentHour ? "selected" : ""}>${value}시${hour >= 18 ? " (야간요금 5만원)" : ""}</option>`;
                             })
                             .join("")}
                         </select>
