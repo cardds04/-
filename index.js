@@ -17647,8 +17647,11 @@ ${folderBtn}
         (companies || []).forEach((c) => {
           const code = normalizeCompanyCode(c?.code).toLowerCase();
           const nameKey = normTight(c?.name);
-          if (code && !dirByCode.has(code)) dirByCode.set(code, c);
-          if (nameKey && !dirByName.has(nameKey)) dirByName.set(nameKey, c);
+          // 같은 고유번호·이름의 업체정보가 여러 줄이면 폴더 주소 있는 줄을 우선(10-12 봄해디자인 깜빡임:
+          //   두 줄 중 어느 게 먼저 읽히느냐에 따라 목록에 떴다 사라졌다 함)
+          const hasLink = (x) => /^https?:\/\//i.test(String(x?.naver_works_company_share_link || "").trim());
+          if (code && (!dirByCode.has(code) || (!hasLink(dirByCode.get(code)) && hasLink(c)))) dirByCode.set(code, c);
+          if (nameKey && (!dirByName.has(nameKey) || (!hasLink(dirByName.get(nameKey)) && hasLink(c)))) dirByName.set(nameKey, c);
         });
         // 폴더 없는 업체 1회씩 (이름 기준 중복 제거), 디렉터리 dbId 동행.
         const missingMap = new Map();
