@@ -1217,6 +1217,7 @@
                   <strong>금액 산출 기준 (더필링)</strong><br />
                   사진 패키지: 20만(45평↓) → +5만(46~99평) → +5만(100평~)<br />
                   사진+영상: 위 사진금액 + 영상 15만 + 평형별 영상 추가(46평~ +3만, 100평~ +3만)<br />
+                  <strong>저녁 6시 이후 촬영: 추가요금 5만원</strong><br />
                   사진 외 편집만 의뢰는 상단 <strong>편집신청</strong> 메뉴에서 접수해 주세요.
                 </p>
               </div>
@@ -3665,7 +3666,13 @@
       }
       const PLACE_REGION_REQUIRED_MSG =
         "촬영장소에 지역이 빠져 있어요.\n동 이름이나 도로명까지 함께 적어주세요.\n예) 의정부시 민락동 ○○아파트 101동 1203호\n예) 의정부시 민락로211";
-      function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false) {
+      // ‼️10-11 사장님: 저녁 6시 이후 촬영은 추가요금 5만원
+      function eveningSurchargeForTime(timeOrHour) {
+        const m = String(timeOrHour == null ? "" : timeOrHour).match(/^(\d{1,2})/);
+        if (!m) return 0;
+        return Number(m[1]) >= 18 ? 50000 : 0; // 18시 이상 = +5만원
+      }
+      function calculateExpectedPaymentAmount(pyeong, composition, taxInvoiceRequested = false, timeOrHour = "") {
         const areaRaw = normalize(pyeong);
         const area =
           areaRaw === "45평이상" || areaRaw === "95평이상" || areaRaw === "145평이상"
@@ -3684,8 +3691,9 @@
         };
         const row = priceTable[area];
         if (!row) return null;
-        const baseAmount = Number(row[compose] || 0) || null;
-        if (!baseAmount) return null;
+        const baseAmount0 = Number(row[compose] || 0) || null;
+        if (!baseAmount0) return null;
+        const baseAmount = baseAmount0 + eveningSurchargeForTime(timeOrHour);
         if (!taxInvoiceRequested) return baseAmount;
         return Math.round(baseAmount * 1.1);
       }
@@ -3721,12 +3729,15 @@
           expectedPaymentTextEl.textContent = "";
           return;
         }
+        const hourNow = scheduleHourEl?.value;
         const amount = calculateExpectedPaymentAmount(
           schedulePyeongEl?.value,
           scheduleCompositionEl?.value,
-          isTaxInvoiceRequested()
+          isTaxInvoiceRequested(),
+          hourNow
         );
-        expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
+        const eveningNote = eveningSurchargeForTime(hourNow) ? " <span style=\"color:#b45309;\">(저녁 6시 이후 추가요금 5만원 포함)</span>" : "";
+        expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}${amount ? eveningNote : ""}`;
       }
       function setCustomerScheduleSubmittingState(isSubmitting) {
         customerScheduleSubmitting = Boolean(isSubmitting);
@@ -5963,7 +5974,7 @@
           const taxInvoiceRequested = isLiteCustomerMode ? false : isTaxInvoiceRequested();
           const expectedAmount = isLiteCustomerMode
             ? null
-            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested);
+            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, taxInvoiceRequested, selectedHour);
           const place = normalize(document.getElementById("schedulePlace").value);
           if (!place) {
             alert("주소를 입력해주세요.");
@@ -6317,7 +6328,7 @@
             }
             item.memo = normalize(cardEl.querySelector(".edit-memo")?.value);
             item.composition = nextComp;
-            const recalcAmt = calculateExpectedPaymentAmount(item.pyeong, item.composition, false);
+            const recalcAmt = calculateExpectedPaymentAmount(item.pyeong, item.composition, false, item.time);
             if (recalcAmt) item.paymentAmount = String(recalcAmt);
           }
           item.adminTimeUpdated = false;
@@ -6572,6 +6583,7 @@
         }
       });
       scheduleHourEl?.addEventListener("change", () => {
+        try { updateExpectedPaymentText(); } catch (_) {}
         if (scheduleHourEl.value === "any-time") {
           scheduleMinuteEl.value = "any";
         }

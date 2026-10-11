@@ -195,6 +195,11 @@
     }
     lines.push(`장소 : ${placeLabel}`);
     if (composition) lines.push(`구성 : ${composition}`);
+    // 10-11 사장님: 저녁 6시 이후 촬영 추가요금 안내
+    {
+      const hm = String(schedule?.time || "").match(/^(\d{1,2})/);
+      if (hm && Number(hm[1]) >= 18) lines.push("※ 저녁 6시 이후 촬영은 추가요금 5만원이 붙습니다.");
+    }
     if (!isShopick && amountLabel) {
       lines.push(`결제예정 : ${amountLabel}`);
       const baseAmount = Number(schedule?.paymentAmount);

@@ -3973,7 +3973,8 @@
                   45평 이하: 사진 15만원 / 영상 10만원<br />
                   46평 이상(45평 초과): 사진 +5만원, 영상 +3만원<br />
                   100평 이상: 사진 +5만원, 영상 +3만원 추가<br />
-                  예) 사진영상둘다 기준: 25만원 → 33만원 → 41만원
+                  예) 사진영상둘다 기준: 25만원 → 33만원 → 41만원<br />
+                  <strong>저녁 6시 이후 촬영: 추가요금 5만원</strong>
                 </div>
               </details>
               <p id="expectedPaymentText" class="hint"><strong>결제예정금액:</strong> -</p>
@@ -6439,7 +6440,13 @@
         if (Number.isNaN(localMs)) return false;
         return Date.now() - localMs <= CUSTOMER_LOCAL_SCHEDULE_EDIT_GRACE_MS;
       }
-      function calculateExpectedPaymentAmount(pyeong, composition) {
+      // ‼️10-11 사장님: 저녁 6시 이후 촬영은 추가요금 5만원
+      function eveningSurchargeForTime(timeOrHour) {
+        const m = String(timeOrHour == null ? "" : timeOrHour).match(/^(\d{1,2})/);
+        if (!m) return 0;
+        return Number(m[1]) >= 18 ? 50000 : 0; // 18시 이상 = +5만원
+      }
+      function calculateExpectedPaymentAmount(pyeong, composition, timeOrHour = "") {
         const areaRaw = normalize(pyeong);
         const area =
           areaRaw === "45평이상" || areaRaw === "95평이상" || areaRaw === "145평이상"
@@ -6458,7 +6465,7 @@
         if (!row) return null;
         const baseAmount = Number(row[compose] || 0) || null;
         if (!baseAmount) return null;
-        return baseAmount;
+        return baseAmount + eveningSurchargeForTime(timeOrHour);
       }
       function applyCustomerSiteMode() {
         if (!isLiteCustomerMode) return;
@@ -6480,8 +6487,10 @@
           expectedPaymentTextEl.textContent = "";
           return;
         }
-        const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value);
-        expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}`;
+        const hourNow = scheduleHourEl?.value;
+        const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, hourNow);
+        const eveningNote = eveningSurchargeForTime(hourNow) ? " <span style=\"color:#b45309;\">(저녁 6시 이후 추가요금 5만원 포함)</span>" : "";
+        expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}${amount ? eveningNote : ""}`;
       }
       function setCustomerScheduleSubmittingState(isSubmitting) {
         customerScheduleSubmitting = Boolean(isSubmitting);
@@ -8457,7 +8466,7 @@
           const taxInvoiceRequested = false;
           const expectedAmount = isLiteCustomerMode
             ? null
-            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
+            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour);
           const place = normalize(document.getElementById("schedulePlace").value);
           if (!place) {
             alert("주소를 입력해주세요.");
@@ -8514,7 +8523,7 @@
           const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
           const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (scheduleCompositionEl.value || "미선택");
           const _memo = normalize(document.getElementById("scheduleMemo").value);
-          const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value);
+          const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour);
           const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
           const _rows = [
             ["업체", scheduleCompanyName],
@@ -8981,6 +8990,7 @@
         updateExpectedPaymentText();
       });
       scheduleHourEl?.addEventListener("change", () => {
+        try { updateExpectedPaymentText(); } catch (_) {}
         if (scheduleHourEl.value === "any-time") {
           scheduleMinuteEl.value = "any";
           return;
