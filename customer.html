@@ -7376,7 +7376,7 @@
 
         // 09~20시 · 18시 이상은 야간요금 안내(10-11)
         scheduleHourEl.innerHTML = Array.from({ length: 12 }, (_, idx) => idx + 9)
-          .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시${hour >= 18 ? " (야간요금 5만원)" : ""}</option>`)
+          .map((hour) => `<option value="${pad2(hour)}">${pad2(hour)}시${hour >= 18 ? " (야간 추가5만원)" : ""}</option>`)
           .join("") + '<option value="any-time">시간상관없음</option>';
         scheduleMinuteEl.innerHTML = `
           <option value="exact">정시</option>
@@ -7888,7 +7888,7 @@
                             .map((hour) => {
                               const value = pad2(hour);
                               const [currentHour = "09"] = String(item.time || "09:00").split(":");
-                              return `<option value="${value}" ${value === currentHour ? "selected" : ""}>${value}시${hour >= 18 ? " (야간요금 5만원)" : ""}</option>`;
+                              return `<option value="${value}" ${value === currentHour ? "selected" : ""}>${value}시${hour >= 18 ? " (야간 추가5만원)" : ""}</option>`;
                             })
                             .join("")}
                         </select>
@@ -8535,7 +8535,7 @@
             ["촬영구성", _composition],
             _amountText ? ["결제예정금액", _amountText] : null,
             // 야간(18시~) 촬영 추가요금 — 금액이 안 보이는 쇼픽 간편 접수에도 반드시 안내(10-11)
-            eveningSurchargeForTime(selectedHour) ? ["추가요금", `<span style="color:#b91c1c;">야간요금 5만원 추가 (저녁 6시 이후 촬영)</span>`] : null,
+            eveningSurchargeForTime(selectedHour) ? ["추가요금", `<span style="color:#b91c1c;">야간 추가5만원 (저녁 6시 이후 촬영)</span>`] : null,
             _memo ? ["메모", _memo] : null,
           ].filter(Boolean);
           const _summaryHtml = _rows.map(([lbl, val]) =>
