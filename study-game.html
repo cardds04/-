@@ -4585,7 +4585,7 @@
       const PRESET_EN_DEF_UNITS = [
         {
           id: "preset_endef_20261012_uigs3_list2",
-          rev: 1,
+          rev: 2,
           title: "10.12 UIGS3 List 2",
           icon: "🅰️",
           createdAt: new Date("2026-10-12T00:00:00+09:00").getTime(),
@@ -4600,12 +4600,12 @@
             { word: "weary",        pos: "adj.", meaning: "To be very tired, or exhausted.",                    example: "I was very weary after soccer practice because I ran for hours.",        exampleForm: "weary" },
             { word: "ferocious",    pos: "adj.", meaning: "Violent, aggressive or brutal.",                     example: "The storm is said to be one of the most ferocious of all time!",         exampleForm: "ferocious" },
             // Spelling Words (뜻·예문은 Claude 작성 — 시험은 듣고 쓰기만)
-            { word: "program",      pos: "n.",   meaning: "A set of instructions that a computer follows to do a task.", example: "She wrote a program that draws a star on the screen.",      exampleForm: "program" },
-            { word: "owner",        pos: "n.",   meaning: "A person who has or possesses something.",                   example: "The owner of the dog called its name loudly.",              exampleForm: "owner" },
-            { word: "alone",        pos: "adj.", meaning: "Without any other people; by yourself.",                     example: "He stayed home alone while his parents went shopping.",     exampleForm: "alone" },
-            { word: "ghost",        pos: "n.",   meaning: "The spirit of a dead person that people imagine they can see.", example: "The children told stories about a ghost in the old house.", exampleForm: "ghost" },
-            { word: "robot",        pos: "n.",   meaning: "A machine that can do work by itself.",                      example: "The robot cleaned the floor while we ate dinner.",          exampleForm: "robot" },
-            { word: "compose",      pos: "v.",   meaning: "To write or create music, a poem, or a letter.",             example: "She composed a song for her mother's birthday.",            exampleForm: "composed" },
+            { group: "spell", word: "program",      pos: "n.",   meaning: "A set of instructions that a computer follows to do a task.", example: "She wrote a program that draws a star on the screen.",      exampleForm: "program" },
+            { group: "spell", word: "owner",        pos: "n.",   meaning: "A person who has or possesses something.",                   example: "The owner of the dog called its name loudly.",              exampleForm: "owner" },
+            { group: "spell", word: "alone",        pos: "adj.", meaning: "Without any other people; by yourself.",                     example: "He stayed home alone while his parents went shopping.",     exampleForm: "alone" },
+            { group: "spell", word: "ghost",        pos: "n.",   meaning: "The spirit of a dead person that people imagine they can see.", example: "The children told stories about a ghost in the old house.", exampleForm: "ghost" },
+            { group: "spell", word: "robot",        pos: "n.",   meaning: "A machine that can do work by itself.",                      example: "The robot cleaned the floor while we ate dinner.",          exampleForm: "robot" },
+            { group: "spell", word: "compose",      pos: "v.",   meaning: "To write or create music, a poem, or a letter.",             example: "She composed a song for her mother's birthday.",            exampleForm: "composed" },
           ],
         },
       ];
@@ -4909,6 +4909,8 @@
               pos: typeof v.pos === "string" ? String(v.pos).trim() : "",
               example: typeof v.example === "string" ? String(v.example).trim() : "",
               exampleForm: typeof v.exampleForm === "string" ? String(v.exampleForm).trim() : "",
+              // 🎒 group: "spell" = Spelling Words 박스(듣고 쓰기 전용), 그 외 = 단어(Part 2·3)
+              group: v.group === "spell" ? "spell" : (v.group === "vocab" ? "vocab" : ""),
             }))
             .filter((v) => {
               if (!v.word || !v.meaning) return false;
@@ -5365,14 +5367,15 @@
           "  - meaning: the ENGLISH definition from sheet (A). If no definition is shown anywhere (e.g. spelling words), GENERATE a short clear English definition (5-15 words).",
           "  - example: the example sentence from sheet (B) if shown. If NOT shown, GENERATE one natural sentence (8-16 words) that uses the word; you MAY conjugate it (past tense / plural / -ing) like a real test.",
           "  - exampleForm: the EXACT form of the word as it appears inside 'example' (e.g. 'hesitated', 'organizations'). Must appear verbatim (case-insensitive) in 'example'.",
+          "  - group: \"spell\" if the word comes ONLY from the 'Spelling Words' box (C); otherwise \"vocab\". Spelling-box words are tested by dictation only.",
           "Return a single valid JSON object ONLY:",
           "{",
-          '  "vocab": [ {"word":"mature","pos":"adj.","meaning":"Like an adult; behaving in a responsible way.","example":"The student seems a lot more mature than his age.","exampleForm":"mature"} ]',
+          '  "vocab": [ {"word":"mature","pos":"adj.","meaning":"Like an adult; behaving in a responsible way.","example":"The student seems a lot more mature than his age.","exampleForm":"mature","group":"vocab"}, {"word":"program","pos":"n.","meaning":"A set of instructions a computer follows.","example":"She wrote a program that draws a star.","exampleForm":"program","group":"spell"} ]',
           "}",
           "Rules:",
           "- 'meaning' and 'example' MUST be English (NOT Korean).",
-          "- Every item MUST have non-empty meaning AND example AND exampleForm.",
-          "- Include spelling-box words too (generate their meaning/example).",
+          "- Every item MUST have non-empty meaning AND example AND exampleForm AND group.",
+          "- Include spelling-box words too (generate their meaning/example) and mark them group \"spell\".",
           "- Each unique word only once.",
           "- Do NOT include spell/sentences/prompts keys.",
           "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
@@ -5740,7 +5743,7 @@
           const isEnDef = (kind === "en_def");
           const pairs = items.filter((p) => p.word && p.meaning);
           if (pairs.length < 2) return { ok: false, reason: "뜻이 있는 항목이 2개 이상 필요해요. 현재 " + pairs.length + "개." };
-          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "", reading: p.reading || "", pos: p.pos || "", example: p.example || "", exampleForm: p.exampleForm || "" })) };
+          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "", reading: p.reading || "", pos: p.pos || "", example: p.example || "", exampleForm: p.exampleForm || "", group: p.group || "" })) };
           const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab", kind: kind });
           const titleEl = $("vocabUnitTitleInput");
           const customTitle = String((titleEl && titleEl.value) || "").trim();
@@ -5850,6 +5853,7 @@
                 if (extra.example) it.example = String(extra.example).trim();
                 if (extra.exampleForm) it.exampleForm = String(extra.exampleForm).trim();
                 if (extra.reading) it.reading = String(extra.reading).trim();
+                if (extra.group === "spell" || extra.group === "vocab") it.group = extra.group;
               }
               items.push(it);
             };
@@ -6515,13 +6519,19 @@
               { ico: "✏️", title: "4단계", desc: "사자성어 쓰기 (생략)" },
             ]
           : ED
-          ? [
+          ? (() => {
               // 🎒 학교 VOCABULARY QUIZ 형식 그대로: Part 1 듣고 쓰기 / Part 2 뜻 연결 / Part 3 문장 빈칸
-              { ico: "📚", title: "1단계", desc: "단어 · 영어 뜻 · 예문 보기" },
-              { ico: "🔊", title: "2단계", desc: "Part 1 · 듣고 철자 쓰기" },
-              { ico: "🔗", title: "3단계", desc: "Part 2 · 단어 보고 영어 뜻 고르기" },
-              { ico: "✏️", title: "4단계", desc: "Part 3 · 예문 빈칸에 단어 쓰기 (시제 주의)" },
-            ]
+              // Spelling Words 태그가 있으면 파트별 출제 개수를 라벨에 표시
+              const spellN = (VOCAB || []).filter((v) => v.group === "spell").length;
+              const wordN = (VOCAB || []).length - spellN;
+              const tagged = spellN > 0;
+              return [
+                { ico: "📚", title: "1단계", desc: "단어 · 영어 뜻 · 예문 보기" },
+                { ico: "🔊", title: "2단계", desc: "Part 1 · 듣고 철자 쓰기" + (tagged ? " · Spelling " + spellN + "개" : "") },
+                { ico: "🔗", title: "3단계", desc: "Part 2 · 단어 보고 영어 뜻 고르기" + (tagged ? " · " + wordN + "개" : "") },
+                { ico: "✏️", title: "4단계", desc: "Part 3 · 예문 빈칸에 단어 쓰기 (시제 주의)" + (tagged ? " · " + wordN + "개" : "") },
+              ];
+            })()
           : HJ
           ? [
               { ico: "📚", title: "1단계", desc: "오늘 외울 한자 보기" },
@@ -6673,6 +6683,17 @@
       function stageForLevel(level) {
         if (isEnDefUnit()) return ({ 4: 2, 2: 3, 5: 4 })[level] || (level + 1);
         return level + 1;
+      }
+      // 🎒 단어에 group 태그가 있으면 시험 파트별로 출제 풀을 나눈다
+      //   group "spell" = Spelling Words 박스 → Part 1 듣고 쓰기(level 4) 전용
+      //   그 외(= 단어)             → Part 2 뜻 연결(level 2) · Part 3 문장 빈칸(level 5) · 뜻→단어(level 1)
+      //   태그가 하나도 없는 단원(옛 단원)은 전체 출제
+      function hasSpellGroup(list) { return (list || []).some((v) => v && v.group === "spell"); }
+      function poolForLevel(list, level) {
+        if (!hasSpellGroup(list)) return list;
+        if (level === 4) { const s = list.filter((v) => v.group === "spell"); return s.length ? s : list; }
+        if (level === 1 || level === 2 || level === 5) { const w = list.filter((v) => v.group !== "spell"); return w.length ? w : list; }
+        return list;
       }
       // 🎒 학교 카테고리: 지금 활성화된 단원이 학교 단원인지
       function isSchoolUnit() { return getActiveUnitId() === SCHOOL_UNIT_ID; }
@@ -6883,6 +6904,8 @@
           const disabled = new Set(u.disabledWords || []);
           let basePool = uniqByWord(VOCAB.filter((v) => !disabled.has(v.word)));
           if (basePool.length === 0) basePool = uniqByWord(VOCAB); // 모두 제외된 경우 안전장치
+          // 🎒 시험 파트별 풀 분리: 듣고 쓰기(4)=Spelling Words만, 뜻 연결(2)·문장 빈칸(5)=단어만
+          basePool = poolForLevel(basePool, state.vocabLevel);
           // 🎒 문장 빈칸(level 5)은 예문이 있는 단어만 출제 가능
           if ((opts.level || state.vocabLevel) === 5) {
             const withEx = basePool.filter((v) => v.example && String(v.example).trim());
@@ -7457,8 +7480,9 @@
             sm.textContent = it.meaning;
           }
           // 🎒 영어 뜻 단원: 품사 + 예문(단어 부분 굵게) — 시험지(Vocabulary in Use)처럼 보여 준다
-          if (isVocab && isEnDefUnit() && (it.pos || it.example)) {
-            const posHtml = it.pos ? '<span class="sm-pos">' + escapeHtml(it.pos) + '</span>' : '';
+          if (isVocab && isEnDefUnit() && (it.pos || it.example || it.group === "spell")) {
+            const posHtml = (it.group === "spell" ? '<span class="sm-pos" style="background:#fef3c7;color:#92400e">✏️ Spelling</span>' : '') +
+              (it.pos ? '<span class="sm-pos">' + escapeHtml(it.pos) + '</span>' : '');
             let exHtml = "";
             if (it.example) {
               const exStr = String(it.example);
@@ -10740,7 +10764,8 @@
       });
       // 예문 없는 단어가 있으면 자동으로 예문을 만든 뒤 문장 빈칸(level 5) 시작
       async function ensureExamplesThenStart(payable) {
-        const missing = (VOCAB || []).filter((v) => !v.example || !String(v.example).trim()).map((v) => v.word);
+        // Part 3는 단어(vocab 그룹)만 출제 → Spelling Words엔 예문을 만들 필요 없음
+        const missing = poolForLevel(VOCAB || [], 5).filter((v) => !v.example || !String(v.example).trim()).map((v) => v.word);
         if (missing.length) {
           const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
           if (!apiKey) {
