@@ -169,6 +169,7 @@
       .pill { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 9px; }
       .pill.wait { background: #fff3e0; color: #b26a00; border: 1px solid #f2d5aa; }
       .pill.done { background: #e7f6ed; color: #2f7a4d; border: 1px solid #bfe4cd; }
+      .sheet.issued-mode .hide-when-issued { display: none !important; }
       .pill.issued { background: #eef2ff; color: #3b4fa0; border: 1px solid #cdd6f5; }
       .a-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
       .a-actions .btn { padding: 8px 12px; font-size: 12.5px; border-radius: 8px; }
@@ -267,15 +268,15 @@
             <tbody>
               <tr class="cell-h">
                 <th>업 체 명</th>
-                <td><input class="line" data-f="company_name" disabled /></td>
-                <th>대표자명</th>
-                <td><input class="line" data-f="ceo_name" disabled /></td>
+                <td id="companyCell"><input class="line" data-f="company_name" disabled /></td>
+                <th class="hide-when-issued">대표자명</th>
+                <td class="hide-when-issued"><input class="line" data-f="ceo_name" disabled /></td>
               </tr>
-              <tr class="cell-h">
+              <tr class="cell-h hide-when-issued">
                 <th>휴 대 폰</th>
                 <td colspan="3"><input class="line" data-f="phone" disabled /></td>
               </tr>
-              <tr class="cell-h">
+              <tr class="cell-h hide-when-issued">
                 <th>이메일주소</th>
                 <td colspan="3"><input class="line" data-f="email" disabled /></td>
               </tr>
@@ -369,13 +370,13 @@
             </div>
           </div>
 
-          <div class="agree-row">
+          <div class="agree-row hide-when-issued">
             <label class="chk" id="sheetAgreeChk"><input type="checkbox" disabled /><span class="box"></span>*본 환불약관에 동의합니다.</label>
             <span>신청자 :</span>
             <span class="sign-name"><input class="line" data-f="signer_name" disabled /></span>
             <span>(서명)</span>
           </div>
-          <div class="sign-row">
+          <div class="sign-row hide-when-issued">
             <div class="sign-pad-wrap">
               <img class="sign-img hidden" id="signImg" alt="서명" />
               <div class="sign-hint hidden" id="signedAtText"></div>
@@ -383,6 +384,10 @@
             </div>
           </div>
 
+          <div id="issuedConsent" class="hidden" style="margin:14px 2px 10px;padding:10px 12px;border:1px solid #e8d5c8;border-radius:6px;background:#fbf6f2;font-size:12.5px;line-height:1.7;color:#3a2d24;">
+            <div style="font-weight:700;">이 내용은 카카오톡으로 전달되며 3일 이내 이의가 없을 경우 계약서에 동의한 것으로 이해합니다.</div>
+            <div id="issuedDateLine" style="text-align:right;font-weight:700;color:#5a4636;margin-top:4px;"></div>
+          </div>
           <div class="doc-foot">
             <span class="b">쑈픽스튜디오 &nbsp;|</span>
             <span class="c">서울 동대문구 한천로 165 201호 &nbsp;&nbsp; 전화 : 070-8015-7526</span>
@@ -1020,8 +1025,12 @@
           writeSheet(row, null, false);
           const d = new Date(row?.created_at || Date.now());
           const note = $("#issuedNote");
-          note.innerHTML = `발행일 ${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.<br />쑈픽스튜디오 발행 (결제 완료 확인)`;
-          note.classList.remove("hidden");
+          note.classList.add("hidden");
+          // 일방 발행용: 대표자·휴대폰·이메일·동의·서명 칸을 빼고 맨 아래 카톡 전달 안내(10-12 사장님)
+          sheetEl.classList.add("issued-mode");
+          $("#companyCell").colSpan = 3;
+          $("#issuedDateLine").textContent = `발행일 ${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. · 쑈픽스튜디오`;
+          $("#issuedConsent").classList.remove("hidden");
           adminViewEl.classList.add("hidden");
           showSheet();
           const canShare = !!(navigator.canShare && navigator.share);
@@ -1063,6 +1072,9 @@
             stageEl.classList.remove("show");
             actionBarEl.classList.add("hidden");
             note.classList.add("hidden");
+            sheetEl.classList.remove("issued-mode");
+            $("#companyCell").colSpan = 1;
+            $("#issuedConsent").classList.add("hidden");
             adminViewEl.classList.remove("hidden");
             window.scrollTo({ top: 0 });
           });
