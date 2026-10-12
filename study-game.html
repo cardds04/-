@@ -7677,7 +7677,9 @@
       // 영어 단어 보기 (정답 단어 + 다른 단어들)
       function buildWordChoices(item, total) {
         const set = new Set([item.word]);
-        shuffle(VOCAB.filter((v) => v.word !== item.word)).forEach((v) => { if (set.size < total) set.add(v.word); });
+        // 🎒 보기(오답)도 같은 그룹 안에서만 (Spelling Words는 뜻→단어 보기에 섞지 않음)
+        const POOL1 = poolForLevel(VOCAB, 1);
+        shuffle(POOL1.filter((v) => v.word !== item.word)).forEach((v) => { if (set.size < total) set.add(v.word); });
         // 영어 단원에서만 기본 단원 단어로 보충 (한자·사자성어 단원엔 영어 섞이지 않게)
         if (set.size < total && !isCJKUnit()) {
           shuffle(DEFAULTS.VOCAB).forEach((v) => { if (set.size < total && v.word !== item.word) set.add(v.word); });
@@ -7716,15 +7718,17 @@
             : isEnDefUnit() ? "🅰️ What does this word mean?"
             : "📖 이 단어의 뜻은?";
           promptBigHtml = escapeHtml(item.word);
-          const insideOthers = shuffle(VOCAB.filter((v) => v.word !== item.word && v.meaning !== item.meaning)).slice(0, 3).map((v) => v.meaning);
-          const inUnitMeanings = new Set(VOCAB.map((v) => v.meaning));
+          // 🎒 보기(오답)도 같은 그룹 안에서만 — 단어 8개 시험이면 Spelling Words 뜻이 섞이지 않게
+          const POOL2 = poolForLevel(VOCAB, 2);
+          const insideOthers = shuffle(POOL2.filter((v) => v.word !== item.word && v.meaning !== item.meaning)).slice(0, 3).map((v) => v.meaning);
+          const inUnitMeanings = new Set(POOL2.map((v) => v.meaning));
           // 한자·사자성어·영어뜻 단원은 단원 안에서만 보기 — 외부 한국어 뜻이 섞이지 않게
           const outsidePool = blockOutsideMeaningPool() ? [] : buildOutsideMeaningPool().filter((m) => !inUnitMeanings.has(m) && m !== item.meaning);
           const outsideOthers = shuffle(outsidePool).slice(0, 2);
           const meaningSet = new Set([item.meaning, ...insideOthers, ...outsideOthers]);
           const merged = [item.meaning, ...insideOthers, ...outsideOthers];
           if (merged.length < totalChoices) {
-            const more = shuffle(VOCAB.filter((v) => !meaningSet.has(v.meaning))).map((v) => v.meaning);
+            const more = shuffle(POOL2.filter((v) => !meaningSet.has(v.meaning))).map((v) => v.meaning);
             for (let i = 0; i < more.length && merged.length < totalChoices; i++) {
               if (!meaningSet.has(more[i])) { meaningSet.add(more[i]); merged.push(more[i]); }
             }
