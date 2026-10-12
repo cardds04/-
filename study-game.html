@@ -2357,6 +2357,34 @@
         font-weight: 700;
         line-height: 1.3;
       }
+      /* ---- 🎒 시험 형식: 듣고 쓰기 / 문장 빈칸 ---- */
+      .type-input-wrap { display:flex; gap:8px; justify-content:center; align-items:center; margin:12px 0 6px; flex-wrap:wrap; }
+      .type-input {
+        flex: 1 1 220px; max-width: 420px;
+        padding: 14px 16px; font-size: 1.25rem; font-weight: 800; letter-spacing: .03em;
+        border: 2.5px solid #c7d2fe; border-radius: 14px; background: #fff; color: #1e1b4b;
+        font-family: inherit; text-align: center; outline: none;
+      }
+      .type-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,.18); }
+      .type-input.is-ok { border-color:#34d399; background:#ecfdf5; }
+      .type-input.is-no { border-color:#f87171; background:#fef2f2; }
+      .fb-sentence {
+        margin: 10px auto 4px; max-width: 560px; padding: 16px 18px;
+        background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 16px;
+        font-size: 1.12rem; line-height: 1.65; color: #0f172a; text-align: left;
+      }
+      .fb-sentence .blank {
+        display: inline-block; min-width: 110px; padding: 0 6px; border-bottom: 3px solid #6366f1;
+        color: #6366f1; font-weight: 900; text-align: center; letter-spacing: .05em;
+      }
+      .fb-sentence .blank.filled-ok { color:#065f46; border-bottom-color:#34d399; }
+      .fb-sentence .blank.filled-no { color:#991b1b; border-bottom-color:#f87171; text-decoration: line-through; }
+      .fb-pos { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#4338ca; font-weight:800; font-size:.78rem; margin-right:6px; }
+      .fb-tense { display:inline-block; padding:2px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-weight:800; font-size:.78rem; }
+      .dict-ear { font-size: 3rem; text-align:center; margin: 6px 0 2px; }
+      .sm-example { display:block; margin-top:3px; color:#475569; font-size:.78rem; font-weight:600; font-style: italic; line-height:1.35; }
+      .sm-example b { color:#4338ca; font-style: normal; }
+      .sm-pos { display:inline-block; padding:1px 6px; border-radius:999px; background:#eef2ff; color:#4338ca; font-weight:800; font-size:.7rem; margin-right:4px; font-style: normal; }
       /* ---- 도움요청 챗 ---- */
       .help-overlay .sheet.help-sheet {
         max-width: 560px;
@@ -4330,6 +4358,53 @@
         return out;
       }
 
+      // 🎒 영어 뜻 단원: 예문(example) + 품사(pos) + 예문 속 실제 형태(exampleForm) 생성
+      // → 시험 Part 3(문장 빈칸)용. 반환: { word: { example, exampleForm, pos } }
+      async function fetchExamplesFromGemini(words) {
+        if (!Array.isArray(words) || !words.length) return {};
+        const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+        if (!apiKey) throw new Error("Gemini API 키가 등록되어 있지 않아요.");
+        const prompt =
+          "For each English vocabulary word below, write ONE natural example sentence (8-16 words) that a Korean elementary/middle school student can understand.\n" +
+          "The sentence must USE the word. You MAY conjugate it (past tense, plural, -ing, 3rd person) so the sentence sounds natural — like a real school vocabulary test.\n" +
+          "Also give the part of speech (adj./n./v./adv.) and the EXACT form of the word as it appears in your sentence.\n" +
+          "Examples:\n" +
+          "- hesitate → pos: \"v.\", example: \"The girl hesitated before she tried the green eggs.\", exampleForm: \"hesitated\"\n" +
+          "- emergency → pos: \"n.\", example: \"Firefighters are helpers when there is an emergency.\", exampleForm: \"emergency\"\n" +
+          "- pouring → pos: \"adj.\", example: \"Get your umbrella, it is pouring outside!\", exampleForm: \"pouring\"\n" +
+          "Respond with JSON only: {\"items\":[{\"word\":\"hesitate\",\"pos\":\"v.\",\"example\":\"The girl hesitated before she tried the green eggs.\",\"exampleForm\":\"hesitated\"}, ...]}\n" +
+          "Rules: exampleForm MUST appear verbatim (case-insensitive) inside example. Each word once.\n" +
+          "Words:\n" + words.map((w) => "- " + w).join("\n");
+        const body = {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, responseMimeType: "application/json" },
+        };
+        const data = await callGeminiAPI(apiKey, body);
+        let raw = "";
+        try { raw = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || "").join("") || ""; } catch (_) {}
+        if (!raw) throw new Error("Gemini 응답이 비어 있어요.");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); }
+        catch (_) {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try { parsed = JSON.parse(cleaned); } catch (_) { parsed = null; }
+        }
+        if (!parsed || !Array.isArray(parsed.items)) throw new Error("Gemini 응답을 해석할 수 없어요.");
+        const out = {};
+        parsed.items.forEach((it) => {
+          if (!it || typeof it !== "object") return;
+          const w = String(it.word || "").trim().toLowerCase();
+          const ex = String(it.example || "").trim();
+          if (!w || !ex) return;
+          out[w] = {
+            example: ex,
+            exampleForm: String(it.exampleForm || "").trim(),
+            pos: String(it.pos || "").trim(),
+          };
+        });
+        return out;
+      }
+
       async function fetchIdiomMeaningsFromGemini(idioms) {
         if (!Array.isArray(idioms) || !idioms.length) return {};
         const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
@@ -4501,12 +4576,91 @@
         showMenu();
       }
 
+      /* ---------- 🎒 프리셋 단원 (사장님이 문제지를 주면 Claude가 여기에 데이터를 넣고 배포) ----------
+       * - 로드 시 getUnits()가 자동으로 '내 단원'에 합쳐 넣는다 (id 기준, 이미 있으면 건너뜀).
+       * - rev 를 올리면 vocab 만 새 데이터로 교체 (클리어·오답 기록은 유지).
+       * - 사용자가 ✕로 지우면 HIDDEN_PRESETS_KEY 에 id 가 기록돼 다시 살아나지 않는다.
+       */
+      const HIDDEN_PRESETS_KEY = "study_game_hidden_presets_v1";
+      const PRESET_EN_DEF_UNITS = [
+        {
+          id: "preset_endef_20261012_uigs3_list2",
+          rev: 1,
+          title: "10.12 UIGS3 List 2",
+          icon: "🅰️",
+          createdAt: new Date("2026-10-12T00:00:00+09:00").getTime(),
+          vocab: [
+            // VOCABULARY · Unit 3: Genre Study 1 → List 2 (정의 시트 + Vocabulary in Use 예문 시트)
+            { word: "mature",       pos: "adj.", meaning: "Like an adult; behaving in a responsible way.",      example: "The student seems a lot more mature than his age.",                      exampleForm: "mature" },
+            { word: "organization", pos: "n.",   meaning: "Groups working for a purpose.",                      example: "The organization will work on a plan to give staff equal opportunities.", exampleForm: "organization" },
+            { word: "resident",     pos: "n.",   meaning: "People who live in a certain place.",                example: "One resident from the Nowon area has won the lottery!",                  exampleForm: "resident" },
+            { word: "scatter",      pos: "v.",   meaning: "Spread out over a wide area.",                       example: "Did you scatter the seeds evenly across the field?",                     exampleForm: "scatter" },
+            { word: "selective",    pos: "adj.", meaning: "To be particular, picky or choosy.",                 example: "He is very selective about the sports teams he supports.",               exampleForm: "selective" },
+            { word: "untold",       pos: "adj.", meaning: "A way to describe something that is not known.",     example: "The typhoon has made untold damage across the country.",                 exampleForm: "untold" },
+            { word: "weary",        pos: "adj.", meaning: "To be very tired, or exhausted.",                    example: "I was very weary after soccer practice because I ran for hours.",        exampleForm: "weary" },
+            { word: "ferocious",    pos: "adj.", meaning: "Violent, aggressive or brutal.",                     example: "The storm is said to be one of the most ferocious of all time!",         exampleForm: "ferocious" },
+            // Spelling Words (뜻·예문은 Claude 작성 — 시험은 듣고 쓰기만)
+            { word: "program",      pos: "n.",   meaning: "A set of instructions that a computer follows to do a task.", example: "She wrote a program that draws a star on the screen.",      exampleForm: "program" },
+            { word: "owner",        pos: "n.",   meaning: "A person who has or possesses something.",                   example: "The owner of the dog called its name loudly.",              exampleForm: "owner" },
+            { word: "alone",        pos: "adj.", meaning: "Without any other people; by yourself.",                     example: "He stayed home alone while his parents went shopping.",     exampleForm: "alone" },
+            { word: "ghost",        pos: "n.",   meaning: "The spirit of a dead person that people imagine they can see.", example: "The children told stories about a ghost in the old house.", exampleForm: "ghost" },
+            { word: "robot",        pos: "n.",   meaning: "A machine that can do work by itself.",                      example: "The robot cleaned the floor while we ate dinner.",          exampleForm: "robot" },
+            { word: "compose",      pos: "v.",   meaning: "To write or create music, a poem, or a letter.",             example: "She composed a song for her mother's birthday.",            exampleForm: "composed" },
+          ],
+        },
+      ];
+      function getHiddenPresetIds() {
+        try { const a = JSON.parse(localStorage.getItem(nsKey(HIDDEN_PRESETS_KEY)) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+      }
+      function hidePresetId(id) {
+        if (!id) return;
+        const a = getHiddenPresetIds();
+        if (a.indexOf(id) < 0) { a.push(id); try { localStorage.setItem(nsKey(HIDDEN_PRESETS_KEY), JSON.stringify(a)); } catch (e) {} }
+        try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
+      }
+      // 프리셋 정의 → 실제 단원 객체 (buildUnitFromGemini 로 필드 모양을 맞춘 뒤 메타만 덮어쓴다)
+      function materializePreset(p) {
+        const u = buildUnitFromGemini({ vocab: p.vocab }, { mode: "vocab", kind: "en_def" });
+        u.id = p.id; u.title = p.title; u.icon = p.icon || "🅰️"; u.createdAt = p.createdAt || Date.now();
+        u.preset = true; u.rev = p.rev || 1;
+        return u;
+      }
+      function mergePresetUnits(arr) {
+        if (!Array.isArray(arr)) arr = [];
+        const hidden = new Set(getHiddenPresetIds());
+        let changed = false;
+        // 숨긴 프리셋이 (다른 기기 동기화 등으로) 목록에 다시 들어와 있으면 제거
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const u = arr[i];
+          if (u && u.preset && hidden.has(u.id)) { arr.splice(i, 1); changed = true; }
+        }
+        PRESET_EN_DEF_UNITS.forEach((p) => {
+          if (hidden.has(p.id)) return;
+          const idx = arr.findIndex((u) => u && u.id === p.id);
+          if (idx < 0) {
+            arr.push(materializePreset(p));
+            changed = true;
+          } else if ((arr[idx].rev || 0) < (p.rev || 1)) {
+            // 데이터 갱신: vocab 만 교체, 진행 기록(vocabStageCleared 등)은 유지
+            const fresh = materializePreset(p);
+            arr[idx] = Object.assign({}, arr[idx], { vocab: fresh.vocab, title: fresh.title, icon: fresh.icon, rev: fresh.rev, preset: true });
+            changed = true;
+          }
+        });
+        return changed;
+      }
+
       function getUnits() {
         try {
           const raw = localStorage.getItem(nsKey(UNITS_KEY));
-          if (!raw) return [];
-          const arr = JSON.parse(raw);
-          return Array.isArray(arr) ? arr : [];
+          const arr = raw ? JSON.parse(raw) : [];
+          const list = Array.isArray(arr) ? arr : [];
+          // 🎒 프리셋 단원 자동 합치기 (빠져 있으면 추가, rev 올라갔으면 vocab 교체)
+          if (mergePresetUnits(list)) {
+            try { localStorage.setItem(nsKey(UNITS_KEY), JSON.stringify(list)); } catch (e) {}
+            try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
+          }
+          return list;
         } catch (e) { return []; }
       }
       function saveUnits(arr) {
@@ -4751,6 +4905,10 @@
               en: typeof v.en === "string" ? String(v.en).trim() : "",
               // 사자성어/한자: 한글 독음(있으면 들어보기에서 이걸 발음)
               reading: typeof v.reading === "string" ? String(v.reading).trim() : "",
+              // 🎒 영어 뜻 단원(시험 형식): 품사·예문·예문 속 실제 형태 (Part 3 문장 빈칸용)
+              pos: typeof v.pos === "string" ? String(v.pos).trim() : "",
+              example: typeof v.example === "string" ? String(v.example).trim() : "",
+              exampleForm: typeof v.exampleForm === "string" ? String(v.exampleForm).trim() : "",
             }))
             .filter((v) => {
               if (!v.word || !v.meaning) return false;
@@ -5196,18 +5354,25 @@
           "- Do NOT include spell/sentences/prompts keys.",
           "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
         ] : isEnDef ? [
-          "You are a kind English study assistant helping a Korean student who is memorizing English words paired with English definitions/example sentences.",
-          "The attached photo(s) contain English vocabulary entries where each word has an ENGLISH meaning (definition or example sentence) — NOT a Korean meaning.",
-          "Extract EVERY English vocabulary entry, with the ENGLISH definition or example sentence that goes with it.",
-          "If the image only shows the word without a definition, GENERATE a short clear English definition yourself (~5-15 words).",
+          "You are a kind English study assistant helping a Korean student prepare for a school VOCABULARY test.",
+          "The attached photo(s) are school vocabulary sheets. There may be SEVERAL kinds of sheets, possibly across multiple photos:",
+          "  (A) a DEFINITIONS sheet: each word with a part of speech (adj./n./v./adv.) and an ENGLISH definition, e.g. 'mature — adj. Like an adult; behaving in a responsible way.'",
+          "  (B) an EXAMPLES sheet ('Vocabulary in Use'): each word with an example SENTENCE where the word appears in bold/italic, e.g. 'The student seems a lot more mature than his age.'",
+          "  (C) a 'Spelling Words' box: plain words with no definition (e.g. program, owner, alone).",
+          "MERGE everything by word. For EACH unique word produce:",
+          "  - word: lowercase English word/phrase",
+          "  - pos: part of speech if shown (adj./n./v./adv.), else your best guess",
+          "  - meaning: the ENGLISH definition from sheet (A). If no definition is shown anywhere (e.g. spelling words), GENERATE a short clear English definition (5-15 words).",
+          "  - example: the example sentence from sheet (B) if shown. If NOT shown, GENERATE one natural sentence (8-16 words) that uses the word; you MAY conjugate it (past tense / plural / -ing) like a real test.",
+          "  - exampleForm: the EXACT form of the word as it appears inside 'example' (e.g. 'hesitated', 'organizations'). Must appear verbatim (case-insensitive) in 'example'.",
           "Return a single valid JSON object ONLY:",
           "{",
-          '  "vocab": [ {"word":"lowercase english word","meaning":"English definition or example sentence"} ]',
+          '  "vocab": [ {"word":"mature","pos":"adj.","meaning":"Like an adult; behaving in a responsible way.","example":"The student seems a lot more mature than his age.","exampleForm":"mature"} ]',
           "}",
           "Rules:",
-          "- 'word' MUST be a lowercase English word/phrase.",
-          "- 'meaning' MUST be an English sentence/definition (NOT Korean, NOT a translation).",
-          "- Every item MUST have non-empty meaning.",
+          "- 'meaning' and 'example' MUST be English (NOT Korean).",
+          "- Every item MUST have non-empty meaning AND example AND exampleForm.",
+          "- Include spelling-box words too (generate their meaning/example).",
           "- Each unique word only once.",
           "- Do NOT include spell/sentences/prompts keys.",
           "- Output ONLY the JSON object, no markdown, no code fences, no extra text.",
@@ -5575,7 +5740,7 @@
           const isEnDef = (kind === "en_def");
           const pairs = items.filter((p) => p.word && p.meaning);
           if (pairs.length < 2) return { ok: false, reason: "뜻이 있는 항목이 2개 이상 필요해요. 현재 " + pairs.length + "개." };
-          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "", reading: p.reading || "" })) };
+          const fakeParsed = { vocab: pairs.map((p) => ({ word: p.word, meaning: p.meaning, en: "", reading: p.reading || "", pos: p.pos || "", example: p.example || "", exampleForm: p.exampleForm || "" })) };
           const newUnit = buildUnitFromGemini(fakeParsed, { mode: "vocab", kind: kind });
           const titleEl = $("vocabUnitTitleInput");
           const customTitle = String((titleEl && titleEl.value) || "").trim();
@@ -5671,16 +5836,24 @@
             // vocab 우선, 혹시 spell 로 와도 함께 수집
             let items = [];
             const seen = new Set();
-            const pushItem = (w, m) => {
+            const pushItem = (w, m, extra) => {
               const isCJK = (currentKind === "hanja" || currentKind === "idiom");
               w = isCJK ? String(w || "").trim() : String(w || "").trim().toLowerCase();
               // 한자: 한 글자도 OK / 사자성어: 두 글자 이상 / 영어: 두 글자 이상
               const minLen = currentKind === "hanja" ? 1 : 2;
               if (!w || w.length < minLen || seen.has(w)) return;
               seen.add(w);
-              items.push({ word: w, meaning: String(m || "").trim() });
+              const it = { word: w, meaning: String(m || "").trim() };
+              // 🎒 영어 뜻(시험 형식): 품사·예문·예문 속 형태 / 사자성어: 독음
+              if (extra && typeof extra === "object") {
+                if (extra.pos) it.pos = String(extra.pos).trim();
+                if (extra.example) it.example = String(extra.example).trim();
+                if (extra.exampleForm) it.exampleForm = String(extra.exampleForm).trim();
+                if (extra.reading) it.reading = String(extra.reading).trim();
+              }
+              items.push(it);
             };
-            (Array.isArray(parsed.vocab) ? parsed.vocab : []).forEach((v) => { if (v && v.word) pushItem(v.word, v.meaning); });
+            (Array.isArray(parsed.vocab) ? parsed.vocab : []).forEach((v) => { if (v && v.word) pushItem(v.word, v.meaning, v); });
             (Array.isArray(parsed.spell) ? parsed.spell : []).forEach((s) => {
               if (typeof s === "string") pushItem(s, "");
               else if (s && s.word) pushItem(s.word, s.meaning);
@@ -6224,6 +6397,8 @@
             delBtn.addEventListener("click", (e) => {
               e.stopPropagation();
               if (!confirm("\"" + u.title + "\" 단원을 삭제할까요?\n\n저장된 ○/× 기록과 시험 진행도 함께 사라져요.")) return;
+              // 🎒 프리셋 단원이면 숨김 목록에 먼저 기록 — 안 그러면 getUnits()가 다시 합쳐 넣어 되살아남
+              if (u.preset) hidePresetId(u.id);
               const units = getUnits().filter((x) => x.id !== u.id);
               saveUnits(units);
               if (getActiveUnitId() === u.id) setActiveUnitId(DEFAULT_UNIT_ID);
@@ -6341,10 +6516,11 @@
             ]
           : ED
           ? [
-              { ico: "📚", title: "1단계", desc: "오늘 외울 단어+영어 뜻 보기" },
-              { ico: "🅰️", title: "2단계", desc: "영어 뜻 보고 → 단어" },
-              { ico: "📖", title: "3단계", desc: "단어 보고 → 영어 뜻" },
-              { ico: "✏️", title: "4단계", desc: "글자 타일로 단어 전체 완성" },
+              // 🎒 학교 VOCABULARY QUIZ 형식 그대로: Part 1 듣고 쓰기 / Part 2 뜻 연결 / Part 3 문장 빈칸
+              { ico: "📚", title: "1단계", desc: "단어 · 영어 뜻 · 예문 보기" },
+              { ico: "🔊", title: "2단계", desc: "Part 1 · 듣고 철자 쓰기" },
+              { ico: "🔗", title: "3단계", desc: "Part 2 · 단어 보고 영어 뜻 고르기" },
+              { ico: "✏️", title: "4단계", desc: "Part 3 · 예문 빈칸에 단어 쓰기 (시제 주의)" },
             ]
           : HJ
           ? [
@@ -6487,6 +6663,17 @@
       }
       // 한자 또는 사자성어 단원: 한자권 처리(소문자 변환 X, 영어 발음 X, 외부 한국어 뜻 X)
       function isCJKUnit() { return isHanjaUnit() || isIdiomUnit(); }
+      // 🎒 화면 단계 번호 ↔ vocab level 매핑
+      //   일반/한자/사자성어: 2단계=level1(뜻→단어) 3단계=level2(단어→뜻) 4단계=level3(스펠링 타일)
+      //   영어 뜻(en_def, 학교 시험 형식): 2단계=level4(듣고 쓰기) 3단계=level2(단어→영어 뜻) 4단계=level5(문장 빈칸)
+      function levelForStage(stage) {
+        if (isEnDefUnit()) return ({ 2: 4, 3: 2, 4: 5 })[stage] || (stage - 1);
+        return stage - 1;
+      }
+      function stageForLevel(level) {
+        if (isEnDefUnit()) return ({ 4: 2, 2: 3, 5: 4 })[level] || (level + 1);
+        return level + 1;
+      }
       // 🎒 학교 카테고리: 지금 활성화된 단원이 학교 단원인지
       function isSchoolUnit() { return getActiveUnitId() === SCHOOL_UNIT_ID; }
       // 🎒 학교 단계별 클리어 정보 (SCHOOL_PERSIST_KEY로 저장)
@@ -6696,6 +6883,11 @@
           const disabled = new Set(u.disabledWords || []);
           let basePool = uniqByWord(VOCAB.filter((v) => !disabled.has(v.word)));
           if (basePool.length === 0) basePool = uniqByWord(VOCAB); // 모두 제외된 경우 안전장치
+          // 🎒 문장 빈칸(level 5)은 예문이 있는 단어만 출제 가능
+          if ((opts.level || state.vocabLevel) === 5) {
+            const withEx = basePool.filter((v) => v.example && String(v.example).trim());
+            if (withEx.length) basePool = withEx;
+          }
           if (opts.retake && Array.isArray(opts.wrongWords)) {
             // 🔁 재시험: 틀린 단어 전부 + 정확히 5개 추가 (틀린 단어는 반드시 포함, 모두 중복 없이)
             const wrongSet = new Set(opts.wrongWords);
@@ -6851,7 +7043,7 @@
           }
           // 💰 이번 판에서 돈을 받았으면 그 단계의 적립금 쿨다운 시작
           if (!state.vocabNoMoney && state.vocabEarned) {
-            const stageNoForPay = (state.vocabLevel || 1) + 1; // level1→2단계, 2→3, 3→4
+            const stageNoForPay = stageForLevel(state.vocabLevel || 1); // 단원 종류별 단계 매핑
             recordStagePayNow(stageNoForPay);
             // 🏆 신기록이면 명예의 전당 등록 (살짝 늦춰 결과 화면 본 뒤 묻기)
             setTimeout(() => { try { checkHallOfFame(); } catch (e) {} }, 1200);
@@ -6859,8 +7051,8 @@
 
           // ---- 🎯 100점 통과 / 재시험 시스템 (단계는 메뉴에서 따로 선택) ----
           // 100점(모두 정답)이면 통과. 아니면 틀린 단어 + 50% 추가 문제로 재시험(돈 없음).
-          const curLevel = state.vocabLevel || 1; // 1=뜻→영어(2단계), 2=영어→뜻(3단계), 3=스펠링(4단계)
-          const stageNo = curLevel + 1;           // 화면에 보이는 단계 번호
+          const curLevel = state.vocabLevel || 1; // 1=뜻→영어, 2=영어→뜻, 3=스펠링 타일, 4=듣고 쓰기, 5=문장 빈칸
+          const stageNo = stageForLevel(curLevel); // 화면에 보이는 단계 번호 (단원 종류별 매핑)
           const wrongThisAttempt = Array.from(new Set(state.sessionWrongs || []));
           const isPerfect = wrongThisAttempt.length === 0 && state.score >= perfectMax;
 
@@ -6911,8 +7103,10 @@
             // ▶ 다음 단계 버튼 (4단계까지 있으면)
             if (stageNo < 4) {
               const nextStageNo = stageNo + 1;
-              const nextLevel = curLevel + 1;
-              const nextName = { 3: "영어 → 뜻", 4: "글자 타일로 단어 완성" }[nextStageNo] || "";
+              const nextLevel = levelForStage(nextStageNo);
+              const nextName = isEnDefUnit()
+                ? ({ 3: "Part 2 · 뜻 연결", 4: "Part 3 · 문장 빈칸" }[nextStageNo] || "")
+                : ({ 3: "영어 → 뜻", 4: "글자 타일로 단어 완성" }[nextStageNo] || "");
               const btnNext = document.createElement("button");
               btnNext.className = "btn btn-primary";
               btnNext.style.cssText = "width:100%;font-size:1.1rem;padding:14px;background:linear-gradient(135deg,#6366f1,#4f46e5);box-shadow:0 5px 14px rgba(79,70,229,0.4)";
@@ -7095,6 +7289,46 @@
         btnHideAll.type = "button";
         rightControls.appendChild(btnHideAll);
 
+        // 🎒 영어 뜻 단원: 예문이 없는 단어에 Gemini로 예문·품사 채우기 (Part 3 문장 빈칸용)
+        let btnFillExamples = null;
+        if (isVocab && isEnDefUnit()) {
+          const noEx = (VOCAB || []).filter((v) => !v.example || !String(v.example).trim()).map((v) => v.word);
+          if (noEx.length) {
+            btnFillExamples = document.createElement("button");
+            btnFillExamples.type = "button";
+            btnFillExamples.className = "btn-fill-meanings";
+            btnFillExamples.textContent = "🤖 예문 채우기 (" + noEx.length + ")";
+            btnFillExamples.title = "예문이 없는 단어에 Gemini로 예문·품사를 만들어요 (Part 3 문장 빈칸에 필요)";
+            btnFillExamples.addEventListener("click", async () => {
+              const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+              if (!apiKey) { alert("⚠️ Gemini API 키가 없어요. 메뉴 ‘+ 새 단어장 만들기’를 열어 키를 먼저 입력해 주세요."); return; }
+              btnFillExamples.disabled = true;
+              btnFillExamples.textContent = "🤖 예문 만드는 중…";
+              try {
+                const merged = {};
+                for (let i = 0; i < noEx.length; i += 40) {
+                  Object.assign(merged, await fetchExamplesFromGemini(noEx.slice(i, i + 40)));
+                }
+                const u2 = getActiveUnit();
+                const newVocab = (u2.vocab || []).map((v) => {
+                  const r = merged[String(v.word || "").toLowerCase()];
+                  if (!r || (v.example && String(v.example).trim())) return v;
+                  return { ...v, example: r.example, exampleForm: r.exampleForm || "", pos: v.pos || r.pos || "" };
+                });
+                saveActiveUnitField("vocab", newVocab);
+                applyActiveUnit();
+                closeStudyOverlay();
+                alert("✅ " + Object.keys(merged).length + "개 단어에 예문을 채웠어요! 4단계(문장 빈칸)를 풀 수 있어요.");
+              } catch (e) {
+                alert("⚠️ 예문 생성 실패: " + (e && e.message ? e.message : e));
+                btnFillExamples.disabled = false;
+                btnFillExamples.textContent = "🤖 예문 채우기 (" + noEx.length + ")";
+              }
+            });
+            rightControls.appendChild(btnFillExamples);
+          }
+        }
+
         // 🤖 비어있는 한글 뜻을 Gemini로 자동 채우기 (이미 만든 단원에도 적용)
         let btnFillMeanings = null;
         if (isVocab) {
@@ -7221,6 +7455,20 @@
             sm.innerHTML = escapeHtml(it.meaning) + '<small class="sm-explain">' + escapeHtml(it.kid_explain) + '</small>';
           } else {
             sm.textContent = it.meaning;
+          }
+          // 🎒 영어 뜻 단원: 품사 + 예문(단어 부분 굵게) — 시험지(Vocabulary in Use)처럼 보여 준다
+          if (isVocab && isEnDefUnit() && (it.pos || it.example)) {
+            const posHtml = it.pos ? '<span class="sm-pos">' + escapeHtml(it.pos) + '</span>' : '';
+            let exHtml = "";
+            if (it.example) {
+              const exStr = String(it.example);
+              const form = findExampleForm(it);
+              const i = form ? exStr.toLowerCase().indexOf(form.toLowerCase()) : -1;
+              exHtml = '<small class="sm-example">' + (i >= 0
+                ? escapeHtml(exStr.slice(0, i)) + '<b>' + escapeHtml(exStr.slice(i, i + form.length)) + '</b>' + escapeHtml(exStr.slice(i + form.length))
+                : escapeHtml(exStr)) + '</small>';
+            }
+            sm.innerHTML = posHtml + escapeHtml(it.meaning) + exHtml;
           }
           sm.title = "탭하면 가리기/보이기";
           if (allHidden) sm.classList.add("is-hidden");
@@ -7418,6 +7666,9 @@
         const level = state.vocabLevel || 2;
         // 3단계는 빈 네모칸에 글자를 하나씩 채우는 전용 화면
         if (level === 3) return renderVocabSpell(item);
+        // 🎒 학교 시험 형식 (영어 뜻 단원): Part 1 듣고 쓰기 / Part 3 문장 빈칸
+        if (level === 4) return renderVocabDictation(item);
+        if (level === 5) return renderVocabFillBlank(item);
         const totalChoices = 6;
         let promptSmall, promptBigHtml, choices, correctVal, showSpeak;
 
@@ -7702,6 +7953,172 @@
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
         if (!isCJKUnit()) setTimeout(() => { try { speak(word); } catch (e) {} }, 350);
       }
+      /* ---------- 🎒 학교 VOCABULARY QUIZ 형식 (영어 뜻 단원) ---------- */
+      // 예문 안에서 단어가 실제로 쓰인 형태를 찾는다 (exampleForm 우선 → 어간 매칭)
+      function findExampleForm(item) {
+        const ex = String(item.example || "");
+        if (!ex) return "";
+        const explicit = String(item.exampleForm || "").trim();
+        if (explicit && ex.toLowerCase().includes(explicit.toLowerCase())) return explicit;
+        const w = String(item.word || "").toLowerCase().trim();
+        if (!w) return "";
+        const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        if (w.includes(" ")) {
+          const m = ex.match(new RegExp(esc(w).replace(/ /g, "\\s+") + "\\w*", "i"));
+          return m ? m[0] : "";
+        }
+        const stem = (w.length > 4 && /[ey]$/.test(w)) ? w.slice(0, -1) : w.slice(0, Math.max(3, w.length - 1));
+        const m = ex.match(new RegExp("\\b" + esc(stem) + "\\w*", "i"));
+        return m ? m[0] : "";
+      }
+      // 기본형과 예문 속 형태가 다르면 시험지처럼 괄호 힌트 ("past tense" 등)
+      function tenseHint(word, form) {
+        const w = String(word || "").toLowerCase(), f = String(form || "").toLowerCase();
+        if (!w || !f || w === f) return "";
+        if (/ed$/.test(f) && !/ed$/.test(w)) return "past tense";
+        if (/ing$/.test(f) && !/ing$/.test(w)) return "-ing form";
+        if (/(s|es)$/.test(f) && !/s$/.test(w)) return "plural / 3인칭 단수";
+        if (/er$/.test(f) && !/er$/.test(w)) return "comparative";
+        return "형태 바꾸기";
+      }
+      function normAnswer(s) {
+        return String(s || "").toLowerCase().replace(/[^a-z' ]/g, "").replace(/\s+/g, " ").trim();
+      }
+
+      // Part 1 · 듣고 쓰기: 단어를 소리로 듣고 철자를 입력
+      function renderVocabDictation(item) {
+        const word = item.word;
+        const expected = normAnswer(word);
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-row">' +
+          '<div class="prompt-small">🔊 Part 1 · 소리를 듣고 <b>철자</b>를 써요 <span class="lv-badge lv2">2단계</span></div>' +
+          '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
+          '</div>' +
+          '<div class="dict-ear">👂</div>' +
+          '<div style="text-align:center;margin:4px 0 2px"><button class="btn btn-say" id="btnSayDict">🔊 다시 듣기</button> <button class="btn btn-hint" id="btnHintDict">💡 뜻 힌트</button></div>' +
+          '<div class="scramble-hint" id="hintText"></div>' +
+          '<div class="type-input-wrap"><input class="type-input" id="dictInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="들은 단어를 입력" /></div>' +
+          '<div class="feedback" id="feedback"></div>' +
+          '<div class="btn-row"><button class="btn btn-primary" id="btnCheck">확인 ✓</button><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
+        gameBody.appendChild(card);
+        const input = $("dictInput");
+        let resolved = false;
+        function evaluate() {
+          if (resolved) return;
+          const typed = normAnswer(input.value);
+          if (!typed) { const fb0 = $("feedback"); fb0.textContent = "단어를 입력해 주세요!"; fb0.className = "feedback no shake"; return; }
+          resolved = true;
+          const isCorrect = typed === expected;
+          const noMoney = !!state.vocabNoMoney;
+          const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
+          if (!noMoney) state.vocabEarned = (state.vocabEarned || 0) + pay;
+          const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
+          const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned || 0) + '원 (단계 클리어해야 실적립)</div>');
+          input.disabled = true;
+          input.classList.add(isCorrect ? "is-ok" : "is-no");
+          const fb = $("feedback");
+          const posTxt = item.pos ? '<span class="fb-pos">' + escapeHtml(item.pos) + '</span>' : '';
+          if (isCorrect) {
+            state.score += 1; state.streak += 1; state.sessionRights.push(word); playCorrect();
+            fb.innerHTML = "정답! 🎉" + moneyTxt + "  <b>" + escapeHtml(word) + "</b> " + posTxt + escapeHtml(item.meaning) + moneyLine;
+            fb.className = "feedback ok pop";
+          } else {
+            state.streak = 0; state.sessionWrongs.push(word); playWrong();
+            fb.innerHTML = "아쉬워요 😅" + moneyTxt + "  정답: <b>" + escapeHtml(word) + "</b> " + posTxt + escapeHtml(item.meaning) + moneyLine;
+            fb.className = "feedback no shake";
+          }
+          updateHud();
+          $("btnCheck").classList.add("hidden");
+          $("btnNext").classList.remove("hidden");
+          try { $("btnNext").focus(); } catch (e) {}
+        }
+        $("btnSayDict").addEventListener("click", (e) => speak(word, { btn: e.currentTarget }));
+        $("btnHintDict").addEventListener("click", () => {
+          $("hintText").textContent = "💡 " + (item.pos ? item.pos + " " : "") + item.meaning + " · 글자 수: " + expected.replace(/ /g, "").length;
+        });
+        $("btnCheck").addEventListener("click", evaluate);
+        $("btnNext").addEventListener("click", next);
+        $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (resolved) next(); else evaluate(); } });
+        setTimeout(() => { try { speak(word); } catch (e) {} try { input.focus(); } catch (e) {} }, 350);
+      }
+
+      // Part 3 · 문장 빈칸: 예문의 빈칸에 알맞은 단어(형태 포함)를 입력
+      function renderVocabFillBlank(item) {
+        const word = item.word;
+        const ex = String(item.example || "");
+        const form = findExampleForm(item) || word;
+        const idx = ex.toLowerCase().indexOf(form.toLowerCase());
+        const before = idx >= 0 ? ex.slice(0, idx) : ex;
+        const after = idx >= 0 ? ex.slice(idx + form.length) : "";
+        const hint = tenseHint(word, form);
+        const expected = normAnswer(form);
+        const card = document.createElement("div");
+        card.className = "question-card pop";
+        card.innerHTML =
+          '<div class="prompt-row">' +
+          '<div class="prompt-small">✏️ Part 3 · 빈칸에 알맞은 <b>단어</b>를 써요 <span class="lv-badge lv3">4단계</span></div>' +
+          '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
+          '</div>' +
+          '<div class="fb-sentence" id="fbSentence">' + escapeHtml(before) + '<span class="blank" id="fbBlank">______</span>' + escapeHtml(after) + '</div>' +
+          '<div style="text-align:center;margin:6px 0 4px">' +
+            (item.pos ? '<span class="fb-pos">' + escapeHtml(item.pos) + '</span>' : '') +
+            (hint ? '<span class="fb-tense">(' + escapeHtml(hint) + ')</span>' : '') +
+          '</div>' +
+          '<div style="text-align:center;margin:4px 0 2px"><button class="btn btn-hint" id="btnHintFb">💡 뜻 힌트</button> <button class="btn btn-say" id="btnSayFb">🔊 문장 듣기</button></div>' +
+          '<div class="scramble-hint" id="hintText"></div>' +
+          '<div class="type-input-wrap"><input class="type-input" id="fbInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="빈칸에 들어갈 단어" /></div>' +
+          '<div class="feedback" id="feedback"></div>' +
+          '<div class="btn-row"><button class="btn btn-primary" id="btnCheck">확인 ✓</button><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
+        gameBody.appendChild(card);
+        const input = $("fbInput");
+        let resolved = false;
+        function evaluate() {
+          if (resolved) return;
+          const typed = normAnswer(input.value);
+          if (!typed) { const fb0 = $("feedback"); fb0.textContent = "단어를 입력해 주세요!"; fb0.className = "feedback no shake"; return; }
+          resolved = true;
+          const isCorrect = typed === expected;
+          const baseOnly = !isCorrect && typed === normAnswer(word) && expected !== normAnswer(word);
+          const noMoney = !!state.vocabNoMoney;
+          const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
+          if (!noMoney) state.vocabEarned = (state.vocabEarned || 0) + pay;
+          const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
+          const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned || 0) + '원 (단계 클리어해야 실적립)</div>');
+          input.disabled = true;
+          input.classList.add(isCorrect ? "is-ok" : "is-no");
+          const blank = $("fbBlank");
+          if (blank) { blank.textContent = form; blank.classList.add(isCorrect ? "filled-ok" : "filled-no"); }
+          const fb = $("feedback");
+          if (isCorrect) {
+            state.score += 1; state.streak += 1; state.sessionRights.push(word); playCorrect();
+            fb.innerHTML = "정답! 🎉" + moneyTxt + "  <b>" + escapeHtml(form) + "</b> — " + escapeHtml(item.meaning) + moneyLine;
+            fb.className = "feedback ok pop";
+          } else {
+            state.streak = 0; state.sessionWrongs.push(word); playWrong();
+            fb.innerHTML = (baseOnly
+              ? "단어는 맞아요! 😅 그런데 형태를 <b>" + escapeHtml(form) + "</b>" + (hint ? " (" + escapeHtml(hint) + ")" : "") + "로 써야 해요."
+              : "아쉬워요 😅" + moneyTxt + "  정답: <b>" + escapeHtml(form) + "</b>" + (form.toLowerCase() !== word.toLowerCase() ? " (기본형 " + escapeHtml(word) + ")" : "") + " — " + escapeHtml(item.meaning)) + moneyLine;
+            fb.className = "feedback no shake";
+          }
+          updateHud();
+          $("btnCheck").classList.add("hidden");
+          $("btnNext").classList.remove("hidden");
+          try { $("btnNext").focus(); } catch (e) {}
+        }
+        $("btnHintFb").addEventListener("click", () => {
+          $("hintText").textContent = "💡 " + item.meaning + " · 첫 글자: " + (word[0] || "").toUpperCase();
+        });
+        $("btnSayFb").addEventListener("click", (e) => speak(before + " blank " + after, { btn: e.currentTarget }));
+        $("btnCheck").addEventListener("click", evaluate);
+        $("btnNext").addEventListener("click", next);
+        $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (resolved) next(); else evaluate(); } });
+        setTimeout(() => { try { input.focus(); } catch (e) {} }, 300);
+      }
+
       function pickVocab(btn, pickedMeaning, correctMeaning, correctItem) {
         const buttons = document.querySelectorAll(".choice-btn");
         buttons.forEach((b) => (b.disabled = true));
@@ -10315,9 +10732,49 @@
             const go = confirm("⏳ 이 단계의 적립금은 " + fmtRemainMin(pc.until - Date.now()) + " 뒤에 다시 받을 수 있어요.\n\n지금 풀면 돈은 안 들어와요. 그래도 풀어볼까요? (재시험·점수기록은 됨)");
             if (!go) return;
           }
-          startMode("vocab", { level: stage - 1, payable: pc.payable });
+          const lvl = levelForStage(stage);
+          // 🎒 문장 빈칸(level 5)은 예문이 필요 → 없으면 Gemini로 먼저 채우고 시작
+          if (lvl === 5) { ensureExamplesThenStart(pc.payable); return; }
+          startMode("vocab", { level: lvl, payable: pc.payable });
         });
       });
+      // 예문 없는 단어가 있으면 자동으로 예문을 만든 뒤 문장 빈칸(level 5) 시작
+      async function ensureExamplesThenStart(payable) {
+        const missing = (VOCAB || []).filter((v) => !v.example || !String(v.example).trim()).map((v) => v.word);
+        if (missing.length) {
+          const apiKey = (localStorage.getItem(GEMINI_KEY_KEY) || "").trim();
+          if (!apiKey) {
+            const has = (VOCAB || []).some((v) => v.example && String(v.example).trim());
+            if (!has) { alert("⚠️ 예문이 없는 단원이에요. ‘+ 새 단어장 만들기’에서 Gemini API 키를 넣으면 예문을 자동으로 만들어 드려요."); return; }
+          } else {
+            const toast = document.createElement("div");
+            toast.className = "study-overlay";
+            toast.innerHTML = '<div class="sheet pop" style="text-align:center;padding:26px 22px;font-weight:800">🤖 예문을 만드는 중… (' + missing.length + '개 · 5~20초)</div>';
+            document.body.appendChild(toast);
+            try {
+              const merged = {};
+              for (let i = 0; i < missing.length; i += 40) {
+                Object.assign(merged, await fetchExamplesFromGemini(missing.slice(i, i + 40)));
+              }
+              const u2 = getActiveUnit();
+              const newVocab = (u2.vocab || []).map((v) => {
+                const r = merged[String(v.word || "").toLowerCase()];
+                if (!r || (v.example && String(v.example).trim())) return v;
+                return { ...v, example: r.example, exampleForm: r.exampleForm || "", pos: v.pos || r.pos || "" };
+              });
+              saveActiveUnitField("vocab", newVocab);
+              applyActiveUnit();
+            } catch (e) {
+              console.warn("[ensureExamples]", e);
+            } finally {
+              try { toast.remove(); } catch (e) {}
+            }
+          }
+        }
+        const ready = (VOCAB || []).some((v) => v.example && String(v.example).trim());
+        if (!ready) { alert("⚠️ 예문을 만들지 못했어요. 1단계 목록에서 ‘🤖 예문 채우기’를 다시 눌러 주세요."); return; }
+        startMode("vocab", { level: 5, payable: payable });
+      }
       // 단어 뜻 맞히기 중간에 나가려는 경우: 적립 실패 안내 + 확인
       function confirmLeaveVocab() {
         if (state.mode !== "vocab") return true;
@@ -10348,7 +10805,7 @@
        */
       (function setupStudyGameSync() {
         const SYNC_TABLE = "study_game_state_kv";
-        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, SCHOOL_PERSIST_KEY, STUDY_CATEGORY_KEY, HIDE_DEFAULT_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY, "grade4_subject_study_v1", "english_travel_3d_v1"];
+        const SYNC_KEYS = [UNITS_KEY, ACTIVE_UNIT_KEY, DEFAULT_PERSIST_KEY, SCHOOL_PERSIST_KEY, STUDY_CATEGORY_KEY, HIDE_DEFAULT_KEY, HIDDEN_PRESETS_KEY, PERFECT_KEY, BEST_KEY, SAVINGS_KEY, "grade4_subject_study_v1", "english_travel_3d_v1"];
         const LOCAL_AT_KEY = "study_game_local_saved_at_v1";
         let pushTimer = null;
         let pulling = false;
