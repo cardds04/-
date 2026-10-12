@@ -169,6 +169,7 @@
       .pill { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 9px; }
       .pill.wait { background: #fff3e0; color: #b26a00; border: 1px solid #f2d5aa; }
       .pill.done { background: #e7f6ed; color: #2f7a4d; border: 1px solid #bfe4cd; }
+      .pill.issued { background: #eef2ff; color: #3b4fa0; border: 1px solid #cdd6f5; }
       .a-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
       .a-actions .btn { padding: 8px 12px; font-size: 12.5px; border-radius: 8px; }
       .linkbox { background: #f7f9ff; border: 1px solid #dbe4f7; border-radius: 8px; padding: 9px 10px; font-size: 12.5px; word-break: break-all; color: #2d4373; margin-top: 10px; }
@@ -378,6 +379,7 @@
             <div class="sign-pad-wrap">
               <img class="sign-img hidden" id="signImg" alt="서명" />
               <div class="sign-hint hidden" id="signedAtText"></div>
+              <div id="issuedNote" class="hidden" style="font-size:12px;color:#5a4636;font-weight:700;text-align:right;line-height:1.6;"></div>
             </div>
           </div>
 
@@ -435,6 +437,8 @@
         </div>
         <div class="a-row" style="margin-top: 14px">
           <button class="btn primary wide" id="createContractBtn" type="button">계약서 링크 만들기</button>
+          <button class="btn wide" id="issueContractBtn" type="button" style="margin-top:8px;">📄 계약서 바로 출력 (고객 서명 없이)</button>
+          <p class="hint" style="margin:6px 0 0;">바로 재결제한 업체용 — 서명 없이 계약서를 만들어 이미지로 저장하거나 카톡으로 보낼 수 있어요. 목록에도 「발행」으로 남습니다.</p>
         </div>
         <div id="newLinkBox" class="linkbox hidden"></div>
       </div>
@@ -924,19 +928,21 @@
             listEl.innerHTML = rows
               .map((row) => {
                 const signed = row.status === "signed";
+                const issued = row.status === "issued";
                 return `
                   <div class="a-item">
                     <div class="top">
                       <span class="nm">${escapeHtml(row.company_name || "(업체명 미기재)")}</span>
-                      <span class="pill ${signed ? "done" : "wait"}">${signed ? "서명완료" : "서명대기"}</span>
+                      <span class="pill ${signed ? "done" : issued ? "issued" : "wait"}">${signed ? "서명완료" : issued ? "발행(서명없음)" : "서명대기"}</span>
                     </div>
                     <div class="meta">
                       ${escapeHtml(planLabel(row))} · ${escapeHtml(payLabel(row.payment_method))} · ${escapeHtml(commaAmount(row.total_amount) || "-")}원<br />
-                      ${signed ? `${escapeHtml(row.signer_name || "-")} 서명 · ${escapeHtml(fmtWhen(row.signed_at))}` : `만든 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
+                      ${signed ? `${escapeHtml(row.signer_name || "-")} 서명 · ${escapeHtml(fmtWhen(row.signed_at))}` : `${issued ? "발행" : "만든"} 날짜 ${escapeHtml(fmtWhen(row.created_at))}`}
                       ${row.memo ? `<br />📝 ${escapeHtml(row.memo)}` : ""}
                     </div>
                     <div class="a-actions">
-                      <button class="btn" data-act="copy" data-token="${escapeHtml(row.token)}">링크 복사</button>
+                      <button class="btn" data-act="print" data-token="${escapeHtml(row.token)}">계약서 출력</button>
+                      ${issued ? "" : `<button class="btn" data-act="copy" data-token="${escapeHtml(row.token)}">링크 복사</button>`}
                       <button class="btn" data-act="open" data-token="${escapeHtml(row.token)}">${signed ? "계약서 보기" : "미리보기"}</button>
                       <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}">문자 보내기</button>
                       <button class="btn" data-act="memo" data-token="${escapeHtml(row.token)}">메모</button>
@@ -955,6 +961,112 @@
           } catch (error) {
             listEl.innerHTML = `<p class="hint">목록을 불러오지 못했습니다 (${escapeHtml(error?.message || "")})</p>`;
           }
+        }
+
+        /* ── 서명 없이 바로 출력(10-12 사장님: 바로 재결제 업체도 계약서는 남긴다) ── */
+        let html2canvasLoading = null;
+        function loadHtml2Canvas() {
+          if (window.html2canvas) return Promise.resolve(window.html2canvas);
+          if (!html2canvasLoading) {
+            html2canvasLoading = new Promise((resolve, reject) => {
+              const sc = document.createElement("script");
+              sc.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+              sc.onload = () => resolve(window.html2canvas);
+              sc.onerror = () => reject(new Error("이미지 도구를 불러오지 못했습니다"));
+              document.head.appendChild(sc);
+            });
+          }
+          return html2canvasLoading;
+        }
+        async function sheetToPngBlob() {
+          const h2c = await loadHtml2Canvas();
+          const prev = scalerEl.style.transform;
+          scalerEl.style.transform = "none";
+          try {
+            // 입력칸 글자는 html2canvas 가 쉼표·밑줄을 빼먹어서(10-12 실측), 복제본에서 일반 글자로 바꿔 그린다.
+            const originals = Array.from(sheetEl.querySelectorAll("input.line, textarea.line"));
+            const styles = originals.map((el) => {
+              const cs = getComputedStyle(el);
+              return { value: el.value, font: cs.font, color: cs.color, textAlign: cs.textAlign, width: cs.width, height: cs.height, padding: cs.padding, lineHeight: cs.lineHeight, isArea: el.tagName === "TEXTAREA" };
+            });
+            const canvas = await h2c(sheetEl, {
+              scale: 2,
+              backgroundColor: "#ffffff",
+              useCORS: true,
+              onclone: (doc) => {
+                const clones = Array.from(doc.querySelectorAll("#sheet input.line, #sheet textarea.line"));
+                clones.forEach((el, i) => {
+                  const st = styles[i];
+                  if (!st) return;
+                  const div = doc.createElement("div");
+                  div.textContent = st.value;
+                  div.style.cssText = `font:${st.font};color:${st.color};text-align:${st.textAlign};width:${st.width};min-height:${st.height};padding:${st.padding};line-height:${st.lineHeight};white-space:${st.isArea ? "pre-wrap" : "nowrap"};box-sizing:border-box;display:inline-block;vertical-align:middle;`;
+                  el.replaceWith(div);
+                });
+              }
+            });
+            return await new Promise((res) => canvas.toBlob(res, "image/png"));
+          } finally {
+            scalerEl.style.transform = prev;
+            fitSheet();
+          }
+        }
+        function issuedFileName(row) {
+          const d = new Date(row?.created_at || Date.now());
+          const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+          return `촬영계약서_${String(row?.company_name || "업체").replace(/[\\/:*?"<>|]/g, "")}_${ymd}.png`;
+        }
+        function showIssuedSheet(row) {
+          writeSheet(row, null, false);
+          const d = new Date(row?.created_at || Date.now());
+          const note = $("#issuedNote");
+          note.innerHTML = `발행일 ${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.<br />쑈픽스튜디오 발행 (결제 완료 확인)`;
+          note.classList.remove("hidden");
+          adminViewEl.classList.add("hidden");
+          showSheet();
+          const canShare = !!(navigator.canShare && navigator.share);
+          renderActionBar(
+            `<button class="btn primary" id="saveImgBtn" type="button">${canShare ? "📤 카톡 등으로 보내기" : "🖼 이미지로 저장"}</button>` +
+              (canShare ? `<button class="btn" id="saveImgOnlyBtn" type="button">🖼 이미지로 저장</button>` : "") +
+              `<button class="btn" id="printBtn" type="button">🖨 인쇄 / PDF</button>` +
+              `<button class="btn ghost" id="backToAdminBtn" type="button">← 목록으로</button>` +
+              zoomBtnHtml()
+          );
+          bindZoomBtn();
+          const download = (blob) => {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = issuedFileName(row);
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+          };
+          const busy = async (btn, fn) => {
+            const t = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "만드는 중…";
+            try { await fn(); } catch (error) { if (error?.name !== "AbortError") alert(`실패: ${error?.message || ""}`); }
+            finally { btn.disabled = false; btn.textContent = t; }
+          };
+          $("#saveImgBtn").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+            const blob = await sheetToPngBlob();
+            const file = new File([blob], issuedFileName(row), { type: "image/png" });
+            if (canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({ files: [file], title: "촬영 계약서" });
+            } else {
+              download(blob);
+            }
+          }));
+          $("#saveImgOnlyBtn")?.addEventListener("click", (e) => busy(e.currentTarget, async () => download(await sheetToPngBlob())));
+          $("#printBtn").addEventListener("click", () => window.print());
+          $("#backToAdminBtn").addEventListener("click", () => {
+            stageEl.classList.remove("show");
+            actionBarEl.classList.add("hidden");
+            note.classList.add("hidden");
+            adminViewEl.classList.remove("hidden");
+            window.scrollTo({ top: 0 });
+          });
+          window.scrollTo({ top: 0 });
         }
 
         function startAdmin() {
@@ -1030,6 +1142,42 @@
               btn.textContent = "계약서 링크 만들기";
             }
           });
+          $("#issueContractBtn").addEventListener("click", async () => {
+            const btn = $("#issueContractBtn");
+            const company = String($("#newCompanyInput").value || "").trim();
+            const amount = onlyDigits($("#newAmountInput").value);
+            if (!company) { alert("업체명을 입력해 주세요."); return; }
+            if (!amount) { alert("합계 금액을 입력해 주세요."); return; }
+            btn.disabled = true;
+            try {
+              const record = {
+                token: makeToken(),
+                company_name: company,
+                ceo_name: String($("#newCeoInput").value || "").trim(),
+                phone: onlyDigits($("#newPhoneInput").value),
+                period_type: "until_used",
+                plan_photo: adminSel.planType === "photo" ? adminSel.planCount : "",
+                plan_photo_video: adminSel.planType === "photo_video" ? adminSel.planCount : "",
+                payment_method: adminSel.pay,
+                total_amount: amount,
+                memo: String($("#newMemoInput").value || "").trim(),
+                status: "issued"
+              };
+              const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}`, {
+                method: "POST",
+                headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
+                body: JSON.stringify([record])
+              });
+              const rows = await res.json().catch(() => []);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              loadList();
+              showIssuedSheet(Array.isArray(rows) && rows[0] ? rows[0] : record);
+            } catch (error) {
+              alert(`계약서 출력에 실패했습니다.\n${error?.message || ""}`);
+            } finally {
+              btn.disabled = false;
+            }
+          });
           $("#reloadListBtn").addEventListener("click", loadList);
 
           adminViewEl.addEventListener("click", async (event) => {
@@ -1039,6 +1187,17 @@
             const tk = btn.dataset.token;
             if (act === "copy") { copyLink(tk); return; }
             if (act === "open") { window.open(contractUrl(tk), "_blank", "noopener"); return; }
+            if (act === "print") {
+              try {
+                const row = await fetchContract(tk);
+                if (!row) throw new Error("계약서를 찾지 못했습니다");
+                if (row.status === "signed") { window.open(contractUrl(tk), "_blank", "noopener"); return; }
+                showIssuedSheet(row);
+              } catch (error) {
+                alert(`출력 실패: ${error?.message || ""}`);
+              }
+              return;
+            }
             if (act === "memo" || act === "memoCancel") {
               const editor = adminViewEl.querySelector(`[data-memo-editor="${CSS.escape(tk)}"]`);
               if (editor) {
