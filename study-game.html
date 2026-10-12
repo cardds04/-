@@ -8074,6 +8074,7 @@
       }
 
       // Part 3 · 문장 빈칸: 예문의 빈칸에 알맞은 단어(형태 포함)를 입력
+      // Part 3 · 문장 빈칸 (객관식): 같은 단어 그룹(단어 8개) 전부를 보기로, 빈칸에 맞는 단어를 고른다
       function renderVocabFillBlank(item) {
         const word = item.word;
         const ex = String(item.example || "");
@@ -8083,11 +8084,22 @@
         const after = idx >= 0 ? ex.slice(idx + form.length) : "";
         const hint = tenseHint(word, form);
         const expected = normAnswer(form);
+        // 보기 = 단어 그룹 전부 (Spelling Words 제외). 각 보기는 예문 속 형태로 맞춘다.
+        const seenC = new Set();
+        const choices = [];
+        poolForLevel(VOCAB, 5).forEach((v) => {
+          const f = findExampleForm(v) || v.word;
+          const k = normAnswer(f);
+          if (k && !seenC.has(k)) { seenC.add(k); choices.push(f); }
+        });
+        if (!seenC.has(expected)) choices.push(form);
+        const options = shuffle(choices);
+
         const card = document.createElement("div");
         card.className = "question-card pop";
         card.innerHTML =
           '<div class="prompt-row">' +
-          '<div class="prompt-small">✏️ Part 3 · 빈칸에 알맞은 <b>단어</b>를 써요 <span class="lv-badge lv3">4단계</span></div>' +
+          '<div class="prompt-small">✏️ Part 3 · 빈칸에 알맞은 <b>단어</b>를 골라요 <span class="lv-badge lv3">4단계</span></div>' +
           '<button class="btn-today" id="btnTodayList">📚 오늘 외워야 할 단어</button>' +
           '</div>' +
           '<div class="fb-sentence" id="fbSentence">' + escapeHtml(before) + '<span class="blank" id="fbBlank">______</span>' + escapeHtml(after) + '</div>' +
@@ -8097,26 +8109,40 @@
           '</div>' +
           '<div style="text-align:center;margin:4px 0 2px"><button class="btn btn-hint" id="btnHintFb">💡 뜻 힌트</button> <button class="btn btn-say" id="btnSayFb">🔊 문장 듣기</button></div>' +
           '<div class="scramble-hint" id="hintText"></div>' +
-          '<div class="type-input-wrap"><input class="type-input" id="fbInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="빈칸에 들어갈 단어" /></div>' +
+          '<div class="choices" id="fbChoices"></div>' +
           '<div class="feedback" id="feedback"></div>' +
-          '<div class="btn-row"><button class="btn btn-primary" id="btnCheck">확인 ✓</button><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
+          '<div class="btn-row"><button class="btn btn-primary hidden" id="btnNext">다음 →</button></div>';
         gameBody.appendChild(card);
-        const input = $("fbInput");
+
+        const wrap = $("fbChoices");
         let resolved = false;
-        function evaluate() {
+        options.forEach((opt) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "choice-btn";
+          btn.dataset.v = opt;
+          btn.textContent = opt;
+          btn.addEventListener("click", () => pickFill(btn, opt));
+          wrap.appendChild(btn);
+        });
+
+        function pickFill(btn, value) {
           if (resolved) return;
-          const typed = normAnswer(input.value);
-          if (!typed) { const fb0 = $("feedback"); fb0.textContent = "단어를 입력해 주세요!"; fb0.className = "feedback no shake"; return; }
           resolved = true;
-          const isCorrect = typed === expected;
-          const baseOnly = !isCorrect && typed === normAnswer(word) && expected !== normAnswer(word);
+          const all = wrap.querySelectorAll(".choice-btn");
+          all.forEach((b) => (b.disabled = true));
+          const isCorrect = normAnswer(value) === expected;
           const noMoney = !!state.vocabNoMoney;
           const pay = noMoney ? 0 : (isCorrect ? 10 : -10);
           if (!noMoney) state.vocabEarned = (state.vocabEarned || 0) + pay;
           const moneyTxt = noMoney ? " (재시험·돈 없음)" : (isCorrect ? "  +10원 💰" : "  -10원");
           const moneyLine = noMoney ? "" : ('<div class="fb-money">💰 이번 판 ' + (state.vocabEarned || 0) + '원 (단계 클리어해야 실적립)</div>');
-          input.disabled = true;
-          input.classList.add(isCorrect ? "is-ok" : "is-no");
+          if (isCorrect) {
+            btn.classList.add("correct");
+          } else {
+            btn.classList.add("wrong");
+            all.forEach((b) => { if (normAnswer(b.dataset.v) === expected) b.classList.add("correct"); });
+          }
           const blank = $("fbBlank");
           if (blank) { blank.textContent = form; blank.classList.add(isCorrect ? "filled-ok" : "filled-no"); }
           const fb = $("feedback");
@@ -8126,13 +8152,10 @@
             fb.className = "feedback ok pop";
           } else {
             state.streak = 0; state.sessionWrongs.push(word); playWrong();
-            fb.innerHTML = (baseOnly
-              ? "단어는 맞아요! 😅 그런데 형태를 <b>" + escapeHtml(form) + "</b>" + (hint ? " (" + escapeHtml(hint) + ")" : "") + "로 써야 해요."
-              : "아쉬워요 😅" + moneyTxt + "  정답: <b>" + escapeHtml(form) + "</b>" + (form.toLowerCase() !== word.toLowerCase() ? " (기본형 " + escapeHtml(word) + ")" : "") + " — " + escapeHtml(item.meaning)) + moneyLine;
+            fb.innerHTML = "아쉬워요 😅" + moneyTxt + "  정답: <b>" + escapeHtml(form) + "</b>" + (form.toLowerCase() !== word.toLowerCase() ? " (기본형 " + escapeHtml(word) + ")" : "") + " — " + escapeHtml(item.meaning) + moneyLine;
             fb.className = "feedback no shake";
           }
           updateHud();
-          $("btnCheck").classList.add("hidden");
           $("btnNext").classList.remove("hidden");
           try { $("btnNext").focus(); } catch (e) {}
         }
@@ -8140,11 +8163,8 @@
           $("hintText").textContent = "💡 " + item.meaning + " · 첫 글자: " + (word[0] || "").toUpperCase();
         });
         $("btnSayFb").addEventListener("click", (e) => speak(before + " blank " + after, { btn: e.currentTarget }));
-        $("btnCheck").addEventListener("click", evaluate);
         $("btnNext").addEventListener("click", next);
         $("btnTodayList").addEventListener("click", () => openStudyListOverlay("vocab"));
-        input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (resolved) next(); else evaluate(); } });
-        setTimeout(() => { try { input.focus(); } catch (e) {} }, 300);
       }
 
       function pickVocab(btn, pickedMeaning, correctMeaning, correctItem) {
