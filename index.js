@@ -8780,7 +8780,8 @@ ${folderBtn}
         }
         return `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-01`;
       }
-      // 관리자 「작가휴무지정」 — 작가·날짜·휴무 방식(종일/이후 가능/까지만/시간대 불가)을 한 창에서 고른다(10-15).
+      // 관리자 「작가휴무지정」 — 스케줄 등록처럼 📅 연·월·일 / ⏰ 시·⏱ 분 칸으로 고른다(10-15).
+      //   종일 · ○시부터 가능(from:HH) · ○시까지만(until:HH) · 시간대 불가(off:HHMM-HHMM)
       function assignWriterDayoffByAdmin() {
         const writerRows = getDayoffWriterSelectionRows();
         if (!writerRows.length) {
@@ -8792,75 +8793,139 @@ ${folderBtn}
           return;
         }
         if (document.getElementById("adminDayoffModal")) return;
-        const defaultDate = getDefaultDayoffDateForAdmin();
         const p2 = (n) => String(n).padStart(2, "0");
+        const WD = ["일", "월", "화", "수", "목", "금", "토"];
+        const [dy, dm, dd] = String(getDefaultDayoffDateForAdmin() || "").split("-").map(Number);
+        const nowY = new Date().getFullYear();
+        const yearOpts = [nowY, nowY + 1, nowY + 2]
+          .map((y) => `<option value="${y}" ${y === dy ? "selected" : ""}>${y}년</option>`).join("");
+        const monthOpts = Array.from({ length: 12 }, (_, i) => i + 1)
+          .map((m) => `<option value="${m}" ${m === dm ? "selected" : ""}>${m}월</option>`).join("");
         const hourOpts = (sel) => Array.from({ length: 13 }, (_, i) => i + 8)
           .map((h) => `<option value="${p2(h)}" ${h === sel ? "selected" : ""}>${h}시</option>`).join("");
         const minOpts = (sel) => ["00", "30"]
           .map((mm) => `<option value="${mm}" ${mm === sel ? "selected" : ""}>${mm}분</option>`).join("");
-        const sel = "padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;background:#fff;";
-        const radio = (value, html, checked) => `
-          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.9rem;">
-            <input type="radio" name="adminDayoffKind" value="${value}" ${checked ? "checked" : ""} />
-            <span>${html}</span>
-          </label>`;
+        const row = "display:flex;gap:6px;margin-bottom:8px;";
+        const cell = "flex:1 1 0;min-width:0;";
+        const label = "font-size:0.8rem;font-weight:800;color:#475569;margin:10px 2px 6px;";
+        const kinds = [
+          ["full", "하루 종일"],
+          ["from", "○시부터 가능"],
+          ["until", "○시까지만"],
+          ["off", "시간대 불가"]
+        ];
         const modal = document.createElement("div");
         modal.id = "adminDayoffModal";
         modal.setAttribute("role", "dialog");
         modal.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
         modal.innerHTML = `
-          <div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:92vh;overflow-y:auto;color:#1f2937;">
-            <div style="font-weight:800;font-size:1.05rem;margin-bottom:14px;">작가 휴무 지정</div>
-            <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <select id="adminDayoffWriter" style="flex:1;${sel}">${writerRows
-                .map((r, i) => `<option value="${i}">${escapeHtml(r.name)}</option>`).join("")}</select>
-              <input id="adminDayoffDate" type="date" value="${escapeHtml(defaultDate)}" style="flex:1;${sel}" />
+          <div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:92vh;overflow-y:auto;color:#1f2937;">
+            <div style="font-weight:800;font-size:1.1rem;margin-bottom:12px;">작가 휴무 지정</div>
+            <div style="${row}">
+              <div class="input-row" style="${cell}"><span>👤</span><select id="adminDayoffWriter">${writerRows
+                .map((r, i) => `<option value="${i}">${escapeHtml(r.name)}</option>`).join("")}</select></div>
             </div>
-            <div style="font-weight:700;font-size:0.88rem;margin-bottom:6px;color:#334155;">휴무 방식</div>
-            ${radio("full", "<b>하루 종일</b> 휴무", true)}
-            ${radio("from", `<select id="adminDayoffFrom" style="${sel}">${hourOpts(13)}</select> <b>이후 촬영 가능</b>`)}
-            ${radio("until", `<select id="adminDayoffUntil" style="${sel}">${hourOpts(17)}</select> 타임<b>까지만 가능</b>`)}
-            ${radio("off", `<span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;">
-              <select id="adminDayoffOffSH" style="${sel}">${hourOpts(14)}</select><select id="adminDayoffOffSM" style="${sel}">${minOpts("00")}</select>
-              ~ <select id="adminDayoffOffEH" style="${sel}">${hourOpts(16)}</select><select id="adminDayoffOffEM" style="${sel}">${minOpts("30")}</select>
-              <b>불가</b></span>`)}
-            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+            <div style="${row}">
+              <div class="input-row" style="${cell}"><span>📅</span><select id="adminDayoffY">${yearOpts}</select></div>
+              <div class="input-row" style="${cell}"><select id="adminDayoffM">${monthOpts}</select></div>
+              <div class="input-row" style="${cell}"><select id="adminDayoffD"></select></div>
+            </div>
+            <div style="${label}">휴무 방식</div>
+            <div id="adminDayoffKinds" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;">
+              ${kinds.map(([v, t]) => `<button type="button" data-kind="${v}" style="padding:9px 4px;border:1.5px solid #cbd5e1;border-radius:9px;background:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">${t}</button>`).join("")}
+            </div>
+            <div id="adminDayoffTimeFrom" style="display:none;">
+              <div style="${label}">이 시각부터 촬영 가능</div>
+              <div style="${row}"><div class="input-row" style="${cell}"><span>⏰</span><select id="adminDayoffFrom">${hourOpts(13)}</select></div></div>
+            </div>
+            <div id="adminDayoffTimeUntil" style="display:none;">
+              <div style="${label}">이 시각 타임이 마지막</div>
+              <div style="${row}"><div class="input-row" style="${cell}"><span>⏰</span><select id="adminDayoffUntil">${hourOpts(17)}</select></div></div>
+            </div>
+            <div id="adminDayoffTimeOff" style="display:none;">
+              <div style="${label}">촬영 안 되는 시간 — 시작</div>
+              <div style="${row}">
+                <div class="input-row" style="${cell}"><span>⏰</span><select id="adminDayoffOffSH">${hourOpts(14)}</select></div>
+                <div class="input-row" style="${cell}"><span>⏱️</span><select id="adminDayoffOffSM">${minOpts("00")}</select></div>
+              </div>
+              <div style="${label}">끝</div>
+              <div style="${row}">
+                <div class="input-row" style="${cell}"><span>⏰</span><select id="adminDayoffOffEH">${hourOpts(16)}</select></div>
+                <div class="input-row" style="${cell}"><span>⏱️</span><select id="adminDayoffOffEM">${minOpts("30")}</select></div>
+              </div>
+            </div>
+            <div id="adminDayoffSummary" style="margin-top:14px;padding:10px 12px;border-radius:10px;background:#f1f5ff;color:#1f3a6b;font-weight:800;font-size:0.92rem;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
               <button id="adminDayoffCancel" type="button" class="btn-sm">취소</button>
-              <button id="adminDayoffOk" type="button" class="btn-sm" style="background:#1f3a6b;color:#fff;border-color:#1f3a6b;font-weight:800;">등록</button>
+              <button id="adminDayoffOk" type="button" class="btn-sm" style="background:#1f3a6b;color:#fff;border-color:#1f3a6b;font-weight:800;padding:8px 18px;">휴무 등록</button>
             </div>
           </div>`;
         document.body.appendChild(modal);
         const q = (id) => modal.querySelector(`#${id}`);
-        // 시간 칸을 만지면 그 방식이 자동으로 선택되게
-        [["adminDayoffFrom", "from"], ["adminDayoffUntil", "until"], ["adminDayoffOffSH", "off"], ["adminDayoffOffSM", "off"], ["adminDayoffOffEH", "off"], ["adminDayoffOffEM", "off"]]
-          .forEach(([id, kind]) => q(id).addEventListener("change", () => {
-            const r = modal.querySelector(`input[name="adminDayoffKind"][value="${kind}"]`);
-            if (r) r.checked = true;
-          }));
+        let kind = "full";
+        const rebuildDays = () => {
+          const y = Number(q("adminDayoffY").value);
+          const m = Number(q("adminDayoffM").value);
+          const last = new Date(y, m, 0).getDate();
+          const cur = Number(q("adminDayoffD").value) || dd || 1;
+          q("adminDayoffD").innerHTML = Array.from({ length: last }, (_, i) => i + 1)
+            .map((d) => {
+              const w = new Date(y, m - 1, d).getDay();
+              const color = w === 0 || w === 6 ? "color:#d74444;" : "";
+              return `<option value="${d}" style="${color}" ${d === Math.min(cur, last) ? "selected" : ""}>${d}일 (${WD[w]})</option>`;
+            })
+            .join("");
+        };
+        const pickedDate = () => `${q("adminDayoffY").value}-${p2(q("adminDayoffM").value)}-${p2(q("adminDayoffD").value)}`;
+        const buildReason = () => {
+          if (kind === "from") return `from:${q("adminDayoffFrom").value}`;
+          if (kind === "until") return `until:${q("adminDayoffUntil").value}`;
+          if (kind === "off") return `off:${q("adminDayoffOffSH").value}${q("adminDayoffOffSM").value}-${q("adminDayoffOffEH").value}${q("adminDayoffOffEM").value}`;
+          return "";
+        };
+        const refresh = () => {
+          modal.querySelectorAll("#adminDayoffKinds button").forEach((btn) => {
+            const on = btn.dataset.kind === kind;
+            btn.style.background = on ? "#1f3a6b" : "#fff";
+            btn.style.color = on ? "#fff" : "#1f2937";
+            btn.style.borderColor = on ? "#1f3a6b" : "#cbd5e1";
+          });
+          q("adminDayoffTimeFrom").style.display = kind === "from" ? "block" : "none";
+          q("adminDayoffTimeUntil").style.display = kind === "until" ? "block" : "none";
+          q("adminDayoffTimeOff").style.display = kind === "off" ? "block" : "none";
+          const w = writerRows[Number(q("adminDayoffWriter").value)];
+          const [y, m, d] = pickedDate().split("-").map(Number);
+          const pl = parseDayoffReason(buildReason()).partialLabel;
+          q("adminDayoffSummary").textContent =
+            `${w ? w.name : ""} · ${m}월 ${d}일 (${WD[new Date(y, m - 1, d).getDay()]}) · ${pl || "하루 종일 휴무"}`;
+        };
+        rebuildDays();
+        q("adminDayoffY").addEventListener("change", () => { rebuildDays(); refresh(); });
+        q("adminDayoffM").addEventListener("change", () => { rebuildDays(); refresh(); });
+        modal.querySelectorAll("select").forEach((el) => el.addEventListener("change", refresh));
+        modal.querySelectorAll("#adminDayoffKinds button").forEach((btn) =>
+          btn.addEventListener("click", () => { kind = btn.dataset.kind; refresh(); })
+        );
+        refresh();
         const close = () => modal.remove();
         q("adminDayoffCancel").addEventListener("click", close);
         modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
         q("adminDayoffOk").addEventListener("click", async () => {
-          const pickedDate = String(q("adminDayoffDate").value || "").trim();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) { alert("날짜를 골라주세요."); return; }
+          const dateKey = pickedDate();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) { alert("날짜를 골라주세요."); return; }
           const matchedWriter = writerRows[Number(q("adminDayoffWriter").value)];
           if (!matchedWriter) { alert("작가를 골라주세요."); return; }
-          const kind = modal.querySelector('input[name="adminDayoffKind"]:checked')?.value || "full";
-          let reasonText = "";
-          if (kind === "from") reasonText = `from:${q("adminDayoffFrom").value}`;
-          else if (kind === "until") reasonText = `until:${q("adminDayoffUntil").value}`;
-          else if (kind === "off") {
-            const a = `${q("adminDayoffOffSH").value}${q("adminDayoffOffSM").value}`;
-            const b = `${q("adminDayoffOffEH").value}${q("adminDayoffOffEM").value}`;
-            if (a >= b) { alert("끝나는 시각이 시작 시각보다 늦어야 해요."); return; }
-            reasonText = `off:${a}-${b}`;
+          const reasonText = buildReason();
+          if (kind === "off") {
+            const [, a, b2] = reasonText.match(/^off:(\d{4})-(\d{4})$/) || [];
+            if (!a || a >= b2) { alert("끝나는 시각이 시작 시각보다 늦어야 해요."); return; }
           }
           const writerName = matchedWriter.name;
           const writerId = matchedWriter.id || writerName;
           const exists = readStorageArray(STORAGE_DAYOFF_REQUESTS).some(
-            (row) =>
-              String(row?.date || "").trim() === pickedDate &&
-              String(row?.writerName || "").trim() === writerName
+            (r) =>
+              String(r?.date || "").trim() === dateKey &&
+              String(r?.writerName || "").trim() === writerName
           );
           if (exists) {
             alert("이미 해당 날짜에 같은 작가 휴무가 등록되어 있습니다. 바꾸려면 기존 휴무를 취소하고 다시 등록해주세요.");
@@ -8869,11 +8934,11 @@ ${folderBtn}
           const okBtn = q("adminDayoffOk");
           okBtn.disabled = true;
           try {
-            await saveAdminDayoffRequestToSupabase(pickedDate, writerName, writerId, reasonText);
+            await saveAdminDayoffRequestToSupabase(dateKey, writerName, writerId, reasonText);
             await pullDayoffRequestsFromSupabaseAndApply();
             close();
             const pl = parseDayoffReason(reasonText).partialLabel;
-            alert(`${pickedDate} ${writerName} 작가 휴무가 등록되었습니다.${pl ? ` (${pl})` : " (종일)"}`);
+            alert(`${dateKey} ${writerName} 작가 휴무가 등록되었습니다. (${pl || "종일"})`);
           } catch (error) {
             okBtn.disabled = false;
             console.error("[DAYOFF][index] 저장 실패", error);
