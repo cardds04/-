@@ -3930,7 +3930,8 @@
             <form id="customerScheduleForm" class="form">
               <div class="date-helper">
                 <span>예약 날짜/시간</span>
-                <strong id="selectedYearLabel"></strong>
+                <select id="scheduleYearPick" aria-label="예약 연도" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;font-weight:700;background:#fff;color:inherit;"></select>
+                <strong id="selectedYearLabel" hidden></strong>
               </div>
               <div class="triple date-quick">
                 <div class="row year-field" aria-hidden="true"><span>📅</span><select id="scheduleYear" required tabindex="-1"></select></div>
@@ -5214,6 +5215,7 @@
       mountFixedCustomerBottomNav();
       const scheduleYearEl = document.getElementById("scheduleYear");
       const selectedYearLabelEl = document.getElementById("selectedYearLabel");
+      const scheduleYearPickEl = document.getElementById("scheduleYearPick");
       const scheduleMonthEl = document.getElementById("scheduleMonth");
       const scheduleDayEl = document.getElementById("scheduleDay");
       const scheduleHourEl = document.getElementById("scheduleHour");
@@ -7395,6 +7397,19 @@
         const year = Number(scheduleYearEl.value) || new Date().getFullYear();
         const currentYearValue = new Date().getFullYear();
         selectedYearLabelEl.textContent = year === currentYearValue ? `${String(year).slice(2)}년 올해 기준` : `${String(year).slice(2)}년 예약`;
+        // 고객이 보는 연도 고르기(올해·내년·내후년) — 내년 예약을 직접 고를 수 있게(10-15)
+        if (scheduleYearPickEl) {
+          const want = [0, 1, 2].map((i) => currentYearValue + i);
+          if (!want.includes(year)) want.push(year);
+          const html = want
+            .map((y) => `<option value="${y}">${y}년${y === currentYearValue ? " (올해)" : y === currentYearValue + 1 ? " (내년)" : ""}</option>`)
+            .join("");
+          if (scheduleYearPickEl.dataset.built !== html) {
+            scheduleYearPickEl.innerHTML = html;
+            scheduleYearPickEl.dataset.built = html;
+          }
+          scheduleYearPickEl.value = String(year);
+        }
       }
 
       function getAutoScheduleYear(monthValue, dayValue) {
@@ -7404,6 +7419,13 @@
         const currentDay = now.getDate();
         const month = Number(monthValue) || currentMonth;
         const day = Number(dayValue) || 1;
+        // 고객이 연도를 직접 골랐으면 그 연도 — 단 지난 날짜가 되면 자동 연도로 돌아간다.
+        const manualYear = Number(scheduleYearEl?.dataset?.manualYear) || 0;
+        if (manualYear) {
+          const picked = new Date(manualYear, month - 1, Math.min(day, new Date(manualYear, month, 0).getDate()));
+          const today = new Date(currentYearValue, now.getMonth(), currentDay);
+          if (picked >= today) return manualYear;
+        }
         return month < currentMonth || (month === currentMonth && day < currentDay)
           ? currentYearValue + 1
           : currentYearValue;
@@ -8999,6 +9021,10 @@
           return;
         }
         scheduleMinuteEl.value = "exact";
+      });
+      scheduleYearPickEl?.addEventListener("change", () => {
+        scheduleYearEl.dataset.manualYear = String(scheduleYearPickEl.value || "");
+        renderDayOptions(scheduleYearPickEl.value, scheduleMonthEl.value, scheduleDayEl.value);
       });
       scheduleYearEl.addEventListener("change", () => {
         renderRegisterMonthOptions(scheduleYearEl.value, scheduleMonthEl.value);
