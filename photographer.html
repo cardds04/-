@@ -2259,15 +2259,17 @@
           })
           .filter((row) => row.name);
         const dayoffRequests = (Array.isArray(dayoffRows) ? dayoffRows : []).map((row) => {
-          // 부분휴무: reason 에 `from:HH` 로 저장돼 있으면 그 시각부터 촬영 가능(한도는 절반만 차감).
-          const fromHour = (String(row?.reason || "").match(/^from:(\d{2})$/) || [])[1] || "";
+          // 부분휴무(시간 지정)는 reason 에 저장 — parseDayoffReason 참고(한도는 절반만 차감).
+          const { fromHour, partialLabel, partialShort } = parseDayoffReason(row?.reason);
           return {
             id: normalize(row?.id),
             writerId: normalize(row?.writer_id),
             writerName: normalize(row?.writer_name),
             date: normalize(row?.dayoff_date),
-            amount: fromHour ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
+            amount: partialLabel ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
             fromHour,
+            partialLabel,
+            partialShort,
             requestedAt: normalize(row?.created_at)
           };
         });
@@ -2396,6 +2398,39 @@
         } catch { return ""; }
       }
 
+      // ── 작가 휴무 시간 해석 ── dayoff_requests.reason 에 저장(스키마 변경 없음)
+      //   ""                → 하루 종일 휴무
+      //   from:HH           → 그 시각 이후 촬영 가능(앞시간 휴무)
+      //   until:HH          → 그 시각 타임이 마지막(이후 휴무)
+      //   off:HHMM-HHMM     → 그 시간대만 촬영 불가(예: off:1400-1630)
+      // 부분휴무는 모두 한도를 종일의 절반(DAYOFF_PARTIAL_AMOUNT)만 차감한다.
+      function dayoffClock(h, m) {
+        return m && m !== "00" ? `${Number(h)}:${m}` : `${Number(h)}시`;
+      }
+      function parseDayoffReason(reason) {
+        const r = String(reason || "").trim();
+        let m;
+        if ((m = r.match(/^from:(\d{2})$/))) return { fromHour: m[1], partialLabel: `${Number(m[1])}시 이후 가능`, partialShort: `${Number(m[1])}시~` };
+        if ((m = r.match(/^until:(\d{2})$/))) return { fromHour: "", partialLabel: `${Number(m[1])}시 타임까지만 가능`, partialShort: `~${Number(m[1])}시` };
+        if ((m = r.match(/^off:(\d{2})(\d{2})-(\d{2})(\d{2})$/))) {
+          const span = `${dayoffClock(m[1], m[2])}~${dayoffClock(m[3], m[4])}`;
+          return { fromHour: "", partialLabel: `${span} 불가`, partialShort: `${span} 불가` };
+        }
+        return { fromHour: "", partialLabel: "", partialShort: "" };
+      }
+      // 저장소에 남은 옛 행(fromHour 만 있음)도 같은 문구로 보이게 한다.
+      function dayoffPartialLabel(item) {
+        const pl = String(item?.partialLabel || "").trim();
+        if (pl) return pl;
+        const fh = String(item?.fromHour || "").trim();
+        return fh ? `${Number(fh)}시 이후 가능` : "";
+      }
+      function dayoffPartialShort(item) {
+        const ps = String(item?.partialShort || "").trim();
+        if (ps) return ps;
+        const fh = String(item?.fromHour || "").trim();
+        return fh ? `${Number(fh)}시~` : "";
+      }
       function normalize(text) {
         return String(text || "").trim();
       }
@@ -3623,9 +3658,10 @@
       /**
        * 휴무요청 등록.
        * @param {string} selectedDate YYYY-MM-DD
-       * @param {{kind?: "full"|"from", fromHour?: string}} [opts]
-       *   kind="from" 이면 부분휴무(그 시각부터 촬영 가능) — 한도는 종일의 절반만 차감.
-       *   시간 정보는 dayoff_requests.reason 컬럼에 `from:HH` 로 저장한다(스키마 변경 불필요).
+       * @param {{kind?: "full"|"from"|"until"|"off", fromHour?: string, untilHour?: string, offStart?: string, offEnd?: string}} [opts]
+       *   full 외에는 부분휴무 — 한도는 종일의 절반만 차감.
+       *   from=그 시각 이후 가능 / until=그 시각 타임까지만 / off=그 시간대만 불가(HHMM).
+       *   시간 정보는 dayoff_requests.reason 컬럼에 저장한다(parseDayoffReason, 스키마 변경 불필요).
        */
       async function requestDayOffReduction(selectedDate, opts) {
         const writer = getCurrentWriter();
@@ -3639,15 +3675,33 @@
           alert("휴무요청 날짜를 선택해주세요.");
           return;
         }
-        const kind = opts && opts.kind === "from" ? "from" : "full";
+        const kind = ["from", "until", "off"].includes(opts && opts.kind) ? opts.kind : "full";
         const fromHour = kind === "from" ? String((opts && opts.fromHour) || "").trim() : "";
+        const untilHour = kind === "until" ? String((opts && opts.untilHour) || "").trim() : "";
+        const offStart = kind === "off" ? String((opts && opts.offStart) || "").trim() : "";
+        const offEnd = kind === "off" ? String((opts && opts.offEnd) || "").trim() : "";
         if (kind === "from" && !/^\d{2}$/.test(fromHour)) {
           alert("촬영 가능 시작 시각을 선택해주세요.");
           return;
         }
-        // 종일=4건, 부분(〇시부터 가능)=절반인 2건 차감 (사장님 확정 2026-08-03)
-        const amount = kind === "from" ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT;
-        const reasonText = kind === "from" ? `from:${fromHour}` : "";
+        if (kind === "until" && !/^\d{2}$/.test(untilHour)) {
+          alert("마지막 촬영 시각을 선택해주세요.");
+          return;
+        }
+        if (kind === "off" && (!/^\d{4}$/.test(offStart) || !/^\d{4}$/.test(offEnd) || offStart >= offEnd)) {
+          alert("안 되는 시간대를 다시 골라주세요. (끝나는 시각이 시작보다 늦어야 해요)");
+          return;
+        }
+        let reasonText = "";
+        if (kind === "from") reasonText = `from:${fromHour}`;
+        else if (kind === "until") reasonText = `until:${untilHour}`;
+        else if (kind === "off") reasonText = `off:${offStart}-${offEnd}`;
+        const parsedReason = parseDayoffReason(reasonText);
+        // 종일=4건, 부분(시간 지정)=절반인 2건 차감 (사장님 확정 2026-08-03)
+        const amount = reasonText ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT;
+        const doneMsg = parsedReason.partialLabel
+          ? `휴무요청이 반영되었습니다 (${parsedReason.partialLabel})`
+          : "휴무요청이 반영되었습니다";
         const currentLimit = getEffectiveDailyLimit(dateKey);
         const bookedCount = getBookedCountForDate(dateKey);
         if (currentLimit - amount < bookedCount) {
@@ -3670,13 +3724,15 @@
             date: dateKey,
             amount,
             fromHour,
+            partialLabel: parsedReason.partialLabel,
+            partialShort: parsedReason.partialShort,
             writerId: "",
             writerName: String(writer.name || "").trim(),
             requestedAt: new Date().toISOString()
           });
           localStorage.setItem(STORAGE_DAYOFF_REQUESTS, JSON.stringify(requests));
           renderMyDayoffRequests();
-          alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시 이후 촬영 가능)` : "휴무요청이 반영되었습니다");
+          alert(doneMsg);
           return;
         }
         const wid = String(writer.id || "").trim() || null;
@@ -3704,7 +3760,7 @@
           return;
         }
         queueWriterTablePull();
-        alert(kind === "from" ? `휴무요청이 반영되었습니다 (${Number(fromHour)}시 이후 촬영 가능)` : "휴무요청이 반영되었습니다");
+        alert(doneMsg);
       }
 
       async function cancelMyDayoffRequest(requestId) {
@@ -3778,9 +3834,9 @@
             const date = normalize(item?.date) || "-";
             const requestedAt = normalize(item?.requestedAt).slice(0, 16).replace("T", " ") || "-";
             const requestId = normalize(item?.id);
-            const fromHour = normalize(item?.fromHour);
-            const kindLabel = fromHour
-              ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.78rem;font-weight:700;">${Number(fromHour)}시 이후 가능</span>`
+            const partialLabel = dayoffPartialLabel(item);
+            const kindLabel = partialLabel
+              ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.78rem;font-weight:700;">${partialLabel}</span>`
               : `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#ffe7e7;color:#7a1d1d;font-size:0.78rem;font-weight:700;">종일</span>`;
             return `
               <div class="dayoff-item">
@@ -3819,7 +3875,7 @@
         modal.setAttribute("role", "dialog");
         modal.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
         modal.innerHTML = `
-          <div style="background:#fff;border-radius:14px;max-width:340px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+          <div style="background:#fff;border-radius:14px;max-width:340px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:92vh;overflow-y:auto;">
             <div style="font-weight:800;font-size:1.05rem;margin-bottom:14px;color:#1f3a6b;">휴무요청 날짜 선택</div>
             <div style="display:flex;gap:8px;margin-bottom:14px;">
               <select id="dayoffPickY" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;">${yearOpts}</select>
@@ -3831,14 +3887,35 @@
               <input type="radio" name="dayoffKind" value="full" checked style="width:16px;height:16px;" />
               <span><b>하루 종일</b> 쉽니다</span>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:0.92rem;">
+            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.92rem;">
               <input type="radio" name="dayoffKind" value="from" style="width:16px;height:16px;" />
               <span>이 시각 <b>이후 촬영 가능</b> (앞시간 휴무)</span>
             </label>
-            <div id="dayoffFromWrap" style="display:none;align-items:center;gap:8px;margin-bottom:14px;padding-left:4px;">
+            <div id="dayoffFromWrap" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding-left:4px;">
               <select id="dayoffPickHour" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
               <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">이후 가능</span>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.92rem;">
+              <input type="radio" name="dayoffKind" value="until" style="width:16px;height:16px;" />
+              <span>이 시각 타임<b>까지만 촬영 가능</b> (뒷시간 휴무)</span>
+            </label>
+            <div id="dayoffUntilWrap" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding-left:4px;">
+              <select id="dayoffPickUntil" style="flex:1;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">타임이 마지막</span>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.92rem;">
+              <input type="radio" name="dayoffKind" value="off" style="width:16px;height:16px;" />
+              <span>이 시간대<b>만 촬영 불가</b> (중간 휴무)</span>
+            </label>
+            <div id="dayoffOffWrap" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px;padding-left:4px;">
+              <select id="dayoffOffSH" style="padding:9px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <select id="dayoffOffSM" style="padding:9px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <span style="font-size:0.9rem;color:#475569;">~</span>
+              <select id="dayoffOffEH" style="padding:9px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <select id="dayoffOffEM" style="padding:9px 6px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:#fff;"></select>
+              <span style="font-size:0.9rem;color:#475569;white-space:nowrap;">불가</span>
+            </div>
+            <div style="height:6px;"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
               <button id="dayoffPickCancel" type="button" style="padding:10px 18px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;font-weight:600;cursor:pointer;">취소</button>
               <button id="dayoffPickOk" type="button" style="padding:10px 20px;background:#1f3a6b;color:#fff;border:0;border-radius:8px;font-weight:800;cursor:pointer;">확인</button>
@@ -3869,11 +3946,31 @@
         hourEl.innerHTML = Array.from({ length: 12 }, (_, i) => i + 8)
           .map((h) => `<option value="${pad2(h)}" ${h === 13 ? "selected" : ""}>${h}시</option>`)
           .join("");
+        const hourOptsHtml = (sel) => Array.from({ length: 13 }, (_, i) => i + 8)
+          .map((h) => `<option value="${pad2(h)}" ${h === sel ? "selected" : ""}>${h}시</option>`)
+          .join("");
+        const minOptsHtml = (sel) => ["00", "30"]
+          .map((mm) => `<option value="${mm}" ${mm === sel ? "selected" : ""}>${mm}분</option>`)
+          .join("");
+        const untilEl = modal.querySelector("#dayoffPickUntil");
+        untilEl.innerHTML = hourOptsHtml(17);
+        const offSH = modal.querySelector("#dayoffOffSH");
+        const offSM = modal.querySelector("#dayoffOffSM");
+        const offEH = modal.querySelector("#dayoffOffEH");
+        const offEM = modal.querySelector("#dayoffOffEM");
+        offSH.innerHTML = hourOptsHtml(14);
+        offSM.innerHTML = minOptsHtml("00");
+        offEH.innerHTML = hourOptsHtml(16);
+        offEM.innerHTML = minOptsHtml("30");
         const fromWrap = modal.querySelector("#dayoffFromWrap");
+        const untilWrap = modal.querySelector("#dayoffUntilWrap");
+        const offWrap = modal.querySelector("#dayoffOffWrap");
         const kindRadios = [...modal.querySelectorAll('input[name="dayoffKind"]')];
         const syncKind = () => {
           const kind = kindRadios.find((r) => r.checked)?.value || "full";
           fromWrap.style.display = kind === "from" ? "flex" : "none";
+          untilWrap.style.display = kind === "until" ? "flex" : "none";
+          offWrap.style.display = kind === "off" ? "flex" : "none";
         };
         kindRadios.forEach((r) => r.addEventListener("change", syncKind));
         syncKind();
@@ -3885,9 +3982,13 @@
           if (!/^\d{4}-\d{2}-\d{2}$/.test(picked)) { alert("날짜를 다시 선택해주세요."); return; }
           const kind = kindRadios.find((r) => r.checked)?.value || "full";
           const fromHour = kind === "from" ? String(hourEl.value || "") : "";
+          const untilHour = kind === "until" ? String(untilEl.value || "") : "";
+          const offStart = kind === "off" ? `${offSH.value}${offSM.value}` : "";
+          const offEnd = kind === "off" ? `${offEH.value}${offEM.value}` : "";
+          if (kind === "off" && offStart >= offEnd) { alert("끝나는 시각이 시작 시각보다 늦어야 해요."); return; }
           dayOffDateEl.value = picked;
           close();
-          requestDayOffReduction(picked, { kind, fromHour });
+          requestDayOffReduction(picked, { kind, fromHour, untilHour, offStart, offEnd });
         });
       }
 

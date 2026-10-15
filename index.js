@@ -6226,19 +6226,54 @@
         }
         return await response.json();
       }
+      // ── 작가 휴무 시간 해석 ── dayoff_requests.reason 에 저장(스키마 변경 없음)
+      //   ""                → 하루 종일 휴무
+      //   from:HH           → 그 시각 이후 촬영 가능(앞시간 휴무)
+      //   until:HH          → 그 시각 타임이 마지막(이후 휴무)
+      //   off:HHMM-HHMM     → 그 시간대만 촬영 불가(예: off:1400-1630)
+      // 부분휴무는 모두 한도를 종일의 절반(DAYOFF_PARTIAL_AMOUNT)만 차감한다.
+      function dayoffClock(h, m) {
+        return m && m !== "00" ? `${Number(h)}:${m}` : `${Number(h)}시`;
+      }
+      function parseDayoffReason(reason) {
+        const r = String(reason || "").trim();
+        let m;
+        if ((m = r.match(/^from:(\d{2})$/))) return { fromHour: m[1], partialLabel: `${Number(m[1])}시 이후 가능`, partialShort: `${Number(m[1])}시~` };
+        if ((m = r.match(/^until:(\d{2})$/))) return { fromHour: "", partialLabel: `${Number(m[1])}시 타임까지만 가능`, partialShort: `~${Number(m[1])}시` };
+        if ((m = r.match(/^off:(\d{2})(\d{2})-(\d{2})(\d{2})$/))) {
+          const span = `${dayoffClock(m[1], m[2])}~${dayoffClock(m[3], m[4])}`;
+          return { fromHour: "", partialLabel: `${span} 불가`, partialShort: `${span} 불가` };
+        }
+        return { fromHour: "", partialLabel: "", partialShort: "" };
+      }
+      // 저장소에 남은 옛 행(fromHour 만 있음)도 같은 문구로 보이게 한다.
+      function dayoffPartialLabel(item) {
+        const pl = String(item?.partialLabel || "").trim();
+        if (pl) return pl;
+        const fh = String(item?.fromHour || "").trim();
+        return fh ? `${Number(fh)}시 이후 가능` : "";
+      }
+      function dayoffPartialShort(item) {
+        const ps = String(item?.partialShort || "").trim();
+        if (ps) return ps;
+        const fh = String(item?.fromHour || "").trim();
+        return fh ? `${Number(fh)}시~` : "";
+      }
       async function pullDayoffRequestsFromSupabaseAndApply() {
         if (!USE_SUPABASE_SYNC) return false;
         const rows = await fetchDayoffRequestsFromSupabase();
         const nextRows = (Array.isArray(rows) ? rows : []).map((row) => {
-          // 부분휴무: reason 이 `from:HH` 면 그 시각부터 촬영 가능 — 한도 차감은 종일의 절반.
-          const fromHour = (String(row?.reason || "").match(/^from:(\d{2})$/) || [])[1] || "";
+          // 부분휴무(시간 지정)는 reason 에 저장 — parseDayoffReason 참고. 한도 차감은 종일의 절반.
+          const { fromHour, partialLabel, partialShort } = parseDayoffReason(row?.reason);
           return {
             id: String(row?.id || "").trim(),
             writerId: String(row?.writer_id || "").trim(),
             writerName: String(row?.writer_name || "").trim(),
             date: String(row?.dayoff_date || "").trim(),
-            amount: fromHour ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
+            amount: partialLabel ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT,
             fromHour,
+            partialLabel,
+            partialShort,
             requestedAt: String(row?.created_at || "").trim()
           };
         });
@@ -8801,8 +8836,8 @@ ${folderBtn}
           .map((item) => {
             const nm = String(item?.writerName || "").trim();
             if (!nm) return "";
-            const fh = String(item?.fromHour || "").trim();
-            return fh ? `${nm} ${Number(fh)}시 이후` : nm;
+            const pl = dayoffPartialLabel(item);
+            return pl ? `${nm} ${pl}` : nm;
           })
           .filter(Boolean);
         return [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko"));
@@ -8824,8 +8859,8 @@ ${folderBtn}
             const n = String(r?.writerName || "").trim();
             if (!d || !n) return;
             const key = `${d}|${n}`;
-            const fh = String(r?.fromHour || "").trim();
-            if (!dayoffQuickCache.has(key) || !fh) dayoffQuickCache.set(key, fh); // 전일휴무가 부분휴무보다 우선
+            const ps = dayoffPartialShort(r);
+            if (!dayoffQuickCache.has(key) || !ps) dayoffQuickCache.set(key, ps); // 전일휴무가 부분휴무보다 우선
           });
         } catch (_) {}
         return dayoffQuickCache;
@@ -8836,7 +8871,7 @@ ${folderBtn}
         if (!wn || wn === "작가미정") return { label, style: "" };
         const fh = getDayoffQuickMap().get(`${String(dateKey || "").trim()}|${wn}`);
         if (fh === undefined) return { label, style: "" };
-        if (fh) return { label: `${label} ${Number(fh)}시~`, style: "background:#fff4e0;border-color:#e8b56b;color:#a05a00;font-weight:800;" };
+        if (fh) return { label: `${label} ${fh}`, style: "background:#fff4e0;border-color:#e8b56b;color:#a05a00;font-weight:800;" };
         return { label: `${label} 휴무`, style: "background:#fdecec;border-color:#e79a9a;color:#c92a2a;font-weight:800;" };
       }
 
@@ -9815,6 +9850,7 @@ ${folderBtn}
             date: String(item?.date || "").trim(),
             amount: Math.max(0, Number(item?.amount) || 0),
             fromHour: String(item?.fromHour || "").trim(),
+            partialLabel: dayoffPartialLabel(item),
             read: dayoffId ? readDayoffIds.has(dayoffId) : false,
             createdAt: item?.requestedAt || ""
           };
@@ -9935,8 +9971,7 @@ ${folderBtn}
           const writerName = item.writerName || "작가미상";
           const writerId = item.writerId || "-";
           const amount = Math.max(0, Number(item.amount) || 0);
-          const fh = String(item.fromHour || "").trim();
-          const kindText = fh ? `${Number(fh)}시 이후 촬영가능` : "종일";
+          const kindText = dayoffPartialLabel(item) || "종일";
           return `${writerName} (${writerId}) 작가가 휴무요청을 등록했습니다. (${dateText}, ${kindText}, 차감 ${amount})`;
         }
         if (item.type === "customer_submission_receipt") {
@@ -11735,9 +11770,9 @@ ${folderBtn}
                 const requestedAt = escapeHtml(String(item?.requestedAt || "").slice(0, 16).replace("T", " "));
                 const id = String(item?.id || "").trim();
                 // 부분휴무(〇시부터 촬영 가능)는 배지로 구분 — 종일 휴무와 한도 차감량이 다르다(4 vs 2).
-                const fh = String(item?.fromHour || "").trim();
-                const kindBadge = fh
-                  ? `<span style="margin-left:4px;padding:0 6px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.72rem;font-weight:700;">${Number(fh)}시 이후 가능</span>`
+                const pl = dayoffPartialLabel(item);
+                const kindBadge = pl
+                  ? `<span style="margin-left:4px;padding:0 6px;border-radius:999px;background:#fff4d6;color:#8a5a00;font-size:0.72rem;font-weight:700;">${escapeHtml(pl)}</span>`
                   : "";
                 const cancelBtn = id
                   ? `<button type="button" class="btn-sm" data-action="adminCancelDayoffRequest" data-request-id="${escapeHtml(id)}" style="margin-left:4px;padding:0 6px;font-size:0.72rem;color:#b91c1c;border-color:#fca5a5;" title="이 휴무요청 취소">취소</button>`
