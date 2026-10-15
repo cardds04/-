@@ -6288,14 +6288,15 @@
         renderCustomerAlertHistory();
         return true;
       }
-      async function saveAdminDayoffRequestToSupabase(dateKey, writerName, writerId = "") {
+      async function saveAdminDayoffRequestToSupabase(dateKey, writerName, writerId = "", reasonText = "") {
         if (!USE_SUPABASE_SYNC) return false;
-        // PostgREST: 테이블에 없는 컬럼을 보내면 400 → reason/status 는 선택 컬럼이 있을 때만 별도 마이그레이션
+        // reason = 시간 지정 휴무(parseDayoffReason 형식). 종일 휴무는 보내지 않는다.
         const row = {
           writer_id: String(writerId || "").trim() || null,
           writer_name: String(writerName || "").trim(),
           dayoff_date: String(dateKey || "").trim()
         };
+        if (String(reasonText || "").trim()) row.reason = String(reasonText).trim();
         const response = await fetch(`${SUPABASE_URL}/rest/v1/dayoff_requests`, {
           method: "POST",
           headers: {
@@ -8779,7 +8780,8 @@ ${folderBtn}
         }
         return `${calendarViewYear}-${String(calendarViewMonth).padStart(2, "0")}-01`;
       }
-      async function assignWriterDayoffByAdmin() {
+      // 관리자 「작가휴무지정」 — 작가·날짜·휴무 방식(종일/이후 가능/까지만/시간대 불가)을 한 창에서 고른다(10-15).
+      function assignWriterDayoffByAdmin() {
         const writerRows = getDayoffWriterSelectionRows();
         if (!writerRows.length) {
           alert("먼저 작가를 등록해주세요.");
@@ -8789,43 +8791,95 @@ ${folderBtn}
           alert("Supabase 연결이 필요합니다. 설정을 확인해주세요.");
           return;
         }
+        if (document.getElementById("adminDayoffModal")) return;
         const defaultDate = getDefaultDayoffDateForAdmin();
-        const pickedDate = String(prompt("휴무일을 입력하세요. (예: 2026-03-11)", defaultDate) || "").trim();
-        if (!pickedDate) return;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) {
-          alert("날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.");
-          return;
-        }
-        const writerGuide = writerRows.map((row, idx) => `${idx + 1}. ${row.name}`).join("\n");
-        const pickedWriterInput = String(prompt(`휴무 작가를 입력하세요.\n${writerGuide}`, writerRows[0].name) || "").trim();
-        if (!pickedWriterInput) return;
-        const matchedWriter =
-          writerRows.find((row) => row.name === pickedWriterInput) ||
-          writerRows.find((row, idx) => String(idx + 1) === pickedWriterInput);
-        if (!matchedWriter) {
-          alert("등록된 작가명(또는 번호)으로 입력해주세요.");
-          return;
-        }
-        const writerName = matchedWriter.name;
-        const writerId = matchedWriter.id || writerName;
-        const requests = readStorageArray(STORAGE_DAYOFF_REQUESTS);
-        const exists = requests.some(
-          (row) =>
-            String(row?.date || "").trim() === pickedDate &&
-            String(row?.writerName || "").trim() === writerName
-        );
-        if (exists) {
-          alert("이미 해당 날짜에 같은 작가 휴무가 등록되어 있습니다.");
-          return;
-        }
-        try {
-          await saveAdminDayoffRequestToSupabase(pickedDate, writerName, writerId);
-          await pullDayoffRequestsFromSupabaseAndApply();
-          alert(`${pickedDate} ${writerName} 작가 휴무가 등록되었습니다.`);
-        } catch (error) {
-          console.error("[DAYOFF][index] 저장 실패", error);
-          alert(`작가 휴무 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
-        }
+        const p2 = (n) => String(n).padStart(2, "0");
+        const hourOpts = (sel) => Array.from({ length: 13 }, (_, i) => i + 8)
+          .map((h) => `<option value="${p2(h)}" ${h === sel ? "selected" : ""}>${h}시</option>`).join("");
+        const minOpts = (sel) => ["00", "30"]
+          .map((mm) => `<option value="${mm}" ${mm === sel ? "selected" : ""}>${mm}분</option>`).join("");
+        const sel = "padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;background:#fff;";
+        const radio = (value, html, checked) => `
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="adminDayoffKind" value="${value}" ${checked ? "checked" : ""} />
+            <span>${html}</span>
+          </label>`;
+        const modal = document.createElement("div");
+        modal.id = "adminDayoffModal";
+        modal.setAttribute("role", "dialog");
+        modal.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
+        modal.innerHTML = `
+          <div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.2);max-height:92vh;overflow-y:auto;color:#1f2937;">
+            <div style="font-weight:800;font-size:1.05rem;margin-bottom:14px;">작가 휴무 지정</div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <select id="adminDayoffWriter" style="flex:1;${sel}">${writerRows
+                .map((r, i) => `<option value="${i}">${escapeHtml(r.name)}</option>`).join("")}</select>
+              <input id="adminDayoffDate" type="date" value="${escapeHtml(defaultDate)}" style="flex:1;${sel}" />
+            </div>
+            <div style="font-weight:700;font-size:0.88rem;margin-bottom:6px;color:#334155;">휴무 방식</div>
+            ${radio("full", "<b>하루 종일</b> 휴무", true)}
+            ${radio("from", `<select id="adminDayoffFrom" style="${sel}">${hourOpts(13)}</select> <b>이후 촬영 가능</b>`)}
+            ${radio("until", `<select id="adminDayoffUntil" style="${sel}">${hourOpts(17)}</select> 타임<b>까지만 가능</b>`)}
+            ${radio("off", `<span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;">
+              <select id="adminDayoffOffSH" style="${sel}">${hourOpts(14)}</select><select id="adminDayoffOffSM" style="${sel}">${minOpts("00")}</select>
+              ~ <select id="adminDayoffOffEH" style="${sel}">${hourOpts(16)}</select><select id="adminDayoffOffEM" style="${sel}">${minOpts("30")}</select>
+              <b>불가</b></span>`)}
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+              <button id="adminDayoffCancel" type="button" class="btn-sm">취소</button>
+              <button id="adminDayoffOk" type="button" class="btn-sm" style="background:#1f3a6b;color:#fff;border-color:#1f3a6b;font-weight:800;">등록</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        const q = (id) => modal.querySelector(`#${id}`);
+        // 시간 칸을 만지면 그 방식이 자동으로 선택되게
+        [["adminDayoffFrom", "from"], ["adminDayoffUntil", "until"], ["adminDayoffOffSH", "off"], ["adminDayoffOffSM", "off"], ["adminDayoffOffEH", "off"], ["adminDayoffOffEM", "off"]]
+          .forEach(([id, kind]) => q(id).addEventListener("change", () => {
+            const r = modal.querySelector(`input[name="adminDayoffKind"][value="${kind}"]`);
+            if (r) r.checked = true;
+          }));
+        const close = () => modal.remove();
+        q("adminDayoffCancel").addEventListener("click", close);
+        modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+        q("adminDayoffOk").addEventListener("click", async () => {
+          const pickedDate = String(q("adminDayoffDate").value || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(pickedDate)) { alert("날짜를 골라주세요."); return; }
+          const matchedWriter = writerRows[Number(q("adminDayoffWriter").value)];
+          if (!matchedWriter) { alert("작가를 골라주세요."); return; }
+          const kind = modal.querySelector('input[name="adminDayoffKind"]:checked')?.value || "full";
+          let reasonText = "";
+          if (kind === "from") reasonText = `from:${q("adminDayoffFrom").value}`;
+          else if (kind === "until") reasonText = `until:${q("adminDayoffUntil").value}`;
+          else if (kind === "off") {
+            const a = `${q("adminDayoffOffSH").value}${q("adminDayoffOffSM").value}`;
+            const b = `${q("adminDayoffOffEH").value}${q("adminDayoffOffEM").value}`;
+            if (a >= b) { alert("끝나는 시각이 시작 시각보다 늦어야 해요."); return; }
+            reasonText = `off:${a}-${b}`;
+          }
+          const writerName = matchedWriter.name;
+          const writerId = matchedWriter.id || writerName;
+          const exists = readStorageArray(STORAGE_DAYOFF_REQUESTS).some(
+            (row) =>
+              String(row?.date || "").trim() === pickedDate &&
+              String(row?.writerName || "").trim() === writerName
+          );
+          if (exists) {
+            alert("이미 해당 날짜에 같은 작가 휴무가 등록되어 있습니다. 바꾸려면 기존 휴무를 취소하고 다시 등록해주세요.");
+            return;
+          }
+          const okBtn = q("adminDayoffOk");
+          okBtn.disabled = true;
+          try {
+            await saveAdminDayoffRequestToSupabase(pickedDate, writerName, writerId, reasonText);
+            await pullDayoffRequestsFromSupabaseAndApply();
+            close();
+            const pl = parseDayoffReason(reasonText).partialLabel;
+            alert(`${pickedDate} ${writerName} 작가 휴무가 등록되었습니다.${pl ? ` (${pl})` : " (종일)"}`);
+          } catch (error) {
+            okBtn.disabled = false;
+            console.error("[DAYOFF][index] 저장 실패", error);
+            alert(`작가 휴무 저장 실패: ${error && error.message ? error.message : "알 수 없는 오류"}`);
+          }
+        });
       }
       function getDayoffWriterNamesByDate(dateKey) {
         const normalizedDate = String(dateKey || "").trim();
