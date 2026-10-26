@@ -3609,6 +3609,108 @@
     </div>
 
     <script>
+      /* ---- 💾 저장소: study-game 데이터는 localStorage 대신 IndexedDB 에 보관 (10-26) ----
+       * 같은 주소(sc-pink.vercel.app)의 localStorage 는 스케줄 앱 캐시 때문에 가득 찰 수 있어서,
+       * 'study_game_*' 키는 IndexedDB 에 저장한다. 앱 코드는 기존 localStorage 호출을 그대로 쓰고,
+       * 아래에서 localStorage.getItem/setItem/removeItem 을 가로채 우리 키만 IndexedDB 로 보낸다.
+       * IndexedDB 를 열 수 없으면 기존 localStorage 방식 그대로 동작한다.
+       * 예외: 'study_game_local_saved_at_v1' 은 grade4·영어 여행 페이지와 함께 쓰는 동기화 시각이라 그대로 둔다.
+       */
+      window.__sgStoreReady = new Promise(function (resolve) {
+        var DB_NAME = "study_game_store_v1";
+        var STORE = "kv";
+        var MIGRATED_FLAG = "__sg_migrated_v1";
+        var SHARED_KEYS = { study_game_local_saved_at_v1: true };
+        var nativeGet = null, nativeSet = null, nativeRemove = null;
+        function isOwned(key) {
+          var base = String(key || "").split(":")[0];
+          return base.indexOf("study_game_") === 0 && !SHARED_KEYS[base];
+        }
+        var openReq;
+        try { openReq = indexedDB.open(DB_NAME, 1); } catch (e) { resolve(false); return; }
+        openReq.onupgradeneeded = function () {
+          openReq.result.createObjectStore(STORE);
+        };
+        openReq.onerror = function () { resolve(false); };
+        openReq.onblocked = function () { resolve(false); };
+        openReq.onsuccess = function () {
+          var db = openReq.result;
+          var mem = new Map();
+          var readTx;
+          try { readTx = db.transaction(STORE, "readonly"); } catch (e) { resolve(false); return; }
+          var cursorReq = readTx.objectStore(STORE).openCursor();
+          cursorReq.onsuccess = function (e) {
+            var cur = e.target.result;
+            if (cur) { mem.set(String(cur.key), cur.value); cur.continue(); return; }
+            afterLoad(db, mem);
+          };
+          cursorReq.onerror = function () { resolve(false); };
+        };
+
+        function afterLoad(db, mem) {
+          nativeGet = localStorage.getItem.bind(localStorage);
+          nativeSet = localStorage.setItem.bind(localStorage);
+          nativeRemove = localStorage.removeItem.bind(localStorage);
+          var warned = false;
+          function warnWriteFail() {
+            if (warned) return;
+            warned = true;
+            console.warn("[study-game] IndexedDB 저장 실패");
+            try { alert("⚠️ 저장에 실패했어요. 새로고침한 뒤 다시 시도해 주세요."); } catch (e) {}
+          }
+          function write(op, key, val) {
+            try {
+              var tx = db.transaction(STORE, "readwrite");
+              tx.onerror = warnWriteFail;
+              tx.onabort = warnWriteFail;
+              if (op === "put") tx.objectStore(STORE).put(val, key);
+              else tx.objectStore(STORE).delete(key);
+            } catch (e) { warnWriteFail(); }
+          }
+          // 처음 한 번만: 기존 localStorage 의 study_game 데이터를 IndexedDB 로 복사 (원본 localStorage 는 그대로 둠)
+          if (!mem.has(MIGRATED_FLAG)) {
+            var n = localStorage.length;
+            for (var i = 0; i < n; i++) {
+              var k = localStorage.key(i);
+              if (!isOwned(k)) continue;
+              var v = nativeGet(k);
+              if (v == null) continue;
+              mem.set(k, v);
+              write("put", k, v);
+            }
+            mem.set(MIGRATED_FLAG, "1");
+            write("put", MIGRATED_FLAG, "1");
+          }
+          localStorage.getItem = function (key) {
+            var k = String(key);
+            if (!isOwned(k)) return nativeGet(k);
+            return mem.has(k) ? mem.get(k) : null;
+          };
+          localStorage.setItem = function (key, value) {
+            var k = String(key), v = String(value);
+            if (!isOwned(k)) return nativeSet(k, v);
+            mem.set(k, v);
+            write("put", k, v);
+          };
+          localStorage.removeItem = function (key) {
+            var k = String(key);
+            if (!isOwned(k)) return nativeRemove(k);
+            mem.delete(k);
+            write("delete", k);
+          };
+          resolve(true);
+        }
+      });
+
+      /* ---- 앱 본체: 저장소와 화면이 모두 준비된 뒤 실행 ---- */
+      Promise.all([
+        window.__sgStoreReady,
+        new Promise(function (r) {
+          if (document.readyState !== "loading") r();
+          else document.addEventListener("DOMContentLoaded", r);
+        }),
+      ]).then(function () {
+
       /* ----------------------------- Data ----------------------------- */
       let VOCAB = [
         { word: "alter", meaning: "바꾸다, 변경하다", en: "to change or modify something" },
@@ -11039,6 +11141,8 @@
       })();
 
       showMenu();
+
+      }); // 앱 본체 끝 (저장소·DOM 준비 후 실행)
     </script>
   </body>
 </html>
