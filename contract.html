@@ -298,6 +298,7 @@
                     <label class="chk" data-group="plan_photo" data-value="5"><input type="checkbox" disabled /><span class="box"></span>5회권</label>
                     <label class="chk" data-group="plan_photo" data-value="10"><input type="checkbox" disabled /><span class="box"></span>10회권</label>
                     <label class="chk" data-group="plan_photo" data-value="20"><input type="checkbox" disabled /><span class="box"></span>20회권</label>
+                    <label class="chk chk-custom" data-custom-group="plan_photo" style="display:none"><input type="checkbox" disabled /><span class="box"></span><span class="cc"></span>회권</label>
                   </div>
                 </td>
               </tr>
@@ -308,6 +309,7 @@
                     <label class="chk" data-group="plan_photo_video" data-value="5"><input type="checkbox" disabled /><span class="box"></span>5회권</label>
                     <label class="chk" data-group="plan_photo_video" data-value="10"><input type="checkbox" disabled /><span class="box"></span>10회권</label>
                     <label class="chk" data-group="plan_photo_video" data-value="20"><input type="checkbox" disabled /><span class="box"></span>20회권</label>
+                    <label class="chk chk-custom" data-custom-group="plan_photo_video" style="display:none"><input type="checkbox" disabled /><span class="box"></span><span class="cc"></span>회권</label>
                   </div>
                 </td>
               </tr>
@@ -421,6 +423,10 @@
             <button type="button" class="chip" data-v="5">5회권</button>
             <button type="button" class="chip on" data-v="10">10회권</button>
             <button type="button" class="chip" data-v="20">20회권</button>
+            <button type="button" class="chip" data-v="custom">직접 입력</button>
+            <span id="customCountWrap" style="display:none;align-items:center;gap:4px;font-weight:700;">
+              <input id="customCountInput" inputmode="numeric" maxlength="3" placeholder="횟수" style="width:72px;padding:8px 10px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;font-weight:700;text-align:right;font-family:inherit;" />회권
+            </span>
           </div>
         </div>
         <div class="opt-line">
@@ -621,6 +627,15 @@
             const on = String(row?.[label.dataset.group] || "") === label.dataset.value;
             label.querySelector("input").checked = on;
             label.classList.toggle("sel", on);
+          });
+          // 5·10·20 외 회권(관리자가 직접 입력한 횟수)은 그 숫자로 체크 칸을 하나 더 보여 준다.
+          document.querySelectorAll(".chk-custom[data-custom-group]").forEach((label) => {
+            const v = String(row?.[label.dataset.customGroup] || "").trim();
+            const custom = v && !["5", "10", "20"].includes(v);
+            label.style.display = custom ? "" : "none";
+            label.querySelector(".cc").textContent = custom ? v : "";
+            label.querySelector("input").checked = Boolean(custom);
+            label.classList.toggle("sel", Boolean(custom));
           });
           const vat = vatIncludedAmount(row?.total_amount);
           $("#sheetVatLine").textContent = vat ? `부가세(VAT) 10% 별도 · 부가세 포함 시 ₩${vat}원` : "부가세(VAT) 10% 별도";
@@ -892,7 +907,15 @@
             const chip = ev.target.closest("button.chip");
             if (!chip) return;
             root.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === chip));
-            adminSel[key] = chip.dataset.v;
+            if (key === "planCount") {
+              // 「직접 입력」 — 5·10·20 외 횟수(예: 15회권)를 관리자가 정한다.
+              const custom = chip.dataset.v === "custom";
+              $("#customCountWrap").style.display = custom ? "inline-flex" : "none";
+              adminSel[key] = custom ? onlyDigits($("#customCountInput").value).replace(/^0+/, "") : chip.dataset.v;
+              if (custom) $("#customCountInput").focus();
+            } else {
+              adminSel[key] = chip.dataset.v;
+            }
             if (key !== "pay") applyAutoAmount();
           });
         }
@@ -906,7 +929,7 @@
           if (auto && !amountTouched) amountEl.value = Number(auto).toLocaleString("ko-KR");
           $("#amtHint").textContent = auto
             ? `(가격표 기준 자동 계산 — 수정 가능)`
-            : `(5회권은 가격표에 없어 직접 입력해 주세요)`;
+            : `(가격표에 없는 회권이라 직접 입력해 주세요)`;
           if (!auto && !amountTouched) amountEl.value = "";
           updateVatPreview();
         }
@@ -1095,6 +1118,12 @@
           document.body.style.background = "#f2f4f8";
           bindChips("planTypeChips", "planType");
           bindChips("planCountChips", "planCount");
+          $("#customCountInput").addEventListener("input", (ev) => {
+            const digits = onlyDigits(ev.target.value).replace(/^0+/, "");
+            if (ev.target.value !== digits) ev.target.value = digits;
+            adminSel.planCount = digits;
+            applyAutoAmount();
+          });
           bindChips("payChips", "pay");
           const amountEl = $("#newAmountInput");
           amountEl.addEventListener("input", () => {
@@ -1112,7 +1141,8 @@
             const phone = String($("#newPhoneInput").value || "").trim();
             const amount = onlyDigits($("#newAmountInput").value);
             if (!company) { alert("업체명을 입력해 주세요."); return; }
-            if (!amount) { alert("합계 금액을 입력해 주세요.\n(5회권은 자동 계산이 없어 직접 입력합니다)"); return; }
+            if (!adminSel.planCount) { alert("회권 횟수를 입력해 주세요."); return; }
+            if (!amount) { alert("합계 금액을 입력해 주세요.\n(가격표에 없는 회권은 직접 입력합니다)"); return; }
             if (phone && !isKoreanMobile(phone)) { alert("휴대폰 번호를 다시 확인해 주세요."); return; }
             btn.disabled = true;
             btn.textContent = "만드는 중…";
@@ -1159,6 +1189,7 @@
             const company = String($("#newCompanyInput").value || "").trim();
             const amount = onlyDigits($("#newAmountInput").value);
             if (!company) { alert("업체명을 입력해 주세요."); return; }
+            if (!adminSel.planCount) { alert("회권 횟수를 입력해 주세요."); return; }
             if (!amount) { alert("합계 금액을 입력해 주세요."); return; }
             btn.disabled = true;
             try {
