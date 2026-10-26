@@ -438,6 +438,13 @@
           </div>
         </div>
         <div class="opt-line">
+          <div class="lb">계약서 가격표</div>
+          <div class="chips" id="priceTableChips">
+            <button type="button" class="chip on" data-v="show">보이기</button>
+            <button type="button" class="chip" data-v="hide">없애기</button>
+          </div>
+        </div>
+        <div class="opt-line">
           <div class="lb">합계 금액 (부가세 별도) <span id="amtHint" style="font-weight:400"></span></div>
           <div class="amt-line">₩ <input id="newAmountInput" inputmode="numeric" maxlength="15" /> 원</div>
           <div class="hint" id="vatPreview" style="margin-top: 5px"></div>
@@ -637,6 +644,9 @@
             label.querySelector("input").checked = Boolean(custom);
             label.classList.toggle("sel", Boolean(custom));
           });
+          // 가격표 숨기기 옵션(hide_price) — 계약서마다 따로 저장된다.
+          const priceTableEl = document.querySelector("table.f.price");
+          if (priceTableEl) priceTableEl.style.display = row?.hide_price ? "none" : "";
           const vat = vatIncludedAmount(row?.total_amount);
           $("#sheetVatLine").textContent = vat ? `부가세(VAT) 10% 별도 · 부가세 포함 시 ₩${vat}원` : "부가세(VAT) 10% 별도";
           $("#sheetAccountLine").textContent =
@@ -899,7 +909,7 @@
         }
 
         /* ── 관리자 ── */
-        const adminSel = { planType: "photo_video", planCount: "10", pay: "account" };
+        const adminSel = { planType: "photo_video", planCount: "10", pay: "account", priceTable: "show" };
         let amountTouched = false;
         function bindChips(rootId, key) {
           const root = document.getElementById(rootId);
@@ -916,7 +926,7 @@
             } else {
               adminSel[key] = chip.dataset.v;
             }
-            if (key !== "pay") applyAutoAmount();
+            if (key === "planType" || key === "planCount") applyAutoAmount();
           });
         }
         function updateVatPreview() {
@@ -974,6 +984,7 @@
                       <button class="btn" data-act="open" data-token="${escapeHtml(row.token)}">${signed ? "계약서 보기" : "미리보기"}</button>
                       <button class="btn" data-act="sms" data-token="${escapeHtml(row.token)}" data-phone="${escapeHtml(row.phone || "")}">문자 보내기</button>
                       <button class="btn" data-act="memo" data-token="${escapeHtml(row.token)}">메모</button>
+                      <button class="btn" data-act="priceToggle" data-token="${escapeHtml(row.token)}" data-hide="${row.hide_price ? "1" : ""}">${row.hide_price ? "가격표 보이기" : "가격표 없애기"}</button>
                       <button class="btn" data-act="del" data-token="${escapeHtml(row.token)}" data-name="${escapeHtml(row.company_name || "")}">삭제</button>
                     </div>
                     <div class="memo-editor hidden" data-memo-editor="${escapeHtml(row.token)}" style="margin-top:8px;">
@@ -1125,6 +1136,7 @@
             applyAutoAmount();
           });
           bindChips("payChips", "pay");
+          bindChips("priceTableChips", "priceTable");
           const amountEl = $("#newAmountInput");
           amountEl.addEventListener("input", () => {
             amountTouched = true;
@@ -1157,6 +1169,7 @@
                 plan_photo: adminSel.planType === "photo" ? adminSel.planCount : "",
                 plan_photo_video: adminSel.planType === "photo_video" ? adminSel.planCount : "",
                 payment_method: adminSel.pay,
+                hide_price: adminSel.priceTable === "hide",
                 total_amount: amount,
                 memo: String($("#newMemoInput").value || "").trim()
               };
@@ -1202,6 +1215,7 @@
                 plan_photo: adminSel.planType === "photo" ? adminSel.planCount : "",
                 plan_photo_video: adminSel.planType === "photo_video" ? adminSel.planCount : "",
                 payment_method: adminSel.pay,
+                hide_price: adminSel.priceTable === "hide",
                 total_amount: amount,
                 memo: String($("#newMemoInput").value || "").trim(),
                 status: "issued"
@@ -1265,6 +1279,25 @@
               } catch (error) {
                 btn.disabled = false;
                 alert(`메모 저장 실패: ${error?.message || ""}`);
+              }
+              return;
+            }
+            if (act === "priceToggle") {
+              // 이미 만든 계약서도 가격표를 없애거나 다시 보이게 한다.
+              const nextHide = !btn.dataset.hide;
+              btn.disabled = true;
+              try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?token=eq.${encodeURIComponent(tk)}`, {
+                  method: "PATCH",
+                  headers: { ...HDR, "Content-Type": "application/json", Prefer: "return=representation" },
+                  body: JSON.stringify({ hide_price: nextHide, updated_at: new Date().toISOString() })
+                });
+                const rows = await res.json();
+                if (!res.ok || !Array.isArray(rows) || !rows.length) throw new Error(`저장 실패 (${res.status})`);
+                loadList();
+              } catch (error) {
+                btn.disabled = false;
+                alert(`가격표 설정 실패: ${error?.message || ""}`);
               }
               return;
             }
