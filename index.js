@@ -17814,7 +17814,9 @@ ${folderBtn}
           if (!company) return;
           const code = normalizeCompanyCode(row?.companyCode || row?.code).toLowerCase();
           const nameKey = normTight(company);
-          const dir = (code && dirByCode.get(code)) || (nameKey && dirByName.get(nameKey)) || null;
+          // 무료촬영 표식 「/무」는 업체정보관리 이름에 없다(10-29 디자인 스튜디오 야무진/무)
+          const bareKey = normTight(company.replace(/\s*\/\s*무$/, ""));
+          const dir = (code && dirByCode.get(code)) || (nameKey && dirByName.get(nameKey)) || (bareKey && dirByName.get(bareKey)) || null;
           const link = String(dir?.naver_works_company_share_link || "").trim();
           if (/^https?:\/\//i.test(link)) return; // 폴더 있음
           if (!missingMap.has(nameKey)) {

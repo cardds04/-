@@ -304,10 +304,12 @@ async function main() {
     const r = rows[i];
     const company = norm(r.company_name);
     const label = `${r.time_key} ${company}`;
-    let shareLink = linkByCode.get(norm(r.code)) || linkByName.get(company) || "";
+    // 무료촬영 표식 「/무」가 붙은 스케줄명은 업체정보관리에 표식 없이 등록돼 있다(10-29 디자인 스튜디오 야무진/무)
+    const bare = company.replace(/\s*\/\s*무$/, "").trim();
+    let shareLink = linkByCode.get(norm(r.code)) || linkByName.get(company) || linkByName.get(bare) || "";
     if (!shareLink) {
       // 신규 업체 — 공유폴더에 업체 폴더를 만들고 편집허용 공유링크를 발급해 저장한다.
-      const dirRow = dirByCode.get(norm(r.code)) || dirByName.get(company);
+      const dirRow = dirByCode.get(norm(r.code)) || dirByName.get(company) || dirByName.get(bare);
       if (!dirRow?.id) {
         failures.push(`${label}: 업체정보관리에 업체가 없음(등록 필요)`);
         continue;
