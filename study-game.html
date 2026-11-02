@@ -556,8 +556,8 @@
       /* ---- 공부 카테고리 + 학교 시험 단계 ---- */
       .study-category-tabs {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
         margin: 16px 0 14px;
         padding: 7px;
         border: 2px solid #e0e7ff;
@@ -1969,6 +1969,14 @@
         padding: 2px 4px 8px;
         scrollbar-width: thin;
       }
+      /* 📒 단어장: 강 번호 단원을 옆으로 넘기지 않고 한눈에 (격자) */
+      .units-row.units-book {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        overflow-x: visible;
+      }
+      .units-row.units-book .unit-chip { min-width: 0; max-width: none; padding: 10px 10px 10px 10px; }
+      .units-row.units-book .unit-chip .uc-ico { display: none; }
       .unit-chip {
         flex: 0 0 auto;
         position: relative;
@@ -3369,6 +3377,7 @@
         <nav class="study-category-tabs" aria-label="공부 카테고리">
           <button type="button" class="study-category-tab is-active" id="categoryAcademy" data-category="academy">🏫 학원</button>
           <button type="button" class="study-category-tab" id="categorySchool" data-category="school">🎒 학교</button>
+          <button type="button" class="study-category-tab" id="categoryBook" data-category="book">📒 단어장</button>
         </nav>
 
         <a class="grade4-quest-banner english-travel-banner" id="englishTravel3dBanner" href="english-travel-3d.html" aria-label="영어 여행 3D 시작: 실제 3D 캐릭터, NPC 음성 대화, 문장 교정, 8개 여행 미션">
@@ -4305,9 +4314,7 @@
         state.modeFilter = null;
         state.schoolStage = null;
         state.schoolWrongItems = [];
-        const category = getStudyCategory();
-        if (category === "school" && getActiveUnitId() !== SCHOOL_UNIT_ID) setActiveUnitId(SCHOOL_UNIT_ID);
-        if (category === "academy" && getActiveUnitId() === SCHOOL_UNIT_ID) setActiveUnitId(DEFAULT_UNIT_ID);
+        alignCategoryAndActiveUnit();
         applyActiveUnit();
         renderStudyCategory();
         renderBadges();
@@ -4666,16 +4673,78 @@
       const DEFAULT_UNIT_ID = "default";
       const SCHOOL_UNIT_ID = "school_uigs3_chapter_test";
 
+      // 카테고리: academy(학원 · 내 단원) / school(학교 시험) / book(📒 단어장 · 학원 강 번호 단원 모음)
       function getStudyCategory() {
-        try { return localStorage.getItem(nsKey(STUDY_CATEGORY_KEY)) === "school" ? "school" : "academy"; }
+        try {
+          const v = localStorage.getItem(nsKey(STUDY_CATEGORY_KEY));
+          return v === "school" ? "school" : v === "book" ? "book" : "academy";
+        }
         catch (e) { return "academy"; }
       }
       function setStudyCategory(category) {
-        const next = category === "school" ? "school" : "academy";
+        const next = (category === "school" || category === "book") ? category : "academy";
         try { localStorage.setItem(nsKey(STUDY_CATEGORY_KEY), next); } catch (e) {}
-        setActiveUnitId(next === "school" ? SCHOOL_UNIT_ID : DEFAULT_UNIT_ID);
+        if (next === "school") setActiveUnitId(SCHOOL_UNIT_ID);
+        else if (next === "book") setActiveUnitId(newestLessonId() || DEFAULT_UNIT_ID);
+        else setActiveUnitId(DEFAULT_UNIT_ID);
         try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
         showMenu();
+      }
+
+      /* ---------- 📒 단어장 — 학원 강 번호 단원(9과·28강·16·11과단어장)을 모아 번호순 "N강" 으로 ----------
+       * 데이터의 이름은 그대로 두고 보여 줄 때만 "N강". 같은 번호가 둘 이상이면 만든 순서로 (1)(2).
+       * 앞으로 "30과" "31강" 처럼 번호만 붙여 만들면 자동으로 단어장에 들어온다.
+       */
+      function lessonNumber(u) {
+        if (!u || u.id === DEFAULT_UNIT_ID || u.id === SCHOOL_UNIT_ID) return 0;
+        const m = /^\s*(\d{1,3})\s*(강|과)?\s*(단어장|단어)?\s*$/.exec(String(u.title || ""));
+        return m ? Number(m[1]) : 0;
+      }
+      function getLessonUnits() {
+        const list = getUnits().filter((u) => lessonNumber(u) > 0)
+          .sort((a, b) => lessonNumber(a) - lessonNumber(b) || (a.createdAt || 0) - (b.createdAt || 0));
+        const count = {};
+        list.forEach((u) => { const n = lessonNumber(u); count[n] = (count[n] || 0) + 1; });
+        const seen = {};
+        return list.map((u) => {
+          const n = lessonNumber(u);
+          seen[n] = (seen[n] || 0) + 1;
+          return { unit: u, label: n + "강" + (count[n] > 1 ? " (" + seen[n] + ")" : "") };
+        });
+      }
+      function lessonLabel(u) {
+        if (!lessonNumber(u)) return "";
+        const hit = getLessonUnits().find((x) => x.unit.id === u.id);
+        return hit ? hit.label : "";
+      }
+      function newestLessonId() {
+        let best = null;
+        getLessonUnits().forEach((x) => { if (!best || (x.unit.createdAt || 0) > (best.createdAt || 0)) best = x.unit; });
+        return best ? best.id : "";
+      }
+      // 고른 단원과 칸(학원·학교·단어장)을 맞춘다. 학원에서 강 단원을 고르면(새로 만든 30과 등) 단어장 칸으로 옮긴다.
+      function alignCategoryAndActiveUnit() {
+        const res = { categoryChanged: false, activeChanged: false };
+        const category = getStudyCategory();
+        const activeId = getActiveUnitId();
+        if (category === "school") {
+          if (activeId !== SCHOOL_UNIT_ID) { setActiveUnitId(SCHOOL_UNIT_ID); res.activeChanged = true; }
+          return res;
+        }
+        const isLesson = activeId !== SCHOOL_UNIT_ID && lessonNumber(getUnits().find((u) => u.id === activeId)) > 0;
+        if (category === "academy") {
+          if (activeId === SCHOOL_UNIT_ID) { setActiveUnitId(DEFAULT_UNIT_ID); res.activeChanged = true; }
+          else if (isLesson) {
+            try { localStorage.setItem(nsKey(STUDY_CATEGORY_KEY), "book"); } catch (e) {}
+            res.categoryChanged = true;
+          }
+          return res;
+        }
+        if (!isLesson) {
+          const id = newestLessonId() || (activeId === SCHOOL_UNIT_ID ? DEFAULT_UNIT_ID : "");
+          if (id && id !== activeId) { setActiveUnitId(id); res.activeChanged = true; }
+        }
+        return res;
       }
 
       /* ---------- 🎒 프리셋 단원 (사장님이 문제지를 주면 Claude가 여기에 데이터를 넣고 배포) ----------
@@ -5298,9 +5367,7 @@
       // 아이 변경 시 menu/단원/뱃지 모두 다시 그리기 (단원·뱃지·기록이 아이별로 분리됨)
       function refreshActiveKidView() {
         try {
-          const category = getStudyCategory();
-          if (category === "school") setActiveUnitId(SCHOOL_UNIT_ID);
-          else if (getActiveUnitId() === SCHOOL_UNIT_ID) setActiveUnitId(DEFAULT_UNIT_ID);
+          alignCategoryAndActiveUnit();
           applyActiveUnit();
           renderStudyCategory();
           renderBadges();
@@ -5546,7 +5613,7 @@
           if (SPELL.length) parts.push("스펠링 " + SPELL.length);
           if (SENTENCES.length) parts.push("문장 " + SENTENCES.length);
           if (WRITE_PROMPTS.length) parts.push("쓰기 " + WRITE_PROMPTS.length);
-          sub.textContent = "📷 " + u.title + " · " + dt + " · " + parts.join(" · ");
+          sub.textContent = (lessonNumber(u) ? "📒 " + (lessonLabel(u) || u.title) : "📷 " + u.title) + " · " + dt + " · " + parts.join(" · ");
         }
       }
 
@@ -6502,7 +6569,9 @@
         if (aiSub) {
           aiSub.innerHTML = category === "school"
             ? '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요. <small>(만들면 🏫 학원 → 내 단원에 담겨요)</small>'
-            : '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요.';
+            : category === "book"
+              ? '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요. <small>(이름을 <b>30강</b>처럼 번호로 지으면 📒 단어장에 들어가요)</small>'
+              : '<b>사진</b>으로 올리거나 <b>직접</b> 적어서 단어장을 만들어요.';
         }
         const school = document.getElementById("schoolStageSection");
         if (school) school.classList.toggle("hidden", category !== "school");
@@ -6511,7 +6580,7 @@
         const grade4Study = document.getElementById("grade4StudyBanner");
         if (grade4Study) grade4Study.classList.toggle("hidden", category !== "school");
         const unitsTitle = document.querySelector("#unitsSection .units-head h3");
-        if (unitsTitle) unitsTitle.textContent = category === "school" ? "🎒 학교 시험" : "📚 내 단원";
+        if (unitsTitle) unitsTitle.textContent = category === "school" ? "🎒 학교 시험" : category === "book" ? "📒 단어장" : "📚 내 단원";
         const editBtn = document.getElementById("unitsEditToggle");
         if (editBtn) editBtn.style.display = category === "school" ? "none" : "";
       }
@@ -6548,7 +6617,11 @@
         const row = $("unitsRow");
         if (!row) return;
         row.innerHTML = "";
+        const aligned = alignCategoryAndActiveUnit();
+        if (aligned.categoryChanged) renderStudyCategory();
+        if (aligned.activeChanged) { applyActiveUnit(); renderMenuDataInfo(); renderMenuCardsState(); }
         if (getStudyCategory() === "school") {
+          row.classList.remove("units-book");
           const u = makeSchoolUnit();
           const chip = document.createElement("button");
           chip.type = "button";
@@ -6564,13 +6637,20 @@
           return;
         }
         row.classList.toggle("units-edit-on", unitsState.editMode);
+        row.classList.toggle("units-book", getStudyCategory() === "book");
         let activeId = getActiveUnitId();
 
         const defaultHidden = isDefaultUnitHidden();
-        const customUnits = getUnits().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // 📒 단어장 = 강 번호 단원만 번호순 / 학원 = 나머지 단원 최신순
+        const isBook = getStudyCategory() === "book";
+        const lessonLabels = {};
+        if (isBook) getLessonUnits().forEach((x) => { lessonLabels[x.unit.id] = x.label; });
+        const customUnits = isBook
+          ? getLessonUnits().map((x) => x.unit)
+          : getUnits().filter((u) => !lessonNumber(u)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         // 편집 모드에서는 숨겨진 기본 단원도 보여주고(다시 보기 버튼), 평소엔 숨김
-        const includeDefault = unitsState.editMode || !defaultHidden;
+        const includeDefault = !isBook && (unitsState.editMode || !defaultHidden);
         const allUnits = (includeDefault ? [makeDefaultUnit()] : []).concat(customUnits);
 
         // 활성 단원이 숨겨진 기본 단원이고 편집 모드 아니라면 → 다른 단원으로 자동 전환
@@ -6586,7 +6666,9 @@
         if (!allUnits.length) {
           const empty = document.createElement("div");
           empty.style.cssText = "padding:14px;color:#94a3b8;font-weight:700;font-size:0.85rem";
-          empty.textContent = "표시 중인 단원이 없어요. ✏️ 편집을 눌러 단원을 다시 보여주거나 사진을 올려 단원을 추가해 주세요.";
+          empty.textContent = isBook
+            ? "아직 단어장에 모인 강이 없어요. 단원 이름을 '30강'처럼 번호로 지으면 여기에 모여요."
+            : "표시 중인 단원이 없어요. ✏️ 편집을 눌러 단원을 다시 보여주거나 사진을 올려 단원을 추가해 주세요.";
           row.appendChild(empty);
         }
 
@@ -6621,8 +6703,8 @@
 
           chip.innerHTML =
             '<div class="uc-ico">' + (u.icon || "📚") + '</div>' +
-            '<div class="uc-title">' + u.title + '</div>' +
-            '<div class="uc-date">' + (isDefault ? "기본 제공" : fmtDate(u.createdAt)) + '</div>' +
+            '<div class="uc-title">' + (lessonLabels[u.id] || u.title) + '</div>' +
+            '<div class="uc-date">' + (isDefault ? "기본 제공" : fmtDate(u.createdAt) + (lessonLabels[u.id] && lessonLabels[u.id] !== u.title ? " · " + escapeHtml(u.title) : "")) + '</div>' +
             '<div class="uc-tags">' + tags.join("") + '</div>' +
             renameBtnHtml +
             actionBtnHtml;
@@ -6717,7 +6799,7 @@
         if (hint) {
           hint.textContent = unitsState.editMode
             ? "✕ 삭제 · 🙈 기본 단원 숨기기"
-            : "아이콘을 눌러 단원을 바꿔요";
+            : isBook ? "1강부터 번호 순서예요" : "아이콘을 눌러 단원을 바꿔요";
         }
       }
       function toggleUnitsEditMode() {
