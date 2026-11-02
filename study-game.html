@@ -11304,6 +11304,7 @@
             const snapshot = readLocalSnapshot();
             const ts = Math.max(Date.now(), getLocalSavedAt());
             snapshot.__savedAt = ts;
+            const body = JSON.stringify({ id: rid, kv: snapshot });
             const res = await fetch(SUPABASE_URL + "/rest/v1/" + SYNC_TABLE, {
               method: "POST",
               headers: {
@@ -11312,8 +11313,9 @@
                 "Content-Type": "application/json",
                 Prefer: "resolution=merge-duplicates,return=minimal",
               },
-              body: JSON.stringify({ id: rid, kv: snapshot }),
-              keepalive: true,
+              body: body,
+              // keepalive 는 64KB 넘으면 브라우저가 요청을 거부한다(단원 많은 아이 = 150KB) → 작을 때만
+              keepalive: new Blob([body]).size < 60000,
             });
             if (!res.ok) {
               console.warn("[study-sync] push HTTP", res.status);
