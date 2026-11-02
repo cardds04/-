@@ -6,6 +6,10 @@
       // 업체정보관리(company_directory) 의 코드→표준 이름 직통 맵. 화면에 항상 정확히 뜨는 단일 출처로,
       // resolveCanonicalCompanyIdentity 가 최우선으로 참조해 이름변경 깜빡임을 없앤다. (pull 때 새로 채움)
       const directoryCompanyNameByCode = new Map();
+      // 업체정보관리(company_directory) 폴더 주소 정본 — dbId → {share, fid}. 비어 있으면 "" 로 보관.
+      //   옛 client_kv 스냅샷이 09-23 정리 때 지운 공유링크를 되살려 「폴더 없는 업체」가
+      //   떴다 사라지던 문제(11-02 에스디디자인스페이스) 차단용.
+      const directoryFolderLinkByDbId = new Map();
       const STORAGE_DIRECTORY_NAME_BY_CODE = "scheduleSiteDirectoryNameByCodeV1";
       let directoryNameMapHydratedFromLocal = false;
       const data = [];
@@ -3289,6 +3293,13 @@
                     c.shopickPhoto = f.photo;
                     c.shopickVideo = f.video;
                     c.shopickBlog = f.blog;
+                  }
+                  // 업체정보관리를 이미 받아 왔으면 폴더 주소는 그쪽이 정본(빈 값 포함).
+                  const dirLink = directoryFolderLinkByDbId.get(String(c?.dbId || "").trim());
+                  if (dirLink) {
+                    c.naver_works_company_share_link = dirLink.share;
+                    c.naver_works_company_folder_id = dirLink.fid;
+                    return;
                   }
                   // 폴더 URL 도 incoming 에 없을 때만 로컬에서 복원.
                   const incomingShare = String(c?.naver_works_company_share_link || "").trim();
@@ -6593,6 +6604,11 @@
           const dcCode = normalizeCompanyCode(row?.code || row?.companyCode);
           const dcName = normalizeCompanyName(row?.name);
           if (dcCode && dcName && !directoryCompanyNameByCode.has(dcCode)) directoryCompanyNameByCode.set(dcCode, dcName);
+        });
+        directoryFolderLinkByDbId.clear();
+        normalized.forEach((row) => {
+          const id = String(row?.dbId || "").trim();
+          if (id) directoryFolderLinkByDbId.set(id, { share: row.naver_works_company_share_link || "", fid: row.naver_works_company_folder_id || "" });
         });
         directoryNameMapHydratedFromLocal = true;
         try {
