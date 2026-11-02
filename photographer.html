@@ -2955,6 +2955,8 @@
         return normalize(name)
           .toLowerCase()
           .replace(/\([^)]*\)/g, "")
+          // 무료촬영 표식 「/무」는 업체정보관리 이름에 없다(11-02 디자인 스튜디오 야무진/무 — 납품폴더 「없음」으로 나옴)
+          .replace(/\s*\/\s*무\s*$/, "")
           .replace(/\s+/g, " ")
           .trim();
       }
@@ -3061,6 +3063,8 @@
         };
         let rows = code ? await fetchRows(`code=eq.${encodeURIComponent(code)}`) : [];
         if (!rows.length && name) rows = await fetchRows(`name=eq.${encodeURIComponent(name)}`);
+        const bareName = name.replace(/\s*\/\s*무\s*$/, "").trim();
+        if (!rows.length && bareName && bareName !== name) rows = await fetchRows(`name=eq.${encodeURIComponent(bareName)}`);
         for (const row of rows) {
           const link = normalize(row?.naver_works_company_share_link);
           if (/^https?:\/\//i.test(link)) return link;
