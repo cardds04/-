@@ -4882,6 +4882,23 @@
             { word: "opinion", pos: "n.", meaning: "What someone thinks or feels. It cannot be proven.",             example: "Opinions often use words like best, worst, or I think.",     exampleForm: "Opinions", choices: ["Facts", "Opinions"] },
           ],
         },
+        {
+          // 김아진 전용 — 주간 단어 5개 (아진이가 쓰던 「10.29 단어」와 같은 영어+한국어 뜻 단원)
+          id: "preset_en_20261102_ajin_words",
+          rev: 1,
+          title: "11.02 단어",
+          icon: "📖",
+          kind: "en",
+          kidIds: ["ddb1d309-bb3e-43b2-b6b3-0dbddc487666"],
+          createdAt: new Date("2026-11-02T00:00:00+09:00").getTime(),
+          vocab: [
+            { word: "marble",  meaning: "구슬" },
+            { word: "plant",   meaning: "식물" },
+            { word: "blouse",  meaning: "블라우스" },
+            { word: "prince",  meaning: "왕자" },
+            { word: "present", meaning: "선물" },
+          ],
+        },
       ];
       function getHiddenPresetIds() {
         try { const a = JSON.parse(localStorage.getItem(nsKey(HIDDEN_PRESETS_KEY)) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
@@ -4893,9 +4910,11 @@
         try { window.studyGameSync && window.studyGameSync.markDirty(); } catch (e) {}
       }
       // 프리셋 정의 → 실제 단원 객체 (buildUnitFromGemini 로 필드 모양을 맞춘 뒤 메타만 덮어쓴다)
+      // kind 생략 = en_def(영어 뜻 시험지) · "en" = 영어 단어 + 한국어 뜻
       function materializePreset(p) {
-        const u = buildUnitFromGemini({ vocab: p.vocab }, { mode: "vocab", kind: "en_def" });
-        u.id = p.id; u.title = p.title; u.icon = p.icon || "🅰️"; u.createdAt = p.createdAt || Date.now();
+        const kind = p.kind || "en_def";
+        const u = buildUnitFromGemini({ vocab: p.vocab }, { mode: "vocab", kind: kind });
+        u.id = p.id; u.title = p.title; u.icon = p.icon || (kind === "en_def" ? "🅰️" : "📖"); u.createdAt = p.createdAt || Date.now();
         u.preset = true; u.rev = p.rev || 1;
         return u;
       }
