@@ -20215,6 +20215,18 @@ ${folderBtn}
       async function ensureFreeShootRowsForFlaggedCompanies() {
         try {
           if (!companies.some((c) => c?.isFreeShoot)) return false;
+          // 브라우저에 남은 옛 업체 목록(계약 전 「무료촬영」 표시)으로 계약 후 스케줄까지 무료촬영으로
+          // 묶이던 문제(11-03 디자인시연 10/22·10/28·10/29) — 서버 업체정보에서 지금 무료촬영인 업체만 인정.
+          const fr = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_COMPANY_DIRECTORY_TABLE}?is_free_shoot=eq.true&select=name,code`, { headers: FREESHOOT_HDR, cache: "no-store" });
+          if (!fr.ok) return false;
+          const liveFree = await fr.json();
+          const liveFreeCodes = new Set(liveFree.map((x) => normalizeCompanyCode(x?.code || "")).filter(Boolean));
+          const liveFreeNames = new Set(liveFree.map((x) => normalizeCompanyName(x?.name || "").toLowerCase()).filter(Boolean));
+          const isLiveFree = (item) => {
+            const cod = normalizeCompanyCode(item?.companyCode || "");
+            if (cod) return liveFreeCodes.has(cod);
+            return liveFreeNames.has(normalizeCompanyName(item?.company || "").toLowerCase().replace(/\s*\/\s*무$/, ""));
+          };
           const t = new Date(); t.setHours(0, 0, 0, 0);
           const fromKey = new Date(t.getTime() - 30 * 86400000).toISOString().slice(0, 10);
           const have = new Set(freeShootRows.map((r) => String(r?.scheduleId || "").trim()).filter(Boolean));
@@ -20225,7 +20237,7 @@ ${folderBtn}
             if (!sid || have.has(sid) || !/^\d{4}-\d{2}-\d{2}$/.test(dk) || dk < fromKey) continue;
             const src = String(item?.source || "").toLowerCase();
             if (src === "deleted" || src === "hold" || src === "refund") continue;
-            if (!isFreeShootCompanyName(item?.company, item?.companyCode)) continue;
+            if (!isFreeShootCompanyName(item?.company, item?.companyCode) || !isLiveFree(item)) continue;
             const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === normalizeCompanyName(item?.company).toLowerCase());
             const row = {
               id: `freeshoot_${sid}`,
