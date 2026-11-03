@@ -11723,6 +11723,56 @@ ${folderBtn}
           return r.ok;
         } catch (_) { return false; }
       }
+      let latestCouponRoundByItem = new Map(); // 입금 목록이 마지막으로 계산한 회차(리스트 출력용)
+      /** 회차권 사용 리스트 — 1회~N회 날짜·주소를 복사해 고객에게 보내도록 창으로 띄운다 */
+      function openCouponRoundListModal(company) {
+        const key = normalizeCompanyName(company).toLowerCase();
+        const pt = couponStartPoints.get(key);
+        if (!pt) return;
+        const rows = data
+          .filter((r) => latestCouponRoundByItem.get(r)?.key === key)
+          .map((r) => ({ r, n: latestCouponRoundByItem.get(r).n }))
+          .sort((a, b) => a.n - b.n);
+        const wd = ["일", "월", "화", "수", "목", "금", "토"];
+        const lines = rows.map(({ r, n }) => {
+          const d = String(r?.date || "");
+          const dt = new Date(`${d}T00:00:00`);
+          const day = Number.isNaN(dt.getTime()) ? "" : ` (${wd[dt.getDay()]})`;
+          return `${n}회 · ${d.replace(/-/g, ".")}${day} · ${String(r?.place || "").trim() || "-"}`;
+        });
+        const remainCount = Math.max(0, pt.total - rows.length);
+        const text =
+          `[${normalizeCompanyName(company)}] ${pt.total}회권 사용 내역\n\n` +
+          (lines.length ? lines.join("\n") : "아직 촬영 내역이 없습니다.") +
+          `\n\n등록 ${rows.length}회 / 남은 ${remainCount}회`;
+        document.getElementById("couponRoundListModal")?.remove();
+        const wrap = document.createElement("div");
+        wrap.id = "couponRoundListModal";
+        wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
+        wrap.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,0.25);">
+            <h3 style="margin:0 0 10px;">${escapeHtml(normalizeCompanyName(company))} · ${pt.total}회권 리스트</h3>
+            <textarea readonly style="width:100%;box-sizing:border-box;min-height:${Math.min(460, 120 + lines.length * 22)}px;font-size:0.95rem;line-height:1.6;padding:10px;border:1px solid #d6dbe6;border-radius:10px;resize:vertical;">${escapeHtml(text)}</textarea>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+              <button type="button" class="btn-sm primary" data-act="copy">복사하기</button>
+              <button type="button" class="btn-sm" data-act="close">닫기</button>
+            </div>
+          </div>`;
+        wrap.addEventListener("click", async (e) => {
+          const act = e.target?.dataset?.act;
+          if (e.target === wrap || act === "close") { wrap.remove(); return; }
+          if (act === "copy") {
+            const ta = wrap.querySelector("textarea");
+            try {
+              await navigator.clipboard.writeText(text);
+            } catch (_) {
+              ta.select();
+              document.execCommand("copy");
+            }
+            e.target.textContent = "복사됨 ✓";
+          }
+        });
+        document.body.appendChild(wrap);
+      }
       /** 촬영일+시간 정렬 키 — 시작점 이후 판정과 회차 순서에 같이 쓴다 */
       function couponRoundOrderKey(date, time, emptyMinutes = 9999) {
         const m = String(time || "").trim() ? parseScheduleTimeToMinutes(time) : NaN;
@@ -15369,6 +15419,7 @@ ${folderBtn}
         }
         // 회차권 시작점이 있는 업체: 시작 촬영부터 날짜·시간순 1회, 2회… (무료촬영 제외, 회권 수까지만)
         const couponRoundByItem = new Map(); // item → { n, total, isStart }
+        latestCouponRoundByItem = couponRoundByItem;
         if (couponStartPoints.size) {
           const groups = new Map();
           data.forEach((row) => {
@@ -15390,7 +15441,7 @@ ${folderBtn}
               if (i + 1 > pt.total) return;
               const sid = String(row?.customerScheduleId || "").trim();
               const isStart = pt.scheduleId ? sid === pt.scheduleId : i === 0;
-              couponRoundByItem.set(row, { n: i + 1, total: pt.total, isStart });
+              couponRoundByItem.set(row, { n: i + 1, total: pt.total, isStart, key });
             });
           });
         }
@@ -15481,7 +15532,7 @@ ${folderBtn}
                   ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
                   : "";
                 const startBtn = rd?.isStart
-                  ? `<button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="회차 번호 매기기 해제" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
+                  ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="회차 번호 매기기 해제" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
                   : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 1회로 번호 매기기" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
                 return pill + startBtn;
               })()}${compBadge}</td>
@@ -20414,6 +20465,10 @@ ${folderBtn}
         }
         if (action === "cancelPaidPaymentRow") {
           cancelPaidPaymentFromTable(index);
+          return;
+        }
+        if (action === "showCouponRoundList") {
+          openCouponRoundListModal(button.dataset.couponCompany || "");
           return;
         }
         if (action === "setCouponStart" || action === "clearCouponStart") {
