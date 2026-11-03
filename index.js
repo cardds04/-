@@ -15299,7 +15299,8 @@ ${folderBtn}
                       !freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim())
                     );
                   }
-                  return item.paymentStatus === "입금완료";
+                  // 무료촬영 건도 입금 업체에 함께 보여 기록을 한곳에서 찾게 한다(11-03 사장님)
+                  return item.paymentStatus === "입금완료" || freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
                 });
         const isPaidTab = currentPaymentFilter === "paid";
         const isUnpaidTab = currentPaymentFilter === "unpaid";
@@ -15512,6 +15513,7 @@ ${folderBtn}
             const amountMode = resolvePresetAmountMode(item.paymentAmount);
             const couponProgressText =
               source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
+            const isFreeShootItem = source === "active" && freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
             const payerIsBusinessName =
               normalizeCompanyName(item.paymentPayer).toLowerCase() === normalizeCompanyName(payId.company).toLowerCase();
             // 촬영구성 배지 — 영상 포함 여부를 한눈에 (사진만=회색 / 영상 포함=보라)
@@ -15526,7 +15528,7 @@ ${folderBtn}
             return `
             <tr>
               <td>${item.date || item.paymentDate || "-"}${(() => {
-                if (source !== "active" || isEditing) return "";
+                if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
                 const pill = rd
                   ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
@@ -15576,6 +15578,7 @@ ${folderBtn}
                   ? `<span>완료/반만입금 버튼으로 처리</span>`
                   : (() => {
                       // 실제 입금상태를 먼저, 쿠폰 잔량은 뒤에 — 쿠폰 표시가 미입금 여부를 가리던 문제(09-02) 수정
+                      if (isFreeShootItem) return freeShootBadgeHtmlForSchedule(item) || "무료촬영";
                       const baseStatus =
                         source === "hold"
                           ? "보류"
@@ -15599,7 +15602,9 @@ ${folderBtn}
                     ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button> `
                     : ""
                 }${
-                  source === "hold"
+                  isFreeShootItem && !isEditing
+                    ? `<span class="helper" style="font-size:0.74rem;">무료촬영 탭에서 관리</span>`
+                    : source === "hold"
                     ? `<button class="btn-sm" type="button" data-action="cancelHoldSchedule" data-index="${index}">스케줄취소</button>
                        <button class="btn-sm primary" type="button" data-action="revertHoldToActive" data-index="${index}">되돌리기</button>`
                     : source === "refund"
