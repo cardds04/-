@@ -20443,12 +20443,25 @@ ${folderBtn}
             alert("회권 수를 1~200 사이 숫자로 입력해 주세요.");
             return;
           }
-          void saveCouponStartPoint(company, {
-            date: d,
-            time: String(row?.time || ""),
-            scheduleId: String(row?.customerScheduleId || "").trim(),
-            total
-          }).then((ok) => { if (!ok) alert("저장 실패 — 다시 시도해 주세요."); });
+          const point = { date: d, time: String(row?.time || ""), scheduleId: String(row?.customerScheduleId || "").trim(), total };
+          // 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰을 쓴 촬영 수. 총 회수 표시(N)도 회권 수로 맞춘다.
+          const startKey = couponRoundOrderKey(point.date, point.time, 0);
+          const used = data.filter((r) => {
+            if (!r?.couponUsed) return false;
+            const rd = String(r?.date || "").trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || couponRoundOrderKey(rd, r?.time) < startKey) return false;
+            const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode).company || r?.company);
+            return rc.toLowerCase() === key;
+          }).length;
+          const remaining = Math.max(0, total - used);
+          void (async () => {
+            const okStart = await saveCouponStartPoint(company, point);
+            const okTotal = await saveCouponTotalOverride(company, total);
+            const okRemain = await updateCouponPass(company, remaining);
+            renderPaymentList();
+            if (!okStart || !okTotal) alert("저장 실패 — 다시 시도해 주세요.");
+            else if (okRemain) alert(`${company} ${total}회권 시작: ${d.slice(5).replace("-", "/")}\n쿠폰 쓴 촬영 ${used}건 → 남은 쿠폰 ${remaining}/${total}회로 맞췄어요.${used > total ? `\n(⚠️ 회권보다 ${used - total}건 더 썼어요)` : ""}`);
+          })();
           renderPaymentList();
           return;
         }
