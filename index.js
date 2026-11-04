@@ -15658,7 +15658,7 @@ ${folderBtn}
                         : baseStatus;
                       // 쿠폰 아직 안 쓴 건: 남은 수는 이 건을 빼기 전 숫자라는 걸 분명히
                       if (!item.couponUsed && baseStatus !== "입금완료") {
-                        return `${statusHtml} · 쿠폰 미적용 <span style="color:#8a94a6;">(현재 ${couponProgressText.replace(/^쿠폰 /, "")} 남음)</span>`;
+                        return `${statusHtml} · 쿠폰 미적용 <span style="color:#8a94a6;">${couponProgressText.replace(/^쿠폰 /, "").replace(/회$/, "")}</span>`;
                       }
                       return `${statusHtml} · ${couponProgressText}`;
                     })()
