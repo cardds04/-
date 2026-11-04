@@ -11780,17 +11780,28 @@ ${folderBtn}
         const m = String(time || "").trim() ? parseScheduleTimeToMinutes(time) : NaN;
         return `${String(date || "")}|${String(Number.isFinite(m) ? m : emptyMinutes).padStart(4, "0")}`;
       }
+      // 회차 순서 = 접수일(requestedAt) 순 (사장님 11-04: 촬영일이 빨라도 나중에 접수된 건이 뒷번호). 접수일 없으면 촬영일로 대신.
+      function couponRoundRowKey(row) {
+        const t = Date.parse(String(row?.requestedAt || "").trim());
+        const base = Number.isFinite(t) ? new Date(t).toISOString() : `${String(row?.date || "")}T00:00:00.000Z`;
+        return `${base}|${couponRoundOrderKey(row?.date, row?.time)}`;
+      }
+      // 어느 촬영이 이 회권에 들어가는지는 예전대로 촬영일(시작 촬영 이후) — 번호 순서만 접수일. 시작 촬영 자체는 시간이 바뀌어도 항상 포함.
+      function isRowInCouponStart(row, pt) {
+        const sid = String(row?.customerScheduleId || "").trim();
+        if (pt?.scheduleId && sid === pt.scheduleId) return true;
+        return couponRoundOrderKey(row?.date, row?.time) >= couponRoundOrderKey(pt?.date, pt?.time, 0);
+      }
       // 시작점이 있는 업체의 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰 쓴 촬영 수 (저장값이 어긋나도 이 값이 정답). 시작점 없으면 null.
       function getStartPointCouponState(companyName, companyCode = "", ctx) {
         const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const key = normalizeCompanyName(id.company || companyName).toLowerCase();
         const pt = key && couponStartPoints.get(key);
         if (!pt || !(pt.total > 0)) return null;
-        const startKey = couponRoundOrderKey(pt.date, pt.time, 0);
         const used = data.filter((r) => {
           if (!r?.couponUsed) return false;
           const rd = String(r?.date || "").trim();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || couponRoundOrderKey(rd, r?.time) < startKey) return false;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || !isRowInCouponStart(r, pt)) return false;
           const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode, ctx).company || r?.company);
           return rc.toLowerCase() === key;
         }).length;
@@ -15438,7 +15449,7 @@ ${folderBtn}
         if (paymentMonthMemoInputEl) {
           paymentMonthMemoInputEl.value = "";
         }
-        // 회차권 시작점이 있는 업체: 시작 촬영부터 날짜·시간순 1회, 2회… (무료촬영 제외, 회권 수까지만)
+        // 회차권 시작점이 있는 업체: 시작 촬영부터 접수일순 1회, 2회… (무료촬영 제외, 회권 수까지만)
         const couponRoundByItem = new Map(); // item → { n, total, isStart }
         latestCouponRoundByItem = couponRoundByItem;
         if (couponStartPoints.size) {
@@ -15450,8 +15461,8 @@ ${folderBtn}
             const key = normalizeCompanyName(paymentCanonForRow(row).company).toLowerCase();
             const pt = key && couponStartPoints.get(key);
             if (!pt) return;
-            const ok = couponRoundOrderKey(d, row?.time);
-            if (ok < couponRoundOrderKey(pt.date, pt.time, 0)) return;
+            if (!isRowInCouponStart(row, pt)) return;
+            const ok = couponRoundRowKey(row);
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push({ row, ok });
           });
@@ -20545,11 +20556,10 @@ ${folderBtn}
           }
           const point = { date: d, time: String(row?.time || ""), scheduleId: String(row?.customerScheduleId || "").trim(), total };
           // 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰을 쓴 촬영 수. 총 회수 표시(N)도 회권 수로 맞춘다.
-          const startKey = couponRoundOrderKey(point.date, point.time, 0);
           const used = data.filter((r) => {
             if (!r?.couponUsed) return false;
             const rd = String(r?.date || "").trim();
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || couponRoundOrderKey(rd, r?.time) < startKey) return false;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || !isRowInCouponStart(r, point)) return false;
             const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode).company || r?.company);
             return rc.toLowerCase() === key;
           }).length;
