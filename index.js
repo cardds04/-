@@ -11737,7 +11737,7 @@ ${folderBtn}
         const passIdx = Number.isFinite(Number(passIdxRaw)) ? Number(passIdxRaw) : passes.length - 1;
         const pt = passes[passIdx];
         if (!pt) return;
-        const passLabel = passes.length > 1 ? `${passIdx + 1}차 ` : "";
+        const passLabel = "";
         const rows = data
           .filter((r) => latestCouponRoundByItem.get(r)?.key === key && latestCouponRoundByItem.get(r)?.passIdx === passIdx)
           .map((r) => ({ r, n: latestCouponRoundByItem.get(r).n }))
@@ -11801,17 +11801,26 @@ ${folderBtn}
         if (pt?.scheduleId && sid === pt.scheduleId) return true;
         return couponRoundOrderKey(row?.date, row?.time) >= couponRoundOrderKey(pt?.date, pt?.time, 0);
       }
-      // 촬영이 속한 회권 번호(passes 안 위치). 시작 촬영이면 그 회권, 아니면 촬영일이 시작 이후인 회권 중 마지막. 없으면 -1.
+      // 회권 시작 촬영의 접수 순서 키(그 촬영이 목록에 없으면 시작일로 대신)
+      function couponPassStartRowKey(pt) {
+        const sid = String(pt?.scheduleId || "").trim();
+        const startRow = sid ? data.find((r) => String(r?.customerScheduleId || "").trim() === sid) : null;
+        return startRow ? couponRoundRowKey(startRow) : `${String(pt?.date || "")}T00:00:00.000Z|`;
+      }
+      // 촬영이 속한 회권 번호(passes 안 위치). 없으면 -1.
+      // 첫 회권: 시작 촬영일 이후 촬영(예전 그대로). 2번째 회권부터: 시작 촬영보다 늦게 접수된 촬영
+      //   → 앞 회권에서 이미 번호를 받은 건(촬영일이 늦어도 먼저 접수된 건)은 앞 회권에 그대로 남는다(사장님 11-04).
       function couponPassIndexForRow(row, passes) {
         const sid = String(row?.customerScheduleId || "").trim();
         if (sid) {
           const own = passes.findIndex((p) => p.scheduleId && p.scheduleId === sid);
           if (own >= 0) return own;
         }
-        for (let i = passes.length - 1; i >= 0; i -= 1) {
-          if (isRowInCouponStart(row, passes[i])) return i;
+        const rowKey = couponRoundRowKey(row);
+        for (let i = passes.length - 1; i >= 1; i -= 1) {
+          if (rowKey >= couponPassStartRowKey(passes[i])) return i;
         }
-        return -1;
+        return passes.length && isRowInCouponStart(row, passes[0]) ? 0 : -1;
       }
       // 시작점이 있는 업체의 남은 쿠폰 = 마지막 회권 수 − 그 회권에서 쿠폰 쓴 촬영 수 (저장값이 어긋나도 이 값이 정답). 시작점 없으면 null.
       function getStartPointCouponState(companyName, companyCode = "", ctx, passesOverride) {
@@ -15591,11 +15600,13 @@ ${folderBtn}
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
                 // 쿠폰 아직 안 쓴 회차(미입금 등)는 점선 회색 + 「쿠폰 미적용」으로 구분
-                const passTag = rd && rd.passCount > 1 ? `${rd.passIdx + 1}차·` : "";
+                // 회권이 여러 개면 지난 회권=파랑, 지금(마지막) 회권=초록
+                const isCurrentPass = rd && rd.passCount > 1 && rd.passIdx === rd.passCount - 1;
+                const passTag = "";
                 const pill = !rd
                   ? ""
                   : item.couponUsed
-                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 사용" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${passTag}${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
+                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 사용" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : isCurrentPass ? "#e3f6ea;color:#15803d;border:1px solid #b5e3c6" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${passTag}${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
                   : `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 아직 안 씀(남은 쿠폰에서 안 빠짐)" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;">${passTag}${rd.n}회 · 쿠폰 미적용</span>`;
                 const startBtn = rd?.isStart
                   ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="이 회권 번호 매기기 해제(다른 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
