@@ -15318,6 +15318,25 @@ ${folderBtn}
           const pid = paymentCanonForRow(row);
           return { row, gk: getCompanyGroupKey(pid.company, pid.companyCode) };
         });
+        // 더필링 접수 업체(업체 목록 사이트=더필링) — 입금금액 자동 계산 대상
+        const theFeelingGroupKeys = new Set();
+        const nonTheFeelingGroupKeys = new Set();
+        for (const c of companies) {
+          const st = normalizeCompanySiteTypeField(c?.siteType);
+          const gk = st && getCompanyGroupKey(c?.name, c?.code);
+          if (!gk) continue;
+          (st === "thefeeling" ? theFeelingGroupKeys : nonTheFeelingGroupKeys).add(gk);
+        }
+        for (const u of readStorageArray(STORAGE_CUSTOMERS)) {
+          if (normalizeCompanySiteTypeField(u?.siteType) !== "thefeeling") continue;
+          const gk = getCompanyGroupKey(u?.company, u?.companyCode);
+          if (gk && !nonTheFeelingGroupKeys.has(gk)) theFeelingGroupKeys.add(gk);
+        }
+        const theFeelingPriceForPaymentRow = (row) => {
+          const pid = paymentCanonForRow(row);
+          const gk = getCompanyGroupKey(pid.company, pid.companyCode);
+          return gk && theFeelingGroupKeys.has(gk) ? theFeelingPriceForRow(row) : null;
+        };
         const couponUsedByGroupKey = new Map();
         for (const row of [...data, ...onHoldPayments, ...refundPayments]) {
           if (!row?.couponUsed) continue;
@@ -15578,7 +15597,22 @@ ${folderBtn}
                   `<button class="btn-sm" type="button" data-action="chooseAmountHistory" data-index="${index}" data-amount-value="${escapeHtml(amount)}">${escapeHtml(amount)}</button>`
               )
               .join("");
-            const amountMode = resolvePresetAmountMode(item.paymentAmount);
+            const feelPrice = source === "active" ? theFeelingPriceForPaymentRow(item) : null;
+            const amountMode = resolvePresetAmountMode(item.paymentAmount || (feelPrice ? String(feelPrice.amount) : ""), feelPrice);
+            // 더필링 기준과 다른 금액이면 표시(부가세 10%·반만입금 금액은 맞는 것으로 봄)
+            const feelAmountHtml = (() => {
+              if (!feelPrice) return escapeHtml(item.paymentAmount || "-");
+              const tip = `더필링 기준: 사진 ${feelPrice.photo / 10000}만${feelPrice.video > feelPrice.photo ? ` · 영상 ${(feelPrice.video - feelPrice.photo) / 10000}만` : ""}${feelPrice.big ? " (45평이상)" : ""}`;
+              const cur = String(item.paymentAmount || "").trim();
+              if (!cur) {
+                return `<span title="${escapeHtml(tip)} — 자동 계산">${feelPrice.amount}</span> <span style="font-size:0.7rem;font-weight:800;color:#0f766e;background:#e6f6f3;border:1px solid #b8e4dc;border-radius:999px;padding:0 5px;">자동</span>`;
+              }
+              const n = parseAmountToNumber(cur);
+              const ok = cur === "쿠폰사용" || n === null || [feelPrice.amount, Math.round(feelPrice.amount * 1.1), Math.floor(feelPrice.amount / 2)].includes(n);
+              return ok
+                ? escapeHtml(cur)
+                : `${escapeHtml(cur)} <span title="${escapeHtml(tip)}" style="font-size:0.7rem;font-weight:800;color:#b42318;">⚠ 기준 ${feelPrice.amount}</span>`;
+            })();
             const couponProgressText =
               source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
             const isFreeShootItem = source === "active" && freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
@@ -15637,16 +15671,16 @@ ${folderBtn}
               <td>${
                 isEditing
                   ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
-                       <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}">사진</button>
-                       <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}">사진영상</button>
+                       <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.photo}" title="더필링 사진 ${feelPrice.photo}"` : ""}>사진</button>
+                       <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.video}" title="더필링 사진영상 ${feelPrice.video}"` : ""}>사진영상</button>
                        <button class="btn-sm ${amountMode === "custom" ? "primary" : ""}" type="button" data-action="setAmountPresetCustom" data-index="${index}">임의금액</button>
                        <button class="btn-sm" type="button" data-action="setAmountAddVat" data-index="${index}">부가세</button>
                      </div>
                      ${amountHistoryButtons ? `<div class="quick-writer-row" style="margin-bottom: 4px;">${amountHistoryButtons}</div>` : ""}
-                     <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || "")}" ${
+                     <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || (feelPrice ? String(feelPrice.amount) : ""))}" ${
                        amountMode === "custom" ? "" : "readonly"
-                     } placeholder="입금금액 입력" />`
-                  : `${escapeHtml(item.paymentAmount || "-")}`
+                     } placeholder="입금금액 입력" />${feelPrice ? `<div class="helper" style="font-size:0.72rem;">더필링 기준 ${feelPrice.amount}${feelPrice.big ? " (45평이상)" : ""}</div>` : ""}`
+                  : feelAmountHtml
               }</td>
               <td>${
                 isEditing
@@ -15748,11 +15782,32 @@ ${folderBtn}
         if (!/^\d+(?:\.\d+)?$/.test(numeric)) return null;
         return Math.floor(Number(numeric) || 0);
       }
-      function resolvePresetAmountMode(amountText) {
+      function resolvePresetAmountMode(amountText, presets = null) {
         const amountNumber = parseAmountToNumber(amountText);
-        if (amountNumber === 150000) return "photo";
-        if (amountNumber === 250000) return "video";
+        if (amountNumber === (presets ? presets.photo : 150000)) return "photo";
+        if (amountNumber === (presets ? presets.video : 250000)) return "video";
         return "custom";
+      }
+      /**
+       * 더필링 접수 업체 촬영비 (사장님 11-04): 사진 20만 · 영상 15만,
+       * 45평이상(95·145평이상 포함)은 사진 +5만 · 영상 +3만. 촬영구성이 비어 있으면 null.
+       */
+      function theFeelingPriceForRow(row) {
+        const comp = String(row?.composition || "").trim();
+        if (!comp) return null;
+        const pyeong = String(row?.pyeong || "").trim();
+        const pyNum = Number((pyeong.match(/\d+/) || [])[0] || 0);
+        const big = pyeong.includes("이상") ? pyNum >= 45 || !pyNum : !pyeong.includes("이하") && pyNum >= 45;
+        const photo = 200000 + (big ? 50000 : 0);
+        const videoOnly = 150000 + (big ? 30000 : 0);
+        const hasVideo = comp.includes("영상");
+        const hasPhoto = comp.includes("사진") || !hasVideo;
+        return {
+          amount: (hasPhoto ? photo : 0) + (hasVideo ? videoOnly : 0),
+          photo,
+          video: photo + videoOnly,
+          big
+        };
       }
       function applyHalfAmountText(amountText) {
         const amountNumber = parseAmountToNumber(amountText);
@@ -20507,14 +20562,14 @@ ${folderBtn}
         if (action === "setAmountPresetPhoto") {
           const amountInput = rowEl?.querySelector(".pay-amount");
           if (!amountInput) return;
-          amountInput.value = "150000";
+          amountInput.value = String(button.dataset.amountValue || "150000");
           amountInput.setAttribute("readonly", "readonly");
           return;
         }
         if (action === "setAmountPresetVideo") {
           const amountInput = rowEl?.querySelector(".pay-amount");
           if (!amountInput) return;
-          amountInput.value = "250000";
+          amountInput.value = String(button.dataset.amountValue || "250000");
           amountInput.setAttribute("readonly", "readonly");
           return;
         }
