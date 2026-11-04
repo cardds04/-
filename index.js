@@ -15682,17 +15682,17 @@ ${folderBtn}
                     ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">완료</button>
                        <button class="btn-sm" type="button" data-action="halfPaymentRow" data-index="${index}">반만입금</button>
                        <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
-                    : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}">입금내역수정</button>
+                    : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}" title="입금내역 수정">수정</button>
                        ${
                          item.paymentStatus === "입금완료"
                            ? `<button class="btn-sm" type="button" data-action="cancelPaidPaymentRow" data-index="${index}">입금취소</button>`
                            : couponApplyIndex === index
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}" title="되돌리기" aria-label="되돌리기">↩</button>
                               <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
                            : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
-                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}">되돌리기</button>
+                              <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}" title="되돌리기" aria-label="되돌리기">↩</button>
                               <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
                        }`
                 }
