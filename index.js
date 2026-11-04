@@ -11738,13 +11738,15 @@ ${folderBtn}
           const d = String(r?.date || "");
           const dt = new Date(`${d}T00:00:00`);
           const day = Number.isNaN(dt.getTime()) ? "" : ` (${wd[dt.getDay()]})`;
-          return `${n}회 · ${d.replace(/-/g, ".")}${day} · ${String(r?.place || "").trim() || "-"}`;
+          return `${n}회 · ${d.replace(/-/g, ".")}${day} · ${String(r?.place || "").trim() || "-"}${r?.couponUsed ? "" : " (쿠폰 미적용)"}`;
         });
-        const remainCount = Math.max(0, pt.total - rows.length);
+        const usedCount = rows.filter(({ r }) => r?.couponUsed).length;
+        const remainCount = Math.max(0, pt.total - usedCount);
         const text =
           `[${normalizeCompanyName(company)}] ${pt.total}회권 사용 내역\n\n` +
           (lines.length ? lines.join("\n") : "아직 촬영 내역이 없습니다.") +
-          `\n\n등록 ${rows.length}회 / 남은 ${remainCount}회`;
+          `\n\n쿠폰 사용 ${usedCount}회 / 남은 ${remainCount}회` +
+          (rows.length > usedCount ? `\n(쿠폰 미적용 ${rows.length - usedCount}건은 적용하면 남은 횟수에서 빠집니다)` : "");
         document.getElementById("couponRoundListModal")?.remove();
         const wrap = document.createElement("div");
         wrap.id = "couponRoundListModal";
@@ -15548,9 +15550,12 @@ ${folderBtn}
               <td>${item.date || item.paymentDate || "-"}${(() => {
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
-                const pill = rd
-                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
-                  : "";
+                // 쿠폰 아직 안 쓴 회차(미입금 등)는 점선 회색 + 「쿠폰 미적용」으로 구분
+                const pill = !rd
+                  ? ""
+                  : item.couponUsed
+                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 사용" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
+                  : `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 아직 안 씀(남은 쿠폰에서 안 빠짐)" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;">${rd.n}회 · 쿠폰 미적용</span>`;
                 const startBtn = rd?.isStart
                   ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="회차 번호 매기기 해제" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
                   : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 1회로 번호 매기기" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
@@ -15611,6 +15616,10 @@ ${folderBtn}
                       const statusHtml = baseStatus === "미입금"
                         ? `<span style="color:#b23b3b;font-weight:700;">미입금</span>`
                         : baseStatus;
+                      // 쿠폰 아직 안 쓴 건: 남은 수는 이 건을 빼기 전 숫자라는 걸 분명히
+                      if (!item.couponUsed && baseStatus !== "입금완료") {
+                        return `${statusHtml} · 쿠폰 미적용 <span style="color:#8a94a6;">(현재 ${couponProgressText.replace(/^쿠폰 /, "")} 남음)</span>`;
+                      }
                       return `${statusHtml} · ${couponProgressText}`;
                     })()
               }</td>
