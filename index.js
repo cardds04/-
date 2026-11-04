@@ -15578,15 +15578,16 @@ ${folderBtn}
             // 촬영구성 배지 — 영상 포함 여부를 한눈에 (사진만=회색 / 영상 포함=보라)
             const compRaw = String(item.composition || "").trim();
             const compHasVideo = compRaw.includes("영상");
-            const compLabel = !compRaw ? "" : compHasVideo ? (compRaw.includes("블로그") ? "사진+영상+블로그" : "사진+영상") : "사진만";
+            // 날짜 칸 한 줄로: 사=사진만 / 사+영=사진+영상 / 사+영+블=블로그 포함
+            const compLabel = !compRaw ? "" : compHasVideo ? (compRaw.includes("블로그") ? "사+영+블" : "사+영") : "사";
             const compBadge = compLabel
-              ? `<div style="margin-top:3px;"><span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:0.72rem;font-weight:800;${
+              ? `<span title="${escapeHtml(compRaw)}" style="display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;font-size:0.72rem;font-weight:800;${
                   compHasVideo ? "background:#efe7fd;color:#6b3fd4;border:1px solid #d8c8f7;" : "background:#f1f3f7;color:#6b7a99;border:1px solid #e0e5ee;"
-                }">${compLabel}</span></div>`
+                }">${compLabel}</span>`
               : "";
             return `
             <tr>
-              <td>${item.date || item.paymentDate || "-"}${(() => {
+              <td style="white-space:nowrap;">${/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? `<span title="${escapeHtml(item.date)}">${item.date.slice(5)}</span>` : item.date || item.paymentDate || "-"}${(() => {
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
                 // 쿠폰 아직 안 쓴 회차(미입금 등)는 점선 회색 + 「쿠폰 미적용」으로 구분
