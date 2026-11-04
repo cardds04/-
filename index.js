@@ -11684,7 +11684,14 @@ ${folderBtn}
       // ── 회차권 시작점 (app_state cpnstart_<업체소문자> 행, 11-03 사장님) ──
       // 고른 촬영일부터 그 뒤 촬영을 1회·2회… 로 번호 매기고, 정한 회권 수(5·10·20…)까지만 붙인다.
       // total 0 = 시작점 해제.
-      const couponStartPoints = new Map(); // key → { date, time, scheduleId, total }
+      // 업체당 회권 여러 개(1차·2차…) — 새 시작점을 누르면 이전 회권 기록은 그대로 두고 새 회권이 추가된다(사장님 11-04).
+      const couponStartPoints = new Map(); // key → [{ date, time, scheduleId, total }] (시작 촬영 순)
+      function normalizeCouponPasses(list) {
+        return (Array.isArray(list) ? list : [])
+          .map((p) => ({ date: String(p?.date || "").trim(), time: String(p?.time || ""), scheduleId: String(p?.scheduleId || "").trim(), total: Math.max(0, Math.floor(Number(p?.total) || 0)) }))
+          .filter((p) => p.total > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date))
+          .sort((a, b) => couponRoundOrderKey(a.date, a.time, 0).localeCompare(couponRoundOrderKey(b.date, b.time, 0)));
+      }
       async function refreshCouponStartPoints() {
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=like.cpnstart_%25&select=id,payload`, {
@@ -11695,22 +11702,21 @@ ${folderBtn}
           couponStartPoints.clear();
           (Array.isArray(rows) ? rows : []).forEach((x) => {
             const key = decodeURIComponent(String(x.id).replace(/^cpnstart_/, ""));
-            const total = Math.max(0, Math.floor(Number(x?.payload?.total) || 0));
-            const date = String(x?.payload?.date || "").trim();
-            if (key && total > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-              couponStartPoints.set(key, { date, time: String(x.payload.time || ""), scheduleId: String(x.payload.scheduleId || ""), total });
-            }
+            // 예전 행은 시작점 1개(payload 자체), 새 행은 payload.passes 목록
+            const passes = normalizeCouponPasses(Array.isArray(x?.payload?.passes) ? x.payload.passes : [x?.payload]);
+            if (key && passes.length) couponStartPoints.set(key, passes);
           });
           renderPaymentList();
         } catch (_) {}
       }
       void refreshCouponStartPoints(); // 시작 시 1회
-      async function saveCouponStartPoint(primaryName, point) {
+      async function saveCouponStartPoints(primaryName, passesInput) {
         const key = normalizeCompanyName(primaryName || "").toLowerCase();
         if (!key) return false;
-        const total = Math.max(0, Math.floor(Number(point?.total) || 0));
-        if (total > 0) couponStartPoints.set(key, { date: point.date, time: point.time || "", scheduleId: point.scheduleId || "", total });
+        const passes = normalizeCouponPasses(passesInput);
+        if (passes.length) couponStartPoints.set(key, passes);
         else couponStartPoints.delete(key);
+        const last = passes[passes.length - 1] || null; // 예전 필드(date·total…)는 마지막 회권으로 채워 둔다(옛 화면 호환)
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
             method: "POST",
@@ -11718,19 +11724,22 @@ ${folderBtn}
               apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
               "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal"
             },
-            body: JSON.stringify([{ id: `cpnstart_${encodeURIComponent(key)}`, payload: { company: normalizeCompanyName(primaryName), date: point?.date || "", time: point?.time || "", scheduleId: point?.scheduleId || "", total, updatedAt: new Date().toISOString() } }])
+            body: JSON.stringify([{ id: `cpnstart_${encodeURIComponent(key)}`, payload: { company: normalizeCompanyName(primaryName), date: last?.date || "", time: last?.time || "", scheduleId: last?.scheduleId || "", total: last?.total || 0, passes, updatedAt: new Date().toISOString() } }])
           });
           return r.ok;
         } catch (_) { return false; }
       }
       let latestCouponRoundByItem = new Map(); // 입금 목록이 마지막으로 계산한 회차(리스트 출력용)
       /** 회차권 사용 리스트 — 1회~N회 날짜·주소를 복사해 고객에게 보내도록 창으로 띄운다 */
-      function openCouponRoundListModal(company) {
+      function openCouponRoundListModal(company, passIdxRaw) {
         const key = normalizeCompanyName(company).toLowerCase();
-        const pt = couponStartPoints.get(key);
+        const passes = couponStartPoints.get(key) || [];
+        const passIdx = Number.isFinite(Number(passIdxRaw)) ? Number(passIdxRaw) : passes.length - 1;
+        const pt = passes[passIdx];
         if (!pt) return;
+        const passLabel = passes.length > 1 ? `${passIdx + 1}차 ` : "";
         const rows = data
-          .filter((r) => latestCouponRoundByItem.get(r)?.key === key)
+          .filter((r) => latestCouponRoundByItem.get(r)?.key === key && latestCouponRoundByItem.get(r)?.passIdx === passIdx)
           .map((r) => ({ r, n: latestCouponRoundByItem.get(r).n }))
           .sort((a, b) => a.n - b.n);
         const wd = ["일", "월", "화", "수", "목", "금", "토"];
@@ -11743,7 +11752,7 @@ ${folderBtn}
         const usedCount = rows.filter(({ r }) => r?.couponUsed).length;
         const remainCount = Math.max(0, pt.total - usedCount);
         const text =
-          `[${normalizeCompanyName(company)}] ${pt.total}회권 사용 내역\n\n` +
+          `[${normalizeCompanyName(company)}] ${passLabel}${pt.total}회권 사용 내역\n\n` +
           (lines.length ? lines.join("\n") : "아직 촬영 내역이 없습니다.") +
           `\n\n쿠폰 사용 ${usedCount}회 / 남은 ${remainCount}회` +
           (rows.length > usedCount ? `\n(쿠폰 미적용 ${rows.length - usedCount}건은 적용하면 남은 횟수에서 빠집니다)` : "");
@@ -11752,7 +11761,7 @@ ${folderBtn}
         wrap.id = "couponRoundListModal";
         wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.45);display:flex;align-items:center;justify-content:center;padding:16px;";
         wrap.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,0.25);">
-            <h3 style="margin:0 0 10px;">${escapeHtml(normalizeCompanyName(company))} · ${pt.total}회권 리스트</h3>
+            <h3 style="margin:0 0 10px;">${escapeHtml(normalizeCompanyName(company))} · ${passLabel}${pt.total}회권 리스트</h3>
             <textarea readonly style="width:100%;box-sizing:border-box;min-height:${Math.min(460, 120 + lines.length * 22)}px;font-size:0.95rem;line-height:1.6;padding:10px;border:1px solid #d6dbe6;border-radius:10px;resize:vertical;">${escapeHtml(text)}</textarea>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
               <button type="button" class="btn-sm primary" data-act="copy">복사하기</button>
@@ -11792,18 +11801,33 @@ ${folderBtn}
         if (pt?.scheduleId && sid === pt.scheduleId) return true;
         return couponRoundOrderKey(row?.date, row?.time) >= couponRoundOrderKey(pt?.date, pt?.time, 0);
       }
-      // 시작점이 있는 업체의 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰 쓴 촬영 수 (저장값이 어긋나도 이 값이 정답). 시작점 없으면 null.
-      function getStartPointCouponState(companyName, companyCode = "", ctx) {
+      // 촬영이 속한 회권 번호(passes 안 위치). 시작 촬영이면 그 회권, 아니면 촬영일이 시작 이후인 회권 중 마지막. 없으면 -1.
+      function couponPassIndexForRow(row, passes) {
+        const sid = String(row?.customerScheduleId || "").trim();
+        if (sid) {
+          const own = passes.findIndex((p) => p.scheduleId && p.scheduleId === sid);
+          if (own >= 0) return own;
+        }
+        for (let i = passes.length - 1; i >= 0; i -= 1) {
+          if (isRowInCouponStart(row, passes[i])) return i;
+        }
+        return -1;
+      }
+      // 시작점이 있는 업체의 남은 쿠폰 = 마지막 회권 수 − 그 회권에서 쿠폰 쓴 촬영 수 (저장값이 어긋나도 이 값이 정답). 시작점 없으면 null.
+      function getStartPointCouponState(companyName, companyCode = "", ctx, passesOverride) {
         const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
         const key = normalizeCompanyName(id.company || companyName).toLowerCase();
-        const pt = key && couponStartPoints.get(key);
+        const passes = passesOverride || (key && couponStartPoints.get(key)) || [];
+        const lastIdx = passes.length - 1;
+        const pt = passes[lastIdx];
         if (!pt || !(pt.total > 0)) return null;
         const used = data.filter((r) => {
           if (!r?.couponUsed) return false;
           const rd = String(r?.date || "").trim();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || !isRowInCouponStart(r, pt)) return false;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(rd)) return false;
           const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode, ctx).company || r?.company);
-          return rc.toLowerCase() === key;
+          if (rc.toLowerCase() !== key) return false;
+          return couponPassIndexForRow(r, passes) === lastIdx;
         }).length;
         return { total: pt.total, used, remaining: Math.max(0, pt.total - used) };
       }
@@ -15459,21 +15483,25 @@ ${folderBtn}
             if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
             if (freeShootScheduleIds.has(String(row?.customerScheduleId || "").trim())) return;
             const key = normalizeCompanyName(paymentCanonForRow(row).company).toLowerCase();
-            const pt = key && couponStartPoints.get(key);
-            if (!pt) return;
-            if (!isRowInCouponStart(row, pt)) return;
-            const ok = couponRoundRowKey(row);
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push({ row, ok });
+            const passes = key && couponStartPoints.get(key);
+            if (!passes) return;
+            const passIdx = couponPassIndexForRow(row, passes);
+            if (passIdx < 0) return;
+            const gk = `${key}\u0000${passIdx}`;
+            if (!groups.has(gk)) groups.set(gk, { key, passIdx, list: [] });
+            groups.get(gk).list.push({ row, ok: couponRoundRowKey(row) });
           });
-          groups.forEach((list, key) => {
-            const pt = couponStartPoints.get(key);
-            list.sort((a, b) => a.ok.localeCompare(b.ok));
+          groups.forEach(({ key, passIdx, list }) => {
+            const passes = couponStartPoints.get(key);
+            const pt = passes[passIdx];
+            // 시작 촬영은 항상 그 회권의 1회, 나머지는 접수일순
+            const isStartRow = (row) => Boolean(pt.scheduleId) && String(row?.customerScheduleId || "").trim() === pt.scheduleId;
+            list.sort((a, b) => (isStartRow(b.row) - isStartRow(a.row)) || a.ok.localeCompare(b.ok));
             list.forEach(({ row }, i) => {
               if (i + 1 > pt.total) return;
               const sid = String(row?.customerScheduleId || "").trim();
               const isStart = pt.scheduleId ? sid === pt.scheduleId : i === 0;
-              couponRoundByItem.set(row, { n: i + 1, total: pt.total, isStart, key });
+              couponRoundByItem.set(row, { n: i + 1, total: pt.total, isStart, key, passIdx, passCount: passes.length });
             });
           });
         }
@@ -15562,14 +15590,15 @@ ${folderBtn}
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
                 // 쿠폰 아직 안 쓴 회차(미입금 등)는 점선 회색 + 「쿠폰 미적용」으로 구분
+                const passTag = rd && rd.passCount > 1 ? `${rd.passIdx + 1}차·` : "";
                 const pill = !rd
                   ? ""
                   : item.couponUsed
-                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 사용" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
-                  : `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 아직 안 씀(남은 쿠폰에서 안 빠짐)" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;">${rd.n}회 · 쿠폰 미적용</span>`;
+                  ? `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 사용" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:${rd.n === rd.total ? "#fde8e8;color:#b42318;border:1px solid #f5c2c2" : "#e7efff;color:#1d4ed8;border:1px solid #c7d7fb"};">${passTag}${rd.n}회${rd.n === rd.total ? " (끝)" : ""}</span>`
+                  : `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 아직 안 씀(남은 쿠폰에서 안 빠짐)" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;">${passTag}${rd.n}회 · 쿠폰 미적용</span>`;
                 const startBtn = rd?.isStart
-                  ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="회차 번호 매기기 해제" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
-                  : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 1회로 번호 매기기" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
+                  ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="이 회권 번호 매기기 해제(다른 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
+                  : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 새 회권 1회로 번호 매기기(이전 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
                 return pill + startBtn;
               })()}${compBadge}</td>
               <td>${escapeHtml(companyDisplay)}</td>
@@ -20524,7 +20553,7 @@ ${folderBtn}
           return;
         }
         if (action === "showCouponRoundList") {
-          openCouponRoundListModal(button.dataset.couponCompany || "");
+          openCouponRoundListModal(button.dataset.couponCompany || "", button.dataset.couponPass);
           return;
         }
         if (action === "setCouponStart" || action === "clearCouponStart") {
@@ -20533,10 +20562,16 @@ ${folderBtn}
           const company = normalizeCompanyName(button.dataset.couponCompany || row.company);
           if (!company) return;
           const key = company.toLowerCase();
-          const prev = couponStartPoints.get(key);
+          const prevPasses = couponStartPoints.get(key) || [];
+          const prev = prevPasses[prevPasses.length - 1] || null;
           if (action === "clearCouponStart") {
-            if (!confirm(`${company} 회차 번호(${prev ? prev.total + "회권" : ""})를 해제할까요?`)) return;
-            void saveCouponStartPoint(company, { total: 0 }).then((ok) => { if (!ok) alert("저장 실패 — 다시 시도해 주세요."); });
+            const idx = Number(button.dataset.couponPass);
+            const target = prevPasses[idx];
+            if (!target) return;
+            const label = prevPasses.length > 1 ? `${idx + 1}차 ` : "";
+            if (!confirm(`${company} ${label}${target.total}회권(${target.date.slice(5).replace("-", "/")} 시작) 번호를 해제할까요?${prevPasses.length > 1 ? "\n다른 회권 기록은 그대로 둡니다." : ""}`)) return;
+            const nextPasses = prevPasses.filter((_, i) => i !== idx);
+            void saveCouponStartPoints(company, nextPasses).then((ok) => { if (!ok) alert("저장 실패 — 다시 시도해 주세요."); });
             renderPaymentList();
             return;
           }
@@ -20545,9 +20580,9 @@ ${folderBtn}
             alert("촬영 날짜가 없는 건은 시작점으로 정할 수 없습니다.");
             return;
           }
-          if (prev && !confirm(`${company}은(는) 이미 ${prev.date.slice(5).replace("-", "/")} 부터 ${prev.total}회권으로 번호를 매기고 있어요.\n${d.slice(5).replace("-", "/")} 부터 새로 시작할까요?`)) return;
+          if (prev && !confirm(`${company}은(는) 지금 ${prev.date.slice(5).replace("-", "/")} 부터 ${prev.total}회권으로 번호를 매기고 있어요.\n이전 회권 기록은 그대로 두고, ${d.slice(5).replace("-", "/")} 부터 새 회권(${prevPasses.length + 1}차)을 시작할까요?`)) return;
           const defTotal = prev?.total || getCouponTotalOverride(company) || 10;
-          const raw = prompt(`${company} — ${d.slice(5).replace("-", "/")} 촬영부터 1회로 셉니다.\n몇 회권인가요? (예: 5, 10, 20)`, String(defTotal));
+          const raw = prompt(`${company} — ${d.slice(5).replace("-", "/")} 촬영부터 ${prevPasses.length ? `새 회권(${prevPasses.length + 1}차) ` : ""}1회로 셉니다.\n몇 회권인가요? (예: 5, 10, 20)`, String(defTotal));
           if (raw === null) return;
           const total = Math.floor(Number(String(raw).replace(/[^0-9]/g, "")) || 0);
           if (total < 1 || total > 200) {
@@ -20555,22 +20590,18 @@ ${folderBtn}
             return;
           }
           const point = { date: d, time: String(row?.time || ""), scheduleId: String(row?.customerScheduleId || "").trim(), total };
-          // 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰을 쓴 촬영 수. 총 회수 표시(N)도 회권 수로 맞춘다.
-          const used = data.filter((r) => {
-            if (!r?.couponUsed) return false;
-            const rd = String(r?.date || "").trim();
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || !isRowInCouponStart(r, point)) return false;
-            const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode).company || r?.company);
-            return rc.toLowerCase() === key;
-          }).length;
-          const remaining = Math.max(0, total - used);
+          // 남은 쿠폰 = 마지막 회권 수 − 그 회권에서 쿠폰 쓴 촬영 수. 총 회수 표시(N)도 마지막 회권 수로 맞춘다.
+          const nextPasses = normalizeCouponPasses([...prevPasses.filter((p) => !(point.scheduleId && p.scheduleId === point.scheduleId)), point]);
+          const latest = getStartPointCouponState(company, "", undefined, nextPasses);
+          const lastPass = nextPasses[nextPasses.length - 1];
+          const isLatest = lastPass && lastPass.scheduleId === point.scheduleId && lastPass.date === point.date;
           void (async () => {
-            const okStart = await saveCouponStartPoint(company, point);
-            const okTotal = await saveCouponTotalOverride(company, total);
-            const okRemain = await updateCouponPass(company, remaining);
+            const okStart = await saveCouponStartPoints(company, nextPasses);
+            const okTotal = await saveCouponTotalOverride(company, lastPass.total);
+            const okRemain = latest ? await updateCouponPass(company, latest.remaining) : true;
             renderPaymentList();
             if (!okStart || !okTotal) alert("저장 실패 — 다시 시도해 주세요.");
-            else if (okRemain) alert(`${company} ${total}회권 시작: ${d.slice(5).replace("-", "/")}\n쿠폰 쓴 촬영 ${used}건 → 남은 쿠폰 ${remaining}/${total}회로 맞췄어요.${used > total ? `\n(⚠️ 회권보다 ${used - total}건 더 썼어요)` : ""}`);
+            else if (okRemain && latest) alert(`${company} ${nextPasses.length > 1 ? `${nextPasses.indexOf(lastPass) + 1}차 ` : ""}${lastPass.total}회권${isLatest ? ` 시작: ${d.slice(5).replace("-", "/")}` : ""}\n쿠폰 쓴 촬영 ${latest.used}건 → 남은 쿠폰 ${latest.remaining}/${lastPass.total}회로 맞췄어요.${latest.used > lastPass.total ? `\n(⚠️ 회권보다 ${latest.used - lastPass.total}건 더 썼어요)` : ""}${nextPasses.length > 1 ? "\n이전 회권 기록은 그대로 남아 있어요." : ""}`);
           })();
           renderPaymentList();
           return;
