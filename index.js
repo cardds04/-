@@ -11778,6 +11778,22 @@ ${folderBtn}
         const m = String(time || "").trim() ? parseScheduleTimeToMinutes(time) : NaN;
         return `${String(date || "")}|${String(Number.isFinite(m) ? m : emptyMinutes).padStart(4, "0")}`;
       }
+      // 시작점이 있는 업체의 남은 쿠폰 = 회권 수 − 시작점부터 쿠폰 쓴 촬영 수 (저장값이 어긋나도 이 값이 정답). 시작점 없으면 null.
+      function getStartPointCouponState(companyName, companyCode = "", ctx) {
+        const id = resolveCanonicalCompanyIdentity(companyName, companyCode, ctx);
+        const key = normalizeCompanyName(id.company || companyName).toLowerCase();
+        const pt = key && couponStartPoints.get(key);
+        if (!pt || !(pt.total > 0)) return null;
+        const startKey = couponRoundOrderKey(pt.date, pt.time, 0);
+        const used = data.filter((r) => {
+          if (!r?.couponUsed) return false;
+          const rd = String(r?.date || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(rd) || couponRoundOrderKey(rd, r?.time) < startKey) return false;
+          const rc = normalizeCompanyName(resolveCanonicalCompanyIdentity(r?.company, r?.companyCode, ctx).company || r?.company);
+          return rc.toLowerCase() === key;
+        }).length;
+        return { total: pt.total, used, remaining: Math.max(0, pt.total - used) };
+      }
       function getCouponTotalOverride(primaryName) {
         const key = normalizeCompanyName(primaryName || "").toLowerCase();
         return key ? Number(couponTotalOverrides.get(key)) || 0 : 0;
@@ -15268,6 +15284,8 @@ ${folderBtn}
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
           const ctx = canonicalIdentityCtxPayment;
+          const startState = getStartPointCouponState(normalizedCompany, companyCode, ctx);
+          if (startState) return `쿠폰 ${startState.remaining}/${startState.total}회`;
           const remaining = Math.max(0, Number(getCouponRemaining(normalizedCompany, companyCode, ctx)) || 0);
           const id =
             preResolvedIdentity && typeof preResolvedIdentity === "object"
@@ -15867,7 +15885,8 @@ ${folderBtn}
           couponUsed: Boolean(item.couponUsed),
           partialPaid: Boolean(item.partialPaid)
         };
-        const remaining = getCouponRemaining(item.company, item.companyCode);
+        const startState = getStartPointCouponState(item.company, item.companyCode);
+        const remaining = startState ? startState.remaining : getCouponRemaining(item.company, item.companyCode);
         if (remaining < 1) {
           alert("남은 회차권이 없습니다. 회차권 등록에서 먼저 등록해주세요.");
           return;
