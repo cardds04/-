@@ -15587,7 +15587,7 @@ ${folderBtn}
               : "";
             return `
             <tr>
-              <td style="white-space:nowrap;">${/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? `<span title="${escapeHtml(item.date)}">${item.date.slice(5)}</span>` : item.date || item.paymentDate || "-"}${(() => {
+              <td style="white-space:nowrap;">${/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? `<span title="${escapeHtml(item.date)}">${item.date.slice(5)}</span>` : item.date || item.paymentDate || "-"}${compBadge}${(() => {
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
                 // 쿠폰 아직 안 쓴 회차(미입금 등)는 점선 회색 + 「쿠폰 미적용」으로 구분
@@ -15601,7 +15601,7 @@ ${folderBtn}
                   ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="이 회권 번호 매기기 해제(다른 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
                   : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 새 회권 1회로 번호 매기기(이전 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
                 return pill + startBtn;
-              })()}${compBadge}</td>
+              })()}</td>
               <td>${escapeHtml(companyDisplay)}</td>
               <td>${
                 isEditing
