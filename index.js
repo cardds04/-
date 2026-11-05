@@ -4304,6 +4304,8 @@
       let latestScheduleCopyRows = [];
       let latestScheduleCopyLabel = "전체스케줄";
       let latestUnpaidSummaryRows = [];
+      /** 미입금 행 → 자동 계산 금액(입금금액이 비어 있을 때만). 요약복사·미수금 합계에 씀 */
+      let latestAutoAmountByRow = new WeakMap();
       const ADMIN_OVERRIDE_PASSWORD = "6315";
       let previousHistoryFilterYear = String(new Date().getFullYear());
       let previousHistoryFilterMonth = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -13297,8 +13299,9 @@ ${folderBtn}
             ) || "-";
           const receivedAddressRaw = String(item?.place || item?.address || "").trim();
           const placeSnippet = formatReceivedAddressSnippetForUnpaidSummary(receivedAddressRaw);
-          const amountValue = parseAmountToNumber(item?.paymentAmount);
-          const amountText = amountValue === null ? String(item?.paymentAmount || "-").trim() || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
+          const amountRaw = String(item?.paymentAmount || "").trim() || latestAutoAmountByRow.get(item) || "";
+          const amountValue = parseAmountToNumber(amountRaw);
+          const amountText = amountValue === null ? amountRaw || "-" : `${amountValue.toLocaleString("ko-KR")}원`;
           if (!companyGroups.has(companyName)) {
             companyGroups.set(companyName, { rows: [], sum: 0 });
           }
@@ -15366,6 +15369,13 @@ ${folderBtn}
         const freeShootScheduleIds = new Set(
           freeShootRows.map((row) => String(row?.scheduleId || "").trim()).filter(Boolean)
         );
+        // 회차권 업체·무료촬영은 자동 금액 없음
+        const autoShootPriceForRow = (item) => {
+          if (freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim())) return null;
+          const pid = paymentCanonForRow(item);
+          if (getCouponProgressText(pid.company, pid.companyCode, pid)) return null;
+          return shootPriceForPaymentRow(item);
+        };
         const filtered =
           currentPaymentFilter === "hold"
             ? onHoldPayments.map((item, index) => ({ item, index, source: "hold" }))
@@ -15480,6 +15490,13 @@ ${folderBtn}
             );
           });
         latestUnpaidSummaryRows = isUnpaidTab ? visibleRows.map(({ item }) => item) : [];
+        latestAutoAmountByRow = new WeakMap();
+        for (const { item, source } of visibleRows) {
+          if (source !== "active" || String(item?.paymentAmount || "").trim()) continue;
+          const price = autoShootPriceForRow(item);
+          if (price) latestAutoAmountByRow.set(item, String(price.amount));
+        }
+        const amountTextWithAuto = (item) => String(item?.paymentAmount || "").trim() || latestAutoAmountByRow.get(item) || "";
         copyUnpaidSummaryBtnEl?.classList.toggle("hidden", !isUnpaidTab);
         // 일괄 입력 바: 미입금 탭에서만 노출 + 검색된 건수 표시.
         if (paymentBulkApplyBarEl) paymentBulkApplyBarEl.style.display = isUnpaidTab ? "flex" : "none"; // 인라인 display:flex 가 .hidden 을 이겨 다른 탭에도 보이던 문제
@@ -15489,7 +15506,7 @@ ${folderBtn}
             ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(item?.paymentAmount) || 0)), 0)
             : 0;
           const unpaidTotalAmount = isUnpaidTab
-            ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(item?.paymentAmount) || 0)), 0)
+            ? visibleRows.reduce((sum, { item }) => sum + Math.max(0, Number(parseAmountToNumber(amountTextWithAuto(item)) || 0)), 0)
             : 0;
           const totalLabel = isPaidAllView ? "전체 총금액" : "월별 총금액";
           paymentMonthTotalTextEl.textContent = isUnpaidTab
@@ -15598,8 +15615,7 @@ ${folderBtn}
             const couponProgressText =
               source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
             const isFreeShootItem = source === "active" && freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
-            // 회차권 업체·무료촬영은 자동 금액 없음
-            const feelPrice = source === "active" && !couponProgressText && !isFreeShootItem ? shootPriceForPaymentRow(item) : null;
+            const feelPrice = source === "active" ? autoShootPriceForRow(item) : null;
             const amountMode = resolvePresetAmountMode(item.paymentAmount || (feelPrice ? String(feelPrice.amount) : ""), feelPrice);
             // 더필링 기준과 다른 금액이면 표시(부가세 10%·반만입금 금액은 맞는 것으로 봄)
             const feelAmountHtml = (() => {
