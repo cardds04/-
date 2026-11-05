@@ -15318,24 +15318,22 @@ ${folderBtn}
           const pid = paymentCanonForRow(row);
           return { row, gk: getCompanyGroupKey(pid.company, pid.companyCode) };
         });
-        // 더필링 접수 업체(업체 목록 사이트=더필링) — 입금금액 자동 계산 대상
-        const theFeelingGroupKeys = new Set();
-        const nonTheFeelingGroupKeys = new Set();
+        // 업체별 사이트(업체 목록 사이트 칸 우선, 없으면 고객 계정) — 입금금액 자동 계산 기준
+        const siteTypeByGroupKey = new Map();
         for (const c of companies) {
           const st = normalizeCompanySiteTypeField(c?.siteType);
           const gk = st && getCompanyGroupKey(c?.name, c?.code);
-          if (!gk) continue;
-          (st === "thefeeling" ? theFeelingGroupKeys : nonTheFeelingGroupKeys).add(gk);
+          if (gk) siteTypeByGroupKey.set(gk, st);
         }
         for (const u of readStorageArray(STORAGE_CUSTOMERS)) {
-          if (normalizeCompanySiteTypeField(u?.siteType) !== "thefeeling") continue;
-          const gk = getCompanyGroupKey(u?.company, u?.companyCode);
-          if (gk && !nonTheFeelingGroupKeys.has(gk)) theFeelingGroupKeys.add(gk);
+          const st = normalizeCompanySiteTypeField(u?.siteType);
+          const gk = st && getCompanyGroupKey(u?.company, u?.companyCode);
+          if (gk && !siteTypeByGroupKey.has(gk)) siteTypeByGroupKey.set(gk, st);
         }
-        const theFeelingPriceForPaymentRow = (row) => {
+        const shootPriceForPaymentRow = (row) => {
           const pid = paymentCanonForRow(row);
           const gk = getCompanyGroupKey(pid.company, pid.companyCode);
-          return gk && theFeelingGroupKeys.has(gk) ? theFeelingPriceForRow(row) : null;
+          return gk ? shootPriceForRow(row, siteTypeByGroupKey.get(gk) || "inlog") : null;
         };
         const couponUsedByGroupKey = new Map();
         for (const row of [...data, ...onHoldPayments, ...refundPayments]) {
@@ -15597,12 +15595,16 @@ ${folderBtn}
                   `<button class="btn-sm" type="button" data-action="chooseAmountHistory" data-index="${index}" data-amount-value="${escapeHtml(amount)}">${escapeHtml(amount)}</button>`
               )
               .join("");
-            const feelPrice = source === "active" ? theFeelingPriceForPaymentRow(item) : null;
+            const couponProgressText =
+              source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
+            const isFreeShootItem = source === "active" && freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
+            // 회차권 업체·무료촬영은 자동 금액 없음
+            const feelPrice = source === "active" && !couponProgressText && !isFreeShootItem ? shootPriceForPaymentRow(item) : null;
             const amountMode = resolvePresetAmountMode(item.paymentAmount || (feelPrice ? String(feelPrice.amount) : ""), feelPrice);
             // 더필링 기준과 다른 금액이면 표시(부가세 10%·반만입금 금액은 맞는 것으로 봄)
             const feelAmountHtml = (() => {
               if (!feelPrice) return escapeHtml(item.paymentAmount || "-");
-              const tip = `더필링 기준: 사진 ${feelPrice.photo / 10000}만${feelPrice.video > feelPrice.photo ? ` · 영상 ${(feelPrice.video - feelPrice.photo) / 10000}만` : ""}${feelPrice.big ? " (45평이상)" : ""}`;
+              const tip = `${feelPrice.label} 기준: 사진 ${feelPrice.photo / 10000}만 · 영상 ${feelPrice.videoOnly / 10000}만${feelPrice.big ? " (45평이상)" : ""}`;
               const cur = String(item.paymentAmount || "").trim();
               if (!cur) {
                 return `<span title="${escapeHtml(tip)} — 자동 계산">${feelPrice.amount}</span> <span style="font-size:0.7rem;font-weight:800;color:#0f766e;background:#e6f6f3;border:1px solid #b8e4dc;border-radius:999px;padding:0 5px;">자동</span>`;
@@ -15613,9 +15615,6 @@ ${folderBtn}
                 ? escapeHtml(cur)
                 : `${escapeHtml(cur)} <span title="${escapeHtml(tip)}" style="font-size:0.7rem;font-weight:800;color:#b42318;">⚠ 기준 ${feelPrice.amount}</span>`;
             })();
-            const couponProgressText =
-              source === "active" ? getCouponProgressText(payId.company, payId.companyCode, payId) : "";
-            const isFreeShootItem = source === "active" && freeShootScheduleIds.has(String(item?.customerScheduleId || "").trim());
             const payerIsBusinessName =
               normalizeCompanyName(item.paymentPayer).toLowerCase() === normalizeCompanyName(payId.company).toLowerCase();
             // 촬영구성 배지 — 영상 포함 여부를 한눈에 (사진만=회색 / 영상 포함=보라)
@@ -15671,15 +15670,15 @@ ${folderBtn}
               <td>${
                 isEditing
                   ? `<div class="quick-writer-row" style="margin-bottom: 4px;">
-                       <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.photo}" title="더필링 사진 ${feelPrice.photo}"` : ""}>사진</button>
-                       <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.video}" title="더필링 사진영상 ${feelPrice.video}"` : ""}>사진영상</button>
+                       <button class="btn-sm ${amountMode === "photo" ? "primary" : ""}" type="button" data-action="setAmountPresetPhoto" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.photo}" title="${feelPrice.label} 사진 ${feelPrice.photo}"` : ""}>사진</button>
+                       <button class="btn-sm ${amountMode === "video" ? "primary" : ""}" type="button" data-action="setAmountPresetVideo" data-index="${index}"${feelPrice ? ` data-amount-value="${feelPrice.video}" title="${feelPrice.label} 사진영상 ${feelPrice.video}"` : ""}>사진영상</button>
                        <button class="btn-sm ${amountMode === "custom" ? "primary" : ""}" type="button" data-action="setAmountPresetCustom" data-index="${index}">임의금액</button>
                        <button class="btn-sm" type="button" data-action="setAmountAddVat" data-index="${index}">부가세</button>
                      </div>
                      ${amountHistoryButtons ? `<div class="quick-writer-row" style="margin-bottom: 4px;">${amountHistoryButtons}</div>` : ""}
                      <input class="inline-input pay-amount" type="text" value="${escapeHtml(item.paymentAmount || (feelPrice ? String(feelPrice.amount) : ""))}" ${
                        amountMode === "custom" ? "" : "readonly"
-                     } placeholder="입금금액 입력" />${feelPrice ? `<div class="helper" style="font-size:0.72rem;">더필링 기준 ${feelPrice.amount}${feelPrice.big ? " (45평이상)" : ""}</div>` : ""}`
+                     } placeholder="입금금액 입력" />${feelPrice ? `<div class="helper" style="font-size:0.72rem;">${feelPrice.label} 기준 ${feelPrice.amount}${feelPrice.big ? " (45평이상)" : ""}</div>` : ""}`
                   : feelAmountHtml
               }</td>
               <td>${
@@ -15789,24 +15788,33 @@ ${folderBtn}
         return "custom";
       }
       /**
-       * 더필링 접수 업체 촬영비 (사장님 11-04): 사진 20만 · 영상 15만,
-       * 45평이상(95·145평이상 포함)은 사진 +5만 · 영상 +3만. 촬영구성이 비어 있으면 null.
+       * 회차권 없는 업체 촬영비 자동 계산 (사장님 11-04·11-05). 45평이상(46·95·145평이상 포함)은 사진 +5만 · 영상 +3만.
+       * - 더필링: 사진 20만 · 영상 15만 → 사진영상 35만 / 43만
+       * - 인로그(사이트 미지정 포함): 사진 15만 · 영상 10만 → 사진영상 25만 / 33만 (지난 입금 기록 기준)
+       * 촬영구성이 비었거나 블로그 포함이면 null(기준 없음).
        */
-      function theFeelingPriceForRow(row) {
+      const SHOOT_BASE_PRICE_BY_SITE = {
+        thefeeling: { label: "더필링", photo: 200000, video: 150000 },
+        inlog: { label: "인로그", photo: 150000, video: 100000 }
+      };
+      function shootPriceForRow(row, siteType) {
+        const base = SHOOT_BASE_PRICE_BY_SITE[siteType];
         const comp = String(row?.composition || "").trim();
-        if (!comp) return null;
+        if (!base || !comp || comp.includes("블로그")) return null;
         const pyeong = String(row?.pyeong || "").trim();
         const pyNum = Number((pyeong.match(/\d+/) || [])[0] || 0);
         const big = pyeong.includes("이상") ? pyNum >= 45 || !pyNum : !pyeong.includes("이하") && pyNum >= 45;
-        const photo = 200000 + (big ? 50000 : 0);
-        const videoOnly = 150000 + (big ? 30000 : 0);
+        const photo = base.photo + (big ? 50000 : 0);
+        const videoOnly = base.video + (big ? 30000 : 0);
         const hasVideo = comp.includes("영상");
         const hasPhoto = comp.includes("사진") || !hasVideo;
         return {
           amount: (hasPhoto ? photo : 0) + (hasVideo ? videoOnly : 0),
           photo,
           video: photo + videoOnly,
-          big
+          videoOnly,
+          big,
+          label: base.label
         };
       }
       function applyHalfAmountText(amountText) {
