@@ -15686,10 +15686,32 @@ ${folderBtn}
               }</td>
               <td>${
                 isEditing
-                  ? `<span class="time-edit-row">
-                       <select class="inline-select pay-month" style="width: 92px;">${monthOptions}</select>
-                       <select class="inline-select pay-day" style="width: 92px;">${dayOptions}</select>
-                     </span>`
+                  ? (() => {
+                      // 11-06 사장님: 입금날짜 기본=오늘, 1·2·3일전 한 번 클릭, 직접설정 때만 월/일 고르기
+                      const today0 = new Date();
+                      const offsetMd = (n) => {
+                        const d = new Date(today0.getFullYear(), today0.getMonth(), today0.getDate() - n);
+                        return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                      };
+                      const selMd = `${selectedMonth}-${selectedDay}`;
+                      const matchedOffset = [0, 1, 2, 3].find((n) => offsetMd(n) === selMd);
+                      const isManual = matchedOffset === undefined;
+                      const quickBtns = [0, 1, 2, 3]
+                        .map((n) => {
+                          const md = offsetMd(n);
+                          return `<button class="btn-sm ${!isManual && matchedOffset === n ? "primary" : ""}" type="button" data-action="setPayDateOffset" data-index="${index}" data-pay-md="${md}" title="${Number(md.slice(0, 2))}월 ${Number(md.slice(3, 5))}일">${n === 0 ? "오늘" : `${n}일전`}</button>`;
+                        })
+                        .join("");
+                      return `<div class="quick-writer-row pay-date-quick" style="margin-bottom: 4px;">
+                         ${quickBtns}
+                         <button class="btn-sm ${isManual ? "primary" : ""}" type="button" data-action="setPayDateManual" data-index="${index}">직접설정</button>
+                       </div>
+                       <span class="time-edit-row pay-date-selects"${isManual ? "" : ' style="display:none;"'}>
+                         <select class="inline-select pay-month" style="width: 92px;">${monthOptions}</select>
+                         <select class="inline-select pay-day" style="width: 92px;">${dayOptions}</select>
+                       </span>
+                       <div class="helper pay-date-label" style="font-size:0.72rem;">${Number(selectedMonth)}월 ${Number(selectedDay)}일</div>`;
+                    })()
                   : `${escapeHtml(item.paymentDate || "-")}`
               }</td>
               <td>${
@@ -20510,6 +20532,15 @@ ${folderBtn}
         void saveFreeShootRow(row).then((ok) => { if (!ok) alert("서버 저장에 실패했어요. 새로고침 후 다시 시도해주세요."); });
         return true;
       }
+      paymentListBodyEl.addEventListener("change", (event) => {
+        const sel = event.target;
+        if (!(sel instanceof HTMLSelectElement) || !sel.matches(".pay-month, .pay-day")) return;
+        const rowEl = sel.closest("tr");
+        const labelEl = rowEl?.querySelector(".pay-date-label");
+        const m = rowEl?.querySelector(".pay-month")?.value;
+        const d = rowEl?.querySelector(".pay-day")?.value;
+        if (labelEl && m && d) labelEl.textContent = `${Number(m)}월 ${Number(d)}일`;
+      });
       paymentListBodyEl.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
@@ -20590,6 +20621,28 @@ ${folderBtn}
           if (!payerInput) return;
           payerInput.value = String(button.dataset.payerName || "").trim();
           payerInput.removeAttribute("readonly");
+          return;
+        }
+        if (action === "setPayDateOffset" || action === "setPayDateManual") {
+          const quickRow = rowEl?.querySelector(".pay-date-quick");
+          const selectsEl = rowEl?.querySelector(".pay-date-selects");
+          const labelEl = rowEl?.querySelector(".pay-date-label");
+          const monthSel = rowEl?.querySelector(".pay-month");
+          const daySel = rowEl?.querySelector(".pay-day");
+          if (!monthSel || !daySel) return;
+          quickRow?.querySelectorAll("button").forEach((b) => b.classList.toggle("primary", b === button));
+          if (action === "setPayDateOffset") {
+            const md = String(button.dataset.payMd || "");
+            if (/^\d{2}-\d{2}$/.test(md)) {
+              monthSel.value = md.slice(0, 2);
+              daySel.value = md.slice(3, 5);
+            }
+            if (selectsEl) selectsEl.style.display = "none";
+          } else if (selectsEl) {
+            selectsEl.style.display = "";
+            monthSel.focus();
+          }
+          if (labelEl) labelEl.textContent = `${Number(monthSel.value)}월 ${Number(daySel.value)}일`;
           return;
         }
         if (action === "setAmountPresetPhoto") {
