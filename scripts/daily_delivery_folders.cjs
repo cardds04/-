@@ -298,12 +298,33 @@ async function main() {
   const dirByName = new Map(directory.map((d) => [norm(d.name), d]));
   const dirByCode = new Map(directory.filter((d) => norm(d.code)).map((d) => [norm(d.code), d]));
 
+  // 11-06 중복 폴더 사고: 지난 날짜를 다시 돌릴 때 그 작가의 다른 촬영이 빠지면 순번이 바뀌어
+  //   (1103 공감대 「…호2」→「…호1」) 빈 폴더가 하나 더 생겼다. 이미 폴더를 만든 촬영은 다시 만들지 않는다.
+  const madeIds = new Set();
+  try {
+    const ids = rows.map((r) => r.id).filter(Boolean);
+    if (ids.length) {
+      const st = await sbJson(
+        `shoot_delivery_drive_state?select=schedule_id,shoot_folder_id&schedule_id=in.(${ids.map((x) => encodeURIComponent(`"${String(x).replace(/"/g, "")}"`)).join(",")})`
+      );
+      st.filter((e) => norm(e.shoot_folder_id)).forEach((e) => madeIds.add(e.schedule_id));
+    }
+  } catch (e) {
+    console.log(`⚠️ 기존 폴더 기록 조회 실패(${e.message}) — 지난 날짜는 건너뜀`);
+    if (argDate && dateKey !== kstTodayYmd()) process.exit(1);
+  }
+
   let okCount = 0;
   const failures = [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const company = norm(r.company_name);
     const label = `${r.time_key} ${company}`;
+    if (madeIds.has(r.id)) {
+      okCount++;
+      console.log(`✅ ${label} → 이미 만든 폴더 있음(기존 재사용·이름 다시 안 셈)`);
+      continue;
+    }
     // 무료촬영 표식 「/무」가 붙은 스케줄명은 업체정보관리에 표식 없이 등록돼 있다(10-29 디자인 스튜디오 야무진/무)
     const bare = company.replace(/\s*\/\s*무$/, "").trim();
     let shareLink = linkByCode.get(norm(r.code)) || linkByName.get(company) || linkByName.get(bare) || "";
