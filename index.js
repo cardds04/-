@@ -15653,7 +15653,7 @@ ${folderBtn}
                 }">${compLabel}</span>`
               : "";
             return `
-            <tr>
+            <tr${isEditing ? ' class="pay-editing"' : ""}>
               <td style="white-space:nowrap;">${/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? `<span title="${escapeHtml(item.date)}">${item.date.slice(5)}</span>` : item.date || item.paymentDate || "-"}${compBadge}${(() => {
                 if (source !== "active" || isEditing || isFreeShootItem) return "";
                 const rd = couponRoundByItem.get(item);
@@ -15668,7 +15668,9 @@ ${folderBtn}
                   : `<span title="${rd.total}회권 중 ${rd.n}번째 촬영 · 쿠폰 아직 안 씀(남은 쿠폰에서 안 빠짐)" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:0.76rem;font-weight:800;background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;">${passTag}${rd.n}회 · 쿠폰 미적용</span>`;
                 const startBtn = rd?.isStart
                   ? `<button class="btn-sm primary" type="button" data-action="showCouponRoundList" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="1회~${rd.total}회 날짜·주소 리스트(복사용)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">리스트</button><button class="btn-sm" type="button" data-action="clearCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" data-coupon-pass="${rd.passIdx}" title="이 회권 번호 매기기 해제(다른 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;">시작 해제</button>`
-                  : `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 새 회권 1회로 번호 매기기(이전 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`;
+                  : couponProgressText
+                  ? `<button class="btn-sm" type="button" data-action="setCouponStart" data-index="${index}" data-coupon-company="${escapeHtml(payId.company)}" title="이 촬영부터 새 회권 1회로 번호 매기기(이전 회권 기록은 그대로)" style="margin-left:4px;padding:1px 7px;font-size:0.72rem;opacity:0.75;">시작</button>`
+                  : "";
                 return pill + startBtn;
               })()}</td>
               <td>${escapeHtml(companyDisplay)}</td>
@@ -15759,7 +15761,7 @@ ${folderBtn}
               <td>
                 ${
                   source === "active" && !isEditing && isFreeShootItem
-                    ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button> `
+                    ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅</button> `
                     : ""
                 }${
                   isFreeShootItem && !isEditing
@@ -15776,7 +15778,7 @@ ${folderBtn}
                        <button class="btn-sm" type="button" data-action="halfPaymentRow" data-index="${index}">반만입금</button>
                        <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
                     : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}" title="입금내역 적기" style="background:#FFD43B;border-color:#E0B000;color:#3a2e00;font-weight:700;">입금체크</button>
-                       ${source === "active" ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button>` : ""}
+                       ${source === "active" ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅</button>` : ""}
                        ${
                          item.paymentStatus === "입금완료"
                            ? `<button class="btn-sm" type="button" data-action="cancelPaidPaymentRow" data-index="${index}">입금취소</button>`
@@ -15784,10 +15786,10 @@ ${folderBtn}
                            ? `<button class="btn-sm primary" type="button" data-action="applyCouponOnce" data-index="${index}">1회적용</button>
                               <button class="btn-sm" type="button" data-action="cancelCouponApply" data-index="${index}">취소</button>
                               <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}" title="되돌리기" aria-label="되돌리기">↩</button>
-                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
-                           : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}">회차권사용</button>
+                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}" title="무료촬영으로 옮기기">무료</button>`
+                           : `<button class="btn-sm" type="button" data-action="startCouponApply" data-index="${index}" title="회차권 사용">회차권</button>
                               <button class="btn-sm" type="button" data-action="undoPaymentRow" data-index="${index}" title="되돌리기" aria-label="되돌리기">↩</button>
-                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}">무료촬영</button>`
+                              <button class="btn-sm" type="button" data-action="moveToFreeShoot" data-index="${index}" title="무료촬영으로 옮기기">무료</button>`
                        }`
                 }
               </td>
