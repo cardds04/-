@@ -15757,7 +15757,7 @@ ${folderBtn}
               }</td>
               <td>
                 ${
-                  source === "active" && !isEditing
+                  source === "active" && !isEditing && isFreeShootItem
                     ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button> `
                     : ""
                 }${
@@ -15774,7 +15774,8 @@ ${folderBtn}
                     ? `<button class="btn-sm primary" type="button" data-action="savePaymentRow" data-index="${index}">완료</button>
                        <button class="btn-sm" type="button" data-action="halfPaymentRow" data-index="${index}">반만입금</button>
                        <button class="btn-sm" type="button" data-action="cancelPaymentRow" data-index="${index}">취소</button>`
-                    : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}" title="입금내역 수정">수정</button>
+                    : `<button class="btn-sm" type="button" data-action="editPaymentRow" data-index="${index}" title="입금내역 적기" style="background:#FFD43B;border-color:#E0B000;color:#3a2e00;font-weight:700;">입금체크</button>
+                       ${source === "active" ? `<button class="btn-sm" type="button" data-action="openScheduleFromPayment" data-index="${index}" title="해당 촬영일 스케줄 보기">📅 스케줄</button>` : ""}
                        ${
                          item.paymentStatus === "입금완료"
                            ? `<button class="btn-sm" type="button" data-action="cancelPaidPaymentRow" data-index="${index}">입금취소</button>`
