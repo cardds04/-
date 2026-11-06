@@ -15632,7 +15632,7 @@ ${folderBtn}
               const tip = `${feelPrice.label} 기준: 사진 ${feelPrice.photo / 10000}만 · 영상 ${feelPrice.videoOnly / 10000}만${feelPrice.big ? " (45평이상)" : ""}`;
               const cur = String(item.paymentAmount || "").trim();
               if (!cur) {
-                return `<span title="${escapeHtml(tip)} — 자동 계산">${feelPrice.amount}</span> <span style="font-size:0.7rem;font-weight:800;color:#0f766e;background:#e6f6f3;border:1px solid #b8e4dc;border-radius:999px;padding:0 5px;">자동</span>`;
+                return `<span style="white-space:nowrap;"><span title="${escapeHtml(tip)} — 자동 계산">${feelPrice.amount}</span> <span style="font-size:0.7rem;font-weight:800;color:#0f766e;background:#e6f6f3;border:1px solid #b8e4dc;border-radius:999px;padding:0 4px;">자동</span></span>`;
               }
               const n = parseAmountToNumber(cur);
               const ok = cur === "쿠폰사용" || n === null || [feelPrice.amount, Math.round(feelPrice.amount * 1.1), Math.floor(feelPrice.amount / 2)].includes(n);
@@ -15749,10 +15749,11 @@ ${folderBtn}
                         ? `<span style="color:#b23b3b;font-weight:700;">미입금</span>`
                         : baseStatus;
                       // 쿠폰 아직 안 쓴 건: 남은 수는 이 건을 빼기 전 숫자라는 걸 분명히
-                      if (!item.couponUsed && baseStatus !== "입금완료") {
-                        return `${statusHtml} · 쿠폰 미적용 <span style="color:#8a94a6;">${couponProgressText.replace(/^쿠폰 /, "").replace(/회$/, "")}</span>`;
-                      }
-                      return `${statusHtml} · ${couponProgressText}`;
+                      // 11-06 사장님: 「쿠폰 미적용」 글씨 대신 「쿠」 아이콘 + 0/3, 한 줄 유지
+                      const couponCount = couponProgressText.replace(/^쿠폰 /, "").replace(/회$/, "");
+                      const notApplied = !item.couponUsed && baseStatus !== "입금완료";
+                      const kuIcon = `<span title="${notApplied ? "회차권 업체 · 이 건은 쿠폰 아직 안 씀(남은 수에서 안 빠짐)" : "회차권 남은/전체"}" style="display:inline-block;padding:0 5px;border-radius:5px;font-size:0.72rem;font-weight:800;line-height:1.5;${notApplied ? "background:#fff;color:#8a94a6;border:1px dashed #b8c0cf;" : "background:#e8f0ff;color:#2f5aa8;border:1px solid #b9cdf2;"}">쿠</span>`;
+                      return `<span style="white-space:nowrap;">${statusHtml} ${kuIcon} <span style="color:#8a94a6;">${couponCount}</span></span>`;
                     })()
               }</td>
               <td>
