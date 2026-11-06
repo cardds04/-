@@ -15346,7 +15346,16 @@ ${folderBtn}
           if (!gk) continue;
           couponUsedByGroupKey.set(gk, (couponUsedByGroupKey.get(gk) || 0) + 1);
         }
+        // 한 번 그릴 때 업체별로 한 번만 계산(줄마다 회차권 계산을 되풀이해 느려지던 문제 11-06)
+        const couponProgressTextCache = new Map();
         const getCouponProgressText = (companyName, companyCode = "", preResolvedIdentity = null) => {
+          const cacheKey = `${companyName || ""}\u0000${companyCode || ""}`;
+          if (couponProgressTextCache.has(cacheKey)) return couponProgressTextCache.get(cacheKey);
+          const text = computeCouponProgressText(companyName, companyCode, preResolvedIdentity);
+          couponProgressTextCache.set(cacheKey, text);
+          return text;
+        };
+        const computeCouponProgressText = (companyName, companyCode = "", preResolvedIdentity = null) => {
           const normalizedCompany = normalizeCompanyName(companyName || "");
           if (!normalizedCompany) return "";
           const ctx = canonicalIdentityCtxPayment;
