@@ -161,7 +161,8 @@ h1, h2, h3, p { margin: 0; }
 .mini .mm-room[aria-current="true"] rect, .mini .mm-room[aria-current="true"] path { fill: rgba(15,122,108,.34); stroke: #0f7a6c; stroke-width: 3px; }
 .mini .wall3d path { fill: none; stroke: #15191b; stroke-width: 9; stroke-linejoin: miter; stroke-linecap: square; }
 .mini .win3d .pane { fill: none; stroke: #ffffff; stroke-width: 9; } .mini .win3d .glass { fill: none; stroke: #a9c8d6; stroke-width: 3; }
-.mini .wall3d, .mini .win3d, .mini .f3d { pointer-events: none; }
+.mini .wall3d, .mini .win3d, .mini .f3d, .mini .opn, .mini .door3d { pointer-events: none; }
+.mini .opn rect { fill: url(#pWood); stroke: none; vector-effect: none; } .mini .door3d path { fill: none; stroke: #3b4248; stroke-width: 2; vector-effect: none; }
 .mini text { paint-order: stroke; stroke: rgba(255,255,255,.88); stroke-width: 5px; stroke-linejoin: round; fill: #17242a; }
 .mini text.e { fill: #3d4a50; }
 </style>
@@ -541,7 +542,7 @@ h1, h2, h3, p { margin: 0; }
       if (cv.width !== Math.round(pw * d) || cv.height !== Math.round(ph * d)) { cv.width = Math.round(pw * d); cv.height = Math.round(ph * d); cv.style.width = pw + "px"; cv.style.height = ph + "px"; }
       var L = el.offsetLeft, T = el.offsetTop, W = el.offsetWidth, H = el.offsetHeight, nw = el.naturalWidth, nh = el.naturalHeight,
           k = Math.min(W / nw, H / nh), fw = nw * k, fh = nh * k, fx = L + (W - fw) / 2, fy = T + (H - fh) / 2, cx = L + W / 2, cy = T + H / 2;
-      ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, pw, ph);
+      ctx.setTransform(d, 0, 0, d, 0, 0); ctx.fillStyle = getComputedStyle(el).backgroundColor || getComputedStyle(par).backgroundColor || "#e6e9eb"; if (/rgba\(0, 0, 0, 0\)|transparent/.test(ctx.fillStyle) || ctx.fillStyle === "rgba(0, 0, 0, 0)") ctx.fillStyle = "#e6e9eb"; ctx.fillRect(0, 0, pw, ph);   /* 11-18 확대 중 뒤 360° 화면이 비쳐 보이던 것 — 바탕을 칠해 가린다 */
       ctx.translate(cx + x, cy + y); ctx.scale(s, s); ctx.translate(-cx, -cy);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
       ctx.drawImage(el, fx, fy, fw, fh);
