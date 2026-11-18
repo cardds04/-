@@ -301,13 +301,17 @@ async function main() {
   // 11-06 중복 폴더 사고: 지난 날짜를 다시 돌릴 때 그 작가의 다른 촬영이 빠지면 순번이 바뀌어
   //   (1103 공감대 「…호2」→「…호1」) 빈 폴더가 하나 더 생겼다. 이미 폴더를 만든 촬영은 다시 만들지 않는다.
   const madeIds = new Set();
+  const madeState = new Map();
   try {
     const ids = rows.map((r) => r.id).filter(Boolean);
     if (ids.length) {
       const st = await sbJson(
-        `shoot_delivery_drive_state?select=schedule_id,shoot_folder_id&schedule_id=in.(${ids.map((x) => encodeURIComponent(`"${String(x).replace(/"/g, "")}"`)).join(",")})`
+        `shoot_delivery_drive_state?select=schedule_id,shoot_folder_id,shoot_date_key&schedule_id=in.(${ids.map((x) => encodeURIComponent(`"${String(x).replace(/"/g, "")}"`)).join(",")})`
       );
-      st.filter((e) => norm(e.shoot_folder_id)).forEach((e) => madeIds.add(e.schedule_id));
+      st.filter((e) => norm(e.shoot_folder_id)).forEach((e) => {
+        madeIds.add(e.schedule_id);
+        madeState.set(e.schedule_id, e);
+      });
     }
   } catch (e) {
     console.log(`⚠️ 기존 폴더 기록 조회 실패(${e.message}) — 지난 날짜는 건너뜀`);
@@ -321,6 +325,36 @@ async function main() {
     const company = norm(r.company_name);
     const label = `${r.time_key} ${company}`;
     if (madeIds.has(r.id)) {
+      // 11-18 보아즈: 촬영 날짜를 옮긴 건은 옛 날짜 이름 폴더(1113…)에 그대로 올라가 원본 감시가 「날짜폴더 없음」.
+      //   → 폴더는 새로 만들지 않고 이름 앞 날짜만 새 날짜로 바꾼다(resourceKey 그대로라 「열기」 링크 유지).
+      const prev = madeState.get(r.id);
+      if (prev && norm(prev.shoot_date_key) && norm(prev.shoot_date_key) !== dateKey) {
+        const shareForRename = linkByCode.get(norm(r.code)) || linkByName.get(company) || "";
+        let note = "";
+        try {
+          const out = require("child_process").execFileSync(
+            "/usr/local/bin/python3",
+            [path.join(__dirname, "rename_shoot_folder_date.py"), shareForRename, prev.shoot_folder_id, mmdd],
+            { encoding: "utf8", timeout: 120000 }
+          );
+          const j = JSON.parse(out.trim().split("\n").pop() || "{}");
+          if (j.ok) {
+            await fetch(`${SB}/rest/v1/shoot_delivery_drive_state?schedule_id=eq.${encodeURIComponent(r.id)}`, {
+              method: "PATCH",
+              headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+              body: JSON.stringify({ shoot_date_key: dateKey, updated_at: new Date().toISOString() })
+            });
+            note = j.from === j.to ? "" : ` · 날짜 바뀜 → 폴더 이름 ${j.from} → ${j.to}`;
+          } else {
+            note = ` · ⚠️날짜 바뀜(${prev.shoot_date_key}→${dateKey}) 폴더 이름 못 바꿈: ${j.message || "?"}`;
+          }
+        } catch (e) {
+          note = ` · ⚠️날짜 바뀜(${prev.shoot_date_key}→${dateKey}) 폴더 이름 못 바꿈: ${e.message}`;
+        }
+        okCount++;
+        console.log(`✅ ${label} → 이미 만든 폴더 있음${note}`);
+        continue;
+      }
       okCount++;
       console.log(`✅ ${label} → 이미 만든 폴더 있음(기존 재사용·이름 다시 안 셈)`);
       continue;
