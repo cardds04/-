@@ -17783,7 +17783,7 @@ ${folderBtn}
                   ${rowDoneBtn}
                   <span class="schedule-dashboard-date-co">${escapeHtml(shortD)}</span>
                   <span class="${passedClass}">(${escapeHtml(passedLabel)})</span>
-                  <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>${freeShootBadgeHtmlForSchedule(item)}
+                  <span class="schedule-dashboard-company" title="${escapeHtml(compHint)}">${escapeHtml(company)}</span>${threeDBadgeHtmlForSchedule(item)}${freeShootBadgeHtmlForSchedule(item)}
                   ${shootTodayBadge}
                   ${freeShootStrip}
                   ${strip}
@@ -19211,7 +19211,7 @@ ${folderBtn}
           const paid = item.paymentStatus === "입금완료";
           return `<span class="writer-place" data-schedule-card="true" data-index="${index}" data-schedule-id="${escapeHtml(sid)}" style="display:block;border:none;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:6px 2px;margin:0;">
             <details class="schedule-extra-detail" style="margin:0;">
-              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;cursor:pointer;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong>${freeShootBadgeHtmlForSchedule(item)} · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
+              <summary style="font-weight:600;font-size:0.9rem;padding:2px 0;cursor:pointer;">${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)} · <strong>${escapeHtml(item.company || "-")}</strong>${threeDBadgeHtmlForSchedule(item)}${freeShootBadgeHtmlForSchedule(item)} · ${escapeHtml(area)} · ${escapeHtml(writer)}</summary>
               <div style="margin-top:5px;font-size:0.86rem;line-height:1.55;">
                 장소(전체): ${formatPlaceForDisplay(item.place)}<br />
                 연락처: ${escapeHtml(getCompanyPhoneForDisplay(item.company, item))}<br />
@@ -20398,6 +20398,18 @@ ${folderBtn}
         if (!nm) return false;
         const co = companies.find((c) => normalizeCompanyName(c?.name).toLowerCase() === nm);
         return Boolean(co?.isFreeShoot);
+      }
+      // 11-18 사장님 「3D를 선택한 업체는 15일간 스케줄에 3D 아이콘」 — 고객 예약 때 메모 맨 앞에 붙는 【3D 공간 사이트 신청】로 판단, 촬영일 뒤 15일까지 표시
+      function threeDBadgeHtmlForSchedule(item) {
+        const memo = String(item?.memo || "");
+        if (!memo.includes("3D 공간 사이트 신청")) return "";
+        const d = String(item?.date || "").trim();
+        try {
+          const t = new Date(); const tk = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+          const passed = diffScheduleDaysPassedFromToday(d, tk);
+          if (Number.isFinite(passed) && passed > 15) return "";
+        } catch (_) {}
+        return '<span class="three-d-badge" title="3D 공간 사이트 신청(촬영 뒤 15일간 표시)">3D</span>';
       }
       function freeShootBadgeHtmlForSchedule(item) {
         const sid = String(item?.customerScheduleId || "").trim();
