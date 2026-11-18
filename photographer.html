@@ -831,8 +831,8 @@
       const STORAGE_DAILY_LIMITS = "scheduleSiteDailyLimits";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
-      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 4건, 부분(〇시부터 가능) 은 절반인 2건 */
-      const DAYOFF_FULL_AMOUNT = 4;
+      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 5건(11-18 사장님, 옛 4건), 부분(시간 지정)은 2건 */
+      const DAYOFF_FULL_AMOUNT = 5;
       const DAYOFF_PARTIAL_AMOUNT = 2;
       const STORAGE_LIMIT_CONFIG = "scheduleSiteLimitConfig";
       const STORAGE_PHOTOGRAPHER_PAYROLL_CONFIG = "scheduleSitePhotographerPayrollConfigV1";
@@ -3701,7 +3701,7 @@
         else if (kind === "until") reasonText = `until:${untilHour}`;
         else if (kind === "off") reasonText = `off:${offStart}-${offEnd}`;
         const parsedReason = parseDayoffReason(reasonText);
-        // 종일=4건, 부분(시간 지정)=절반인 2건 차감 (사장님 확정 2026-08-03)
+        // 종일=5건(11-18 사장님, 옛 4건), 부분(시간 지정)=2건 차감
         const amount = reasonText ? DAYOFF_PARTIAL_AMOUNT : DAYOFF_FULL_AMOUNT;
         const doneMsg = parsedReason.partialLabel
           ? `휴무요청이 반영되었습니다 (${parsedReason.partialLabel})`

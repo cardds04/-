@@ -68,8 +68,8 @@
       const STORAGE_EMERGENCY_LIMIT_ADDITIONS = "scheduleSiteEmergencyLimitAdditions";
       const STORAGE_DAYOFF_DEDUCTIONS = "scheduleSiteDayoffDeductions";
       const STORAGE_DAYOFF_REQUESTS = "scheduleSiteDayoffRequests";
-      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 4건, 부분(〇시부터 가능) 은 절반인 2건 */
-      const DAYOFF_FULL_AMOUNT = 4;
+      /** 휴무 1건이 그날 예약 한도에서 깎는 양 — 종일 5건(11-18 사장님, 옛 4건), 부분(시간 지정)은 2건 */
+      const DAYOFF_FULL_AMOUNT = 5;
       const DAYOFF_PARTIAL_AMOUNT = 2;
       const STORAGE_DAYOFF_ALERT_READ_IDS = "scheduleSiteDayoffAlertReadIds";
       const STORAGE_COUPON_LOWLIST_EXCLUDED = "scheduleSiteCouponLowlistExcluded";
