@@ -55,6 +55,15 @@
       .copt-name { align-items:center; font-size:.8rem !important; line-height:1.25; word-break:keep-all; overflow-wrap:normal; gap:3px !important; }
       .copt-name small { font-size:.78rem !important; color:#1d2326 !important; font-weight:800 !important; }
       .copt-name .copt-more { font-size:.66rem !important; color:#3f6d00 !important; font-weight:700 !important; margin-top:2px; }
+      .copt-item .copt-radio { border-radius:6px !important; }
+      .copt-item[aria-checked="true"] .copt-radio { background:#1d2326; border-color:#1d2326; }
+      .copt-item[aria-checked="true"] .copt-radio::after { content:"✓" !important; inset:auto !important; position:absolute; left:0; right:0; top:-2px; text-align:center; color:#d9f86b; font-size:.8rem; font-weight:900; background:none !important; }
+      .copt-item[data-opt="photo"] { cursor:default; }
+      .copt-item[data-opt="3d"][aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+      .copt-note { font-size:.64rem !important; color:#7a847d !important; font-weight:600 !important; }
+      .copt-item[data-opt="3d"]:not([aria-disabled="true"]) .copt-note { display:none; }
+      .copt-info { margin-top:2px; width:100%; padding:10px 12px; border-radius:14px; border:1px dashed #c6ec3a; background:#fbfff0; color:#2b3330; font:inherit; font-size:.82rem; cursor:pointer; }
+      .copt-info b { color:#3f6d00; }
       .copt-item { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:16px; border:1.5px solid #e6eadf; background:#fff; text-align:left; cursor:pointer; font:inherit; color:#151a1c; }
       .copt-item[aria-checked="true"] { border-color:#c6ec3a; box-shadow:0 0 0 2px #e9fbb0 inset; background:#fbfff0; }
       .copt-name { display:flex; flex-direction:column; gap:2px; font-weight:800; font-size:.95rem; min-width:0; }
@@ -4003,12 +4012,13 @@
               </div>
               <!-- 11-18 사장님: 인로그 촬영 구성 = 사진 기본 + 옵션 하나(코덱스 시안 2번). 쇼픽(lite)은 숨김 -->
               <section class="copt" id="composeOptBox" aria-label="촬영 구성">
-                <div class="copt-head"><strong>촬영 구성</strong><span>원하시는 촬영 구성을 골라 주세요</span></div>
-                <div class="copt-list" role="radiogroup" aria-label="촬영 구성">
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="photo"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진 촬영<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span></button>
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="video"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">사진 + 영상 촬영<small>+10만원</small></span></button>
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="both"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_both.png" alt="" /><span class="copt-name">사진 + 영상 + 3D 공간 사이트<small>+13만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span></button>
+                <div class="copt-head"><strong>촬영 구성</strong><span>사진은 기본, 영상·3D는 필요하면 함께 체크해 주세요</span></div>
+                <div class="copt-list" role="group" aria-label="촬영 구성">
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="true" aria-disabled="true" data-opt="photo"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span></button>
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" data-opt="video"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">영상<small>+10만원</small></span></button>
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" aria-disabled="true" data-opt="3d"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간<small>+3만원</small><small class="copt-note">영상 선택 시 가능</small></span></button>
                 </div>
+                <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 궁금하다면? <b>소개 영상 보기 ▶</b></button>
               </section>
               <div class="copt-modal hidden" id="copt3dModal" role="dialog" aria-modal="true" aria-label="3D 공간 사이트 소개">
                 <div class="copt-modal-card">
@@ -4022,9 +4032,9 @@
               <details class="compose-price-guide">
                 <summary>금액 산출 기준 보기</summary>
                 <div class="compose-price-body copt-guide-new">
-                  사진 촬영(기본): 45평 이하 15만원 · 46평 이상 20만원 · 100평 이상 25만원<br />
-                  사진 + 영상 촬영: +10만원<br />
-                  사진 + 영상 + 3D 공간 사이트: +13만원<br />
+                  사진(기본): 45평 이하 15만원 · 46평 이상 20만원 · 100평 이상 25만원<br />
+                  영상 추가: +10만원<br />
+                  3D 공간 사이트 추가: +3만원 (영상 선택 시)<br />
                   <strong>저녁 6시 이후 촬영: 추가요금 5만원</strong>
                 </div>
                 <div class="compose-price-body copt-guide-old">
@@ -6527,25 +6537,33 @@
         return baseAmount + eveningSurchargeForTime(timeOrHour);
       }
       /* 11-18 인로그 촬영 구성 옵션: 사진 기본(평수별) + 옵션 하나. 영상이 들어간 옵션은 기존 값 「사진영상 둘다」로 저장해 영상 제작 흐름을 그대로 탄다 */
-      const COMPOSE_OPT = {
-        photo: { label: "사진 촬영", add: 0, composition: "사진만", memo: "" },
-        video: { label: "사진 + 영상 촬영", add: 100000, composition: "사진영상 둘다", memo: "" },
-        both: { label: "사진 + 영상 + 3D 공간 사이트", add: 130000, composition: "사진영상 둘다", memo: "【3D 공간 사이트 신청】" },
-      };
       const COMPOSE_PHOTO_BASE = { "45평이하": 150000, "46평이상": 200000, "100평이상": 250000 };
-      let composeOptKey = "";
+      const COMPOSE_ADD = { video: 100000, "3d": 30000 };
+      const composeState = { video: false, "3d": false };
+      let composeOptKey = "photo";   // 사진은 항상 포함 — 고른 상태를 하나의 묶음으로 본다
+      function composeSel() {
+        if (isLiteCustomerMode) return null;
+        const v = composeState.video, d = v && composeState["3d"];
+        return { label: d ? "사진 + 영상 + 3D 공간 사이트" : v ? "사진 + 영상" : "사진", add: (v ? COMPOSE_ADD.video : 0) + (d ? COMPOSE_ADD["3d"] : 0),
+                 composition: v ? "사진영상 둘다" : "사진만", memo: d ? "【3D 공간 사이트 신청】" : "" };
+      }
       function calcComposeOptAmount(pyeong, timeOrHour = "") {
-        if (isLiteCustomerMode || !composeOptKey || !COMPOSE_OPT[composeOptKey]) return null;
+        const sel = composeSel(); if (!sel) return null;
         const areaRaw = normalize(pyeong);
         const area = areaRaw === "45평이상" ? "46평이상" : areaRaw;
         const base = COMPOSE_PHOTO_BASE[area];
         if (!base) return null;
-        return base + COMPOSE_OPT[composeOptKey].add + eveningSurchargeForTime(timeOrHour);
+        return base + sel.add + eveningSurchargeForTime(timeOrHour);
       }
       function setComposeOpt(key) {
-        composeOptKey = COMPOSE_OPT[key] ? key : "";
-        document.querySelectorAll("#composeOptBox .copt-item").forEach((b) => b.setAttribute("aria-checked", b.dataset.opt === composeOptKey ? "true" : "false"));
-        if (scheduleCompositionEl) scheduleCompositionEl.value = composeOptKey ? COMPOSE_OPT[composeOptKey].composition : "미선택";
+        if (key === "video") { composeState.video = !composeState.video; if (!composeState.video) composeState["3d"] = false; }
+        else if (key === "3d") { if (!composeState.video) return; composeState["3d"] = !composeState["3d"]; }
+        else if (key === "") { composeState.video = false; composeState["3d"] = false; }
+        const box = document.getElementById("composeOptBox");
+        box?.querySelector('[data-opt="video"]')?.setAttribute("aria-checked", composeState.video ? "true" : "false");
+        const d = box?.querySelector('[data-opt="3d"]');
+        if (d) { d.setAttribute("aria-checked", composeState["3d"] ? "true" : "false"); d.setAttribute("aria-disabled", composeState.video ? "false" : "true"); }
+        if (scheduleCompositionEl) scheduleCompositionEl.value = composeSel()?.composition || "사진만";
         updateExpectedPaymentText();
       }
       function updateComposePhotoPrice() {
@@ -6567,6 +6585,7 @@
         document.getElementById("copt3dClose")?.addEventListener("click", closeInfo);
         modal?.addEventListener("click", (e) => { if (e.target === modal) closeInfo(); });
         document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => setComposeOpt(""), 0));
+        if (!isLiteCustomerMode) setTimeout(() => setComposeOpt(""), 0);
       })();
       function applyCustomerSiteMode() {
         if (!isLiteCustomerMode) return;
@@ -8643,7 +8662,7 @@
             ? "시간 상관없음"
             : `${time} <span style="color:#b91c1c;font-weight:700;">(확정아님)</span>`;
           const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-          const _optSel = !isLiteCustomerMode && composeOptKey ? COMPOSE_OPT[composeOptKey] : null;
+          const _optSel = composeSel();
           const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (_optSel ? _optSel.label : (scheduleCompositionEl.value || "미선택"));
           const _memoRaw = normalize(document.getElementById("scheduleMemo").value);
           const _memo = _optSel && _optSel.memo && !_memoRaw.includes(_optSel.memo) ? normalize(`${_optSel.memo} ${_memoRaw}`) : _memoRaw;
