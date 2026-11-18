@@ -608,4 +608,34 @@ h1, h2, h3, p { margin: 0; }
   new MutationObserver(reset).observe(document.getElementById("roomName"), { childList: true, characterData: true, subtree: true });
   document.getElementById("back360").addEventListener("click", reset);
 })();
-</script><style>.stage canvas { transform-origin: 50% 50%; will-change: transform; } .stage.cvzoom { cursor: grab; } .stage.cvzoom .badge360 { opacity: 0; }</style></body></html><script>(function(){function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="pointer";e.title="업체 첫 화면";e.addEventListener("click",function(){location.href="../";});}L("co");L("logo");})();</script>
+</script><style>.stage canvas { transform-origin: 50% 50%; will-change: transform; } .stage.cvzoom { cursor: grab; } .stage.cvzoom .badge360 { opacity: 0; }</style></body></html><script>
+/* 11-18 사장님 「확대하면 선명하지 않다」: 확대는 CSS 배율이라 브라우저가 작은 크기로 그려 둔 그림을 늘려 보여 준다(600%면 깍두기).
+   확대 중에는 사진 위에 화면 해상도 그대로의 캔버스를 깔고, 원본(큰 사진)에서 지금 보이는 부분을 직접 다시 그린다. */
+(function () {
+  function crisp(el) {
+    if (!el) return; var par = el.parentNode, cv = document.createElement("canvas"), ctx = cv.getContext("2d"), raf = 0;
+    cv.hidden = true; cv.setAttribute("aria-hidden", "true");
+    cv.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:0";
+    par.insertBefore(cv, el.nextSibling);
+    function render() {
+      raf = 0;
+      var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([\d.]+)\)/.exec(el.style.transform || "");
+      if (el.hidden || !m || +m[3] <= 1.01 || !el.naturalWidth) { cv.hidden = true; el.style.opacity = ""; return; }
+      var x = +m[1], y = +m[2], s = +m[3], pw = par.clientWidth, ph = par.clientHeight, d = Math.min(3, window.devicePixelRatio || 1);
+      if (cv.width !== Math.round(pw * d) || cv.height !== Math.round(ph * d)) { cv.width = Math.round(pw * d); cv.height = Math.round(ph * d); cv.style.width = pw + "px"; cv.style.height = ph + "px"; }
+      var L = el.offsetLeft, T = el.offsetTop, W = el.offsetWidth, H = el.offsetHeight, nw = el.naturalWidth, nh = el.naturalHeight,
+          k = Math.min(W / nw, H / nh), fw = nw * k, fh = nh * k, fx = L + (W - fw) / 2, fy = T + (H - fh) / 2, cx = L + W / 2, cy = T + H / 2;
+      ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, pw, ph);
+      ctx.translate(cx + x, cy + y); ctx.scale(s, s); ctx.translate(-cx, -cy);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(el, fx, fy, fw, fh);
+      cv.hidden = false; el.style.opacity = "0";
+    }
+    function soon() { if (!raf) raf = requestAnimationFrame(render); }
+    new MutationObserver(soon).observe(el, { attributes: true, attributeFilter: ["style", "src", "hidden"] });
+    el.addEventListener("load", soon); window.addEventListener("resize", soon);
+  }
+  crisp(document.getElementById("shot")); crisp(document.getElementById("zoomImg"));
+})();
+</script>
+<script>(function(){function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="pointer";e.title="업체 첫 화면";e.addEventListener("click",function(){location.href="../";});}L("co");L("logo");})();</script>
