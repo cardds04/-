@@ -39,6 +39,44 @@
       .tabs button { border: 1px solid var(--line); background: #f7f9ff; border-radius: 8px; padding: 7px 12px; font-weight: 700; cursor: pointer; }
       .tabs button.active { border-color: var(--blue); background: var(--blue); color: #fff; }
       .hidden { display: none !important; }
+
+      /* 11-18 인로그 촬영 구성 옵션 박스(시안 2번) */
+      .copt { background:#fff; border:1px solid #e7ece0; border-radius:20px; padding:16px 14px 14px; display:grid; gap:10px; }
+      .copt-head strong { display:block; font-size:1.05rem; font-weight:800; color:#151a1c; }
+      .copt-head span { font-size:.82rem; color:#5f6b62; }
+      .copt-base { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:16px; background:#f3fbd6; }
+      .copt-base img, .copt-item img { width:40px; height:40px; object-fit:contain; flex:none; }
+      .copt-base b { font-size:1rem; } .copt-base em { font-style:normal; font-size:.75rem; font-weight:800; padding:3px 9px; border-radius:999px; background:#d9f86b; color:#1d2326; }
+      .copt-chk { margin-left:auto; width:24px; height:24px; border-radius:50%; background:#d9f86b; color:#1d2326; display:grid; place-items:center; font-style:normal; font-weight:900; font-size:.85rem; }
+      .copt-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+      .copt-item { position:relative; align-items:center; padding:12px 34px 12px 10px !important; min-height:76px; }
+      .copt-item img { width:34px !important; height:34px !important; }
+      .copt-item .copt-radio { position:absolute; right:10px; top:50%; transform:translateY(-50%); width:20px; height:20px; }
+      .copt-item .copt-price { display:none; }
+      .copt-name { font-size:.84rem !important; line-height:1.25; word-break:keep-all; overflow-wrap:normal; }
+      .copt-name small { font-size:.78rem !important; color:#3b4440 !important; font-weight:600 !important; }
+      .copt-name .copt-more { font-size:.68rem !important; color:#3f6d00 !important; }
+      .copt-sale { position:absolute; top:-9px; right:10px; margin:0 !important; font-size:.66rem !important; }
+      .copt-base { padding:8px 12px !important; } .copt-base img { width:32px !important; height:32px !important; }
+      .copt-item { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:16px; border:1.5px solid #e6eadf; background:#fff; text-align:left; cursor:pointer; font:inherit; color:#151a1c; }
+      .copt-item[aria-checked="true"] { border-color:#c6ec3a; box-shadow:0 0 0 2px #e9fbb0 inset; background:#fbfff0; }
+      .copt-name { display:flex; flex-direction:column; gap:2px; font-weight:800; font-size:.95rem; min-width:0; }
+      .copt-name small { font-weight:500; font-size:.75rem; color:#6b766d; }
+      .copt-name .copt-more { color:#3f6d00; font-weight:700; text-decoration:underline; text-underline-offset:2px; cursor:pointer; width:max-content; }
+      .copt-sale { white-space:nowrap; display:inline-block; align-self:flex-start; font-style:normal; font-size:.7rem; font-weight:800; padding:2px 8px; border-radius:999px; background:#ff5a3c; color:#fff; vertical-align:2px; margin-left:4px; }
+      .copt-price { margin-left:auto; font-weight:800; font-size:.92rem; white-space:nowrap; }
+      .copt-radio { width:22px; height:22px; border-radius:50%; border:2px solid #c9cfc4; flex:none; position:relative; }
+      .copt-item[aria-checked="true"] .copt-radio { border-color:#1d2326; } .copt-item[aria-checked="true"] .copt-radio::after { content:""; position:absolute; inset:4px; border-radius:50%; background:#1d2326; }
+      .copt-modal { position:fixed; inset:0; z-index:2147483000; background:rgba(10,14,16,.72); display:flex; align-items:center; justify-content:center; padding:16px; }
+      .copt-modal-card { background:#fff; border-radius:20px; padding:14px; width:min(420px,100%); display:grid; gap:10px; }
+      .copt-modal-card video { width:100%; max-height:62vh; object-fit:contain; border-radius:14px; background:#111; aspect-ratio:720/1000; }
+      .copt-modal-card p { margin:0; font-size:.9rem; line-height:1.5; color:#2b3330; }
+      .copt-modal-btns { display:flex; gap:8px; } .copt-modal-btns a, .copt-modal-btns button { flex:1; text-align:center; padding:12px; border-radius:14px; font-weight:800; font:inherit; font-weight:800; text-decoration:none; border:0; cursor:pointer; }
+      .copt-modal-btns a { background:#d9f86b; color:#1d2326; } .copt-modal-btns button { background:#1d2326; color:#fff; }
+      body:not(.customer-lite) #compositionSection { display:none; }
+      body:not(.customer-lite) .option-line { grid-template-columns: 1fr !important; }
+      body:not(.customer-lite) #pyeongSection { grid-column: 1 / -1; width: auto; }
+      body.customer-lite #composeOptBox, body.customer-lite .copt-guide-new, body:not(.customer-lite) .copt-guide-old { display:none; }
       .form { display: grid; gap: 8px; }
       .row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fcfdff; padding: 9px 10px; }
       .row input, .row select { width: 100%; border: 0; outline: none; background: transparent; font-size: 0.95rem; }
@@ -3966,11 +4004,35 @@
                   </select>
                 </div>
               </div>
+              <!-- 11-18 사장님: 인로그 촬영 구성 = 사진 기본 + 옵션 하나(코덱스 시안 2번). 쇼픽(lite)은 숨김 -->
+              <section class="copt" id="composeOptBox" aria-label="촬영 구성">
+                <div class="copt-head"><strong>촬영 구성</strong><span>사진 촬영은 기본 포함, 필요한 옵션을 골라 주세요</span></div>
+                <div class="copt-base"><img src="assets/compose-opt/ic_photo.png" alt="" /><b>사진 촬영</b><em>기본 포함</em><i class="copt-chk" aria-hidden="true">✓</i></div>
+                <div class="copt-list" role="radiogroup" aria-label="촬영 옵션">
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="photo"><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진만<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span><span class="copt-price">사진만</span><i class="copt-radio" aria-hidden="true"></i></button>
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="both"><img src="assets/compose-opt/ic_both.png" alt="" /><em class="copt-sale">특가할인</em><span class="copt-name">영상 + 3D 공간<small>+15만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span><span class="copt-price">+15만원</span><i class="copt-radio" aria-hidden="true"></i></button>
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="video"><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">영상 추가 촬영<small>+10만원</small></span><span class="copt-price">+10만원</span><i class="copt-radio" aria-hidden="true"></i></button>
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="3d"><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간 사이트 등록<small>+10만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span><span class="copt-price">+10만원</span><i class="copt-radio" aria-hidden="true"></i></button>
+                </div>
+              </section>
+              <div class="copt-modal hidden" id="copt3dModal" role="dialog" aria-modal="true" aria-label="3D 공간 사이트 소개">
+                <div class="copt-modal-card">
+                  <video id="copt3dVideo" src="assets/compose-opt/3d_site_intro.mp4" muted loop playsinline preload="none"></video>
+                  <p>시공한 현장을 360°로 돌려 보고, 평면도에서 방을 눌러 이동하는 <b>업체 전용 포트폴리오 페이지</b>입니다. 고객에게 링크 하나로 보여 주세요.</p>
+                  <div class="copt-modal-btns"><a href="/tour/handyman/" target="_blank" rel="noopener">예시 사이트 보기</a><button type="button" id="copt3dClose">닫기</button></div>
+                </div>
+              </div>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소 (동 이름 또는 도로명까지 · 예: 민락동 ○○아파트, 민락로211)" required /></div>
               <div class="row" style="align-items:flex-start;"><span style="padding-top:2px;">📝</span><textarea id="scheduleMemo" rows="1" placeholder="현관/세대비번과 메모사항을 남겨주세요" style="width:100%;border:0;outline:none;background:transparent;font-family:inherit;font-size:0.95rem;line-height:1.5;resize:none;overflow:hidden;padding:0;margin:0;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';"></textarea></div>
               <details class="compose-price-guide">
                 <summary>금액 산출 기준 보기</summary>
-                <div class="compose-price-body">
+                <div class="compose-price-body copt-guide-new">
+                  사진 촬영(기본): 45평 이하 15만원 · 46평 이상 20만원 · 100평 이상 25만원<br />
+                  옵션: 영상 추가 촬영 +10만원 · 3D 공간 사이트 등록 +10만원<br />
+                  영상 + 3D 공간 <strong>특가할인 +15만원</strong><br />
+                  <strong>저녁 6시 이후 촬영: 추가요금 5만원</strong>
+                </div>
+                <div class="compose-price-body copt-guide-old">
                   45평 이하: 사진 15만원 / 영상 10만원<br />
                   46평 이상(45평 초과): 사진 +5만원, 영상 +3만원<br />
                   100평 이상: 사진 +5만원, 영상 +3만원 추가<br />
@@ -6469,6 +6531,49 @@
         if (!baseAmount) return null;
         return baseAmount + eveningSurchargeForTime(timeOrHour);
       }
+      /* 11-18 인로그 촬영 구성 옵션: 사진 기본(평수별) + 옵션 하나. 영상이 들어간 옵션은 기존 값 「사진영상 둘다」로 저장해 영상 제작 흐름을 그대로 탄다 */
+      const COMPOSE_OPT = {
+        photo: { label: "사진만", add: 0, composition: "사진만", memo: "" },
+        both: { label: "사진 + 영상 + 3D 공간 사이트 (특가할인)", add: 150000, composition: "사진영상 둘다", memo: "【3D 공간 사이트 신청】" },
+        video: { label: "사진 + 영상 추가 촬영", add: 100000, composition: "사진영상 둘다", memo: "" },
+        "3d": { label: "사진 + 3D 공간 사이트 등록", add: 100000, composition: "사진만", memo: "【3D 공간 사이트 신청】" },
+      };
+      const COMPOSE_PHOTO_BASE = { "45평이하": 150000, "46평이상": 200000, "100평이상": 250000 };
+      let composeOptKey = "";
+      function calcComposeOptAmount(pyeong, timeOrHour = "") {
+        if (isLiteCustomerMode || !composeOptKey || !COMPOSE_OPT[composeOptKey]) return null;
+        const areaRaw = normalize(pyeong);
+        const area = areaRaw === "45평이상" ? "46평이상" : areaRaw;
+        const base = COMPOSE_PHOTO_BASE[area];
+        if (!base) return null;
+        return base + COMPOSE_OPT[composeOptKey].add + eveningSurchargeForTime(timeOrHour);
+      }
+      function setComposeOpt(key) {
+        composeOptKey = COMPOSE_OPT[key] ? key : "";
+        document.querySelectorAll("#composeOptBox .copt-item").forEach((b) => b.setAttribute("aria-checked", b.dataset.opt === composeOptKey ? "true" : "false"));
+        if (scheduleCompositionEl) scheduleCompositionEl.value = composeOptKey ? COMPOSE_OPT[composeOptKey].composition : "미선택";
+        updateExpectedPaymentText();
+      }
+      function updateComposePhotoPrice() {
+        const el = document.getElementById("coptPhotoPrice"); if (!el) return;
+        const a = normalize(schedulePyeongEl?.value); const base = COMPOSE_PHOTO_BASE[a === "45평이상" ? "46평이상" : a];
+        el.textContent = base ? `${base / 10000}만원` : "15만원~";
+      }
+      schedulePyeongEl?.addEventListener("change", updateComposePhotoPrice);
+      (function initComposeOpt() {
+        const box = document.getElementById("composeOptBox"); if (!box) return;
+        const modal = document.getElementById("copt3dModal"), video = document.getElementById("copt3dVideo");
+        if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);   // 부모 상자(transform) 안에 있으면 fixed 가 화면 기준이 아니게 된다
+        const openInfo = () => { modal.classList.remove("hidden"); try { video.currentTime = 0; video.play(); } catch (_) {} };
+        const closeInfo = () => { modal.classList.add("hidden"); try { video.pause(); } catch (_) {} };
+        box.addEventListener("click", (e) => {
+          if (e.target.closest("[data-act='3dinfo']")) { e.preventDefault(); e.stopPropagation(); openInfo(); return; }
+          const it = e.target.closest(".copt-item"); if (it) setComposeOpt(it.dataset.opt);
+        });
+        document.getElementById("copt3dClose")?.addEventListener("click", closeInfo);
+        modal?.addEventListener("click", (e) => { if (e.target === modal) closeInfo(); });
+        document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => setComposeOpt(""), 0));
+      })();
       function applyCustomerSiteMode() {
         if (!isLiteCustomerMode) return;
         document.body.classList.add("customer-lite");
@@ -6490,7 +6595,7 @@
           return;
         }
         const hourNow = scheduleHourEl?.value;
-        const amount = calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, hourNow);
+        const amount = calcComposeOptAmount(schedulePyeongEl?.value, hourNow) ?? calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl?.value, hourNow);
         const eveningNote = eveningSurchargeForTime(hourNow) ? " <span style=\"color:#b45309;\">(저녁 6시 이후 추가요금 5만원 포함)</span>" : "";
         expectedPaymentTextEl.innerHTML = `<strong>결제예정금액:</strong> ${amount ? formatWonText(amount) : "-"}${amount ? eveningNote : ""}`;
       }
@@ -8489,7 +8594,7 @@
           const taxInvoiceRequested = false;
           const expectedAmount = isLiteCustomerMode
             ? null
-            : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour);
+            : (calcComposeOptAmount(schedulePyeongEl?.value, selectedHour) ?? calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour));
           const place = normalize(document.getElementById("schedulePlace").value);
           if (!place) {
             alert("주소를 입력해주세요.");
@@ -8544,9 +8649,11 @@
             ? "시간 상관없음"
             : `${time} <span style="color:#b91c1c;font-weight:700;">(확정아님)</span>`;
           const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
-          const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (scheduleCompositionEl.value || "미선택");
-          const _memo = normalize(document.getElementById("scheduleMemo").value);
-          const _amount = isLiteCustomerMode ? null : calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour);
+          const _optSel = !isLiteCustomerMode && composeOptKey ? COMPOSE_OPT[composeOptKey] : null;
+          const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (_optSel ? _optSel.label : (scheduleCompositionEl.value || "미선택"));
+          const _memoRaw = normalize(document.getElementById("scheduleMemo").value);
+          const _memo = _optSel && _optSel.memo && !_memoRaw.includes(_optSel.memo) ? normalize(`${_optSel.memo} ${_memoRaw}`) : _memoRaw;
+          const _amount = isLiteCustomerMode ? null : (calcComposeOptAmount(schedulePyeongEl?.value, selectedHour) ?? calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour));
           const _amountText = _amount ? `${Number(_amount).toLocaleString()}원` : null;
           const _rows = [
             ["업체", scheduleCompanyName],
