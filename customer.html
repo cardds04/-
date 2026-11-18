@@ -64,6 +64,7 @@
       .copt-item[aria-checked="true"] .copt-radio::after { content:"✓" !important; inset:auto !important; position:absolute; left:0; right:0; top:-2px; text-align:center; color:#d9f86b; font-size:.8rem; font-weight:900; background:none !important; }
       .copt-item[data-opt="photo"] { cursor:default; }
       .copt-item[data-opt="3d"][aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+      .copt-sale-price s { color:#8b938e; font-weight:600; text-decoration-thickness:2px; }
       .copt-note { font-size:.64rem !important; color:#7a847d !important; font-weight:600 !important; }
       .copt-item[data-opt="3d"]:not([aria-disabled="true"]) .copt-note { display:none; }
       .copt-info { margin-top:0; width:100%; padding:7px 10px; border-radius:14px; border:1px dashed #c6ec3a; background:#fbfff0; color:#2b3330; font:inherit; font-size:.82rem; cursor:pointer; }
@@ -4014,18 +4015,6 @@
                   </select>
                 </div>
               </div>
-              <!-- 11-18 사장님: 인로그 촬영 구성 = 사진 기본 + 옵션 하나(코덱스 시안 2번). 쇼픽(lite)은 숨김 -->
-              <section class="copt" id="composeOptBox" aria-label="촬영 구성">
-                <div class="copt-head"><strong>촬영 구성</strong><span>사진은 기본, 영상·3D는 필요하면 함께 체크해 주세요</span></div>
-                <div class="copt-list" role="group" aria-label="촬영 구성">
-                  <button type="button" class="copt-item" role="checkbox" aria-checked="true" aria-disabled="true" data-opt="photo"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span></button>
-                  <div class="copt-set" aria-label="영상 세트"><span class="copt-set-tag">영상 세트</span>
-                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" data-opt="video"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">영상<small>+10만원</small></span></button>
-                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" aria-disabled="true" data-opt="3d"><em class="copt-sticker">50% 할인</em><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간<small>+3만원</small><small class="copt-note">영상 선택 시 가능</small></span></button>
-                  </div>
-                </div>
-                <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 궁금하다면? <b>소개 영상 보기 ▶</b></button>
-              </section>
               <div class="copt-modal hidden" id="copt3dModal" role="dialog" aria-modal="true" aria-label="3D 공간 사이트 소개">
                 <div class="copt-modal-card">
                   <video id="copt3dVideo" src="assets/compose-opt/3d_site_intro.mp4" muted loop playsinline preload="none"></video>
@@ -4035,6 +4024,18 @@
               </div>
               <div class="row"><span>📍</span><input id="schedulePlace" type="text" placeholder="촬영장소 (동 이름 또는 도로명까지 · 예: 민락동 ○○아파트, 민락로211)" required /></div>
               <div class="row" style="align-items:flex-start;"><span style="padding-top:2px;">📝</span><textarea id="scheduleMemo" rows="1" placeholder="현관/세대비번과 메모사항을 남겨주세요" style="width:100%;border:0;outline:none;background:transparent;font-family:inherit;font-size:0.95rem;line-height:1.5;resize:none;overflow:hidden;padding:0;margin:0;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';"></textarea></div>
+              <!-- 11-18 사장님: 인로그 촬영 구성 = 사진 기본 + 옵션 하나(코덱스 시안 2번). 쇼픽(lite)은 숨김 -->
+              <section class="copt" id="composeOptBox" aria-label="촬영 구성">
+                <div class="copt-head"><strong>촬영 구성</strong><span>사진은 기본, 영상·3D는 필요하면 함께 체크해 주세요</span></div>
+                <div class="copt-list" role="group" aria-label="촬영 구성">
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="true" aria-disabled="true" data-opt="photo"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span></button>
+                  <div class="copt-set" aria-label="영상 세트"><span class="copt-set-tag">영상 세트</span>
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" data-opt="video"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">영상<small>+10만원</small></span></button>
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" aria-disabled="true" data-opt="3d"><em class="copt-sticker">50% 할인</em><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간<small class="copt-sale-price"><s>6만원</s> → 3만원</small><small class="copt-note">영상 선택 시 가능</small></span></button>
+                  </div>
+                </div>
+                <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 궁금하다면? <b>소개 영상 보기 ▶</b></button>
+              </section>
               <details class="compose-price-guide">
                 <summary>금액 산출 기준 보기</summary>
                 <div class="compose-price-body copt-guide-new">
