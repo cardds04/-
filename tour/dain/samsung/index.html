@@ -540,8 +540,7 @@ new MutationObserver(place).observe(svg,{subtree:true,attributes:true,attributeF
 <script>(function(){
 /* 11-18 사장님 「밑에 사진을 클릭했을 때도 포인트가 바뀌게 — 사진이 현관으로 바뀌면 현관 포인트가 나오도록」 */
 var src=[].map.call(document.scripts,function(x){return x.textContent;}).find(function(t){return t.indexOf("var DATA = ")>=0;}); if(!src) return;
-var m=/var DATA = (\{.*?\});
-/.exec(src); if(!m) return; var D=JSON.parse(m[1]), byName={}; D.rooms.forEach(function(r){byName[r.name]=r;});
+var m=/var DATA = (\{.*?\});\n/.exec(src); if(!m) return; var D=JSON.parse(m[1]), byName={}; D.rooms.forEach(function(r){byName[r.name]=r;});
 var $=function(i){return document.getElementById(i);}, last="";
 function photoBtn(num){var i=-1; D.photos.forEach(function(p,k){if(p.n===num)i=k;}); return document.querySelector('#strip button[data-i="'+i+'"]');}
 function render(roomName){
