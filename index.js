@@ -17980,6 +17980,7 @@ ${folderBtn}
         }
         renderMissingFolderCompaniesBox(activeRows, todayKey);
         renderKakaoPendingBox();
+        renderTour3dDoneBox().catch(() => {});
       }
 
       /**
@@ -18103,6 +18104,69 @@ ${folderBtn}
       }
       // 주기적 갱신 — DM 봇이 새 업체를 등재하면 30초 내 화면에 반영
       try { setInterval(() => { renderKakaoPendingBox().catch(() => {}); }, 30000); } catch (_) {}
+
+      /**
+       * 3D 작업 완료 업체 — app_state 행 tour3d_<스케줄id> 중 status=done (Claude 가 하루 한 번 3D 사이트를 만들고 done 으로 올림).
+       * 사장님이 고객에게 완료 안내를 보낸 뒤 「확인」 → 「전달 완료되었나요?」 예 → delivered(목록에서 사라짐). 11-18
+       */
+      let tour3dLastJson = "";
+      async function renderTour3dDoneBox() {
+        const box = document.getElementById("tour3dDoneBox");
+        if (!box) return;
+        let items = [];
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=like.tour3d_%25&select=id,payload`, { headers: KAKAO_HDR });
+          if (res.ok) items = (await res.json()).map((r) => ({ ...(r.payload || {}), __id: r.id }));
+        } catch (_) {}
+        const waiting = items.filter((m) => m.status === "waiting" || m.status === "ready").length;
+        items = items.filter((m) => m.status === "done").sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+        const sig = JSON.stringify([items, waiting]);
+        if (sig === tour3dLastJson && box.dataset.rendered === "1") return;
+        tour3dLastJson = sig; box.dataset.rendered = "1";
+        const waitLine = waiting ? `<div class="helper" style="margin:0 0 6px;font-size:0.82em;">3D 작업 대기 ${waiting}건 (사진완료 뒤 클로드가 하루 한 번 작업)</div>` : "";
+        if (!items.length) {
+          box.innerHTML = waitLine + '<div class="helper" style="margin:0;color:#16a34a;">전달할 3D 완료 업체가 없습니다.</div>';
+          return;
+        }
+        box.innerHTML = waitLine +
+          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${items.length}건 3D 완료 · 고객 전달 대기</div>` +
+          items.map((m, i) => {
+            const url = String(m.site_url || "");
+            return `<div class="customer-alert-row" style="padding:7px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
+              <span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#d9f86b;background:#111816;border-radius:6px;padding:2px 6px;">3D</span>
+              <span style="flex:0 0 auto;"><strong>${escapeHtml(String(m.company || ""))}</strong></span>
+              <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
+              ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.82em;word-break:break-all;">${escapeHtml(url)}</a>` : '<span style="flex:1"></span>'}
+              <button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>
+            </div>`;
+          }).join("");
+        box.__tour3dItems = items;
+        if (!box.dataset.boundTour3d) {
+          box.dataset.boundTour3d = "1";
+          box.addEventListener("click", async (event) => {
+            const btn = event.target.closest('button[data-action="tour3dDelivered"]');
+            if (!btn || btn.disabled) return;
+            const item = (box.__tour3dItems || [])[parseInt(btn.dataset.idx, 10)];
+            if (!item) return;
+            if (!window.confirm(`${item.company || ""} — 전달 완료되었나요?`)) return;
+            btn.disabled = true; btn.textContent = "처리 중…";
+            try {
+              const { __id, ...payload } = item;
+              const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
+                method: "POST",
+                headers: { ...KAKAO_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                body: JSON.stringify([{ id: __id, payload: { ...payload, status: "delivered", delivered_at: new Date().toISOString() } }])
+              });
+              if (!res.ok) throw new Error(String(res.status));
+              box.dataset.rendered = "";
+              await renderTour3dDoneBox();
+            } catch (e) {
+              alert("저장 실패: " + (e && e.message ? e.message : e)); btn.disabled = false; btn.textContent = "확인";
+            }
+          });
+        }
+      }
+      try { setInterval(() => { renderTour3dDoneBox().catch(() => {}); }, 30000); } catch (_) {}
 
       /**
        * 15일간 스케줄(getDashboardFifteenDayWindow 윈도우) 중 업체정보관리에 「폴더연결 주소」
