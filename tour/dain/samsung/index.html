@@ -522,7 +522,21 @@ h1, h2, h3, p { margin: 0; }
   crisp(document.getElementById("shot")); crisp(document.getElementById("zoomImg"));
 })();
 </script>
-<style>.homebtn{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px 7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;font-size:14px;text-decoration:none}
+
+<style>.mini .pin3d{pointer-events:none} .mini .pin3d .bob{animation:pinbob 1.6s ease-in-out infinite} @keyframes pinbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@media (prefers-reduced-motion:reduce){.mini .pin3d .bob{animation:none}} .mini .mm-room[aria-current="true"] path,.mini .mm-room[aria-current="true"] rect{fill:rgba(15,122,108,.16)!important}</style>
+<script>(function(){
+/* 11-18 사장님 「현재 위치 표시를 위에 화살표 3D 추 모양으로(코덱스)」 → 지금 공간 이름 위에 코덱스가 그린 3D 추가 떠서 살짝 흔들린다 */
+var svg=document.getElementById("mini"); if(!svg) return; var NS="http://www.w3.org/2000/svg";
+var g=document.createElementNS(NS,"g"); g.setAttribute("class","pin3d"); var b=document.createElementNS(NS,"g"); b.setAttribute("class","bob");
+var im=document.createElementNS(NS,"image"); im.setAttribute("href","pin.png"); var W=58,H=W*1.5385; im.setAttribute("width",W); im.setAttribute("height",H); im.setAttribute("x",-W/2); im.setAttribute("y",-H);
+b.appendChild(im); g.appendChild(b); svg.appendChild(g);
+function place(){var c=svg.querySelector('.mm-room[aria-current="true"]'); if(!c){g.style.display="none";return;}
+ var t=svg.querySelector('text[data-for="'+c.dataset.key+'"]'), x, y;
+ if(t){x=+t.getAttribute("x"); y=+t.getAttribute("y")-(t.classList.contains("s")?12:18);} else {var bb=c.getBBox(); x=bb.x+bb.width/2; y=bb.y+bb.height/2;}
+ g.style.display=""; g.setAttribute("transform","translate("+x+" "+y+")");}
+new MutationObserver(place).observe(svg,{subtree:true,attributes:true,attributeFilter:["aria-current"]}); place();
+})();</script><style>.homebtn{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px 7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;font-size:14px;text-decoration:none}
 .homebtn:hover{border-color:var(--accent);color:var(--accent)} .homebtn svg{width:17px;height:17px} @media (max-width:999px){.top{gap:10px}}</style>
 <script>(function(){
 /* 11-18 사장님 「홈으로 가기 버튼 — 현장에서 누르면 업체 메인」 */
