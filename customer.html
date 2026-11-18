@@ -48,16 +48,13 @@
       .copt-base img, .copt-item img { width:40px; height:40px; object-fit:contain; flex:none; }
       .copt-base b { font-size:1rem; } .copt-base em { font-style:normal; font-size:.75rem; font-weight:800; padding:3px 9px; border-radius:999px; background:#d9f86b; color:#1d2326; }
       .copt-chk { margin-left:auto; width:24px; height:24px; border-radius:50%; background:#d9f86b; color:#1d2326; display:grid; place-items:center; font-style:normal; font-weight:900; font-size:.85rem; }
-      .copt-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-      .copt-item { position:relative; align-items:center; padding:12px 34px 12px 10px !important; min-height:76px; }
-      .copt-item img { width:34px !important; height:34px !important; }
-      .copt-item .copt-radio { position:absolute; right:10px; top:50%; transform:translateY(-50%); width:20px; height:20px; }
-      .copt-item .copt-price { display:none; }
-      .copt-name { font-size:.84rem !important; line-height:1.25; word-break:keep-all; overflow-wrap:normal; }
-      .copt-name small { font-size:.78rem !important; color:#3b4440 !important; font-weight:600 !important; }
-      .copt-name .copt-more { font-size:.68rem !important; color:#3f6d00 !important; }
-      .copt-sale { position:absolute; top:-9px; right:10px; margin:0 !important; font-size:.66rem !important; }
-      .copt-base { padding:8px 12px !important; } .copt-base img { width:32px !important; height:32px !important; }
+      .copt-list { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+      .copt-item { position:relative; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; text-align:center; padding:14px 6px 12px !important; min-height:150px; }
+      .copt-item img { width:44px !important; height:44px !important; }
+      .copt-item .copt-radio { position:absolute; right:8px; top:8px; width:18px; height:18px; }
+      .copt-name { align-items:center; font-size:.8rem !important; line-height:1.25; word-break:keep-all; overflow-wrap:normal; gap:3px !important; }
+      .copt-name small { font-size:.78rem !important; color:#1d2326 !important; font-weight:800 !important; }
+      .copt-name .copt-more { font-size:.66rem !important; color:#3f6d00 !important; font-weight:700 !important; margin-top:2px; }
       .copt-item { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:16px; border:1.5px solid #e6eadf; background:#fff; text-align:left; cursor:pointer; font:inherit; color:#151a1c; }
       .copt-item[aria-checked="true"] { border-color:#c6ec3a; box-shadow:0 0 0 2px #e9fbb0 inset; background:#fbfff0; }
       .copt-name { display:flex; flex-direction:column; gap:2px; font-weight:800; font-size:.95rem; min-width:0; }
@@ -4006,13 +4003,11 @@
               </div>
               <!-- 11-18 사장님: 인로그 촬영 구성 = 사진 기본 + 옵션 하나(코덱스 시안 2번). 쇼픽(lite)은 숨김 -->
               <section class="copt" id="composeOptBox" aria-label="촬영 구성">
-                <div class="copt-head"><strong>촬영 구성</strong><span>사진 촬영은 기본 포함, 필요한 옵션을 골라 주세요</span></div>
-                <div class="copt-base"><img src="assets/compose-opt/ic_photo.png" alt="" /><b>사진 촬영</b><em>기본 포함</em><i class="copt-chk" aria-hidden="true">✓</i></div>
-                <div class="copt-list" role="radiogroup" aria-label="촬영 옵션">
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="photo"><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진만<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span><span class="copt-price">사진만</span><i class="copt-radio" aria-hidden="true"></i></button>
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="both"><img src="assets/compose-opt/ic_both.png" alt="" /><em class="copt-sale">특가할인</em><span class="copt-name">영상 + 3D 공간<small>+15만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span><span class="copt-price">+15만원</span><i class="copt-radio" aria-hidden="true"></i></button>
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="video"><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">영상 추가 촬영<small>+10만원</small></span><span class="copt-price">+10만원</span><i class="copt-radio" aria-hidden="true"></i></button>
-                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="3d"><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간 사이트 등록<small>+10만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span><span class="copt-price">+10만원</span><i class="copt-radio" aria-hidden="true"></i></button>
+                <div class="copt-head"><strong>촬영 구성</strong><span>원하시는 촬영 구성을 골라 주세요</span></div>
+                <div class="copt-list" role="radiogroup" aria-label="촬영 구성">
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="photo"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_photo.png" alt="" /><span class="copt-name">사진 촬영<small class="copt-pp" id="coptPhotoPrice">15만원~</small></span></button>
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="video"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_video.png" alt="" /><span class="copt-name">사진 + 영상 촬영<small>+10만원</small></span></button>
+                  <button type="button" class="copt-item" role="radio" aria-checked="false" data-opt="both"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_both.png" alt="" /><span class="copt-name">사진 + 영상 + 3D 공간 사이트<small>+13만원</small><small class="copt-more" data-act="3dinfo">3D 사이트란? ▶</small></span></button>
                 </div>
               </section>
               <div class="copt-modal hidden" id="copt3dModal" role="dialog" aria-modal="true" aria-label="3D 공간 사이트 소개">
@@ -4028,8 +4023,8 @@
                 <summary>금액 산출 기준 보기</summary>
                 <div class="compose-price-body copt-guide-new">
                   사진 촬영(기본): 45평 이하 15만원 · 46평 이상 20만원 · 100평 이상 25만원<br />
-                  옵션: 영상 추가 촬영 +10만원 · 3D 공간 사이트 등록 +10만원<br />
-                  영상 + 3D 공간 <strong>특가할인 +15만원</strong><br />
+                  사진 + 영상 촬영: +10만원<br />
+                  사진 + 영상 + 3D 공간 사이트: +13만원<br />
                   <strong>저녁 6시 이후 촬영: 추가요금 5만원</strong>
                 </div>
                 <div class="compose-price-body copt-guide-old">
@@ -6533,10 +6528,9 @@
       }
       /* 11-18 인로그 촬영 구성 옵션: 사진 기본(평수별) + 옵션 하나. 영상이 들어간 옵션은 기존 값 「사진영상 둘다」로 저장해 영상 제작 흐름을 그대로 탄다 */
       const COMPOSE_OPT = {
-        photo: { label: "사진만", add: 0, composition: "사진만", memo: "" },
-        both: { label: "사진 + 영상 + 3D 공간 사이트 (특가할인)", add: 150000, composition: "사진영상 둘다", memo: "【3D 공간 사이트 신청】" },
-        video: { label: "사진 + 영상 추가 촬영", add: 100000, composition: "사진영상 둘다", memo: "" },
-        "3d": { label: "사진 + 3D 공간 사이트 등록", add: 100000, composition: "사진만", memo: "【3D 공간 사이트 신청】" },
+        photo: { label: "사진 촬영", add: 0, composition: "사진만", memo: "" },
+        video: { label: "사진 + 영상 촬영", add: 100000, composition: "사진영상 둘다", memo: "" },
+        both: { label: "사진 + 영상 + 3D 공간 사이트", add: 130000, composition: "사진영상 둘다", memo: "【3D 공간 사이트 신청】" },
       };
       const COMPOSE_PHOTO_BASE = { "45평이하": 150000, "46평이상": 200000, "100평이상": 250000 };
       let composeOptKey = "";
