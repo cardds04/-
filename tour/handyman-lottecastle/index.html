@@ -568,4 +568,44 @@ h1, h2, h3, p { margin: 0; }
   route();
 })();
 </script>
-</body></html>
+<script>
+(function () {
+  var shot = document.getElementById("shot");
+  new MutationObserver(function () {
+    var m = /(?:^|\/)p\/(\d+)\.(?:webp|jpg)$/.exec(shot.getAttribute("src") || ""); if (!m) return;
+    var n = m[1]; if (shot.dataset.hi === n || shot.dataset.pre === n) return; shot.dataset.pre = n;
+    var im = new Image(); im.onload = function () { if (!shot.hidden && (shot.getAttribute("src") || "").indexOf("p/" + n + ".") >= 0) { shot.src = im.src; shot.dataset.hi = n; } }; im.src = "p/h_" + n + ".webp";
+  }).observe(shot, { attributes: true, attributeFilter: ["src"] });
+  var cv = document.getElementById("cv"), stage = document.getElementById("stage"), st = { s: 1, x: 0, y: 0 }, pts = {};
+  function apply() {
+    var r = cv.getBoundingClientRect(), w = r.width / st.s, h = r.height / st.s, mx = w * (st.s - 1) / 2, my = h * (st.s - 1) / 2;
+    st.x = Math.max(-mx, Math.min(mx, st.x)); st.y = Math.max(-my, Math.min(my, st.y));
+    cv.style.transform = st.s > 1.001 ? "translate(" + st.x + "px," + st.y + "px) scale(" + st.s + ")" : ""; stage.classList.toggle("cvzoom", st.s > 1.001);
+  }
+  function zoomAt(cx, cy, k) {
+    var r = stage.getBoundingClientRect(), px = cx - (r.left + r.width / 2), py = cy - (r.top + r.height / 2), ns = Math.max(1, Math.min(3, st.s * k)), f = ns / st.s;
+    st.x = px - (px - st.x) * f; st.y = py - (py - st.y) * f; st.s = ns; if (ns <= 1.001) { st.s = 1; st.x = 0; st.y = 0; } apply();
+  }
+  function reset() { st.s = 1; st.x = 0; st.y = 0; apply(); }
+  cv.addEventListener("wheel", function (e) { e.preventDefault(); stage.classList.add("seen"); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018))); }, { passive: false });
+  cv.addEventListener("pointerdown", function (e) {
+    pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var n = Object.keys(pts).length;
+    if (n >= 2) { stage.dispatchEvent(new PointerEvent("pointercancel", { pointerId: e.pointerId, bubbles: false })); }
+    if (n >= 2 || st.s > 1.001) { e.stopPropagation(); try { cv.setPointerCapture(e.pointerId); } catch (err) {} }
+  });
+  cv.addEventListener("pointermove", function (e) {
+    var p0 = pts[e.pointerId]; if (!p0) return; var ids = Object.keys(pts);
+    if (ids.length >= 2) {
+      var o = pts[ids[0] === String(e.pointerId) ? ids[1] : ids[0]], d0 = Math.hypot(p0.x - o.x, p0.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+      if (d0 > 0) zoomAt((e.clientX + o.x) / 2, (e.clientY + o.y) / 2, d1 / d0); e.stopPropagation();
+    } else if (st.s > 1.001) { st.x += e.clientX - p0.x; st.y += e.clientY - p0.y; apply(); e.stopPropagation(); }
+    pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+  });
+  function up(e) { delete pts[e.pointerId]; }
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("dblclick", reset);
+  new MutationObserver(reset).observe(document.getElementById("roomName"), { childList: true, characterData: true, subtree: true });
+  document.getElementById("back360").addEventListener("click", reset);
+})();
+</script><style>.stage canvas { transform-origin: 50% 50%; will-change: transform; } .stage.cvzoom { cursor: grab; } .stage.cvzoom .badge360 { opacity: 0; }</style></body></html>
