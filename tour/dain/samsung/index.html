@@ -536,6 +536,31 @@ function place(){var c=svg.querySelector('.mm-room[aria-current="true"]'); if(!c
  if(t){x=+t.getAttribute("x"); y=+t.getAttribute("y")-(t.classList.contains("s")?12:18);} else {var bb=c.getBBox(); x=bb.x+bb.width/2; y=bb.y+bb.height/2;}
  g.style.display=""; g.setAttribute("transform","translate("+x+" "+y+")");}
 new MutationObserver(place).observe(svg,{subtree:true,attributes:true,attributeFilter:["aria-current"]}); place();
+})();</script>
+<script>(function(){
+/* 11-18 사장님 「밑에 사진을 클릭했을 때도 포인트가 바뀌게 — 사진이 현관으로 바뀌면 현관 포인트가 나오도록」 */
+var src=[].map.call(document.scripts,function(x){return x.textContent;}).find(function(t){return t.indexOf("var DATA = ")>=0;}); if(!src) return;
+var m=/var DATA = (\{.*?\});
+/.exec(src); if(!m) return; var D=JSON.parse(m[1]), byName={}; D.rooms.forEach(function(r){byName[r.name]=r;});
+var $=function(i){return document.getElementById(i);}, last="";
+function photoBtn(num){var i=-1; D.photos.forEach(function(p,k){if(p.n===num)i=k;}); return document.querySelector('#strip button[data-i="'+i+'"]');}
+function render(roomName){
+  if(roomName===last) return; last=roomName; var r=byName[roomName];
+  $("ptRoom").textContent=roomName; $("roomName").textContent=roomName; var ol=$("ptList"); ol.textContent="";
+  if(!r){ $("ptLead").textContent="이 공간은 아래 사진으로 둘러보세요."; $("ptMore").hidden=true; return; }
+  $("ptLead").textContent=r.lead;
+  r.pts.forEach(function(p){var li=document.createElement("li"),d=document.createElement("div"),b=document.createElement("b"),sp=document.createElement("span");
+    b.textContent=p[0]; sp.textContent=p[1]; d.appendChild(b); d.appendChild(sp); li.appendChild(d);
+    if(p[2]){var pb=document.createElement("button"),im=document.createElement("img"); pb.type="button"; pb.className="ph"; pb.setAttribute("aria-label",p[0]+" 사진 보기");
+      im.src="p/t_"+p[2]+".jpg"; im.alt=p[0]; im.loading="lazy"; pb.appendChild(im); pb.addEventListener("click",function(){var bt=photoBtn(p[2]); if(bt) bt.click();}); li.appendChild(pb);}
+    ol.appendChild(li);});
+  $("ptsBox").classList.remove("all"); $("ptMore").hidden=r.pts.length<=2;
+  document.querySelectorAll("#mini .mm-room, #jumpList button, #chips .chip").forEach(function(g){g.setAttribute("aria-current", g.dataset.key===r.key?"true":"false");});
+}
+new MutationObserver(function(){
+  var cur=document.querySelector("#strip button.cur"), inPhoto=document.getElementById("stage").classList.contains("photo");
+  if(cur && inPhoto) render(cur.dataset.room); else last="";
+}).observe($("strip"),{subtree:true,attributes:true,attributeFilter:["class"]});
 })();</script><style>.homebtn{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px 7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;font-size:14px;text-decoration:none}
 .homebtn:hover{border-color:var(--accent);color:var(--accent)} .homebtn svg{width:17px;height:17px} @media (max-width:999px){.top{gap:10px}}</style>
 <script>(function(){
