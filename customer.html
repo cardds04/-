@@ -89,6 +89,19 @@
       body:not(.customer-lite) #pyeongSection { grid-column: 1 / -1; width: auto; }
       body.customer-lite #composeOptBox, body.customer-lite .copt-guide-new, body:not(.customer-lite) .copt-guide-old { display:none; }
       body:not(.customer-lite) #lite3dBox { display:none; }
+      #lite3dBox { display:grid; gap:6px; }
+      #lite3dBox .l3d-row { display:flex; align-items:center; gap:12px; width:100%; padding:12px 14px; border:1.5px solid var(--line,#dfe5ee); border-radius:14px; background:#fff; font:inherit; text-align:left; cursor:pointer; transition:border-color .15s, background .15s; }
+      #lite3dBox .l3d-row img { width:40px; height:40px; object-fit:contain; flex:none; }
+      #lite3dBox .l3d-txt { flex:1; min-width:0; display:grid; gap:2px; }
+      #lite3dBox .l3d-txt b { font-size:0.98rem; color:#1d2326; }
+      #lite3dBox .l3d-txt small { font-size:0.78rem; color:#6b7480; line-height:1.35; }
+      #lite3dBox .l3d-price { flex:none; font-weight:800; color:#d92d20; font-size:0.95rem; }
+      #lite3dBox .l3d-check { flex:none; width:22px; height:22px; border-radius:7px; border:1.5px solid #b8c2cf; background:#fff; display:grid; place-items:center; }
+      #lite3dBox .l3d-row[aria-checked="true"] { border-color:#9bd12e; background:#f8ffe8; }
+      #lite3dBox .l3d-row[aria-checked="true"] .l3d-check { background:#1d2326; border-color:#1d2326; }
+      #lite3dBox .l3d-row[aria-checked="true"] .l3d-check::after { content:""; width:6px; height:11px; border:solid #d9f86b; border-width:0 2.5px 2.5px 0; transform:rotate(45deg) translate(-1px,-1px); }
+      #lite3dBox .l3d-info { justify-self:start; background:none; border:0; padding:2px 4px; font:inherit; font-size:0.8rem; color:#6b7480; cursor:pointer; }
+      #lite3dBox .l3d-info b { color:#3f6212; }
       .form { display: grid; gap: 8px; }
       .row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fcfdff; padding: 9px 10px; }
       .row input, .row select { width: 100%; border: 0; outline: none; background: transparent; font-size: 0.95rem; }
@@ -4061,12 +4074,14 @@
                 <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 무엇인가요? <b>영상 보기 클릭 ▶</b></button>
               </section>
               <!-- 11-19 사장님: 쇼픽 접수 화면에도 3D 공간 옵션(+3만원) -->
-              <section class="copt" id="lite3dBox" aria-label="3D 공간 옵션">
-                <div class="copt-head"><strong>추가 옵션</strong><span>필요하면 체크해 주세요</span></div>
-                <div class="copt-list" role="group" aria-label="추가 옵션">
-                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" data-opt="lite3d"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간 사이트<small class="copt-pp">+3만원</small></span></button>
-                </div>
-                <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 무엇인가요? <b>영상 보기 클릭 ▶</b></button>
+              <section id="lite3dBox" aria-label="3D 공간 옵션">
+                <button type="button" class="l3d-row" role="checkbox" aria-checked="false">
+                  <img src="assets/compose-opt/ic_3d.png" alt="" />
+                  <span class="l3d-txt"><b>3D 공간 사이트 추가</b><small>시공 현장을 360°로 둘러보는 업체 전용 페이지</small></span>
+                  <span class="l3d-price">+3만원</span>
+                  <i class="l3d-check" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="l3d-info" data-act="3dinfo">3D 공간 사이트가 무엇인가요? <b>영상 보기 ▶</b></button>
               </section>
               <details class="compose-price-guide">
                 <summary>금액 산출 기준 보기</summary>
@@ -6625,10 +6640,10 @@
         const lbox = document.getElementById("lite3dBox");
         lbox?.addEventListener("click", (e) => {
           if (e.target.closest("[data-act='3dinfo']")) { e.preventDefault(); e.stopPropagation(); openInfo(); return; }
-          const it = e.target.closest(".copt-item"); if (!it) return;
+          const it = e.target.closest(".l3d-row"); if (!it) return;
           liteState3d = !liteState3d; it.setAttribute("aria-checked", liteState3d ? "true" : "false");
         });
-        document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => { liteState3d = false; lbox?.querySelector(".copt-item")?.setAttribute("aria-checked", "false"); }, 0));
+        document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => { liteState3d = false; lbox?.querySelector(".l3d-row")?.setAttribute("aria-checked", "false"); }, 0));
         document.getElementById("copt3dClose")?.addEventListener("click", closeInfo);
         modal?.addEventListener("click", (e) => { if (e.target === modal) closeInfo(); });
         document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => setComposeOpt(""), 0));
