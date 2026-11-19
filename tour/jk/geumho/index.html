@@ -668,3 +668,9 @@ filt.addEventListener("click",function(e){
   if(("#"+r.key)===location.hash) setTimeout(to360,0); else { location.hash=r.key; setTimeout(to360,80); }
 });
 })();</script>
+<script>(function(){
+/* 11-19 사장님 「아래 거실·주방이나 사진을 누르면 가운데 화면 맨 윗부분이 화면 위로 오게 — 전체가 딱 보이게」 */
+var st=document.getElementById("stage"); if(!st) return;
+function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ var y=st.getBoundingClientRect().top+window.pageYOffset-8; window.scrollTo({top:Math.max(0,y),behavior:"smooth"}); },120); }
+["filt","strip"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("click",function(e){ if(e.target.closest("button")) up(); }); });
+})();</script>
