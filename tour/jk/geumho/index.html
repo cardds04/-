@@ -585,4 +585,41 @@ new MutationObserver(function(){
 var top=document.querySelector("header.top"); if(top){var a=document.createElement("a"); a.className="homebtn"; a.href="../"; a.setAttribute("aria-label","업체 첫 화면으로");
  a.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9.5L10 3l7 6.5M5 8v8.5h4v-5h2v5h4V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>홈'; top.insertBefore(a, top.firstChild);}
 function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="pointer";e.addEventListener("click",function(){location.href="../";});}L("co");L("logo");
+})();</script><style>
+.fixbtn{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer}
+.fixbtn svg{width:16px;height:16px}.fixbtn:hover{border-color:var(--accent);color:var(--accent)}
+.fixmask{position:fixed;inset:0;z-index:70;background:rgba(10,20,25,.45);display:none;align-items:flex-end;justify-content:center;padding:16px}
+.fixmask.on{display:flex}@media(min-width:700px){.fixmask{align-items:center}}
+.fixcard{width:100%;max-width:440px;background:var(--card);color:var(--ink);border-radius:18px;padding:18px 16px 16px;box-shadow:0 10px 40px rgba(0,0,0,.25);display:grid;gap:10px}
+.fixcard h3{margin:0;font-size:17px}.fixcard p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.fixcard label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.fixcard select,.fixcard textarea,.fixcard input{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);width:100%;box-sizing:border-box}
+.fixcard textarea{min-height:110px;resize:vertical}
+.fixrow{display:flex;gap:8px}.fixrow button{flex:1;padding:12px;border-radius:12px;border:0;font:inherit;font-weight:700;cursor:pointer}
+.fixsend{background:var(--accent);color:#fff}.fixclose{background:#eef0f2;color:var(--ink)}
+.fixmsg{font-size:13px;font-weight:600;min-height:18px}
+</style>
+<script>(function(){
+/* 11-19 사장님 「고객이 수정사항을 요청할 수 있는 버튼 → 하루에 한 번 확인해서 수정」 */
+var m=location.pathname.match(/\/tour\/([a-z0-9-]+)\/([a-z0-9-]+)\/?/); if(!m) return;
+var rooms=[]; try{ rooms=(DATA.rooms||[]).map(function(r){return r.name}); }catch(e){}
+var b=document.createElement("button"); b.className="fixbtn"; b.type="button";
+b.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>수정 요청';
+var w=document.createElement("div"); w.className="fixmask";
+w.innerHTML='<div class="fixcard" role="dialog" aria-modal="true" aria-label="수정 요청"><h3>수정 요청</h3><p>고칠 부분을 적어 주시면 확인 후 하루 안에 반영해 드립니다.</p>'+
+ '<label>어느 공간인가요?<select id="fixRoom"><option value="">전체 / 잘 모르겠음</option>'+rooms.map(function(r){return '<option>'+r.replace(/</g,"")+'</option>'}).join("")+'</select></label>'+
+ '<label>수정할 내용<textarea id="fixText" maxlength="2000" placeholder="예: 주방 360° 화면에서 중문이 막힌 벽으로 보여요 / 포인트 설명 문구를 바꿔 주세요"></textarea></label>'+
+ '<label>연락처 (선택)<input id="fixContact" maxlength="80" placeholder="업체명 또는 연락처"></label>'+
+ '<div class="fixmsg" id="fixMsg"></div><div class="fixrow"><button type="button" class="fixclose">닫기</button><button type="button" class="fixsend">보내기</button></div></div>';
+document.body.appendChild(b); document.body.appendChild(w);
+var $=function(id){return document.getElementById(id)}, msg=$("fixMsg");
+b.addEventListener("click",function(){ var cur=($("roomName")||{}).textContent||""; var sel=$("fixRoom"); for(var i=0;i<sel.options.length;i++){ if(cur && cur.indexOf(sel.options[i].text)>=0 && sel.options[i].value!==""){ sel.selectedIndex=i; break; } } msg.textContent=""; w.classList.add("on"); setTimeout(function(){$("fixText").focus()},50); });
+w.addEventListener("click",function(e){ if(e.target===w||e.target.classList.contains("fixclose")) w.classList.remove("on"); });
+w.querySelector(".fixsend").addEventListener("click",function(){
+  var t=$("fixText").value.trim(); if(t.length<2){ msg.style.color="#b42318"; msg.textContent="수정할 내용을 적어 주세요."; return; }
+  var btn=this; btn.disabled=true; msg.style.color=""; msg.textContent="보내는 중…";
+  fetch("/api/tour-fix-request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({vendor:m[1],site:m[2],room:$("fixRoom").value,text:t,contact:$("fixContact").value.trim()})})
+   .then(function(r){return r.json()}).then(function(j){ btn.disabled=false; if(j&&j.ok){ msg.style.color="var(--accent)"; msg.textContent="접수됐습니다. 하루 안에 반영해 드릴게요."; $("fixText").value=""; setTimeout(function(){w.classList.remove("on")},1600);} else { msg.style.color="#b42318"; msg.textContent=(j&&j.error)||"보내지 못했습니다. 잠시 뒤 다시 시도해 주세요."; } })
+   .catch(function(){ btn.disabled=false; msg.style.color="#b42318"; msg.textContent="보내지 못했습니다. 잠시 뒤 다시 시도해 주세요."; });
+});
 })();</script>
