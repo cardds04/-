@@ -1,0 +1,719 @@
+<!doctype html><html lang="ko"><head><title>영통 늘푸른벽산 공간 둘러보기 · 디자인빌2</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>영통 늘푸른벽산 공간 둘러보기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 시안 8번(도면 먼저 고르는 구성): PC = 왼쪽 도면·공간 목록 / 가운데 3D / 오른쪽 포인트 / 아래 전체 사진. 폰 = 도면 서랍 → 3D → 공간 단추 → 포인트 → 전체 사진 */
+:root {
+  --bg: #eef0f2; --card: #ffffff; --ink: #17242a; --muted: #5d6b72; --line: #dfe4e7; --soft: #f3f6f6;
+  --accent: #0f7a6c; --accent-ink: #ffffff; --accent-soft: #d5efe9; --stage: #e6e9eb; --wall: #1b2a30;
+  --display: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1517; --card: #182124; --ink: #e7eef0; --muted: #96a5ab; --line: #2a373b; --soft: #1e2a2d;
+  --accent: #3fc2ae; --accent-ink: #062621; --accent-soft: #1d4a43; --stage: #0b1012; --wall: #e7eef0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1517; --card: #182124; --ink: #e7eef0; --muted: #96a5ab; --line: #2a373b; --soft: #1e2a2d;
+  --accent: #3fc2ae; --accent-ink: #062621; --accent-soft: #1d4a43; --stage: #0b1012; --wall: #e7eef0; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+* { box-sizing: border-box; }
+.app { display: grid; gap: 12px; padding-block: 12px 16px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); max-width: 1500px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+h1, h2, h3, p { margin: 0; }
+/* 머리줄 */
+.top { display: flex; align-items: center; gap: 14px; padding: 12px 16px; }
+.top .logo { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+.top .bar { width: 1px; height: 20px; background: var(--line); }
+.crumb { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; font-size: 15px; font-weight: 400; color: var(--muted); min-width: 0; }
+.crumb i { font-style: normal; opacity: .6; } .crumb b { font-size: 19px; font-weight: 700; color: var(--accent); }
+/* 도면 칸 */
+.plan { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.plan-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: default; }
+.plan-head h2 { font-size: 18px; font-weight: 700; } .plan-head p { font-size: 12.5px; color: var(--muted); }
+.plan-head .chev { margin-left: auto; display: none; transition: transform .15s; }
+.mini { display: block; width: 100%; height: auto; overflow: visible; --w: 2.4px; --t: 1px; -webkit-tap-highlight-color: transparent; }
+.mini * { vector-effect: non-scaling-stroke; }
+.mini .mm-etc rect { fill: var(--card); stroke: none; } .mini .mm-etc .util { fill: var(--soft); }
+.mini .mm-room rect, .mini .mm-room path { fill: var(--card); stroke: none; }
+.mini .mm-room { cursor: pointer; outline: none; }
+.mini .mm-room:hover rect, .mini .mm-room:hover path, .mini .mm-room:focus-visible rect, .mini .mm-room:focus-visible path { fill: var(--accent-soft); }
+.mini .mm-room[aria-current="true"] rect, .mini .mm-room[aria-current="true"] path { fill: color-mix(in srgb, var(--accent) 38%, var(--card)); }
+.mini .wall path { fill: none; stroke: var(--wall); stroke-width: var(--w); stroke-linecap: square; stroke-linejoin: miter; }
+.mini .win path { fill: none; stroke: var(--accent); stroke-width: calc(var(--w) + 1.6px); }
+.mini .door path, .mini .fx * { fill: none; stroke: var(--wall); stroke-width: var(--t); opacity: .8; }
+.mini .wall, .mini .win, .mini .door, .mini .fx, .mini .lb { pointer-events: none; }
+.mini text { fill: var(--ink); font-family: var(--display); font-size: 33px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+.mini text.s { font-size: 20px; } .mini text.e { font-size: 24px; font-weight: 500; fill: var(--muted); } .mini text.e.s { font-size: 17px; }
+.jump h3 { font-size: 15px; font-weight: 700; margin: 4px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.jump ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.jump button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); cursor: pointer; font-weight: 500; text-align: left; }
+.jump button .k { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.jump button::after { content: "›"; color: var(--muted); font-size: 18px; line-height: 1; }
+.jump button:hover { border-color: var(--accent); }
+.jump button[aria-current="true"] { background: var(--accent-soft); border-color: transparent; color: var(--ink); font-weight: 700; }
+/* 3D 화면 */
+.view { position: relative; overflow: hidden; background: var(--stage); }
+.stage { position: relative; display: flex; align-items: center; justify-content: center; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; height: 100%; }
+.stage.dragging { cursor: grabbing; }
+.stage canvas { display: block; max-width: 100%; }
+.load { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 8px 14px; border-radius: 999px; background: rgba(10,16,18,.72); color: #fff; font-family: var(--mono); font-size: 12.5px; pointer-events: none; }
+.arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(10,16,18,.58); color: #fff; cursor: pointer; }
+.arrow:hover { background: rgba(10,16,18,.8); } .arrow.l { left: 12px; } .arrow.r { right: 12px; } .arrow svg { width: 22px; height: 22px; }
+.pill { position: absolute; bottom: 12px; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; background: rgba(10,16,18,.62); color: #fff; font-size: 13px; pointer-events: none; }
+.pill.ang { left: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; } .pill.tip { right: 12px; padding-left: 12px; }
+.dial { width: 22px; height: 22px; } .dial .ring { fill: none; stroke: rgba(255,255,255,.55); stroke-width: 2; } .dial .needle { stroke: #fff; stroke-width: 2.5; stroke-linecap: round; transform-origin: 20px 20px; } .dial .hub { fill: #fff; }
+.bar2 { width: 46px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); position: relative; } .bar2 i { position: absolute; top: -3px; width: 11px; height: 11px; margin-left: -5px; border-radius: 50%; background: #fff; }
+/* 360° 아이콘 = 코덱스가 그린 그림(시안/아이콘/360_a.png)을 틀로 써서 글자색으로 칠한다 */
+.arrow.u, .arrow.d { left: 50%; top: auto; transform: translateX(-50%); width: 42px; height: 42px; }
+.arrow.u { top: 12px; } .arrow.d { bottom: 12px; } .arrow.u[hidden], .arrow.d[hidden] { display: none; }
+.stage.photo .arrow.u, .stage.photo .arrow.d { display: none; }
+.i360 { display: inline-block; width: 36px; height: 26px; flex: none; color: var(--accent); background: currentColor;
+  -webkit-mask: url(i360.png) center / contain no-repeat; mask: url(i360.png) center / contain no-repeat; }
+.badge360 { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 22px 14px; border-radius: 18px;
+  background: rgba(10,16,18,.6); color: #fff; font-size: 15px; font-weight: 600; pointer-events: none; transition: opacity .25s; text-align: center; white-space: nowrap; }
+.badge360 .i360 { width: 104px; height: 76px; color: #fff; }
+.stage:hover .badge360, .stage.seen .badge360, .stage.photo .badge360 { opacity: 0; }
+.shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: var(--stage); }
+.shot[hidden] { display: none; } .shot, .zoom img { cursor: default; touch-action: none; transform-origin: 50% 50%; will-change: transform; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+.shot.zoomed, .zoom img.zoomed { cursor: grab; }
+.stage.photo { overflow: hidden; } .zoom { overflow: hidden; }
+.pill.zh { right: 12px; bottom: auto; top: 12px; padding-left: 12px; } .pill.zh[hidden] { display: none; }
+.bigbtn { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px 8px 10px; border: 0; border-radius: 999px; background: rgba(10,16,18,.72); color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.bigbtn:hover { background: rgba(10,16,18,.9); } .bigbtn[hidden] { display: none; } .bigbtn svg { width: 16px; height: 16px; }
+/* 사진 크게 보기(가운데 사진을 누르면 화면 전체로) */
+.zoom { position: fixed; inset: 0; z-index: 40; background: rgba(5,8,9,.97); display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.zoom[hidden] { display: none; }
+.zoom img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.zoom .x { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); right: 12px; padding: 8px 14px; border-radius: 999px; border: 0; background: rgba(255,255,255,.16); color: #fff; cursor: pointer; font-weight: 600; }
+.zoom .cnt { position: absolute; top: max(16px, env(safe-area-inset-top, 0px)); left: 16px; color: #fff; font-size: 14px; opacity: .85; }
+.back360 { position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 7px 8px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.back360 .i360 { color: var(--accent-ink); } .back360[hidden] { display: none; }
+.stage.photo { cursor: default; } .stage.photo .pill.ang, .stage.photo .pill.tip { display: none; }
+.pill.cap { left: 12px; padding-left: 12px; } .pill.cap[hidden] { display: none; }
+.strip .to360 { display: grid; place-items: center; width: 68px; border: 2px solid var(--accent); background: var(--accent-soft); cursor: pointer; }
+.strip .to360 .i360 { width: 50px; height: 36px; }
+.jump button .i360 { margin-right: -2px; }
+/* 공간 단추(폰) */
+.chips { display: none; gap: 6px; overflow-x: auto; scrollbar-width: none; } .chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; font-size: 14px; }
+.chip[aria-current="true"], .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+/* 포인트 */
+.pts { padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.pts h2 { font-size: 18px; font-weight: 700; } .pts h2 em { font-style: normal; color: var(--accent); }
+.pts .lead2 { font-size: 16px; font-weight: 600; line-height: 1.4; text-wrap: balance; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.pts ol { margin: 0; padding: 0; list-style: none; counter-reset: p; display: grid; }
+.pts li { counter-increment: p; display: grid; grid-template-columns: 30px 1fr 88px; column-gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.pts li:last-child { border-bottom: 0; }
+.pts li::before { content: counter(p, decimal-leading-zero); font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 0; text-align: center; margin-top: 2px; }
+.pts li b { display: block; font-size: 15px; font-weight: 700; } .pts li span { display: block; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.pts li .ph { grid-column: 3; width: 88px; height: 66px; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: var(--soft); cursor: zoom-in; }
+.pts li .ph img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pts .more { display: none; padding: 10px; border: 0; border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-weight: 600; cursor: pointer; }
+.pts .src { font-size: 11px; color: var(--muted); }
+/* 전체 사진 */
+.photos { padding: 12px 16px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: center; }
+.photos .ttl { grid-row: 1 / 3; align-self: start; padding-top: 4px; } .photos .ttl h2 { font-size: 16px; font-weight: 700; } .photos .ttl p { font-size: 12px; color: var(--muted); }
+.frow { display: flex; align-items: center; gap: 8px; min-width: 0; } .filt { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; } .filt::-webkit-scrollbar { display: none; }
+.nav { flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-size: 18px; line-height: 1; }
+.strip { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding-bottom: 4px; min-width: 0; scroll-behavior: smooth; }
+.strip button { flex: none; height: 68px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--soft); cursor: zoom-in; }
+.strip button[hidden] { display: none; }
+.strip img { display: block; height: 100%; width: auto; }
+.strip button.cur { border-color: var(--accent); }
+.fine { font-size: 11px; line-height: 1.4; color: var(--muted); padding: 0 4px; }
+/* 사진 크게 보기 */
+.lb { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(6,10,11,.96); color: #fff; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.lb[hidden] { display: none; }
+.lb .lbtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 15px; } .lb .lbtop .sp { flex: 1; } .lb .cnt { font-family: var(--mono); font-size: 12px; opacity: .7; }
+.lb .x { padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: none; color: #fff; cursor: pointer; }
+.lb .pic { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.lb .pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lb .strip { flex: none; padding: 10px 14px; } .lb .strip button { height: 56px; background: #1a2326; } .lb .strip button.cur { border-color: #fff; }
+/* PC: 세 칸 + 아래 사진 줄, 한 화면에 다 들어오게 */
+@media (min-width: 1000px) {
+  .app { height: 100dvh; min-height: 640px; grid-template-columns: 300px minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr) auto auto; grid-template-areas: "top top top" "plan view pts" "photos photos photos" "fine fine fine"; }
+  .top { grid-area: top; } .plan { grid-area: plan; overflow: auto; } .view { grid-area: view; } .pts { grid-area: pts; } .photos { grid-area: photos; } .fine { grid-area: fine; }
+  .stage canvas { max-height: 100%; }
+}
+/* 폰·좁은 화면: 위에서 아래로 */
+@media (max-width: 999px) {
+  .top { padding: 10px 14px; } .top .logo, .top .bar { display: none; }
+  .plan { padding: 12px 14px; background: var(--accent-soft); border-color: transparent; }
+  .plan-head { cursor: pointer; } .plan-head .chev { display: block; } .plan.open .plan-head .chev { transform: rotate(180deg); }
+  .plan:not(.open) .plan-body { display: none; } .plan-body { background: var(--card); border-radius: 10px; padding: 12px; }
+  .jump { display: none; }
+  .stage canvas { max-height: min(66dvh, 680px); }
+  .chips { display: flex; }
+  .pts:not(.all) li:nth-child(n+3) { display: none; } .pts .more { display: block; }
+  .photos { grid-template-columns: minmax(0, 1fr); } .photos .ttl { grid-row: auto; display: flex; align-items: baseline; gap: 8px; }
+  .pill.tip { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .strip { scroll-behavior: auto; } }
+</style><style>
+.mini .f3d *, .mini .wall3d *, .mini .win3d * { vector-effect: none; }
+.mini .mm-etc path { fill: transparent; }
+.mini .mm-room rect, .mini .mm-room path { fill: transparent; }
+.mini .mm-room:hover rect, .mini .mm-room:hover path, .mini .mm-room:focus-visible path { fill: rgba(15,122,108,.22); }
+.mini .mm-room[aria-current="true"] rect, .mini .mm-room[aria-current="true"] path { fill: rgba(15,122,108,.34); stroke: #0f7a6c; stroke-width: 3px; }
+.mini .wall3d path { fill: none; stroke: #15191b; stroke-width: 9; stroke-linejoin: miter; stroke-linecap: square; }
+.mini .win3d .pane { fill: none; stroke: #ffffff; stroke-width: 9; } .mini .win3d .glass { fill: none; stroke: #a9c8d6; stroke-width: 3; }
+.mini .wall3d, .mini .win3d, .mini .f3d, .mini .opn, .mini .door3d, .mini .plan3d { pointer-events: none; }
+.mini .opn rect { fill: url(#pBeige); stroke: none; vector-effect: none; } .mini .door3d path { fill: none; stroke: #3b4248; stroke-width: 2; vector-effect: none; }
+.mini text { paint-order: stroke; stroke: rgba(255,255,255,.88); stroke-width: 5px; stroke-linejoin: round; fill: #17242a; }
+.mini text.e { fill: #3d4a50; }
+</style>
+
+<div class="app" id="app">
+  <header class="card top">
+    <span class="logo" id="logo"></span><span class="bar"></span>
+    <h1 class="crumb"><span id="co"></span><i aria-hidden="true">›</i><span id="site"></span><i aria-hidden="true">›</i><b id="roomName"></b></h1>
+  </header>
+
+  <section class="card plan" id="planBox" aria-label="평면도">
+    <button class="plan-head" id="planHead" type="button" aria-expanded="false">
+      <span><h2>평면도</h2><p>원하는 공간을 눌러 이동하세요.</p></span>
+      <svg class="chev" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="plan-body">
+    <svg class="mini" id="mini" viewBox="62 42 904 666" role="group" aria-label="도면에서 공간 고르기">
+      <image class="plan3d" href="plan3d.webp" x="2" y="34" width="1024" height="682.667" preserveAspectRatio="none"/>
+      <g class="mm-etc">
+        <path d="M313.6 294.8 L702.4 294.8 L702.4 376.4 L313.6 376.4 Z"/>
+        <path d="M702.4 294.8 L856.0 294.8 L856.0 376.4 L702.4 376.4 Z"/>
+        <path d="M332.8 54.8 L616.0 54.8 L616.0 126.8 L332.8 126.8 Z"/>
+        <path d="M620.8 54.8 L860.8 54.8 L860.8 126.8 L620.8 126.8 Z"/>
+        <path d="M352.0 578.0 L856.0 578.0 L856.0 630.8 L352.0 630.8 Z"/>
+        <path d="M179.2 544.4 L347.2 544.4 L347.2 626.0 L179.2 626.0 Z"/>
+      </g>
+      <g class="mm-room" data-key="living" tabindex="0" role="button" aria-label="거실"><path d="M352.0 376.4 L616.0 376.4 L616.0 578.0 L352.0 578.0 Z"/></g>
+      <g class="mm-room" data-key="kitchen" tabindex="0" role="button" aria-label="주방"><path d="M414.4 126.8 L616.0 126.8 L616.0 294.8 L414.4 294.8 Z"/></g>
+      <g class="mm-room" data-key="master" tabindex="0" role="button" aria-label="안방"><path d="M620.8 381.2 L856.0 381.2 L856.0 578.0 L620.8 578.0 Z"/></g>
+      <g class="mm-room" data-key="bed1" tabindex="0" role="button" aria-label="작은방 1"><path d="M179.2 381.2 L347.2 381.2 L347.2 544.4 L179.2 544.4 Z"/></g>
+      <g class="mm-room" data-key="bed2" tabindex="0" role="button" aria-label="작은방 2"><path d="M620.8 126.8 L769.6 126.8 L769.6 294.8 L620.8 294.8 Z"/></g>
+      <g class="mm-room" data-key="entrance" tabindex="0" role="button" aria-label="현관"><path d="M198.4 294.8 L313.6 294.8 L313.6 376.4 L198.4 376.4 Z"/></g>
+      <g class="mm-room" data-key="bath" tabindex="0" role="button" aria-label="욕실"><path d="M308.8 170.0 L409.6 170.0 L409.6 294.8 L308.8 294.8 Z"/></g>
+      <g class="mm-room" data-key="mbath" tabindex="0" role="button" aria-label="안방 욕실"><path d="M774.4 165.2 L856.0 165.2 L856.0 290.0 L774.4 290.0 Z"/></g>
+      <g class="lb">
+        <text x="484.0" y="482.0" data-for="living">거실</text>
+        <text x="515.2" y="218.0" data-for="kitchen">주방</text>
+        <text x="738.4" y="474.8" data-for="master">안방</text>
+        <text x="263.2" y="467.6" class="s" data-for="bed1">작은방 1</text>
+        <text x="695.2" y="218.0" class="s" data-for="bed2">작은방 2</text>
+        <text x="256.0" y="338.0" class="s" data-for="entrance">현관</text>
+        <text x="359.2" y="237.2" class="s" data-for="bath">욕실</text>
+        <text x="815.2" y="232.4" class="s" data-for="mbath">안방 욕실</text>
+        <text x="779.2" y="338.0" class="e s">파우더·드레스</text>
+        <text x="500.8" y="338.0" class="e s">복도</text>
+        <text x="604.0" y="606.8" class="e s">발코니</text>
+        <text x="474.4" y="90.8" class="e s">다용도</text>
+      </g>
+    </svg>
+    </div>
+    <nav class="jump" aria-label="360도 공간 바로가기"><h3>360° 공간 바로가기</h3><ul id="jumpList"></ul></nav>
+  </section>
+
+  <section class="card view" aria-label="공간 돌려 보기">
+    <div class="stage" id="stage">
+      <canvas id="cv" width="720" height="1072"></canvas>
+      <div class="load" id="load" hidden></div>
+      <button class="arrow u" id="arrU" type="button" aria-label="위쪽 보기" hidden><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 14l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="arrow d" id="arrD" type="button" aria-label="아래쪽 보기" hidden><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 8l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <img class="shot" id="shot" alt="" hidden>
+      <div class="badge360" id="b360"><span class="i360" aria-hidden="true"></span><span>360° 화면보기</span></div>
+      <button class="back360" id="back360" type="button" hidden><span class="i360" aria-hidden="true"></span>화면으로</button>
+      <span class="pill cap" id="cap" hidden></span>
+      <span class="pill zh" id="zh" hidden></span>
+      <button class="bigbtn" id="bigBtn" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>크게보기</button>
+      <button class="arrow l" id="arrL" type="button" aria-label="왼쪽으로 돌리기"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M14 4L7 11l7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="arrow r" id="arrR" type="button" aria-label="오른쪽으로 돌리기"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M8 4l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="pill ang"><svg class="dial" id="dial" viewBox="0 0 40 40" aria-hidden="true"><circle class="ring" cx="20" cy="20" r="16"/><line class="needle" id="needle" x1="20" y1="20" x2="20" y2="7"/><circle class="hub" cx="20" cy="20" r="3"/></svg><span class="bar2" id="bar" hidden><i id="barDot"></i></span><span id="read"></span></span>
+      <span class="pill tip" id="hint"></span>
+    </div>
+  </section>
+
+  <div class="chips" id="chips" aria-label="공간 고르기"></div>
+
+  <section class="card pts" id="ptsBox" aria-label="이 공간의 포인트">
+    <h2><em id="ptRoom"></em> 포인트</h2>
+    <p class="lead2" id="ptLead"></p>
+    <ol id="ptList"></ol>
+    <button class="more" id="ptMore" type="button" aria-expanded="false"></button>
+  </section>
+
+  <section class="card photos" aria-label="전체 사진">
+    <div class="ttl"><h2>전체 사진</h2><p id="phCount"></p></div>
+    <div class="frow"><div class="filt" id="filt"></div><button class="nav" id="stPrev" type="button" aria-label="사진 줄 앞으로">‹</button><button class="nav" id="stNext" type="button" aria-label="사진 줄 뒤로">›</button></div>
+    <div class="strip" id="strip"></div>
+  </section>
+  <p class="fine">실제 촬영 사진을 바탕으로, 3D 화면에서 사진과 사진 사이는 AI가 이어 만든 것입니다. 세부가 실제와 다를 수 있습니다. 도면은 준공 당시 평면도를 따라 그린 것이라 리모델링 뒤 구조와 다를 수 있습니다.</p>
+</div>
+
+<div class="zoom" id="zoom" hidden role="dialog" aria-modal="true" aria-label="사진 크게 보기">
+  <img id="zoomImg" alt=""><span class="cnt" id="zoomCnt"></span>
+  <button class="arrow l" id="zPrev" type="button" aria-label="앞 사진"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M14 4L7 11l7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="arrow r" id="zNext" type="button" aria-label="다음 사진"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M8 4l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="x" id="zClose" type="button">닫기</button>
+</div>
+<script>
+(function () {
+  "use strict";
+  var DATA = {"co":"디자인빌2","home":"living","apt":"영통 늘푸른벽산","rooms":[{"key":"living","name":"거실","kind":"loop","v":{"n":160,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_living_c972e6_00.webp","m/v_living_c972e6_01.webp","m/v_living_c972e6_02.webp","m/v_living_c972e6_03.webp","m/v_living_c972e6_04.webp","m/v_living_c972e6_05.webp","m/v_living_c972e6_06.webp","m/v_living_c972e6_07.webp","m/v_living_c972e6_08.webp","m/v_living_c972e6_09.webp"],"start":0},"lead":"넓은 창과 사각 조명이 있는 밝은 거실","pts":[["사각 LED 등","거실 천장 가운데에 사각 모양 LED 등을 달았습니다.","848"],["창 위 간접조명","거실 창 위 커튼 자리에 띠 조명을 넣었습니다.","823"],["밝은 원목 마루","집 전체에 밝은 원목 무늬 마루를 이어 깔았습니다.","832"],["매입등·라인 조명","천장에 작은 매입등과 가는 라인 조명을 나눠 달았습니다.","827"],["월패드·스위치 정리","월패드와 스위치를 한 벽에 모았습니다.","820"]]},{"key":"kitchen","name":"주방","kind":"sweep","v":{"n":93,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_kitchen_ba47ff_00.webp","m/v_kitchen_ba47ff_01.webp","m/v_kitchen_ba47ff_02.webp","m/v_kitchen_ba47ff_03.webp","m/v_kitchen_ba47ff_04.webp","m/v_kitchen_ba47ff_05.webp"],"start":46},"lead":"ㄱ자로 짠 화이트 주방","pts":[["ㄱ자 조리대","흰 무광 문짝으로 ㄱ자 주방을 짰습니다.","830"],["상부장 아래 조명","상부장 아래에 띠 조명을 넣어 조리대가 밝습니다.","838"],["사각 개수대와 높은 수전","넓은 사각 개수대에 높은 수전을 달았습니다.","838"],["매입 인덕션 자리","조리대 끝에 인덕션을 매입했습니다.","846"],["냉장고 자리","냉장고가 들어갈 자리를 장으로 감싸 짰습니다.","837"],["다용도실 유리문","주방 옆으로 다용도실에 나가는 유리문이 있습니다.","839"]]},{"key":"master","name":"안방","kind":"sweep","v":{"n":93,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_master_256bba_00.webp","m/v_master_256bba_01.webp","m/v_master_256bba_02.webp","m/v_master_256bba_03.webp","m/v_master_256bba_04.webp","m/v_master_256bba_05.webp"],"start":46},"lead":"붙박이장이 벽 한 면을 채운 안방","pts":[["벽 한 면 붙박이장","손잡이를 숨긴 흰 붙박이장으로 한쪽 벽을 채웠습니다.","801"],["아치 입구","안쪽 파우더 공간으로 둥근 아치 입구를 냈습니다.","815"],["창 위 간접조명","창 위에 띠 조명을 넣었습니다.","801"],["둥근 조명 거울 파우더","아치 안쪽에 둥근 조명 거울과 서랍장을 두었습니다.","806"]]},{"key":"bed1","name":"작은방 1","kind":"loop","v":{"n":160,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_bed1_63c5d7_00.webp","m/v_bed1_63c5d7_01.webp","m/v_bed1_63c5d7_02.jpg","m/v_bed1_63c5d7_03.webp","m/v_bed1_63c5d7_04.webp","m/v_bed1_63c5d7_05.webp","m/v_bed1_63c5d7_06.webp","m/v_bed1_63c5d7_07.webp","m/v_bed1_63c5d7_08.webp","m/v_bed1_63c5d7_09.webp"],"start":0},"lead":"발코니 문이 있는 밝은 방","pts":[["발코니 미닫이문","방에서 바로 작은 발코니로 나갈 수 있습니다.","782"],["문 위 간접조명","발코니 문 위에 띠 조명을 넣었습니다.","781"],["흰 방문","문틀까지 흰색으로 맞춘 방문을 달았습니다.","783"]]},{"key":"bed2","name":"작은방 2","kind":"sweep","v":{"n":93,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_bed2_f1a4bf_00.webp","m/v_bed2_f1a4bf_01.webp","m/v_bed2_f1a4bf_02.webp","m/v_bed2_f1a4bf_03.webp","m/v_bed2_f1a4bf_04.webp","m/v_bed2_f1a4bf_05.webp"],"start":46},"lead":"발코니 문이 있는 방","pts":[["발코니 미닫이문","방에서 바로 작은 발코니로 나갈 수 있습니다.","800"],["문 위 간접조명","발코니 문 위에 띠 조명을 넣었습니다.","796"],["흰 방문","문틀까지 흰색으로 맞춘 방문을 달았습니다.","799"]]},{"key":"entrance","name":"현관","kind":"sweep","v":{"n":45,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_entrance_cdc403_00.jpg","m/v_entrance_cdc403_01.webp","m/v_entrance_cdc403_02.webp"],"start":22},"lead":"키큰 신발장이 있는 현관","pts":[["천장까지 신발장","현관 정면을 천장까지 닿는 흰 신발장으로 채웠습니다.","793"],["신발장 아래 조명","신발장 아래를 띄우고 띠 조명을 넣었습니다.","792"],["현관 바닥 타일","현관 바닥은 밝은 타일로 깔고 마루와 깔끔하게 나눴습니다.","794"]]},{"key":"bath","name":"욕실","kind":"sweep","v":{"n":86,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_bath_6b5bc5_00.webp","m/v_bath_6b5bc5_01.webp","m/v_bath_6b5bc5_02.webp","m/v_bath_6b5bc5_03.webp","m/v_bath_6b5bc5_04.webp","m/v_bath_6b5bc5_05.webp"],"start":35},"lead":"아치 거울이 있는 욕조 욕실","pts":[["아치 조명 거울","뒤에서 빛이 나오는 아치 모양 거울을 달았습니다.","786"],["둥근 수납장","거울 옆에 둥근 모서리 수납장과 열린 선반을 달았습니다.","785"],["벽걸이 세면대","벽에 붙인 흰 세면대로 아래가 깔끔합니다.","791"],["욕조와 샤워","유리 칸막이 안쪽에 욕조와 샤워기를 두었습니다.","787"]]},{"key":"mbath","name":"안방 욕실","kind":"sweep","v":{"n":45,"fw":720,"fh":1072,"cols":4,"rows":4,"per":16,"sheets":["m/v_mbath_148967_00.webp","m/v_mbath_148967_01.webp","m/v_mbath_148967_02.webp"],"start":22},"lead":"넓은 거울장이 있는 샤워 욕실","pts":[["거울 수납장","세면대 위에 넓은 거울 수납장을 달고 아래에 띠 조명을 넣었습니다.","808"],["벽걸이 세면대","벽에 붙인 흰 세면대를 달았습니다.","813"],["유리 샤워 칸","유리 칸막이로 샤워 자리를 나눴습니다.","811"],["샤워 벽 선반","샤워 벽에 긴 선반 턱을 냈습니다.","811"]]}],"photos":[{"n":"820","ext":".webp","room":"거실","w":853,"h":1280,"tw":107,"th":160},{"n":"823","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"824","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"825","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"826","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"827","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"828","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"832","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"833","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"834","ext":".webp","room":"거실","w":1280,"h":853,"tw":240,"th":160},{"n":"848","ext":".webp","room":"거실","w":853,"h":1280,"tw":107,"th":160},{"n":"829","ext":".jpg","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"830","ext":".webp","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"831","ext":".webp","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"835","ext":".jpg","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"836","ext":".webp","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"837","ext":".webp","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"838","ext":".webp","room":"주방","w":1280,"h":853,"tw":240,"th":160},{"n":"839","ext":".webp","room":"주방","w":853,"h":1280,"tw":107,"th":160},{"n":"840","ext":".webp","room":"주방","w":853,"h":1280,"tw":107,"th":160},{"n":"846","ext":".jpg","room":"주방","w":853,"h":1280,"tw":107,"th":160},{"n":"801","ext":".webp","room":"안방","w":1280,"h":853,"tw":240,"th":160},{"n":"847","ext":".webp","room":"안방","w":1280,"h":853,"tw":240,"th":160},{"n":"781","ext":".webp","room":"작은방 1","w":1280,"h":853,"tw":240,"th":160},{"n":"782","ext":".webp","room":"작은방 1","w":1280,"h":853,"tw":240,"th":160},{"n":"783","ext":".webp","room":"작은방 1","w":1280,"h":853,"tw":240,"th":160},{"n":"796","ext":".webp","room":"작은방 2","w":1280,"h":853,"tw":240,"th":160},{"n":"799","ext":".webp","room":"작은방 2","w":1280,"h":853,"tw":240,"th":160},{"n":"800","ext":".webp","room":"작은방 2","w":1280,"h":853,"tw":240,"th":160},{"n":"803","ext":".webp","room":"파우더·드레스","w":853,"h":1280,"tw":107,"th":160},{"n":"804","ext":".webp","room":"파우더·드레스","w":853,"h":1280,"tw":107,"th":160},{"n":"805","ext":".webp","room":"파우더·드레스","w":853,"h":1280,"tw":107,"th":160},{"n":"806","ext":".webp","room":"파우더·드레스","w":853,"h":1280,"tw":107,"th":160},{"n":"814","ext":".webp","room":"파우더·드레스","w":853,"h":1280,"tw":107,"th":160},{"n":"815","ext":".jpg","room":"파우더·드레스","w":1280,"h":853,"tw":240,"th":160},{"n":"792","ext":".webp","room":"현관","w":853,"h":1280,"tw":107,"th":160},{"n":"793","ext":".webp","room":"현관","w":853,"h":1280,"tw":107,"th":160},{"n":"794","ext":".webp","room":"현관","w":853,"h":1280,"tw":107,"th":160},{"n":"850","ext":".jpg","room":"현관","w":1280,"h":853,"tw":240,"th":160},{"n":"785","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"786","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"787","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"788","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"789","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"790","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"791","ext":".webp","room":"욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"807","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"808","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"809","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"810","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"811","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"812","ext":".jpg","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"813","ext":".webp","room":"안방 욕실","w":853,"h":1280,"tw":107,"th":160},{"n":"802","ext":".jpg","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"816","ext":".webp","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"818","ext":".webp","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"819","ext":".jpg","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"842","ext":".webp","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"843","ext":".jpg","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"844","ext":".webp","room":"복도","w":853,"h":1280,"tw":107,"th":160},{"n":"845","ext":".webp","room":"복도","w":1280,"h":853,"tw":240,"th":160},{"n":"784","ext":".webp","room":"발코니","w":853,"h":1280,"tw":107,"th":160},{"n":"795","ext":".webp","room":"발코니","w":853,"h":1280,"tw":107,"th":160},{"n":"841","ext":".webp","room":"발코니","w":853,"h":1280,"tw":107,"th":160},{"n":"821","ext":".webp","room":"디테일","w":853,"h":1280,"tw":107,"th":160},{"n":"822","ext":".jpg","room":"디테일","w":853,"h":1280,"tw":107,"th":160},{"n":"851","ext":".webp","room":"디테일","w":853,"h":1280,"tw":107,"th":160}]};
+  var rooms = DATA.rooms, byKey = {}, photos = DATA.photos;
+  rooms.forEach(function (r) { byKey[r.key] = r; });
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var coarse = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+  var I360 = '<span class="i360" aria-hidden="true"></span>';
+
+  $("logo").textContent = DATA.co; $("co").textContent = DATA.co; $("site").textContent = DATA.apt;
+  rooms.forEach(function (r) {
+    var li = document.createElement("li"), b = document.createElement("button"), k = document.createElement("span"); b.type = "button"; b.dataset.key = r.key; b.innerHTML = I360; b.appendChild(document.createTextNode(r.name));
+    k.className = "k"; k.textContent = r.kind === "loop" ? "한 바퀴" : "좌우"; b.appendChild(k); b.addEventListener("click", function () { go(r.key); }); li.appendChild(b); $("jumpList").appendChild(li);
+    var c = document.createElement("button"); c.className = "chip"; c.type = "button"; c.textContent = r.name; c.dataset.key = r.key; c.addEventListener("click", function () { go(r.key); }); $("chips").appendChild(c);
+  });
+  each(document.querySelectorAll("#mini .mm-room"), function (g) {
+    g.addEventListener("click", function () { go(g.dataset.key); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(g.dataset.key); } });
+  });
+  $("planHead").addEventListener("click", function () { var o = $("planBox").classList.toggle("open"); $("planHead").setAttribute("aria-expanded", o ? "true" : "false"); });
+  $("ptMore").addEventListener("click", function () { var o = $("ptsBox").classList.toggle("all"); $("ptMore").setAttribute("aria-expanded", o ? "true" : "false"); moreText(); });
+  function moreText() { $("ptMore").textContent = $("ptsBox").classList.contains("all") ? "접기" : "포인트 전체 보기 (" + (cur ? cur.pts.length : 0) + "개)"; }
+
+  /* ── 3D 돌려 보기 ── */
+  var cv = $("cv"), ctx = cv.getContext("2d"), stage = $("stage");
+  var lbAt = -1;      /* 가운데에 사진을 보여 주는 중이면 그 사진 번호, 360° 화면이면 -1 */
+  var cur = null, set = null, pos = 0, vel = 0, hold = 0, holdT = 0, raf = 0, lastT = 0, cache = {};
+  function sheetsOf(key) {
+    if (cache[key]) return cache[key];
+    var s = byKey[key].v, arr = s.sheets.map(function () { return { img: null, ok: false }; }); cache[key] = arr;
+    var order = [], first = Math.floor(s.start / s.per); order.push(first);
+    for (var d = 1; d < arr.length; d++) { if (first + d < arr.length) order.push(first + d); if (first - d >= 0) order.push(first - d); }
+    var i = 0;
+    (function next() {
+      if (i >= order.length) return; var k = order[i++], im = new Image();
+      im.onload = function () { arr[k].ok = true; if (cur && cur.key === key) { draw(); progress(); } next(); };
+      im.onerror = function () { next(); };
+      im.src = s.sheets[k]; arr[k].img = im;
+      if (i === 1) next();
+    })();
+    return arr;
+  }
+  function progress() {
+    var arr = cache[cur.key], done = arr.filter(function (a) { return a.ok; }).length, el = $("load");
+    if (done >= arr.length) { el.hidden = true; return; }
+    el.hidden = false; el.textContent = "불러오는 중 " + Math.round(done / arr.length * 100) + "%";
+  }
+  function frameIndex() {
+    var n = set.n; if (cur.kind === "loop") { var f = Math.round(pos) % n; return f < 0 ? f + n : f; }
+    return Math.max(0, Math.min(n - 1, Math.round(pos)));
+  }
+  /* ── 위·아래 보기(시험): 시작 화면(정면)에서만 ▲▼ 로 고개를 든다. tilt > 0 = 위, < 0 = 아래. 좌우로 돌리면 정면으로 돌아온다 ── */
+  var tilt = 0, tcache = {}, tiltTimer = 0;
+  function tiltSet(dir) { return cur && cur.tilt ? cur.tilt[dir] : null; }
+  function tiltSheets(dir) {
+    var id = cur.key + "/" + dir; if (tcache[id]) return tcache[id];
+    var s = tiltSet(dir), arr = s.sheets.map(function (u) { var o = { img: new Image(), ok: false }; o.img.onload = function () { o.ok = true; if (tilt) drawTilt(); }; o.img.src = u; return o; });
+    tcache[id] = arr; return arr;
+  }
+  function drawTilt() {
+    var dir = tilt > 0 ? "up" : "dn", s = tiltSet(dir), arr = tiltSheets(dir), f = Math.min(s.n, Math.abs(tilt)) - 1, sh = arr[Math.floor(f / s.per)];
+    if (!sh || !sh.ok) return; var j = f % s.per;
+    ctx.drawImage(sh.img, (j % s.cols) * s.fw, Math.floor(j / s.cols) * s.fh, s.fw, s.fh, 0, 0, cv.width, cv.height);
+    $("read").textContent = (tilt > 0 ? "위 " : "아래 ") + Math.round(Math.abs(tilt) / s.n * 100) + "%";
+  }
+  function tiltStep(d) {
+    if (!cur || !cur.tilt || lbAt >= 0) return; if (!tilt && frameIndex() !== set.start) return;
+    var lim = d > 0 ? tiltSet("up").n : tiltSet("dn").n, nt = tilt + d * 2;
+    if (d > 0) nt = Math.min(nt, lim); else nt = Math.max(nt, -lim);
+    tilt = nt; stage.classList.add("seen"); if (tilt) drawTilt(); else draw(); tiltUI();
+  }
+  function tiltUI() { var can = !!(cur && cur.tilt) && lbAt < 0 && (tilt !== 0 || frameIndex() === set.start);
+    $("arrU").hidden = !can || (tilt > 0 && tilt >= tiltSet("up").n); $("arrD").hidden = !can || (tilt < 0 && -tilt >= tiltSet("dn").n);
+    $("arrL").style.visibility = $("arrR").style.visibility = tilt ? "hidden" : ""; }
+  function tiltHold(d) { tiltStep(d); clearInterval(tiltTimer); tiltTimer = setInterval(function () { tiltStep(d); }, 70); }
+  function tiltStop() { clearInterval(tiltTimer); tiltTimer = 0; }
+  [["arrU", 1], ["arrD", -1]].forEach(function (p) { var b = $(p[0]);
+    b.addEventListener("pointerdown", function (e) { e.preventDefault(); tiltHold(p[1]); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (n) { b.addEventListener(n, tiltStop); });
+    b.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tiltStep(p[1]); } }); });
+  var tuT = 0; function tiltUIsoon() { if (!tuT) tuT = setTimeout(function () { tuT = 0; tiltUI(); }, 0); }
+  function draw() {
+    if (tilt) { tilt = 0; } tiltUIsoon();
+    if (!cur) return; var arr = cache[cur.key], n = set.n, f = frameIndex(), best = -1;
+    for (var d = 0; d < n; d++) {
+      var a = cur.kind === "loop" ? (f + d) % n : f + d, b = cur.kind === "loop" ? (f - d + n) % n : f - d;
+      if (a < n && arr[Math.floor(a / set.per)].ok) { best = a; break; }
+      if (b >= 0 && arr[Math.floor(b / set.per)].ok) { best = b; break; }
+    }
+    if (best < 0) return;
+    var j = best % set.per, im = arr[Math.floor(best / set.per)].img;
+    ctx.drawImage(im, (j % set.cols) * set.fw, Math.floor(j / set.cols) * set.fh, set.fw, set.fh, 0, 0, cv.width, cv.height);
+    if (cur.kind === "loop") { var deg = (f / n) * 360; $("needle").style.transform = "rotate(" + deg + "deg)"; $("read").textContent = String(Math.round(deg)).padStart(3, "0") + "°"; }
+    else { var t = n > 1 ? f / (n - 1) : 0; $("barDot").style.left = (t * 100) + "%"; $("read").textContent = t < 0.34 ? "왼쪽" : t > 0.66 ? "오른쪽" : "가운데"; }
+  }
+  function clamp() { if (cur.kind !== "loop") { if (pos < 0) { pos = 0; vel = 0; } if (pos > set.n - 1) { pos = set.n - 1; vel = 0; } } }
+  function tick(t) {
+    raf = 0; var dt = Math.min(0.05, (t - lastT) / 1000 || 0.016); lastT = t;
+    if (hold && t - holdT > 220) vel = hold * set.n / (cur.kind === "loop" ? 9 : 4);
+    if (vel) { pos += vel * dt; clamp(); if (!hold) { vel *= Math.pow(0.04, dt); if (Math.abs(vel) < 0.6) vel = 0; } draw(); }
+    if (vel || hold) kick();
+  }
+  function kick() { if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(tick); } }
+  function step(dir) { pos = Math.round(pos) + dir; clamp(); vel = 0; draw(); }
+  function press(dir) { if (hold === dir) return; hold = dir; holdT = performance.now(); step(dir); kick(); }
+  function release() { if (hold) { hold = 0; vel = 0; } }
+
+  function show(key) {
+    var r = byKey[key]; if (!r) { key = DATA.home; r = byKey[key]; }
+    if (zoomOn) zoomClose();
+    cur = r; set = r.v; pos = set.start; vel = 0; tilt = 0; tiltStop(); release(); leavePhoto(); stage.classList.remove("seen");
+    cv.width = set.fw; cv.height = set.fh; ctx.fillStyle = "#dfe3e5"; ctx.fillRect(0, 0, cv.width, cv.height);
+    $("roomName").textContent = r.name; document.title = DATA.co + " · " + DATA.apt + " · " + r.name;
+    $("dial").style.display = r.kind === "loop" ? "" : "none"; $("bar").hidden = r.kind === "loop";
+    $("hint").textContent = (r.kind === "loop" ? "끌어서 360° 둘러보기" : "끌어서 좌우로 보기") + (coarse ? "" : " · ← → 키");
+    each(document.querySelectorAll("#mini .mm-room, #jumpList button, #chips .chip"), function (g) { g.setAttribute("aria-current", g.dataset.key === key ? "true" : "false"); });
+    $("ptRoom").textContent = r.name; $("ptLead").textContent = r.lead; var ol = $("ptList"); ol.textContent = "";
+    r.pts.forEach(function (p) { var li = document.createElement("li"), d = document.createElement("div"), b = document.createElement("b"), sp = document.createElement("span");
+      b.textContent = p[0]; sp.textContent = p[1]; d.appendChild(b); d.appendChild(sp); li.appendChild(d);
+      if (p[2]) { var pb = document.createElement("button"), im = document.createElement("img"); pb.type = "button"; pb.className = "ph"; pb.setAttribute("aria-label", p[0] + " 사진 크게 보기");
+        im.src = "p/t_" + p[2] + ".jpg"; im.alt = p[0]; im.loading = "lazy"; pb.appendChild(im); pb.addEventListener("click", function () { setFilter(r.name); openPhoto(p[2]); }); li.appendChild(pb); }
+      ol.appendChild(li); });
+    $("ptsBox").classList.remove("all"); $("ptMore").setAttribute("aria-expanded", "false"); $("ptMore").hidden = r.pts.length <= 2; moreText();
+    setFilter(r.name); sheetsOf(key); progress(); draw();
+  }
+  function go(key) { if (("#" + key) === location.hash) show(key); else location.hash = key; }
+  function route() { show((location.hash || "").replace(/^#/, "")); }
+  window.addEventListener("hashchange", route);
+
+  /* 끌기: 화면 너비만큼 끌면 고리는 1/3 바퀴. 위아래로 미는 것은 화면 스크롤로 넘긴다 */
+  var drag = null;
+  stage.addEventListener("pointerdown", function (e) {
+    if (e.target.closest && (e.target.closest(".arrow") || e.target.closest(".back360") || e.target.closest(".bigbtn"))) return;
+    if (lbAt >= 0 || tilt) return;
+    stage.classList.add("seen");
+    drag = { x: e.clientX, t: performance.now(), v: 0 }; vel = 0; stage.classList.add("dragging");
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  stage.addEventListener("pointermove", function (e) {
+    if (!drag || !cur) return; var now = performance.now(), dx = e.clientX - drag.x, w = cv.getBoundingClientRect().width || 300;
+    var per = set.n * (cur.kind === "loop" ? 1 / 3 : 0.8) / w, d = -dx * per;
+    pos += d; clamp(); var dt = Math.max(1, now - drag.t) / 1000; drag.v = 0.6 * drag.v + 0.4 * (d / dt); drag.x = e.clientX; drag.t = now; draw();
+  });
+  function endDrag() {
+    if (!drag) return; stage.classList.remove("dragging");
+    if (!reduceMotion && performance.now() - drag.t < 80 && Math.abs(drag.v) > 8) { vel = Math.max(-set.n, Math.min(set.n, drag.v)); kick(); }
+    drag = null;
+  }
+  stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+  [["arrL", -1], ["arrR", 1]].forEach(function (p) {
+    var b = $(p[0]);
+    b.addEventListener("pointerdown", function (e) { e.preventDefault(); if (lbAt >= 0) { movePhoto(p[1]); return; } stage.classList.add("seen"); press(p[1]); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (n) { b.addEventListener(n, release); });
+    b.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (lbAt >= 0) movePhoto(p[1]); else step(p[1]); } });
+  });
+
+  /* ── 전체 사진: 공간별로 걸러 보기 + 크게 보기(썸네일 줄은 그대로 아래에) ── */
+  var filter = "전체", labels = [];
+  photos.forEach(function (ph) { if (labels.indexOf(ph.room) < 0) labels.push(ph.room); });
+  ["전체"].concat(labels).forEach(function (lb) {
+    var c = document.createElement("button"); c.className = "chip"; c.type = "button"; c.textContent = lb; c.dataset.room = lb; c.addEventListener("click", function () { setFilter(lb); }); $("filt").appendChild(c);
+  });
+  (function () { var t = document.createElement("button"); t.type = "button"; t.className = "to360"; t.dataset.keep = "1"; t.innerHTML = I360; t.setAttribute("aria-label", "360도 화면으로 돌아가기"); t.addEventListener("click", back360); $("strip").appendChild(t); })();
+  photos.forEach(function (ph, i) {
+    var bt = document.createElement("button"), im = document.createElement("img"); bt.type = "button"; bt.dataset.room = ph.room; bt.dataset.i = String(i); bt.setAttribute("aria-label", ph.room + " 사진 크게 보기");
+    im.src = "p/t_" + ph.n + ".jpg"; im.alt = ""; im.loading = "lazy"; im.width = ph.tw; im.height = ph.th; bt.appendChild(im);
+    bt.addEventListener("click", function () { showPhoto(i); }); $("strip").appendChild(bt);
+  });
+  function visible() { var v = []; photos.forEach(function (ph, i) { if (filter === "전체" || ph.room === filter) v.push(i); }); return v; }
+  function setFilter(lb) {
+    if (labels.indexOf(lb) < 0) lb = "전체"; filter = lb;
+    each($("filt").children, function (c) { c.setAttribute("aria-pressed", c.dataset.room === lb ? "true" : "false"); });
+    each($("strip").children, function (bt) { bt.hidden = !(bt.dataset.keep || lb === "전체" || bt.dataset.room === lb); });
+    $("strip").scrollLeft = 0; $("phCount").textContent = (lb === "전체" ? "총 " : lb + " ") + visible().length + "장";
+  }
+  function showPhoto(i) {      /* 아래 미리보기를 누르면 가운데 360° 화면 자리에 그 사진을 보여 준다 */
+    lbAt = i; var ph = photos[i], v = visible(); release(); vel = 0;
+    each($("strip").children, function (bt) { var on = bt.dataset.i === String(i); bt.classList.toggle("cur", on); if (on) $("strip").scrollLeft = Math.max(0, bt.offsetLeft - $("strip").clientWidth / 2 + bt.offsetWidth / 2); });
+    zShot.reset(); $("shot").dataset.hi = ""; $("shot").dataset.want = ""; $("shot").src = "p/" + ph.n + (ph.ext || ".jpg"); $("shot").alt = ph.room + " 사진"; $("shot").hidden = false; stage.classList.add("photo");
+    $("back360").hidden = false; $("bigBtn").hidden = false; $("cap").hidden = false; $("cap").textContent = ph.room + " 사진 " + (v.indexOf(i) + 1) + " / " + v.length; $("load").hidden = true;
+    var r = stage.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) stage.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+  }
+  function movePhoto(d) { var v = visible(), k = v.indexOf(lbAt); if (k < 0) k = 0; showPhoto(v[((k + d) % v.length + v.length) % v.length]); }
+  function openPhoto(num) { for (var i = 0; i < photos.length; i++) if (photos[i].n === num) return showPhoto(i); }
+  function leavePhoto() { lbAt = -1; if (typeof zShot !== "undefined") zShot.reset(); $("zh").hidden = true; $("bigBtn").hidden = true; $("shot").hidden = true; $("shot").removeAttribute("src"); stage.classList.remove("photo"); $("back360").hidden = true; $("cap").hidden = true;
+    each($("strip").querySelectorAll(".cur"), function (b) { b.classList.remove("cur"); }); }
+  function back360() { if (cur) show(cur.key); }
+  /* 사진 확대: 마우스 휠을 돌리거나 손가락 두 개로 벌리면 그 자리를 중심으로 커지고, 커진 상태에서는 끌어서 옮긴다. 두 번 누르면 원래 크기 */
+  function zoomable(el, onChange) {
+    var st = { s: 1, x: 0, y: 0, moved: false }, pts = {}, last = null;
+    function apply() {
+      var r = el.parentNode.getBoundingClientRect(), mx = r.width * (st.s - 1) / 2, my = r.height * (st.s - 1) / 2;
+      st.x = Math.max(-mx, Math.min(mx, st.x)); st.y = Math.max(-my, Math.min(my, st.y));
+      el.style.transform = st.s > 1 ? "translate(" + st.x + "px," + st.y + "px) scale(" + st.s + ")" : ""; el.classList.toggle("zoomed", st.s > 1); if (onChange) onChange(st.s);
+    }
+    function zoomAt(cx, cy, k) {
+      var r = el.parentNode.getBoundingClientRect(), px = cx - (r.left + r.width / 2), py = cy - (r.top + r.height / 2), ns = Math.max(1, Math.min(6, st.s * k)), f = ns / st.s;
+      st.x = px - (px - st.x) * f; st.y = py - (py - st.y) * f; st.s = ns; if (ns === 1) { st.x = 0; st.y = 0; } apply();
+    }
+    el.addEventListener("wheel", function (e) { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018))); }, { passive: false });
+    el.addEventListener("pointerdown", function (e) { pts[e.pointerId] = { x: e.clientX, y: e.clientY }; st.moved = false; last = null; try { el.setPointerCapture(e.pointerId); } catch (err) {} });
+    el.addEventListener("pointermove", function (e) {
+      if (!pts[e.pointerId]) return; var ids = Object.keys(pts), p0 = pts[e.pointerId], dx = e.clientX - p0.x, dy = e.clientY - p0.y;
+      if (ids.length >= 2) {
+        var o = pts[ids[0] === String(e.pointerId) ? ids[1] : ids[0]], d0 = Math.hypot(p0.x - o.x, p0.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+        if (d0 > 0) zoomAt((e.clientX + o.x) / 2, (e.clientY + o.y) / 2, d1 / d0); st.moved = true;
+      } else if (st.s > 1) { st.x += dx; st.y += dy; if (Math.abs(dx) + Math.abs(dy) > 2) st.moved = true; apply(); }
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    });
+    function up(e) { delete pts[e.pointerId]; }
+    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("dblclick", function () { st.s = 1; st.x = 0; st.y = 0; apply(); });
+    return { reset: function () { st.s = 1; st.x = 0; st.y = 0; apply(); }, scale: function () { return st.s; }, moved: function () { return st.moved; } };
+  }
+  /* 확대하면 그 사진 한 장만 큰 것으로 바꿔 받는다(평소에는 가벼운 사진만) */
+  function hires(el) {
+    if (lbAt < 0) return; var n = photos[lbAt].n; if (el.dataset.hi === n || el.dataset.want === n) return; el.dataset.want = n;
+    var im = new Image(); im.onload = function () { if (lbAt >= 0 && photos[lbAt].n === n && !el.hidden) { el.src = im.src; el.dataset.hi = n; } }; im.src = "p/h_" + n + ".webp";
+  }
+  function zhint(sc) { if (sc > 1.25) hires($("shot")); $("zh").hidden = lbAt < 0; $("zh").textContent = sc > 1 ? Math.round(sc * 100) + "% · 두 번 누르면 원래대로" : (coarse ? "두 손가락으로 벌려 확대" : "휠을 돌려 확대"); }
+  var zShot = zoomable($("shot"), zhint), zFull = zoomable($("zoomImg"), function (sc) { if (sc > 1.25) hires($("zoomImg")); });
+  /* 가운데 사진을 누르면 화면 전체로 크게 */
+  var zoomOn = false;
+  function zoomSync() { if (!zoomOn || lbAt < 0) return; zFull.reset(); $("zoomImg").dataset.hi = $("shot").dataset.hi || ""; $("zoomImg").dataset.want = ""; $("zoomImg").src = $("shot").src; $("zoomImg").alt = $("shot").alt; $("zoomCnt").textContent = $("cap").textContent; }
+  function zoomOpen() { if (lbAt < 0) return; zoomOn = true; $("zoom").hidden = false; zoomSync(); $("zClose").focus({ preventScroll: true }); }
+  function zoomClose() { zoomOn = false; $("zoom").hidden = true; $("zoomImg").removeAttribute("src"); }
+  $("bigBtn").addEventListener("click", zoomOpen);      /* 화면 전체로 크게 보기는 오른쪽 아래 「크게보기」 단추로만 */
+  $("zoom").addEventListener("click", function (e) { if (e.target.closest && e.target.closest(".arrow")) return; if (e.target === $("zoomImg") && (zFull.scale() > 1 || zFull.moved())) return; zoomClose(); });
+  $("zPrev").addEventListener("click", function () { movePhoto(-1); zoomSync(); }); $("zNext").addEventListener("click", function () { movePhoto(1); zoomSync(); });
+  $("back360").addEventListener("click", back360);
+  $("stPrev").addEventListener("click", function () { $("strip").scrollLeft -= $("strip").clientWidth * 0.8; }); $("stNext").addEventListener("click", function () { $("strip").scrollLeft += $("strip").clientWidth * 0.8; });
+
+  window.addEventListener("keydown", function (e) {
+    if (zoomOn) { if (e.key === "Escape") zoomClose(); else if (e.key === "ArrowRight") { movePhoto(1); zoomSync(); } else if (e.key === "ArrowLeft") { movePhoto(-1); zoomSync(); } return; }
+    if (lbAt >= 0) { if (e.key === "Escape") back360(); else if (e.key === "ArrowRight") movePhoto(1); else if (e.key === "ArrowLeft") movePhoto(-1); return; }
+    if (!cur) return;
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") { if (cur.tilt && (tilt || frameIndex() === set.start)) { e.preventDefault(); tiltStep(e.key === "ArrowUp" ? 1 : -1); } return; }
+    if (tilt && (e.key === "ArrowRight" || e.key === "ArrowLeft")) { e.preventDefault(); tilt = 0; draw(); return; }
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); stage.classList.add("seen"); if (!e.repeat) press(e.key === "ArrowRight" ? 1 : -1); }
+  });
+  window.addEventListener("keyup", function (e) { if (e.key === "ArrowRight" || e.key === "ArrowLeft") release(); });
+  window.addEventListener("blur", release);
+  route();
+})();
+</script>
+<script>
+(function () {
+  var shot = document.getElementById("shot");
+  new MutationObserver(function () {
+    var m = /(?:^|\/)p\/(\d+)\.(?:webp|jpg)$/.exec(shot.getAttribute("src") || ""); if (!m) return;
+    var n = m[1]; if (shot.dataset.hi === n || shot.dataset.pre === n) return; shot.dataset.pre = n;
+    var im = new Image(); im.onload = function () { if (!shot.hidden && (shot.getAttribute("src") || "").indexOf("p/" + n + ".") >= 0) { shot.src = im.src; shot.dataset.hi = n; } }; im.src = "p/h_" + n + ".webp";
+  }).observe(shot, { attributes: true, attributeFilter: ["src"] });
+})();
+</script></body></html><script>
+/* 11-18 사장님 「확대하면 선명하지 않다」: 확대는 CSS 배율이라 브라우저가 작은 크기로 그려 둔 그림을 늘려 보여 준다(600%면 깍두기).
+   확대 중에는 사진 위에 화면 해상도 그대로의 캔버스를 깔고, 원본(큰 사진)에서 지금 보이는 부분을 직접 다시 그린다. */
+(function () {
+  function crisp(el) {
+    if (!el) return; var par = el.parentNode, cv = document.createElement("canvas"), ctx = cv.getContext("2d"), raf = 0;
+    cv.hidden = true; cv.setAttribute("aria-hidden", "true");
+    cv.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:0";
+    par.insertBefore(cv, el.nextSibling);
+    function render() {
+      raf = 0;
+      var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([\d.]+)\)/.exec(el.style.transform || "");
+      if (el.hidden || !m || +m[3] <= 1.01 || !el.naturalWidth) { cv.hidden = true; el.style.opacity = ""; return; }
+      var x = +m[1], y = +m[2], s = +m[3], pw = par.clientWidth, ph = par.clientHeight, d = Math.min(3, window.devicePixelRatio || 1);
+      if (cv.width !== Math.round(pw * d) || cv.height !== Math.round(ph * d)) { cv.width = Math.round(pw * d); cv.height = Math.round(ph * d); cv.style.width = pw + "px"; cv.style.height = ph + "px"; }
+      var L = el.offsetLeft, T = el.offsetTop, W = el.offsetWidth, H = el.offsetHeight, nw = el.naturalWidth, nh = el.naturalHeight,
+          k = Math.min(W / nw, H / nh), fw = nw * k, fh = nh * k, fx = L + (W - fw) / 2, fy = T + (H - fh) / 2, cx = L + W / 2, cy = T + H / 2;
+      ctx.setTransform(d, 0, 0, d, 0, 0); ctx.fillStyle = getComputedStyle(el).backgroundColor || getComputedStyle(par).backgroundColor || "#e6e9eb"; if (/rgba\(0, 0, 0, 0\)|transparent/.test(ctx.fillStyle) || ctx.fillStyle === "rgba(0, 0, 0, 0)") ctx.fillStyle = "#e6e9eb"; ctx.fillRect(0, 0, pw, ph);   /* 11-18 확대 중 뒤 360° 화면이 비쳐 보이던 것 — 바탕을 칠해 가린다 */
+      ctx.translate(cx + x, cy + y); ctx.scale(s, s); ctx.translate(-cx, -cy);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(el, fx, fy, fw, fh);
+      cv.hidden = false; el.style.opacity = "0";
+    }
+    function soon() { if (!raf) raf = requestAnimationFrame(render); }
+    new MutationObserver(soon).observe(el, { attributes: true, attributeFilter: ["style", "src", "hidden"] });
+    el.addEventListener("load", soon); window.addEventListener("resize", soon);
+  }
+  crisp(document.getElementById("shot")); crisp(document.getElementById("zoomImg"));
+})();
+</script>
+
+<style>.mini .pin3d{pointer-events:none} .mini .pin3d .bob{animation:pinbob 1.6s ease-in-out infinite} @keyframes pinbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@media (prefers-reduced-motion:reduce){.mini .pin3d .bob{animation:none}} .mini .mm-room[aria-current="true"] path,.mini .mm-room[aria-current="true"] rect{fill:rgba(15,122,108,.16)!important}</style>
+<script>(function(){
+/* 11-18 사장님 「현재 위치 표시를 위에 화살표 3D 추 모양으로(코덱스)」 → 지금 공간 이름 위에 코덱스가 그린 3D 추가 떠서 살짝 흔들린다 */
+var svg=document.getElementById("mini"); if(!svg) return; var NS="http://www.w3.org/2000/svg";
+var g=document.createElementNS(NS,"g"); g.setAttribute("class","pin3d"); var b=document.createElementNS(NS,"g"); b.setAttribute("class","bob");
+var im=document.createElementNS(NS,"image"); im.setAttribute("href","pin.png"); var W=58,H=W*1.5385; im.setAttribute("width",W); im.setAttribute("height",H); im.setAttribute("x",-W/2); im.setAttribute("y",-H);
+b.appendChild(im); g.appendChild(b); svg.appendChild(g);
+function place(){var c=svg.querySelector('.mm-room[aria-current="true"]'); if(!c){g.style.display="none";return;}
+ var t=svg.querySelector('text[data-for="'+c.dataset.key+'"]'), x, y;
+ if(t){x=+t.getAttribute("x"); y=+t.getAttribute("y")-(t.classList.contains("s")?12:18);} else {var bb=c.getBBox(); x=bb.x+bb.width/2; y=bb.y+bb.height/2;}
+ g.style.display=""; g.setAttribute("transform","translate("+x+" "+y+")");}
+new MutationObserver(place).observe(svg,{subtree:true,attributes:true,attributeFilter:["aria-current"]}); place();
+})();</script>
+<script>(function(){
+/* 11-18 사장님 「밑에 사진을 클릭했을 때도 포인트가 바뀌게 — 사진이 현관으로 바뀌면 현관 포인트가 나오도록」 */
+var src=[].map.call(document.scripts,function(x){return x.textContent;}).find(function(t){return t.indexOf("var DATA = ")>=0;}); if(!src) return;
+var m=/var DATA = (\{.*?\});\n/.exec(src); if(!m) return; var D=JSON.parse(m[1]), byName={}; D.rooms.forEach(function(r){byName[r.name]=r;});
+var $=function(i){return document.getElementById(i);}, last="";
+function photoBtn(num){var i=-1; D.photos.forEach(function(p,k){if(p.n===num)i=k;}); return document.querySelector('#strip button[data-i="'+i+'"]');}
+function render(roomName){
+  if(roomName===last) return; last=roomName; var r=byName[roomName];
+  $("ptRoom").textContent=roomName; $("roomName").textContent=roomName; var ol=$("ptList"); ol.textContent="";
+  if(!r){ $("ptLead").textContent="이 공간은 아래 사진으로 둘러보세요."; $("ptMore").hidden=true; return; }
+  $("ptLead").textContent=r.lead;
+  r.pts.forEach(function(p){var li=document.createElement("li"),d=document.createElement("div"),b=document.createElement("b"),sp=document.createElement("span");
+    b.textContent=p[0]; sp.textContent=p[1]; d.appendChild(b); d.appendChild(sp); li.appendChild(d);
+    if(p[2]){var pb=document.createElement("button"),im=document.createElement("img"); pb.type="button"; pb.className="ph"; pb.setAttribute("aria-label",p[0]+" 사진 보기");
+      im.src="p/t_"+p[2]+".jpg"; im.alt=p[0]; im.loading="lazy"; pb.appendChild(im); pb.addEventListener("click",function(){var bt=photoBtn(p[2]); if(bt) bt.click();}); li.appendChild(pb);}
+    ol.appendChild(li);});
+  $("ptsBox").classList.remove("all"); $("ptMore").hidden=r.pts.length<=2;
+  document.querySelectorAll("#mini .mm-room, #jumpList button, #chips .chip").forEach(function(g){g.setAttribute("aria-current", g.dataset.key===r.key?"true":"false");});
+}
+new MutationObserver(function(){
+  var cur=document.querySelector("#strip button.cur"), inPhoto=document.getElementById("stage").classList.contains("photo");
+  if(cur && inPhoto) render(cur.dataset.room); else last="";
+}).observe($("strip"),{subtree:true,attributes:true,attributeFilter:["class"]});
+})();</script><style>.homebtn{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px 7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;font-size:14px;text-decoration:none}
+.homebtn:hover{border-color:var(--accent);color:var(--accent)} .homebtn svg{width:17px;height:17px} @media (max-width:999px){.top{gap:10px}}</style>
+<script>(function(){
+/* 11-18 사장님 「홈으로 가기 버튼 — 현장에서 누르면 업체 메인」 */
+var top=document.querySelector("header.top"); if(top){var a=document.createElement("a"); a.className="homebtn"; a.href="../"; a.setAttribute("aria-label","업체 첫 화면으로");
+ a.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9.5L10 3l7 6.5M5 8v8.5h4v-5h2v5h4V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>홈'; top.insertBefore(a, top.firstChild);}
+function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="pointer";e.addEventListener("click",function(){location.href="../";});}L("co");L("logo");
+})();</script><style>
+/* 11-19 사장님 「360도 화면 양옆 화살표 없애고, 「360° 화면보기」 자리에 「옆으로 드래그」」 */
+.stage:not(.photo) .arrow.l,.stage:not(.photo) .arrow.r{display:none!important}
+.fixbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:12px 14px;border-radius:12px;border:0;background:#ffd84d;color:#3a2e00;font:inherit;font-weight:800;font-size:15px;cursor:pointer}
+.fixbtn svg{width:17px;height:17px}.fixbtn:hover{background:#ffcd1f}
+.fixbtn.float{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;width:auto;margin:0;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.fixmask{position:fixed;inset:0;z-index:70;background:rgba(10,20,25,.45);display:none;align-items:flex-end;justify-content:center;padding:16px}
+.fixmask.on{display:flex}@media(min-width:700px){.fixmask{align-items:center}}
+.fixcard{width:100%;max-width:440px;background:var(--card);color:var(--ink);border-radius:18px;padding:18px 16px 16px;box-shadow:0 10px 40px rgba(0,0,0,.25);display:grid;gap:10px}
+.fixcard h3{margin:0;font-size:17px}.fixcard p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.fixcard label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.fixcard select,.fixcard textarea,.fixcard input{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);width:100%;box-sizing:border-box}
+.fixcard textarea{min-height:110px;resize:vertical}
+.fixrow{display:flex;gap:8px}.fixrow button{flex:1;padding:12px;border-radius:12px;border:0;font:inherit;font-weight:700;cursor:pointer}
+.fixsend{background:var(--accent);color:#fff}.fixclose{background:#eef0f2;color:var(--ink)}
+.fixmsg{font-size:13px;font-weight:600;min-height:18px}
+</style>
+<script>(function(){var bd=document.querySelector("#b360 span:last-child"); if(bd) bd.textContent="옆으로 드래그";})();</script>
+<script>(function(){
+/* 11-19 사장님 「고객이 수정사항을 요청할 수 있는 버튼 → 하루에 한 번 확인해서 수정」 */
+var m=location.pathname.match(/\/tour\/([a-z0-9-]+)\/([a-z0-9-]+)\/?/); if(!m) return;
+var rooms=[].map.call(document.querySelectorAll("#chips .chip"),function(c){return c.textContent.trim()});
+var b=document.createElement("button"); b.className="fixbtn"; b.type="button";
+b.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>수정 요청';
+var w=document.createElement("div"); w.className="fixmask";
+w.innerHTML='<div class="fixcard" role="dialog" aria-modal="true" aria-label="수정 요청"><h3>수정 요청</h3><p>고칠 부분을 적어 주시면 확인 후 하루 안에 반영해 드립니다.</p>'+
+ '<label>어느 공간인가요?<select id="fixRoom"><option value="">전체 / 잘 모르겠음</option>'+rooms.map(function(r){return '<option>'+r.replace(/</g,"")+'</option>'}).join("")+'</select></label>'+
+ '<label>수정할 내용<textarea id="fixText" maxlength="2000" placeholder="예: 주방 360° 화면에서 중문이 막힌 벽으로 보여요 / 포인트 설명 문구를 바꿔 주세요"></textarea></label>'+
+ '<label>연락처 (선택)<input id="fixContact" maxlength="80" placeholder="업체명 또는 연락처"></label>'+
+ '<div class="fixmsg" id="fixMsg"></div><div class="fixrow"><button type="button" class="fixclose">닫기</button><button type="button" class="fixsend">보내기</button></div></div>';
+var box=document.getElementById("ptsBox"); if(box){ box.appendChild(b); } else { b.classList.add("float"); document.body.appendChild(b); } document.body.appendChild(w);
+var $=function(id){return document.getElementById(id)}, msg=$("fixMsg");
+b.addEventListener("click",function(){ var cur=($("roomName")||{}).textContent||""; var sel=$("fixRoom"); for(var i=0;i<sel.options.length;i++){ if(cur && cur.indexOf(sel.options[i].text)>=0 && sel.options[i].value!==""){ sel.selectedIndex=i; break; } } msg.textContent=""; w.classList.add("on"); setTimeout(function(){$("fixText").focus()},50); });
+w.addEventListener("click",function(e){ if(e.target===w||e.target.classList.contains("fixclose")) w.classList.remove("on"); });
+w.querySelector(".fixsend").addEventListener("click",function(){
+  var t=$("fixText").value.trim(); if(t.length<2){ msg.style.color="#b42318"; msg.textContent="수정할 내용을 적어 주세요."; return; }
+  var btn=this; btn.disabled=true; msg.style.color=""; msg.textContent="보내는 중…";
+  fetch("/api/tour-fix-request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({vendor:m[1],site:m[2],room:$("fixRoom").value,text:t,contact:$("fixContact").value.trim()})})
+   .then(function(r){return r.json()}).then(function(j){ btn.disabled=false; if(j&&j.ok){ msg.style.color="var(--accent)"; msg.textContent="접수됐습니다. 하루 안에 반영해 드릴게요."; $("fixText").value=""; setTimeout(function(){w.classList.remove("on")},1600);} else { msg.style.color="#b42318"; msg.textContent=(j&&j.error)||"보내지 못했습니다. 잠시 뒤 다시 시도해 주세요."; } })
+   .catch(function(){ btn.disabled=false; msg.style.color="#b42318"; msg.textContent="보내지 못했습니다. 잠시 뒤 다시 시도해 주세요."; });
+});
+})();</script>
+<style>
+/* 11-19 사장님 「모바일에서 거실·주방·안방 고르는 줄 — 못 보고 지나칠 것 같으니 화살표 표시」 */
+.chiphint{display:none;position:relative;height:16px;margin:0 0 -2px}
+@media (max-width:999px){#chips{display:none!important}}
+.chiphint .ch-arr{position:absolute;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;transition:left .25s ease}
+.chiphint .ch-txt{font-size:11.5px;font-weight:800;color:#3a2e00;background:#ffd84d;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.chiphint .ch-tri{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:12px solid #f5b800;animation:chbob 1s ease-in-out infinite}
+@keyframes chbob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+</style>
+<script>(function(){
+var chips=document.getElementById("filt"); if(!chips) return;   /* 11-19 「위 거실·주방 줄은 중복이라 없애고」 → 아래 사진 줄의 공간 고르기에 화살표 */
+var h=document.createElement("div"); h.className="chiphint"; h.innerHTML='<div class="ch-arr"><i class="ch-tri"></i></div>';
+var anc=chips.closest(".frow")||chips; anc.parentNode.insertBefore(h, anc); var a=h.firstChild;
+function place(){ var c=chips.querySelector('.chip[aria-pressed="true"]')||chips.querySelector(".chip"); if(!c) return;
+  var cr=c.getBoundingClientRect(), hr=h.getBoundingClientRect(); var x=cr.left+cr.width/2-hr.left; var half=a.offsetWidth/2;
+  x=Math.max(half+2, Math.min(h.clientWidth-half-2, x)); a.style.left=x+"px"; }
+chips.addEventListener("scroll", place, {passive:true}); window.addEventListener("resize", place);
+new MutationObserver(place).observe(chips,{subtree:true,childList:true,attributes:true,attributeFilter:["aria-pressed"]});
+setTimeout(place,300); place();
+})();</script>
+<style>
+/* 11-19 사장님 「모바일: 아래 사진 미리보기가 계속 따라다니게 · 공간을 바꾸면 360° 화면 · 사진 누르면 사진 · 맨 앞 360° 버튼 고정」 */
+.strip .to360{position:sticky;left:0;z-index:2;box-shadow:6px 0 8px -4px rgba(0,0,0,.15)}
+@media (max-width:999px){
+  .card.photos{position:fixed;left:0;right:0;bottom:0;z-index:50;margin:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.14);padding:8px 10px calc(8px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr);gap:6px}
+  .card.photos .ttl,.card.photos .nav{display:none}
+  .card.photos .strip button{height:46px}
+  .card.photos .strip .to360{width:52px}
+  .card.photos .filt .chip{padding:5px 12px;font-size:13px}
+  body{padding-bottom:150px}
+}
+</style>
+<script>(function(){
+var filt=document.getElementById("filt"); if(!filt) return;
+function rooms(){ return [].map.call(document.querySelectorAll("#chips .chip"),function(c){return {key:c.dataset.key,name:c.textContent.trim()}}); }
+function to360(){ var t=document.querySelector(".strip .to360"); if(t) t.click(); }
+filt.addEventListener("click",function(e){
+  var c=e.target.closest(".chip"); if(!c) return; var lb=c.dataset.room||c.textContent.trim();
+  var r=rooms().filter(function(x){return x.name===lb})[0]; if(!r) return;   /* 「전체」는 그대로 */
+  if(("#"+r.key)===location.hash) setTimeout(to360,0); else { location.hash=r.key; setTimeout(to360,80); }
+});
+})();</script>
+<script>(function(){
+/* 11-19 사장님 「아래 거실·주방이나 사진을 누르면 가운데 화면 맨 윗부분이 화면 위로 오게 — 전체가 딱 보이게」 */
+var st=document.getElementById("stage"); if(!st) return;
+function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ /* 11-19 「너무 올라가 — 화면 아래가 아래 공간 줄 상자 위에 살짝 붙게」 */
+  var bar=document.querySelector(".card.photos"), r=st.getBoundingClientRect(), lim=(bar?bar.getBoundingClientRect().top:window.innerHeight)-6;
+  var dy=r.bottom-lim; if(r.top-dy<0) dy=r.top-4;   /* 화면이 너무 커서 다 안 들어가면 위가 잘리지 않게 */
+  window.scrollTo({top:Math.max(0,window.pageYOffset+dy),behavior:"smooth"}); },120); }
+["filt","strip"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("click",function(e){ if(e.target.closest("button")) up(); }); });
+})();</script>
+<style>
+/* 11-19 사장님 「모바일에서 가운데 화면 양옆 여백 없애고 꽉 차게」 */
+@media (max-width:999px){ html,body{overflow-x:clip} .stage canvas{max-height:none!important;width:100%!important;max-width:100%!important;height:min(calc(100vw * 1.49), calc(100dvh - 128px))!important;object-fit:cover} .stage{width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;border-radius:0!important;border-left:0!important;border-right:0!important} }
+</style>
+<script>setTimeout(function(){window.dispatchEvent(new Event("resize"))},200);</script>
+<style>
+/* 11-19 「메뉴가 안 흔들린다 → 심장 뛰듯이 / 글씨 앞 점 깜빡」: 지금 공간 버튼은 두근두근, 나머지는 앞에 점이 깜빡 */
+@media (max-width:999px){
+  #filt{padding:4px 2px}
+  #filt .chip[aria-pressed="true"]::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#ffd84d;margin-right:6px;vertical-align:middle;animation:filtdot 1.2s ease-in-out infinite}
+}
+@keyframes filtbeat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.09)}20%{transform:scale(1)}30%{transform:scale(1.06)}}
+@keyframes filtdot{0%,100%{opacity:1}50%{opacity:.15}}
+</style>
+<style>body.zoom-on .card.photos{display:none!important}</style>
+<script>(function(){
+/* 11-19 사장님 「사진 크게보기를 누르면 아래 거실·주방 메뉴가 사라지고, 닫으면 다시」 */
+var z=document.getElementById("zoom"); if(!z) return;
+function sync(){ document.body.classList.toggle("zoom-on", !z.hidden); }
+new MutationObserver(sync).observe(z,{attributes:true,attributeFilter:["hidden"]}); sync();
+})();</script>
+<script>(function(){
+/* 11-19 사장님 「크게보기도 드래그로 다음 장 넘기기」 — 확대 안 한 상태에서 옆으로 밀면 앞·뒤 사진 */
+var z=document.getElementById("zoom"), im=document.getElementById("zoomImg"); if(!z||!im) return;
+function scaled(){ var t=getComputedStyle(im).transform; if(!t||t==="none") return false; var m=t.match(/matrix\(([^,]+)/); return m && parseFloat(m[1])>1.05; }
+var sx=0, sy=0, ok=false;
+function start(x,y,n){ ok = n===1 && !scaled(); sx=x; sy=y; }
+function end(x,y){ if(!ok) return; ok=false; var dx=x-sx, dy=y-sy; if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.4){ var b=document.getElementById(dx<0?"zNext":"zPrev"); if(b) b.click(); } }
+z.addEventListener("touchstart",function(e){ start(e.touches[0].clientX,e.touches[0].clientY,e.touches.length); },{passive:true});
+z.addEventListener("touchmove",function(e){ if(e.touches.length>1) ok=false; },{passive:true});
+z.addEventListener("touchend",function(e){ var t=e.changedTouches[0]; end(t.clientX,t.clientY); },{passive:true});
+z.addEventListener("mousedown",function(e){ if(e.target.closest("button")) return; start(e.clientX,e.clientY,1); });
+z.addEventListener("mouseup",function(e){ end(e.clientX,e.clientY); });
+})();</script>
