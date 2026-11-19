@@ -742,3 +742,23 @@ function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTi
 @keyframes filtbeat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.09)}20%{transform:scale(1)}30%{transform:scale(1.06)}}
 @keyframes filtdot{0%,100%{opacity:1}50%{opacity:.15}}
 </style>
+<style>body.zoom-on .card.photos{display:none!important}</style>
+<script>(function(){
+/* 11-19 사장님 「사진 크게보기를 누르면 아래 거실·주방 메뉴가 사라지고, 닫으면 다시」 */
+var z=document.getElementById("zoom"); if(!z) return;
+function sync(){ document.body.classList.toggle("zoom-on", !z.hidden); }
+new MutationObserver(sync).observe(z,{attributes:true,attributeFilter:["hidden"]}); sync();
+})();</script>
+<script>(function(){
+/* 11-19 사장님 「크게보기도 드래그로 다음 장 넘기기」 — 확대 안 한 상태에서 옆으로 밀면 앞·뒤 사진 */
+var z=document.getElementById("zoom"), im=document.getElementById("zoomImg"); if(!z||!im) return;
+function scaled(){ var t=getComputedStyle(im).transform; if(!t||t==="none") return false; var m=t.match(/matrix\(([^,]+)/); return m && parseFloat(m[1])>1.05; }
+var sx=0, sy=0, ok=false;
+function start(x,y,n){ ok = n===1 && !scaled(); sx=x; sy=y; }
+function end(x,y){ if(!ok) return; ok=false; var dx=x-sx, dy=y-sy; if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.4){ var b=document.getElementById(dx<0?"zNext":"zPrev"); if(b) b.click(); } }
+z.addEventListener("touchstart",function(e){ start(e.touches[0].clientX,e.touches[0].clientY,e.touches.length); },{passive:true});
+z.addEventListener("touchmove",function(e){ if(e.touches.length>1) ok=false; },{passive:true});
+z.addEventListener("touchend",function(e){ var t=e.changedTouches[0]; end(t.clientX,t.clientY); },{passive:true});
+z.addEventListener("mousedown",function(e){ if(e.target.closest("button")) return; start(e.clientX,e.clientY,1); });
+z.addEventListener("mouseup",function(e){ end(e.clientX,e.clientY); });
+})();</script>
