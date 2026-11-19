@@ -621,7 +621,7 @@ function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="po
 <script>(function(){
 /* 11-19 사장님 「고객이 수정사항을 요청할 수 있는 버튼 → 하루에 한 번 확인해서 수정」 */
 var m=location.pathname.match(/\/tour\/([a-z0-9-]+)\/([a-z0-9-]+)\/?/); if(!m) return;
-var rooms=[]; try{ rooms=(DATA.rooms||[]).map(function(r){return r.name}); }catch(e){}
+var rooms=[].map.call(document.querySelectorAll("#chips .chip"),function(c){return c.textContent.trim()});
 var b=document.createElement("button"); b.className="fixbtn"; b.type="button";
 b.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>수정 요청';
 var w=document.createElement("div"); w.className="fixmask";
@@ -661,4 +661,25 @@ function place(){ var c=chips.querySelector('.chip[aria-current="true"]')||chips
 chips.addEventListener("scroll", place, {passive:true}); window.addEventListener("resize", place);
 new MutationObserver(place).observe(chips,{subtree:true,childList:true,attributes:true,attributeFilter:["aria-current"]});
 setTimeout(place,300); place();
+})();</script>
+<style>
+/* 11-19 사장님 「모바일: 아래 사진 미리보기가 계속 따라다니게 · 공간을 바꾸면 360° 화면 · 사진 누르면 사진 · 맨 앞 360° 버튼 고정」 */
+.strip .to360{position:sticky;left:0;z-index:2;box-shadow:6px 0 8px -4px rgba(0,0,0,.15)}
+@media (max-width:999px){
+  .card.photos{position:fixed;left:0;right:0;bottom:0;z-index:50;margin:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.14);padding:8px 10px calc(8px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr);gap:6px}
+  .card.photos .ttl,.card.photos .nav{display:none}
+  .card.photos .strip button{height:58px}
+  .card.photos .strip .to360{width:62px}
+  body{padding-bottom:150px}
+}
+</style>
+<script>(function(){
+var filt=document.getElementById("filt"); if(!filt) return;
+function rooms(){ return [].map.call(document.querySelectorAll("#chips .chip"),function(c){return {key:c.dataset.key,name:c.textContent.trim()}}); }
+function to360(){ var t=document.querySelector(".strip .to360"); if(t) t.click(); }
+filt.addEventListener("click",function(e){
+  var c=e.target.closest(".chip"); if(!c) return; var lb=c.dataset.room||c.textContent.trim();
+  var r=rooms().filter(function(x){return x.name===lb})[0]; if(!r) return;   /* 「전체」는 그대로 */
+  if(("#"+r.key)===location.hash) setTimeout(to360,0); else { location.hash=r.key; setTimeout(to360,80); }
+});
 })();</script>
