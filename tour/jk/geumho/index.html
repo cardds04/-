@@ -586,8 +586,9 @@ var top=document.querySelector("header.top"); if(top){var a=document.createEleme
  a.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9.5L10 3l7 6.5M5 8v8.5h4v-5h2v5h4V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>홈'; top.insertBefore(a, top.firstChild);}
 function L(id){var e=document.getElementById(id);if(!e)return;e.style.cursor="pointer";e.addEventListener("click",function(){location.href="../";});}L("co");L("logo");
 })();</script><style>
-.fixbtn{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer}
-.fixbtn svg{width:16px;height:16px}.fixbtn:hover{border-color:var(--accent);color:var(--accent)}
+.fixbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:12px 14px;border-radius:12px;border:0;background:#ffd84d;color:#3a2e00;font:inherit;font-weight:800;font-size:15px;cursor:pointer}
+.fixbtn svg{width:17px;height:17px}.fixbtn:hover{background:#ffcd1f}
+.fixbtn.float{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;width:auto;margin:0;box-shadow:0 4px 16px rgba(0,0,0,.15)}
 .fixmask{position:fixed;inset:0;z-index:70;background:rgba(10,20,25,.45);display:none;align-items:flex-end;justify-content:center;padding:16px}
 .fixmask.on{display:flex}@media(min-width:700px){.fixmask{align-items:center}}
 .fixcard{width:100%;max-width:440px;background:var(--card);color:var(--ink);border-radius:18px;padding:18px 16px 16px;box-shadow:0 10px 40px rgba(0,0,0,.25);display:grid;gap:10px}
@@ -611,7 +612,7 @@ w.innerHTML='<div class="fixcard" role="dialog" aria-modal="true" aria-label="�
  '<label>수정할 내용<textarea id="fixText" maxlength="2000" placeholder="예: 주방 360° 화면에서 중문이 막힌 벽으로 보여요 / 포인트 설명 문구를 바꿔 주세요"></textarea></label>'+
  '<label>연락처 (선택)<input id="fixContact" maxlength="80" placeholder="업체명 또는 연락처"></label>'+
  '<div class="fixmsg" id="fixMsg"></div><div class="fixrow"><button type="button" class="fixclose">닫기</button><button type="button" class="fixsend">보내기</button></div></div>';
-document.body.appendChild(b); document.body.appendChild(w);
+var box=document.getElementById("ptsBox"); if(box){ box.appendChild(b); } else { b.classList.add("float"); document.body.appendChild(b); } document.body.appendChild(w);
 var $=function(id){return document.getElementById(id)}, msg=$("fixMsg");
 b.addEventListener("click",function(){ var cur=($("roomName")||{}).textContent||""; var sel=$("fixRoom"); for(var i=0;i<sel.options.length;i++){ if(cur && cur.indexOf(sel.options[i].text)>=0 && sel.options[i].value!==""){ sel.selectedIndex=i; break; } } msg.textContent=""; w.classList.add("on"); setTimeout(function(){$("fixText").focus()},50); });
 w.addEventListener("click",function(e){ if(e.target===w||e.target.classList.contains("fixclose")) w.classList.remove("on"); });
