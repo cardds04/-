@@ -611,22 +611,22 @@ w.querySelector(".fixsend").addEventListener("click",function(){
 })();</script>
 <style>
 /* 11-19 사장님 「모바일에서 거실·주방·안방 고르는 줄 — 못 보고 지나칠 것 같으니 화살표 표시」 */
-.chiphint{display:none;position:relative;height:30px;margin:4px 0 -2px}
-@media (max-width:999px){.chiphint{display:block}}
+.chiphint{display:none;position:relative;height:28px;margin:0 0 -4px}
+@media (max-width:999px){.chiphint{display:block} #chips{display:none!important}}
 .chiphint .ch-arr{position:absolute;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;transition:left .25s ease}
 .chiphint .ch-txt{font-size:11.5px;font-weight:800;color:#3a2e00;background:#ffd84d;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .chiphint .ch-tri{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #ffd84d;animation:chbob 1s ease-in-out infinite}
 @keyframes chbob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
 </style>
 <script>(function(){
-var chips=document.getElementById("chips"); if(!chips) return;
+var chips=document.getElementById("filt"); if(!chips) return;   /* 11-19 「위 거실·주방 줄은 중복이라 없애고」 → 아래 사진 줄의 공간 고르기에 화살표 */
 var h=document.createElement("div"); h.className="chiphint"; h.innerHTML='<div class="ch-arr"><span class="ch-txt">눌러서 공간 이동</span><i class="ch-tri"></i></div>';
-chips.parentNode.insertBefore(h, chips); var a=h.firstChild;
-function place(){ var c=chips.querySelector('.chip[aria-current="true"]')||chips.querySelector(".chip"); if(!c) return;
-  var x=c.offsetLeft - chips.scrollLeft + c.offsetWidth/2 + (chips.offsetLeft - h.offsetLeft); var half=a.offsetWidth/2;
+var anc=chips.closest(".frow")||chips; anc.parentNode.insertBefore(h, anc); var a=h.firstChild;
+function place(){ var c=chips.querySelector('.chip[aria-pressed="true"]')||chips.querySelector(".chip"); if(!c) return;
+  var cr=c.getBoundingClientRect(), hr=h.getBoundingClientRect(); var x=cr.left+cr.width/2-hr.left; var half=a.offsetWidth/2;
   x=Math.max(half+2, Math.min(h.clientWidth-half-2, x)); a.style.left=x+"px"; }
 chips.addEventListener("scroll", place, {passive:true}); window.addEventListener("resize", place);
-new MutationObserver(place).observe(chips,{subtree:true,childList:true,attributes:true,attributeFilter:["aria-current"]});
+new MutationObserver(place).observe(chips,{subtree:true,childList:true,attributes:true,attributeFilter:["aria-pressed"]});
 setTimeout(place,300); place();
 })();</script>
 <style>
