@@ -666,8 +666,12 @@ function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTi
 </style>
 <script>setTimeout(function(){window.dispatchEvent(new Event("resize"))},200);</script>
 <style>
-/* 11-19 「화살표 대신 메뉴 자체가 살짝살짝 움직이게」 — 처음 몇 번만, 누르면 멈춤 */
-@media (max-width:999px){ #filt.nudge{animation:filtnudge 2.4s ease-in-out 1s 4} }
-@keyframes filtnudge{0%,70%,100%{transform:translateX(0)}78%{transform:translateX(-10px)}86%{transform:translateX(4px)}93%{transform:translateX(-3px)}}
+/* 11-19 「메뉴가 안 흔들린다 → 심장 뛰듯이 / 글씨 앞 점 깜빡」: 지금 공간 버튼은 두근두근, 나머지는 앞에 점이 깜빡 */
+@media (max-width:999px){
+  #filt{padding:4px 2px}
+  #filt .chip[aria-pressed="true"]{animation:filtbeat 1.4s ease-in-out infinite;transform-origin:center}
+  #filt .chip[aria-pressed="false"]:not([data-room="전체"])::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#f5b800;margin-right:5px;vertical-align:middle;animation:filtdot 1.2s ease-in-out infinite}
+}
+@keyframes filtbeat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.09)}20%{transform:scale(1)}30%{transform:scale(1.06)}}
+@keyframes filtdot{0%,100%{opacity:1}50%{opacity:.15}}
 </style>
-<script>(function(){ var f=document.getElementById("filt"); if(!f) return; f.classList.add("nudge"); f.addEventListener("click",function(){ f.classList.remove("nudge"); }); f.addEventListener("touchstart",function(){ f.classList.remove("nudge"); },{passive:true}); })();</script>
