@@ -18164,7 +18164,7 @@ ${folderBtn}
           box.dataset.boundTour3d = "1";
           box.addEventListener("click", async (event) => {
             const lb = event.target.closest('button[data-action="tour3dList"]');
-            if (lb) { window.open("./tour3d-list.html", "_blank"); return; }   // 11-19 「업체 리스트 게시판 따로 — 누르면 거기로」
+            if (lb) { window.open("./tour/", "_blank"); return; }   // 11-19 「업체를 모아 놓은 상위 사이트(비번)로」
             const cb = event.target.closest('button[data-action="tour3dCopy"]');
             if (cb) {
               const u = cb.dataset.url || "";
