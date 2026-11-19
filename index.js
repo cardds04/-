@@ -18110,6 +18110,12 @@ ${folderBtn}
        * 사장님이 고객에게 완료 안내를 보낸 뒤 「확인」 → 「전달 완료되었나요?」 예 → delivered(목록에서 사라짐). 11-18
        */
       let tour3dLastJson = "";
+      // 11-19 사장님 「우리가 만든 건 무료, 고객이 요청해서 만든 건 유료 아이콘」 — paid 는 tour3d_jobs scan(접수 메모 신청)이 붙인다
+      function tour3dPayBadge(m) {
+        return m && m.paid
+          ? '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#fff;background:#dc2626;border-radius:6px;padding:2px 6px;">유료</span>'
+          : '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#475569;background:#e2e8f0;border-radius:6px;padding:2px 6px;">무료</span>';
+      }
       async function renderTour3dDoneBox() {
         const box = document.getElementById("tour3dDoneBox");
         if (!box) return;
@@ -18131,7 +18137,7 @@ ${folderBtn}
         const listBtn = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;"><button type="button" class="btn-sm" data-action="tour3dList">${listOpen ? "업체 리스트 닫기" : `업체 리스트 (${allSites.length})`}</button></div>`;
         const listHtml = listOpen ? `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:6px 8px;margin:0 0 10px;background:#fafafa;">` +
           (allSites.length ? allSites.map((m) => `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e5e7eb;flex-wrap:wrap;">
-              <strong style="flex:0 0 auto;font-size:0.9em;">${escapeHtml(String(m.company || ""))}</strong>
+              ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;font-size:0.9em;">${escapeHtml(String(m.company || ""))}</strong>
               <span class="helper" style="margin:0;font-size:0.78em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}${m.status === "delivered" ? " · 전달 끝" : ""}</span>
               <a href="${escapeHtml(String(m.site_url))}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.8em;word-break:break-all;">${escapeHtml(String(m.site_url))}</a>
               <button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(String(m.site_url))}">링크 복사</button>
@@ -18146,7 +18152,7 @@ ${folderBtn}
             const url = String(m.site_url || "");
             return `<div class="customer-alert-row" style="padding:7px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
               <span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#d9f86b;background:#111816;border-radius:6px;padding:2px 6px;">3D</span>
-              <span style="flex:0 0 auto;"><strong>${escapeHtml(String(m.company || ""))}</strong></span>
+              ${tour3dPayBadge(m)}<span style="flex:0 0 auto;"><strong>${escapeHtml(String(m.company || ""))}</strong></span>
               <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
               ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.82em;word-break:break-all;">${escapeHtml(url)}</a>` : '<span style="flex:1"></span>'}
               ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}">링크 복사</button>` : ""}
