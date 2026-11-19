@@ -653,6 +653,9 @@ filt.addEventListener("click",function(e){
 <script>(function(){
 /* 11-19 사장님 「아래 거실·주방이나 사진을 누르면 가운데 화면 맨 윗부분이 화면 위로 오게 — 전체가 딱 보이게」 */
 var st=document.getElementById("stage"); if(!st) return;
-function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ var y=st.getBoundingClientRect().top+window.pageYOffset-8; window.scrollTo({top:Math.max(0,y),behavior:"smooth"}); },120); }
+function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ /* 11-19 「너무 올라가 — 화면 아래가 아래 공간 줄 상자 위에 살짝 붙게」 */
+  var bar=document.querySelector(".card.photos"), r=st.getBoundingClientRect(), lim=(bar?bar.getBoundingClientRect().top:window.innerHeight)-6;
+  var dy=r.bottom-lim; if(r.top-dy<0) dy=r.top-4;   /* 화면이 너무 커서 다 안 들어가면 위가 잘리지 않게 */
+  window.scrollTo({top:Math.max(0,window.pageYOffset+dy),behavior:"smooth"}); },120); }
 ["filt","strip"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("click",function(e){ if(e.target.closest("button")) up(); }); });
 })();</script>
