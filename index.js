@@ -18134,7 +18134,7 @@ ${folderBtn}
         tour3dLastJson = sig; box.dataset.rendered = "1";
         const waitLine = waiting ? `<div class="helper" style="margin:0 0 6px;font-size:0.82em;">3D 작업 대기 ${waiting}건 (사진완료 뒤 클로드가 하루 한 번 작업)</div>` : "";
         const listOpen = box.dataset.listOpen === "1";
-        const listBtn = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;"><button type="button" class="btn-sm" data-action="tour3dList">${listOpen ? "업체 리스트 닫기" : `업체 리스트 (${allSites.length})`}</button></div>`;
+        const listBtn = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;"><button type="button" class="btn-sm" data-action="tour3dList">업체 리스트 (${allSites.length}) ↗</button></div>`;
         const listHtml = listOpen ? `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:6px 8px;margin:0 0 10px;background:#fafafa;">` +
           (allSites.length ? allSites.map((m) => `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e5e7eb;flex-wrap:wrap;">
               ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;font-size:0.9em;">${escapeHtml(String(m.company || ""))}</strong>
@@ -18164,7 +18164,7 @@ ${folderBtn}
           box.dataset.boundTour3d = "1";
           box.addEventListener("click", async (event) => {
             const lb = event.target.closest('button[data-action="tour3dList"]');
-            if (lb) { box.dataset.listOpen = box.dataset.listOpen === "1" ? "" : "1"; box.dataset.rendered = ""; await renderTour3dDoneBox(); return; }
+            if (lb) { window.open("./tour3d-list.html", "_blank"); return; }   // 11-19 「업체 리스트 게시판 따로 — 누르면 거기로」
             const cb = event.target.closest('button[data-action="tour3dCopy"]');
             if (cb) {
               const u = cb.dataset.url || "";
