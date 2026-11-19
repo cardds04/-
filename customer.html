@@ -88,6 +88,7 @@
       body:not(.customer-lite) .option-line { grid-template-columns: 1fr !important; }
       body:not(.customer-lite) #pyeongSection { grid-column: 1 / -1; width: auto; }
       body.customer-lite #composeOptBox, body.customer-lite .copt-guide-new, body:not(.customer-lite) .copt-guide-old { display:none; }
+      body:not(.customer-lite) #lite3dBox { display:none; }
       .form { display: grid; gap: 8px; }
       .row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fcfdff; padding: 9px 10px; }
       .row input, .row select { width: 100%; border: 0; outline: none; background: transparent; font-size: 0.95rem; }
@@ -4059,6 +4060,14 @@
                 </div>
                 <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 무엇인가요? <b>영상 보기 클릭 ▶</b></button>
               </section>
+              <!-- 11-19 사장님: 쇼픽 접수 화면에도 3D 공간 옵션(+3만원) -->
+              <section class="copt" id="lite3dBox" aria-label="3D 공간 옵션">
+                <div class="copt-head"><strong>추가 옵션</strong><span>필요하면 체크해 주세요</span></div>
+                <div class="copt-list" role="group" aria-label="추가 옵션">
+                  <button type="button" class="copt-item" role="checkbox" aria-checked="false" data-opt="lite3d"><i class="copt-radio" aria-hidden="true"></i><img src="assets/compose-opt/ic_3d.png" alt="" /><span class="copt-name">3D 공간 사이트<small class="copt-pp">+3만원</small></span></button>
+                </div>
+                <button type="button" class="copt-info" data-act="3dinfo">3D 공간 사이트가 무엇인가요? <b>영상 보기 클릭 ▶</b></button>
+              </section>
               <details class="compose-price-guide">
                 <summary>금액 산출 기준 보기</summary>
                 <div class="compose-price-body copt-guide-new">
@@ -6570,15 +6579,16 @@
       const COMPOSE_PHOTO_BASE = { "45평이하": 150000, "46평이상": 200000, "100평이상": 250000 };
       const COMPOSE_ADD = { video: 100000, "3d": 30000 };
       const composeState = { video: false, "3d": false };
+      let liteState3d = false;   // 11-19 쇼픽 접수: 3D 공간 +3만원
       let composeOptKey = "photo";   // 사진은 항상 포함 — 고른 상태를 하나의 묶음으로 본다
       function composeSel() {
-        if (isLiteCustomerMode) return null;
+        if (isLiteCustomerMode) return liteState3d ? { label: null, add: COMPOSE_ADD["3d"], composition: null, memo: "【3D 공간 사이트 신청】", lite3d: true } : null;
         const v = composeState.video, d = v && composeState["3d"];
         return { label: d ? "사진 + 영상 + 3D 공간 사이트" : v ? "사진 + 영상" : "사진", add: (v ? COMPOSE_ADD.video : 0) + (d ? COMPOSE_ADD["3d"] : 0),
                  composition: v ? "사진영상 둘다" : "사진만", memo: d ? "【3D 공간 사이트 신청】" : "" };
       }
       function calcComposeOptAmount(pyeong, timeOrHour = "") {
-        const sel = composeSel(); if (!sel) return null;
+        const sel = composeSel(); if (!sel || sel.lite3d) return null;
         const areaRaw = normalize(pyeong);
         const area = areaRaw === "45평이상" ? "46평이상" : areaRaw;
         const base = COMPOSE_PHOTO_BASE[area];
@@ -6612,6 +6622,13 @@
           if (e.target.closest("[data-act='3dinfo']")) { e.preventDefault(); e.stopPropagation(); openInfo(); return; }
           const it = e.target.closest(".copt-item"); if (it) setComposeOpt(it.dataset.opt);
         });
+        const lbox = document.getElementById("lite3dBox");
+        lbox?.addEventListener("click", (e) => {
+          if (e.target.closest("[data-act='3dinfo']")) { e.preventDefault(); e.stopPropagation(); openInfo(); return; }
+          const it = e.target.closest(".copt-item"); if (!it) return;
+          liteState3d = !liteState3d; it.setAttribute("aria-checked", liteState3d ? "true" : "false");
+        });
+        document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => { liteState3d = false; lbox?.querySelector(".copt-item")?.setAttribute("aria-checked", "false"); }, 0));
         document.getElementById("copt3dClose")?.addEventListener("click", closeInfo);
         modal?.addEventListener("click", (e) => { if (e.target === modal) closeInfo(); });
         document.getElementById("customerScheduleForm")?.addEventListener("reset", () => setTimeout(() => setComposeOpt(""), 0));
@@ -8693,7 +8710,7 @@
             : `${time} <span style="color:#b91c1c;font-weight:700;">(확정아님)</span>`;
           const _pyeong = isLiteCustomerMode ? "" : normalize(document.getElementById("schedulePyeong").value);
           const _optSel = composeSel();
-          const _composition = isLiteCustomerMode ? getShopickLiteCompositionString(user) : (_optSel ? _optSel.label : (scheduleCompositionEl.value || "미선택"));
+          const _composition = isLiteCustomerMode ? (getShopickLiteCompositionString(user) + (_optSel && _optSel.lite3d ? " + 3D 공간 사이트(+3만원)" : "")) : (_optSel ? _optSel.label : (scheduleCompositionEl.value || "미선택"));
           const _memoRaw = normalize(document.getElementById("scheduleMemo").value);
           const _memo = _optSel && _optSel.memo && !_memoRaw.includes(_optSel.memo) ? normalize(`${_optSel.memo} ${_memoRaw}`) : _memoRaw;
           const _amount = isLiteCustomerMode ? null : (calcComposeOptAmount(schedulePyeongEl?.value, selectedHour) ?? calculateExpectedPaymentAmount(schedulePyeongEl?.value, scheduleCompositionEl.value, selectedHour));
