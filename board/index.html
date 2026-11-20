@@ -1,0 +1,2761 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>게시현황판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --font-anthropic-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+    --font-anthropic-serif: "Noto Serif KR", "AppleMyungjo", Georgia, serif;
+    --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 12px; --cds-gap-lg: 20px;
+    --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 16px;
+    --cds-radius: 10px;
+    --cds-font-size-caption: 12px; --cds-font-size-body: 14px; --cds-font-size-heading: 17px; --cds-font-size-title: 26px;
+    --cds-font-weight-medium: 600; --cds-dur-slow: 300ms;
+    --color-bg: #faf9f5; --color-panel: #ffffff; --color-fg: #1f1e1d; --color-fg-muted: #73726c;
+    --color-text-secondary: #5e5d59; --cds-text-secondary: #5e5d59;
+    --color-border-line: rgba(31, 30, 29, 0.13); --cds-border: rgba(31, 30, 29, 0.13);
+    --color-ok: #2f7d4f; --color-warn: #b26b00; --color-bad: #c0392b;
+    --cds-chart-grid: #e8e6dc; --cds-chart-axis: #8a8880; --cds-chart-reference: #b0aea5; --cds-chart-muted: #d6d3c8;
+    --cds-surface-popover: #ffffff; --cds-shadow-popover: 0 6px 24px rgba(0, 0, 0, 0.14);
+    --skel: #ecebe4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --color-bg: #1f1e1d; --color-panel: #262624; --color-fg: #f0eee6; --color-fg-muted: #a6a39b;
+      --color-text-secondary: #c2c0b6; --cds-text-secondary: #c2c0b6;
+      --color-border-line: rgba(240, 238, 230, 0.14); --cds-border: rgba(240, 238, 230, 0.14);
+      --color-ok: #5fbf85; --color-warn: #e0a43a; --color-bad: #ef6b5b;
+      --cds-chart-grid: #3a3936; --cds-chart-axis: #8f8c84; --cds-chart-reference: #6b6963; --cds-chart-muted: #4a4844;
+      --cds-surface-popover: #30302e; --cds-shadow-popover: 0 6px 24px rgba(0, 0, 0, 0.5);
+      --skel: #33322f;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-bg: #1f1e1d; --color-panel: #262624; --color-fg: #f0eee6; --color-fg-muted: #a6a39b;
+    --color-text-secondary: #c2c0b6; --cds-text-secondary: #c2c0b6;
+    --color-border-line: rgba(240, 238, 230, 0.14); --cds-border: rgba(240, 238, 230, 0.14);
+    --color-ok: #5fbf85; --color-warn: #e0a43a; --color-bad: #ef6b5b;
+    --cds-chart-grid: #3a3936; --cds-chart-axis: #8f8c84; --cds-chart-reference: #6b6963; --cds-chart-muted: #4a4844;
+    --cds-surface-popover: #30302e; --cds-shadow-popover: 0 6px 24px rgba(0, 0, 0, 0.5);
+    --skel: #33322f;
+  }
+  html, body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); line-height: 1.5; }
+  #dash-root { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; }
+  a { color: inherit; }
+  .dash-skeleton { color: transparent !important; background: var(--skel); border-radius: 6px; animation: skel 1.2s ease-in-out infinite alternate; }
+  @keyframes skel { from { opacity: .55 } to { opacity: 1 } }
+  .dash-select { font: inherit; color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 8px; padding: 4px 8px; }
+  #site-bar { display: flex; gap: 12px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--color-fg-muted); margin-bottom: 8px; flex-wrap: wrap; }
+  #site-bar button { font: inherit; color: inherit; background: none; border: 1px solid var(--color-border-line); border-radius: 8px; padding: 2px 10px; cursor: pointer; }
+  #login { position: fixed; inset: 0; display: grid; place-items: center; background: var(--color-bg); z-index: 1000; padding: 16px; }
+  #login form { width: min(360px, 100%); display: grid; gap: 12px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 14px; padding: 24px; }
+  #login h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 22px; }
+  #login p { margin: 0; color: var(--color-fg-muted); font-size: 13px; }
+  #login input { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg); }
+  #login button { font: inherit; font-weight: 600; padding: 10px; border-radius: 10px; border: 0; background: var(--color-fg); color: var(--color-bg); cursor: pointer; }
+  #login .err { color: var(--color-bad); min-height: 1em; }
+</style>
+<script>
+/* 대시보드 장치 대역 — 아티팩트 dash API 와 같은 이름(data/onData/calc/colors/setLink/params/setParams) */
+window.dash = (() => {
+  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts"];
+  const GROUPS = [['work'], ['slots'], ['realscript', 'scripts'], NAMES.filter((n) => !['work', 'slots', 'realscript', 'scripts'].includes(n))];
+  const raw = {}, st = {}, calcs = {}, subs = [], memo = {};
+  let ver = 0, params = {}, queued = false;
+  const tok = { get() { try { return localStorage.getItem('gb_admin_token'); } catch (e) { return null; } },
+                set(v) { try { v ? localStorage.setItem('gb_admin_token', v) : localStorage.removeItem('gb_admin_token'); } catch (e) {} } };
+  const rowsOf = (v) => (Array.isArray(v) ? v : v && Array.isArray(v.rows) ? v.rows : v ? [v] : []);
+  function notify() {
+    if (queued) return; queued = true;
+    requestAnimationFrame(() => { queued = false; ver++; for (const cb of subs) { try { cb(); } catch (e) { console.error(e); } } window.__siteBar && window.__siteBar(); });
+  }
+  function data(id) {
+    const c = calcs[id];
+    if (c) {
+      const ins = c.inputs.map(data);
+      const bad = ins.find((x) => x.status !== 'ok');
+      if (bad) return { status: bad.status };
+      if (memo[id] && memo[id].v === ver) return memo[id].r;
+      let r;
+      try { r = { status: 'ok', data: c.fn(...ins.map((x) => x.data)) }; } catch (e) { console.error('calc', id, e); r = { status: 'error' }; }
+      memo[id] = { v: ver, r }; return r;
+    }
+    const s = st[id] || 'loading';
+    return s === 'ok' ? { status: 'ok', data: raw[id].rows, updated: raw[id].updated_at } : { status: s };
+  }
+  async function api(body) {
+    const r = await fetch('/api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: tok.get(), ...body }) });
+    if (r.status === 401) { tok.set(null); showLogin('다시 로그인해 주세요.'); throw new Error('auth'); }
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'error'); return j;
+  }
+  async function load() {
+    await Promise.all([
+      ...GROUPS.map(async (g) => {
+        try {
+          const j = await api({ action: 'get', names: g });
+          for (const n of g) { if (j.data[n]) { raw[n] = { rows: rowsOf(j.data[n].rows), updated_at: j.data[n].updated_at, by: j.data[n].by }; st[n] = 'ok'; } else if (!raw[n]) st[n] = 'error'; }
+        } catch (e) { if (e.message === 'auth') return; for (const n of g) if (!raw[n]) st[n] = 'error'; }
+        notify();
+      }),
+      api({ action: 'params' }).then((j) => { params = j.params || {}; notify(); }).catch(() => {}),
+    ]);
+    window.__loadedAt = new Date();
+    notify();
+  }
+  function showLogin(msg) {
+    const box = document.getElementById('login'); if (!box) return;
+    box.hidden = false; box.querySelector('.err').textContent = msg || '';
+    setTimeout(() => box.querySelector('input').focus(), 50);
+  }
+  function start() {
+    const box = document.getElementById('login');
+    box.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = box.querySelector('input').value;
+      box.querySelector('.err').textContent = '확인 중…';
+      try {
+        const r = await fetch('/api/admin-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', adminPassword: pw }) });
+        const j = await r.json();
+        if (!j.ok || !j.token) { box.querySelector('.err').textContent = '비밀번호가 맞지 않아요.'; return; }
+        tok.set(j.token); box.hidden = true; box.querySelector('input').value = ''; load();
+      } catch (err) { box.querySelector('.err').textContent = '연결이 안 돼요. 다시 눌러 주세요.'; }
+    });
+    if (tok.get()) load(); else showLogin();
+    setInterval(() => { if (tok.get() && !document.hidden) load(); }, 120000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && tok.get() && (!window.__loadedAt || Date.now() - window.__loadedAt > 60000)) load(); });
+  }
+  return {
+    data,
+    onData(cb) { subs.push(cb); },
+    calc(id, def) { calcs[id] = def; },
+    colors: ['#d97757', '#6a9bcc', '#788c5d', '#b38a3f', '#9b7ec4', '#c46686', '#5aa7a0'],
+    setLink(id) { try { history.replaceState(null, '', '#' + id); } catch (e) {} },
+    params() { return params; },
+    setParams(p) { params = { ...params, ...p }; notify(); api({ action: 'set_params', params }).catch(() => {}); },
+    _start: start, _load: load, _logout() { tok.set(null); location.reload(); },
+  };
+})();
+</script>
+</head>
+<body>
+<div id="login" hidden>
+  <form autocomplete="on">
+    <h1>게시현황판</h1>
+    <p>관리자 비밀번호를 넣어 주세요.</p>
+    <input type="password" name="password" autocomplete="current-password" inputmode="numeric" aria-label="관리자 비밀번호">
+    <button type="submit">들어가기</button>
+    <div class="err" aria-live="polite"></div>
+  </form>
+</div>
+<div id="dash-root">
+<div id="site-bar"><span id="site-stamp">불러오는 중…</span><button type="button" id="site-reload">새로고침</button><button type="button" id="site-logout">나가기</button></div>
+<style>
+  .gb { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
+  .gb-head { display: grid; gap: var(--cds-gap-xs); }
+  .gb-head h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); text-wrap: balance; }
+  .gb-take { margin: 0; font-size: var(--cds-font-size-body); }
+  .gb-take b, .gb-tile b { font-weight: var(--cds-font-weight-medium); }
+  .gb-stamp { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+
+  .gb-tiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); }
+  .gb-tile { display: grid; gap: var(--cds-gap-xs); align-content: start; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); }
+  .gb-tile-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-tile-value { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.1; }
+  .gb-tile-value small { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
+  .gb-tile-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-tile.is-warn .gb-tile-value { color: var(--color-warn); }
+  .gb-tile.is-bad .gb-tile-value { color: var(--color-bad); }
+
+  .gb-tabs { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); }
+  .gb-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: var(--cds-pad-sm) var(--cds-pad-md); font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg-muted); cursor: pointer; }
+  .gb-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+  .gb-tab:focus-visible, .gb-chip:focus-visible, .gb-filter:focus-visible, .gb-aud tbody tr:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+
+  .gb-page { display: grid; gap: var(--cds-gap-lg); }
+  .gb-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-md); min-width: 0; }
+  .gb-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .gb-card-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-grid { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+
+  .gb-filters { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); }
+  .gb-filter { appearance: none; font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg-muted); cursor: pointer; }
+  .gb-filter[aria-pressed="true"] { color: var(--color-fg); border-color: var(--color-fg); }
+
+  .gb-board { display: grid; gap: var(--cds-gap-lg); min-height: 12rem; }
+  .gb-group { display: grid; gap: 0; }
+  .gb-group-title { margin: 0 0 var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .04em; }
+  .gb-row { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr auto; gap: var(--cds-gap-sm) var(--cds-gap-md); align-items: center; padding: var(--cds-pad-sm) 0; border-top: 1px solid var(--color-border-line); }
+  .gb-row-name { display: grid; gap: 2px; min-width: 0; }
+  .gb-row-name strong { font-weight: var(--cds-font-weight-medium); }
+  .gb-type { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-rule { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); overflow-wrap: anywhere; }
+  .gb-chips { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); min-width: 0; }
+  .gb-chip { appearance: none; font: inherit; font-size: var(--cds-font-size-caption); display: inline-flex; align-items: center; gap: 6px; max-width: 11rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg); cursor: pointer; }
+  .gb-chip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gb-chip[aria-expanded="true"] { border-color: var(--color-fg); }
+  .gb-dot { width: .5rem; height: .5rem; border-radius: 50%; flex: none; background: var(--cds-chart-muted); }
+  .is-ok .gb-dot { background: var(--color-ok); }
+  .is-warn .gb-dot { background: var(--color-warn); }
+  .is-bad .gb-dot { background: var(--color-bad); }
+  .gb-chip.is-ok { border-color: color-mix(in srgb, var(--color-ok) 45%, transparent); }
+  .gb-chip.is-warn { border-color: color-mix(in srgb, var(--color-warn) 55%, transparent); }
+  .gb-chip.is-bad { border-color: color-mix(in srgb, var(--color-bad) 55%, transparent); }
+  .gb-chip.is-wait { border-style: dashed; color: var(--color-fg-muted); }
+  .gb-stock { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); white-space: nowrap; text-align: right; }
+  .gb-stock b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+  .gb-detail { grid-column: 1 / -1; display: grid; gap: var(--cds-gap-xs); padding: var(--cds-pad-sm) var(--cds-pad-md); border-radius: var(--cds-radius); background: var(--color-bg); border: 1px solid var(--color-border-line); }
+  .gb-detail p { margin: 0; overflow-wrap: anywhere; }
+  .gb-detail-meta { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: center; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-pill { display: inline-flex; align-items: center; gap: 6px; color: var(--color-fg); }
+  .gb-detail-reason { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-detail a { font-size: var(--cds-font-size-caption); color: var(--color-fg); width: fit-content; }
+  .gb-empty { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .gb-notices { margin: 0; padding-left: 1.1rem; display: grid; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); min-height: 3rem; }
+
+  .gb-aud-wrap { overflow-x: auto; min-height: 14rem; }
+  .gb-aud { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); }
+  .gb-aud th { text-align: left; font-weight: var(--cds-font-weight-medium); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .gb-aud td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); }
+  .gb-aud .num { text-align: right; }
+  .gb-aud tbody tr { cursor: pointer; }
+  .gb-aud tbody tr[aria-selected="true"] td { background: var(--color-bg); }
+  .gb-aud tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--color-fg); }
+  .gb-up { color: var(--color-ok); }
+  .gb-down { color: var(--color-bad); }
+  .gb-muted { color: var(--color-fg-muted); }
+  .gb-hide-narrow { }
+  @container (max-width: 30rem) { .gb-hide-narrow { display: none; } }
+  .gb-aud-card { container-type: inline-size; }
+
+  .gb-chart { position: relative; min-height: 240px; }
+  .gb-chart svg { display: block; overflow: visible; }
+  .gb-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .gb-tip span { display: block; color: var(--cds-text-secondary); }
+
+  .gb-bars { display: grid; gap: var(--cds-gap-sm); min-height: 18rem; }
+  .gb-bar-row { display: grid; grid-template-columns: 7.5rem 1fr 7.5rem; gap: var(--cds-gap-sm); align-items: center; font-size: var(--cds-font-size-caption); }
+  .gb-bar-track { position: relative; height: 12px; border-radius: 6px; background: var(--cds-chart-grid); overflow: hidden; }
+  .gb-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+  .gb-bar-val { text-align: right; color: var(--color-fg-muted); }
+  .gb-bar-val b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+
+  .gb-fail { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .gb-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+
+  @media (max-width: 40rem) {
+    .gb { gap: var(--cds-gap-md); }
+    .gb-row { grid-template-columns: 1fr; }
+    .gb-stock { text-align: left; }
+    .gb-bar-row { grid-template-columns: 5.5rem minmax(0, 1fr) 3.75rem; }
+    .gb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cds-gap-sm); }
+    .gb-tile { padding: var(--cds-pad-sm) var(--cds-pad-md); }
+    .gb-tile[data-tile="follows"] { grid-column: 1 / -1; }
+    .gb-tile-note { display: none; }
+    .gb-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .gb-tabs::-webkit-scrollbar { display: none; }
+    .gb-tab { flex: none; padding: var(--cds-pad-sm); }
+    .gb-card { padding: var(--cds-pad-md); }
+    .gb-grid { grid-template-columns: minmax(0, 1fr); }
+    .gb-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .gb-filter { flex: none; }
+    .gb-chip { max-width: 100%; padding: 6px 10px; }
+    .gb-aud { font-size: var(--cds-font-size-caption); }
+    .gb-aud th, .gb-aud td { padding: var(--cds-pad-xs) 6px; }
+    .gb-aud td:first-child { overflow-wrap: anywhere; }
+    .gb-aud-wrap { min-height: 0; }
+    .gb-tip { white-space: normal; max-width: 70vw; }
+    .gb-chart { min-height: 200px; }
+  }
+
+  /* 10-26 사장님 「이전에 코덱스가 만든 스타일과 비슷하게」 — daily-channel-board 실측값(밝은 그라데이션·파스텔 요약 카드·초록 알약 탭·흰 표) */
+  .gb {
+    --color-fg: #121c36; --color-fg-muted: #61718e; --color-panel: rgba(255,255,255,.93); --color-bg: #f4f8ff;
+    --color-border-line: #e6edf8; --color-ok: #14784a; --color-warn: #b7791f; --color-bad: #d14575;
+    --cds-text-secondary: #61718e; --cds-surface-popover: #fff; --cds-border: #e6edf8; --cds-chart-grid: #eef3fb;
+    color-scheme: light; color: var(--color-fg);
+    font-family: -apple-system, "system-ui", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background:
+      radial-gradient(at 55% -12%, #dbeaff 0, transparent 38%),
+      radial-gradient(at 98% 0, #eee2ff 0, transparent 28%),
+      linear-gradient(180deg, #f6f9ff, #f9fbff);
+    border-radius: 18px; padding: 28px 32px 32px;
+  }
+  .gb-head h1 { font-family: inherit; font-weight: 800; font-size: 34px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+  .gb-head h1::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #18c08f; box-shadow: 0 0 0 4px rgba(24,192,143,.15); }
+  .gb-head::before { content: "DAILY PUBLISHING"; font-size: 10px; letter-spacing: .18em; color: #61718e; font-weight: 600; }
+  .gb-take, .gb-stamp { color: #61718e; }
+  .gb-take b { color: #121c36; }
+
+  .gb-tile { border: 1px solid rgba(255,255,255,.87); border-radius: 15px; padding: 17px 16px 14px; box-shadow: 0 5px 25px rgba(106,138,176,.06); }
+  .gb-tile[data-tile="posted"]    { background: linear-gradient(120deg, #b5f7c8, #ddfff2); }
+  .gb-tile[data-tile="remaining"] { background: linear-gradient(120deg, #d9ebff, #c9e6ff 75%, #e9f6ff); }
+  .gb-tile[data-tile="late"]      { background: linear-gradient(115deg, #ffe2ec, #ffbfcf 76%, #ffe3ee); }
+  .gb-tile[data-tile="uncertain"] { background: linear-gradient(115deg, #edddff, #ded3ff 75%, #f0e5ff); }
+  .gb-tile[data-tile="follows"]   { background: linear-gradient(115deg, #fff0c9, #ffe3a8 75%, #fff4d9); }
+  .gb-tile-label { font-weight: 700; color: #293452; display: flex; align-items: center; gap: 8px; }
+  .gb-tile-label::before { content: ""; width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 7px rgba(255,255,255,.0); flex: none; }
+  .gb-tile[data-tile="posted"] .gb-tile-label::before    { background: radial-gradient(circle, #237b6a 0 4px, rgba(255,255,255,.75) 5px); }
+  .gb-tile[data-tile="remaining"] .gb-tile-label::before { background: radial-gradient(circle, #245de8 0 4px, rgba(255,255,255,.75) 5px); }
+  .gb-tile[data-tile="late"] .gb-tile-label::before      { background: radial-gradient(circle, #d14575 0 4px, rgba(255,255,255,.75) 5px); }
+  .gb-tile[data-tile="uncertain"] .gb-tile-label::before { background: radial-gradient(circle, #8055df 0 4px, rgba(255,255,255,.75) 5px); }
+  .gb-tile[data-tile="follows"] .gb-tile-label::before   { background: radial-gradient(circle, #b7791f 0 4px, rgba(255,255,255,.75) 5px); }
+  .gb-tile-value { font-family: inherit; font-weight: 800; font-size: 32px; letter-spacing: -.02em; color: #121c36; }
+  .gb-tile.is-warn .gb-tile-value { color: #b7791f; }
+  .gb-tile.is-bad .gb-tile-value { color: #d14575; }
+  .gb-tile-note { color: #4d5b78; }
+
+  .gb-tabs { border-bottom: 0; gap: 8px; }
+  .gb-tab { margin: 0; border: 1px solid #fff; border-radius: 10px; background: rgba(255,255,255,.85); color: #293452; font-size: 12px; padding: 11px 14px; box-shadow: 0 2px 10px rgba(106,138,176,.06); }
+  .gb-tab[aria-selected="true"] { background: linear-gradient(110deg, #00a77b, #12c49b); border-color: #63e4bf; color: #fff; font-weight: 700; }
+  .gb-filter { border-radius: 10px; border: 1px solid #e6edf8; background: rgba(255,255,255,.85); color: #293452; padding: 7px 11px; }
+  .gb-filter[aria-pressed="true"] { background: #e3f7ea; border-color: #63e4bf; color: #14784a; font-weight: 700; }
+
+  .gb-card { border: 0; border-radius: 15px; background: rgba(255,255,255,.93); box-shadow: 0 5px 25px rgba(106,138,176,.07); }
+  .gb-card h2 { font-weight: 800; color: #121c36; }
+  .gb-group-title { color: #61718e; font-weight: 700; }
+  .gb-row { border-top-color: #eef3fb; }
+  .gb-chip { border-color: #e6edf8; background: #f8fbff; }
+  .gb-aud th { background: #f4f8ff; color: #61718e; font-size: 11px; font-weight: 600; }
+  .gb-aud td { border-bottom-color: #eef3fb; }
+  .gb-up { color: #14784a; background: #e3f7ea; border-radius: 5px; padding: 2px 5px; font-weight: 750; }
+  .gb-down { color: #d14575; background: #ffe7ef; border-radius: 5px; padding: 2px 5px; font-weight: 750; }
+
+  @media (max-width: 40rem) {
+    .gb { padding: 18px 14px 20px; border-radius: 14px; }
+    .gb-head h1 { font-size: 26px; }
+    .gb-tile-value { font-size: 26px; }
+    .gb-tile-label::before { width: 20px; height: 20px; }
+  }
+  /* 회차별 동그라미 표 (옛 daily-channel-board 실측) */
+  .gb-tbl-wrap { overflow-x: auto; margin: 0 calc(-1 * var(--cds-pad-lg)); padding: 0 var(--cds-pad-lg); }
+  .gb-tbl { width: 100%; border-collapse: collapse; min-width: 52rem; font-size: 13px; }
+  .gb-tbl th { background: #f4f8ff; color: #61718e; font-size: 11px; font-weight: 600; text-align: left; padding: 12px 10px; white-space: nowrap; }
+  .gb-tbl th.gb-c, .gb-tbl td.gb-slot, .gb-tbl td.gb-next { text-align: center; }
+  .gb-tbl td { padding: 12px 10px; border-top: 1px solid #eef3fb; vertical-align: middle; }
+  .gb-name { display: flex; align-items: center; gap: 10px; min-width: 11rem; }
+  .gb-name strong { display: block; font-weight: 700; font-size: 13px; }
+  .gb-avatar { width: 36px; height: 36px; flex: none; border-radius: 10px; background: #eef1f8; color: #293452; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+  .gb-sub { color: #8592ad; font-size: 12px; padding-left: 46px; }
+  .gb-plat { font-size: 10px; color: #61718e; }
+  .gb-plat::before { content: "●"; margin-right: 4px; font-size: 8px; }
+  .gb-plat.p-youtube::before { color: #ff2b2b; } .gb-plat.p-threads::before { color: #121c36; } .gb-plat.p-instagram::before { color: #e1306c; }
+  .gb-aud-cell { text-align: center; white-space: nowrap; }
+  .gb-aud-unit, .gb-aud-day { display: block; font-size: 10px; color: #8592ad; }
+  .gb-aud-line { display: flex; gap: 5px; justify-content: center; align-items: center; }
+  .gb-aud-line b { font-size: 15px; font-weight: 800; }
+  .gb-aud-line .gb-up, .gb-aud-line .gb-down { font-size: 10px; }
+  .gb-kind { display: inline-block; border-radius: 5px; padding: 5px 8px; font-size: 10px; background: #dff9f2; color: #238976; white-space: nowrap; }
+  .gb-kind.long { background: #fff0c9; color: #876b26; }
+  .gb-slot { min-width: 4.5rem; }
+  .gb-ring { appearance: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 4px; cursor: pointer; font: inherit; font-weight: 800; font-size: 13px; line-height: 1; border: 1.5px solid #f05a7e; background: #fff; color: #f05a7e; }
+  .gb-ring.is-posted { background: #12b886; border-color: #12b886; color: #fff; }
+  .gb-ring.is-failed { background: #f05a7e; color: #fff; }
+  .gb-ring.is-paused { border-style: dashed; border-color: #9aa0a6; color: #9aa0a6; background: transparent; opacity: .7; }
+  .gb-ring.is-late { border-color: #f0a33a; color: #d98612; background: #fff7e8; }
+  .gb-ring.is-uncertain { border-color: #8055df; color: #8055df; background: #f3edff; }
+  /* 10-26 사장님 「문제를 인지했으면 공사 중 표시 — 느낌표만 있으면 아직 아무도 안 본 문제」 */
+  .gb-ring.is-fixing { border-color: #e8b100; background: #fff6cc; color: #8a6a00; font-size: 0.85em; }
+  .gb-ring-note.is-fixing { color: #8a6a00; }
+  .cp-days { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 12px; }
+  .cp-day { appearance: none; border: 1px solid #e6edf8; background: #fff; border-radius: 10px; padding: 7px 14px; font: inherit; font-size: 14px; cursor: pointer; color: #293452; }
+  .cp-day[aria-pressed="true"] { background: #12b886; border-color: #12b886; color: #fff; font-weight: 700; }
+  .cp-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 4px 0 4px; }
+  .cp-big b { font-size: 34px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .cp-big span { font-size: 14px; color: #61718e; }
+  .cp-stamp { font-size: 13px; color: #61718e; margin: 0 0 14px; }
+  .cp-accts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); margin-bottom: 16px; }
+  .cp-acct { background: #f8fbff; border: 1px solid #e6edf8; border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; }
+  .cp-acct strong { font-size: 15px; }
+  .cp-acct b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cp-acct small { font-size: 12px; color: #61718e; }
+  .cp-group { margin-top: 18px; }
+  .cp-acgrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+  .cp-accard { border: 1px solid #e6edf8; border-radius: 12px; padding: 10px 14px 4px; background: #fff; }
+  .cp-ach { font-size: 14px; font-weight: 800; color: #12805f; padding-bottom: 6px; border-bottom: 1px solid #eef3fb; }
+  .cp-accard .cp-list li:last-child { border-bottom: 0; }
+  .cp-gh { font-size: 16px; font-weight: 800; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 2px solid #e6edf8; text-wrap: balance; }
+  .cp-list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .cp-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid #eef3fb; }
+  .cp-left { display: grid; gap: 2px; min-width: 0; }
+  .cp-title { color: #1d4ed8; font-weight: 700; font-size: 15px; text-decoration: none; overflow-wrap: anywhere; }
+  .cp-title:hover { text-decoration: underline; }
+  .cp-meta { font-size: 12px; color: #61718e; }
+  .cp-right { display: grid; justify-items: end; flex: none; }
+  .cp-v { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cp-inc { font-size: 11px; color: #0f9f74; }
+  .gb-tbl tbody tr.gb-xrow > td { height: auto !important; padding: 4px 14px 14px !important; background: #f8fbff; text-align: left !important; vertical-align: top; }
+  .gb-detail-box { border: 1px solid #dfe8f6; border-radius: 12px; background: #fff; padding: 12px 16px; max-height: 420px; overflow-y: auto; white-space: normal; max-width: 760px; }
+  .gb-xrow .gb-detail-meta { display: block; }
+  .gb-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .gb-detail-head strong { font-size: 15px; font-weight: 800; }
+  .gb-detail-meta { font-size: 12px; color: #8592ad; margin: 2px 0 8px; }
+  .gb-detail-body { font-size: 14px; line-height: 1.6; }
+  .gb-detail-body p { margin: 0 0 6px; }
+  .gb-ring.is-open { box-shadow: 0 0 0 3px rgba(18,28,54,.18); }
+  .gb-ring.is-real { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #3b5bdb; }
+  .gb-ring-real { display: block; font-size: 10px; font-weight: 800; color: #3b5bdb; white-space: nowrap; }
+  .gb-prod-real { font-weight: 800; color: #3b5bdb; }
+  .gb-ring-views { display: block; font-size: 10px; font-weight: 700; color: #0f9f74; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .gb-ring.is-wait { border-color: #9fb3d4; background: #f2f6fd; color: #4d6180; font-size: 9px; font-weight: 800; letter-spacing: -.04em; cursor: default; }
+  .rs-fix { background: #fff6cc; border: 1px solid #f0d77a; border-radius: 10px; padding: 10px 12px; margin: 4px 0 10px; }
+  .rs-fix p { margin: 0 0 4px; }
+  .gb-ring[aria-expanded="true"] { box-shadow: 0 0 0 3px rgba(18,28,54,.15); }
+  .gb-ring-time { display: block; font-size: 10px; color: #8592ad; }
+  .gb-ring-note { display: block; font-size: 9px; color: #8055df; }
+  .gb-none { color: #c4cddd; }
+  .gb-next b { font-size: 16px; font-weight: 800; }
+  .gb-next small { font-size: 10px; color: #8592ad; margin-left: 1px; }
+  .gb-held { display: block; font-size: 10px; color: #d98612; }
+  .gb-detail-row td { background: #f8fbff; }
+  @media (max-width: 40rem) { .gb-tbl-wrap { margin: 0 calc(-1 * var(--cds-pad-md)); padding: 0 var(--cds-pad-md); } }
+
+  /* 10-26 사장님 「넓게 펼치지 말고 한눈에 보기 편하게」 — 표를 내용 폭으로 줄이고 줄 높이·여백 압축 */
+  .gb-tbl { width: auto; min-width: 0; font-size: 12px; }
+  .gb-tbl th { padding: 7px 6px; font-size: 10px; }
+  .gb-tbl td { padding: 5px 6px; }
+  .gb-tbl tbody tr:has(.gb-avatar) td { border-top: 1px solid #dfe7f3; }
+  .gb-tbl tbody tr:not(:has(.gb-avatar)) td { border-top: 0; }
+  .gb-name { min-width: 0; width: 10.5rem; gap: 7px; }
+  .gb-name strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8rem; }
+  .gb-avatar { width: 26px; height: 26px; border-radius: 7px; font-size: 10px; }
+  .gb-sub { padding-left: 33px; font-size: 11px; }
+  .gb-aud-cell { width: 6.5rem; }
+  .gb-aud-unit, .gb-aud-day { display: none; }
+  .gb-aud-line b { font-size: 13px; }
+  .gb-aud-cell .gb-muted { font-size: 10px; }
+  .gb-kind { padding: 3px 6px; font-size: 10px; }
+  .gb-slot { min-width: 0; width: 3.4rem; }
+  .gb-ring { width: 20px; height: 20px; font-size: 11px; margin-bottom: 2px; border-width: 1.5px; }
+  .gb-ring-time { font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 3.4rem; margin: 0 auto; }
+  .gb-ring-note { font-size: 8px; }
+  .gb-next { width: 3.6rem; }
+  .gb-next b { font-size: 14px; }
+
+  /* 10-26 사장님 「글씨는 키우고 더 간단하게」 — 이름 앞 네모·구분 열·설명글 숨김, 글자·동그라미 키움 */
+  #post-card > .gb-card-note { display: none; }
+  .gb-avatar { display: none; }
+  .gb-tbl th:nth-child(3), .gb-tbl td:nth-child(3) { display: none; }
+  .gb-tbl { font-size: 15px; }
+  .gb-tbl th { font-size: 12px; padding: 9px 8px; }
+  .gb-tbl td { padding: 7px 8px; }
+  .gb-name { width: 11rem; }
+  .gb-name strong { font-size: 15px; max-width: 10rem; }
+  .gb-plat { font-size: 11px; }
+  .gb-sub { padding-left: 4px; font-size: 13px; color: #61718e; }
+  .gb-aud-line b { font-size: 16px; }
+  .gb-aud-line .gb-up, .gb-aud-line .gb-down { font-size: 11px; }
+  .gb-slot { width: 3.8rem; }
+  .gb-ring { width: 26px; height: 26px; font-size: 14px; }
+  .gb-ring-time { font-size: 11px; max-width: 3.8rem; }
+  .gb-ring-note { font-size: 10px; }
+  .gb-next { width: 4rem; }
+  .gb-next b { font-size: 18px; }
+  .gb-held { font-size: 11px; }
+
+  /* 10-26 사장님 「위아래 간격 줄이고 아주 간단한 아이콘으로 한눈에」 — 한 줄 행·작은 점 아이콘·시각은 마우스 올리면 */
+  .gb-tbl td { padding: 4px 8px; line-height: 1.2; }
+  .gb-tbl th { padding: 6px 8px; }
+  .gb-name { display: block; }
+  .gb-name > div { display: flex; align-items: baseline; gap: 6px; }
+  .gb-name strong { display: inline; }
+  .gb-plat { font-size: 0; }
+  .gb-plat::before { font-size: 9px; margin: 0; }
+  .gb-tbl tbody tr:has(.gb-plat) .gb-name strong::after { content: ""; }
+  .gb-sub { font-size: 12px; padding-left: 10px; }
+  .gb-aud-cell .gb-muted { display: none; }
+  .gb-aud-line b { font-size: 15px; }
+  .gb-ring { width: 16px; height: 16px; margin: 0 auto; font-size: 10px; border-width: 1.5px; }
+  .gb-ring.is-pending { border-color: #cfd8e6; color: transparent; background: #fff; }
+  .gb-ring-time, .gb-ring-note { display: none; }
+  .gb-none { font-size: 11px; }
+  .gb-next b { font-size: 15px; }
+  .gb-held { display: inline; margin-left: 4px; font-size: 10px; }
+  /* 10-26 사장님 「위아래 레이아웃 균형」 — 모든 칸 같은 줄 높이·가운데 정렬·재고 칸 줄바꿈 금지 */
+  .gb-tbl tbody td { height: 32px; padding-top: 0; padding-bottom: 0; vertical-align: middle; }
+  .gb-tbl tbody tr:has(.gb-plat) td { height: 36px; }
+  .gb-tbl tbody tr:not(:has(.gb-plat)):not(.gb-detail-row) td { height: 28px; }
+  .gb-name, .gb-name > div { line-height: 1; }
+  .gb-sub { display: inline-block; line-height: 1; }
+  .gb-aud-cell, .gb-aud-line { line-height: 1; }
+  .gb-aud-line { justify-content: flex-end; }
+  .gb-tbl th:nth-child(2) { text-align: right; }
+  .gb-next { width: 6.5rem; white-space: nowrap; text-align: right !important; padding-right: 14px !important; }
+  .gb-tbl th:last-child { text-align: right; padding-right: 14px; }
+  .gb-next b, .gb-next small, .gb-held { line-height: 1; vertical-align: baseline; }
+  .gb-ring, .gb-none { vertical-align: middle; }
+  .gb-tbl-wrap { display: flex; justify-content: flex-start; }
+  /* 10-26 사장님 「여백이 없어서 답답」 — 줄·열 간격을 조금 되돌리고 채널명 칸을 표 칸으로(세로 가운데) */
+  .gb-tbl td.gb-name { display: table-cell; width: 12rem; padding-left: 14px; }
+  .gb-tbl tbody tr:has(.gb-plat) td { height: 46px; }
+  .gb-tbl tbody tr:not(:has(.gb-plat)):not(.gb-detail-row) td { height: 38px; }
+  .gb-tbl tbody tr:not(:has(.gb-plat)):not(.gb-detail-row) td:first-child { padding-bottom: 2px; }
+  .gb-tbl th { padding: 10px 12px; }
+  .gb-tbl td { padding-left: 12px; padding-right: 12px; }
+  .gb-slot { width: 4.2rem; }
+  .gb-ring { width: 18px; height: 18px; }
+  .gb-sub { padding-left: 14px; color: #8592ad; }
+  .gb-tbl tbody tr:has(.gb-plat) td { border-top: 1px solid #e3eaf5; }
+  .gb-tbl tbody tr:has(.gb-plat):first-child td { border-top: 0; }
+  .gb-tbl tbody tr:nth-child(4n+1), .gb-tbl tbody tr:nth-child(4n+2) { background: transparent; }
+  .gb-aud-cell { padding-right: 20px !important; }
+  /* 10-26 사장님 「아이콘 더 키우고 글씨도 키우고」 */
+  .gb-ring { width: 26px; height: 26px; font-size: 14px; border-width: 2px; }
+  .gb-slot { width: 4.6rem; }
+  .gb-tbl { font-size: 16px; }
+  .gb-tbl th { font-size: 13px; }
+  .gb-name strong { font-size: 17px; max-width: 11rem; }
+  .gb-tbl td.gb-name { width: 13rem; }
+  .gb-sub { font-size: 14px; }
+  .gb-aud-line b { font-size: 18px; }
+  .gb-aud-line .gb-up, .gb-aud-line .gb-down { font-size: 12px; }
+  .gb-next b { font-size: 19px; }
+  .gb-next small, .gb-held { font-size: 12px; }
+  .gb-none { font-size: 14px; }
+  .gb-tbl tbody tr:has(.gb-plat) td { height: 52px; }
+  .gb-tbl tbody tr:not(:has(.gb-plat)):not(.gb-detail-row) td { height: 44px; }
+  /* 10-26 사장님 「올리는 시간 다시 표시」 */
+  .gb-ring-time { display: block; font-size: 12px; color: #61718e; margin: 3px auto 0; max-width: 4.6rem; line-height: 1; }
+  .gb-ring-note { display: none; }
+  .gb-tbl tbody tr:has(.gb-plat) td { height: 62px; }
+  .gb-tbl tbody tr:not(:has(.gb-plat)):not(.gb-detail-row) td { height: 56px; }
+  .gb-follow { text-align: center; white-space: nowrap; width: 6rem; }
+  .gb-follow b { font-size: 18px; font-weight: 800; color: #121c36; }
+  .gb-follow b.gb-f-ok { color: #14784a; }
+  .gb-follow small { font-size: 12px; color: #8592ad; }
+  .gb-legend { font-size: 14px !important; }
+  .gb-legend i { width: 14px !important; height: 14px !important; }
+  .gb-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: #61718e; margin: 2px 0 0; }
+  .gb-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; border: 1.5px solid; }
+  .gb-pf { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 800; flex: none; align-self: center; }
+  .gb-pf.pf-youtube { background: #ff0033; font-size: 9px; }
+  .gb-pf.pf-threads { background: #111; font-size: 13px; }
+  .gb-pf.pf-instagram { background: linear-gradient(45deg, #feda75, #fa7e1e 30%, #d62976 60%, #962fbf 85%, #4f5bd5); font-size: 13px; }
+  .gb-name > div { align-items: center !important; gap: 8px !important; }
+  .gb-plat { display: none !important; }
+  .gb-chlink { color: inherit; text-decoration: none; }
+  .gb-chlink:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+  .gb-longcol { background: #fffaf0; }
+  /* 10-27 사장님 「롱폼·숏폼 순서대로, 구분은 테두리 색깔만 조금 다르게」 — 상태 색은 그대로 두고 바깥 테두리만 금색 */
+  .gb-ring.is-long { outline: 2px solid #e2b54f; outline-offset: 2px; }
+  .gb-ypp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .gb-ypp th { text-align: left; font-weight: 600; color: var(--color-fg-muted); padding: 6px 10px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .gb-ypp td { padding: 8px 10px; border-bottom: 1px solid var(--color-border-line); vertical-align: top; font-variant-numeric: tabular-nums; }
+  .gb-ypp td:first-child { font-weight: 700; white-space: nowrap; }
+  .gb-ypp-sum { cursor: pointer; list-style-position: inside; }
+  .gb-ypp-sum h2 { display: inline; }
+  .gb-yppcard[open] .gb-ypp-sum { margin-bottom: 8px; }
+  .gb-ypp .is-far { color: var(--color-bad); }
+  .gb-ypp .is-done { color: var(--color-ok); }
+  .gb-ypp .gb-ypp-bar { display: block; height: 5px; border-radius: 3px; background: var(--color-border-line); margin-top: 4px; max-width: 160px; overflow: hidden; }
+  .gb-ypp .gb-ypp-bar i { display: block; height: 100%; background: #2b8fbf; }
+  .gb-ypp td small { color: var(--color-fg-muted); }
+  .gb-turn { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; background: #eef3fb; color: #3b5b8c; }
+  .gb-turn.is-long { background: #fff3d6; color: #876b26; box-shadow: inset 0 0 0 1.5px #e2b54f; }
+  th.gb-longcol { background: #fff3d6 !important; color: #876b26 !important; }
+  .gb-split { border-left: 2px solid #e3eaf5; }
+  .gb-tbl tbody td { height: 62px !important; border-top: 1px solid #e3eaf5 !important; }
+  .gb-tbl tbody tr:first-child td { border-top: 0 !important; }
+  .gb-stk { display: block; white-space: nowrap; line-height: 1.25; }
+  .gb-stk em { font-style: normal; font-size: 11px; color: #8592ad; margin-right: 3px; }
+  .gb-stk b { font-size: 17px !important; }
+  .gb-next { width: 8rem !important; }
+  /* 10-26 사장님 「이 부분은 없애 버려」 — 위 요약 문장·요약 카드 숨김 */
+  .gb-take, #summary { display: none !important; }
+  /* 날짜 고르기 */
+  .gb-days { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .gb-day { appearance: none; font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 10px; border: 1px solid #e6edf8; background: rgba(255,255,255,.9); color: #293452; cursor: pointer; flex: none; }
+  .gb-day[aria-pressed="true"] { background: linear-gradient(110deg, #00a77b, #12c49b); border-color: #63e4bf; color: #fff; font-weight: 700; }
+  .cx-accts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  .cx-acct { background: #f8fbff; border: 1px solid #e6edf8; border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; }
+  .cx-acct.is-bad { background: #fff3f6; border-color: #ffc6d4; }
+  .cx-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .cx-top strong { font-size: 17px; font-weight: 800; }
+  .cx-plan { font-size: 12px; color: #8592ad; overflow-wrap: anywhere; }
+  .cx-big b { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .cx-big small { font-size: 13px; color: #61718e; }
+  .cx-bar { height: 10px; border-radius: 6px; background: #eef3fb; overflow: hidden; }
+  .cx-fill { height: 100%; border-radius: 6px; }
+  .cx-meta { display: grid; gap: 2px; font-size: 13px; color: #4d5b78; }
+  .cx-jobs td { height: auto !important; padding: 8px 12px !important; }
+  .cx-jobs th:nth-child(3), .cx-jobs td:nth-child(3) { display: table-cell !important; }
+  .cx-jobs td.cx-ch { font-weight: 700; white-space: nowrap; }
+  .cx-form { display: inline-block; border-radius: 5px; padding: 3px 7px; font-size: 12px; white-space: nowrap; }
+  .cx-form.f-long { background: #fff0c9; color: #876b26; }
+  .cx-form.f-short { background: #dff9f2; color: #238976; }
+  .cx-form.f-both { background: #eef1ff; color: #4a55c4; }
+  .cx-form.f-toon { background: #ffe9f1; color: #c2366a; }
+  .cx-stock { white-space: nowrap; }
+  .cx-stk { display: inline-block; margin: 0 3px; font-weight: 700; }
+  .cx-stk.is-zero { color: #d14575; }
+  /* 10-31 사장님 「게시현황판에 실시간 제작 중인 거」 */
+  .gb-prodcard { padding: 10px 14px !important; gap: 6px !important; }
+  .gb-prodcard h2 { font-size: 13px !important; color: #61718e; font-weight: 700 !important; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .gb-prodcard h2 small { font-weight: 500; color: var(--color-text-secondary, #7a879c); font-size: 12px; }
+  .gb-prodcard h2 small.is-stale { color: #9aa0a6; }
+  .gb-prodlist { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); list-style: none; margin: 0; padding: 0; }
+  .gb-prod { border: 1px solid var(--color-border-line, #e6edf8); border-radius: 8px; padding: 6px 10px; display: grid; gap: 2px; font-size: 13px; min-width: 0; }
+  .gb-prod.is-blocked { border-color: color-mix(in srgb, var(--color-bad) 55%, transparent); }
+  /* 11-04 사장님 「정렬이 이상해 · 펼치기/숨기기로 · 숨겨 놔」 — 접힌 채 시작, 채널 이름이 길어도 제목이 세로로 찌그러지지 않게 위아래로 */
+  .gb-prod-sum { cursor: pointer; list-style-position: inside; }
+  .gb-prod-sum h2 { display: inline-flex !important; }
+  .gb-prodcard[open] .gb-prod-sum { margin-bottom: 6px; }
+  .gb-prod-top { display: grid; gap: 1px; min-width: 0; }
+  .gb-prod-ch { color: #61718e; font-size: 12px; overflow-wrap: anywhere; }
+  .gb-prod-title { font-weight: 700; overflow-wrap: anywhere; }
+  .gb-prod-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: #61718e; font-variant-numeric: tabular-nums; }
+  .gb-prod-stage { font-weight: 700; color: var(--color-ok); }
+  .gb-prod-block { color: var(--color-bad); font-size: 12px; font-weight: 700; }
+  .gb-prodcard.is-stale .gb-prodlist { opacity: .6; }
+  .gb-stockcard { gap: 10px; }
+  .gb-stockgrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr)); }
+  .gb-stk-item { background: #f8fbff; border: 1px solid #e6edf8; border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+  .gb-stk-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .gb-stk-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gb-stk-nums { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+  .gb-stk-part em { font-style: normal; font-size: 12px; color: #8592ad; margin-right: 4px; }
+  .gb-stk-part b { font-size: 20px; font-weight: 800; }
+  .gb-stk-part small { font-size: 12px; color: #8592ad; margin-left: 1px; }
+  .gb-stk-part i { font-style: normal; font-size: 11px; color: #d98612; margin-left: 5px; }
+  .gb-stk-part.is-low b { color: #d98612; }
+  .gb-stk-part.is-zero b { color: #d14575; }
+
+  /* 10-26 사장님 「재고 상황 아주 작고 간단하게 · 계정별 남은 한도는 아래쪽으로」 */
+  .gb-stockcard { padding: 10px 14px !important; gap: 6px !important; }
+  .gb-stockcard h2 { font-size: 13px !important; color: #61718e; font-weight: 700 !important; }
+  .gb-stockgrid { display: flex !important; flex-wrap: wrap; gap: 4px 6px !important; }
+  .gb-stk-item { display: inline-flex !important; align-items: center; gap: 6px !important; padding: 3px 9px !important; border-radius: 999px !important; background: #f6f9ff; }
+  .gb-stk-head { gap: 4px !important; }
+  .gb-stk-head .gb-pf { width: 14px; height: 14px; border-radius: 4px; font-size: 8px; }
+  .gb-stk-name { font-size: 12px !important; font-weight: 600 !important; max-width: 7rem; }
+  .gb-stk-nums { gap: 6px !important; flex-wrap: nowrap !important; }
+  .gb-stk-part em { font-size: 10px !important; margin-right: 1px !important; }
+  .gb-stk-part b { font-size: 13px !important; }
+  .gb-stk-part small { display: none; }
+  .gb-stk-part i { font-size: 10px !important; margin-left: 2px !important; }
+  #codex-acct-card { order: 2; }
+  #codex-job-card { order: 1; }
+  /* 재고 표(코덱스 표와 같은 꼴) */
+  .gb-stockgrid { display: block !important; }
+  .gb-stktbl td { padding: 5px 12px !important; font-size: 14px; }
+  .gb-stktbl td.cx-ch { display: flex; align-items: center; gap: 6px; }
+  .gb-stktbl td.cx-ch .gb-pf { width: 16px; height: 16px; border-radius: 4px; font-size: 9px; }
+  .gb-stktbl b { font-size: 15px; font-weight: 800; }
+  .gb-stktbl .stk-zero { color: #d14575 !important; font-weight: 800; }
+  .gb-stktbl .stk-low { color: #d98612 !important; font-weight: 800; }
+  .gb-stktbl .stk-held { color: #d98612; }
+  .gb-stk3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .gb-stk3 .gb-stktbl th, .gb-stk3 .gb-stktbl td.gb-c { white-space: nowrap; }
+  .gb-stk3 .gb-tbl-wrap { margin: 0 !important; padding: 0 !important; }
+  .gb-stk3 .gb-stktbl { width: 100%; }
+  .gb-stk3 .gb-stktbl td, .gb-stk3 .gb-stktbl th { padding: 4px 6px !important; }
+  .gb-stk3 .gb-stktbl td.cx-ch { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; display: table-cell; }
+  @media (max-width: 64rem) { .gb-stk3 { grid-template-columns: minmax(0, 1fr); } }
+  /* 10-26 사장님 「위아래 여백 좀 줄여」 */
+  .gb-stk3 .gb-stktbl tbody td { height: 26px !important; padding-top: 2px !important; padding-bottom: 2px !important; line-height: 1.15; }
+  .gb-stk3 .gb-stktbl thead th { padding-top: 5px !important; padding-bottom: 5px !important; }
+  .gb-stk3 .gb-stktbl .cx-form { padding: 1px 6px; font-size: 11px; }
+  .gb-stockcard { padding-top: 8px !important; padding-bottom: 8px !important; }
+  .cx-jobs tbody td { height: 34px !important; padding-top: 4px !important; padding-bottom: 4px !important; }
+  .gb-stk-more { margin-top: 6px; }
+  .gb-stk-more summary { cursor: pointer; font-size: 13px; color: #61718e; padding: 4px 0; list-style-position: inside; }
+  .gb-stk-more[open] summary { margin-bottom: 6px; }
+  .gb-ring.has-script { cursor: zoom-in; }
+  .gb-modal { position: fixed; inset: 0; background: rgba(18,28,54,.35); display: grid; place-items: center; z-index: 50; padding: 16px; }
+  .gb-modal[hidden] { display: none !important; }
+  .gb-modal.at { display: block; }
+  .gb-modal.at .gb-modal-panel { position: absolute; max-height: 560px; }
+  .gb-modal-panel { background: #fff; color: #121c36; border-radius: 16px; width: min(640px, 100%); max-height: min(80vh, 760px); display: grid; grid-template-rows: auto auto 1fr; box-shadow: 0 20px 60px rgba(18,28,54,.25); overflow: hidden; }
+  .gb-modal-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 16px 18px 6px; }
+  .gb-modal-head strong { font-size: 17px; font-weight: 800; line-height: 1.35; }
+  .gb-modal-x { appearance: none; border: 1px solid #e6edf8; background: #f8fbff; border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; flex: none; color: #293452; }
+  .gb-modal-meta { padding: 0 18px 10px; font-size: 12px; color: #8592ad; border-bottom: 1px solid #eef3fb; }
+  .gb-modal-body { overflow-y: auto; padding: 12px 18px 18px; font-size: 15px; line-height: 1.65; }
+  .gb-modal-body p { margin: 0 0 6px; }
+  .gb-modal-body p.is-line b { color: #4a55c4; }
+  .gb-f-last { color: #8592ad; font-size: 12px; white-space: nowrap; }
+  #follow-last-all { color: #14784a; margin-left: 4px; }
+  .wk-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); align-items: start; }
+  .wk-card { background: #f8fbff; border: 1px solid #e6edf8; border-left: 4px solid #8fa3c4; border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+  .wk-card.st-run { border-left-color: #12b886; } .wk-card.st-bad { border-left-color: #f05a7e; background: #fff6f8; } .wk-card.st-wait { border-left-color: #cfd8e6; } .wk-card.st-ok { border-left-color: #4a55c4; }
+  .wk-head { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: inherit; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; text-align: left; cursor: pointer; }
+  .wk-head strong { font-size: 16px; font-weight: 800; }
+  .wk-st { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #e3f7ea; color: #14784a; }
+  .st-bad .wk-st { background: #ffe7ef; color: #d14575; } .st-wait .wk-st { background: #eef1f8; color: #61718e; }
+  .wk-up { font-size: 12px; color: #8592ad; margin-left: auto; }
+  .wk-doing { margin: 0; font-size: 14px; }
+  .wk-blocked { margin: 0; font-size: 13px; color: #d14575; }
+  .wk-line { margin: 0; font-size: 13px; color: #4d5b78; }
+  .wk-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .wk-th { appearance: none; border: 1px solid #e6edf8; padding: 0; border-radius: 8px; overflow: hidden; background: #fff; cursor: zoom-in; flex: none; }
+  .wk-th img { display: block; height: 96px; width: auto; }
+  .wk-list { display: grid; gap: 4px; }
+  .wk-item { appearance: none; text-align: left; border: 1px solid #e6edf8; background: #fff; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 14px; color: #121c36; cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .wk-item small { color: #8592ad; font-size: 12px; }
+  .wk-type { font-size: 11px; background: #eef1ff; color: #4a55c4; border-radius: 5px; padding: 1px 6px; }
+  .wk-more { appearance: none; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: #4a55c4; cursor: pointer; text-align: left; }
+  .wk-lbp { width: min(960px, 100%); }
+  .wk-big { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: 8px; }
+  .wk-pre { white-space: pre-wrap; font-family: inherit; font-size: 15px; line-height: 1.65; margin: 0; }
+  .wk-note { color: #61718e; font-size: 13px; }
+  .gb-todocard { border: 2px solid #ffc6d4 !important; background: #fff8fa !important; padding: 12px 16px !important; gap: 8px !important; }
+  .gb-todocard h2 { color: #c2366a !important; font-size: 16px !important; }
+  .td-n { font-size: 13px; background: #f05a7e; color: #fff; border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+  .td-row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid #ffe1e9; }
+  .td-row:first-child { border-top: 0; }
+  .td-no { flex: none; width: 22px; height: 22px; border-radius: 50%; background: #f05a7e; color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+  .td-body { display: grid; gap: 2px; min-width: 0; }
+  .td-body strong { font-size: 15px; font-weight: 800; color: #121c36; }
+  .td-where, .td-why { font-size: 13px; color: #4d5b78; overflow-wrap: anywhere; }
+  .td-from { font-size: 11px; color: #8592ad; }
+  .td-row { cursor: pointer; align-items: flex-start; }
+  .td-cb { width: 22px; height: 22px; flex: none; margin: 0; accent-color: #12b886; cursor: pointer; }
+  .td-row.is-done .td-body strong { text-decoration: line-through; color: #8592ad; }
+  .td-row.is-done { opacity: .75; }
+  .td-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #f05a7e; color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; vertical-align: 1px; }
+  .gb-tab[aria-selected="true"] .td-badge { background: #fff; color: #c2366a; }
+  .td-row { cursor: default !important; }
+  .td-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .td-btn { appearance: none; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid #e6edf8; background: #fff; color: #293452; cursor: pointer; }
+  .td-btn.b-done.on { background: #12b886; border-color: #12b886; color: #fff; }
+  .td-btn.b-auto.on { background: #4a55c4; border-color: #4a55c4; color: #fff; }
+  .td-btn.b-cmt.on { background: #f0a33a; border-color: #f0a33a; color: #fff; }
+  .td-form { display: flex; gap: 6px; margin-top: 4px; }
+  .td-form[hidden] { display: none !important; }
+  .td-inp { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid #cfd8e6; border-radius: 8px; }
+  .td-btn.b-send { background: #121c36; color: #fff; border-color: #121c36; }
+  .td-cmt { font-size: 13px; color: #b7791f; }
+  .td-row.is-done .td-body strong { text-decoration: none !important; color: #61718e; }
+  .td-log { margin-top: 10px; border-top: 1px dashed #ffc6d4; padding-top: 8px; }
+  .td-log summary { cursor: pointer; font-size: 13px; color: #61718e; }
+  .td-logrow { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; flex-wrap: wrap; }
+  .td-logok { color: #12b886; font-weight: 800; }
+  .td-logw { color: #4d5b78; }
+  .td-loga { font-size: 12px; background: #eef1ff; color: #4a55c4; border-radius: 5px; padding: 1px 6px; }
+  .td-logt { font-size: 11px; color: #8592ad; margin-left: auto; }
+  .gb-ring.has-reason { cursor: help; }
+  .rs-short { font-size: 18px; font-weight: 800; margin: 4px 0 8px !important; }
+  .rs-next { font-size: 14px; color: #4a55c4; }
+  .rs-h { font-size: 12px; color: #8592ad; margin-top: 12px !important; }
+  .rs-long { font-size: 13px; color: #4d5b78; white-space: pre-wrap; }
+  .td-btn.b-ok.on { background: #e8590c; border-color: #e8590c; color: #fff; }
+  /* 11-06 사장님 「오늘 부족 옆에 제작 중이면 제작 중 아이콘 · 1순위·2순위」 */
+  .gb-rank { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #121c36; color: #fff; font-size: 11px; font-weight: 800; margin-right: 4px; flex: none; }
+  .gb-making { display: inline-block; white-space: nowrap; font-size: 11px; font-weight: 700; color: #1d6b4f; background: #e3f7ea; border: 1px solid #9ee2c0; border-radius: 999px; padding: 1px 7px; cursor: help; }
+  /* 11-06 18:4x 사장님 「게시판을 이해하기 쉽게 — 위아래 정렬 · 숫자가 무엇인지 · 제작 과정을 한눈에, 재고는 따로」 */
+  .inv-wrap { overflow-x: auto; }
+  .inv-tbl { width: 100%; min-width: 50rem; border-collapse: collapse; table-layout: fixed; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .inv-tbl th { background: #f4f8ff; color: #61718e; font-size: 12px; font-weight: 600; padding: 6px 8px; text-align: left; line-height: 1.25; vertical-align: bottom; }
+  .inv-tbl td { padding: 6px 8px; border-top: 1px solid #eef3fb; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inv-tbl .n { text-align: right; }
+  .inv-tbl td.inv-days { white-space: normal; }
+  .inv-tbl b { font-weight: 800; }
+  .inv-ch { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+  .inv-ch .gb-pf { width: 16px; height: 16px; border-radius: 4px; font-size: 9px; }
+  .inv-chname { overflow: hidden; text-overflow: ellipsis; }
+  .inv-zero { color: #d14575; }
+  .inv-low { color: #d98612; }
+  .inv-held { color: #d98612; }
+  .pp-list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .pp-row { display: grid; grid-template-columns: minmax(12rem, 20rem) 1fr; gap: 4px 14px; align-items: center; padding: 8px 0; border-top: 1px solid #eef3fb; }
+  .pp-row:first-child { border-top: 0; }
+  .pp-name { min-width: 0; display: grid; gap: 1px; }
+  .pp-ch { font-size: 12px; color: #61718e; overflow-wrap: anywhere; }
+  .pp-title { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+  .pp-steps { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .pp-step { display: inline-flex; gap: 3px; align-items: baseline; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #dfe6f2; background: #f6f8fc; color: #8592ad; white-space: nowrap; }
+  .pp-step small { font-size: 11px; opacity: .9; }
+  .pp-step.s-done { background: #e3f7ea; border-color: #9ee2c0; color: #14784a; }
+  .pp-step.s-doing { background: #e7efff; border-color: #9db8f5; color: #2550c8; font-weight: 700; }
+  .pp-step.s-blocked { background: #ffe7ef; border-color: #f5a3bb; color: #c2366a; font-weight: 700; }
+  .pp-arrow { color: #c4cddd; font-size: 12px; }
+  .pp-row .gb-prod-block { grid-column: 1 / -1; }
+  .pp-legend { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #61718e; margin: 0 0 4px; }
+  @media (max-width: 40rem) { .pp-row { grid-template-columns: minmax(0, 1fr); } }
+  /* 11-06 19:2x 사장님 「현황판에 넣고 제작 과정 칸은 없애 — 재고 칸에 다 나오니까」(E5 시안) — 채널 카드: 위 제작 과정 막대 · 아래 형식별 재고 · 정렬 단추 */
+  .sc-sort { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; }
+  .sc-sbtn { appearance: none; font: inherit; font-size: 12px; font-weight: 800; padding: 5px 12px; border-radius: 999px; border: 1px solid #d9dfeb; background: #fff; color: #4c5670; cursor: pointer; }
+  .sc-sbtn.on { background: #18213a; border-color: #18213a; color: #fff; }
+  .sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; }
+  .sc-card { background: #fff; border-radius: 8px; padding: 5px 6px; min-width: 0; box-shadow: 0 1px 2px rgba(20,30,60,.06), 0 4px 12px rgba(20,30,60,.05); border-top: 3px solid #e3e8f2; }
+  .sc-card.sc-bad { border-top-color: #f0476d; } .sc-card.sc-warn { border-top-color: #f5b52e; } .sc-card.sc-ok { border-top-color: #2fbf7c; }
+  .sc-hd { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .sc-rk { flex: none; min-width: 16px; height: 16px; border-radius: 999px; background: #18213a; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center; padding: 0 3px; }
+  .sc-hd .gb-pf { width: 13px; height: 13px; border-radius: 4px; font-size: 8px; }
+  .sc-nm { font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-now { display: flex; justify-content: space-between; align-items: baseline; gap: 3px; font-size: 10px; font-weight: 700; margin: 3px 0 2px; }
+  .sc-now span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-now b { flex: none; color: #3a63f0; font-size: 11px; }
+  .sc-now.sc-idle { color: #9aa4ba; } .sc-now.sc-idle b { color: #c3c9d6; }
+  .sc-bar { display: flex; gap: 2px; }
+  .sc-seg { flex: 1; min-width: 0; }
+  .sc-b { height: 6px; border-radius: 4px; background: #e7ebf3; overflow: hidden; }
+  .sc-b i { display: block; height: 100%; background: #4f7cff; }
+  .sc-b i.run { background: repeating-linear-gradient(135deg, #9db5ff 0 6px, #c9d7ff 6px 12px); }
+  .sc-seg.sc-done .sc-b { background: #34c38f; } .sc-seg.sc-doing .sc-b { background: #dbe5ff; } .sc-seg.sc-blocked .sc-b { background: #ffd3dd; } .sc-seg.sc-blocked .sc-b i { background: #f0476d; }
+  .sc-seg.sc-off .sc-b { background: repeating-linear-gradient(90deg, #eef1f6 0 6px, #f6f8fb 6px 12px); }
+  /* 11-19 사장님 「작업 중인 것만 활성화 · 대기는 노란색 · 쉬는 것은 회색 비활성화」 */
+  .sc-card.sc-st-idle { opacity: .45; filter: grayscale(1); box-shadow: none; background: #f3f5f9; }
+  .sc-card.sc-st-wait { background: #fffaea; box-shadow: 0 1px 2px rgba(120,90,10,.06); }
+  .sc-card.sc-st-run { box-shadow: 0 0 0 2px rgba(79,124,255,.45), 0 6px 16px rgba(79,124,255,.18); }
+  .sc-now.sc-wait span, .sc-now.sc-wait b { color: #b7791f; }
+  .sc-bar.sc-wait .sc-seg.sc-doing .sc-b { background: #fbe9b0; }
+  .sc-bar.sc-wait .sc-b i, .sc-bar.sc-wait .sc-b i.run { background: #f5b52e; }
+  .sc-bar.sc-wait .sc-seg.sc-doing .sc-l { color: #b7791f; }
+  .sc-bar.sc-wait .sc-seg.sc-done .sc-b { background: #d8e7df; } .sc-bar.sc-wait .sc-seg.sc-done .sc-l { color: #7fa893; }
+  .sc-bar.sc-run .sc-seg.sc-doing .sc-b i { animation: scRunPulse 1.4s ease-in-out infinite; }
+  @keyframes scRunPulse { 50% { opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .sc-bar.sc-run .sc-seg.sc-doing .sc-b i { animation: none; } }
+  .sc-l { font-size: 8px; font-weight: 700; color: #a3abbe; text-align: center; margin-top: 1px; white-space: nowrap; overflow: hidden; letter-spacing: -.04em; }
+  .sc-seg.sc-done .sc-l { color: #1f9a62; } .sc-seg.sc-doing .sc-l { color: #3a63f0; font-weight: 900; } .sc-seg.sc-blocked .sc-l { color: #e23a62; font-weight: 900; }
+  .sc-nums { display: flex; gap: 3px; margin-top: 4px; }
+  .sc-num { flex: 1; min-width: 0; border-radius: 5px; padding: 1px 5px 2px; display: flex; align-items: baseline; gap: 3px; white-space: nowrap; background: #f4f6fa; }
+  .sc-k { font-size: 9px; font-weight: 700; color: #6b7690; }
+  .sc-v { font-size: 18px; font-weight: 900; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .sc-d { margin-left: auto; font-size: 9px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; }
+  .sc-num.sc-bad { background: #fff0f3; } .sc-num.sc-bad .sc-v, .sc-num.sc-bad .sc-d { color: #e23a62; }
+  .sc-num.sc-warn { background: #fff7e3; } .sc-num.sc-warn .sc-v, .sc-num.sc-warn .sc-d { color: #c27c12; }
+  .sc-num.sc-ok { background: #eefaf4; } .sc-num.sc-ok .sc-v, .sc-num.sc-ok .sc-d { color: #1f9a62; }
+  .sc-num.sc-none .sc-v { color: #9aa4ba; }
+  a.sc-num { text-decoration: none; color: inherit; cursor: pointer; }
+  a.sc-num:hover { box-shadow: inset 0 0 0 1.5px currentColor; }
+  /* 11-06 19:3x 사장님 「너무 작다 — 한 칸 한 칸을 지금의 1.3배로」 */
+  .sc-sbtn { font-size: 15px; padding: 6px 16px; }
+  .sc-grid { grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 7px; }
+  .sc-card { border-radius: 10px; padding: 7px 8px; border-top-width: 4px; }
+  .sc-hd { gap: 5px; }
+  .sc-rk { min-width: 21px; height: 21px; font-size: 13px; padding: 0 4px; }
+  .sc-hd .gb-pf { width: 17px; height: 17px; border-radius: 5px; font-size: 10px; }
+  .sc-nm { font-size: 16px; }
+  .sc-now { font-size: 13px; margin: 4px 0 3px; gap: 4px; }
+  .sc-now b { font-size: 14px; }
+  .sc-bar { gap: 3px; }
+  .sc-b { height: 8px; border-radius: 5px; }
+  .sc-l { font-size: 10px; margin-top: 2px; }
+  .sc-nums { gap: 4px; margin-top: 5px; }
+  .sc-num { border-radius: 6px; padding: 2px 6px 3px; gap: 4px; }
+  .sc-k { font-size: 12px; }
+  .sc-v { font-size: 23px; }
+  .sc-d { font-size: 12px; }
+  .sc-kt { flex: none; font-style: normal; font-size: 11px; font-weight: 900; padding: 0 6px; border-radius: 5px; background: #eef1ff; color: #4a55c4; margin-right: 2px; }
+  .sc-now .sc-kt + span { flex: 1; }
+  /* 11-12 사장님 「유튜브 / 툰·스레드 따로 — 유튜브 위, 툰·스레드는 아래 접어 두기」 */
+  .sc-sec-h { margin: 6px 0 6px; font-size: 15px; font-weight: 900; color: #18213a; }
+  .sc-fold { margin-top: 12px; border-top: 1px dashed #d9dfeb; padding-top: 8px; }
+  .sc-fold-sum { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; font-weight: 900; color: #18213a; padding: 6px 2px; }
+  .sc-fold-red { font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: #fff0f3; color: #e23a62; }
+  .sc-fold-hint { font-size: 12px; font-weight: 700; color: #9aa4ba; }
+  .sc-fold[open] > .sc-fold-sum { margin-bottom: 6px; }
+
+  /* 11-19 사장님 「수익화 게시정보 전부 하나로 통일 — 게시 정상 초록 · 문제 빨강 · 안 되면 회색」 — 채널 카드 하나(uc) */
+  .uc-wrap { gap: 10px !important; }
+  .uc-wrap h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .uc-upd { font-size: 12px; font-weight: 500; color: #8592ad; }
+  .uc-upd.is-stale { color: #d14575; }
+  .uc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: #4d5b78; }
+  .uc-legend2 { font-size: 12px; color: #61718e; }
+  .uc-sw { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 5px; vertical-align: -1px; }
+  .uc-sw.is-ok { background: #2fbf7c; } .uc-sw.is-bad { background: #f0476d; } .uc-sw.is-off { background: #b8c0cf; }
+  .uc-k-ok { color: #12b886; } .uc-k-warn { color: #d98612; } .uc-k-un { color: #8055df; } .uc-k-bad { color: #f05a7e; }
+  .uc-controls { display: grid; gap: 6px; }
+  .uc-controls .sc-sort { margin: 0; }
+  .uc-body { display: grid; gap: 14px; min-height: 12rem; }
+  .uc-sec-h { margin: 4px 0 0; font-size: 16px; font-weight: 900; color: #18213a; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .uc-sec-h small { font-size: 12px; font-weight: 700; color: #8592ad; }
+  .uc-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); align-items: start; }
+  .uc { background: #fff; border: 1px solid #e6edf8; border-top: 6px solid #b8c0cf; border-radius: 14px; padding: 10px 12px 12px; display: grid; gap: 8px; min-width: 0; box-shadow: 0 4px 16px rgba(20,30,60,.06); }
+  .uc.is-ok { border-color: #bfe9d3; border-top-color: #2fbf7c; background: linear-gradient(180deg, #ecfaf2 0, #fff 72px); }
+  .uc.is-bad { border-color: #f5b5c7; border-top-color: #f0476d; background: linear-gradient(180deg, #fff0f3 0, #fff 72px); box-shadow: 0 0 0 1px #f5b5c7, 0 6px 18px rgba(240,71,109,.12); }
+  .uc.is-off { border-color: #dfe3ea; border-top-color: #b8c0cf; background: #f4f6f9; }
+  .uc-hd { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+  .uc-hd .sc-rk { flex: none; }
+  .uc-hd .gb-pf { width: 18px; height: 18px; border-radius: 5px; font-size: 10px; }
+  .uc-nm { font-size: 17px; font-weight: 900; color: #121c36; min-width: 0; overflow-wrap: anywhere; text-decoration: none; }
+  a.uc-nm:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .uc-st { margin-left: auto; flex: none; font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; cursor: help; white-space: nowrap; }
+  .uc.is-ok .uc-st { background: #2fbf7c; color: #fff; }
+  .uc.is-bad .uc-st { background: #f0476d; color: #fff; }
+  .uc.is-off .uc-st { background: #dfe3ea; color: #4d5b78; }
+  .uc-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; color: #61718e; }
+  .uc-sub b { font-size: 17px; font-weight: 800; color: #121c36; font-variant-numeric: tabular-nums; }
+  .uc-money { display: inline-block; font-size: 12px; font-weight: 900; padding: 2px 8px; border-radius: 6px; background: linear-gradient(110deg, #ffe08a, #ffc53d); color: #6b4a00; box-shadow: inset 0 0 0 1px #e2b54f; white-space: nowrap; }
+  .uc-why { margin: 0; font-size: 12px; color: #4d5b78; overflow-wrap: anywhere; cursor: help; }
+  .uc.is-bad .uc-why { color: #c2366a; font-weight: 700; }
+  .uc-blk { display: grid; gap: 5px; padding-top: 7px; border-top: 1px dashed #e3e8f2; min-width: 0; }
+  .uc-lab { font-size: 11px; font-weight: 800; color: #8592ad; letter-spacing: .02em; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+  .uc-lab span { font-weight: 600; color: #8592ad; }
+  /* 수익화 */
+  .uc-ypp-steps { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .uc-ys { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #dfe6f2; background: #f6f8fc; color: #8592ad; white-space: nowrap; }
+  .uc-ys.s-done { background: #e3f7ea; border-color: #9ee2c0; color: #14784a; font-weight: 700; }
+  .uc-ys.s-doing { background: #e7efff; border-color: #9db8f5; color: #2550c8; font-weight: 800; }
+  .uc-ys.s-need { background: #fff6cc; border-color: #f0d77a; color: #8a6a00; font-weight: 800; }
+  .uc-ys.s-bad { background: #ffe7ef; border-color: #f5a3bb; color: #c2366a; font-weight: 800; }
+  .uc-ypp-line { margin: 0; font-size: 13px; color: #293452; overflow-wrap: anywhere; }
+  .uc-ypp-line small { color: #8592ad; }
+  .uc-ypp-note { margin: 0; font-size: 12px; color: #8a6a00; overflow-wrap: anywhere; }
+  .uc-ypp-bad { color: #c2366a; }
+  .uc-meter { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); gap: 2px 8px; align-items: center; font-size: 12px; color: #4d5b78; }
+  .uc-meter .uc-mbar { height: 7px; border-radius: 4px; background: #eef3fb; overflow: hidden; }
+  .uc-meter .uc-mbar i { display: block; height: 100%; background: #2b8fbf; }
+  .uc-meter .uc-mtx { grid-column: 2; font-size: 12px; color: #293452; overflow-wrap: anywhere; }
+  .uc-muted { color: #8592ad; font-size: 12px; margin: 0; }
+  /* 게시 */
+  .uc-slots { display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: flex-start; }
+  .uc-slot { display: grid; justify-items: center; width: 3.3rem; min-width: 0; }
+  .uc-slot .gb-ring { margin: 0 auto; }
+  .uc-slot .gb-ring.is-wait { width: 32px; border-radius: 13px; font-size: 10px; white-space: nowrap; letter-spacing: -.05em; }
+  .uc-slot .gb-ring-time { max-width: 3.3rem; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uc-slot .gb-ring-views, .uc-slot .gb-ring-real { font-size: 10px; }
+  .uc-slot .gb-ring-note { display: block; font-size: 10px; }
+  .uc-next { margin: 0; font-size: 13px; color: #293452; }
+  .uc-next b { font-weight: 800; }
+  .uc-recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+  .uc-recent li { display: flex; gap: 6px; align-items: baseline; font-size: 13px; min-width: 0; }
+  .uc-recent .uc-rt { flex: none; font-size: 11px; color: #8592ad; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .uc-recent a { color: #1d4ed8; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .uc-recent a:hover { text-decoration: underline; }
+  .uc-recent .uc-rv { flex: none; font-size: 11px; font-weight: 700; color: #0f9f74; }
+  .uc-detail { border: 1px solid #dfe8f6; border-radius: 10px; background: #fff; padding: 8px 10px; display: grid; gap: 4px; max-height: 360px; overflow-y: auto; font-size: 13px; }
+  .uc-detail p { margin: 0; overflow-wrap: anywhere; }
+  .uc-detail-hd { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .uc-detail-hd strong { font-size: 14px; font-weight: 800; }
+  .uc-detail .gb-modal-x { padding: 3px 8px; font-size: 12px; }
+  .uc-detail .rs-short { font-size: 15px; margin: 0 !important; }
+  .uc-detail p.is-line b { color: #4a55c4; }
+  /* 재고 · 만드는 중(11-19 표시 유지) */
+  .uc .sc-nums { margin-top: 0; }
+  .uc-stk-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: #61718e; }
+  .uc-stk-meta .inv-held { font-weight: 700; }
+  .uc-prod { display: grid; gap: 3px; border-radius: 8px; padding: 4px 6px 5px; }
+  .uc-prod.sc-st-run { box-shadow: 0 0 0 2px rgba(79,124,255,.45), 0 4px 12px rgba(79,124,255,.15); background: #fff; }
+  .uc-prod.sc-st-wait { background: #fffaea; box-shadow: inset 0 0 0 1px #f3dc9a; }
+  .uc-prod.sc-st-idle { opacity: .5; filter: grayscale(1); background: #eef1f6; }
+  .uc-prod .sc-now { margin: 2px 0 1px; }
+  @media (max-width: 40rem) {
+    .uc-grid { grid-template-columns: minmax(0, 1fr); }
+    .uc { padding: 9px 10px 10px; }
+    .uc-nm { font-size: 16px; }
+    .uc-legend { font-size: 12px; }
+  }
+
+  /* 11-19 사장님 「좀 더 간소화 — 한눈에」: 카드 4줄(머리·게시 한마디·재고·만드는 중) + 「▸ 자세히」 하나, 회색은 한 줄 칩 */
+  .uc-wrap h2 small.uc-sum { font-size: 13px; font-weight: 800; color: #293452; }
+  .uc-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .uc-day { font-size: 13px; }
+  .uc-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr)); gap: 8px; }
+  .uc { gap: 5px; padding: 8px 10px 8px; border-top-width: 5px; }
+  .uc-hd { flex-wrap: nowrap; gap: 5px; }
+  .uc-hd .uc-nm { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+  .uc-subn { flex: none; font-size: 13px; font-weight: 800; color: #4d5b78; font-variant-numeric: tabular-nums; cursor: help; }
+  .uc-money { flex: none; margin-left: auto; font-size: 11px; padding: 1px 7px; }
+  .uc-ytag { flex: none; margin-left: auto; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 6px; background: #eef1f8; color: #4d5b78; white-space: nowrap; cursor: help; }
+  .uc-pl { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+  .uc-pl.is-bad b { color: #d1284f; }
+  .uc-okw { color: #14784a; }
+  .uc-offw { color: #61718e; }
+  .uc .sc-nums { gap: 4px; }
+  .uc .sc-num { padding: 1px 6px 2px; }
+  .uc .sc-v { font-size: 18px; }
+  .uc .sc-k, .uc .sc-d { font-size: 11px; }
+  .uc-foot { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .uc-pr { margin: 0; flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 7px; border-radius: 6px; cursor: help; }
+  .uc-pr.is-run { background: #e7efff; color: #2550c8; box-shadow: inset 0 0 0 1px #9db8f5; }
+  .uc-pr.is-wait { background: #fff6dc; color: #9a6a12; box-shadow: inset 0 0 0 1px #f3dc9a; }
+  .uc-pr.is-idle { background: #eef1f6; color: #9aa4ba; }
+  .uc-pr .uc-more { color: #8592ad; font-weight: 700; }
+  .uc-moreb { appearance: none; flex: none; border: 0; background: none; padding: 2px 2px; font: inherit; font-size: 12px; font-weight: 700; color: #4a55c4; cursor: pointer; white-space: nowrap; }
+  .uc-moreb:hover { text-decoration: underline; }
+  .uc-moreb:focus-visible { outline: 2px solid #4a55c4; outline-offset: 1px; border-radius: 4px; }
+  .uc-det { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed #e3e8f2; min-width: 0; }
+  .uc-det .uc-why { cursor: default; }
+  .uc-chips { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 25rem), 1fr)); }
+  .uc-chips > .uc { grid-column: 1 / -1; }
+  .uc-chip { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px; border-radius: 10px; background: #f4f6f9; border: 1px solid #dfe3ea; border-left: 4px solid #b8c0cf; }
+  .uc-chip .uc-hd { flex: 1 1 auto; min-width: 0; }
+  .uc-chip .uc-nm { font-size: 13px; color: #4d5b78; flex: 1 1 auto; min-width: 5.5em; }
+  .uc-chip .uc-ytag { margin-left: 0; }
+  .uc-chip-why { flex: none; font-size: 12px; color: #8592ad; white-space: nowrap; }
+  .uc-chip .sc-nums { flex: none; }
+  .uc-chip .sc-v { font-size: 14px; }
+  .uc-chip .sc-d { display: none; }
+  @media (max-width: 40rem) { .uc-chip { flex-wrap: wrap; } .uc-chip .uc-hd { flex-basis: 100%; } }
+
+  /* 11-19 사장님 「유튜브와 스레드·인스타 구분해 줘, 그룹을」 */
+  .uc-body { gap: 18px; }
+  .uc-group { display: grid; gap: 8px; min-width: 0; padding: 10px 12px 12px; border-radius: 14px; border: 1px solid #e3e8f2; }
+  .uc-group-yt { background: #fff7f7; border-left: 5px solid #ff2b2b; }
+  .uc-group-sns { background: #f6f7fb; border-left: 5px solid #121c36; }
+  .uc-group + .uc-group { margin-top: 4px; }
+  .uc-group-h { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-bottom: 6px; border-bottom: 2px solid #e3e8f2; }
+  .uc-group-t { font-size: 18px; font-weight: 900; color: #121c36; margin-right: 4px; }
+  .uc-gc { font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+  .uc-gc.is-bad { background: #ffe7ef; color: #d1284f; } .uc-gc.is-ok { background: #e3f7ea; color: #14784a; } .uc-gc.is-off { background: #eef1f6; color: #61718e; }
+  .uc-sub-h { font-size: 12px; font-weight: 800; color: #8592ad; margin-top: 2px; }
+  @media (max-width: 40rem) { .uc-group { padding: 8px; } }
+
+  /* 11-19 사장님 「게시 중 체크 옆에 제작 중 체크도 · 게시 안 됨도 같은 모양으로」 — 상태 알약 두 개, 회색 카드도 같은 4줄(흐리게) */
+  .uc-stline { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
+  .uc-pill { display: inline-block; max-width: 100%; font-size: 13px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+  .uc-pill.is-ok { background: #dff6e9; color: #14784a; box-shadow: inset 0 0 0 1px #9ee2c0; }
+  .uc-pill.is-bad { background: #ffe3eb; color: #d1284f; box-shadow: inset 0 0 0 1px #f5a3bb; }
+  .uc-pill.is-off { background: #e9edf3; color: #61718e; box-shadow: inset 0 0 0 1px #d3d9e3; }
+  .uc-pill.is-run { background: #e3ecff; color: #2550c8; box-shadow: inset 0 0 0 1px #9db8f5; }
+  .uc-pill.is-wait { background: #fff3d1; color: #9a6a12; box-shadow: inset 0 0 0 1px #f0d77a; }
+  .uc-pill.is-idle { background: #e9edf3; color: #8592ad; box-shadow: inset 0 0 0 1px #d3d9e3; }
+  .uc.is-off { opacity: .78; box-shadow: none; }
+  .uc.is-off .uc-nm { color: #4d5b78; }
+  .uc.is-off:hover, .uc.is-off.is-open { opacity: 1; }
+
+  /* 11-19 수익(이번 달 · 집계된 마지막 날) */
+  .uc-rev { margin: -2px 0 0; font-size: 12px; color: #6b4a00; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+  .uc-rev b { font-size: 13px; font-weight: 900; color: #8a5a00; font-variant-numeric: tabular-nums; }
+  .uc-rev-k { color: #8592ad; font-weight: 700; }
+
+  .uc-gtot { margin-left: auto; font-size: 13px; font-weight: 700; color: #6b4a00; background: linear-gradient(110deg, #fff3c4, #ffe08a); box-shadow: inset 0 0 0 1px #e2b54f; padding: 2px 10px; border-radius: 999px; white-space: nowrap; cursor: help; }
+  .uc-gtot b { font-weight: 900; color: #6b4a00; font-variant-numeric: tabular-nums; }
+  @media (max-width: 40rem) { .uc-gtot { margin-left: 0; } }
+
+  /* 11-19 「처리 중」 노랑 · 「문제 처리했음」 초록 */
+  .uc.is-warn { border-color: #f3dc9a; border-top-color: #f5b52e; background: linear-gradient(180deg, #fff8e1 0, #fff 72px); }
+  .uc-pill.is-warn { background: #fff3d1; color: #9a6a12; box-shadow: inset 0 0 0 1px #f0d77a; }
+  .uc-gc.is-warn { background: #fff3d1; color: #9a6a12; }
+
+  /* 11-19 사장님 「수익 — 전달·이번 달·어제 표로」 */
+  .uc-revbox { background: #fffdf4; border: 1px solid #f0d77a; border-radius: 12px; padding: 8px 10px; display: grid; gap: 4px; min-width: 0; }
+  .uc-revbox-h { font-size: 14px; font-weight: 900; color: #6b4a00; }
+  .uc-revwrap { overflow-x: auto; min-width: 0; }
+  .uc-revtbl { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .uc-revtbl th { text-align: left; font-size: 11px; font-weight: 700; color: #8592ad; padding: 3px 6px; border-bottom: 1px solid #f0e2b0; white-space: nowrap; }
+  .uc-revtbl td { padding: 3px 6px; border-bottom: 1px solid #f6edd0; color: #293452; }
+  .uc-revtbl .n { text-align: right; white-space: nowrap; }
+  .uc-revtbl tr.is-total td, .uc-revtbl td.is-b { font-weight: 900; color: #6b4a00; }
+  .uc-revtbl small { color: #8592ad; font-weight: 500; }
+  .uc-revnote { margin: 0; font-size: 11px; color: #8592ad; }
+  .uc-revdays summary { cursor: pointer; font-size: 12px; font-weight: 700; color: #4a55c4; padding: 2px 0; list-style: none; }
+  .uc-revdays summary::-webkit-details-marker { display: none; }
+  .uc-revdays[open] summary { margin-bottom: 4px; }
+  .uc-body, .uc-group { grid-template-columns: minmax(0, 1fr); }
+  .uc-group > *, .uc-revbox > * { min-width: 0; }
+  @media (max-width: 40rem) { .uc-revtbl { font-size: 11.5px; } .uc-revtbl th { font-size: 10.5px; } .uc-revtbl th, .uc-revtbl td { padding: 3px 3px; } .uc-revtbl td:first-child { white-space: normal; word-break: keep-all; } .uc-revbox { padding: 6px 3px; } .uc-group { padding: 6px; } }
+
+  .uc-revbox-h { appearance: none; border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+  .uc-revbox-h:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .uc-revbox-h:focus-visible { outline: 2px solid #b7791f; outline-offset: 2px; border-radius: 4px; }
+  .uc-revbox.is-hidden { padding: 4px 10px; background: #fffaea; justify-self: start; }
+
+  /* 11-19 「오늘 만든 것」 */
+  .uc-made { display: grid; gap: 6px; min-width: 0; padding: 10px 12px; border-radius: 14px; border: 1px solid #e3e8f2; background: #fbfcff; border-left: 5px solid #4a55c4; }
+  .uc-made-h { appearance: none; border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; color: inherit; }
+  .uc-made-h:focus-visible { outline: 2px solid #4a55c4; outline-offset: 2px; border-radius: 4px; }
+  .uc-made-t { font-size: 17px; font-weight: 900; color: #121c36; margin-right: 4px; }
+  .uc-mk { display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+  .uc-mk b { font-weight: 900; }
+  .uc-mk.k-long { background: #ffe3e3; color: #c92a2a; } .uc-mk.k-short { background: #fff0db; color: #c25e00; }
+  .uc-mk.k-toon { background: #e3f7ea; color: #14784a; } .uc-mk.k-insta { background: #f1e8ff; color: #7048c8; } .uc-mk.k-etc { background: #eef1f6; color: #61718e; }
+  .uc-madetbl { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .uc-madetbl th { text-align: left; font-size: 11px; font-weight: 700; color: #8592ad; padding: 3px 6px; border-bottom: 1px solid #e3e8f2; white-space: nowrap; }
+  .uc-madetbl td { padding: 4px 6px; border-bottom: 1px solid #eef3fb; color: #293452; vertical-align: top; }
+  .uc-madetbl td.n { white-space: nowrap; color: #61718e; }
+  .uc-made-what { overflow-wrap: anywhere; }
+  .uc-made-what small { color: #8592ad; font-weight: 700; }
+  @media (max-width: 40rem) { .uc-made { padding: 6px; } .uc-madetbl { font-size: 12px; } .uc-madetbl th, .uc-madetbl td { padding: 3px 3px; } }
+</style>
+
+<div class="gb">
+  <header class="gb-head" id="top">
+    <h1>게시현황판</h1>
+    <p class="gb-take">먼저 볼 것: 지연 <b data-source="today_summary" data-field="late" data-row="0" class="dash-skeleton">—</b>칸, 확인 필요 <b data-source="today_summary" data-field="uncertain" data-row="0" class="dash-skeleton">—</b>건, 실패 <b data-source="today_summary" data-field="failed" data-row="0" class="dash-skeleton">—</b>건.</p>
+    <p class="gb-stamp">게시 기록 기준 <span data-source="board" data-field="source_checked" data-row="0" class="dash-skeleton">—</span> · 현황판 정리 <span data-source="board" data-field="built" data-row="0" class="dash-skeleton">—</span> (한국 시각)</p>
+  </header>
+
+  <section class="gb-tiles" id="summary" aria-label="오늘 요약">
+    <div class="gb-tile" data-tile="posted">
+      <span class="gb-tile-label">오늘 공개</span>
+      <span class="gb-tile-value"><span data-source="today_summary" data-field="posted" data-row="0" class="dash-skeleton">—</span><small>건</small></span>
+      <span class="gb-tile-note">공개 링크까지 확인된 게시</span>
+    </div>
+    <div class="gb-tile" data-tile="remaining">
+      <span class="gb-tile-label">남은 칸</span>
+      <span class="gb-tile-value"><span data-source="today_summary" data-field="remaining" data-row="0" class="dash-skeleton">—</span><small>칸</small></span>
+      <span class="gb-tile-note">대기와 지연을 합친 오늘 칸</span>
+    </div>
+    <div class="gb-tile" data-tile="late">
+      <span class="gb-tile-label">지연</span>
+      <span class="gb-tile-value"><span data-source="today_summary" data-field="late" data-row="0" class="dash-skeleton">—</span><small>칸</small></span>
+      <span class="gb-tile-note">예정 시각에서 30분 넘게 지난 칸</span>
+    </div>
+    <div class="gb-tile" data-tile="uncertain">
+      <span class="gb-tile-label">확인 필요</span>
+      <span class="gb-tile-value"><span data-source="today_summary" data-field="uncertain" data-row="0" class="dash-skeleton">—</span><small>건</small></span>
+      <span class="gb-tile-note">올렸지만 공개 여부를 아직 못 본 게시</span>
+    </div>
+    <div class="gb-tile" data-tile="follows" hidden>
+      <span class="gb-tile-label">오늘 팔로우</span>
+      <span class="gb-tile-value"><span data-source="today_summary" data-field="follows_today" data-row="0" class="dash-skeleton">—</span><small> / <span data-source="today_summary" data-field="follow_goal" data-row="0">—</span>명</small></span>
+      <span class="gb-tile-note">12계정 × 하루 50명 목표</span>
+    </div>
+  </section>
+
+    <!-- 11-19 사장님 「유튜브 스레드를 모두 펼치고 수익화 게시정보 전부 하나로 통일」 → 「좀 더 간소화 — 한눈에 보기 편하게」
+       옛 「재고·제작 과정」 카드 줄 · 「수익 창출 진행」 표 · 「채널별 오늘 칸」 표를 채널 카드 하나로(4줄 + 누르면 상세) -->
+  <section class="gb-card uc-wrap" id="channel-cards" aria-label="채널별 한눈에 보기">
+    <h2>채널 <small class="uc-sum" id="uc-sum"></small> <small class="uc-upd" id="uc-upd"></small></h2>
+    <p class="uc-legend"><span><i class="uc-sw is-ok"></i>게시 정상</span><span><i class="uc-sw is-bad"></i>게시 문제</span><span><i class="uc-sw" style="background:#f5b52e"></i>처리 중</span><span><i class="uc-sw is-off"></i>게시 안 됨</span><span>· 「▸ 자세히」 = 게시 칸·최근 게시·수익화·제작 단계</span></p>
+    <div class="uc-controls" id="uc-controls">
+      <div class="gb-filters uc-filters" role="group" aria-label="걸러 보기">
+        <button class="gb-filter" type="button" data-toggle="problems" aria-pressed="false">문제만</button>
+      </div>
+      <select class="dash-select uc-day" id="uc-days" aria-label="게시 칸 날짜(펼친 카드)"></select>
+    </div>
+    <div class="uc-body dash-skeleton" id="uc-grid" data-source="channels slots production ypp_watch audience_latest scripts realscript board revenue revenue_total revenue_daily today_made today_made_sum"></div>
+  </section>
+
+  <nav class="gb-tabs" role="tablist" aria-label="현황판 보기">
+    <button class="gb-tab" role="tab" id="tab-posts" aria-controls="posts" aria-selected="true" data-tab="posts">운영 메모</button>
+    <button class="gb-tab" role="tab" id="tab-audience" aria-controls="audience" aria-selected="false" data-tab="audience">팔로워·구독자</button>
+    <button class="gb-tab" role="tab" id="tab-follows" aria-controls="follows" aria-selected="false" data-tab="follows" hidden>팔로우 작업</button>
+    <button class="gb-tab" role="tab" id="tab-coupang" aria-controls="coupang" aria-selected="false" data-tab="coupang">쿠팡 조회</button>
+    <button class="gb-tab" role="tab" id="tab-codex" aria-controls="codex" aria-selected="false" data-tab="codex">코덱스</button>
+    <button class="gb-tab" role="tab" id="tab-work" aria-controls="work" aria-selected="false" data-tab="work">작업실</button>
+  </nav>
+
+  <section class="gb-page" id="posts" role="tabpanel" aria-labelledby="tab-posts">
+    <div class="gb-card" id="notice-card">
+      <h2>운영 메모</h2>
+      <ul class="gb-notices" id="notices" data-source="board"></ul>
+    </div>
+  </section>
+
+  <section class="gb-page" id="audience" role="tabpanel" aria-labelledby="tab-audience" hidden>
+    <div class="gb-grid">
+      <div class="gb-card gb-aud-card" id="audience-table-card">
+        <h2>채널별 최근 실측</h2>
+        <p class="gb-card-note">YouTube는 구독자, Threads·Instagram은 팔로워입니다. 변화는 직전 측정일 대비입니다. 줄을 누르면 오른쪽 그래프가 바뀝니다.</p>
+        <div class="gb-aud-wrap">
+          <table class="gb-aud" id="audience-table" data-source="audience_latest" data-row-key="key">
+            <thead><tr>
+              <th data-field="name">채널</th>
+              <th data-field="platform" class="gb-hide-narrow">플랫폼</th>
+              <th data-field="latest" class="num">현재</th>
+              <th data-field="change" class="num">변화</th>
+              <th data-field="latest_day" class="num gb-hide-narrow">측정일</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="gb-card" id="audience-chart-card">
+        <h2 id="audience-chart-title">추이</h2>
+        <p class="gb-card-note">날짜별 마지막 실측값입니다. 측정하지 않은 날은 점이 없습니다.</p>
+        <div class="gb-chart" id="audience-chart" data-source="audience"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="gb-page" id="follows" role="tabpanel" aria-labelledby="tab-follows" hidden>
+    <div class="gb-grid">
+      <div class="gb-card" id="follow-today-card">
+        <h2>오늘 계정별 팔로우</h2>
+        <p class="gb-card-note">팔로우 버튼 전후 상태까지 확인된 건만 셉니다. 오른쪽 시각은 그 계정의 마지막 팔로우입니다. <b id="follow-last-all"></b></p>
+        <div class="gb-bars" id="follow-bars" data-source="follows board"></div>
+      </div>
+      <div class="gb-card" id="follow-daily-card">
+        <h2>날짜별 팔로우 합계</h2>
+        <p class="gb-card-note">12계정 합계입니다. 점선은 하루 목표입니다.</p>
+        <div class="gb-chart" id="follow-daily" data-source="follows_daily"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10-26 사장님 「쿠팡 링크 글 총조회수 분석 — 분석 완료한 시간도 · 일별로 볼 수 있게 기록 계속」 -->
+  <section class="gb-page" id="coupang" role="tabpanel" aria-labelledby="tab-coupang" hidden>
+    <div class="gb-card">
+      <h2>쿠팡 링크 스레드 조회수</h2>
+      <p class="gb-card-note">캠핑·펫·살림·육아치트키 Threads에서 쿠팡 링크가 달린 글만 셉니다. 「그날 올린 글」은 게시 뒤 누적 조회, 「전날 이전 글 증가분」은 전날 밤 대비 늘어난 조회(근사)입니다.</p>
+      <div class="cp-days" id="cp-days" role="group" aria-label="날짜"></div>
+      <div id="cp-body" data-source="coupang"></div>
+    </div>
+  </section>
+
+  <section class="gb-page" id="codex" role="tabpanel" aria-labelledby="tab-codex" hidden>
+    <div class="gb-card" id="codex-acct-card">
+      <h2>코덱스 계정</h2>
+      <div class="cx-accts" id="cx-accts" data-source="codex_accounts"></div>
+    </div>
+    <div class="gb-card" id="claude-acct-card">
+      <h2>Claude 계정</h2>
+      <div class="cx-accts" id="cl-accts" data-source="claude_accounts"></div>
+    </div>
+    <div class="gb-card" id="codex-job-card">
+      <h2>오늘 코덱스로 만든 것</h2>
+      <div class="gb-tbl-wrap"><table class="gb-tbl cx-jobs" id="cx-jobs" data-source="codex_jobs" data-row-key="id">
+        <thead><tr><th data-field="channel">채널</th><th data-field="form">형식</th><th data-field="series">시리즈</th><th data-field="kind">종류</th><th data-field="episode">화</th><th data-field="main" class="gb-c">계정1</th><th data-field="acct2" class="gb-c">계정2</th><th data-field="acct3" class="gb-c">계정3</th><th data-field="acct4" class="gb-c">계정4</th><th data-field="total" class="gb-c">합계</th><th data-field="last" class="gb-c">마지막</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="gb-page" id="work" role="tabpanel" aria-labelledby="tab-work" hidden>
+    <div class="gb-card">
+      <h2>세션별 작업 현황</h2>
+      <p class="gb-card-note">각 담당 세션이 지금 하는 일과 결과물(탐색 결과·대본 시안·디자인 시안·완성본)입니다. 카드를 누르면 펼쳐지고, 글은 눌러서 전문, 그림은 눌러서 크게 봅니다.</p>
+      <div class="wk-grid" id="wk-grid" data-source="work"></div>
+    </div>
+  </section>
+
+  <section class="gb-page" id="todo" role="tabpanel" aria-labelledby="tab-todo" hidden>
+  <div class="gb-card gb-todocard" id="todo-card">
+    <h2>사장님 할 일 <span class="td-n" id="todo-n"></span></h2>
+    <div id="todo-list" data-source="work"></div>
+  </div>
+
+  </section>
+</div>
+
+<script>
+  dash.calc('today_summary', {
+    title: '오늘 게시·팔로우 요약',
+    description: '오늘 칸을 상태별로 세고, 오늘 확인된 팔로우 수와 목표를 더합니다.',
+    inputs: ['slots', 'follows', 'board'],
+    fn: (slots, follows, board) => {
+      const day = board.length ? board[0].today : '';
+      const todays_slots = slots.filter((s) => !s.day || s.day === day);
+      const count = (state) => todays_slots.filter((s) => s.state === state).length;
+      const todays = follows.filter((f) => f.day === day);
+      return [{
+        posted: count('posted'),
+        remaining: count('pending') + count('late'),
+        late: count('late'),
+        uncertain: count('uncertain'),
+        failed: count('failed'),
+        follows_today: todays.reduce((sum, f) => sum + Number(f.follows), 0),
+        follow_goal: todays.reduce((sum, f) => sum + Number(f.goal), 0),
+      }];
+    },
+  });
+
+  dash.calc('audience_latest', {
+    title: '채널별 최근 실측',
+    description: '채널마다 가장 최근 실측값과 직전 측정일 대비 변화를 구합니다.',
+    inputs: ['audience'],
+    fn: (audience) => {
+      const byKey = {};
+      audience.forEach((p) => { (byKey[p.key] = byKey[p.key] || []).push(p); });
+      return Object.values(byKey).map((points) => {
+        points.sort((a, b) => (a.day < b.day ? -1 : 1));
+        const last = points[points.length - 1];
+        const prev = points[points.length - 2];
+        return {
+          key: last.key, name: last.name, platform: last.platform, unit: last.unit,
+          latest: Number(last.value), latest_day: last.day,
+          change: prev ? Number(last.value) - Number(prev.value) : null,
+        };
+      });
+    },
+  });
+
+  dash.calc('follows_daily', {
+    title: '날짜별 팔로우 합계',
+    description: '12계정의 확인된 팔로우 수와 목표를 날짜별로 더합니다.',
+    inputs: ['follows'],
+    fn: (follows) => {
+      const byDay = {};
+      follows.forEach((f) => {
+        const d = byDay[f.day] || (byDay[f.day] = { day: f.day, follows: 0, goal: 0 });
+        d.follows += Number(f.follows);
+        d.goal += Number(f.goal);
+      });
+      return Object.values(byDay).sort((a, b) => (a.day < b.day ? -1 : 1));
+    },
+  });
+
+  // 11-04 사장님 「인픽 7계정 게시현황판 바꿔 줘」 — 인스타 7계정을 인픽 이름·새 아이디로(스레드는 옛 이름 그대로)
+  const INPIC7 = {
+    inpic_ig: ['인픽 · 햇살 든 집', 'inpic.kr'],
+    salim_ig: ['인픽 · 가구 들어온 집', 'inpic.living'],
+    joseon_ig: ['인픽 · 주방 모음', 'inpic.kitchen'],
+    baby_ig: ['인픽 · 상가 공간', 'inpic.shop'],
+    pet_ig: ['인픽 · 인테리어 기술', 'inpic.tech'],
+    camp_ig: ['인픽 · 인테리어 사진작가', 'inpic.photo'],
+    ajik_ig: ['인픽 · 현장 웹툰', 'inpic.toon'],
+  };
+  const renCh = (rows) => (rows || []).map((c) => (INPIC7[c.key] ? { ...c, name: INPIC7[c.key][0], channel_url: 'https://www.instagram.com/' + INPIC7[c.key][1] + '/', handle: '@' + INPIC7[c.key][1] } : c));
+  window.gb = {
+    renCh,
+    STATE: {
+      posted: { label: '공개 완료', cls: 'is-ok' },
+      late: { label: '지연', cls: 'is-warn' },
+      uncertain: { label: '확인 필요', cls: 'is-warn' },
+      failed: { label: '실패', cls: 'is-bad' },
+      pending: { label: '대기', cls: 'is-idle' },
+      paused: { label: '중단', cls: 'is-paused' },
+      conditional: { label: '조건 대기', cls: 'is-wait' },
+    },
+    num: d3.format(','),
+    signed: (v) => (v > 0 ? '+' : '') + d3.format(',')(v),
+    shortDay: (day) => (day ? day.slice(5).replace('-', '.') : ''),
+    el(tag, cls, text) {
+      const node = document.createElement(tag);
+      if (cls) node.className = cls;
+      if (text != null) node.textContent = text;
+      return node;
+    },
+    failLine() {
+      return window.gb.el('div', 'gb-fail', '불러오지 못했습니다');
+    },
+    draws: {},
+    visible: (id) => !document.getElementById(id).hidden,
+  };
+</script>
+
+<script>
+  // 머리말·요약 숫자
+  (() => {
+    const { num } = window.gb;
+    dash.onData(() => {
+      for (const id of ['today_summary', 'board']) {
+        const d = dash.data(id);
+        document.querySelectorAll(`[data-source="${id}"][data-field][data-row]`).forEach((node) => {
+          if (d.status !== 'ok') {
+            node.textContent = '—';
+            node.classList.toggle('dash-skeleton', d.status === 'loading');
+            return;
+          }
+          node.classList.remove('dash-skeleton');
+          const row = d.data[Number(node.dataset.row)];
+          const value = row ? row[node.dataset.field] : null;
+          node.textContent = value == null || value === '' ? '—' : typeof value === 'number' ? num(value) : String(value);
+        });
+      }
+      const s = dash.data('today_summary');
+      const row = s.status === 'ok' ? s.data[0] : null;
+      const tile = (name) => document.querySelector(`[data-tile="${name}"]`);
+      tile('late').classList.toggle('is-warn', !!row && row.late > 0);
+      tile('uncertain').classList.toggle('is-warn', !!row && row.uncertain > 0);
+    });
+  })();
+</script>
+
+<script>
+  // 탭
+  (() => {
+    const tabs = [...document.querySelectorAll('.gb-tab')];
+    const show = (id, link) => {
+      tabs.forEach((t) => {
+        const on = t.dataset.tab === id;
+        t.setAttribute('aria-selected', String(on));
+        document.getElementById(t.dataset.tab).hidden = !on;
+      });
+      if (window.gb.draws[id]) window.gb.draws[id]();
+      if (link) dash.setLink(id);
+    };
+    tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.tab, true)));
+    const named = location.hash.slice(1);
+    if (tabs.some((t) => t.dataset.tab === named)) show(named, false);
+  })();
+</script>
+
+<script>
+  // 운영 메모 (11-19 「채널별 오늘 칸」 표는 위 채널 카드로 옮김 — 이 탭엔 메모만)
+  (() => {
+    const { el, failLine } = window.gb;
+    function drawNotices() {
+      const list = document.getElementById('notices');
+      if (!list) return;
+      const d = dash.data('board');
+      list.replaceChildren();
+      if (d.status !== 'ok') {
+        list.classList.toggle('dash-skeleton', d.status === 'loading');
+        if (d.status !== 'loading') list.append(failLine());
+        return;
+      }
+      list.classList.remove('dash-skeleton');
+      const text = d.data[0] ? String(d.data[0].notices || '') : '';
+      text.split('\n').filter(Boolean).forEach((line) => list.append(el('li', null, line)));
+    }
+    window.gb.draws.posts = drawNotices;
+    dash.onData(() => { if (window.gb.visible('posts')) drawNotices(); });
+  })();
+</script>
+
+<script>
+  // 팔로워·구독자
+  (() => {
+    const { el, failLine, num, signed, shortDay } = window.gb;
+    const tbody = document.querySelector('#audience-table tbody');
+    const chart = document.getElementById('audience-chart');
+    const heading = document.getElementById('audience-chart-title');
+    const order = { YouTube: 0, Threads: 1, Instagram: 2 };
+    let selected = null;
+
+    const pick = (key) => { selected = key; draw(); };
+    tbody.addEventListener('click', (event) => {
+      const tr = event.target.closest('tr[data-key]');
+      if (tr) pick(tr.dataset.key);
+    });
+    tbody.addEventListener('keydown', (event) => {
+      const tr = event.target.closest('tr[data-key]');
+      if (tr && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); pick(tr.dataset.key); }
+    });
+
+    function drawTable(rows) {
+      tbody.replaceChildren();
+      rows.forEach((r) => {
+        const tr = el('tr');
+        tr.dataset.key = r.key;
+        tr.tabIndex = 0;
+        tr.setAttribute('aria-selected', String(r.key === selected));
+        const change = el('td', 'num');
+        if (r.change == null) change.append(el('span', 'gb-muted', '—'));
+        else change.append(el('span', r.change > 0 ? 'gb-up' : r.change < 0 ? 'gb-down' : 'gb-muted', signed(r.change)));
+        tr.append(el('td', null, r.name), el('td', 'gb-hide-narrow gb-muted', r.platform), el('td', 'num', num(r.latest)), change, el('td', 'num gb-hide-narrow gb-muted', shortDay(r.latest_day)));
+        tbody.append(tr);
+      });
+    }
+
+    function drawChart(points, meta) {
+      chart.replaceChildren();
+      const width = chart.clientWidth;
+      if (!width) return;
+      const height = 240;
+      heading.textContent = meta ? `${meta.name} ${meta.platform} ${meta.unit} 추이` : '추이';
+      if (!points.length) { chart.append(el('p', 'gb-empty', '실측 기록이 없습니다.')); return; }
+      const data = points.map((p) => ({ date: new Date(p.day + 'T00:00:00Z'), day: p.day, value: Number(p.value) })).sort((a, b) => a.date - b.date);
+      const extent = d3.extent(data, (d) => d.value);
+      const pad = Math.max(1, Math.round((extent[1] - extent[0]) * 0.15));
+      const y0 = d3.scaleLinear([Math.max(0, extent[0] - pad), extent[1] + pad], [height - 28, 12]).nice(4);
+
+      const svg = d3.select(chart).append('svg').attr('width', '100%').attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+      const probe = svg.append('text').attr('font-size', 12).text(num(y0.domain()[1]));
+      const left = Math.ceil(probe.node().getComputedTextLength()) + 12;
+      probe.remove();
+      const endProbe = svg.append('text').attr('font-size', 12).text(num(data[data.length - 1].value));
+      const right = Math.ceil(endProbe.node().getComputedTextLength()) + 16;
+      endProbe.remove();
+
+      const x = d3.scaleUtc(d3.extent(data, (d) => d.date), [left, width - right]);
+      if (data.length === 1) x.domain([d3.utcDay.offset(data[0].date, -1), d3.utcDay.offset(data[0].date, 1)]);
+      const y = y0;
+
+      svg.append('g').selectAll('line').data(y.ticks(4)).join('line')
+        .attr('x1', left).attr('x2', width - right).attr('y1', (d) => y(d)).attr('y2', (d) => y(d))
+        .attr('stroke', 'var(--cds-chart-grid)').attr('stroke-width', 1);
+      svg.append('g').attr('transform', `translate(${left - 8},0)`)
+        .selectAll('text').data(y.ticks(4)).join('text')
+        .attr('y', (d) => y(d)).attr('dy', '0.32em').attr('text-anchor', 'end')
+        .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((d) => num(d));
+      const days = data.length > 6 ? x.ticks(5) : data.map((d) => d.date);
+      svg.append('g').selectAll('text').data(days).join('text')
+        .attr('x', (d) => x(d)).attr('y', height - 6).attr('text-anchor', 'middle')
+        .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((d) => d3.utcFormat('%m.%d')(d));
+      svg.append('line').attr('x1', left).attr('x2', width - right).attr('y1', height - 28).attr('y2', height - 28)
+        .attr('stroke', 'var(--cds-chart-axis)').attr('stroke-width', 1);
+
+      const color = dash.colors[0];
+      svg.append('path').datum(data)
+        .attr('d', d3.line((d) => x(d.date), (d) => y(d.value)))
+        .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2)
+        .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+      svg.append('g').selectAll('circle').data(data).join('circle')
+        .attr('cx', (d) => x(d.date)).attr('cy', (d) => y(d.value)).attr('r', 3.5)
+        .attr('fill', color);
+      const last = data[data.length - 1];
+      svg.append('text').attr('x', x(last.date) + 8).attr('y', y(last.value)).attr('dy', '0.32em')
+        .attr('font-size', 12).attr('fill', 'var(--color-fg)').text(num(last.value));
+
+      const tip = el('div', 'gb-tip');
+      tip.hidden = true;
+      chart.append(tip);
+      const dot = svg.append('circle').attr('r', 5.5).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('visibility', 'hidden');
+      const delaunay = d3.Delaunay.from(data, (d) => x(d.date), (d) => y(d.value));
+      svg.on('pointermove', (event) => {
+        const [mx, my] = d3.pointer(event);
+        const d = data[delaunay.find(mx, my)];
+        dot.attr('cx', x(d.date)).attr('cy', y(d.value)).attr('visibility', 'visible');
+        tip.replaceChildren(el('span', null, d.day), document.createTextNode(`${num(d.value)}명`));
+        tip.hidden = false;
+        const tw = tip.offsetWidth;
+        const left = Math.min(Math.max(0, x(d.date) - tw / 2), width - tw);
+        tip.style.left = `${left}px`;
+        tip.style.top = `${Math.max(0, y(d.value) - 48)}px`;
+      });
+      svg.on('pointerleave', () => { tip.hidden = true; dot.attr('visibility', 'hidden'); });
+    }
+
+    function draw() {
+      const latest = dash.data('audience_latest');
+      const all = dash.data('audience');
+      if (latest.status !== 'ok' || all.status !== 'ok') {
+        tbody.replaceChildren();
+        chart.replaceChildren();
+        const loading = latest.status === 'loading' || all.status === 'loading';
+        chart.classList.toggle('dash-skeleton', loading);
+        if (!loading) chart.append(failLine());
+        return;
+      }
+      chart.classList.remove('dash-skeleton');
+      const rows = latest.data.slice().sort((a, b) => (order[a.platform] - order[b.platform]) || (b.latest - a.latest));
+      if (!rows.some((r) => r.key === selected)) selected = rows.length ? rows[0].key : null;
+      drawTable(rows);
+      const meta = rows.find((r) => r.key === selected);
+      drawChart(all.data.filter((p) => p.key === selected), meta);
+    }
+
+    window.gb.draws.audience = draw;
+    dash.onData(() => { if (window.gb.visible('audience')) draw(); });
+  })();
+</script>
+
+<script>
+  // 팔로우 작업
+  (() => {
+    const { el, failLine, num, shortDay } = window.gb;
+    const bars = document.getElementById('follow-bars');
+    const daily = document.getElementById('follow-daily');
+
+    function drawBars() {
+      const f = dash.data('follows');
+      const b = dash.data('board');
+      bars.replaceChildren();
+      if (f.status !== 'ok' || b.status !== 'ok') {
+        const loading = f.status === 'loading' || b.status === 'loading';
+        bars.classList.toggle('dash-skeleton', loading);
+        if (!loading) bars.append(failLine());
+        return;
+      }
+      bars.classList.remove('dash-skeleton');
+      const day = b.data[0] ? b.data[0].today : '';
+      const rows = f.data.filter((r) => r.day === day);
+      if (!rows.length) { bars.append(el('p', 'gb-empty', '오늘 기록이 아직 없습니다.')); return; }
+      const lasts = rows.map((r) => String(r.last_at || '')).filter(Boolean).sort();
+      const la = document.getElementById('follow-last-all');
+      if (la) la.textContent = lasts.length ? `마지막 작업 ${lasts[lasts.length - 1].replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').slice(0, 5)}` : '';
+      rows.forEach((r, i) => {
+        const done = Number(r.follows);
+        const goal = Number(r.goal);
+        const row = el('div', 'gb-bar-row');
+        const track = el('div', 'gb-bar-track');
+        const fill = el('div', 'gb-bar-fill');
+        fill.style.width = `${Math.min(100, goal ? (done / goal) * 100 : 0)}%`;
+        fill.style.background = done >= goal ? 'var(--color-ok)' : dash.colors[r.platform === 'Threads' ? 0 : 1];
+        track.append(fill);
+        const val = el('div', 'gb-bar-val');
+        val.append(el('b', null, num(done)), document.createTextNode(` / ${num(goal)}`));
+        // 10-26 사장님 「팔로우 작업 실시간 마지막 시간 표기」 — follows 행의 last_at(마지막 확인된 팔로우 시각)
+        const lastAt = r.last_at ? String(r.last_at).replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').slice(0, 5) : '';
+        if (lastAt) val.append(el('span', 'gb-f-last', ` · ${lastAt}`));
+        row.append(el('span', null, `${r.brand} ${r.platform}`), track, val);
+        bars.append(row);
+      });
+    }
+
+    function drawDaily() {
+      const d = dash.data('follows_daily');
+      daily.replaceChildren();
+      if (d.status !== 'ok') {
+        const loading = d.status === 'loading';
+        daily.classList.toggle('dash-skeleton', loading);
+        if (!loading) daily.append(failLine());
+        return;
+      }
+      daily.classList.remove('dash-skeleton');
+      const width = daily.clientWidth;
+      if (!width) return;
+      const data = d.data.slice(-14);
+      const height = 240;
+      const goal = d3.max(data, (r) => Number(r.goal)) || 0;
+      const top = Math.max(goal, d3.max(data, (r) => Number(r.follows)) || 0);
+      const y = d3.scaleLinear([0, top], [height - 28, 16]).nice(4);
+      const svg = d3.select(daily).append('svg').attr('width', '100%').attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+      const probe = svg.append('text').attr('font-size', 12).text(num(y.domain()[1]));
+      const left = Math.ceil(probe.node().getComputedTextLength()) + 12;
+      probe.remove();
+      const x = d3.scaleBand(data.map((r) => r.day), [left, width - 8]).padding(0.35);
+
+      svg.append('g').selectAll('line').data(y.ticks(4)).join('line')
+        .attr('x1', left).attr('x2', width - 8).attr('y1', (v) => y(v)).attr('y2', (v) => y(v))
+        .attr('stroke', 'var(--cds-chart-grid)').attr('stroke-width', 1);
+      svg.append('g').selectAll('text').data(y.ticks(4)).join('text')
+        .attr('x', left - 8).attr('y', (v) => y(v)).attr('dy', '0.32em').attr('text-anchor', 'end')
+        .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((v) => num(v));
+      svg.append('g').selectAll('rect').data(data).join('rect')
+        .attr('x', (r) => x(r.day) + Math.max(0, (x.bandwidth() - 32) / 2))
+        .attr('width', Math.min(32, x.bandwidth()))
+        .attr('y', (r) => y(Number(r.follows)))
+        .attr('height', (r) => Math.max(0, y(0) - y(Number(r.follows))))
+        .attr('rx', 4)
+        .attr('fill', (r) => (Number(r.follows) >= Number(r.goal) ? 'var(--color-ok)' : dash.colors[0]));
+      svg.append('g').selectAll('text').data(data).join('text')
+        .attr('x', (r) => x(r.day) + x.bandwidth() / 2).attr('y', (r) => y(Number(r.follows)) - 6)
+        .attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', 'var(--color-fg)')
+        .text((r) => num(Number(r.follows)));
+      svg.append('line').attr('x1', left).attr('x2', width - 8).attr('y1', y(0)).attr('y2', y(0))
+        .attr('stroke', 'var(--cds-chart-axis)').attr('stroke-width', 1);
+      if (goal) {
+        svg.append('line').attr('x1', left).attr('x2', width - 8).attr('y1', y(goal)).attr('y2', y(goal))
+          .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-width', 1).attr('stroke-dasharray', '4 4');
+      }
+      svg.append('g').selectAll('text').data(data).join('text')
+        .attr('x', (r) => x(r.day) + x.bandwidth() / 2).attr('y', height - 6).attr('text-anchor', 'middle')
+        .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((r) => shortDay(r.day));
+    }
+
+    window.gb.draws.follows = () => { drawBars(); drawDaily(); };
+    dash.onData(() => { if (window.gb.visible('follows')) window.gb.draws.follows(); });
+  })();
+</script>
+<script>
+  // 10-26 사장님 「쿠팡 링크 글 총조회수 · 분석 완료 시간 · 일별 기록」 — coupang 데이터(meta/acct/post 행, day 별 누적)
+  (() => {
+    const { el, failLine, num } = window.gb;
+    const days = document.getElementById('cp-days'), body = document.getElementById('cp-body');
+    let pick = null;
+    const fmt = (s) => { const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m ? `${+m[2]}월 ${+m[3]}일 ${m[4]}:${m[5]}` : (s || ''); };
+    const dlabel = (d) => { const m = String(d).match(/\d{4}-(\d{2})-(\d{2})/); return m ? `${+m[1]}월 ${+m[2]}일` : d; };
+    function draw() {
+      const c = dash.data('coupang');
+      days.replaceChildren(); body.replaceChildren();
+      if (c.status !== 'ok') { body.classList.toggle('dash-skeleton', c.status === 'loading'); if (c.status !== 'loading') body.append(failLine()); return; }
+      body.classList.remove('dash-skeleton');
+      const all = [...new Set(c.data.map((r) => r.day).filter(Boolean))].sort().reverse();
+      if (!all.length) { body.append(el('p', 'gb-empty', '아직 기록이 없습니다.')); return; }
+      if (!pick || !all.includes(pick)) pick = all[0];
+      all.forEach((d, i) => { const b = el('button', 'cp-day', i === 0 && d === all[0] ? `${dlabel(d)} (최근)` : dlabel(d)); b.type = 'button'; b.setAttribute('aria-pressed', String(d === pick)); b.onclick = () => { pick = d; draw(); }; days.append(b); });
+      const rows = c.data.filter((r) => r.day === pick);
+      const m = rows.find((r) => r.kind === 'meta') || {};
+      const big = el('div', 'cp-big');
+      big.append(el('b', null, `${num(Number(m.total || 0))}회`), el('span', null, `그날 올린 링크 글 ${num(Number(m.today_n || 0))}편 ${num(Number(m.today_views || 0))}회 + 전날 이전 글 증가분 약 ${num(Number(m.older_inc || 0))}회`));
+      body.append(big, el('p', 'cp-stamp', `분석 완료 ${fmt(m.measured_at)}${m.older_excluded ? ` · 값을 못 구한 이전 글 ${m.older_excluded}편 제외` : ''}`));
+      const accts = el('div', 'cp-accts');
+      rows.filter((r) => r.kind === 'acct').sort((a, b) => (b.total || 0) - (a.total || 0)).forEach((a) => {
+        const box = el('div', 'cp-acct');
+        box.append(el('strong', null, a.account), el('b', null, `${num(Number(a.total || 0))}회`),
+          el('small', null, `그날 글 ${num(Number(a.today_n || 0))}편 ${num(Number(a.today_views || 0))} · 이전 글 +${num(Number(a.older_inc || 0))}`));
+        accts.append(box);
+      });
+      body.append(accts);
+      // 10-26 사장님 「최신 일자순으로 나눠 — 일자별 구분, 어떤 게 몇 회·총 몇 회, 글 누르면 링크」: 올린 날짜별 묶음(최신 먼저)
+      const posts = rows.filter((r) => r.kind === 'post');
+      const pdays = [...new Set(posts.map((p) => p.posted_day || p.day))].sort().reverse();
+      pdays.forEach((pd) => {
+        const list = posts.filter((p) => (p.posted_day || p.day) === pd).sort((a, b) => (b.views || 0) - (a.views || 0));
+        const sum = list.reduce((s, p) => s + Number(p.views || 0), 0);
+        const inc = list.reduce((s, p) => s + Number(p.inc || 0), 0);
+        const isPick = pd === pick;
+        const sec = el('div', 'cp-group');
+        sec.append(el('h3', 'cp-gh', `${dlabel(pd)} 올린 쿠팡 링크 글 · ${list.length}편 · 누적 총 ${num(sum)}회${!isPick && inc ? ` (그중 ${dlabel(pick)} 하루 약 +${num(inc)}회)` : ''}`));
+        // 10-26 사장님 「채널별로 나눠 줘 — 보기 편하게」: 날짜 묶음 안에서 계정별 소계(조회 많은 계정 먼저)
+        const accs = [...new Set(list.map((p) => p.account))]
+          .map((a) => ({ a, ps: list.filter((p) => p.account === a) }))
+          .map((g) => ({ ...g, s: g.ps.reduce((t, p) => t + Number(p.views || 0), 0), i: g.ps.reduce((t, p) => t + Number(p.inc || 0), 0) }))
+          .sort((x, y) => y.s - x.s);
+        const grid = el('div', 'cp-acgrid');
+        accs.forEach((g) => {
+          const card = el('div', 'cp-accard');
+          card.append(el('div', 'cp-ach', `${g.a} · ${g.ps.length}편 · ${num(g.s)}회${!isPick && g.i ? ` (${dlabel(pick)} +${num(g.i)})` : ''}`));
+          const ul = el('ol', 'cp-list');
+          g.ps.forEach((p) => {
+          const li = el('li');
+          const a = el('a', 'cp-title', p.title || '글 보기'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const meta = el('span', 'cp-meta', `${p.account} · ${p.time || ''}${p.follows ? ` · 팔로우 +${num(Number(p.follows))}` : ''}`);
+          const v = el('b', 'cp-v', `${num(Number(p.views || 0))}회`);
+          const sub = !isPick && p.inc ? el('small', 'cp-inc', `${dlabel(pick)} +${num(Number(p.inc))}`) : null;
+          const right = el('span', 'cp-right'); right.append(v); if (sub) right.append(sub);
+          const left = el('span', 'cp-left'); left.append(a, meta);
+          li.append(left, right); ul.append(li);
+          });
+          card.append(ul); grid.append(card);
+        });
+        sec.append(grid); body.append(sec);
+      });
+    }
+    window.gb.draws.coupang = draw;
+    dash.onData(() => { if (window.gb.visible('coupang')) draw(); });
+  })();
+
+  // 10-27 총괄 「Claude 계정 카드 — 기존 계정·히든 계정 역할·세션·사용량」
+  (() => {
+    const { el, failLine } = window.gb;
+    const box = document.getElementById('cl-accts');
+    function draw() {
+      const a = dash.data('claude_accounts');
+      box.replaceChildren();
+      if (a.status !== 'ok') { box.classList.toggle('dash-skeleton', a.status === 'loading'); if (a.status !== 'loading') box.append(failLine()); return; }
+      box.classList.remove('dash-skeleton');
+      const rows = Array.isArray(a.data) ? a.data : (a.data && Array.isArray(a.data.rows) ? a.data.rows : []);
+      rows.forEach((r) => { try {
+        const c = el('div', 'cx-acct');
+        const top = el('div', 'cx-top');
+        top.append(el('strong', null, r.alias), el('span', 'cx-plan', r.role || ''));
+        const big = el('div', 'cx-big');
+        const has = r.usage_pct !== null && r.usage_pct !== undefined && r.usage_pct !== '';
+        big.append(el('b', null, has ? `${r.usage_pct}%` : '—'), el('small', null, ' 사용량'));
+        const meta = el('div', 'cx-meta');
+        meta.append(el('span', null, `이전 상태 · ${r.migration || '—'}`));
+        meta.append(el('span', null, `세션 · ${(r.sessions || []).join(' · ') || '—'}`));
+        meta.append(el('span', null, `갱신 ${r.updated || '—'}`));
+        c.append(top, big, meta); box.append(c);
+      } catch (e) { console.error('claude 계정 카드', e); } });
+    }
+    try { draw(); } catch (e) { console.error('claude 계정 카드', e); }
+    dash.onData(() => { try { draw(); } catch (e) { console.error('claude 계정 카드', e); } });
+  })();
+
+  // 10-26 사장님 「게시판에 코덱스 사용 현황 — 어떤 장면에 썼는지, 계정 1·2·3 한도가 얼마나 남았는지」
+  (() => {
+    const { el, failLine, num } = window.gb;
+    const box = document.getElementById('cx-accts');
+    const tbody = document.querySelector('#cx-jobs tbody');
+    function draw() {
+      const a = dash.data('codex_accounts');
+      const j = dash.data('codex_jobs');
+      box.replaceChildren(); tbody.replaceChildren();
+      if (a.status !== 'ok') { box.classList.toggle('dash-skeleton', a.status === 'loading'); if (a.status !== 'loading') box.append(failLine()); }
+      else {
+        box.classList.remove('dash-skeleton');
+        a.data.forEach((r) => {
+          const c = el('div', `cx-acct ${r.state === '막힘' ? 'is-bad' : ''}`);
+          const top = el('div', 'cx-top');
+          top.append(el('strong', null, r.acct), el('span', 'cx-plan', `${r.plan} · ${r.email}`));
+          // 10-26 사장님 「한도 % 는 빼고 — 막힘·언제 풀림·오늘 생성한 사진 몇 장만」
+          const bad = r.state === '막힘';
+          const when = (s) => {
+            const d = new Date(s); if (!s || isNaN(d)) return s || '';
+            const now = new Date(), day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+            const diff = Math.round((day(d) - day(now)) / 864e5);
+            const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            return `${diff === 0 ? '오늘' : diff === 1 ? '내일' : `${d.getMonth() + 1}월 ${d.getDate()}일`} ${hm}`;
+          };
+          const big = el('div', 'cx-big');
+          const b = el('b', null, bad ? '막힘' : '사용 가능'); b.style.color = bad ? '#e0446a' : '#0f9f74';
+          big.append(b);
+          const meta = el('div', 'cx-meta');
+          if (bad) meta.append(el('span', null, `${when(r.until)} 풀림`));
+          meta.append(el('span', null, `오늘 생성 ${num(Number(r.images_today))}장`));
+          c.append(top, big, meta); box.append(c);
+        });
+      }
+      if (j.status === 'ok') {
+        if (!j.data.length) { const tr = el('tr'); const td = el('td', 'gb-empty', '오늘 기록이 없습니다.'); td.colSpan = 10; tr.append(td); tbody.append(tr); }
+        j.data.forEach((r) => {
+          const tr = el('tr');
+          [r.channel, r.form, r.series, r.kind, r.episode, r.main, r.acct2, r.acct3, r.acct4 || 0, r.total, r.last].forEach((v, i) => {
+            const td = el('td', i >= 5 ? 'gb-c' : (i === 0 ? 'cx-ch' : null), typeof v === 'number' ? (v ? num(v) : '—') : (v || '—'));
+            if (i === 9) td.style.fontWeight = '800';
+            if (i === 1) { td.textContent = ''; td.append(el('span', `cx-form f-${/웹툰/.test(v) ? 'toon' : /롱폼·/.test(v) ? 'both' : /롱/.test(v) ? 'long' : 'short'}`, v || '—')); }
+            tr.append(td);
+          });
+          tr.dataset.key = r.id;
+          tbody.append(tr);
+        });
+        // 10-26 사장님 「하단에 총계 — 총 몇 장」
+        const sum = (k) => j.data.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+        const tr = el('tr', 'cx-total');
+        const lab = el('td', null, `총계 · ${num(j.data.length)}건`); lab.colSpan = 5; tr.append(lab);
+        ['main', 'acct2', 'acct3', 'acct4', 'total'].forEach((k) => { const td = el('td', 'gb-c', num(sum(k)) + '장'); td.style.fontWeight = '800'; tr.append(td); });
+        tr.append(el('td'));
+        tr.style.background = '#f2f6fd';
+        if (j.data.length) tbody.append(tr);
+      }
+    }
+    window.gb.draws.codex = draw;
+    dash.onData(() => { if (window.gb.visible('codex')) draw(); });
+  })();
+</script>
+<script>
+  // 11-04 사장님 「예상 달성은 빼고 그냥 단순하게 유효 시청시간만」 — 성과분석이 쌓는 ypp(Studio 화면 숫자)의 채널별 최신 기록
+  // 11-19 채널 카드에 합치면서 status(파트너 승인됨·진행 중·수익 창출 불가·미측정)·note(조치 필요 등)·구독자 진행도 같이 냄
+  // 11-19 사장님 「총액도 써 줘, 유튜브 9 옆에」 — 수익화 채널 예상 수익 합계(이번 달 합 · 가장 최근 집계일 하루 합 — 그날이 집계된 채널만 더함)
+  dash.calc('revenue_total', {
+    title: '수익화 채널 예상 수익 합계',
+    description: '수익화 채널들의 이번 달 예상 수익 합계와, 가장 최근 집계일(last_day)의 하루 수익 합계(그날로 집계된 채널만 더함)',
+    inputs: ['revenue'],
+    fn: (revenue) => {
+      const rows = Array.isArray(revenue) ? revenue : [];
+      const month = rows.map((r) => String(r.month || '')).filter(Boolean).sort().pop() || '';
+      const last = rows.map((r) => String(r.last_day || '')).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() || null;
+      return [{
+        month,
+        month_total: rows.filter((r) => !month || String(r.month || '') === month).reduce((s, r) => s + (Number(r.month_total) || 0), 0),
+        last_day: last,
+        last_day_amount: last ? rows.filter((r) => String(r.last_day || '') === last).reduce((s, r) => s + (Number(r.last_day_amount) || 0), 0) : 0,
+        channels: rows.length,
+        prev_month: rows.map((r) => String(r.prev_month || '')).filter(Boolean).sort().pop() || '',
+        prev_month_total: rows.reduce((s, r) => s + (Number(r.prev_month_total) || 0), 0),
+      }];
+    },
+  });
+  // 11-19 사장님 「전달·이번 달·어제 표로 쭉」 — 날짜별 수익(최근 31일, 최신 먼저): 그날 전체 합계 + 채널별(열 이름 = 채널 uc)
+  // 11-19 사장님 「오늘 제작한 거 리스트」 — 종류별 개수(롱폼·숏폼·웹툰·인스타): n = 묶음 수, files = 편·장 수 합
+  dash.calc('today_made_sum', {
+    title: '오늘 만든 것 종류별 개수',
+    description: '오늘 마이박스에 올라간 완성본을 종류(롱폼·숏폼·웹툰·인스타)별로 셉니다 — n은 목록 줄 수, files는 편·장 수 합',
+    inputs: ['today_made'],
+    fn: (made) => {
+      const order = ['롱폼', '숏폼', '웹툰', '인스타'];
+      const by = {};
+      for (const r of (Array.isArray(made) ? made : [])) { const k = String(r.kind || '기타'); const o = by[k] || (by[k] = { kind: k, n: 0, files: 0 }); o.n += 1; o.files += Number(r.files) || 0; }
+      return Object.values(by).sort((a, b) => (order.indexOf(a.kind) + 1 || 99) - (order.indexOf(b.kind) + 1 || 99));
+    },
+  });
+  dash.calc('revenue_daily', {
+    title: '날짜별 예상 수익',
+    description: '수익화 채널들의 날짜별 예상 수익(원) — total = 그날 전체 합계, 나머지 열은 채널(uc)별 금액',
+    inputs: ['revenue'],
+    fn: (revenue) => {
+      const by = {};
+      for (const r of (Array.isArray(revenue) ? revenue : [])) {
+        let daily = r.daily;
+        if (typeof daily === 'string') { try { daily = JSON.parse(daily); } catch (e) { daily = []; } }
+        for (const d of (Array.isArray(daily) ? daily : [])) {
+          if (!d || !d.date) continue;
+          const row = by[d.date] || (by[d.date] = { date: String(d.date), total: 0 });
+          row[r.uc] = (Number(row[r.uc]) || 0) + (Number(d.amount) || 0);
+          row.total += Number(d.amount) || 0;
+        }
+      }
+      return Object.values(by).sort((a, b) => b.date.localeCompare(a.date));
+    },
+  });
+  dash.calc('ypp_watch', {
+    title: '채널별 수익 창출 진행',
+    description: '유튜브 채널마다 가장 최근 수익 창출 기록: 단계(status)·메모, 구독자·유효 시청시간(4,000시간 기준), 분석 28일 시청시간과 4,000시간 예상 날짜',
+    inputs: ['ypp'],
+    fn: (ypp) => {
+      const n = (v) => (v == null || v === '' ? null : Number(v));
+      const f = (v) => Math.round(v).toLocaleString('ko-KR');
+      const by = {};
+      for (const r of ypp) { (by[r.key] = by[r.key] || []).push(r); }
+      const out = [];
+      for (const key of Object.keys(by)) {
+        const rs = by[key].slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+        const last = rs[rs.length - 1];
+        const row = { key, name: last.name, status: String(last.status || '—'), note: String(last.note || ''), measured: String(last.at || ''), subs_txt: '—', watch_txt: '—', a28_txt: '—', eta_txt: '—', watch_pct: 0, subs_pct: 0, sort: 0 };
+        // 분석 28일 시청시간(모든 단계 공통) — 그 값이 있는 가장 최근 줄, 기간 끝 날짜 기준
+        const w = rs.filter((x) => n(x.watch_28d) != null).pop();
+        if (w) {
+          const m = String(w.range_28d || '').match(/~\s*\d{4}\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+          row.a28_txt = `${Math.floor(n(w.watch_28d)).toLocaleString('ko-KR')}시간` + (m ? ` (${m[1]}/${m[2]})` : '');
+          const md = (s) => { const x = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?/); return x ? { d: `${+x[2]}/${+x[3]}`, h: x[4] != null ? +x[4] : null } : null; };
+          if (n(last.wh_yesterday) != null) { const y = md(last.wh_yesterday_date); row.a28_txt += ` · 어제 ${f(n(last.wh_yesterday))}시간` + (y ? `(Studio ${y.d})` : ''); }
+        }
+        if (last.status !== '진행 중') {
+          row.watch_txt = row.status;
+          row.sort = last.status === '파트너 승인됨' ? 1e9 : -1;
+          out.push(row); continue;
+        }
+        const subs = n(last.subs), sg = n(last.subs_goal2) || n(last.subs_goal) || 1000;
+        // 11-04 사장님 「파트너 승인을 3000시간 말고 4000시간으로」
+        const wh = n(last.watch_hours), wg = n(last.watch_goal2) || 4000;
+        row.subs_txt = subs == null ? '—' : `${f(subs)} / ${f(sg)}명`;
+        row.subs_pct = subs == null ? 0 : Math.min(1, subs / sg);
+        const asof = String(last.asof || last.day || '').slice(5).replace('-', '/').replace(/^0/, '').replace('/0', '/');
+        row.watch_txt = wh == null ? '—' : `${f(wh)} / ${f(wg)}시간 · ${f(Math.max(0, wg - wh))}시간 남음` + (asof ? ` (${asof})` : '');
+        // 11-04 사장님 방식: (분석 28일 − 수익 창출 화면) ÷ 두 날짜 사이 날수(양끝 포함) = 하루 시간 → 남은 시간 ÷ 하루 시간 = 예상 날짜
+        const ya = String(last.asof || '').match(/^(\d{4})-(\d{2})-(\d{2})/), ym = w && String(w.range_28d || '').match(/~\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+        if (w && wh != null && ya && ym) {
+          const d0 = new Date(+ya[1], +ya[2] - 1, +ya[3]), d1 = new Date(+ym[1], +ym[2] - 1, +ym[3]);
+          const days = Math.round((d1 - d0) / 86400000) + 1, a = n(w.watch_28d);
+          const per = days >= 2 ? (a - wh) / days : 0;
+          if (a >= wg) row.eta_txt = '달성';
+          else if (per > 0) {
+            const left = wg - a, need = Math.ceil(left / per);
+            const e = new Date(d1); e.setDate(e.getDate() + need);
+            row.eta_txt = `${e.getFullYear() !== d1.getFullYear() ? e.getFullYear() + '년 ' : ''}${e.getMonth() + 1}월 ${e.getDate()}일쯤 · 하루 ${f(per)}시간`;
+          }
+        }
+        row.watch_pct = wh == null ? 0 : Math.min(1, wh / wg);
+        row.sort = wh == null ? 0 : wh;
+        out.push(row);
+      }
+      return out.sort((a, b) => b.sort - a.sort);
+    },
+  });
+</script>
+<script>
+  // 11-19 사장님 「유튜브 스레드를 모두 펼치고 수익화 게시정보 전부 하나로 통일 — 인생도감이라고 하면 그 안에 만드는 중,
+  //   게시는 어떻게 되고 있는지, 어떤 걸 게시했는지, 수익화는 어디까지 진행되었는지 … 게시가 정상이면 초록색, 문제 있으면 빨간색, 안 되면 회색」
+  // 채널(이름+플랫폼)마다 카드 하나: 머리(순위·플랫폼·이름·구독자/팔로워) → 수익화 → 게시(오늘 칸·다음 칸·최근 게시) → 재고 → 만드는 중
+  //
+  // ■ 카드 색 = 오늘 게시 상태 (판정 기준 — 카드 오른쪽 위 상태에 마우스를 올리면 칸별 이유)
+  //   빨강(게시 문제): 오늘 칸 가운데 하나라도
+  //     ① 실패(failed)  ② 공개 미확정(uncertain — 올렸는데 공개 여부를 못 봄)
+  //     ③ 지연(late)인데 사유가 「재고 없음·보류」가 아닌 것(올릴 편이 있는데 안 올라감 · 게시 기록 없음)
+  //     ④ 대기(waiting·pending) 칸의 예정 시각이 「게시 기록 기준 시각」보다 30분 넘게 지났는데 안 올라감
+  //        (지금 시각이 아니라 데이터 기준 시각으로 잼 — 데이터가 늦게 올라와도 멀쩡한 칸을 빨강으로 만들지 않게)
+  //   초록(게시 정상): 문제 칸이 없고, 오늘 공개된 칸이 있거나 시각이 잡힌 다음 칸이 정상 대기 중
+  //   회색(게시 안 됨): 문제 칸이 없고 공개된 칸도 시각이 잡힌 다음 칸도 없음 — 올릴 재고 없음·파일 보류·중단(쉬는 채널)·오늘 칸 없음
+  //   ※ 「재고 없음」으로 못 올린 칸은 게시 실수가 아니라 재고 문제라 회색 — 재고 줄이 빨강으로 따로 보임
+  //   ※ 인생 채널 롱폼은 08:00~08:10 칸에만 시작(업로드관리자 11-03 정정) — 그 시각이 지난 대기 롱폼은 「내일 08:00」 대기로 보고 문제로 치지 않음
+  //   ※ 색은 늘 「오늘」 기준. 날짜 단추로 지난 날을 고르면 게시 칸 줄만 그날 기록으로 바뀜
+  (() => {
+    const { el, failLine, num, STATE } = window.gb;
+    const grid = document.getElementById('uc-grid');
+    const ctrl = document.getElementById('uc-controls');
+    if (!grid || !ctrl) return;
+    const sumEl = document.getElementById('uc-sum');
+    const dayBar = document.getElementById('uc-days');
+    const filters = ctrl.querySelector('.uc-filters');
+    const updEl = document.getElementById('uc-upd');
+    const SHORT = [['첫 장면', '장면'], ['장면 그림', '장면'], ['그림', '장면'], ['대본', '대본'], ['나레이션', '음성'], ['그록 0초', '그록'], ['숏폼·그록', '그록'], ['그록', '그록'], ['맞추기', '맞춤'], ['롱폼 렌더', '렌더'], ['숏폼 렌더', '렌더'], ['렌더', '렌더'], ['검수', '검수'], ['마무리', '검수'], ['재고 등록', '올림'], ['올리기', '올림'], ['등록', '올림']];
+    const short = (n) => { const h = SHORT.find(([k]) => String(n || '').includes(k)); return h ? h[1] : String(n || '').slice(0, 2); };
+    const frac = (s) => { const m = String(s || '').match(/(\d+)\s*\/\s*(\d+)/); return m ? Number(m[1]) / Math.max(1, Number(m[2])) : null; };
+    const PLAT = { '스레드': 'Threads', '인스타': 'Instagram', '유튜브': 'YouTube' };
+    const view = { platform: 'all', problems: false, day: null, open: null, exp: new Set() };
+    const val = (c, k) => (c && c[k] != null && c[k] !== '' && !isNaN(Number(c[k])) ? Number(c[k]) : null);
+    const enc = (v) => String(v).replace(/%/g, '%25').replace(/&/g, '%26').replace(/=/g, '%3D');
+    const mark = (node, src, field, key, keyCol) => { node.dataset.source = src; node.dataset.field = field; if (key != null) node.dataset.where = `${keyCol || 'key'}=${enc(key)}`; return node; };
+    const ICON = { posted: '✓', failed: '✕', late: '!', uncertain: '?', pending: '–', paused: '⏸', conditional: '…' };
+    const https = (u) => String(u || '').startsWith('https://');
+    const hm = (t) => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+    const tkey = (s) => (hm(s.time) != null ? String(s.time).padStart(5, '0') : '99:99');
+    const kstNowMin = () => { const k = new Date(Date.now() + 9 * 3600e3); return k.getUTCHours() * 60 + k.getUTCMinutes(); };
+    const noStock = (s) => /재고\s*(없|0)|ready\s*(없|0)|올릴 편이 없|보류/i.test(`${s.reason_short || ''} ${s.fix_cause || ''}`);
+    const norm = (t) => String(t || '').replace(/\s*#Shorts\s*$/, '').trim();
+    const dlabel = (d) => { const m = String(d || '').match(/\d{4}-(\d{2})-(\d{2})/); return m ? `${+m[1]}.${+m[2]}` : String(d || ''); };
+
+    // 현실대본스킬 편 표시(11-04)
+    const realOf = (t) => {
+      let d; try { d = dash.data('realscript'); } catch (e) { d = null; }
+      if (!d || d.status !== 'ok' || !t) return false;
+      const n = norm(t);
+      if (d.data.some((r) => r.kind === 'title' && String(r.title).trim() === n)) return true;
+      const m = n.match(/\|\s*(.+?)\s+(\d+)화\s*\|/);
+      return !!(m && d.data.some((r) => r.kind === 'rule' && r.series === m[1] && Number(m[2]) >= Number(r.ep)));
+    };
+
+    filters.addEventListener('click', (event) => {
+      const b = event.target.closest('button');
+      if (!b) return;
+      if (b.dataset.platform) view.platform = b.dataset.platform;
+      if (b.dataset.toggle === 'problems') view.problems = !view.problems;
+      draw();
+    });
+    dayBar.addEventListener('change', () => { view.day = dayBar.value; view.open = null; draw(); });
+    grid.addEventListener('click', (event) => {
+      const x = event.target.closest('[data-uc-close]');
+      if (x) { view.open = null; draw(); return; }
+      const ring = event.target.closest('button.gb-ring[data-slot]');
+      if (ring) { view.open = view.open === ring.dataset.slot ? null : ring.dataset.slot; draw(); return; }
+      // 펼치기는 카드 안 「▸ 자세히」 단추 하나로(11-19 사장님)
+      const btn = event.target.closest('button[data-uc-exp]');
+      if (!btn) return;
+      const id = btn.dataset.ucExp;
+      if (view.exp.has(id)) view.exp.delete(id); else view.exp.add(id);
+      draw();
+    });
+
+    // 게시 칸 하나의 판정: ok(공개) · bad(문제) · next(시각 잡힌 다음 칸) · later(시각 없는 뒤 차례) · empty(재고 없음·보류) · rest(중단)
+    // 11-19 사장님 「문제 있는 것들은 해결해 줘」 — 지나간 빈 칸·실패 칸이 뒤에 해결됐으면 빨강에서 뺌
+    //   ① 실패 칸: 같은 편(제목)이 그 뒤 공개 완료 → 해결(재게시 성공). 같은 편 실패가 2번 이상이고 아직 공개 못 했으면 빨강(반복 실패)
+    //   ② 기록 없이 지나간 칸(지연): 그 칸 사유에 「재고 없음·ready 없음」 → 회색(그때 재고 없음) / 같은 날 그 뒤 칸에서 그 계정이 공개 성공 → 해결
+    //   ③ 공개 미확정(uncertain)·재고가 있는데 시각 지나 안 올라간 칸(뒤 성공도 없음)은 빨강 유지
+    function judgeSlot(s, refMin, sib) {
+      const sibs = Array.isArray(sib) ? sib : [];
+      const tN = (x) => { const v = hm(x && x.time); return v == null ? -1 : v; };
+      const postedAfter = sibs.filter((y) => y !== s && y.state === 'posted' && tN(y) > tN(s));
+      const sameTitle = (y) => norm(y.title) && norm(y.title) !== '미게시' && norm(y.title) === norm(s.title);
+      if (s.state === 'posted') return { k: 'ok' };
+      if (s.state === 'failed') {
+        const re = sibs.find((y) => y.state === 'posted' && sameTitle(y));
+        if (re) return { k: 'fixed', why: `${s.time || ''} 실패 → 같은 편 재게시 성공`, orig: '게시 실패', at: re.time };
+        const n = sibs.filter((y) => y.state === 'failed' && sameTitle(y)).length;
+        return { k: 'bad', type: n >= 2 ? 'repeat' : 'fail', why: n >= 2 ? `같은 편 ${n}번 실패` : '게시 실패' };
+      }
+      if (s.state === 'uncertain') return { k: 'bad', type: 'unc', why: '올렸는데 공개 미확정' };
+      if (s.state === 'paused') return { k: 'rest', why: s.reason_short || '중단' };
+      // 사장님 지시로 중단된 채널(사유·원인 메모에 「중단」)은 지연이 아니라 쉬는 채널 — 회색
+      if (/중단/.test(`${s.reason_short || ''} ${s.fix_cause || ''}`)) return { k: 'rest', why: '중단 · 사장님 지시' };
+      if (noStock(s)) return { k: 'empty', why: s.reason_short || '재고 없음' };
+      if (s.state === 'late') return postedAfter.length ? { k: 'fixed', why: `${s.time || ''} 칸 비었지만 ${postedAfter[0].time} 공개 성공`, orig: s.reason_short || '지연', at: postedAfter[0].time } : { k: 'bad', type: 'miss', why: `예정 ${s.time || ''} 지났는데 안 올라감${s.reason_short ? ' · ' + s.reason_short : ''}` };
+      const t = hm(s.time);
+      if (t != null && refMin != null && refMin - t > 30) return postedAfter.length ? { k: 'fixed', why: `${s.time} 칸 비었지만 ${postedAfter[0].time} 공개 성공`, orig: '예정 시각 지남', at: postedAfter[0].time } : { k: 'bad', type: 'miss', why: `예정 ${s.time} 지났는데 안 올라감` };
+      if (t != null) return { k: 'next' };
+      return { k: 'later', why: s.reason_short || '' };
+    }
+
+    // 롱폼 08:00 칸 규칙(옛 게시 칸 표의 dueOf 그대로)
+    const dueOf = (x, isToday) => {
+      if (!x.long || x.r === 0 || !isToday || !['late', 'pending', 'waiting'].includes(x.s.state) || noStock(x.s)) return x.s;
+      if (kstNowMin() <= 8 * 60 + 10) return x.s;
+      return { ...x.s, time: '내일 08:00', state: 'waiting', reason_short: '롱폼은 08:00 칸에만 — 내일 차례' };
+    };
+
+    function ringCell(s, isLong, scr) {
+      const td = el('div', 'uc-slot');
+      const isWaitWord = s.state === 'waiting' || (s.state === 'late' && /간격 대기|차례|순서 대기|앞 편 뒤/.test(String(s.reason_short || '')));
+      const st = STATE[s.state] || STATE.pending;
+      const link = https(s.url);
+      let b;
+      if (link) { b = el('a', `gb-ring is-${s.state || 'pending'}`); b.href = s.url; b.target = '_blank'; b.rel = 'noopener noreferrer'; }
+      else { b = el('button', `gb-ring ${isWaitWord ? 'is-wait' : 'is-' + (s.state || 'pending')}`); b.type = 'button'; b.dataset.slot = s.slot_id; b.setAttribute('aria-expanded', String(view.open === s.slot_id)); }
+      mark(b, 'slots', 'state', s.slot_id, 'slot_id');
+      if (s.fixing && typeof s.fixing === 'string') { try { s.fixing = JSON.parse(s.fixing); } catch (e) { s.fixing = { cause: s.fixing }; } }
+      if (!s.fixing && (s.fix_cause || s.fix_plan)) s.fixing = { cause: s.fix_cause, plan: s.fix_plan, eta: s.fix_eta, by: s.fix_by, at: s.fix_at };
+      const problemSt = ['failed', 'late', 'uncertain'].includes(s.state) && !isWaitWord;
+      const fixing = problemSt && !noStock(s) && s.fixing && (s.fixing.cause || s.fixing.plan);
+      const titleTxt = s.title && s.title !== '미게시' ? s.title : (scr && scr.title) || '';
+      b.title = `${isLong ? '롱폼 · ' : ''}${s.time || ''} ${isWaitWord ? '대기' : st.label}${s.reason_short && s.state !== 'posted' ? ' · ' + s.reason_short : ''}${titleTxt ? ' · ' + titleTxt : ''}${link ? ' · 누르면 게시물' : ' · 누르면 ' + (problemSt ? '이유' : scr ? '대본' : '내용')}`;
+      b.setAttribute('aria-label', `${isLong ? '롱폼 ' : ''}${s.index}번째 칸 ${s.time || ''} ${isWaitWord ? '대기' : st.label}`);
+      b.append(el('span', 'gb-ring-mark', isWaitWord ? '대기' : fixing ? '🚧' : (ICON[s.state] || ICON.pending)));
+      if (isLong) b.classList.add('is-long');
+      if (fixing) b.classList.add('is-fixing');
+      td.append(b, el('span', 'gb-ring-time', s.time || '—'));
+      const vw = Number(s.views);
+      if (s.state === 'posted' && s.views != null && s.views !== '' && !Number.isNaN(vw)) {
+        const vt = vw >= 10000 ? `${(vw / 10000).toFixed(vw >= 100000 ? 0 : 1)}만` : num(vw);
+        const v = el('span', 'gb-ring-views', `▶ ${vt}`);
+        v.title = `조회수 ${num(vw)}${s.views_at ? ' · ' + s.views_at + ' 확인' : ''}`;
+        td.append(v);
+      }
+      if (fixing) td.append(el('span', 'gb-ring-note is-fixing', '공사 중'));
+      else if (s.state === 'uncertain') td.append(el('span', 'gb-ring-note', '확인 중'));
+      if (realOf(titleTxt)) { b.classList.add('is-real'); td.append(el('span', 'gb-ring-real', '현실')); }
+      return td;
+    }
+
+    function detailBox(s, scr) {
+      const box = el('div', 'uc-detail');
+      const hd = el('div', 'uc-detail-hd');
+      const x = el('button', 'gb-modal-x', '접기'); x.type = 'button'; x.dataset.ucClose = '1';
+      const st = STATE[s.state] || STATE.pending;
+      const problemSt = ['failed', 'late', 'uncertain'].includes(s.state);
+      if (!problemSt && scr) {
+        hd.append(el('strong', null, scr.title || scr.episode_id || '대본'), x);
+        box.append(hd, el('p', 'uc-muted', `${scr.kind || ''} · ${scr.episode_id || ''} · ${scr.state === 'ready' ? '올릴 준비 됨' : scr.state === 'blocked' ? '보류' : '확인 중'}`));
+        String(scr.text || '대본 없음').split('\n').forEach((ln) => {
+          const m = ln.match(/^([^:：\s]{1,8})[:：]\s*(.*)$/);
+          const p = el('p', m ? 'is-line' : null);
+          if (m) p.append(el('b', null, m[1] + ' '), document.createTextNode(m[2])); else p.textContent = ln;
+          box.append(p);
+        });
+        return box;
+      }
+      hd.append(el('strong', null, `${s.index}번째 칸 ${s.time || ''} · ${st.label}`), x);
+      box.append(hd);
+      if (s.title && s.title !== '미게시') box.append(el('p', 'uc-muted', s.title));
+      box.append(el('p', 'rs-short', s.reason_short || st.label));
+      const fx = s.fixing;
+      if (fx && (fx.cause || fx.plan)) {
+        const f = el('div', 'rs-fix');
+        if (fx.cause) f.append(el('p', null, `무엇이 문제였나: ${fx.cause}`));
+        if (fx.plan) f.append(el('p', null, `어떻게 올리나: ${fx.plan}`));
+        if (fx.eta) f.append(el('p', null, `언제 올리나: ${fx.eta}`));
+        if (fx.by || fx.at) f.append(el('p', 'rs-h', `${fx.by || ''} ${fx.at ? '· ' + fx.at + ' 메모' : ''}`.trim()));
+        box.append(f);
+      }
+      const next = { failed: '다음: 미게시가 확인되면 게시 세션이 다시 올립니다(재시도는 승인된 경우만).', late: '다음: 게시 세션이 순서대로 따라잡습니다. 재고·보류 문제면 제작 쪽에 요청이 갑니다.', uncertain: '다음: 게시 세션이 플랫폼에서 공개 여부를 확인한 뒤 공개 완료나 실패로 정리합니다(그전엔 다시 올리지 않음).' }[s.state];
+      if (next) box.append(el('p', 'rs-next', next));
+      if (s.reason) { box.append(el('p', 'rs-h', '자세한 기록')); box.append(el('p', 'rs-long', String(s.reason))); }
+      return box;
+    }
+
+    function yppBlock(g, yp) {
+      const blk = el('div', 'uc-blk uc-ypp');
+      const lab = el('div', 'uc-lab', '수익화');
+      blk.append(lab);
+      if (g.platform !== 'YouTube') { blk.append(el('p', 'uc-muted', `${g.platform}는 수익 창출 기록을 재지 않습니다`)); return blk; }
+      if (!yp) { blk.append(el('p', 'uc-muted', '수익 창출 기록 없음')); return blk; }
+      if (yp.measured) lab.append(el('span', null, `측정 ${yp.measured.slice(5, 16).replace('T', ' ')}`));
+      const status = yp.status;
+      const partner = status === '파트너 승인됨';
+      const need = (yp.note.match(/조치 필요[」"']?\s*[:：]?\s*(.+)$/) || [])[1] || '';
+      const steps = el('div', 'uc-ypp-steps');
+      const step = (txt, cls) => steps.append(el('span', `uc-ys ${cls}`, txt));
+      if (partner) {
+        step('✓ 조건 채움', 's-done'); step('✓ 파트너 승인', 's-done');
+        step(need ? '! 정보·주소 확인' : '✓ 정보·주소 확인', need ? 's-need' : 's-done');
+      } else if (status === '진행 중') {
+        step('● 조건 채우는 중', 's-doing'); step('파트너 승인', ''); step('정보·주소 확인', '');
+      } else if (/불가|거절|기각/.test(status)) {
+        step('✕ ' + status, 's-bad');
+      } else if (/검토/.test(status)) {
+        step('✓ 조건 채움', 's-done'); step('● ' + status, 's-doing'); step('정보·주소 확인', '');
+      } else {
+        step(status, '');
+      }
+      blk.append(steps);
+      const st = mark(el('p', 'uc-ypp-line'), 'ypp_watch', 'status', g.yppKey);
+      st.textContent = `단계: ${status}`;
+      blk.append(st);
+      if (partner) {
+        if (need) blk.append(el('p', 'uc-ypp-note', `조치 필요: ${need}`));
+        // 수익화 계정 전환(게시 계정이 수익화 계정으로 바뀌었는지)·지급 설정은 데이터에 칸이 없어 기록 없음으로 둠
+        blk.append(el('p', 'uc-muted', '수익화 계정 전환·지급 설정: 기록 없음'));
+      } else if (status === '진행 중') {
+        const meter = el('div', 'uc-meter');
+        const bar = (lab2, pct, txt, field) => {
+          const b = el('span', 'uc-mbar'); const i = el('i'); i.style.width = `${(pct * 100).toFixed(1)}%`; b.append(i);
+          const t = mark(el('span', 'uc-mtx', txt), 'ypp_watch', field, g.yppKey);
+          meter.append(el('span', null, lab2), b, t);
+        };
+        bar('구독자', yp.subs_pct, yp.subs_txt, 'subs_txt');
+        bar('유효 시청', yp.watch_pct, yp.watch_txt, 'watch_txt');
+        blk.append(meter);
+        if (yp.eta_txt && yp.eta_txt !== '—') { const e = mark(el('p', 'uc-ypp-line'), 'ypp_watch', 'eta_txt', g.yppKey); e.append(el('small', null, '4,000시간 예상 '), document.createTextNode(yp.eta_txt)); blk.append(e); }
+      } else if (yp.note) {
+        blk.append(el('p', /불가|거절|기각/.test(status) ? 'uc-ypp-note uc-ypp-bad' : 'uc-ypp-note', yp.note));
+      }
+      if (yp.a28_txt && yp.a28_txt !== '—') { const a = mark(el('p', 'uc-ypp-line'), 'ypp_watch', 'a28_txt', g.yppKey); a.append(el('small', null, '분석 시청시간(28일) '), document.createTextNode(yp.a28_txt)); blk.append(a); }
+      return blk;
+    }
+
+    function draw() {
+      filters.querySelectorAll('[data-platform]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.platform === view.platform)));
+      const pb = filters.querySelector('[data-toggle="problems"]'); if (pb) pb.setAttribute('aria-pressed', String(view.problems));
+      const ch = dash.data('channels');
+      const sl = dash.data('slots');
+      grid.replaceChildren(); dayBar.replaceChildren();
+      if (ch.status !== 'ok' || sl.status !== 'ok') {
+        const loading = ch.status === 'loading' || sl.status === 'loading';
+        grid.classList.toggle('dash-skeleton', loading);
+        if (!loading) grid.append(failLine());
+        return;
+      }
+      grid.classList.remove('dash-skeleton');
+      let pr; try { pr = dash.data('production'); } catch (e) { pr = null; }
+      const prod = pr && pr.status === 'ok' && Array.isArray(pr.data) ? pr.data.filter((it) => it && (it.title || it.channel)) : [];
+      const au = dash.data('audience_latest');
+      const audBy = new Map((au.status === 'ok' ? au.data : []).map((a) => [a.key, a]));
+      const yw = dash.data('ypp_watch');
+      const yppBy = new Map((yw.status === 'ok' && Array.isArray(yw.data) ? yw.data : []).map((r) => [r.key, r]));
+      const bd = dash.data('board');
+      const b0 = bd.status === 'ok' && bd.data[0] ? bd.data[0] : {};
+      const todayKey = String(b0.today || '');
+      // 판정 기준 시각 = 게시 기록 기준 시각(오늘 날짜일 때). 못 읽으면 지금 시각
+      const refMin = (() => { const m = String(b0.source_checked || b0.built || '').match(/(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})/); if (m && m[1] === todayKey) return Number(m[2]) * 60 + Number(m[3]); const h = String(b0.source_checked || '').match(/(\d{1,2}):(\d{2})/); return h && !/\d{4}-\d{2}-\d{2}/.test(String(b0.source_checked)) ? Number(h[1]) * 60 + Number(h[2]) : kstNowMin(); })();
+      // 갱신 시각 표시
+      const pAt = prod.map((r) => String(r.updated || '')).filter(Boolean).sort().pop();
+      const pStale = prod.length > 0 && prod.every((r) => r.stale === true || r.stale === 'true');
+      const pHm = pAt ? (() => { const t = new Date(pAt); return isNaN(t) ? '' : t.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' }); })() : '';
+      updEl.textContent = [b0.source_checked ? `게시 기록 ${b0.source_checked}` : '', pHm ? `제작 ${pHm}${pStale ? ' (오래됨)' : ''}` : ''].filter(Boolean).join(' · ');
+      updEl.classList.toggle('is-stale', pStale);
+
+      const dayOf = (x) => String(x.day || todayKey);
+      const days = [...new Set(sl.data.map(dayOf).concat(todayKey ? [todayKey] : []))].filter(Boolean).sort().reverse();
+      if (!view.day || !days.includes(view.day)) view.day = days[0] || todayKey;
+      days.forEach((d) => { const o = new Option(d === todayKey ? `오늘 ${dlabel(d)} 게시 칸` : `${dlabel(d)} 게시 칸(기록)`, d); dayBar.append(o); });
+      dayBar.value = view.day;
+      const isToday = view.day === todayKey;
+      const slotsByKeyDay = d3.group(sl.data, (s) => s.key, dayOf);
+      const slotsOf = (c, day) => (c ? ((slotsByKeyDay.get(c.key) || new Map()).get(day) || []).slice().sort((x, y) => Number(x.index) - Number(y.index)) : []);
+
+      // 채널 묶기(롱폼·숏폼 행을 이름+플랫폼으로 한 카드)
+      const groups = [];
+      for (const c of window.gb.renCh(ch.data)) {
+        let g = groups.find((x) => x.name === c.name && x.platform === c.platform);
+        if (!g) { g = { name: c.name, platform: c.platform, long: null, short: null }; groups.push(g); }
+        if (/롱/.test(c.type)) g.long = c; else g.short = c;
+      }
+      groups.forEach((g) => { const k = String((g.short || g.long).key).replace(/_long$/, ''); g.baseKey = k; g.yppKey = k; g.id = `${k}-${String(g.platform).toLowerCase()}`; });
+
+      // 안 올라간 칸에 대본 붙이기(제작맥 대기열 순서 — 옛 게시 칸 표와 같음)
+      const sc = dash.data('scripts');
+      const scBy = d3.group(sc.status === 'ok' ? sc.data : [], (r) => r.key);
+      const scriptOf = {};
+      const assign = (c) => {
+        if (!c) return;
+        const list = (scBy.get(c.key) || []).slice().sort((x, y) => x.seq - y.seq);
+        const used = new Set();
+        const ss = slotsOf(c, todayKey);
+        ss.forEach((s) => { const hit = list.find((r) => norm(r.title) === norm(s.title)); if (hit) { used.add(hit.id); if (!https(s.url)) scriptOf[s.slot_id] = hit; } });
+        const free = list.filter((r) => !used.has(r.id));
+        ss.forEach((s) => { if (https(s.url)) return; if (!scriptOf[s.slot_id] && free.length) scriptOf[s.slot_id] = free.shift(); });
+      };
+      groups.forEach((g) => { assign(g.long); assign(g.short); });
+
+      // 게시 순서(옛 표 그대로): 나간 칸은 시각 순 → 앞 화 남은 숏폼 → 다음 화 롱폼 → 그 롱폼 뒤 숏폼
+      const doneSlot = (s) => https(s.url) || s.state === 'posted' || s.state === 'uncertain';
+      const rankSlot = (x) => (doneSlot(x.s) ? 0 : x.long ? 2 : /롱폼 공개/.test(String(x.s.reason_short || '')) ? 3 : 1);
+      const lineOf = (g, day) => [...slotsOf(g.long, day).map((s) => ({ s, long: true })), ...slotsOf(g.short, day).map((s) => ({ s, long: false }))]
+        .map((x, i) => ({ ...x, i, r: rankSlot(x) }))
+        .sort((x, y) => x.r - y.r || (x.r === 0 ? tkey(x.s).localeCompare(tkey(y.s)) : 0) || x.i - y.i)
+        .map((x) => ({ ...x, s: dueOf(x, day === todayKey) }));
+
+      // 오늘 게시 판정
+      const postState = (g) => {
+        const line = lineOf(g, todayKey);
+        const sibOf = (s) => line.filter((y) => y.s.key === s.key).map((y) => y.s);
+        const js = line.map((x) => ({ x, j: judgeSlot(x.s, refMin, sibOf(x.s)) }));
+        const fixed = js.filter((y) => y.j.k === 'fixed');
+        const bad = js.filter((y) => y.j.k === 'bad');
+        const posted = js.filter((y) => y.j.k === 'ok');
+        const next = js.find((y) => y.j.k === 'next');
+        const empties = js.filter((y) => y.j.k === 'empty');
+        const rests = js.filter((y) => y.j.k === 'rest');
+        const tag = (y) => `${y.x.long ? '롱폼 ' : ''}${y.x.s.index}번째 칸 ${y.x.s.time || ''}`.trim();
+        let k, short_, lines = [];
+        // 11-19 사장님 「문제 처리하면 초록으로 · 재고는 있는데 저녁 칸을 기다리면 노랑 『처리 중 — 다음 칸』」
+        //   노랑(처리 중) = 남은 문제가 모두 「지나간 빈 칸」(실패·공개 미확정·반복 실패 아님)이고, 그 계정에 재고가 있으며 같은 계정의 다음 칸이 잡혀 있음
+        const rowOf = (s) => [g.long, g.short].find((c) => c && c.key === s.key);
+        const nextFor = (s) => js.find((y) => y.j.k === 'next' && y.x.s.key === s.key);
+        const pending = bad.length && bad.every((y) => y.j.type === 'miss' && Number((rowOf(y.x.s) || {}).ready || 0) > 0 && nextFor(y.x.s));
+        if (bad.length && !pending) {
+          k = 'bad';
+          short_ = `게시 문제 ${bad.length}칸 — ${bad[0].j.why}`;
+          lines = bad.map((y) => `✕ ${tag(y)}: ${y.j.why}`);
+        } else if (bad.length) {
+          k = 'warn';
+          const nx = nextFor(bad[0].x.s);
+          short_ = `처리 중 — 다음 칸 ${nx.x.s.time}`;
+          lines = bad.map((y) => `… ${tag(y)}: ${y.j.why} → 재고 있음, 다음 칸 ${(nextFor(y.x.s) || nx).x.s.time}에 올라감`);
+        } else if (posted.length || next || fixed.length) {
+          k = 'ok';
+          short_ = fixed.length ? `문제 처리했음 ✓ (${fixed[0].j.orig} → ${fixed[0].j.at} 게시)` : `게시 정상 · 오늘 공개 ${posted.length}칸${next ? ` · 다음 ${next.x.s.time}` : ''}`;
+          lines = [`공개 ${posted.length}칸`, next ? `다음 칸 ${next.x.s.time} 대기(정상)` : '오늘 남은 시각 잡힌 칸 없음'];
+          fixed.forEach((y) => lines.push(`✓ 처리함 · ${tag(y)}: ${y.j.why}`));
+          if (empties.length) lines.push(`재고 없음·보류로 못 올리는 칸 ${empties.length}개 (${[...new Set(empties.map((y) => y.j.why))].join(', ')})`);
+        } else {
+          k = 'off';
+          const why = !line.length ? '오늘 칸 없음' : empties.length ? `올릴 재고 없음 (${[...new Set(empties.map((y) => y.j.why))].join(', ')})` : rests.length ? `쉬는 채널 (${[...new Set(rests.map((y) => y.j.why))].join(', ')})` : '시각 잡힌 칸 없음';
+          short_ = `게시 안 됨 — ${why}`;
+          lines = [why];
+        }
+        return { k, short: short_, title: `${{ ok: '초록 = 게시 정상', warn: '노랑 = 처리 중', bad: '빨강 = 게시 문제', off: '회색 = 게시 안 됨' }[k]}\n` + lines.join('\n') + '\n(판정: 실패·공개 미확정·반복 실패·재고 있는데 안 올라감 = 빨강 / 빈 칸이지만 재고 있고 다음 칸 잡힘 = 노랑 / 공개됐거나 다음 칸 정상·문제 처리함 = 초록 / 재고 없음·보류·중단·칸 없음 = 회색)', line, posted: posted.length, next: next ? next.x : null, bad, fixed };
+      };
+
+      const parts = (g) => (g.platform !== 'YouTube' ? [['툰', g.short || g.long]] : [['롱', g.long], ['숏', g.short]].filter(([, c]) => c));
+      const minDays = (g) => { const ds = parts(g).map(([, c]) => val(c, 'days_left')).filter((v) => v != null); return ds.length ? Math.min(...ds) : null; };
+      const rankOf = (g) => { const r = [g.long, g.short].map((c) => val(c, 'rank')).filter((v) => v != null); return r.length ? Math.min(...r) : null; };
+      const rankRow = (g) => [g.long, g.short].filter((c) => val(c, 'rank') != null).sort((a, b) => val(a, 'rank') - val(b, 'rank'))[0] || null;
+      const lvOf = (k, c) => { const n = Number((c && c.ready) || 0); if (k === '숏') return n <= 3 ? 'bad' : n >= 12 ? 'ok' : 'warn'; return n <= 1 ? 'bad' : 'ok'; };
+      const prodOf = (g) => {
+        const ks = [g.long, g.short].filter(Boolean).map((c) => String(c.key));
+        const base = ks.map((k) => k.replace(/_long$/, ''));
+        return prod.filter((it) => {
+          if (it.row) return ks.includes(String(it.row)) || base.includes(String(it.row).replace(/_long$/, ''));
+          const raw = String(it.channel || ''); const nm = raw.replace(/\(.*?\)/g, '').trim();
+          const plats = Object.entries(PLAT).filter(([k]) => raw.includes(k)).map(([, v]) => v);
+          return !!nm && (nm === g.name || g.name.includes(nm) || nm.includes(g.name)) && (!plats.length || plats.includes(g.platform));
+        });
+      };
+      const stockKey = (g) => { const rs = parts(g).map(([, c]) => Number(c.ready || 0)); return [rs.length ? Math.min(...rs) : 999, rs.reduce((a, b) => a + b, 0)]; };
+      groups.forEach((g) => { g.ps = postState(g); });
+      // 11-19 사장님 「좀 더 간소화 — 한눈에」: 정렬 단추 없앰. 순서 = 빨강 → 초록(유튜브 먼저 · 급한 순위) · 회색은 아래 한 줄 칩
+      const PO = { bad: 0, warn: 1, ok: 2, off: 3 };
+      groups.sort((a, b) => PO[a.ps.k] - PO[b.ps.k] || (a.platform === 'YouTube' ? 0 : 1) - (b.platform === 'YouTube' ? 0 : 1) || (rankOf(a) ?? 999) - (rankOf(b) ?? 999));
+
+
+      // 제작 줄 하나(11-19 표시 유지 — 작업 중 파랑 sc-run · 대기 노랑 sc-wait)
+      function prodLine(it, tag) {
+        const now = el('div', 'sc-now');
+        const bar = el('div', 'sc-bar');
+        if (tag) now.append(el('em', 'sc-kt', tag));
+        let steps = it.steps;
+        if (typeof steps === 'string') { try { steps = JSON.parse(steps); } catch (e) { steps = null; } }
+        if (!Array.isArray(steps) || !steps.length) steps = [{ name: it.stage || '진행 중', state: it.blocked ? 'blocked' : 'doing', note: it.progress || '' }];
+        const done = steps.filter((s) => s && s.state === 'done').length;
+        const cur = steps.find((s) => s && (s.state === 'doing' || s.state === 'blocked')) || steps[steps.length - 1];
+        const fr = cur && (cur.state === 'doing' || cur.state === 'blocked') ? frac(cur.note) : null;
+        const pct = Math.round(100 * (done + (fr || 0)) / Math.max(1, steps.length));
+        const note = String((cur && cur.note) || '');
+        const isWait = cur && cur.state === 'doing' && (/대기|차례|기다|줄 ?섬/.test(`${cur.name || ''} ${note}`) || fr === 0);
+        const run = !!(cur && cur.state === 'doing' && !isWait);
+        now.classList.add(run ? 'sc-run' : 'sc-wait'); bar.classList.add(run ? 'sc-run' : 'sc-wait');
+        now.append(el('span', null, `${cur && cur.state === 'blocked' ? '막힘 ' : ''}${short(cur && cur.name)}${note && note.length <= 7 ? ' ' + note : ''}`), el('b', null, steps.length === 1 && fr == null ? '진행' : `${pct}%`));
+        now.title = [it.title, it.ep].filter(Boolean).join(' ') + (it.blocked ? ' · 막힘: ' + it.blocked : '');
+        for (const s of steps) {
+          const st = ['done', 'doing', 'blocked'].includes(s && s.state) ? s.state : 'todo';
+          const seg = el('div', 'sc-seg sc-' + st);
+          const b = el('div', 'sc-b');
+          if (st === 'doing' || st === 'blocked') { const f2 = frac(s.note); const i = el('i', f2 == null ? 'run' : null); i.style.width = f2 == null ? '100%' : `${Math.round(f2 * 100)}%`; b.append(i); }
+          seg.append(b, el('div', 'sc-l', short(s && s.name)));
+          seg.title = `${(s && s.name) || ''}${s && s.note ? ' ' + s.note : ''}`;
+          bar.append(seg);
+        }
+        return { now, bar, pct, run, step: `${cur && cur.state === 'blocked' ? '막힘 ' : ''}${(cur && cur.name) || it.stage || '진행 중'}` };
+      }
+      const kindTag = (it) => { const k = String(it.kind || ''); return /롱/.test(k) && /숏/.test(k) ? '롱+숏' : /롱/.test(k) ? '롱' : /숏/.test(k) ? '숏' : /웹툰|툰/.test(k) ? '툰' : ''; };
+      // 수익화 단계 짧은 글자(💰 배지 옆)
+      const yppShort = (yp) => { if (!yp) return ''; const s = yp.status; if (s === '파트너 승인됨') return '수익화'; if (s === '진행 중') return '진행 중'; if (/불가|거절|기각/.test(s)) return '불가'; if (/검토/.test(s)) return '검토 중'; return s; };
+      const headOf = (g, yp, compact) => {
+        const hd = el('div', 'uc-hd');
+        const rk = rankOf(g); const rr = rankRow(g);
+        const rkEl = el('span', 'sc-rk', rk != null ? String(rk) : '—'); rkEl.title = rk != null ? `급한 순위 ${rk}` : '순위 없음';
+        if (rr) mark(rkEl, 'channels', 'rank', rr.key);
+        const pf = String(g.platform).toLowerCase();
+        const pfEl = el('span', `gb-pf pf-${pf}`, pf === 'youtube' ? '▶' : pf === 'threads' ? '@' : pf === 'instagram' ? '◎' : '•'); pfEl.title = g.platform;
+        const curl = [g.long, g.short].map((c) => c && c.channel_url).find(https);
+        const nm = el(curl ? 'a' : 'span', 'uc-nm', g.name);
+        if (curl) { nm.href = curl; nm.target = '_blank'; nm.rel = 'noopener noreferrer'; nm.title = `${g.name} 채널 열기`; }
+        hd.append(rkEl, pfEl, nm);
+        if (!compact) {
+          const a = audBy.get(g.baseKey);
+          if (a) { const b = mark(el('b', 'uc-subn', num(Number(a.latest))), 'audience_latest', 'latest', a.key); b.title = `${g.platform === 'YouTube' ? '구독자' : '팔로워'} ${num(Number(a.latest))}${a.change != null ? ' (' + (a.change >= 0 ? '+' : '') + num(Number(a.change)) + ')' : ''}${a.latest_day ? ' · ' + a.latest_day + ' 측정' : ''}`; hd.append(b); }
+          else { const fc = [g.short, g.long].find((c) => c && val(c, 'followers') != null); if (fc) hd.append(mark(el('b', 'uc-subn', num(val(fc, 'followers'))), 'channels', 'followers', fc.key)); }
+        }
+        if (yp) {
+          const partner = yp.status === '파트너 승인됨';
+          const t = mark(el('span', partner ? 'uc-money' : 'uc-ytag', `${partner ? '💰 ' : ''}${yppShort(yp)}`), 'ypp_watch', 'status', g.yppKey);
+          t.title = `수익화: ${yp.status}${yp.note ? ' · ' + yp.note : ''}`;
+          hd.append(t);
+        }
+        return hd;
+      };
+      const stockLine = (g) => {
+        const nums = el('div', 'sc-nums uc-stk');
+        for (const [k, c] of parts(g)) {
+          const d = val(c, 'days_left');
+          const box = el('div', 'sc-num sc-' + lvOf(k, c));
+          const rdy = Number(c.ready || 0); const ip = Number(c.in_production || 0);
+          box.append(el('span', 'sc-k', k), mark(el('span', 'sc-v', num(rdy)), 'channels', 'ready', c.key));
+          if (d != null) box.append(mark(el('span', 'sc-d', `${Math.floor(d * 10) / 10}일`), 'channels', 'days_left', c.key));
+          box.title = `${k === '롱' ? '롱폼' : k === '숏' ? '숏폼' : '웹툰'} 올라간 재고 ${rdy}편${d != null ? ' · ' + d + '일 버팀' : ''}${ip ? ' · 만드는 중 +' + ip : ''}`;
+          nums.append(box);
+        }
+        return nums;
+      };
+
+      // 회색(게시 안 됨) 채널 = 한 줄 칩. 누르면 카드로 펼침
+      function chip(g) {
+        const yp = g.platform === 'YouTube' ? yppBy.get(g.yppKey) : null;
+        const b = el('div', 'uc-chip'); b.title = g.ps.title;
+        b.append(headOf(g, yp, true), el('span', 'uc-chip-why', offWord(g.ps)), stockLine(g), moreBtn(g, false));
+        return b;
+      }
+
+      // 게시 한마디(11-19 사장님 「현재 게시 중인지 문제가 있는지만 간단하게」)
+      function offWord(ps) { const s = ps.short.replace(/^게시 안 됨 — /, ''); return /쉬는|중단/.test(s) ? '게시 안 됨 · 중단' : /재고|보류/.test(s) ? '게시 안 됨 · 재고 없음' : '게시 안 됨'; }
+      function moreBtn(g, open) {
+        const b = el('button', 'uc-moreb', open ? '▾ 접기' : '▸ 자세히'); b.type = 'button'; b.dataset.ucExp = g.id;
+        b.setAttribute('aria-expanded', String(open));
+        return b;
+      }
+      const cleanTitle = (it) => `${String(it.title || '').replace(/\s+—.*$/, '').replace(/[「」]/g, '').replace(/\s*대사 숏폼$/, '')} ${it.ep || ''}`.trim();
+
+      // 수익(원) 표시: 1만 이상은 만 단위 소수 1자리, 그 밑은 ₩4,625
+      const won = (v) => { const n = Number(v || 0); return n >= 10000 ? `₩${(n / 10000).toFixed(1)}만` : `₩${num(n)}`; };
+      const rvD = dash.data('revenue');
+      const rvRows = rvD.status === 'ok' && Array.isArray(rvD.data) ? rvD.data : [];
+      // 수익 표(항상 보임): 구분 | 지난달 | 이번 달 | 어제(집계 최근일) — 첫 줄 전체 합계, 아래 채널별 · ▸ 날짜별(최근 7일)
+      const revShown = () => { if (view.revShow == null) { let v = null; try { v = localStorage.getItem('gb_rev_show'); } catch (e) { v = null; } view.revShow = v === '1'; } return view.revShow; };
+      const wonFull = (v) => `₩${Number(v || 0).toLocaleString('ko-KR')}`;
+      const mLab = (m) => { const x = String(m || '').match(/-(\d{2})$/); return x ? `${+x[1]}월` : ''; };
+      const dLab = (d) => { const x = String(d || '').match(/^\d{4}-(\d{2})-(\d{2})$/); return x ? `${+x[1]}/${+x[2]}` : ''; };
+      const markEl = (node, src, field, where, row) => { node.dataset.source = src; node.dataset.field = field; if (where) node.dataset.where = where; if (row != null) node.dataset.row = String(row); return node; };
+      function madeBox() {
+        const md = dash.data('today_made');
+        if (md.status !== 'ok' || !Array.isArray(md.data)) return null;
+        if (view.madeOpen == null) { let v = null; try { v = localStorage.getItem('gb_made_open'); } catch (e) { v = null; } view.madeOpen = v !== '0'; }
+        const open = view.madeOpen;
+        const sec = el('section', 'uc-made'); sec.id = 'today-made';
+        const hd = el('button', 'uc-made-h'); hd.type = 'button'; hd.setAttribute('aria-expanded', String(open));
+        hd.append(el('span', 'uc-made-t', `${open ? '▾' : '▸'} 오늘 만든 것${todayKey ? ' · ' + todayKey.slice(5) : ''}`));
+        const sm = dash.data('today_made_sum');
+        (sm.status === 'ok' && Array.isArray(sm.data) ? sm.data : []).forEach((s, i) => {
+          const c = el('span', `uc-mk k-${({ 롱폼: 'long', 숏폼: 'short', 웹툰: 'toon', 인스타: 'insta' })[s.kind] || 'etc'}`);
+          const n = el('b', null, String(s.n)); n.dataset.source = 'today_made_sum'; n.dataset.field = 'n'; n.dataset.where = `kind=${enc(s.kind)}`;
+          c.append(document.createTextNode(`${s.kind} `), n);
+          if (s.kind === '숏폼' && s.files) c.append(document.createTextNode(` (${s.files}편)`));
+          hd.append(c);
+        });
+        hd.addEventListener('click', () => { view.madeOpen = !view.madeOpen; try { localStorage.setItem('gb_made_open', view.madeOpen ? '1' : '0'); } catch (e) { /* 저장 안 돼도 이번 화면은 바뀜 */ } draw(); });
+        sec.append(hd);
+        if (!open) return sec;
+        if (!md.data.length) { sec.append(el('p', 'uc-muted', '오늘 올라간 완성본이 아직 없습니다.')); return sec; }
+        const wrap = el('div', 'uc-revwrap');
+        const tb = el('table', 'uc-madetbl');
+        const hr = el('tr'); hr.append(el('th', null, '시각'), el('th', null, '채널'), el('th', null, '종류'), el('th', null, '무엇'));
+        const th = el('thead'); th.append(hr);
+        const body = el('tbody');
+        md.data.map((r, i) => ({ r, i })).sort((a, b) => String(a.r.time || '').localeCompare(String(b.r.time || '')) || a.i - b.i).forEach(({ r, i }) => {
+          const tr = el('tr');
+          const mk = (tag, cls, txt, field) => { const n = el(tag, cls, txt); n.dataset.source = 'today_made'; n.dataset.field = field; n.dataset.row = String(i); return n; };
+          const kd = el('td'); kd.append(mk('span', `uc-mk k-${({ 롱폼: 'long', 숏폼: 'short', 웹툰: 'toon', 인스타: 'insta' })[r.kind] || 'etc'}`, String(r.kind || ''), 'kind'));
+          const wt = el('td', 'uc-made-what'); wt.append(mk('span', null, String(r.what || ''), 'what'));
+          if (r.kind === '숏폼' && Number(r.files) > 0) wt.append(el('small', null, ` ×${Number(r.files)}`));
+          tr.append(mk('td', 'n', String(r.time || ''), 'time'), mk('td', null, String(r.channel || ''), 'channel'), kd, wt);
+          body.append(tr);
+        });
+        tb.append(th, body); wrap.append(tb); sec.append(wrap);
+        return sec;
+      }
+      function revBox() {
+        const rt = dash.data('revenue_total');
+        const r0 = rt.status === 'ok' && Array.isArray(rt.data) ? rt.data[0] : null;
+        if (!r0 || !rvRows.length) return null;
+        const box = el('div', `uc-revbox${revShown() ? '' : ' is-hidden'}`); box.id = 'revenue-table';
+        // 11-19 사장님 「수익도 숨기기 되게」 — 제목 줄을 누르면 접기/펼치기(기본 접힘). 접으면 금액 안 보임(표·총액 배지·카드 수익 줄 모두)
+        const tg = el('button', 'uc-revbox-h', revShown() ? '💰 수익(유튜브 예상 수익) ▾' : '💰 수익 ▸'); tg.type = 'button';
+        tg.setAttribute('aria-expanded', String(revShown())); tg.title = revShown() ? '눌러서 수익 숨기기' : '눌러서 수익 보기';
+        tg.addEventListener('click', () => { const v = !revShown(); try { localStorage.setItem('gb_rev_show', v ? '1' : '0'); } catch (e) { /* 저장 안 돼도 이번 화면은 바뀜 */ } view.revShow = v; draw(); });
+        box.append(tg);
+        if (!revShown()) return box;
+        const wrap = el('div', 'uc-revwrap');
+        const tb = el('table', 'uc-revtbl');
+        const thead = el('thead'); const hr = el('tr');
+        hr.append(el('th', null, '구분'), el('th', 'n', `지난달${mLab(r0.prev_month) ? '(' + mLab(r0.prev_month) + ')' : ''}`), el('th', 'n', `이번 달${mLab(r0.month) ? '(' + mLab(r0.month) + ')' : ''}`), el('th', 'n', `어제${dLab(r0.last_day) ? '(' + dLab(r0.last_day) + ')' : ''}`));
+        thead.append(hr);
+        const body = el('tbody');
+        const tr0 = el('tr', 'is-total');
+        tr0.append(el('td', null, '전체'),
+          markEl(el('td', 'n', wonFull(r0.prev_month_total)), 'revenue_total', 'prev_month_total', null, 0),
+          markEl(el('td', 'n', wonFull(r0.month_total)), 'revenue_total', 'month_total', null, 0),
+          r0.last_day ? markEl(el('td', 'n', wonFull(r0.last_day_amount)), 'revenue_total', 'last_day_amount', null, 0) : el('td', 'n uc-muted', '집계 전'));
+        body.append(tr0);
+        rvRows.forEach((r) => {
+          const tr = el('tr');
+          const w = `uc=${enc(r.uc)}`;
+          const ld = el('td', 'n');
+          if (r.last_day) { ld.append(markEl(el('span', null, wonFull(r.last_day_amount)), 'revenue', 'last_day_amount', w)); if (r.last_day !== r0.last_day) ld.append(el('small', null, ` (${dLab(r.last_day)})`)); }
+          else { ld.textContent = '집계 전'; ld.classList.add('uc-muted'); }
+          tr.append(el('td', null, r.channel || ''), markEl(el('td', 'n', wonFull(r.prev_month_total)), 'revenue', 'prev_month_total', w), markEl(el('td', 'n', wonFull(r.month_total)), 'revenue', 'month_total', w), ld);
+          body.append(tr);
+        });
+        tb.append(thead, body); wrap.append(tb); box.append(wrap);
+        box.append(el('p', 'uc-revnote', '유튜브는 1~2일 늦게 집계 — 어제 칸은 집계된 가장 최근 날 · 매일 13:00 갱신'));
+        // ▸ 날짜별(최근 7일) — 접어 둠, 펼친 상태는 다시 그려도 유지
+        const dd = dash.data('revenue_daily');
+        const days = dd.status === 'ok' && Array.isArray(dd.data) ? dd.data.slice(0, 7) : [];
+        if (days.length) {
+          const det = el('details', 'uc-revdays'); det.open = !!view.revOpen;
+          det.addEventListener('toggle', () => { view.revOpen = det.open; });
+          det.append(el('summary', null, '▸ 날짜별(최근 7일)'));
+          const w2 = el('div', 'uc-revwrap'); const t2 = el('table', 'uc-revtbl');
+          const h2 = el('tr'); h2.append(el('th', null, '날짜'), el('th', 'n', '전체'), ...rvRows.map((r) => el('th', 'n', r.channel || '')));
+          const th2 = el('thead'); th2.append(h2);
+          const b2 = el('tbody');
+          days.forEach((d) => {
+            const tr = el('tr'); const w = `date=${enc(d.date)}`;
+            tr.append(el('td', null, dLab(d.date)), markEl(el('td', 'n is-b', wonFull(d.total)), 'revenue_daily', 'total', w));
+            rvRows.forEach((r) => { const v = d[r.uc]; tr.append(v == null ? el('td', 'n uc-muted', '—') : markEl(el('td', 'n', wonFull(v)), 'revenue_daily', r.uc, w)); });
+            b2.append(tr);
+          });
+          t2.append(th2, b2); w2.append(t2); det.append(w2); box.append(det);
+        }
+        return box;
+      }
+      const revOf = (g) => { if (g.platform !== 'YouTube') return null; const curl = [g.long, g.short].map((c) => c && String(c.channel_url || '')).join(' '); return rvRows.find((r) => (r.uc && curl.includes(r.uc)) || r.channel === g.name) || null; };
+      function card(g) {
+        const ps = g.ps;
+        const open = view.exp.has(g.id);
+        const yp = g.platform === 'YouTube' ? yppBy.get(g.yppKey) : null;
+        const partner = !!(yp && yp.status === '파트너 승인됨');
+        const cardEl = el('article', `uc is-${ps.k}${open ? ' is-open' : ''}`);
+        cardEl.id = `ch-${g.id}`;
+        // ① 머리(순위·플랫폼·이름·구독자·수익화 한 단어)
+        cardEl.append(headOf(g, yp, false));
+        // 11-19 사장님 「수익화 옆에 이번 달 얼마 벌었는지, 어제 얼마 벌었는지(매일 1시 업데이트)」 — revenue(유튜브 예상 수익, 1~2일 늦게 집계)
+        const rv = revShown() ? revOf(g) : null;
+        if (rv) {
+          const rl = el('p', 'uc-rev');
+          const mm = String(rv.month || '').match(/-(\d{2})$/);
+          rl.append(el('span', 'uc-rev-k', `${mm ? +mm[1] + '월' : '이번 달'} `), mark(el('b', null, won(rv.month_total)), 'revenue', 'month_total', rv.uc, 'uc'));
+          rl.append(document.createTextNode(' · '));
+          const ld = String(rv.last_day || '').match(/^\d{4}-(\d{2})-(\d{2})$/);
+          if (ld) rl.append(el('span', 'uc-rev-k', `${+ld[1]}/${+ld[2]} `), mark(el('b', null, won(rv.last_day_amount)), 'revenue', 'last_day_amount', rv.uc, 'uc'));
+          else rl.append(el('span', 'uc-rev-k', '집계 전'));
+          rl.title = `유튜브 예상 수익 · 이번 달 ${Number(rv.month_total || 0).toLocaleString('ko-KR')}원${ld ? ` · ${rv.last_day} ${Number(rv.last_day_amount || 0).toLocaleString('ko-KR')}원` : ''} (유튜브는 1~2일 늦게 집계 — 날짜 = 집계된 가장 최근 날 · 매일 13시 갱신)`;
+          cardEl.append(rl);
+        }
+        // ② 상태 한 줄 — 게시·제작 같은 꼴로 나란히(11-19 사장님 「게시 중 체크 옆에 제작 중 체크도」)
+        //    게시: 게시 중 ✓(초록) / 문제: 한마디(빨강) / 게시 안 됨(회색) · 제작: 제작 중 ✓(파랑, 도는 작업 있음) / 제작 대기(노랑, 차례 대기만) / 제작 없음(회색)
+        const line = ps.line;
+        const its = prodOf(g);
+        const both = !!(g.long && g.short);
+        const lines = its.map((it) => ({ it, ...prodLine(it, (its.length > 1 || both) ? kindTag(it) : '') })).sort((a, b) => (b.run ? 1 : 0) - (a.run ? 1 : 0) || b.pct - a.pct);
+        const stl = el('div', 'uc-stline');
+        const pl = el('span', 'uc-pill uc-pl');
+        if (ps.k === 'bad') {
+          const bad = ps.bad;
+          const w = bad[0].j.why.replace(/^예정 \S+ 지났는데 안 올라감( · )?/, '').trim() || '예정 시각 지남';
+          pl.classList.add('is-bad'); pl.textContent = `문제: ${w}${bad.length > 1 ? ` 외 ${bad.length - 1}칸` : ''}${ps.posted ? ` · 오늘 ${ps.posted}편` : ''}`;
+        } else if (ps.k === 'warn') { pl.classList.add('is-warn'); pl.textContent = `${ps.short}${ps.posted ? ` · 오늘 ${ps.posted}편` : ''}`; }
+        else if (ps.k === 'ok' && ps.fixed.length) { pl.classList.add('is-ok'); pl.textContent = `${ps.short}${ps.posted ? ` · 오늘 ${ps.posted}편` : ''}`; }
+        else if (ps.k === 'ok') { pl.classList.add('is-ok'); pl.textContent = `게시 중 ✓ 오늘 ${ps.posted}편`; }
+        else { pl.classList.add('is-off'); pl.textContent = `${offWord(ps)}${ps.posted ? ` · 오늘 ${ps.posted}편` : ''}`; }
+        // 오늘 n편 = 오늘 공개된 칸 수(롱·숏 합) — 11-19 사장님 「게시 중에 오늘 몇 편 올렸는지」
+        pl.title = ps.title;
+        const prk = !lines.length ? 'idle' : lines.some((l) => l.run) ? 'run' : 'wait';
+        // 진행률 = 대표 작업(작업 중 먼저, 그다음 많이 된 순) 1개의 단계 막대 %(11-19 사장님 「제작 중 옆에 몇 프로인지」)
+        const pp = el('span', `uc-pill uc-pp is-${prk}`, `${{ run: '제작 중 ✓', wait: '제작 대기', idle: '제작 없음' }[prk]}${lines.length ? ' ' + lines[0].pct + '%' : ''}`);
+        pp.title = lines.length ? lines.map((l) => `${l.run ? '▶ 작업 중' : '… 차례 대기'} · ${l.step} · ${cleanTitle(l.it)} — ${l.pct}%`).join('\n') : '지금 만드는 작업 없음';
+        stl.append(pl, pp);
+        cardEl.append(stl);
+        // ③ 재고 한 줄(색만)
+        cardEl.append(stockLine(g));
+        // ④ 지금 작업 한 줄: 가장 앞선 작업 이름만(막대·다른 작업은 펼치기)
+        const pr1 = el('p', 'uc-pr');
+        if (!lines.length) { pr1.classList.add('is-idle'); pr1.textContent = '만드는 것 없음'; }
+        else {
+          const l0 = lines[0];
+          pr1.classList.add(l0.run ? 'is-run' : 'is-wait');
+          pr1.append(el('b', null, l0.step), document.createTextNode(` · ${cleanTitle(l0.it)}${l0.run ? '' : ' (차례 대기)'}`));
+          if (lines.length > 1) pr1.append(el('span', 'uc-more', ` 외 ${lines.length - 1}개`));
+          pr1.title = lines.map((l) => `${l.run ? '▶' : '…'} ${l.step} · ${cleanTitle(l.it)} — ${l.pct}%`).join('\n');
+        }
+        // 수익화 승인 채널은 펼칠 것 없음(💰 수익화 표시로 끝) — 그래도 게시 칸·제작 상세는 「▸ 자세히」에
+        const row = el('div', 'uc-foot');
+        row.append(pr1, moreBtn(g, open));
+        cardEl.append(row);
+        if (!open) return cardEl;
+
+        // ── 펼친 상세 — 판정 이유 · 제작 단계 막대(전부) · 게시 칸 · 최근 게시 · 수익화(승인 채널 제외) · 재고 메모
+        const det = el('div', 'uc-det');
+        det.append(el('p', 'uc-why', ps.title.split('\n').slice(1, -1).join(' · ')));
+        if (lines.length) {
+          const pbox = el('div', 'uc-prod');
+          pbox.classList.add(lines.some((l) => l.run) ? 'sc-st-run' : 'sc-st-wait');
+          lines.forEach((l) => pbox.append(l.now, l.bar));
+          const mb = el('div', 'uc-blk'); mb.append(el('div', 'uc-lab', `만드는 중 ${lines.length}건`), pbox); det.append(mb);
+        }
+        const a = audBy.get(g.baseKey);
+        if (a) { const s = el('p', 'uc-muted', `${g.platform === 'YouTube' ? '구독자' : '팔로워'} ${num(Number(a.latest))}${a.change != null ? ' (' + (a.change >= 0 ? '+' : '') + num(Number(a.change)) + ')' : ''}${a.latest_day ? ' · ' + a.latest_day + ' 측정' : ''}`); det.append(s); }
+        const pblk = el('div', 'uc-blk');
+        pblk.append(el('div', 'uc-lab', isToday ? '오늘 게시 칸' : `${dlabel(view.day)} 게시 칸(기록)`));
+        const dline = isToday ? line : lineOf(g, view.day);
+        const slotsEl = el('div', 'uc-slots');
+        if (!dline.length) slotsEl.append(el('span', 'uc-muted', '이날 칸 없음'));
+        let openSlot = null;
+        dline.forEach((y) => {
+          const scr = isToday && !https(y.s.url) && !['failed', 'late', 'uncertain'].includes(y.s.state) ? scriptOf[y.s.slot_id] : null;
+          slotsEl.append(ringCell(y.s, y.long, scr));
+          if (view.open && y.s.slot_id === view.open) openSlot = { s: y.s, scr };
+        });
+        pblk.append(slotsEl);
+        if (openSlot) pblk.append(detailBox(openSlot.s, openSlot.scr));
+        const keys = [g.long, g.short].filter(Boolean).map((c) => c.key);
+        const posts = sl.data.filter((s) => keys.includes(s.key) && s.state === 'posted' && https(s.url))
+          .sort((p, q) => dayOf(q).localeCompare(dayOf(p)) || tkey(q).localeCompare(tkey(p))).slice(0, 3);
+        const rl = el('ul', 'uc-recent');
+        posts.forEach((s) => {
+          const li = el('li');
+          const isL = g.long && s.key === g.long.key;
+          li.append(el('span', 'uc-rt', `${dayOf(s) === todayKey ? '오늘' : dlabel(dayOf(s))} ${s.time || ''}${both ? (isL ? ' 롱' : ' 숏') : ''}`));
+          const lk = mark(el('a', null, norm(s.title) || '게시물'), 'slots', 'title', s.slot_id, 'slot_id'); lk.href = s.url; lk.target = '_blank'; lk.rel = 'noopener noreferrer'; lk.title = norm(s.title);
+          li.append(lk);
+          const vw = Number(s.views);
+          if (s.views != null && s.views !== '' && !Number.isNaN(vw)) li.append(el('span', 'uc-rv', `▶ ${vw >= 10000 ? (vw / 10000).toFixed(1) + '만' : num(vw)}`));
+          rl.append(li);
+        });
+        pblk.append(el('div', 'uc-lab', '최근 게시'), posts.length ? rl : el('p', 'uc-muted', '기록된 공개 게시 없음'));
+        det.append(pblk);
+        if (yp && yp.status !== '파트너 승인됨') det.append(yppBlock(g, yp));
+        const meta = el('div', 'uc-stk-meta');
+        const bl = [g.long, g.short].reduce((s, c) => s + (c ? Number(c.blocked || 0) : 0), 0);
+        if (bl) meta.append(el('span', 'inv-held', `보류 ${num(bl)}편`));
+        const ipT = [g.long, g.short].reduce((s, c) => s + (c ? Number(c.in_production || 0) : 0), 0);
+        if (ipT) meta.append(el('span', null, `만드는 중 ${num(ipT)}편`));
+        const jn = [g.long, g.short].find((c) => c && c.start_ok != null && c.start_ok !== '' && /롱/.test(c.type)) || [g.long, g.short].find((c) => c && c.start_ok != null && c.start_ok !== '');
+        if (jn) { const ok = jn.start_ok === true || jn.start_ok === 'true'; const s = el('span', ok ? null : 'inv-held', ok ? '새로 만들어도 됨' : '재고 상한 — 새로 안 만듦'); if (jn.start_note) s.title = jn.start_note; meta.append(s); }
+        const mk = [g.long, g.short].map((c) => c && c.making_note).filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).join(' · ');
+        if (mk) meta.append(el('span', null, '제작 메모: ' + mk));
+        if (meta.children.length) { const sb = el('div', 'uc-blk'); sb.append(el('div', 'uc-lab', '재고 메모'), meta); det.append(sb); }
+        cardEl.append(det);
+        return cardEl;
+      }
+      // 그리기(위 도우미들이 다 정의된 뒤)
+      // 11-19 사장님 「유튜브와 스레드·인스타 구분해 줘, 그룹을」 — 그룹마다 제목 줄(개수·색별 수) · 그룹 안 빨강 → 초록 → 회색 카드(「게시 안 됨도 같은 모양으로」 — 칩 없앰). 「문제만」은 두 그룹 함께
+      const cnt = { ok: 0, warn: 0, bad: 0, off: 0 }; groups.forEach((g) => { cnt[g.ps.k]++; });
+      sumEl.textContent = `빨강 ${cnt.bad}${cnt.warn ? ` · 노랑 ${cnt.warn}` : ''} · 초록 ${cnt.ok} · 회색 ${cnt.off}`;
+      let anyShown = false;
+      for (const [sk, sname] of [['yt', '▶ 유튜브'], ['sns', '@ 스레드·인스타']]) {
+        const all = groups.filter((g) => (sk === 'yt') === (g.platform === 'YouTube'));
+        if (!all.length) continue;
+        const sec = el('section', `uc-group uc-group-${sk}`); sec.id = `uc-group-${sk}`;
+        const c2 = { ok: 0, warn: 0, bad: 0, off: 0 }; all.forEach((g) => { c2[g.ps.k]++; });
+        const h = el('h3', 'uc-group-h');
+        h.append(el('span', 'uc-group-t', `${sname} ${all.length}`), el('span', 'uc-gc is-bad', `빨강 ${c2.bad}`), el('span', 'uc-gc is-ok', `초록 ${c2.ok}`), el('span', 'uc-gc is-off', `회색 ${c2.off}`));
+        if (c2.warn) h.insertBefore(el('span', 'uc-gc is-warn', `노랑 ${c2.warn}`), h.querySelector('.uc-gc.is-ok'));
+        if (sk === 'yt') {
+          const rt = dash.data('revenue_total');
+          const r0 = rt.status === 'ok' && Array.isArray(rt.data) ? rt.data[0] : null;
+          if (r0 && r0.channels && revShown()) {
+            const tot = el('span', 'uc-gtot');
+            const mm = String(r0.month || '').match(/-(\d{2})$/);
+            const mEl = el('b', null, won(r0.month_total)); mEl.dataset.source = 'revenue_total'; mEl.dataset.field = 'month_total'; mEl.dataset.row = '0';
+            tot.append(document.createTextNode(`💰 ${mm ? +mm[1] + '월' : '이번 달'} `), mEl);
+            const ld = String(r0.last_day || '').match(/^\d{4}-(\d{2})-(\d{2})$/);
+            if (ld) { const dEl = el('b', null, won(r0.last_day_amount)); dEl.dataset.source = 'revenue_total'; dEl.dataset.field = 'last_day_amount'; dEl.dataset.row = '0'; tot.append(document.createTextNode(` · ${+ld[1]}/${+ld[2]} `), dEl); }
+            else tot.append(document.createTextNode(' · 집계 전'));
+            tot.title = `수익화 ${r0.channels}채널 예상 수익 합계 · 이번 달 ${Number(r0.month_total).toLocaleString('ko-KR')}원${ld ? ` · ${r0.last_day} ${Number(r0.last_day_amount).toLocaleString('ko-KR')}원(그날 집계된 채널만)` : ''} · 매일 13시 갱신`;
+            h.append(tot);
+          }
+        }
+        sec.append(h);
+        if (sk === 'yt') { const rb = revBox(); if (rb) sec.append(rb); }
+        const shown = all.filter((g) => !view.problems || g.ps.k === 'bad');
+        if (shown.length) { const wrap = el('div', 'uc-grid'); shown.forEach((g) => wrap.append(card(g))); sec.append(wrap); }
+        if (!shown.length) sec.append(el('p', 'gb-empty', '이 그룹엔 게시 문제(빨강) 채널이 없습니다.'));
+        else anyShown = true;
+        grid.append(sec);
+      }
+      if (!anyShown && !groups.length) grid.append(el('p', 'gb-empty', '표시할 채널이 없습니다.'));
+      // 11-19 사장님 「오늘 제작한 거 리스트를 아래에」 — 맨 아래 「오늘 만든 것」(기본 펼침, 제목 줄 눌러 접기 · 브라우저에 기억)
+      const mb = madeBox(); if (mb) grid.append(mb);
+    }
+    window.gb.draws.channels = draw;
+    dash.onData(draw);
+  })();
+</script>
+<script>
+  // 10-26 사장님 「작업별로 작업 현황 — 디자인 시안·대본 시안·탐색 결과 등 가능한 모든 걸 볼 수 있게」
+  (() => {
+    const { el, failLine } = window.gb;
+    const grid = document.getElementById('wk-grid');
+    const NAMES = { 탐색: '탐색 총괄', 대본기획: '대본·기획 총괄', 디자인: '디자인 총괄', 제작재고: '제작·재고 총괄', 성과분석: '성과 분석·전략', 시스템1: '시스템·도구(1번 PC)', 업로드관리자: '업로드관리자', 게시운영: '게시 운영', 현황판갱신: '게시현황판 갱신', 현황판감시: '현황판 감시', 팔로우A: '팔로우 A(Threads)', 팔로우B: '팔로우 B(Instagram)', 깃허브스킬: '깃허브 스킬 관리자', 알뜰검수: '알뜰검수자' };
+    const open = window.gb.wkOpen = window.gb.wkOpen || {};
+    const lb = el('div', 'gb-modal'); lb.hidden = true;
+    const lbp = el('div', 'gb-modal-panel wk-lbp');
+    const lbh = el('div', 'gb-modal-head'); const lbt = el('strong'); const lbx = el('button', 'gb-modal-x', '닫기'); lbx.type = 'button';
+    const lbb = el('div', 'gb-modal-body');
+    lbh.append(lbt, lbx); lbp.append(lbh, lbb); lb.append(lbp); document.getElementById('dash-root').append(lb);
+    const closeL = () => { lb.hidden = true; };
+    lbx.addEventListener('click', closeL); lb.addEventListener('click', (e) => { if (e.target === lb) closeL(); });
+    const show = (it) => {
+      lbt.textContent = it.title || '';
+      lbb.replaceChildren();
+      if (it.img) { const im = document.createElement('img'); im.src = it.img; im.alt = it.title || ''; im.className = 'wk-big'; lbb.append(im); }
+      else { const pre = el('pre', 'wk-pre'); pre.textContent = it.body || '(내용 없음)'; lbb.append(pre); }
+      if (it.note) lbb.append(el('p', 'wk-note', it.note));
+      lb.hidden = false;
+    };
+    function draw() {
+      const d = dash.data('work');
+      grid.replaceChildren();
+      if (d.status !== 'ok') { grid.classList.toggle('dash-skeleton', d.status === 'loading'); if (d.status !== 'loading') grid.append(failLine()); return; }
+      grid.classList.remove('dash-skeleton');
+      const sess = d.data.filter((r) => r.kind === 'session');
+      if (!sess.length) { grid.append(el('p', 'gb-empty', '아직 올라온 작업 현황이 없습니다.')); return; }
+      for (const s of sess) {
+        const items = d.data.filter((r) => r.kind === 'item' && r.key === s.key).sort((a, b) => a.seq - b.seq);
+        const card = el('div', `wk-card st-${s.status === '막힘' ? 'bad' : s.status === '완료' ? 'ok' : s.status === '대기' ? 'wait' : 'run'}`);
+        const head = el('button', 'wk-head'); head.type = 'button';
+        head.append(el('strong', null, NAMES[s.key] || s.session), el('span', 'wk-st', s.status || '—'), el('span', 'wk-up', s.updated || ''));
+        head.addEventListener('click', () => { open[s.key] = !open[s.key]; draw(); });
+        card.append(head, el('p', 'wk-doing', s.doing || ''));
+        if (s.blocked) card.append(el('p', 'wk-blocked', '막힘: ' + s.blocked));
+        const imgs = items.filter((x) => x.img);
+        if (imgs.length) {
+          const strip = el('div', 'wk-strip');
+          imgs.slice(0, open[s.key] ? 20 : 4).forEach((x) => { const b = el('button', 'wk-th'); b.type = 'button'; const im = document.createElement('img'); im.src = x.img; im.alt = x.title; b.append(im); b.title = x.title; b.addEventListener('click', () => show(x)); strip.append(b); });
+          card.append(strip);
+        }
+        if (open[s.key]) {
+          if (s.done_today) card.append(el('p', 'wk-line', '오늘 한 일: ' + s.done_today));
+          if (s.next) card.append(el('p', 'wk-line', '다음: ' + s.next));
+          const list = el('div', 'wk-list');
+          items.filter((x) => !x.img).forEach((x) => { const b = el('button', 'wk-item'); b.type = 'button'; b.append(el('span', 'wk-type', x.type === 'table' ? '표' : '글'), el('span', null, x.title)); if (x.note) b.append(el('small', null, x.note)); b.addEventListener('click', () => show(x)); list.append(b); });
+          if (list.children.length) card.append(list);
+        } else {
+          const n = items.filter((x) => !x.img).length;
+          if (n) { const more = el('button', 'wk-more', `결과물 ${n}개 보기`); more.type = 'button'; more.addEventListener('click', () => { open[s.key] = true; draw(); }); card.append(more); }
+        }
+        grid.append(card);
+      }
+    }
+    window.gb.draws.work = draw;
+    dash.onData(() => { if (window.gb.visible('work')) draw(); });
+  })();
+</script>
+<script>
+  // 10-26 사장님 「각 세션에서 나한테 요구하는, 반드시 내가 해야 하는 일도 게시현황에」
+  (() => {
+    const { el } = window.gb;
+    const box = document.getElementById('todo-list');
+    const n = document.getElementById('todo-n');
+    const card = document.getElementById('todo-card');
+    dash.onData(() => {
+      const d = dash.data('work');
+      box.replaceChildren();
+      if (d.status !== 'ok') { box.classList.toggle('dash-skeleton', d.status === 'loading'); return; }
+      box.classList.remove('dash-skeleton');
+      const list = d.data.filter((r) => r.kind === 'todo').sort((a, b) => a.seq - b.seq);
+      // 10-26 사장님 「버튼은 했음·알아서 해·코멘트 남기기 3개로」 — 답은 dash 필터값(todo_done·todo_auto·todo_cmt)에 남고, 제작맥이 30분마다 읽어 처리
+      const P = dash.params();
+      const done = new Set(P.todo_done || []), auto = new Set(P.todo_auto || []), okk = new Set(P.todo_ok || []);
+      const OPEN = window.gb.tdOpen = window.gb.tdOpen || {}; const DRAFT = window.gb.tdDraft = window.gb.tdDraft || {};
+      const cmts = {}; (P.todo_cmt || []).forEach((x) => { const i = String(x).indexOf('|'); if (i > 0) cmts[String(x).slice(0, i)] = String(x).slice(i + 1); });
+      const answered = (t) => done.has(t.tid) || auto.has(t.tid) || okk.has(t.tid) || cmts[t.tid] != null;
+      const left = list.filter((t) => !answered(t));
+      n.textContent = left.length ? `${left.length}건 남음` : '모두 답함';
+      const bd = document.getElementById('todo-badge'); if (bd) { bd.textContent = left.length ? String(left.length) : ''; bd.hidden = !left.length; }
+      const setList = (name, tid, on) => { const cur = new Set(dash.params()[name] || []); if (on) cur.add(tid); else cur.delete(tid); return [...cur]; };
+      list.slice().sort((a, b) => (answered(a) - answered(b)) || a.seq - b.seq).forEach((t) => {
+        const st = done.has(t.tid) ? 'done' : okk.has(t.tid) ? 'ok' : auto.has(t.tid) ? 'auto' : cmts[t.tid] != null ? 'cmt' : '';
+        const row = el('div', `td-row${st ? ' is-done' : ''}`);
+        const body = el('div', 'td-body');
+        body.append(el('strong', null, t.what));
+        if (!st) {
+          if (t.where) body.append(el('span', 'td-where', '어디서: ' + t.where));
+          if (t.why) body.append(el('span', 'td-why', '왜: ' + t.why));
+        }
+        const btns = el('div', 'td-btns');
+        const mk = (label, cls, on, fn) => { const b = el('button', `td-btn ${cls}${on ? ' on' : ''}`, label); b.type = 'button'; b.addEventListener('click', fn); return b; };
+        btns.append(
+          mk('했음', 'b-done', st === 'done', () => dash.setParams({ todo_done: setList('todo_done', t.tid, st !== 'done'), todo_auto: setList('todo_auto', t.tid, false), todo_ok: setList('todo_ok', t.tid, false) })),
+          // 10-26 사장님 「승인이라는 버튼도 만들어 줘」
+          mk('허용·승인', 'b-ok', st === 'ok', () => dash.setParams({ todo_ok: setList('todo_ok', t.tid, st !== 'ok'), todo_done: setList('todo_done', t.tid, false), todo_auto: setList('todo_auto', t.tid, false) })),
+          mk('알아서 해', 'b-auto', st === 'auto', () => dash.setParams({ todo_auto: setList('todo_auto', t.tid, st !== 'auto'), todo_done: setList('todo_done', t.tid, false), todo_ok: setList('todo_ok', t.tid, false) })),
+          // 10-26 「코멘트 남기기 눌러도 창이 안 열려」 — 화면 폭이 바뀌면 다시 그려져 닫히던 것: 열림·적던 글을 기억
+          mk('코멘트 남기기', 'b-cmt', st === 'cmt', () => { OPEN[t.tid] = !OPEN[t.tid]; form.hidden = !OPEN[t.tid]; if (OPEN[t.tid]) setTimeout(() => inp.focus(), 0); })
+        );
+        const form = el('div', 'td-form'); form.hidden = !OPEN[t.tid];
+        const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'td-inp'; inp.placeholder = '하고 싶은 말을 적어 주세요'; inp.value = DRAFT[t.tid] != null ? DRAFT[t.tid] : (cmts[t.tid] || '');
+        inp.addEventListener('input', () => { DRAFT[t.tid] = inp.value; });
+        const send = mk('보내기', 'b-send', false, () => {
+          const v = inp.value.replace(/[\r\n|]+/g, ' ').trim();
+          const cur = (dash.params().todo_cmt || []).filter((x) => !String(x).startsWith(t.tid + '|'));
+          if (v) cur.push(t.tid + '|' + v);
+          OPEN[t.tid] = false; delete DRAFT[t.tid];
+          dash.setParams({ todo_cmt: cur });
+          form.hidden = true;
+        });
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') send.click(); });
+        form.append(inp, send);
+        body.append(btns, form);
+        if (cmts[t.tid]) body.append(el('span', 'td-cmt', '내 코멘트: ' + cmts[t.tid]));
+        body.append(el('span', 'td-from', st === 'done' ? '했다고 표시함 — 담당 세션이 확인하면 목록에서 빠집니다' : st === 'ok' ? '승인함 — 담당 세션이 진행합니다' : st === 'auto' ? '알아서 하라고 함 — 담당 세션이 판단해 처리합니다' : st === 'cmt' ? '코멘트 보냄 — 담당 세션이 읽고 답합니다' : `${t.from || ''}${t.since ? ' · ' + t.since : ''}`));
+        row.append(body);
+        box.append(row);
+      });
+      // 클로드가 확인한 할 일 = 기록
+      const logs = d.data.filter((r) => r.kind === 'todo_log').sort((a, b) => a.seq - b.seq);
+      if (!list.length) box.append(el('p', 'gb-empty', '새 할 일이 없습니다.'));
+      if (logs.length) {
+        const det = el('details', 'td-log');
+        if (window.gb.logOpen) det.open = true;
+        det.addEventListener('toggle', () => { window.gb.logOpen = det.open; });
+        det.append(el('summary', null, `클로드가 확인한 할 일 기록 ${logs.length}건`));
+        logs.forEach((t) => {
+          const r = el('div', 'td-logrow');
+          r.append(el('span', 'td-logok', '✓'), el('span', 'td-logw', t.what), el('span', 'td-loga', t.answer || '했음'), el('span', 'td-logt', t.confirmed_at || ''));
+          det.append(r);
+        });
+        box.append(det);
+      }
+    });
+  })();
+</script>
+
+
+
+
+
+</div>
+<script>
+  (() => {
+    const stamp = document.getElementById('site-stamp');
+    window.__siteBar = () => {
+      const t = window.__loadedAt;
+      stamp.textContent = t ? `불러온 시각 ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} · 2분마다 자동` : '불러오는 중…';
+    };
+    document.getElementById('site-reload').addEventListener('click', () => dash._load());
+    document.getElementById('site-logout').addEventListener('click', () => dash._logout());
+    dash._start();
+  })();
+</script>
+</body>
+</html>
