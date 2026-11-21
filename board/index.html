@@ -2397,26 +2397,27 @@ window.dash = (() => {
         const wrap = el('div', 'uc-revwrap');
         const tb = el('table', 'uc-revtbl');
         const thead = el('thead'); const hr = el('tr');
-        hr.append(el('th', null, '구분'), el('th', 'n', `지난달${mLab(r0.prev_month) ? '(' + mLab(r0.prev_month) + ')' : ''}`), el('th', 'n', `이번 달${mLab(r0.month) ? '(' + mLab(r0.month) + ')' : ''}`), el('th', 'n', `어제${dLab(r0.last_day) ? '(' + dLab(r0.last_day) + ')' : ''}`));
+        // 🆕11-21 사장님 「최근 5일치를 보여줘」 — 「어제」 한 칸 대신 집계된 최근 5일(왼쪽 오래된 날 → 오른쪽 최근)
+        const _dd5 = dash.data('revenue_daily');
+        const last5 = (_dd5.status === 'ok' && Array.isArray(_dd5.data) ? _dd5.data.slice(0, 5) : []).slice().reverse();
+        hr.append(el('th', null, '구분'), el('th', 'n', `지난달${mLab(r0.prev_month) ? '(' + mLab(r0.prev_month) + ')' : ''}`), el('th', 'n', `이번 달${mLab(r0.month) ? '(' + mLab(r0.month) + ')' : ''}`), ...last5.map((d) => el('th', 'n', dLab(d.date))));
         thead.append(hr);
         const body = el('tbody');
         const tr0 = el('tr', 'is-total');
         tr0.append(el('td', null, '전체'),
           markEl(el('td', 'n', wonFull(r0.prev_month_total)), 'revenue_total', 'prev_month_total', null, 0),
           markEl(el('td', 'n', wonFull(r0.month_total)), 'revenue_total', 'month_total', null, 0),
-          r0.last_day ? markEl(el('td', 'n', wonFull(r0.last_day_amount)), 'revenue_total', 'last_day_amount', null, 0) : el('td', 'n uc-muted', '집계 전'));
+          ...last5.map((d) => markEl(el('td', 'n', wonFull(d.total)), 'revenue_daily', 'total', `date=${enc(d.date)}`)));
         body.append(tr0);
         rvRows.forEach((r) => {
           const tr = el('tr');
           const w = `uc=${enc(r.uc)}`;
-          const ld = el('td', 'n');
-          if (r.last_day) { ld.append(markEl(el('span', null, wonFull(r.last_day_amount)), 'revenue', 'last_day_amount', w)); if (r.last_day !== r0.last_day) ld.append(el('small', null, ` (${dLab(r.last_day)})`)); }
-          else { ld.textContent = '집계 전'; ld.classList.add('uc-muted'); }
-          tr.append(el('td', null, r.channel || ''), markEl(el('td', 'n', wonFull(r.prev_month_total)), 'revenue', 'prev_month_total', w), markEl(el('td', 'n', wonFull(r.month_total)), 'revenue', 'month_total', w), ld);
+          const dcells = last5.map((d) => { const v = d[r.uc]; return v == null ? el('td', 'n uc-muted', r.last_day ? '—' : '집계 전') : markEl(el('td', 'n', wonFull(v)), 'revenue_daily', r.uc, `date=${enc(d.date)}`); });
+          tr.append(el('td', null, r.channel || ''), markEl(el('td', 'n', wonFull(r.prev_month_total)), 'revenue', 'prev_month_total', w), markEl(el('td', 'n', wonFull(r.month_total)), 'revenue', 'month_total', w), ...dcells);
           body.append(tr);
         });
         tb.append(thead, body); wrap.append(tb); box.append(wrap);
-        box.append(el('p', 'uc-revnote', '유튜브는 1~2일 늦게 집계 — 어제 칸은 집계된 가장 최근 날 · 매일 10:00·13:00 갱신'));
+        box.append(el('p', 'uc-revnote', '유튜브는 1~2일 늦게 집계 — 날짜 칸은 집계된 최근 5일 · 매일 10:00·13:00 갱신'));
         // ▸ 날짜별(최근 7일) — 접어 둠, 펼친 상태는 다시 그려도 유지
         const dd = dash.data('revenue_daily');
         const days = dd.status === 'ok' && Array.isArray(dd.data) ? dd.data.slice(0, 7) : [];
