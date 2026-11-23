@@ -18125,15 +18125,35 @@ ${folderBtn}
           const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=like.tour3d_%25&select=id,payload`, { headers: KAKAO_HDR });
           if (res.ok) items = (await res.json()).map((r) => ({ ...(r.payload || {}), __id: r.id }));
         } catch (_) {}
-        const waiting = items.filter((m) => m.status === "waiting" || m.status === "ready").length;
+        const waiting = items.filter((m) => m.status === "waiting" || m.status === "ready" || m.status === "working").length;
+        // 11-23 사장님 「신청하면 신청된 리스트가 나오게 + 진행 상태 · 작업 완료되면 리스트에서 사라지고 아래 작업 완료 업체로」
+        const reqBox = document.getElementById("tour3dReqBox");
+        if (reqBox) {
+          const reqs = items.filter((m) => m.status === "waiting" || m.status === "ready" || m.status === "working")
+            .sort((a, b) => String(a.created_at || a.date || "").localeCompare(String(b.created_at || b.date || "")));
+          const ST = {
+            waiting: ["사진 보정 중 (사진완료 대기)", "#64748b", "#f1f5f9"],
+            ready: ["3D 작업 대기", "#b45309", "#fef3c7"],
+            working: ["3D 제작 중", "#1d4ed8", "#dbeafe"]
+          };
+          reqBox.innerHTML = `<div style="font-weight:800;font-size:0.92em;margin:0 0 6px;">신청된 현장 ${reqs.length}건</div>` +
+            (reqs.length ? reqs.map((m) => {
+              const st = ST[m.status] || [m.status, "#475569", "#f1f5f9"];
+              return `<div class="company-item" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
+                ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;">${escapeHtml(String(m.company || ""))}</strong>
+                <span class="helper" style="margin:0;font-size:0.8em;flex:1;min-width:90px;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))} · ${escapeHtml(String(m.place || "").slice(0, 28))}</span>
+                <span style="flex:0 0 auto;font-size:0.75em;font-weight:800;color:${st[1]};background:${st[2]};border-radius:6px;padding:2px 7px;">${escapeHtml(st[0])}</span>
+              </div>`;
+            }).join("") : '<div class="helper" style="margin:0;">신청된 현장이 없습니다.</div>');
+        }
         // 11-19 사장님 「업체 리스트 버튼 → 링크 리스트 다 보기」: 완성(done)+전달 끝(delivered) 전부
         const allSites = items.filter((m) => (m.status === "done" || m.status === "delivered") && m.site_url)
           .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
         items = items.filter((m) => m.status === "done").sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
         const sig = JSON.stringify([items, waiting, allSites.length, box.dataset.listOpen || ""]);
+        const waitLine = "";
         if (sig === tour3dLastJson && box.dataset.rendered === "1") return;
         tour3dLastJson = sig; box.dataset.rendered = "1";
-        const waitLine = waiting ? `<div class="helper" style="margin:0 0 6px;font-size:0.82em;">3D 작업 대기 ${waiting}건 (사진완료 뒤 클로드가 하루 한 번 작업)</div>` : "";
         const listOpen = box.dataset.listOpen === "1";
         const listBtn = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;"><button type="button" class="btn-sm" data-action="tour3dList">업체 리스트 (${allSites.length}) ↗</button></div>`;
         const listHtml = listOpen ? `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:6px 8px;margin:0 0 10px;background:#fafafa;">` +
