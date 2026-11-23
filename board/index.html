@@ -2297,7 +2297,11 @@ window.dash = (() => {
           if (a) { const b = mark(el('b', 'uc-subn', num(Number(a.latest))), 'audience_latest', 'latest', a.key); b.title = `${g.platform === 'YouTube' ? '구독자' : '팔로워'} ${num(Number(a.latest))}${a.change != null ? ' (' + (a.change >= 0 ? '+' : '') + num(Number(a.change)) + ')' : ''}${a.latest_day ? ' · ' + a.latest_day + ' 측정' : ''}`; hd.append(b); }
           else { const fc = [g.short, g.long].find((c) => c && val(c, 'followers') != null); if (fc) hd.append(mark(el('b', 'uc-subn', num(val(fc, 'followers'))), 'channels', 'followers', fc.key)); }
         }
-        if (yp) {
+        // 🆕11-23 사장님 「게시현황판에도 수익화 계정 표시해 줘」 — 수익화(YPP 승인) 유튜브 채널은 이름 옆에 💰 수익화 표시(ypp 기록이 늦어도 이 목록이 우선)
+        const MON_YT = ['이것이 인생이다', '인생 툇마루', '인생은아름다워', '인생도감', '살아보니 인생', '우리들인생'];
+        const monByList = g.platform === 'YouTube' && MON_YT.some((n) => String(g.name).replace(/\s/g, '').includes(n.replace(/\s/g, '')));
+        if (monByList && !(yp && yp.status === '파트너 승인됨')) { const mt = el('span', 'uc-money', '💰 수익화'); mt.title = '수익화 계정(사장님 확인)'; hd.append(mt); }
+        if (yp && !(monByList && yp.status !== '파트너 승인됨')) {
           const partner = yp.status === '파트너 승인됨';
           const t = mark(el('span', partner ? 'uc-money' : 'uc-ytag', `${partner ? '💰 ' : ''}${yppShort(yp)}`), 'ypp_watch', 'status', g.yppKey);
           t.title = `수익화: ${yp.status}${yp.note ? ' · ' + yp.note : ''}`;
