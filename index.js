@@ -18217,12 +18217,21 @@ ${folderBtn}
           const rows = res.ok ? await res.json() : [];
           const names = [...new Set(rows.filter((r) => !bad(r.source)).map((r) => String(r.company_name || "").trim()).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, "ko"));
-          cSel.innerHTML = '<option value="">업체 선택</option>' + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
-        } catch (_) { cSel.innerHTML = '<option value="">업체를 못 불러왔습니다</option>'; }
-        cSel.addEventListener("change", async () => {
-          const name = cSel.value; msg.textContent = ""; btn.disabled = true;
+          cSel.__names = names;
+          const dl = document.getElementById("tour3dManualCompanyList");
+          if (dl) dl.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+          cSel.placeholder = "업체 검색 (이름 일부 입력)";
+        } catch (_) { cSel.placeholder = "업체를 못 불러왔습니다"; }
+        // 11-23 사장님 「업체 고를 때 검색하게」 — 입력칸+자동완성, 목록 이름과 정확히 같아지면 현장을 불러온다
+        let lastName = "";
+        const onCompany = async () => {
+          const typed = cSel.value.trim();
+          const name = (cSel.__names || []).includes(typed) ? typed : "";
+          if (name === lastName) return;
+          lastName = name; msg.textContent = ""; btn.disabled = true;
           sSel.disabled = true; sSel.innerHTML = '<option value="">현장 불러오는 중…</option>';
           if (!name) { sSel.innerHTML = '<option value="">먼저 업체를 고르세요</option>'; return; }
+          cSel.value = name;
           try {
             const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,date_key,place,source&company_name=eq.${encodeURIComponent(name)}&order=date_key.desc&limit=30`, { headers: hdr, cache: "no-store" });
             const list = (res.ok ? await res.json() : []).filter((r) => !bad(r.source)).slice(0, 10);
@@ -18232,7 +18241,9 @@ ${folderBtn}
               : '<option value="">현장이 없습니다</option>';
             sSel.disabled = !list.length;
           } catch (_) { sSel.innerHTML = '<option value="">현장을 못 불러왔습니다</option>'; }
-        });
+        };
+        cSel.addEventListener("input", onCompany);
+        cSel.addEventListener("change", onCompany);
         sSel.addEventListener("change", () => { btn.disabled = sSel.value === ""; msg.textContent = ""; });
         btn.addEventListener("click", async () => {
           const r = (sSel.__rows || [])[parseInt(sSel.value, 10)];
