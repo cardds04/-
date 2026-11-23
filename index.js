@@ -17981,6 +17981,7 @@ ${folderBtn}
         renderMissingFolderCompaniesBox(activeRows, todayKey);
         renderKakaoPendingBox();
         renderTour3dDoneBox().catch(() => {});
+        initTour3dManual().catch(() => {});
       }
 
       /**
@@ -18196,6 +18197,72 @@ ${folderBtn}
         }
       }
       try { setInterval(() => { renderTour3dDoneBox().catch(() => {}); }, 30000); } catch (_) {}
+
+      /**
+       * 3D 작업 수동등록 신청 — 11-23 사장님 「업체명 고르고 현장 고를 수 있게, 현장은 최근 10개만」.
+       * 신청하면 app_state tour3d_<스케줄id> 를 waiting(manual) 으로 넣는다 → tour3d_jobs scan 이 사진완료 뒤 ready 로 올리고 클로드가 작업.
+       */
+      async function initTour3dManual() {
+        const cSel = document.getElementById("tour3dManualCompany");
+        const sSel = document.getElementById("tour3dManualSite");
+        const btn = document.getElementById("tour3dManualSubmit");
+        const msg = document.getElementById("tour3dManualMsg");
+        if (!cSel || cSel.dataset.bound) return;
+        cSel.dataset.bound = "1";
+        const bad = (s) => ["hold", "refund", "deleted"].includes(String(s || "").toLowerCase());
+        const hdr = { ...KAKAO_HDR, Accept: "application/json" };
+        try {
+          const since = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=company_name,source&date_key=gte.${since}&order=date_key.desc&limit=5000`, { headers: hdr, cache: "no-store" });
+          const rows = res.ok ? await res.json() : [];
+          const names = [...new Set(rows.filter((r) => !bad(r.source)).map((r) => String(r.company_name || "").trim()).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, "ko"));
+          cSel.innerHTML = '<option value="">업체 선택</option>' + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+        } catch (_) { cSel.innerHTML = '<option value="">업체를 못 불러왔습니다</option>'; }
+        cSel.addEventListener("change", async () => {
+          const name = cSel.value; msg.textContent = ""; btn.disabled = true;
+          sSel.disabled = true; sSel.innerHTML = '<option value="">현장 불러오는 중…</option>';
+          if (!name) { sSel.innerHTML = '<option value="">먼저 업체를 고르세요</option>'; return; }
+          try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/schedules?select=id,date_key,place,source&company_name=eq.${encodeURIComponent(name)}&order=date_key.desc&limit=30`, { headers: hdr, cache: "no-store" });
+            const list = (res.ok ? await res.json() : []).filter((r) => !bad(r.source)).slice(0, 10);
+            sSel.__rows = list;
+            sSel.innerHTML = list.length
+              ? '<option value="">현장 선택 (최근 10개)</option>' + list.map((r, i) => `<option value="${i}">${escapeHtml(formatYmdToMdSlash(String(r.date_key || "")))} · ${escapeHtml(String(r.place || "").slice(0, 40))}</option>`).join("")
+              : '<option value="">현장이 없습니다</option>';
+            sSel.disabled = !list.length;
+          } catch (_) { sSel.innerHTML = '<option value="">현장을 못 불러왔습니다</option>'; }
+        });
+        sSel.addEventListener("change", () => { btn.disabled = sSel.value === ""; msg.textContent = ""; });
+        btn.addEventListener("click", async () => {
+          const r = (sSel.__rows || [])[parseInt(sSel.value, 10)];
+          if (!r) return;
+          btn.disabled = true; msg.style.color = ""; msg.textContent = "확인 중…";
+          try {
+            const rid = `tour3d_${r.id}`;
+            const ex = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(rid)}&select=payload`, { headers: hdr });
+            const exRows = ex.ok ? await ex.json() : [];
+            if (exRows.length) {
+              const st = (exRows[0].payload || {}).status || "";
+              const label = { waiting: "사진완료 대기", ready: "작업 대기", done: "완성(전달 대기)", delivered: "전달 끝" }[st] || st;
+              msg.style.color = "#b45309"; msg.textContent = `이미 3D 목록에 있습니다 (${label}).`; btn.disabled = false; return;
+            }
+            if (!window.confirm(`${cSel.value} · ${formatYmdToMdSlash(String(r.date_key || ""))} 현장을 3D 작업 신청할까요?`)) { btn.disabled = false; msg.textContent = ""; return; }
+            const payload = { schedule_id: r.id, company: cSel.value, date: r.date_key, place: r.place, status: "waiting", paid: false, manual: true, created_at: new Date().toISOString() };
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
+              method: "POST",
+              headers: { ...KAKAO_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+              body: JSON.stringify([{ id: rid, payload }])
+            });
+            if (!res.ok) throw new Error(String(res.status));
+            msg.style.color = "#16a34a"; msg.textContent = `신청 완료 — ${cSel.value} ${formatYmdToMdSlash(String(r.date_key || ""))}`;
+            const box = document.getElementById("tour3dDoneBox"); if (box) box.dataset.rendered = "";
+            renderTour3dDoneBox().catch(() => {});
+          } catch (e) {
+            msg.style.color = "#dc2626"; msg.textContent = "신청 실패: " + (e && e.message ? e.message : e); btn.disabled = false;
+          }
+        });
+      }
 
       /**
        * 15일간 스케줄(getDashboardFifteenDayWindow 윈도우) 중 업체정보관리에 「폴더연결 주소」
