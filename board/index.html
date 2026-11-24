@@ -2376,7 +2376,7 @@ window.dash = (() => {
         const hd = el('button', 'uc-made-h'); hd.type = 'button'; hd.setAttribute('aria-expanded', String(open));
         hd.append(el('span', 'uc-made-t', `${open ? '▾' : '▸'} 오늘 만든 것${todayKey ? ' · ' + todayKey.slice(5) : ''}`));
         const sm = dash.data('today_made_sum');
-        (sm.status === 'ok' && Array.isArray(sm.data) ? sm.data : []).forEach((s, i) => {
+        (sm.status === 'ok' && Array.isArray(sm.data) ? sm.data : []).filter((s) => s.kind === '롱폼' || s.kind === '숏폼').forEach((s, i) => {   // 🆕11-24 사장님 「오늘 만든 것에는 유튜브만 보여줘」
           const c = el('span', `uc-mk k-${({ 롱폼: 'long', 숏폼: 'short', 웹툰: 'toon', 인스타: 'insta' })[s.kind] || 'etc'}`);
           const n = el('b', null, String(s.n)); n.dataset.source = 'today_made_sum'; n.dataset.field = 'n'; n.dataset.where = `kind=${enc(s.kind)}`;
           c.append(document.createTextNode(`${s.kind} `), n);
@@ -2392,7 +2392,7 @@ window.dash = (() => {
         const hr = el('tr'); hr.append(el('th', null, '시각'), el('th', null, '채널'), el('th', null, '종류'), el('th', null, '무엇'));
         const th = el('thead'); th.append(hr);
         const body = el('tbody');
-        md.data.map((r, i) => ({ r, i })).sort((a, b) => String(a.r.time || '').localeCompare(String(b.r.time || '')) || a.i - b.i).forEach(({ r, i }) => {
+        md.data.map((r, i) => ({ r, i })).filter(({ r }) => r.kind === '롱폼' || r.kind === '숏폼').sort((a, b) => String(a.r.time || '').localeCompare(String(b.r.time || '')) || a.i - b.i).forEach(({ r, i }) => {
           const tr = el('tr');
           const mk = (tag, cls, txt, field) => { const n = el(tag, cls, txt); n.dataset.source = 'today_made'; n.dataset.field = field; n.dataset.row = String(i); return n; };
           const kd = el('td'); kd.append(mk('span', `uc-mk k-${({ 롱폼: 'long', 숏폼: 'short', 웹툰: 'toon', 인스타: 'insta' })[r.kind] || 'etc'}`, String(r.kind || ''), 'kind'));
