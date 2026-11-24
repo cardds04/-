@@ -896,6 +896,7 @@ window.dash = (() => {
   .uc-blk { display: grid; gap: 5px; padding-top: 7px; border-top: 1px dashed #e3e8f2; min-width: 0; }
   .uc-lab { font-size: 11px; font-weight: 800; color: #8592ad; letter-spacing: .02em; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
   .uc-lab span { font-weight: 600; color: #8592ad; }
+  .uc-gnote { font-size: 12px; font-weight: 600; color: #7a879c; }
   .uc-pc { color: #3b4a6b !important; background: #eef3fb !important; border-color: #d6e0f0 !important; white-space: nowrap; }
   /* 수익화 */
   .uc-ypp-steps { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
@@ -2580,15 +2581,13 @@ window.dash = (() => {
       const cnt = { ok: 0, warn: 0, bad: 0, off: 0 }; groups.forEach((g) => { cnt[g.ps.k]++; });
       sumEl.textContent = `빨강 ${cnt.bad}${cnt.warn ? ` · 노랑 ${cnt.warn}` : ''} · 초록 ${cnt.ok} · 회색 ${cnt.off}`;
       let anyShown = false;
-      for (const [sk, sname] of [['yt', '▶ 유튜브'], ['sns', '@ 스레드·인스타']]) {
-        const all = groups.filter((g) => (sk === 'yt') === (g.platform === 'YouTube'));
-        if (!all.length) continue;
-        const sec = el('section', `uc-group uc-group-${sk}`); sec.id = `uc-group-${sk}`;
-        const c2 = { ok: 0, warn: 0, bad: 0, off: 0 }; all.forEach((g) => { c2[g.ps.k]++; });
-        const h = el('h3', 'uc-group-h');
-        h.append(el('span', 'uc-group-t', `${sname} ${all.length}`), el('span', 'uc-gc is-bad', `빨강 ${c2.bad}`), el('span', 'uc-gc is-ok', `초록 ${c2.ok}`), el('span', 'uc-gc is-off', `회색 ${c2.off}`));
-        if (c2.warn) h.insertBefore(el('span', 'uc-gc is-warn', `노랑 ${c2.warn}`), h.querySelector('.uc-gc.is-ok'));
-        if (sk === 'yt') {
+      // 🆕11-24 사장님 「아예 PC별로 나눠 줘 섹션을」 — 섹션 = 담당 컴퓨터(게시분담.json). 준비 전이면 「담당 ○○(준비 중) · 지금 1번 PC」 표시
+      {
+        {
+          const sec = el('section', 'uc-group uc-group-rev'); const h = el('h3', 'uc-group-h');
+          h.append(el('span', 'uc-group-t', '💰 수익화 유튜브'));
+          const sk = 'yt';
+          {
           const rt = dash.data('revenue_total');
           const r0 = rt.status === 'ok' && Array.isArray(rt.data) ? rt.data[0] : null;
           if (r0 && r0.channels && revShown()) {
@@ -2603,11 +2602,26 @@ window.dash = (() => {
             h.append(tot);
           }
         }
+          const rb = revBox(); if (rb || h.querySelector('.uc-gtot')) { sec.append(h); if (rb) sec.append(rb); grid.append(sec); }
+        }
+      }
+      const NMPC = { PC1: '1번 PC', 제작맥: '2번 PC', 사무실: '사무실 컴퓨터' };
+      const ownerOf = (g) => { const ps = splitBy.get(g.baseKey); return ps ? ps.machine : 'PC1'; };
+      for (const sk of ['PC1', '제작맥', '사무실']) {
+        const all = groups.filter((g) => ownerOf(g) === sk);
+        if (!all.length) continue;
+        const sec = el('section', `uc-group uc-group-pc`); sec.id = `uc-group-${sk}`;
+        const c2 = { ok: 0, warn: 0, bad: 0, off: 0 }; all.forEach((g) => { c2[g.ps.k]++; });
+        const h = el('h3', 'uc-group-h');
+        const nYt = all.filter((g) => g.platform === 'YouTube').length;
+        h.append(el('span', 'uc-group-t', `🖥 ${NMPC[sk]} ${all.length}`), el('span', 'uc-gc is-bad', `빨강 ${c2.bad}`), el('span', 'uc-gc is-ok', `초록 ${c2.ok}`), el('span', 'uc-gc is-off', `회색 ${c2.off}`));
+        if (c2.warn) h.insertBefore(el('span', 'uc-gc is-warn', `노랑 ${c2.warn}`), h.querySelector('.uc-gc.is-ok'));
+        const notReady = all.filter((g) => { const ps = splitBy.get(g.baseKey); return ps && !ps.ready; });
+        h.append(el('span', 'uc-gnote', `유튜브 ${nYt} · 스레드·인스타 ${all.length - nYt}${notReady.length ? ` · 준비 중 — 지금은 1번 PC가 올림` : ''}`));
         sec.append(h);
-        if (sk === 'yt') { const rb = revBox(); if (rb) sec.append(rb); }
         const shown = all.filter((g) => !view.problems || g.ps.k === 'bad');
         if (shown.length) { const wrap = el('div', 'uc-grid'); shown.forEach((g) => wrap.append(card(g))); sec.append(wrap); }
-        if (!shown.length) sec.append(el('p', 'gb-empty', '이 그룹엔 게시 문제(빨강) 채널이 없습니다.'));
+        if (!shown.length) sec.append(el('p', 'gb-empty', '이 컴퓨터 몫엔 게시 문제(빨강) 채널이 없습니다.'));
         else anyShown = true;
         grid.append(sec);
       }
