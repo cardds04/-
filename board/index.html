@@ -69,7 +69,7 @@
 <script>
 /* 대시보드 장치 대역 — 아티팩트 dash API 와 같은 이름(data/onData/calc/colors/setLink/params/setParams) */
 window.dash = (() => {
-  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts"];
+  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split"];
   const GROUPS = [['work'], ['slots'], ['realscript', 'scripts'], NAMES.filter((n) => !['work', 'slots', 'realscript', 'scripts'].includes(n))];
   const raw = {}, st = {}, calcs = {}, subs = [], memo = {};
   let ver = 0, params = {}, queued = false;
@@ -896,6 +896,7 @@ window.dash = (() => {
   .uc-blk { display: grid; gap: 5px; padding-top: 7px; border-top: 1px dashed #e3e8f2; min-width: 0; }
   .uc-lab { font-size: 11px; font-weight: 800; color: #8592ad; letter-spacing: .02em; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
   .uc-lab span { font-weight: 600; color: #8592ad; }
+  .uc-pc { color: #3b4a6b !important; background: #eef3fb !important; border-color: #d6e0f0 !important; white-space: nowrap; }
   /* 수익화 */
   .uc-ypp-steps { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
   .uc-ys { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #dfe6f2; background: #f6f8fc; color: #8592ad; white-space: nowrap; }
@@ -2132,6 +2133,8 @@ window.dash = (() => {
       const audBy = new Map((au.status === 'ok' ? au.data : []).map((a) => [a.key, a]));
       const yw = dash.data('ypp_watch');
       const yppBy = new Map((yw.status === 'ok' && Array.isArray(yw.data) ? yw.data : []).map((r) => [r.key, r]));
+      let psd; try { psd = dash.data('posting_split'); } catch (e) { psd = null; }
+      const splitBy = new Map((psd && psd.status === 'ok' && Array.isArray(psd.data) ? psd.data : []).map((r) => [r.key, r]));
       const bd = dash.data('board');
       const b0 = bd.status === 'ok' && bd.data[0] ? bd.data[0] : {};
       const todayKey = String(b0.today || '');
@@ -2308,6 +2311,15 @@ window.dash = (() => {
           hd.append(t);
         }
         return hd;
+      };
+      // 🆕11-24 사장님 「게시현황판에도 어떤 컴퓨터에서 올라가는지 표시해 줘」 — 게시분담.json(채널 → 컴퓨터) · 준비 전이면 「1번→2번」(지금 1번 PC가 올리고, 담당 2번 PC 준비 중)
+      const pcPill = (g) => {
+        const ps = splitBy.get(g.baseKey); if (!ps) return null;
+        const nm = (m) => m === 'PC1' ? '1번 PC' : m === '제작맥' ? '2번 PC' : m;
+        const sn = (m) => m === 'PC1' ? '1번' : m === '제작맥' ? '2번' : m;
+        const t = el('span', 'uc-pill uc-pc', ps.ready ? `🖥 ${sn(ps.now)}` : `🖥 ${sn(ps.now)}→${sn(ps.machine)}`);
+        t.title = ps.ready ? `${nm(ps.machine)}에서 올림` : `담당은 ${nm(ps.machine)} — 준비 끝나기 전이라 지금은 ${nm(ps.now)}가 올림`;
+        return t;
       };
       const stockLine = (g) => {
         const nums = el('div', 'sc-nums uc-stk');
@@ -2489,6 +2501,7 @@ window.dash = (() => {
         const pp = el('span', `uc-pill uc-pp is-${prk}`, `${{ run: '제작 중 ✓', wait: '제작 대기', idle: '제작 없음' }[prk]}${lines.length ? ' ' + lines[0].pct + '%' : ''}`);
         pp.title = lines.length ? lines.map((l) => `${l.run ? '▶ 작업 중' : '… 차례 대기'} · ${l.step} · ${cleanTitle(l.it)} — ${l.pct}%`).join('\n') : '지금 만드는 작업 없음';
         stl.append(pl, pp);
+        { const pc = pcPill(g); if (pc) stl.append(pc); }
         cardEl.append(stl);
         // ③ 재고 한 줄(색만)
         cardEl.append(stockLine(g));
