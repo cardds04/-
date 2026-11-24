@@ -1001,6 +1001,10 @@ window.dash = (() => {
   .uc-group-yt { background: #fff7f7; border-left: 5px solid #ff2b2b; }
   .uc-group-sns { background: #f6f7fb; border-left: 5px solid #121c36; }
   .uc-group + .uc-group { margin-top: 4px; }
+  .uc-plat { margin-top: 12px; }
+  .uc-plat-h { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; font-weight: 700; color: #33415c; background: #f3f6fb; border: 1px solid #e3e8f2; border-radius: 8px; padding: 7px 12px; margin-bottom: 8px; }
+  button.uc-plat-h { cursor: pointer; }
+  button.uc-plat-h:hover { background: #e9eef8; }
   .uc-group-h { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-bottom: 6px; border-bottom: 2px solid #e3e8f2; }
   .uc-group-t { font-size: 18px; font-weight: 900; color: #121c36; margin-right: 4px; }
   .uc-gc { font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
@@ -2620,9 +2624,34 @@ window.dash = (() => {
         h.append(el('span', 'uc-gnote', `유튜브 ${nYt} · 스레드·인스타 ${all.length - nYt}${notReady.length ? ` · 준비 중 — 지금은 1번 PC가 올림` : ''}`));
         sec.append(h);
         const shown = all.filter((g) => !view.problems || g.ps.k === 'bad');
-        if (shown.length) { const wrap = el('div', 'uc-grid'); shown.forEach((g) => wrap.append(card(g))); sec.append(wrap); }
+        // 🆕11-24 사장님 「1번 PC 유튜브와 스레드·인스타 3개 섹션으로 나눠 주고 스레드랑 인스타는 펼치기·숨기기 버튼」 — 플랫폼별 작은 묶음 · 스레드·인스타는 접기(기본 접힘 · 브라우저에 기억)
+        const PL = [['YouTube', '▶ 유튜브', false], ['Threads', '@ 스레드', true], ['Instagram', '◎ 인스타', true]];
+        const platOf = (g) => g.platform === 'YouTube' ? 'YouTube' : g.platform === 'Threads' ? 'Threads' : 'Instagram';
+        for (const [pk, plabel, fold] of PL) {
+          const items = shown.filter((g) => platOf(g) === pk);
+          const total = all.filter((g) => platOf(g) === pk);
+          if (!total.length) continue;
+          const sub = el('div', 'uc-plat');
+          const skey = `gb_plat_${sk}_${pk}`;
+          let open = !fold;
+          if (fold) { let v = null; try { v = localStorage.getItem(skey); } catch (e) { v = null; } open = v === '1'; }
+          const c3 = { ok: 0, warn: 0, bad: 0, off: 0 }; total.forEach((g) => { c3[g.ps.k]++; });
+          const hd = el(fold ? 'button' : 'div', 'uc-plat-h', `${plabel} ${total.length}  ·  빨강 ${c3.bad}${c3.warn ? ` · 노랑 ${c3.warn}` : ''} · 초록 ${c3.ok} · 회색 ${c3.off}${fold ? (open ? '   ▾ 숨기기' : '   ▸ 펼치기') : ''}`);
+          if (fold) {
+            hd.type = 'button'; hd.setAttribute('aria-expanded', String(open));
+            hd.addEventListener('click', () => { try { localStorage.setItem(skey, open ? '0' : '1'); } catch (e) { /* 저장 안 돼도 이번 화면은 바뀜 */ } view[skey] = !open; draw(); });
+            if (view[skey] != null) open = view[skey];
+            hd.textContent = `${plabel} ${total.length}  ·  빨강 ${c3.bad}${c3.warn ? ` · 노랑 ${c3.warn}` : ''} · 초록 ${c3.ok} · 회색 ${c3.off}   ${open ? '▾ 숨기기' : '▸ 펼치기'}`;
+            hd.setAttribute('aria-expanded', String(open));
+          }
+          sub.append(hd);
+          if (open) {
+            if (items.length) { const wrap = el('div', 'uc-grid'); items.forEach((g) => wrap.append(card(g))); sub.append(wrap); anyShown = true; }
+            else sub.append(el('p', 'gb-empty', '게시 문제(빨강) 채널이 없습니다.'));
+          }
+          sec.append(sub);
+        }
         if (!shown.length) sec.append(el('p', 'gb-empty', '이 컴퓨터 몫엔 게시 문제(빨강) 채널이 없습니다.'));
-        else anyShown = true;
         grid.append(sec);
       }
       if (!anyShown && !groups.length) grid.append(el('p', 'gb-empty', '표시할 채널이 없습니다.'));
