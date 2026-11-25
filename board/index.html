@@ -163,6 +163,8 @@ window.dash = (() => {
 <style>
   .gb { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
   .gb-head { display: grid; gap: var(--cds-gap-xs); }
+  /* 🆕11-25 15:4x 사장님 「지금 상황 없애 · 캡처한 부분(운영 메모·실측·추이·팔로우·쿠팡·Claude 계정) 다 없애 · 사장님 할 일도 없애」 */
+  #now, #tab-posts, #posts, #tab-audience, #audience, #tab-follows, #follows, #tab-coupang, #coupang, #claude-acct-card, #todo, #tab-todo, #todo-card, #todo-badge { display: none !important; }
   .gb-now { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--color-bg-subtle, #f6f6f4); display: grid; gap: 6px; }
   .gb-now h2 { margin: 0; font-size: 18px; }
   .gb-now ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 15px; line-height: 1.45; }
@@ -1143,15 +1145,15 @@ window.dash = (() => {
   </section>
 
   <nav class="gb-tabs" role="tablist" aria-label="현황판 보기">
-    <button class="gb-tab" role="tab" id="tab-posts" aria-controls="posts" aria-selected="true" data-tab="posts">운영 메모</button>
+    <button class="gb-tab" role="tab" id="tab-posts" aria-controls="posts" aria-selected="false" data-tab="posts">운영 메모</button>
     <button class="gb-tab" role="tab" id="tab-audience" aria-controls="audience" aria-selected="false" data-tab="audience">팔로워·구독자</button>
     <button class="gb-tab" role="tab" id="tab-follows" aria-controls="follows" aria-selected="false" data-tab="follows" hidden>팔로우 작업</button>
     <button class="gb-tab" role="tab" id="tab-coupang" aria-controls="coupang" aria-selected="false" data-tab="coupang">쿠팡 조회</button>
-    <button class="gb-tab" role="tab" id="tab-codex" aria-controls="codex" aria-selected="false" data-tab="codex">코덱스</button>
+    <button class="gb-tab" role="tab" id="tab-codex" aria-controls="codex" aria-selected="true" data-tab="codex">코덱스</button>
     <button class="gb-tab" role="tab" id="tab-work" aria-controls="work" aria-selected="false" data-tab="work">작업실</button>
   </nav>
 
-  <section class="gb-page" id="posts" role="tabpanel" aria-labelledby="tab-posts">
+  <section class="gb-page" id="posts" role="tabpanel" aria-labelledby="tab-posts" hidden>
     <div class="gb-card" id="notice-card">
       <h2>운영 메모</h2>
       <ul class="gb-notices" id="notices" data-source="board"></ul>
@@ -1209,7 +1211,7 @@ window.dash = (() => {
     </div>
   </section>
 
-  <section class="gb-page" id="codex" role="tabpanel" aria-labelledby="tab-codex" hidden>
+  <section class="gb-page" id="codex" role="tabpanel" aria-labelledby="tab-codex">
     <div class="gb-card" id="codex-acct-card">
       <h2>코덱스 계정</h2>
       <div class="cx-accts" id="cx-accts" data-source="codex_accounts"></div>
@@ -2012,7 +2014,7 @@ window.dash = (() => {
         const n = sibs.filter((y) => y.state === 'failed' && sameTitle(y)).length;
         return { k: 'bad', type: n >= 2 ? 'repeat' : 'fail', why: n >= 2 ? `같은 편 ${n}번 실패` : '게시 실패' };
       }
-      if (s.state === 'uncertain') return { k: 'bad', type: 'unc', why: '올렸는데 공개 미확정' };
+      if (s.state === 'uncertain') return { k: 'ok', wait: true, why: '수익 검사 대기 중' };   // 🆕11-25 사장님 「빨간색 표시하지 마 · 문제라고도 하지 마 · 수익 검사 대기 중」
       if (s.state === 'paused') return { k: 'rest', why: s.reason_short || '중단' };
       // 사장님 지시로 중단된 채널(사유·원인 메모에 「중단」)은 지연이 아니라 쉬는 채널 — 회색
       if (/중단/.test(`${s.reason_short || ''} ${s.fix_cause || ''}`)) return { k: 'rest', why: '중단 · 사장님 지시' };
@@ -2253,7 +2255,8 @@ window.dash = (() => {
           lines = bad.map((y) => `… ${tag(y)}: ${y.j.why} → 재고 있음, 다음 칸 ${(nextFor(y.x.s) || nx).x.s.time}에 올라감`);
         } else if (posted.length || next || fixed.length) {
           k = 'ok';
-          short_ = fixed.length ? `문제 처리했음 ✓ (${fixed[0].j.orig} → ${fixed[0].j.at} 게시)` : `게시 정상 · 오늘 공개 ${posted.length}칸${next ? ` · 다음 ${next.x.s.time}` : ''}`;
+          const waits = js.filter((y) => y.j.wait);
+          short_ = waits.length ? `수익 검사 대기 중 · 오늘 공개 ${posted.length - waits.length}칸` : fixed.length ? `문제 처리했음 ✓ (${fixed[0].j.orig} → ${fixed[0].j.at} 게시)` : `게시 정상 · 오늘 공개 ${posted.length}칸${next ? ` · 다음 ${next.x.s.time}` : ''}`;
           lines = [`공개 ${posted.length}칸`, next ? `다음 칸 ${next.x.s.time} 대기(정상)` : '오늘 남은 시각 잡힌 칸 없음'];
           fixed.forEach((y) => lines.push(`✓ 처리함 · ${tag(y)}: ${y.j.why}`));
           if (empties.length) lines.push(`재고 없음·보류로 못 올리는 칸 ${empties.length}개 (${[...new Set(empties.map((y) => y.j.why))].join(', ')})`);
