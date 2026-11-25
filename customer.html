@@ -7466,7 +7466,12 @@
         const btn = document.getElementById("tour3dPortalBtn");
         if (!btn) return;
         const token = readCustomerSessionToken();
-        if (!token || !getCurrentSessionUser()) { btn.classList.add("hidden"); tour3dPortalTokenDone = ""; return; }
+        if (!getCurrentSessionUser()) { btn.classList.add("hidden"); tour3dPortalTokenDone = ""; return; }
+        if (!token) {
+          btn.href = "/tour/sample/"; btn.target = "_blank"; btn.rel = "noopener";
+          const label = btn.querySelector("span"); if (label) label.textContent = "🏠 3D 둘러보기 샘플 보기";
+          btn.classList.remove("hidden"); tour3dPortalTokenDone = ""; return;
+        }
         if (tour3dPortalTokenDone === token) return;
         tour3dPortalTokenDone = token;
         try {
@@ -7478,8 +7483,16 @@
           });
           const j = await r.json().catch(() => ({}));
           const v = (j && j.ok && Array.isArray(j.vendors) && j.vendors[0]) || null;
-          if (v) { btn.href = v.url; btn.target = "_blank"; btn.rel = "noopener"; btn.classList.remove("hidden"); }
-          else btn.classList.add("hidden");
+          const label = btn.querySelector("span");
+          if (v) {
+            btn.href = v.url;
+            if (label) label.textContent = "🏠 우리 업체 3D 둘러보기";
+          } else {
+            // 3D 가 아직 없는 업체 → 업체 이름을 지운 샘플 포트폴리오(2026-11-25)
+            btn.href = "/tour/sample/";
+            if (label) label.textContent = "🏠 3D 둘러보기 샘플 보기";
+          }
+          btn.target = "_blank"; btn.rel = "noopener"; btn.classList.remove("hidden");
         } catch (_) {
           tour3dPortalTokenDone = "";
         }

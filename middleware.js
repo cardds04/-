@@ -105,6 +105,7 @@ export default async function middleware(req) {
   if (parts.length === 3 && parts[2] !== "index.html") return;
   if (parts.length > 3) return;
   if (vendor && (vendor.startsWith("_") || vendor.includes("."))) return;
+  if (vendor === "sample") return; // 3D 샘플 포트폴리오는 누구나(tools/tour_sample.py)
 
   const claims = await readToken(getCookie(req, "t3d"));
   if (claims && (claims.adm === 1 || (vendor && Array.isArray(claims.vs) && claims.vs.includes(vendor)))) return;
