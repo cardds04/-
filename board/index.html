@@ -69,7 +69,7 @@
 <script>
 /* 대시보드 장치 대역 — 아티팩트 dash API 와 같은 이름(data/onData/calc/colors/setLink/params/setParams) */
 window.dash = (() => {
-  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split"];
+  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split", "today_status"];
   const GROUPS = [['work'], ['slots'], ['realscript', 'scripts'], NAMES.filter((n) => !['work', 'slots', 'realscript', 'scripts'].includes(n))];
   const raw = {}, st = {}, calcs = {}, subs = [], memo = {};
   let ver = 0, params = {}, queued = false;
@@ -163,6 +163,13 @@ window.dash = (() => {
 <style>
   .gb { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
   .gb-head { display: grid; gap: var(--cds-gap-xs); }
+  .gb-now { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--color-bg-subtle, #f6f6f4); display: grid; gap: 6px; }
+  .gb-now h2 { margin: 0; font-size: 18px; }
+  .gb-now ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 15px; line-height: 1.45; }
+  .gb-now li { padding-left: 1.4em; text-indent: -1.4em; overflow-wrap: anywhere; }
+  .gb-now li::before { display: inline-block; width: 1.4em; text-indent: 0; }
+  .gb-now li.is-ok::before { content: "🟢"; } .gb-now li.is-warn::before { content: "🟡"; } .gb-now li.is-bad::before { content: "🔴"; } .gb-now li.is-info::before { content: "·"; }
+  .gb-now li.is-stamp { color: var(--color-fg-muted, #777); font-size: 13px; }
   .gb-head h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); text-wrap: balance; }
   .gb-take { margin: 0; font-size: var(--cds-font-size-body); }
   .gb-take b, .gb-tile b { font-weight: var(--cds-font-weight-medium); }
@@ -1087,6 +1094,12 @@ window.dash = (() => {
     <p class="gb-stamp">게시 기록 기준 <span data-source="board" data-field="source_checked" data-row="0" class="dash-skeleton">—</span> · 현황판 정리 <span data-source="board" data-field="built" data-row="0" class="dash-skeleton">—</span> (한국 시각)</p>
   </header>
 
+  <!-- 🆕11-25 사장님 「뭐가 어떻게 되고 있는지 헷갈리네」 — 지금 상황(제작맥 today_status.py 가 10분마다 계산) -->
+  <section class="gb-now" id="now" aria-label="지금 상황">
+    <h2>지금 상황</h2>
+    <ul id="now-list" class="dash-skeleton" data-source="today_status"></ul>
+  </section>
+
   <section class="gb-tiles" id="summary" aria-label="오늘 요약">
     <div class="gb-tile" data-tile="posted">
       <span class="gb-tile-label">오늘 공개</span>
@@ -1371,6 +1384,24 @@ window.dash = (() => {
     tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.tab, true)));
     const named = location.hash.slice(1);
     if (tabs.some((t) => t.dataset.tab === named)) show(named, false);
+  })();
+</script>
+
+<script>
+  // 🆕11-25 지금 상황
+  (() => {
+    function drawNow() {
+      const list = document.getElementById('now-list'); if (!list) return;
+      let d; try { d = dash.data('today_status'); } catch (e) { return; }
+      if (!d || d.status !== 'ok') return;
+      list.classList.remove('dash-skeleton'); list.replaceChildren();
+      (d.data || []).forEach((r, i) => {
+        const li = document.createElement('li');
+        li.className = (i === 0 && /기준$/.test(r.text || '')) ? 'is-stamp' : 'is-' + (r.level || 'info');
+        li.textContent = r.text || ''; list.append(li);
+      });
+    }
+    dash.onData(drawNow);
   })();
 </script>
 
