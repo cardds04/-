@@ -69,7 +69,7 @@
 <script>
 /* 대시보드 장치 대역 — 아티팩트 dash API 와 같은 이름(data/onData/calc/colors/setLink/params/setParams) */
 window.dash = (() => {
-  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split", "today_status", "new_script"];
+  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "prod_board", "revenue", "claude_accounts", "posting_split", "today_status", "new_script"];
   const GROUPS = [['work'], ['slots'], ['realscript', 'scripts'], NAMES.filter((n) => !['work', 'slots', 'realscript', 'scripts'].includes(n))];
   const raw = {}, st = {}, calcs = {}, subs = [], memo = {};
   let ver = 0, params = {}, queued = false;
@@ -1073,6 +1073,31 @@ window.dash = (() => {
   .uc-revbox.is-hidden { padding: 4px 10px; background: #fffaea; justify-self: start; }
 
   /* 11-19 「오늘 만든 것」 */
+  /* 🆕11-25 제작 게시판 */
+  .pb-wrap { gap: 8px; }
+  .pb-sum, .pb-upd { font-size: 12px; font-weight: 600; color: #8592ad; margin-left: 6px; }
+  .pb-legend { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .pb-list { display: grid; gap: 6px; min-height: 2rem; }
+  .pb-row { display: grid; gap: 5px; min-width: 0; padding: 8px 10px; border: 1px solid #e3e8f2; border-left: 5px solid #4a7df0; border-radius: 12px; background: #fbfcff; }
+  .pb-row.is-wait { border-left-color: #b8c2d6; }
+  .pb-row.is-stall { border-left-color: #e8912d; background: #fff8ee; }
+  .pb-top { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: baseline; min-width: 0; }
+  .pb-stall { display: inline-block; font-size: 12px; font-weight: 800; color: #a65300; background: #ffe6c7; border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+  .pb-ch { font-size: 12px; font-weight: 700; color: #61718e; white-space: nowrap; }
+  .pb-ti { font-size: 14px; font-weight: 800; color: #121c36; overflow-wrap: anywhere; min-width: 0; }
+  .pb-start { font-size: 12px; color: #8592ad; white-space: nowrap; }
+  .pb-steps { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+  .pb-step { display: inline-flex; flex-wrap: wrap; gap: 2px 4px; align-items: baseline; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #dfe6f2; background: #f4f6f9; color: #8592ad; max-width: 100%; overflow-wrap: anywhere; }
+  .pb-step small { font-size: 11px; opacity: .92; font-weight: 600; }
+  .pb-step.s-done { background: #e3f7ea; border-color: #9ee2c0; color: #14784a; }
+  .pb-step.s-doing { background: #e7efff; border-color: #9db8f5; color: #2550c8; font-weight: 700; }
+  .pb-step.s-wait { background: #f1f2f6; border-color: #c3cad8; color: #4d5b78; font-weight: 700; }
+  .pb-why { margin: 0; font-size: 12px; color: #8a5a12; overflow-wrap: anywhere; }
+  .pb-more { appearance: none; font: inherit; font-size: 13px; font-weight: 700; color: #4d5b78; background: #f1f2f6; border: 1px solid #dfe3ea; border-radius: 10px; padding: 4px 10px; cursor: pointer; justify-self: start; }
+  .pb-h3 { margin: 6px 0 0; font-size: 15px; font-weight: 800; color: #121c36; }
+  .pb-h3 small { font-size: 12px; font-weight: 600; color: #8592ad; margin-left: 6px; }
+  .pb-made { min-width: 0; overflow-x: auto; }
+  @media (max-width: 40rem) { .pb-row { padding: 6px 7px; } .pb-ti { flex-basis: 100%; } .pb-step { font-size: 11px; padding: 2px 6px; } }
   .uc-made { display: grid; gap: 6px; min-width: 0; padding: 10px 12px; border-radius: 14px; border: 1px solid #e3e8f2; background: #fbfcff; border-left: 5px solid #4a55c4; }
   .uc-made-h { appearance: none; border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; color: inherit; }
   .uc-made-h:focus-visible { outline: 2px solid #4a55c4; outline-offset: 2px; border-radius: 4px; }
@@ -1143,6 +1168,15 @@ window.dash = (() => {
       <select class="dash-select uc-day" id="uc-days" aria-label="게시 칸 날짜(펼친 카드)"></select>
     </div>
     <div class="uc-body dash-skeleton" id="uc-grid" data-source="channels slots production ypp_watch audience_latest scripts realscript board revenue revenue_total revenue_daily today_made today_made_sum new_script"></div>
+  </section>
+
+  <!-- 🆕11-25 사장님 「제작 게시판을 게시현황판에 만들어 줘 — 제작 시작·각 과정·마무리를 시각과 함께, 진행되지 않는 제작은 드러나게, 완료되면 오늘 만든 것으로」 (자료 ~/tools/prod_board.py) -->
+  <section class="gb-card pb-wrap" id="prod-board" aria-label="제작 게시판">
+    <h2>제작 게시판 <small class="pb-sum" id="pb-sum"></small> <small class="pb-upd" id="pb-upd"></small></h2>
+    <p class="pb-legend"><span class="pb-step s-done">✓ 끝난 단계 · 끝난 시각</span><span class="pb-step s-doing">▶ 하는 중 · 시작 시각</span><span class="pb-step s-wait">… 차례 대기 · 이유</span><span class="pb-step">아직</span><span class="pb-stall">⏸ 멈춤</span></p>
+    <div class="pb-list dash-skeleton" id="pb-list" data-source="prod_board"></div>
+    <h3 class="pb-h3">오늘 만든 롱폼·숏폼 <small id="pb-made-sum"></small></h3>
+    <div class="pb-made" id="pb-made" data-source="prod_board today_made"></div>
   </section>
 
   <nav class="gb-tabs" role="tablist" aria-label="현황판 보기">
@@ -1387,6 +1421,93 @@ window.dash = (() => {
     tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.tab, true)));
     const named = location.hash.slice(1);
     if (tabs.some((t) => t.dataset.tab === named)) show(named, false);
+  })();
+</script>
+
+<script>
+  // 🆕11-25 제작 게시판 — 제작 중인 건마다 한 줄(시작 시각 · 단계 알약 · 멈춘 건은 맨 앞) + 오늘 만든 롱폼·숏폼
+  (() => {
+    const { el } = window.gb;
+    const view = { waitOpen: null };
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const tm = (iso) => { const s = String(iso || ''); if (s.length < 16) return ''; return s.slice(0, 10) === today() ? s.slice(11, 16) : `${s.slice(5, 10)} ${s.slice(11, 16)}`; };
+    const dur = (m) => { const n = Number(m); if (!Number.isFinite(n) || n <= 0) return ''; return n >= 60 ? `${Math.floor(n / 60)}시간 ${n % 60 ? (n % 60) + '분' : ''}`.trim() : `${n}분`; };
+    function pill(z) {
+      const cls = { done: 's-done', doing: 's-doing', wait: 's-wait' }[z.state] || '';
+      const mark = { done: '✓ ', doing: '▶ ', wait: '… ' }[z.state] || '';
+      const p = el('span', `pb-step ${cls}`.trim(), mark + String(z.name || ''));
+      let sub = '';
+      if (z.state === 'done') sub = tm(z.done_at);
+      else if (z.state === 'doing') sub = [tm(z.started_at) ? tm(z.started_at) + '~' : '', z.note || ''].filter(Boolean).join(' · ');
+      else if (z.state === 'wait') sub = z.note || '차례 대기';
+      else sub = z.note || '';
+      if (sub) p.append(el('small', null, sub));
+      return p;
+    }
+    function row(r) {
+      const kind = r.stalled ? 'is-stall' : r.waiting ? 'is-wait' : 'is-doing';
+      const li = el('div', `pb-row ${kind}`);
+      const top = el('div', 'pb-top');
+      if (r.stalled) top.append(el('span', 'pb-stall', `⏸ ${dur(r.stalled_min) || '0분'}째 멈춤`));
+      top.append(el('span', 'pb-ch', String(r.channel || '')), el('span', 'pb-ti', `${r.title || ''} ${r.ep || ''}`.trim()),
+                 el('span', 'pb-start', `제작 시작 ${tm(r.started_at)}`));
+      const steps = el('div', 'pb-steps'); (Array.isArray(r.steps) ? r.steps : []).forEach((z) => steps.append(pill(z)));
+      li.append(top, steps);
+      if (r.stalled && r.why) li.append(el('p', 'pb-why', String(r.why).replace(/‼️/g, '').replace(/\s{2,}/g, ' ')));
+      return li;
+    }
+    function draw() {
+      const list = document.getElementById('pb-list'); if (!list) return;
+      let d; try { d = dash.data('prod_board'); } catch (e) { return; }
+      const made = document.getElementById('pb-made');
+      if (!d || d.status === 'loading') return;
+      list.classList.remove('dash-skeleton'); list.replaceChildren();
+      if (d.status !== 'ok') { list.append(window.gb.failLine()); return; }
+      const rows = Array.isArray(d.data) ? d.data : [];
+      const open = rows.filter((r) => !r.done_at);
+      const rank = (r) => (r.stalled ? 0 : r.waiting ? 2 : 1);
+      open.sort((a, b) => rank(a) - rank(b) || String(a.started_at || '').localeCompare(String(b.started_at || '')));
+      const nS = open.filter((r) => r.stalled).length, nW = open.filter((r) => !r.stalled && r.waiting).length, nD = open.length - nS - nW;
+      document.getElementById('pb-sum').textContent = `하는 중 ${nD} · 차례 대기 ${nW}${nS ? ' · 멈춤 ' + nS : ''}`;
+      const upd = d.updated ? String(d.updated).slice(11, 16) : '';
+      document.getElementById('pb-upd').textContent = upd ? `${upd} 기준 · 5분마다` : '';
+      if (!open.length) list.append(el('p', 'uc-muted', '지금 제작 중인 것이 없습니다.'));
+      if (view.waitOpen == null) { let v = null; try { v = localStorage.getItem('gb_pb_wait'); } catch (e) { v = null; } view.waitOpen = v !== '0'; }
+      open.filter((r) => r.stalled || !r.waiting).forEach((r) => list.append(row(r)));
+      const waits = open.filter((r) => !r.stalled && r.waiting);
+      if (waits.length) {
+        const b = el('button', 'pb-more', `${view.waitOpen ? '▾' : '▸'} 차례 대기 ${waits.length}건`); b.type = 'button'; b.setAttribute('aria-expanded', String(view.waitOpen));
+        b.addEventListener('click', () => { view.waitOpen = !view.waitOpen; try { localStorage.setItem('gb_pb_wait', view.waitOpen ? '1' : '0'); } catch (e) { /* 이번 화면만 */ } draw(); });
+        list.append(b);
+        if (view.waitOpen) waits.forEach((r) => list.append(row(r)));
+      }
+      // 오늘 만든 롱폼·숏폼 — 제작 게시판에서 끝난 건 + 마이박스에 올라간 완성본(today_made), 같은 것은 한 줄로
+      made.replaceChildren();
+      const items = [];
+      rows.filter((r) => r.done_at && String(r.done_at).slice(0, 10) === today()).forEach((r) => items.push({ time: String(r.done_at).slice(11, 16), channel: r.channel || '', kind: r.kind || '', what: `${r.title || ''} ${r.ep || ''}`.trim(), took: dur(r.took_min) }));
+      let md; try { md = dash.data('today_made'); } catch (e) { md = null; }
+      const seen = new Set(items.map((x) => x.what));
+      (md && md.status === 'ok' && Array.isArray(md.data) ? md.data : []).filter((r) => r.kind === '롱폼' || r.kind === '숏폼').forEach((r) => {
+        const what = String(r.what || '');
+        if (r.kind === '롱폼' && seen.has(what)) return;
+        items.push({ time: String(r.time || ''), channel: r.channel || '', kind: r.kind, what: what + (r.kind === '숏폼' && Number(r.files) > 0 ? ` ×${Number(r.files)}` : ''), took: '' });
+      });
+      items.sort((a, b) => a.time.localeCompare(b.time));
+      const nL = items.filter((x) => x.kind !== '숏폼').length, nSh = items.filter((x) => x.kind === '숏폼').length;
+      document.getElementById('pb-made-sum').textContent = items.length ? `롱폼 ${nL} · 숏폼 묶음 ${nSh} · 내일이 되면 비워집니다` : '';
+      if (!items.length) { made.append(el('p', 'uc-muted', '오늘 끝난 것이 아직 없습니다.')); return; }
+      const tb = el('table', 'uc-madetbl'); const th = el('thead'); const hr = el('tr');
+      hr.append(el('th', null, '완료'), el('th', null, '채널'), el('th', null, '종류'), el('th', null, '무엇'), el('th', null, '걸린 시간')); th.append(hr);
+      const body = el('tbody');
+      items.forEach((x) => {
+        const tr = el('tr'); const kd = el('td');
+        kd.append(el('span', `uc-mk k-${x.kind === '숏폼' ? 'short' : x.kind === '롱폼' || x.kind === '롱폼 세트' ? 'long' : 'etc'}`, x.kind));
+        tr.append(el('td', 'n', x.time), el('td', null, x.channel), kd, el('td', 'uc-made-what', x.what), el('td', 'n', x.took)); body.append(tr);
+      });
+      tb.append(th, body); made.append(tb);
+    }
+    dash.onData(() => { try { draw(); } catch (e) { console.error('제작 게시판', e); } });
   })();
 </script>
 
@@ -2701,7 +2822,9 @@ window.dash = (() => {
       }
       if (!anyShown && !groups.length) grid.append(el('p', 'gb-empty', '표시할 채널이 없습니다.'));
       // 11-19 사장님 「오늘 제작한 거 리스트를 아래에」 — 맨 아래 「오늘 만든 것」(기본 펼침, 제목 줄 눌러 접기 · 브라우저에 기억)
-      const mb = madeBox(); if (mb) grid.append(mb);
+      // 🆕11-25 「오늘 만든 롱폼·숏폼」은 아래 제작 게시판 구역에 하나로 합쳐 보인다 — 그 자료가 없을 때만 예전 상자
+      let pbOk = false; try { pbOk = dash.data('prod_board').status === 'ok'; } catch (e) { pbOk = false; }
+      if (!pbOk) { const mb = madeBox(); if (mb) grid.append(mb); }
     }
     window.gb.draws.channels = draw;
     dash.onData(draw);
