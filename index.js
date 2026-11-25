@@ -18146,47 +18146,43 @@ ${folderBtn}
               </div>`;
             }).join("") : '<div class="helper" style="margin:0;">신청된 현장이 없습니다.</div>');
         }
-        // 11-19 사장님 「업체 리스트 버튼 → 링크 리스트 다 보기」: 완성(done)+전달 끝(delivered) 전부
-        const allSites = items.filter((m) => (m.status === "done" || m.status === "delivered") && m.site_url)
-          .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+        // 11-25 사장님 「업체 리스트는 없애도 돼 · UI 깔끔하게」: 리스트 버튼 제거, 행을 카드형 두 줄로
         // 11-25 사장님 「입금확인도 넣어줘 완료하고 나면 입금받아야 됨」: 유료는 전달 확인 뒤에도 입금확인 전까지 남는다
         items = items.filter((m) => m.status === "done" || (m.status === "delivered" && m.paid && !m.paid_at)).sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
-        const sig = JSON.stringify([items, waiting, allSites.length, box.dataset.listOpen || ""]);
-        const waitLine = "";
+        const sig = JSON.stringify([items, waiting]);
         if (sig === tour3dLastJson && box.dataset.rendered === "1") return;
         tour3dLastJson = sig; box.dataset.rendered = "1";
-        const listOpen = box.dataset.listOpen === "1";
-        const listBtn = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;"><button type="button" class="btn-sm" data-action="tour3dList">업체 리스트 (${allSites.length}) ↗</button></div>`;
-        const listHtml = listOpen ? `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:6px 8px;margin:0 0 10px;background:#fafafa;">` +
-          (allSites.length ? allSites.map((m) => `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e5e7eb;flex-wrap:wrap;">
-              ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;font-size:0.9em;">${escapeHtml(String(m.company || ""))}</strong>
-              <span class="helper" style="margin:0;font-size:0.78em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}${m.status === "delivered" ? " · 전달 끝" : ""}</span>
-              <a href="${escapeHtml(String(m.site_url))}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.8em;word-break:break-all;">${escapeHtml(String(m.site_url))}</a>
-              <button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(String(m.site_url))}">링크 복사</button>
-            </div>`).join("") : '<div class="helper" style="margin:0;">아직 만든 3D 사이트가 없습니다.</div>') + `</div>` : "";
+        box.style.alignContent = "start";
         if (!items.length) {
-          box.innerHTML = listBtn + listHtml + waitLine + '<div class="helper" style="margin:0;color:#16a34a;">전달할 3D 완료 업체가 없습니다.</div>';
+          box.innerHTML = '<div style="border:1px dashed #cbd5e1;border-radius:12px;padding:18px 12px;text-align:center;color:#64748b;font-size:0.88em;background:#f8fafc;">전달할 3D 완료 업체가 없습니다.</div>';
           return;
         }
-        box.innerHTML = listBtn + listHtml + waitLine +
-          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${items.length}건 3D 완료${items.some((m) => m.paid) ? ` · 유료 ${items.filter((m) => m.paid).length}건 입금 대기` : ""}</div>` +
+        const paidN = items.filter((m) => m.paid).length;
+        box.innerHTML =
+          `<div style="display:flex;gap:6px;align-items:center;margin:0 0 2px;font-size:0.84em;font-weight:800;color:#0f172a;">완료 ${items.length}건${paidN ? `<span style="font-weight:800;color:#b45309;background:#fef3c7;border-radius:999px;padding:1px 8px;font-size:0.92em;">입금 대기 ${paidN}</span>` : ""}</div>` +
           items.map((m, i) => {
             const url = String(m.site_url || "");
-            return `<div class="customer-alert-row" style="padding:7px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
-              <span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#d9f86b;background:#111816;border-radius:6px;padding:2px 6px;">3D</span>
-              ${tour3dPayBadge(m)}<span style="flex:0 0 auto;"><strong>${escapeHtml(String(m.company || ""))}</strong></span>
-              <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
-              ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.82em;word-break:break-all;">${escapeHtml(url)}</a>` : '<span style="flex:1"></span>'}
-              ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}">링크 복사</button>` : ""}
-              ${m.paid ? `<span style="flex:0 0 auto;font-size:0.75em;font-weight:800;color:#b45309;background:#fef3c7;border-radius:6px;padding:2px 7px;">입금 대기</span><button type="button" class="btn-sm primary" data-action="tour3dPaid" data-idx="${i}">입금완료</button>` : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`}
+            const short = url.replace(/^https?:\/\//, "");
+            const action = m.paid
+              ? `<button type="button" class="btn-sm primary" data-action="tour3dPaid" data-idx="${i}">입금완료</button>`
+              : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`;
+            return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#fff;display:flex;flex-direction:column;gap:7px;">
+              <div style="display:flex;gap:6px;align-items:center;min-width:0;">
+                ${tour3dPayBadge(m)}
+                <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(String(m.company || ""))}</strong>
+                <span style="flex:0 0 auto;font-size:0.78em;color:#64748b;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;min-width:0;">
+                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(url)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8em;color:#2563eb;">${escapeHtml(short)}</a>` : '<span style="flex:1;font-size:0.8em;color:#94a3b8;">링크 없음</span>'}
+                ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}">복사</button>` : ""}
+                ${action}
+              </div>
             </div>`;
           }).join("");
         box.__tour3dItems = items;
         if (!box.dataset.boundTour3d) {
           box.dataset.boundTour3d = "1";
           box.addEventListener("click", async (event) => {
-            const lb = event.target.closest('button[data-action="tour3dList"]');
-            if (lb) { window.open("./tour/", "_blank"); return; }   // 11-19 「업체를 모아 놓은 상위 사이트(비번)로」
             const cb = event.target.closest('button[data-action="tour3dCopy"]');
             if (cb) {
               const u = cb.dataset.url || "";
