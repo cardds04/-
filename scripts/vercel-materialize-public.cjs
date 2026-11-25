@@ -28,6 +28,7 @@ const SKIP_TOP_DIR = new Set([
 
 const SKIP_TOP_FILE = new Set([
   "server.js",
+  "middleware.js", // Vercel Routing Middleware(3D 업체 페이지 잠금) — 정적 파일 아님
   "Dockerfile",
   "docker-entrypoint.sh",
   "fly.toml",

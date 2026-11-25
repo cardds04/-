@@ -18117,7 +18117,23 @@ ${folderBtn}
           ? '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#fff;background:#dc2626;border-radius:6px;padding:2px 6px;">유료</span>'
           : '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#475569;background:#e2e8f0;border-radius:6px;padding:2px 6px;">무료</span>';
       }
+      // 3D 업체 페이지(/tour/<업체>/)·전체 목록(/tour/)은 잠겨 있다(middleware.js).
+      // 관리자는 이미 로그인했으니 관리자 토큰으로 t3d 쿠키를 받아 비번 없이 연다(2026-11-25).
+      let tour3dAdminCookieToken = "";
+      function ensureTour3dAdminCookie() {
+        const t = readAdminSessionToken();
+        if (!t || tour3dAdminCookieToken === t) return;
+        tour3dAdminCookieToken = t;
+        fetch("/api/tour-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ action: "admin", token: t }),
+        }).catch(() => { tour3dAdminCookieToken = ""; });
+      }
+
       async function renderTour3dDoneBox() {
+        ensureTour3dAdminCookie();
         const box = document.getElementById("tour3dDoneBox");
         if (!box) return;
         let items = [];

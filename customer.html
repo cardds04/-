@@ -4009,6 +4009,7 @@
         <div id="scheduleBlock" class="hidden">
           <div class="top-line">
             <strong id="welcomeText"></strong>
+            <a id="tour3dPortalBtn" class="hidden" href="#" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1.5px solid #9fb5ee;border-radius:999px;font-size:13px;font-weight:700;color:#1d3fa8;text-decoration:none;background:#fff;white-space:nowrap;">3D 둘러보기 →</a>
           </div>
 
           <section id="registerSection">
@@ -6362,6 +6363,7 @@
             const auth = await customerAuthRequest("login", { loginId: userId, password: secretPw });
             if (auth && auth.ok && auth.token) {
               writeCustomerSessionToken(auth.token);
+              setTimeout(() => { refreshTour3dPortalLink(); }, 0);
               return normalize(auth.token);
             }
             return "";
@@ -7456,7 +7458,35 @@
         }
       }
 
+      // ── 3D 둘러보기 업체 페이지 바로가기 (2026-11-25) ─────────────────
+      //  이미 로그인했으니 비번 없이: 세션 토큰으로 /api/tour-login 이 t3d 쿠키를 심고
+      //  이 업체의 3D 업체 페이지(/tour/<업체>/) 링크를 돌려준다. 3D 가 없는 업체는 버튼 숨김.
+      let tour3dPortalTokenDone = "";
+      async function refreshTour3dPortalLink() {
+        const btn = document.getElementById("tour3dPortalBtn");
+        if (!btn) return;
+        const token = readCustomerSessionToken();
+        if (!token || !getCurrentSessionUser()) { btn.classList.add("hidden"); tour3dPortalTokenDone = ""; return; }
+        if (tour3dPortalTokenDone === token) return;
+        tour3dPortalTokenDone = token;
+        try {
+          const r = await fetch("/api/tour-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ action: "session", token }),
+          });
+          const j = await r.json().catch(() => ({}));
+          const v = (j && j.ok && Array.isArray(j.vendors) && j.vendors[0]) || null;
+          if (v) { btn.href = v.url; btn.target = "_blank"; btn.rel = "noopener"; btn.classList.remove("hidden"); }
+          else btn.classList.add("hidden");
+        } catch (_) {
+          tour3dPortalTokenDone = "";
+        }
+      }
+
       function renderAuthState() {
+        setTimeout(() => { refreshTour3dPortalLink(); }, 0);
         let user = getCurrentSessionUser();
         const isLoggedIn = Boolean(user);
         authBlockEl.classList.toggle("hidden", isLoggedIn);
