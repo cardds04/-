@@ -2465,7 +2465,7 @@ window.dash = (() => {
           const tr = el('tr');
           const w = `uc=${enc(r.uc)}`;
           const dcells = last5.map((d) => { const v = d[r.uc]; return v == null ? el('td', 'n uc-muted', r.last_day ? '—' : '집계 전') : markEl(el('td', 'n', wonFull(v)), 'revenue_daily', r.uc, `date=${enc(d.date)}`); });
-          tr.append(el('td', null, r.channel || ''), markEl(el('td', 'n', wonFull(r.prev_month_total)), 'revenue', 'prev_month_total', w), markEl(el('td', 'n', wonFull(r.month_total)), 'revenue', 'month_total', w), ...dcells);
+          tr.append(el('td', null, (r.channel || '') + (r.stale ? ' · 이전 값' : '')), markEl(el('td', 'n', wonFull(r.prev_month_total)), 'revenue', 'prev_month_total', w), markEl(el('td', 'n', wonFull(r.month_total)), 'revenue', 'month_total', w), ...dcells);
           body.append(tr);
         });
         tb.append(thead, body); wrap.append(tb); box.append(wrap);
