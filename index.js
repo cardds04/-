@@ -18149,7 +18149,8 @@ ${folderBtn}
         // 11-19 사장님 「업체 리스트 버튼 → 링크 리스트 다 보기」: 완성(done)+전달 끝(delivered) 전부
         const allSites = items.filter((m) => (m.status === "done" || m.status === "delivered") && m.site_url)
           .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-        items = items.filter((m) => m.status === "done").sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+        // 11-25 사장님 「입금확인도 넣어줘 완료하고 나면 입금받아야 됨」: 유료는 전달 확인 뒤에도 입금확인 전까지 남는다
+        items = items.filter((m) => m.status === "done" || (m.status === "delivered" && m.paid && !m.paid_at)).sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
         const sig = JSON.stringify([items, waiting, allSites.length, box.dataset.listOpen || ""]);
         const waitLine = "";
         if (sig === tour3dLastJson && box.dataset.rendered === "1") return;
@@ -18168,7 +18169,7 @@ ${folderBtn}
           return;
         }
         box.innerHTML = listBtn + listHtml + waitLine +
-          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${items.length}건 3D 완료 · 고객 전달 대기</div>` +
+          `<div class="helper" style="margin:0 0 6px;color:#dc2626;font-weight:700;">${items.filter((m) => m.status === "done").length}건 3D 완료 · 고객 전달 대기${items.some((m) => m.status === "delivered") ? ` · ${items.filter((m) => m.status === "delivered").length}건 입금 대기` : ""}</div>` +
           items.map((m, i) => {
             const url = String(m.site_url || "");
             return `<div class="customer-alert-row" style="padding:7px 8px;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -18177,7 +18178,7 @@ ${folderBtn}
               <span class="helper" style="flex:0 0 auto;margin:0;font-size:0.8em;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
               ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="flex:1;min-width:120px;font-size:0.82em;word-break:break-all;">${escapeHtml(url)}</a>` : '<span style="flex:1"></span>'}
               ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}">링크 복사</button>` : ""}
-              <button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>
+              ${m.status === "delivered" ? `<span style="flex:0 0 auto;font-size:0.75em;font-weight:800;color:#b45309;background:#fef3c7;border-radius:6px;padding:2px 7px;">전달 끝 · 입금 대기</span><button type="button" class="btn-sm primary" data-action="tour3dPaid" data-idx="${i}">입금확인</button>` : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`}
             </div>`;
           }).join("");
         box.__tour3dItems = items;
@@ -18192,6 +18193,26 @@ ${folderBtn}
               try { await navigator.clipboard.writeText(u); }
               catch (_) { const t = document.createElement("textarea"); t.value = u; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); } catch (__) {} t.remove(); }
               const old = cb.textContent; cb.textContent = "복사됨 ✓"; setTimeout(() => { cb.textContent = old; }, 1400);
+              return;
+            }
+            const pb = event.target.closest('button[data-action="tour3dPaid"]');
+            if (pb && !pb.disabled) {
+              const it = (box.__tour3dItems || [])[parseInt(pb.dataset.idx, 10)];
+              if (!it || !window.confirm(`${it.company || ""} — 3D 입금 확인되었나요?`)) return;
+              pb.disabled = true; pb.textContent = "처리 중…";
+              try {
+                const { __id, ...payload } = it;
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
+                  method: "POST",
+                  headers: { ...KAKAO_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+                  body: JSON.stringify([{ id: __id, payload: { ...payload, paid_at: new Date().toISOString() } }])
+                });
+                if (!res.ok) throw new Error(String(res.status));
+                box.dataset.rendered = "";
+                await renderTour3dDoneBox();
+              } catch (e) {
+                alert("저장 실패: " + (e && e.message ? e.message : e)); pb.disabled = false; pb.textContent = "입금확인";
+              }
               return;
             }
             const btn = event.target.closest('button[data-action="tour3dDelivered"]');
