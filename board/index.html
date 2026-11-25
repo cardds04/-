@@ -69,7 +69,7 @@
 <script>
 /* 대시보드 장치 대역 — 아티팩트 dash API 와 같은 이름(data/onData/calc/colors/setLink/params/setParams) */
 window.dash = (() => {
-  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split", "today_status"];
+  const NAMES = ["board", "channels", "slots", "audience", "follows", "production", "realscript", "coupang", "ypp", "codex_accounts", "codex_jobs", "scripts", "work", "today_made", "revenue", "claude_accounts", "posting_split", "today_status", "new_script"];
   const GROUPS = [['work'], ['slots'], ['realscript', 'scripts'], NAMES.filter((n) => !['work', 'slots', 'realscript', 'scripts'].includes(n))];
   const raw = {}, st = {}, calcs = {}, subs = [], memo = {};
   let ver = 0, params = {}, queued = false;
@@ -164,7 +164,8 @@ window.dash = (() => {
   .gb { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
   .gb-head { display: grid; gap: var(--cds-gap-xs); }
   /* 🆕11-25 15:4x 사장님 「지금 상황 없애 · 캡처한 부분(운영 메모·실측·추이·팔로우·쿠팡·Claude 계정) 다 없애 · 사장님 할 일도 없애」 */
-  #now, #tab-posts, #posts, #tab-audience, #audience, #tab-follows, #follows, #tab-coupang, #coupang, #claude-acct-card, #todo, #tab-todo, #todo-card, #todo-badge { display: none !important; }
+  .uc-pill.uc-new { background: #e7f0ff; color: #1d4fd7; box-shadow: inset 0 0 0 1px #9dbcff; font-weight: 700; }
+  #work, #tab-work, #now, #tab-posts, #posts, #tab-audience, #audience, #tab-follows, #follows, #tab-coupang, #coupang, #claude-acct-card, #todo, #tab-todo, #todo-card, #todo-badge { display: none !important; }
   .gb-now { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--color-bg-subtle, #f6f6f4); display: grid; gap: 6px; }
   .gb-now h2 { margin: 0; font-size: 18px; }
   .gb-now ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 15px; line-height: 1.45; }
@@ -1141,7 +1142,7 @@ window.dash = (() => {
       </div>
       <select class="dash-select uc-day" id="uc-days" aria-label="게시 칸 날짜(펼친 카드)"></select>
     </div>
-    <div class="uc-body dash-skeleton" id="uc-grid" data-source="channels slots production ypp_watch audience_latest scripts realscript board revenue revenue_total revenue_daily today_made today_made_sum"></div>
+    <div class="uc-body dash-skeleton" id="uc-grid" data-source="channels slots production ypp_watch audience_latest scripts realscript board revenue revenue_total revenue_daily today_made today_made_sum new_script"></div>
   </section>
 
   <nav class="gb-tabs" role="tablist" aria-label="현황판 보기">
@@ -2360,6 +2361,15 @@ window.dash = (() => {
         t.title = ps.ready ? `${nm(ps.machine)}에서 올림` : `담당은 ${nm(ps.machine)} — 준비 끝나기 전이라 지금은 ${nm(ps.now)}가 올림`;
         return t;
       };
+      // 🆕11-25 사장님 「전기승결로 게시되기 시작한 채널에 아이콘 — 뉴대본」
+      const newPill = (g) => {
+        let nd; try { nd = dash.data('new_script'); } catch (e) { return null; }
+        const r = nd && nd.status === 'ok' ? (nd.data || []).find((x) => x.key === g.baseKey && x.on) : null;
+        if (!r) return null;
+        const t = el('span', 'uc-pill uc-new', '🆕 뉴대본');
+        t.title = `5분 전기승결 대본 게시 시작 — ${r.series || ''} ${r.ep || ''} (${r.since || ''})`;
+        return t;
+      };
       const stockLine = (g) => {
         const nums = el('div', 'sc-nums uc-stk');
         for (const [k, c] of parts(g)) {
@@ -2541,6 +2551,7 @@ window.dash = (() => {
         pp.title = lines.length ? lines.map((l) => `${l.run ? '▶ 작업 중' : '… 차례 대기'} · ${l.step} · ${cleanTitle(l.it)} — ${l.pct}%`).join('\n') : '지금 만드는 작업 없음';
         stl.append(pl, pp);
         { const pc = pcPill(g); if (pc) stl.append(pc); }
+        { const np = newPill(g); if (np) stl.append(np); }
         cardEl.append(stl);
         // ③ 재고 한 줄(색만)
         cardEl.append(stockLine(g));
