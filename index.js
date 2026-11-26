@@ -18227,20 +18227,21 @@ ${folderBtn}
           `<div style="display:flex;gap:6px;align-items:center;margin:0 0 2px;font-size:0.84em;font-weight:800;color:#0f172a;">완료 ${items.length}건${paidN ? `<span style="font-weight:800;color:#b45309;background:#fef3c7;border-radius:999px;padding:1px 8px;font-size:0.92em;">입금 대기 ${paidN}</span>` : ""}</div>` +
           items.map((m, i) => {
             const url = String(m.site_url || "");
-            const short = url.replace(/^https?:\/\//, "");
             const action = m.paid && !m.paid_at
               ? `<button type="button" class="btn-sm primary" data-action="tour3dPaid" data-idx="${i}">입금완료</button>`
               : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`;
-            return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#fff;display:flex;flex-direction:column;gap:7px;">
-              <div style="display:flex;gap:6px;align-items:center;min-width:0;">
-                ${tour3dPayBadge(m)}
-                <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(String(m.company || ""))}</strong>
+            // 11-26 사장님 「사이트 주소 없어도 돼 · 간결하게 위 신청된 현장이랑 비슷하게」 → 신청 카드와 같은 두 줄:
+            //   윗줄 = 유료/무료 · 업체(누르면 사이트 열림) · 날짜 / 아랫줄 = 주소 한 줄(말줄임) · 입금 · 링크복사 · 확인
+            const place = String(m.place || "").replace(/^\s*주소\s*[:：]\s*/, "")
+              .replace(/^(서울특별시|서울시|서울|경기도|경기|인천광역시|인천시|인천)\s*/, "").replace(/\s+/g, " ").trim();
+            const nameHtml = `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(String(m.company || ""))}</strong>`;
+            return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:9px 11px;background:#fff;display:grid;grid-template-columns:1fr auto;row-gap:5px;column-gap:8px;align-items:center;">
+              <div style="display:flex;gap:6px;align-items:center;min-width:0;">${tour3dPayBadge(m)}${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="3D 사이트 열기" style="min-width:0;overflow:hidden;color:inherit;text-decoration:none;display:flex;">${nameHtml}</a>` : nameHtml}</div>
+              <span style="font-size:0.78em;color:#64748b;text-align:right;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
+              <span style="font-size:0.8em;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${escapeHtml(place)}</span>
+              <div style="display:flex;gap:5px;align-items:center;justify-content:flex-end;">
                 ${tour3dPayButton(m)}
-                <span style="flex:0 0 auto;font-size:0.78em;color:#64748b;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
-              </div>
-              <div style="display:flex;gap:6px;align-items:center;min-width:0;">
-                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(url)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8em;color:#2563eb;">${escapeHtml(short)}</a>` : '<span style="flex:1;font-size:0.8em;color:#94a3b8;">링크 없음</span>'}
-                ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}">복사</button>` : ""}
+                ${url ? `<button type="button" class="btn-sm" data-action="tour3dCopy" data-url="${escapeHtml(url)}" title="${escapeHtml(url)}">링크 복사</button>` : ""}
                 ${action}
               </div>
             </div>`;
