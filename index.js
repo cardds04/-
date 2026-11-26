@@ -18122,11 +18122,11 @@ ${folderBtn}
       //   유료 건만: 미입금 = 「💳 입금 확인」 단추 · 입금 확인됨 = 초록 「입금 ✓ 날짜」(누르면 되돌리기)
       function tour3dPayButton(m) {
         if (!m || !m.paid) return "";
-        const id = escapeHtml(String(m.__id || ""));
+        const id = escapeHtml(String(m.__id || "")) + `" data-name="${escapeHtml(String(m.company || ""))}`;
         if (m.paid_at) {
-          return `<button type="button" data-action="tour3dPayUndo" data-id="${id}" title="입금 확인을 되돌리려면 누르세요" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 9px;cursor:pointer;">입금 ✓ ${escapeHtml(formatYmdToMdSlash(String(m.paid_at).slice(0, 10)))}</button>`;
+          return `<button type="button" data-action="tour3dPayUndo" data-id="${id}" title="입금 확인을 되돌리려면 누르세요" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 9px;cursor:pointer;white-space:nowrap;">입금 ✓ ${escapeHtml(formatYmdToMdSlash(String(m.paid_at).slice(0, 10)))}</button>`;
         }
-        return `<button type="button" data-action="tour3dPayMark" data-id="${id}" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#9a3412;background:#ffedd5;border:1px solid #fdba74;border-radius:999px;padding:2px 9px;cursor:pointer;">💳 입금 확인</button>`;
+        return `<button type="button" data-action="tour3dPayMark" data-id="${id}" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#9a3412;background:#ffedd5;border:1px solid #fdba74;border-radius:999px;padding:2px 9px;cursor:pointer;white-space:nowrap;">입금 확인</button>`;
       }
       async function tour3dSetPaid(rowId, on) {
         const r = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(rowId)}&select=id,payload`, { headers: KAKAO_HDR });
@@ -18147,7 +18147,7 @@ ${folderBtn}
         const b = event.target.closest('button[data-action="tour3dPayMark"],button[data-action="tour3dPayUndo"]');
         if (!b || b.disabled) return;
         const on = b.dataset.action === "tour3dPayMark";
-        const name = (b.closest(".company-item,div")?.querySelector("strong")?.textContent || "").trim();
+        const name = String(b.dataset.name || "").trim();
         if (!window.confirm(on ? `${name} — 3D 비용 입금 받으셨나요?` : `${name} — 입금 확인을 되돌릴까요?`)) return;
         b.disabled = true; const old = b.textContent; b.textContent = "저장 중…";
         try {
@@ -18188,19 +18188,26 @@ ${folderBtn}
         if (reqBox) {
           const reqs = items.filter((m) => m.status === "waiting" || m.status === "ready" || m.status === "working")
             .sort((a, b) => String(a.created_at || a.date || "").localeCompare(String(b.created_at || b.date || "")));
+          // 11-26 사장님 「화면이 너무 지저분 · 일률성 있게 간단하게」 → 모든 줄을 같은 두 줄 카드로:
+          //   윗줄 = 유료/무료 · 업체 · 날짜 / 아랫줄 = 주소 한 줄(말줄임) · 상태 · 입금 단추(오른쪽 끝 고정)
           const ST = {
-            waiting: ["사진 보정 중 (사진완료 대기)", "#64748b", "#f1f5f9"],
-            ready: ["3D 작업 대기", "#b45309", "#fef3c7"],
-            working: ["3D 제작 중", "#1d4ed8", "#dbeafe"]
+            waiting: ["사진 대기", "#64748b", "#f1f5f9"],
+            ready: ["3D 대기", "#b45309", "#fef3c7"],
+            working: ["제작 중", "#1d4ed8", "#dbeafe"]
           };
+          const shortPlace = (t) => String(t || "").replace(/^\s*주소\s*[:：]\s*/, "")
+            .replace(/^(서울특별시|서울시|서울|경기도|경기|인천광역시|인천시|인천)\s*/, "").replace(/\s+/g, " ").trim();
           reqBox.innerHTML = `<div style="font-weight:800;font-size:0.92em;margin:0 0 6px;">신청된 현장 ${reqs.length}건</div>` +
             (reqs.length ? reqs.map((m) => {
               const st = ST[m.status] || [m.status, "#475569", "#f1f5f9"];
-              return `<div class="company-item" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
-                ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;">${escapeHtml(String(m.company || ""))}</strong>
-                <span class="helper" style="margin:0;font-size:0.8em;flex:1;min-width:90px;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))} · ${escapeHtml(String(m.place || "").slice(0, 28))}</span>
-                <span style="flex:0 0 auto;font-size:0.75em;font-weight:800;color:${st[1]};background:${st[2]};border-radius:6px;padding:2px 7px;">${escapeHtml(st[0])}</span>
-                ${tour3dPayButton(m)}
+              return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:9px 11px;background:#fff;margin-bottom:6px;display:grid;grid-template-columns:1fr auto;row-gap:5px;column-gap:8px;align-items:center;">
+                <div style="display:flex;gap:6px;align-items:center;min-width:0;">${tour3dPayBadge(m)}<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(String(m.company || ""))}</strong></div>
+                <span style="font-size:0.78em;color:#64748b;text-align:right;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
+                <span style="font-size:0.8em;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${escapeHtml(shortPlace(m.place))}</span>
+                <div style="display:flex;gap:5px;align-items:center;justify-content:flex-end;">
+                  <span style="font-size:0.74em;font-weight:800;color:${st[1]};background:${st[2]};border-radius:999px;padding:2px 9px;white-space:nowrap;">${escapeHtml(st[0])}</span>
+                  ${tour3dPayButton(m)}
+                </div>
               </div>`;
             }).join("") : '<div class="helper" style="margin:0;">신청된 현장이 없습니다.</div>');
         }
