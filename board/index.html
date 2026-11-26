@@ -1120,6 +1120,8 @@ window.dash = (() => {
   .uc-made-what { overflow-wrap: anywhere; }
   .uc-made-what small { color: #8592ad; font-weight: 700; }
   @media (max-width: 40rem) { .uc-made { padding: 6px; } .uc-madetbl { font-size: 12px; } .uc-madetbl th, .uc-madetbl td { padding: 3px 3px; } }
+.uc-revtbl tr.is-pc td { background: rgba(80,120,220,.07); font-weight: 600; }
+.uc-revtbl tr.is-pc td:first-child { font-size: .92em; }
 </style>
 
 <div class="gb">
@@ -2614,6 +2616,20 @@ window.dash = (() => {
           markEl(el('td', 'n', wonFull(r0.month_total)), 'revenue_total', 'month_total', null, 0),
           ...last5.map((d) => markEl(el('td', 'n', wonFull(d.total)), 'revenue_daily', 'total', `date=${enc(d.date)}`)));
         body.append(tr0);
+        // 🆕11-26 사장님 「수익을 PC별 금액과 총액으로 나눠 게시현황판에」 — 채널 이름 → 채널 키(channels) → 게시 PC(posting_split) 로 묶어 PC별 소계 줄
+        const _pcName = { '사무실': '🖥 사무실', PC1: '🖥 1번 PC', '제작맥': '🖥 제작맥(2번)' };
+        const _keyByName = new Map((ch.status === 'ok' && Array.isArray(ch.data) ? ch.data : []).filter((c) => c && c.key && !/_long$/.test(c.key)).map((c) => [c.name, c.key]));
+        const _pcOf = (r) => { const k = _keyByName.get(r.channel); const sp = k ? splitBy.get(k) : null; return sp ? (sp.now || sp.machine) : null; };
+        const _pcs = []; rvRows.forEach((r) => { const m = _pcOf(r) || '미정'; if (!_pcs.includes(m)) _pcs.push(m); });
+        ['사무실', 'PC1', '제작맥', '미정'].filter((m) => _pcs.includes(m)).forEach((m) => {
+          const rs = rvRows.filter((r) => (_pcOf(r) || '미정') === m);
+          const sum = (f) => rs.reduce((a, r) => a + Number(f(r) || 0), 0);
+          const tr = el('tr', 'is-pc');
+          tr.append(el('td', null, `${_pcName[m] || '🖥 ' + m} · ${rs.map((r) => r.channel).join('·')}`), el('td', 'n', wonFull(sum((r) => r.prev_month_total))), el('td', 'n', wonFull(sum((r) => r.month_total))),
+            ...last5.map((d) => { const vs = rs.map((r) => d[r.uc]).filter((v) => v != null); return vs.length ? el('td', 'n', wonFull(vs.reduce((a, v) => a + Number(v), 0))) : el('td', 'n uc-muted', '—'); }));
+          tr.title = 'PC별 소계 — 게시분담(게시분담.json) 기준 채널 묶음';
+          body.append(tr);
+        });
         rvRows.forEach((r) => {
           const tr = el('tr');
           const w = `uc=${enc(r.uc)}`;
