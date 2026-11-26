@@ -18117,6 +18117,47 @@ ${folderBtn}
           ? '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#fff;background:#dc2626;border-radius:6px;padding:2px 6px;">유료</span>'
           : '<span style="flex:0 0 auto;font-size:0.7em;font-weight:900;color:#475569;background:#e2e8f0;border-radius:6px;padding:2px 6px;">무료</span>';
       }
+      // 11-26 사장님 「결제 버튼 — 사진작업 전에 내는 사람, 중간에 내는 사람 다양하니 돈 낸 순간 눌러 두고,
+      //   작업 끝날 때까지 확인 안 했으면 아이콘이 남아 있고, 작업도 끝나고 돈도 냈으면 사라지게」
+      //   유료 건만: 미입금 = 「💳 입금 확인」 단추 · 입금 확인됨 = 초록 「입금 ✓ 날짜」(누르면 되돌리기)
+      function tour3dPayButton(m) {
+        if (!m || !m.paid) return "";
+        const id = escapeHtml(String(m.__id || ""));
+        if (m.paid_at) {
+          return `<button type="button" data-action="tour3dPayUndo" data-id="${id}" title="입금 확인을 되돌리려면 누르세요" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 9px;cursor:pointer;">입금 ✓ ${escapeHtml(formatYmdToMdSlash(String(m.paid_at).slice(0, 10)))}</button>`;
+        }
+        return `<button type="button" data-action="tour3dPayMark" data-id="${id}" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#9a3412;background:#ffedd5;border:1px solid #fdba74;border-radius:999px;padding:2px 9px;cursor:pointer;">💳 입금 확인</button>`;
+      }
+      async function tour3dSetPaid(rowId, on) {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(rowId)}&select=id,payload`, { headers: KAKAO_HDR });
+        if (!r.ok) throw new Error(String(r.status));
+        const rows = await r.json();
+        if (!rows.length) throw new Error("항목을 찾지 못했습니다");
+        const payload = { ...(rows[0].payload || {}) };
+        if (on) payload.paid_at = new Date().toISOString(); else delete payload.paid_at;
+        payload.updated_at = new Date().toISOString();
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
+          method: "POST",
+          headers: { ...KAKAO_HDR, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ id: rowId, payload }])
+        });
+        if (!res.ok) throw new Error(String(res.status));
+      }
+      document.addEventListener("click", async (event) => {
+        const b = event.target.closest('button[data-action="tour3dPayMark"],button[data-action="tour3dPayUndo"]');
+        if (!b || b.disabled) return;
+        const on = b.dataset.action === "tour3dPayMark";
+        const name = (b.closest(".company-item,div")?.querySelector("strong")?.textContent || "").trim();
+        if (!window.confirm(on ? `${name} — 3D 비용 입금 받으셨나요?` : `${name} — 입금 확인을 되돌릴까요?`)) return;
+        b.disabled = true; const old = b.textContent; b.textContent = "저장 중…";
+        try {
+          await tour3dSetPaid(b.dataset.id, on);
+          tour3dLastJson = ""; const box = document.getElementById("tour3dDoneBox"); if (box) box.dataset.rendered = "";
+          await renderTour3dDoneBox();
+        } catch (e) {
+          alert("저장 실패: " + (e && e.message ? e.message : e)); b.disabled = false; b.textContent = old;
+        }
+      });
       // 3D 업체 페이지(/tour/<업체>/)·전체 목록(/tour/)은 잠겨 있다(middleware.js).
       // 관리자는 이미 로그인했으니 관리자 토큰으로 t3d 쿠키를 받아 비번 없이 연다(2026-11-25).
       let tour3dAdminCookieToken = "";
@@ -18159,6 +18200,7 @@ ${folderBtn}
                 ${tour3dPayBadge(m)}<strong style="flex:0 0 auto;">${escapeHtml(String(m.company || ""))}</strong>
                 <span class="helper" style="margin:0;font-size:0.8em;flex:1;min-width:90px;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))} · ${escapeHtml(String(m.place || "").slice(0, 28))}</span>
                 <span style="flex:0 0 auto;font-size:0.75em;font-weight:800;color:${st[1]};background:${st[2]};border-radius:6px;padding:2px 7px;">${escapeHtml(st[0])}</span>
+                ${tour3dPayButton(m)}
               </div>`;
             }).join("") : '<div class="helper" style="margin:0;">신청된 현장이 없습니다.</div>');
         }
@@ -18173,19 +18215,20 @@ ${folderBtn}
           box.innerHTML = '<div style="border:1px dashed #cbd5e1;border-radius:12px;padding:18px 12px;text-align:center;color:#64748b;font-size:0.88em;background:#f8fafc;">전달할 3D 완료 업체가 없습니다.</div>';
           return;
         }
-        const paidN = items.filter((m) => m.paid).length;
+        const paidN = items.filter((m) => m.paid && !m.paid_at).length;
         box.innerHTML =
           `<div style="display:flex;gap:6px;align-items:center;margin:0 0 2px;font-size:0.84em;font-weight:800;color:#0f172a;">완료 ${items.length}건${paidN ? `<span style="font-weight:800;color:#b45309;background:#fef3c7;border-radius:999px;padding:1px 8px;font-size:0.92em;">입금 대기 ${paidN}</span>` : ""}</div>` +
           items.map((m, i) => {
             const url = String(m.site_url || "");
             const short = url.replace(/^https?:\/\//, "");
-            const action = m.paid
+            const action = m.paid && !m.paid_at
               ? `<button type="button" class="btn-sm primary" data-action="tour3dPaid" data-idx="${i}">입금완료</button>`
               : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`;
             return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#fff;display:flex;flex-direction:column;gap:7px;">
               <div style="display:flex;gap:6px;align-items:center;min-width:0;">
                 ${tour3dPayBadge(m)}
                 <strong style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(String(m.company || ""))}</strong>
+                ${tour3dPayButton(m)}
                 <span style="flex:0 0 auto;font-size:0.78em;color:#64748b;">${escapeHtml(formatYmdToMdSlash(String(m.date || "")))}</span>
               </div>
               <div style="display:flex;gap:6px;align-items:center;min-width:0;">
