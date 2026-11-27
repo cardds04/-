@@ -18128,17 +18128,13 @@ ${folderBtn}
         }
         return `<button type="button" data-action="tour3dPayMark" data-id="${id}" style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#9a3412;background:#ffedd5;border:1px solid #fdba74;border-radius:999px;padding:2px 9px;cursor:pointer;white-space:nowrap;">입금 확인</button>`;
       }
-      // finish = 「3D 작업 완료 업체」 목록에서 누른 입금 확인 — 옛 「입금완료」 단추처럼 전달까지 처리해 목록에서 사라지게(11-27)
-      async function tour3dSetPaid(rowId, on, finish) {
+      async function tour3dSetPaid(rowId, on) {
         const r = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?id=eq.${encodeURIComponent(rowId)}&select=id,payload`, { headers: KAKAO_HDR });
         if (!r.ok) throw new Error(String(r.status));
         const rows = await r.json();
         if (!rows.length) throw new Error("항목을 찾지 못했습니다");
         const payload = { ...(rows[0].payload || {}) };
         if (on) payload.paid_at = new Date().toISOString(); else delete payload.paid_at;
-        if (on && finish && (payload.status === "done" || payload.status === "delivered")) {
-          payload.status = "delivered"; payload.delivered_at = payload.delivered_at || new Date().toISOString();
-        }
         payload.updated_at = new Date().toISOString();
         const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}`, {
           method: "POST",
@@ -18152,11 +18148,10 @@ ${folderBtn}
         if (!b || b.disabled) return;
         const on = b.dataset.action === "tour3dPayMark";
         const name = String(b.dataset.name || "").trim();
-        const finish = on && !!b.closest("#tour3dDoneBox");
-        if (!window.confirm(on ? `${name} — 3D 비용 입금 받으셨나요?${finish ? " (목록에서 사라집니다)" : ""}` : `${name} — 입금 확인을 되돌릴까요?`)) return;
+        if (!window.confirm(on ? `${name} — 3D 비용 입금 받으셨나요?` : `${name} — 입금 확인을 되돌릴까요?`)) return;
         b.disabled = true; const old = b.textContent; b.textContent = "저장 중…";
         try {
-          await tour3dSetPaid(b.dataset.id, on, finish);
+          await tour3dSetPaid(b.dataset.id, on);
           tour3dLastJson = ""; const box = document.getElementById("tour3dDoneBox"); if (box) box.dataset.rendered = "";
           await renderTour3dDoneBox();
         } catch (e) {
@@ -18232,11 +18227,11 @@ ${folderBtn}
           `<div style="display:flex;gap:6px;align-items:center;margin:0 0 2px;font-size:0.84em;font-weight:800;color:#0f172a;">완료 ${items.length}건${paidN ? `<span style="font-weight:800;color:#b45309;background:#fef3c7;border-radius:999px;padding:1px 8px;font-size:0.92em;">입금 대기 ${paidN}</span>` : ""}</div>` +
           items.map((m, i) => {
             const url = String(m.site_url || "");
-            // 11-27 사장님 「입금 확인·입금완료 단추가 같은 기능 — 입금완료는 없애도 돼」: 유료 미입금 건은 「입금 확인」 하나로 끝낸다
-            //   (완료 목록에서 누르면 입금+전달 처리되어 사라짐). 「확인」(전달 완료)은 무료 건·미리 입금된 건에만.
-            const action = (m.paid && !m.paid_at) || m.status !== "done"
-              ? ""
-              : `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">확인</button>`;
+            // 11-27 사장님 「입금완료 단추가 아니라 전달완료 단추를 만들어 줘」: 입금(「입금 확인」)과 전달(「전달 완료」)은 따로 누른다.
+            //   무료 = 전달 완료만 누르면 사라짐 · 유료 = 전달 완료 + 입금 확인 둘 다 끝나야 사라짐(순서 상관없음). 전달만 끝난 유료 건은 「전달 ✓」 표시.
+            const action = m.status === "done"
+              ? `<button type="button" class="btn-sm primary" data-action="tour3dDelivered" data-idx="${i}">전달 완료</button>`
+              : `<span style="flex:0 0 auto;font-size:0.74em;font-weight:800;color:#1e3a8a;background:#dbeafe;border:1px solid #93c5fd;border-radius:999px;padding:2px 9px;white-space:nowrap;">전달 ✓</span>`;
             // 11-26 사장님 「사이트 주소 없어도 돼 · 간결하게 위 신청된 현장이랑 비슷하게」 → 신청 카드와 같은 두 줄:
             //   윗줄 = 유료/무료 · 업체(누르면 사이트 열림) · 날짜 / 아랫줄 = 주소 한 줄(말줄임) · 입금 · 링크복사 · 확인
             const place = String(m.place || "").replace(/^\s*주소\s*[:：]\s*/, "")
@@ -18282,7 +18277,7 @@ ${folderBtn}
               box.dataset.rendered = "";
               await renderTour3dDoneBox();
             } catch (e) {
-              alert("저장 실패: " + (e && e.message ? e.message : e)); btn.disabled = false; btn.textContent = "확인";
+              alert("저장 실패: " + (e && e.message ? e.message : e)); btn.disabled = false; btn.textContent = "전달 완료";
             }
           });
         }
