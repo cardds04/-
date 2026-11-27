@@ -10,7 +10,9 @@
   const sections = cfg.sections.map(item => {
     const entry = {...item, begin:total}; total += item.duration; entry.end = total; return entry;
   });
-  const entries = new Map(), imageCache = new Map();
+  const imageCache = new Map();
+  native.hidden = true;
+  let outputFrame = null;
   let position = 0, selected = cfg.startPhoto, gallery = false, playing = false, raf = 0, time = 0;
   let current = null, lastSheet = '', playEpoch = 0, gesture, drawQueued = false;
   const clamp = (x, low, high) => Math.min(high, Math.max(low, x));
@@ -38,42 +40,50 @@
   }
   function imageNodes() {
     for(const p of pics.values()){
-      const img = document.createElement('img');img.src=p.src;img.alt='';img.draggable=false;img.style.zIndex='0';
-      native.appendChild(img);entries.set(p.id,img);
+      fetchImage(p.src,true);fetchImage(p.thumb,true);
       const b=document.createElement('button'); b.type='button';b.className='thumb';b.dataset.photo=p.id;
       b.setAttribute('aria-label',p.label+' 원본 사진 보기');
       const t=document.createElement('img');t.src=p.thumb;t.alt='';t.width=150;t.height=100;
       const name=document.createElement('span');name.textContent=p.label;b.append(t,name);b.onclick=()=>showPhoto(p.id);by('thumbs').appendChild(b);
     }
   }
-  function inverse(m) {
-    const [a,b,c,d,e,f,g,h,i]=m;
-    const v=[e*i-f*h,c*h-b*i,b*f-c*e,f*g-d*i,a*i-c*g,c*d-a*f,d*h-e*g,b*g-a*h,a*e-b*d];
-    const s=v[8];return v.map(n=>n/s);
-  }
-  // Exact projective mapping from a rectilinear camera photograph onto the portrait view.
-  function originalWarp(p, yaw, field, width, height) {
-    const lens=Math.tan(field*degrees/2), a=(yaw-cfg.offset)*degrees, cs=Math.cos(a), sn=Math.sin(a);
-    const R=p.rotation, c=p.center, f=p.focal;
-    function project(x,y) {
-      const xx=(2*x/width-1)*lens, yy=(1-2*y/height)*lens*height/width;
-      const w=[xx*cs+sn,yy,cs-xx*sn];
-      const q=[0,1,2].map(k=>w[0]*R[0][k]+w[1]*R[1][k]+w[2]*R[2][k]);
-      return [c[0]*q[2]+f*q[0],c[1]*q[2]+f*q[1],q[2]];
-    }
-    const z=project(0,0), x=project(width,0), y=project(0,height);
-    const m=[];
-    for(let k=0;k<3;k++)m.push((x[k]-z[k])/width,(y[k]-z[k])/height,z[k]);
-    const h=inverse(m);
-    return 'matrix3d('+[h[0],h[3],0,h[6],h[1],h[4],0,h[7],0,0,1,0,h[2],h[5],0,h[8]].join(',')+')';
+  // Sample the camera image into the same backing store used by the photographic transitions.
+  function imagePixels(item) {
+    if(item.pixels)return item.pixels;
+    const im=item.image, factor=Math.min(1,2048/im.naturalWidth);
+    const raster=document.createElement('canvas');raster.width=Math.round(im.naturalWidth*factor);raster.height=Math.round(im.naturalHeight*factor);
+    const cx=raster.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0,raster.width,raster.height);
+    item.pixels={w:raster.width,h:raster.height,data:cx.getImageData(0,0,raster.width,raster.height).data};return item.pixels;
   }
   function showNative(seg,t) {
-    const p=pics.get(seg.photo),img=entries.get(seg.photo);
-    const from=seg.yaw[0],to=seg.yaw[1], yaw=from+(to-from)*t;
-    const fields=Array.isArray(seg.field)?seg.field:[seg.field,seg.field];
-    img.style.transform=originalWarp(p,yaw,fields[0]+(fields[1]-fields[0])*t,stage.clientWidth,stage.clientHeight);
-    for(const [key,n] of entries)n.style.zIndex=key===seg.photo?'2':'0';
-    bridge.hidden=true;by('feedback').hidden=true;stage.dataset.photo=seg.photo;
+    const p=pics.get(seg.photo), full=fetchImage(p.src,true), low=fetchImage(p.thumb,true);
+    if(!full.ready&&!low.ready){by('feedback').textContent='사진을 불러오는 중';by('feedback').hidden=false;return;}
+    const src=imagePixels(full.ready?full:low),sw=src.w,sh=src.h,buf=src.data, factor=sw/900;
+    const w=Math.min(620,Math.max(1,Math.round(stage.clientWidth*Math.min(devicePixelRatio||1,2))));
+    const h=Math.round(w*1.5);
+    if(bridge.width!==w||bridge.height!==h){bridge.width=w;bridge.height=h;}
+    if(!outputFrame||outputFrame.width!==w||outputFrame.height!==h)outputFrame=context.createImageData(w,h);
+    const out=outputFrame.data,fs=Array.isArray(seg.field)?seg.field:[seg.field,seg.field];
+    const half=Math.tan((fs[0]+t*(fs[1]-fs[0]))*degrees/2),ang=(seg.yaw[0]+t*(seg.yaw[1]-seg.yaw[0])-cfg.offset)*degrees;
+    const co=Math.cos(ang),si=Math.sin(ang),R=p.rotation,c=p.center,f=p.focal;
+    const u=[0,1,2].map(k=>(co*R[0][k]-si*R[2][k])*(2*half/w));
+    const v=[0,1,2].map(k=>-R[1][k]*(2*half/w));
+    const dx=(1/w-1)*half,dy=(h-1)*half/w;
+    const z=[0,1,2].map(k=>(dx*co+si)*R[0][k]+dy*R[1][k]+(co-dx*si)*R[2][k]);
+    for(let y=0,dst=0;y<h;y++){
+      let qx=z[0]+y*v[0],qy=z[1]+y*v[1],qz=z[2]+y*v[2];
+      for(let x=0;x<w;x++,dst+=4,qx+=u[0],qy+=u[1],qz+=u[2]){
+        const inv=f/qz,sx=clamp((c[0]+qx*inv)*factor-.5,0,sw-1.001),sy=clamp((c[1]+qy*inv)*factor-.5,0,sh-1.001);
+        const ix=sx|0,iy=sy|0,wx=sx-ix,wy=sy-iy,o=(iy*sw+ix)*4,bot=o+sw*4;
+        for(let channel=0;channel<3;channel++){
+          const top=buf[o+channel]+(buf[o+4+channel]-buf[o+channel])*wx;
+          const bottom=buf[bot+channel]+(buf[bot+4+channel]-buf[bot+channel])*wx;
+          out[dst+channel]=top+(bottom-top)*wy;
+        }
+        out[dst+3]=255;
+      }
+    }
+    context.putImageData(outputFrame,0,0);bridge.hidden=false;by('feedback').hidden=true;stage.dataset.photo=seg.photo;
   }
   function frameFrom(img,n,cols,w,h) {
     const scale=Math.min(devicePixelRatio||1,2);
