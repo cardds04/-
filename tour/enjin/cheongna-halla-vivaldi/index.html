@@ -244,10 +244,11 @@ h1, h2, h3, p { margin: 0; }
 .stage .turn-pane {position:absolute;inset:0;isolation:isolate;background:#252b28;color:#fff;touch-action:pan-y;cursor:grab}
 .turn-pane.dragging {cursor:grabbing}
 .stage .turn-pane canvas {position:absolute;inset:0;width:100%;height:100%;max-height:none;max-width:none;display:block;pointer-events:none}
-.turn-axis {box-sizing:border-box;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(92%,420px);padding:5px 8px;display:flex;align-items:center;gap:7px;border-radius:11px;color:white;background:#162120de;box-shadow:0 1px 8px #0002;font:600 12px/1.4 system-ui,sans-serif;cursor:default}
-.turn-axis button {font:inherit;color:inherit;background:transparent;border:0;border-radius:6px;min-width:32px;min-height:35px;cursor:pointer}
-.turn-axis button:hover,.turn-axis button:focus-visible {background:#ffffff26}
-.turn-axis input {min-width:20px;flex:1;accent-color:#d0ebe2;cursor:pointer}
+.turn-axis {box-sizing:border-box;flex:none;display:flex;align-items:center;gap:5px;width:100%;padding:3px 8px;background:var(--card);color:var(--ink);border-top:1px solid var(--line);font:600 12px/1.4 system-ui,sans-serif}
+.turn-axis[hidden] {display:none}
+.turn-axis button {font:inherit;color:inherit;background:transparent;border:0;border-radius:6px;min-width:32px;min-height:36px;cursor:pointer}
+.turn-axis button:hover,.turn-axis button:focus-visible {background:var(--soft);color:var(--accent)}
+.turn-axis input {min-width:20px;flex:1;accent-color:var(--accent);cursor:pointer}
 .turn-axis output {min-width:35px;text-align:center;font-variant-numeric:tabular-nums}
 .turn-axis .turn-prev,.turn-axis .turn-next {font-size:20px}
 .turn-axis .turn-auto {white-space:nowrap;padding:0 6px}
@@ -255,7 +256,7 @@ h1, h2, h3, p { margin: 0; }
 .turn-pane.loading .turn-load {display:block}
 #jumpList button[data-panorama="full"] .k {color:var(--accent);font-weight:750}
 #chips button[data-panorama="full"]::after {content:' 360°';font-size:.8em;font-weight:700}
-@media(max-width:600px){.turn-bar{font-size:12px;padding:6px 9px}.turn-axis{bottom:8px}.view.card .stage.immersed{min-height:min(53svh,114vw)}}
+@media(max-width:600px){.turn-bar{font-size:12px;padding:6px 9px}.view.card .stage.immersed{min-height:min(53svh,114vw)}}
 .room-without-tour #strip .to360,.stage.photos-only #back360,.stage.photo #engineStations,.stage.photo #viewOptions {display:none!important}
 #stage .turn-pane>canvas {width:100%!important;height:100%!important;object-fit:fill!important}
 @media(max-width:999px){
@@ -281,7 +282,7 @@ h1, h2, h3, p { margin: 0; }
 
 @container(max-width:300px){
   .turn-hint {display:none}
-  .turn-axis {width:calc(100% - 12px);gap:3px;padding:4px}
+  .turn-axis {gap:3px;padding:3px 4px}
   .turn-axis button {min-width:26px;padding:0 3px}
   .turn-axis output {min-width:29px}
 }
@@ -303,11 +304,16 @@ h1, h2, h3, p { margin: 0; }
   const pane = document.createElement('div');
   pane.className = 'turn-pane'; pane.hidden = true; pane.tabIndex = 0;
   pane.setAttribute('role','group');
-  pane.innerHTML = '<canvas aria-hidden="true"></canvas><span class="turn-load" role="status">파노라마를 불러오는 중</span><div class="turn-axis"><button class="turn-prev" type="button" aria-label="왼쪽으로 회전">‹</button><input type="range" aria-label="수평 회전 각도" step=".1"><button class="turn-next" type="button" aria-label="오른쪽으로 회전">›</button><output></output><button class="turn-auto" type="button">자동 회전</button></div>';
+  pane.innerHTML = '<canvas aria-hidden="true"></canvas><span class="turn-load" role="status">파노라마를 불러오는 중</span>';
   stage.append(pane);
+  const controls=document.createElement('div');
+  controls.className='turn-axis';controls.hidden=true;
+  controls.setAttribute('role','group');controls.setAttribute('aria-label','파노라마 회전');
+  controls.innerHTML='<button class="turn-prev" type="button" aria-label="왼쪽으로 회전">‹</button><input type="range" aria-label="수평 회전 각도" step=".1"><button class="turn-next" type="button" aria-label="오른쪽으로 회전">›</button><output></output><button class="turn-auto" type="button">자동 회전</button>';
+  stage.after(controls);
   const status=bar.querySelector('.turn-status'), mode=bar.querySelector('.turn-switch');
-  const prev=pane.querySelector('.turn-prev'), next=pane.querySelector('.turn-next'), slider=pane.querySelector('input');
-  const auto=pane.querySelector('.turn-auto'), angle=pane.querySelector('output');
+  const prev=controls.querySelector('.turn-prev'), next=controls.querySelector('.turn-next'), slider=controls.querySelector('input');
+  const auto=controls.querySelector('.turn-auto'), angle=controls.querySelector('output');
   const rad=Math.PI/180;
   let room=null, info=null, image=null, pending=null, active=false, yaw=0;
   let openPhotos=null,openTour=null,photoCount=0;
@@ -372,6 +378,7 @@ h1, h2, h3, p { margin: 0; }
     const desktop=matchMedia('(min-width:1000px)').matches;
     const rect=slot.getBoundingClientRect();
     const border=card.offsetWidth-card.clientWidth;
+    const chromeHeight=bar.offsetHeight+controls.offsetHeight+border;
     let height=rect.height;
     if(!desktop){
       const viewport=document.documentElement.clientHeight;
@@ -380,10 +387,10 @@ h1, h2, h3, p { margin: 0; }
       // An expanded floor plan can be scrolled past before looking around.
       const intro=Math.min(Math.max(0,rect.top+window.scrollY),viewport*.34);
       // Short phones still get a readable picture. The view may start further down the document.
-      const comfortable=Math.min(Math.min(rect.width*.86,304)*1.5+bar.offsetHeight+border,bottom-12);
-      height=hasDock?Math.max(comfortable,bottom-intro-6):Math.max(260,viewport-16);
+      const comfortable=Math.min(Math.min(rect.width*.86,304)*1.5+chromeHeight,bottom-12);
+      height=hasDock?Math.min(bottom-6,Math.max(comfortable,bottom-intro-6+controls.offsetHeight)):Math.max(260,viewport-16);
     }
-    const width=Math.max(1,Math.floor(Math.min(rect.width,(height-bar.offsetHeight-border)*2/3+border)));
+    const width=Math.max(1,Math.floor(Math.min(rect.width,(height-chromeHeight)*2/3+border)));
     const value=width+'px';
     if(slot.style.getPropertyValue('--portrait-width')!==value)slot.style.setProperty('--portrait-width',value);
   }
@@ -392,7 +399,7 @@ h1, h2, h3, p { margin: 0; }
     if(!fitFrame && active)fitFrame=requestAnimationFrame(()=>{fitFrame=0;fitPortrait();});
   }
   const layoutObserver=new ResizeObserver(queueFit);
-  [slot,bar,dock,app.querySelector('.top'),app.querySelector('.plan')].forEach(el=>layoutObserver.observe(el));
+  [slot,bar,controls,dock,app.querySelector('.top'),app.querySelector('.plan')].forEach(el=>layoutObserver.observe(el));
   let lastWidth=window.innerWidth,lastHeight=window.innerHeight;
   window.addEventListener('resize',()=>{
     queueFit();
@@ -495,7 +502,7 @@ h1, h2, h3, p { margin: 0; }
   slider.oninput=()=>{stop();yaw=normalize(Number(slider.value));draw();};
   pane.addEventListener('pointerdown',e=>{
     e.stopPropagation();
-    if(e.target.closest('.turn-axis')||e.button!==0)return;
+    if(e.button!==0)return;
     stop();drag={id:e.pointerId,x:e.clientX,yaw};pane.setPointerCapture(e.pointerId);pane.classList.add('dragging');
     pane.focus({preventScroll:true});
   });
@@ -508,7 +515,7 @@ h1, h2, h3, p { margin: 0; }
   window.addEventListener('keydown',e=>{
     if(!active||stage.classList.contains('photo')||document.querySelector('dialog[open],.fixmask.on')||!['ArrowLeft','ArrowRight'].includes(e.key))return;
     if(e.target.matches('input,textarea,select')&&e.target!==slider)return;
-    if(e.target.closest('button,a,input,textarea,select')&&!pane.contains(e.target))return;
+    if(e.target.closest('button,a,input,textarea,select')&&!controls.contains(e.target))return;
     e.stopImmediatePropagation();e.preventDefault();stop();turn((e.key==='ArrowLeft'?-1:1)*(e.shiftKey?15:5));
   },true);
   function refresh() {
@@ -520,12 +527,12 @@ h1, h2, h3, p { margin: 0; }
   }
   function close(){
     stop();pending=null;image=null;pixels=null;grid=null;active=false;drag=null;
-    pane.hidden=true;pane.dataset.ready='false';stage.classList.remove('immersed');refresh();
+    pane.hidden=true;controls.hidden=true;pane.dataset.ready='false';stage.classList.remove('immersed');refresh();
   }
   function activate(){
     if(!info)return;
     stop();active=true;full=info.kind==='full';left=info.left;right=info.right;low=info.bottom;high=info.top;
-    yaw=full && room.key===angleRoom && Number.isFinite(openingAngle)?normalize(openingAngle):(info.start||0);pane.hidden=false;pane.dataset.ready='false';pane.dataset.kind=info.kind;pane.classList.add('loading');
+    yaw=full && room.key===angleRoom && Number.isFinite(openingAngle)?normalize(openingAngle):(info.start||0);pane.hidden=false;controls.hidden=false;pane.dataset.ready='false';pane.dataset.kind=info.kind;pane.classList.add('loading');
     pane.setAttribute('aria-label',room.name+' '+(full?'360° 파노라마':'부분 파노라마'));
     stage.classList.add('immersed');refresh();fitPortrait();size();initRenderer();revealPortrait();
     const im=new Image();pending=im;image=null;pixels=null;grid=null;
@@ -1002,7 +1009,7 @@ filt.addEventListener("click",function(e){
 /* 11-19 사장님 「아래 거실·주방이나 사진을 누르면 가운데 화면 맨 윗부분이 화면 위로 오게 — 전체가 딱 보이게」 */
 var st=document.getElementById("stage"); if(!st) return;
 function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ /* 11-19 「너무 올라가 — 화면 아래가 아래 공간 줄 상자 위에 살짝 붙게」 */
-  var bar=document.querySelector(".card.photos"), r=st.getBoundingClientRect(), lim=(bar?bar.getBoundingClientRect().top:window.innerHeight)-6;
+  var bar=document.querySelector(".card.photos"), r=(st.classList.contains('immersed')?st.closest('.card.view'):st).getBoundingClientRect(), lim=(bar?bar.getBoundingClientRect().top:window.innerHeight)-6;
   var dy=r.bottom-lim; if(r.top-dy<0) dy=r.top-4;   /* 화면이 너무 커서 다 안 들어가면 위가 잘리지 않게 */
   window.scrollTo({top:Math.max(0,window.pageYOffset+dy),behavior:"smooth"}); },120); }
 ["filt","strip"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("click",function(e){ if(e.target.closest("button")) up(); }); });
