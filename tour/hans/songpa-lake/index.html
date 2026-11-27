@@ -228,10 +228,244 @@ h1, h2, h3, p { margin: 0; }
   <button class="arrow r" id="zNext" type="button" aria-label="다음 사진"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M8 4l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   <button class="x" id="zClose" type="button">닫기</button>
 </div>
+<style>.view.card {display:flex;flex-direction:column;min-height:0}
+.view .stage {width:100%;height:auto;flex:1;min-height:0}
+.turn-bar {box-sizing:border-box;flex:none;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px 10px;padding:7px 12px;background:var(--card);border-bottom:1px solid var(--line);color:var(--ink);font:600 13px/1.4 system-ui,sans-serif;min-height:36px}
+.turn-actions {display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.turn-bar button {border:1px solid var(--line);border-radius:30px;background:var(--card);color:var(--accent);font:600 12px/1.4 system-ui,sans-serif;padding:5px 11px;cursor:pointer}
+.turn-pane[hidden],.turn-bar [hidden],.stage.photo .turn-pane {display:none!important}
+.stage.immersed:not(.photo)>:not(.turn-pane):not(#cv) {visibility:hidden!important;pointer-events:none!important}
+.stage.immersed:not(.photo)>#cv {visibility:hidden!important}
+.stage .turn-pane {position:absolute;inset:0;isolation:isolate;background:#252b28;color:#fff;touch-action:pan-y;cursor:grab}
+.turn-pane.dragging {cursor:grabbing}
+.stage .turn-pane canvas {position:absolute;inset:0;width:100%;height:100%;max-height:none;max-width:none;display:block;pointer-events:none}
+.turn-axis {box-sizing:border-box;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(92%,420px);padding:5px 8px;display:flex;align-items:center;gap:7px;border-radius:11px;color:white;background:#162120de;box-shadow:0 1px 8px #0002;font:600 12px/1.4 system-ui,sans-serif;cursor:default}
+.turn-axis button {font:inherit;color:inherit;background:transparent;border:0;border-radius:6px;min-width:32px;min-height:35px;cursor:pointer}
+.turn-axis button:hover,.turn-axis button:focus-visible {background:#ffffff26}
+.turn-axis input {min-width:20px;flex:1;accent-color:#d0ebe2;cursor:pointer}
+.turn-axis output {min-width:35px;text-align:center;font-variant-numeric:tabular-nums}
+.turn-axis .turn-prev,.turn-axis .turn-next {font-size:20px}
+.turn-axis .turn-auto {white-space:nowrap;padding:0 6px}
+.turn-load {display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#182420ca;border-radius:9px;padding:8px 12px;font:13px system-ui}
+.turn-pane.loading .turn-load {display:block}
+#jumpList button[data-panorama="full"] .k {color:var(--accent);font-weight:750}
+#chips button[data-panorama="full"]::after {content:' 360°';font-size:.8em;font-weight:700}
+@media(max-width:600px){.turn-bar{font-size:12px;padding:6px 9px}.turn-axis{bottom:8px}.view.card .stage.immersed{min-height:min(53svh,114vw)}}
+.room-without-tour #strip .to360,.stage.photos-only #back360,.stage.photo #engineStations,.stage.photo #viewOptions {display:none!important}
+#stage .turn-pane>canvas {width:100%!important;height:100%!important;object-fit:fill!important}
+@media(max-width:999px){
+  .view.card #stage.immersed,.view.card #stage.photo {height:clamp(205px,calc(100svh - 335px - env(safe-area-inset-bottom,0px)),min(116vw,610px))!important;min-height:0!important;flex:0 0 auto;aspect-ratio:auto}
+  #stage.immersed>#cv,#stage.photo>#cv {display:none!important}
+}
+@media(max-width:999px) and (max-height:520px){
+  .app section.card.photos {position:static!important}
+  .view.card #stage.immersed,.view.card #stage.photo {height:clamp(205px,64svh,340px)!important}
+}
+
+@media(max-width:999px){.view.card #stage.immersed:not(.photo){max-height:var(--turn-height-cap,none)!important}}
+</style>
+<script>(() => {
+  'use strict';
+  const stage = document.getElementById('stage');
+  const bar = document.createElement('div');
+  bar.className = 'turn-bar';
+  bar.innerHTML = '<span class="turn-status"></span><div class="turn-actions"><button class="turn-switch" type="button" hidden></button></div>';
+  stage.before(bar);
+  const pane = document.createElement('div');
+  pane.className = 'turn-pane'; pane.hidden = true; pane.tabIndex = 0;
+  pane.setAttribute('role','group');
+  pane.innerHTML = '<canvas aria-hidden="true"></canvas><span class="turn-load" role="status">파노라마를 불러오는 중</span><div class="turn-axis"><button class="turn-prev" type="button" aria-label="왼쪽으로 회전">‹</button><input type="range" aria-label="수평 회전 각도" step=".1"><button class="turn-next" type="button" aria-label="오른쪽으로 회전">›</button><output></output><button class="turn-auto" type="button">자동 회전</button></div>';
+  stage.append(pane);
+  const status=bar.querySelector('.turn-status'), mode=bar.querySelector('.turn-switch');
+  const prev=pane.querySelector('.turn-prev'), next=pane.querySelector('.turn-next'), slider=pane.querySelector('input');
+  const auto=pane.querySelector('.turn-auto'), angle=pane.querySelector('output');
+  const rad=Math.PI/180;
+  let room=null, info=null, image=null, pending=null, active=false, yaw=0;
+  let openPhotos=null,openTour=null,photoCount=0;
+  let min=0,max=360,half=0,aspect=1,centerPitch=0, left=-180,right=180, low=-60,high=60,full=false;
+  let raf=0, spin=false, spinSign=1, last=0, drag=null;
+  let canvas=pane.querySelector('canvas'), gl=null, gpu=null, cpu=null, pixels=null, grid=null;
+  function fallback() {
+    const replacement=canvas.cloneNode(false); canvas.replaceWith(replacement); canvas=replacement;
+    gl=null;gpu=null;cpu=canvas.getContext('2d');pixels=null;grid=null;
+  }
+  function initRenderer() {
+    if(gl || cpu) return;
+    try {
+      gl=canvas.getContext('webgl',{alpha:false,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:true});
+      if(!gl){fallback();return;}
+      function shader(type,code){
+        const s=gl.createShader(type); gl.shaderSource(s,code);gl.compileShader(s);
+        if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error('shader');
+        return s;
+      }
+      const program=gl.createProgram();
+      gl.attachShader(program,shader(gl.VERTEX_SHADER,'attribute vec2 a; varying vec2 v; void main(){v=a;gl_Position=vec4(a,0.,1.);}'));
+      gl.attachShader(program,shader(gl.FRAGMENT_SHADER,
+        'precision highp float;varying vec2 v;uniform sampler2D tex;uniform vec4 cam;uniform vec4 span;uniform vec2 tilt;void main(){float ny=v.y*cam.y/cam.z;vec3 d=normalize(vec3(v.x*cam.y,ny*tilt.x+tilt.y,tilt.x-ny*tilt.y));float lon=atan(d.x,d.z)+cam.x;float u=(lon-span.x)/(span.y-span.x);u=cam.w>0.5?fract(u):clamp(u,0.,1.);float t=(span.z-asin(d.y))/(span.z-span.w);gl_FragColor=texture2D(tex,vec2(u,clamp(t,0.,1.)));}'));
+      gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('program');
+      gl.useProgram(program);
+      const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+      const attr=gl.getAttribLocation(program,'a');gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,2,gl.FLOAT,false,0,0);
+      const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+      for(const param of [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER])gl.texParameteri(gl.TEXTURE_2D,param,gl.LINEAR);
+      for(const param of [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T])gl.texParameteri(gl.TEXTURE_2D,param,gl.CLAMP_TO_EDGE);
+      gpu={tex,cam:gl.getUniformLocation(program,'cam'),span:gl.getUniformLocation(program,'span'),tilt:gl.getUniformLocation(program,'tilt')};
+      canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fallback();if(image){upload();draw();}});
+    } catch(e){fallback();}
+  }
+  function bitmap(maxSize) {
+    const scale=Math.min(1,maxSize/Math.max(image.width,image.height));
+    const temp=document.createElement('canvas');temp.width=Math.max(1,Math.round(image.width*scale));temp.height=Math.max(1,Math.round(image.height*scale));
+    temp.getContext('2d').drawImage(image,0,0,temp.width,temp.height);return temp;
+  }
+  function upload() {
+    if(gl){
+      const maxSize=gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      const src=Math.max(image.width,image.height)>maxSize?bitmap(maxSize):image;
+      gl.bindTexture(gl.TEXTURE_2D,gpu.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,src);
+    } else {
+      const temp=bitmap(4096),data=temp.getContext('2d').getImageData(0,0,temp.width,temp.height);
+      pixels={w:temp.width,h:temp.height,rgba:new Uint32Array(data.data.buffer)};
+    }
+    grid=null;
+  }
+  function size() {
+    const box=pane.getBoundingClientRect();
+    if(!box.width||!box.height)return false;
+    const scale=gl?Math.min(devicePixelRatio||1,2,1800/Math.max(box.width,box.height)):Math.min(1,640/Math.max(box.width,box.height));
+    const w=Math.max(1,Math.round(box.width*scale)),h=Math.max(1,Math.round(box.height*scale));
+    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;grid=null;}
+    aspect=w/h;
+    const maxHorizontal=box.width<600?58:74;
+    const oldPitch=centerPitch;
+    centerPitch=full?(low+high)*.5*rad:0;
+    let verticalMargin=full?(high-low)/2:Math.min(high,-low);
+    if(info.pitchGuide){
+      // Keep the camera within the directly photographed band as it turns toward a reflected wall.
+      const guide=info.pitchGuide, c=Math.cos((yaw-guide.frontYaw)*rad);
+      const t=Math.max(0,Math.min(1,(.5-c)/.75));centerPitch=(guide.front+ (guide.back-guide.front)*t*t*(3-2*t))*rad;
+      verticalMargin=Math.min(verticalMargin,guide.verticalHalf);
+    }
+    if(!gl && Math.abs(centerPitch-oldPitch)>.000001)grid=null;
+    half=Math.min(Math.tan(maxHorizontal*rad/2),aspect*Math.tan(verticalMargin*rad*.98));
+    if(!full)half=Math.min(half,Math.tan(Math.min(80,right-left-200.1)*rad/2));
+    const edge=Math.atan(half)/rad;
+    min=full?0:left+edge;max=full?360:right-edge;
+    slider.min=min;slider.max=max;
+    return true;
+  }
+  function cpuDraw() {
+    if(!pixels)return;
+    const w=canvas.width,h=canvas.height,tex=pixels;
+    if(!grid){
+      const longitude=new Float32Array(w*h),rows=new Int32Array(w*h);
+      const ct=Math.cos(centerPitch),st=Math.sin(centerPitch);
+      for(let x=0;x<w;x++){
+        const dx=(2*(x+.5)/w-1)*half;
+        for(let y=0;y<h;y++){
+          const dy=(1-2*(y+.5)/h)*half/aspect,dz=ct-dy*st;
+          const pitch=Math.atan2(dy*ct+st,Math.hypot(dx,dz))/rad;
+          longitude[y*w+x]=(Math.atan2(dx,dz)/rad-left)/(right-left)*tex.w;
+          rows[y*w+x]=Math.max(0,Math.min(tex.h-1,Math.floor((high-pitch)/(high-low)*tex.h)))*tex.w;
+        }
+      }
+      const frame=cpu.createImageData(w,h);
+      grid={longitude,rows,frame,out:new Uint32Array(frame.data.buffer)};
+    }
+    const shift=yaw/(right-left)*tex.w;
+    for(let i=0;i<w*h;i++){
+      const u=Math.floor(grid.longitude[i]+shift);
+      const col=full?((u%tex.w)+tex.w)%tex.w:Math.max(0,Math.min(tex.w-1,u));
+      grid.out[i]=tex.rgba[grid.rows[i]+col];
+    }
+    cpu.putImageData(grid.frame,0,0);
+  }
+  function normalize(deg){return full?((deg%360)+360)%360:Math.max(min,Math.min(max,deg));}
+  function draw() {
+    if(!active||stage.classList.contains('photo')||!image||!size())return;
+    yaw=normalize(yaw);
+    if(gl){
+      gl.viewport(0,0,canvas.width,canvas.height);gl.uniform4f(gpu.cam,yaw*rad,half,aspect,full?1:0);
+      gl.uniform2f(gpu.tilt,Math.cos(centerPitch),Math.sin(centerPitch));gl.uniform4f(gpu.span,left*rad,right*rad,high*rad,low*rad);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    }else cpuDraw();
+    const degrees=full?Math.round(yaw)%360:Math.round(yaw-min);
+    angle.value=degrees+'°';slider.value=yaw;slider.setAttribute('aria-valuetext',angle.value);
+    if(!full)refresh();pane.dataset.yaw=yaw.toFixed(2);pane.dataset.ready='true';pane.classList.remove('loading');
+  }
+  function stop(){
+    spin=false;if(raf)cancelAnimationFrame(raf);raf=0;last=0;
+    auto.textContent='자동 회전';auto.setAttribute('aria-pressed','false');
+  }
+  function turn(amount){yaw=normalize(yaw+amount);draw();}
+  function tick(t){
+    if(!active||!spin||document.hidden||stage.classList.contains('photo')){stop();return;}
+    if(last){if(!full&&(yaw>=max-.1||yaw<=min+.1))spinSign=yaw>=max-.1?-1:1;turn(Math.min(64,t-last)*.016*spinSign);}
+    last=t;raf=requestAnimationFrame(tick);
+  }
+  auto.onclick=()=>{if(spin){stop();return;}spin=true;spinSign=1;auto.textContent='일시 정지';auto.setAttribute('aria-pressed','true');raf=requestAnimationFrame(tick);};
+  prev.onclick=()=>{stop();turn(-15);};next.onclick=()=>{stop();turn(15);};
+  slider.oninput=()=>{stop();yaw=normalize(Number(slider.value));draw();};
+  pane.addEventListener('pointerdown',e=>{
+    e.stopPropagation();
+    if(e.target.closest('.turn-axis')||e.button!==0)return;
+    stop();drag={id:e.pointerId,x:e.clientX,yaw};pane.setPointerCapture(e.pointerId);pane.classList.add('dragging');
+    pane.focus({preventScroll:true});
+  });
+  pane.addEventListener('pointermove',e=>{
+    if(!drag||drag.id!==e.pointerId)return;
+    const span=2*Math.atan(half)/rad;
+    yaw=normalize(drag.yaw+(drag.x-e.clientX)*span*1.65/Math.max(1,pane.clientWidth));draw();
+  });
+  pane.addEventListener('lostpointercapture',()=>{drag=null;pane.classList.remove('dragging');});
+  window.addEventListener('keydown',e=>{
+    if(!active||stage.classList.contains('photo')||document.querySelector('dialog[open],.fixmask.on')||!['ArrowLeft','ArrowRight'].includes(e.key))return;
+    if(e.target.matches('input,textarea,select')&&e.target!==slider)return;
+    if(e.target.closest('button,a,input,textarea,select')&&!pane.contains(e.target))return;
+    e.stopImmediatePropagation();e.preventDefault();stop();turn((e.key==='ArrowLeft'?-1:1)*(e.shiftKey?15:5));
+  },true);
+  function refresh() {
+    if(!room)return;
+    if(active){
+      status.textContent=full?'360° · 좌우로 끌어 한 바퀴 보기':'부분 투어 · 좌우 회전 '+Math.round(max-min)+'°';
+    }else{status.textContent='공간 사진 · '+photoCount+'장';}
+    mode.hidden=!info;mode.textContent=active?'공간 사진 보기':(info?.kind==='full'?'360°로 돌아가기':'부분 투어로 돌아가기');
+  }
+  function close(){
+    stop();pending=null;image=null;pixels=null;grid=null;active=false;drag=null;
+    pane.hidden=true;pane.dataset.ready='false';stage.classList.remove('immersed');refresh();
+  }
+  function activate(){
+    if(!info)return;
+    stop();active=true;full=info.kind==='full';left=info.left;right=info.right;low=info.bottom;high=info.top;
+    yaw=info.start||0;pane.hidden=false;pane.dataset.ready='false';pane.dataset.kind=info.kind;pane.classList.add('loading');
+    pane.setAttribute('aria-label',room.name+' '+(full?'360° 파노라마':'부분 파노라마'));
+    const available=info.pitchGuide?.verticalHalf ?? (full?(high-low)/2:Math.min(high,-low));
+    stage.style.setProperty('--turn-height-cap',available<29?(100*Math.tan(available*rad*.98)/Math.tan(29*rad)).toFixed(2)+'vw':'none');
+    stage.classList.add('immersed');size();refresh();initRenderer();
+    const im=new Image();pending=im;image=null;pixels=null;grid=null;
+    im.onload=()=>{if(pending!==im||!active)return;image=im;upload();draw();};
+    im.onerror=()=>{if(pending===im){close();openPhotos();status.textContent='파노라마를 불러오지 못해 공간 사진을 표시합니다.';}};
+    im.src=info.src;
+  }
+  mode.onclick=()=>{if(active){close();openPhotos();}else openTour();};
+  new ResizeObserver(()=>{if(active)draw();}).observe(pane);
+  window.addEventListener('blur',stop);document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+  window.tourSpaceViewer={
+    enter(r,count,onPhotos,onTour){
+      close();room=r;photoCount=count;openPhotos=onPhotos;openTour=onTour;info=room.panorama||null;
+      bar.dataset.room=room.key;stage.classList.toggle('photos-only',!info);stage.closest('.app').classList.toggle('room-without-tour',!info);
+      if(info)activate();else {openPhotos();refresh();}
+    },
+    photo(){if(active)close();refresh();}
+  };
+})();
+</script>
 <script>
 (function () {
   "use strict";
-  var DATA = {"co":"한스","apt":"송파레이크호반써밋","home":"living","rooms":[{"key":"living","name":"거실","lead":"큰 창과 실링팬이 있는 거실","kind":"sweep","pts":[["우드 실링팬","세 개의 나무 날개가 천장 중앙에 달려 있습니다.","305"],["우물천장","낮춘 천장의 테두리를 따라 간접등이 이어집니다.","306"],["창과 마루","큰 창의 빛이 밝은 마루 위로 들어옵니다.","227"]],"views":[{"src":"m/227.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"227","label":"창 정면"},{"src":"m/229.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"229","label":"주방에서 창 쪽"},{"src":"m/231.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"231","label":"창가에서 방문 쪽"},{"src":"m/230.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"230","label":"복도 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/227.webp"],"start":60}},{"key":"kitchen","name":"주방","lead":"창 아래 싱크대와 수납형 아일랜드","kind":"sweep","pts":[["창가의 싱크대","창가에 긴 조리대와 높은 곡선 수전을 배치했습니다.","236"],["인출 수납","서랍처럼 앞으로 당겨 주방 안쪽까지 쓸 수 있습니다.","304"],["매립 콘센트","아일랜드 상판에 둥근 콘센트를 넣었습니다.","318"]],"views":[{"src":"m/234.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"234","label":"거실에서"},{"src":"m/235.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"235","label":"조리대 앞"},{"src":"m/237.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"237","label":"조리대에서 거실 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/234.webp"],"start":60}},{"key":"master","name":"안방","lead":"발코니를 마주 보는 침실","kind":"sweep","pts":[["발코니 창","바닥까지 내려오는 유리문이 침실과 발코니를 잇습니다.","250"],["수납 코너","벽 안쪽 선반과 복도가 침실 옆으로 이어집니다.","252"]],"views":[{"src":"m/248.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"248","label":"출입구에서"},{"src":"m/249.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"249","label":"발코니에서"},{"src":"m/252.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"252","label":"수납장 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/248.webp"],"start":60}},{"key":"study","name":"서재","lead":"벽 선반과 책상이 있는 방","kind":"sweep","pts":[["책상과 선반","긴 책상 위로 벽 선반이 이어집니다.","239"],["창가","창을 향한 자리와 책상 옆 여유 공간을 볼 수 있습니다.","241"]],"views":[{"src":"m/239.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"239","label":"책상과 창"},{"src":"m/240.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"240","label":"방문 쪽"},{"src":"m/241.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"241","label":"창 정면"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/239.webp"],"start":60}},{"key":"dress","name":"붙박이장 방","lead":"붙박이장과 오픈 선반이 마주 보는 방","kind":"sweep","pts":[["거울 문","밝은 붙박이장 문 한쪽에 세로 거울을 넣었습니다.","242"],["오픈 선반","맞은편 벽에는 봉과 선반이 함께 놓여 있습니다.","244"]],"views":[{"src":"m/242.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"242","label":"붙박이장 쪽"},{"src":"m/243.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"243","label":"창 정면"},{"src":"m/244.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"244","label":"방문 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/242.webp"],"start":60}},{"key":"storage","name":"작은방","lead":"사각 천장등을 둔 작은방","kind":"sweep","pts":[["벽면 마감","밝은 벽과 낮은 걸레받이를 같은 톤으로 맞췄습니다.","246"],["우드 방문","나무 무늬 방문이 밝은 마루와 이어집니다.","247"]],"views":[{"src":"m/246.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"246","label":"안쪽 벽"},{"src":"m/247.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"247","label":"방문 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/246.webp"],"start":60}},{"key":"powder","name":"안방 수납공간","lead":"복도형 수납장과 안쪽 선반","kind":"sweep","pts":[["매립 선반","복도 벽 안에 수납장을 넣고 아래쪽 조명을 더했습니다.","253"],["인출형 수납","키 큰 수납장 안쪽에 깊은 서랍을 넣었습니다.","321"]],"views":[{"src":"m/253.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"253","label":"수납장 앞"},{"src":"m/255.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"255","label":"선반 안쪽"},{"src":"m/256.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"256","label":"침실 방향"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/253.webp"],"start":60}},{"key":"masterbath","name":"안방 욕실","lead":"석재 무늬 선반과 사각 세면대","kind":"sweep","pts":[["세면대","짙은 무늬 상판에 흰 사각 세면대를 얹었습니다.","258"],["유리 칸막이","투명 유리로 샤워 자리를 구분했습니다.","261"]],"views":[{"src":"m/257.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"257","label":"세면대와 변기"},{"src":"m/261.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"261","label":"샤워 공간"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/257.webp"],"start":60}},{"key":"hall","name":"복도","lead":"거실과 현관을 잇는 수납 복도","kind":"sweep","pts":[["벽면 수납","한쪽 벽을 따라 키 큰 수납장이 이어집니다.","272"],["전시 선반","수납장 중심에 짙은 내부 선반을 두었습니다.","274"]],"views":[{"src":"m/270.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"270","label":"현관 방향"},{"src":"m/271.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"271","label":"거실 방향"},{"src":"m/273.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"273","label":"수납장 앞"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/270.webp"],"start":60}},{"key":"entrance","name":"현관","lead":"유리 중문과 우드 벤치가 있는 현관","kind":"sweep","pts":[["벤치 수납","우드 패널을 벤치와 이어 놓고 아래에 흰 수납장을 넣었습니다.","280"],["간접등","키 큰 신발장 하부를 바닥에서 띄워 빛을 넣었습니다.","277"],["안쪽 선반","벤치 옆 문 안에 여러 단의 수납 선반이 있습니다.","282"]],"views":[{"src":"m/279-joined.webp","a":-0.6383967528005855,"b":1.3106934841643194,"v":0.5491205068296189,"left":-0.28547586839195943,"right":0.905729640623931,"fov":0.6981317007977318,"start":0.0,"n":"279","label":"중문에서 벤치까지"},{"src":"m/276.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"276","label":"현관문 쪽"},{"src":"m/283.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"283","label":"안쪽 수납"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/279-joined.webp"],"start":60}},{"key":"bath","name":"공용 욕실","lead":"따뜻한 타일과 거울 간접등","kind":"sweep","pts":[["거울 조명","거울 아래로 선반과 길게 이어지는 간접등을 두었습니다.","288"],["샤워 자리","샤워 수전을 벽에 달고 옆에 낮은 턱을 두었습니다.","291"]],"views":[{"src":"m/287.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"287","label":"세면대 쪽"},{"src":"m/289.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"289","label":"샤워 쪽"},{"src":"m/290.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"290","label":"안쪽에서"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/287.webp"],"start":60}},{"key":"balcony","name":"발코니","lead":"침실에서 나가는 창가 발코니","kind":"sweep","pts":[["발코니 창","큰 창 가까이 볕이 들어오고 벽면에 수전이 있습니다.","269"]],"views":[{"src":"m/269.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"269","label":"창과 바닥"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/269.webp"],"start":60}},{"key":"utility","name":"다용도실","lead":"주방 옆 세탁 공간","kind":"sweep","pts":[["다용도실","작은 창과 벽걸이 선반, 바닥 배수구가 함께 보입니다.","317"]],"views":[{"src":"m/317.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"317","label":"창가 선반"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/317.webp"],"start":60}}],"photos":[{"n":"221","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"222","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"223","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"224","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"225","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"226","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"227","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"228","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"229","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"230","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"231","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"232","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"233","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"234","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"235","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"236","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"237","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"238","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"239","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"240","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"241","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"242","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"243","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"244","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"245","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"246","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"247","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"248","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"249","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"250","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"251","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"252","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"253","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"254","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"255","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"256","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"257","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"258","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"259","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"261","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"262","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"263","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"264","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"265","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"266","room":"안방 수납공간","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"269","room":"발코니","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"270","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"271","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"272","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"273","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"274","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"275","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"276","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"277","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"278","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"279","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"280","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"281","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"282","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"283","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"284","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"285","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"286","room":"현관","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"287","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"288","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"289","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"290","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"291","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"292","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"293","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"294","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"295","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"296","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"297","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"298","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"299","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"300","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"301","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"302","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"303","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"304","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"305","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"306","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"307","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"308","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"309","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"310","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"311","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"312","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"313","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"314","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"315","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"316","room":"현관","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"317","room":"다용도실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"318","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"319","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"320","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"321","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"322","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"323","room":"안방 수납공간","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"324","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"330","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"331","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170}]};
+  var DATA = {"co":"한스","apt":"송파레이크호반써밋","home":"living","rooms":[{"key":"living","name":"거실","lead":"큰 창과 실링팬이 있는 거실","kind":"sweep","pts":[["우드 실링팬","세 개의 나무 날개가 천장 중앙에 달려 있습니다.","305"],["우물천장","낮춘 천장의 테두리를 따라 간접등이 이어집니다.","306"],["창과 마루","큰 창의 빛이 밝은 마루 위로 들어옵니다.","227"]],"views":[{"src":"m/227.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"227","label":"창 정면"},{"src":"m/229.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"229","label":"주방에서 창 쪽"},{"src":"m/231.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"231","label":"창가에서 방문 쪽"},{"src":"m/230.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"230","label":"복도 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/227.webp"],"start":60},"panorama":{"kind":"full","start":-19,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-living-9a46a16ef4.webp"}},{"key":"kitchen","name":"주방","lead":"창 아래 싱크대와 수납형 아일랜드","kind":"sweep","pts":[["창가의 싱크대","창가에 긴 조리대와 높은 곡선 수전을 배치했습니다.","236"],["인출 수납","서랍처럼 앞으로 당겨 주방 안쪽까지 쓸 수 있습니다.","304"],["매립 콘센트","아일랜드 상판에 둥근 콘센트를 넣었습니다.","318"]],"views":[{"src":"m/234.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"234","label":"거실에서"},{"src":"m/235.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"235","label":"조리대 앞"},{"src":"m/237.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"237","label":"조리대에서 거실 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/234.webp"],"start":60},"panorama":{"kind":"full","start":-28,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-kitchen-47fa429a6c.webp"}},{"key":"master","name":"안방","lead":"발코니를 마주 보는 침실","kind":"sweep","pts":[["발코니 창","바닥까지 내려오는 유리문이 침실과 발코니를 잇습니다.","250"],["수납 코너","벽 안쪽 선반과 복도가 침실 옆으로 이어집니다.","252"]],"views":[{"src":"m/248.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"248","label":"출입구에서"},{"src":"m/249.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"249","label":"발코니에서"},{"src":"m/252.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"252","label":"수납장 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/248.webp"],"start":60},"panorama":{"kind":"full","start":0,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-master-53049e620a.webp"}},{"key":"study","name":"서재","lead":"벽 선반과 책상이 있는 방","kind":"sweep","pts":[["책상과 선반","긴 책상 위로 벽 선반이 이어집니다.","239"],["창가","창을 향한 자리와 책상 옆 여유 공간을 볼 수 있습니다.","241"]],"views":[{"src":"m/239.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"239","label":"책상과 창"},{"src":"m/240.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"240","label":"방문 쪽"},{"src":"m/241.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"241","label":"창 정면"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/239.webp"],"start":60},"panorama":{"kind":"full","start":-56,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-study-beef83dfae.webp"}},{"key":"dress","name":"붙박이장 방","lead":"붙박이장과 오픈 선반이 마주 보는 방","kind":"sweep","pts":[["거울 문","밝은 붙박이장 문 한쪽에 세로 거울을 넣었습니다.","242"],["오픈 선반","맞은편 벽에는 봉과 선반이 함께 놓여 있습니다.","244"]],"views":[{"src":"m/242.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"242","label":"붙박이장 쪽"},{"src":"m/243.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"243","label":"창 정면"},{"src":"m/244.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"244","label":"방문 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/242.webp"],"start":60},"panorama":{"kind":"full","start":-15,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-dress-8b300efb2a.webp"}},{"key":"storage","name":"작은방","lead":"사각 천장등을 둔 작은방","kind":"sweep","pts":[["벽면 마감","밝은 벽과 낮은 걸레받이를 같은 톤으로 맞췄습니다.","246"],["우드 방문","나무 무늬 방문이 밝은 마루와 이어집니다.","247"]],"views":[{"src":"m/246.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"246","label":"안쪽 벽"},{"src":"m/247.webp","a":-0.839153986113171,"b":0.839153986113171,"v":0.5936368234208367,"left":-0.3666947689173223,"right":0.3666947689173223,"fov":0.7504915783575618,"start":0.0,"n":"247","label":"방문 쪽"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/246.webp"],"start":60},"panorama":{"kind":"full","start":170,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-storage-afe48260b7.webp"}},{"key":"powder","name":"안방 수납공간","lead":"복도형 수납장과 안쪽 선반","kind":"sweep","pts":[["매립 선반","복도 벽 안에 수납장을 넣고 아래쪽 조명을 더했습니다.","253"],["인출형 수납","키 큰 수납장 안쪽에 깊은 서랍을 넣었습니다.","321"]],"views":[{"src":"m/253.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"253","label":"수납장 앞"},{"src":"m/255.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"255","label":"선반 안쪽"},{"src":"m/256.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"256","label":"침실 방향"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/253.webp"],"start":60},"panorama":{"kind":"full","start":159,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-powder-f5d8683967.webp"}},{"key":"masterbath","name":"안방 욕실","lead":"석재 무늬 선반과 사각 세면대","kind":"sweep","pts":[["세면대","짙은 무늬 상판에 흰 사각 세면대를 얹었습니다.","258"],["유리 칸막이","투명 유리로 샤워 자리를 구분했습니다.","261"]],"views":[{"src":"m/257.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"257","label":"세면대와 변기"},{"src":"m/261.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"261","label":"샤워 공간"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/257.webp"],"start":60},"panorama":{"kind":"full","start":-23,"left":-180,"right":180,"top":55,"bottom":-42,"pitchGuide":{"frontYaw":0,"front":-8,"back":14,"verticalHalf":21},"src":"m/panorama-masterbath-6e1dd5b9d6.webp"}},{"key":"hall","name":"복도","lead":"거실과 현관을 잇는 수납 복도","kind":"sweep","pts":[["벽면 수납","한쪽 벽을 따라 키 큰 수납장이 이어집니다.","272"],["전시 선반","수납장 중심에 짙은 내부 선반을 두었습니다.","274"]],"views":[{"src":"m/270.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"270","label":"현관 방향"},{"src":"m/271.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"271","label":"거실 방향"},{"src":"m/273.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"273","label":"수납장 앞"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/270.webp"],"start":60},"panorama":{"kind":"full","start":1,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-hall-ab912b9a30.webp"}},{"key":"entrance","name":"현관","lead":"유리 중문과 우드 벤치가 있는 현관","kind":"sweep","pts":[["벤치 수납","우드 패널을 벤치와 이어 놓고 아래에 흰 수납장을 넣었습니다.","280"],["간접등","키 큰 신발장 하부를 바닥에서 띄워 빛을 넣었습니다.","277"],["안쪽 선반","벤치 옆 문 안에 여러 단의 수납 선반이 있습니다.","282"]],"views":[{"src":"m/279-joined.webp","a":-0.6383967528005855,"b":1.3106934841643194,"v":0.5491205068296189,"left":-0.28547586839195943,"right":0.905729640623931,"fov":0.6981317007977318,"start":0.0,"n":"279","label":"중문에서 벤치까지"},{"src":"m/276.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"276","label":"현관문 쪽"},{"src":"m/283.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"283","label":"안쪽 수납"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/279-joined.webp"],"start":60},"panorama":{"kind":"full","start":22,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-entrance-b7294da349.webp"}},{"key":"bath","name":"공용 욕실","lead":"따뜻한 타일과 거울 간접등","kind":"sweep","pts":[["거울 조명","거울 아래로 선반과 길게 이어지는 간접등을 두었습니다.","288"],["샤워 자리","샤워 수전을 벽에 달고 옆에 낮은 턱을 두었습니다.","291"]],"views":[{"src":"m/287.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"287","label":"세면대 쪽"},{"src":"m/289.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"289","label":"샤워 쪽"},{"src":"m/290.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"290","label":"안쪽에서"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/287.webp"],"start":60},"panorama":{"kind":"full","start":8,"top":60,"bottom":-60,"left":-180,"right":180,"src":"m/panorama-bath-d72ba86f2a.webp"}},{"key":"balcony","name":"발코니","lead":"침실에서 나가는 창가 발코니","kind":"sweep","pts":[["발코니 창","큰 창 가까이 볕이 들어오고 벽면에 수전이 있습니다.","269"]],"views":[{"src":"m/269.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"269","label":"창과 바닥"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/269.webp"],"start":60},"panorama":{"kind":"partial","start":7,"left":-225,"right":39,"top":28,"bottom":-25,"src":"m/panorama-balcony-3fd96d095a.webp"}},{"key":"utility","name":"다용도실","lead":"주방 옆 세탁 공간","kind":"sweep","pts":[["다용도실","작은 창과 벽걸이 선반, 바닥 배수구가 함께 보입니다.","317"]],"views":[{"src":"m/317.webp","a":-0.6383967528005855,"b":0.6383967528005855,"v":0.5491205068296189,"left":-0.2875476610926181,"right":0.28754766109261803,"fov":0.6981317007977318,"start":0.0,"n":"317","label":"창가 선반"}],"v":{"n":121,"fw":784,"fh":1176,"cols":1,"rows":1,"per":121,"sheets":["m/317.webp"],"start":60},"panorama":{"kind":"partial","start":55,"left":-131,"right":131,"top":39,"bottom":-34,"src":"m/panorama-utility-b700a96754.webp"}}],"photos":[{"n":"221","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"222","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"223","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"224","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"225","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"226","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"227","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"228","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"229","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"230","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"231","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"232","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"233","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"234","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"235","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"236","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"237","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"238","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"239","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"240","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"241","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"242","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"243","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"244","room":"붙박이장 방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"245","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"246","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"247","room":"작은방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"248","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"249","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"250","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"251","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"252","room":"안방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"253","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"254","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"255","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"256","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"257","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"258","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"259","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"261","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"262","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"263","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"264","room":"안방 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"265","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"266","room":"안방 수납공간","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"269","room":"발코니","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"270","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"271","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"272","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"273","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"274","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"275","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"276","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"277","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"278","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"279","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"280","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"281","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"282","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"283","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"284","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"285","room":"현관","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"286","room":"현관","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"287","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"288","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"289","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"290","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"291","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"292","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"293","room":"공용 욕실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"294","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"295","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"296","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"297","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"298","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"299","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"300","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"301","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"302","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"303","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"304","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"305","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"306","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"307","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"308","room":"거실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"309","room":"복도","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"310","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"311","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"312","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"313","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"314","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"315","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"316","room":"현관","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"317","room":"다용도실","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"318","room":"주방","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"319","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"320","room":"주방","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"321","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"322","room":"안방 수납공간","ext":".webp","w":900,"h":1350,"tw":113,"th":170},{"n":"323","room":"안방 수납공간","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"324","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"330","room":"서재","ext":".webp","w":1350,"h":900,"tw":255,"th":170},{"n":"331","room":"거실","ext":".webp","w":1350,"h":900,"tw":255,"th":170}]};
   var rooms = DATA.rooms, byKey = {}, photos = DATA.photos;
   rooms.forEach(function (r) { byKey[r.key] = r; });
   var $ = function (id) { return document.getElementById(id); };
@@ -243,8 +477,8 @@ h1, h2, h3, p { margin: 0; }
   $("logo").textContent = DATA.co; $("co").textContent = DATA.co; $("site").textContent = DATA.apt;
   rooms.forEach(function (r) {
     var li = document.createElement("li"), b = document.createElement("button"), k = document.createElement("span"); b.type = "button"; b.dataset.key = r.key; b.innerHTML = I360; b.appendChild(document.createTextNode(r.name));
-    k.className = "k"; k.textContent = r.kind === "loop" ? "한 바퀴" : "좌우"; b.appendChild(k); b.addEventListener("click", function () { go(r.key); }); li.appendChild(b); $("jumpList").appendChild(li);
-    var c = document.createElement("button"); c.className = "chip"; c.type = "button"; c.textContent = r.name; c.dataset.key = r.key; c.addEventListener("click", function () { go(r.key); }); $("chips").appendChild(c);
+    k.className = "k"; b.dataset.panorama=r.panorama?.kind||"photo"; k.textContent=b.dataset.panorama==="full"?"360°":r.panorama?"부분 투어":"사진"; b.appendChild(k); b.addEventListener("click", function () { go(r.key); }); li.appendChild(b); $("jumpList").appendChild(li);
+    var c = document.createElement("button"); c.className = "chip"; c.type = "button"; c.textContent = r.name; c.dataset.key = r.key; c.dataset.panorama=r.panorama?.kind||"photo"; c.addEventListener("click", function () { go(r.key); }); $("chips").appendChild(c);
   });
   each(document.querySelectorAll("#mini .mm-room"), function (g) {
     g.addEventListener("click", function () { go(g.dataset.key); });
@@ -398,6 +632,13 @@ h1, h2, h3, p { margin: 0; }
       ol.appendChild(li); });
     $("ptsBox").classList.remove("all"); $("ptMore").setAttribute("aria-expanded", "false"); $("ptMore").hidden = r.pts.length <= 2; moreText();
     setFilter(r.name); viewOptions();
+    var pictures=photos.filter(function(p){return p.room===r.name;});
+    var primary=r.views?.[0]?.n || r.pts?.[0]?.[2];
+    var first=pictures.find(function(p){return p.n===primary;}) || pictures[0];
+    window.tourSpaceViewer.enter(r,pictures.length,function(){
+      if(first){setFilter(r.name);showPhoto(photos.indexOf(first),true);}
+    },function(){show(key);});
+    
   }
   function go(key) { if (("#" + key) === location.hash) show(key); else location.hash = key; }
   function route() { show((location.hash || "").replace(/^#/, "")); }
@@ -449,12 +690,12 @@ h1, h2, h3, p { margin: 0; }
     each($("strip").children, function (bt) { bt.hidden = !(bt.dataset.keep || lb === "전체" || bt.dataset.room === lb); });
     $("strip").scrollLeft = 0; $("phCount").textContent = (lb === "전체" ? "총 " : lb + " ") + visible().length + "장";
   }
-  function showPhoto(i) {      /* 아래 미리보기를 누르면 가운데 360° 화면 자리에 그 사진을 보여 준다 */
+  function showPhoto(i, quiet) { window.tourSpaceViewer.photo();      /* 아래 미리보기를 누르면 가운데 360° 화면 자리에 그 사진을 보여 준다 */
     lbAt = i; var ph = photos[i], v = visible(); release(); vel = 0;
     each($("strip").children, function (bt) { var on = bt.dataset.i === String(i); bt.classList.toggle("cur", on); if (on) $("strip").scrollLeft = Math.max(0, bt.offsetLeft - $("strip").clientWidth / 2 + bt.offsetWidth / 2); });
-    zShot.reset(); $("shot").dataset.hi = ""; $("shot").dataset.want = ""; $("shot").src = "p/" + ph.n + (ph.ext || ".jpg"); $("shot").alt = ph.room + " 사진"; $("shot").hidden = false; stage.classList.add("photo");
+    zShot.reset(); $("shot").dataset.hi = ""; $("shot").dataset.want = ""; $("shot").src = "p/" + ph.n + (ph.ext || ".jpg"); $("shot").alt = ph.room + " 사진"; $("shot").hidden = false; stage.classList.add("photo"); $("arrL").setAttribute("aria-label","이전 사진"); $("arrR").setAttribute("aria-label","다음 사진");
     $("back360").hidden = false; $("bigBtn").hidden = false; $("cap").hidden = false; $("cap").textContent = ph.room + " 사진 " + (v.indexOf(i) + 1) + " / " + v.length; $("load").hidden = true;
-    var r = stage.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) stage.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    var r = stage.getBoundingClientRect(); if (!quiet && (r.top < 0 || r.bottom > innerHeight)) stage.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
   }
   function movePhoto(d) { var v = visible(), k = v.indexOf(lbAt); if (k < 0) k = 0; showPhoto(v[((k + d) % v.length + v.length) % v.length]); }
   function openPhoto(num) { for (var i = 0; i < photos.length; i++) if (photos[i].n === num) return showPhoto(i); }
@@ -523,73 +764,7 @@ h1, h2, h3, p { margin: 0; }
   route();
 })();
 </script>
-<style>@media(max-width:999px){.app{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}}</style><style>
-.cam-open{border:1px solid #718c84;border-radius:999px;background:#f2f7f3;color:#205348;font:600 14px system-ui;padding:8px 15px;cursor:pointer}.cam-dialog{box-sizing:border-box;width:min(96vw,1050px);max-height:94svh;border:0;border-radius:12px;padding:0;background:#fafbf9;color:#1c3029;box-shadow:0 12px 65px #0007}.cam-dialog::backdrop{background:#15211fe0}.cam-dialog header,.cam-tools{display:flex;align-items:center;gap:12px;padding:11px 16px}.cam-dialog h2{font:650 17px/1.4 system-ui;margin:0;flex:1}.cam-dialog button{background:#fff;color:#23483e;border:1px solid #c5d1cb;min-height:38px;padding:6px 13px;cursor:pointer;border-radius:7px;font:600 14px system-ui}.cam-dialog .cam-action{min-width:82px}.cam-dialog video,.cam-dialog canvas{width:100%;height:100%;display:block;object-fit:contain;touch-action:none;cursor:grab}.cam-dialog [hidden]{display:none!important}.cam-picture{height:min(68svh,65vw,660px);min-height:170px;background:#17211d}.cam-tools input{min-width:0;flex:1;accent-color:#226956}.cam-dialog button:focus-visible,.cam-open:focus-visible,.cam-tools input:focus-visible{outline:3px solid #238166;outline-offset:3px}@media(max-width:600px){.cam-picture{height:min(61svh,86vw)}.cam-dialog header,.cam-tools{padding:9px}.cam-open{font-size:12px;padding:6px 10px}}
-</style>
-<script type="application/json" id="site-camera-spec">{"kind": "video", "asset": "m/camera-glide.mp4", "label": "거실 시점 이동"}</script>
-<script>
-(()=>{
- const spec=JSON.parse(document.querySelector('#site-camera-spec').textContent);
- const host=document.querySelector('#hint')?.parentElement || document.querySelector('#stage')?.parentElement;
- if(!host)return;
- const open=document.createElement('button');open.type='button';open.className='cam-open';open.textContent=spec.label;host.append(open);
- open.addEventListener('pointerdown',e=>e.stopPropagation());
- const dialog=document.createElement('dialog');dialog.className='cam-dialog';dialog.setAttribute('aria-labelledby','cam-heading');
- dialog.innerHTML='<header><h2 id="cam-heading"></h2><button type="button" class="cam-close">닫기</button></header><div class="cam-picture"><video playsinline muted preload="none" hidden></video><canvas hidden></canvas></div><div class="cam-tools"><button type="button" class="cam-action"></button><input type="range" min="0" max="1000" step="1" value="0"></div>';
- document.body.append(dialog);
- const title=dialog.querySelector('h2'),action=dialog.querySelector('.cam-action'),range=dialog.querySelector('input');
- const video=dialog.querySelector('video'),canvas=dialog.querySelector('canvas'),pano=spec.kind==='pano';
- title.textContent=spec.label;range.setAttribute('aria-label',pano?'둘러보기 각도':'촬영 시점 위치');
- let ready=false,theta=spec.start||0,raf=0,spin=false,last=0,drag=null,pending=null;
- function setAction(){action.textContent=pano?(spin?'멈춤':'자동 회전'):(video.paused?'재생':'멈춤')}
- function seek(){if(pending===null||video.readyState<1||video.seeking)return;const v=pending;pending=null;video.currentTime=v}
- function move(v){if(pano){theta=((v%360)+360)%360;range.value=Math.round(theta*1000/360);draw();return}range.value=Math.round(v*1000);pending=v*Math.max(0,(video.duration||0)-1/60);seek()}
- video.addEventListener('seeked',seek);video.addEventListener('loadedmetadata',seek);
- for(const e of ['play','pause','ended'])video.addEventListener(e,setAction);
- video.addEventListener('timeupdate',()=>{if(!video.paused&&video.duration)range.value=1000*video.currentTime/video.duration});
- function stop(){spin=false;cancelAnimationFrame(raf);raf=0;last=0;video.pause();setAction()}
- function loop(t){if(!spin)return;if(last)move(theta+Math.min(t-last,80)*.018);last=t;raf=requestAnimationFrame(loop)}
- function toggle(){if(pano){if(spin){stop();return}spin=true;setAction();raf=requestAnimationFrame(loop)}else if(video.paused){if(video.ended||video.duration-video.currentTime<.03)video.currentTime=0;video.play().catch(setAction)}else video.pause()}
- action.onclick=toggle;range.oninput=()=>{stop();move(Number(range.value)/1000*(pano?360:1))};
- let gl,uniforms={},image,context,fallback=false;
- function shader(type,source){const sh=gl.createShader(type);gl.shaderSource(sh,source);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(sh));return sh}
- function preparePano(){
-  canvas.hidden=false;image=new Image();image.onload=()=>{ready=true;draw()};
-  gl=canvas.getContext('webgl',{alpha:false,antialias:false});
-  if(gl){
-   const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,'attribute vec2 xy;varying vec2 p;void main(){p=xy;gl_Position=vec4(xy,0.,1.);}'));
-   gl.attachShader(program,shader(gl.FRAGMENT_SHADER,'precision highp float;varying vec2 p;uniform sampler2D tex;uniform vec4 cam;uniform vec3 span;void main(){float h=cam.y;vec3 d=normalize(vec3(p.x*h,p.y*h/cam.z,1.));float yaw=atan(d.x,d.z)+cam.x;float pitch=asin(d.y);float u=fract(yaw/6.283185307+span.z);float v=clamp((span.x-pitch)/(span.x-span.y),0.001,0.999);gl_FragColor=texture2D(tex,vec2(u,v));}'));
-   gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('Panorama program');
-   gl.useProgram(program);const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-   const xy=gl.getAttribLocation(program,'xy');gl.enableVertexAttribArray(xy);gl.vertexAttribPointer(xy,2,gl.FLOAT,false,0,0);
-   uniforms.cam=gl.getUniformLocation(program,'cam');uniforms.span=gl.getUniformLocation(program,'span');
-   const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
-   for(const z of [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T])gl.texParameteri(gl.TEXTURE_2D,z,gl.CLAMP_TO_EDGE);
-   for(const z of [gl.TEXTURE_MAG_FILTER,gl.TEXTURE_MIN_FILTER])gl.texParameteri(gl.TEXTURE_2D,z,gl.LINEAR);
-   image.onload=()=>{gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,image);ready=true;draw()};
-  }else{fallback=true;context=canvas.getContext('2d')}
-  image.src=spec.asset;
- }
- function draw(){
-   if(!pano||!ready||!dialog.open)return;
-   const dims=canvas.getBoundingClientRect(),px=Math.min(2,devicePixelRatio||1);
-   const w=Math.round(dims.width*px),h=Math.round(dims.height*px);
-   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
-   const top=spec.top??90,bot=spec.bottom??-90;const hfov=window.innerWidth<600?51:72;
-   const half=Math.min(Math.tan(hfov*Math.PI/360),w/h*Math.tan(Math.min(top,-bot)*.95*Math.PI/180));
-   if(!fallback){gl.viewport(0,0,w,h);gl.uniform4f(uniforms.cam,theta*Math.PI/180,half,w/h,0);gl.uniform3f(uniforms.span,top*Math.PI/180,bot*Math.PI/180,spec.offset??0);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}
-   else{const sw=image.width*Math.atan(half)/Math.PI,sh=Math.min(image.height,image.height*(2*Math.atan(half*h/w)*180/Math.PI)/(top-bot));const x=((theta/360+(spec.offset||0))*image.width-sw/2+image.width)%image.width;const y=Math.max(0,Math.min(image.height-sh,top/(top-bot)*image.height-sh/2));const w1=Math.min(sw,image.width-x);context.drawImage(image,x,y,w1,sh,0,0,w*w1/sw,h);if(w1<sw)context.drawImage(image,0,y,sw-w1,sh,w*w1/sw,0,w*(sw-w1)/sw,h)}
- }
- const picture=dialog.querySelector('.cam-picture');
- picture.onpointerdown=e=>{if(e.button!==0)return;stop();drag={id:e.pointerId,x:e.clientX,v:pano?theta:Number(range.value)/1000};picture.setPointerCapture(e.pointerId)};
- picture.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const dx=(drag.x-e.clientX)/picture.clientWidth;move(pano?drag.v+dx*105:Math.min(1,Math.max(0,drag.v+dx)))};
- picture.onlostpointercapture=()=>drag=null;
- dialog.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();e.stopPropagation();stop();const s=e.key==='ArrowLeft'?-1:1;move(pano?theta+3*s:Math.min(1,Math.max(0,Number(range.value)/1000+.035*s)))});
- open.onclick=()=>{dialog.showModal();if(pano){if(!image)preparePano();move(spec.start||0)}else{video.hidden=false;if(!video.getAttribute('src'))video.src=spec.asset;video.currentTime=0;range.value=0;video.play().catch(setAction)}setAction()};
- dialog.querySelector('.cam-close').onclick=()=>dialog.close();dialog.addEventListener('close',stop);
- dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});window.addEventListener('resize',draw);
-})();
-</script>
+<style>@media(max-width:999px){.app{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}}</style>
 </body></html><script>
 (function () {
   var shot = document.getElementById("shot");
