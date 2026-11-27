@@ -138,13 +138,13 @@ h1, h2, h3, p { margin: 0; }
 .lb .pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .lb .strip { flex: none; padding: 10px 14px; } .lb .strip button { height: 56px; background: #1a2326; } .lb .strip button.cur { border-color: #fff; }
 /* PC: 세 칸 + 아래 사진 줄, 한 화면에 다 들어오게 */
-@media (min-width: 1000px) {
+@media (min-width:1200px), (min-width:1000px) and (orientation:landscape) {
   .app { height: 100dvh; min-height: 640px; grid-template-columns: 300px minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr) auto auto; grid-template-areas: "top top top" "plan view pts" "photos photos photos" "fine fine fine"; }
   .top { grid-area: top; } .plan { grid-area: plan; overflow: auto; } .view { grid-area: view; } .pts { grid-area: pts; } .photos { grid-area: photos; } .fine { grid-area: fine; }
   .stage canvas { max-height: 100%; }
 }
 /* 폰·좁은 화면: 위에서 아래로 */
-@media (max-width: 999px) {
+@media (max-width:999px), (max-width:1199px) and (orientation:portrait) {
   .top { padding: 10px 14px; } .top .logo, .top .bar { display: none; }
   .plan { padding: 12px 14px; background: var(--accent-soft); border-color: transparent; }
   .plan-head { cursor: pointer; } .plan-head .chev { display: block; } .plan.open .plan-head .chev { transform: rotate(180deg); }
@@ -259,11 +259,11 @@ h1, h2, h3, p { margin: 0; }
 @media(max-width:600px){.turn-bar{font-size:12px;padding:6px 9px}.view.card .stage.immersed{min-height:min(53svh,114vw)}}
 .room-without-tour #strip .to360,.stage.photos-only #back360,.stage.photo #engineStations,.stage.photo #viewOptions {display:none!important}
 #stage .turn-pane>canvas {width:100%!important;height:100%!important;object-fit:fill!important}
-@media(max-width:999px){
+@media(max-width:999px), (max-width:1199px) and (orientation:portrait){
   .view.card #stage.immersed,.view.card #stage.photo {height:clamp(205px,calc(100svh - 335px - env(safe-area-inset-bottom,0px)),min(116vw,610px))!important;min-height:0!important;flex:0 0 auto;aspect-ratio:auto}
   #stage.immersed>#cv,#stage.photo>#cv {display:none!important}
 }
-@media(max-width:999px) and (max-height:520px){
+@media all and (max-height:520px) and (width < 1000px){
   .app section.card.photos {position:static!important}
   .view.card #stage.immersed,.view.card #stage.photo {height:clamp(205px,64svh,340px)!important}
 }
@@ -278,7 +278,26 @@ h1, h2, h3, p { margin: 0; }
   flex:none;aspect-ratio:2 / 3;width:100%!important;height:auto!important;
   max-width:100%!important;max-height:none!important;min-height:0!important;margin:0!important;
 }
-@media(min-width:1000px){.tour-slot:has(#stage.immersed){grid-area:view}}
+@media(min-width:1200px), (min-width:1000px) and (orientation:landscape){.tour-slot:has(#stage.immersed){grid-area:view}}
+
+/* 세로 파노라마는 휴대폰 폭을 기준으로 크기를 정한다. */
+@media(max-width:1199px) and (orientation:portrait){
+  .app .tour-slot:has(#stage.immersed) {
+    justify-self:stretch;
+    margin-left:calc(0px - max(12px,env(safe-area-inset-left,0px)));
+    margin-right:calc(0px - max(12px,env(safe-area-inset-right,0px)));
+  }
+  .tour-slot > .card.view:has(#stage.immersed) {
+    width:100%;justify-self:stretch;border-inline:0;border-radius:0;
+  }
+  .app:has(#stage.immersed) .card.photos {
+    position:static;box-shadow:none;border-radius:14px;
+  }
+  .app:has(#stage.immersed) > .pts {order:1}
+  .app:has(#stage.immersed) > .fine {order:2}
+  .app:has(#stage.immersed) {padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))!important}
+  body:has(#stage.immersed) {padding-bottom:0}
+}
 
 @container(max-width:300px){
   .turn-hint {display:none}
@@ -373,9 +392,14 @@ h1, h2, h3, p { margin: 0; }
   const card=stage.closest('.card.view');
   const dock=document.querySelector('.card.photos');
   const app=slot.closest('.app');
+  const edgePortrait=matchMedia('(max-width:1199px) and (orientation:portrait)');
   function fitPortrait(){
     if(!active || !stage.classList.contains('immersed'))return;
-    const desktop=matchMedia('(min-width:1000px)').matches;
+    if(edgePortrait.matches){
+      slot.style.removeProperty('--portrait-width');
+      return;
+    }
+    const desktop=matchMedia('(min-width:1200px), (min-width:1000px) and (orientation:landscape)').matches;
     const rect=slot.getBoundingClientRect();
     const border=card.offsetWidth-card.clientWidth;
     const chromeHeight=bar.offsetHeight+controls.offsetHeight+border;
@@ -413,9 +437,12 @@ h1, h2, h3, p { margin: 0; }
     cancelAnimationFrame(entryFrame);
     entryFrame=requestAnimationFrame(()=>{
       fitPortrait();
-      if(!active || !matchMedia('(max-width:999px)').matches)return;
+      if(!active || !matchMedia('(max-width:999px), (max-width:1199px) and (orientation:portrait)').matches)return;
       const rect=card.getBoundingClientRect();
-      const bottom=(getComputedStyle(dock).position==='fixed'?dock.getBoundingClientRect().top:document.documentElement.clientHeight)-6;
+      const viewport=document.documentElement.clientHeight;
+      const trayHeight=dock.offsetHeight+12;
+      const reserve=edgePortrait.matches && rect.height+trayHeight<=viewport-6 ? trayHeight : 0;
+      const bottom=(getComputedStyle(dock).position==='fixed'?dock.getBoundingClientRect().top:viewport-reserve)-6;
       const delta=rect.bottom-bottom;
       if(delta>1 && rect.top>=0 && rect.top<window.innerHeight && rect.top-delta>=0){
         window.scrollBy({top:delta,behavior:'instant'});
@@ -845,7 +872,7 @@ h1, h2, h3, p { margin: 0; }
     var im = new Image(); im.onload = function () { if (!shot.hidden && (shot.getAttribute("src") || "").indexOf("p/" + n + ".") >= 0) { shot.src = im.src; shot.dataset.hi = n; } }; im.src = "p/h_" + n + ".webp";
   }).observe(shot, { attributes: true, attributeFilter: ["src"] });
 })();
-</script><style>@media(max-width:999px){.app{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}}</style>
+</script><style>@media(max-width:999px), (max-width:1199px) and (orientation:portrait){.app{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}}</style>
 </body></html><script>
 /* 11-18 사장님 「확대하면 선명하지 않다」: 확대는 CSS 배율이라 브라우저가 작은 크기로 그려 둔 그림을 늘려 보여 준다(600%면 깍두기).
    확대 중에는 사진 위에 화면 해상도 그대로의 캔버스를 깔고, 원본(큰 사진)에서 지금 보이는 부분을 직접 다시 그린다. */
@@ -915,7 +942,7 @@ new MutationObserver(function(){
   if(cur && inPhoto) render(cur.dataset.room); else last="";
 }).observe($("strip"),{subtree:true,attributes:true,attributeFilter:["class"]});
 })();</script><style>.homebtn{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px 7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;font-size:14px;text-decoration:none}
-.homebtn:hover{border-color:var(--accent);color:var(--accent)} .homebtn svg{width:17px;height:17px} @media (max-width:999px){.top{gap:10px}}</style>
+.homebtn:hover{border-color:var(--accent);color:var(--accent)} .homebtn svg{width:17px;height:17px} @media (max-width:999px), (max-width:1199px) and (orientation:portrait){.top{gap:10px}}</style>
 <script>(function(){
 /* 11-18 사장님 「홈으로 가기 버튼 — 현장에서 누르면 업체 메인」 */
 var top=document.querySelector("header.top"); if(top){var a=document.createElement("a"); a.className="homebtn"; a.href="../"; a.setAttribute("aria-label","업체 첫 화면으로");
@@ -966,7 +993,7 @@ w.querySelector(".fixsend").addEventListener("click",function(){
 <style>
 /* 11-19 사장님 「모바일에서 거실·주방·안방 고르는 줄 — 못 보고 지나칠 것 같으니 화살표 표시」 */
 .chiphint{display:none;position:relative;height:16px;margin:0 0 -2px}
-@media (max-width:999px){#chips{display:none!important}}
+@media (max-width:999px), (max-width:1199px) and (orientation:portrait){#chips{display:none!important}}
 .chiphint .ch-arr{position:absolute;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;transition:left .25s ease}
 .chiphint .ch-txt{font-size:11.5px;font-weight:800;color:#3a2e00;background:#ffd84d;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .chiphint .ch-tri{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:12px solid #f5b800;animation:chbob 1s ease-in-out infinite}
@@ -986,7 +1013,7 @@ setTimeout(place,300); place();
 <style>
 /* 11-19 사장님 「모바일: 아래 사진 미리보기가 계속 따라다니게 · 공간을 바꾸면 360° 화면 · 사진 누르면 사진 · 맨 앞 360° 버튼 고정」 */
 .strip .to360{position:sticky;left:0;z-index:2;box-shadow:6px 0 8px -4px rgba(0,0,0,.15)}
-@media (max-width:999px){
+@media (max-width:999px), (max-width:1199px) and (orientation:portrait){
   .card.photos{position:fixed;left:0;right:0;bottom:0;z-index:50;margin:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.14);padding:8px 10px calc(8px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr);gap:6px}
   .card.photos .ttl,.card.photos .nav{display:none}
   .card.photos .strip button{height:46px}
@@ -1008,20 +1035,20 @@ filt.addEventListener("click",function(e){
 <script>(function(){
 /* 11-19 사장님 「아래 거실·주방이나 사진을 누르면 가운데 화면 맨 윗부분이 화면 위로 오게 — 전체가 딱 보이게」 */
 var st=document.getElementById("stage"); if(!st) return;
-function up(){ if(!window.matchMedia("(max-width:999px)").matches) return; setTimeout(function(){ /* 11-19 「너무 올라가 — 화면 아래가 아래 공간 줄 상자 위에 살짝 붙게」 */
-  var bar=document.querySelector(".card.photos"), r=(st.classList.contains('immersed')?st.closest('.card.view'):st).getBoundingClientRect(), lim=(bar?bar.getBoundingClientRect().top:window.innerHeight)-6;
+function up(){ if(!window.matchMedia("(max-width:999px), (max-width:1199px) and (orientation:portrait)").matches) return; setTimeout(function(){ /* 11-19 「너무 올라가 — 화면 아래가 아래 공간 줄 상자 위에 살짝 붙게」 */
+  var bar=document.querySelector(".card.photos"), r=(st.classList.contains('immersed')?st.closest('.card.view'):st).getBoundingClientRect(), lim=(bar && getComputedStyle(bar).position==='fixed'?bar.getBoundingClientRect().top:window.innerHeight)-6;
   var dy=r.bottom-lim; if(r.top-dy<0) dy=r.top-4;   /* 화면이 너무 커서 다 안 들어가면 위가 잘리지 않게 */
   window.scrollTo({top:Math.max(0,window.pageYOffset+dy),behavior:"smooth"}); },120); }
 ["filt","strip"].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener("click",function(e){ if(e.target.closest("button")) up(); }); });
 })();</script>
 <style>
 /* 11-19 사장님 「모바일에서 가운데 화면 양옆 여백 없애고 꽉 차게」 */
-@media (max-width:999px){ html,body{overflow-x:clip} .stage canvas{max-height:none!important;width:100%!important;max-width:100%!important;height:min(calc(100vw * 1.49), calc(100dvh - 128px))!important;object-fit:cover} .stage{width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;border-radius:0!important;border-left:0!important;border-right:0!important} }
+@media (max-width:999px), (max-width:1199px) and (orientation:portrait){ html,body{overflow-x:clip} .stage canvas{max-height:none!important;width:100%!important;max-width:100%!important;height:min(calc(100vw * 1.49), calc(100dvh - 128px))!important;object-fit:cover} .stage{width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;border-radius:0!important;border-left:0!important;border-right:0!important} }
 </style>
 <script>setTimeout(function(){window.dispatchEvent(new Event("resize"))},200);</script>
 <style>
 /* 11-19 「메뉴가 안 흔들린다 → 심장 뛰듯이 / 글씨 앞 점 깜빡」: 지금 공간 버튼은 두근두근, 나머지는 앞에 점이 깜빡 */
-@media (max-width:999px){
+@media (max-width:999px), (max-width:1199px) and (orientation:portrait){
   #filt{padding:4px 2px}
   #filt .chip[aria-pressed="true"]::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#ffd84d;margin-right:6px;vertical-align:middle;animation:filtdot 1.2s ease-in-out infinite}
 }
